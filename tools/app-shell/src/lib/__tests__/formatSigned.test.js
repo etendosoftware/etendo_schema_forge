@@ -29,6 +29,88 @@ describe('formatSigned helpers', () => {
     it('honors the provided BCP locale ordering', () => {
       assert.equal(formatDate('2026-04-27T00:00:00Z', 'en-US'), '04/27/2026');
     });
+
+    /**
+     * ETP-5100 — the evening-timestamp regression.
+     *
+     * `formatDate` used to be:
+     *
+     *   const d = new Date(iso);
+     *   new Intl.DateTimeFormat(bcpLocale, { ..., timeZone: 'UTC' }).format(d);
+     *
+     * i.e. two opposite assumptions that only cancel out for a payload that is
+     * literally UTC midnight — which is what every pre-existing fixture in this
+     * repo used, which is why 2105 green tests never noticed. Once NEO started
+     * emitting a real wall-clock time, `new Date()` resolved it in the HOST's
+     * zone while the formatter rendered it back in UTC, so the two offsets
+     * stacked and the calendar day moved.
+     *
+     * Each case below states whether it is RED against that old body, and under
+     * which host zone. `withTz` pins the zone per assertion so none of this
+     * depends on the machine running the suite.
+     */
+    describe('ETP-5100 — a wall-clock time must not move the calendar day', () => {
+      function withTz(tz, fn) {
+        const previous = process.env.TZ;
+        process.env.TZ = tz;
+        try {
+          fn();
+        } finally {
+          process.env.TZ = previous;
+        }
+      }
+
+      it('zone-less evening value keeps its own day on a UTC-3 host', () => {
+        // RED against the old body: `new Date('2026-09-01T22:59:10')` is LOCAL,
+        // so on UTC-3 the instant is 2026-09-02T01:59:10Z and the UTC formatter
+        // printed 02/09/2026. This is the exact shape reported live.
+        withTz('America/Argentina/Buenos_Aires', () => {
+          assert.equal(formatDate('2026-09-01T22:59:10', 'es-ES'), '01/09/2026');
+        });
+      });
+
+      it('zone-less after-midnight value keeps its own day on a UTC+14 host', () => {
+        // The mirror image, RED against the old body for the opposite reason:
+        // local 2026-09-02 00:30 on UTC+14 is 2026-09-01T10:30Z, so the UTC
+        // formatter printed 01/09/2026 for a movement dated the 2nd. Proves the
+        // fix is offset-agnostic, not just "negative offsets patched".
+        withTz('Pacific/Kiritimati', () => {
+          assert.equal(formatDate('2026-09-02T00:30:00', 'es-ES'), '02/09/2026');
+        });
+      });
+
+      it('offset-suffixed evening value keeps its own day under any host zone', () => {
+        // RED against the old body under EVERY host zone: the offset is honored
+        // on parse (→ 2026-09-02T01:59:10Z) and then rendered in UTC, so the day
+        // moved no matter where the browser was. The only case here that needs
+        // no TZ pinning at all.
+        for (const tz of ['UTC', 'America/Argentina/Buenos_Aires', 'Europe/Madrid', 'Pacific/Kiritimati']) {
+          withTz(tz, () => {
+            assert.equal(formatDate('2026-09-01T22:59:10-03:00', 'es-ES'), '01/09/2026', `host zone ${tz}`);
+          });
+        }
+      });
+
+      it('Z-suffixed evening value renders its own day', () => {
+        // NOT red against the old body (parsed as UTC, rendered as UTC → same
+        // answer). Kept deliberately: the fix must remain correct for whichever
+        // wire shape NEO ends up sending, and this pins the second one.
+        for (const tz of ['UTC', 'America/Argentina/Buenos_Aires', 'Pacific/Kiritimati']) {
+          withTz(tz, () => {
+            assert.equal(formatDate('2026-09-01T22:59:10Z', 'es-ES'), '01/09/2026', `host zone ${tz}`);
+          });
+        }
+      });
+
+      it('bare date-only and UTC-midnight payloads keep working', () => {
+        // Regression pin for the shapes that DID work before, so the fix cannot
+        // be "corrected" back by trading one broken case for another.
+        withTz('America/Argentina/Buenos_Aires', () => {
+          assert.equal(formatDate('2026-09-01', 'es-ES'), '01/09/2026');
+          assert.equal(formatDate('2026-09-01T00:00:00Z', 'es-ES'), '01/09/2026');
+        });
+      });
+    });
   });
 
   describe('formatSigned', () => {

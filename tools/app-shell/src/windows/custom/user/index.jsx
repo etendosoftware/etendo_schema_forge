@@ -2,13 +2,17 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Loader2, Send } from 'lucide-react';
-import { useUI } from '@/i18n';
+import { useUI, useLocaleSwitch } from '@/i18n';
 import UserPage from '@generated/user/generated/web/user/UserPage';
 import UserRolesTab from './UserRolesTab';
 import { AttachmentsTab } from '@/components/attachments';
 import { RoleSelectionProvider } from './roleSelectionContext.js';
 import { fetchUserRoleAssignments, saveUserRoleAssignments } from '@/lib/userRoleAssignmentsApi.js';
 import { resendInvitation } from '@/lib/resendInvitationApi.js';
+import { promoteUserToAdmin, demoteUserFromAdmin } from '@/lib/promoteUserRoleApi.js';
+import { fetchRolesOverview } from '@/lib/rolesApi.js';
+import { useViewerRole } from '@/hooks/useViewerRole.js';
+import { resolveDefaultRoleId } from './RoleChipsCell.jsx';
 import { RECORD_SAVE_TOAST_ID } from '@/hooks/useEntity';
 import { runInlineToggleRequest } from '@/components/contract-ui/DataTable.jsx';
 import { Switch } from '@/components/ui/switch';
@@ -122,6 +126,7 @@ function ActiveStatusToggle({ data, recordId, token, apiBaseUrl, onRefresh }) {
  */
 function useResendInvitationExtraActions() {
   const ui = useUI();
+  const { locale } = useLocaleSwitch();
   const [sending, setSending] = useState(false);
 
   return useCallback(({ data, onRefresh }) => {
@@ -132,7 +137,7 @@ function useResendInvitationExtraActions() {
     const handleClick = async () => {
       setSending(true);
       try {
-        await resendInvitation(id);
+        await resendInvitation(id, locale);
         toast.success(ui('resendInvitationSuccessToast'));
         onRefresh?.();
       } catch (err) {
@@ -156,6 +161,123 @@ function useResendInvitationExtraActions() {
       ),
     }];
   }, [sending, ui]);
+}
+
+/**
+ * ETP-5019 — resolves the client's Admin role id, the same "find the
+ * `SFRolesOverview` row with `isClientAdmin === true`" lookup
+ * `AssignTemplateRolesControl.jsx`'s own effect already performs (see that
+ * component's `fetchRolesOverview()`-based effect and its `adminRoleId`
+ * state) — duplicated here at a much smaller scope: this window only needs
+ * the resolved id to classify the CURRENT record for promote/demote, never
+ * the full roles/template catalog `AssignTemplateRolesControl` also fetches
+ * for its picker. Fetches unconditionally on mount (no `token`/`apiBaseUrl`
+ * gate): `fetchRolesOverview()` reads the auth token straight from
+ * `localStorage` via `neoWebhookClient.js`'s `getToken()`, not from props.
+ */
+function useAdminRoleId() {
+  const [adminRoleId, setAdminRoleId] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchRolesOverview()
+      .then((res) => {
+        if (cancelled) return;
+        const roles = Array.isArray(res?.roles) ? res.roles : [];
+        const adminRole = roles.find((r) => r?.isClientAdmin === true) ?? null;
+        setAdminRoleId(adminRole?.id != null ? String(adminRole.id) : null);
+      })
+      .catch(() => {
+        if (!cancelled) setAdminRoleId(null);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  return adminRoleId;
+}
+
+/**
+ * ETP-5019 — "Make administrator" / "Remove administrator role" as a right-side
+ * toolbar action, same `extraActions` extension point as
+ * `useResendInvitationExtraActions` above (merged together at the `<UserPage>`
+ * render call below). Hidden entirely for a brand-new/unsaved record (`id`
+ * absent or `'new'`) and for the account owner — the owner already has full
+ * access by construction and can never be demoted (mirrors
+ * `AssignTemplateRolesControl.jsx`'s own owner/admin-composition guard,
+ * `UserRoleCompositionService#enforceOwnerProtection` on the backend).
+ *
+ * Which single button renders is decided by comparing the record's own
+ * `defaultRole` (via `resolveDefaultRoleId`, the same helper
+ * `RoleChipsCell.jsx`/`AssignTemplateRolesControl.jsx` already use for this
+ * exact comparison) against `adminRoleId` (resolved by `useAdminRoleId` above):
+ * already holding the Admin role → "Remove administrator role"; otherwise →
+ * "Make administrator".
+ *
+ * **Viewer gating (follow-up).** Both buttons are also gated by the CURRENT
+ * LOGGED-IN VIEWER's own role, via `useViewerRole()` — fail closed for
+ * `undefined` (still loading) and `null` (unauthenticated/unknown), only
+ * unlocking when the viewer is confirmed to hold the client-admin role
+ * themselves (covers both the owner and any other promoted admin viewing the
+ * page). The backend remains the real authority regardless
+ * (`UserRoleCompositionService#promoteToAdmin`/`demoteFromAdmin`'s
+ * `callerIsOwnerOrAdmin` check); this is UX-only, closing the previously
+ * documented gap where any viewer who could open a User's detail page saw a
+ * button that would always fail for them.
+ */
+function useAdminPromotionExtraActions(adminRoleId, viewerRole) {
+  const ui = useUI();
+  const [working, setWorking] = useState(false);
+
+  return useCallback(({ data, onRefresh }) => {
+    const id = data?.id;
+    if (!id || id === 'new' || data?.isOwner) return [];
+    if (!adminRoleId) return [];
+    if (viewerRole?.isClientAdmin !== true) return [];
+
+    const currentDefaultRoleId = resolveDefaultRoleId(data);
+    const isAdmin = !!(adminRoleId && currentDefaultRoleId && currentDefaultRoleId === adminRoleId);
+
+    const handlePromote = async () => {
+      setWorking(true);
+      try {
+        await promoteUserToAdmin(id);
+        toast.success(ui('promoteToAdminSuccessToast'));
+        onRefresh?.();
+      } catch (err) {
+        toast.error(err?.message || ui('promoteToAdminErrorFallback'));
+      } finally {
+        setWorking(false);
+      }
+    };
+
+    const handleDemote = async () => {
+      setWorking(true);
+      try {
+        await demoteUserFromAdmin(id);
+        toast.success(ui('demoteFromAdminSuccessToast'));
+        onRefresh?.();
+      } catch (err) {
+        toast.error(err?.message || ui('demoteFromAdminErrorFallback'));
+      } finally {
+        setWorking(false);
+      }
+    };
+
+    if (isAdmin) {
+      return [{
+        key: 'demote-from-admin',
+        disabled: working,
+        onClick: handleDemote,
+        label: <span data-testid="DemoteFromAdminButton">{ui('demoteFromAdminAction')}</span>,
+      }];
+    }
+    return [{
+      key: 'promote-to-admin',
+      disabled: working,
+      onClick: handlePromote,
+      label: <span data-testid="PromoteToAdminButton">{ui('promoteToAdminAction')}</span>,
+    }];
+  }, [adminRoleId, viewerRole, working, ui]);
 }
 
 /**
@@ -241,6 +363,18 @@ export default function UserWindow(props) {
   const ui = useUI();
   const navigate = useNavigate();
   const resendInvitationExtraActions = useResendInvitationExtraActions();
+  const adminRoleId = useAdminRoleId();
+  const viewerRole = useViewerRole();
+  const adminPromotionExtraActions = useAdminPromotionExtraActions(adminRoleId, viewerRole);
+  // ETP-5019 — `extraActions` accepts either a plain array or a function taking
+  // `{ data, children, onRefresh }` (see `detailViewHelpers.jsx`'s
+  // `renderExtraActionButtons`); merges both action-producing hooks' results into
+  // the single array `<UserPage>` renders, resend-invitation first (unchanged
+  // ETP-4999 ordering), admin promote/demote appended after it.
+  const combinedExtraActions = useCallback(
+    (args) => [...resendInvitationExtraActions(args), ...adminPromotionExtraActions(args)],
+    [resendInvitationExtraActions, adminPromotionExtraActions],
+  );
   const [selectedRoleIds, setSelectedRoleIds] = useState([]);
   const appliedRoleIdsRef = useRef([]);
   const hasUnsavedRoleChange = !sameIdSet(selectedRoleIds, appliedRoleIdsRef.current);
@@ -403,7 +537,7 @@ export default function UserWindow(props) {
         {...props}
         newLabel={ui('newUser')}
         topbarExtra={TopbarExtra}
-        extraActions={resendInvitationExtraActions}
+        extraActions={combinedExtraActions}
         onAfterCreate={handleAfterCreate}
         onAfterExistingSave={handleRoleAssignmentSave}
         additionalDirtyState={hasUnsavedRoleChange}

@@ -1,8 +1,8 @@
 {
-  "version": "0.20.0",
+  "version": "0.21.0",
   "generatedAt": "2026-06-16T16:34:09.049Z",
-  "updatedAt": "2026-07-28T13:29:09.489Z",
-  "contractChecksum": "101372bce7f34703",
+  "updatedAt": "2026-08-31T11:36:23.257Z",
+  "contractChecksum": "86d6d6ad62398160",
   "apiPrediction": {
     "specName": "simple-g-l-journal",
     "baseUrl": "/sws/neo/simple-g-l-journal",
@@ -17,7 +17,12 @@
         "listUrl": "/sws/neo/simple-g-l-journal/gLJournal",
         "detailUrl": "/sws/neo/simple-g-l-journal/gLJournal/{id}",
         "supportedFilters": [
-          "description"
+          "description",
+          "accountingDate",
+          "period",
+          "currency",
+          "posted",
+          "documentStatus"
         ]
       },
       "gLJournalLine": {
@@ -326,6 +331,11 @@
             "required": true,
             "defaultValue": "N"
           },
+          "documentStatus": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "DR"
+          },
           "businessPartner": {
             "readOnlyLogic": "@Posted@='Y'"
           },
@@ -469,5 +479,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "452c18b9a9a63447"
+  "checksum": "64cd88b425c63815"
 }

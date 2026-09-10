@@ -59,6 +59,9 @@ Physical Inventory should let a warehouse user create an inventory count session
 10. On a header with no lines yet, confirm the empty state shows both "+ Add line" and "Generate lines automatically". Click the latter, confirm the modal shows Product Category (default "All categories"), Inventory Quantity (default `not 0`), and "Set Book Quantity to zero" (unchecked). Submit and confirm lines are generated for the header's warehouse only, a success toast appears, and the modal closes without a full page reload.
 11. On a header with existing lines, open the "+ Add line" dropdown and confirm "Generate lines automatically" is listed; confirm it opens the same modal.
 12. In the modal, pick a specific Product Category and confirm only products in that category are generated. Leave it on "All categories" and confirm products across categories are generated (i.e. the request omits `M_Product_Category_ID` rather than sending a placeholder).
+13. **(ETP-5052)** Given a saved header with no lines yet, when it is opened, then `Warehouse` is editable.
+14. **(ETP-5052)** Given a saved header with no lines, when the first count line is added (manually or via "Generate lines automatically"), then `Warehouse` becomes read-only.
+15. **(ETP-5052)** Given a header with at least one line and a locked `Warehouse`, when the last remaining line is removed, then `Warehouse` becomes editable again.
 
 ## Automated evidence
 - `docs/generated-custom-windows/app-shell-functional-flows.md` documents the shared generated-window routing model for `/:windowName` and `/:windowName/:recordId`.
@@ -138,6 +141,12 @@ no AD-level gap) had `"section": "other"` instead of `"section": "principal"`, m
 render in the secondary/collapsed area instead of the main visible form. Fixed by changing
 `section` to `"principal"` for both fields in `decisions.json` and regenerating; confirmed in
 `contract.json` (`section: "principal"`) and in the generated `InventoryForm.jsx`.
+
+## Design changes — ETP-5052
+
+- Header `warehouse` now locks once the count session has at least one line, and unlocks again once the last line is removed — **OR'd with** the pre-existing Processed-based lock, not replacing it: `decisions.json` → `entities.header.fields.warehouse.readOnlyLogicJs: "!!record.hasLines || record.processed === true"` (with `readOnlyLogic: null` explicit, per the documented convention for combining both keys). The published `generate-contract.js` always prefers an explicit `readOnlyLogicJs` over the AD-translated raw logic unconditionally, so a bare `"!!record.hasLines"` would have silently dropped the `READONLY_Processed_Header` protection for this field once processed (caught in review) — the OR keeps both conditions honored.
+- Relies on the generic `record.hasLines` capability added to the header-form data path (`DetailView.jsx` / `detailViewHelpers.jsx`'s `buildHeaderFormData()`) — a live, display-only boolean (`hook.children.length > 0`) merged into the record object passed to header `<Form>` calls only. Full mechanism and the `readOnlyLogicJs` convention: see `docs/decisions-reference.md`, `readOnlyLogicJs` row (ETP-5052 note).
+- Regenerated via `make regen ONLY=physical-inventory`; confirmed in `contract.json` (`warehouse.readOnlyLogic.js: "!!record.hasLines || record.processed === true"`) and in the generated `InventoryForm.jsx` (`readOnlyLogic: (record) => !!record.hasLines || record.processed === true`). `npx sf-validate-pipeline --scope=physical-inventory` reports 0 violations.
 
 ## Theme roles
 

@@ -1,7 +1,20 @@
 // Mock dependencies BEFORE any import
 vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
+
+// The modal GETs the contract's default subject/message before anything else (ETP-5003). Queue an
+// answer for it first, so the responses a test lines up still meet the requests it cares about.
+// The modal fetches more than the send request (the preview cache, for one), so locate the send
+// request by what it is rather than by call index.
+function sendRequestBody() {
+  const call = global.fetch.mock.calls.find(
+    ([url, init]) => String(url).endsWith('/send') && init?.method === 'POST',
+  );
+  if (!call) throw new Error('no send request was made');
+  return JSON.parse(call[1].body);
+}
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -235,12 +248,20 @@ describe('SendDocumentModal', () => {
         expect.objectContaining({ method: 'POST' }),
       );
     });
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    const body = sendRequestBody();
     expect(body).toEqual({
       version: 'v1',
       recordId: 'doc-1',
       intent: 'send-document',
       idempotencyKey: 'sales-invoice-send:doc-1:send:v1',
+      // ETP-5003 — the operator's locale travels with every send. Without it the module renders
+      // its catalog copy in Spanish regardless of the language the operator is working in.
+      language: expect.any(String),
+      // ETP-5003 — what the operator reads on screen is what is sent, always.
+      messageEdits: expect.objectContaining({
+        subject: expect.any(String),
+        message: expect.stringContaining('sendModalDefaultGreeting'),
+      }),
     });
     expect(body.to).toBeUndefined();
     expect(body.template).toBeUndefined();
@@ -277,13 +298,11 @@ describe('SendDocumentModal', () => {
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith('blob:test');
     });
-    expect(global.fetch).toHaveBeenNthCalledWith(
-      2,
+    expect(global.fetch).toHaveBeenCalledWith(
       'http://localhost:8080/etendo/neo/sales-invoice/sws/neo/attachments/C_Invoice/doc-1?markAsMain=true',
       expect.objectContaining({ method: 'POST' }),
     );
-    expect(global.fetch).toHaveBeenNthCalledWith(
-      3,
+    expect(global.fetch).toHaveBeenCalledWith(
       'http://localhost:8080/etendo/neo/email-contracts/sales-invoice-send/send',
       expect.objectContaining({ method: 'POST' }),
     );
@@ -317,12 +336,18 @@ describe('SendDocumentModal', () => {
         expect.objectContaining({ method: 'POST' }),
       );
     });
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    const body = sendRequestBody();
     expect(body).toEqual({
       version: 'v1',
       recordId: 'order-1',
       intent: 'send-document',
       idempotencyKey: 'sales-order-send:order-1:send:v1',
+      language: expect.any(String),
+      // ETP-5003 — what the operator reads on screen is what is sent, always.
+      messageEdits: expect.objectContaining({
+        subject: expect.any(String),
+        message: expect.stringContaining('sendModalDefaultGreeting'),
+      }),
     });
   });
 
@@ -353,12 +378,18 @@ describe('SendDocumentModal', () => {
         expect.objectContaining({ method: 'POST' }),
       );
     });
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    const body = sendRequestBody();
     expect(body).toEqual({
       version: 'v1',
       recordId: 'quotation-1',
       intent: 'send-document',
       idempotencyKey: 'sales-quotation-send:quotation-1:send:v1',
+      language: expect.any(String),
+      // ETP-5003 — what the operator reads on screen is what is sent, always.
+      messageEdits: expect.objectContaining({
+        subject: expect.any(String),
+        message: expect.stringContaining('sendModalDefaultGreeting'),
+      }),
     });
   });
 
@@ -746,6 +777,7 @@ describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
     expect(subjectInput).toHaveValue('Custom subject line');
 
     const messageTextarea = getMessageTextarea();
+    await user.clear(messageTextarea);
     await user.type(messageTextarea, 'Please review this document');
     expect(messageTextarea).toHaveValue('Please review this document');
   });
@@ -765,6 +797,9 @@ describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
       />,
     );
 
+    // ETP-5003 — the message starts pre-filled with the copy that would be sent, so replacing it
+    // means clearing first.
+    await user.clear(getMessageTextarea());
     await user.type(getMessageTextarea(), 'Please review this document');
     await user.click(getSendButton());
 
@@ -774,14 +809,14 @@ describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
         expect.objectContaining({ method: 'POST' }),
       );
     });
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    const body = sendRequestBody();
     expect(body.messageEdits).toBeTruthy();
     expect(body.messageEdits.message).toBe('Please review this document');
-    // Subject was not touched — its auto-derived default is carried alongside.
+    // Subject was not touched — its default is carried alongside.
     expect(body.messageEdits.subject).toBe('Invoice #INV-001 — ACME');
   });
 
-  it('omits messageEdits from the send payload for an untouched send (backward compatibility)', async () => {
+  it('sends the on-screen subject and message even when the operator changed nothing', async () => {
     // This is a regression guard, not a bug-reproduction test: it documents
     // that a send where the operator never touched subject/message must stay
     // byte-identical to the legacy payload shape (no messageEdits key at all).
@@ -807,8 +842,18 @@ describe('SendDocumentModal — subject and message editing (ETP-4717)', () => {
         expect.objectContaining({ method: 'POST' }),
       );
     });
-    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
-    expect(body.messageEdits).toBeUndefined();
+    const body = sendRequestBody();
+    // ETP-5003 — this used to assert the opposite. Omitting an untouched message left the module
+    // recomposing it from its own catalog in whatever language the command carried, so a command
+    // with no language rebuilt in Spanish what the operator had just read in English.
+    expect(body.messageEdits).toBeTruthy();
+    expect(body.messageEdits.subject).toBe('Invoice #INV-001 — ACME');
+    // The greeting is part of the editable message so the operator can see how the customer is
+    // addressed; the module skips its own whenever a message is supplied.
+    // ui() is mocked as `key:{params}`, so this pins the composition, not the wording.
+    expect(body.messageEdits.message).toBe(
+      'sendModalDefaultGreeting:{"bpName":"ACME"}\n\n'
+      + 'sendModalDefaultMessage:{"documentType":"Invoice","documentNo":"INV-001"}');
   });
 });
 
@@ -819,5 +864,175 @@ describe('SendDocumentButton', () => {
     render(<SendDocumentButton onClick={onClick} />);
     await user.click(screen.getByTestId('action-send-email'));
     expect(onClick).toHaveBeenCalled();
+  });
+
+  it('posts the operator locale so the module does not fall back to Spanish', async () => {
+    // ETP-5003 — the modal read the locale and handed it to its own send helper, which did not
+    // destructure it, so it never reached the request body. Everything the module resolved from
+    // its catalog (button, link fallback, summary labels, date format) came back in Spanish while
+    // the operator was working in English. The server logs a WARN when this field is missing.
+    const user = userEvent.setup();
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: 'SENT' }),
+    });
+
+    render(
+      <SendDocumentModal
+        {...BASE}
+        bpEmail="user@domain.com"
+        apiBaseUrl="http://localhost:8080/etendo/neo/sales-invoice"
+      />,
+    );
+
+    await user.click(getSendButton());
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalled();
+    });
+    expect(sendRequestBody().language).toBeTruthy();
+  });
+});
+
+// ── ETP-5069: the success-only `onSent` callback ─────────────────────────────
+// `onClose` alone cannot tell a successful send apart from a dismissal, so a caller had no
+// way to know the document actually went out (the email-history card needs exactly that to
+// invalidate itself). `onSent` fires ONLY on a success, carrying the outcome the module
+// reported, and immediately before `onClose`.
+describe('SendDocumentModal — onSent success callback (ETP-5069)', () => {
+  function getCancelButton() {
+    return screen.getByRole('button', { name: 'cancel' });
+  }
+
+  it('fires onSent with the send outcome on a SENT response', async () => {
+    const user = userEvent.setup();
+    const onSent = vi.fn();
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: 'SENT', auditId: 'aud-1', requestId: 'req-1' }),
+    });
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onSent={onSent} />);
+    await user.click(getSendButton());
+
+    await waitFor(() => expect(onSent).toHaveBeenCalledTimes(1));
+    expect(onSent).toHaveBeenCalledWith({ status: 'SENT', auditId: 'aud-1', requestId: 'req-1' });
+  });
+
+  it('fires onSent on a DUPLICATE response — an idempotent re-send is still a success', async () => {
+    const user = userEvent.setup();
+    const onSent = vi.fn();
+    global.fetch.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      json: async () => ({ response: { data: { status: 'DUPLICATE', auditId: 'aud-2' } } }),
+    });
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onSent={onSent} />);
+    await user.click(getSendButton());
+
+    await waitFor(() => expect(onSent).toHaveBeenCalledTimes(1));
+    expect(onSent).toHaveBeenCalledWith(expect.objectContaining({ status: 'DUPLICATE', auditId: 'aud-2' }));
+  });
+
+  it('fires onSent BEFORE onClose, so the caller can react while the outcome is still known', async () => {
+    const user = userEvent.setup();
+    const order = [];
+    const onSent = vi.fn(() => order.push('onSent'));
+    const onClose = vi.fn(() => order.push('onClose'));
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: 'SENT' }),
+    });
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onSent={onSent} onClose={onClose} />);
+    await user.click(getSendButton());
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(order).toEqual(['onSent', 'onClose']);
+  });
+
+  it('does NOT fire onSent when the send fails at the provider', async () => {
+    const user = userEvent.setup();
+    const onSent = vi.fn();
+    const onClose = vi.fn();
+    global.fetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ response: { data: { status: 'PROVIDER_FAILED' } } }),
+    });
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onSent={onSent} onClose={onClose} />);
+    await user.click(getSendButton());
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(onSent).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does NOT fire onSent when the send is throttled', async () => {
+    const user = userEvent.setup();
+    const onSent = vi.fn();
+    global.fetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ response: { data: { status: 'THROTTLED', retryAfterSeconds: 30 } } }),
+    });
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onSent={onSent} />);
+    await user.click(getSendButton());
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(onSent).not.toHaveBeenCalled();
+  });
+
+  it('does NOT fire onSent when the request itself rejects', async () => {
+    const user = userEvent.setup();
+    const onSent = vi.fn();
+    global.fetch.mockRejectedValueOnce(new Error('Network down'));
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onSent={onSent} />);
+    await user.click(getSendButton());
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(onSent).not.toHaveBeenCalled();
+  });
+
+  it('does NOT fire onSent when the operator cancels the modal', async () => {
+    const user = userEvent.setup();
+    const onSent = vi.fn();
+    const onClose = vi.fn();
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onSent={onSent} onClose={onClose} />);
+    await user.click(getCancelButton());
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onSent).not.toHaveBeenCalled();
+  });
+
+  it('does NOT fire onSent when the operator dismisses the modal with the header close', async () => {
+    const user = userEvent.setup();
+    const onSent = vi.fn();
+    const onClose = vi.fn();
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onSent={onSent} onClose={onClose} />);
+    await user.click(screen.getByRole('button', { name: '×' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onSent).not.toHaveBeenCalled();
+  });
+
+  it('completes a successful send unchanged when no onSent is supplied (every existing caller omits it)', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: 'SENT' }),
+    });
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" onClose={onClose} />);
+    await user.click(getSendButton());
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(toast.success).toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
   });
 });

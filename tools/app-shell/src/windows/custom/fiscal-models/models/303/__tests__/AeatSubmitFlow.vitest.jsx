@@ -142,7 +142,13 @@ function jsonResponse(body) {
   return Promise.resolve({ ok: true, json: async () => body });
 }
 
+const DEFAULT_NRC = '1234567890123456789012';
+
+// The default fixture is tipo 'I' with an empty NRC, which the ETP-5027 pre-flight guard
+// now rejects. Fill the NRC centrally here so every submit-path test keeps exercising the
+// behaviour it was written for; guard tests opt out with `{ fillNrc: false }`.
 function renderFlow(overrides = {}) {
+  const { fillNrc = true, ...props } = overrides;
   const defaults = {
     decl: DECL,
     orgIdent: ORG_IDENT,
@@ -153,7 +159,12 @@ function renderFlow(overrides = {}) {
     onSuccess: vi.fn(),
     onClose: vi.fn(),
   };
-  return render(<AeatSubmitFlow {...defaults} {...overrides} />);
+  const utils = render(<AeatSubmitFlow {...defaults} {...props} />);
+  if (fillNrc) {
+    const nrcInput = screen.queryByTestId('AeatSubmitFlow__nrc');
+    if (nrcInput) fireEvent.change(nrcInput, { target: { value: DEFAULT_NRC } });
+  }
+  return utils;
 }
 
 describe('AeatSubmitFlow — confirm screen', () => {
@@ -606,5 +617,129 @@ describe('AeatSubmitFlow — connection failure', () => {
     renderFlow();
     fireEvent.click(screen.getByText('fm.aeat.action.submit'));
     await waitFor(() => expect(screen.getByText('fm.aeat.error.connection')).toBeInTheDocument());
+  });
+});
+
+describe('AeatSubmitFlow — NRC required guard (ETP-5027)', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  function submit() {
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+  }
+
+  it('blocks submission and shows the error banner for tipo I with an empty NRC', async () => {
+    renderFlow({ fillNrc: false });
+    submit();
+
+    await waitFor(() => expect(screen.getByText('fm.aeat.error.nrcRequired')).toBeInTheDocument());
+    expect(stableApiFetch).not.toHaveBeenCalled();
+    // Still on the confirm screen — the submit button must still be present.
+    expect(screen.getByText('fm.aeat.action.submit')).toBeInTheDocument();
+  });
+
+  it('blocks submission for tipo I with a whitespace-only NRC', async () => {
+    renderFlow({ fillNrc: false });
+    fireEvent.change(screen.getByTestId('AeatSubmitFlow__nrc'), { target: { value: '   ' } });
+    submit();
+
+    await waitFor(() => {
+      expect(screen.getByText('fm.aeat.error.nrcRequired')).toBeInTheDocument();
+    });
+    expect(stableApiFetch).not.toHaveBeenCalled();
+  });
+
+  it('does not block submission for tipo I once the NRC is filled', async () => {
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'SUCCESS' }));
+    renderFlow();
+    submit();
+
+    await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('fm.aeat.error.nrcRequired')).not.toBeInTheDocument();
+  });
+
+  it('does not block submission in test mode, where no NRC exists yet', async () => {
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'TEST_SUCCESS' }));
+    renderFlow({ fillNrc: false });
+    fireEvent.click(screen.getByTestId('AeatSubmitFlow__testMode'));
+    submit();
+
+    await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('fm.aeat.error.nrcRequired')).not.toBeInTheDocument();
+  });
+
+  it('does not fire when declarationType is empty even though decl.result.kind is I', async () => {
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'SUCCESS' }));
+    // `tipo` (the looser expression the IBAN guard uses) resolves to 'I' here via its
+    // decl.result.kind fallback, but declarationType is '' so the NRC field is NOT
+    // rendered. Keying the guard off `tipo` would block submission against an invisible
+    // field with no way for the user to satisfy it.
+    renderFlow({
+      fillNrc: false,
+      decl: { ...DECL, result: { kind: 'I' } },
+      identChecks: { tipo_declaracion: '', bank_iban: 'ES7620770024003102575766' },
+    });
+
+    expect(screen.queryByTestId('AeatSubmitFlow__nrc')).not.toBeInTheDocument();
+    submit();
+
+    await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('fm.aeat.error.nrcRequired')).not.toBeInTheDocument();
+  });
+
+  it.each(['U', 'D', 'N'])('does not fire the NRC guard for tipo %s', async (tipo) => {
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'SUCCESS' }));
+    renderFlow({
+      fillNrc: false,
+      decl: { ...DECL, result: { kind: tipo } },
+      identChecks: { tipo_declaracion: tipo, bank_iban: 'ES7620770024003102575766' },
+    });
+    submit();
+
+    await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('fm.aeat.error.nrcRequired')).not.toBeInTheDocument();
+  });
+});
+
+// The asterisk and the pre-flight guard are driven by the same `nrcRequired` expression, so
+// the marker must track test mode exactly like the guard does: while "Validar sin presentar"
+// is checked the NRC is not required, and promising otherwise with an asterisk is a lie.
+describe('AeatSubmitFlow — NRC required marker (ETP-5027)', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('renders the required asterisk next to the NRC label for tipo I with test mode off', () => {
+    const { container } = renderFlow();
+    expect(screen.getByTestId('AeatSubmitFlow__testMode')).not.toBeChecked();
+    expect(container.querySelector('.fm-aeat-required-mark')).toBeInTheDocument();
+  });
+
+  it('renders no required asterisk when the NRC field is hidden (tipo D, test mode off)', () => {
+    const { container } = renderFlow({
+      decl: { ...DECL, result: { kind: 'D' } },
+      identChecks: { tipo_declaracion: 'D', bank_iban: 'ES7620770024003102575766' },
+    });
+    expect(container.querySelector('.fm-aeat-required-mark')).toBeNull();
+  });
+
+  it('renders no required asterisk for tipo I when test mode is on', () => {
+    const { container } = renderFlow();
+    fireEvent.click(screen.getByTestId('AeatSubmitFlow__testMode'));
+    expect(container.querySelector('.fm-aeat-required-mark')).toBeNull();
+  });
+
+  it('keeps the NRC input visible in test mode — only the required marker goes away', () => {
+    const { container } = renderFlow();
+    fireEvent.click(screen.getByTestId('AeatSubmitFlow__testMode'));
+    expect(screen.getByTestId('AeatSubmitFlow__nrc')).toBeInTheDocument();
+    expect(container.querySelector('.fm-aeat-required-mark')).toBeNull();
+  });
+
+  it('toggles the asterisk reactively as the test-mode checkbox is clicked', () => {
+    const { container } = renderFlow();
+    const checkbox = screen.getByTestId('AeatSubmitFlow__testMode');
+    expect(container.querySelector('.fm-aeat-required-mark')).toBeInTheDocument();
+    fireEvent.click(checkbox);
+    expect(container.querySelector('.fm-aeat-required-mark')).toBeNull();
+    fireEvent.click(checkbox);
+    expect(container.querySelector('.fm-aeat-required-mark')).toBeInTheDocument();
   });
 });

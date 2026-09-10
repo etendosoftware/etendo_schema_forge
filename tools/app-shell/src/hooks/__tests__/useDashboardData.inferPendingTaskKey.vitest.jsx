@@ -20,13 +20,27 @@
 
 // --- Mocks must be declared before any imports that trigger module resolution ---
 
+import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
+
 vi.mock('@generated/dashboard/generated/config', () => ({
   kpisConfig: [],
   actions: [],
 }));
 
 vi.mock('@/auth/AuthContext', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  // ETP-5088 — widget visibility now decides what this hook fetches at all. These suites are
+  // about the mapping, not the gating, so they run as a client-admin (every gate open), which is
+  // exactly how they behaved before the gating landed. The gating itself is covered by
+  // `src/lib/__tests__/dashboardWidgetAccess.test.js` and `pages/__tests__/DashboardPage.vitest.jsx`.
+  useAuth: () => ({
+    token: 'test-token',
+    windowAccess: {},
+    capabilities: { isAdminOrClientAdmin: true },
+  }),
+}));
+
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: createStableUseApiFetchMock(),
 }));
 
 vi.mock('@/lib/dashboardNavigation.js', () => ({
@@ -207,6 +221,30 @@ describe('useDashboardData — inferPendingTaskKey (PENDING_TASK_RULES)', () => 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current.pendingTasks[0].taskKey).toBe('paymentsDueToday');
+  });
+
+  // ---- Rule (ETP-5017): payment overdue — checked before "payment due today" ----
+
+  it('infersPendingTaskKeyFromTextPaymentsOverdue — count > 1 → plural', async () => {
+    mockFetchWithPendingTasks([
+      { link: '', text: '3 payments overdue', count: 3 },
+    ]);
+
+    const { result } = renderHook(() => useDashboardData());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.pendingTasks[0].taskKey).toBe('paymentsOverdue_plural');
+  });
+
+  it('infersPendingTaskKeyFromTextPaymentsOverdue — count 1 → singular', async () => {
+    mockFetchWithPendingTasks([
+      { link: '', text: '1 payment overdue', count: 1 },
+    ]);
+
+    const { result } = renderHook(() => useDashboardData());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.pendingTasks[0].taskKey).toBe('paymentsOverdue');
   });
 
   // ---- Rule 6: physical-inventory / low stock alert ----

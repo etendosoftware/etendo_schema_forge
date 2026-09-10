@@ -137,13 +137,49 @@ describe('selectNextSurvey', () => {
     expect(selectNextSurvey({ isAdmin: false, now: NOW })).toBeNull();
   });
 
-  it('does not return csat_onboarding (disabled until fully implemented)', () => {
+  it('returns csat_onboarding for an eligible admin on login source', () => {
+    mockStorage.setItem(STORAGE_KEY, JSON.stringify({
+      onboardingCompleted: true,
+      onboardingShown: false,
+      onboardingCompletedAt: isoAgo(2 * MS_DAY),
+      counters: { invoicing: 0, order: 0 },
+    }));
+    const survey = selectNextSurvey({ isAdmin: true, now: NOW, source: 'login' });
+    expect(survey?.id).toBe('csat_onboarding');
+  });
+
+  it('does not return csat_onboarding for a non-admin even when onboarding is completed', () => {
     mockStorage.setItem(STORAGE_KEY, JSON.stringify({
       onboardingCompleted: true,
       onboardingShown: false,
       counters: { invoicing: 0, order: 0 },
     }));
-    expect(selectNextSurvey({ isAdmin: true, now: NOW })).toBeNull();
+    expect(selectNextSurvey({ isAdmin: false, now: NOW, source: 'login' })).toBeNull();
+  });
+
+  it('does not return csat_onboarding once it has already been shown', () => {
+    mockStorage.setItem(STORAGE_KEY, JSON.stringify({
+      onboardingCompleted: true,
+      onboardingShown: true,
+      counters: { invoicing: 0, order: 0 },
+    }));
+    expect(selectNextSurvey({ isAdmin: true, now: NOW, source: 'login' })).toBeNull();
+  });
+
+  it('prioritizes csat_onboarding over nps when both are simultaneously eligible', () => {
+    // csat_onboarding is listed before nps in SURVEYS, and both declare
+    // sources: ['login'] — an admin who just finished onboarding AND already
+    // clears the 60-day nps min-account-age must get csat_onboarding first,
+    // not nps. This is the array-order priority REVIEW flagged as untested.
+    mockStorage.setItem(STORAGE_KEY, JSON.stringify({
+      onboardingCompleted: true,
+      onboardingShown: false,
+      onboardingCompletedAt: isoAgo(2 * MS_DAY),
+      firstLoginAt: new Date(NOW - 61 * MS_DAY).toISOString(),
+      counters: { invoicing: 0, order: 0 },
+    }));
+    const survey = selectNextSurvey({ isAdmin: true, now: NOW, source: 'login' });
+    expect(survey?.id).toBe('csat_onboarding');
   });
 
   it('returns nps after 60 days for first-time user', () => {

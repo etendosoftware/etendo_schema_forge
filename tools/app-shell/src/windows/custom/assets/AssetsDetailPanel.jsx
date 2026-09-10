@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { EntityForm } from '@/components/contract-ui';
 import { PillToggle } from '@/components/PillToggle';
-import { useUI } from '@/i18n';
+import { useUI, useLabel } from '@/i18n';
 import { useAccountingDimensionFields } from '@/hooks/useAccountingDimensionFields';
 
 function GroupHead({ title, description }) {
@@ -94,6 +94,7 @@ export function computeAssetAmounts(field, asset, residual, amort) {
 
 export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, api, editing, onChange, onLocalChange, registerFields, fieldErrors }) {
   const ui = useUI();
+  const t = useLabel();
   const d = data ?? {};
   const depreciate = isDepreciate(d);
 
@@ -174,7 +175,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
 
   const group1Fields = [
     { key: 'searchKey', column: 'Value', type: 'text', label: ui('Search Key'), required: true, section: 'principal' },
-    { key: 'name', column: 'Name', type: 'text', label: ui('Name'), required: true, section: 'principal' },
+    { key: 'name', column: 'Name', type: 'text', label: ui('Name'), required: true, section: 'principal', maxLength: 60 },
     // TEMPORARY opt-out (searchSelect: false) — keeps this field on the OLD plain
     // SelectorInput instead of ETP-4600's unified CreatableSearchSelect. The unified
     // component's interaction timing exposes a pre-existing DetailView save→refetch/
@@ -183,7 +184,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     // never renders the "Crear Amortización" button (integration Cases 5/6/7). Remove
     // this opt-out once the DetailView race has its own fix (tracked as a separate
     // ticket) — this is NOT masking a bug in the unified selector itself.
-    { key: 'assetCategory', column: 'A_Asset_Group_ID', type: 'selector', label: ui('Asset Category'), required: true, section: 'principal', reference: 'AssetGroup', inputMode: 'selector', searchSelect: false },
+    { key: 'assetCategory', column: 'A_Asset_Group_ID', type: 'selector', label: t('A_Asset_Group_ID') || 'Asset Group', required: true, section: 'principal', reference: 'AssetGroup', inputMode: 'selector', searchSelect: false },
     // ETP-4529 — per the corrected accounting-dimension matrix, Producto is "Siempre"
     // for Activo (Amortizaciones) Cabecera: always visible regardless of GL Configuration.
     // It is a plain business field (which product this asset represents), not a
@@ -197,7 +198,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     // Column order (per ETP-4539 follow-up): Identificador, Nombre, Grupo Activo, Producto,
     // Valor del Activo, Descripcion — assetValue must render BEFORE description.
     { key: 'assetValue', column: 'AssetValueAmt', type: 'number', label: ui('assetsAssetValueLabel'), section: 'principal', calloutOn: 'blur' },
-    { key: 'description', column: 'Description', type: 'textarea', label: ui('Description'), section: 'other' },
+    { key: 'description', column: 'Description', type: 'textarea', label: ui('Description'), section: 'other', maxLength: 255 },
   ];
 
   const group2Fields = [
@@ -232,7 +233,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     // (e.g. 12.5% is valid) — so only `min: 1` is set, no `integer`. Drives the
     // generic numeric validation in EntityForm (on-blur toast) and the useEntity
     // save-block gate — no window-specific code. ETP-4542.
-    { key: 'annualDepreciation', column: 'Amortizationpercentage', type: 'number', label: ui('assetsAnnualDepreciationLabel'), section: 'principal', min: 1, displayLogic: (record) => isDepreciate(record) && record.calculateType !== 'TI', requiredVisual: true },
+    { key: 'annualDepreciation', column: 'Amortizationpercentage', type: 'number', label: ui('assetsAnnualDepreciationLabel'), section: 'principal', min: 1, max: 100, calloutOn: 'blur', displayLogic: (record) => isDepreciate(record) && record.calculateType !== 'TI', requiredVisual: true },
     { key: 'amortize', column: 'Assetschedule', type: 'select', required: true, section: 'principal', options: [{ value: 'MO', label: ui('assetsOptMonthly') }, { value: 'YE', label: ui('assetsOptYearly') }], displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' },
     // Usable Life must be a positive whole number (backend "Create Amortization"
     // rejects empty/zero/negative/decimal). `min: 1` + `integer: true` drive the

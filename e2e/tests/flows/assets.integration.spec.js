@@ -83,7 +83,7 @@ async function openNewAsset(page) {
     .catch(() => {}); // OK if spinner never appeared
 }
 
-/** Pick the real "Genérico" category in the Grupo activo selector.
+/** Pick the real "Genérico" category in the Categoría de activo selector.
  *
  * ETP-4600 unified FK fields onto CreatableSearchSelect (chip + combobox model),
  * but `assetCategory` carries an explicit `searchSelect: false` opt-out
@@ -96,7 +96,7 @@ async function openNewAsset(page) {
  * the same `field-assetCategory` trigger, so the post-selection assertion
  * checks that trigger's text instead of a `-chip` testid. This is a legitimate
  * adaptation to the field's real (old) component, not a weakened assertion. */
-async function selectGrupoActivoOtros(page) {
+async function selectCategoryOtros(page) {
   await openSelectorField(page, 'assetCategory');
   await page.getByRole('option', { name: /Gen[eé]rico|Otros|Others/i }).first().click();
   // Original guarantee: a category is now selected — the trigger reflects the label.
@@ -169,20 +169,32 @@ async function setFieldUntilDirty(page, testId, value) {
 /** Persist current edits, then run "Crear Amortización" and expect a toast. */
 async function saveThenProcess(page, expectRe) {
   await saveAsset(page);
+  // Drain the toast stack before triggering the next one. data-front="true"
+  // alone is NOT enough: it marks whichever toast is currently frontmost, and
+  // between saveAsset's own "Registro guardado" and the process result there is
+  // a window where the PREVIOUS cycle's toast is still mounted and still front.
+  // Under load that window widens and the assertion below reads the stale toast
+  // instead — observed twice on this file (Case 5, then Case 6 on the next run,
+  // the failure moving between adjacent cases being the giveaway that it was a
+  // race and not a real defect). Sonner auto-dismisses in 4s by default, so this
+  // converges on its own; waiting here means any toast that appears after the
+  // click can only be this cycle's.
+  await expect(page.locator('[data-sonner-toast]'),
+    'toasts from the previous cycle should have dismissed before the next process run',
+  ).toHaveCount(0, { timeout: 15_000 });
   await crearAmortizacionBtn(page).click();
   // Assert the FRONTMOST toast (newest = this cycle's result) so repeated
-  // identical errors (empty / 0 / negative) don't trip strict mode or match a
-  // stale toast from a previous attempt.
+  // identical errors (empty / 0 / negative) don't trip strict mode.
   await expect(page.locator('[data-sonner-toast][data-front="true"]'))
     .toContainText(expectRe, { timeout: 12_000 });
 }
 
 /**
- * Apply the conditional filter Nombre Es <name> AND Grupo activo Es Genérico,
+ * Apply the conditional filter Nombre Es <name> AND Categoría de activo Es Genérico,
  * and assert the list narrows to exactly the created asset.
  */
-/** Build and apply the conditional filter Nombre Es <name> AND Grupo activo Es Genérico. */
-async function applyNameAndGrupoFilter(page, name) {
+/** Build and apply the conditional filter Nombre Es <name> AND Categoría de activo Es Genérico. */
+async function applyNameAndCategoryFilter(page, name) {
   await page.getByTestId('filter-advanced').click();
   const panel = page.getByRole('dialog');
   await expect(panel).toBeVisible();
@@ -194,10 +206,10 @@ async function applyNameAndGrupoFilter(page, name) {
   await page.getByRole('option', { name: 'Es', exact: true }).click();
   await panel.getByRole('textbox').first().fill(name);
 
-  // Condition 2 — Grupo activo Es Genérico (FK value = IdentifierMultiPicker).
+  // Condition 2 — Categoría de activo Es Genérico (FK value = IdentifierMultiPicker).
   await panel.getByRole('button', { name: 'Añadir condición' }).click();
   await panel.locator('[role="combobox"]', { hasText: 'Selector de campo' }).first().click();
-  await page.getByRole('option', { name: /Grupo activo|Asset Category|Categor/i }).click();
+  await page.getByRole('option', { name: /^Categoría de activo$|^Asset Group$/i }).click();
   await panel.locator('[role="combobox"]', { hasText: 'Seleccionar condición' }).first().click();
   await page.getByRole('option', { name: 'Es', exact: true }).click();
   await panel.getByRole('button', { name: 'Seleccionar valor' }).click();
@@ -208,18 +220,18 @@ async function applyNameAndGrupoFilter(page, name) {
 }
 
 /** Filter the list and assert it narrows to exactly the created asset. */
-async function findByNameAndGrupo(page, name) {
-  await applyNameAndGrupoFilter(page, name);
+async function findByNameAndCategory(page, name) {
+  await applyNameAndCategoryFilter(page, name);
   await expect(page.locator('tbody tr')).toHaveCount(1, { timeout: 10_000 });
   await expect(page.locator('tbody tr').first()).toContainText(name);
 }
 
-/** After deletion, filter the list by the asset's name + Grupo activo and assert
- *  it no longer appears. */
+/** After deletion, filter the list by the asset's name + Categoría de activo and
+ *  assert it no longer appears. */
 async function verifyAssetNotInList(page, name) {
   await page.goto('/assets');
   await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 15_000 });
-  await applyNameAndGrupoFilter(page, name);
+  await applyNameAndCategoryFilter(page, name);
   await expect(page.locator('tbody tr').filter({ hasText: name })).toHaveCount(0, { timeout: 10_000 });
 }
 
@@ -371,7 +383,7 @@ async function createDepreciableAsset(page, { stamp, name }) {
 
   await page.getByTestId('field-searchKey').fill(`AS-E2E-${stamp}`);
   await page.getByTestId('field-name').fill(name);
-  await selectGrupoActivoOtros(page);
+  await selectCategoryOtros(page);
 
   // Activate "Depreciar" → financial + accounting-dimensions sections appear.
   // Register the evaluate-display wait BEFORE the click (see helper docblock),
@@ -438,12 +450,32 @@ async function fillStartDate(page, digits) {
   await dateInput.blur(); // commit so the form becomes dirty
 }
 
+/** Save and assert the success toast, ARMING the toast expectation before the
+ *  click. A post-hoc assertion races the toast's own auto-dismiss: the DOM
+ *  captured on a failing run had zero toasts and a disabled Save button — the
+ *  save had landed and its toast was already gone. Declaring the expectation
+ *  first is the same pattern ETP-4903 applied to waitForResponse.
+ *
+ *  Save must be enabled here: `saveAsset` returns early on a clean form, which
+ *  would leave the caller waiting for a toast no save ever produced. Asserting
+ *  it enabled turns that into a loud, accurate failure instead. */
+async function saveAssetExpectingToast(page) {
+  const saveBtn = page.getByTestId('action-save')
+    .or(page.getByRole('button', { name: /guardar|save/i }));
+  await expect(saveBtn.first(),
+    'Save should be enabled — this call site always has pending edits',
+  ).toBeEnabled({ timeout: 10_000 });
+
+  const toastShown = expect(page.locator('[data-sonner-toast][data-front="true"]'))
+    .toContainText(/Registro guardado/i, { timeout: 15_000 });
+  await saveAsset(page);
+  await toastShown;
+}
+
 /** Edit Descripción in place and save, expecting "Registro guardado". */
 async function editDescriptionInPlace(page, stamp) {
   await setFieldUntilDirty(page, 'field-description', `Descripción de prueba ${stamp}`);
-  await saveAsset(page);
-  await expect(page.locator('[data-sonner-toast][data-front="true"]'))
-    .toContainText(/Registro guardado/i, { timeout: 10_000 });
+  await saveAssetExpectingToast(page);
 }
 
 /** Edit Valor residual with negative / 0 / below / above Valor a amortizar
@@ -453,9 +485,7 @@ async function editResidualValues(page) {
   for (const value of ['-100', '0', '1000', '3000', '0']) {
     await setFieldUntilDirty(page, 'field-residualAssetValue', value);
     await verifySidebarSync(page);
-    await saveAsset(page);
-    await expect(page.locator('[data-sonner-toast][data-front="true"]'))
-      .toContainText(/Registro guardado/i, { timeout: 10_000 });
+    await saveAssetExpectingToast(page);
   }
 }
 
@@ -504,13 +534,13 @@ test.describe('Assets (real backend)', () => {
 
     await page.getByTestId('field-searchKey').fill(`AS-E2E-${stamp}`);
     await page.getByTestId('field-name').fill(name);
-    await selectGrupoActivoOtros(page);
+    await selectCategoryOtros(page);
     await page.getByTestId('action-save').click();
     await expect(toastByText(page, /Registro creado/i)).toBeVisible({ timeout: 10_000 });
 
     await page.getByTestId('action-cancel').click();
     await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 10_000 });
-    await findByNameAndGrupo(page, name);
+    await findByNameAndCategory(page, name);
 
     // Open it, edit Descripción + save, then delete the record.
     await editDescriptionAndDelete(page, stamp, name);
@@ -567,7 +597,7 @@ test.describe('Assets (real backend)', () => {
     // Back to the list: filter and verify the row columns.
     await page.getByTestId('action-cancel').click();
     await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 10_000 });
-    await findByNameAndGrupo(page, name);
+    await findByNameAndCategory(page, name);
     const row = page.locator('tbody tr').first();
     await expect(row).toContainText('2,000.00 €');
     await expect(row).toContainText('01/06/2026');
@@ -593,7 +623,7 @@ test.describe('Assets (real backend)', () => {
     // Navigate straight to the list (the blocked-delete dialog is discarded).
     await page.goto('/assets');
     await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 15_000 });
-    await findByNameAndGrupo(page, name);
+    await findByNameAndCategory(page, name);
     await verifyGridAmortizationBar(page);
 
     // Reactivate → now deletable. Delete and verify the asset is gone, then clean
@@ -663,7 +693,7 @@ test.describe('Assets (real backend)', () => {
     // Back to the list: filter and verify the row columns.
     await page.getByTestId('action-cancel').click();
     await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 10_000 });
-    await findByNameAndGrupo(page, name);
+    await findByNameAndCategory(page, name);
     const row = page.locator('tbody tr').first();
     await expect(row).toContainText('2,000.00 €');
     await expect(row).toContainText('01/01/2026');
@@ -686,7 +716,7 @@ test.describe('Assets (real backend)', () => {
     // Point 3: the filtered grid shows the amortization progress bar with its %.
     await page.goto('/assets');
     await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 15_000 });
-    await findByNameAndGrupo(page, name);
+    await findByNameAndCategory(page, name);
     await verifyGridAmortizationBar(page);
 
     // Reactivate → now deletable. Delete, verify gone, conditional cascade (Point 4).
@@ -749,7 +779,7 @@ test.describe('Assets (real backend)', () => {
     // Back to the list: filter and verify the row columns.
     await page.getByTestId('action-cancel').click();
     await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 10_000 });
-    await findByNameAndGrupo(page, name);
+    await findByNameAndCategory(page, name);
     const row = page.locator('tbody tr').first();
     await expect(row).toContainText('2,000.00 €');
     await expect(row).toContainText('01/01/2026');
@@ -772,7 +802,7 @@ test.describe('Assets (real backend)', () => {
     // Point 3: the filtered grid shows the amortization progress bar with its %.
     await page.goto('/assets');
     await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 15_000 });
-    await findByNameAndGrupo(page, name);
+    await findByNameAndCategory(page, name);
     await verifyGridAmortizationBar(page);
 
     // Reactivate → now deletable. Delete, verify gone, conditional cascade (Point 4).
@@ -971,7 +1001,7 @@ test.describe('Assets (real backend)', () => {
 
     await page.getByTestId('field-searchKey').fill(`AS-E2E-${stamp}`);
     await page.getByTestId('field-name').fill(name);
-    await selectGrupoActivoOtros(page);
+    await selectCategoryOtros(page);
 
     const depreciarToggle = page.getByRole('switch').first();
 
@@ -1013,7 +1043,7 @@ test.describe('Assets (real backend)', () => {
     await expect(toastByText(page, /Registro creado/i)).toBeVisible({ timeout: 10_000 });
     await page.getByTestId('action-cancel').click();
     await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 10_000 });
-    await findByNameAndGrupo(page, name);
+    await findByNameAndCategory(page, name);
 
     // Open it, edit Descripción + save, then delete the record.
     await editDescriptionAndDelete(page, stamp, name);

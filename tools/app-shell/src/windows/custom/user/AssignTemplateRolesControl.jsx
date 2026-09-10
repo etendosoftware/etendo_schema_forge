@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
-import { fetchTemplateRoles } from '@/lib/rolesApi.js';
+import { fetchTemplateRoles, fetchRolesOverview } from '@/lib/rolesApi.js';
+import { resolveDefaultRoleId } from './RoleChipsCell.jsx';
 import { useRoleSelection } from './roleSelectionContext.js';
 
 const MAX_COLLAPSED_CHIPS = 3;
@@ -32,11 +33,24 @@ export default function AssignTemplateRolesControl(props) {
   const { selectedRoleIds, setSelectedRoleIds } = useRoleSelection();
 
   const [roles, setRoles] = useState([]);
+  const [adminRoleId, setAdminRoleId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const containerRef = useRef(null);
 
   const hasPersistedUser = !!data?.id;
+
+  // ETP-5019 — the owner/admin already has full access by construction: composing template
+  // roles for a user CURRENTLY holding the client-admin "Admin" role would fail to find a
+  // reusable personal role (Admin is explicitly excluded, see
+  // `UserRoleCompositionService#isReusablePersonalRole`) and silently mint a brand-new one,
+  // REPLACING `Default_Ad_Role_ID` and losing the Admin role as a side effect. The backend now
+  // rejects this unconditionally (`UserRoleCompositionService#enforceOwnerProtection`) — this is
+  // the UI-side guard so the control never even offers the (always-doomed) interaction. Same
+  // "compare the row's own defaultRole id against SFRolesOverview's isClientAdmin row" pattern
+  // `RoleChipsCell.jsx`'s `useUserRoleGridData`/admin branch already established for the grid.
+  const currentDefaultRoleId = resolveDefaultRoleId(data);
+  const isAdminRoleHolder = !!(adminRoleId && currentDefaultRoleId && currentDefaultRoleId === adminRoleId);
 
   useEffect(() => {
     if (!hasPersistedUser || !token || !apiBaseUrl) {
@@ -45,15 +59,24 @@ export default function AssignTemplateRolesControl(props) {
     }
     let cancelled = false;
     setLoading(true);
-    fetchTemplateRoles()
-      .then((res) => {
+    Promise.all([fetchTemplateRoles(), fetchRolesOverview()])
+      .then(([templateRes, overviewRes]) => {
         if (cancelled) return;
         // No isClientAdmin filter needed — SFSystemRoleTemplates never returns a client-admin
         // row at all (there is none at system level, see its class javadoc).
-        setRoles(res?.roles ?? []);
+        setRoles(templateRes?.roles ?? []);
+        // fetchRolesOverview() is kept ONLY for its tenant-scoped client-admin row (ETP-5019),
+        // mirroring RoleChipsCell.jsx's useUserRoleGridData — never used to populate the
+        // selectable template list itself (see fetchTemplateRoles()'s own docstring for why).
+        const overviewRoles = Array.isArray(overviewRes?.roles) ? overviewRes.roles : [];
+        const adminRole = overviewRoles.find((r) => r?.isClientAdmin === true) ?? null;
+        setAdminRoleId(adminRole?.id != null ? String(adminRole.id) : null);
       })
       .catch(() => {
-        if (!cancelled) setRoles([]);
+        if (!cancelled) {
+          setRoles([]);
+          setAdminRoleId(null);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -111,6 +134,19 @@ export default function AssignTemplateRolesControl(props) {
       <div className="flex flex-col gap-2 w-full" data-testid="AssignTemplateRolesControl__save-first">
         <label className="text-sm font-medium text-foreground">{ui('assignedRolesLabel')}</label>
         <p className="text-sm text-muted-foreground">{ui('saveUserFirstForRoles')}</p>
+      </div>
+    );
+  }
+
+  // ETP-5019 — the owner/admin cannot compose additional roles at all; render a locked
+  // placeholder instead of the interactive editor (structural UI block, on top of the
+  // unconditional backend rejection — see the effect above and
+  // UserRoleCompositionService#enforceOwnerProtection).
+  if (isAdminRoleHolder) {
+    return (
+      <div className="flex flex-col gap-2 w-full" data-testid="AssignTemplateRolesControl__admin-locked">
+        <label className="text-sm font-medium text-foreground">{ui('assignedRolesLabel')}</label>
+        <p className="text-sm text-muted-foreground">{ui('adminRoleNoCompositionMessage')}</p>
       </div>
     );
   }

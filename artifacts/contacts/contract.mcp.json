@@ -1,8 +1,7 @@
 {
-  "version": "0.50.0",
-  "generatedAt": "2026-08-25T11:37:47.653Z",
-  "updatedAt": "2026-08-25T18:09:16.378Z",
-  "contractChecksum": "397296243d877390",
+  "version": "0.1.0",
+  "generatedAt": "2026-09-09T11:18:23.940Z",
+  "contractChecksum": "c9701b214fb19991",
   "apiPrediction": {
     "specName": "contacts",
     "baseUrl": "/sws/neo/contacts",
@@ -226,8 +225,17 @@
         "field": "account",
         "column": "FIN_Financial_Account_ID",
         "reference": "FIN_Financial_Account",
-        "inputMode": "selector",
-        "url": "/sws/neo/contacts/businessPartner/selectors/account"
+        "inputMode": "dependent",
+        "url": "/sws/neo/contacts/businessPartner/selectors/account",
+        "context": {
+          "required": [
+            {
+              "param": "Fin_Paymentmethod_ID",
+              "source": "field",
+              "field": "paymentMethod"
+            }
+          ]
+        }
       },
       {
         "entity": "businessPartner",
@@ -250,7 +258,7 @@
         "field": "pOFinancialAccount",
         "column": "PO_Financial_Account_ID",
         "reference": "FIN_Financial_Account",
-        "inputMode": "selector",
+        "inputMode": "dependent",
         "url": "/sws/neo/contacts/businessPartner/selectors/pOFinancialAccount",
         "context": {
           "required": [
@@ -696,7 +704,8 @@
         "EM_Etgo_Web": "Página web",
         "EM_Etgo_Firstname": "Nombre",
         "EM_Etgo_Lastname": "Apellidos",
-        "C_BP_Group_ID": "Categoría de contacto"
+        "C_BP_Group_ID": "Categoría de contacto",
+        "TaxID": "NIF"
       }
     }
   },
@@ -1199,6 +1208,19 @@
     "selectorContexts": [
       {
         "entity": "businessPartner",
+        "field": "account",
+        "context": {
+          "required": [
+            {
+              "param": "Fin_Paymentmethod_ID",
+              "source": "field",
+              "field": "paymentMethod"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "businessPartner",
         "field": "pOFinancialAccount",
         "context": {
           "required": [
@@ -1266,5 +1288,5 @@
     "dangerousOperations": [],
     "agentPrompt": "Master data for contacts (the adopted term for what Etendo classic calls a business partner, also referred to as BP): customers, vendors and employees, with their contact people, locations, discounts and bank accounts. The `bankAccount` entity holds a contact's (business partner / BP) OWN bank accounts (Etendo table C_BP_BankAccount), used to store the contact's payment/bank details. These are NOT the company's own financial accounts. For the company's cash/bank/card accounts (FIN_Financial_Account) use the `financial-account` spec instead."
   },
-  "checksum": "f7a41415a4d348d4"
+  "checksum": "ea94ea3de24f3709"
 }

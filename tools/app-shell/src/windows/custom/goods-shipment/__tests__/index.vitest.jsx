@@ -37,7 +37,7 @@ vi.mock('@/components/contract-ui/CreateContactContext.js', () => ({
 
 vi.mock('@/components/contract-ui/useCreateContactModal.jsx', () => ({
   useCreateContactModal: vi.fn(() => ({
-    headers: { Authorization: 'Bearer tkn' },
+    headers: { Authorization: 'Bearer tkn', 'Accept-Language': 'es_ES' },
     createContactCtxValue: { open: vi.fn() },
     contactPortal: <div data-testid="contact-portal" />,
   })),
@@ -170,6 +170,7 @@ describe('GoodsShipmentWindow', () => {
       recordId: 'ship-1',
       autoSaveOnBlur: true,
       processes: [],
+      refetchAfterSave: true,
     });
     expect(lastPageProps.hideMoreMenu({ data: { documentStatus: 'DR' } })).toBe(true);
     expect(lastPageProps.hideMoreMenu({ data: { documentStatus: 'CO' } })).toBe(false);

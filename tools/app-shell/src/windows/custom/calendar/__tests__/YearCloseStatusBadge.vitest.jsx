@@ -3,6 +3,11 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
+
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: createStableUseApiFetchMock(),
+}));
 
 // This test intentionally does NOT mock '@/i18n' — it renders with the real LocaleProvider
 // and the real locale JSON files, same convention as *.i18n.vitest.jsx elsewhere in this repo
@@ -34,12 +39,12 @@ function renderWithLocale(locale, ui) {
 describe('YearCloseStatusBadge', () => {
   it('shows "Año cerrado" (green) when the year has at least one closing-type accounting entry', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [ROW] }) }));
-    renderWithLocale('es_ES', <YearCloseStatusBadge recordId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    renderWithLocale('es_ES', <YearCloseStatusBadge recordId="year1" apiBaseUrl="https://api.test" />);
 
     await waitFor(() => expect(screen.getByTestId('year-close-status')).toBeInTheDocument());
     expect(global.fetch).toHaveBeenCalledWith(
       'https://api.test/accounting?year=year1',
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer tok' }) })
+      {}
     );
     const badge = screen.getByTestId('tag');
     expect(badge).toHaveAttribute('data-variant', 'green');
@@ -48,7 +53,7 @@ describe('YearCloseStatusBadge', () => {
 
   it('shows "Año no cerrado" (neutral) when the year has no closing-type accounting entries', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [] }) }));
-    renderWithLocale('es_ES', <YearCloseStatusBadge recordId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    renderWithLocale('es_ES', <YearCloseStatusBadge recordId="year1" apiBaseUrl="https://api.test" />);
 
     await waitFor(() => expect(screen.getByTestId('year-close-status')).toBeInTheDocument());
     const badge = screen.getByTestId('tag');
@@ -58,14 +63,14 @@ describe('YearCloseStatusBadge', () => {
 
   it('shows the equivalent English labels ("Year closed" / "Year not closed") under en_US', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [ROW] }) }));
-    renderWithLocale('en_US', <YearCloseStatusBadge recordId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    renderWithLocale('en_US', <YearCloseStatusBadge recordId="year1" apiBaseUrl="https://api.test" />);
 
     await waitFor(() => expect(screen.getByTestId('tag')).toHaveTextContent('Year closed'));
   });
 
   it('falls back to `data.id` when recordId is not provided', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [ROW] }) }));
-    renderWithLocale('es_ES', <YearCloseStatusBadge data={{ id: 'year-from-data' }} token="tok" apiBaseUrl="https://api.test" />);
+    renderWithLocale('es_ES', <YearCloseStatusBadge data={{ id: 'year-from-data' }} apiBaseUrl="https://api.test" />);
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
       'https://api.test/accounting?year=year-from-data',
@@ -75,13 +80,13 @@ describe('YearCloseStatusBadge', () => {
 
   it('renders nothing while the request is pending (no misleading placeholder)', () => {
     global.fetch = vi.fn(() => new Promise(() => {})); // never resolves
-    const { container } = renderWithLocale('es_ES', <YearCloseStatusBadge recordId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    const { container } = renderWithLocale('es_ES', <YearCloseStatusBadge recordId="year1" apiBaseUrl="https://api.test" />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it('renders nothing (fails silently) when the request errors, rather than showing a wrong status', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) }));
-    const { container } = renderWithLocale('es_ES', <YearCloseStatusBadge recordId="year1" token="tok" apiBaseUrl="https://api.test" />);
+    const { container } = renderWithLocale('es_ES', <YearCloseStatusBadge recordId="year1" apiBaseUrl="https://api.test" />);
 
     // Give the rejected fetch a tick to resolve into the `null` (errored) state.
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
@@ -91,7 +96,7 @@ describe('YearCloseStatusBadge', () => {
 
   it('renders nothing when there is no year id at all', () => {
     global.fetch = vi.fn();
-    const { container } = renderWithLocale('es_ES', <YearCloseStatusBadge token="tok" apiBaseUrl="https://api.test" />);
+    const { container } = renderWithLocale('es_ES', <YearCloseStatusBadge apiBaseUrl="https://api.test" />);
     expect(global.fetch).not.toHaveBeenCalled();
     expect(container).toBeEmptyDOMElement();
   });

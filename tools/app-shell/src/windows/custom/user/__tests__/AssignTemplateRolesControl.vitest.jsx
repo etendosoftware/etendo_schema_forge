@@ -13,9 +13,10 @@ vi.mock('@/i18n', () => ({
 
 vi.mock('@/lib/rolesApi.js', () => ({
   fetchTemplateRoles: vi.fn(),
+  fetchRolesOverview: vi.fn(),
 }));
 
-import { fetchTemplateRoles } from '@/lib/rolesApi.js';
+import { fetchTemplateRoles, fetchRolesOverview } from '@/lib/rolesApi.js';
 import AssignTemplateRolesControl from '../AssignTemplateRolesControl.jsx';
 import { RoleSelectionProvider } from '../roleSelectionContext.js';
 
@@ -26,8 +27,25 @@ const TEMPLATE_ROLES = [
   { id: 'role-inv', name: 'Inventory' },
 ];
 
+const ADMIN_ROLE_ID = 'admin-role-1';
+
 function mockTemplatesOk(roles = TEMPLATE_ROLES) {
   fetchTemplateRoles.mockResolvedValue({ roles });
+}
+
+// ETP-5019 — `fetchRolesOverview()` is fetched in parallel (`Promise.all`) with
+// `fetchTemplateRoles()` on every mount for an existing user, purely to resolve the
+// tenant's client-admin role id (see the component's own doc comment). Every existing-user
+// test needs SOME resolved value here or the component's effect throws inside the mock
+// factory itself (`vi.mock` only declares the two named exports, it does not stub a
+// return value) — default to "no admin role" so pre-existing tests keep exercising the
+// normal (non-locked) editor unless a test explicitly opts into the admin-lock scenario.
+function mockOverviewOk(roles = []) {
+  fetchRolesOverview.mockResolvedValue({ roles });
+}
+
+function mockOverviewWithAdminRole(adminRoleId = ADMIN_ROLE_ID) {
+  fetchRolesOverview.mockResolvedValue({ roles: [{ id: adminRoleId, isClientAdmin: true }] });
 }
 
 function renderControl({
@@ -48,6 +66,9 @@ function renderControl({
 describe('AssignTemplateRolesControl', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: no client-admin row at all — matches most pre-existing tests, which exercise
+    // the normal (non-locked) editor. Admin-lock tests override this explicitly.
+    mockOverviewOk();
   });
 
   describe('save-first placeholder (new, not-yet-persisted user)', () => {
@@ -283,6 +304,90 @@ describe('AssignTemplateRolesControl', () => {
       expect(root.className).toContain('w-full');
       expect(root.className).not.toContain('max-w-[420px]');
       expect(root.className).not.toContain('px-6');
+    });
+  });
+
+  // ETP-5019 — the owner/admin already has full access by construction; composing
+  // template roles for a user CURRENTLY holding the client-admin role would silently mint
+  // a fresh empty personal role and REPLACE their Admin role (see
+  // `UserRoleCompositionService#enforceOwnerProtection`'s javadoc in `com.etendoerp.go`).
+  // This is the UI-side guard: `fetchRolesOverview()`'s client-admin row id, compared
+  // against `resolveDefaultRoleId(data)`, decides whether to render the locked message
+  // instead of the interactive editor.
+  describe('admin-role lock (ETP-5019)', () => {
+    it('renders the locked message instead of the editor when data.defaultRole matches the client-admin role', async () => {
+      mockTemplatesOk();
+      mockOverviewWithAdminRole();
+      renderControl({ data: { id: 'user-1', defaultRole: ADMIN_ROLE_ID } });
+
+      await waitFor(() => expect(fetchRolesOverview).toHaveBeenCalled());
+      expect(screen.getByTestId('AssignTemplateRolesControl__admin-locked')).toBeInTheDocument();
+      expect(screen.getByText('adminRoleNoCompositionMessage')).toBeInTheDocument();
+      expect(screen.queryByTestId('AssignTemplateRolesControl')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('AssignTemplateRolesControl__toggle-expand')).not.toBeInTheDocument();
+    });
+
+    it('renders the locked message when data.defaultRole is an object shape (id/value)', async () => {
+      // resolveDefaultRoleId(data) also accepts { id } / { value } object shapes (see
+      // RoleChipsCell.jsx) — not just a plain string id.
+      mockTemplatesOk();
+      mockOverviewWithAdminRole();
+      renderControl({ data: { id: 'user-1', defaultRole: { id: ADMIN_ROLE_ID } } });
+
+      await waitFor(() => expect(fetchRolesOverview).toHaveBeenCalled());
+      expect(screen.getByTestId('AssignTemplateRolesControl__admin-locked')).toBeInTheDocument();
+    });
+
+    it('renders the normal interactive editor when data.defaultRole does NOT match the client-admin role id (regression guard)', async () => {
+      mockTemplatesOk();
+      mockOverviewWithAdminRole();
+      renderControl({ data: { id: 'user-1', defaultRole: 'some-other-role' } });
+
+      await waitFor(() => expect(fetchRolesOverview).toHaveBeenCalled());
+      expect(screen.getByTestId('AssignTemplateRolesControl')).toBeInTheDocument();
+      expect(screen.getByTestId('AssignTemplateRolesControl__toggle-expand')).toBeInTheDocument();
+      expect(screen.queryByTestId('AssignTemplateRolesControl__admin-locked')).not.toBeInTheDocument();
+    });
+
+    it('renders the normal editor when there is no client-admin row in the overview at all', async () => {
+      mockTemplatesOk();
+      mockOverviewOk([]); // no isClientAdmin row -> adminRoleId stays null
+      renderControl({ data: { id: 'user-1', defaultRole: ADMIN_ROLE_ID } });
+
+      await waitFor(() => expect(fetchRolesOverview).toHaveBeenCalled());
+      expect(screen.getByTestId('AssignTemplateRolesControl')).toBeInTheDocument();
+      expect(screen.queryByTestId('AssignTemplateRolesControl__admin-locked')).not.toBeInTheDocument();
+    });
+
+    it('does not crash while fetchRolesOverview is still in flight, then settles into the locked state once it resolves', async () => {
+      mockTemplatesOk();
+      let resolveOverview;
+      fetchRolesOverview.mockReturnValue(new Promise((resolve) => { resolveOverview = resolve; }));
+      renderControl({ data: { id: 'user-1', defaultRole: ADMIN_ROLE_ID } });
+
+      // Before adminRoleId resolves: neither the locked message nor a stale editor should
+      // crash the component — it just hasn't decided yet (adminRoleId is still null, so
+      // isAdminRoleHolder reads false and the normal loading editor renders in the meantime).
+      expect(screen.queryByTestId('AssignTemplateRolesControl__admin-locked')).not.toBeInTheDocument();
+
+      resolveOverview({ roles: [{ id: ADMIN_ROLE_ID, isClientAdmin: true }] });
+
+      await waitFor(() => expect(screen.getByTestId('AssignTemplateRolesControl__admin-locked')).toBeInTheDocument());
+      expect(screen.queryByTestId('AssignTemplateRolesControl')).not.toBeInTheDocument();
+    });
+
+    it('falls back gracefully (no admin lock, no crash) when fetchRolesOverview rejects', async () => {
+      // Mirrors the existing fetchTemplateRoles-rejection test's pattern: Promise.all rejects
+      // as soon as EITHER call rejects, so the shared .catch() resets both roles and
+      // adminRoleId — the component must render the normal (unlocked, empty) editor, not
+      // throw and not get stuck locked.
+      fetchTemplateRoles.mockResolvedValue({ roles: TEMPLATE_ROLES });
+      fetchRolesOverview.mockRejectedValue(new Error('network down'));
+      renderControl({ data: { id: 'user-1', defaultRole: ADMIN_ROLE_ID } });
+
+      await waitFor(() => expect(screen.getByTestId('AssignTemplateRolesControl__toggle-expand')).not.toBeDisabled());
+      expect(screen.queryByTestId('AssignTemplateRolesControl__admin-locked')).not.toBeInTheDocument();
+      expect(screen.getByTestId('AssignTemplateRolesControl__empty')).toBeInTheDocument();
     });
   });
 

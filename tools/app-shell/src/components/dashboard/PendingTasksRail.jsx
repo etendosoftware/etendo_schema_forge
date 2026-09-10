@@ -5,28 +5,31 @@ import { useUI } from '@/i18n';
 import { resolveDashboardNavigation } from '@/lib/dashboardNavigation.js';
 import { DASHBOARD_KPI_IDS, trackDashboardKpi } from '@/lib/dashboardKpiTelemetry.js';
 
+// `category` drives KPI telemetry; `tone` drives the badge color. They are deliberately separate:
+// the payments card turns red when overdue (ETP-5017) while staying in the `payments` telemetry
+// bucket, so reusing `category` for color would silently corrupt the tracked type.
 const CATEGORY_MAP = {
-  overdueInvoices:               { category: 'sales',       icon: FileText,    subjectKey: 'pendingSubjectSalesInvoices', stateKey: 'pendingStateOverdue'   },
-  overdueInvoices_plural:        { category: 'sales',       icon: FileText,    subjectKey: 'pendingSubjectSalesInvoices', stateKey: 'pendingStateOverdue'   },
-  pendingSalesDeliveries:        { category: 'sales',       icon: Truck,       subjectKey: 'pendingSubjectShipments',     stateKey: 'pendingStatePending'   },
-  pendingSalesDeliveries_plural: { category: 'sales',       icon: Truck,       subjectKey: 'pendingSubjectShipments',     stateKey: 'pendingStatePending'   },
-  collectionsDueToday:           { category: 'collections', icon: DollarSign,  subjectKey: 'pendingSubjectCollections',   stateKey: 'pendingStateDueToday'  },
-  collectionsDueToday_plural:    { category: 'collections', icon: DollarSign,  subjectKey: 'pendingSubjectCollections',   stateKey: 'pendingStateDueToday'  },
-  paymentsDueToday:              { category: 'payments',    icon: CreditCard,  subjectKey: 'pendingSubjectPayments',      stateKey: 'pendingStateDueToday'  },
-  paymentsDueToday_plural:       { category: 'payments',    icon: CreditCard,  subjectKey: 'pendingSubjectPayments',      stateKey: 'pendingStateDueToday'  },
-  pendingReceptions:             { category: 'purchases',   icon: ShoppingBag, subjectKey: 'pendingSubjectReceptions',    stateKey: 'pendingStatePending'   },
-  pendingReceptions_plural:      { category: 'purchases',   icon: ShoppingBag, subjectKey: 'pendingSubjectReceptions',    stateKey: 'pendingStatePending'   },
-  lowStockAlert:                 { category: 'stock',       icon: Box,         subjectKey: 'pendingSubjectStock',         stateKey: 'pendingStateLowStock'  },
-  lowStockAlerts:                { category: 'stock',       icon: Box,         subjectKey: 'pendingSubjectStock',         stateKey: 'pendingStateLowStock'  },
+  overdueInvoices:               { category: 'sales',       tone: 'danger',  icon: FileText,    subjectKey: 'pendingSubjectSalesInvoices', stateKey: 'pendingStateOverdue'         },
+  overdueInvoices_plural:        { category: 'sales',       tone: 'danger',  icon: FileText,    subjectKey: 'pendingSubjectSalesInvoices', stateKey: 'pendingStateOverdue'         },
+  pendingSalesDeliveries:        { category: 'sales',       tone: 'danger',  icon: Truck,       subjectKey: 'pendingSubjectShipments',     stateKey: 'pendingStatePending'         },
+  pendingSalesDeliveries_plural: { category: 'sales',       tone: 'danger',  icon: Truck,       subjectKey: 'pendingSubjectShipments',     stateKey: 'pendingStatePending'         },
+  collectionsDueToday:           { category: 'collections', tone: 'warning', icon: DollarSign,  subjectKey: 'pendingSubjectCollections',   stateKey: 'pendingStateDueToday'        },
+  collectionsDueToday_plural:    { category: 'collections', tone: 'warning', icon: DollarSign,  subjectKey: 'pendingSubjectCollections',   stateKey: 'pendingStateDueToday'        },
+  paymentsDueToday:              { category: 'payments',    tone: 'warning', icon: CreditCard,  subjectKey: 'pendingSubjectPayments',      stateKey: 'pendingStateDueToday'        },
+  paymentsDueToday_plural:       { category: 'payments',    tone: 'warning', icon: CreditCard,  subjectKey: 'pendingSubjectPayments',      stateKey: 'pendingStateDueToday'        },
+  paymentsOverdue:               { category: 'payments',    tone: 'danger',  icon: CreditCard,  subjectKey: 'pendingSubjectPayments',      stateKey: 'pendingStateOverduePayments' },
+  paymentsOverdue_plural:        { category: 'payments',    tone: 'danger',  icon: CreditCard,  subjectKey: 'pendingSubjectPayments',      stateKey: 'pendingStateOverduePayments' },
+  pendingReceptions:             { category: 'purchases',   tone: 'info',    icon: ShoppingBag, subjectKey: 'pendingSubjectReceptions',    stateKey: 'pendingStatePending'         },
+  pendingReceptions_plural:      { category: 'purchases',   tone: 'info',    icon: ShoppingBag, subjectKey: 'pendingSubjectReceptions',    stateKey: 'pendingStatePending'         },
+  lowStockAlert:                 { category: 'stock',       tone: 'warning', icon: Box,         subjectKey: 'pendingSubjectStock',         stateKey: 'pendingStateLowStock'        },
+  lowStockAlerts:                { category: 'stock',       tone: 'warning', icon: Box,         subjectKey: 'pendingSubjectStock',         stateKey: 'pendingStateLowStock'        },
 };
 
 const STATUS_BADGE_STYLES = {
-  sales:       { backgroundColor: 'var(--status-destructive-bg)', color: 'hsl(var(--destructive))', borderColor: 'hsl(var(--destructive) / 0.3)' },
-  collections: { backgroundColor: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', borderColor: 'var(--status-warning-border)' },
-  payments:    { backgroundColor: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', borderColor: 'var(--status-warning-border)' },
-  purchases:   { backgroundColor: 'var(--status-info-bg)', color: 'var(--status-info-fg)', borderColor: 'var(--status-info-border)' },
-  stock:       { backgroundColor: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', borderColor: 'var(--status-warning-border)' },
-  other:       { backgroundColor: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))', borderColor: 'hsl(var(--border-subtle))' },
+  danger:  { backgroundColor: 'var(--status-destructive-bg)', color: 'hsl(var(--destructive))', borderColor: 'hsl(var(--destructive) / 0.3)' },
+  warning: { backgroundColor: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', borderColor: 'var(--status-warning-border)' },
+  info:    { backgroundColor: 'var(--status-info-bg)', color: 'var(--status-info-fg)', borderColor: 'var(--status-info-border)' },
+  muted:   { backgroundColor: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))', borderColor: 'hsl(var(--border-subtle))' },
 };
 
 function resolveTaskMeta(task) {
@@ -34,7 +37,7 @@ function resolveTaskMeta(task) {
   const meta = key && CATEGORY_MAP[key];
   if (meta) return meta;
   console.warn('[PendingTasksRail] Unknown taskKey:', key, task);
-  return { category: 'other', icon: Circle, subjectKey: null, stateKey: null };
+  return { category: 'other', tone: 'muted', icon: Circle, subjectKey: null, stateKey: null };
 }
 
 export function PendingTasksRail({ tasks = [] }) {
@@ -105,7 +108,7 @@ export function PendingTasksRail({ tasks = [] }) {
               const target = resolveDashboardNavigation(task.navigation) || task.link || '/dashboard';
               const subjectLabel = meta.subjectKey ? ui(meta.subjectKey) : task.text;
               const stateLabel   = meta.stateKey   ? ui(meta.stateKey)   : task.text;
-              const badgeStyle    = STATUS_BADGE_STYLES[meta.category] || STATUS_BADGE_STYLES.other;
+              const badgeStyle    = STATUS_BADGE_STYLES[meta.tone] || STATUS_BADGE_STYLES.muted;
 
               return (
                 <Link

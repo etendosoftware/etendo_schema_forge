@@ -109,12 +109,25 @@ describe('SifSendingModal — callProcess helper', () => {
 describe('SifSendingModal — results phase', () => {
   it('renders a ✓ for successful submissions', () => {
     assert.match(src, /sendToSifSuccessSii/);
-    assert.match(src, /sendToSifSuccessTbai/);
+    assert.match(src, /ui\(tbaiSuccessKey\)/);
   });
 
   it('renders a ✗ for failed submissions', () => {
     assert.match(src, /sendToSifErrorSii/);
-    assert.match(src, /sendToSifErrorTbai/);
+    assert.match(src, /ui\(tbaiErrorKey\)/);
+  });
+
+  // ETP-5087: the TBAI result copy is purchase/sales aware (Batuz vs TicketBAI),
+  // resolved through sifSending.js — never a hardcoded generic TBAI key.
+  it('resolves the TBAI result keys through the shared sifSending helpers', () => {
+    assert.match(src, /import \{ getSifTbaiSuccessKey, getSifTbaiErrorKey \} from '\.\/sifSending\.js'/);
+    assert.match(src, /const tbaiSuccessKey = getSifTbaiSuccessKey\(specName\)/);
+    assert.match(src, /const tbaiErrorKey = getSifTbaiErrorKey\(specName\)/);
+  });
+
+  it('never hardcodes the generic TicketBAI result keys in the JSX', () => {
+    assert.doesNotMatch(src, /ui\('sendToSifSuccessTbai'\)/);
+    assert.doesNotMatch(src, /ui\('sendToSifErrorTbai'\)/);
   });
 
   it('calls onAfterSend with the results object before snapping to 100%', () => {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const DEFAULT_TIMEOUT_MS = 15000;
 
@@ -18,15 +19,8 @@ export function getApiBase() {
  * Fetches a NEO endpoint with auth, abort signal, and JSON parsing. Returns
  * the inner `response.data` payload, or throws if the shape is invalid.
  */
-async function fetchNeoPayload(apiBase, token, path, signal) {
-  const url = `${apiBase}${path}`;
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    signal,
-  });
+async function fetchNeoPayload(apiFetch, path, signal) {
+  const res = await apiFetch(path, { signal });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const json = await res.json();
   const data = json?.response?.data;
@@ -60,6 +54,7 @@ async function fetchNeoPayload(apiBase, token, path, signal) {
 export function useNeoResource({ path, deps = [], mapPayload, timeoutMs = DEFAULT_TIMEOUT_MS, label = 'useNeoResource' }) {
   const { token } = useAuth();
   const apiBase = useMemo(() => getApiBase(), []);
+  const apiFetch = useApiFetch(apiBase);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -71,7 +66,7 @@ export function useNeoResource({ path, deps = [], mapPayload, timeoutMs = DEFAUL
     setLoading(true);
     setError(null);
     try {
-      const raw = await fetchNeoPayload(apiBase, token, path, ctrl.signal);
+      const raw = await fetchNeoPayload(apiFetch, path, ctrl.signal);
       setData(mapPayload ? mapPayload(raw) : raw);
     } catch (err) {
       if (err.name !== 'AbortError') {
@@ -83,7 +78,7 @@ export function useNeoResource({ path, deps = [], mapPayload, timeoutMs = DEFAUL
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiBase, token, path, timeoutMs, label, ...deps]);
+  }, [apiFetch, token, path, timeoutMs, label, ...deps]);
 
   useEffect(() => {
     load();

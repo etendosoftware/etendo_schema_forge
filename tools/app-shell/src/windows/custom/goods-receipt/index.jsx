@@ -14,6 +14,7 @@ import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useUI } from '@/i18n';
 
+import { buildHeaders } from '@/auth/api.js';
 const HEADER_COLUMNS = [
   { key: 'movementDate', column: 'MovementDate', type: 'date', dot: false, required: true },
   { key: 'orderReference', column: 'POReference', type: 'string' },
@@ -81,10 +82,7 @@ export default function GoodsReceiptWindow(props) {
   const [cloneTargets, setCloneTargets] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => (buildHeaders(token)), [token]);
 
   const { requestDelete, deleteDialog } = useRowDelete({
     apiBaseUrl,
@@ -132,6 +130,13 @@ export default function GoodsReceiptWindow(props) {
       <GeneratedApp
         {...props}
         autoSaveOnBlur={true}
+        // ETP-5058 — GoodsReceiptHeaderHandler.afterHandle only enriches linkedInvoices/
+        // linkedOrders/invoiceStatus/etc. on GET responses (NeoHandlerUtils.extractGetDataArray
+        // bails for any other HTTP method). Without a refetch, handleSave() replaces the
+        // already-enriched `editing` state with the bare PATCH response, wiping the DOCUMENTOS
+        // panel after every save (e.g. changing Warehouse), not just when the invoice link
+        // actually changes. Mirrors sales-invoice/purchase-invoice, which hit the same gap.
+        refetchAfterSave={true}
         Table={CustomHeaderTable}
         labelOverrides={LABEL_OVERRIDES}
         initialColumnFilters={docStatus ? { documentStatus: { mode: 'enumLabel', value: [docStatus] } } : undefined}

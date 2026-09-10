@@ -70,6 +70,8 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `category` | string | Inferred | `"sales"`, `"purchases"`, `"inventory"`, `"finance"`, `"accounting"`, `"master"`, `"project"`, `"general"` | UI routing and navigation grouping. |
 | `name` | string | From AD | — | Display name for breadcrumbs and titles. |
 | `agentPrompt` | string | `null` | Free text | Spec-level guidance for AI agents that consume the NEO Headless MCP server. Surfaced in `agentProfile.agentPrompt` (contract) and persisted to `ETGO_SF_SPEC.AGENT_PROMPT`, from where `neo_discover` returns it per spec. Empty or whitespace-only values clear the persisted prompt and are omitted from the MCP response. |
+| `vectorSearch` | object | _absent_ (does not participate) | `{ "target": "product" }` | Opts this window into the global semantic search. The generator copies the descriptor to `frontendContract.window.vectorSearch`; the app aggregates only declared targets. Do not add `enabled: false` to every other window: omission is the default. The target must match an active DB Extended Search Target and use `[A-Za-z][A-Za-z0-9_.-]{0,127}`. |
+| `searchSuggestions` | array | _absent_ | `[{ "label": "overdueSalesInvoices", "path": "/sales-invoice?filter=overdue" }]` | Window-owned global-search navigation shortcuts. `label` is an i18n key and `path` must be a local route for that window. Suggestions are displayed only while their window is within the selected search scope. |
 | `showInMcp` | boolean | `true` | `false` | **Opt-out** MCP visibility. Persisted to `ETGO_SF_SPEC.SHOWINMCP` by `push-to-neo`. Only an explicit `false` hides the spec from the NEO Headless **MCP** (both `neo_discover`/tools listing and resource reads) — absent or `true` keeps it visible, so the ~50 existing decisions files need no edit. **MCP-only**: `isactive` is untouched, so the spec keeps serving the REST/OpenAPI API and every other consumer. Backed by the `Show in MCP` checkbox on the *Schema Forge Configuration* window (Spec tab). Added ETP-4278. |
 | `layoutType` | string | `"default"` | `"default"`, `"kanban"`, `"calendar"`, `"list-modal"`, `"custom"` | Frontend rendering mode. See `docs/window-templates.md`. |
 | `templateConfig` | object | `null` | Layout-specific | Extra config for non-default layouts. `kanban`/`calendar`: `groupBy`, `dateField`, etc. `list-modal`: `titleKey`, `editTitleKey`, `bannerKey`, `searchPlaceholderKey`, `newLabelKey`, `autoPriorityField`, `autoPriorityStep`, `sections` (ordered `[{ key, label }]`), `backLabelKey` (toolbar back-button i18n key; default `cancel`), `backTo` (route to navigate to on back; defaults to history `-1`), `toolbarFilters` (declarative dropdown filters `[{ key, field, allLabelKey, options: [{ value, labelKey }] }]`, applied client-side over the loaded rows). All strings are i18n keys. See the `list-modal` section in `docs/window-templates.md`. |
@@ -87,6 +89,7 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `listViewOptions.hidePrint` | boolean | `null` | — | Per-list override for the list view's two print buttons (bulk "Print (N)" + toolbar Print/Report), independent of the detail-view `hidePrint`/`hidePrintWhen`. `ListView.jsx` reads `listViewOptions?.hidePrint ?? hidePrint` — set this explicitly when a window uses `hidePrintWhen` (which doesn't touch the list) but the list-level print should still stay hidden. See "Print Visibility" below. Added ETP-4714. |
 | `hideMoreMenu` | boolean | `false` | — | Hides the triple-dot "more" menu in the detail view action bar. |
 | `hideStatusFilter` | boolean | `false` | — | Hides the status-filter dropdown ("All statuses") in the list toolbar, even when a `status`-typed column exists. The rest of the filter bar (date filter, Filters) is unaffected. |
+| `hideRecordCount` | boolean | `false` | — | Omits the small record-count badge next to the list title (`TopBar.jsx`'s `recordCount` badge, plumbed through `AppLayout.jsx`). `ListView.jsx` passes `recordCount: hideRecordCount ? undefined : hook.items.length` to `useSetPageMeta` — `undefined` is `TopBar.jsx`'s existing "don't render the badge" signal, so no `TopBar.jsx`/`AppLayout.jsx` change was needed. Use this when the generic count is misleading rather than merely redundant — e.g. a custom tree/hierarchy list (`chart-of-accounts`) where `hook.items.length` only reflects one paginated batch of leaves, not the full materialized structure the page actually renders. Added ETP-5101. |
 | `customListIcons` | boolean | `false` | — | Swaps the list toolbar sort/refresh icons for the shared `SortIcon` / `RefreshIcon` set (`@/components/ui/custom-icons`), matching Contacts/Warehouse. Emits `SortIconComponent` / `RefreshIconComponent` on `ListView`. |
 | `contentBg` | string | `"bg-white"` | Any Tailwind bg class | Background color of the main content card in the detail view (e.g., `"bg-slate-50"` for a light gray tone). |
 | `formCardPadding` | string | `null` | Any Tailwind padding class | Override the Tailwind padding class applied to the form card div in the detail view. When `null`, `DetailView` falls back to `p-6`. Use `"px-2 pb-2"` for tighter (8px horizontal) padding, for example on windows with dense form layouts. |
@@ -99,7 +102,10 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `processOverrides` | object | `{}` | See below | Override presentation and behavior of process buttons in the detail view. Keys are process names or column names. See Process Overrides subsection. |
 | `detailSortBy` | string | `null` | Any valid sort expression | Default sort order for the detail entity tab (e.g., `"sEQNoAsset asc"`). Passed directly to DetailView as the `detailSortBy` prop. |
 | `documentDateField` | string | `"orderDate"` | Any header date field name | Names the header field that holds this document's primary date (e.g., `"orderDate"` for orders/quotations, `"invoiceDate"` for invoices). `DetailView` uses it for exchange-rate lookups (currency conversion of new lines and the currency-dropdown validation) and other document-date-dependent logic. Windows without an `orderDate` field (e.g. sales/purchase invoices) MUST declare this explicitly, or those lookups silently no-op. Defaults to `"orderDate"` for backward compatibility with windows that don't declare it. |
+| `selectorPriceCurrency` | string | `null` | `"org"` or absent | Currency used to format the **catalog price shown inside the product-selector drawer** (`ProductSearchDrawer`). Declare `"org"` on any document window whose header currency is user-editable: the drawer then labels the price with the organization/session currency, which is the currency the price list is actually expressed in. When absent, `DetailView` leaves `selectorContext.priceCurrency` unset and the drawer falls back to the **document** currency (`currency$_identifier`) — so an invoice switched to USD renders the unconverted EUR catalog price as `$5,00`. The backend does not convert the price, only the symbol was wrong. Required by every window that has a `product` field in `addLineFields` using the default lookup drawer; windows on `product-stock` (see `lookupDrawers.js`) show no price and do not need it. Read by `DetailView.jsx` (`priceCurrency` in `selectorContextByEntity`) and consumed by `ProductSearchDrawer.jsx`. Documented retroactively in ETP-5148, which added it to `sales-invoice` and `purchase-invoice`; `sales-order`, `purchase-order` and `sales-quotation` already declared it. |
 | `statusBar` | object | `null` | See below | Generates a summary status bar above the detail form showing key numeric fields and an optional progress indicator. |
+| `summaryFields` | array | _absent_ | `[]` or field names | Controls the `SummaryBar` recap strip under the detail header form. **When absent, the default is every `readOnly` field of the entity** (minus the resolved `statusField`) — so on a window whose fields are ALL `readOnly` the strip duplicates the whole form as a line of text. Declare `[]` to suppress it entirely, or list field names to pick a subset. Consumed by `getSummaryFields()` in `generate-frontend.js`; forwarded by `resolve-curated.js`. Documented retroactively in ETP-5075 (`matched-purchase-invoices` declares `[]`). |
+| `noHeaderBorder` | boolean | `false` | — | Drops the card wrapper (`rounded-2xl border … bg-card shadow-sm`) around the principal + collapsed header fields, so the form sits flush on the page background. Read by `DetailView.jsx` (the `hideFormCard`/`noHeaderBorder` class expression on the header card). Used by `goods-receipt`, `purchase-invoice`, `cost-center`, `matched-purchase-invoices`. Documented retroactively in ETP-5075. |
 | `statusPills` | array | `[]` | See below | Renders one or more additional status pills next to the document-status pill on the detail view's action bar, driven by a boolean-like header field (e.g. an accounting `posted` pill). |
 | `subsetFilters` | array | `null` | See below | Segmented, radio-style filter above the list. One is always active, mutually exclusive, applied before any other filter. Ideal for "which universe am I looking at" selectors (e.g., All / Customers / Vendors). |
 | `quickFilters` | array | `null` | See below | Independent toggle pills above the list. Each can be on/off; multiple can be active simultaneously. Combined with the active subset and column filters using AND. Ideal for "refinements" (e.g., only overdue, only pending delivery). |
@@ -134,14 +140,21 @@ Real examples in this repo (all added for ETP-4714):
 
 | Window | `hidePrintWhen` | Meaning |
 |---|---|---|
-| `sales-invoice`, `sales-order`, `purchase-order`, `return-to-vendor-shipment`, `goods-shipment` | `{ "documentStatus": { "notEquals": "CO" } }` | Print only visible once Completado |
+| `sales-invoice`, `sales-order`, `purchase-order`, `return-to-vendor-shipment`, `goods-shipment`, `return-material-receipt` | `{ "documentStatus": { "notEquals": "CO" } }` | Print only visible once Completado |
 | `sales-quotation` | `{ "documentStatus": { "notIn": ["UE", "CA", "ETGO_CI", "CJ"] } }` | Print only visible in Bajo Evaluación / Cerrado-Pedido creado / Cerrado-Factura creada / Cerrado-Rechazado |
-| `purchase-invoice`, `return-material-receipt` | `true` | Print always hidden |
+| `purchase-invoice` | `true` | Print always hidden |
 
-`purchase-invoice` and `return-material-receipt` use the unconditional-match literal `true`
-(not the plain `hidePrint` boolean — see the pitfall below for why). `goods-receipt` uses the
-plain `hidePrint: true` (it never needed a condition and its list-view print was already meant
-to be hidden).
+`purchase-invoice` uses the unconditional-match literal `true` (not the plain `hidePrint`
+boolean — see the pitfall below for why). `goods-receipt` uses the plain `hidePrint: true` (it
+never needed a condition and its list-view print was already meant to be hidden).
+
+`return-material-receipt` shipped with `hidePrintWhen: true` (Print unconditionally hidden in
+every status), which meant the sibling `HELPERS is not defined` bug in
+`useReturnReceiptPdf.js`'s `generateReturnReceiptPdf`/`generateReturnReceiptHtml` never fired for
+this window (Print was never reachable). ETP-5124 moved it into this conditional group, matching
+`return-to-vendor-shipment`/`goods-shipment` exactly, and fixed the `HELPERS` bug (present in both
+`return-material-receipt` and `return-to-vendor-shipment`'s PDF hooks) in the same change — see
+`docs/generated-custom-windows/return-material-receipt.md`.
 
 `goods-shipment`, `return-to-vendor-shipment`, and `return-material-receipt` used to gate their
 own **custom** Print buttons directly inside their custom `topbarRight` components
@@ -161,21 +174,23 @@ feeds the first one — this is intentional (ETP-4714 was scoped to the form vie
 explicit product direction: the list-view print must never be touched by this feature). Two
 regressions were caught during review because of this split, with two different fixes:
 
-- `sales-invoice`/`purchase-order` **already had** `hidePrint: true` before this ticket (list
-  AND form both hidden). Swapping to `hidePrintWhen: {...}` for the new conditional form
-  behavior silently un-hid their list-view print buttons (list has no gate of its own once
-  `hidePrint` is unset). Fix: also declare `"listViewOptions": { "hidePrint": true }` alongside
-  `hidePrintWhen` — `ListView.jsx` reads it with priority over the plain `hidePrint` prop
-  (`listViewOptions?.hidePrint ?? hidePrint`) — restoring the list to exactly its pre-ticket
-  always-hidden state. **These two windows also needed a second fix**: their custom
-  `tools/app-shell/src/windows/custom/{sales-invoice,purchase-order}/index.jsx` hand-rolls its
+- `sales-invoice`/`purchase-order` **had** `hidePrint: true` before ETP-4714 (list AND form
+  both hidden). Swapping to `hidePrintWhen: {...}` for the new conditional form behavior
+  silently un-hid their list-view print buttons (list has no gate of its own once `hidePrint`
+  is unset). ETP-4714's fix was to also declare `"listViewOptions": { "hidePrint": true }`
+  alongside `hidePrintWhen` — `ListView.jsx` reads it with priority over the plain `hidePrint`
+  prop (`listViewOptions?.hidePrint ?? hidePrint`) — restoring the list to exactly its
+  pre-ticket always-hidden state. Because both windows' custom
+  `tools/app-shell/src/windows/custom/{sales-invoice,purchase-order}/index.jsx` hand-roll their
   own `<ListView>` for the list route instead of delegating to the generated `HeaderPage.jsx`
-  (only the detail/record route goes through the generated component) — so the generator's
-  literal `listViewOptions={{"hidePrint":true}}` in `HeaderPage.jsx` is never even reached for
-  the list. The custom wrapper needs the exact same prop hardcoded directly on its own
-  `<ListView>` call (matching the existing pattern already used there for `dateFilterKey` etc.)
-  — check for this class of gap on **any** window whose custom `index.jsx` renders `<ListView>`
-  itself rather than delegating unconditionally to the generated `App`/`HeaderPage`.
+  (only the detail/record route goes through the generated component), the generator's literal
+  `listViewOptions={{"hidePrint":true}}` in `HeaderPage.jsx` was never even reached for the
+  list — the custom wrapper needed the same prop hardcoded directly on its own `<ListView>`
+  call too. **ETP-4728 QA later flagged this as an inconsistency** (grid print present on
+  `sales-order`, absent on `sales-invoice`/`purchase-order` with no per-status reason) and
+  ETP-4728 **removed** the `listViewOptions.hidePrint` from both windows' `decisions.json` AND
+  their custom `index.jsx`, unifying them with the `sales-order`/`sales-quotation` baseline
+  below — do **not** reintroduce it for these two windows either.
 - `purchase-invoice` needed the **opposite** correction: it never had `hidePrint` set before
   this ticket, so its list-view print was **visible**. An earlier iteration set
   `"hidePrint": true` to hide the form unconditionally, which also hid the previously-visible
@@ -190,14 +205,33 @@ regressions were caught during review because of this split, with two different 
   (plus `goods-shipment`'s), restoring their list-view print to always-visible as the new,
   tested, intended baseline — `tools/app-shell/src/windows/custom/sales-order/__tests__/index.test.js`
   has an explicit regression guard (`'does not hardcode hidePrint on ListView (ETP-4729 — print
-  restored)'`) asserting this. ETP-4714's original `listViewOptions` fix for these two windows
-  is now obsolete and was removed — do **not** reintroduce it; the list stays unconditionally
-  visible for `sales-order`/`sales-quotation`, only the detail-view `hidePrintWhen` gate applies.
+  restored)'`) asserting this. **ETP-4728 later applied the same removal to `sales-invoice` and
+  `purchase-order`** (see above), each with the same class of regression guard on their own
+  custom `index.jsx` test — the list stays unconditionally visible for all four windows
+  (`sales-order`, `sales-quotation`, `sales-invoice`, `purchase-order`); only the detail-view
+  `hidePrintWhen` gate applies anywhere now. `listViewOptions.hidePrint` remains legitimately
+  in use elsewhere for non-document master-data windows with their own unrelated reason to
+  suppress print (e.g. `contacts`, alongside `hideCounter`/`hideLink`/`hideBulkDelete`) — but
+  for the sales/purchase document windows specifically, before reintroducing it, re-check
+  whether the list-level suppression is genuinely intended (product decision) rather than an
+  accidental carry-over from an unrelated `hidePrintWhen` change, per the pitfall above.
 
 **Rule of thumb:** before changing a window's Print visibility, check what its list-view print
 buttons looked like *before* your change, and make sure they still look the same *after* it —
 match to the pre-existing `hidePrint: true` (→ add `listViewOptions.hidePrint: true`) or absence
 (→ use `hidePrintWhen: true`/an object condition, never the plain `hidePrint`) case above.
+
+**The idle-toolbar Print button hides during a selection.** `ListView.jsx`'s top-right toolbar
+Print button (opens the whole-list report via `setShowReport(true)`) is gated by
+`selectedRows.length === 0 && !(listViewOptions?.hidePrint ?? hidePrint)` — as soon as one or
+more rows are selected, it disappears, leaving only the bottom `SelectionToolbar`'s own Print
+icon (bulk-prints just the selected rows via `printDocuments()`). Before this, both Print
+affordances stayed visible at once during a selection — confusing, since they print different
+things (the whole filtered list vs. only the selected rows). This is a **generic `ListView.jsx`
+behavior**, not a per-window flag — it applies uniformly to every window using `ListView`,
+regardless of `hidePrint`/`hidePrintWhen`/`listViewOptions.hidePrint` configuration. Do not add a
+per-window opt-out; if a window genuinely needs both prints visible during a selection, that is a
+product decision to revisit here, not to route around locally.
 
 ### Send Document (`window.sendDocument`)
 
@@ -291,13 +325,24 @@ Renders one or more additional status pills next to the standard document-status
 
 | Property | Type | Purpose |
 |----------|------|---------|
-| `field` | string | Header field to read (`data[field]`). Etendo `'Y'`/`'N'`-aware: truthy when `true`, `'Y'`, or `'true'`. |
+| `field` | string | Header field to read (`data[field]`). Etendo `'Y'`/`'N'`-aware: truthy when `true`, `'Y'`, or `'true'`. A field on the AD **posting-status** domain (`Posted`) is resolved by `lib/postedStatus.js` first — see *Posting-status fields* below. |
 | `trueKey` | string | i18n key (resolved through `useUI()`) shown when the field is truthy. Renders with `tone: "success"`. |
 | `falseKey` | string | i18n key shown when the field is falsy. Renders with `tone: "warning"`. Omit for a **one-sided pill** that only appears in the truthy state — `DetailView` guards against rendering the generator's literal `'undefined'` fallback and hides the pill instead when the current value's key is missing. |
 | `visibleWhenCapability` | string | Optional. Same capability gate as the field-level property of the same name (see `visibleWhenCapability` under Grid cell flags below) — the pill is omitted entirely (not just disabled) when the named capability resolves `false` for the current role. |
 | `_note` | string | Optional free-text comment, ignored at runtime. Useful for documenting *why* the pill exists inline in `decisions.json`. |
 
 **Mechanics:** the generator resolves this array into an `extraBadges` array of `{ key: field, type: 'statusPill', trueKey, falseKey, visibleWhenCapability }` entries, emitted inside an `@sf-generated-start extraBadges:{Window}` marker and passed to `<DetailView extraBadges={extraBadges} />`. `DetailView.jsx` renders each `statusPill` entry as a `DocumentStatusPill` when the field's value is non-null and a resolvable i18n key exists for its current state. (`extraBadges` also accepts an older plain-badge shape — `{ key, label, style, hideWhenStatus, when }` — predating the `statusPill` type; new windows should always go through the `statusPills` decision above, which emits `type: 'statusPill'` entries, not the legacy shape directly.)
+
+**Posting-status fields are not two-state (ETP-5075).** The AD `Posted` column is a
+17-code domain (`Y`, `N`, `E`, `i`, `p`, `T`, `D`, `b`, `c`, `C`, `L`, `NC`, `AD`, `DT`,
+`NO`, `y`, `d`); only `Y`/`N` mean posted/not-posted and every other code is the REASON a
+posting attempt failed. `tools/app-shell/src/lib/postedStatus.js` is the single registry
+that maps those codes to a label and a tone, and **both** the detail pill and the grid
+badge resolve through it, so they can never disagree on the same raw value again — before
+it existed, each renderer had its own hardcoded `'Y'`/`'N'` allowlist and the same record
+showed a bare `—` in the list while the pill claimed "Not posted". `trueKey`/`falseKey`
+still drive `Y`/`N` exactly as documented above; the registry only covers the other codes,
+which is what keeps already-shipped windows unchanged.
 
 **Real example — `posted` on `purchase-invoice`/`sales-invoice` (ETP-4520) and `return-to-vendor-shipment`/`return-material-receipt` (ETP-4707, 3rd window on the pattern):** shown above. Pair with the field-level `badge`/`badgeLabels`/`badgeVariants` properties (see Grid cell flags below) to show the same true/false state as both a grid-column pill and a form-header pill, driven by one `posted` field.
 
@@ -332,7 +377,8 @@ Adds a generic "Attachments" tab to the detail view, sitting alongside the stand
     "attachments": {
       "enabled": true,
       "maxSizeMB": 10,
-      "allowedMimeTypes": ["application/pdf", "image/*"]
+      "allowedMimeTypes": ["application/pdf", "image/*"],
+      "saveBeforeAttach": false
     }
   }
 }
@@ -343,6 +389,7 @@ Adds a generic "Attachments" tab to the detail view, sitting alongside the stand
 | `enabled` | boolean | `true` | Master toggle. Set to `false` for the same effect as `attachments: false`. |
 | `maxSizeMB` | number | `10` | Max file size enforced client-side before upload. The NEO servlet has its own hard limit of 10 MB (`MultipartConfig`); raising this beyond 10 will surface a server error. |
 | `allowedMimeTypes` | string[] | `undefined` (any) | MIME-type allow-list applied client-side. Supports wildcards like `"image/*"`, `"application/*"`. When omitted, every MIME type is accepted. |
+| `saveBeforeAttach` | boolean | `false` | ETP-4315 QA follow-up. On a brand-new (unsaved) record, `recordId` is the literal string `"new"` — truthy, so the dropzone stays enabled, but an upload against it fails server-side and the file is silently lost. When `true`, dropping a file on an unsaved record force-saves the header first (same `hook.handleSave()` → `primeSaved()` → navigate mechanism `secondaryTabs.requireSavedRecord` already uses), then uploads against the newly persisted id and lands on the saved record with this tab still open. When `false` (default), the tab keeps today's behavior — the underlying bug still exists on any window that hasn't opted in. Enabled today only on `purchase-invoice`, where attaching the supplier's original document before finishing data entry is the expected flow; other windows are a deliberately separate follow-up (see the ETP-4315 comment thread) rather than a blanket auto-save-on-attach for every window. |
 
 **Note:** the frontend resolves the target `tableName` from `frontendContract.entities.header.tableName` automatically — you do **not** configure it in `decisions.json`. The tab does a lazy fetch on activation (no request until the user opens it). Backend storage uses the standard Etendo `AttachImplementationManager` and the `C_FILE` table.
 
@@ -395,6 +442,8 @@ generated `<Page>` component, sorted by `tabOrder`.
 |----------|------|---------|---------|
 | `tabOrder` | number | `99` | Global sort weight across the ENTIRE tab strip (ETP-4415) — not just among secondary tabs. Lower sorts first. Also settable on `customPanelTabs[]`/`extraTabs[]` items and `attachments` (default `999`, i.e. after secondaryTabs); the lines tab uses `window.detailTabOrder` (or the legacy `window.detailTabIndex`, see below) instead, since it isn't declared per-entry. A window declaring no `tabOrder` anywhere renders in exactly the pre-ETP-4415 order. |
 | `label` | string | `toLabel(key)` | Tab label (menu-translatable via `tMenu`). |
+| `labelKey` | string | `null` | i18n key resolved through `useUI()`, substituted for `tMenu(label)` wherever the tab's translated label is composed into a generic template (`entityDetail`, `addEntity`) — the label text only, not the whole template. |
+| `addLineLabelKey` | string | `null` | **(ETP-5021)** Full i18n key that REPLACES the tab's "add" button text entirely, bypassing the generic `addEntity` ("Añadir {label}") composition — use when the action must match a standardized CTA used elsewhere in the app (verb + prefix + casing) rather than the generic tab-name-derived phrasing. E.g. `locationAddress` sets `"addLineLabelKey": "addAddress"` so its button reads the same "+ Añadir dirección" as the document-header `PartnerAddressPicker` (`C_BPartner_Location_ID` fields), instead of the generic "Añadir Dirección". Implemented by `resolveAddLineLabel(st, ui, tMenu)` in `detailViewHelpers.jsx`. `buildSecondaryTabPropEntry` (`generate-frontend.js`, `schema_forge_core`) now emits `labelKey`/`addLineLabelKey` onto the generated `secondaryTabs` array entry alongside `tabOrder`/`requireSavedRecord`/`customAddModal` — verified locally with `LOCAL_CORE=1` against `schema_forge_core` branch `feature/ETP-5021` (commit `927042462`), whose PR is pending review/merge/publish. **Not yet in the published package this repo pins** — `contacts`'s committed `BusinessPartnerPage.jsx` therefore does not carry `addLineLabelKey` yet (the offline UI-drift check regenerates against the pinned version and would otherwise fail). Once the core package is published and bumped here (`docs/repo-topology.md`), re-run `make regen ONLY=contacts` and commit the result — no other change needed. |
 | `tabMode` | string | `null` | `"form-only"` renders `isFormTab: true` (a plain form bound to the header's own state, not a child table) — see `SecondaryFormTab`'s prop contract in `docs/ui-customization.md` §17. Any other value (or `"table-form"`) is a genuine child-entity table + detail form. |
 | `addLineFields` | array | `[]` | Field keys shown in the tab's inline add-row. Resolved against the entity's own contract fields (labels, lookups, defaults, etc. carried over automatically). |
 | `requireSavedRecord` | boolean | `false` | Blocks opening/adding to this tab until the header record itself has been saved (no `id` yet). |
@@ -402,8 +451,9 @@ generated `<Page>` component, sorted by `tabOrder`.
 | `customAddModal` | string | `null` | Opens a hand-written modal component instead of the inline add-row (e.g. `locationAddress`'s `LocationEditorModal`). |
 | `readOnlyLogic` | AD logic string | `null` | Compiled with the same translator as field-level `readOnlyLogic`; evaluated against the current header record, independent of the document's own draft/completed state. |
 | `maxDetailLines` | number | `null` | **(ETP-4565)** Caps this tab's own child count, mirroring the top-level `window.maxDetailLines` semantics for the `detailEntity` pattern but scoped per secondary tab — a window can declare several `secondaryTabs`, each needing an independent cap (e.g. `contacts`' `customerAccounting` vs. `vendorAccounting`). `N > 0` hides the add-line button, the empty-state add trigger, and the inline add-row once the tab's child count reaches `N` (e.g. `1` for a "registro único" accounting-schema row). `0` disables manual add entirely for that tab. Undeclared (default) stays uncapped. Implemented by `resolveCanAddSecondaryLines(st, childrenCount)` in `tools/app-shell/src/components/contract-ui/DetailView.jsx`, fed by the `maxDetailLines` prop the generator emits on the tab's entry in `buildSecondaryTabPropEntry` (`generate-frontend.js`, `schema_forge_core`). |
+| `visibleWhenCapability` | string | `null` | **(ETP-5116)** Names a capability key (e.g. `"showAccountingFields"`) from the same `capabilities` map used by the field-level `visibleWhenCapability` (see that entry under Grid cell flags above) — the WHOLE tab is omitted (not just disabled) when the named capability resolves `false` for the current role: hidden from the tab-strip nav, and unreachable via the `openSecondaryTab` deep-link/location-state path (a stale link to a hidden tab silently no-ops instead of activating it). A Panel-type tab (`customPanel`) is normally mounted eagerly regardless of which tab is active (so its child-count badge can update without a click) — this gate suppresses that eager mount too, not just the visible content. Opt-in — absent means always visible, matching pre-ETP-5116 behavior. Emitted by `buildSecondaryTabPropEntry` (`generate-frontend.js`, `schema_forge_core`) and consumed by `buildInitialTabs()`/the secondary-tab content map in `tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx` / `DetailView.jsx` via `isCapabilityVisible()` (`@/lib/capabilityVisibility.js`). |
 
-**Real examples:** `product`/`asset-group` (`secondaryTabs.accounting.maxDetailLines: 1`), `contacts` (`secondaryTabs.customerAccounting.maxDetailLines: 1` and `secondaryTabs.vendorAccounting.maxDetailLines: 1`) — all four cap their accounting-schema row at exactly one record, the `secondaryTabs`-pattern equivalent of `window.maxDetailLines: 1` on `product-category`/`business-partner-category`/`tax`'s `detailEntity`. Full extension-point reference (Panel/Form prop contracts, custom-window wiring): `docs/ui-customization.md` §17.
+**Real examples:** `product`/`asset-group`/`assets` (`secondaryTabs.accounting`/`assetAcct`), `warehouse` (`secondaryTabs.accounting`) and `contacts` (`secondaryTabs.customerAccounting` and `vendorAccounting`) all set `"visibleWhenCapability": "showAccountingFields"` — their Accounting tab(s) are gated behind `AD_Role.EM_ETGO_Show_Acct_Fields`, hidden entirely for a role that shouldn't see GL account fields (`financial-account`'s own Accounting tab is hand-rolled and gates itself directly via `useHasCapability`, ETP-4530 — it does not use this `decisions.json` property). `product`/`asset-group` (`secondaryTabs.accounting.maxDetailLines: 1`), `contacts` (`secondaryTabs.customerAccounting.maxDetailLines: 1` and `secondaryTabs.vendorAccounting.maxDetailLines: 1`) — all four cap their accounting-schema row at exactly one record, the `secondaryTabs`-pattern equivalent of `window.maxDetailLines: 1` on `product-category`/`business-partner-category`/`tax`'s `detailEntity`. Full extension-point reference (Panel/Form prop contracts, custom-window wiring): `docs/ui-customization.md` §17.
 
 **Cross-group ordering (ETP-4415).** `tabOrder` used to only sort within `secondaryTabs`; it now sorts the whole tab strip (`secondaryTabs` + lines + `customPanelTabs`/`extraTabs`/`attachments`) together, computed at runtime in `buildInitialTabs()` (`tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx`). This lets a classic tab (e.g. Contabilidad) render after a custom tab (e.g. Precio) — previously impossible since classic tabs were always emitted before custom ones. `relatedDocuments` does not participate (it renders via a separate footer path, not this tab strip, regardless of this feature).
 
@@ -1007,6 +1057,12 @@ Two field-level props control how the grid column renders raw values as labeled 
 2. `DistinctEnumPicker` (in `AdvancedFilterBuilder.jsx`) reads `enumLabels` to populate the advanced/conditional filter value dropdown — so the filter shows translated labels instead of raw values.
 3. `ListFilterBar.jsx` uses the same `enumLabels` to drive the status quick-filter pills above the list.
 
+**Option order in the two status dropdowns (ETP-4913):** both the `ListFilterBar` pill and `DistinctEnumPicker` merge two sources that arrive at different times — the uncached backend `_distinct` fetch (fired when the popover opens) and the codes present in the currently loaded grid rows. Neither source is wrong on its own, but merging them unsorted meant the list painted in grid order and then reshuffled once the fetch resolved, giving a different order on every open. Both now sort with `compareStatusCodes` / `STATUS_ORDER` from `lib/statusBadge.js`, the single fixed business-flow catalog (Temporary → Draft → In process → Awaiting → Completed → Re-opened → Closed → Voided → Unknown).
+
+`DistinctEnumPicker` applies that sort **only** to `type: 'status'` columns — exactly the set `ListFilterBar` discovers via `columns.find(c => c.type === 'status')`, so the two can never disagree for the same column. Every other `enumLabel` column keeps its merge order, because it is already deterministic AND intentional: the backend's `order by <code> asc` for business enums (`accountType` `A,E,L,M,O,R` would become `M,A,E,L,O,R`, since `M` sits in the In-process bucket), or the `enumLabels` insertion order for virtual columns filled by `fillFallbackCodes` (a severity list `vencida, proxima, aldia` would be alphabetized into reverse severity). **Do not widen that gate.** Note that `DistinctEnumPicker` lives in `schema_forge_core`, so `STATUS_ORDER` is duplicated there; `tools/app-shell/src/lib/__tests__/statusBadge.coreParity.test.js` fails the build if the two copies drift apart.
+
+Unlike `ListFilterBar.labelForStatus`, `DistinctEnumPicker.labelFor` deliberately does NOT delegate to `statusLabel()`: that function only honours an `enumLabels` entry that is an i18n **key**, and a literal label falls through to its hardcoded code→key `MAP`, yielding the **raw code** for anything outside it. Docstatus `enumLabels` are always keys, but that picker also serves columns whose `enumLabels` are literals (`docBaseType`'s 44 AD names, `'GENERIC' → 'Use Generic Account No.'`, `sales-quotation`'s `ui('quotationStatus.CO')`), which would all regress to raw codes.
+
 **"All statuses" dropdown label resolution (ETP-4696):** `labelForStatus` in `ListFilterBar.jsx` — the function that renders each option text in the "All statuses" quick-filter dropdown — delegates 100% to `statusLabel(code, dictionary, ui, statusCol?.enumLabels)`, the exact same resolution function `DataTable.cellRenderers.jsx` uses for the grid cell badge (also used by `DocumentStatusPill.jsx`, `CloneOrderModal.jsx`, `ReportDrawer.jsx`, `useInvoicePreview.js`). It previously had its own local lookup that bypassed `statusLabel()`, so codes without a fortuitous translation (`PWNC`, `RDNC`, `ETGO_CI`, `RPVOID`) rendered in raw/English form in the dropdown while the grid cell for the same row translated correctly. There is no second translation mechanism to maintain: extending the catalog — a new `enumValues` entry in `decisions.json`, a `genericLabels` key in `{es_ES,en_US}.json`, or an `AD_Ref_List_Trl` row — is picked up by `statusLabel()` once, and both the grid cell and the dropdown reflect it automatically.
 
 **Key rules:**
@@ -1015,7 +1071,9 @@ Two field-level props control how the grid column renders raw values as labeled 
 - The mapping is **per-window**: the same raw value (e.g. `false`) can map to `statusDraft` in one window and a different key (e.g. `statusIncomplete`) in another. The shared `statusLabel` function stays generic.
 - `name` should be an existing key in `genericLabels` (in `packages/app-shell-core/src/locales/{es_ES,en_US}.json`) so both locales resolve correctly. If you use a literal string it renders as-is in all locales.
 - If you introduce a **new** key, add it to **both** `en_US.json` and `es_ES.json` (per `docs/i18n-guide.md`).
-- If the raw schema already supplies `enumValues` (from an AD list reference), `decisions.json` `enumValues` **overrides** them.
+- If the raw schema already supplies `enumValues` (from an AD list reference), `decisions.json` `enumValues` **overrides** them. An empty array (`[]`) is ignored, so it cannot accidentally leave a field with no options — declare the codes you want or omit the key.
+  - **Fixed in ETP-4913.** Until then this only held for fields with NO raw `enumValues` (e.g. the synthetic `YesNo` `processed` status of `goods-movements`). `buildField` in the core's `cli/src/resolve-curated.js` copies `enumValues` from decisions first and from the raw schema second, and the raw copy overwrote unconditionally — so a field backed by a real AD List reference silently kept the AD values. That is why the two return-shipment windows could not redirect `DocStatus`/`CO` away from the poisoned `docStatusCo` key. Requires `@etendosoftware/schema-forge-cli` ≥ the ETP-4913 release.
+  - The poisoning itself is a separate, still-open generator issue: `extract-labels.js` keys enum labels by `(column name, value code)` rather than by AD reference, so `M_InOut.DocStatus/CO` ("Completed") and `C_Order.DocStatus/CO` ("Booked") collide on one global `docStatusCo` key, and the `ORDER BY rl.name COLLATE "C"` tie-break makes "Booked"/"Registrado" win for every window. Overriding `enumValues` per window is the supported workaround; a reference-scoped key would be the root fix. See `docs/generated-custom-windows/return-material-receipt.md` §"Final status reads Completado".
 
 **Example — `goods-movements` `processed` field** (an Etendo `YesNo` boolean the API serializes as `true`/`false`):
 
@@ -1166,6 +1224,20 @@ selected.
 }
 ```
 
+**Precedence over callouts (ETP-5039).** A mapping target is an explicit user choice, so
+`applyOnSelectMappings` registers every `to` key as *touched*. A callout fired by the same
+selection (e.g. the product callout returning the AD locator `Value`, `AS-0-0-0`) therefore
+cannot overwrite it. The protection extends to the `to$_identifier` companion key, where the
+display label lives — in `applyCalloutUpdates` (`tools/app-shell/src/lib/applyCalloutUpdates.js`)
+a `X$_identifier` key inherits the base key `X`'s membership in both `touched` and
+`forceCalloutFields`. Consequences:
+
+- A field the user picked keeps **both** its value and its label against a callout default.
+- A field declared in `forceCalloutFields` still wins, and its label is refreshed with it —
+  no value/label mismatch.
+- Untouched autocompleted fields (prices, discounts, amounts) are recalculated by callouts
+  exactly as before.
+
 ### Custom Renderer (`customRenderer`)
 
 Swap in a custom React component as the input widget for a single field inside `EntityForm`.
@@ -1252,7 +1324,7 @@ that already has values stored with the scheme included.
 | `max` | number | `undefined` | Maximum allowed value for numeric fields. On blur the grid UI autocorrects values above this limit to `max`. Travels through the full pipeline (`decisions.json` → contract → generated FieldDefs). Example: `"max": 100` on a discount (%) field prevents values above 100. |
 | `integer` | boolean | `undefined` (decimals allowed) | When `true`, the numeric field rejects decimal values. In detail forms a decimal raises a `fieldIntegerError` toast on blur and blocks the save. **Default (flag absent or `false`) accepts decimals** — omit it for the common case; only set `integer: true` for whole-number fields (e.g. Assets `usableLifeMonths` / `usableLifeYears`, declared `"min": 1, "integer": true`). Fully backwards-compatible: a field that declares neither `min` nor `integer` performs no numeric validation. Travels through the full pipeline (`decisions.json` → `resolve-curated` → contract → generated FieldDefs). |
 | `readOnlyLogic` | string \| null | `null` | AD-logic-string expression for conditional read-only (`@Column@=value` syntax, compiled from raw AD `displaylogic`/`readonlylogic`). Set `null` to omit — e.g. to silence the raw AD value before overriding it with `readOnlyLogicJs` below. |
-| `readOnlyLogicJs` | string \| undefined | `undefined` | Raw JavaScript expression (not AD-logic syntax) for conditional read-only, evaluated against the record with `record` bound in scope — e.g. `"!!record.id"` to lock a field once the record is persisted (a "locks after first save" pattern the AD-logic translator cannot express, since raw AD `displaylogic`/`readonlylogic` only ever references *other column values*, never "does this record have a PK yet"). Compiles into the SAME generated `readOnlyLogic: (record) => …` function property as the AD-logic-string variant above — `EntityForm.jsx`'s `evalReadOnlyLogic` doesn't know or care which decisions.json key produced it. Real examples: `sales-invoice`/`purchase-invoice`'s `transactionDocument` (`"!!record.id"`, locked after first save) and `simple-g-l-journal`'s several fields (`"record['processed'] === true"`, an AD-shaped condition written directly in JS because it was simpler than composing the equivalent `@Processed@` logic string). When both `readOnlyLogic` and `readOnlyLogicJs` are set on the same field, set `readOnlyLogic: null` explicitly (as in the examples above) — otherwise the raw AD value and the JS override may both compile into contradictory or redundant checks. |
+| `readOnlyLogicJs` | string \| undefined | `undefined` | Raw JavaScript expression (not AD-logic syntax) for conditional read-only, evaluated against the record with `record` bound in scope — e.g. `"!!record.id"` to lock a field once the record is persisted (a "locks after first save" pattern the AD-logic translator cannot express, since raw AD `displaylogic`/`readonlylogic` only ever references *other column values*, never "does this record have a PK yet"). Compiles into the SAME generated `readOnlyLogic: (record) => …` function property as the AD-logic-string variant above — `EntityForm.jsx`'s `evalReadOnlyLogic` doesn't know or care which decisions.json key produced it. Real examples: `sales-invoice`/`purchase-invoice`'s `transactionDocument` (`"!!record.id"`, locked after first save) and `simple-g-l-journal`'s several fields (`"record['processed'] === true"`, an AD-shaped condition written directly in JS because it was simpler than composing the equivalent `@Processed@` logic string). When both `readOnlyLogic` and `readOnlyLogicJs` are set on the same field, set `readOnlyLogic: null` explicitly (as in the examples above) — otherwise the raw AD value and the JS override may both compile into contradictory or redundant checks. **`record.hasLines` (ETP-5052):** for a HEADER field, `record` also carries a live `hasLines` boolean — `true` once the master record has at least one child line, `false` once the last one is removed — sourced by `DetailView.jsx` from `hook.children.length > 0` and merged in via `buildHeaderFormData()` (`detailViewHelpers.jsx`), display-only and never part of the save payload. Use it to lock a header field once lines exist, e.g. Physical Inventory's `warehouse`, which combines it with the field's pre-existing Processed-based lock: `"readOnlyLogicJs": "!!record.hasLines || record.processed === true"` (with `"readOnlyLogic": null`) — the OR is required because `readOnlyLogicJs` always takes priority over the AD-translated raw logic, so a bare `"!!record.hasLines"` would silently drop the Processed lock instead of adding to it (see `docs/generated-custom-windows/physical-inventory.md` § "Design changes — ETP-5052"). Only header `<Form>` calls receive this merged `record` — line-entity forms keep receiving the plain record, so `hasLines` is not available on line-level `readOnlyLogicJs` expressions. |
 | `displayLogic` | string \| null | `null` | AD-logic-string expression for conditional visibility (`@Column@=value` syntax). Set `null` to omit. |
 | `displayLogicJs` | string \| undefined | `undefined` | Raw JavaScript expression (not AD-logic syntax) for conditional visibility, evaluated against the record with `record` bound in scope — e.g. `"!!record.id"` to hide a field only on the CREATE form (shown again once persisted; the double negation is deliberate — `evalDisplayLogic` treats a truthy result as "show", so "hidden until saved" needs `!!record.id`, not the single-negation `!record.id`, which would do the opposite). Compiles into the same generated `displayLogic: (record) => …` function property `EntityForm.jsx`'s `evalDisplayLogic` reads to filter `displayFields` — a field failing this check is removed from the rendered form entirely, not merely disabled. Real examples: `assets`/`asset-group`'s several fields gated on `"record.depreciate === true \|\| record.depreciate === 'Y'"`, and `user`'s `password` (ETP-4830, `"!!record.id"` — hidden on the create form now that admin-typed passwords no longer bypass the invite-email flow, shown again once the user record is saved so an existing user's password can still be reset). |
 | `businessCritical` | boolean | `false` | Advisory-only metadata flag. When `true`, marks the field as business-critical data. This flag does **not** change any functional behavior (validation, read-only logic, visibility, etc.). It travels through the pipeline (`decisions.json` → `resolve-curated` → `contract.json` → `push-to-neo` → `ETGO_SF_FIELD.ISBUSINESSCRITICAL`) so that downstream consumers (e.g., AI agents reading `neo_schema`) know they must confirm with the user before creating or updating records that include this field. |

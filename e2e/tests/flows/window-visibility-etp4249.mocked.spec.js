@@ -12,6 +12,12 @@ import { login } from '../helpers/auth.js';
  * TC-35 — Tax Category window is accessible (partial)
  * TC-37 — Existing Tax Rate window unaffected by this PR
  *
+ * This file is also the home for later window-visibility regressions that share
+ * the same assertions, so they stay in one place instead of spawning a spec per
+ * ticket:
+ *
+ * ETP-5068 — "Conversion Rate Downloader Log" retired from the Settings menu
+ *
  * All specs run in mock mode (no real Etendo backend required).
  */
 
@@ -143,11 +149,21 @@ test.describe('TC-35 — Tax Category window accessible', () => {
   });
 
   test('menu-item for tax-category is present in the navigation', async ({ page }) => {
-    // tax-category is declared in menu.json (Settings group, windowId "138").
+    // tax-category is declared in menu.json (Finance group, windowId "138").
     // Expand the sidebar so sub-items are rendered in the DOM (collapsed mode
     // only renders group icons via a hover-triggered Popover).
-    await expandSidebar(page);
-    await expect(page.getByTestId('menu-item-tax-category')).toBeVisible();
+    //
+    // The item's own group ("Configuración") also has its own open/closed
+    // state (see SideMenu.jsx's per-group `aria-expanded`/`isOpen`), which is
+    // expected to auto-open for the active route — but that derivation runs
+    // in a later effect than the sidebar-width expand above, so on a slower
+    // CI runner the retry below (re-running expandSidebar, a no-op once the
+    // sidebar is already expanded) gives that effect the extra ticks it needs
+    // instead of asserting on whatever rendered within a single check.
+    await expect(async () => {
+      await expandSidebar(page);
+      await expect(page.getByTestId('menu-item-tax-category')).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 10_000 });
   });
 });
 
@@ -168,9 +184,114 @@ test.describe('TC-37 — Tax Rate window unaffected', () => {
   });
 
   test('menu-item for tax is still present in the navigation', async ({ page }) => {
-    // tax is declared in menu.json (Settings group, windowId "137").
+    // tax is declared in menu.json (Finance group, windowId "137").
     // Expand the sidebar so sub-items are rendered in the DOM.
     await expandSidebar(page);
     await expect(page.getByTestId('menu-item-tax')).toBeVisible();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5068 — "Conversion Rate Downloader Log" retired from the Settings menu
+//
+// The window is an internal log of the conversion-rate downloader job. It adds
+// no value to the Etendo Go end user, so it was REMOVED from menu.json rather
+// than marked `hidden: true` — reinstating it is not planned, and administrators
+// read the log in Etendo classic instead (the GO template roles keep their AD
+// window grant). The artifact, contract and NEO spec are intentionally intact,
+// so the slug is declared in `apiOnlyWindows` in registry.js.
+//
+// These tests are the regression net for that removal: a bulk `make regen` or a
+// bad merge re-adding the menu entry would silently undo the ticket.
+//
+// IMPORTANT — why every test here navigates to `/payment-term` first: in
+// expanded mode the SideMenu only renders the sub-items of the OPEN group,
+// and the open group is the one matching the current route
+// (`findActiveGroup`). Asserting the absence of a `menu-item-*` testid from
+// `/dashboard` is therefore VACUOUS — it passes whether or not the entry
+// still exists in menu.json. `payment-term` is a Settings sibling (windowId
+// "141"), so landing on `/payment-term` opens exactly the group the retired
+// entry used to live in, and the sanity test below pins that precondition so
+// this suite can never silently go green for the wrong reason.
+//
+// `tax` was the original anchor, but ETP-5146 moved it (and `tax-category`)
+// from Settings to Finance, so it no longer opens the right group — do not
+// revert this anchor back to `tax`/`tax-category` without re-checking which
+// group they live in.
+// ---------------------------------------------------------------------------
+test.describe('ETP-5068 — Conversion Rate Downloader Log retired from the menu', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await installListMock(page, 'payment-term');
+    await page.goto('/payment-term');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await expandSidebar(page);
+  });
+
+  test('precondition — the Settings group is open and renders its items', async ({ page }) => {
+    // Guards the whole suite: if this fails, the absence assertions below prove
+    // nothing and must be fixed rather than trusted.
+    await expect(page.getByTestId('menu-item-payment-term')).toBeVisible();
+    await expect(page.getByTestId('menu-item-fiscal-config')).toBeVisible();
+  });
+
+  test('no menu item for conversion-rate-downloader-log exists in the DOM', async ({ page }) => {
+    // The SideMenu emits data-testid="menu-item-{name}" for every non-hidden
+    // item of the open group. Settings is open (see precondition) and the entry
+    // was deleted from menu.json, so the element must be absent.
+    await expect(page.getByTestId('menu-item-fiscal-config')).toBeVisible();
+    await expect(page.getByTestId('menu-item-conversion-rate-downloader-log')).toHaveCount(0);
+  });
+
+  test('no anchor href contains the "conversion-rate-downloader" path segment', async ({ page }) => {
+    // Belt-and-suspenders: no sidebar link may point at the retired route,
+    // whatever testid naming a future re-add might use. Retried like the
+    // tax-category presence check above: the group's own open-state effect
+    // can still be settling relative to the sidebar-width expand in
+    // beforeEach, so a single read right after can land mid-render on a
+    // slower runner.
+    await expect(async () => {
+      await expect(page.getByTestId('menu-item-fiscal-config')).toBeVisible({ timeout: 2_000 });
+      await expect(page.locator('nav a[href*="conversion-rate-downloader"]')).toHaveCount(0);
+    }).toPass({ timeout: 10_000 });
+  });
+
+  test('direct navigation renders the not-found state instead of the window', async ({ page }) => {
+    // The route is not registered anymore, but `:windowName` is a catch-all, so
+    // the URL still resolves — to WindowLoader's error branch. Asserting this
+    // pins the graceful degradation: no blank page, and no window rendered.
+    await page.goto('/conversion-rate-downloader-log');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await expect(
+      page.getByText(/Window "conversion-rate-downloader-log" not found/),
+    ).toBeVisible();
+    await expect(page.getByTestId('list-view')).toHaveCount(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5068 (companion) — "Conversion Rates" must NOT be collateral damage
+//
+// `conversion-rates` (Finance group, windowId "116") is the window users
+// actually need, and its slug is a prefix-neighbour of the retired one — an
+// over-broad deletion or a careless grep-and-remove would take it out too.
+// ---------------------------------------------------------------------------
+test.describe('ETP-5068 — Conversion Rates window unaffected', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await installListMock(page, 'conversion-rates');
+    await page.goto('/conversion-rates');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  });
+
+  test('conversion-rates route still renders the list view', async ({ page }) => {
+    await expect(page.getByTestId('list-view')).toBeVisible();
+  });
+
+  test('menu-item for conversion-rates is still present in the navigation', async ({ page }) => {
+    // Landing on /conversion-rates makes Finance the active (open) group, so its
+    // sub-items are rendered — same mechanism as the Settings note above.
+    await expandSidebar(page);
+    await expect(page.getByTestId('menu-item-conversion-rates')).toBeVisible();
   });
 });

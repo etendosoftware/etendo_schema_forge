@@ -1,10 +1,17 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ token: 'test-token' }),
-}));
-
+import { AuthProvider } from '@/auth/AuthContext.jsx';
 import { useCreateStatement } from '../useCreateStatement.js';
+
+// ETP-5022: useCreateStatement now goes through useApiFetch, which reads the
+// token from the real core AuthProvider (or falls back to the ambient session)
+// rather than from a mocked `useAuth`. A mocked `@/auth/AuthContext.jsx` never
+// crosses the `useApiFetch` shim (it imports auth via the core package's own
+// relative path, which the `@/auth` alias does not intercept), so a real
+// AuthProvider seeded with a token is required instead.
+const wrapper = ({ children }) => (
+  <AuthProvider initialSession={{ token: 'test-token' }}>{children}</AuthProvider>
+);
 
 function setPathname(pathname) {
   Object.defineProperty(window, 'location', {
@@ -37,7 +44,7 @@ describe('useCreateStatement', () => {
   });
 
   it('returns the initial idle state', () => {
-    const { result } = renderHook(() => useCreateStatement());
+    const { result } = renderHook(() => useCreateStatement(), { wrapper });
     expect(result.current.creating).toBe(false);
     expect(result.current.error).toBeNull();
     expect(typeof result.current.createStatement).toBe('function');
@@ -49,7 +56,7 @@ describe('useCreateStatement', () => {
       json: async () => ({ response: { data: { id: 'st-1', name: 'Extracto manual', lineCount: 1 } } }),
     });
 
-    const { result } = renderHook(() => useCreateStatement());
+    const { result } = renderHook(() => useCreateStatement(), { wrapper });
 
     let res;
     await act(async () => {
@@ -79,7 +86,7 @@ describe('useCreateStatement', () => {
     let resolve;
     globalThis.fetch.mockReturnValue(new Promise((r) => { resolve = r; }));
 
-    const { result } = renderHook(() => useCreateStatement());
+    const { result } = renderHook(() => useCreateStatement(), { wrapper });
     let promise;
     act(() => { promise = result.current.createStatement(PAYLOAD); });
     await waitFor(() => expect(result.current.creating).toBe(true));
@@ -95,7 +102,7 @@ describe('useCreateStatement', () => {
     globalThis.fetch.mockResolvedValue({
       ok: false, status: 400, text: async () => 'At least one line is required',
     });
-    const { result } = renderHook(() => useCreateStatement());
+    const { result } = renderHook(() => useCreateStatement(), { wrapper });
 
     await act(async () => {
       await expect(result.current.createStatement(PAYLOAD)).rejects.toThrow(/HTTP 400/);
@@ -106,7 +113,7 @@ describe('useCreateStatement', () => {
 
   it('propagates a network rejection', async () => {
     globalThis.fetch.mockRejectedValue(new Error('offline'));
-    const { result } = renderHook(() => useCreateStatement());
+    const { result } = renderHook(() => useCreateStatement(), { wrapper });
 
     await act(async () => {
       await expect(result.current.createStatement(PAYLOAD)).rejects.toThrow('offline');
@@ -116,7 +123,7 @@ describe('useCreateStatement', () => {
 
   it('returns {} when the API omits response.data', async () => {
     globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({}) });
-    const { result } = renderHook(() => useCreateStatement());
+    const { result } = renderHook(() => useCreateStatement(), { wrapper });
 
     let res;
     await act(async () => { res = await result.current.createStatement(PAYLOAD); });

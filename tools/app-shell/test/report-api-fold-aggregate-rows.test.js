@@ -120,4 +120,48 @@ describe('foldAggregateRows (report-trial-balance)', () => {
     const folded = foldAggregateRows(rows, null);
     assert.deepEqual(folded.map(a => a.account_no), ['43000000', '57000000', '61000000']);
   });
+
+  // ETP-5013 — the grouped view is now ONE BLOCK PER ACCOUNT (dimension
+  // breakdown nested inside), so the fold must order account-first. The
+  // previous order was dimension-first, which is what produced the
+  // dimension-outer cards whose "total" row always netted to ~0.
+  it('sorts by account_no FIRST and dimensionValue SECOND when a dimensionField is given', () => {
+    const rows = [
+      fineGrainRow({ account_no: '57000000', bpartner_name: 'Alpha', opening_balance: -1 }),
+      fineGrainRow({ account_no: '43000000', bpartner_name: 'Zeta', opening_balance: -1 }),
+      fineGrainRow({ account_no: '57000000', bpartner_name: 'Zeta', opening_balance: -1 }),
+      fineGrainRow({ account_no: '43000000', bpartner_name: 'Alpha', opening_balance: -1 }),
+    ];
+    const folded = foldAggregateRows(rows, 'bpartner_name');
+    assert.deepEqual(folded.map(a => [a.account_no, a.dimensionValue]), [
+      ['43000000', 'Alpha'],
+      ['43000000', 'Zeta'],
+      ['57000000', 'Alpha'],
+      ['57000000', 'Zeta'],
+    ]);
+  });
+
+  it('leaves every account as ONE contiguous run, which the account blocks depend on', () => {
+    const rows = [
+      fineGrainRow({ account_no: '57000000', bpartner_name: 'B', opening_balance: -1 }),
+      fineGrainRow({ account_no: '43000000', bpartner_name: 'B', opening_balance: -1 }),
+      fineGrainRow({ account_no: '57000000', bpartner_name: 'A', opening_balance: -1 }),
+      fineGrainRow({ account_no: '43000000', bpartner_name: 'A', opening_balance: -1 }),
+    ];
+    const runs = [];
+    for (const r of foldAggregateRows(rows, 'bpartner_name')) {
+      if (runs[runs.length - 1] !== r.account_no) runs.push(r.account_no);
+    }
+    assert.deepEqual(runs, ['43000000', '57000000']);
+  });
+
+  it('keeps the blank dimension value ("") as its own row, first within its account', () => {
+    const rows = [
+      fineGrainRow({ account_no: '35000000', bpartner_name: 'Juan Perez', opening_balance: -141413.14, activity_credit: 640.52, closing_balance: -142053.66 }),
+      fineGrainRow({ account_no: '35000000', bpartner_name: '', opening_balance: 159193.58, closing_balance: 159193.58 }),
+    ];
+    const folded = foldAggregateRows(rows, 'bpartner_name');
+    assert.equal(folded.length, 2, 'the no-dimension bucket must not be merged into another row');
+    assert.deepEqual(folded.map(a => a.dimensionValue), ['', 'Juan Perez']);
+  });
 });

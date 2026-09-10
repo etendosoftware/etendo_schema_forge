@@ -9,6 +9,11 @@ export default function GoodsShipmentConfirmModal({ base, headers, recordId, dat
   // own. Reuse the same picker CreateInvoiceConfirmModal already shows on the
   // post-completion "Crear factura" button — required only when there is no
   // linked order to derive the price list from automatically.
+  // ETP-5052 — QA found the picker always preselected the system-default price list
+  // instead of the linked order's / Business Partner's own tariff. `resolvedPriceListId`
+  // is computed server-side (GoodsShipmentHeaderHandler#enrichResolvedPriceList) with the
+  // same priority as the real invoice-creation flow, and passed through so the picker
+  // preselects the correct value instead of only the system default.
   const hasLinkedOrder = Array.isArray(data?.linkedOrders) && data.linkedOrders.length > 0;
   return (
     <ConfirmInOutModal
@@ -22,6 +27,7 @@ export default function GoodsShipmentConfirmModal({ base, headers, recordId, dat
       showPriceListPicker
       isSOTrx
       hasLinkedOrder={hasLinkedOrder}
+      defaultPriceListId={data?.resolvedPriceListId}
       title={ui('goodsShipment.confirmModal.title')}
       docInfo={{
         documentNo: data?.documentNo,

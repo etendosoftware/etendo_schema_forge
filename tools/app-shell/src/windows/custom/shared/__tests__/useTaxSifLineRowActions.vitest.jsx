@@ -21,6 +21,13 @@ vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
   useFiscalConfig: (...args) => useFiscalConfigMock(...args),
 }));
 
+// ETP-5022 — the hook's requests come from `useApiFetch`, which reads the token from the
+// core session rather than from the `token` argument.
+vi.mock('@etendosoftware/app-shell-core/auth', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useAuthOptional: () => ({ token: 'test-token' }),
+}));
+
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => useAuthMock(),
 }));
@@ -297,7 +304,9 @@ describe('useTaxSifLineRowActions — header fetch + selector context wiring', (
 
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
       `${API_BASE_URL}/header/${RECORD_ID}`,
-      { headers: { Authorization: `Bearer ${TOKEN}` } },
+      // `credentials: 'include'` comes from the shared helper now, instead of being
+      // remembered per call site (ETP-5022).
+      { credentials: 'include', headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES' } },
     ));
 
     await waitFor(() => {
@@ -312,7 +321,7 @@ describe('useTaxSifLineRowActions — header fetch + selector context wiring', (
       expect(url).toContain('priceList=PL-1');
       expect(url).toContain('C_BPartner_Location_ID=ADDR-1');
       expect(url).toContain('currency=EUR');
-      expect(init).toEqual({ headers: { Authorization: `Bearer ${TOKEN}` } });
+      expect(init).toEqual({ credentials: 'include', headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES' } });
     });
   });
 
@@ -824,5 +833,140 @@ describe('useTaxSifLineRowActions — modal wiring', () => {
     // as no-longer-missing too — both reads hit the SAME taxById['tax-shared'] entry.
     expect(screen.getByTestId('line1-missing')).toHaveTextContent('false');
     expect(screen.getByTestId('line2-missing')).toHaveTextContent('false');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5027 — the ⚠ badge is gated by DOCUMENT DIRECTION, not just by profile.
+//
+// Before this, a purchase line on a VERI*FACTU (or non-Bizkaia TBAI) org showed a
+// warning badge demanding a key that could never be transmitted. The territory
+// comes off `useFiscalConfig().tbaiRecord.etsgSifTerritory`; the spec is `specName`
+// or, by default, the last segment of `apiBaseUrl`.
+// ---------------------------------------------------------------------------
+describe('useTaxSifLineRowActions — document-direction gate (ETP-5027)', () => {
+  const MISSING_TAX = { id: 'tax-1', EM_Tbai_Claveregimeniva: null };
+  const MISSING_VERIFACTU_TAX = { id: 'tax-1', EM_Etvfac_Vat_Regime: null };
+
+  function renderBadge({ apiBaseUrl = API_BASE_URL, specName = null, taxItems = [MISSING_TAX] } = {}) {
+    installDefaultFetch({ taxItems });
+    return renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales', specName,
+    }));
+  }
+
+  async function badgeFor(options) {
+    const { result } = renderBadge(options);
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.cellBadges.tax).toBeTypeOf('function'));
+    return () => result.current.cellBadges.tax({ tax: 'tax-1' });
+  }
+
+  describe('TicketBAI', () => {
+    it('renders the badge on a SALES document regardless of territory', async () => {
+      for (const territory of [null, 'ARABA', 'BIZKAIA', 'GIPUZKOA']) {
+        vi.clearAllMocks();
+        useAuthMock.mockReturnValue({ selectedOrg: { id: 'ORG-1' } });
+        useFiscalConfigMock.mockReturnValue({
+          profile: 'tbai', verifactuRecord: null, tbaiRecord: { etsgSifTerritory: territory },
+        });
+        const badge = await badgeFor({ apiBaseUrl: '/sws/neo/sales-invoice' });
+        expect(badge()).not.toBeNull();
+      }
+    });
+
+    it.each(['/sws/neo/purchase-invoice', '/sws/neo/purchase-order'])(
+      'suppresses the badge on %s outside BIZKAIA',
+      async (apiBaseUrl) => {
+        for (const territory of [null, undefined, 'ARABA', 'GIPUZKOA']) {
+          vi.clearAllMocks();
+          useAuthMock.mockReturnValue({ selectedOrg: { id: 'ORG-1' } });
+          useFiscalConfigMock.mockReturnValue({
+            profile: 'tbai', verifactuRecord: null, tbaiRecord: { etsgSifTerritory: territory },
+          });
+          const badge = await badgeFor({ apiBaseUrl });
+          expect(badge()).toBeNull();
+        }
+      },
+    );
+
+    // Deliberate ETP-5027 loosening: Batuz/LROE DOES send purchases in Bizkaia,
+    // so the badge must come back, not stay suppressed.
+    it.each(['/sws/neo/purchase-invoice', '/sws/neo/purchase-order'])(
+      'RESTORES the badge on %s under BIZKAIA',
+      async (apiBaseUrl) => {
+        useFiscalConfigMock.mockReturnValue({
+          profile: 'tbai', verifactuRecord: null, tbaiRecord: { etsgSifTerritory: 'BIZKAIA' },
+        });
+        const badge = await badgeFor({ apiBaseUrl });
+        expect(badge()).not.toBeNull();
+      },
+    );
+
+    it('a missing tbaiRecord is treated as "no territory" (badge stays off on purchases)', async () => {
+      useFiscalConfigMock.mockReturnValue({ profile: 'tbai', verifactuRecord: null });
+      const badge = await badgeFor({ apiBaseUrl: '/sws/neo/purchase-invoice' });
+      expect(badge()).toBeNull();
+    });
+  });
+
+  describe('VERI*FACTU', () => {
+    beforeEach(() => {
+      useFiscalConfigMock.mockReturnValue({
+        profile: 'verifactu',
+        verifactuRecord: { tAXType: '01' },
+        tbaiRecord: { etsgSifTerritory: 'BIZKAIA' },
+      });
+    });
+
+    it('renders the badge on a sales invoice', async () => {
+      const badge = await badgeFor({ apiBaseUrl: '/sws/neo/sales-invoice', taxItems: [MISSING_VERIFACTU_TAX] });
+      expect(badge()).not.toBeNull();
+    });
+
+    it.each(['/sws/neo/purchase-invoice', '/sws/neo/purchase-order'])(
+      'never renders the badge on %s, not even under BIZKAIA',
+      async (apiBaseUrl) => {
+        const badge = await badgeFor({ apiBaseUrl, taxItems: [MISSING_VERIFACTU_TAX] });
+        expect(badge()).toBeNull();
+      },
+    );
+  });
+
+  describe('spec resolution', () => {
+    it('defaults the spec to the last segment of apiBaseUrl', async () => {
+      useFiscalConfigMock.mockReturnValue({ profile: 'verifactu', verifactuRecord: { tAXType: '01' } });
+      const sales = await badgeFor({ apiBaseUrl: '/sws/neo/sales-invoice/', taxItems: [MISSING_VERIFACTU_TAX] });
+      expect(sales()).not.toBeNull();
+    });
+
+    it('an explicit specName wins over the apiBaseUrl derivation', async () => {
+      useFiscalConfigMock.mockReturnValue({ profile: 'verifactu', verifactuRecord: { tAXType: '01' } });
+      // Base says sales, spec says purchase -> gated out.
+      const badge = await badgeFor({
+        apiBaseUrl: '/sws/neo/sales-invoice',
+        specName: 'purchase-invoice',
+        taxItems: [MISSING_VERIFACTU_TAX],
+      });
+      expect(badge()).toBeNull();
+    });
+  });
+
+  it('forwards the resolved targets to TaxSifModal when the badge is clicked', async () => {
+    useFiscalConfigMock.mockReturnValue({
+      profile: 'tbai', verifactuRecord: null, tbaiRecord: { etsgSifTerritory: 'BIZKAIA' },
+    });
+    installDefaultFetch({ taxItems: [MISSING_TAX] });
+    render(<Harness options={{
+      apiBaseUrl: '/sws/neo/purchase-invoice', token: TOKEN, enabled: true,
+      recordId: RECORD_ID, windowCategory: 'purchases',
+    }} />);
+
+    const button = await screen.findByTestId('line-action-tax-sif');
+    await act(async () => { button.click(); });
+
+    expect(taxSifModalProps).toHaveBeenCalled();
+    const { targets } = taxSifModalProps.mock.calls.at(-1)[0];
+    expect(targets).toEqual({ showSii: false, showTbai: true, showVerifactu: false });
   });
 });

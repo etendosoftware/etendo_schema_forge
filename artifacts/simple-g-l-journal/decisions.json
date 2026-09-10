@@ -56,6 +56,7 @@
         "description": {
           "visibility": "editable",
           "grid": true,
+          "gridOrder": 1,
           "searchable": true,
           "readOnlyLogicJs": "record['processed'] === true",
           "seq": 30
@@ -72,15 +73,28 @@
         "accountingDate": {
           "visibility": "editable",
           "defaultExpr": "@#Date@",
-          "seq": 10
+          "seq": 10,
+          "labels": {
+            "en_US": "Date",
+            "es_ES": "Fecha"
+          },
+          "grid": true,
+          "gridOrder": 2,
+          "searchable": true
         },
         "period": {
           "visibility": "editable",
-          "seq": 20
+          "seq": 20,
+          "grid": true,
+          "gridOrder": 3,
+          "searchable": true
         },
         "currency": {
           "visibility": "editable",
-          "readOnlyLogicJs": "record['processed'] === true"
+          "readOnlyLogicJs": "record['processed'] === true",
+          "grid": true,
+          "gridOrder": 4,
+          "searchable": true
         },
         "opening": {
           "visibility": "editable",
@@ -133,9 +147,11 @@
         },
         "posted": {
           "visibility": "readOnly",
-          "reason": "Posting status — hidden under the hood. Posting itself is deferred to workstream D.",
+          "reason": "Posting status — surfaced as a readOnly status pill (Sin contabilizar/Contabilizado). Posting itself is handled via the Post/Unpost menuActions (DocumentPostingService).",
           "form": false,
           "grid": true,
+          "gridOrder": 6,
+          "searchable": true,
           "badge": true,
           "badgeLabels": {
             "true": {
@@ -186,8 +202,12 @@
           "reason": "Posting-only dimension — posting deferred to workstream D."
         },
         "documentStatus": {
-          "visibility": "discarded",
-          "reason": "Document status — completion/posting flow deferred to workstream D."
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 5,
+          "form": false,
+          "searchable": true,
+          "reason": "Document lifecycle status chip (Draft/Complete) — DF §2.1 point 2. Independent second chip alongside the accounting 'posted' pill; badge label mapping (DR->statusDraft, CO->statusComplete) comes from the shared statusBadge.js default fallback, no window-specific badge override needed."
         }
       }
     },

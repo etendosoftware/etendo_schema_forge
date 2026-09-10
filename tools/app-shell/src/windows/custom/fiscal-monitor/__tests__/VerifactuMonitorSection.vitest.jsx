@@ -29,6 +29,7 @@ vi.mock('../FmPrimitives.jsx', () => ({
   PAGE_SIZE: 20,
   ExportIcon: () => <span>export</span>,
   useFmSelection: (...args) => mockUseFmSelection(...args),
+  selectedRowClassName: (selectedIds, id) => (selectedIds.has(id) ? 'fm-row--selected' : undefined),
 }));
 vi.mock('../useFiscalMonitor.js', () => ({
   VF_SPEC: 'monitor-verifactu',

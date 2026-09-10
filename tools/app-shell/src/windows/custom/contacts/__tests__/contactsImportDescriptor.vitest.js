@@ -12,10 +12,9 @@ const baseRow = {
 describe('contacts import descriptor', () => {
   it('builds businessPartner, location, and contact ops with location parentRef to the businessPartner', async () => {
     const resolveCountry = vi.fn().mockResolvedValue({ status: 'auto-resolved', id: 'C-AR', name: 'Argentina' });
-    const resolveRegion = vi.fn().mockResolvedValue({ status: 'auto-resolved', id: 'R-1', name: 'Córdoba' });
     const ops = await buildOperations(baseRow, {
       spec: 'contacts', descriptorName: 'contacts', token: 't',
-      resolveCountryFn: resolveCountry, resolveRegionFn: resolveRegion,
+      resolveCountryFn: resolveCountry,
     });
     assert.equal(ops.length, 3);
     const [bp, location, contact] = ops;
@@ -33,7 +32,11 @@ describe('contacts import descriptor', () => {
     assert.equal(location.body.cityName, 'Springfield');
     assert.equal(location.body.postalCode, '1000');
     assert.equal(location.body.country, 'C-AR');
-    assert.equal(location.body.region, 'R-1');
+    // ETP-4997: the province travels as free text for the handler to resolve against this
+    // payload's own country. It used to be resolved here against an endpoint that does not
+    // exist, so it was silently dropped from every imported address.
+    assert.equal(location.body.regionName, 'Córdoba');
+    assert.equal(location.body.region, undefined);
     assert.equal(contact.entity, 'contact');
     assert.equal(contact.parentRef, bp.id);
     // baseRow has no contact-level firstName/lastName, only BP-level
@@ -67,6 +70,39 @@ describe('contacts import descriptor', () => {
     const ops = await buildOperations(row, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
     const contact = ops.find((op) => op.entity === 'contact');
     assert.equal(contact.body.name, 'Acme Corp');
+  });
+
+  it('treats a whitespace-only province as absent, not as an instruction to clear it', async () => {
+    // A cell holding only spaces is visually empty to whoever typed it, but it is truthy, so
+    // the raw value used to ship the key — and the handler reads the key's PRESENCE, so on a
+    // PUT that erased a province the file never mentioned.
+    const resolveCountry = vi.fn().mockResolvedValue({ status: 'auto-resolved', id: 'C-AR', name: 'Argentina' });
+    const ops = await buildOperations({ ...baseRow, region: '   ' }, {
+      spec: 'contacts', descriptorName: 'contacts', token: 't', resolveCountryFn: resolveCountry,
+    });
+    const location = ops.find((op) => op.entity === 'locationAddress');
+    assert.equal('regionName' in location.body, false);
+  });
+
+  it('sends the province trimmed, so a stray space cannot miss an exact name match', async () => {
+    const resolveCountry = vi.fn().mockResolvedValue({ status: 'auto-resolved', id: 'C-AR', name: 'Argentina' });
+    const ops = await buildOperations({ ...baseRow, region: '  Córdoba  ' }, {
+      spec: 'contacts', descriptorName: 'contacts', token: 't', resolveCountryFn: resolveCountry,
+    });
+    const location = ops.find((op) => op.entity === 'locationAddress');
+    assert.equal(location.body.regionName, 'Córdoba');
+  });
+
+  it('omits regionName entirely when the row has no province, rather than sending a blank', async () => {
+    // A blank `regionName` is not the same request as an absent one: the handler reads its
+    // presence as "clear the region", which for a fresh address is a pointless write and for a
+    // PUT would wipe a province the file simply did not mention.
+    const resolveCountry = vi.fn().mockResolvedValue({ status: 'auto-resolved', id: 'C-AR', name: 'Argentina' });
+    const ops = await buildOperations({ ...baseRow, region: '' }, {
+      spec: 'contacts', descriptorName: 'contacts', token: 't', resolveCountryFn: resolveCountry,
+    });
+    const location = ops.find((op) => op.entity === 'locationAddress');
+    assert.equal('regionName' in location.body, false);
   });
 
   it('regression: computes a human-readable location name (city, address) instead of relying on the handler\'s "." fallback', async () => {
@@ -139,7 +175,7 @@ describe('contacts import descriptor', () => {
       assert.equal(op.body.oBTIKTaxIDKey, '3');
     });
 
-    it("accepts 'CIF' as the Tax ID Type, since the column is labelled CIF/NIF", async () => {
+    it("accepts 'CIF' as the Tax ID Type, since the column was labelled CIF/NIF before ETP-4992 renamed it to NIF", async () => {
       const [byCif] = await buildOperations({ name: 'Importadora Test SL', oBTIKTaxIDKey: 'CIF' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
       const [bySlash] = await buildOperations({ name: 'Otra SL', oBTIKTaxIDKey: 'cif/nif' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
       assert.equal(byCif.body.oBTIKTaxIDKey, '1');
@@ -230,17 +266,17 @@ describe('contacts import descriptor', () => {
 
   it('builds a location operation when an imported contact includes address data', async () => {
     const resolveCountry = vi.fn().mockResolvedValue({ status: 'auto-resolved', id: 'C-ES', name: 'Spain' });
-    const resolveRegion = vi.fn().mockResolvedValue({ status: 'auto-resolved', id: 'R-MAD', name: 'Madrid' });
+
     const ops = await buildOperations({
       name: 'Acme Iberia', etgoFirstname: 'Ana', etgoLastname: 'García',
       address: 'Calle Mayor 1', city: 'Madrid', postal: '28013', country: 'Spain', region: 'Madrid',
     }, {
-      spec: 'contacts', descriptorName: 'contacts', token: 't', resolveCountryFn: resolveCountry, resolveRegionFn: resolveRegion,
+      spec: 'contacts', descriptorName: 'contacts', token: 't', resolveCountryFn: resolveCountry,
     });
     const location = ops.find((op) => op.entity === 'locationAddress');
     assert.deepEqual(location.body, {
       name: 'Madrid, Calle Mayor 1', addressLine1: 'Calle Mayor 1', cityName: 'Madrid',
-      postalCode: '28013', country: 'C-ES', region: 'R-MAD',
+      postalCode: '28013', country: 'C-ES', regionName: 'Madrid',
     });
   });
 

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
 
 /**
@@ -42,10 +43,12 @@ export default function ConfirmInOutModal({
   showPriceListPicker = false,
   isSOTrx = true,
   hasLinkedOrder = false,
+  defaultPriceListId = undefined,
   onConfirmed,
   onClose,
 }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(base);
   const [createInvoice, setCreateInvoice] = useState(skipDocumentAction ? true : defaultCreateInvoice);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -58,6 +61,8 @@ export default function ConfirmInOutModal({
     isSOTrx,
     base,
     headers,
+    defaultPriceListId,
+    allowGenericFallback: !priceListRequired,
   });
   const canConfirm = !priceListRequired || !!priceListId;
 
@@ -74,11 +79,11 @@ export default function ConfirmInOutModal({
     setLoading(true);
     setError(null);
     try {
-      const actionBase = `${base}/${specName}/${entityName}/${recordId}/action`;
+      const actionBase = `/${specName}/${entityName}/${recordId}/action`;
 
       if (!skipDocumentAction) {
-        const res = await fetch(`${actionBase}/documentAction`, {
-          method: 'POST', headers, body: JSON.stringify({ docAction: 'CO' }),
+        const res = await apiFetch(`${actionBase}/documentAction`, {
+          method: 'POST', body: JSON.stringify({ docAction: 'CO' }),
         });
         if (!res.ok) {
           const body = await res.json().catch(() => null);
@@ -89,8 +94,8 @@ export default function ConfirmInOutModal({
       let invoice = null;
       if (invoiceRequested && invoiceAction) {
         const invoiceBody = pickerActive && priceListId ? { priceListId } : {};
-        const invRes = await fetch(`${actionBase}/${invoiceAction}`, {
-          method: 'POST', headers, body: JSON.stringify(invoiceBody),
+        const invRes = await apiFetch(`${actionBase}/${invoiceAction}`, {
+          method: 'POST', body: JSON.stringify(invoiceBody),
         });
         if (!invRes.ok) {
           const body = await invRes.json().catch(() => null);
@@ -125,12 +130,18 @@ export default function ConfirmInOutModal({
       onKeyDown={e => e.key === 'Escape' && onClose()}
       style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'hsl(var(--foreground) / .45)' }}
     >
+      {/*
+        ETP-5108: no `fontFamily` here on purpose — same fix as ConfirmResultModal,
+        which this modal hands off to. The family is declared once, on `body` in the
+        core's styles.css, and inherited; overriding it here took the whole modal off
+        Inter and onto the OS sans, so the two steps of one flow disagreed visually.
+      */}
       <div
         onClick={e => e.stopPropagation()}
         style={{
           width: 468, borderRadius: 16, background: 'hsl(var(--card))',
           boxShadow: '0 24px 60px -12px hsl(var(--foreground) / .32), 0 8px 24px -8px hsl(var(--foreground) / .18)',
-          overflow: 'hidden', fontFamily: 'system-ui, -apple-system, sans-serif',
+          overflow: 'hidden',
         }}
       >
         {/* Header */}

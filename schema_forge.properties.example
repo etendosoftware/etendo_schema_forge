@@ -1,0 +1,10 @@
+## Schema Forge Configuration
+##
+## Copy this file to schema_forge.properties (gitignored) and fill in your own
+## local paths. Do not commit schema_forge.properties.
+
+# Path to the Etendo module to work with
+module.path=/path/to/etendo/modules/com.etendoerp.go
+
+# Path to the Etendo root (derived: module.path/../../)
+etendo.path=/path/to/etendo

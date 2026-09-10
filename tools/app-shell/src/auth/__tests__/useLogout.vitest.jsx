@@ -1,9 +1,14 @@
 import { renderHook, act } from '@testing-library/react';
 
 // Mock the core auth so we control (and observe) the underlying logout.
+// ETP-5022 — the hook reads the session with `useAuthOptional` (so it does not throw with no
+// AuthProvider above, which matters now that useApiFetch is one of its callers), so that is
+// what has to be mocked. `notifyAmbientUnauthorized` is the no-provider fallback and must be
+// present on the mock, though these tests never reach it.
 const coreLogout = vi.fn();
-vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ logout: coreLogout }),
+vi.mock('@etendosoftware/app-shell-core/auth', () => ({
+  useAuthOptional: () => ({ logout: coreLogout }),
+  notifyAmbientUnauthorized: () => {},
 }));
 
 import { useLogout } from '../useLogout';

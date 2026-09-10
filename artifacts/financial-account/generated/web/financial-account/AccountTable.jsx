@@ -5,6 +5,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 const columns = [
   { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
   { key: 'type', column: 'Type', type: 'multiField', title: 'type', parts: [{"key":"type","column":"Type","type":"enum","label":"Type"},{"key":"iBAN","column":"Iban","type":"string","label":"IBAN"}] },
+  { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: 'Currency', required: true },
   { key: 'country', column: 'C_Country_ID', type: 'selector', label: 'Country', required: true },
   { key: 'currentBalance', column: 'Currentbalance', type: 'amount', label: 'Current Balance', required: true },
   { key: 'eTGOPendingCount', column: 'EM_ETGO_Pending_Count', type: 'number', label: 'Pending Count', computed: {"mode":"stored","refresh":"synchronous"} },

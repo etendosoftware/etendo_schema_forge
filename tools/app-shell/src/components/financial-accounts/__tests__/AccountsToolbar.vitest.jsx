@@ -74,7 +74,9 @@ describe('AccountsToolbar', () => {
     expect(onMatchingRules).toHaveBeenCalledTimes(1);
   });
 
-  it('does not render the advanced ("by conditions") filter', () => {
+  // AdvancedFilterButton renders nothing without an onChange handler (its own guard), so a
+  // caller that does not own condition-tree state gets no funnel at all.
+  it('does not render the advanced ("by conditions") filter without a change handler', () => {
     render(
       <AccountsToolbar
         typeFilter={null}
@@ -84,6 +86,160 @@ describe('AccountsToolbar', () => {
       />,
     );
     expect(screen.queryByTestId('cuentas-advanced-filter')).not.toBeInTheDocument();
+  });
+
+  // ETP-5113 — the funnel is wired in the Cuentas list. The popover contents belong to
+  // AdvancedFilterBuilder's own suite; what this toolbar owns is the trigger.
+  it('renders the advanced filter when the parent owns the condition state', () => {
+    render(
+      <AccountsToolbar
+        typeFilter={null}
+        onTypeFilterChange={vi.fn()}
+        search=""
+        onSearchChange={vi.fn()}
+        advancedFilter={null}
+        onAdvancedFilterChange={vi.fn()}
+      />,
+    );
+    const trigger = screen.getByTestId('cuentas-advanced-filter');
+    expect(trigger).toBeInTheDocument();
+    // Icon-only + label, both resolved through i18n keys — never a hardcoded string.
+    expect(trigger).toHaveAttribute('title', 'advancedFilterTitle');
+    expect(trigger).toHaveTextContent('filters');
+  });
+
+  // The button's own base height is h-9 (see docs/list-filters.md "Visual parity"); every
+  // control in THIS toolbar is 40px tall, so the window passes h-10 explicitly.
+  it('overrides the funnel height to match the rest of the toolbar', () => {
+    render(
+      <AccountsToolbar
+        typeFilter={null}
+        onTypeFilterChange={vi.fn()}
+        search=""
+        onSearchChange={vi.fn()}
+        onAdvancedFilterChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('cuentas-advanced-filter').className).toContain('h-10');
+  });
+
+  it('places the funnel immediately after the account-type filter', () => {
+    render(
+      <AccountsToolbar
+        typeFilter={null}
+        onTypeFilterChange={vi.fn()}
+        search=""
+        onSearchChange={vi.fn()}
+        onAdvancedFilterChange={vi.fn()}
+      />,
+    );
+    const toolbar = screen.getByTestId('cuentas-toolbar');
+    const nodes = [...toolbar.querySelectorAll('[data-testid]')];
+    const typeIndex = nodes.indexOf(screen.getByTestId('account-type-filter-trigger'));
+    const funnelIndex = nodes.indexOf(screen.getByTestId('cuentas-advanced-filter'));
+    const searchIndex = nodes.indexOf(screen.getByTestId('cuentas-search-input'));
+    expect(typeIndex).toBeLessThan(funnelIndex);
+    expect(funnelIndex).toBeLessThan(searchIndex);
+  });
+
+  it('badges the funnel with the number of active conditions', () => {
+    render(
+      <AccountsToolbar
+        typeFilter={null}
+        onTypeFilterChange={vi.fn()}
+        search=""
+        onSearchChange={vi.fn()}
+        advancedFilter={{
+          rowOperator: 'and',
+          conditions: [
+            { field: 'currencyIso', operator: 'equals', value: 'EUR' },
+            { field: 'currentBalance', operator: 'greaterThan', value: 0 },
+          ],
+        }}
+        onAdvancedFilterChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('cuentas-advanced-filter')).toHaveTextContent('2');
+  });
+
+  it('renders no condition badge while the filter is empty', () => {
+    const { unmount } = render(
+      <AccountsToolbar
+        typeFilter={null}
+        onTypeFilterChange={vi.fn()}
+        search=""
+        onSearchChange={vi.fn()}
+        advancedFilter={{ rowOperator: 'and', conditions: [] }}
+        onAdvancedFilterChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('cuentas-advanced-filter')).not.toHaveTextContent(/\d/);
+    unmount();
+
+    render(
+      <AccountsToolbar
+        typeFilter={null}
+        onTypeFilterChange={vi.fn()}
+        search=""
+        onSearchChange={vi.fn()}
+        advancedFilter={null}
+        onAdvancedFilterChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('cuentas-advanced-filter')).not.toHaveTextContent(/\d/);
+  });
+
+  // This window hides ListView's idle bar and draws its own toolbar, so the generic
+  // refresh button is reproduced here (same reason as `sortControl`).
+  it('renders the refresh button', () => {
+    render(
+      <AccountsToolbar
+        typeFilter={null}
+        onTypeFilterChange={vi.fn()}
+        search=""
+        onSearchChange={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+    const button = screen.getByTestId('finance-refresh-button');
+    expect(button).toBeInTheDocument();
+    // Icon-only: the accessible name comes from the i18n key, never a hardcoded string.
+    expect(button).toHaveAttribute('aria-label', 'refresh');
+    expect(button).toHaveAttribute('title', 'refresh');
+  });
+
+  it('calls onRefresh when the refresh button is clicked', () => {
+    const onRefresh = vi.fn();
+    render(
+      <AccountsToolbar
+        typeFilter={null}
+        onTypeFilterChange={vi.fn()}
+        search=""
+        onSearchChange={vi.fn()}
+        onRefresh={onRefresh}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('finance-refresh-button'));
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the refresh button between the sort control and the matching-rules button', () => {
+    render(
+      <AccountsToolbar
+        typeFilter={null}
+        onTypeFilterChange={vi.fn()}
+        search=""
+        onSearchChange={vi.fn()}
+        onRefresh={vi.fn()}
+        sortControl={<button type="button" data-testid="sort-control">sort</button>}
+      />,
+    );
+    const toolbar = screen.getByTestId('cuentas-toolbar');
+    const order = ['sort-control', 'finance-refresh-button', 'cuentas-matching-rules-button']
+      .map((id) => [...toolbar.querySelectorAll('[data-testid]')]
+        .indexOf(screen.getByTestId(id)));
+    expect(order[0]).toBeLessThan(order[1]);
+    expect(order[1]).toBeLessThan(order[2]);
   });
 
   it('keeps the "Nueva cuenta" button enabled with no click handler in T1', () => {

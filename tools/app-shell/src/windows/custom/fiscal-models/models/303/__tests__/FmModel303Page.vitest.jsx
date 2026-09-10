@@ -9,6 +9,9 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
+}));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ selectedOrg: { id: 'org-1' } }) }));
 vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
   const actual = await importOriginal();
@@ -570,5 +573,80 @@ describe('FmModel303Page — handleCompute async', () => {
     // Summary stays at default (0) since res is null and setLiveSummary is not called
     const values = container.querySelectorAll('.test-kpi303-value');
     expect(values[1].textContent).toBe('0');
+  });
+});
+
+// ── Generate error toast (ETP-5027) ──────────────────────────────────────────
+//
+// The page-level `genError` banner (a red strip above the tabs, driven by a
+// `genError` state) was replaced by a sonner toast, matching the 349 page and the
+// invoice rectification save errors. Assertions therefore go through the mocked
+// `toast.error` rather than the DOM — and the banner's absence is asserted too, so
+// the two renderings can never both come back.
+
+describe('FmModel303Page — generate error toast', () => {
+  const genBtn = () => Array.from(document.querySelectorAll('button'))
+    .find(b => b.textContent.includes('fm.action.gen303'));
+
+  // Other components in this tree can toast for unrelated reasons in the test
+  // environment, so never count total calls — always filter by message.
+  const toastsFor = (toast, message) =>
+    toast.error.mock.calls.filter(c => c[0] === message).length;
+
+  async function generateWith(result) {
+    const { toast } = await import('sonner');
+    const { generate303File } = await import('../../../fiscalModelsUtils.js');
+    generate303File.mockResolvedValue(result);
+
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    fireEvent.click(genBtn());
+    fireEvent.click(screen.getByTestId('filegen303-confirm'));
+    return toast;
+  }
+
+  it('toasts the backend serverMessage when generate303File fails with one', async () => {
+    const toast = await generateWith({ ok: false, error: 'http_400', serverMessage: 'AEAT303 boom' });
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('AEAT303 boom'));
+  });
+
+  it('falls back to the fm.gen303.error.generic key when there is no serverMessage', async () => {
+    const toast = await generateWith({ ok: false, error: 'http_500' });
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.gen303.error.generic'));
+  });
+
+  it('uses the dedicated iban_required message instead of the generic one', async () => {
+    const toast = await generateWith({ ok: false, error: 'iban_required' });
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.gen303.error.iban_required'));
+    expect(toastsFor(toast, 'fm.gen303.error.generic')).toBe(0);
+  });
+
+  it('the iban_required branch wins even when a serverMessage is present', async () => {
+    const toast = await generateWith({ ok: false, error: 'iban_required', serverMessage: 'ignored' });
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.gen303.error.iban_required'));
+    expect(toastsFor(toast, 'ignored')).toBe(0);
+  });
+
+  it('renders NO inline error banner — the message lives only in the toast', async () => {
+    const toast = await generateWith({ ok: false, serverMessage: 'Boom validation error' });
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Boom validation error'));
+    expect(document.body.textContent).not.toContain('Boom validation error');
+    expect(screen.queryByTestId('OctagonAlert__gen_error')).not.toBeInTheDocument();
+  });
+
+  it('emits exactly one toast per failure and does not re-emit when the modal is reopened', async () => {
+    const toast = await generateWith({ ok: false, serverMessage: 'Boom validation error' });
+    await waitFor(() => expect(toastsFor(toast, 'Boom validation error')).toBe(1));
+
+    // Reopening the modal is not a failure event — it must not toast again.
+    fireEvent.click(genBtn());
+    expect(toastsFor(toast, 'Boom validation error')).toBe(1);
+  });
+
+  it('does not toast at all on a successful generation', async () => {
+    const toast = await generateWith({ ok: true });
+    const { generate303File } = await import('../../../fiscalModelsUtils.js');
+    await waitFor(() => expect(generate303File).toHaveBeenCalled());
+    expect(toastsFor(toast, 'fm.gen303.error.generic')).toBe(0);
+    expect(toastsFor(toast, 'fm.gen303.error.iban_required')).toBe(0);
   });
 });

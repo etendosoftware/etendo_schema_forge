@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const FETCH_TIMEOUT_MS = 10000;
 const ENDPOINT = '/sws/neo/financial-accounts-page';
@@ -11,15 +12,8 @@ function getApiBase() {
   return path.substring(0, webIdx);
 }
 
-async function fetchAccountsPayload(apiBase, token, signal) {
-  const url = `${apiBase}${ENDPOINT}`;
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    signal,
-  });
+async function fetchAccountsPayload(apiFetch, signal) {
+  const res = await apiFetch(ENDPOINT, { signal });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const json = await res.json();
   const data = json?.response?.data;
@@ -43,6 +37,7 @@ export function useFinancialAccounts() {
   const [error, setError] = useState(null);
 
   const apiBase = useMemo(() => getApiBase(), []);
+  const apiFetch = useApiFetch(apiBase);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -51,7 +46,7 @@ export function useFinancialAccounts() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchAccountsPayload(apiBase, token, ctrl.signal);
+      const data = await fetchAccountsPayload(apiFetch, ctrl.signal);
       setAccounts(Array.isArray(data.accounts) ? data.accounts : []);
       setSummary(data.summary || EMPTY_SUMMARY);
     } catch (err) {
@@ -63,7 +58,7 @@ export function useFinancialAccounts() {
       clearTimeout(timer);
       setLoading(false);
     }
-  }, [apiBase, token]);
+  }, [apiFetch, token]);
 
   useEffect(() => {
     load();

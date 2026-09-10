@@ -6,6 +6,7 @@
 
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { assertAllActionsDisabledWhileRequiredEmpty, waitForAllActionsEnabled } from './reportViewerTestHelpers';
 
 let mockSearchParams = new URLSearchParams();
 const mockSetSearchParams = vi.fn();
@@ -20,12 +21,19 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
+// ETP-5116 — ReportViewerPage now gates the finance category behind
+// useWindowAccess()/WindowAccessGuard; defaults to 'full' so the existing
+// suite's finance-category renders are unaffected.
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({
     token: 'test-token',
     selectedRole: { orgList: [] },
     selectedOrg: { id: 'org1' },
   }),
+  useWindowAccess: () => 'full',
+  WindowAccessGuard: (props) => (
+    <div data-testid="window-access-guard" data-window-id={props.windowId} />
+  ),
 }));
 
 vi.mock('@/components/layout/PageMetaContext', () => ({
@@ -247,9 +255,8 @@ describe('ReportViewerPage — ReportSidebar select / boolean / date interaction
     expect(checkbox).toBeChecked();
   });
 
-  it('changes a date field value and clears the required error on change', async () => {
+  it('changes a date field value and re-enables the report actions (ETP-4900)', async () => {
     mockSearchParams = new URLSearchParams({ report: 'report-date' });
-    const user = userEvent.setup();
     globalThis.fetch = vi.fn().mockImplementation((url) => {
       if (url === '/api/reports') return Promise.resolve(makeReportsListResponse([DATE_REPORT]));
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) });
@@ -258,17 +265,16 @@ describe('ReportViewerPage — ReportSidebar select / boolean / date interaction
     render(<ReportViewerPage />);
     await waitFor(() => expect(screen.getByText('Date From')).toBeInTheDocument());
 
-    // Submitting with the required date empty shows the error
-    await user.click(screen.getByText('runReport'));
-    await waitFor(() => expect(screen.getByText('required')).toBeInTheDocument());
+    // While the required date is empty, every action that could trigger a
+    // render (sidebar submit + all four top-bar buttons) is disabled.
+    assertAllActionsDisabledWhileRequiredEmpty();
 
-    // Setting a value should clear the error (handleChange clears errors[name] when value is truthy)
+    // Setting a value should re-enable them (handleChange clears errors[name]
+    // when the value is truthy, and hasAllRequiredFilled recomputes on params change)
     const dateField = screen.getByTestId('date-field');
-    await user.type(dateField, '2024-01-15');
+    await userEvent.setup().type(dateField, '2024-01-15');
 
-    await waitFor(() => {
-      expect(screen.queryByText('required')).not.toBeInTheDocument();
-    });
+    await waitForAllActionsEnabled();
   });
 });
 
@@ -328,9 +334,9 @@ describe('ReportViewerPage — ReportSidebar conditional required (requiredIf, E
     const dateLabel = screen.getByText('From Reference Date');
     expect(dateLabel.closest('label')).not.toHaveTextContent('*');
 
-    // Now submitting with referenceYearId empty must show the required error.
-    await user.click(screen.getByText('runReport'));
-    await waitFor(() => expect(screen.getByText('required')).toBeInTheDocument());
+    // With referenceYearId now required and empty, every render-triggering
+    // action (sidebar submit + all four top-bar buttons) stays disabled.
+    assertAllActionsDisabledWhileRequiredEmpty();
   });
 
   it('toggling the gate back off re-hides both visibleIf-gated params and clears the requirement', async () => {

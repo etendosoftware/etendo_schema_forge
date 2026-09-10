@@ -94,6 +94,12 @@ const INVOICE_LINE = {
  * @param {object} opts.headerOverride - override fields on the returned header
  * @param {Array}  opts.lines          - invoice lines to return
  */
+// Non-matching methods use route.fallback(), NOT route.continue(): continue() sends the
+// request to the real network, so a request these handlers do not model reached the live
+// backend with the fake E2E token and came back 401. That was harmless while a 401 was
+// ignored; since ETP-5022 routes an expired session to the login screen, it logged the test
+// out and blanked the page. fallback() defers to login()'s /sws/** catch-all instead, which
+// is what the rest of this suite already does.
 async function installInvoiceMocks(page, { headerOverride = {}, lines = [INVOICE_LINE] } = {}) {
   const header = { ...INVOICE_HEADER_DRAFT, ...headerOverride };
 
@@ -101,7 +107,7 @@ async function installInvoiceMocks(page, { headerOverride = {}, lines = [INVOICE
   await page.route('**/sws/neo/sales-invoice/header{/**,}**', async (route) => {
     const req = route.request();
     const url = req.url();
-    if (req.method() !== 'GET') return route.continue();
+    if (req.method() !== 'GET') return route.fallback();
 
     // Detail fetch: URL contains /header/<id>
     if (/\/header\/[^/?]+/.test(url)) {
@@ -123,7 +129,7 @@ async function installInvoiceMocks(page, { headerOverride = {}, lines = [INVOICE
   // Invoice lines endpoint
   await page.route('**/sws/neo/sales-invoice/lines{/**,}**', async (route) => {
     const req = route.request();
-    if (req.method() !== 'GET') return route.continue();
+    if (req.method() !== 'GET') return route.fallback();
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -133,7 +139,7 @@ async function installInvoiceMocks(page, { headerOverride = {}, lines = [INVOICE
 
   // Payment plan — empty (no installments so side panel uses grandTotalAmount)
   await page.route('**/sws/neo/sales-invoice/paymentPlan{/**,}**', async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
+    if (route.request().method() !== 'GET') return route.fallback();
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -143,7 +149,7 @@ async function installInvoiceMocks(page, { headerOverride = {}, lines = [INVOICE
 
   // invoicePayments action — empty
   await page.route('**/sws/neo/sales-invoice/header/**/action/invoicePayments', async (route) => {
-    if (route.request().method() !== 'POST') return route.continue();
+    if (route.request().method() !== 'POST') return route.fallback();
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -161,7 +167,7 @@ async function installInvoiceMocks(page, { headerOverride = {}, lines = [INVOICE
  */
 async function installJsreportMock(page, { jsreportCalls }) {
   await page.route('**/jsreport/api/report', async (route) => {
-    if (route.request().method() !== 'POST') return route.continue();
+    if (route.request().method() !== 'POST') return route.fallback();
     const body = route.request().postData();
     try {
       const parsed = JSON.parse(body);

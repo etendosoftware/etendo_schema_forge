@@ -36,6 +36,11 @@ const SORT_ARROW = { asc: '▲', desc: '▼' };
  *   button's active styling and whether the clear row shows at all
  * @param {React.ComponentType} [SortIconComponent] icon override, for hosts that theme it
  * @param {string} [iconButtonHover] hover classes, so the button matches its host toolbar
+ * @param {object} [labelOverrides] the host window's per-locale label overrides, the same map
+ *   its header cells resolve through. Omitting it is what made this menu disagree with the
+ *   grid (ETP-5106): every renamed column listed its raw AD label here — "Total Pendiente"
+ *   beside a "Saldo pendiente" header. A host without overrides passes nothing and resolves
+ *   exactly as before.
  */
 export function ListSortPopover({
   columns = [],
@@ -46,9 +51,10 @@ export function ListSortPopover({
   isDefaultSort = true,
   SortIconComponent,
   iconButtonHover = 'hover:text-foreground',
+  labelOverrides,
 }) {
   const ui = useUI();
-  const t = useLabel();
+  const t = useLabel(labelOverrides);
   const { locale } = useLocaleSwitch();
   const [open, setOpen] = useState(false);
   const anchorRef = useRef(null);

@@ -10,6 +10,7 @@ import {
   buildDocumentPdfLabels,
   computeDiscountBreakdown,
   resolveProductCode,
+  resolveDocumentCurrencyCode,
   useDocumentPdf,
 } from './documentPdf.js';
 
@@ -55,6 +56,7 @@ export async function buildQuotationData(quotationId, base, token, currencyData 
   return {
     ...buildCompanyFields(session, header, companyLogoDataUrl, partnerLocation),
     documentNo: header.documentNo || '',
+    currencyCode: resolveDocumentCurrencyCode(header),
     invoiceDate: header.orderDate || '',
     validUntil: header.validUntil || null,
     customerName: header.businessPartner$_identifier || header.businessPartner || '—',

@@ -33,7 +33,7 @@ function resolveBaseRef(repo) {
   const configured = process.env.DETAILVIEW_BASE_REF;
   const candidates = configured
     ? [configured]
-    : ['origin/epic/ETP-3504', 'epic/ETP-3504', 'origin/main', 'main', 'origin/develop', 'develop'];
+    : ['origin/develop', 'develop', 'origin/main', 'main'];
   return candidates.find((ref) => {
     try {
       runGit(repo, ['rev-parse', '--verify', ref]);

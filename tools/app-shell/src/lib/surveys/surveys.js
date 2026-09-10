@@ -3,6 +3,12 @@ import { getSurveyTypeConfig } from './survey-config.js';
 const INVOICE_SPEC_NAMES = new Set(['sales-invoice', 'purchase-invoice']);
 const ORDER_SPEC_NAMES = new Set(['purchase-order', 'sales-order']);
 
+// Fixed delay before the onboarding survey becomes eligible — a simple, non-configurable
+// 1-day gate per product requirement (not routed through survey-config.js/getSurveyTypeConfig,
+// unlike the other surveys' tunables — this one is intentionally hardcoded).
+const MS_DAY = 24 * 60 * 60 * 1000;
+const CSAT_ONBOARDING_DELAY_MS = MS_DAY;
+
 export function isInvoiceSpec(specName) {
   return INVOICE_SPEC_NAMES.has(specName);
 }
@@ -24,8 +30,17 @@ function npsIsEligible({ state, now, env = import.meta.env }) {
   return now - new Date(lastRespondedAt).getTime() >= responseCooldownMs;
 }
 
-function csatOnboardingIsEligible() {
-  return false; // onboarding survey disabled until fully implemented
+function csatOnboardingIsEligible({ state, isAdmin, now }) {
+  if (!isAdmin || !state.onboardingCompleted || state.onboardingShown) return false;
+  // Legacy cohort: users who completed onboarding while markOnboardingCompleted() fired
+  // without a timestamp (Phase 1 / ETP-4352, before onboardingCompletedAt existed) have
+  // onboardingCompleted: true but onboardingCompletedAt: null forever — that event only
+  // fires once. Blocking on a missing timestamp would permanently exclude them from this
+  // survey, not just delay them, so with no completion time to gate against, treat them
+  // as immediately eligible instead.
+  if (!state.onboardingCompletedAt) return true;
+  const msSinceCompleted = now - new Date(state.onboardingCompletedAt).getTime();
+  return msSinceCompleted >= CSAT_ONBOARDING_DELAY_MS;
 }
 
 // Shared logic by csat_invoicing/csat_order — each survey now reads its own independent

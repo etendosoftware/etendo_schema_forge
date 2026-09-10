@@ -90,9 +90,12 @@ async function setFieldUntilDirty(page, testId, value) {
 /** Persist current edits, then run "Crear Amortización" and expect a toast. */
 async function saveThenProcess(page, expectRe) {
   await saveAsset(page);
+  // Wait for the PROCESS call itself, at ANY status. The validation answers this test asserts
+  // on come back as 400s, so a `status < 400` predicate never matched them — it matched some
+  // unrelated request instead and let the assertion race the toast it was supposed to wait for.
   const processResponse = page.waitForResponse(
-    (r) => r.url().includes('/sws/neo/') && r.status() < 400,
-    { timeout: 15_000 },
+    (r) => r.url().includes('/action/processAsset'),
+    { timeout: 20_000 },
   );
   await crearAmortizacionBtn(page).click();
   await processResponse;

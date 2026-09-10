@@ -1,10 +1,16 @@
 import { registerImportDescriptor } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
+import { registerImportRowValidator } from '@etendosoftware/app-shell-core/lib/import/rowValidators.js';
+// Shared with `validateRow`'s `isNumeric` check, so the review queue and the send path
+// cannot disagree about whether a price cell is a number (ETP-4996).
+import { parseImportNumber } from '@etendosoftware/app-shell-core/lib/import/parseImportNumber.js';
 import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendosoftware/app-shell-core/lib/import/resolveDependentEntity.js';
 import { getFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResolvers.js';
 import { parseBoolean } from '@/lib/parseBoolean.js';
-import { resolveCodedCellOrThrow } from '@/lib/codedValue.js';
+import { resolveCodedCellOrThrow, codedCellError, codeLabels } from '@/lib/codedValue.js';
+import { registerExportHints } from '@/lib/importExportColumns.js';
 import { asDependentEntityInput } from '@/lib/dependentEntityCell.js';
 
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // Columns copied verbatim onto the product body. Everything else declared in
 // `window.import.fields` needs interpreting first: `productType` and `uOM` are resolved
 // below, the two price columns become their own operations, and `category` resolves to a
@@ -73,22 +79,6 @@ function extractId(value) {
   return null;
 }
 
-// CSV prices arrive as strings and this app is used primarily in Spanish, so accept both
-// "1234.50" and the es-ES "1.234,50" / "1234,50" forms. Returns null for an empty cell
-// (product imported without a price), a finite number when parseable, or NaN when the cell
-// is non-empty but not a number (a real row error, surfaced by the descriptor).
-function parsePrice(raw) {
-  if (raw == null) return null;
-  let s = String(raw).trim().replace(/\s/g, '');
-  if (s === '') return null;
-  if (s.includes(',') && s.includes('.')) {
-    s = s.replace(/\./g, '').replace(',', '.'); // es-ES: '.' thousands, ',' decimal
-  } else if (s.includes(',')) {
-    s = s.replace(',', '.');
-  }
-  const n = Number(s);
-  return Number.isFinite(n) ? n : NaN;
-}
 
 // The org's default price list versions (one for sales, one for purchase), each resolved
 // ONCE per import run (not per row) and reused for every priced row. Keyed by
@@ -107,9 +97,9 @@ async function fetchProductDefaults(token) {
   const base = detectEtendoBase();
   const url = `${base}/sws/neo/product/product/defaults`;
   try {
-    const res = await fetch(url, {
-      credentials: 'include',
-      headers: { Authorization: `Bearer ${token}` },
+    const res = await apiFetch(url, {
+      baseUrl: '',
+      token,
     });
     if (!res.ok) return {};
     const json = await res.json().catch(() => null);
@@ -130,7 +120,7 @@ function resolveProductDefaults(token) {
 async function fetchPriceListVersion(spec, token, wantSales) {
   const base = detectEtendoBase();
   const url = `${base}/sws/neo/${spec}/price/selectors/${PLV_SELECTOR_COLUMN}`;
-  const res = await fetch(url, { credentials: 'include', headers: { Authorization: `Bearer ${token}` } });
+  const res = await apiFetch(url, { baseUrl: '', token });
   if (!res.ok) return null;
   const payload = await res.json().catch(() => null);
   const items = Array.isArray(payload?.items) ? payload.items : [];
@@ -159,7 +149,7 @@ async function fetchProductCategories(token) {
   const base = detectEtendoBase();
   const url = `${base}/sws/neo/product-category/productCategory?limit=1000`;
   try {
-    const res = await fetch(url, { credentials: 'include', headers: { Authorization: `Bearer ${token}` } });
+    const res = await apiFetch(url, { baseUrl: '', token });
     if (!res.ok) return [];
     const json = await res.json().catch(() => null);
     const data = json?.response?.data ?? json?.data ?? [];
@@ -206,13 +196,10 @@ async function resolveCategory(row, config) {
   const createFn = config.createCategoryFn || (async ({ searchKey, name }) => {
     const base = detectEtendoBase();
     const url = `${base}/sws/neo/product-category/productCategory`;
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.token}`,
-      },
+      baseUrl: '',
+      token: config.token,
       body: JSON.stringify({ searchKey, name }),
     });
     if (!res.ok) {
@@ -258,7 +245,7 @@ async function resolveCategory(row, config) {
  * price could not be imported at all.
  */
 async function buildPriceOperation(rawPrice, { opId, wantSales, config }) {
-  const price = parsePrice(rawPrice);
+  const price = parseImportNumber(rawPrice);
   if (price === null) return null; // no price cell → nothing to create for this direction
 
   if (Number.isNaN(price)) {
@@ -289,6 +276,37 @@ async function buildPriceOperation(rawPrice, { opId, wantSales, config }) {
     body: { priceListVersion: plvId, standardPrice: priceStr, listPrice: priceStr, priceLimit: priceStr },
   };
 }
+
+/**
+ * ETP-4996: `productType` is checked during REVIEW, not at send time.
+ *
+ * The two price columns are covered generically instead — they declare `isNumeric: true`
+ * in decisions.json, which `validateRow` picks up, so a price cell reading "abc" fails its
+ * row in the review queue rather than inside `buildPriceOperation`. Both sides parse the
+ * amount through the same `parseImportNumber`, so the preview cannot accept a value the
+ * send would reject.
+ */
+registerImportRowValidator('product', (row, { translate } = {}) => [
+  codedCellError(row.productType, PRODUCT_TYPE_VALUES, {
+    target: 'productType', fieldLabelKey: 'importFieldProductType', fieldLabelFallback: 'Product Type', translate,
+  }),
+].filter(Boolean));
+
+// ETP-4997 — see the twin block in `contactsImportDescriptor.js`. Three of the eight import
+// targets are spelled differently on a product LIST row; `uOM` needs no entry because its
+// `matchEntity` already marks it as a foreign key, and the rest are read straight off the row.
+registerExportHints('product', {
+  sourceKeys: {
+    category: 'productCategory$_identifier',
+    // Prices are read back from the Etendo GO convenience columns the list exposes, not from
+    // the M_ProductPrice rows the import writes through — those are not on a product row.
+    salesPrice: 'eTGOSalePrice',
+    purchasePrice: 'eTGOPurchasePrice',
+  },
+  // A raw 'I'/'S'/'E' is unreadable in a spreadsheet. Inverted from the same synonym table
+  // validated above, so every exported word is one this descriptor accepts back.
+  valueLabels: { productType: codeLabels(PRODUCT_TYPE_VALUES) },
+});
 
 registerImportDescriptor('product', async (row, config) => {
   const productBody = pick(row, PRODUCT_TARGETS);

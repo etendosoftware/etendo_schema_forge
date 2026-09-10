@@ -28,6 +28,31 @@ function sessionCacheKey(declId) {
   return `fiscal_ac_v3_${declId}`;
 }
 
+/**
+ * Drops the cached compute payload for ONE declaration, so the next run of the
+ * mount effect below cannot restore it and is forced to recompute from the server.
+ *
+ * Needed by side-effects that change what `computeFn` would return WITHOUT touching
+ * anything `checkModifiedFn` looks at. The VIES revalidation button (ETP-5027) is
+ * exactly that: it updates the business partners' VIES status, while
+ * `checkModified349` only asks whether the period's INVOICES changed — so it answers
+ * `false`, the stale cached payload is restored, and the pre-validation VIES badges
+ * are repainted over the fresh ones.
+ *
+ * Bumping the `fiscal_ac_vN_` key version does NOT solve this: a version bump only
+ * discards payloads written by a PREVIOUS BUILD, whereas here the stale entry was
+ * written seconds ago by the running build under whatever the current version is.
+ * The entry has to be deleted by id.
+ */
+export function invalidateFiscalComputeCache(declId) {
+  if (declId == null) return;
+  try {
+    sessionStorage.removeItem(sessionCacheKey(declId));
+  } catch {
+    // sessionStorage unavailable (private mode / SSR) — nothing was cached either
+  }
+}
+
 function readCache(key) {
   try {
     const raw = sessionStorage.getItem(key);

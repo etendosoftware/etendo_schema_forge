@@ -137,4 +137,63 @@ describe('PendingTasksRail KPI telemetry', () => {
     );
     expect(container.querySelector('a')?.getAttribute('href')).toBe('/dashboard');
   });
+
+  // ETP-5017: the payments card must reflect whichever state is more critical.
+  describe('ETP-5017 — payments card tone and combined-count badge', () => {
+    it('renders the "due today" state (warning tone) for taskKey paymentsDueToday', () => {
+      render(<PendingTasksRail tasks={[{ taskKey: 'paymentsDueToday', count: 1 }]} />);
+
+      expect(screen.getByText('pendingStateDueToday')).toBeInTheDocument();
+      const badge = screen.getByText('pendingStateDueToday');
+      expect(badge).toHaveStyle({ color: 'var(--status-warning-fg)' });
+    });
+
+    it('renders the "overdue" state (destructive/danger tone) for taskKey paymentsOverdue', () => {
+      render(<PendingTasksRail tasks={[{ taskKey: 'paymentsOverdue', count: 1 }]} />);
+
+      expect(screen.getByText('pendingStateOverduePayments')).toBeInTheDocument();
+      const badge = screen.getByText('pendingStateOverduePayments');
+      expect(badge).toHaveStyle({ color: 'hsl(var(--destructive))' });
+    });
+
+    it('renders the combined count sent by the backend for paymentsOverdue_plural', () => {
+      // Backend reports the combined total (overdue + due today), not just the overdue subset.
+      render(<PendingTasksRail tasks={[{ taskKey: 'paymentsOverdue_plural', count: 5 }]} />);
+
+      expect(screen.getByText('5')).toBeInTheDocument();
+      expect(screen.getByText('pendingStateOverduePayments')).toBeInTheDocument();
+    });
+
+    it('tracks paymentsOverdue telemetry under the "payments" type, not "danger"', async () => {
+      // Regression for the `tone` vs `category` split introduced by this ticket:
+      // `tone` must only drive the badge color, `category` must keep feeding telemetry.
+      const user = userEvent.setup();
+      render(<PendingTasksRail tasks={[{ taskKey: 'paymentsOverdue', count: 1 }]} />);
+
+      await user.click(screen.getByTestId('Link__7e1000'));
+
+      expect(telemetryMocks.trackDashboardKpi).toHaveBeenCalledWith(
+        'pending_task_opened',
+        expect.objectContaining({ type: 'payments' }),
+      );
+    });
+
+    it('does not change the color of unrelated cards after the tone refactor', () => {
+      render(
+        <PendingTasksRail
+          tasks={[
+            { taskKey: 'overdueInvoices', count: 1 },
+            { taskKey: 'collectionsDueToday', count: 1 },
+            { taskKey: 'pendingReceptions', count: 1 },
+            { taskKey: 'lowStockAlert', count: 1 },
+          ]}
+        />,
+      );
+
+      expect(screen.getByText('pendingStateOverdue')).toHaveStyle({ color: 'hsl(var(--destructive))' });
+      expect(screen.getByText('pendingStateDueToday')).toHaveStyle({ color: 'var(--status-warning-fg)' });
+      expect(screen.getByText('pendingStatePending')).toHaveStyle({ color: 'var(--status-info-fg)' });
+      expect(screen.getByText('pendingStateLowStock')).toHaveStyle({ color: 'var(--status-warning-fg)' });
+    });
+  });
 });

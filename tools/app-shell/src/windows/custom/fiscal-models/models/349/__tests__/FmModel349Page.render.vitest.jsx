@@ -6,6 +6,9 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
+}));
 vi.mock('../../../fiscalModelsUtils.js', () => ({
   formatAmount: (n) => (n == null ? '—' : String(n)),
   compute349Operators: vi.fn().mockResolvedValue(null),
@@ -396,14 +399,14 @@ describe('FmModel349Page — standalone Generar fichero button', () => {
   });
 });
 
-// ── Generate error banner (genError) ────────────────────────────────────────
-// Mirrors the 303 genError banner pattern (FmModel303Page.jsx). The local
-// lucide-react mock nulls out OctagonAlert's rendering, so these assertions
-// go through the banner's text content — same convention already used above
-// for the VIES banner — rather than the icon's data-testid.
+// ── Generate error toast (ETP-5027) ────────────────────────────────────────
+// The page-level error banner was replaced by a sonner toast, matching the
+// rectification save errors on the invoice. The assertions therefore go
+// through the mocked `toast.error` instead of the rendered DOM.
 
-describe('FmModel349Page — generate error banner', () => {
-  it('shows the backend serverMessage in the banner when generate349File fails with one', async () => {
+describe('FmModel349Page — generate error toast', () => {
+  it('toasts the backend serverMessage when generate349File fails with one', async () => {
+    const { toast } = await import('sonner');
     const { generate349File } = await import('../../../fiscalModelsUtils.js');
     generate349File.mockResolvedValue({
       ok: false, error: 'http_400', serverMessage: 'AEAT349_FormerStatement_Required',
@@ -415,10 +418,11 @@ describe('FmModel349Page — generate error banner', () => {
     fireEvent.click(genBtn);
     fireEvent.click(screen.getByTestId('filegen349-confirm'));
 
-    await waitFor(() => expect(document.body.textContent).toContain('AEAT349_FormerStatement_Required'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('AEAT349_FormerStatement_Required'));
   });
 
   it('falls back to the fm.gen349.error.generic key when generate349File fails without a serverMessage', async () => {
+    const { toast } = await import('sonner');
     const { generate349File } = await import('../../../fiscalModelsUtils.js');
     generate349File.mockResolvedValue({ ok: false });
 
@@ -428,10 +432,11 @@ describe('FmModel349Page — generate error banner', () => {
     fireEvent.click(genBtn);
     fireEvent.click(screen.getByTestId('filegen349-confirm'));
 
-    await waitFor(() => expect(document.body.textContent).toContain('fm.gen349.error.generic'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('fm.gen349.error.generic'));
   });
 
-  it('clears the error banner when "Generar fichero 349" is clicked again to reopen the modal', async () => {
+  it('emits exactly one toast per failure and does not re-emit when the modal is reopened', async () => {
+    const { toast } = await import('sonner');
     const { generate349File } = await import('../../../fiscalModelsUtils.js');
     generate349File.mockResolvedValue({ ok: false, serverMessage: 'Boom validation error' });
 
@@ -441,10 +446,14 @@ describe('FmModel349Page — generate error banner', () => {
 
     fireEvent.click(genBtn());
     fireEvent.click(screen.getByTestId('filegen349-confirm'));
-    await waitFor(() => expect(document.body.textContent).toContain('Boom validation error'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Boom validation error'));
+    // Count only OUR message: useAttachments also toasts in this unmocked-fetch env.
+    const genToasts = () => toast.error.mock.calls.filter(c => c[0] === 'Boom validation error').length;
+    expect(genToasts()).toBe(1);
 
+    // Reopening the modal is not a failure event — no second toast.
     fireEvent.click(genBtn());
-    expect(document.body.textContent).not.toContain('Boom validation error');
+    expect(genToasts()).toBe(1);
   });
 });
 

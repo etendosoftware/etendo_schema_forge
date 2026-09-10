@@ -8,6 +8,7 @@
 import { expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { ensureFinancialAccountSetup } from './financial-account-helpers.js';
 
 // ── Credentials ──────────────────────────────────────────────────────────────
 
@@ -68,10 +69,18 @@ export async function safeReload(page) {
 /**
  * Dismiss the "Cerrar" success modal if it appears after a confirmation action.
  * Waits for the page to settle after dismissal.
+ *
+ * ETP-5063 replaced the modal with an auto-dismissing toast for confirmations
+ * that create no related document (receipt/invoice) — that path has nothing
+ * to dismiss here, so a modal that never shows up is not an error.
  */
 export async function dismissSuccessModal(page) {
   const closeBtn = page.getByRole('button', { name: /^(Cerrar|Close)$/ });
-  await expect(closeBtn).toBeVisible({ timeout: 30_000 });
+  try {
+    await closeBtn.waitFor({ state: 'visible', timeout: 8_000 });
+  } catch {
+    return; // ETP-5063: toast-only path, no modal to dismiss.
+  }
   await closeBtn.click();
   await slow(page);
 }
@@ -125,9 +134,17 @@ export function waitForDocumentActionResponse(page, entityPath = 'purchase-order
 export async function waitForLinesSettled(page, count, message) {
   const linesPattern = new RegExp(`l[ií]neas\\s+${count}|lines\\s+${count}`, 'i');
   const linesBtn = page.getByRole('button', { name: linesPattern });
+
+  // Wait out any load-in-progress spinner BEFORE the first count check —
+  // otherwise a slow initial load (a fresh navigation, or a reload) eats into
+  // the same budget as the count check itself, and the two failures (still
+  // loading vs. genuinely wrong count) become indistinguishable in the error.
+  await page.getByText(/cargando|loading/i).first()
+    .waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
+
   await expect(linesBtn,
     message || `Lines count should reach ${count}`,
-  ).toBeVisible({ timeout: 15_000 });
+  ).toBeVisible({ timeout: 30_000 });
 
   const spinner = page.getByText(/cargando|loading/i);
   await spinner.waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
@@ -525,18 +542,27 @@ async function ensureVendorAddress(page, bpId) {
     await firstInput.fill(VENDOR_FIXTURE_ADDRESS_LINE);
   }
 
-  // Select País — button opens a search dialog with country list
-  const paisButton = page.getByText(/^pa[ií]s$/i).locator('..').locator('button[aria-haspopup="dialog"]');
+  // Select País — button opens a search dialog with country list.
+  // The trailing `\*?` is required: since ETP-5103 the label renders a mandatory
+  // asterisk inside the same element, so its textContent is "País*" and Playwright
+  // matches getByText against the full textContent. Do not "clean up" the `\*?`.
+  const paisButton = page.getByText(/^pa[ií]s\s*\*?$/i).locator('..').locator('button[aria-haspopup="dialog"]');
   await paisButton.click();
 
   const countrySearch = page.getByPlaceholder(/buscar pa[ií]s/i);
   await expect(countrySearch).toBeVisible({ timeout: 5_000 });
   await countrySearch.fill('spa');
 
-  const countryOption = page.getByRole('button', { name: /^espa[nñ]a$/i })
-    .or(page.getByRole('button', { name: /^spain$/i }))
-    .or(page.locator('button').filter({ hasText: /^España$/ }))
-    .or(page.locator('button').filter({ hasText: /^Spain$/ }));
+  // Scope to the picker overlay (inline z-index 160, see LocationEditorModal.jsx
+  // PICKER_MODAL): since ETP-5103 the País field itself displays "España" (preselected
+  // on create), so an unscoped "España" button locator resolves to the FIELD button,
+  // which sits behind the picker overlay — the click then times out on intercepted
+  // pointer events instead of selecting the option.
+  const countryPicker = page.locator('div[style*="z-index: 160"]');
+  const countryOption = countryPicker.getByRole('button', { name: /^espa[nñ]a$/i })
+    .or(countryPicker.getByRole('button', { name: /^spain$/i }))
+    .or(countryPicker.locator('button').filter({ hasText: /^España$/ }))
+    .or(countryPicker.locator('button').filter({ hasText: /^Spain$/ }));
   await expect(countryOption.first()).toBeVisible({ timeout: 5_000 });
   await countryOption.first().click();
 
@@ -566,6 +592,24 @@ async function ensureVendorAddress(page, bpId) {
  * doc comment) — it just never needs the UI to do so on the common path.
  */
 export async function ensureVendorSetup(page, { navigateTo }) {
+  // ETP-5079: `ensureVendorPaymentFieldsSet` below needs the "PO Payment Method"
+  // selector to offer something, and the AD validation rule behind that field
+  // (`FIN_PaymentMethodsWithAccountIsReceiptControl`) is an EXISTS over
+  // FIN_FINACC_PAYMENTMETHOD, not over the payment-method masters. ETP-5079
+  // emptied the onboarding dataset's financial accounts AND their payment-method
+  // links, so on a fresh tenant that selector is empty and the step below fails
+  // with "element(s) not found" on `option-pOPaymentMethod-*`.
+  //
+  // It only ever worked because `financial-account-cash-close` ("f") runs before
+  // the purchase specs ("p") under `workers: 1` and left an account behind — an
+  // implicit cross-spec dependency, not a real precondition. Provision it here so
+  // every caller works on a genuinely fresh tenant, in any order, in isolation.
+  //
+  // API-only and navigation-free (see financial-account-helpers.js), and it must
+  // run BEFORE the Contacts window loads: the selector's options are fetched by
+  // the form, so creating the link afterwards would not be picked up.
+  await ensureFinancialAccountSetup(page);
+
   await navigateTo(page, 'contacts');
   await slow(page);
 
@@ -763,20 +807,36 @@ export async function selectVendorBP(page, { name } = {}) {
 export async function saveDraft(page) {
   const saveBtn = page.getByTestId('action-save-draft')
     .or(page.getByRole('button', { name: /guardar|save/i }));
+  // Wait for the button to be enabled — it stays disabled while BP callouts
+  // (price list, payment terms, currency, address) are still propagating.
+  await expect(saveBtn.first()).toBeEnabled({ timeout: 15_000 });
   const savePromise = expectSaveResponse(page);
-  await saveBtn.click();
+  await saveBtn.first().click();
   await savePromise;
   await slow(page);
 }
 
 /**
  * Add a product line using the inline-add row.
+ *
+ * Prefer `productName` (a `PRODUCT_FIXTURE_*.name` from product-helpers.js,
+ * ensured by `ensureProductSetup()`) over `productIndex`. ETP-5079 emptied the
+ * onboarding dataset's product list, so on a fresh tenant "the product at index
+ * N" is nothing at all; and on a long-lived dev tenant it is whatever leftover
+ * data a previous run created, which quietly binds the caller's assertions to
+ * an arbitrary record. `productIndex` is kept for callers that genuinely do not
+ * care which product they get (e.g. financial-account-cash-close, which only
+ * needs *a* priced line to collect).
+ *
  * @param {Object} opts
- * @param {number} [opts.productIndex=0] - Which product to pick from the drawer (0-based)
+ * @param {string} [opts.productName] - Exact fixture name to search for and pick
+ *   in the drawer. Takes precedence over `productIndex`.
+ * @param {number} [opts.productIndex=0] - Which product to pick from the drawer
+ *   (0-based). Only used when `productName` is not given.
  * @param {string} [opts.quantity] - Optional quantity to set
  * @param {boolean} [opts.isFirst=false] - True if this is the first line (uses empty-state button)
  */
-export async function addProductLine(page, { productIndex = 0, quantity, isFirst = false } = {}) {
+export async function addProductLine(page, { productName, productIndex = 0, quantity, isFirst = false } = {}) {
   // Click add-line button — retry the whole click→inline-add-row sequence
   if (isFirst) {
     const emptyStateBtn = page.getByTestId('action-add-lines-empty-state')
@@ -812,20 +872,46 @@ export async function addProductLine(page, { productIndex = 0, quantity, isFirst
   }).toPass({ timeout: 20_000 });
   await slow(page);
 
-  // Select the product by index — fall back to first if nth doesn't exist.
-  // Retry the whole selection if the drawer loads empty (intermittent backend timing).
-  const allProducts = page.locator('[data-testid^="product-search-option-"]');
-  await expect(allProducts.first()).toBeVisible({ timeout: 20_000 });
-  const count = await allProducts.count();
-  const product = allProducts.nth(Math.min(productIndex, count - 1));
+  // Narrow the drawer to the requested fixture BEFORE resolving options, so the
+  // list the index/first-match runs against is already the filtered one. Typing
+  // into the search box re-queries the backend, so the `hasText` filter below is
+  // a second, client-side guarantee rather than the only one.
+  if (productName) {
+    const searchInput = page.getByTestId('product-search-input');
+    await expect(searchInput).toBeVisible({ timeout: 10_000 });
+    await searchInput.fill(productName);
+  }
 
-  // Start listening for callout (price/tax fill) BEFORE clicking the product
-  const productCalloutResponse = page.waitForResponse(
-    (resp) => resp.url().includes('/sws/neo/') && resp.status() < 400,
-    { timeout: 30_000 },
-  );
-  await product.waitFor({ state: 'visible', timeout: 10_000 });
-  await product.click();
+  // Select the product by name when one was given, otherwise by index — falling
+  // back to first if nth doesn't exist.
+  // Retry the whole click sequence if the element detaches from the DOM mid-click
+  // (the ProductSearchDrawer re-renders its entire list when waterfall/pagination
+  // fetches complete, which can replace the <button> between locator resolution
+  // and the actual pointer event — see ETP-4567 QA flaky-test investigation).
+  const optionLocator = page.locator('[data-testid^="product-search-option-"]');
+  const allProducts = productName ? optionLocator.filter({ hasText: productName }) : optionLocator;
+  // Two different async events, not one: the drawer opening (checked above) and
+  // its product list finishing its OWN fetch. 20s covered the drawer; under a
+  // slower environment the list can still be mid-fetch when that budget was
+  // built, so this needs its own separate wait rather than sharing the first.
+  await expect(allProducts.first(),
+    productName
+      ? `Product "${productName}" should appear in the search drawer — is ensureProductSetup() called for it?`
+      : 'The product search drawer should offer at least one product — is ensureProductSetup() called?',
+  ).toBeVisible({ timeout: 30_000 });
+
+  let productCalloutResponse;
+  await expect(async () => {
+    const count = await allProducts.count();
+    const product = productName ? allProducts.first() : allProducts.nth(Math.min(productIndex, count - 1));
+
+    // Start listening for callout (price/tax fill) BEFORE clicking the product
+    productCalloutResponse = page.waitForResponse(
+      (resp) => resp.url().includes('/sws/neo/') && resp.status() < 400,
+      { timeout: 30_000 },
+    );
+    await product.click({ timeout: 3_000 });
+  }).toPass({ timeout: 20_000 });
   await expect(searchDrawer).toBeHidden({ timeout: 10_000 }).catch(() => {});
   await productCalloutResponse;
   await slow(page);
@@ -843,47 +929,218 @@ export async function addProductLine(page, { productIndex = 0, quantity, isFirst
   await page.keyboard.press('Enter');
   await linePromise;
   await slow(page);
+
+  // Verify the line was saved: the inline-add-row must disappear (or be
+  // replaced by the next empty row) and the saved line must appear in the
+  // grid. Without this gate the caller can race into a second
+  // addProductLine() before the first line is committed to the DOM.
+  await expect(page.getByTestId('inline-add-row')).toBeHidden({ timeout: 15_000 })
+    .catch(() => {}); // OK if already gone or immediately replaced
+
+  // Two different grid renderers share this helper: the classic <table> (real
+  // <tbody><tr> rows) and InlineLinesPanel.jsx (data-testid="line-row-<ID>"
+  // divs, used by e.g. the purchase-order/rectificativa windows). A bare
+  // 'tbody tr' silently matches on BOTH kinds of window, because every page
+  // also carries a hidden (display:none) attachments <table> — so on an
+  // InlineLinesPanel window this gate used to report the line saved by
+  // finding that unrelated hidden row, before the real one had rendered.
+  // ':visible' excludes that hidden table without needing to know which
+  // renderer this window uses.
+  await expect(page.locator('tbody tr:visible, [data-testid^="line-row-"]').first(),
+    'Saved line should appear in the lines grid',
+  ).toBeVisible({ timeout: 15_000 });
 }
 
 /**
- * Open a draft row from a list view by hovering and clicking the edit button (pencil).
- * Falls back to double-click if the pencil button is not visible.
+ * Visible status text per document status code, used ONLY as a fallback for
+ * lists whose rows do not carry `data-row-status` (see rowByDocumentStatus).
+ * Both locales, since the UI language depends on the test user's profile.
  */
-export async function openDraftRow(page, { label = 'draft row' } = {}) {
-  // Dismiss any overlay (preview panel, modal) that may block pointer events
+const DOCUMENT_STATUS_TEXT = {
+  DR: /borrador|draft/i,
+  CO: /completado|completed/i,
+  VO: /anulado|void/i,
+  CL: /cerrado|closed/i,
+};
+
+/**
+ * Locator for the first list row in a given document status.
+ *
+ * Prefers the `data-row-status` attribute that DataTable emits for every row
+ * whose record carries a `documentStatus` (`data-row-status={row.documentStatus}`
+ * in tools/app-shell/src/components/contract-ui/DataTable.jsx) — the documented,
+ * language-independent way to assert document status, see
+ * docs/e2e-testing-guide.md § "Document status attributes". The translated-text
+ * filter is kept as an `.or()` fallback for lists that do not expose the
+ * attribute (a list whose header entity has no documentStatus column).
+ *
+ * Prefer `page.getByTestId('row-<id>')` over this helper whenever the test
+ * already knows the record id — that targets THE record under test instead of
+ * "whichever row happens to be first in this status".
+ */
+export function rowByDocumentStatus(page, status = 'DR') {
+  const textPattern = DOCUMENT_STATUS_TEXT[status];
+  if (!textPattern) {
+    throw new Error(`rowByDocumentStatus: unknown document status "${status}" (expected one of ${Object.keys(DOCUMENT_STATUS_TEXT).join(', ')})`);
+  }
+  const byAttribute = page.locator(`tbody tr[data-row-status="${status}"]`);
+  const byText = page.locator('tbody tr').filter({ hasText: textPattern });
+  return byAttribute.or(byText).first();
+}
+
+/**
+ * Close the row-preview overlay (GenericPreviewModal) if it is open.
+ *
+ * Windows that pass `renderPreview` to ListView (purchase-invoice,
+ * sales-invoice, …) open this overlay on row activation, and it also opens by
+ * itself on arrival at the list when a record was just saved/confirmed
+ * (`externalPreviewRow` ← `location.state.savedRecord`). It renders as a
+ * full-viewport `fixed inset-0` backdrop, so it swallows every pointer event
+ * aimed at a row underneath it.
+ *
+ * It has NO Escape handler — verified in
+ * tools/app-shell/src/windows/custom/shared/GenericPreviewModal.jsx, whose only
+ * exits are the header close button and a click on the backdrop (`onClick={triggerClose}`
+ * on the backdrop div, with the card itself stopping propagation). So
+ * `keyboard.press('Escape')` does NOT dismiss it. The backdrop is the modal
+ * card's parent element; the card is inset by 8px on every side, so a click at
+ * y < 8 lands on the backdrop whatever the card's width.
+ */
+export async function dismissPreviewModal(page) {
+  const modal = page.getByTestId('generic-preview-modal');
+  // Deliberately a one-shot check (isVisible() never waits): the overlay is
+  // either already up by the time we get here or it is not coming at all, and
+  // this runs on every openListRow() call, including the many where no window
+  // renders a preview.
+  if (!await modal.isVisible().catch(() => false)) return;
+
+  await modal.locator('xpath=..').click({ position: { x: 4, y: 2 } });
+  await expect(modal,
+    'The row-preview overlay should close on a backdrop click — it blocks pointer events on the list underneath',
+  ).toBeHidden({ timeout: 10_000 });
+}
+
+/**
+ * Open a list row's detail view via its row quick action (pencil).
+ *
+ * Handles the three things a bare `row.dblclick()` gets wrong:
+ *   1. The row-preview overlay, which intercepts pointer events (see
+ *      dismissPreviewModal) — closed first.
+ *   2. The quick-action pill is revealed on row hover
+ *      (`opacity-0 group-hover/row:opacity-100` in RowQuickActions.jsx) — the
+ *      row is hovered before the button is located.
+ *   3. The edit button is icon-only: its label lives in `aria-label`/`title`,
+ *      never in text, so a `hasText: /editar|edit/i` locator can NEVER match it
+ *      and silently falls through to something else on the page. Located by the
+ *      canonical `row-quick-action-edit` testid, scoped to the row.
+ */
+export async function openListRow(page, targetRow, { label = 'row' } = {}) {
+  await dismissPreviewModal(page);
+  // Close transient popovers/drawers that DO listen for Escape (search selects,
+  // product drawers, ConfirmInOutModal…) — harmless when nothing is open.
   await page.keyboard.press('Escape');
 
-  const rows = page.locator('tbody tr');
-  await expect(rows.first(),
-    `${label} list should have at least one row`,
-  ).toBeVisible({ timeout: 10_000 });
-
-  const draftRow = rows.filter({ hasText: /borrador|draft/i }).first();
-  await expect(draftRow,
-    `There should be a draft ${label}`,
-  ).toBeVisible({ timeout: 10_000 });
-
-  await draftRow.hover();
+  await expect(targetRow, `The ${label} should be visible in the list`).toBeVisible({ timeout: 10_000 });
+  await targetRow.hover();
   await slow(page);
-  const editBtn = draftRow.locator('[data-testid*="Pencil"], [data-testid*="pencil"], [data-testid="row-quick-action-edit"]').first();
-  if (await editBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
+
+  // `row-quick-action-edit` is the canonical testid (RowQuickActions.jsx); the
+  // Pencil icon testids are the same button's child, kept for lists that render
+  // an older edit affordance. `.or()` resolves in DOM order, so the button wins
+  // over its own icon when both match.
+  const editBtn = targetRow.getByTestId('row-quick-action-edit')
+    .or(targetRow.locator('[data-testid*="Pencil"], [data-testid*="pencil"]'))
+    .first();
+
+  // waitFor(), not isVisible({ timeout }) — the latter's timeout option is
+  // ignored by Playwright, so it would sample the DOM once with no retry.
+  const hasEditBtn = await editBtn.waitFor({ state: 'visible', timeout: 3_000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (hasEditBtn) {
     await editBtn.click();
   } else {
-    await draftRow.dblclick();
+    // Row activation only navigates on lists whose window does NOT pass
+    // `renderPreview` to ListView — see buildRowNavigateHandler() in
+    // components/contract-ui/ListView.jsx. On a preview-enabled list this opens
+    // the overlay instead, which is a test-setup problem worth naming rather
+    // than an opaque `detail-view` timeout 20s later.
+    await targetRow.dblclick();
+    const previewOpened = await page.getByTestId('generic-preview-modal')
+      .waitFor({ state: 'visible', timeout: 3_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (previewOpened) {
+      throw new Error(
+        `openListRow: activating the ${label} opened the row-preview overlay instead of the detail `
+        + 'view, and the row exposed no "row-quick-action-edit" button to click. This list needs row '
+        + 'quick actions enabled for a test to open a record from it.',
+      );
+    }
   }
   await slow(page);
   await waitForDetailReady(page);
 }
 
 /**
+ * Open the first list row in a given document status (default: draft).
+ * Thin wrapper over openListRow + rowByDocumentStatus.
+ */
+export async function openRowByStatus(page, { status = 'DR', label = 'row' } = {}) {
+  const rows = page.locator('tbody tr');
+  await expect(rows.first(),
+    `${label} list should have at least one row`,
+  ).toBeVisible({ timeout: 10_000 });
+
+  const targetRow = rowByDocumentStatus(page, status);
+  await expect(targetRow,
+    `There should be a ${status} ${label}`,
+  ).toBeVisible({ timeout: 10_000 });
+
+  await openListRow(page, targetRow, { label });
+}
+
+/**
+ * Open a draft row from a list view. Kept as the default-status wrapper so
+ * existing call sites keep their exact behaviour.
+ */
+export async function openDraftRow(page, { label = 'draft row' } = {}) {
+  await openRowByStatus(page, { status: 'DR', label });
+}
+
+/**
  * Click the confirm button (action-save) on a draft document.
  * In draft mode, action-save is the "Confirmar" button.
  */
-export async function clickConfirmButton(page) {
+/**
+ * @param {import('@playwright/test').Page} page
+ * @param {RegExp|string} [expectedModalText] - optional text that should become visible
+ *   right after the click (e.g. the confirm modal's title). When given, the click is
+ *   retried until that text appears — this class of flake showed up under a loaded CI
+ *   agent as the click landing but the modal not mounting within a single flat wait,
+ *   same environment-tail-latency shape as the lines-count and product-search waits
+ *   fixed elsewhere in this file. Safe to retry here: by this point in every caller's
+ *   flow the record is already persisted, so runDraftModeConfirm's own pre-checks
+ *   (flushPendingLines / maybeSaveBeforeConfirm) are no-ops — this click only opens a
+ *   client-side modal, it does not resubmit anything.
+ */
+export async function clickConfirmButton(page, expectedModalText) {
   const confirmBtn = page.getByTestId('action-save');
   await expect(confirmBtn).toBeVisible({ timeout: 10_000 });
-  await confirmBtn.click();
-  // Caller is responsible for waiting on the modal/response that follows
+  // Wait for enabled — the button stays disabled while a save is in-flight
+  // or while BP callouts are still propagating derived fields.
+  await expect(confirmBtn).toBeEnabled({ timeout: 15_000 });
+
+  if (expectedModalText) {
+    await expect(async () => {
+      await confirmBtn.click({ timeout: 3_000 });
+      await expect(page.getByText(expectedModalText).first()).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 20_000 });
+  } else {
+    await confirmBtn.click();
+  }
+  // Caller is responsible for waiting on any other modal/response that follows
   await slow(page);
 }
 

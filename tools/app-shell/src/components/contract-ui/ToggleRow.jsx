@@ -45,6 +45,15 @@ export function ToggleRow({
         checked={checked}
         onCheckedChange={onCheckedChange}
         disabled={disabled}
+        // ETP-4879 / ETP-5120: the shared Switch's default look derives the enabled
+        // tracks from `bg-primary`/`bg-input` and the disabled tracks from a blanket
+        // `disabled:opacity-50` on top of those same classes — none of the 4 resulting
+        // shades match the real Figma export. Cancel the opacity dimming and pin all 4
+        // states explicitly (`--switch-track-{off,on}-{enabled,disabled}`, defined in
+        // this app's index.css as HSL triplets, same convention as every other theme
+        // token) so every state — off/on x enabled/disabled — is a deliberate,
+        // theme-aware colour instead of a Tailwind default or an opacity side effect.
+        className="data-[state=unchecked]:bg-[hsl(var(--switch-track-off-enabled))] data-[state=checked]:bg-[hsl(var(--switch-track-on-enabled))] disabled:opacity-100 disabled:data-[state=unchecked]:bg-[hsl(var(--switch-track-off-disabled))] disabled:data-[state=checked]:bg-[hsl(var(--switch-track-on-disabled))]"
         data-testid={dataTestId ? `${dataTestId}-switch` : undefined}
       />
     </div>

@@ -120,7 +120,7 @@ export default function PurchaseOrderWindow(props) {
   // ETP-4888 point 5 follow-up — see LINE_TAX_SIF_TRIGGER_ENABLED above for the
   // decisions.json mirror note.
   const { cellBadges: taxSifCellBadges, modal: taxSifModal } = useTaxSifLineRowActions({
-    apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'purchases',
+    apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'purchases', specName: 'purchase-order',
   });
 
   // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
@@ -166,7 +166,6 @@ export default function PurchaseOrderWindow(props) {
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}
         rowQuickActions={rowQuickActions}
         hideLink
-        listViewOptions={{ hidePrint: true }}
         bulkActions={PurchaseOrderBulkActions}
         dateFilterKey="orderDate"
         refreshTrigger={refreshKey}

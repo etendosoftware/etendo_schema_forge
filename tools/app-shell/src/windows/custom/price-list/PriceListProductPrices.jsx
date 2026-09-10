@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { InlineLinesPanel } from '@/components/contract-ui';
 import { useUI } from '@/i18n';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 // ETP-4592: product-price lines cannot be deleted from this tab (products are
 // added to a tariff from the product record itself). InlineLinesPanel has no
 // prop to hide just the row-delete icon — it renders unconditionally alongside
@@ -56,10 +57,7 @@ export default function PriceListProductPrices({ recordId, data, token, apiBaseU
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   const parentId = data?.id || (recordId !== 'new' ? recordId : null);
   const selectorContext = useMemo(() => (versionId ? { parentId: versionId } : {}), [versionId]);
@@ -79,7 +77,7 @@ export default function PriceListProductPrices({ recordId, data, token, apiBaseU
     setLoading(true); setError(null);
     try {
       setVersionId(versionFromRecord);
-      const lineRes = await fetch(`${apiBaseUrl}/productPrice?parentId=${versionFromRecord}&_startRow=0&_endRow=200`, { headers });
+      const lineRes = await apiFetch(`/productPrice?parentId=${versionFromRecord}&_startRow=0&_endRow=200`);
       if (!lineRes.ok) throw new Error(await readErrorMessage(lineRes));
       setLines(rowsFrom(await lineRes.json()));
       setLoading(false);
@@ -87,7 +85,7 @@ export default function PriceListProductPrices({ recordId, data, token, apiBaseU
       setError(err?.message || ui('priceLoadError'));
       setVersionId(null); setLines([]); setLoading(false);
     }
-  }, [apiBaseUrl, headers, parentId, token, versionFromRecord]);
+  }, [apiBaseUrl, apiFetch, parentId, token, versionFromRecord]);
 
   useEffect(() => {
     // loadProductPrices handles its own errors; catch is a safety net for unexpected throws.
@@ -98,8 +96,8 @@ export default function PriceListProductPrices({ recordId, data, token, apiBaseU
   // Throwing on failure lets InlineLinesPanel show the error toast itself; on
   // success it shows its own "saved" toast, so this stays silent on the happy path.
   const handleUpdateRow = useCallback(async (row, fieldKey, value) => {
-    const res = await fetch(`${apiBaseUrl}/productPrice/${row.id}`, {
-      method: 'PATCH', headers,
+    const res = await apiFetch(`/productPrice/${row.id}`, {
+      method: 'PATCH',
       body: JSON.stringify({ [fieldKey]: toNumber(value) }),
     });
     if (!res.ok) throw new Error(await readErrorMessage(res));
@@ -110,7 +108,7 @@ export default function PriceListProductPrices({ recordId, data, token, apiBaseU
     const serverValue = updated?.response?.data?.[0]?.[fieldKey];
     const nextValue = serverValue !== undefined ? serverValue : toNumber(value);
     setLines(prev => prev.map(l => (l.id === row.id ? { ...l, [fieldKey]: nextValue } : l)));
-  }, [apiBaseUrl, headers]);
+  }, [apiFetch]);
 
   if (!parentId) {
     return (

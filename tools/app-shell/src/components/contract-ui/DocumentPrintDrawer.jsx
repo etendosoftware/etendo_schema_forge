@@ -5,6 +5,8 @@ import { useUI } from '@/i18n';
 import { useAnimatedOpen } from '@/lib/useAnimatedOpen.js';
 import { hasClientPdf, buildClientPdfBlob, buildClientHtml } from '@/windows/custom/shared/documentPdfRegistry.js';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
+import { apiFetch as ambientApiFetch } from '@/auth/api.js';
 /**
  * Posts rendered HTML to jsreport (through the Vite `/jsreport` proxy) and
  * returns the resulting PDF blob.
@@ -23,6 +25,7 @@ import { hasClientPdf, buildClientPdfBlob, buildClientHtml } from '@/windows/cus
 async function renderPdfViaJsreport(htmlContent, translate = (key) => key) {
   let pdfRes;
   try {
+    // raw-fetch-ok: local jsreport container proxy, unauthenticated by design (no Etendo bearer token)
     pdfRes = await fetch('/jsreport/api/report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -73,6 +76,7 @@ async function renderPdfViaJsreport(htmlContent, translate = (key) => key) {
  */
 export default function DocumentPrintDrawer({ open, onClose, windowName, documentIds = [], token, apiBaseUrl }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const { shouldRender, isClosing } = useAnimatedOpen(open, 200);
   const iframeRef = useRef(null);
   // Object URL of the client-rendered PDF, reused by Download/Print and revoked
@@ -114,9 +118,9 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/reports/${reportId}/render`, {
+      const res = await apiFetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        baseUrl: '',
         body: JSON.stringify({ format: 'html', params: { documentId: docId } }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
@@ -133,7 +137,7 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
       setError(err.message);
     }
     setLoading(false);
-  }, [reportId, token, windowName, apiBaseUrl, ui]);
+  }, [reportId, token, windowName, apiBaseUrl, apiFetch, ui]);
 
   useEffect(() => { if (open && currentDocId) renderDocument(currentDocId); }, [open, currentDocId, renderDocument]);
   useEffect(() => { if (open) setCurrentIndex(0); }, [open]);
@@ -156,9 +160,9 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
         return;
       }
       // Get HTML
-      const res = await fetch(`/api/reports/${reportId}/render`, {
+      const res = await apiFetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        baseUrl: '',
         body: JSON.stringify({ format: 'html', params: { documentId: currentDocId } }),
       });
       if (!res.ok) throw new Error(ui('actionFailed'));
@@ -271,10 +275,36 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
  * Any failure — including a jsreport outage — is caught here and surfaced via
  * `toast.error()` instead of propagating as an unhandled promise rejection
  * (the previous behavior: this function's caller never awaits/catches it).
+ *
+ * `documents` items are either a bare id (the single-document drawer print, or a
+ * window whose grid doesn't expose `documentStatus` — see ListView's
+ * `toPrintableDocument`) or `{ id, documentStatus }` (list multi-select, when the
+ * window's decisions.json declares `documentStatus` with `grid: true`, the same
+ * field `hidePrintWhen` already reads everywhere). ETP-5124 AC#6/AC#7: Draft
+ * ('DR') documents are excluded from a multi-select print batch before rendering
+ * anything — silently if some non-Draft documents remain, or with an
+ * informational notice (no PDF generated at all) if every selected document was
+ * Draft. A bare id (no status available) is never treated as Draft, so callers
+ * that can't supply a status keep printing everything, unchanged.
  */
-export async function printDocuments(windowName, documentIds, token, translate = (key) => key, apiBaseUrl = null) {
+export async function printDocuments(windowName, documents, token, translate = (key) => key, apiBaseUrl = null) {
   const reportId = `print-${windowName}`;
-  if (!reportId || !token || documentIds.length === 0) return;
+  if (!reportId || !token || !documents || documents.length === 0) return;
+
+  const normalizedDocuments = documents.map((doc) => (
+    doc && typeof doc === 'object'
+      ? { id: doc.id, documentStatus: doc.documentStatus }
+      : { id: doc, documentStatus: undefined }
+  ));
+  const printableDocuments = normalizedDocuments.filter((doc) => doc.documentStatus !== 'DR');
+
+  if (printableDocuments.length === 0) {
+    console.info(`[print-documents] ${windowName}: all ${normalizedDocuments.length} selected document(s) are Draft — nothing to print`);
+    toast.info(translate('printAllDraftExcluded'));
+    return;
+  }
+
+  const documentIds = printableDocuments.map((doc) => doc.id);
 
   try {
     // Which template each document uses — same rule as the drawer: design A when the
@@ -298,9 +328,10 @@ export async function printDocuments(windowName, documentIds, token, translate =
         }));
         continue;
       }
-      const res = await fetch(`/api/reports/${reportId}/render`, {
+      const res = await ambientApiFetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        baseUrl: '',
+        token,
         body: JSON.stringify({ format: 'html', params: { documentId: docId } }),
       });
       if (!res.ok) throw new Error(translate('actionFailed'));

@@ -292,3 +292,78 @@ describe('useTaxSifLineRowActions + TaxSifModal (real, end-to-end) — compound/
     expect(screen.getByTestId('still-missing')).toHaveTextContent('false');
   });
 });
+
+// ---------------------------------------------------------------------------
+// ETP-5027 — document-direction gate, end-to-end through the REAL modal.
+//
+// The hook-only spec proves the badge disappears; this proves nothing downstream
+// leaks either — no dialog, no dead-end empty modal — and, for the deliberately
+// LOOSENED Bizkaia purchase case, that the full badge -> real-modal path still works.
+// ---------------------------------------------------------------------------
+function GatedHarness({ apiBaseUrl }) {
+  const { cellBadges, modal } = useTaxSifLineRowActions({
+    apiBaseUrl, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'purchases',
+  });
+  const badge = cellBadges.tax?.({ tax: TAX_ID });
+  return (
+    <div>
+      <div data-testid="still-missing">{String(badge !== null)}</div>
+      {badge}
+      {modal}
+    </div>
+  );
+}
+
+function installTaxFetch(taxRecord) {
+  globalThis.fetch = vi.fn((url) => {
+    if (String(url).includes('/header/')) return headerResponse({ id: RECORD_ID });
+    return jsonResponse({ items: [taxRecord], hasMore: false });
+  });
+}
+
+describe('useTaxSifLineRowActions + TaxSifModal (real) — document-direction gate (ETP-5027)', () => {
+  it('a VERI*FACTU purchase invoice renders NO badge and NO dialog at all', async () => {
+    // Same org config as the passing sales case above — only the document changed.
+    render(<GatedHarness apiBaseUrl="/sws/neo/purchase-invoice" />);
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId('still-missing')).toHaveTextContent('false'));
+    expect(screen.queryByTestId('line-action-tax-sif')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
+  });
+
+  it('a TBAI purchase invoice OUTSIDE Bizkaia renders no badge', async () => {
+    useFiscalConfigMock.mockReturnValue({
+      profile: 'tbai', verifactuRecord: null, tbaiRecord: { etsgSifTerritory: 'GIPUZKOA' },
+    });
+    installTaxFetch({ id: TAX_ID, name: 'IVA 21%', EM_Tbai_Claveregimeniva: null });
+
+    render(<GatedHarness apiBaseUrl="/sws/neo/purchase-invoice" />);
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId('still-missing')).toHaveTextContent('false'));
+    expect(screen.queryByTestId('line-action-tax-sif')).not.toBeInTheDocument();
+  });
+
+  it('a TBAI purchase invoice UNDER Bizkaia keeps the whole badge -> real modal path working', async () => {
+    useFiscalConfigMock.mockReturnValue({
+      profile: 'tbai', verifactuRecord: null, tbaiRecord: { etsgSifTerritory: 'BIZKAIA' },
+    });
+    installTaxFetch({ id: TAX_ID, name: 'IVA 21%', EM_Tbai_Claveregimeniva: null });
+    fetchByIdMock.mockResolvedValue({ id: TAX_ID, name: 'IVA 21%', EM_Tbai_Claveregimeniva: null });
+
+    render(<GatedHarness apiBaseUrl="/sws/neo/purchase-invoice" />);
+    await waitFor(() => expect(screen.getByTestId('still-missing')).toHaveTextContent('true'));
+
+    await act(async () => { screen.getByTestId('line-action-tax-sif').click(); });
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
+
+    await pickOption('tbaiClaveregimeniva', '05');
+    await act(async () => { screen.getByTestId('tax-sif-modal-save').click(); });
+
+    await waitFor(() => expect(patchByIdMock).toHaveBeenCalledWith(
+      'tax', 'tax', TAX_ID,
+      { tbaiClaveregimeniva: '05' },
+      TOKEN, '/sws/neo/purchase-invoice',
+    ));
+    await waitFor(() => expect(screen.getByTestId('still-missing')).toHaveTextContent('false'));
+  });
+});

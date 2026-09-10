@@ -1,6 +1,14 @@
-import { formatCurrency } from './formatCurrency.js';
+import { formatCurrency, getCurrencySymbol } from './formatCurrency.js';
+import { isCurrencySymbolRightSide } from './currencyFormatConfig.js';
 
 const DASHBOARD_NUMBER_LOCALE = 'en-US';
+
+/** Extracts the 3-letter ISO code from a currency label (`"EUR"` or `"1.14 EUR"`). */
+function extractCurrencyCode(currencyLabel) {
+  const normalizedLabel = String(currencyLabel).trim();
+  const codeMatch = normalizedLabel.toUpperCase().match(/\b[A-Z]{3}\b/);
+  return codeMatch ? codeMatch[0] : normalizedLabel.toUpperCase();
+}
 
 export function localeFromUi(locale) {
   return locale === 'es_ES' ? 'es-ES' : 'en-US';
@@ -36,9 +44,7 @@ export function formatDashboardAmount(value, currencyLabel) {
     return formatCurrency(undefined, num);
   }
 
-  const normalizedLabel = String(currencyLabel).trim();
-  const codeMatch = normalizedLabel.toUpperCase().match(/\b[A-Z]{3}\b/);
-  const currencyCode = codeMatch ? codeMatch[0] : normalizedLabel.toUpperCase();
+  const currencyCode = extractCurrencyCode(currencyLabel);
   return formatCurrency(currencyCode, num);
 }
 
@@ -51,7 +57,23 @@ export function formatDashboardCompact(value, { locale = 'en-US', currencyLabel 
     const hasFraction = Math.abs(compact) < 100 && Math.abs(compact % 1) >= 0.05;
 
     if (currencyLabel) {
-      return `${formatDashboardAmount(compact, currencyLabel)}${suffix}`;
+      const amountStr = formatDashboardAmount(compact, currencyLabel);
+      const currencyCode = extractCurrencyCode(currencyLabel);
+
+      // ETP-5105: the scale suffix (K/M/B) must sit BEFORE the currency symbol
+      // ("197,45 K€", not "197,45 €K") — for a right-side currency (EUR) that
+      // means splicing it in ahead of the trailing "<NBSP><symbol>"; a left-side
+      // currency (e.g. USD, "$197,45") already reads correctly with the suffix
+      // appended at the very end.
+      if (isCurrencySymbolRightSide(currencyCode)) {
+        const symbol = getCurrencySymbol(currencyCode);
+        const symbolSuffix = ` ${symbol}`;
+        if (symbol && amountStr.endsWith(symbolSuffix)) {
+          return `${amountStr.slice(0, -symbolSuffix.length)}${suffix}${symbolSuffix}`;
+        }
+      }
+
+      return `${amountStr}${suffix}`;
     }
 
     return `${formatDashboardNumber(compact, locale, {

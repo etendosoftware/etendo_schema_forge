@@ -846,6 +846,19 @@ describe('buildAdvancedFilterCriteria', () => {
       }
     });
 
+    it('routes iStartsWith to $_identifier like the other textual ops (ETP-4982)', () => {
+      // Bug: TEXTUAL_IDENTIFIER_OPS was missing 'iStartsWith', so a "starts with"
+      // filter on a reference column (e.g. grupoActivo) fell through to the raw
+      // FK/UUID key instead of $_identifier — a partial text search against a
+      // UUID never matches anything.
+      const result = build({
+        conditions: [{ field: 'businessPartner', operator: 'iStartsWith', value: 'jua' }],
+      });
+      assert.deepEqual(result, [
+        { fieldName: 'businessPartner$_identifier', operator: 'iStartsWith', value: 'jua' },
+      ]);
+    });
+
     it('honors backendFilterKey over the identifier routing', () => {
       const columns = [{ key: 'bp', type: 'selector', backendFilterKey: 'bp$name' }];
       const result = build({ conditions: [{ field: 'bp', operator: 'iContains', value: 'jua' }] }, columns);
@@ -907,5 +920,12 @@ describe('getFilteredKey composed with resolveFilterMode', () => {
   it('leaves a text column on its raw key even for a textual operator', () => {
     const col = { key: 'documentNo', type: 'string' };
     assert.equal(getFilteredKey(col, resolveFilterMode(col), 'iContains'), 'documentNo');
+  });
+
+  it('routes a selector column to $_identifier for iStartsWith (ETP-4982)', () => {
+    // Same bug, unit-level: iStartsWith must be treated as a textual op for
+    // identifier-mode columns, exactly like iContains/iEquals already are.
+    const col = { key: 'grupoActivo', type: 'selector' };
+    assert.equal(getFilteredKey(col, resolveFilterMode(col), 'iStartsWith'), 'grupoActivo$_identifier');
   });
 });

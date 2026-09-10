@@ -55,7 +55,13 @@ function ViewToggle({ viewMode, onToggle, ui }) {
   );
 }
 
-export function BestProductsList({ sellers = [], products = [], currencyLabel = '' }) {
+/**
+ * ETP-5088 — `canCreateSale` gates the empty state's creation CTAs (including "create with Copilot",
+ * whose only purpose here is to create that same record). They are creation actions, so they need
+ * the WRITE tier on the target window, not mere visibility. Defaults to `true` so existing callers
+ * and tests keep their behaviour; `DashboardPage` passes the resolved value.
+ */
+export function BestProductsList({ sellers = [], products = [], currencyLabel = '', canCreateSale = true }) {
   const ui = useUI();
   const navigate = useNavigate();
   const { locale } = useLocaleSwitch();
@@ -75,10 +81,10 @@ export function BestProductsList({ sellers = [], products = [], currencyLabel = 
           title={ui('bestProductsEmptyTitle')}
           subtitle={ui('bestProductsEmptySubtitle')}
           width="340px"
-          actions={[
+          actions={canCreateSale ? [
             { key: 'copilot', icon: Sparkles, label: ui('createWithCopilot'), onClick: openCopilot, variant: 'secondary' },
             { key: 'new', icon: Plus, label: ui('newSale'), onClick: () => navigate('/sales-invoice/new'), variant: 'primary' },
-          ]}
+          ] : []}
           data-testid="DashboardEmptyState__4d53b7" />
       ) : (<>
       <div

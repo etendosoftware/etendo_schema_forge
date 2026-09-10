@@ -6,7 +6,7 @@ const columns = [
   { key: 'movementDate', column: 'MovementDate', type: 'date', label: 'Movement Date', required: true, dot: false },
   { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.', required: true },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner', required: true },
-  { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', enumLabels: { 'CL': 'docStatusCl', 'CO': 'docStatusCo', 'DR': 'docStatusDr', 'NA': 'docStatusNa', 'WP': 'docStatusWp', 'RE': 'docStatusRe', 'TEMP': 'docStatusTemp', 'IP': 'docStatusIp', '??': 'docStatus', 'VO': 'docStatusVo' }, required: true },
+  { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', enumLabels: { 'CL': 'docStatusCl', 'CO': 'statusComplete', 'DR': 'docStatusDr', 'NA': 'docStatusNa', 'WP': 'docStatusWp', 'RE': 'docStatusRe', 'TEMP': 'docStatusTemp', 'IP': 'docStatusIp', '??': 'docStatus', 'VO': 'docStatusVo' }, required: true },
   { key: 'warehouse', column: 'M_Warehouse_ID', type: 'selector', label: 'Warehouse', required: true },
   { key: 'sourceShipmentDocNo', column: 'sourceShipmentDocNo', type: 'string', label: 'Source Shipment' },
   { key: 'invoiceStatus', column: 'InvoiceStatus', type: 'percent', label: 'Invoice Status' },

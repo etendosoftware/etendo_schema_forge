@@ -2,7 +2,7 @@ name: Schema Forge Quality Gate
 
 on:
   pull_request:
-    branches: [develop, epic/ETP-3504]
+    branches: [develop]
     types: [opened, reopened, synchronize, ready_for_review]
 
 permissions:

@@ -1,61 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../helpers/auth.js';
 import { t } from '../helpers/i18n.js';
-
-function responseData(data) {
-  return JSON.stringify({ response: { data } });
-}
-
-async function seedSelectedOrg(page) {
-  await page.addInitScript(() => {
-    localStorage.setItem('sf_auth_selected_org', JSON.stringify({
-      id: 'ORG_1',
-      name: 'QA Mock Org',
-    }));
-  });
-}
-
-async function installFiscalProfileMocks(page, profile) {
-  const siiRecord = profile === 'sii'
-    ? { taxtype: 'IVA' }
-    : profile === 'sii-navarra'
-      ? { navarra: 'Y', taxtype: 'IVA' }
-      : profile === 'sii+tbai'
-        ? { guipuzcoa: 'Y', taxtype: 'IVA' }
-        : null;
-
-  const tbaiRecord = profile === 'tbai' || profile === 'sii+tbai'
-    ? { etsgSifTerritory: 'GIPUZKOA', tbaisystemdate: '2026-05-08' }
-    : null;
-
-  const verifactuRecord = profile === 'verifactu'
-    ? { tAXType: '01', nextSendWaitTime: '60' }
-    : null;
-
-  await page.route('**/sws/neo/sii-config/siiConfiguration?**', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: responseData(siiRecord ? [siiRecord] : []),
-    });
-  });
-
-  await page.route('**/sws/neo/tbai-config/header?**', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: responseData(tbaiRecord ? [tbaiRecord] : []),
-    });
-  });
-
-  await page.route('**/sws/neo/verifactu-config/**', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: responseData(verifactuRecord ? [verifactuRecord] : []),
-    });
-  });
-}
+// Shared with purchase-invoice-batuz-column.mocked.spec.js — see
+// helpers/fiscal-config-mocks.js for why BOTH the seeded org and the
+// `response.data`-wrapped config mocks are required.
+import {
+  responseData,
+  seedSelectedOrg,
+  installFiscalProfileMocks,
+} from '../helpers/fiscal-config-mocks.js';
 
 async function installInvoiceDetailMocks(page, specName, invoice, installments = []) {
   await page.route(`**/sws/neo/${specName}/header/${invoice.id}`, async (route) => {
@@ -185,6 +138,70 @@ test.describe('SIF buttons follow fiscal config in invoice detail views', () => 
     await navigateTo(page, 'sales-invoice/SI_1');
     await expect(page.getByTestId('detail-view')).toBeVisible();
     await expect(page.getByRole('button', { name: t('sendToSif') })).toBeVisible();
+  });
+
+  // ETP-5087: a purchase invoice is only TBAI-eligible when the org's active
+  // TBAI config territory is Bizkaia (Batuz). Sales invoices are unaffected —
+  // covered above. These two cases lock the popup body copy for the purchase
+  // side: SII+TBAI both offered in Bizkaia, SII-only outside it.
+  test('purchase invoice + SII+TBAI profile + Bizkaia territory: Send to SIF popup offers both SII and TBAI', async ({ page }) => {
+    await installFiscalProfileMocks(page, 'sii+tbai', { territory: 'BIZKAIA' });
+    await installInvoiceDetailMocks(page, 'purchase-invoice', {
+      id: 'PI_BIZKAIA_1',
+      documentNo: 'PI-BIZKAIA-001',
+      orderReference: 'SUP-BIZKAIA-001',
+      documentStatus: 'CO',
+      grandTotalAmount: 275,
+      outstandingAmount: 275,
+      businessPartner: 'BP_1',
+      'businessPartner$_identifier': 'QA Supplier',
+      'currency$_identifier': 'EUR',
+      aeatsiiIssent: false,
+      tbaiIssent: false,
+    });
+
+    await navigateTo(page, 'purchase-invoice/PI_BIZKAIA_1');
+    await expect(page.getByTestId('detail-view')).toBeVisible();
+
+    const sendButton = page.getByRole('button', { name: t('sendToSif') });
+    await expect(sendButton).toBeVisible();
+    await sendButton.click();
+
+    const sifDialog = page.locator('div').filter({ has: page.getByRole('heading', { name: t('sendToSifTitle') }) }).last();
+    await expect(sifDialog.getByRole('heading', { name: t('sendToSifTitle') })).toBeVisible();
+    await expect(sifDialog.getByText(t('sendToSifBodyBothPurchase'))).toBeVisible();
+    await expect(sifDialog.getByText(t('sendToSifBodySii'), { exact: true })).toHaveCount(0);
+    await expect(sifDialog.getByText(t('sendToSifBodyTbai'), { exact: true })).toHaveCount(0);
+  });
+
+  test('purchase invoice + SII+TBAI profile + non-Bizkaia territory: Send to SIF popup offers SII only, no TBAI mention', async ({ page }) => {
+    await installFiscalProfileMocks(page, 'sii+tbai', { territory: 'ARABA' });
+    await installInvoiceDetailMocks(page, 'purchase-invoice', {
+      id: 'PI_ARABA_1',
+      documentNo: 'PI-ARABA-001',
+      orderReference: 'SUP-ARABA-001',
+      documentStatus: 'CO',
+      grandTotalAmount: 275,
+      outstandingAmount: 275,
+      businessPartner: 'BP_1',
+      'businessPartner$_identifier': 'QA Supplier',
+      'currency$_identifier': 'EUR',
+      aeatsiiIssent: false,
+      tbaiIssent: false,
+    });
+
+    await navigateTo(page, 'purchase-invoice/PI_ARABA_1');
+    await expect(page.getByTestId('detail-view')).toBeVisible();
+
+    const sendButton = page.getByRole('button', { name: t('sendToSif') });
+    await expect(sendButton).toBeVisible();
+    await sendButton.click();
+
+    const sifDialog = page.locator('div').filter({ has: page.getByRole('heading', { name: t('sendToSifTitle') }) }).last();
+    await expect(sifDialog.getByRole('heading', { name: t('sendToSifTitle') })).toBeVisible();
+    await expect(sifDialog.getByText(t('sendToSifBodySii'))).toBeVisible();
+    await expect(sifDialog.getByText(t('sendToSifBodyBothPurchase'), { exact: true })).toHaveCount(0);
+    await expect(sifDialog.getByText(t('sendToSifBodyTbai'), { exact: true })).toHaveCount(0);
   });
 
   test('shows Send to SIF in the purchase invoice preview modal when the org profile is SII', async ({ page }) => {

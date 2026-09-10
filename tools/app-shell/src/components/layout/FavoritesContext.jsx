@@ -8,7 +8,8 @@ import {
   useState,
 } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { buildHeaders, detectBaseUrl } from '@/auth/api.js';
+import { detectBaseUrl } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const FavoritesContext = createContext(null);
 
@@ -44,6 +45,7 @@ export function FavoritesProvider({ children }) {
   const { username, token } = useAuth();
   const [favorites, setFavorites] = useState(() => readFavorites(username));
   const fetchedRef = useRef(false);
+  const apiFetch = useApiFetch();
 
   // Reset to localStorage when user changes (login/logout)
   useEffect(() => {
@@ -55,7 +57,7 @@ export function FavoritesProvider({ children }) {
   useEffect(() => {
     if (!token || !username || fetchedRef.current) return;
     let cancelled = false;
-    fetch(FAVORITES_ENDPOINT, { headers: buildHeaders(token), credentials: 'include' })
+    apiFetch(FAVORITES_ENDPOINT, { baseUrl: '' })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!cancelled && Array.isArray(data)) {
@@ -70,19 +72,18 @@ export function FavoritesProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [token, username]);
+  }, [token, username, apiFetch]);
 
   const syncToServer = useCallback(
     (list) => {
       if (!token) return;
-      fetch(FAVORITES_ENDPOINT, {
+      apiFetch(FAVORITES_ENDPOINT, {
         method: 'PUT',
-        headers: buildHeaders(token),
+        baseUrl: '',
         body: JSON.stringify(list),
-        credentials: 'include',
       }).catch(() => {});
     },
-    [token]
+    [token, apiFetch]
   );
 
   const addFavorite = useCallback(

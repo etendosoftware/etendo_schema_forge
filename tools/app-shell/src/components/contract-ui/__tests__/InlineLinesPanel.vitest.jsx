@@ -2256,3 +2256,65 @@ describe('InlineLinesPanel', () => {
     });
   });
 });
+
+// ---------- ETP-5073 / DOC-04: onUpdateRow rejection no longer double-toasts ----------
+//
+// Before this fix, commitField's catch toasted every rejection unconditionally. The
+// save-conflict handoff (buildInlineRowUpdateHandler) now toasts its OWN failure (or lets the
+// conflict dialog speak for it) and marks the thrown Error `userNotified: true` so this catch
+// does not repeat it — the exact regression this suite guards.
+describe('InlineLinesPanel — commitField error toast dedupe (ETP-5073 / DOC-04)', () => {
+  async function editAndBlurProduct(row, value) {
+    await act(async () => { await userEvent.hover(row); });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => { await userEvent.click(editBtn); });
+    const productInput = within(row).getByTestId('field-product');
+    act(() => { productInput.focus(); });
+    fireEvent.change(productInput, { target: { value } });
+    await act(async () => { productInput.blur(); });
+  }
+
+  // NOTE: `sonner` is mocked once for the whole file with no per-test `vi.clearAllMocks()`, so
+  // `toast.error` accumulates calls from every other test in this suite. Assertions here compare
+  // against a call-count snapshot taken right before the action, rather than `.not.toHaveBeenCalled()`
+  // / a bare `.toHaveBeenCalledWith()`, so a prior test's toast can't produce a false pass.
+
+  it('does NOT toast when onUpdateRow rejects with userNotified: true (the save handler already told the user)', async () => {
+    const { toast } = await import('sonner');
+    const onUpdateRow = vi.fn().mockRejectedValue(
+      Object.assign(new Error('server boom'), { userNotified: true }),
+    );
+    renderPanel({ onUpdateRow });
+    const row = screen.getByTestId('line-row-L1');
+    const callsBefore = toast.error.mock.calls.length;
+
+    await editAndBlurProduct(row, 'Changed');
+
+    expect(onUpdateRow).toHaveBeenCalledTimes(1);
+    expect(toast.error.mock.calls.length).toBe(callsBefore);
+  });
+
+  it('toasts err.message when onUpdateRow rejects WITHOUT the userNotified marker', async () => {
+    const { toast } = await import('sonner');
+    const onUpdateRow = vi.fn().mockRejectedValue(new Error('plain network error'));
+    renderPanel({ onUpdateRow });
+    const row = screen.getByTestId('line-row-L1');
+
+    await editAndBlurProduct(row, 'Changed');
+
+    expect(onUpdateRow).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenLastCalledWith('plain network error');
+  });
+
+  it('falls back to the generic networkError key when the unmarked rejection has no message', async () => {
+    const { toast } = await import('sonner');
+    const onUpdateRow = vi.fn().mockRejectedValue(Object.assign(new Error(), { message: '' }));
+    renderPanel({ onUpdateRow });
+    const row = screen.getByTestId('line-row-L1');
+
+    await editAndBlurProduct(row, 'Changed');
+
+    expect(toast.error).toHaveBeenLastCalledWith('networkError');
+  });
+});

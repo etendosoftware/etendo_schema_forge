@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { captureScreenshot } from '../helpers/captureScreenshot.js';
 import { login } from '../helpers/auth.js';
 
 /**
@@ -89,7 +90,7 @@ test.describe('Company User Invitations — ETP-4894', () => {
     await expect(toast).toContainText('Usuario creado. Invitación enviada por correo.');
     await expect(toast.getByRole('button', { name: 'Configurar roles' })).toBeVisible();
 
-    await page.screenshot({
+    await captureScreenshot(page, {
       path: '../artifacts/delivery-evidence/ETP-4894/ETP-4894-user-invitation-pending.png',
       fullPage: true,
     });
@@ -144,7 +145,7 @@ test.describe('Company User Invitations — ETP-4894', () => {
     await expect(page.locator('#login-email')).toHaveValue('existing.employee@example.com');
     await expect(page.locator('#login-email')).toBeDisabled();
 
-    await page.screenshot({
+    await captureScreenshot(page, {
       path: '../artifacts/delivery-evidence/ETP-4894/ETP-4894-invitation-existing-login.png',
       fullPage: true,
     });
@@ -153,7 +154,7 @@ test.describe('Company User Invitations — ETP-4894', () => {
     await page.getByTestId('action-login-submit').click();
     await expect(page.getByTestId('invite-authenticated-step')).toBeVisible();
 
-    await page.screenshot({
+    await captureScreenshot(page, {
       path: '../artifacts/delivery-evidence/ETP-4894/ETP-4894-invitation-authenticated.png',
       fullPage: true,
     });
@@ -165,7 +166,7 @@ test.describe('Company User Invitations — ETP-4894', () => {
     await expect(page.getByTestId('invite-success-icon')).toBeVisible();
     expect(acceptRequested).toBe(true);
 
-    await page.screenshot({
+    await captureScreenshot(page, {
       path: '../artifacts/delivery-evidence/ETP-4894/ETP-4894-invitation-existing-account.png',
       fullPage: true,
     });
@@ -218,7 +219,7 @@ test.describe('Company User Invitations — ETP-4894', () => {
     await page.locator('#reg-name').fill('New Member');
     await page.locator('#reg-password').fill('Strong.Member.Password1!');
 
-    await page.screenshot({
+    await captureScreenshot(page, {
       path: '../artifacts/delivery-evidence/ETP-4894/ETP-4894-invitation-new-account-registration.png',
       fullPage: true,
     });
@@ -235,7 +236,7 @@ test.describe('Company User Invitations — ETP-4894', () => {
       password: 'Strong.Member.Password1!',
     });
 
-    await page.screenshot({
+    await captureScreenshot(page, {
       path: '../artifacts/delivery-evidence/ETP-4894/ETP-4894-invitation-new-account.png',
       fullPage: true,
     });
@@ -260,7 +261,7 @@ test.describe('Company User Invitations — ETP-4894', () => {
     await expect(page.getByTestId('action-error-sign-in')).toBeVisible();
     await expect(page.getByText('Enlace inválido o caducado')).toBeVisible();
 
-    await page.screenshot({
+    await captureScreenshot(page, {
       path: '../artifacts/delivery-evidence/ETP-4894/ETP-4894-invitation-expired.png',
       fullPage: true,
     });
@@ -282,7 +283,7 @@ test.describe('Company User Invitations — ETP-4894', () => {
     await expect(page.getByTestId('invite-loading')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('Etendo Go', { exact: true })).toBeVisible();
 
-    await page.screenshot({
+    await captureScreenshot(page, {
       path: '../artifacts/delivery-evidence/ETP-4894/ETP-4894-invitation-loading.png',
       fullPage: true,
     });
@@ -306,7 +307,7 @@ test.describe('Company User Invitations — ETP-4894', () => {
     await expect(page.getByTestId('invite-success-state')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByTestId('action-go-to-app')).toBeVisible();
 
-    await page.screenshot({
+    await captureScreenshot(page, {
       path: '../artifacts/delivery-evidence/ETP-4894/ETP-4894-invitation-already-accepted.png',
       fullPage: true,
     });
@@ -348,7 +349,7 @@ test.describe('Company User Invitations — ETP-4894', () => {
     await page.getByTestId('action-accept-invitation').click();
     await expect(page.getByTestId('invite-action-error')).toBeVisible({ timeout: 10_000 });
 
-    await page.screenshot({
+    await captureScreenshot(page, {
       path: '../artifacts/delivery-evidence/ETP-4894/ETP-4894-invitation-accept-error.png',
       fullPage: true,
     });

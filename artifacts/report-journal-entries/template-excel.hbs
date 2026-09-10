@@ -27,6 +27,7 @@
       <th>{{meta.labels.bPartnerId}}</th>
       <th>{{meta.labels.productId}}</th>
       <th>{{meta.labels.projectId}}</th>
+      <th>{{meta.labels.costCenterId}}</th>
       {{/ifCond}}
       {{#ifCond meta.params.showEntryDescription '===' 'true'}}
       <th>{{meta.labels.entry_description}}</th>
@@ -37,7 +38,7 @@
       <tr>
         <td>{{lookup this 'entry_no'}}</td>
         <td>{{formatDate (lookup this 'dateacct')}}</td>
-        <td>{{lookup this 'document_type'}}</td>
+        <td>{{translateDocType (lookup this 'docbasetype') (lookup this 'isreturn') (lookup this 'document_type') @root.meta.locale}}</td>
         <td>{{lookup this 'account_no'}}</td>
         <td>{{lookup this 'account_name'}}</td>
         <td data-cell-type="number">{{lookup this 'amtacctdr'}}</td>
@@ -46,6 +47,7 @@
         <td>{{lookup this 'bpname'}}</td>
         <td>{{lookup this 'productname'}}</td>
         <td>{{lookup this 'projectname'}}</td>
+        <td>{{lookup this 'costcentername'}}</td>
         {{/ifCond}}
         {{#ifCond @root.meta.params.showEntryDescription '===' 'true'}}
         <td>{{lookup this 'entry_description'}}</td>

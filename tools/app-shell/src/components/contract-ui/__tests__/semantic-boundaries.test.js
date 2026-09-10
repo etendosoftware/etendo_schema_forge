@@ -25,6 +25,10 @@ describe('generic contract UI semantic boundaries (ETP-4554)', () => {
     // border-border-subtle tokens that also appear in these files.
     assert.match(sources[0], /border-border(?!-)/);
     assert.match(sources[1], /border-border(?!-)/);
-    assert.match(sources[2], /border-border(?!-)/);
+    // BalanceFooterPanel (sources[2]) intentionally has no divider of its own
+    // any more: ETP-4917 removed the difference/balanced-badge row it used to
+    // separate from the debit/credit totals above (that check still runs via
+    // `computeBalance` for Save/Complete blocking, it's just not rendered).
+    // With only two peer total rows left, there is nothing left to divide.
   });
 });

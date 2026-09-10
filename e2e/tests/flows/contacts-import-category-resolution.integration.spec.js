@@ -33,6 +33,13 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     const evidenceDir = resolve(import.meta.dirname, '../../../artifacts/delivery-evidence/ETP-4905');
     mkdirSync(evidenceDir, { recursive: true });
     const unique = Date.now();
+    // The import dedupes on taxID (artifacts/contacts/decisions.json -> window.import.dedupe.key),
+    // so a hardcoded CIF makes this spec pass exactly ONCE per environment: the first run creates
+    // those business partners, and every later run sees all five rows as "Omitida" (skipped),
+    // leaving the dialog on "Importar 0" with the button disabled. Derive the tax IDs from
+    // `unique` like every other identifying value here, keeping the last digit distinct per row
+    // so they are not in-file duplicates either.
+    const taxId = (index) => `B${String(unique).slice(-7)}${index}`;
     const newCategoryName = `E2E Contact Category ${unique}`;
     const rows = [
       { name: `E2E Contact Code ${unique}`, first: `Lucia${unique}`, last: 'Code', categoryMode: 'code' },
@@ -87,11 +94,11 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
         // and "nombre" now maps to the commercial name so the person's first name has its own
         // header. The single cell still resolves by exact code first, then by name.
         'nombre comercial,nombre de pila,apellido,email,telefono,web,cif/nif,direccion,ciudad,codigo postal,pais,region,categoria,email de contacto',
-        [rows[0].name, rows[0].first, rows[0].last, `e2e-company-${unique}@example.com`, '+34 910 000 001', `https://e2e-${unique}.example`, 'B12345678', 'Calle Mayor 1', 'Madrid', '28013', 'Spain', 'Madrid', existingCategoryCode, `e2e-contact-code-${unique}@example.com`].join(','),
-        [rows[1].name, rows[1].first, rows[1].last, `e2e-company-name-${unique}@example.com`, '+34 910 000 002', `https://name-${unique}.example`, 'B12345679', '', '', '', '', '', String(existingCategoryName).toLowerCase(), `e2e-contact-name-${unique}@example.com`].join(','),
-        [rows[2].name, rows[2].first, rows[2].last, `e2e-company-new-one-${unique}@example.com`, '+34 910 000 003', `https://new-one-${unique}.example`, 'B12345680', '', '', '', '', '', newCategoryName, `e2e-contact-new-one-${unique}@example.com`].join(','),
-        [rows[3].name, rows[3].first, rows[3].last, `e2e-company-new-two-${unique}@example.com`, '+34 910 000 004', `https://new-two-${unique}.example`, 'B12345681', '', '', '', '', '', newCategoryName, `e2e-contact-new-two-${unique}@example.com`].join(','),
-        [rows[4].name, rows[4].first, rows[4].last, `e2e-company-legacy-${unique}@example.com`, '+34 910 000 005', `https://legacy-${unique}.example`, 'B12345682', '', '', '', '', '', existingCategoryName, `e2e-contact-legacy-${unique}@example.com`].join(','),
+        [rows[0].name, rows[0].first, rows[0].last, `e2e-company-${unique}@example.com`, '+34 910 000 001', `https://e2e-${unique}.example`, taxId(0), 'Calle Mayor 1', 'Madrid', '28013', 'Spain', 'Madrid', existingCategoryCode, `e2e-contact-code-${unique}@example.com`].join(','),
+        [rows[1].name, rows[1].first, rows[1].last, `e2e-company-name-${unique}@example.com`, '+34 910 000 002', `https://name-${unique}.example`, taxId(1), '', '', '', '', '', String(existingCategoryName).toLowerCase(), `e2e-contact-name-${unique}@example.com`].join(','),
+        [rows[2].name, rows[2].first, rows[2].last, `e2e-company-new-one-${unique}@example.com`, '+34 910 000 003', `https://new-one-${unique}.example`, taxId(2), '', '', '', '', '', newCategoryName, `e2e-contact-new-one-${unique}@example.com`].join(','),
+        [rows[3].name, rows[3].first, rows[3].last, `e2e-company-new-two-${unique}@example.com`, '+34 910 000 004', `https://new-two-${unique}.example`, taxId(3), '', '', '', '', '', newCategoryName, `e2e-contact-new-two-${unique}@example.com`].join(','),
+        [rows[4].name, rows[4].first, rows[4].last, `e2e-company-legacy-${unique}@example.com`, '+34 910 000 005', `https://legacy-${unique}.example`, taxId(4), '', '', '', '', '', existingCategoryName, `e2e-contact-legacy-${unique}@example.com`].join(','),
       ].join('\n')),
     });
 
@@ -136,7 +143,7 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     await expect(page.getByTestId('field-etgoEmail')).toHaveValue(`e2e-company-${unique}@example.com`);
     await expect(page.getByTestId('field-etgoPhone')).toHaveValue('+34 910 000 001');
     await expect(page.getByTestId('field-etgoWeb')).toHaveValue(`https://e2e-${unique}.example`);
-    await expect(page.getByTestId('field-taxID')).toHaveValue('B12345678');
+    await expect(page.getByTestId('field-taxID')).toHaveValue(taxId(0));
     await page.getByTestId('tab-locationAddress').click();
     await expect(page.getByText('Madrid, Calle Mayor 1', { exact: true })).toBeVisible({ timeout: 15_000 });
     await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-tomcat-detail.png'), fullPage: true });

@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
  * Drives the generic transactional batch endpoint.
  *
@@ -17,6 +18,7 @@ import { useCallback, useMemo, useState } from 'react';
 export function useBatch({ apiBaseUrl, token }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const apiFetch = useApiFetch('');
 
   // The /batch endpoint lives at the NEO root, not under any spec. apiBaseUrl
   // points at the *host* spec (e.g. /sws/neo/purchase-invoice) so we strip
@@ -30,12 +32,9 @@ export function useBatch({ apiBaseUrl, token }) {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch(batchUrl, {
+      const res = await apiFetch(batchUrl, {
+        baseUrl: '',
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ operations }),
       });
       const text = await res.text().catch(() => '');
@@ -61,7 +60,7 @@ export function useBatch({ apiBaseUrl, token }) {
     } finally {
       setLoading(false);
     }
-  }, [batchUrl, token]);
+  }, [batchUrl, apiFetch]);
 
   return { runBatch, loading, error };
 }

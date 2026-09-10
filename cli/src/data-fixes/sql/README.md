@@ -66,7 +66,26 @@ physical-inventory correction first).
 2. **Two-layer idempotency.** `@check` decides whether to run at all; `@apply`
    is ALSO defensively guarded (`WHERE NOT EXISTS`) so partial/concurrent state
    is safe.
-3. **Applied fixes are immutable.** Never rename or edit an applied `.sql`.
+3. **Applied fixes are immutable.** Never rename or edit an applied `.sql`. A fix that becomes
+   superseded (e.g. by a later fix covering the same ground more completely) is never edited or
+   deleted either — it is **retired** instead via `../retired.json` (`fixId` + sha256 checksum of
+   the file's live bytes), which makes the runner skip it entirely on every future run. See
+   `../../../.claude/agents/tenant-fixer.md` § Retirement for the mechanism.
+
+## Fixes that target the System pseudo-tenant (`--client 0`)
+
+The default tenant universe excludes `ad_client_id = '0'` (see `../run.js`), so a
+normal fix never touches System-owned rows. A fix whose subject IS genuinely
+System-owned data (e.g. a shared/global `C_Tax` row with `ad_client_id = '0'`,
+used by every tenant) may legitimately set its scope filter to `ad_client_id =
+:client_id` and be run explicitly with `--fix <id> --client 0`. This still
+satisfies rule 1 above literally — the anchor table's `ad_client_id` really is
+`'0'` — and the exclusion from the default sweep becomes a deliberate safety gate:
+the fix only runs when an operator names it. `@check` must still independently
+re-verify, from live DB state (not from run ordering), that it is actually safe to
+act — see `20260904T130000Z__R34-tax-sif-config-clear-system.sql` for a worked
+example (it nulls a shared System field only once every tenant that needs it has
+already been given its own per-org override by its sibling fix).
 
 ## Apply-time placeholders
 

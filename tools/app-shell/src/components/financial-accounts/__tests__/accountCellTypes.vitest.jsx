@@ -60,7 +60,10 @@ const UI = (key, params = {}) => {
 describe('ACCOUNT_CELL_TYPES — registry shape', () => {
   it('exposes exactly the cellTypes the Cuentas list can bind', () => {
     expect(Object.keys(ACCOUNT_CELL_TYPES).sort()).toEqual([
-      'accountBalance', 'accountCountry', 'accountName', 'accountType', 'reconcilePill',
+      'accountBalance', 'accountCountry', 'accountName', 'accountType',
+      // ETP-5113 — the Moneda column's ISO chip.
+      'currencyChip',
+      'reconcilePill',
     ]);
   });
 
@@ -138,6 +141,32 @@ describe('ACCOUNT_CELL_TYPES — accountCountry', () => {
   });
 });
 
+// ETP-5113 — the "Moneda" column. The chip is the shared `Tag` primitive, which renders a
+// plain <span> and forwards no data-testid, so it is asserted through the cell's text.
+describe('ACCOUNT_CELL_TYPES — currencyChip', () => {
+  it('renders the account ISO code', () => {
+    renderCell('currencyChip');
+
+    expect(screen.getByTestId('cell')).toHaveTextContent('EUR');
+  });
+
+  it('renders whatever code the row carries', () => {
+    renderCell('currencyChip', { ...ACCOUNT, currencyIso: 'USD' });
+
+    expect(screen.getByTestId('cell')).toHaveTextContent('USD');
+  });
+
+  it('renders an em dash for an account served without a currency', () => {
+    renderCell('currencyChip', { ...ACCOUNT, currencyIso: '' });
+
+    expect(screen.getByTestId('cell')).toHaveTextContent('—');
+  });
+
+  it('needs no context — the currency cell reads everything off the row', () => {
+    expect(() => renderCell('currencyChip', ACCOUNT, {})).not.toThrow();
+  });
+});
+
 describe('ACCOUNT_CELL_TYPES — accountBalance', () => {
   it('renders the currency-formatted balance', () => {
     renderCell('accountBalance');
@@ -201,6 +230,10 @@ describe('resolveCellType', () => {
     expect(resolveCellType({ name: 'type', cellType: 'accountType' })).toBe('accountType');
     expect(resolveCellType({ name: 'currentBalance', cellType: 'accountBalance' }))
       .toBe('accountBalance');
+    // The Moneda column is declared on the `currency` FK field but painted from the
+    // enriched `currencyIso` — the binding is still a plain cellType read.
+    expect(resolveCellType({ name: 'currency', cellType: 'currencyChip' }))
+      .toBe('currencyChip');
   });
 
   it('reads the pending column cellType off the contract like any other', () => {

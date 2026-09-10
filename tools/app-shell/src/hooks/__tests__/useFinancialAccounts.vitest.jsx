@@ -46,7 +46,7 @@ describe('useFinancialAccounts', () => {
     expect(result.current.error).toBeNull();
   });
 
-  it('calls the financial-accounts-page endpoint with the bearer token', async () => {
+  it('calls the financial-accounts-page endpoint', async () => {
     globalThis.fetch.mockResolvedValue(okResponse({ accounts: [], summary: {} }));
 
     renderHook(() => useFinancialAccounts());
@@ -55,9 +55,8 @@ describe('useFinancialAccounts', () => {
       expect(globalThis.fetch).toHaveBeenCalled();
     });
 
-    const [url, init] = globalThis.fetch.mock.calls[0];
+    const [url] = globalThis.fetch.mock.calls[0];
     expect(url).toContain('/sws/neo/financial-accounts-page');
-    expect(init.headers.Authorization).toBe('Bearer test-token');
   });
 
   it('captures the error and keeps accounts empty on HTTP failure', async () => {

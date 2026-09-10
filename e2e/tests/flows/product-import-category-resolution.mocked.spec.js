@@ -200,15 +200,33 @@ test('keeps invalid rows out of the batch and allows valid rows to continue', as
   });
 
   await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('4/4');
+
+  // The two invalid rows fail at DIFFERENT stages, and ETP-4996 is what moved the first one.
+  // BAD-PRICE-4905 is caught during REVIEW: `isNumeric` on the price column makes validateRow
+  // reject "not-a-number" before anything is sent. It used to be counted as importable and
+  // only failed inside buildOperations, once the user had already confirmed.
+  const errorFilter = page.getByTestId('ImportReviewQueue__statusFilter-error');
+  await expect(errorFilter).toContainText('1');
+  await errorFilter.click();
+  // A FIELD error, not a row-level one: validateRow reports it against the salesPrice target,
+  // so it renders on that cell. Row-level (`rowError-N`) is reserved for errors with no target,
+  // which is what the post-send failures below are.
+  await expect(page.getByTestId('ImportReviewQueue__fieldError-0-salesPrice'))
+    .toContainText(/precio|price|number|número/i);
+  await page.getByTestId('ImportReviewQueue__statusFilter-ok').click();
+
   await page.getByTestId('ImportDialog__importButton').click();
   await expect(page.getByTestId('ImportConfirmStep__confirm')).toBeVisible();
-  await expect(page.getByTestId('ImportConfirmStep__importCount')).toContainText('3');
+  // Two, not three — the invalid price never enters the batch.
+  await expect(page.getByTestId('ImportConfirmStep__importCount')).toContainText('2');
   await page.getByTestId('ImportConfirmStep__confirm').click();
-  const errorFilter = page.getByTestId('ImportReviewQueue__statusFilter-error');
-  await expect(errorFilter).toContainText('2');
+
+  // AMBIG-4905 still needs the send to fail: its category carries no matchEntity, so it is
+  // only resolved server-side. The review queue is rebuilt from the send results here, so
+  // this count covers the sent rows alone — BAD-PRICE-4905 was already reported above.
+  await expect(errorFilter).toContainText('1');
   await errorFilter.click();
-  await expect(page.getByTestId('ImportReviewQueue__rowError-0')).toContainText(/precio|price|number|número/i);
-  await expect(page.getByTestId('ImportReviewQueue__rowError-1')).toContainText(/múltiple|multiple|match|coincid/i);
+  await expect(page.getByTestId('ImportReviewQueue__rowError-0')).toContainText(/múltiple|multiple|match|coincid/i);
   await captureScreenshot(page, {
     path: resolve(evidenceDir, 'ETP-4905-product-import-corner-errors.png'),
     fullPage: true,

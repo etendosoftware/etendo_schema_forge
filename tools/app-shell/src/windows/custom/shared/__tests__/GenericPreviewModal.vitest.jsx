@@ -69,6 +69,49 @@ describe('GenericPreviewModal actionButtons', () => {
     expect(screen.getByText('Action')).toBeInTheDocument();
   });
 
+  it('closes instead of freezing when triggerEdit runs without an onEdit prop', async () => {
+    vi.useFakeTimers();
+    const onClose = vi.fn();
+    let helpers = null;
+    render(
+      <GenericPreviewModal
+        title="Test Title"
+        onClose={onClose}
+        actionButtons={(h) => { helpers = h; return <button>Action</button>; }}
+      />,
+    );
+
+    helpers.triggerEdit();
+    await vi.advanceTimersByTimeAsync(300);
+
+    // Without the fallback the modal animates out but never unmounts,
+    // leaving an invisible overlay blocking the page (ETP-5027).
+    expect(onClose).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it('calls onEdit when supplied', async () => {
+    vi.useFakeTimers();
+    const onEdit = vi.fn();
+    const onClose = vi.fn();
+    let helpers = null;
+    render(
+      <GenericPreviewModal
+        title="Test Title"
+        onClose={onClose}
+        onEdit={onEdit}
+        actionButtons={(h) => { helpers = h; return <button>Action</button>; }}
+      />,
+    );
+
+    helpers.triggerEdit();
+    await vi.advanceTimersByTimeAsync(300);
+
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
   it('renders static ReactNode actionButtons unchanged', () => {
     render(
       <GenericPreviewModal

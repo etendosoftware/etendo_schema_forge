@@ -114,6 +114,35 @@ describe('StatementsToolbar', () => {
     expect(screen.getByTestId('status-filter')).toHaveAttribute('data-value', 'PARTIAL');
   });
 
+  // The imported-statements tab draws its own toolbar, so it never picked up ListView's
+  // generic refresh button — RefreshButton reproduces it and is wired to the tab's reload.
+  it('renders the refresh button with an i18n accessible name', () => {
+    renderToolbar({ onRefresh: vi.fn() });
+    const button = screen.getByTestId('finance-refresh-button');
+    expect(button).toBeInTheDocument();
+    expect(button).toHaveAttribute('aria-label', 'refresh');
+    expect(button).toHaveAttribute('title', 'refresh');
+  });
+
+  it('emits onRefresh when the refresh button is clicked', async () => {
+    const user = userEvent.setup();
+    const onRefresh = vi.fn();
+    renderToolbar({ onRefresh });
+    await user.click(screen.getByTestId('finance-refresh-button'));
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the refresh button after the sort control', () => {
+    renderToolbar({
+      onRefresh: vi.fn(),
+      sortControl: <button type="button" data-testid="sort-control">sort</button>,
+    });
+    const sort = screen.getByTestId('sort-control');
+    const refresh = screen.getByTestId('finance-refresh-button');
+    // Node.DOCUMENT_POSITION_FOLLOWING === 4
+    expect(sort.compareDocumentPosition(refresh) & 4).toBeTruthy();
+  });
+
   it('keeps the "Create manually" menu closed until the split arrow is clicked', () => {
     renderToolbar({ onManualClick: vi.fn() });
     expect(screen.queryByTestId('statements-manual-create')).not.toBeInTheDocument();

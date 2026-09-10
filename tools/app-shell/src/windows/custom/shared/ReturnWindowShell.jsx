@@ -6,6 +6,7 @@ import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { useRowEmailModal } from './useRowEmailModal.jsx';
 
+import { buildHeaders } from '@/auth/api.js';
 export default function ReturnWindowShell({
   windowName, recordId, apiBaseUrl, token,
   PageComponent,
@@ -29,10 +30,7 @@ export default function ReturnWindowShell({
   const [refreshKey, setRefreshKey] = useState(0);
   const [cloneTargets, setCloneTargets] = useState(null);
 
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => (buildHeaders(token)), [token]);
 
   const { requestDelete, deleteDialog } = useRowDelete({
     apiBaseUrl,

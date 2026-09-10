@@ -87,7 +87,7 @@ describe('documentDateField prop (source-reading)', () => {
   it('the saved-state currency-sync effect dependency array includes the dynamic date and documentDateField itself', () => {
     assert.match(
       src,
-      /\[recordId, hook\.selected\?\.currency, hook\.selected\?\.eTGOCurrencyRate, hook\.selected\?\.\[documentDateField\], apiBaseUrl, token, documentDateField\]/,
+      /\[recordId, hook\.selected\?\.currency, hook\.selected\?\.eTGOCurrencyRate, hook\.selected\?\.\[documentDateField\], apiBaseUrl, token, documentDateField, apiFetch\]/,
     );
   });
 
@@ -101,7 +101,7 @@ describe('documentDateField prop (source-reading)', () => {
   it('the currency-change validator callback dependency array includes documentDateField', () => {
     assert.match(
       src,
-      /\[hook\.handleChange, hook\.editing, hook\.selected, executeCallout, apiBaseUrl, token, ui, documentDateField\]/,
+      /\[hook\.handleChange, hook\.editing, hook\.selected, executeCallout, apiBaseUrl, token, ui, documentDateField, apiFetch\]/,
     );
   });
 

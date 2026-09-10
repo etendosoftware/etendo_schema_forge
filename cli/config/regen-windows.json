@@ -211,6 +211,11 @@
       "name": "end-year-close",
       "windowId": "B5673F73F613496C8BEA22FB55E4E1E4",
       "menuName": "End Year Close"
+    },
+    {
+      "name": "matched-purchase-invoices",
+      "windowId": "107",
+      "menuName": "Matched Purchase Invoices"
     }
   ]
 }

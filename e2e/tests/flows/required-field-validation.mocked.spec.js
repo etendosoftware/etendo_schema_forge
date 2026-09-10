@@ -140,9 +140,15 @@ test.describe('Required-field validation — /sales-quotation/new (ETP-3894)', (
     const bpWrapper = page.getByTestId('field-businessPartner');
     await expect(bpWrapper).toBeVisible({ timeout: MOUNT_TIMEOUT });
 
+    // Match the CREATE endpoint exactly — `.../quotation`, optional query, nothing after it.
+    // A substring match also caught `POST .../quotation/callout` (useCallout posts to
+    // `/{entity}/callout`), so any callout firing inside the assertion window read as "the record
+    // was POSTed" and failed the test under CI timing while passing locally. The guard under test
+    // is unchanged: the record-creating POST must never be sent.
+    const CREATE_RECORD_POST = /\/sws\/neo\/sales-quotation\/quotation(?:\?.*)?$/;
     let postSent = false;
     page.on('request', (r) => {
-      if (r.url().includes('/sws/neo/sales-quotation/quotation') && r.method() === 'POST') postSent = true;
+      if (CREATE_RECORD_POST.test(r.url()) && r.method() === 'POST') postSent = true;
     });
 
     const saveDraftBtn = page.getByTestId('action-save-draft');

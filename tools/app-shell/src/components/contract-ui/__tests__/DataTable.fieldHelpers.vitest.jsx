@@ -53,7 +53,52 @@ vi.mock('@/components/ui/badge', () => ({ Badge: () => null }));
 vi.mock('@/components/ui/skeleton', () => ({ Skeleton: () => null }));
 vi.mock('@/components/ui/switch', () => ({ Switch: () => null }));
 
-const { applyOnSelectMappings, buildDisplayCatalogMaps } = await import('../DataTable.jsx');
+const { applyOnSelectMappings, resolveOnSelectMappings, buildDisplayCatalogMaps } = await import('../DataTable.jsx');
+
+// ETP-5037 (Goods Movements, DEV 5): a `value` mapping forces a fixed literal onto the target
+// field regardless of what the selected item carries — used to zero Cantidad on product
+// selection, overriding the classic SL_Movement_Product callout's own on-hand-quantity default.
+describe('resolveOnSelectMappings — value (literal) mappings', () => {
+  it('resolves a fixed value without reading the item', () => {
+    const field = { onSelectMappings: [{ value: '0', to: 'movementQuantity' }] };
+    const results = resolveOnSelectMappings(field, { id: 'P1' });
+    expect(results).toEqual([{ to: 'movementQuantity', value: '0', label: undefined }]);
+  });
+
+  it('applyOnSelectMappings writes the literal via handleChange and marks it touched', () => {
+    const handleChange = vi.fn();
+    const markTouched = vi.fn();
+    const field = { onSelectMappings: [{ value: '0', to: 'movementQuantity' }] };
+    applyOnSelectMappings(field, { id: 'P1' }, handleChange, markTouched);
+    expect(handleChange).toHaveBeenCalledWith('movementQuantity$_identifier', '0');
+    expect(handleChange).toHaveBeenCalledWith('movementQuantity', '0');
+    expect(markTouched).toHaveBeenCalledWith('movementQuantity');
+  });
+
+  it('combines a from-mapping and a value-mapping on the same field independently', () => {
+    const handleChange = vi.fn();
+    const field = {
+      onSelectMappings: [
+        { from: '_aux._LOC', to: 'storageBin' },
+        { value: '0', to: 'movementQuantity' },
+      ],
+    };
+    applyOnSelectMappings(field, { id: 'P1', _aux: { _LOC: 'LOC-1' } }, handleChange);
+    expect(handleChange).toHaveBeenCalledWith('storageBin', 'LOC-1');
+    expect(handleChange).toHaveBeenCalledWith('movementQuantity', '0');
+  });
+
+  it('value mapping still resolves a label via labelFrom when present', () => {
+    const field = { onSelectMappings: [{ value: '0', to: 'movementQuantity', labelFrom: 'unit' }] };
+    const results = resolveOnSelectMappings(field, { unit: 'Unidad' });
+    expect(results[0].label).toBe('Unidad');
+  });
+
+  it('a mapping with neither from nor value is ignored', () => {
+    const field = { onSelectMappings: [{ to: 'movementQuantity' }] };
+    expect(resolveOnSelectMappings(field, { id: 'P1' })).toEqual([]);
+  });
+});
 
 describe('applyOnSelectMappings', () => {
   it('is a no-op when field has no onSelectMappings', () => {
@@ -120,6 +165,47 @@ describe('applyOnSelectMappings', () => {
     const handleChange = vi.fn();
     applyOnSelectMappings({ onSelectMappings: [{ to: 'X' }, { from: 'a' }, null] }, { a: 1 }, handleChange);
     expect(handleChange).not.toHaveBeenCalled();
+  });
+
+  // ETP-5039 — markTouched reports mapped targets so applyCalloutUpdates can
+  // protect the label/value the user picked from a parallel callout race.
+  it('calls markTouched once per mapping target, not for the $_identifier key', () => {
+    const handleChange = vi.fn();
+    const markTouched = vi.fn();
+    const field = {
+      onSelectMappings: [
+        { from: 'a', to: 'X' },
+        { from: 'b', to: 'Y' },
+      ],
+    };
+    applyOnSelectMappings(field, { a: 1, b: 2 }, handleChange, markTouched);
+    expect(markTouched).toHaveBeenCalledTimes(2);
+    expect(markTouched).toHaveBeenCalledWith('X');
+    expect(markTouched).toHaveBeenCalledWith('Y');
+    expect(markTouched).not.toHaveBeenCalledWith('X$_identifier');
+    expect(markTouched).not.toHaveBeenCalledWith('Y$_identifier');
+  });
+
+  it('does not throw when markTouched is omitted (backwards compatible 3-arg call)', () => {
+    const handleChange = vi.fn();
+    const field = { onSelectMappings: [{ from: 'a', to: 'X' }] };
+    expect(() => applyOnSelectMappings(field, { a: 1 }, handleChange)).not.toThrow();
+    expect(handleChange).toHaveBeenCalledWith('X', 1);
+  });
+
+  it('does not call markTouched for a mapping that is skipped', () => {
+    const handleChange = vi.fn();
+    const markTouched = vi.fn();
+    const field = {
+      onSelectMappings: [
+        { to: 'X' },                          // missing from
+        { from: 'a' },                        // missing to
+        null,                                 // malformed
+        { from: 'missing', to: 'Y' },         // resolves to null
+      ],
+    };
+    applyOnSelectMappings(field, { a: 1 }, handleChange, markTouched);
+    expect(markTouched).not.toHaveBeenCalled();
   });
 });
 

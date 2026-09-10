@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { TriangleAlert, ArrowUpRight } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { neutralizeSpreadsheetCell } from '../../../../../../templates/reports/helpers/report-html-helpers.js';
 
 export const ERROR_STATUSES = new Set([
   'IN', 'EE', 'AE',                            // SII
@@ -37,6 +38,8 @@ const STATUS_CONFIG = {
   partiallyAccepted:  { cls: 'warn',    labelKey: 'fiscalMonitor.status.vf.partiallyAccepted' },
   rejected:           { cls: 'danger',  labelKey: 'fiscalMonitor.status.vf.rejected' },
   invalid:            { cls: 'danger',  labelKey: 'fiscalMonitor.status.vf.invalid' },
+  // Namespaced so it does not collide with the SII 'PE' raw code above.
+  vf_pending:         { cls: 'pending', labelKey: 'fiscalMonitor.status.vf.pending' },
 };
 
 export const StatusPill = ({ estado, onClick, title: titleProp }) => {
@@ -167,14 +170,20 @@ export async function fetchCsvAndDownload(apiFetch, path, params, filename, colu
 /**
  * Builds a CSV from columnDefs + rows and triggers a browser file download.
  * Adds a UTF-8 BOM so Excel opens it correctly without encoding issues.
+ *
+ * Cells and header labels go through `neutralizeSpreadsheetCell` (ETP-5032): these
+ * exports carry AEAT-returned free text (error reasons, `descripcionOperacion`, invoice
+ * descriptions), so a value starting with a formula trigger would evaluate in the
+ * recipient's spreadsheet (CWE-1236, ADR-0004). Only the POLICY is shared — the
+ * always-quote style, the LF line ending and the BOM are this path's own observable
+ * format and stay exactly as they were, because ADR-0004 D4 keeps presentation changes
+ * out of a security fix.
  */
 export function buildCsvAndDownload(filename, columnDefs, rows) {
-  const header = columnDefs.map(c => `"${c.label}"`).join(',');
+  const cell = (value) => `"${neutralizeSpreadsheetCell(value).replace(/"/g, '""')}"`;
+  const header = columnDefs.map(c => cell(c.label)).join(',');
   const body = rows.map(row =>
-    columnDefs.map(c => {
-      const val = c.get(row) ?? '';
-      return `"${String(val).replace(/"/g, '""')}"`;
-    }).join(',')
+    columnDefs.map(c => cell(c.get(row) ?? '')).join(',')
   );
   const csv = '﻿' + [header, ...body].join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -186,6 +195,18 @@ export function buildCsvAndDownload(filename, columnDefs, rows) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * ETP-5030 — selected-row tint. The single source of truth for the actual
+ * colour is the `.fm-row--selected` rule in fiscal-monitor.css (these tables
+ * paint their backgrounds on the CELLS, so a Tailwind `bg-primary/5` on the
+ * <tr> would be covered by `tr:hover td` at exactly the moment the user
+ * clicks the checkbox). This helper only computes the class name shared by
+ * the three monitor sections (SII, TBAI, Verifactu).
+ */
+export function selectedRowClassName(selectedIds, id) {
+  return selectedIds.has(id) ? 'fm-row--selected' : undefined;
 }
 
 export const WipBadge = ({ inline = false }) => {

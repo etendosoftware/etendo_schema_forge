@@ -119,8 +119,14 @@ describe('InlineLinesPanel', () => {
 
   it('lifts the row with a shadow on hover and while editing', () => {
     // Hover state: shadow + raised z-index so the shadow is not clipped by adjacent rows.
+    // Match the class-array string literal, not a bare `hover:z-20` token: the
+    // previous `/hover:z-10/` assertion was satisfied only by the prose comment
+    // above the array, so it stayed green while the emitted class was z-20. The
+    // behavioural counterpart lives in InlineLinesPanel.rowSelection.vitest.jsx,
+    // which asserts the rendered row's classList.
     assert.match(src, /hover:shadow-\[/);
-    assert.match(src, /hover:z-10/);
+    assert.match(src, /'hover:relative hover:z-20 hover:shadow-\[/);
+    assert.doesNotMatch(src, /hover:z-10/);
     // Editing state preserves the same elevation so the actively edited row stays prominent.
     assert.match(src, /isEditing\s*\?\s*'shadow-\[[^']*\]\s+relative\s+z-20'/);
   });

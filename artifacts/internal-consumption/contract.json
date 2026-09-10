@@ -1,8 +1,8 @@
 {
-  "version": "0.14.0",
+  "version": "0.17.0",
   "generatedAt": "2026-06-26T00:48:58.290Z",
-  "updatedAt": "2026-07-24T12:56:46.892Z",
-  "checksum": "7c6e0d2e00c5047f",
+  "updatedAt": "2026-09-01T16:56:21.623Z",
+  "checksum": "ff782f46b2d85db9",
   "frontendContract": {
     "window": {
       "id": "800076",
@@ -19,6 +19,17 @@
         "bottomSection": "InternalConsumptionBottomPanel"
       },
       "statusField": "status",
+      "labelOverrides": {
+        "en_US": {
+          "M_Locator_ID": "Warehouse"
+        },
+        "es_ES": {
+          "M_Locator_ID": "Almacén"
+        },
+        "es_AR": {
+          "M_Locator_ID": "Almacén"
+        }
+      },
       "listViewOptions": {
         "hideStatusFilter": true
       },
@@ -228,9 +239,11 @@
             },
             "defaultValue": "0",
             "columnWidth": 160,
+            "min": 1,
             "validation": {
               "required": true,
-              "maxLength": 12
+              "maxLength": 12,
+              "minimum": 1
             }
           },
           {
@@ -264,7 +277,6 @@
             "sourceRequired": true,
             "reference": "Locator",
             "inputMode": "search",
-            "displayFromCatalog": true,
             "validation": {
               "required": true,
               "maxLength": 60
@@ -310,6 +322,17 @@
         "bottomSection": "InternalConsumptionBottomPanel"
       },
       "statusField": "status",
+      "labelOverrides": {
+        "en_US": {
+          "M_Locator_ID": "Warehouse"
+        },
+        "es_ES": {
+          "M_Locator_ID": "Almacén"
+        },
+        "es_AR": {
+          "M_Locator_ID": "Almacén"
+        }
+      },
       "listViewOptions": {
         "hideStatusFilter": true
       },
@@ -842,6 +865,17 @@
     },
     "window": {
       "category": "inventory"
+    },
+    "labelOverrides": {
+      "en_US": {
+        "M_Locator_ID": "Warehouse"
+      },
+      "es_ES": {
+        "M_Locator_ID": "Almacén"
+      },
+      "es_AR": {
+        "M_Locator_ID": "Almacén"
+      }
     }
   },
   "testManifest": {

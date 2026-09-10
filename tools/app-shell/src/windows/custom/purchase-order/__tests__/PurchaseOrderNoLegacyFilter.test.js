@@ -37,4 +37,10 @@ describe('PurchaseOrderWindow — legacy pendingDelivery filter removed (ETP-400
     assert.match(src, /windowAccessTier === 'read-only'/);
     assert.match(src, /window=\{effectiveWindow\}/);
   });
+
+  it('does not hardcode hidePrint on ListView (ETP-4728 — print restored)', () => {
+    assert.doesNotMatch(src, /hidePrint/,
+      'the bulk "Print (N)" grid button must not be hidden via listViewOptions — ' +
+      'ETP-4728 restored it for purchase-order, mirroring sales-order (ETP-4729)');
+  });
 });

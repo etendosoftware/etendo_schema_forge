@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { FileText, Check } from 'lucide-react';
@@ -7,6 +7,7 @@ import { formatCurrency } from '@/lib/formatCurrency';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /* eslint-disable react/prop-types */
 
 /**
@@ -38,17 +39,7 @@ export default function PurchaseOrderActions({
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [processing, setProcessing] = useState(false);
 
-  const base = useMemo(
-    () => (apiBaseUrl || '').replace(/\/[^/]+$/, ''),
-    [apiBaseUrl],
-  );
-  const headers = useMemo(
-    () => ({
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    }),
-    [token],
-  );
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   if (!data) return null;
 
@@ -70,9 +61,9 @@ export default function PurchaseOrderActions({
     if (processing) return;
     setProcessing(true);
     try {
-      const res = await fetch(
-        `${base}/purchase-order/header/${recordId}/action/rMCreateInvoice`,
-        { method: 'POST', headers, body: JSON.stringify({}) },
+      const res = await apiFetch(
+        `/header/${recordId}/action/rMCreateInvoice`,
+        { method: 'POST', body: JSON.stringify({}) },
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);
@@ -326,11 +317,7 @@ function ConfirmOrderModal({
   const [freshData, setFreshData] = useState(null);
   const [needsReload, setNeedsReload] = useState(false);
 
-  const orderUrl = `${apiBaseUrl}/header`;
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   // Fetch fresh record + line count on mount
   useEffect(() => {
@@ -338,8 +325,8 @@ function ConfirmOrderModal({
     (async () => {
       try {
         const [recRes, linesRes] = await Promise.all([
-          fetch(`${orderUrl}/${orderId}`, { headers }),
-          fetch(`${apiBaseUrl}/lines?parentId=${orderId}&_startRow=0&_endRow=999`, { headers }),
+          apiFetch(`/header/${orderId}`),
+          apiFetch(`/lines?parentId=${orderId}&_startRow=0&_endRow=999`),
         ]);
         if (cancelled) return;
         if (recRes.ok) {
@@ -354,7 +341,7 @@ function ConfirmOrderModal({
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [orderId, orderUrl, apiBaseUrl, headers]);
+  }, [orderId, apiFetch]);
 
   const d = freshData || data || {};
   const documentNo = d.documentNo || '';
@@ -375,9 +362,9 @@ function ConfirmOrderModal({
 
     try {
       // Step 1: Complete the order via documentAction=CO
-      const processRes = await fetch(
-        `${orderUrl}/${orderId}/action/documentAction`,
-        { method: 'POST', headers, body: JSON.stringify({ docAction: 'CO' }) },
+      const processRes = await apiFetch(
+        `/header/${orderId}/action/documentAction`,
+        { method: 'POST', body: JSON.stringify({ docAction: 'CO' }) },
       );
       if (!processRes.ok) {
         const err = await processRes.json().catch(() => null);
@@ -388,9 +375,9 @@ function ConfirmOrderModal({
 
       // Step 2: Create invoice if requested
       if (selected === 'invoice') {
-        const res = await fetch(
-          `${orderUrl}/${orderId}/action/rMCreateInvoice`,
-          { method: 'POST', headers, body: JSON.stringify({}) },
+        const res = await apiFetch(
+          `/header/${orderId}/action/rMCreateInvoice`,
+          { method: 'POST', body: JSON.stringify({}) },
         );
         if (!res.ok) {
           const err = await res.json().catch(() => null);

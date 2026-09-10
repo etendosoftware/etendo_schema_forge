@@ -9,7 +9,7 @@ const columns = [
   { key: 'payment', column: 'FIN_Payment_ID', type: 'selector', label: 'Payment' },
   { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: 'Currency' },
   { key: 'transactionType', column: 'Trxtype', type: 'enum', label: 'Transaction Type', enumLabels: { 'BPD': 'trxtypeBpd', 'BPW': 'trxtypeBpw', 'BF': 'trxtypeBf' } },
-  { key: 'gLItem', column: 'C_Glitem_ID', type: 'selector', label: 'G/L Item' },
+  { key: 'gLItem', column: 'C_Glitem_ID', type: 'selector', label: 'Accounting account' },
 ];
 // @sf-generated-end columns:clearedItems
 

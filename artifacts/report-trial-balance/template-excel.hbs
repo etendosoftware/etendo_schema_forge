@@ -1,9 +1,15 @@
-{{!-- Excel-only template (ETP-4898) — same one-row-per-account shape as template.hbs
-      (this report's HTML is already flat), just with numeric amount cells instead of
+{{!-- Excel-only template (ETP-4898) — same one-row-per-(account[, dimension])
+      shape `rows` already has after folding (this report's export is always
+      flat, even when template.hbs nests the HTML/PDF view into per-account
+      blocks — ETP-5013), just with numeric amount cells instead of
       formatCurrency text, so Excel can sum/pivot the columns.
       Amount cells use data-cell-type="number" with the RAW value (no formatCurrency) —
       html-to-xlsx does `parseFloat(cell.innerText)` for that type, so a formatted
-      amount would silently truncate at the thousands separator. Never format here. --}}
+      amount would silently truncate at the thousands separator. Never format here.
+      The dimension column (ETP-5013) only appears when "Agrupar por" picked
+      one — without it, a grouped export repeats the same account N times with
+      no way to tell which row belongs to which contact/product/etc. Ungrouped
+      exports are byte-for-byte unchanged from before this column existed. --}}
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8">
 <style>
@@ -17,6 +23,7 @@
     <thead><tr>
       <th>{{meta.labels.account_no}}</th>
       <th>{{meta.labels.account_name}}</th>
+      {{#if meta.dimensionField}}<th>{{meta.dimensionLabel}}</th>{{/if}}
       <th>{{meta.labels.opening_balance}}</th>
       <th>{{meta.labels.activity_debit}}</th>
       <th>{{meta.labels.activity_credit}}</th>
@@ -27,6 +34,7 @@
       <tr>
         <td>{{lookup this 'account_no'}}</td>
         <td>{{lookup this 'account_name'}}</td>
+        {{#if @root.meta.dimensionField}}<td>{{lookup this 'dimensionValue'}}</td>{{/if}}
         <td data-cell-type="number">{{lookup this 'opening_balance'}}</td>
         <td data-cell-type="number">{{lookup this 'activity_debit'}}</td>
         <td data-cell-type="number">{{lookup this 'activity_credit'}}</td>

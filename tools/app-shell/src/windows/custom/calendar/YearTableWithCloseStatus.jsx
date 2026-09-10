@@ -27,11 +27,11 @@ function rootApiBase(apiBaseUrl) {
 // inherently small and bounded (one row per calendar year, never paginated in practice), so
 // N small parallel requests is an acceptable tradeoff against the added complexity of a
 // dedicated bulk endpoint.
-function YearCloseStatusCell({ yearId, token, apiBaseUrl }) {
+function YearCloseStatusCell({ yearId, apiBaseUrl }) {
   const ui = useUI();
   // `undefined` = loading, `null` = the request failed — both render nothing (an auxiliary
   // column cell showing a wrong/misleading state is worse than briefly showing nothing).
-  const closed = useYearCloseStatus(yearId, token, apiBaseUrl);
+  const closed = useYearCloseStatus(yearId, apiBaseUrl);
 
   if (closed === undefined || closed === null) return null;
 
@@ -62,10 +62,9 @@ const columns = [
     label: 'Estado',
     labels: { es_ES: 'Estado', es_AR: 'Estado', en_US: 'Status' },
     sortable: false,
-    render: (row, { token, apiBaseUrl }) => (
+    render: (row, { apiBaseUrl }) => (
       <YearCloseStatusCell
         yearId={row.id}
-        token={token}
         apiBaseUrl={`${rootApiBase(apiBaseUrl)}/end-year-close`}
         data-testid="YearCloseStatusCell__413aee" />
     ),

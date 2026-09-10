@@ -97,6 +97,14 @@
   background: var(--fm-gray-900); color: hsl(var(--card));
   border-color: var(--fm-gray-900); font-weight: 600;
 }
+/* Overrides the generic .fm-toolbar__pill:hover (light background) — without this,
+   hovering an active-dark pill left white text on a near-white background (invisible).
+   Matches .fm-toolbar__btn--primary:hover so every dark actionable pill/button in the
+   fiscal-models toolbar shares one hover treatment. */
+.fm-toolbar__pill--active-dark:hover {
+  background: hsl(var(--accent-highlight)); border-color: hsl(var(--accent-highlight));
+  color: hsl(var(--accent-highlight-foreground));
+}
 .fm-toolbar__pill--active-blue {
   background: var(--fm-info-bg); color: var(--fm-info-fg);
   border-color: var(--fm-blue-200); font-weight: 600;
@@ -240,6 +248,25 @@
 .fm-table tbody tr:hover td { background: hsl(var(--card)); }
 .fm-table tr.fm-table__row--current td { background: var(--fm-info-bg); }
 .fm-table tbody tr.fm-table__row--selected td { background: hsl(var(--muted)); box-shadow: inset 0 1px 0 hsl(var(--border-control)), inset 0 -1px 0 hsl(var(--border-control)); }
+/* ETP-5030 — selected-row tint, converged on the app-wide selection colour.
+   `hsl(var(--primary) / 0.05)` is the literal Tailwind `bg-primary/5` resolves
+   to (app-shell-core tailwind preset: primary.DEFAULT = 'hsl(var(--primary))'),
+   so this matches the Sales Orders grid, InlineLinesPanel and DataTable.
+
+   NOTE: this deliberately does NOT reuse `.fm-table__row--selected` above,
+   which is still on the older `--muted` + inset-border look and is used by
+   models/349/FmModel349Page.jsx. Migrating that sibling onto this rule is a
+   pending decision, not part of this ticket.
+
+   Defined as a CSS rule rather than a `bg-primary/5` class on the <tr> because
+   this table paints its backgrounds on the CELLS (`tbody tr:hover td` above),
+   and a td background covers whatever the tr paints underneath. The pointer is
+   necessarily over the row when the user clicks the checkbox, so a row-level
+   utility would show nothing at exactly the moment feedback is expected — the
+   bug this ticket fixes. The `:hover` selector outranks `tbody tr:hover td`
+   on specificity, so the tint survives independently of rule order. */
+.fm-table tbody tr.fm-row--selected td,
+.fm-table tbody tr.fm-row--selected:hover td { background: hsl(var(--primary) / 0.05); }
 .fm-table th.num, .fm-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .fm-table td.strong { color: var(--fm-fg-1); font-weight: 600; }
 .fm-table td.mono {
@@ -1015,6 +1042,24 @@
 .fm-349-total-row__label { font: 400 12px/16px var(--fm-font-sans, system-ui); color: hsl(var(--muted-foreground)); }
 .fm-349-total-row__amount { font: 500 14px/20px var(--fm-font-sans, system-ui); color: hsl(var(--foreground)); font-variant-numeric: tabular-nums; }
 .fm-349-total-row__amount--zero { color: var(--fm-fg-4); }
+
+/* ─── 349 rectificative (corrective) rows & subtotal — ETP-5027 ─────
+   Corrective operator rows carry SIGNED deltas that are usually negative.
+   A negative amount here is the expected, valid case, so it is tinted for
+   legibility only — never treated as an error state, never Math.abs()'d. */
+.fm-349-total-row__amount--negative,
+.fm-349-amount--negative { color: var(--fm-danger-fg); }
+.fm-349-rectif-totals { margin-top: 10px; }
+.fm-349-rectif-totals .fm-349-totals__title { color: var(--status-warning-fg); }
+.fm-349-total-row--grand { border-top: 1px solid hsl(var(--foreground) / 0.12); }
+.fm-349-total-row--grand .fm-349-total-row__label { font-weight: 600; color: hsl(var(--foreground)); }
+/* Same inline-pill shape as .fm-vies above — sibling class, not a new primitive. */
+.fm-349-rectif-badge {
+  display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px;
+  font: 500 11px/14px var(--fm-font-sans, system-ui); white-space: nowrap;
+  background: var(--status-warning-bg); color: var(--status-warning-fg);
+  border: 1px solid var(--status-warning-border);
+}
 
 /* ─── VIES status pill ─────────────────────────────────────────────── */
 .fm-vies { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font: 500 11px/14px var(--fm-font-sans, system-ui); border: 1px solid; white-space: nowrap; }

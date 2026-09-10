@@ -13,7 +13,7 @@ import { render } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import ImportFromPurchaseInvoiceModal from '@generated/goods-receipt/custom/ImportFromPurchaseInvoiceModal';
 
-const headers = { Authorization: 'Bearer tok', 'Content-Type': 'application/json' };
+const headers = { Authorization: 'Bearer tok', 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' };
 const base = '/api';
 
 function jsonRes(data, ok = true) {

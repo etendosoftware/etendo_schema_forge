@@ -1,8 +1,8 @@
-# Asset Category
+# Asset Group
 
 ## Intent
 
-Asset Category lets finance users maintain the master records that classify fixed assets. Each category defines a named grouping (e.g. "Machinery", "Vehicles"), the depreciation policy applied to assets in that category, and the two GL accounts required to post depreciation. The window lives in the Finance section of the menu, after Assets.
+Asset Group lets finance users maintain the master records that classify fixed assets. Each group defines a named grouping (e.g. "Machinery", "Vehicles"), the depreciation policy applied to assets in that group, and the two GL accounts required to post depreciation. The window lives in the Finance section of the menu, after Assets.
 
 ## What this window should allow
 
@@ -20,7 +20,7 @@ The depreciation policy fields are shown conditionally: they only appear when **
 ## Interaction model
 
 - **Route:** `/asset-group` for the list and `/asset-group/:recordId` for record detail.
-- **Visibility:** visible in the Finance menu as **Asset Category** (after Assets).
+- **Visibility:** visible in the Finance menu as **Asset Group** (after Assets).
 - **Implementation type:** generated window loaded from `tools/app-shell/src/windows/registry.js` into the generic `/:windowName` shell route. No custom wrapper — the registry points directly to the generated `AssetCategoryPage`.
 - **Window shape:** master + inline-editable child. `assetCategory` is the header entity (table `A_Asset_Group`, AD_Window_ID 252). `accounting` is the child entity (table `A_Asset_Group_Acct`, AD_Tab_ID 800204), rendered as an inline-editable grid.
 - **List behavior:** the category list shows Name and Description. Both columns are visible in the grid.
@@ -139,19 +139,23 @@ All five flags are set in `decisions.json → window`:
 
 ## i18n notes
 
-The dictionary key for this window is `"Asset Group"` — the stable AD window name. It never changes even if the display label is updated.
+The dictionary key for this window is `"Asset Group"` — the stable AD window name (matches `AD_Menu.Name` and `decisions.json`'s `window.name`). It never changes even if the display label is updated.
 
 ```json
-// en_US.json → windows
-"Asset Group": { "label": "Asset Category", "newLabel": "New category" }
+// en_US.json → windows and menus
+"Asset Group": { "label": "Asset Group", "newLabel": "New group" }   // windows
+"Asset Group": { "label": "Asset Group" }                            // menus
 
-// es_ES.json → windows
-"Asset Group": { "label": "Categoría de Activos", "newLabel": "Nueva categoría" }
+// es_ES.json → windows and menus
+"Asset Group": { "label": "Categoría de activo", "newLabel": "Nueva categoría" }   // windows
+"Asset Group": { "label": "Categoría de activo" }                                  // menus
 ```
 
-The breadcrumb and menu title both resolve via `useMenuLabel()`. That hook searches `menus` before `windows`, so if a `menus["Asset Group"]` entry ever exists it takes precedence over the `windows` entry for the title and breadcrumb. In the current build, only the `windows` section carries this key, which is the canonical source.
+Both `windows["Asset Group"]` and `menus["Asset Group"]` carry the key, and both must be kept in sync — `tools/app-shell/src/menu.json`'s own `asset-group` entry (`label`/`favname`) is a third, separate copy that must also stay aligned (ETP-4945 fixed a case where `menu.json` still said `"Asset Category"` while `windows`/`menus` said `"Asset Group"` with the wrong label text — three disagreeing sources for the same window name).
 
-The generated page uses `entityLabel="Asset Category"` (for the detail title) and `entityLabel="Asset Group"` (for the list breadcrumb) — the list still reads the raw AD name; the detail renders the localized label from `windows[key].label`.
+The breadcrumb and menu title both resolve via `useMenuLabel()`. That hook searches `menus` before `windows`, so the `menus["Asset Group"]` entry takes precedence over the `windows` entry for the title and breadcrumb.
+
+The generated page still passes `entityLabel="Asset Category"` for the detail title (looked up against `tabs["Asset Category"]`) and `entityLabel="Asset Group"` for the list breadcrumb (looked up against `windows`/`menus`) — these dictionary keys are the stable AD names and are not renamed. As of ETP-4986, however, both keys' `label` values were unified across locales, so the two no longer diverge in what the user sees: `tabs["Asset Category"].label`, `windows["Asset Group"].label` and `menus["Asset Group"].label` all resolve to the same string per locale ("Asset Group" / "Categoría de activo"). Before this fix they showed different, inconsistent text across three rounds of naming ("Categoría de activos" vs "Grupo de activos", then "Grupo de activo" in both, then "Categoría de Activo" — still not the reporter's final, confirmed term). The Assets window header field, grid column and filter label for the same grouping (AD field `A_Asset_Group_ID`) resolve through `fields["A_Asset_Group_ID"].label`, unified to the same "Categoría de activo" string.
 
 ## Non-obvious gotchas
 
@@ -179,7 +183,7 @@ For `depreciate`, using `defaultExpr: "N"` ensures the backend serves `IsDepreci
 
 ### No draftMode / Confirm button
 
-The Confirm/Save button seen on transactional windows (Sales Order, Internal Consumption) is a `draftMode` completion flow — it reflects a document lifecycle with an explicit Complete action. Asset Category is a master-data window and has no such lifecycle. The standard Save button is correct here. The generated `AssetCategoryPage.jsx` confirms this: `const draftMode = null`.
+The Confirm/Save button seen on transactional windows (Sales Order, Internal Consumption) is a `draftMode` completion flow — it reflects a document lifecycle with an explicit Complete action. Asset Group is a master-data window and has no such lifecycle. The standard Save button is correct here. The generated `AssetCategoryPage.jsx` confirms this: `const draftMode = null`.
 
 ## Pipeline commands
 
@@ -206,7 +210,7 @@ node cli/src/push-to-neo.js asset-group
 
 ## Automated evidence
 
-- `tools/app-shell/src/menu.json` places **Asset Category** under the Finance menu (after Assets), using `"name": "asset-group"`.
+- `tools/app-shell/src/menu.json` places **Asset Group** under the Finance menu (after Assets), using `"name": "asset-group"`. The raw `label`/`favname` in `menu.json` still read `"Asset Category"` — that string is not shown directly, it is used as the `useMenuLabel()` lookup key, which resolves through `dictionary.tabs["Asset Category"].label` (updated by ETP-4986) to the unified displayed text.
 - `tools/app-shell/src/windows/registry.js` maps `'asset-group'` to the generated page at `@generated/asset-group/generated/web/asset-group/...`.
 - `artifacts/asset-group/generated/web/asset-group/AssetCategoryForm.jsx` defines the header form fields: `name`, `description` (`span: 2`, `rows: 1`), `depreciate` (checkbox), and the conditional depreciation-policy fields, each carrying a `displayLogic: (record) => ...` arrow function and `section: 'principal'`.
 - `artifacts/asset-group/generated/web/asset-group/AssetCategoryPage.jsx` renders `ListView` for the list route and `DetailView` with `secondaryTabs` (Accounting), `linesLayout="inlineEditable"`, `hidePrint`, `noHeaderBorder`, and `AttachmentsTab` in `customTabs`.
@@ -254,7 +258,7 @@ and `usableLifeMonths` carry `min: 1, integer: true` with their amortize-based `
 
 ### Manual verification (ETP-4542)
 
-1. Open an Asset Category with **Depreciate** enabled and **Calculate Type** = "Time" (`TI`) so
+1. Open an Asset Group record with **Depreciate** enabled and **Calculate Type** = "Time" (`TI`) so
    **Usable Life - Months** is visible.
 2. Type `0`, a negative number, or a decimal like `5.5`, then click away (blur). Confirm a toast
    error appears ("Value must be at least 1" or "Value must be a whole number", or the Spanish
@@ -289,7 +293,7 @@ Verified in `artifacts/asset-group/contract.json` and the regenerated
 
 ## Manual verification
 
-1. Open the Finance menu and confirm **Asset Category** appears after Assets.
+1. Open the Finance menu and confirm **Asset Group** appears after Assets.
 2. Open `/asset-group` and confirm the list loads with Name and Description columns.
 3. Confirm the custom Sort and Refresh icons appear in the list toolbar and that the Print and Link icons do not appear.
 4. Create a new category, confirm the **Depreciate** checkbox starts unchecked, and confirm the record saves with only Name supplied (no depreciation fields required while Depreciate is off).
@@ -312,3 +316,7 @@ Verified in `artifacts/asset-group/contract.json` and the regenerated
 ## ETP-4565 — Accounting tab: non-deletable record
 
 **`entities.accounting.hideDelete: true`** added — the Accounting tab's row can no longer be deleted (`apiPrediction.crud.accounting.delete: false`); confirmed this gates the `SecondaryTableTab` delete affordance in `DetailView.jsx` the same way it does for `product`'s `secondaryTabs.accounting`. **Resolved (follow-up pass):** the Accounting tab is now capped at one record via `window.secondaryTabs.accounting.maxDetailLines: 1` — the same generic `secondaryTabs`-pattern capability added for `product`/`contacts` (see `product.md` for the full mechanism). Note this window's Accounting tab declares no `addLineFields` at all (unlike `product`'s), so there is no manual add trigger in the SPA today regardless — the cap is declared anyway for forward-compatibility (if `addLineFields` is ever added, the "registro único" requirement is already enforced) and for consistency with the sibling windows. Regenerated via `make regen ONLY=asset-group`; `sf-validate-pipeline --scope=asset-group` reports 0 violations. Regression tests: `artifacts/__tests__/etp-4565-accounting-tab-restrictions.test.js` (decisions.json assertion) and `tools/app-shell/src/components/contract-ui/__tests__/DetailView.secondaryTabsMaxLines.vitest.jsx` (behavioral, shared across the family).
+
+## ETP-5116 — Accounting tab hidden for roles without the accounting capability
+
+`window.secondaryTabs.accounting.visibleWhenCapability: "showAccountingFields"` added in `decisions.json`. For a role where the `showAccountingFields` capability (`AD_Role.EM_ETGO_Show_Acct_Fields`) resolves `false`, the whole Accounting tab is omitted from the tab strip (not merely disabled) and its `openSecondaryTab` deep link silently no-ops. Full mechanism reference: `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)" and `docs/ui-customization.md` §17.

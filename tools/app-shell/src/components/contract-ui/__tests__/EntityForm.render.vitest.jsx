@@ -1080,6 +1080,72 @@ describe('EntityForm — extended render coverage', () => {
       const input = screen.getByTestId('field-code');
       expect(input).toBeInTheDocument();
     });
+
+    // ETP-4984: f.maxLength is forwarded as the native HTML maxLength attribute — additive,
+    // opt-in. A field that declares it renders with maxlength set on the DOM node.
+    it('renders the maxLength attribute on a text input when the field declares it', () => {
+      const fields = [
+        { key: 'name', label: 'Name', type: 'text', column: 'Name', maxLength: 60 },
+      ];
+      render(
+        <EntityForm fields={fields} data={{ name: '' }} onChange={vi.fn()} />,
+      );
+      const input = screen.getByTestId('field-name');
+      expect(input).toHaveAttribute('maxlength', '60');
+    });
+
+    it('renders the maxLength attribute on a textarea field when it declares it', () => {
+      const fields = [
+        { key: 'description', label: 'Description', type: 'textarea', column: 'Description', maxLength: 255 },
+      ];
+      render(
+        <EntityForm fields={fields} data={{ description: '' }} onChange={vi.fn()} />,
+      );
+      const textarea = screen.getByTestId('field-description');
+      expect(textarea).toHaveAttribute('maxlength', '255');
+    });
+
+    it('renders the maxLength attribute on the deferred (calloutOn: blur) input variant', () => {
+      const fields = [
+        {
+          key: 'name',
+          label: 'Name',
+          type: 'text',
+          column: 'Name',
+          maxLength: 60,
+          calloutOn: 'blur',
+        },
+      ];
+      render(
+        <EntityForm fields={fields} data={{ name: '' }} onChange={vi.fn()} />,
+      );
+      const input = screen.getByTestId('field-name');
+      expect(input).toHaveAttribute('maxlength', '60');
+    });
+
+    // Regression guard: a field without maxLength must render with NO maxlength attribute at
+    // all — proving the change is additive/opt-in and other windows' fields are unaffected.
+    it('does not render a maxLength attribute when the field does not declare one', () => {
+      const fields = [
+        { key: 'code', label: 'Code', type: 'text', column: 'Code' },
+      ];
+      render(
+        <EntityForm fields={fields} data={{ code: '' }} onChange={vi.fn()} />,
+      );
+      const input = screen.getByTestId('field-code');
+      expect(input).not.toHaveAttribute('maxlength');
+    });
+
+    it('does not render a maxLength attribute on a textarea field that does not declare one', () => {
+      const fields = [
+        { key: 'notes', label: 'Notes', type: 'textarea', column: 'Notes' },
+      ];
+      render(
+        <EntityForm fields={fields} data={{ notes: '' }} onChange={vi.fn()} />,
+      );
+      const textarea = screen.getByTestId('field-notes');
+      expect(textarea).not.toHaveAttribute('maxlength');
+    });
   });
 
   // --- Enum (select) field with empty value → shows placeholder option ---

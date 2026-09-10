@@ -30,6 +30,14 @@ describe('ListSortPopover — structure', () => {
     assert.match(src, /resolveColumnLabel\(col, locale, t\)/);
   });
 
+  // ETP-5106: the resolver above is only as good as the translator it is handed. Calling
+  // `useLabel()` bare made every renamed column list its raw AD label in the menu while the
+  // header showed the override — the exact disagreement the previous test forbids.
+  it('feeds the resolver the host window\'s label overrides', () => {
+    assert.match(src, /useLabel\(labelOverrides\)/);
+    assert.match(listView, /<ListSortPopover[\s\S]*?labelOverrides=\{labelOverrides\}[\s\S]*?\/>/);
+  });
+
   it('owns only its open state, never the sort state', () => {
     assert.match(src, /const \[open, setOpen\] = useState\(false\)/);
     assert.doesNotMatch(src, /useState\(sortColumn/);

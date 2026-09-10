@@ -54,13 +54,88 @@ case "$SUITE" in
 esac
 
 PREVIEW_PID=""
+JSREPORT_STARTED_BY_US=0
 cleanup() {
   if [ -n "$PREVIEW_PID" ] && kill -0 "$PREVIEW_PID" 2>/dev/null; then
     kill "$PREVIEW_PID" 2>/dev/null || true
     wait "$PREVIEW_PID" 2>/dev/null || true
   fi
+  # Only stop jsreport when THIS run started it. A developer's own
+  # `make report-serve-detach` — or the CI sidecar — must outlive us.
+  if [ "$JSREPORT_STARTED_BY_US" = "1" ]; then
+    ( cd "$REPO_DIR" && make report-stop ) >/dev/null 2>&1 || true
+  fi
 }
 trap cleanup EXIT
+
+# jsreport renders every document printable (invoice, order, shipment…). The app
+# reaches it through vite's `/jsreport` proxy, whose target is a fixed
+# http://localhost:5488 in BOTH the dev and the preview block of vite.config.js.
+# That fixed address is exactly what lets local and CI share this code path with
+# no env var and no per-environment branch: locally the compose container
+# publishes 5488 on the host, and in CI the Jenkins agent runs jsreport as a
+# sidecar in the same pod (containers in a pod share a network namespace).
+#
+# Ownership follows the same contract as the preview server above (and
+# playwright.config.js's `reuseExistingServer`): reuse whatever already listens,
+# only tear down what we started.
+JSREPORT_URL="http://127.0.0.1:5488"
+
+jsreport_up() {
+  curl -sf -o /dev/null --max-time 2 "$JSREPORT_URL/api/ping" 2>/dev/null
+}
+
+# Best-effort provisioning ONLY. This function never aborts the run: deciding
+# that a missing jsreport is fatal belongs to the specs that actually need it,
+# which assert the service and FAIL — they must never skip, or an absent
+# dependency would read as a pass and hide exactly what the spec exists to catch.
+ensure_jsreport() {
+  if jsreport_up; then
+    echo "==> jsreport already listening on ${JSREPORT_URL} — reusing it (left running)"
+    return 0
+  fi
+
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "⚠️  jsreport is not reachable on ${JSREPORT_URL} and docker is unavailable here." >&2
+    echo "    Any spec that downloads a printable will FAIL (by design — it asserts, it does not skip)." >&2
+    return 1
+  fi
+
+  # Distinguish a stopped daemon from a missing image: `docker image inspect`
+  # fails identically for both, and pointing someone at `make report-build`
+  # when Docker itself is down just buys them a cryptic socket error.
+  if ! docker info >/dev/null 2>&1; then
+    echo "⚠️  jsreport is not running and the Docker daemon is not reachable." >&2
+    echo "    Start Docker (Desktop/OrbStack), then re-run." >&2
+    return 1
+  fi
+
+  if ! docker image inspect etendo-jsreport:latest >/dev/null 2>&1; then
+    echo "⚠️  jsreport is not running and its image was never built on this machine." >&2
+    echo "    Build it once (it is not rebuilt per run):  make report-build" >&2
+    return 1
+  fi
+
+  echo "==> Starting jsreport on ${JSREPORT_URL} (log: tmp/e2e-jsreport.log)..."
+  JSREPORT_LOG="$REPO_DIR/tmp/e2e-jsreport.log"
+  if ! ( cd "$REPO_DIR" && make report-serve-detach ) > "$JSREPORT_LOG" 2>&1; then
+    echo "⚠️  Could not start jsreport. Last 20 lines of $JSREPORT_LOG:" >&2
+    tail -n 20 "$JSREPORT_LOG" >&2
+    return 1
+  fi
+  JSREPORT_STARTED_BY_US=1
+
+  for _ in $(seq 1 30); do
+    if jsreport_up; then
+      echo "==> jsreport ready on ${JSREPORT_URL}"
+      return 0
+    fi
+    sleep 1
+  done
+  echo "⚠️  jsreport started but never answered /api/ping. Last 20 lines of $JSREPORT_LOG:" >&2
+  tail -n 20 "$JSREPORT_LOG" >&2
+  return 1
+}
 
 # The port is this script's own ephemeral resource (unlike :3100, which a
 # developer may have a real `make dev`/`make preview` on) — safe to clear any
@@ -111,6 +186,10 @@ if [ "$SUITE" != "mocked" ]; then
     echo "   Bring up Tomcat + PostgreSQL (set E2E_BACKEND_URL if your context path differs), then retry." >&2
     exit 1
   fi
+
+  # Printable specs live in the integration suite (mocked specs intercept the
+  # route and need no real service). Non-fatal on purpose — see ensure_jsreport.
+  ensure_jsreport || true
 
   integration_workers="${E2E_WORKERS:-1}"
   integration_note=""

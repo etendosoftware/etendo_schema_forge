@@ -5,7 +5,7 @@ import { neoBase } from '@/components/related-documents/helpers.js';
 import { formatAmount } from '@/lib/formatAmount.js';
 import { FileUp, FileDown } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
-import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, isPendingStatus, fmtDate, PAGE_SIZE, ExportIcon, useFmSelection, fetchCsvAndDownload } from './FmPrimitives.jsx';
+import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, isPendingStatus, fmtDate, PAGE_SIZE, ExportIcon, useFmSelection, fetchCsvAndDownload, selectedRowClassName } from './FmPrimitives.jsx';
 import { pickMostRecentMotivo } from './fiscalMonitor.utils.js';
 import {
   SII_SPEC,
@@ -198,7 +198,7 @@ function SiiTableContent({
               ? (row.aeatsiiErrorMsg || motivoMap[row.id] || null)
               : null;
             return (
-              <tr key={row.id ?? i}>
+              <tr key={row.id ?? i} className={selectedRowClassName(selectedIds, row.id)}>
                 <td><Checkbox
                   checked={selectedIds.has(row.id)}
                   onChange={() => onToggleRow(row.id)}

@@ -193,7 +193,21 @@ export default function AttachmentsTable({
             ?? null;
           const updatedAt = item.updatedAt ?? item.modifiedAt ?? item.updateDate ?? null;
           return (
-            <TableRow key={item.id} data-testid={`attachment-row-${item.id}`} className="group h-10">
+            // ETP-5030 — exactly ONE background per row, mirroring
+            // `computeRowClassName` (contract-ui/InlineLinesPanel.jsx). TableRow's
+            // own base class is `hover:bg-muted/50`, so the `hover:` half is
+            // required: the pointer is over the row when the checkbox is clicked,
+            // and without it the base hover repaints over the tint at exactly the
+            // moment the user looks for feedback. TableRow merges via `cn`
+            // (tailwind-merge), so this className legitimately replaces the base
+            // hover rather than racing it on stylesheet order.
+            <TableRow
+              key={item.id}
+              data-testid={`attachment-row-${item.id}`}
+              className={selectedIds.has(item.id)
+                ? 'group h-10 bg-primary/5 hover:bg-primary/5'
+                : 'group h-10'}
+            >
               <TableCell className="w-10 px-2 py-0" data-testid="TableCell__e868a0">
                 <Checkbox
                   checked={selectedIds.has(item.id)}

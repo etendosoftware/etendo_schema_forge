@@ -358,6 +358,30 @@ describe('ListView — sorting', () => {
     expect(tableProps.sortDirection).toBe('desc');
   });
 
+  // ETP-4979 (QA rejection) — a window whose declared default is 'desc' (e.g.
+  // amortization's `listSortBy: "accountingDate desc"`) starts at rest already
+  // equal to { column, direction: 'desc' }. The old cycle assumed 'asc' was
+  // always the resting direction, so the first click on that column landed in
+  // the "already sorted, not asc" branch and reset the state to itself
+  // (same column, same direction) — a same-value setState that never
+  // re-renders, so the click looked completely dead.
+  it('column-header clicks on a desc-default column cycle desc -> asc -> desc, never freezing', () => {
+    render(<ListView {...defaultProps} listSortBy="name desc" />);
+    expect(tableProps.sortColumn).toBe('name');
+    expect(tableProps.sortDirection).toBe('desc');
+
+    act(() => { tableProps.onSort('name'); });
+    expect(tableProps.sortColumn).toBe('name');
+    expect(tableProps.sortDirection).toBe('asc');
+
+    act(() => { tableProps.onSort('name'); });
+    expect(tableProps.sortColumn).toBe('name');
+    expect(tableProps.sortDirection).toBe('desc');
+
+    act(() => { tableProps.onSort('name'); });
+    expect(tableProps.sortDirection).toBe('asc');
+  });
+
   it('refetches when the sort changes, but not on the initial mount', () => {
     render(<ListView {...defaultProps} />);
     expect(refreshMock).not.toHaveBeenCalled();
@@ -1054,6 +1078,33 @@ describe('ListView — refresh and paging', () => {
     act(() => { scrollPaneProps.onReachBottom(); });
 
     expect(loadMoreMock).not.toHaveBeenCalled();
+  });
+});
+
+// ETP-4921 — the inline progress-bar JSX moved out of ListView into the shared
+// ListProgressBar so the hand-rolled tables (financial-account tabs, ListModalWindow,
+// ReconciliationSplitPanel) can render the same affordance. The extraction must be invisible
+// from ListView's side: same `list-progress-bar` testid, same gate.
+describe('ListView — refresh progress bar', () => {
+  it('shows the bar while refreshing over rows already on screen', () => {
+    hookOverrides = { loading: true, items: [{ id: 'r1' }] };
+    render(<ListView {...defaultProps} />);
+
+    expect(screen.getByTestId('list-progress-bar')).toBeInTheDocument();
+  });
+
+  it('hides the bar on the very first fetch, where the skeleton is the indicator', () => {
+    hookOverrides = { loading: true, items: [] };
+    render(<ListView {...defaultProps} />);
+
+    expect(screen.queryByTestId('list-progress-bar')).not.toBeInTheDocument();
+  });
+
+  it('hides the bar once the fetch settles', () => {
+    hookOverrides = { loading: false, items: [{ id: 'r1' }] };
+    render(<ListView {...defaultProps} />);
+
+    expect(screen.queryByTestId('list-progress-bar')).not.toBeInTheDocument();
   });
 });
 

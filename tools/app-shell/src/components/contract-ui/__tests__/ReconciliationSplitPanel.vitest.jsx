@@ -1,7 +1,7 @@
 // Mocks BEFORE imports
-// The action bar's "Desconciliar / Reactivar" split button uses a Radix <DropdownMenu>, which
-// relies on Pointer Capture + scrollIntoView — neither implemented by jsdom. Polyfill them so the
-// menu can open (same pattern as EditAccountModal.vitest.jsx).
+// The panel's Radix-based popovers (date range, distinct-values filters) rely on Pointer Capture +
+// scrollIntoView — neither implemented by jsdom. Polyfill them so those overlays can open (same
+// pattern as EditAccountModal.vitest.jsx).
 beforeAll(() => {
   Element.prototype.hasPointerCapture = vi.fn(() => false);
   Element.prototype.setPointerCapture = vi.fn();
@@ -29,19 +29,15 @@ vi.mock('sonner', () => ({
 
 // Hook mocks — overridable per test via the mutable state objects below.
 // `draftReconciliationCount` = how many reconciliations of the account are already in draft
-// (server-computed, NOT derived from `lines`, which are date/status filtered). Drives the up-front
-// "another draft will be confirmed" warning in the Reactivar confirm dialog. Default 0.
+// (server-computed, NOT derived from `lines`, which are date/status filtered). The hook still
+// returns it, but since ETP-5135 removed "Reactivar" nothing in this panel reads it — it is kept
+// here purely so the tests can prove the un-reconcile cartel ignores it. Default 0.
 const linesState = {
   lines: [], total: 0, counts: {}, loading: false, reload: vi.fn(), draftReconciliationCount: 0,
 };
 const candidatesState = { candidates: [], loading: false };
 const reconcileState = { reconcile: vi.fn().mockResolvedValue({ reconciliationId: 'R1' }), loading: false };
 const removeState = { removeOperation: vi.fn().mockResolvedValue({ removed: true }), loading: false };
-// "Reactivar" — the lighter un-reconcile (keeps the reconciliation as a draft with its
-// transactions still linked) exposed via the action bar's split-button dropdown.
-const reactivateSelectedState = {
-  reactivateSelected: vi.fn().mockResolvedValue({ reactivated: true }), loading: false,
-};
 // "Posting the remainder to a G/L item" — closes a PARTIALLY reconciled line by writing its
 // leftover amount off against an accounting concept.
 const reconcileDifferenceState = {
@@ -68,7 +64,6 @@ vi.mock('@/hooks/useReconciliation', () => ({
   },
   useReconcileGroup: () => reconcileState,
   useRemoveOperation: () => removeState,
-  useReactivateSelected: () => reactivateSelectedState,
   useReconcileDifference: () => reconcileDifferenceState,
 }));
 
@@ -77,6 +72,10 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { toast } from 'sonner';
 import { ReconciliationSplitPanel } from '@/components/contract-ui/ReconciliationSplitPanel.jsx';
+// The left panel's footer total goes through the shared signed-money formatter. Importing it here
+// (instead of hardcoding '1.191,69 €') keeps the expectation on the same canonical formatting path
+// the component uses, so the instance-wide separators cannot make the assertion lie.
+import { formatSigned } from '@/lib/formatSigned';
 
 // ── Fixtures ───────────────────────────────────────────────────────────────────
 
@@ -183,8 +182,6 @@ describe('ReconciliationSplitPanel', () => {
     reconcileState.loading = false;
     removeState.removeOperation = vi.fn().mockResolvedValue({ removed: true });
     removeState.loading = false;
-    reactivateSelectedState.reactivateSelected = vi.fn().mockResolvedValue({ reactivated: true });
-    reactivateSelectedState.loading = false;
     candidateCallArgs.accountId = null;
     candidateCallArgs.lineId = null;
     candidateCallArgs.docType = null;
@@ -201,6 +198,49 @@ describe('ReconciliationSplitPanel', () => {
     expect(screen.getByTestId('recon-line-row-L1')).toBeInTheDocument();
     expect(screen.getByTestId('recon-line-row-L2')).toBeInTheDocument();
     expect(screen.getByText('Transfer ACME')).toBeInTheDocument();
+  });
+
+  // ETP-4921 — this panel never goes through ListView, so it never inherited ListView's
+  // refresh progress bar. It renders the extracted ListProgressBar above the split, under the
+  // same gate ListView uses: only once lines are already on screen, because on the true first
+  // fetch the panel's own skeleton is the indicator.
+  describe('refresh progress bar', () => {
+    it('shows the bar while refreshing over lines already on screen', () => {
+      setLines([LINE_A, LINE_B]);
+      linesState.loading = true;
+      renderPanel();
+      expect(screen.getByTestId('reconciliation-progress-bar')).toBeInTheDocument();
+    });
+
+    it('keeps the lines mounted underneath the bar (smooth refresh, not a remount)', () => {
+      setLines([LINE_A, LINE_B]);
+      linesState.loading = true;
+      renderPanel();
+      expect(screen.getByTestId('reconciliation-progress-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-line-row-L1')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-line-row-L2')).toBeInTheDocument();
+    });
+
+    it('hides the bar on the very first fetch, where the skeleton is the indicator', () => {
+      setLines([]);
+      linesState.loading = true;
+      renderPanel();
+      expect(screen.queryByTestId('reconciliation-progress-bar')).not.toBeInTheDocument();
+    });
+
+    it('hides the bar once the fetch settles', () => {
+      setLines([LINE_A, LINE_B]);
+      linesState.loading = false;
+      renderPanel();
+      expect(screen.queryByTestId('reconciliation-progress-bar')).not.toBeInTheDocument();
+    });
+
+    it('uses its own testid, not the default ListView one', () => {
+      setLines([LINE_A]);
+      linesState.loading = true;
+      renderPanel();
+      expect(screen.queryByTestId('list-progress-bar')).not.toBeInTheDocument();
+    });
   });
 
   it('shows the empty state on the right until a line is selected', () => {
@@ -457,21 +497,61 @@ describe('ReconciliationSplitPanel', () => {
     expect(rows[2]).toBe('recon-cand-row-C1');
   });
 
-  // ── Client-side state filter (T7) ─────────────────────────────────────────────
+  // ── Client-side state filter (T7 / ETP-5033) ─────────────────────────────────
+  //
+  // The backend assigns each statement line exactly ONE `state`: pending | suggested | byRule |
+  // difference | reconciled. The filter codes are therefore NOT all mutually exclusive: 'pending'
+  // — which is also the DEFAULT filter — means "everything not reconciled", so suggested, byRule
+  // and difference lines are on screen when the panel opens (ETP-5033: strict equality used to
+  // hide exactly the lines the user has to act on). 'suggested' / 'byRule' / 'difference' /
+  // 'reconciled' stay strict subsets, and the "Todos" entry (null) shows everything.
+  // Membership itself is unit-tested in reconciliationStatusFilter.test.js.
 
-  it('shows only lines matching the active leftStatus filter', () => {
-    // Four lines: two pending, one suggested, one byRule.
+  // One line per engine-computed state, so a single fixture set can drive the whole matrix.
+  const LINE_ST_PENDING = { id: 'SP', date: '2026-05-10T00:00:00Z', description: 'Plain pending line', state: 'pending', status: 'pending', amount: -10 };
+  const LINE_ST_SUGGESTED = { id: 'SS', date: '2026-05-11T00:00:00Z', description: 'Suggested line', state: 'suggested', status: 'pending', amount: -100 };
+  const LINE_ST_BYRULE = { id: 'SB', date: '2026-05-12T00:00:00Z', description: 'By-rule line', state: 'byRule', status: 'pending', amount: -50 };
+  const LINE_ST_DIFFERENCE = { id: 'SD', date: '2026-05-13T00:00:00Z', description: 'Difference line', state: 'difference', status: 'pending', amount: -5 };
+  const LINE_ST_RECONCILED = { id: 'SR', date: '2026-05-14T00:00:00Z', description: 'Reconciled line', state: 'reconciled', status: 'reconciled', amount: 500 };
+  const ALL_STATE_LINES = [
+    LINE_ST_PENDING, LINE_ST_SUGGESTED, LINE_ST_BYRULE, LINE_ST_DIFFERENCE, LINE_ST_RECONCILED,
+  ];
+  const ALL_STATE_COUNTS = { all: 5, pending: 1, suggested: 1, byRule: 1, difference: 1, reconciled: 1 };
+
+  /**
+   * Drives the status dropdown the same way the source-filter tests drive theirs: the
+   * DistinctValuesFilter trigger renders the ACTIVE label, and the open popover renders one
+   * button per code (plus the "Todos" row). Both are matched by their i18n key, which the mock
+   * echoes back verbatim.
+   */
+  function selectStatus(activeLabelKey, nextLabelKey) {
+    fireEvent.click(screen.getByText(new RegExp(activeLabelKey)));
+    fireEvent.click(screen.getByText(new RegExp(nextLabelKey)));
+  }
+
+  /** The ids of every statement row currently rendered in the left panel. */
+  function visibleLineIds() {
+    return screen
+      .queryAllByTestId(/^recon-line-row-/)
+      .map((el) => el.getAttribute('data-testid').replace('recon-line-row-', ''));
+  }
+
+  it('treats the default pending filter as "not reconciled", keeping suggested and by-rule lines visible', () => {
+    // Four lines: two plain pending, one suggested, one byRule — all four are non-reconciled, so
+    // all four must be on screen under the default filter.
     const LINE_SUGGESTED = { id: 'LS', date: '2026-05-10T00:00:00Z', description: 'Suggested line', state: 'suggested', status: 'pending', amount: -100 };
     const LINE_BYRULE = { id: 'LR', date: '2026-05-11T00:00:00Z', description: 'By-rule line', state: 'byRule', status: 'pending', amount: -50 };
     setLines([LINE_A, LINE_B, LINE_SUGGESTED, LINE_BYRULE]);
     linesState.counts = { all: 4, pending: 2, suggested: 1, byRule: 1, difference: 0, reconciled: 0 };
     renderPanel();
 
-    // Default leftStatus is 'pending' — only LINE_A and LINE_B (state: 'pending') visible.
+    // Default leftStatus is 'pending' = "not reconciled" — nothing here is reconciled, so the
+    // list is complete. Before ETP-5033 the last two assertions were the opposite (the suggested
+    // and by-rule rows were filtered out by the DEFAULT filter, which is the bug).
     expect(screen.getByTestId('recon-line-row-L1')).toBeInTheDocument();
     expect(screen.getByTestId('recon-line-row-L2')).toBeInTheDocument();
-    expect(screen.queryByTestId('recon-line-row-LS')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('recon-line-row-LR')).not.toBeInTheDocument();
+    expect(screen.getByTestId('recon-line-row-LS')).toBeInTheDocument();
+    expect(screen.getByTestId('recon-line-row-LR')).toBeInTheDocument();
   });
 
   it('passes counts from the hook to the status filter component', () => {
@@ -482,22 +562,208 @@ describe('ReconciliationSplitPanel', () => {
     // ReconciliationStatusFilter renders labelFor(code) = `${ui(key)} (${countFor(code)})`.
     // With our i18n mock returning the key, the label includes the count.
     // The active label (pending) is visible in the trigger button; the others are in the popover.
+    // The pending count is the SUM of its members — 3 pending + 1 suggested + 0 byRule +
+    // 1 difference = 5 — because the filter itself shows all four (ETP-5033); a chip reading 3
+    // would contradict the 5 rows below it.
     // Use a text-content function matcher to handle elements that split text across children.
-    expect(screen.getByText((content) => content.includes('financeReconcileFilterStatusPending') && content.includes('3'))).toBeInTheDocument();
+    expect(screen.getByText((content) => content.includes('financeReconcileFilterStatusPending') && content.includes('5'))).toBeInTheDocument();
   });
 
   it('visibleTotal reflects filtered lines, not all lines', () => {
-    // Three lines: two pending (amounts -8.31 and 1200), one suggested (-100).
-    const LINE_SUGGESTED2 = { id: 'LS2', date: '2026-05-12T00:00:00Z', description: 'S line', state: 'suggested', status: 'pending', amount: -100 };
-    setLines([LINE_A, LINE_B, LINE_SUGGESTED2]);
-    // Default leftStatus is 'pending' — only LINE_A (-8.31) and LINE_B (1200) are visible.
+    // Three lines: two non-reconciled (amounts -8.31 and 1200) and one RECONCILED (500). Under
+    // the default 'pending' filter only the first two are visible, so only they may count toward
+    // the footer total. (A suggested line would no longer work as the excluded one — it is now
+    // visible under the default filter, and its amount legitimately joins the total.)
+    setLines([LINE_A, LINE_B, LINE_ST_RECONCILED]);
+    linesState.counts = { all: 3, pending: 2, suggested: 0, byRule: 0, difference: 0, reconciled: 1 };
     renderPanel();
 
-    // The footer total must show the sum of only visible (pending) lines: -8.31 + 1200 = 1191.69.
-    // The panel renders visibleTotal with MoneyAmount; in our mock MoneyAmount renders the value.
-    // We check the total footer row which renders formatSigned(visibleTotal, currency).
-    // Since formatSigned is internal, we verify the footer does NOT show -100 (the suggested line).
-    expect(screen.queryByText(/-100/)).not.toBeInTheDocument();
+    // The reconciled row is filtered out, so its amount is nowhere in the list.
+    expect(visibleLineIds()).toEqual(['L1', 'L2']);
+    expect(screen.queryByTestId('recon-line-row-SR')).not.toBeInTheDocument();
+
+    // The footer renders ui('financeReconcileFooterTotal', { amount: formatSigned(total, cur) }).
+    // The i18n mock has no `{amount}` placeholder in the key itself, so the interpolated string
+    // never reaches the DOM — read it off the captured call instead. Expected: -8.31 + 1200 =
+    // 1191.69, i.e. the visible subset only (1691.69 would mean the reconciled line leaked in).
+    const footerCalls = uiCalls.filter((c) => c.key === 'financeReconcileFooterTotal');
+    expect(footerCalls.length).toBeGreaterThan(0);
+    expect(footerCalls.at(-1).vars.amount).toBe(formatSigned(1191.69, 'EUR'));
+  });
+
+  it('shows the four non-reconciled states and hides the reconciled one under the default filter', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    expect(visibleLineIds()).toEqual(['SP', 'SS', 'SB', 'SD']);
+    expect(screen.queryByTestId('recon-line-row-SR')).not.toBeInTheDocument();
+  });
+
+  it('narrows to only the suggested line when the filter switches to suggested', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusSuggested');
+
+    expect(visibleLineIds()).toEqual(['SS']);
+  });
+
+  it('narrows to only the difference line when the filter switches to difference', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusDifference');
+
+    expect(visibleLineIds()).toEqual(['SD']);
+  });
+
+  it('narrows to only the by-rule line when the filter switches to byRule', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusByRule');
+
+    expect(visibleLineIds()).toEqual(['SB']);
+  });
+
+  it('shows only the reconciled line under the reconciled filter', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusReconciled');
+
+    expect(visibleLineIds()).toEqual(['SR']);
+  });
+
+  it('shows every line under the "Todos" entry', () => {
+    setLines(ALL_STATE_LINES);
+    linesState.counts = ALL_STATE_COUNTS;
+    renderPanel();
+
+    // The "Todos" row calls onChange(null) — the only way to clear the status filter.
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusAll');
+
+    expect(visibleLineIds()).toEqual(['SP', 'SS', 'SB', 'SD', 'SR']);
+  });
+
+  // ── ETP-5121 / CP-1: a reactivated statement keeps its reconciled line ───────
+  //
+  // "Reactivar" on an imported statement only clears FIN_BankStatement.Processed; it does not
+  // touch the reconciliation chain of an already-matched line (line -> transaction ->
+  // reconciliation, the reconciliation still processed). The backend's PENDING_LINES_SQL used to
+  // gate the WHOLE pendingLines query on `bs.processed = 'Y'`, so after a reactivation BOTH lines
+  // of that statement vanished from the panel — under every filter, not just "Conciliadas" — and
+  // the reconciled one became unreachable (it could no longer be un-reconciled from here).
+  //
+  // With the backend gate fixed the reconciled line is returned again. Note the gate's exception
+  // is deliberately NARROW: only the already-reconciled line comes back for a draft statement —
+  // its unmatched sibling stays out, because a draft statement's pending lines genuinely are not
+  // reconcilable yet. The two-line fixture below therefore models the statement's lines as the
+  // endpoint reports them WHILE STILL PROCESSED, which is the payload that exercises both buckets.
+  //
+  // This panel's filtering is 100% client-side (`matchesStatus` in reconciliationStatusFilter.js)
+  // and keys off `state` alone — it knows nothing about the parent statement's Processed flag. So
+  // what has to be guarded here is that a reconciled line is bucketed ONLY under 'reconciled' and
+  // never under the default 'pending' filter, and that it is reachable (selectable and
+  // un-reconcilable) once the user switches to it — the bug made the row absent under every filter.
+
+  /** The reconciled line — the one the fixed gate keeps returning after a reactivation. */
+  const REACTIVATED_RECONCILED_LINE = {
+    id: 'RS-REC', date: '2026-06-01T00:00:00Z', description: 'Cobro ya conciliado',
+    state: 'reconciled', status: 'reconciled', reconcileStatus: 'RECONCILED', amount: 50,
+    pendingAmount: 0, reconciledAmount: 50, reconciledPct: 100,
+    // No draftReconciliationId: the reconciliation is still PROCESSED — reactivating the
+    // STATEMENT is not the same thing as reactivating the reconciliation.
+    draftReconciliationId: '',
+    txns: [{
+      transactionId: 'T2', documentNo: '1000099', contact: 'Globex', amount: 50,
+      autoCreated: false,
+    }],
+  };
+  /**
+   * Its sibling on the same statement, never matched. Present here so the filter matrix has both
+   * buckets to sort; the backend only returns it while the statement is still processed.
+   */
+  const REACTIVATED_PENDING_LINE = {
+    id: 'RS-PEND', date: '2026-06-02T00:00:00Z', description: 'Cargo sin conciliar',
+    state: 'pending', status: 'pending', amount: -40,
+  };
+  const REACTIVATED_LINES = [REACTIVATED_RECONCILED_LINE, REACTIVATED_PENDING_LINE];
+  const REACTIVATED_COUNTS = {
+    all: 2, pending: 1, suggested: 0, byRule: 0, difference: 0, reconciled: 1,
+  };
+
+  it('keeps the reconciled line of a reactivated statement under the reconciled filter', () => {
+    setLines(REACTIVATED_LINES);
+    linesState.counts = REACTIVATED_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusReconciled');
+
+    // This is the regression: before the backend fix the row was not in `lines` at all, so the
+    // "Conciliadas" filter rendered an empty list.
+    expect(visibleLineIds()).toEqual(['RS-REC']);
+    expect(screen.getByTestId('recon-line-row-RS-REC')).toBeInTheDocument();
+  });
+
+  it('shows only the unmatched sibling line of a reactivated statement under the default filter', () => {
+    setLines(REACTIVATED_LINES);
+    linesState.counts = REACTIVATED_COUNTS;
+    renderPanel();
+
+    // Default filter is 'pending' = "everything not reconciled" — the reconciled line stays out of
+    // it even though its statement is back in draft.
+    expect(visibleLineIds()).toEqual(['RS-PEND']);
+    expect(screen.queryByTestId('recon-line-row-RS-REC')).not.toBeInTheDocument();
+  });
+
+  it('shows both lines of a reactivated statement under the "Todos" entry', () => {
+    setLines(REACTIVATED_LINES);
+    linesState.counts = REACTIVATED_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusAll');
+
+    expect(visibleLineIds()).toEqual(['RS-REC', 'RS-PEND']);
+  });
+
+  it('reports one reconciled line in the status chip for a reactivated statement', () => {
+    setLines(REACTIVATED_LINES);
+    linesState.counts = REACTIVATED_COUNTS;
+    renderPanel();
+
+    // The chip labels are `${ui(key)} (${count})`; the reconciled one lives in the popover, so
+    // open the dropdown before reading it.
+    fireEvent.click(screen.getByText(/financeReconcileFilterStatusPending/));
+    expect(screen.getByText((content) => (
+      content.includes('financeReconcileFilterStatusReconciled') && content.includes('1')
+    ))).toBeInTheDocument();
+  });
+
+  it('keeps the reconciled line of a reactivated statement selectable and un-reconcilable', () => {
+    setLines(REACTIVATED_LINES);
+    setCandidates([RECON_CAND_T2]);
+    linesState.counts = REACTIVATED_COUNTS;
+    renderPanel();
+
+    selectStatus('financeReconcileFilterStatusPending', 'financeReconcileFilterStatusReconciled');
+    fireEvent.click(screen.getByTestId('recon-line-radio-RS-REC'));
+
+    // Reachable again: its linked document shows up pre-checked and the bulk "Desconciliar (N)"
+    // action is enabled — which is the whole point of not dropping the row (the statement itself
+    // cannot be deleted while it still holds a matched line either).
+    expect(screen.getByTestId('recon-cand-row-T2')).toBeInTheDocument();
+    expect(candidateCheckbox('T2')).toBeChecked();
+    const action = screen.getByTestId('recon-action-reconcile');
+    expect(action).toHaveTextContent('financeReconcileActionRemoveCount');
+    expect(action).not.toBeDisabled();
+    // Read-only line: the transaction-type selector stays hidden even in a draft statement.
+    expect(screen.queryByText(/financeReconcileSourceReceipts/)).not.toBeInTheDocument();
   });
 
   // ── Source filter visibility (single "Tipo de transacción" selector) ──────────
@@ -564,6 +830,65 @@ describe('ReconciliationSplitPanel', () => {
     fireEvent.click(screen.getByTestId('recon-line-radio-L1'));
     // Open the selector (trigger shows the current 'payments' label) and pick receipts.
     fireEvent.click(screen.getByText(/financeReconcileSourcePayments/));
+    fireEvent.click(screen.getByText(/financeReconcileSourceReceipts/));
+    expect(candidateCallArgs.kind).toBeNull();
+    expect(candidateCallArgs.docType).toBe('receipts');
+  });
+
+  // ── "Tipo" (source) filter dropdown — no fake "all" row (bug fix regression) ──
+  // The Tipo filter always has a concrete value (SOURCE_CODES has no genuine "all" state,
+  // unlike the sibling status filter). Previously `allLabel={ui('financeReconcileSourceLabel')}`
+  // was passed to DistinctValuesFilter, which made DistinctValuesList render the field's own
+  // header/placeholder text as a clickable — but functionally inert — row. That prop was removed.
+
+  it('does not offer the field label as a selectable "Tipo" option, only the four real source values', () => {
+    setLines([LINE_B]); // inflow → default source 'receipts'
+    renderPanel();
+    fireEvent.click(screen.getByTestId('recon-line-radio-L2'));
+    // Open the "Tipo" dropdown via its trigger (shows the current source label).
+    fireEvent.click(screen.getByText(/financeReconcileSourceReceipts/));
+
+    const popover = screen.getByTestId('PopoverContent__cd3aa9');
+    // Regression: the field's own label/placeholder key must never render as a selectable
+    // row — it is not a real filter value and selecting it used to do nothing.
+    expect(within(popover).queryByText('financeReconcileSourceLabel')).not.toBeInTheDocument();
+    expect(
+      within(popover).queryByRole('button', { name: /financeReconcileSourceLabel/ }),
+    ).not.toBeInTheDocument();
+
+    // All four real source options are present as selectable rows.
+    expect(within(popover).getByText(/financeReconcileSourceSalesInvoices/)).toBeInTheDocument();
+    expect(within(popover).getByText(/financeReconcileSourcePurchaseInvoices/)).toBeInTheDocument();
+    expect(within(popover).getByText(/financeReconcileSourceReceipts/)).toBeInTheDocument();
+    expect(within(popover).getByText(/financeReconcileSourcePayments/)).toBeInTheDocument();
+  });
+
+  it('selects each real "Tipo" option and flows the mapped (kind, docType) through to the candidates hook', () => {
+    setLines([LINE_B]); // inflow → default source 'receipts'
+    renderPanel();
+    fireEvent.click(screen.getByTestId('recon-line-radio-L2'));
+
+    // receipts (default) → payments: (kind null, docType 'payments').
+    fireEvent.click(screen.getByText(/financeReconcileSourceReceipts/));
+    fireEvent.click(screen.getByText(/financeReconcileSourcePayments/));
+    expect(candidateCallArgs.kind).toBeNull();
+    expect(candidateCallArgs.docType).toBe('payments');
+    expect(screen.getByText(/financeReconcileSourcePayments/)).toBeInTheDocument();
+
+    // payments → salesInvoices: (kind 'invoices', docType 'receipts').
+    fireEvent.click(screen.getByText(/financeReconcileSourcePayments/));
+    fireEvent.click(screen.getByText(/financeReconcileSourceSalesInvoices/));
+    expect(candidateCallArgs.kind).toBe('invoices');
+    expect(candidateCallArgs.docType).toBe('receipts');
+
+    // salesInvoices → purchaseInvoices: (kind 'invoices', docType 'payments').
+    fireEvent.click(screen.getByText(/financeReconcileSourceSalesInvoices/));
+    fireEvent.click(screen.getByText(/financeReconcileSourcePurchaseInvoices/));
+    expect(candidateCallArgs.kind).toBe('invoices');
+    expect(candidateCallArgs.docType).toBe('payments');
+
+    // purchaseInvoices → receipts: back to (kind null, docType 'receipts').
+    fireEvent.click(screen.getByText(/financeReconcileSourcePurchaseInvoices/));
     fireEvent.click(screen.getByText(/financeReconcileSourceReceipts/));
     expect(candidateCallArgs.kind).toBeNull();
     expect(candidateCallArgs.docType).toBe('receipts');
@@ -702,6 +1027,8 @@ describe('ReconciliationSplitPanel', () => {
     // A pending line shows the "Conciliar" (count) label, never the un-reconcile one.
     expect(btn).toHaveTextContent('financeReconcileActionReconcileCount');
     expect(btn).not.toHaveTextContent('financeReconcileActionRemoveCount');
+    // ETP-5135: nor the chevron that used to reveal "Reactivar" (removed for every line state).
+    expect(screen.queryByTestId('recon-action-reconcile-more')).toBeNull();
   });
 
   it('opens the confirm dialog when "Desconciliar" is clicked, without calling the endpoint', () => {
@@ -1141,8 +1468,10 @@ describe('ReconciliationSplitPanel', () => {
       });
       setUpPartialLineWithCandidate();
 
+      // No `failureReason` in this response, so the toast carries no description at all
+      // (`undefined`, never an empty options object that would render a blank description row).
       await waitFor(() => expect(toast.warning)
-        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved'));
+        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved', undefined));
       expect(toast.success).not.toHaveBeenCalled();
       expect(toast.error).not.toHaveBeenCalled();
       // Verify the EXACT interpolation values the component computed from the resolved result.
@@ -1154,19 +1483,85 @@ describe('ReconciliationSplitPanel', () => {
       await waitFor(() => expect(candidateCheckbox('C2')).not.toBeChecked());
     });
 
-    it('total failure (successful HTTP, everything failed): toast.error, reload/selection-clear STILL run', async () => {
+    it('total failure (successful HTTP, everything failed): the UN-RECONCILE error copy, reload/selection-clear STILL run', async () => {
       removeState.removeOperation = vi.fn().mockResolvedValue({
         transactionIds: [], failedTransactionIds: ['A', 'B'],
       });
       setUpPartialLineWithCandidate();
 
-      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('financeReconcileToastError'));
+      // The action-specific key. This branch used to fall back to `financeReconcileToastError`,
+      // whose copy reads "Error al conciliar" — the wrong action entirely for an un-reconcile.
+      await waitFor(() => expect(toast.error)
+        .toHaveBeenCalledWith('financeReconcileToastOperationRemoveError', undefined));
       expect(toast.success).not.toHaveBeenCalled();
       expect(toast.warning).not.toHaveBeenCalled();
       // Still no exception, still a "resolved" flow — reload + selection-clear still happen.
       await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
       await waitFor(() => expect(candidateCheckbox('C2')).not.toBeChecked());
       await waitFor(() => expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
+    });
+
+    // ── the backend-supplied CAUSE ────────────────────────────────────────────
+    // The un-reconcile helpers swallow their exceptions so one failure does not abort the batch, so
+    // the response has always been able to say WHICH ids failed. What it could not say is WHY — the
+    // reason stayed in the server log. It now travels as `failureReason` on the same 200, and the
+    // panel shows it verbatim as the sonner description under the action-specific title.
+    const CLOSED_PERIOD = 'The accounting period is closed and the document cannot be unposted';
+
+    it('total failure: shows the backend failureReason as the toast description', async () => {
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: [], failedTransactionIds: ['A', 'B'], failureReason: CLOSED_PERIOD,
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
+        'financeReconcileToastOperationRemoveError', { description: CLOSED_PERIOD }));
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.warning).not.toHaveBeenCalled();
+      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
+    });
+
+    it('total failure: never falls back to the generic "Error al conciliar" key', async () => {
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: [], failedTransactionIds: ['A'], failureReason: CLOSED_PERIOD,
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalled());
+      // Regression guard: the generic reconcile-error copy is not merely un-toasted, it is never
+      // even requested from i18n on this (resolved-response) path. It stays reserved for the catch
+      // branch, where the request itself failed and no action can be named.
+      expect(toast.error).not.toHaveBeenCalledWith('financeReconcileToastError');
+      expect(toast.error).not.toHaveBeenCalledWith('financeReconcileToastError', undefined);
+      expect(uiCalls.some((c) => c.key === 'financeReconcileToastError')).toBe(false);
+    });
+
+    it('partial failure: keeps the partial key and adds the reason as the description', async () => {
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: ['A'], failedTransactionIds: ['B'], failureReason: CLOSED_PERIOD,
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.warning).toHaveBeenCalledWith(
+        'financeReconcileToastOperationPartiallyRemoved', { description: CLOSED_PERIOD }));
+      expect(toast.error).not.toHaveBeenCalled();
+      // The counts are unchanged by the added description.
+      const call = uiCalls.find((c) => c.key === 'financeReconcileToastOperationPartiallyRemoved');
+      expect(call.vars).toEqual({ removed: 1, total: 2, failed: 1 });
+    });
+
+    it('full success: never attaches a description, even if the backend echoes a reason', async () => {
+      // Defensive: `failureReason` is only meaningful alongside failed ids. With none, the success
+      // branch runs and the toast keeps its single-argument shape.
+      removeState.removeOperation = vi.fn().mockResolvedValue({
+        transactionIds: ['T1'], failedTransactionIds: [], failureReason: CLOSED_PERIOD,
+      });
+      setUpPartialLineWithCandidate();
+
+      await waitFor(() => expect(toast.success)
+        .toHaveBeenCalledWith('financeReconcileToastOperationRemoved'));
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(toast.warning).not.toHaveBeenCalled();
     });
 
     it('network/HTTP error (rejected promise): toast.error, but NO reload — nothing was attempted', async () => {
@@ -1186,272 +1581,65 @@ describe('ReconciliationSplitPanel', () => {
     });
   });
 
-  // ── "Reactivar" split-button action (lighter un-reconcile, keeps a draft) ──────
-  // Same checked selection as "Desconciliar (N)", but the reconciliation is REACTIVATED to draft
-  // (its pre-existing transactions stay linked and come back pre-selected) instead of deleted.
-  // Exposed as the dropdown item behind a chevron on the primary button.
-  describe('"Reactivar" split-button action', () => {
-    /** Opens the split button's dropdown menu (Radix — needs real pointer events). */
-    async function openMoreMenu() {
-      const user = userEvent.setup();
-      await user.click(screen.getByTestId('recon-action-reconcile-more'));
-      return user;
-    }
-
-    it('renders the chevron trigger only on a fully reconciled line', () => {
-      setLines([LINE_RECONCILED_MULTI]);
+  // ── ETP-5135 — "Reactivar" is gone from the reconciliation tab ─────────────────
+  // A processed reconciliation is a FINAL state: the split button collapsed back into a single
+  // "Desconciliar (N)" button, and the chevron that used to reveal the lighter "Reactivar" (which
+  // left the reconciliation in draft with its transactions still linked) no longer exists.
+  describe('processed reconciliation has no "Reactivar" escape hatch (ETP-5135)', () => {
+    it('ETP-5135: a fully reconciled line offers only Desconciliar — no chevron, no Reactivar item', () => {
+      setLines([LINE_RECONCILED_MULTI]); // 2 linked docs, both pre-checked → "Desconciliar (2)"
       setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
       renderPanel();
       fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
-      expect(screen.getByTestId('recon-action-reconcile-more')).toBeInTheDocument();
+
+      // The split button's chevron trigger and its dropdown item are both gone from the DOM.
+      expect(screen.queryByTestId('recon-action-reconcile-more')).toBeNull();
+      expect(screen.queryByTestId('recon-action-reactivate')).toBeNull();
+
+      // The only remaining way out is the primary un-reconcile button, still live and labelled.
+      const btn = screen.getByTestId('recon-action-reconcile');
+      expect(btn).toBeInTheDocument();
+      expect(btn).not.toBeDisabled();
+      expect(btn).toHaveTextContent('financeReconcileActionRemoveCount');
     });
 
-    it('does NOT render the chevron trigger for a pending line (plain "Conciliar")', () => {
-      setLines([LINE_A]);
-      setCandidates([CAND_MATCH]);
-      renderPanel();
-      fireEvent.click(screen.getByTestId('recon-line-radio-L1'));
-      expect(screen.queryByTestId('recon-action-reconcile-more')).not.toBeInTheDocument();
-      expect(screen.getByTestId('recon-action-reconcile'))
-        .toHaveTextContent('financeReconcileActionReconcileCount');
-    });
-
-    it('does NOT render the chevron trigger for a PARTIAL line (still reconciling the remainder)', () => {
-      setLines([LINE_PARTIAL]);
-      setCandidates([CAND_MATCH]);
-      renderPanel();
-      fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
-      expect(screen.queryByTestId('recon-action-reconcile-more')).not.toBeInTheDocument();
-    });
-
-    it('disables the chevron trigger when nothing is checked (removeCount === 0)', () => {
-      setLines([LINE_RECONCILED_TXNS]); // single linked doc T2, pre-checked by default
+    it('ETP-5135: unchecking every document disables the lone Desconciliar button', () => {
+      setLines([LINE_RECONCILED_TXNS]);
       setCandidates([RECON_CAND_T2]);
       renderPanel();
       fireEvent.click(screen.getByTestId('recon-line-radio-LR1'));
-      expect(screen.getByTestId('recon-action-reconcile-more')).not.toBeDisabled();
-      // Uncheck the only linked doc → count 0 → both the primary and the chevron go disabled.
+      expect(screen.getByTestId('recon-action-reconcile')).not.toBeDisabled();
+
+      // Uncheck the only linked doc → removeCount 0 → the button goes disabled. There is no
+      // second (chevron) control left that could stay enabled behind it.
       fireEvent.click(screen.getByTestId('recon-cand-check-T2'));
-      expect(screen.getByTestId('recon-action-reconcile-more')).toBeDisabled();
       expect(screen.getByTestId('recon-action-reconcile')).toBeDisabled();
+      expect(screen.queryByTestId('recon-action-reconcile-more')).toBeNull();
     });
 
-    it('opens the confirm dialog with the REACTIVATE copy (distinct from Desconciliar)', async () => {
-      setLines([LINE_RECONCILED_MULTI]); // 2 docs → "many" body
-      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
-      renderPanel();
-      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
-
-      const user = await openMoreMenu();
-      await user.click(screen.getByTestId('recon-action-reactivate'));
-
-      const dialog = screen.getByTestId('recon-remove-modal');
-      expect(dialog).toHaveTextContent('financeReconcileConfirmReactivateTitle');
-      expect(dialog).toHaveTextContent('financeReconcileConfirmReactivateManyBody');
-      // The Desconciliar copy must NOT leak into the reactivate dialog.
-      expect(dialog).not.toHaveTextContent('financeReconcileConfirmRemoveOneTitle');
-      expect(dialog).not.toHaveTextContent('financeReconcileConfirmRemoveManyBody');
-      // Confirm button carries the Reactivar label, not the Desconciliar one.
-      expect(screen.getByTestId('recon-remove-accept'))
-        .toHaveTextContent('financeReconcileActionReactivateSelected');
-      // Nothing hits the backend until confirmation.
-      expect(reactivateSelectedState.reactivateSelected).not.toHaveBeenCalled();
-      expect(removeState.removeOperation).not.toHaveBeenCalled();
-    });
-
-    it('uses the "one" reactivate body for a single checked doc', async () => {
-      setLines([LINE_RECONCILED_TXNS]); // single linked doc → count 1
-      setCandidates([RECON_CAND_T2]);
-      renderPanel();
-      fireEvent.click(screen.getByTestId('recon-line-radio-LR1'));
-
-      const user = await openMoreMenu();
-      await user.click(screen.getByTestId('recon-action-reactivate'));
-
-      const dialog = screen.getByTestId('recon-remove-modal');
-      expect(dialog).toHaveTextContent('financeReconcileConfirmReactivateOneBody');
-      expect(dialog).not.toHaveTextContent('financeReconcileConfirmReactivateManyBody');
-    });
-
-    it('still shows the created-payment bullet when the selection contains an auto-created txn', async () => {
-      setLines([LINE_RECONCILED_MULTI]); // T3 autoCreated: true → the payment IS still deleted
-      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
-      renderPanel();
-      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
-
-      const user = await openMoreMenu();
-      await user.click(screen.getByTestId('recon-action-reactivate'));
-
-      const modal = screen.getByTestId('recon-remove-modal');
-      expect(modal).toHaveTextContent('financeReconcileConfirmItemPaymentTitle');
-      expect(modal).toHaveTextContent('financeReconcileConfirmItemPaymentDesc');
-    });
-
-    it('omits the created-payment bullet when no checked doc is auto-created', async () => {
-      setLines([LINE_RECONCILED_TXNS]); // T2 autoCreated: false
-      setCandidates([RECON_CAND_T2]);
-      renderPanel();
-      fireEvent.click(screen.getByTestId('recon-line-radio-LR1'));
-
-      const user = await openMoreMenu();
-      await user.click(screen.getByTestId('recon-action-reactivate'));
-
-      const modal = screen.getByTestId('recon-remove-modal');
-      expect(modal).not.toHaveTextContent('financeReconcileConfirmItemPaymentTitle');
-      expect(modal).not.toHaveTextContent('financeReconcileConfirmItemPaymentDesc');
-    });
-
-    it('confirming calls reactivateSelected (NOT removeOperation) with the checked ids', async () => {
-      reactivateSelectedState.reactivateSelected = vi.fn().mockResolvedValue({
-        transactionIds: ['T3', 'T4'], failedTransactionIds: [],
-      });
-      setLines([LINE_RECONCILED_MULTI]);
-      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
-      const { props } = renderPanel();
-      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
-
-      const user = await openMoreMenu();
-      await user.click(screen.getByTestId('recon-action-reactivate'));
-      await user.click(screen.getByTestId('recon-remove-accept'));
-
-      await waitFor(() =>
-        expect(reactivateSelectedState.reactivateSelected).toHaveBeenCalledTimes(1));
-      // The lighter endpoint is used — the destructive one is never touched.
-      expect(removeState.removeOperation).not.toHaveBeenCalled();
-      const payload = reactivateSelectedState.reactivateSelected.mock.calls[0][0];
-      expect(payload.financialAccountId).toBe('ACC-1');
-      expect(payload.statementLineId).toBe('LR2');
-      expect([...payload.transactionIds].sort()).toEqual(['T3', 'T4']);
-      // Reactivate-specific success toast, and the shared reload/selection-clear still run.
-      await waitFor(() => expect(toast.success)
-        .toHaveBeenCalledWith('financeReconcileToastOperationReactivated'));
-      expect(toast.success).not.toHaveBeenCalledWith('financeReconcileToastOperationRemoved');
-      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
-      await waitFor(() => expect(props.onReconcileSuccess).toHaveBeenCalled());
-      await waitFor(() =>
-        expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
-    });
-
-    it('reuses the shared partial-outcome handling on the reactivate path', async () => {
-      // One reactivated, one still linked (e.g. Core refused: a draft already exists on the account).
-      reactivateSelectedState.reactivateSelected = vi.fn().mockResolvedValue({
-        transactionIds: ['T3'], failedTransactionIds: ['T4'],
-      });
+    it('ETP-5135: confirming always calls removeOperation — the reactivate branch is gone', async () => {
       setLines([LINE_RECONCILED_MULTI]);
       setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
       renderPanel();
       fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
-
-      const user = await openMoreMenu();
-      await user.click(screen.getByTestId('recon-action-reactivate'));
-      await user.click(screen.getByTestId('recon-remove-accept'));
-
-      await waitFor(() => expect(toast.warning)
-        .toHaveBeenCalledWith('financeReconcileToastOperationPartiallyRemoved'));
-      expect(toast.success).not.toHaveBeenCalled();
-      const call = uiCalls.find((c) => c.key === 'financeReconcileToastOperationPartiallyRemoved');
-      expect(call.vars).toEqual({ removed: 1, total: 2, failed: 1 });
-      // Always reload, even on a partial outcome.
-      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
-    });
-
-    // The "another draft will be confirmed" warning moved OUT of the result toast and INTO the
-    // confirm dialog (shown up front, before the user commits). The backend still returns
-    // `autoConfirmedDrafts`, but the frontend no longer reacts to it on the success path.
-    it('ignores autoConfirmedDrafts on the success path (the warning moved into the dialog)', async () => {
-      reactivateSelectedState.reactivateSelected = vi.fn().mockResolvedValue({
-        reactivated: true, transactionIds: ['T3', 'T4'], failedTransactionIds: [],
-        autoConfirmedDrafts: 2,
-      });
-      setLines([LINE_RECONCILED_MULTI]);
-      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
-      renderPanel();
-      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
-
-      const user = await openMoreMenu();
-      await user.click(screen.getByTestId('recon-action-reactivate'));
-      await user.click(screen.getByTestId('recon-remove-accept'));
-
-      // Plain success even though autoConfirmedDrafts > 0 — no result-toast warning any more.
-      await waitFor(() => expect(toast.success)
-        .toHaveBeenCalledWith('financeReconcileToastOperationReactivated'));
-      expect(toast.warning).not.toHaveBeenCalled();
-      expect(toast.error).not.toHaveBeenCalled();
-      await waitFor(() => expect(linesState.reload).toHaveBeenCalled());
-      await waitFor(() => expect(candidateCheckbox('T3')).not.toBeChecked());
-    });
-
-    // ── Up-front dialog warning (driven by draftReconciliationCount from the lines hook) ──
-
-    // The warning has no testid of its own — it is the shared cartel's single yellow warning box,
-    // whose copy SWITCHES to the "otro borrador" variant (and gains a matching bullet) when another
-    // draft exists. So assert on the copy, not on a dedicated element.
-    it('warns in the Reactivar dialog when another reconciliation is already in draft', async () => {
-      linesState.draftReconciliationCount = 1;
-      setLines([LINE_RECONCILED_MULTI]);
-      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
-      renderPanel();
-      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
-
-      const user = await openMoreMenu();
-      await user.click(screen.getByTestId('recon-action-reactivate'));
-
-      const modal = screen.getByTestId('recon-remove-modal');
-      expect(modal).toHaveTextContent('financeReconcileReactivateOtherDraftWarning');
-      // ...and the extra consequence bullet spelling out that the other draft gets confirmed.
-      expect(modal).toHaveTextContent('financeReconcileConfirmItemOtherDraftTitle');
-      expect(modal).toHaveTextContent('financeReconcileConfirmItemOtherDraftDesc');
-      // Shown BEFORE committing — nothing has been sent yet.
-      expect(reactivateSelectedState.reactivateSelected).not.toHaveBeenCalled();
-    });
-
-    it('does not warn in the Reactivar dialog when no other reconciliation is in draft', async () => {
-      linesState.draftReconciliationCount = 0;
-      setLines([LINE_RECONCILED_MULTI]);
-      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
-      renderPanel();
-      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
-
-      const user = await openMoreMenu();
-      await user.click(screen.getByTestId('recon-action-reactivate'));
-
-      const modal = screen.getByTestId('recon-remove-modal');
-      expect(modal).toBeInTheDocument();
-      expect(modal).not.toHaveTextContent('financeReconcileReactivateOtherDraftWarning');
-      expect(modal).not.toHaveTextContent('financeReconcileConfirmItemOtherDraftTitle');
-      expect(modal).not.toHaveTextContent('financeReconcileConfirmItemOtherDraftDesc');
-      // The plain reactivate caveat takes the warning box instead.
-      expect(modal).toHaveTextContent('financeReconcileConfirmReactivateWarning');
-    });
-
-    it('does not warn in the Desconciliar dialog even when another draft exists', async () => {
-      // The warning is gated on `reactivate` too: deleting the reconciliation never confirms the
-      // other draft, so the caveat does not apply to that action.
-      linesState.draftReconciliationCount = 3;
-      setLines([LINE_RECONCILED_MULTI]);
-      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
-      renderPanel();
-      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
-
-      // Primary button = Desconciliar (not the dropdown's Reactivar).
       fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+      fireEvent.click(screen.getByTestId('recon-remove-accept'));
 
-      const modal = screen.getByTestId('recon-remove-modal');
-      expect(modal).toBeInTheDocument();
-      expect(modal).not.toHaveTextContent('financeReconcileReactivateOtherDraftWarning');
-      expect(modal).not.toHaveTextContent('financeReconcileConfirmItemOtherDraftTitle');
-      expect(modal).not.toHaveTextContent('financeReconcileConfirmItemOtherDraftDesc');
-      // Desconciliar keeps its own warning copy.
-      expect(modal).toHaveTextContent('financeReconcileConfirmRemoveWarning');
+      await waitFor(() => expect(removeState.removeOperation).toHaveBeenCalledTimes(1));
+      // The destructive endpoint is the ONLY one the cartel can reach now.
+      await waitFor(() => expect(toast.success)
+        .toHaveBeenCalledWith('financeReconcileToastOperationRemoved'));
+      expect(uiCalls.some((c) => c.key.startsWith('financeReconcileToastOperationReactivat')))
+        .toBe(false);
     });
   });
 
   // ── The un-reconcile confirm cartel (shared LifecycleConfirmModal) ─────────────
-  // Both Desconciliar and Reactivar now render the SAME cartel Movimientos and Cobros/Pagos use
-  // (`recon-remove-*` testids come from its `testIdPrefix`): red title + sub, one consequence bullet
-  // per effect that actually applies, a single yellow warning box, then Cancelar + the destructive
-  // confirm. These tests pin the content matrix (which bullet / which warning / which confirm label)
-  // for each combination of action × auto-created payment × another-draft-open.
+  // Desconciliar renders the SAME cartel Movimientos and Cobros/Pagos use (`recon-remove-*` testids
+  // come from its `testIdPrefix`): red title + sub, one consequence bullet per effect that actually
+  // applies, a single yellow warning box, then Cancelar + the destructive confirm. Since ETP-5135 it
+  // serves a SINGLE action, so what is left to pin is the content matrix per auto-created payment,
+  // plus the guarantee that no reactivate wording survives anywhere in it.
   describe('un-reconcile confirm cartel (shared LifecycleConfirmModal)', () => {
     /** Selects the given reconciled line and opens the DESCONCILIAR cartel (primary button). */
     function openRemoveDialog(line, candidates) {
@@ -1461,18 +1649,6 @@ describe('ReconciliationSplitPanel', () => {
       fireEvent.click(screen.getByTestId(`recon-line-radio-${line.id}`));
       fireEvent.click(screen.getByTestId('recon-action-reconcile'));
       return rendered;
-    }
-
-    /** Same, but opens the REACTIVAR cartel through the split button's dropdown item. */
-    async function openReactivateDialog(line, candidates) {
-      setLines([line]);
-      setCandidates(candidates);
-      const rendered = renderPanel();
-      fireEvent.click(screen.getByTestId(`recon-line-radio-${line.id}`));
-      const user = userEvent.setup();
-      await user.click(screen.getByTestId('recon-action-reconcile-more'));
-      await user.click(screen.getByTestId('recon-action-reactivate'));
-      return { ...rendered, user };
     }
 
     const modal = () => screen.getByTestId('recon-remove-modal');
@@ -1510,41 +1686,10 @@ describe('ReconciliationSplitPanel', () => {
       expect(m).not.toHaveTextContent('financeReconcileConfirmReactivateTitle');
     });
 
-    // ── Reactivar content ───────────────────────────────────────────────────────
-    it('Reactivar: reactivate title/bullet/warning/confirm label, and no remove copy', async () => {
-      linesState.draftReconciliationCount = 0;
-      await openReactivateDialog(LINE_RECONCILED_TXNS, [RECON_CAND_T2]);
-      const m = modal();
-      expect(m).toHaveTextContent('financeReconcileConfirmReactivateTitle');
-      expect(m).toHaveTextContent('financeReconcileConfirmReactivateOneBody');
-      // Bullet 1 — same title, draft-preserving description.
-      expect(m).toHaveTextContent('reactivarItem1Title');
-      expect(m).toHaveTextContent('financeReconcileConfirmItemReactivateDesc');
-      expect(m).not.toHaveTextContent('financeReconcileConfirmItemRemoveDesc');
-      // With no other draft open, the plain reactivate caveat fills the warning box.
-      expect(m).toHaveTextContent('financeReconcileConfirmReactivateWarning');
-      expect(m).not.toHaveTextContent('financeReconcileReactivateOtherDraftWarning');
-      expect(m).not.toHaveTextContent('financeReconcileConfirmRemoveWarning');
-      expect(screen.getByTestId('recon-remove-accept'))
-        .toHaveTextContent('financeReconcileActionReactivateSelected');
-      expect(screen.getByTestId('recon-remove-accept'))
-        .not.toHaveTextContent('financeReconcileActionRemoveOne');
-    });
-
-    // ── Another-draft-open bullet + warning switch (draftReconciliationCount) ───
-    it('Reactivar with another draft open: extra bullet AND the switched warning copy', async () => {
-      linesState.draftReconciliationCount = 1;
-      await openReactivateDialog(LINE_RECONCILED_TXNS, [RECON_CAND_T2]);
-      const m = modal();
-      expect(m).toHaveTextContent('financeReconcileConfirmItemOtherDraftTitle');
-      expect(m).toHaveTextContent('financeReconcileConfirmItemOtherDraftDesc');
-      // The warning box copy SWITCHES (it is not additive — there is only one box).
-      expect(m).toHaveTextContent('financeReconcileReactivateOtherDraftWarning');
-      expect(m).not.toHaveTextContent('financeReconcileConfirmReactivateWarning');
-    });
-
+    // ── Another draft open is no longer a variable (ETP-5135) ───────────────────
     it('Desconciliar with another draft open: no extra bullet, warning unchanged', () => {
-      // Gated on `reactivate` too — deleting the reconciliation never confirms the other draft.
+      // The cartel has one wording now: deleting the reconciliation never confirms another draft,
+      // so `draftReconciliationCount` cannot change a single string in it.
       linesState.draftReconciliationCount = 1;
       openRemoveDialog(LINE_RECONCILED_TXNS, [RECON_CAND_T2]);
       const m = modal();
@@ -1554,81 +1699,87 @@ describe('ReconciliationSplitPanel', () => {
       expect(m).toHaveTextContent('financeReconcileConfirmRemoveWarning');
     });
 
-    // ── Created-payment bullet (hasAuto), both actions ──────────────────────────
-    it('shows the created-payment bullet on BOTH actions when the selection has an auto-created txn', async () => {
-      // Desconciliar first (LINE_RECONCILED_MULTI: T3 autoCreated, T4 not — both pre-checked).
+    // ── Created-payment bullet (hasAuto) ────────────────────────────────────────
+    it('shows the created-payment bullet when the selection has an auto-created txn', () => {
+      // LINE_RECONCILED_MULTI: T3 autoCreated, T4 not — both pre-checked, so the bullet applies.
       openRemoveDialog(LINE_RECONCILED_MULTI, [RECON_CAND_T3, RECON_CAND_T4]);
       expect(modal()).toHaveTextContent('financeReconcileConfirmItemPaymentTitle');
       expect(modal()).toHaveTextContent('financeReconcileConfirmItemPaymentDesc');
-      // Then the same selection through Reactivar — the payment is deleted in both cases.
+      // Reopening the same selection is stable — the bullet is derived from the txns, not latched.
       fireEvent.click(screen.getByTestId('recon-remove-cancel'));
-      const user = userEvent.setup();
-      await user.click(screen.getByTestId('recon-action-reconcile-more'));
-      await user.click(screen.getByTestId('recon-action-reactivate'));
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
       expect(modal()).toHaveTextContent('financeReconcileConfirmItemPaymentTitle');
       expect(modal()).toHaveTextContent('financeReconcileConfirmItemPaymentDesc');
     });
 
-    it('omits the created-payment bullet on BOTH actions when nothing was auto-created', async () => {
+    it('omits the created-payment bullet when nothing was auto-created', () => {
       openRemoveDialog(LINE_RECONCILED_TXNS, [RECON_CAND_T2]); // T2 autoCreated: false
       expect(modal()).not.toHaveTextContent('financeReconcileConfirmItemPaymentTitle');
       fireEvent.click(screen.getByTestId('recon-remove-cancel'));
-      const user = userEvent.setup();
-      await user.click(screen.getByTestId('recon-action-reconcile-more'));
-      await user.click(screen.getByTestId('recon-action-reactivate'));
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
       expect(modal()).not.toHaveTextContent('financeReconcileConfirmItemPaymentTitle');
       expect(modal()).not.toHaveTextContent('financeReconcileConfirmItemPaymentDesc');
     });
 
-    it('orders the bullets: reconciliation, then created payment, then other draft', async () => {
+    it('orders the bullets: reconciliation, then created payment', () => {
+      // Two bullets is the maximum now — the third ("otro borrador") only existed for Reactivar
+      // and went with it in ETP-5135, so a draft count cannot add anything after the payment one.
       linesState.draftReconciliationCount = 2;
-      // T3 is auto-created → all three bullets apply at once on the reactivate path.
-      await openReactivateDialog(LINE_RECONCILED_MULTI, [RECON_CAND_T3, RECON_CAND_T4]);
+      // T3 is auto-created → both remaining bullets apply at once.
+      openRemoveDialog(LINE_RECONCILED_MULTI, [RECON_CAND_T3, RECON_CAND_T4]);
       const text = modal().textContent;
       const first = text.indexOf('reactivarItem1Title');
       const payment = text.indexOf('financeReconcileConfirmItemPaymentTitle');
-      const otherDraft = text.indexOf('financeReconcileConfirmItemOtherDraftTitle');
       expect(first).toBeGreaterThan(-1);
       expect(payment).toBeGreaterThan(first);
-      expect(otherDraft).toBeGreaterThan(payment);
+      expect(text).not.toContain('financeReconcileConfirmItemOtherDraftTitle');
     });
 
     // ── Dismissal (cancel / ×) never touches the backend ───────────────────────
-    it('Cancelar closes the Desconciliar cartel without calling either endpoint', async () => {
+    it('Cancelar closes the Desconciliar cartel without calling the endpoint', async () => {
       openRemoveDialog(LINE_RECONCILED_MULTI, [RECON_CAND_T3, RECON_CAND_T4]);
       fireEvent.click(screen.getByTestId('recon-remove-cancel'));
       await waitFor(() =>
         expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
       expect(removeState.removeOperation).not.toHaveBeenCalled();
-      expect(reactivateSelectedState.reactivateSelected).not.toHaveBeenCalled();
       // The line stays selected, so the action bar is still usable.
       expect(screen.getByTestId('recon-line-radio-LR2')).toBeChecked();
     });
 
-    it('the × button closes the Desconciliar cartel without calling either endpoint', async () => {
+    it('the × button closes the Desconciliar cartel without calling the endpoint', async () => {
       openRemoveDialog(LINE_RECONCILED_MULTI, [RECON_CAND_T3, RECON_CAND_T4]);
       fireEvent.click(screen.getByTestId('recon-remove-close'));
       await waitFor(() =>
         expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
       expect(removeState.removeOperation).not.toHaveBeenCalled();
-      expect(reactivateSelectedState.reactivateSelected).not.toHaveBeenCalled();
     });
 
-    it('the × button closes the Reactivar cartel without calling either endpoint', async () => {
-      await openReactivateDialog(LINE_RECONCILED_MULTI, [RECON_CAND_T3, RECON_CAND_T4]);
+    // Same two dismissals from the OTHER entry point into this cartel — the per-row "−" unlink,
+    // which since ETP-5135 is the only other way to reach it.
+    it('the × button closes the cartel opened from the per-row unlink, endpoint untouched', async () => {
+      setLines([LINE_RECONCILED_TXNS]);
+      setCandidates([RECON_CAND_T2]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR1'));
+      fireEvent.click(screen.getByTestId('recon-unlink-T2'));
+      expect(modal()).toBeInTheDocument();
+
       fireEvent.click(screen.getByTestId('recon-remove-close'));
       await waitFor(() =>
         expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
-      expect(reactivateSelectedState.reactivateSelected).not.toHaveBeenCalled();
       expect(removeState.removeOperation).not.toHaveBeenCalled();
     });
 
-    it('Cancelar closes the Reactivar cartel without calling either endpoint', async () => {
-      await openReactivateDialog(LINE_RECONCILED_MULTI, [RECON_CAND_T3, RECON_CAND_T4]);
+    it('a dismissed cartel can be reopened — the request is cleared, not latched', async () => {
+      openRemoveDialog(LINE_RECONCILED_MULTI, [RECON_CAND_T3, RECON_CAND_T4]);
       fireEvent.click(screen.getByTestId('recon-remove-cancel'));
       await waitFor(() =>
         expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument());
-      expect(reactivateSelectedState.reactivateSelected).not.toHaveBeenCalled();
+
+      // Pressing "Desconciliar (N)" again brings the very same cartel back, unchanged.
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+      expect(modal()).toHaveTextContent('financeReconcileConfirmRemoveOneTitle');
+      expect(modal()).toHaveTextContent('financeReconcileConfirmRemoveManyBody');
       expect(removeState.removeOperation).not.toHaveBeenCalled();
     });
 
@@ -1663,6 +1814,8 @@ describe('ReconciliationSplitPanel', () => {
       const btn = screen.getByTestId('recon-action-reconcile');
       expect(btn).not.toHaveTextContent('financeReconcileActionReactivate');
       expect(btn).toHaveTextContent('financeReconcileActionReconcileCount');
+      // ETP-5135: a PARTIAL line never grew the split-button chevron, and now nothing does.
+      expect(screen.queryByTestId('recon-action-reconcile-more')).toBeNull();
     });
 
     it('calls the candidate hook with the remainderLineId (not the merged line id)', () => {
@@ -1719,6 +1872,138 @@ describe('ReconciliationSplitPanel', () => {
       const btn = screen.getByTestId('recon-action-reconcile');
       expect(btn).toHaveTextContent('financeReconcileActionRemoveCount');
       expect(btn).not.toHaveTextContent('financeReconcileActionReconcileCount');
+    });
+  });
+
+
+  // ETP-4921 QA — "la vista de conciliación se ve cortada; si cambio el zoom se ve bien".
+  // A long statement description stretched the auto-layout table past the panel, so Progreso and
+  // Importe ended up behind a horizontal scrollbar. The fix is structural (fixed table layout +
+  // an ellipsised description), which is why these assert on the layout contract rather than on
+  // pixels: jsdom does no layout, so nothing here can measure the overflow itself.
+  describe('column layout — Progreso and Importe stay in view', () => {
+    const LONG_DESC = 'TRANSFERENCIA INMEDIATA A FAVOR DE Galder Romo CONCEPTO Factura Nº : 10001754 1000896';
+
+    it('lays both tables out with fixed columns, so the free column absorbs the overflow', () => {
+      setLines([LINE_A]);
+      renderPanel();
+
+      const tables = screen.getAllByTestId('Table__d0f4d5');
+      expect(tables.length).toBeGreaterThan(0);
+      for (const table of tables) {
+        expect(table.className).toContain('table-fixed');
+      }
+    });
+
+    // Every column but the description declares a width; under `table-fixed` those widths are
+    // what the browser honours, so Progreso (90px) and Importe (139px) can no longer be pushed out.
+    it('keeps a declared width on the Progreso and Importe columns', () => {
+      setLines([LINE_A]);
+      renderPanel();
+
+      const heads = screen.getAllByTestId('TableHead__d0f4d5');
+      const classes = heads.map((h) => h.className);
+      expect(classes.some((c) => c.includes('w-[90px]'))).toBe(true);
+      expect(classes.some((c) => c.includes('w-[139px]'))).toBe(true);
+    });
+
+    it('ellipsises the statement description instead of widening the row', () => {
+      setLines([{ ...LINE_A, description: LONG_DESC }]);
+      renderPanel();
+
+      const desc = screen.getByTestId('recon-line-desc-L1');
+      expect(desc).toHaveTextContent(LONG_DESC);
+      expect(desc.className).toContain('truncate');
+    });
+
+    // The full text is not lost — it comes back on hover, which is the whole point of clipping it.
+    it('offers the full description in a tooltip once it is clipped', () => {
+      setLines([{ ...LINE_A, description: LONG_DESC }]);
+      renderPanel();
+
+      const desc = screen.getByTestId('recon-line-desc-L1');
+      // jsdom reports 0 for both metrics, so the overflow has to be stated explicitly.
+      Object.defineProperty(desc, 'scrollWidth', { configurable: true, value: 640 });
+      Object.defineProperty(desc, 'clientWidth', { configurable: true, value: 300 });
+
+      fireEvent.focus(desc);
+
+      expect(screen.getByTestId('recon-line-desc-L1-tooltip')).toHaveTextContent(LONG_DESC);
+    });
+
+    // The row still falls back through partnerName / referenceNo when there is no description.
+    /**
+     * ETP-4921 — the money headers carried an explicit `text-left` while every MoneyCell under
+     * them is `text-right`, so "Importe" / "Saldo pendiente" labelled the opposite edge of their
+     * own column. The generic DataTable right-aligns a numeric column's header; these two
+     * hand-rolled panels never inherited that.
+     */
+    it('right-aligns the money headers over their own figures', () => {
+      setLines([LINE_A]);
+      renderPanel();
+
+      const heads = screen.getAllByTestId('TableHead__d0f4d5');
+      const moneyHeads = heads.filter((h) => /financeReconcileCol(Amount|PendingBalance)/
+        .test(h.textContent));
+      // Left panel Importe + right panel Saldo pendiente & Importe.
+      expect(moneyHeads.length).toBeGreaterThan(0);
+      for (const h of moneyHeads) {
+        expect(h.className, h.textContent).toContain('text-right');
+        expect(h.className, h.textContent).not.toContain('text-left');
+      }
+    });
+
+    // Fecha / Descripción / Progreso name text or a bar, not a figure — they stay left.
+    it('leaves the non-money headers alone', () => {
+      setLines([LINE_A]);
+      renderPanel();
+
+      const heads = screen.getAllByTestId('TableHead__d0f4d5');
+      const textHeads = heads.filter((h) => /financeReconcileCol(Date|Description|Progress)/
+        .test(h.textContent));
+      expect(textHeads.length).toBeGreaterThan(0);
+      for (const h of textHeads) {
+        expect(h.className, h.textContent).not.toContain('text-right');
+      }
+    });
+
+    it('keeps the description fallback chain', () => {
+      setLines([{ id: 'L9', date: '2026-05-10T00:00:00Z', status: 'pending', amount: 5, partnerName: 'ACME' }]);
+      renderPanel();
+
+      expect(screen.getByTestId('recon-line-desc-L9')).toHaveTextContent('ACME');
+    });
+  });
+
+  // ETP-4956 — "Todo el tiempo" is encoded as `value === null`, which is indistinguishable
+  // from "nothing has been chosen", so computeTriggerLabel falls through to the placeholder.
+  // The placeholder used to be `financeReconcileFilterDate`, whose literal Spanish value is
+  // "Últimos 12 meses" — so the button kept advertising a 12-month window after the user had
+  // widened the filter to every date. It is now the generic `dateRangeAnyTime`.
+  describe('date range trigger after picking "all time"', () => {
+    it('reads the last-12-months preset on mount (the default period)', () => {
+      setLines([LINE_A]);
+      renderPanel();
+      expect(screen.getAllByText('dateRangeLast12Months').length).toBeGreaterThan(0);
+    });
+
+    it('stops advertising a 12-month window once "all time" is picked', async () => {
+      const user = userEvent.setup();
+      setLines([LINE_A]);
+      renderPanel();
+
+      // Open the picker from its trigger (which currently shows the default preset).
+      await user.click(screen.getAllByText('dateRangeLast12Months')[0]);
+
+      // The popover's "all time" preset emits `null` and closes the popover.
+      await user.click(await screen.findByText('dateRangeAllTime'));
+
+      // The trigger must no longer claim a bounded period…
+      expect(screen.queryByText('dateRangeLast12Months')).not.toBeInTheDocument();
+      // …nor fall back to the window-specific label that reads as one.
+      expect(screen.queryByText('financeReconcileFilterDate')).not.toBeInTheDocument();
+      // …and instead says "any date".
+      expect(screen.getAllByText('dateRangeAnyTime').length).toBeGreaterThan(0);
     });
   });
 

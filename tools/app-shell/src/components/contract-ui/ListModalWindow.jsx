@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog.jsx';
 import { PillToggle } from '@/components/PillToggle';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useNeoResource, getApiBase } from '@/hooks/useNeoResource.js';
 import { useUI, useMenuLabel, useLabel } from '@/i18n';
@@ -22,11 +23,35 @@ import { EntityForm } from './EntityForm.jsx';
 import { InfoBanner } from '../InfoBanner.jsx';
 import { ListModalCell, cellAlignClass } from './listModalCells.jsx';
 import { ListSortPopover } from './ListSortPopover.jsx';
+import { ListProgressBar } from './ListProgressBar.jsx';
+import { RefreshButton } from './RefreshButton.jsx';
 import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
 import { useClientSort } from '@/hooks/useClientSort';
 import { ListModalToolbarFilter } from './ListModalToolbarFilter.jsx';
 import { AdvancedFilterButton } from './AdvancedFilterButton.jsx';
 import { applyConditions } from '@/windows/custom/financial-account/advancedFilterApply';
+import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useActiveAccountingDimensions } from '@/hooks/useActiveAccountingDimensions.js';
+import { filterByActiveDimensions, hasDimensionFields } from '@/lib/accountingDimensions.js';
+import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
+import { useRowSelection } from '@/hooks/useRowSelection';
+import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
+
+// Row actions the grid should expose. A read-only role gets none, which also drops the whole
+// actions column. Kept out of the component so its branching does not count against the
+// component's cognitive complexity (Sonar javascript:S3776 — the function was already at 14 of
+// the 15 allowed before the selection work).
+function rowActionProps({ readOnly, allowClone, onEdit, onClone, onDelete }) {
+  if (readOnly) return {};
+  return { onEdit, onClone: allowClone ? onClone : undefined, onDelete };
+}
+
+// Bulk-delete outcome, per the shared three-outcome contract: refetch when anything was deleted,
+// and narrow the selection to the rows that failed (none left = cleared, all left = unchanged).
+function applyDeleteOutcome(succeeded, failed, reload, keepOnly) {
+  if (succeeded.length > 0) reload();
+  keepOnly(failed.map((row) => row.id));
+}
 
 // Resolve an i18n label, falling back to a default key when the configured key is
 // absent. Keeps title/submit-label expressions free of nested ternaries (Sonar S3358).
@@ -71,6 +96,75 @@ function canonFilterValue(v) {
 // Client-side filtering for the list: exact-match toolbar dropdown filters first,
 // then a free-text search over the searchable columns. Pure helper so the
 // component's useMemo stays trivial (keeps cognitive complexity low).
+/**
+ * The list region: first-fetch skeletons, or the grid with a refresh bar over it.
+ *
+ * Same three states as before, stated as one early return instead of two chained ternaries:
+ * a first fetch (loading, nothing on screen yet) shows skeletons and no bar; any later load
+ * keeps the rows mounted and puts the indeterminate bar above them; otherwise just the grid.
+ *
+ * Its own component so those decisions leave `ListModalWindow`'s body, which was over Sonar's
+ * cognitive-complexity ceiling (javascript:S3776) — the rule scores each function separately,
+ * and a window component's JSX is where its conditionals accumulate.
+ *
+ * @param {{ loading: boolean, hasRows: boolean, gridProps: object }} props
+ */
+function ListModalBody({ loading, hasRows, gridProps }) {
+  if (loading && !hasRows) {
+    return (
+      <div className="flex flex-col gap-2 px-2">
+        <Skeleton className="h-10 w-full" data-testid="Skeleton__19eda5" />
+        <Skeleton className="h-10 w-full" data-testid="Skeleton__19eda5" />
+        <Skeleton className="h-10 w-full" data-testid="Skeleton__19eda5" />
+      </div>
+    );
+  }
+  return (
+    <>
+      {/* Refresh indicator — only once rows are on screen; the first fetch shows the skeletons
+          above instead. */}
+      {loading ? (
+        <ListProgressBar testId="list-modal-progress-bar" data-testid="ListProgressBar__19eda5" />
+      ) : null}
+      {/* `pb-2` keeps the last row's hover shadow off the scroll boundary — the grid cancels the
+          base Table's own overflow precisely so that shadow is not clipped (see ListModalGrid). */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+        <ListModalGrid {...gridProps} data-testid="ListModalGrid__19eda5" />
+      </div>
+    </>
+  );
+}
+
+/**
+ * Rows ordered by the window's auto-priority field, ascending.
+ *
+ * Match rules are the case this exists for: their banner states that rows are evaluated in
+ * ascending priority order, so the list has to mirror that (10, 20, 30…). Rows with a missing or
+ * non-numeric priority sink to the end, and ties keep their order — `Array.prototype.sort` has
+ * been stable since ES2019, so equal rows stay in the order the backend sent them.
+ *
+ * Module-level rather than inline in the component: it is a named ordering rule, it is pure, and
+ * keeping the four-branch comparator out of the component body is what holds `ListModalWindow`
+ * under Sonar's cognitive-complexity ceiling (javascript:S3776).
+ *
+ * @param {Array<object>} rows
+ * @param {string|undefined} priorityField field to order by; falsy returns `rows` untouched
+ * @returns {Array<object>} a new array, or the original reference when there is nothing to do
+ */
+function orderByAutoPriority(rows, priorityField) {
+  if (!priorityField) return rows;
+  return [...rows].sort((a, b) => {
+    const av = Number(a?.[priorityField]);
+    const bv = Number(b?.[priorityField]);
+    const aok = Number.isFinite(av);
+    const bok = Number.isFinite(bv);
+    if (aok && bok) return av - bv;
+    if (aok) return -1;
+    if (bok) return 1;
+    return 0;
+  });
+}
+
 function filterRows(allRows, { toolbarFilters, filterValues, searchQuery, filters }) {
   let result = allRows;
   for (const f of toolbarFilters) {
@@ -161,6 +255,9 @@ function buildFilterColumns(columns, fields, ui, tMenu, tLabel) {
  * @param {string}   [props.breadcrumb]
  * @param {Array}    props.columns        grid column descriptors (carry cellType)
  * @param {Array}    props.fields         EntityForm field descriptors (grouped by section)
+ *   Descriptors whose AD `column` is an accounting dimension (`C_Project_ID`,
+ *   `C_Costcenter_ID`, `M_Product_ID`) are rendered only while that dimension is active in the
+ *   Accounting Schema; a section left with no visible field is dropped along with its heading.
  * @param {Array}    props.sections       ordered [{ key, label? }] for modal grouping
  * @param {string[]} props.filters        column keys used by the local search box
  * @param {object}   props.config         { titleKey, editTitleKey, subtitleKey,
@@ -182,13 +279,14 @@ export function ListModalWindow({
   entityLabel,
   breadcrumb,
   columns = [],
-  fields = [],
+  fields: fieldsProp = [],
   sections = [],
   filters = [],
   config = {},
   api,
   token: tokenProp,
   apiBaseUrl: apiBaseUrlProp,
+  window: windowConfig,
 }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
@@ -200,6 +298,20 @@ export function ListModalWindow({
   const apiBaseUrl = useMemo(
     () => apiBaseUrlProp || (api?.baseUrl ? `${getApiBase()}${api.baseUrl}` : getApiBase()),
     [apiBaseUrlProp, api],
+  );
+  const apiFetch = useApiFetch(apiBaseUrl);
+
+  // Accounting-dimension gating: a dimension switched off in the Accounting Schema must not be
+  // offered here either (ETP-4950). Recognised from each descriptor's AD column, so no window
+  // needs to opt in, and skipped entirely — no request — for a window with no dimension fields.
+  const gateDimensions = useMemo(() => hasDimensionFields(fieldsProp), [fieldsProp]);
+  const activeDimensions = useActiveAccountingDimensions(entity, {
+    apiBaseUrl,
+    enabled: gateDimensions,
+  });
+  const fields = useMemo(
+    () => (gateDimensions ? filterByActiveDimensions(fieldsProp, activeDimensions) : fieldsProp),
+    [gateDimensions, fieldsProp, activeDimensions],
   );
 
   const label = tMenu(entityLabel) || entityLabel || entity;
@@ -230,33 +342,30 @@ export function ListModalWindow({
     [columns, fields, ui, tMenu, tLabel],
   );
 
+  // Declared type per filter column, so `applyConditions` routes date columns
+  // through the calendar-day operators and numeric ones through the numeric
+  // comparisons. Without it every operator fell back to the generic string
+  // table, where `equals` string-compares a timestamp against a `yyyy-MM-dd`
+  // picker value and `lessThan`/`greaterThan` run through `parseFloat` — which
+  // reduces any ISO date to its YEAR (ETP-4956).
+  const filterColumnsByKey = useMemo(
+    () => Object.fromEntries(filterColumns.map((c) => [c.key, c])),
+    [filterColumns],
+  );
+
   // --- Local search over the configured filter columns ----------------------
   const [searchQuery, setSearchQuery] = useState('');
   const priorityOrdered = useMemo(
-    () => {
-      const filtered = applyConditions(
+    () => orderByAutoPriority(
+      applyConditions(
         filterRows(allRows, { toolbarFilters, filterValues, searchQuery, filters }),
         advancedFilter,
-      );
-      // Order by the auto-priority field ascending when the window declares one
-      // (e.g. match rules: the banner states rows are evaluated in ascending
-      // priority order, so the list must mirror that — 10, 20, 30…). Rows with a
-      // missing/non-numeric priority sink to the end; ties keep their order
-      // (Array.prototype.sort is stable).
-      const priorityField = config?.autoPriorityField;
-      if (!priorityField) return filtered;
-      return [...filtered].sort((a, b) => {
-        const av = Number(a?.[priorityField]);
-        const bv = Number(b?.[priorityField]);
-        const aok = Number.isFinite(av);
-        const bok = Number.isFinite(bv);
-        if (aok && bok) return av - bv;
-        if (aok) return -1;
-        if (bok) return 1;
-        return 0;
-      });
-    },
-    [allRows, searchQuery, filters, toolbarFilters, filterValues, advancedFilter, config],
+        undefined,
+        filterColumnsByKey,
+      ),
+      config?.autoPriorityField,
+    ),
+    [allRows, searchQuery, filters, toolbarFilters, filterValues, advancedFilter, config, filterColumnsByKey],
   );
 
   // Client-side sorting (ETP-4921). `useNeoResource` fetches the whole list in one request and
@@ -285,10 +394,22 @@ export function ListModalWindow({
 
   const requiredKeys = useMemo(() => fields.filter(f => f.required).map(f => f.key), [fields]);
 
-  const authHeaders = useCallback(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4950 — the generated page passes `window={{ ...,  readOnly: true }}` when the role's
+  // AD_Window_Access tier for this window is "read-only". This component used to drop that prop,
+  // so a read-only role still saw New / edit / clone / delete and the Active toggle, and only
+  // found out on click when NEO rejected the write (NeoAccessHelper gates write methods on
+  // AD_Window_Access.IsReadWrite). Honour it here instead.
+  const readOnly = Boolean(windowConfig?.readOnly);
+
+  // --- Multi-select + bulk delete ------------------------------------------
+  // Same affordance every other list in the app has (Cuentas, Movimientos, Extractos, and
+  // ListView's own grid): a checkbox column plus the floating "N selected" pill. Read-only roles
+  // get no selection at all — there is no action they could take with it.
+  const selectable = !readOnly;
+  const {
+    selectedIds, selectedRows, allSelected, someSelected,
+    toggleSelect, toggleSelectAll, clearSelection, keepOnly,
+  } = useRowSelection(data);
 
   // Read and translate a backend error message from a failed Response.
   const errorMessage = useCallback(async (res) => {
@@ -378,13 +499,12 @@ export function ListModalWindow({
     setSaving(true);
     setFormError(null);
     // Generic NEO W CRUD: POST {entity} creates, PUT {entity}/{id} updates.
-    const url = editingRow
-      ? `${apiBaseUrl}/${entity}/${encodeURIComponent(editingRow.id)}`
-      : `${apiBaseUrl}/${entity}`;
+    const path = editingRow
+      ? `/${entity}/${encodeURIComponent(editingRow.id)}`
+      : `/${entity}`;
     try {
-      const res = await fetch(url, {
+      const res = await apiFetch(path, {
         method: editingRow ? 'PUT' : 'POST',
-        headers: authHeaders(),
         body: JSON.stringify(formData),
       });
       if (!res.ok) {
@@ -398,16 +518,15 @@ export function ListModalWindow({
     } finally {
       setSaving(false);
     }
-  }, [missingRequired, editingRow, apiBaseUrl, entity, formData, authHeaders, ui, closeModal, reload, errorMessage]);
+  }, [missingRequired, editingRow, entity, formData, apiFetch, ui, closeModal, reload, errorMessage]);
 
   // Inline toggle: PATCH {entity}/{id} with optimistic UI handled by reload.
   const handleToggle = useCallback(async (row, col, nextChecked) => {
     const key = `${row.id}:${col.key}`;
     setSavingToggles(prev => ({ ...prev, [key]: true }));
     try {
-      const res = await fetch(`${apiBaseUrl}/${entity}/${encodeURIComponent(row.id)}`, {
+      const res = await apiFetch(`/${entity}/${encodeURIComponent(row.id)}`, {
         method: 'PATCH',
-        headers: authHeaders(),
         body: JSON.stringify({ [col.key]: nextChecked }),
       });
       if (!res.ok) {
@@ -424,16 +543,15 @@ export function ListModalWindow({
         return next;
       });
     }
-  }, [apiBaseUrl, entity, authHeaders, errorMessage, reload, ui]);
+  }, [entity, apiFetch, errorMessage, reload, ui]);
 
   // Delete confirmed from the dialog: DELETE {entity}/{id}, then reload.
   const handleDeleteConfirmed = useCallback(async () => {
     if (!deletingRow) return;
     setDeleting(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/${entity}/${encodeURIComponent(deletingRow.id)}`, {
+      const res = await apiFetch(`/${entity}/${encodeURIComponent(deletingRow.id)}`, {
         method: 'DELETE',
-        headers: authHeaders(),
       });
       if (!res.ok) {
         toast.error(await errorMessage(res));
@@ -446,7 +564,22 @@ export function ListModalWindow({
     } finally {
       setDeleting(false);
     }
-  }, [deletingRow, apiBaseUrl, entity, authHeaders, errorMessage, reload, ui]);
+  }, [deletingRow, entity, apiFetch, errorMessage, reload, ui]);
+
+  // Bulk delete of the checked rows. Reuses the shared hook every other grid uses, so the confirm
+  // dialog, the parallel DELETEs and the three-outcome toast (all / partial / none) behave
+  // identically here. On a partial failure only the rows that failed stay checked.
+  const applyBulkDeleteOutcome = useCallback(
+    (succeeded, failed) => applyDeleteOutcome(succeeded, failed, reload, keepOnly),
+    [reload, keepOnly],
+  );
+
+  const { requestBulkDelete, bulkDeleteDialog, deleting: bulkDeleting } = useBulkRowDelete({
+    apiBaseUrl,
+    entity,
+    token,
+    onSuccess: applyBulkDeleteOutcome,
+  });
 
   const handleBack = useCallback(() => {
     if (config?.backTo) navigate(config.backTo);
@@ -538,6 +671,13 @@ export function ListModalWindow({
             onClear={clearSort}
             isDefaultSort={isDefaultSort}
             data-testid="ListSortPopover__19eda5" />
+          {/* Same slot a generated list gives it (between sort and the create button). This
+              window draws its own toolbar, so it never inherited ListView's. */}
+          <RefreshButton
+            onRefresh={reload}
+            label={ui('refresh')}
+            data-testid="RefreshButton__19eda5" />
+          {!readOnly && (
           <button
             type="button"
             onClick={openCreate}
@@ -549,6 +689,7 @@ export function ListModalWindow({
               data-testid="Plus__19eda5" />
             {config?.newLabelKey ? ui(config.newLabelKey) : ui('newRecord')}
           </button>
+          )}
         </div>
       </div>
       {/* Dismissible banner explaining how the rows are evaluated */}
@@ -563,34 +704,46 @@ export function ListModalWindow({
           {ui(config.bannerKey)}
         </InfoBanner>
       )}
-      {/* Grid */}
-      {loading && allRows.length === 0 ? (
-        <div className="flex flex-col gap-2 px-2">
-          <Skeleton className="h-10 w-full" data-testid="Skeleton__19eda5" />
-          <Skeleton className="h-10 w-full" data-testid="Skeleton__19eda5" />
-          <Skeleton className="h-10 w-full" data-testid="Skeleton__19eda5" />
-        </div>
-      ) : (
-        // `pb-2` keeps the last row's hover shadow off the scroll boundary — the grid cancels the
-        // base Table's own overflow precisely so that shadow is not clipped (see ListModalGrid).
-        (<div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-          <ListModalGrid
-            columns={columns}
-            data={data}
-            sortKey={sortKey}
-            sortDirection={sortDirection}
-            onSort={toggleSort}
-            tMenu={tMenu}
-            ui={ui}
-            onEdit={openEdit}
-            onClone={config.allowClone ? openClone : undefined}
-            onDelete={(row) => setDeletingRow(row)}
-            deletingId={deleting ? deletingRow?.id : null}
-            onToggle={handleToggle}
-            savingToggles={savingToggles}
-            data-testid="ListModalGrid__19eda5" />
-        </div>)
+      {/* Floating "N selected" pill (portals to the viewport via SelectionToolbar), so it does not
+          take a slot in this flow. */}
+      {selectable && (
+        <BulkDeleteSelectionBar
+          count={selectedIds.size}
+          deleting={bulkDeleting}
+          onCancel={clearSelection}
+          onDelete={() => requestBulkDelete(selectedRows)}
+          data-testid="BulkDeleteSelectionBar__19eda5" />
       )}
+      <ListModalBody
+        loading={loading}
+        hasRows={allRows.length > 0}
+        gridProps={{
+          columns,
+          data,
+          sortKey,
+          sortDirection,
+          onSort: toggleSort,
+          tMenu,
+          ui,
+          ...rowActionProps({
+            readOnly,
+            allowClone: config.allowClone,
+            onEdit: openEdit,
+            onClone: openClone,
+            onDelete: setDeletingRow,
+          }),
+          deletingId: deleting ? deletingRow?.id : null,
+          onToggle: handleToggle,
+          savingToggles,
+          readOnly,
+          selectable,
+          selectedIds,
+          allSelected,
+          someSelected,
+          onToggleSelect: toggleSelect,
+          onToggleSelectAll: toggleSelectAll,
+        }}
+        data-testid="ListModalBody__19eda5" />
       {/* Create / edit modal — Figma "Nueva Regla de matcheo" layout:
           wide container, header (title + subtitle), multi-column body grouped by
           section, and a footer with an optional toggle (left) + pill submit (right). */}
@@ -677,6 +830,8 @@ export function ListModalWindow({
         onConfirm={handleDeleteConfirmed}
         ui={ui}
         data-testid="DeleteConfirmDialog__19eda5" />
+      {/* Bulk-delete confirm dialog owned by useBulkRowDelete — the host only has to render it. */}
+      {bulkDeleteDialog}
     </div>
   );
 }
@@ -777,9 +932,14 @@ function DeleteConfirmDialog({ open, busy, onCancel, onConfirm, ui }) {
 function ListModalGrid({
   columns, data, sortKey, sortDirection, onSort, tMenu, ui,
   onEdit, onClone, onDelete, deletingId, onToggle, savingToggles,
+  readOnly = false, selectable = false, selectedIds, allSelected, someSelected,
+  onToggleSelect, onToggleSelectAll,
 }) {
   const actionsColClass = onClone ? 'w-28' : 'w-20';
   const isEmpty = !data || data.length === 0;
+  const hasRowActions = Boolean(onEdit || onClone || onDelete);
+  // columns + the leading checkbox + the trailing actions column, whichever are present.
+  const colSpan = columns.length + (selectable ? 1 : 0) + (hasRowActions ? 1 : 0);
 
   return (
     // [&>div]:overflow-visible cancels the base Table's inner overflow-auto so the
@@ -790,6 +950,16 @@ function ListModalGrid({
           <TableRow
             className="border-b border-[hsl(var(--border-subtle))] hover:bg-transparent"
             data-testid="TableRow__19eda5">
+            {selectable && (
+              <TableHead className="w-10 px-3" data-testid="list-modal-select-all-head">
+                <Checkbox
+                  checked={allSelected}
+                  indeterminate={someSelected}
+                  onChange={onToggleSelectAll}
+                  aria-label={ui('selectAll')}
+                  data-testid="list-modal-select-all" />
+              </TableHead>
+            )}
             {columns.map((col) => (
               <TableHead
                 key={col.key}
@@ -809,19 +979,19 @@ function ListModalGrid({
               </TableHead>
             ))}
             {/* Actions column header */}
-            <TableHead
-              className={cn(actionsColClass, 'p-0')}
-              aria-hidden="true"
-              data-testid="TableHead__19eda5" />
+            {hasRowActions && (
+              <TableHead
+                className={cn(actionsColClass, 'p-0')}
+                aria-hidden="true"
+                data-testid="TableHead__19eda5" />
+            )}
           </TableRow>
         </TableHeader>
         <TableBody data-testid="TableBody__19eda5">
           {isEmpty ? (
             <TableRow className="hover:bg-transparent" data-testid="TableRow__19eda5">
               <TableCell
-                // columns + the trailing actions column. Was +2 while a drag-handle column led
-                // every row; that column is gone (ETP-4921).
-                colSpan={columns.length + 1}
+                colSpan={colSpan}
                 className="py-12 text-center text-[hsl(var(--muted-foreground))]"
                 data-testid="list-modal-empty"
               >
@@ -835,6 +1005,15 @@ function ListModalGrid({
               data-testid={`list-modal-row-${row.id}`}
               className="group/row relative border-b border-[hsl(var(--border-subtle))] bg-card transition-shadow hover:z-10 hover:bg-card hover:shadow-lg"
             >
+              {selectable && (
+                <TableCell className="w-10 px-3" data-testid={`list-modal-select-cell-${row.id}`}>
+                  <Checkbox
+                    checked={selectedIds?.has(row.id) ?? false}
+                    onChange={() => onToggleSelect?.(row.id)}
+                    aria-label={ui('selectRow')}
+                    data-testid={`list-modal-select-${row.id}`} />
+                </TableCell>
+              )}
               {columns.map((col) => (
                 <TableCell
                   key={col.key}
@@ -846,22 +1025,26 @@ function ListModalGrid({
                     tMenu={tMenu}
                     ui={ui}
                     onToggle={onToggle}
+                    readOnly={readOnly}
                     savingToggle={savingToggles[`${row.id}:${col.key}`]}
                     data-testid="ListModalCell__19eda5" />
                 </TableCell>
               ))}
               {/* Hover row actions */}
+              {hasRowActions && (
               <TableCell className={cn(actionsColClass, 'p-0')} data-testid="TableCell__19eda5">
                 <div className={cn('flex items-center justify-center gap-1 opacity-0 transition-opacity group-hover/row:opacity-100', actionsColClass)}>
+                  {onEdit && (
                   <button
                     type="button"
-                    onClick={() => onEdit?.(row)}
+                    onClick={() => onEdit(row)}
                     aria-label={ui('edit')}
                     data-testid={`list-modal-edit-${row.id}`}
                     className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] transition-colors hover:bg-[hsl(var(--border-subtle))]"
                   >
                     <Pencil className="h-4 w-4" data-testid="Pencil__19eda5" />
                   </button>
+                  )}
                   {onClone && (
                     <button
                       type="button"
@@ -889,6 +1072,7 @@ function ListModalGrid({
                   )}
                 </div>
               </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>

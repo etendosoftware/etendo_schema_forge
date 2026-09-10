@@ -51,7 +51,22 @@ describe('StatementLinesInline', () => {
   it('forwards the statementId to the useBankStatementLines hook', () => {
     linesMock.mockReturnValue({ lines: [], loading: false });
     render(<StatementLinesInline statementId="s-42" />);
-    expect(linesMock).toHaveBeenCalledWith('s-42');
+    expect(linesMock).toHaveBeenCalledWith('s-42', 0);
+  });
+
+  /**
+   * ETP-4921 — these lines are fetched by statementId alone, so nothing invalidated them when the
+   * edit modal above changed a line: the header row showed the new total while the expanded rows
+   * kept the pre-edit amounts, and the toolbar's refresh button (which reloads only the headers)
+   * looked broken. The tab now bumps a token on every mutation; it has to reach the hook.
+   */
+  it('forwards the refresh token so an outside mutation can invalidate the lines', () => {
+    linesMock.mockReturnValue({ lines: [], loading: false });
+    const { rerender } = render(<StatementLinesInline statementId="s-42" refreshToken={3} />);
+    expect(linesMock).toHaveBeenLastCalledWith('s-42', 3);
+
+    rerender(<StatementLinesInline statementId="s-42" refreshToken={4} />);
+    expect(linesMock).toHaveBeenLastCalledWith('s-42', 4);
   });
 
   it('renders loading skeletons (no rows) when loading=true', () => {
@@ -304,6 +319,31 @@ describe('StatementLinesInline', () => {
       render(<StatementLinesInline statementId="s1" />);
       expect(screen.getByTestId('statement-line-txn-l1'))
         .toHaveTextContent('financeAccountStatementLinesTxnChipMulti');
+    });
+  });
+
+  /**
+   * ETP-4921 — Salida / Entrada label right-aligned figures, so the header sat at the opposite
+   * edge of the column from the amount it names. The generic DataTable right-aligns numeric
+   * headers automatically; this mini-grid is hand-rolled and never inherited that.
+   */
+  describe('numeric header alignment', () => {
+    const headerFor = (labelKey) => screen.getByText(labelKey);
+
+    it('right-aligns the Salida / Entrada headers', () => {
+      linesMock.mockReturnValue({ lines: [], loading: false });
+      render(<StatementLinesInline statementId="s1" />);
+
+      expect(headerFor('financeAccountStatementLinesColDramount').className).toContain('text-right');
+      expect(headerFor('financeAccountStatementLinesColCramount').className).toContain('text-right');
+    });
+
+    it('leaves the text headers left-aligned', () => {
+      linesMock.mockReturnValue({ lines: [], loading: false });
+      render(<StatementLinesInline statementId="s1" />);
+
+      expect(headerFor('financeAccountStatementLinesColDate').className).not.toContain('text-right');
+      expect(headerFor('financeAccountStatementLinesColMatched').className).not.toContain('text-right');
     });
   });
 });

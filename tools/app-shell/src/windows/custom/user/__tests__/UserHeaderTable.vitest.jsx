@@ -149,8 +149,12 @@ describe('UserHeaderTable — layout', () => {
     render(<UserHeaderTable data={ROWS} />);
 
     await screen.findByTestId('data-table');
+    // ETP-5198 — `businessPartner` ("Contacto") and `locked` ("Bloqueado") were dropped
+    // from the hand-mirrored column list: neither is a user-editable field, so neither
+    // belongs as a grid column (or, by extension, as an AdvancedFilterButton filter
+    // option — every grid column doubles as a filter option).
     expect(tableProps.columns.map((c) => c.key)).toEqual([
-      'name', 'businessPartner', 'email', 'locked', 'active', 'invitationStatus', 'defaultRole',
+      'name', 'email', 'active', 'invitationStatus', 'defaultRole',
     ]);
   });
 

@@ -65,7 +65,7 @@ import CreateContactModal, { getBillingPatch } from '../CreateContactModal.jsx';
 describe('CreateContactModal', () => {
   const defaultProps = {
     bpApiBaseUrl: 'http://localhost/sws/neo/contacts',
-    headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+    headers: { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
     onClose: vi.fn(),
     onCreated: vi.fn(),
     initialQuery: '',
@@ -254,7 +254,7 @@ describe('CreateContactModal', () => {
 describe('CreateContactModal — pre-fill', () => {
   const baseProps = {
     bpApiBaseUrl: 'http://localhost/sws/neo/contacts',
-    headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+    headers: { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
     onClose: vi.fn(),
     onCreated: vi.fn(),
   };

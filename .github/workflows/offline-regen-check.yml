@@ -17,7 +17,7 @@ on:
     # as soon as the workflow lands there. `feature/ETP-3993` is here
     # temporarily so the workflow runs on every push while we iterate on the
     # offline regen check itself — remove it once it has merged upstream.
-    branches: [main, develop, "epic/**", "feature/ETP-3993"]
+    branches: [main, develop]
   workflow_dispatch:
 
 jobs:
@@ -53,7 +53,6 @@ jobs:
 
           case "$GIT_BRANCH" in
             hotfix/*)  FALLBACK="$MAIN_BRANCH" ;;
-            feature/*) FALLBACK="epic/ETP-3504" ;;
             *)         FALLBACK="$DEVELOP_BRANCH" ;;
           esac
           echo "FALLBACK=$FALLBACK" >> "$GITHUB_OUTPUT"

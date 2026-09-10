@@ -6,6 +6,7 @@ import FiscalDefaultsSection from './FiscalDefaultsSection';
 import ContactsSummaryWidget from './ContactsSummaryWidget';
 
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 function CreditLimitStepper({ value, readOnly, onChange, onBlur, saving }) {
   const ui = useUI();
   const num = value === '' || value == null ? 0 : Number(value);
@@ -62,6 +63,7 @@ function CreditLimitStepper({ value, readOnly, onChange, onBlur, saving }) {
 
 export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalogs, api, editing, onChange }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [creditTaxDraft, setCreditTaxDraft] = useState({});
   const [savingField, setSavingField] = useState(null);
   const draftRef = useRef({});
@@ -94,12 +96,8 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
         ? (currentValue === '' || currentValue == null ? null : Number(currentValue))
         : (currentValue === '' ? null : currentValue);
       const payload = { [fieldKey]: normalizedValue };
-      const res = await fetch(`${apiBaseUrl}/businessPartner/${data.id}`, {
+      const res = await apiFetch(`/businessPartner/${data.id}`, {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(payload),
       });
 

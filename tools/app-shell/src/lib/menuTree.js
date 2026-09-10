@@ -1,3 +1,4 @@
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 function detectBase() {
   const path = window.location.pathname;
   const webIdx = path.indexOf('/web/');
@@ -31,14 +32,14 @@ function getToken() {
 async function callMenuWebhook(params) {
   const url = `${NEO_BASE}/listmenu`;
   const token = getToken();
-  // No Content-Type: this is a GET with no body, and application/json isn't a
-  // CORS-safelisted value — setting it unnecessarily triggers a preflight
-  // OPTIONS request (and risks it failing) whenever VITE_API_BASE points at a
-  // different origin than the SPA.
-  const headers = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  // apiFetch sets NO Content-Type on a bodyless request, preserving the reason these headers
+  // were once hand-built: a GET has no body, and application/json isn't a CORS-safelisted
+  // value, so setting it would trigger a preflight OPTIONS whenever VITE_API_BASE points at a
+  // different origin than the SPA. It also sends Accept-Language — which IS CORS-safelisted,
+  // so the preflight concern still doesn't apply — without which the menu labels came back in
+  // the AD language (ETP-5022).
   const query = new URLSearchParams(params).toString();
-  const res = await fetch(query ? `${url}?${query}` : url, { headers });
+  const res = await apiFetch(query ? `${url}?${query}` : url, { baseUrl: '', token });
   const text = await res.text();
   let data;
   let parsed = true;

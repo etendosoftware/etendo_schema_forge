@@ -1,9 +1,12 @@
 import { registerImportDescriptor } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
+import { registerImportRowValidator } from '@etendosoftware/app-shell-core/lib/import/rowValidators.js';
 import { getFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResolvers.js';
 import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendosoftware/app-shell-core/lib/import/resolveDependentEntity.js';
-import { resolveCodedCellOrThrow } from '@/lib/codedValue.js';
+import { resolveCodedCellOrThrow, codedCellError, codeLabels } from '@/lib/codedValue.js';
+import { registerExportHints } from '@/lib/importExportColumns.js';
 import { asDependentEntityInput } from '@/lib/dependentEntityCell.js';
 
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // `creditLimit` used to be listed here with no matching decisions.json column, so nothing
 // could ever populate it — the mirror image of the "column with no consumer" problem.
 const BP_TARGETS = ['name', 'etgoFirstname', 'etgoLastname', 'etgoEmail', 'etgoPhone', 'etgoWeb', 'oBTIKTaxIDKey', 'etgoIsperson', 'taxID'];
@@ -24,7 +27,7 @@ async function fetchBusinessPartnerCategories(token) {
   const base = detectEtendoBase();
   const url = `${base}/sws/neo/business-partner-category/businessPartnerCategory?limit=1000`;
   try {
-    const res = await fetch(url, { credentials: 'include', headers: { Authorization: `Bearer ${token}` } });
+    const res = await apiFetch(url, { baseUrl: '', token });
     if (!res.ok) return [];
     const json = await res.json().catch(() => null);
     const data = json?.response?.data ?? json?.data ?? [];
@@ -74,8 +77,9 @@ const DEFAULT_TAX_ID_KEY = '1';
 const TAX_ID_KEY_VALUES = {
   // 'CIF' is not an AD_Ref_List name, but it is what people actually type: CIF was the
   // Spanish company tax ID until it was folded into NIF in 2008, and this window's own
-  // tax-id column is labelled "CIF/NIF". A QA plan authored independently used 'CIF' here
-  // too, which is evidence enough that rejecting it would just be pedantry.
+  // tax-id column was labelled "CIF/NIF" until ETP-4992 renamed it to "NIF" (CIF no longer
+  // exists in Spain). A QA plan authored independently used 'CIF' here too, which is
+  // evidence enough that rejecting it would just be pedantry.
   1: ['NIF', 'CIF', 'CIF/NIF', 'NIF/CIF'],
   2: ['NOI'],
   3: ['Pasaporte', 'Passport'],
@@ -151,10 +155,10 @@ async function resolveCategoryId(row, config) {
   const createFn = config.createCategoryFn || (async ({ searchKey, name }) => {
     const base = detectEtendoBase();
     const url = `${base}/sws/neo/business-partner-category/businessPartnerCategory`;
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.token}` },
+      baseUrl: '',
+      token: config.token,
       body: JSON.stringify({ searchKey, name }),
     });
     if (!res.ok) {
@@ -194,21 +198,95 @@ async function resolveLocation(row, config) {
       : `The country "${row.country}" could not be resolved to an existing record.`;
     throw new Error(message);
   }
-  let regionId;
-  if (row.region) {
-    const resolveRegion = config.resolveRegionFn || getFkResolver('contacts-region');
-    const regionResult = await resolveRegion(row.region, { token: config.token, countryId: countryResult.id });
-    if (regionResult.status === 'auto-resolved') regionId = regionResult.id;
-  }
   return {
     id: 'location', spec: config.spec, entity: 'locationAddress', parentRef: 'bp',
     body: {
       name: [row.city, row.address].filter(Boolean).join(', ') || 'Location',
       addressLine1: row.address, cityName: row.city, postalCode: row.postal,
-      country: countryResult.id, ...(regionId ? { region: regionId } : {}),
+      country: countryResult.id,
+      // ETP-4997: the province travels as free text and `ContactsLocationAddressHandler`
+      // resolves it, scoped to the country in this very payload. It used to be resolved here,
+      // which could not work: scoping the candidates meant fetching each one's country from
+      // `/sws/neo/contacts/region`, and no NEO spec exposes a region entity — every fetch 404'd,
+      // every candidate was discarded, and the field was skipped WITHOUT an error, so an address
+      // silently arrived with no province. The server has the country in hand and the client
+      // context needed to tell the tenant's own province row from the System one, so it is the
+      // only place the lookup can be decided at all.
+      // Trimmed before the check, not just before sending: a cell holding only spaces is
+      // visually empty to whoever typed it, but it is truthy here, so the raw value would ship
+      // the key — and the key's PRESENCE is what the handler reads as an instruction. Blank
+      // must be indistinguishable from absent.
+      ...(String(row.region ?? '').trim() ? { regionName: row.region.trim() } : {}),
     },
   };
 }
+
+/**
+ * ETP-4996: the two AD-coded columns are checked while the user is still REVIEWING the
+ * file, not when the row is sent. Before this, a mistyped "Persona Fisica" sat in the
+ * Correctas tab, and the user only discovered the problem after confirming the import.
+ *
+ * Same tables and same wording as the send path below — see `codedCellError`.
+ */
+registerImportRowValidator('contacts', (row, { translate } = {}) => [
+  codedCellError(row.oBTIKTaxIDKey, TAX_ID_KEY_VALUES, {
+    target: 'oBTIKTaxIDKey', fieldLabelKey: 'importFieldTaxIdType', fieldLabelFallback: 'Tax ID Type', translate,
+  }),
+  codedCellError(row.etgoIsperson, IS_PERSON_VALUES, {
+    target: 'etgoIsperson', fieldLabelKey: 'importFieldContactType', fieldLabelFallback: 'Contact Type', translate,
+  }),
+].filter(Boolean));
+
+// ETP-4997 — the CSV export derives its columns from these same import fields, but reads the
+// values off a businessPartner LIST row, where the names do not always line up. Only the
+// exceptions are declared; every other target is read straight off the row.
+//
+// The ten child-scoped fields (the contact person on AD_User, the address on
+// C_BPartner_Location + C_Location) are NOT on a C_BPartner row at all — its only
+// address-shaped property is `eTGOLocation`, one concatenated display string that cannot be
+// split back into columns. `BusinessPartnerHandler.attachChildData` therefore attaches each
+// partner's primary contact and primary address under `etgoChildData` when the list GET carries
+// `includeChildData=1` (which ListView's export sends), and these dotted paths read them —
+// `NeoCsvExportService` resolves a dotted column key into nested values. Nested rather than
+// flattened so the added keys cannot collide with a DAL property.
+//
+// Without the flag those columns come back empty, which is still a valid file: the headers match
+// the template, so a user can fill them in by hand. The export always sends it.
+registerExportHints('contacts', {
+  sourceKeys: {
+    // Written as `category`, but the list row carries the FK as `businessPartnerCategory`
+    // (+ its `$_identifier` label, which is the half the import can resolve back).
+    category: 'businessPartnerCategory$_identifier',
+    // Contact person (AD_User) — the oldest active one, the same contact the `etgoEmail`
+    // fallback picks, so the two can never name different people.
+    email: 'etgoChildData.email',
+    firstName: 'etgoChildData.firstName',
+    lastName: 'etgoChildData.lastName',
+    phone: 'etgoChildData.phone',
+    position: 'etgoChildData.position',
+    // Address (C_Location) — bill-to, then ship-to, then newest, mirroring ETGO_GET_LOCATION so
+    // the exported address is the one the grid's Location column already shows.
+    address: 'etgoChildData.address',
+    city: 'etgoChildData.city',
+    postal: 'etgoChildData.postal',
+    country: 'etgoChildData.country',
+    region: 'etgoChildData.region',
+  },
+  // Codes are unreadable in a spreadsheet ("false", "6"), which defeats the edit half of
+  // export -> edit -> import. Both tables are inverted from the very synonym tables validated
+  // above, so every exported word is one this descriptor accepts back.
+  valueLabels: {
+    // EM_Etgo_Isperson is an AD Yes/No column, so the list row carries a JSON boolean rather
+    // than the 'Y'/'N' the synonym table is keyed by. Both spellings are mapped: NEO serializes
+    // it as `true`/`false` today, and a Yes/No column read through another path still answers
+    // 'Y'/'N'.
+    etgoIsperson: {
+      true: IS_PERSON_VALUES.Y[0], Y: IS_PERSON_VALUES.Y[0],
+      false: IS_PERSON_VALUES.N[0], N: IS_PERSON_VALUES.N[0],
+    },
+    oBTIKTaxIDKey: codeLabels(TAX_ID_KEY_VALUES),
+  },
+});
 
 registerImportDescriptor('contacts', async (row, config) => {
   const bpFields = pick(row, BP_TARGETS);

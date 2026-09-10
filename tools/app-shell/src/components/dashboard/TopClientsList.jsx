@@ -7,7 +7,8 @@ import { formatDashboardAmount, localeFromUi } from '@/lib/dashboardNumberFormat
 import { resolveDashboardNavigation } from '@/lib/dashboardNavigation.js';
 import { DASHBOARD_KPI_IDS, trackDashboardKpi } from '@/lib/dashboardKpiTelemetry.js';
 
-async function resolveClientRoute({ client, token, apiBaseUrl }) {
+import { useApiFetch } from '@/auth/useApiFetch.js';
+async function resolveClientRoute({ client, token, apiBaseUrl, apiFetch }) {
   const directRoute = resolveDashboardNavigation(client?.navigation);
   if (directRoute) return directRoute;
   if (client?.id) return `/contacts/${client.id}`;
@@ -21,9 +22,8 @@ async function resolveClientRoute({ client, token, apiBaseUrl }) {
   }));
 
   try {
-    const res = await fetch(
-      `${apiBaseUrl}/contacts/businessPartner?_sortBy=name asc&_startRow=0&_endRow=10&criteria=${criteria}`,
-      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    const res = await apiFetch(
+      `/contacts/businessPartner?_sortBy=name asc&_startRow=0&_endRow=10&criteria=${criteria}`
     );
     if (!res.ok) return '/contacts';
     const json = await res.json();
@@ -35,12 +35,19 @@ async function resolveClientRoute({ client, token, apiBaseUrl }) {
   }
 }
 
-export function TopClientsList({ clients = [], currencyLabel = '', token = '', apiBaseUrl = '' }) {
+/**
+ * ETP-5088 — `canCreateContact` gate the empty state's creation CTAs (including "create with Copilot", whose
+ * only purpose here is to create that same record). Creation actions need the WRITE tier on the
+ * target window, not mere visibility. Default `true` so existing callers and tests keep their
+ * behaviour; `DashboardPage` passes the resolved values.
+ */
+export function TopClientsList({ clients = [], currencyLabel = '', token = '', apiBaseUrl = '', canCreateContact = true }) {
   const ui = useUI();
   const navigate = useNavigate();
   const { locale } = useLocaleSwitch();
   const numberLocale = localeFromUi(locale);
   const { open: openCopilot } = useCopilot();
+  const apiFetch = useApiFetch(apiBaseUrl);
 
   const handleClick = async (client) => {
     trackDashboardKpi('dashboard_document_opened', {
@@ -48,7 +55,7 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
       entityType: 'business_partner',
       source: 'dashboard_top_clients',
     });
-    const route = await resolveClientRoute({ client, token, apiBaseUrl });
+    const route = await resolveClientRoute({ client, token, apiBaseUrl, apiFetch });
     navigate(route);
   };
 
@@ -76,6 +83,8 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
               </p>
             </div>
             <div className="flex flex-row items-center" style={{ gap: '12px' }}>
+              {canCreateContact && (
+              <>
               <button
                 type="button"
                 onClick={openCopilot}
@@ -102,6 +111,8 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
                   {ui('newClient')}
                 </span>
               </button>
+              </>
+              )}
             </div>
           </div>
         </div>

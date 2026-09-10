@@ -70,11 +70,16 @@ const TAX_ENTITY_NAME = 'tax';
  *                                       derive the shared NEO root from it.
  * @param {string}   props.token         NEO bearer token.
  * @param {Function} props.onClose       () => void — called on cancel/backdrop/save.
+ * @param {{showTbai: boolean, showVerifactu: boolean}|null} [props.targets] document-direction
+ *   gate from `getInvoiceFiscalTargets()`, forwarded verbatim to `selectSifFields()`
+ *   (ETP-5027). The caller (`useTaxSifLineRowActions`) already refuses to open this
+ *   modal when the gate yields zero fields, so this is a defence-in-depth pass-through:
+ *   it guarantees the modal can never render an editable key the document could not send.
  * @param {Function} props.onSaved       (updatedTaxRecord) => void — called after a
  *                                       successful PATCH, so the caller can refresh its
  *                                       local tax-completeness cache without a full reload.
  */
-export default function TaxSifModal({ taxId, apiBaseUrl, token, onClose, onSaved }) {
+export default function TaxSifModal({ taxId, apiBaseUrl, token, onClose, onSaved, targets = null }) {
   const ui = useUI();
   const { selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
@@ -158,8 +163,8 @@ export default function TaxSifModal({ taxId, apiBaseUrl, token, onClose, onSaved
   }, [taxId, token, apiBaseUrl]);
 
   const selectedFields = useMemo(
-    () => (editing ? selectSifFields({ profile, verifactuRecord, data: editing, ui }) : []),
-    [profile, verifactuRecord, editing, ui],
+    () => (editing ? selectSifFields({ profile, verifactuRecord, data: editing, ui, targets }) : []),
+    [profile, verifactuRecord, editing, ui, targets],
   );
 
   const handleChange = useCallback((key, value) => {
@@ -213,6 +218,14 @@ export default function TaxSifModal({ taxId, apiBaseUrl, token, onClose, onSaved
     () => selectedFields.some((field) => editing?.[field.key] !== original?.[field.key]),
     [selectedFields, editing, original],
   );
+
+  // ETP-5027 — a modal with nothing to configure is a dead end: it would show only a
+  // title, the tax badge, a caption and a permanently-disabled Save. That state is now
+  // reachable in one more way than before (the document-direction gate in `targets`
+  // zeroing out the fields), so render NOTHING instead of an empty dialog. Placed after
+  // every hook so hook order stays stable, and guarded on `!loading` so the loading
+  // dialog still shows while the record is being fetched.
+  if (!loading && selectedFields.length === 0) return null;
 
   return (
     <Dialog open={Boolean(taxId)} onOpenChange={handleOpenChange} data-testid="Dialog__taxsifmodal">

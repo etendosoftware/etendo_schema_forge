@@ -1,3 +1,4 @@
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 /**
  * Thin client for the NEO Headless attachments endpoints
  * (com.etendoerp.go NeoBuiltInEndpointHandler /sws/neo/attachments/*).
@@ -30,10 +31,10 @@ export async function listAttachments({ token, tableName, recordId, apiBaseUrl }
   const base = detectAttachmentsBase(apiBaseUrl);
   const url = `${base}/sws/neo/attachments/${tableName}/${recordId}`;
   try {
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: 'GET',
-      credentials: 'include',
-      headers: { Authorization: `Bearer ${token}` },
+      baseUrl: '',
+      token,
     });
     if (!res.ok) return [];
     const json = await res.json().catch(() => null);
@@ -66,11 +67,11 @@ export async function uploadAttachment({ token, tableName, recordId, file, fileN
   if (name) form.append('file', file, name);
   else form.append('file', file);
   try {
-    const res = await fetch(`${base}/sws/neo/attachments/${tableName}/${recordId}`, {
+    const res = await apiFetch(`${base}/sws/neo/attachments/${tableName}/${recordId}`, {
       method: 'POST',
-      credentials: 'include',
       // No Content-Type header — the browser must set the multipart boundary.
-      headers: { Authorization: `Bearer ${token}` },
+      baseUrl: '',
+      token,
       body: form,
     });
     if (!res.ok) {
@@ -93,10 +94,10 @@ export async function deleteAttachment({ token, attachmentId, apiBaseUrl } = {})
   if (!token || !attachmentId) return { ok: false, error: 'missing_params' };
   const base = detectAttachmentsBase(apiBaseUrl);
   try {
-    const res = await fetch(`${base}/sws/neo/attachments/file/${attachmentId}`, {
+    const res = await apiFetch(`${base}/sws/neo/attachments/file/${attachmentId}`, {
       method: 'DELETE',
-      credentials: 'include',
-      headers: { Authorization: `Bearer ${token}` },
+      baseUrl: '',
+      token,
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
@@ -119,10 +120,10 @@ export async function fetchAttachmentBlob({ token, attachmentId, apiBaseUrl } = 
   const base = detectAttachmentsBase(apiBaseUrl);
   const url = `${base}/sws/neo/attachments/file/${attachmentId}`;
   try {
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: 'GET',
-      credentials: 'include',
-      headers: { Authorization: `Bearer ${token}` },
+      baseUrl: '',
+      token,
     });
     if (!res.ok) return null;
     return await res.blob();
@@ -156,10 +157,10 @@ export async function fetchMainAttachment({ token, tableName, recordId, apiBaseU
   const base = detectAttachmentsBase(apiBaseUrl);
   const url = `${base}/sws/neo/attachments/${tableName}/${recordId}/main`;
   try {
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: 'GET',
-      credentials: 'include',
-      headers: { Authorization: `Bearer ${token}` },
+      baseUrl: '',
+      token,
     });
     if (!res.ok) return null;
     const json = await res.json().catch(() => null);
@@ -187,10 +188,10 @@ export async function uploadAndMarkMainAttachment({
   const form = new FormData();
   form.append('file', file, fileName || file.name || 'document');
   try {
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: 'POST',
-      credentials: 'include',
-      headers: { Authorization: `Bearer ${token}` },
+      baseUrl: '',
+      token,
       body: form,
     });
     if (!res.ok) return null;
@@ -213,10 +214,10 @@ export async function markAttachmentAsMain({ token, attachmentId, isMain, apiBas
   const base = detectAttachmentsBase(apiBaseUrl);
   const url = `${base}/sws/neo/attachments/file/${attachmentId}/main`;
   try {
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: 'PATCH',
-      credentials: 'include',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      baseUrl: '',
+      token,
       body: JSON.stringify({ isMain }),
     });
     return res.ok;

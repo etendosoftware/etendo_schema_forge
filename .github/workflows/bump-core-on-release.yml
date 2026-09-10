@@ -2,7 +2,7 @@ name: Bump schema_forge_core pin on release
 
 # Fired via repository_dispatch when schema_forge_core publishes a new release
 # (see schema_forge_core .github/workflows/release.yml, "Notify functional
-# repo of new release" step). Opens a PR against the epic branch bumping the
+# repo of new release" step). Opens a PR against develop bumping the
 # lockstep pin (@etendosoftware/app-shell-core, schema-forge-cli,
 # schema-forge-core) via `make bump-core-version`.
 #
@@ -19,7 +19,8 @@ on:
         required: true
 
 env:
-  EPIC_BRANCH: epic/ETP-3504
+  # ETP-5028: the epic is no longer an integration step; bumps go to develop.
+  TARGET_BRANCH: develop
 
 jobs:
   bump-core-version:
@@ -41,7 +42,7 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.EPIC_BRANCH }}
+          ref: ${{ env.TARGET_BRANCH }}
           # A PAT (not GITHUB_TOKEN) is required so the branch pushed below
           # triggers the repo's own workflows (Tests, Offline Regen Check, ...)
           # on the PR — pushes made with GITHUB_TOKEN don't trigger workflows.
@@ -98,14 +99,14 @@ jobs:
         # PR's own CI checks once opened, so skipping the local hook here is safe.
         run: git push --no-verify -u origin "chore/bump-core-${{ steps.version.outputs.version }}"
 
-      - name: Open PR against the epic branch
+      - name: Open PR against the target branch
         if: steps.diff.outputs.has_changes == 'true'
         env:
           GH_TOKEN: ${{ secrets.SF_BUMP_PAT }}
         run: |
           set -euo pipefail
           existing=$(gh pr list \
-            --base "${{ env.EPIC_BRANCH }}" \
+            --base "${{ env.TARGET_BRANCH }}" \
             --head "chore/bump-core-${{ steps.version.outputs.version }}" \
             --state open \
             --json url \
@@ -117,7 +118,7 @@ jobs:
           fi
 
           gh pr create \
-            --base "${{ env.EPIC_BRANCH }}" \
+            --base "${{ env.TARGET_BRANCH }}" \
             --head "chore/bump-core-${{ steps.version.outputs.version }}" \
             --title "Epic ETP-3504: Bump schema_forge_core pin to ${{ steps.version.outputs.version }}" \
             --body "Automated bump — schema_forge_core released \`${{ steps.version.outputs.version }}\`. Runs \`make bump-core-version\` to realign the lockstep pin (@etendosoftware/app-shell-core, schema-forge-cli, schema-forge-core) in \`package.json\` and \`tools/app-shell/package.json\`."

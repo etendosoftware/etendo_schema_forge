@@ -181,6 +181,43 @@ No frontend change was needed on this window itself — `system` fields are excl
 `backendContract.entities.information.fields`, absent from `frontendContract`) followed by
 `make regen ONLY=organization PUSH_TO_NEO=1`.
 
+## ETP-5031 — Teléfono keystroke filtering + length cap
+
+Same gap as Contacts' Teléfono (see `docs/generated-custom-windows/contacts.md` §ETP-5031): the
+save-time format check (`getPhoneFieldError`, already wired here via `getInvalidFormatErrorKey`)
+blocked a malformed value on Save, but the user could still type letters/symbols into the field
+with no feedback until then.
+
+`OrganizationPage.jsx`'s "Teléfono" (`org-phone`) is a fully hand-built `<Input>` — this page
+never goes through `EntityForm`/`useEntity`, so it can't be reached by
+`contactsFieldValidation.js`'s Contacts-only gate. Rather than widen that gate to silently also
+cover an unrelated window, the underlying charset filter was extracted into a small, ungated,
+reusable primitive — `filterPhoneCharacters(value)` — exported alongside the gated
+`filterContactsInputValue`. `OrganizationPage.jsx` opts in explicitly by calling it directly in
+the phone input's `onChange`, since this page already knows it wants phone filtering (it is the
+one choosing to call it, not something a shared component silently turned on).
+
+`etgoPhone` maps to the same AD column (`EM_Etgo_Phone`, `VARCHAR(60)`) as Contacts' `etgoPhone` —
+same charset (digits, `+ - ( ) .` and whitespace) and the same 60-char limit, applied as a plain
+HTML `maxLength={60}` attribute (hard truncation; this page has no per-field inline error UI for
+phone, so no toast/`FieldError` was added for length — a native `maxLength` is enough).
+
+A value that passes the keystroke filter's charset but still has zero digits (e.g. `"()"`)
+still reaches the existing save-time `phoneInvalidChars` toast unchanged — the keystroke filter
+narrows what the format check has to catch, it doesn't replace it.
+
+Regression coverage: `OrganizationPage.vitest.jsx`, "Contact field format validation" block —
+filters letters/symbols out of Teléfono as typed, and still blocks Save on a punctuation-only
+value with no digits.
+
+**Follow-up — "Sitio web" required a real domain shape.** Same repo-wide `isSecureUrl`
+tightening as Contacts (see `docs/generated-custom-windows/contacts.md` §"Página web required a
+real domain shape") — `getWebsiteFieldError`/`isSecureUrl` (`recipientEdits.js`) is called here
+too, via `getInvalidFormatErrorKey`, with the same fixed `https://` `inputPrefix` chip on
+`org-web`. `"https://asda"` is now correctly rejected instead of passing as "secure"; the
+`websiteInsecureUrl` toast text was corrected to describe the actual mistake (an incomplete
+domain, not a wrong scheme — the scheme chip is always `https://` already, non-editable).
+
 ## Known gaps
 
 - **Country is derived, not a real field**: `deriveCountryFromIdentifier()` in `OrganizationPage.jsx` takes the last `" - "`-separated segment of the fiscal address's `$_identifier` string (e.g. `"... - España"`). There is no dedicated read-only country field on this window's contract. If one is added later, prefer it over this heuristic.

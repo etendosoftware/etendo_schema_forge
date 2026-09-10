@@ -4,7 +4,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from '@/components/ui/dialog.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { buildHeaders } from '@/auth/api';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI } from '@/i18n';
 import { extractErrorMessage } from '@/hooks/useEntity';
 
@@ -25,6 +25,7 @@ import { extractErrorMessage } from '@/hooks/useEntity';
  */
 export function useRowDelete({ apiBaseUrl, entity = 'header', token, onSuccess, deleteFn }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [pending, setPending] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -45,9 +46,8 @@ export function useRowDelete({ apiBaseUrl, entity = 'header', token, onSuccess, 
       if (deleteFn) {
         await deleteFn(pending);
       } else {
-        const res = await fetch(`${apiBaseUrl}/${entity}/${pending.id}`, {
+        const res = await apiFetch(`/${entity}/${pending.id}`, {
           method: 'DELETE',
-          headers: buildHeaders(token),
         });
         if (!res.ok) {
           const msg = await extractErrorMessage(res, ui);
@@ -66,7 +66,7 @@ export function useRowDelete({ apiBaseUrl, entity = 'header', token, onSuccess, 
     } finally {
       setDeleting(false);
     }
-  }, [pending, apiBaseUrl, entity, token, onSuccess, ui, deleteFn]);
+  }, [pending, apiBaseUrl, entity, apiFetch, onSuccess, ui, deleteFn]);
 
   const deleteDialog = (
     <Dialog

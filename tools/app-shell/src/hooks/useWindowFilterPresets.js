@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { buildHeaders, detectBaseUrl } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /**
  * Per-user, per-window named filter presets backed by
@@ -16,25 +16,26 @@ import { buildHeaders, detectBaseUrl } from '@/auth/api.js';
  */
 export function useWindowFilterPresets(windowName) {
   const { token } = useAuth();
+  const apiFetch = useApiFetch();
   const [presets, setPresets] = useState({});
   const [loading, setLoading] = useState(false);
 
-  const baseUrl = useCallback(
-    () => `${detectBaseUrl()}/sws/neo/filters/${encodeURIComponent(windowName || '')}`,
+  const path = useCallback(
+    () => `/sws/neo/filters/${encodeURIComponent(windowName || '')}`,
     [windowName],
   );
 
   const refresh = useCallback(() => {
     if (!windowName || !token) return;
     setLoading(true);
-    fetch(baseUrl(), { headers: buildHeaders(token), credentials: 'include' })
+    apiFetch(path())
       .then((res) => (res.ok ? res.json() : {}))
       .then((data) => {
         setPresets(data && typeof data === 'object' ? data : {});
       })
       .catch(() => setPresets({}))
       .finally(() => setLoading(false));
-  }, [windowName, token, baseUrl]);
+  }, [windowName, token, path, apiFetch]);
 
   useEffect(() => {
     refresh();
@@ -43,34 +44,28 @@ export function useWindowFilterPresets(windowName) {
   const savePreset = useCallback(
     async (presetName, payload) => {
       if (!windowName || !token || !presetName) return;
-      const url = `${baseUrl()}/${encodeURIComponent(presetName)}`;
-      await fetch(url, {
+      const url = `${path()}/${encodeURIComponent(presetName)}`;
+      await apiFetch(url, {
         method: 'PUT',
-        headers: buildHeaders(token),
         body: JSON.stringify(payload ?? {}),
-        credentials: 'include',
       });
       setPresets((prev) => ({ ...prev, [presetName]: payload ?? {} }));
     },
-    [windowName, token, baseUrl],
+    [windowName, token, path, apiFetch],
   );
 
   const deletePreset = useCallback(
     async (presetName) => {
       if (!windowName || !token || !presetName) return;
-      const url = `${baseUrl()}/${encodeURIComponent(presetName)}`;
-      await fetch(url, {
-        method: 'DELETE',
-        headers: buildHeaders(token),
-        credentials: 'include',
-      });
+      const url = `${path()}/${encodeURIComponent(presetName)}`;
+      await apiFetch(url, { method: 'DELETE' });
       setPresets((prev) => {
         const next = { ...prev };
         delete next[presetName];
         return next;
       });
     },
-    [windowName, token, baseUrl],
+    [windowName, token, path, apiFetch],
   );
 
   return { presets, loading, refresh, savePreset, deletePreset };

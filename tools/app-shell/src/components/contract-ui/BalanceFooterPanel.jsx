@@ -3,8 +3,11 @@ import { computeBalance } from '@/lib/balanceTotals';
 
 /**
  * BalanceFooterPanel — generic debit/credit balance footer for double-entry
- * windows (e.g. manual journals). Renders Σ debit, Σ credit, the difference,
- * and a balanced/unbalanced badge. Activated by decisions.json
+ * windows (e.g. manual journals). Renders Σ debit and Σ credit only; the
+ * balance check itself (difference/isBalanced) is computed here but kept
+ * internal — it is not rendered — and Save/Complete blocking still relies on
+ * `computeBalance` directly (see `blockSaveForBalance`/`blockCompleteForBalance`
+ * in DetailView.jsx). Activated by decisions.json
  * `window.balanceFooter: { debitField, creditField }`.
  *
  * Props:
@@ -22,12 +25,9 @@ export default function BalanceFooterPanel({
   currency,
 }) {
   const ui = useUI();
-  const { totalDebit, totalCredit, difference, isBalanced, hasAmounts } =
-    computeBalance(lines, pendingLine, editingLine, config);
+  const { totalDebit, totalCredit } = computeBalance(lines, pendingLine, editingLine, config);
 
   const fmt = (v) => (typeof formatAmount === 'function' ? formatAmount(v, currency) : String(v));
-
-  const divider = <div className="border-t border-border" />;
 
   return (
     <div className="mt-1 flex flex-col items-end" data-testid="balance-footer">
@@ -39,22 +39,6 @@ export default function BalanceFooterPanel({
         <div className="flex justify-between py-2 px-2">
           <span className="text-muted-foreground">{ui('totalCredit')}</span>
           <span className="tabular-nums" data-testid="balance-total-credit">{fmt(totalCredit)}</span>
-        </div>
-        {divider}
-        <div className="flex justify-between items-center py-2 px-2 font-semibold">
-          <span>{ui('difference')}</span>
-          <div className="flex items-center gap-2">
-            <span className="tabular-nums" data-testid="balance-difference">{fmt(difference)}</span>
-            {hasAmounts && (
-              <span
-                data-testid="balance-status"
-                data-balanced={String(isBalanced)}
-                className={`text-xs rounded px-2 py-0.5 ${isBalanced ? 'bg-status-success text-status-success-foreground' : 'bg-destructive text-destructive-foreground'}`}
-              >
-                {isBalanced ? `✓ ${ui('balanced')}` : `✗ ${ui('unbalanced')}`}
-              </span>
-            )}
-          </div>
         </div>
       </div>
     </div>

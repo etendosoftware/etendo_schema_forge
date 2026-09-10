@@ -13,7 +13,7 @@ vi.mock('@/i18n', () => ({
 }));
 
 vi.mock('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
+  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }));
 
 vi.mock('@/components/ui/dialog', () => ({
@@ -99,6 +99,7 @@ describe('AutoMatchSuggestionModal', () => {
     applyMock.mockReset().mockResolvedValue({});
     toast.success.mockReset();
     toast.error.mockReset();
+    toast.warning.mockReset();
   });
 
   it('renders nothing when open is false', () => {
@@ -204,6 +205,64 @@ describe('AutoMatchSuggestionModal', () => {
     renderModal();
     fireEvent.click(screen.getByTestId('automatch-modal-apply'));
     await vi.waitFor(() => expect(toast.error).toHaveBeenCalled());
+  });
+
+  // ── Per-group partial-success outcome (ETP-4951: shared-batch reconciliation) ──
+  // applySuggestions now shares ONE reconciliation across the whole batch, so a per-group failure no
+  // longer aborts the request — it resolves with `results[]` carrying a mix of success entries and
+  // `{ error }` entries. handleApply must read that per-group outcome instead of always showing a
+  // flat success toast regardless of what actually happened.
+
+  it('shows a partial-success warning toast when some groups succeeded and some failed', async () => {
+    applyMock.mockResolvedValue({
+      results: [
+        { reconciliationId: 'r1', statementLineId: 'line-1' },
+        { error: { message: 'boom' } },
+      ],
+    });
+    renderModal();
+    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
+
+    await vi.waitFor(() => expect(toast.warning).toHaveBeenCalledTimes(1));
+    expect(toast.warning).toHaveBeenCalledWith(
+      expect.stringContaining('financeReconcileAutomatchToastPartial'),
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('shows an error toast (not a warning) when every group in the batch failed', async () => {
+    applyMock.mockResolvedValue({
+      results: [
+        { error: { message: 'boom 1' } },
+        { error: { message: 'boom 2' } },
+      ],
+    });
+    renderModal();
+    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
+
+    await vi.waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    // The backend's own reason wins over the generic key: applySuggestions answers 201 even when
+    // every group is rejected, so results[].error.message is the ONLY place the cause survives.
+    // Reducing it to a bare "could not apply" is what sent QA back with an unactionable toast.
+    expect(toast.error).toHaveBeenCalledWith('boom 1');
+    expect(toast.warning).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('still shows the plain success toast when every group in the batch succeeded', async () => {
+    applyMock.mockResolvedValue({
+      results: [
+        { reconciliationId: 'r1', statementLineId: 'line-1' },
+        { reconciliationId: 'r1', statementLineId: 'line-2' },
+      ],
+    });
+    renderModal();
+    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
+
+    await vi.waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
+    expect(toast.warning).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it('calls onClose when cancel is clicked', () => {
@@ -312,4 +371,46 @@ describe('AutoMatchSuggestionModal', () => {
     // No money amount anywhere in the dialog should render the EUR symbol for a USD account.
     expect(document.body.textContent).not.toContain('€');
   });
+
+  // ── Missing accounting concept: the edit-account affordance (ETP-4965) ────────
+  //
+  // A mass automatch cannot ask for an accounting concept line by line, so a group whose
+  // within-tolerance difference has no `EM_Aprm_Glitem_Diff` to post against comes back as a
+  // per-group `GL_ITEM_REQUIRED` failure. The only thing the user can do about it is configure the
+  // concept on the account — hence the modal STAYS OPEN and offers a direct link there, instead of
+  // closing over a toast that names a setting the user then has to go hunting for.
+  //
+  // The button is deliberately conditional on BOTH signals: the failure must have actually
+  // happened (`needsGlItem`) and the host must have given us somewhere to navigate
+  // (`onEditAccount`). It is not a permanent fixture of the footer.
+
+  const GL_ITEM_REQUIRED_FAILURE = {
+    statementLineId: 'line-2',
+    code: 'GL_ITEM_REQUIRED',
+    differenceAmount: '0.38',
+    error: { message: 'A difference GL item is required' },
+  };
+
+  const EDIT_ACCOUNT_BUTTON = 'automatch-modal-edit-account';
+
+  it('does not offer the edit-account button before any apply has run', () => {
+    renderModal({ onEditAccount: vi.fn() });
+    expect(screen.queryByTestId(EDIT_ACCOUNT_BUTTON)).toBeNull();
+  });
+
+  it('does not offer the edit-account button after a fully successful apply', async () => {
+    applyMock.mockResolvedValue({
+      results: [
+        { reconciliationId: 'r1', statementLineId: 'line-1' },
+        { reconciliationId: 'r1', statementLineId: 'line-2' },
+      ],
+    });
+    const { props } = renderModal({ onEditAccount: vi.fn() });
+    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
+
+    await vi.waitFor(() => expect(props.onClose).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId(EDIT_ACCOUNT_BUTTON)).toBeNull();
+    expect(props.onEditAccount).not.toHaveBeenCalled();
+  });
+
 });

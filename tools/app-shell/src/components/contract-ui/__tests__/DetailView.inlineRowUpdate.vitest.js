@@ -130,6 +130,7 @@ function build(args) {
     extractErrorMessage: args.extractErrorMessage,
     ui: args.ui,
     fields: args.fields,
+    raiseRowSaveConflict: args.raiseRowSaveConflict,
   });
 }
 
@@ -231,6 +232,48 @@ describe('buildInlineRowUpdateHandler — PATCH behavior', () => {
     expect(body.tax).toBe('TAX1');
     expect(body['tax$_identifier']).toBeUndefined(); // $_identifier skipped
     expect(body.price).toBe(50); // user-changed field wins last
+  });
+
+  // ETP-5037 (Goods Movements, DEV 5): a `value`-based onSelectMappings entry on the
+  // edited field forces its target into the PATCH body, overriding whatever the callout
+  // (e.g. classic SL_Movement_Product, defaulting movementQuantity to the on-hand quantity)
+  // returned for it — the persisted-line counterpart to DataTable.jsx's add-line form fix.
+  describe('onSelectMappings override (ETP-5037, DEV 5)', () => {
+    const FIELDS = [
+      { key: 'product', column: 'M_Product_ID', onSelectMappings: [{ value: '0', to: 'movementQuantity' }] },
+      { key: 'movementQuantity', column: 'MovementQty' },
+    ];
+
+    it('forces the mapped field even when the callout returns a different value for it', async () => {
+      const handleLineFieldChange = vi.fn(async (fieldKey, value, snapshot, applyUpdates) => {
+        applyUpdates({ movementQuantity: 850, storageBin: 'LOC-1' });
+      });
+      const args = makeArgs({ handleLineFieldChange, fields: FIELDS });
+      const handler = build(args);
+      await handler({ id: 'L1', movementQuantity: 300 }, 'product', 'PROD-2', { selectedItem: { id: 'PROD-2' } });
+
+      const body = lastFetchBody();
+      expect(body.movementQuantity).toBe(0);
+      expect(body.storageBin).toBe('LOC-1'); // unrelated derived field unaffected
+    });
+
+    it('does nothing when no selectedItem is passed (e.g. a plain text-field edit)', async () => {
+      const args = makeArgs({ fields: FIELDS });
+      const handler = build(args);
+      await handler({ id: 'L1', movementQuantity: 300 }, 'product', 'PROD-2', {});
+
+      const body = lastFetchBody();
+      expect(body.movementQuantity).toBe(300); // untouched — no mapping applied
+    });
+
+    it('does nothing when the edited field has no onSelectMappings', async () => {
+      const args = makeArgs({ fields: FIELDS });
+      const handler = build(args);
+      await handler({ id: 'L1', movementQuantity: 300 }, 'movementQuantity', '75', { selectedItem: { id: 'X' } });
+
+      const body = lastFetchBody();
+      expect(body.movementQuantity).toBe(75); // the user's own edit, not forced to 0
+    });
   });
 
   it('calls prepareLineForPost(fieldValues) before fetch with the field-values object', async () => {
@@ -470,5 +513,79 @@ describe('buildInlineRowUpdateHandler — server-wins update from PATCH response
     const handler2 = build(args);
     await handler2({ id: 'L1', quantityCount: 10 }, 'quantityCount', '42', {});
     expect(handleUpdateChild).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('buildInlineRowUpdateHandler — save-conflict handoff (ETP-5073 / DOC-04)', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn().mockResolvedValue(errResponse());
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    delete global.fetch;
+  });
+
+  it('when raiseRowSaveConflict raises the dialog (true), does NOT toast.error, but still throws with userNotified: true', async () => {
+    const raiseRowSaveConflict = vi.fn().mockResolvedValue(true);
+    const extractErrorMessage = vi.fn().mockResolvedValue('OBJSON_StaleDate');
+    const args = makeArgs({ raiseRowSaveConflict, extractErrorMessage });
+    const handler = build(args);
+
+    let caught;
+    try {
+      await handler({ id: 'L1' }, 'unitPrice', '42', {});
+    } catch (e) {
+      caught = e;
+    }
+
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught.userNotified).toBe(true);
+  });
+
+  it('when raiseRowSaveConflict reports false (a non-stale error, or no dialog host), toasts and still throws with userNotified: true', async () => {
+    const raiseRowSaveConflict = vi.fn().mockResolvedValue(false);
+    const extractErrorMessage = vi.fn().mockResolvedValue('Duplicate record');
+    const args = makeArgs({ raiseRowSaveConflict, extractErrorMessage });
+    const handler = build(args);
+
+    let caught;
+    try {
+      await handler({ id: 'L1' }, 'unitPrice', '42', {});
+    } catch (e) {
+      caught = e;
+    }
+
+    expect(toast.error).toHaveBeenCalledWith('Duplicate record');
+    expect(caught.userNotified).toBe(true);
+  });
+
+  it('without a raiseRowSaveConflict prop at all (optional chaining), falls back to the plain toast — preexisting contract', async () => {
+    const extractErrorMessage = vi.fn().mockResolvedValue('server boom');
+    const args = makeArgs({ extractErrorMessage }); // no raiseRowSaveConflict override
+    const handler = build(args);
+
+    await expect(handler({ id: 'L1' }, 'unitPrice', '42', {})).rejects.toThrow('server boom');
+    expect(toast.error).toHaveBeenCalledWith('server boom');
+  });
+
+  it('calls raiseRowSaveConflict with the raw response and the row id BEFORE extractErrorMessage — the clone/consume ordering matters', async () => {
+    const order = [];
+    const raiseRowSaveConflict = vi.fn(async (res, rowId) => {
+      order.push(['raise', res, rowId]);
+      return false;
+    });
+    const extractErrorMessage = vi.fn(async () => {
+      order.push(['extract']);
+      return 'boom';
+    });
+    const args = makeArgs({ raiseRowSaveConflict, extractErrorMessage });
+    const handler = build(args);
+
+    await expect(handler({ id: 'L42' }, 'unitPrice', '1', {})).rejects.toThrow();
+
+    expect(order.map(e => e[0])).toEqual(['raise', 'extract']);
+    expect(order[0][2]).toBe('L42');
   });
 });

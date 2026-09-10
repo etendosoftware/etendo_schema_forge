@@ -108,7 +108,7 @@ describe('documentEmailSend', () => {
     );
     const uploadOptions = global.fetch.mock.calls[0][1];
     expect(uploadOptions.body).toBeInstanceOf(FormData);
-    expect(uploadOptions.headers).toMatchObject({ Authorization: 'Bearer tok' });
+    expect(uploadOptions.headers).toMatchObject({ Authorization: 'Bearer tok', 'Accept-Language': 'es_ES' });
     const uploadedFile = uploadOptions.body.get('file');
     expect(uploadedFile.name).toBe('sales-invoice-INV-001.pdf');
     expect(uploadedFile.type).toBe('application/pdf');

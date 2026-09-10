@@ -299,7 +299,17 @@ describe('DetailView line sidebar save/delete flow (classic layout)', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(fetchMock.mock.calls[0][1].method).toBe('PATCH');
-    expect(fetchMock.mock.calls[1][1]).toEqual({ headers: { Authorization: 'Bearer test-token' } });
+    // ETP-5022: the fresh-GET refetch now goes through apiFetch (createApiFetch), which
+    // adds credentials:'include' — the raw `fetch` this replaced didn't send that (and,
+    // like the original, sends no Content-Type for this bodyless GET), so this exact-match
+    // assertion is updated to the new (still correct) request shape.
+    expect(fetchMock.mock.calls[1][1]).toEqual({
+      credentials: 'include',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Accept-Language': 'es_ES',
+      },
+    });
     await waitFor(() => expect(mockHook.handleUpdateChild).toHaveBeenCalledWith('L1', { id: 'L1', unitPrice: 55, lineNetAmount: 55 }));
   });
 

@@ -1,5 +1,7 @@
 // Mocks must be declared before any imports that pull in the mocked modules.
 
+import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
+
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), warning: vi.fn(), error: vi.fn() },
 }));
@@ -11,6 +13,10 @@ vi.mock('@/i18n', () => ({
 
 vi.mock('@/auth/AuthContext', () => ({
   useAuth: () => ({ selectedOrg: { id: 'org-001' } }),
+}));
+
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: createStableUseApiFetchMock(),
 }));
 
 vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
@@ -101,7 +107,10 @@ vi.mock('@/components/ui/select', () => {
   return {
     Select,
     SelectTrigger: ({ id, children }) => <div id={id}>{children}</div>,
-    SelectValue: ({ placeholder }) => <span>{placeholder}</span>,
+    // ETP-5117: mirrors real Radix SelectValue — renders explicit children when
+    // given (SifTab now passes a computed label/fallback for etvfacInvType) and
+    // only falls back to the placeholder when no children are provided.
+    SelectValue: ({ placeholder, children }) => <span>{children ?? placeholder}</span>,
     SelectContent: ({ children }) => <div>{children}</div>,
     SelectItem,
   };
@@ -570,6 +579,62 @@ describe('SifTab', () => {
     });
   });
 
+  // ETP-5027: the two toasts above are SII-only. The exemption cause they point at lives on
+  // the invoice HEADER and its selector is rendered exclusively inside the SII panel, so on a
+  // VERI*FACTU-only or TicketBAI-only org the toast would tell the user to fill in a field
+  // this UI never renders. The backend flag is fiscal-system-agnostic and fires on every
+  // exempt-line save, so the guard has to live here.
+
+  describe('exemption cause toasts are SII-only (ETP-5027)', () => {
+    const withWarning = { documentStatus: 'DR', hasExemptTaxes: true, exemptionCauseWarning: true };
+    const withAutoFill = { documentStatus: 'DR', hasExemptTaxes: true, exemptionCauseAutoFilled: true };
+
+    it('does NOT fire the warning toast for a verifactu-only profile', () => {
+      mockFiscalConfig('verifactu');
+      render(<SifTab {...makeProps({ data: withWarning })} />);
+      expect(toast.warning).not.toHaveBeenCalled();
+    });
+
+    it('does NOT fire the info toast for a verifactu-only profile', () => {
+      mockFiscalConfig('verifactu');
+      render(<SifTab {...makeProps({ data: withAutoFill })} />);
+      expect(toast.info).not.toHaveBeenCalled();
+    });
+
+    it('does NOT fire either toast for a tbai-only profile', () => {
+      mockFiscalConfig('tbai');
+      render(<SifTab {...makeProps({ data: { ...withWarning, ...withAutoFill } })} />);
+      expect(toast.warning).not.toHaveBeenCalled();
+      expect(toast.info).not.toHaveBeenCalled();
+    });
+
+    it('still fires both toasts for an SII profile', () => {
+      mockFiscalConfig('sii');
+      render(<SifTab {...makeProps({ data: { ...withWarning, ...withAutoFill } })} />);
+      expect(toast.warning).toHaveBeenCalledTimes(1);
+      expect(toast.info).toHaveBeenCalledTimes(1);
+    });
+
+    it('still fires for a combined sii+tbai profile', () => {
+      mockFiscalConfig('sii+tbai');
+      render(<SifTab {...makeProps({ data: withWarning })} />);
+      expect(toast.warning).toHaveBeenCalledTimes(1);
+    });
+
+    // Suppressing a toast must NOT latch the one-shot ref: if the fiscal profile resolves
+    // late (useFiscalConfig starts unconfigured and settles on SII) the warning must still
+    // fire on the render where showSii finally becomes true, with the flag unchanged.
+    it('fires when showSii flips false -> true while the flag stays set', () => {
+      mockFiscalConfig('verifactu');
+      const { rerender } = render(<SifTab {...makeProps({ data: withWarning })} />);
+      expect(toast.warning).not.toHaveBeenCalled();
+
+      mockFiscalConfig('sii');
+      rerender(<SifTab {...makeProps({ data: withWarning })} />);
+      expect(toast.warning).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // ── TBAI: minimal Adjuntos-only rail (ETP-4888) ─────────────────────────────
   // ETP-4401 removed the full TBAI field panel (Chain Sequence, Invoice Series, Invoice
   // Sequence) from SifTab because chaining sequences are now generated automatically per
@@ -826,11 +891,37 @@ describe('SifTab', () => {
       expect(screen.getByTestId('input-sif-vfDesc')).toBeInTheDocument();
     });
 
-    it('renders all 8 VERIFACTU_INV_TYPE_OPTIONS', () => {
+    it('renders all 7 VERIFACTU_INV_TYPE_OPTIONS', () => {
       render(<SifTab {...makeProps()} />);
-      ['F1', 'F2', 'F3', 'R1', 'R2', 'R3', 'R4', 'R5'].forEach((v) => {
+      // ETP-5117: F3 was removed from the GO-only selectable options — Classic
+      // still offers it, and a legacy record can still carry it (see the
+      // "legacy etvfacInvType value" test below).
+      ['F1', 'F2', 'R1', 'R2', 'R3', 'R4', 'R5'].forEach((v) => {
         expect(screen.getByText(`${v} — sifDataTabs.option.vf${v}`)).toBeInTheDocument();
       });
+      expect(screen.queryByText(/^F3 — /)).not.toBeInTheDocument();
+    });
+
+    // ETP-5117: a record whose etvfacInvType is still 'F3' (legacy/Classic value —
+    // F3 remains valid stored data, it's just no longer a selectable new option)
+    // must fall back to displaying the raw stored code instead of rendering blank.
+    it('falls back to the raw stored code when etvfacInvType is a legacy value with no matching option', () => {
+      const onChange = vi.fn();
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', etvfacInvType: 'F3' }, onChange })} />);
+
+      // Displayed value falls back to the raw code, not blank and not the
+      // "value — label" format used for a matching option.
+      const trigger = document.querySelector('#sif-vfInvType');
+      expect(trigger).toHaveTextContent('F3');
+      expect(screen.queryByText('F3 — sifDataTabs.option.vfF3')).not.toBeInTheDocument();
+
+      // Rendering a legacy value must not itself mutate data or fire onChange
+      // (the ETP-4390 auto-default effect only fires when the field is empty).
+      expect(onChange).not.toHaveBeenCalled();
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+
+      consoleErrorSpy.mockRestore();
     });
 
     it('calls onChange with the new value when etvfacInvType is changed via the select', () => {
@@ -979,10 +1070,12 @@ describe('SifTab', () => {
     });
 
     it('etvfacInvType calls onChange when a select option is picked', () => {
+      // ETP-5117: F3 is no longer a selectable option (see the dedicated F2 click
+      // test above) — this one exercises R1 so more than one option is covered.
       const onChange = vi.fn();
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR', etvfacInvType: 'F1' }, onChange })} />);
-      fireEvent.click(screen.getByTestId('mock-select-option-F3'));
-      expect(onChange).toHaveBeenCalledWith('etvfacInvType', 'F3');
+      fireEvent.click(screen.getByTestId('mock-select-option-R1'));
+      expect(onChange).toHaveBeenCalledWith('etvfacInvType', 'R1');
     });
 
     it('etvfacVerifacDesc calls onChange when the input value changes', () => {

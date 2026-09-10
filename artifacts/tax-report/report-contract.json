@@ -71,10 +71,7 @@
     "summaryByTaxRate": { "en_US": "Summary by Tax Rate", "es_ES": "Resumen por Tasa de Impuesto" },
     "totalByTaxCategory": { "en_US": "Total by Tax Category", "es_ES": "Total por Categoría de Impuesto" },
     "salesReceipts": { "en_US": "Sales / Receipts", "es_ES": "Ventas / Cobros" },
-    "purchasesPayments": { "en_US": "Purchases / Payments", "es_ES": "Compras / Pagos" },
-    "both": { "en_US": "Both", "es_ES": "Ambos" },
-    "accountingDate": { "en_US": "Accounting Date", "es_ES": "Fecha Contable" },
-    "operationDate": { "en_US": "Operation Date", "es_ES": "Fecha de Operación" }
+    "purchasesPayments": { "en_US": "Purchases / Payments", "es_ES": "Compras / Pagos" }
   },
   "mockDataFile": "mock-data.json"
 }

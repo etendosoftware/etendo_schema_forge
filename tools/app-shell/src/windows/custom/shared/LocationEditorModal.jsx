@@ -1,10 +1,13 @@
 import {useState, useEffect, useMemo, useRef} from 'react';
+import {useUnsavedChangesGuard} from '@/hooks/useUnsavedChangesGuard.js';
 import {X, Loader2, Search, ChevronDown, Check} from 'lucide-react';
 import {useUI, useLabel} from '@/i18n';
-import {useAuth} from '@/auth/AuthContext.jsx';
 import {toast} from 'sonner';
 import {SquareCheckbox} from './SquareCheckbox';
+import RequiredMark from '@/components/ui/required-mark.jsx';
+import {matchOptionByLabel} from '@/lib/matchOptionLabel.js';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 const EMPTY_FORM = {
     address: '',
     address2: '',
@@ -19,6 +22,51 @@ const EMPTY_FORM = {
 };
 const SELECTOR_PAGE_SIZE = 120;
 
+// ETP-5103 — Spain is the default country for a NEW address. The NEO selector returns
+// only { id, label } (no ISO code) and pages 120 rows at a time ordered by the BASE
+// name, so Spain sits ~200th and never lands in the first page: it has to be asked for
+// explicitly. `q` filters on C_Country.NAME (core seed data, always "Spain") OR the
+// request-language translation, so this query hits in any locale; the aliases below then
+// match the returned label, which IS translated.
+const DEFAULT_COUNTRY_QUERY = 'Spain';
+const DEFAULT_COUNTRY_LABEL_ALIASES = ['España', 'Spain'];
+const DEFAULT_COUNTRY_LIMIT = 5;
+
+/**
+ * Shallow form comparison for the unsaved-changes baseline (ETP-5022). Compares by sorted
+ * keys rather than JSON.stringify so a differing key order never reads as a change.
+ */
+function sameForm(a, b) {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    for (const key of keys) {
+        if (a[key] !== b[key]) return false;
+    }
+    return true;
+}
+
+/**
+ * Marks a picker button as "nothing chosen yet".
+ *
+ * A picker BUTTON always has text -- the placeholder -- so anything reading its
+ * label as a value would consider an untouched field already answered. The
+ * walkthrough engine's `requireValue` gate is one such reader.
+ */
+function placeholderAttr(value) {
+    return value ? {} : { 'data-placeholder': '' };
+}
+
+/** Picker label colour: a real value reads as text, a placeholder as disabled. */
+function pickerTextColor(value) {
+    return value ? 'hsl(var(--foreground))' : 'hsl(var(--text-disabled))';
+}
+
+/** A picker that is inert until its prerequisite is chosen (region needs a country). */
+function pickerButtonStyle(base, enabled) {
+    return { ...base, opacity: enabled ? 1 : 0.5, cursor: enabled ? 'pointer' : 'not-allowed' };
+}
+
 function normalizeText(value) {
     return String(value ?? '')
         .normalize('NFD')
@@ -26,8 +74,8 @@ function normalizeText(value) {
         .toLowerCase();
 }
 
-async function fetchSelectorPage(url, headers) {
-    const response = await fetch(url, {headers});
+async function fetchSelectorPage(apiFetch, url) {
+    const response = await apiFetch(url);
     if (!response.ok) {
         throw new Error(`Selector request failed: ${response.status}`);
     }
@@ -37,6 +85,118 @@ async function fetchSelectorPage(url, headers) {
         items: Array.isArray(items) ? items : [],
         hasMore: Boolean(data?.hasMore),
     };
+}
+
+/**
+ * Normalize one raw selector row into the { id, label } shape the pickers render.
+ * Shared by the country and region option lists and by the default-country lookup,
+ * so all three agree on which server field wins as the display label.
+ */
+function toSelectorOption(item) {
+    return {
+        id: item.id,
+        label: item.label || item.name || item._identifier || item.id,
+    };
+}
+
+/**
+ * Resolve the default-country option (ETP-5103) from a `?q=` selector page.
+ *
+ * Returns null when it cannot be resolved — no alias matched, or the request failed.
+ * The country field then simply stays empty, which is the pre-ETP-5103 behaviour and
+ * lets the user pick manually. Never guess an id: a wrong country the user cannot see
+ * is worse than an empty one.
+ */
+async function fetchDefaultCountryOption(apiFetch, url) {
+    const {items} = await fetchSelectorPage(apiFetch, url);
+    const options = items.map(toSelectorOption);
+    for (const alias of DEFAULT_COUNTRY_LABEL_ALIASES) {
+        const matchedId = matchOptionByLabel(options, alias);
+        if (matchedId) return options.find(option => option.id === matchedId);
+    }
+    return null;
+}
+
+/**
+ * Apply a resolved default country to the form (ETP-5103).
+ *
+ * Module-level on purpose: it writes the unsaved-changes baseline by the SAME delta it
+ * writes to the form, because a prefill is not a user edit — without that, the ETP-5022
+ * guard would warn about a form nobody touched.
+ */
+function applyDefaultCountryOption(option, setForm, baselineRef) {
+    const patch = {country: option.id, countryLabel: option.label};
+    setForm(prev => ({...prev, ...patch}));
+    baselineRef.current = {...(baselineRef.current || EMPTY_FORM), ...patch};
+}
+
+/**
+ * Save gating (ETP-5103): address line 1 and country are the mandatory fields, and a
+ * save in flight or an in-progress initial load blocks too.
+ *
+ * Module-level so the modal body stays flat — a chain of `||` inside the component
+ * counts against its cognitive complexity, which is already at its budget.
+ */
+function isSaveBlocked({saving, initialLoading, address, country}) {
+    if (saving || initialLoading) return true;
+    if (address.trim() === '') return true;
+    return country === '';
+}
+
+/**
+ * ETP-5103 — preselect Spain in the country field while CREATING an address.
+ *
+ * Extracted from the modal body so the prefill can be reasoned about on its own.
+ *
+ * A non-null `rowId` means edit mode: an existing record's country is never overwritten
+ * and the request is not even issued. `selectorBase` is the URL that won the modal's
+ * 8-fallback cascade: depending on it means no prefill happens when every fallback came
+ * back empty — deliberately, since an instance exposing no countries has nothing to
+ * preselect — and saves this hook from re-walking the cascade itself.
+ *
+ * The one-shot ref is the same guard as AccountFormStep (ETP-4896): without it the
+ * default would snap back over a country the user had already picked while the catalog
+ * was still loading. It resets while the modal is closed.
+ *
+ * @param {boolean}       open          modal visibility
+ * @param {string|null}   rowId         existing record id; null means create
+ * @param {string}        selectorBase  resolved country-selector URL, '' while unknown
+ * @param {Function}      apiFetch      authenticated fetch bound to the window's API base
+ * @param {Function}      buildParams   builds the selector query string with window context
+ * @param {Function}      onResolved    receives the resolved { id, label } option
+ */
+function useDefaultCountryPrefill({open, rowId, selectorBase, apiFetch, buildParams, onResolved}) {
+    const appliedRef = useRef(false);
+
+    useEffect(() => {
+        if (!open || rowId) {
+            appliedRef.current = false;
+            return undefined;
+        }
+        if (!selectorBase || appliedRef.current) return undefined;
+
+        let cancelled = false;
+        const params = buildParams({
+            q: DEFAULT_COUNTRY_QUERY,
+            limit: String(DEFAULT_COUNTRY_LIMIT),
+            offset: '0',
+        });
+
+        fetchDefaultCountryOption(apiFetch, `${selectorBase}?${params.toString()}`)
+            .then(option => {
+                if (cancelled || !option || appliedRef.current) return;
+                appliedRef.current = true;
+                onResolved(option);
+            })
+            .catch(() => {
+                // Best-effort: the field stays empty and the user picks a country manually.
+            });
+
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, rowId, selectorBase]);
 }
 
 function PickerMessage({text}) {
@@ -71,6 +231,8 @@ function CountryPicker({
                        }) {
     return (
         <div
+            role="dialog"
+            aria-modal="true"
             className="fixed inset-0 z-[160] flex items-center justify-center bg-foreground/30 p-4"
             onMouseDown={onClose}
         >
@@ -182,8 +344,16 @@ export default function LocationEditorModal({
     const entityPath = saveMode === 'location' ? 'location' : 'locationAddress';
     const ui = useUI();
     const t = useLabel();
-    const {token} = useAuth();
+    const apiFetch = useApiFetch(contactsApiBase);
     const [form, setForm] = useState(EMPTY_FORM);
+    // ETP-5022: this modal holds its own form state, so DetailView's isDirty does not see it.
+    // Without registering here, a language change (which reloads) or an F5 threw the typed
+    // address away with no warning — verified in the browser before this was added.
+    const baselineRef = useRef(null);
+    const isDirty = open
+        && baselineRef.current !== null
+        && !sameForm(form, baselineRef.current);
+    useUnsavedChangesGuard(isDirty);
     const [countries, setCountries] = useState([]);
     const [countrySelectorBase, setCountrySelectorBase] = useState('');
     const [countryOffset, setCountryOffset] = useState(0);
@@ -211,8 +381,6 @@ export default function LocationEditorModal({
     const regionLoadMoreRef = useRef(null);
     const regionLoadingMoreRef = useRef(false);
 
-    const authHeader = {Authorization: `Bearer ${token}`};
-
     function buildSelectorParams(baseParams = {}) {
         const params = new URLSearchParams();
         Object.entries(selectorContext || {}).forEach(([key, value]) => {
@@ -231,10 +399,7 @@ export default function LocationEditorModal({
         return (countries ?? []).reduce((acc, item) => {
             if (!item?.id || seen.has(item.id)) return acc;
             seen.add(item.id);
-            acc.push({
-                id: item.id,
-                label: item.label || item.name || item._identifier || item.id,
-            });
+            acc.push(toSelectorOption(item));
             return acc;
         }, []);
     }, [countries]);
@@ -245,6 +410,10 @@ export default function LocationEditorModal({
         return countryOptions.filter((country) => normalizeText(country.label).includes(q));
     }, [countryOptions, countryQuery]);
 
+    // The `form.countryLabel` fallback below is what surfaces a bad server label: it is only
+    // reached while the translated option is not yet loaded (countries page in at 120 at a time,
+    // ordered by the BASE name, so "Spain" sits ~200th and never lands in the first page). See
+    // the ETP-5022 note on countryLabel above for which Java builds that string.
     const selectedCountryLabel = useMemo(() => {
         if (!form.country) return '—';
         return countryOptions.find((country) => country.id === form.country)?.label || form.countryLabel || form.country;
@@ -255,10 +424,7 @@ export default function LocationEditorModal({
         return (regions ?? []).reduce((acc, item) => {
             if (!item?.id || seen.has(item.id)) return acc;
             seen.add(item.id);
-            acc.push({
-                id: item.id,
-                label: item.label || item.name || item._identifier || item.id,
-            });
+            acc.push(toSelectorOption(item));
             return acc;
         }, []);
     }, [regions]);
@@ -274,6 +440,17 @@ export default function LocationEditorModal({
         return regionOptions.find((region) => region.id === form.region)?.label || form.regionLabel || form.region;
     }, [regionOptions, form.region, form.regionLabel]);
 
+    // ETP-5103: one derived flag feeds the Save button's `disabled`, its opacity and the
+    // handleSave guard, so the three can never disagree. Country was already mandatory —
+    // handleSave has always refused to save without it — so gating on it only surfaces
+    // the rule before the click instead of after; it does not restrict what can be saved.
+    const saveDisabled = isSaveBlocked({
+        saving,
+        initialLoading,
+        address: form.address,
+        country: form.country,
+    });
+
     // Reset and load data on open
     useEffect(() => {
         if (!open) return;
@@ -281,6 +458,7 @@ export default function LocationEditorModal({
         let cancelled = false;
 
         setForm(EMPTY_FORM);
+        baselineRef.current = EMPTY_FORM;
         setRegions([]);
         setRegionSelectorBase('');
         setRegionOffset(0);
@@ -326,7 +504,7 @@ export default function LocationEditorModal({
                         limit: String(SELECTOR_PAGE_SIZE),
                         offset: '0',
                     });
-                    const {items, hasMore} = await fetchSelectorPage(`${baseUrl}?${params.toString()}`, authHeader);
+                    const {items, hasMore} = await fetchSelectorPage(apiFetch, `${baseUrl}?${params.toString()}`);
                     hasSuccessfulRequest = true;
                     if (items.length > 0 || hasMore) {
                         if (cancelled) return;
@@ -364,25 +542,43 @@ export default function LocationEditorModal({
             setInitialLoading(true);
             // The handler enriches the GET-by-ID response with C_Location fields
             // (ContactsLocationAddressHandler for 'bpartner', the plain location handler for 'location').
-            fetch(`${contactsApiBase}/${entityPath}/${bplLinkId}`, {headers: authHeader})
+            apiFetch(`/${entityPath}/${bplLinkId}`)
                 .then(r => (r.ok ? r.json() : null))
                 .then(d => {
                     const rec = d?.response?.data?.[0] ?? d;
                     if (rec?.id) {
-                        setForm({
+                        const loaded = {
                             address: rec.address ?? rec.addressLine1 ?? '',
                             address2: rec.address2 ?? rec.addressLine2 ?? '',
                             postalCode: rec.postalCode ?? '',
                             city: rec.city ?? rec.cityName ?? '',
                             country: rec.country ?? '',
-                            // Store the known label so the picker shows "Spain" even if the selector
-                            // returns a different ID format or hasn't loaded yet.
+                            // Store the known label so the picker shows the country even if the
+                            // selector returns a different ID format or hasn't loaded yet.
+                            //
+                            // ETP-5022 — WHERE THIS LABEL ACTUALLY COMES FROM. Not from the
+                            // standard NEO/DataToJsonConverter path like every other FK field:
+                            // this endpoint is served by a CUSTOM Java handler,
+                            //   com.etendoerp.go/src/com/etendoerp/go/schemaforge/
+                            //     ContactsLocationAddressHandler.java  (~line 350)
+                            // which builds `country$_identifier` by hand. It used to call
+                            // Country.getName() — the plain Hibernate getter, which ignores the
+                            // request language — so this field showed "Spain" with the UI in
+                            // Spanish, and only corrected itself to "España" once the user
+                            // scrolled far enough for the translated option to load (see
+                            // selectedCountryLabel below, which prefers the loaded option).
+                            // Fixed there by switching to getIdentifier(). If this ever shows an
+                            // untranslated country again, look at that handler FIRST — the bug is
+                            // not in this file, and not in Etendo core. WarehouseLocationHandler
+                            // has the same hand-built field for the warehouse address.
                             countryLabel: rec['country$_identifier'] ?? '',
                             region: rec.region ?? '',
                             regionLabel: rec['region$_identifier'] ?? '',
                             shipToAddress: rec.shipToAddress === 'Y' || rec.shipToAddress === true,
                             invoiceToAddress: rec.invoiceToAddress === 'Y' || rec.invoiceToAddress === true,
-                        });
+                        };
+                        setForm(loaded);
+                        baselineRef.current = loaded;
                     }
                 })
                 .catch(() => {
@@ -397,6 +593,16 @@ export default function LocationEditorModal({
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, bplLinkId]);
+
+    // ETP-5103 — Spain preselected on create. See useDefaultCountryPrefill above.
+    useDefaultCountryPrefill({
+        open,
+        rowId: bplLinkId,
+        selectorBase: countrySelectorBase,
+        apiFetch,
+        buildParams: buildSelectorParams,
+        onResolved: option => applyDefaultCountryOption(option, setForm, baselineRef),
+    });
 
     // Reload region list when country selection changes
     useEffect(() => {
@@ -449,8 +655,8 @@ export default function LocationEditorModal({
 
                 try {
                     const {items, hasMore} = await fetchSelectorPage(
-                        `${baseUrl}?${params.toString()}`,
-                        authHeader
+                        apiFetch,
+                        `${baseUrl}?${params.toString()}`
                     );
 
                     if (!fallbackSuccess) {
@@ -540,7 +746,7 @@ export default function LocationEditorModal({
                     offset: String(countryOffset),
                 });
 
-                fetchSelectorPage(`${countrySelectorBase}?${params.toString()}`, authHeader)
+                fetchSelectorPage(apiFetch, `${countrySelectorBase}?${params.toString()}`)
                     .then(({items, hasMore}) => {
                         setCountries(prev => [...prev, ...items]);
                         setCountryOffset(prev => prev + items.length);
@@ -565,7 +771,7 @@ export default function LocationEditorModal({
         countryHasMore,
         countryOffset,
         countriesLoading,
-        token,
+        apiFetch,
     ]);
 
     useEffect(() => {
@@ -597,7 +803,7 @@ export default function LocationEditorModal({
                     offset: String(regionOffset),
                 });
 
-                fetchSelectorPage(`${regionSelectorBase}?${params.toString()}`, authHeader)
+                fetchSelectorPage(apiFetch, `${regionSelectorBase}?${params.toString()}`)
                     .then(({items, hasMore}) => {
                         setRegions(prev => [...prev, ...items]);
                         setRegionOffset(prev => prev + items.length);
@@ -623,7 +829,7 @@ export default function LocationEditorModal({
         regionOffset,
         regionsLoading,
         form.country,
-        token,
+        apiFetch,
     ]);
 
     function setField(key, value) {
@@ -675,7 +881,11 @@ export default function LocationEditorModal({
     }
 
     async function handleSave() {
-        if (saving || initialLoading) return;
+        if (saveDisabled) return;
+        // Defence in depth: `saveDisabled` already covers an empty country since ETP-5103,
+        // so the Save button can no longer reach this branch. It stays for a programmatic
+        // or keyboard-driven call, and so that a future change re-enabling the button still
+        // tells the user why the save was refused.
         if (!form.country) {
             toast.error(ui('locationCountryRequired'));
             return;
@@ -700,14 +910,11 @@ export default function LocationEditorModal({
                 payload.shipToAddress = form.shipToAddress ? 'Y' : 'N';
                 payload.invoiceToAddress = form.invoiceToAddress ? 'Y' : 'N';
             }
-            const postHeaders = {...authHeader, 'Content-Type': 'application/json'};
-
             if (bplLinkId) {
                 // EDIT: 'bpartner' updates C_Location + C_BPartner_Location atomically;
                 // 'location' updates the plain C_Location.
-                const res = await fetch(`${contactsApiBase}/${entityPath}/${bplLinkId}`, {
+                const res = await apiFetch(`/${entityPath}/${bplLinkId}`, {
                     method: 'PUT',
-                    headers: postHeaders,
                     body: JSON.stringify(payload),
                 });
                 if (res.ok) {
@@ -723,15 +930,14 @@ export default function LocationEditorModal({
             // CREATE:
             //   'bpartner' → creates C_Location + C_BPartner_Location atomically (needs parentId/bpId)
             //   'location' → creates a plain C_Location, no business partner link
-            const createUrl = saveMode === 'location'
-                ? `${contactsApiBase}/${entityPath}`
-                : `${contactsApiBase}/locationAddress?parentId=${bpId}`;
+            const createPath = saveMode === 'location'
+                ? `/${entityPath}`
+                : `/locationAddress?parentId=${bpId}`;
             const createBody = saveMode === 'location'
                 ? payload
                 : {...payload, businessPartner: bpId};
-            const res = await fetch(createUrl, {
+            const res = await apiFetch(createPath, {
                 method: 'POST',
-                headers: postHeaders,
                 body: JSON.stringify(createBody),
             });
 
@@ -783,7 +989,12 @@ export default function LocationEditorModal({
     };
 
     return (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 150, background: 'hsl(var(--foreground) / .35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        // `role="dialog"` is not decoration here: the walkthrough engine detects an
+        // open app dialog by role and suspends its scrim / parks its card so the
+        // dialog stays usable (useForeignDialog). Without it a tour that opens this
+        // modal dims it from above and the user cannot type. It is also simply
+        // correct a11y for a focus-trapping overlay.
+        <div role="dialog" aria-modal="true" data-testid="location-modal" style={{ position: 'fixed', inset: 0, zIndex: 150, background: 'hsl(var(--foreground) / .35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ background: 'hsl(var(--card))', borderRadius: 16, boxShadow: '0 8px 40px hsl(var(--foreground) / .18)', width: '100%', maxWidth: 560, margin: 16, display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 64px)', animation: 'fm-modal-in .2s cubic-bezier(.4,0,.2,1)' }}>
 
                 {/* Header */}
@@ -821,39 +1032,41 @@ export default function LocationEditorModal({
 
                             {/* Línea 1 */}
                             <div>
-                                <div style={FIELD_LABEL}>{ui('addressLine1')}</div>
-                                <input autoFocus type="text" value={form.address} onChange={e => setField('address', e.target.value)} style={INPUT} />
+                                <div style={FIELD_LABEL}>{ui('addressLine1')}<RequiredMark data-testid="RequiredMark__927831" /></div>
+                                <input autoFocus type="text" value={form.address} onChange={e => setField('address', e.target.value)} data-testid="location-field-address" style={INPUT} />
                             </div>
 
                             {/* Línea 2 */}
                             <div>
                                 <div style={FIELD_LABEL}>{ui('addressLine2')}</div>
-                                <input type="text" value={form.address2} onChange={e => setField('address2', e.target.value)} style={INPUT} />
+                                <input type="text" value={form.address2} onChange={e => setField('address2', e.target.value)} data-testid="location-field-address2" style={INPUT} />
                             </div>
 
                             {/* CP + Ciudad en grid */}
                             <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 12 }}>
                                 <div>
                                     <div style={FIELD_LABEL}>{ui('postalCodeLabel')}</div>
-                                    <input type="text" value={form.postalCode} onChange={e => setField('postalCode', e.target.value)} style={INPUT} />
+                                    <input type="text" value={form.postalCode} onChange={e => setField('postalCode', e.target.value)} data-testid="location-field-postalCode" style={INPUT} />
                                 </div>
                                 <div>
                                     <div style={FIELD_LABEL}>{ui('cityLabel')}</div>
-                                    <input type="text" value={form.city} onChange={e => setField('city', e.target.value)} style={INPUT} />
+                                    <input type="text" value={form.city} onChange={e => setField('city', e.target.value)} data-testid="location-field-city" style={INPUT} />
                                 </div>
                             </div>
 
                             {/* País */}
                             <div>
-                                <div style={FIELD_LABEL}>{ui('countryLabel')}</div>
+                                <div style={FIELD_LABEL}>{ui('countryLabel')}<RequiredMark data-testid="RequiredMark__927831" /></div>
                                 <button
                                     type="button"
                                     onClick={() => setCountryPickerOpen(true)}
                                     aria-haspopup="dialog"
                                     aria-expanded={countryPickerOpen}
+                                    data-testid="location-field-country"
+                                    {...placeholderAttr(form.country)}
                                     style={PICKER_BTN}
                                 >
-                                    <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: form.country ? 'hsl(var(--foreground))' : 'hsl(var(--text-disabled))' }}>
+                                    <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: pickerTextColor(form.country) }}>
                                         {selectedCountryLabel}
                                     </span>
                                     <ChevronDown
@@ -870,11 +1083,13 @@ export default function LocationEditorModal({
                                     type="button"
                                     onClick={() => { if (form.country) setRegionPickerOpen(true); }}
                                     disabled={!form.country}
+                                    data-testid="location-field-region"
+                                    {...placeholderAttr(form.region)}
                                     aria-haspopup="dialog"
                                     aria-expanded={regionPickerOpen}
-                                    style={{ ...PICKER_BTN, opacity: form.country ? 1 : 0.5, cursor: form.country ? 'pointer' : 'not-allowed' }}
+                                    style={pickerButtonStyle(PICKER_BTN, !!form.country)}
                                 >
-                                    <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: form.region ? 'hsl(var(--foreground))' : 'hsl(var(--text-disabled))' }}>
+                                    <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: pickerTextColor(form.region) }}>
                                         {!form.country ? ui('selectCountryFirst') : selectedRegionLabel}
                                     </span>
                                     <ChevronDown
@@ -908,6 +1123,7 @@ export default function LocationEditorModal({
                 <div style={{ padding: '14px 20px', borderTop: '1px solid hsl(var(--border-subtle))', display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
                     <button
                         onClick={onClose}
+                        data-testid="location-cancel"
                         style={{ font: '400 14px/20px system-ui', padding: '9px 20px', borderRadius: 20, border: '1px solid hsl(var(--border-control))', cursor: 'pointer', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
                     >
                         {ui('cancel')}
@@ -915,8 +1131,12 @@ export default function LocationEditorModal({
                     <div style={{ display: 'flex', gap: 8 }}>
                         <button
                             onClick={handleSave}
-                            disabled={saving || initialLoading}
-                            style={{ font: '600 14px/20px system-ui', padding: '9px 20px', borderRadius: 20, border: '1px solid hsl(var(--foreground))', cursor: 'pointer', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))', display: 'inline-flex', alignItems: 'center', gap: 6, opacity: (saving || initialLoading) ? 0.5 : 1 }}
+                            disabled={saveDisabled}
+                            // Referenced by the `create-contact` walkthrough's closing step
+                            // (tools/app-shell/src/walkthrough/flows/create-contact.json).
+                            // Renaming it breaks a shipped tour.
+                            data-testid="location-save"
+                            style={{ font: '600 14px/20px system-ui', padding: '9px 20px', borderRadius: 20, border: '1px solid hsl(var(--foreground))', cursor: 'pointer', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))', display: 'inline-flex', alignItems: 'center', gap: 6, opacity: saveDisabled ? 0.5 : 1 }}
                         >
                             {saving && <Loader2
                                 size={13}
@@ -930,8 +1150,12 @@ export default function LocationEditorModal({
 
             </div>
             {/* Country picker */}
+            {/* role="dialog" on the picker: the walkthrough engine detects an open
+                app dialog by role and suspends its scrim over it. Without it a tour
+                step that points at this picker's trigger keeps dimming the list and
+                cuts a band through it (useForeignDialog). Correct a11y regardless. */}
             {countryPickerOpen && (
-                <div style={PICKER_MODAL} onMouseDown={() => setCountryPickerOpen(false)}>
+                <div role="dialog" aria-modal="true" style={PICKER_MODAL} onMouseDown={() => setCountryPickerOpen(false)}>
                     <div style={PICKER_CONTENT} onMouseDown={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid hsl(var(--border-subtle))' }}>
                             <span style={{ font: '600 16px/22px system-ui', color: 'hsl(var(--foreground))' }}>{ui('countryLabel')}</span>
@@ -968,8 +1192,12 @@ export default function LocationEditorModal({
                 </div>
             )}
             {/* Region picker */}
+            {/* role="dialog" on the picker: the walkthrough engine detects an open
+                app dialog by role and suspends its scrim over it. Without it a tour
+                step that points at this picker's trigger keeps dimming the list and
+                cuts a band through it (useForeignDialog). Correct a11y regardless. */}
             {regionPickerOpen && (
-                <div style={PICKER_MODAL} onMouseDown={() => setRegionPickerOpen(false)}>
+                <div role="dialog" aria-modal="true" style={PICKER_MODAL} onMouseDown={() => setRegionPickerOpen(false)}>
                     <div style={PICKER_CONTENT} onMouseDown={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid hsl(var(--border-subtle))' }}>
                             <span style={{ font: '600 16px/22px system-ui', color: 'hsl(var(--foreground))' }}>{ui('regionLabel')}</span>

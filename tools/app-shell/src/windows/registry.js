@@ -31,6 +31,7 @@ const windowLoaders = {
   'purchase-order': () => import('@generated/purchase-order/generated/web/purchase-order/index.jsx'),
   'goods-receipt': () => import('@generated/goods-receipt/generated/web/goods-receipt/index.jsx'),
   'return-to-vendor-shipment': () => import('@generated/return-to-vendor-shipment/generated/web/return-to-vendor-shipment/index.jsx'),
+  'matched-purchase-invoices': () => import('@generated/matched-purchase-invoices/generated/web/matched-purchase-invoices/index.jsx'),
   'physical-inventory': () => import('@generated/physical-inventory/generated/web/physical-inventory/index.jsx'),
   'goods-movements': () => import('@generated/goods-movements/generated/web/goods-movements/index.jsx'),
   'internal-consumption': () => import('@generated/internal-consumption/generated/web/internal-consumption/index.jsx'),
@@ -56,7 +57,6 @@ const windowLoaders = {
   'assets': () => import('@generated/assets/generated/web/assets/index.jsx'),
   'asset-group': () => import('@generated/asset-group/generated/web/asset-group/index.jsx'),
   'conversion-rates': () => import('@generated/conversion-rates/generated/web/conversion-rates/index.jsx'),
-  'conversion-rate-downloader-log': () => import('@generated/conversion-rate-downloader-log/generated/web/conversion-rate-downloader-log/index.jsx'),
   'amortization': () => import('@generated/amortization/generated/web/amortization/index.jsx'),
   'simple-g-l-journal': () => import('@generated/simple-g-l-journal/generated/web/simple-g-l-journal/index.jsx'),
   'open-close-period-control': () => import('@/windows/custom/open-close-period-control-redirect/index.jsx'),
@@ -82,22 +82,48 @@ const windowLoaders = {
  * (a missing/not-yet-loaded `capabilities` map hides it, same convention as
  * `isCapabilityVisible` in `@/lib/capabilityVisibility.js`).
  *
+ * A third, independent axis (ETP-5240) lets a menu.json item declare
+ * `"accessWindowId": "<AD_Window_ID>"` for entries whose target window has no
+ * active `AD_Menu` node to be walked by SFListMenu — e.g. `ReportViewerPage`/
+ * `SmartScanPage`, which point at a permission-anchor `AD_Window` created only
+ * so those pages can content-gate via `useWindowAccess()`/`WindowAccessGuard`.
+ * Deliberately a SEPARATE field from `windowId` (reserved for real `AD_Menu`
+ * membership, checked against `allowedIds` above) — ETP-5116 reused `windowId`
+ * for this same purpose on these 3 entries, which made them permanently
+ * invisible in the sidebar for every role (ETP-5240) since their windowId
+ * never appears in any real `AD_Menu` tree. This check fails CLOSED, same
+ * convention as the `capability` axis: an item with `accessWindowId` is hidden
+ * unless `windowAccess[item.accessWindowId]` is a defined access tier.
+ *
+ * Admin/client-admin is exempt from this axis (ETP-5240 follow-up).
+ * `SFWindowAccessMap` now includes windows with active grants alongside active
+ * spec windows, so permission anchors are included in the admin map. Keeping
+ * the `capabilities.isAdminOrClientAdmin` bypass makes sidebar visibility
+ * resilient to an absent map or missing anchor entry once admin status is
+ * known. It bypasses neither the other menu axes nor the page's content gate,
+ * which still consumes the backend access map.
+ *
  * @param {Array} groups — output of buildMenuGroups.
  * @param {Set<string>|null} allowedIds — from useRoleMenu(). `null` disables
  *   the windowId/processId/obuiappProcessId filtering axis.
  * @param {Record<string, boolean>|null} [capabilities] — from `useAuth()`/
- *   `useCapabilitiesSafe()`. `null`/omitted disables the capability filtering
- *   axis. When both `allowedIds` and `capabilities` are falsy, `groups` is
- *   returned unchanged (matches this function's pre-ETP-4513 behavior).
+ *   `useCapabilitiesSafe()`. `null`/omitted fails closed for capability-gated
+ *   items. When `allowedIds`, `capabilities` and `windowAccess` are all falsy,
+ *   `groups` is returned unchanged (matches this function's pre-ETP-4513
+ *   behavior).
+ * @param {Record<string, string>|null} [windowAccess] — from `useAuth()`/
+ *   `useWindowAccessSafe()`. `null`/omitted fails closed for accessWindowId
+ *   items unless the admin exemption or all-falsy passthrough above applies.
  */
-export function filterMenuGroupsByAccess(groups, allowedIds, capabilities = null) {
-  if (!allowedIds && !capabilities) return groups;
+export function filterMenuGroupsByAccess(groups, allowedIds, capabilities = null, windowAccess = null) {
+  if (!allowedIds && !capabilities && !windowAccess) return groups;
   const itemIds = item => [item.windowId, item.processId, item.obuiappProcessId].filter(Boolean);
   return groups
     .map(group => ({
       ...group,
       items: group.items.filter(item => {
         if (item.capability && capabilities?.[item.capability] !== true) return false;
+        if (item.accessWindowId && !capabilities?.isAdminOrClientAdmin && (!windowAccess || windowAccess[item.accessWindowId] === undefined)) return false;
         if (!allowedIds) return true;
         const ids = itemIds(item);
         return ids.length === 0 || ids.some(id => allowedIds.has(String(id)));
@@ -172,10 +198,19 @@ export function getAllWindowNames() {
 }
 
 /**
- * API-only sub-windows: have a contract.json and NEO spec but are never loaded
- * as standalone UI windows. They are consumed directly via fetch by other custom
- * components (e.g. FiscalConfigPage fetches sii-config / tbai-config / verifactu-config).
- * Listed here so pipeline F3 validation knows they are intentionally registry-free.
+ * API-only windows: have a contract.json and NEO spec but are never loaded as
+ * standalone UI windows. Listed here so pipeline F3 validation knows they are
+ * intentionally registry-free. Two distinct reasons land a window here:
+ *
+ * 1. Sub-windows consumed directly via fetch by another custom component
+ *    (e.g. FiscalConfigPage fetches sii-config / tbai-config / verifactu-config).
+ * 2. Windows retired from the UI but still served read-only over NEO/MCP —
+ *    `conversion-rate-downloader-log` (ETP-5068): an internal log of the
+ *    conversion-rate downloader job that added no value to the Etendo Go end
+ *    user, so it was dropped from the Settings menu. Administrators read it in
+ *    Etendo classic (the GO template roles keep their AD window grant, see
+ *    `TemplateRoleWindowAccess` in com.etendoerp.go), and `neo_discover` still
+ *    reports it read-only for agents.
  */
 export const apiOnlyWindows = new Set([
   'sii-config',
@@ -184,6 +219,7 @@ export const apiOnlyWindows = new Set([
   'sii-monitor',
   'monitor-verifactu',
   'tbai-facturas-enviadas',
+  'conversion-rate-downloader-log',
 ]);
 
 /**

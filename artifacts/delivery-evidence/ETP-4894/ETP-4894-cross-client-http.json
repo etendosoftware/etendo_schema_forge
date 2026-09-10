@@ -1,0 +1,100 @@
+{
+  "environment": "local",
+  "clientCount": 2,
+  "clientNames": [
+    "E2E User 1 c3c48251",
+    "E2E User 2 8d032a4c"
+  ],
+  "firstInvitation": {
+    "resolve": "SENT",
+    "browser": [
+      {
+        "method": "GET",
+        "path": "/sws/go/company-invitations/resolve",
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/sws/go/login",
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/sws/go/company-invitations/accept",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/sws/go/environments",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/sws/go/login",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/sws/go/environments",
+        "status": 200
+      }
+    ]
+  },
+  "secondInvitation": {
+    "resolve": "SENT",
+    "browser": [
+      {
+        "method": "GET",
+        "path": "/sws/go/company-invitations/resolve",
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/sws/go/login",
+        "status": 200
+      },
+      {
+        "method": "POST",
+        "path": "/sws/go/company-invitations/accept",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/sws/go/environments",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/sws/go/login",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/sws/go/environments",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/sws/go/login",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/sws/go/environments",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/sws/go/login",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "path": "/sws/go/environments",
+        "status": 200
+      }
+    ]
+  },
+  "idempotentFirstLink": true,
+  "returnedTo": "E2E User 1 c3c48251"
+}

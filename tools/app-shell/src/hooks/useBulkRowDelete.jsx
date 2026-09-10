@@ -3,7 +3,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from '@/components/ui/dialog.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { buildHeaders } from '@/auth/api';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI } from '@/i18n';
 import { extractErrorMessage } from '@/hooks/useEntity';
 import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
@@ -31,6 +31,7 @@ import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
  */
 export function useBulkRowDelete({ apiBaseUrl, entity = 'header', token, onSuccess }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const [pendingRows, setPendingRows] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -53,24 +54,34 @@ export function useBulkRowDelete({ apiBaseUrl, entity = 'header', token, onSucce
       // single-toast-per-outcome selection — see `batchDelete.js` (ETP-4656:
       // extracted once Financial Accounts / Movements / Statements needed the
       // same "select → confirm → batch delete → 3-outcome toast" pattern).
-      const { succeeded, failed } = await runBatchDelete(pendingRows, (row) =>
-        fetch(`${apiBaseUrl}/${entity}/${row.id}`, {
+      const { succeeded, failed, errors } = await runBatchDelete(pendingRows, (row) =>
+        apiFetch(`/${entity}/${row.id}`, {
           method: 'DELETE',
-          headers: buildHeaders(token),
         }).then(async (res) => {
-          if (!res.ok) throw new Error(await extractErrorMessage(res, ui));
+          if (!res.ok) {
+            const err = new Error(await extractErrorMessage(res, ui));
+            // ETP-5111 — the status must travel with the error. The unified delete rule stopped
+            // pre-disabling the "Delete selected" button for an ineligible selection (ListView's
+            // `isRowDeletable` is gone), so the toast is now the ONLY place the refusal can be
+            // explained; `batchDelete.isBusinessRejection` trusts a reason only when it carries a
+            // 4xx status, so without this a single-row failure degraded to a bare counter and the
+            // backend's own message was discarded. Same shape as `useCreateMovement.postAction`
+            // and `useStatementActions`.
+            err.status = res.status;
+            throw err;
+          }
           return row;
         })
       );
 
-      toastBatchDeleteOutcome(ui, { succeeded, failed, total: pendingRows.length });
+      toastBatchDeleteOutcome(ui, { succeeded, failed, errors, total: pendingRows.length });
 
       setPendingRows(null);
       onSuccess?.(succeeded, failed);
     } finally {
       setDeleting(false);
     }
-  }, [pendingRows, apiBaseUrl, entity, token, ui, onSuccess]);
+  }, [pendingRows, apiBaseUrl, entity, apiFetch, ui, onSuccess]);
 
   const count = pendingRows?.length ?? 0;
 

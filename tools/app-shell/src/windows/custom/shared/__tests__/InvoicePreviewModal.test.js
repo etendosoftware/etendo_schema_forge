@@ -8,8 +8,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'InvoicePreview.jsx'), 'utf8');
 
 describe('InvoicePreviewModal source', () => {
-  it('calls useFiscalStatus without a token argument — signature is (id, spec, profile, apiBaseUrl, orgId)', () => {
-    assert.match(src, /useFiscalStatus\(\s*invoice\?\.id,\s*specName,\s*profile,\s*apiBaseUrl,\s*orgId,?\s*\)/);
+  // ETP-5087 added a trailing `territory` argument (TBAI territory gating for purchase
+  // invoices) — the regex below tolerates that optional extra arg while still guarding
+  // against the original bug (a `token` argument sneaking back in).
+  it('calls useFiscalStatus without a token argument — signature is (id, spec, profile, apiBaseUrl, orgId[, territory])', () => {
+    assert.match(src, /useFiscalStatus\(\s*invoice\?\.id,\s*specName,\s*profile,\s*apiBaseUrl,\s*orgId,(\s*territory,?)?\s*\)/);
     assert.doesNotMatch(src, /useFiscalStatus\([^)]*token[^)]*orgId/);
   });
 

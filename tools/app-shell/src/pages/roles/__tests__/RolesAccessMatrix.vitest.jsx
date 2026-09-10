@@ -103,37 +103,30 @@ describe('RolesAccessMatrix', () => {
     expect(iconFor).toHaveBeenCalledWith(CARDS[0]);
   });
 
-  describe('hardcoded General overlay (Inicio/Favoritos/Copilot)', () => {
-    // These 3 rows are NOT real AD windows (confirmed against the sibling
-    // feature/ETP-4906 branch's UserRolesTab.jsx GENERAL_ROWS precedent) and
-    // will never arrive from the backend's matrix.categories — they are
-    // always overlaid client-side, unconditionally, ahead of the real groups.
-    it('always renders the General category, even with an empty real matrix', () => {
+  describe('no hardcoded General overlay (ETP-5071)', () => {
+    // ETP-5071 — the 3 hardcoded "General" rows (Inicio/Dashboard, Favoritos, Copilot)
+    // that used to be overlaid ahead of the real matrix were removed: none of the 3 is a
+    // real AD window and they never appeared in the backend's own `matrix.categories` —
+    // the component now renders ONLY `matrix.map(...)`, nothing else.
+    it('never renders the General category, even with an empty real matrix', () => {
       render(<RolesAccessMatrix cards={CARDS} matrix={[]} />);
-      expect(screen.getByTestId('RolesAccessMatrix__category-General')).toBeTruthy();
+      expect(screen.queryByTestId('RolesAccessMatrix__category-General')).not.toBeInTheDocument();
     });
 
-    it('renders all 3 hardcoded rows using the shared ETP-4906 i18n keys', () => {
-      render(<RolesAccessMatrix cards={CARDS} matrix={[]} />);
-      expect(document.body.textContent).toContain('userRolesTabDashboardRow');
-      expect(document.body.textContent).toContain('userRolesTabFavoritesRow');
-      expect(document.body.textContent).toContain('userRolesTabCopilotRow');
+    it('does not render any of the old hardcoded General rows or their i18n text', () => {
+      render(<RolesAccessMatrix cards={CARDS} matrix={MATRIX} />);
+      expect(screen.queryByTestId(`RolesAccessMatrix__row-${buildRowKey('General', 'dashboard')}`)).not.toBeInTheDocument();
+      expect(screen.queryByTestId(`RolesAccessMatrix__row-${buildRowKey('General', 'favorites')}`)).not.toBeInTheDocument();
+      expect(screen.queryByTestId(`RolesAccessMatrix__row-${buildRowKey('General', 'copilot')}`)).not.toBeInTheDocument();
+      expect(document.body.textContent).not.toContain('userRolesTabDashboardRow');
+      expect(document.body.textContent).not.toContain('userRolesTabFavoritesRow');
+      expect(document.body.textContent).not.toContain('userRolesTabCopilotRow');
     });
 
-    it('gives every role column full ("✓") access on every General row, unconditionally', () => {
-      render(<RolesAccessMatrix cards={CARDS} matrix={[]} />);
-      for (const rowId of ['dashboard', 'favorites', 'copilot']) {
-        const key = buildRowKey('General', rowId);
-        expect(screen.getByTestId(`RolesAccessMatrix__cell-${key}-admin`).textContent).toBe('✓');
-        expect(screen.getByTestId(`RolesAccessMatrix__cell-${key}-inventory`).textContent).toBe('✓');
-      }
-    });
-
-    it('renders the General overlay before the real matrix.categories groups in document order', () => {
+    it('renders ONLY the real matrix.categories groups, with no extra category ahead of them', () => {
       render(<RolesAccessMatrix cards={CARDS} matrix={MATRIX} />);
       const rows = Array.from(document.querySelectorAll('[data-testid^="RolesAccessMatrix__category-"]'));
       expect(rows.map((r) => r.getAttribute('data-testid'))).toEqual([
-        'RolesAccessMatrix__category-General',
         'RolesAccessMatrix__category-Commercial',
         'RolesAccessMatrix__category-Inventory',
       ]);

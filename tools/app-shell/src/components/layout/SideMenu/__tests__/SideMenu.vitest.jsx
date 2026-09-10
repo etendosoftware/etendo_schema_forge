@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 const { mockUseFeatureFlag } = vi.hoisted(() => ({
   mockUseFeatureFlag: vi.fn(() => false),
 }));
+const menuFixture = vi.hoisted(() => ({ useShippedMenu: false }));
 const { mockUseEnvironmentSwitch } = vi.hoisted(() => ({
   mockUseEnvironmentSwitch: vi.fn(() => ({
     environments: [],
@@ -16,9 +17,15 @@ const { mockUseEnvironmentSwitch } = vi.hoisted(() => ({
 // Mock react-router-dom — useLocation wrapped in a vi.fn() so individual
 // tests can override the current path (e.g. the ETP-4598 openGroups-race
 // regression test below needs a non-'/dashboard' route).
+//
+// ETP-5073 / DOC-08: the menu's links are GuardedNavLink now, which calls useNavigate so an
+// ordinary click can be routed through the unsaved-changes gate. The mock has to provide it, and
+// mockNavigate doubles as the assertion seam for the guard cases at the bottom of this file.
 const mockUseLocation = vi.fn(() => ({ pathname: '/dashboard', search: '' }));
+const mockNavigate = vi.fn();
 vi.mock('react-router-dom', () => ({
   useLocation: () => mockUseLocation(),
+  useNavigate: () => mockNavigate,
   NavLink: ({ children, to, className, ...props }) => (
     <a href={to} className={typeof className === 'function' ? '' : className} {...props}>{children}</a>
   ),
@@ -60,9 +67,11 @@ vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
 // a group with no `items`, plus a second "Home" item addressed by `path`) so
 // the favNameMap-building loop in SideMenu exercises its `continue`, its
 // `g.items || []` fallback, and the `item.path || item.name` branch.
-vi.mock('@/menu.json', () => ({
+vi.mock('@/menu.json', async importOriginal => {
+  const real = await importOriginal();
+  return {
   default: {
-    menu: [
+    get menu() { return menuFixture.useShippedMenu ? real.default.menu : [
       {
         group: 'Home',
         icon: 'Home',
@@ -82,9 +91,10 @@ vi.mock('@/menu.json', () => ({
         group: 'NoItems',
         icon: 'Package',
       },
-    ],
+    ]; },
   },
-}));
+  };
+});
 
 // Mock Radix UI primitives that need portals/popper
 vi.mock('@/components/ui/tooltip.jsx', () => ({
@@ -172,6 +182,45 @@ vi.mock('@phosphor-icons/react', () => {
 });
 
 import SideMenu from '../SideMenu.jsx';
+import { buildMenuGroups, filterMenuGroupsByAccess } from '@/windows/registry.js';
+import { defaultNavigation, optionalNavigation, hiddenNavigation, navigationProfiles, expectedNavigation, navigationPermissions } from '@/windows/__tests__/navigationExpectations.js';
+
+describe('SideMenu shipped navigation profiles (ETP-5240)', () => {
+  beforeEach(() => {
+    menuFixture.useShippedMenu = true;
+    mockUseFavorites.mockReturnValue({ favorites: [] });
+    mockUseLocation.mockReturnValue({ pathname: '/dashboard', search: '' });
+  });
+
+  afterEach(() => {
+    menuFixture.useShippedMenu = false;
+    mockUseFeatureFlag.mockReturnValue(false);
+  });
+
+  it.each(navigationProfiles)('$label renders the intended real links only', async profile => {
+    mockUseFeatureFlag.mockImplementation(key => key === 'proof-of-concept-menu' && profile.proof);
+    const { allowedIds, capabilities, windowAccess } = navigationPermissions();
+    const menuGroups = filterMenuGroupsByAccess(
+      buildMenuGroups(profile.apps, { appStoreUnlocked: profile.marketplace }), allowedIds, capabilities, windowAccess,
+    );
+    const expected = expectedNavigation(profile);
+    const user = userEvent.setup();
+    render(<SideMenu menuGroups={menuGroups} expanded onToggle={vi.fn()} />);
+
+    for (const group of new Set(expected.map(entry => entry.group))) {
+      const trigger = screen.queryByTestId(`menu-group-${group.replace(/\s+/g, '-').toLowerCase()}`);
+      if (trigger) await user.click(trigger);
+      for (const entry of expected.filter(candidate => candidate.group === group)) {
+        const link = screen.getByTestId(`menu-item-${entry.name}`);
+        expect(link).toBeVisible();
+        expect(link).toHaveAttribute('href', `/${entry.path}`);
+      }
+    }
+    const absent = [...hiddenNavigation, ...[...defaultNavigation, ...optionalNavigation]
+      .filter(entry => !expected.some(candidate => candidate.name === entry.name)).map(entry => entry.name)];
+    for (const name of absent) expect(screen.queryByTestId(`menu-item-${name}`), name).not.toBeInTheDocument();
+  });
+});
 
 const MENU_GROUPS = [
   {

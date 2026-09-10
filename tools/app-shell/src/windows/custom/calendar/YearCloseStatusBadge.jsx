@@ -11,13 +11,13 @@ import { useYearCloseStatus } from './useYearCloseStatus.js';
  * YearTableWithCloseStatus (list column) and index.jsx's menuActions override (Cerrar
  * Año/Deshacer Cierre de Año visibility) — so none of the three can ever disagree.
  */
-export default function YearCloseStatusBadge({ data, recordId, token, apiBaseUrl }) {
+export default function YearCloseStatusBadge({ data, recordId, apiBaseUrl }) {
   const ui = useUI();
   const yearId = recordId || data?.id;
   // `undefined` = loading/unknown, `null` = the request failed. Loading and error states render
   // nothing — this is an auxiliary status indicator, not core functionality, so failing
   // silently is preferable to a misleading placeholder.
-  const closed = useYearCloseStatus(yearId, token, apiBaseUrl);
+  const closed = useYearCloseStatus(yearId, apiBaseUrl);
 
   if (closed === undefined || closed === null) {
     return null;

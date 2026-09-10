@@ -130,7 +130,19 @@ export function useActividadesIae(orgId, apiBaseUrl) {
     // a row this call already swept.
     rowsRef.current = rowsRef.current.map(r =>
       (others.some(o => o.id === r.id) ? { ...r, default: false } : r));
-    await Promise.all(others.map(r => patchRow(r.id, { default: false }).catch(() => null)));
+    // Swept one at a time, NOT `Promise.all(others.map(...))` (ETP-5112). Each `patchRow` is a
+    // PATCH carrying the row's `updated` token, and core parses that token through a
+    // non-thread-safe static `SimpleDateFormat` (`JsonToDataConverter` line 129); concurrent
+    // writes corrupt each other's parse and one comes back refused as a conflict against a row
+    // nobody touched. A sweep is the worst shape for it — it fans out one write per sibling row.
+    //
+    // The per-row `catch` stays and the loop never breaks: a failed sweep on one sibling must not
+    // stop the others from being corrected, which is what the docstring above promises. The
+    // optimistic marks in `rowsRef` are already written by the synchronous prefix, so overlapping
+    // callers still see them regardless of how long this loop takes.
+    for (const r of others) {
+      await patchRow(r.id, { default: false }).catch(() => null);
+    }
   }, [patchRow]);
 
   return {

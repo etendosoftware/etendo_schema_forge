@@ -8,6 +8,7 @@ vi.mock('@/i18n', () => ({
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ConfirmResultModal } from '../ConfirmResultModal.jsx';
+import { inlineFontFamiliesUpToBody } from './fontInheritance.js';
 
 const DOCS = [
   { type: 'entrada',      num: 'GR-001', amount: 100,  route: '/goods-receipt/1' },
@@ -217,6 +218,73 @@ describe('ConfirmResultModal', () => {
       expect(screen.queryByText('soViewInvoice')).not.toBeInTheDocument();
       // Only the close button is present in the footer (no primary button).
       expect(screen.getByText('soClose')).toBeInTheDocument();
+    });
+  });
+
+  // ── ETP-5108: one typeface across the whole modal ───────────────────────────
+  // The shell used to declare `fontFamily: 'system-ui, -apple-system, sans-serif'`,
+  // which took the modal off the design system's Inter — the header, the card and
+  // the buttons alike. It read as mixed typography because the document number's
+  // digit widths are where a non-Inter sans shows itself most.
+  describe('typography inheritance (ETP-5108)', () => {
+    const MODAL_TITLE = 'Order confirmed';
+    const DOC_NUMBER = '1000147';
+    const SALIDA_LABEL = 'confirmResultModal.docType.salida';
+    const SHIPMENT_DOC = { type: 'salida', num: DOC_NUMBER, amount: 350, route: '/goods-shipment/1' };
+
+    /** Renders the ticket's own case: the "Order confirmed" modal with a shipment card. */
+    function renderShipmentResult() {
+      return renderModal({ title: MODAL_TITLE, docs: [SHIPMENT_DOC] });
+    }
+
+    it('neither the overlay nor the modal shell declares a font-family', () => {
+      renderShipmentResult();
+      const overlay = screen.getByTestId('confirm-result-modal');
+      expect(overlay.style.fontFamily).toBe('');
+      // The shell is the overlay's only element child; JSX comments emit no nodes.
+      expect(overlay.firstElementChild.style.fontFamily).toBe('');
+    });
+
+    it('the document type label inherits the design system typeface', () => {
+      renderShipmentResult();
+      expect(inlineFontFamiliesUpToBody(screen.getByText(SALIDA_LABEL))).toEqual([]);
+    });
+
+    it('the document number inherits the design system typeface', () => {
+      renderShipmentResult();
+      expect(inlineFontFamiliesUpToBody(screen.getByText(DOC_NUMBER))).toEqual([]);
+    });
+
+    it('card and header resolve to the same typeface (CP-1, CP-2)', () => {
+      renderShipmentResult();
+      const title = inlineFontFamiliesUpToBody(screen.getByText(MODAL_TITLE));
+      const label = inlineFontFamiliesUpToBody(screen.getByText(SALIDA_LABEL));
+      const number = inlineFontFamiliesUpToBody(screen.getByText(DOC_NUMBER));
+      expect(label).toEqual(title);
+      expect(number).toEqual(title);
+    });
+
+    it('the footer buttons inherit it too', () => {
+      renderShipmentResult();
+      expect(inlineFontFamiliesUpToBody(screen.getByText('soClose'))).toEqual([]);
+      expect(inlineFontFamiliesUpToBody(screen.getByText('soViewShipment'))).toEqual([]);
+    });
+
+    it('keeps the label typography the fix must not touch', () => {
+      renderShipmentResult();
+      const { style } = screen.getByText(SALIDA_LABEL);
+      expect(style.textTransform).toBe('uppercase');
+      // jsdom normalises the source's `.06em` to a leading-zero form.
+      expect(style.letterSpacing).toBe('0.06em');
+      expect(style.fontSize).toBe('10px');
+      expect(style.fontWeight).toBe('600');
+    });
+
+    it('keeps the document number typography the fix must not touch', () => {
+      renderShipmentResult();
+      const { style } = screen.getByText(DOC_NUMBER);
+      expect(style.fontSize).toBe('13px');
+      expect(style.fontWeight).toBe('600');
     });
   });
 });

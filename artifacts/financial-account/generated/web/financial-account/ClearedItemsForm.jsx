@@ -10,7 +10,7 @@ const fields = [
   { key: 'transactionType', column: 'Trxtype', type: 'select', label: 'Transaction Type', readOnly: true, section: 'other', options: [{ value: 'BPD', label: 'BP Deposit', labels: {"es_ES":"Cobro"} }, { value: 'BPW', label: 'BP Withdrawal', labels: {"es_ES":"Pago"} }, { value: 'BF', label: 'Bank fee', labels: {"es_ES":"Tasa de Banco"} }] },
   { key: 'currency', column: 'C_Currency_ID', type: 'search', label: 'Currency', readOnly: true, section: 'other', reference: 'Currency', inputMode: 'search' },
   { key: 'payment', column: 'FIN_Payment_ID', type: 'search', label: 'Payment', readOnly: true, section: 'other', reference: 'Payment', inputMode: 'search' },
-  { key: 'gLItem', column: 'C_Glitem_ID', type: 'search', label: 'G/L Item', readOnly: true, section: 'other', reference: 'Glitem', inputMode: 'search' },
+  { key: 'gLItem', column: 'C_Glitem_ID', type: 'search', label: 'Accounting account', readOnly: true, section: 'other', reference: 'Glitem', inputMode: 'search' },
   { key: 'depositAmount', column: 'Depositamt', type: 'number', label: 'Deposit Amount', readOnly: true, section: 'other' },
   { key: 'paymentAmount', column: 'Paymentamt', type: 'number', label: 'Withdrawal Amount', readOnly: true, section: 'other' },
   { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', readOnly: true, section: 'other', reference: 'Project', inputMode: 'search', visible: null, visibilitySource: 'server', displayLogicReason: 'server-macro' },

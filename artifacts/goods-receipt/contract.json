@@ -1,8 +1,8 @@
 {
-  "version": "0.32.0",
+  "version": "0.33.0",
   "generatedAt": "2026-07-30T22:14:36.474Z",
-  "updatedAt": "2026-08-13T12:52:08.773Z",
-  "checksum": "faaaff89df312265",
+  "updatedAt": "2026-08-28T16:57:57.057Z",
+  "checksum": "d4bae3764d5905d7",
   "frontendContract": {
     "window": {
       "id": "184",
@@ -789,7 +789,7 @@
               "type": "computed",
               "source": "0"
             },
-            "defaultValue": "1",
+            "defaultValue": "0",
             "section": "principal",
             "seq": 20,
             "validation": {

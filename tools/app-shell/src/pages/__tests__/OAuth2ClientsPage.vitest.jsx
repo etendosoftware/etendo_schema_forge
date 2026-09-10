@@ -15,6 +15,8 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 
 const stableApiFetch = vi.fn();
 vi.mock('@/auth/api.js', () => ({
+  authHeaders: (t) => ({ 'Accept-Language': 'es_ES', ...(t ? { Authorization: `Bearer ${t}` } : {}) }),
+  buildHeaders: (t) => ({ 'Content-Type': 'application/json', 'Accept-Language': 'es_ES', ...(t ? { Authorization: `Bearer ${t}` } : {}) }),
   createApiFetch: () => stableApiFetch,
 }));
 

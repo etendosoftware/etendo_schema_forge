@@ -1,3 +1,4 @@
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 /**
  * Shared plumbing for the NEO pseudo-spec bridge webhook family (`NeoGoWebhookBridge`
  * in `com.etendoerp.go`) — `rolesApi.js` (`SFRolesOverview`/`SFSystemRoleTemplates`)
@@ -78,10 +79,9 @@ export function getToken() {
  */
 export async function fetchNeoWebhookJson(url, webhookName, resolveFallback) {
   const token = getToken();
-  const headers = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-
-  const res = await fetch(url, { headers });
+  // ETP-5022: shared by every NEO webhook caller, so a missing Accept-Language here made all
+  // of them resolve reference data in the AD language.
+  const res = await apiFetch(url, { baseUrl: '', token });
   const text = await res.text();
   let data;
   let parsed = true;

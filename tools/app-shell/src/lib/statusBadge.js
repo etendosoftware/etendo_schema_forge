@@ -1,24 +1,41 @@
 /**
- * Canonical business-flow ordering for status codes, independent of
- * data-source arrival order (in-memory rows vs. backend distinct-values
- * fetch). Buckets follow: Draft -> In process -> Awaiting -> Completed ->
- * Closed -> Voided. Codes not listed here are unknown to this catalog and
- * are sorted alphabetically after all known codes (see compareStatusCodes).
+ * Canonical business-flow ordering for document/payment status codes,
+ * independent of data-source arrival order (in-memory rows vs. backend
+ * distinct-values fetch). Buckets follow: Temporary -> Draft -> In process ->
+ * Awaiting -> Completed -> Re-opened -> Closed -> Voided -> Unknown.
+ * Codes not listed here are unknown to this catalog and are sorted
+ * alphabetically after all known codes (see compareStatusCodes).
+ *
+ * ETP-4913 added the remaining real docstatus codes (TMP/TEMP, NC, AE, ME, WP,
+ * RE, NA and the '??' sentinel), which previously fell into the alphabetical
+ * tail — the "??, NA, RE, TEMP, WP" clump the user saw as an illogical order.
+ *
+ * Kept byte-identical to the core copy
+ * (@etendosoftware/app-shell-core/lib/statusBadge.js), which the advanced
+ * filter's value picker uses; statusBadge.coreParity.test.js fails the build if
+ * the two drift apart, so the "All statuses" pill and that picker can never
+ * disagree for the same column.
  */
 export const STATUS_ORDER = [
+  // Temporary / pre-draft
+  'TMP', 'TEMP',
   // Draft / not started
-  'DR', 'DRAFT', 'FALSE', 'N',
-  // In process
-  'IP', 'M', 'UE', 'RPAE',
+  'DR', 'DRAFT', 'FALSE', 'N', 'NC',
+  // In process / under evaluation
+  'IP', 'M', 'UE', 'AE', 'ME', 'RPAE',
   // Awaiting
-  'RPAP',
+  'RPAP', 'WP',
   // Completed
   'CO', 'CA', 'ETGO_CI', 'TRUE', 'Y', 'YES', 'PROCESSED',
   'RPR', 'RPPC', 'PPM', 'PWNC', 'RDNC',
+  // Re-opened after completion (back in the flow, before terminal Closed)
+  'RE',
   // Closed
   'CL', 'PA',
-  // Voided / rejected
-  'VO', 'CJ', 'RPVOID', 'ETGOERR', 'P',
+  // Rejected / voided
+  'NA', 'CJ', 'VO', 'RPVOID', 'ETGOERR', 'P',
+  // Unknown sentinel — always last among the known codes
+  '??',
 ];
 
 /**

@@ -9,7 +9,8 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => stableApiFetch }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
 vi.mock('@/components/layout/PageMetaContext', () => ({ useSetPageMeta: vi.fn() }));
-vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
+const navigateMock = vi.fn();
+vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
 vi.mock('../../fiscal-config/useCertExpiry.js', () => ({
   useCertExpiry: () => ({ daysLeft: null }),
 }));
@@ -53,7 +54,16 @@ vi.mock('../fiscalMonitorMockData.js', () => ({
   MOCK_TBAI_VALIDATION_RESULTS: [],
 }));
 vi.mock('../SiiMonitorSection.jsx', () => ({
-  default: (props) => <div data-testid="sii-section" data-parent={props.parentId} />,
+  default: (props) => (
+    <div data-testid="sii-section" data-parent={props.parentId}>
+      <button
+        data-testid="sii-open-invoice"
+        onClick={() => props.onInvoiceOpen?.('inv-1', 'sales-invoice')}
+      >
+        open
+      </button>
+    </div>
+  ),
 }));
 vi.mock('../TbaiMonitorSection.jsx', () => ({
   default: () => <div data-testid="tbai-section" />,
@@ -64,8 +74,16 @@ vi.mock('../VerifactuMonitorSection.jsx', () => ({
 vi.mock('../FiscalMonitorDebugPanel.jsx', () => ({
   default: () => <div data-testid="debug-panel" />,
 }));
+// The stub must exercise onEdit: an inert stub is exactly why ETP-5027
+// (frozen page on "Edit") went unnoticed.
 vi.mock('../../shared/InvoicePreviewModal.jsx', () => ({
-  default: () => <div data-testid="invoice-preview" />,
+  default: (props) => (
+    <div data-testid="invoice-preview">
+      <button data-testid="invoice-preview-edit" onClick={() => props.onEdit?.('inv-1')}>
+        Edit
+      </button>
+    </div>
+  ),
 }));
 vi.mock('../../shared/PdfViewer.jsx', () => ({
   default: () => <div data-testid="pdf-viewer" />,
@@ -80,7 +98,7 @@ vi.mock('../ContactDetailModal.jsx', () => ({
 }));
 vi.mock('../fiscal-monitor.css', () => ({}));
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import FiscalMonitorPage from '../FiscalMonitorPage.jsx';
 
 const baseProps = {
@@ -119,5 +137,45 @@ describe('FiscalMonitorPage', () => {
       expect(screen.getByTestId('sii-section')).toBeInTheDocument();
     });
     expect(screen.getByTestId('sii-section').getAttribute('data-parent')).toBe('parent-1');
+  });
+});
+
+describe('FiscalMonitorPage invoice preview edit', () => {
+  beforeEach(() => {
+    navigateMock.mockClear();
+    stableApiFetch.mockImplementation(() => Promise.resolve({
+      ok: true,
+      json: async () => ({ response: { data: [{ id: 'inv-1' }] } }),
+    }));
+  });
+
+  afterEach(() => {
+    stableApiFetch.mockImplementation(() => Promise.resolve({
+      ok: true,
+      json: async () => ({ response: { data: [] } }),
+    }));
+  });
+
+  it('navigates to the invoice detail and unmounts the modal on edit', async () => {
+    render(<FiscalMonitorPage {...baseProps} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('sii-section')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      screen.getByTestId('sii-open-invoice').click();
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('invoice-preview')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      screen.getByTestId('invoice-preview-edit').click();
+    });
+
+    expect(navigateMock).toHaveBeenCalledWith('/sales-invoice/inv-1');
+    await waitFor(() => {
+      expect(screen.queryByTestId('invoice-preview')).toBeNull();
+    });
   });
 });

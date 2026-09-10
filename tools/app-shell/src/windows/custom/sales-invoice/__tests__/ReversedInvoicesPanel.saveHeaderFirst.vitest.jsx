@@ -13,8 +13,13 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: () => {} }),
 }));
 
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn(), message: vi.fn() },
+}));
+
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { toast } from 'sonner';
 import ReversedInvoicesPanel from '../ReversedInvoicesPanel.jsx';
 
 const RECORD_ID = 'rec-1';
@@ -203,18 +208,21 @@ describe('save-header-first — child POST failure after header save', () => {
       draft: { reversedInvoice: 'inv-orig-9', 'reversedInvoice$_identifier': '10000090' },
       error: 'trigger rejected',
     });
-    // No inline error on THIS mount — staying on /new would re-save the header
-    // on every tab switch (duplicate invoices); the error travels with the draft
+    // No inline error anywhere — the paragraph no longer exists (ETP-5027)
     expect(screen.queryByTestId('text__saveError')).not.toBeInTheDocument();
+    // No toast on THIS mount either: the message travels with the draft and is
+    // toasted once the navigation remounts the panel with restoreDraft, so the
+    // user sees exactly one toast, not one here and another after the remount.
+    expect(toast.error).not.toHaveBeenCalled();
   });
 });
 
 // ---------------------------------------------------------------------------
-// (d) header save itself fails → inline error, no POST
+// (d) header save itself fails → error toast, no POST
 // ---------------------------------------------------------------------------
 
 describe('save-header-first — header save failure', () => {
-  it('onSaveHeader returning null shows rectSaveError and fires no POST', async () => {
+  it('onSaveHeader returning null toasts rectSaveError and fires no POST', async () => {
     const onSaveHeader = vi.fn(async () => null);
     const onGoToSavedRecord = vi.fn();
     renderNewPanel({ onSaveHeader, onGoToSavedRecord, headerInvoices: [CANDIDATE] });
@@ -222,7 +230,9 @@ describe('save-header-first — header save failure', () => {
     await openAddAndPickCandidate();
     fireEvent.click(screen.getByTestId('btn__saveNewLine'));
 
-    expect(await screen.findByTestId('text__saveError')).toHaveTextContent('rectSaveError');
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('rectSaveError'));
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('text__saveError')).not.toBeInTheDocument();
     expect(postCalls()).toHaveLength(0);
     expect(onGoToSavedRecord).not.toHaveBeenCalled();
   });
@@ -238,14 +248,17 @@ describe('save-header-first — autoOpenAdd restores the draft after the remount
     error: 'boom',
   };
 
-  it('mounts with the add form open, the picked invoice prefilled and the carried error visible', async () => {
+  it('mounts with the add form open, the picked invoice prefilled and the carried error toasted', async () => {
     renderSavedPanel({ panelProps: { autoOpenAdd: true, restoreDraft: RESTORE } });
 
     // Add form auto-opened with the restored draft
     expect(await screen.findByTestId('btn__saveNewLine')).toBeInTheDocument();
     expect(screen.getByText('X')).toBeInTheDocument();
-    // The error from the failed child POST survived the navigation
-    expect(screen.getByTestId('text__saveError')).toHaveTextContent('boom');
+    // The error from the failed child POST survived the navigation and is
+    // surfaced as a toast — exactly once, and never as inline text
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('boom'));
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('text__saveError')).not.toBeInTheDocument();
     // Draft has an invoice picked → save is enabled
     expect(screen.getByTestId('btn__saveNewLine')).not.toBeDisabled();
   });
@@ -288,7 +301,10 @@ describe('parseNeoError — 400 field-errors shape joins all messages', () => {
     fireEvent.click(await screen.findByText('10000090'));
     fireEvent.click(screen.getByTestId('btn__saveNewLine'));
 
-    expect(await screen.findByTestId('text__saveError')).toHaveTextContent('msg1 · msg2');
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('msg1 · msg2'));
+    // ETP-5027: toast only — never duplicated as inline text
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('text__saveError')).not.toBeInTheDocument();
   });
 });
 

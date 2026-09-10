@@ -24,7 +24,30 @@
           "type": "object",
           "required": ["primaryEntity"],
           "properties": {
-            "primaryEntity": { "type": ["string", "null"] }
+            "primaryEntity": { "type": ["string", "null"] },
+            "vectorSearch": {
+              "type": "object",
+              "required": ["target"],
+              "properties": {
+                "target": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,127}$"
+                }
+              },
+              "additionalProperties": false
+            },
+            "searchSuggestions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["label", "path"],
+                "properties": {
+                  "label": { "type": "string", "minLength": 1 },
+                  "path": { "type": "string", "pattern": "^/" }
+                },
+                "additionalProperties": false
+              }
+            }
           },
           "additionalProperties": true
         },

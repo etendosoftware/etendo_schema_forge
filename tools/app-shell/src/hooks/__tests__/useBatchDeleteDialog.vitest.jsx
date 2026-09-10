@@ -161,6 +161,42 @@ describe('useBatchDeleteDialog', () => {
     expect(onOutcome).toHaveBeenCalledWith([], ['a', 'b']);
   });
 
+  // ETP-5085 — the hook now forwards `runBatchDelete`'s `errors` to `toastBatchDeleteOutcome`, so a
+  // batch whose failures all state one 4xx business reason is toasted with that reason. For a single
+  // selected record the reason REPLACES the counter entirely: "None of the 1 selected record(s) could
+  // be deleted." is a worse way of saying a sentence the backend already wrote. The three tests above
+  // reject with a plain `new Error('boom')` (no `status`), so they keep exercising the old branch.
+  it('all fail on ONE item with a 4xx business reason: the toast IS that message, not the counter', async () => {
+    const reason = 'This movement is linked to a payment and cannot be deleted.';
+    const rejection = new Error(reason);
+    rejection.status = 409;
+    const deleteOneFn = vi.fn(async () => { throw rejection; });
+    const onOutcome = vi.fn();
+
+    function TestComponent() {
+      const { requestBatchDelete, batchDeleteDialog } = useBatchDeleteDialog({ deleteOneFn, onOutcome });
+      return (
+        <>
+          <button onClick={() => requestBatchDelete(['a'])}>Bulk</button>
+          {batchDeleteDialog}
+        </>
+      );
+    }
+    render(<TestComponent />);
+    const user = userEvent.setup();
+
+    await act(async () => { await user.click(screen.getByText('Bulk')); });
+    await act(async () => { await user.click(screen.getByTestId('batch-delete-confirm')); });
+
+    const { toast } = await import('sonner');
+    expect(toast.error).toHaveBeenCalledWith(reason);
+    expect(toast.error).not.toHaveBeenCalledWith(expect.stringContaining('None of the'));
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.warning).not.toHaveBeenCalled();
+    // Outcome reporting is unchanged: nothing succeeded, so the host keeps its selection.
+    expect(onOutcome).toHaveBeenCalledWith([], ['a']);
+  });
+
   it('disables the confirm/cancel buttons while the batch is in flight', async () => {
     let resolveDelete;
     const deleteOneFn = vi.fn(() => new Promise((resolve) => { resolveDelete = resolve; }));

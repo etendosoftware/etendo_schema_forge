@@ -20,7 +20,15 @@ import { useUI } from '@/i18n';
  * Reuses the same `delete`/`selected` i18n keys as the grid bulk delete — no
  * new wording.
  *
- * @param {{ count: number, onDelete: () => void, onCancel: () => void, deleting?: boolean }} props
+ * ETP-5111 — there is deliberately NO `disabledReason` prop. ETP-4921 added one so the Statements
+ * tab could grey the trash out for a selection the backend was guaranteed to reject; the unified
+ * delete rule replaced that with "attempt it, then explain the refusal" (the reason is reported by
+ * `toastBatchDeleteOutcome`, and only when a single record was selected). The button's only
+ * disabled state is therefore the in-flight one.
+ *
+ * @param {{
+ *   count: number, onDelete: () => void, onCancel: () => void, deleting?: boolean,
+ * }} props
  */
 export function BulkDeleteSelectionBar({ count, onDelete, onCancel, deleting = false }) {
   const ui = useUI();

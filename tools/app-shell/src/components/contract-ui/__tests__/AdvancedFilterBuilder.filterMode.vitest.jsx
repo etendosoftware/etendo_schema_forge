@@ -85,7 +85,7 @@ const OUTSTANDING_COLUMN = {
   column: 'OutstandingAmt',
   type: 'custom',
   filterMode: 'numeric',
-  label: 'Pendiente de pago',
+  label: 'Saldo pendiente',
 };
 
 const DUE_DATE_COLUMN = {
@@ -164,10 +164,18 @@ describe('AdvancedFilterBuilder — custom column with explicit filterMode (ETP-
     expect(operatorTrigger).not.toHaveTextContent('advancedFilterSelectOp');
   });
 
-  it('renders a number input for the outstandingAmount value', () => {
+  // The numeric editor is NOT an <input type="number">: the grid renders amounts
+  // with a locale decimal comma ("1.646,49 €") and a number input refuses that
+  // character in most browsers, so the user could only ever type the value back
+  // in a format they never see. It is a text input carrying
+  // `inputMode="decimal"` (numeric keypad on mobile, comma allowed), and the
+  // builder normalizes to canonical dot-decimal at apply time — so `inputMode`,
+  // not `type`, is the attribute that says "numeric" here.
+  it('renders the numeric editor for the outstandingAmount value', () => {
     render(<AdvancedFilterBuilder columns={makeColumns()} value={OVERDUE_FILTER} />);
     const valueInput = within(getRows()[1]).getByTestId('Input__4eedf1');
-    expect(valueInput).toHaveAttribute('type', 'number');
+    expect(valueInput).toHaveAttribute('type', 'text');
+    expect(valueInput).toHaveAttribute('inputMode', 'decimal');
   });
 
   it('keeps the first row on the enum picker (status column is unaffected)', () => {
@@ -215,8 +223,22 @@ describe('AdvancedFilterBuilder — custom column with explicit filterMode (ETP-
 });
 
 // ── Negative control: this is what locks the fix in ───────────────────────────
-// Dropping `filterMode` from the custom column reproduces the original bug.
-
+// Dropping `filterMode` from the custom column reproduces the original bug —
+// the column degrades to TEXT mode instead of numeric.
+//
+// Update (ETP-5008, core 0.3.45): `getOperatorsForColumn` now always keeps the
+// row's OWN operator in the offered list, even when it isn't one of the modes's
+// normal operators — added so a saved filter preset never renders a blank
+// trigger (see AdvancedFilterBuilder.jsx `getOperatorsForColumn` doc comment).
+// That happens to also cover this row's preloaded `greaterThan` operator, so
+// the trigger label and the option list both still show "opGreaterThan" even
+// though the column resolved to text mode. This is a deliberate, documented
+// upstream behavior change, not a regression — the underlying ETP-4681 bug
+// (text mode used for a numeric column) is still fully reproduced by the two
+// assertions that matter: the value editor stays a plain text input (no
+// numeric `inputMode`), and the rest of the numeric operator set
+// (greaterOrEqual/lessThan/lessOrEqual/between) never appears — only the
+// single preserved operator plus the text-mode set are offered.
 describe('AdvancedFilterBuilder — custom column WITHOUT filterMode reproduces the bug', () => {
   const brokenColumns = () => {
     const cols = makeColumns();
@@ -227,22 +249,36 @@ describe('AdvancedFilterBuilder — custom column WITHOUT filterMode reproduces 
     });
   };
 
-  it('does not render the greater-than label (operator select comes up empty)', () => {
+  // Pre-ETP-5008 this trigger rendered blank (no matching item for the
+  // now-text-mode operator list). ETP-5008's "keep the current operator"
+  // fallback means the label still shows — this asserts that fallback, not
+  // the original bug being gone.
+  it('still shows the preloaded operator label via the ETP-5008 current-operator fallback', () => {
     render(<AdvancedFilterBuilder columns={brokenColumns()} value={OVERDUE_FILTER} />);
     const operatorTrigger = getOperatorTrigger(getRows()[1]);
-    expect(operatorTrigger).not.toHaveTextContent('opGreaterThan');
+    expect(operatorTrigger).toHaveTextContent('opGreaterThan');
   });
 
-  it('degrades the value editor to a text input', () => {
+  // Both editors are `type="text"`, so that attribute alone cannot tell them
+  // apart — the absence of `inputMode` is what makes this one a PLAIN text box.
+  // Asserted against its numeric counterpart above so the two stay distinct.
+  it('degrades the value editor to a plain text input (no numeric input mode)', () => {
     render(<AdvancedFilterBuilder columns={brokenColumns()} value={OVERDUE_FILTER} />);
     const valueInput = within(getRows()[1]).getByTestId('Input__4eedf1');
     expect(valueInput).toHaveAttribute('type', 'text');
+    expect(valueInput).not.toHaveAttribute('inputMode');
   });
 
-  it('offers only text operators, so greaterThan is unreachable', async () => {
+  // The list still degrades to the text-mode operator set — the rest of the
+  // numeric set (greaterOrEqual/lessThan/lessOrEqual/between) is unreachable.
+  // `greaterThan` itself is present too, but only as the ETP-5008 preserved
+  // current-operator fallback (asserted above), not as a real numeric offer.
+  it('offers only the text operator set plus the preserved current operator', async () => {
     render(<AdvancedFilterBuilder columns={brokenColumns()} value={OVERDUE_FILTER} />);
     const optionLabels = await openOperatorOptions(getRows()[1]);
     expect(optionLabels).toContain('opContains');
-    expect(optionLabels).not.toContain('opGreaterThan');
+    for (const key of ['opGreaterOrEqual', 'opLessThan', 'opLessOrEqual', 'opBetween']) {
+      expect(optionLabels).not.toContain(key);
+    }
   });
 });

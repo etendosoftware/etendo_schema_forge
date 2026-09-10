@@ -62,10 +62,22 @@ const COMPLETED_HEADER = {
   'documentStatus$_identifier': 'Completado',
 };
 
+// Non-matching methods use route.fallback(), NOT route.fallback(): continue() sends the
+// request to the real network, so a POST that these handlers do not model (e.g.
+// quotationLine/evaluate-display) reached the live backend with the fake E2E token and came
+// back 401. That was harmless while a 401 was ignored; since ETP-5022 routes an expired
+// session to the login screen, it logged the test out and blanked the page. fallback() defers
+// to login()'s /sws/** catch-all instead, which is what the rest of this suite already does.
+// Non-matching methods use route.fallback(), NOT route.continue(): continue() sends the
+// request to the real network, so a request these handlers do not model reached the live
+// backend with the fake E2E token and came back 401. That was harmless while a 401 was
+// ignored; since ETP-5022 routes an expired session to the login screen, it logged the test
+// out and blanked the page. fallback() defers to login()'s /sws/** catch-all instead, which
+// is what the rest of this suite already does.
 async function installQuotationMocks(page, { header = DRAFT_HEADER, lines = [LINE_A, LINE_B] } = {}) {
   // Header GET
   await page.route(`**/sws/neo/sales-quotation/quotation/${header.id}`, async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
+    if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -75,7 +87,7 @@ async function installQuotationMocks(page, { header = DRAFT_HEADER, lines = [LIN
 
   // Also match the generic header path used by some generated pages
   await page.route(`**/sws/neo/sales-quotation/header/${header.id}`, async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
+    if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -85,7 +97,7 @@ async function installQuotationMocks(page, { header = DRAFT_HEADER, lines = [LIN
 
   // Lines (quotationLine child entity)
   await page.route('**/sws/neo/sales-quotation/quotationLine{/**,}**', async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
+    if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -95,7 +107,7 @@ async function installQuotationMocks(page, { header = DRAFT_HEADER, lines = [LIN
 
   // PATCH autosave — return the patched line as-is
   await page.route('**/sws/neo/sales-quotation/quotationLine/**', async (route) => {
-    if (route.request().method() !== 'PATCH') return route.continue();
+    if (route.request().method() !== 'PATCH') return route.fallback();
     const body = JSON.parse(route.request().postData() || '{}');
     const lineId = route.request().url().split('/').pop();
     const original = lines.find(l => l.id === lineId) ?? LINE_A;
@@ -108,7 +120,7 @@ async function installQuotationMocks(page, { header = DRAFT_HEADER, lines = [LIN
 
   // DELETE line
   await page.route('**/sws/neo/sales-quotation/quotationLine/**', async (route) => {
-    if (route.request().method() !== 'DELETE') return route.continue();
+    if (route.request().method() !== 'DELETE') return route.fallback();
     await route.fulfill({ status: 204 });
   });
 }
@@ -192,7 +204,7 @@ test.describe('Inline-editable lines — Sales Quotation (mocked)', () => {
 
     // Override DELETE to capture the ID — registered LAST so it wins.
     await page.route('**/sws/neo/sales-quotation/quotationLine/**', async (route) => {
-      if (route.request().method() !== 'DELETE') return route.continue();
+      if (route.request().method() !== 'DELETE') return route.fallback();
       const url = route.request().url();
       deletedIds.push(url.split('/').pop());
       await route.fulfill({ status: 204 });

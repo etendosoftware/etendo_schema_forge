@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   getNumericFieldError, numericFieldToastId,
   trackSaveBlockToast, dismissSaveBlockToasts, resetSaveBlockToastTracking,
+  clampNumericFieldMax,
 } from '../numericValidation.js';
 
 // Pure, declarative numeric validation (min / integer) shared by EntityForm's
@@ -160,5 +161,37 @@ describe('save-block toast tracking', () => {
     trackSaveBlockToast('numeric-field-x');
     dismissSaveBlockToasts(undefined);
     assert.ok(true);
+  });
+});
+
+/**
+ * ETP-4887 — `clampNumericFieldMax`: a silent max-value clamp for numeric fields,
+ * distinct from `getNumericFieldError` (which BLOCKS save and toasts). Clamping
+ * never reports a violation — it just corrects the value in place.
+ */
+describe('clampNumericFieldMax', () => {
+  it('clamps a value above max down to the max, as a string', () => {
+    assert.equal(clampNumericFieldMax({ max: 100 }, 150), '100');
+  });
+
+  it('leaves a value at or below max unchanged', () => {
+    assert.equal(clampNumericFieldMax({ max: 100 }, 25), 25);
+  });
+
+  it('leaves an empty value unchanged', () => {
+    assert.equal(clampNumericFieldMax({ max: 100 }, ''), '');
+  });
+
+  it('is a no-op when the field declares no max', () => {
+    assert.equal(clampNumericFieldMax({}, 150), 150);
+  });
+
+  it('leaves null/undefined values unchanged', () => {
+    assert.equal(clampNumericFieldMax({ max: 100 }, null), null);
+    assert.equal(clampNumericFieldMax({ max: 100 }, undefined), undefined);
+  });
+
+  it('leaves a non-numeric value unchanged', () => {
+    assert.equal(clampNumericFieldMax({ max: 100 }, 'abc'), 'abc');
   });
 });

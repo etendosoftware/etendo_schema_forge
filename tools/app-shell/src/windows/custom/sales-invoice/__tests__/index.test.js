@@ -3,25 +3,16 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { registerLabelOverrideTests, OUTSTANDING_AMT_CASE } from '../../shared/__tests__/testUtils/labelOverrideAssertions.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'index.jsx'), 'utf8');
 
-// The wrapper bypasses the generated HeaderPage when listing, so the spec's
-// labelOverrides do not reach DataTable. The local LABEL_OVERRIDES constant
-// is the only thing that renames AD columns in this view — keep these tests
-// in sync with artifacts/sales-invoice/decisions.json → window.labelOverrides.
-
 describe('SalesInvoiceWindow — LABEL_OVERRIDES', () => {
-  it('renames OutstandingAmt to "Pendiente de pago" / "Pending Payment"', () => {
-    assert.match(src, /es_ES:\s*\{[\s\S]*?OutstandingAmt:\s*'Pendiente de pago'/);
-    assert.match(src, /en_US:\s*\{[\s\S]*?OutstandingAmt:\s*'Pending Payment'/);
-  });
-
-  it('renames em_etgo_delivery_status to "Estado de entrega" / "Delivery Status"', () => {
-    assert.match(src, /es_ES:\s*\{[\s\S]*?em_etgo_delivery_status:\s*'Estado de entrega'/);
-    assert.match(src, /en_US:\s*\{[\s\S]*?em_etgo_delivery_status:\s*'Delivery Status'/);
-  });
+  registerLabelOverrideTests(assert, src, [
+    OUTSTANDING_AMT_CASE,
+    { column: 'em_etgo_delivery_status', labels: { es_ES: 'Estado de entrega', en_US: 'Delivery Status' } },
+  ]);
 
   it('passes LABEL_OVERRIDES into the ListView', () => {
     assert.match(src, /labelOverrides=\{LABEL_OVERRIDES\}/);
@@ -35,6 +26,12 @@ describe('SalesInvoiceWindow — wiring', () => {
 
   it('routes to HeaderPage when a recordId is present', () => {
     assert.match(src, /if\s*\(recordId\)/);
+  });
+
+  it('does not hardcode hidePrint on ListView (ETP-4728 — print restored)', () => {
+    assert.doesNotMatch(src, /hidePrint/,
+      'the bulk "Print (N)" grid button must not be hidden via listViewOptions — ' +
+      'ETP-4728 restored it for sales-invoice, mirroring sales-order (ETP-4729)');
   });
 });
 
@@ -57,10 +54,10 @@ describe('SalesInvoiceWindow — Tax SIF trigger wiring (ETP-4888)', () => {
     assert.match(src, /const\s+LINE_TAX_SIF_TRIGGER_ENABLED\s*=\s*true\s*;/);
   });
 
-  it('calls the hook with apiBaseUrl, token, enabled, recordId and windowCategory: "sales"', () => {
+  it('calls the hook with apiBaseUrl, token, enabled, recordId, windowCategory: "sales" and specName: "sales-invoice"', () => {
     assert.match(
       src,
-      /useTaxSifLineRowActions\(\{\s*\n?\s*apiBaseUrl,\s*token,\s*enabled:\s*LINE_TAX_SIF_TRIGGER_ENABLED,\s*recordId,\s*windowCategory:\s*'sales',?\s*\n?\s*\}\)/,
+      /useTaxSifLineRowActions\(\{\s*\n?\s*apiBaseUrl,\s*token,\s*enabled:\s*LINE_TAX_SIF_TRIGGER_ENABLED,\s*recordId,\s*windowCategory:\s*'sales',\s*specName:\s*'sales-invoice',?\s*\n?\s*\}\)/,
     );
   });
 

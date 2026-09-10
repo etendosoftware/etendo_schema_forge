@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 /* eslint-disable react/prop-types */
 
 /**
@@ -22,6 +23,8 @@ export function ContactsFinanceProvider({ token, apiBaseUrl, children }) {
   const [stats, setStats] = useState(null); // null = loading, [] = loaded/empty
   const [trend, setTrend] = useState(null);
 
+  const apiFetch = useApiFetch(apiBaseUrl);
+
   useEffect(() => {
     if (!recordId || !token || !apiBaseUrl) {
       setStats(null);
@@ -30,16 +33,15 @@ export function ContactsFinanceProvider({ token, apiBaseUrl, children }) {
     }
     setStats(null);
     setTrend(null);
-    const headers = { Authorization: `Bearer ${token}` };
-    fetch(`${apiBaseUrl}/bp-stats?businessPartnerId=${recordId}`, { headers })
+    apiFetch(`/bp-stats?businessPartnerId=${recordId}`)
       .then(r => (r.ok ? r.json() : null))
       .then(data => setStats(data?.response?.data ?? []))
       .catch(() => setStats([]));
-    fetch(`${apiBaseUrl}/bp-trend?businessPartnerId=${recordId}`, { headers })
+    apiFetch(`/bp-trend?businessPartnerId=${recordId}`)
       .then(r => (r.ok ? r.json() : null))
       .then(data => setTrend(data?.response?.data ?? EMPTY_TREND))
       .catch(() => setTrend(EMPTY_TREND));
-  }, [recordId, token, apiBaseUrl]);
+  }, [recordId, token, apiBaseUrl, apiFetch]);
 
   const value = useMemo(() => ({
     period, setPeriod,

@@ -1,9 +1,11 @@
 {
   "$schema": "decisions-v2",
   "window": {
-    "category": "accounting",
+    "category": "finance",
     "name": "Chart of Accounts",
     "hideCreate": true,
+    "hideListFilters": true,
+    "hideRecordCount": true,
     "titleField": "searchKey",
     "customComponents": {
       "headerTable": "AccountTreeView"
@@ -25,7 +27,14 @@
         "description":           { "visibility": "editable",  "grid": false, "form": true, "readOnlyLogic": "@ProtectedParentLikeSubaccount@='Y'" },
         "accountType":           { "visibility": "editable",  "grid": true,  "form": true, "readOnlyLogic": "@ProtectedParentLikeSubaccount@='Y'" },
         "summaryLevel":          { "visibility": "system" },
-        "active":                { "visibility": "readOnly",  "grid": true,  "form": true },
+        "active": {
+          "visibility": "editable",
+          "grid": true,
+          "form": true,
+          "inlineToggle": true,
+          "derivation": null,
+          "reason": "ETP-4884 item 5 — no UI action existed to deactivate an existing subaccount. Raw AD data pins this field to a computed derivation (source: 'true', always hardcoded true) even though visibility was already 'readOnly' here — overridden to visibility: editable + inlineToggle: true (renders a live-PATCHing Switch, mirroring the exact escape-hatch pattern already used for user.active, ETP-4830) + an explicit derivation: null so resolve-curated.js's copyRawProps does not keep copying the raw computed derivation onto the curated field post-flip, which would let NEO override any admin-set value on save. Deactivating a subaccount only flips C_ElementValue.IsActive — it does not delete the record or block viewing/editing it afterward (standard Etendo de-activation semantics). Protected 0000-suffixed placeholder subaccounts remain fully locked (readOnlyLogic on the other editable fields is unaffected by this change) and the toggle is disabled for them in AccountTreeRow since the backend rejects any PATCH on those codes regardless."
+        },
         "organization":          { "visibility": "system" },
         "id":                    { "visibility": "system" },
         "client":                { "visibility": "system" },

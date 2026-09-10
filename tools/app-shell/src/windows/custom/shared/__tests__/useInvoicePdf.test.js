@@ -53,7 +53,13 @@ describe('useInvoicePdf', () => {
 
   it('sends Bearer token in all API requests', () => {
     // fetch helpers live in pdfUtils.js (shared), re-exported via documentPdf.js
-    assert.match(pdfUtilsSrc, /Authorization.*Bearer.*token/);
+    // ETP-5022 — neither the header nor the request is assembled here any more: the module
+    // goes through the shared `apiFetch`, which supplies Authorization AND Accept-Language.
+    // Asserting that is the stronger check, and two repo-root guardrails fail the build if
+    // a call site regresses — test/auth-header-policy.test.js on a hand-rolled header,
+    // test/no-raw-fetch.test.js on a bare fetch that bypasses the helper entirely.
+    assert.match(pdfUtilsSrc, /\bapiFetch\s*\(/);
+    assert.match(pdfUtilsSrc, /import \{ apiFetch \}/);
   });
 
   // ── PDF rendering ─────────────────────────────────────────────────────────
@@ -124,7 +130,7 @@ describe('useInvoicePdf', () => {
   describe('fetchAll (inline replica)', () => {
     async function fetchAll(url, token) {
       const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${token}`, 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
       });
       if (!res.ok) return [];
       const d = await res.json();

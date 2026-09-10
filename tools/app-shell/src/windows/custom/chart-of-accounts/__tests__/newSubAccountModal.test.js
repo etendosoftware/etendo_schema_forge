@@ -81,7 +81,10 @@ describe('ChartOfAccounts new sub-account modal source wiring', () => {
     assert.match(modalSrc, /const\s+\[loadedAccounts,\s*setLoadedAccounts\]\s*=\s*useState\(\[\]\)/);
     assert.match(modalSrc, /const\s+accountRows\s*=\s*allAccounts\.length\s*>\s*0\s*\?\s*allAccounts\s*:\s*loadedAccounts/);
     assert.match(modalSrc, /if \(!isOpen \|\| allAccounts\.length > 0 \|\| accountsFetched \|\| !apiBaseUrl\) return;/);
-    assert.match(modalSrc, /fetch\(`\$\{apiBaseUrl\}\/elementValue\?_startRow=0&_endRow=9999`,/);
+    // ETP-5022 — the request goes through the shared `apiFetch`, which is bound to
+    // apiBaseUrl by the hook, so the path is relative and the base no longer appears here.
+    assert.match(modalSrc, /useApiFetch\(apiBaseUrl\)/);
+    assert.match(modalSrc, /apiFetch\('\/elementValue\?_startRow=0&_endRow=9999'\)/);
     assert.match(modalSrc, /setLoadedAccounts\(data\?\.response\?\.data \?\? \[\]\)/);
   });
 });

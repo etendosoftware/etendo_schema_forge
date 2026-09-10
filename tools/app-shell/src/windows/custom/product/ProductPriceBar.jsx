@@ -9,6 +9,7 @@ import { InlineCreateModal } from '@/components/contract-ui/InlineCreateModal.js
 import { buildCreateUrl } from '@/components/contract-ui/InlineCreateSelector.jsx';
 import { useUI } from '@/i18n';
 
+import { useApiFetch } from '@/auth/useApiFetch.js';
 function getSalesFlagFromOption(option) {
   if (!option || typeof option !== 'object') return null;
   for (const [key, value] of Object.entries(option)) {
@@ -126,6 +127,7 @@ function FieldLabel({ children }) {
 
 export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api, onCountChange }) {
   const ui = useUI();
+  const apiFetch = useApiFetch(apiBaseUrl);
   const recordId = data?.id;
 
   const [priceRows, setPriceRows] = useState(null);
@@ -162,9 +164,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     }
     setLoading(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/price?parentId=${recordId}&_startRow=0&_endRow=200`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch(`/price?parentId=${recordId}&_startRow=0&_endRow=200`);
       if (!res.ok) throw new Error();
       const payload = await res.json();
       setPriceRows(payload?.response?.data ?? []);
@@ -173,7 +173,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     } finally {
       setLoading(false);
     }
-  }, [recordId, token, apiBaseUrl]);
+  }, [recordId, token, apiFetch]);
 
   useEffect(() => { refreshPrices(); }, [refreshPrices]);
 
@@ -196,9 +196,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     if (!apiBaseUrl || !token) return undefined;
 
     let aborted = false;
-    fetch(`${apiBaseUrl}/price/selectors/${selectorColumn}?limit=200`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    apiFetch(`/price/selectors/${selectorColumn}?limit=200`)
       .then(res => (res.ok ? res.json() : null))
       .then(payload => {
         if (aborted) return;
@@ -219,7 +217,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
       });
 
     return () => { aborted = true; };
-  }, [adding, eagerOptions, apiBaseUrl, token, selectorColumn]);
+  }, [adding, eagerOptions, apiBaseUrl, token, apiFetch, selectorColumn]);
 
   // Reset the draft prices whenever we leave "adding" mode (cancel, Escape, outside
   // click, section toggle, or a successful add), so reopening starts clean.
@@ -301,9 +299,8 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     // Optimistic local update.
     setPriceRows(prev => (prev ?? []).map(r => (r.id === row.id ? { ...r, [field]: value } : r)));
     try {
-      const res = await fetch(`${apiBaseUrl}/price/${row.id}`, {
+      const res = await apiFetch(`/price/${row.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ [field]: String(value) }),
       });
       if (!res.ok) throw new Error(await extractErrorMessage(res));
@@ -314,15 +311,12 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     } finally {
       setSavingId(null);
     }
-  }, [apiBaseUrl, token, ui, refreshPrices]);
+  }, [apiFetch, ui, refreshPrices]);
 
   const handleDelete = useCallback(async (row) => {
     setSavingId(row.id);
     try {
-      const res = await fetch(`${apiBaseUrl}/price/${row.id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch(`/price/${row.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(await extractErrorMessage(res));
       await refreshPrices();
     } catch (err) {
@@ -330,7 +324,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     } finally {
       setSavingId(null);
     }
-  }, [apiBaseUrl, token, ui, refreshPrices]);
+  }, [apiFetch, ui, refreshPrices]);
 
   const handleAdd = useCallback(async (plvId, unitPrice = 0, listPrice = 0) => {
     if (!plvId) return;
@@ -338,9 +332,8 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     const unit = Number(unitPrice) || 0;
     const list = Number(listPrice) || 0;
     try {
-      const res = await fetch(`${apiBaseUrl}/price`, {
+      const res = await apiFetch('/price', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           parentId: recordId,
           product: recordId,
@@ -361,7 +354,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     } finally {
       setSavingId(null);
     }
-  }, [apiBaseUrl, token, recordId, ui, refreshPrices]);
+  }, [apiFetch, recordId, ui, refreshPrices]);
 
   // CreatableSearchSelect asks us to open a creation UI. We link the new tariff to
   // the product ourselves (see submitCreateTariff), so we don't need its `onCreated`
@@ -380,9 +373,10 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
   // header handler auto-creates the hidden price list version and returns its id,
   // which we then link to the product via handleAdd.
   const submitCreateTariff = useCallback(async (name) => {
-    const res = await fetch(buildCreateUrl(apiBaseUrl, 'price-list', 'priceList'), {
+    // buildCreateUrl returns a sibling path from the app root, not one under our base.
+    const res = await apiFetch(buildCreateUrl(apiBaseUrl, 'price-list', 'priceList'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      baseUrl: '',
       body: JSON.stringify({
         name,
         salesPriceList: isSales,
@@ -398,7 +392,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     if (!versionId) throw new Error(ui('priceUnableToSave'));
     setCreateOpen(false);
     await handleAdd(versionId, draftUnitPrice, draftListPrice);
-  }, [apiBaseUrl, token, isSales, ui, handleAdd, draftUnitPrice, draftListPrice]);
+  }, [apiBaseUrl, apiFetch, isSales, ui, handleAdd, draftUnitPrice, draftListPrice]);
 
   if (!recordId) {
     return (

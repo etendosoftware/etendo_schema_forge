@@ -7,6 +7,7 @@ import { Separator } from '@/components/ui/separator.jsx';
 import { cn } from '@/lib/utils';
 import { useUI } from '@/i18n';
 import { AttachmentChips } from './AttachmentChips.jsx';
+import { MarkdownContent } from './MarkdownContent.jsx';
 
 /**
  * ChatView — scrollable message area + file upload bar + input form.
@@ -36,6 +37,9 @@ export function ChatView({
   attachments = [],
   onRemoveAttachment,
   isSending = false,
+  error = '',
+  onRetry,
+  onDismissError,
   welcomeMessage,
   inputPlaceholder,
 }) {
@@ -73,6 +77,32 @@ export function ChatView({
     <>
       {/* Message area */}
       <div className="flex flex-1 min-h-0 flex-col gap-3 overflow-y-auto p-4">
+        {error && (
+          <div
+            role="alert"
+            className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+            data-testid="ChatError__61b427">
+            <p>{error}</p>
+            <div className="mt-2 flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={onRetry}
+                disabled={isSending}
+                data-testid="Button__61b427">
+                Retry
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={onDismissError}
+                data-testid="Button__61b427">
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        )}
         {messages.length === 0 && (
           <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
             {welcomeMessage || ui('copilotWelcome')}
@@ -94,14 +124,14 @@ export function ChatView({
             )}
             <div
               className={cn(
-                'rounded-lg px-3 py-2 text-sm whitespace-pre-line',
+                'rounded-lg px-3 py-2 text-sm',
                 message.role === 'user' && 'bg-primary text-primary-foreground',
                 message.role === 'copilot' && 'bg-muted text-foreground',
                 message.role === 'error' &&
                   'bg-destructive/10 text-destructive',
               )}
             >
-              <div>{message.text}</div>
+              <MarkdownContent data-testid="MarkdownContent__61b427">{message.text}</MarkdownContent>
               {Array.isArray(message.files) && message.files.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {message.files.map((file, index) => (

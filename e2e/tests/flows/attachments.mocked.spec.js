@@ -46,7 +46,7 @@ test.describe('Suite E — Product smoke (mocked)', () => {
     await login(page);
 
     await page.route(`**/sws/neo/product/product/${PRODUCT_ID}`, async (route) => {
-      if (route.request().method() !== 'GET') return route.continue();
+      if (route.request().method() !== 'GET') return route.fallback();
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -72,7 +72,7 @@ test.describe('Suite E — Product smoke (mocked)', () => {
     await login(page);
 
     await page.route(`**/sws/neo/product/product/${PRODUCT_ID}`, async (route) => {
-      if (route.request().method() !== 'GET') return route.continue();
+      if (route.request().method() !== 'GET') return route.fallback();
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -102,7 +102,7 @@ test.describe('Suite E — Product smoke (mocked)', () => {
           body: JSON.stringify({ response: { data: newItem } }),
         });
       } else {
-        await route.continue();
+        await route.fallback();
       }
     });
 
@@ -147,13 +147,19 @@ const SO_HEADER = {
 };
 
 /** Install mocks for a Sales Order detail view + attachments. */
+// Non-matching methods use route.fallback(), NOT route.continue(): continue() sends the
+// request to the real network, so a request these handlers do not model reached the live
+// backend with the fake E2E token and came back 401. That was harmless while a 401 was
+// ignored; since ETP-5022 routes an expired session to the login screen, it logged the test
+// out and blanked the page. fallback() defers to login()'s /sws/** catch-all instead, which
+// is what the rest of this suite already does.
 async function installSalesOrderMocks(page, { items = [], onUpload = null, onDelete = null } = {}) {
   let currentItems = [...items];
   let uploadCounter = 0;
 
   // Header GET
   await page.route(`**/sws/neo/sales-order/header/${SO_ID}`, async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
+    if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -163,7 +169,7 @@ async function installSalesOrderMocks(page, { items = [], onUpload = null, onDel
 
   // Lines GET — return empty so the Lines tab renders cleanly
   await page.route('**/sws/neo/sales-order/lines{/**,}**', async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
+    if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -195,7 +201,7 @@ async function installSalesOrderMocks(page, { items = [], onUpload = null, onDel
           body: Buffer.from('%PDF-1.4'),
         });
       } else {
-        await route.continue();
+        await route.fallback();
       }
     } else if (method === 'GET') {
       await route.fulfill({
@@ -221,7 +227,7 @@ async function installSalesOrderMocks(page, { items = [], onUpload = null, onDel
         body: JSON.stringify({ response: { data: uploaded } }),
       });
     } else {
-      await route.continue();
+      await route.fallback();
     }
   });
 }
@@ -433,7 +439,7 @@ test.describe('Suite I — Sales Order: download (mocked)', () => {
           body: Buffer.from('%PDF-1.4'),
         });
       } else {
-        await route.continue();
+        await route.fallback();
       }
     });
 

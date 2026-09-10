@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label.jsx';
 import { FileCheck } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
+import { useNeoAction } from '@/hooks/useNeoAction';
 
 const STORAGE_KEY = 'bulkActionResult';
 
@@ -15,14 +16,34 @@ export const buildInOutActions = (rows) => {
 };
 
 export default function BulkDocumentAction({
-  selectedRows, clearSelection, token, apiBaseUrl,
+  selectedRows, clearSelection, token, apiBaseUrl, windowName,
   entity = 'header',
   buildActions,
   rowFilter,
   labelKey = 'bulkCompletion',
+  actionMode = 'documentAction',
 }) {
   const ui = useUI();
-  const { execute } = useDocumentAction({ apiBaseUrl, entity, token });
+  const docAction = useDocumentAction({ apiBaseUrl, entity, token });
+  const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl, token });
+  // ETP-5075 — `actionMode: 'neoAction'` retargets the per-row call from the DocAction
+  // endpoint (`/action/documentAction` with a `{docAction}` body) to the generic NEO action
+  // endpoint (`/action/{name}`), so each `buildActions` value is an action NAME instead of a
+  // DocAction code. That is what lets a window whose actions are not DocActions at all —
+  // e.g. matched-purchase-invoices' accounting `post`/`unpost` — reuse this whole modal.
+  //
+  // The adapter is load-bearing, not ceremony: `useNeoAction.execute` RESOLVES with
+  // `{ success: false }` on failure (its own javadoc contrasts itself with
+  // useDocumentAction, which throws), while `handleDone` below detects failures via
+  // Promise.allSettled's 'rejected' status. Without normalising to a throw, every failed
+  // row would be silently counted as a success and the toast would report "N ok, 0 failed".
+  const execute = actionMode === 'neoAction'
+    ? async (recordId, actionName) => {
+      const result = await neoAction.execute(recordId, actionName);
+      if (!result?.success) throw new Error(result?.message || 'Unknown error');
+      return result;
+    }
+    : docAction.execute;
   const [open, setOpen] = useState(false);
   const [running, setRunning] = useState(false);
   const [selectedAction, setSelectedAction] = useState(null);

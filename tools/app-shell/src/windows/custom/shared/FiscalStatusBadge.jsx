@@ -10,6 +10,12 @@ const CONFIG = {
   BA:                { tone: 'neutral', key: 'fiscalMonitor.status.sii.BA' },
   NR:                { tone: 'neutral', key: 'fiscalMonitor.status.sii.NR' },
   Recibido:          { tone: 'success', key: 'fiscalMonitor.tbai.status.Recibido' },
+  // ETP-5087: "Enviada" is the ONLY thing the `EM_Tbai_Issent` boolean proves —
+  // the invoice was submitted. It is deliberately NOT mapped to `Recibido`,
+  // which means "accepted by the Diputación" and is a stronger claim the flag
+  // cannot back. Tone stays `success` (the send succeeded) but the wording does
+  // not promise acceptance.
+  Enviada:           { tone: 'success', key: 'fiscalMonitor.tbai.status.Enviada' },
   Rechazado:         { tone: 'destructive', key: 'fiscalMonitor.tbai.status.Rechazado' },
   Error:             { tone: 'destructive', key: 'fiscalMonitor.tbai.status.Error' },
   Pendiente:         { tone: 'neutral', key: 'fiscalMonitor.tbai.status.Pendiente' },

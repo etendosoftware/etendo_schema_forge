@@ -58,12 +58,26 @@ At login, the same hook runs `selectNextSurvey({ source: 'login' })` after a 2.5
 
 | ID | Type | Trigger source | Scale | Eligibility rule |
 |----|------|---------------|-------|-----------------|
-| `csat_onboarding` | csat | `login` | 1–5 stars | **Disabled** — `isEligible` always returns `false` |
+| `csat_onboarding` | csat | `login` | 1–5 stars | Admin user AND onboarding checklist 100% complete AND >= 24h since completion; shown once per user, never repeated |
 | `nps` | nps | `login` | 0–10 | First login >= 60 days ago AND last login <= 14 days ago |
 | `csat_invoicing` | csat | `trigger` | 1–5 stars | >= 5 invoices confirmed; re-eligible after 30 more invoices AND 90 days |
 | `csat_order` | csat | `trigger` | 1–5 stars | >= 5 orders confirmed; re-eligible after 30 more orders AND 90 days |
 
 The `SURVEYS` array in `surveys.js` is evaluated in order. The first survey that passes all guards is shown. No two surveys are shown in the same pass.
+
+**`csat_onboarding`'s 24h delay is hardcoded, not a backoffice tunable.** Unlike the per-survey
+timing parameters in [Configuration](#configuration) below (which read from `ETGO_Survey_Type` via
+`getSurveyTypeConfig`), `csatOnboardingIsEligible`'s 24h gate is a fixed `CSAT_ONBOARDING_DELAY_MS`
+constant in `surveys.js`, by design — do not go looking for it as a row/column on
+`ETGO_Survey_Type`; it isn't there.
+
+**Legacy-cohort exception:** the gate is measured from `onboardingCompletedAt` (see
+[localStorage Schema](#localstorage-schema)), a field that didn't exist during Phase 1
+(ETP-4352). Users whose `onboardingCompleted` flipped to `true` back then have
+`onboardingCompletedAt: null` forever — `markOnboardingCompleted()` only fires once, so it will
+never backfill. Since there's no completion timestamp to measure 24h against, `csatOnboardingIsEligible`
+treats a missing `onboardingCompletedAt` as immediately eligible rather than permanently blocked,
+so that legacy cohort isn't locked out of the survey indefinitely.
 
 ---
 
@@ -180,9 +194,13 @@ All survey state is stored under the key **`sf_survey_v1`** as a JSON object. Th
   "lastShownAt":  "2025-06-20T08:30:05.000Z",  // updated whenever a survey is displayed
   "lastDismissedAt": "2025-06-01T09:00:00.000Z", // updated on any dismiss
 
-  // Onboarding state (reserved for future use)
-  "onboardingCompleted": false,
-  "onboardingShown": false,
+  // Onboarding state — read by csat_onboarding's eligibility rule (see Survey Types above)
+  "onboardingCompleted": false,  // set true by markOnboardingCompleted() when the checklist hits 100%
+  "onboardingCompletedAt": null, // ISO timestamp set by markOnboardingCompleted(now); read by
+                                  // csatOnboardingIsEligible() to enforce the 24h post-completion
+                                  // delay — null for users who completed onboarding before this
+                                  // field existed (legacy cohort, see Survey Types above)
+  "onboardingShown": false,      // set true by markSurveyShown('csat_onboarding') — gates the once-per-user rule
 
   // Document-level counters — incremented each time a document is confirmed
   "counters": {
@@ -335,11 +353,11 @@ needs to turn a survey off for all tenants (e.g. a survey type is temporarily no
 without touching code.
 
 **2. Hardcoded `isEligible: () => false` (permanent, code-level) — for surveys not ready to ship.**
-This is the pattern used for `csat_onboarding`:
+Write the survey's real `isEligible` function to unconditionally return `false`, e.g.:
 
 ```js
-function csatOnboardingIsEligible() {
-  return false; // onboarding survey disabled until fully implemented
+function csatNewFeatureIsEligible() {
+  return false; // new-feature survey disabled until fully implemented
 }
 ```
 
@@ -348,6 +366,15 @@ will never be selected by `selectNextSurvey`. No state migrations are needed. Us
 survey isn't finished yet (no backoffice row makes sense for it either) — for a survey that is
 otherwise live and just needs to be turned off/on operationally, use the backoffice toggle above
 instead, since that doesn't require a code change to reverse.
+
+**Historical example — `csat_onboarding` (ETP-4352 → ETP-4353):** this is exactly the pattern
+`csat_onboarding` used in Phase 1 (ETP-4352), when the survey shipped in the `SURVEYS` array with
+`csatOnboardingIsEligible` hardcoded to `return false` while the rest of the onboarding flow was
+still being built. Phase 2 (ETP-4353) replaced that stub with the real rule — admin user AND
+onboarding checklist 100% complete AND not yet shown (see [Survey Types](#survey-types) and
+`csatOnboardingIsEligible` in `surveys.js`) — so `csat_onboarding` is no longer an example of this
+disabling pattern; it is kept here only as the reference case for how a not-ready survey is staged
+before activation.
 
 ---
 

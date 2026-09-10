@@ -372,3 +372,51 @@ export async function parseApiError(res) {
     return body || res.statusText;
   }
 }
+
+/**
+ * Resolves the environment flag of a single fiscal config record.
+ *
+ * Each fiscal system stores the environment in its own column, and VERI*FACTU
+ * stores it INVERTED (it flags the developer/test environment, not production):
+ *   - sii       → `entornoDeProduccin` (AD column ENTORNO_DE_PRODUCCIN), Y = production
+ *   - tbai      → `productionEnv`      (AD column Production_Env),        Y = production
+ *   - verifactu → `isDevEnv`           (AD column IS_Dev_Env),            Y = developer/TEST
+ *
+ * @param {'sii'|'tbai'|'verifactu'} system
+ * @param {object|null|undefined} record
+ * @returns {boolean|null} true = production, false = test/sandbox, null = unknown
+ */
+export function resolveRecordEnvironment(system, record) {
+  if (!record) return null;
+  let raw;
+  if (system === 'verifactu') raw = record.isDevEnv;
+  else if (system === 'tbai') raw = record.productionEnv;
+  else if (system === 'sii') raw = record.entornoDeProduccin;
+  if (raw === undefined || raw === null || raw === '') return null;
+  const flag = isEtendoTrue(raw);
+  return system === 'verifactu' ? !flag : flag;
+}
+
+/**
+ * True when EVERY config record backing the chosen system is in the production
+ * environment. Any unknown/missing flag resolves to false: mislabelling a test
+ * setup as "Production" is far more dangerous to the user than the opposite,
+ * so the sandbox label is the deliberate fallback.
+ *
+ * @param {'SII'|'TBAI'|'SII+TBAI'|'VERIFACTU'|null} system
+ * @param {{ sii?: object, tbai?: object, verifactu?: object }|null} records
+ * @returns {boolean}
+ */
+export function isProductionEnvironment(system, records) {
+  let keys;
+  switch (system) {
+    case 'SII':       keys = ['sii']; break;
+    case 'TBAI':      keys = ['tbai']; break;
+    case 'SII+TBAI':  keys = ['sii', 'tbai']; break;
+    case 'VERIFACTU': keys = ['verifactu']; break;
+    default:          return false;
+  }
+  const flags = keys.map(key => resolveRecordEnvironment(key, records?.[key]));
+  if (flags.some(flag => flag === null)) return false;
+  return flags.every(Boolean);
+}

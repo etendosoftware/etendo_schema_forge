@@ -14938,6 +14938,30 @@
       ],
       "rows": []
     },
+    "f24b576bdb7d04fb296f50cbd4db119ef42027696d641e54b927e50a4ae81ae0": {
+      "checksum": "cd3367ba85c50528890ace48e71c9e36b1dc97feb7b0be1f4244716b71fd5bfc",
+      "params": [
+        "107"
+      ],
+      "rows": [
+        {
+          "columnname": "EM_Etblkp_Bulkposting",
+          "displaylogic": "@Processed@='Y' & @#ShowAcct@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Bulk Posting",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Posted",
+          "displaylogic": "@Processed@='Y' & @#ShowAcct@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Posted",
+          "readonlylogic": null
+        }
+      ]
+    },
     "f580e813ff8670c80a14ff6eade856a95ce0d0f578526fc32592db9cba3c7f76": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "params": [

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -406,7 +407,7 @@ function PaymentHistoryBody({
 }
 
 /**
- * InvoicePaymentHistoryModal — intermediate popup opened from the "Pendiente de pago" badge
+ * InvoicePaymentHistoryModal — intermediate popup opened from the "Saldo pendiente" badge
  * in the invoice list (Step 1 of the two-step payment flow).
  *
  * Shows existing payment records for the invoice and offers an "Añadir cobro/pago" button
@@ -562,8 +563,12 @@ export default function InvoicePaymentHistoryModal({
         method: 'POST', body: JSON.stringify({ paymentId: deletingPayment.id }),
       });
       const json = await res.json().catch(() => null);
-      if (!res.ok || json?.response?.error) {
-        throw new Error(json?.response?.error?.message || ui('cpDeleteDraftFailed'));
+      if (!res.ok || json?.error || json?.response?.error) {
+        // NEO Headless answers a 400 in its OWN envelope, `{error:{message,status}}` — checking only
+        // Etendo's `response.error` shape both missed the failure and replaced a specific backend
+        // reason with the generic copy (same defect fixed in NewPaymentEntryModal, ETP-5084).
+        const raw = json?.error?.message || json?.response?.error?.message;
+        throw new Error((raw && translateBackendError(raw, ui)) || ui('cpDeleteDraftFailed'));
       }
       setDeletingPayment(null);
       setPaymentWasAdded(true);

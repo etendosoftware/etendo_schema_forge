@@ -12,7 +12,11 @@ const DROPDOWN_MAX_H = 224; // matches max-h-56
  * Text input + dropdown list picker. The caller supplies a `useLookup` hook
  * that takes the query string and returns `{ results, loading }` (results are
  * `{ id, name }`). Selection is reported via `onSelect(item)` and clearing via
- * `onClear()`. Shared by NewMovementDialog and ManualStatementModal.
+ * `onClear()`. Shared by NewMovementDialog, NewMovementWizard and PaymentForm.
+ * (ETP-4924 follow-up: `ManualStatementModal` switched its Contacto/Cuenta
+ * contable line cells to the shared `ChipSelect` from `@/components/forms/fields`
+ * — same visible clear affordance as every other FK picker in the app — so
+ * it no longer uses this component.)
  *
  * The results list is portalled to `document.body` with fixed positioning so it
  * overflows any `overflow:hidden`/scrollable ancestor (the rounded lines table

@@ -48,13 +48,27 @@ async function fetchTbaiStatus(apiFetch, orgId, invoiceId) {
 // Maps em_etvfac_invoice_status DB codes to the StatusPill keys defined in FmPrimitives.jsx.
 // Without this mapping, codes like 'IN' are misread as the SII 'IN' code ("Rechazado")
 // instead of the Verifactu 'invalid' code ("Inválido") — ETP-4783.
-const VF_STATUS_MAP = {
-  CO: 'accepted',
+// The Verifactu AD reference list is AC/AE/IN/ER/PE (com.etendoerp.verifactu) —
+// there is no 'CO' code here; that one belongs to SII.
+export const VF_STATUS_MAP = {
+  AC: 'accepted',
   AE: 'partiallyAccepted',
   ER: 'rejected',
   IN: 'invalid',
-  PE: 'pending',
+  PE: 'vf_pending',
 };
+
+/**
+ * Canonical raw-code -> StatusPill-key mapper for VERI*FACTU statuses.
+ * Single source of truth: every Verifactu surface (invoice preview badge,
+ * fiscal monitor table, CSV export) must go through this helper so a raw code
+ * never reaches `StatusPill` and collides with a same-letter SII code.
+ * Unknown codes fall through unchanged.
+ *
+ * @param {string|null|undefined} raw raw `em_etvfac_invoice_status` code
+ * @returns {string|null|undefined} StatusPill-compatible key
+ */
+export const mapVfStatus = (raw) => VF_STATUS_MAP[raw] ?? raw;
 
 async function fetchVerifactuStatus(apiFetch, orgId, invoiceId) {
   const entities = [
@@ -65,7 +79,7 @@ async function fetchVerifactuStatus(apiFetch, orgId, invoiceId) {
   ];
   for (const entity of entities) {
     const raw = await fetchFirstStatus(apiFetch, VF_SPEC, entity, { organization: orgId }, { fkField: 'invoice', statusField: 'verifactuSendingStatus' }, invoiceId);
-    if (raw !== null) return VF_STATUS_MAP[raw] ?? raw;
+    if (raw !== null) return mapVfStatus(raw);
   }
   return null;
 }
@@ -86,7 +100,7 @@ async function fetchVerifactuStatus(apiFetch, orgId, invoiceId) {
  * `useInvoiceUpdatedListener`), so this hook re-runs the fetch on that same
  * event instead of introducing a second refresh mechanism.
  */
-export function useFiscalStatus(invoiceId, specName, profile, apiBaseUrl, orgId) {
+export function useFiscalStatus(invoiceId, specName, profile, apiBaseUrl, orgId, territory = null) {
   const [state, setState] = useState({ sii: null, tbai: null, verifactu: null, loading: true });
   const [refreshTick, setRefreshTick] = useState(0);
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
@@ -98,7 +112,7 @@ export function useFiscalStatus(invoiceId, specName, profile, apiBaseUrl, orgId)
       setState({ sii: null, tbai: null, verifactu: null, loading: false });
       return;
     }
-    const targets = getInvoiceFiscalTargets(specName, profile);
+    const targets = getInvoiceFiscalTargets(specName, profile, territory);
     if (!targets.showSii && !targets.showTbai && !targets.showVerifactu) {
       setState({ sii: null, tbai: null, verifactu: null, loading: false });
       return;
@@ -113,7 +127,7 @@ export function useFiscalStatus(invoiceId, specName, profile, apiBaseUrl, orgId)
     ])
       .then(([sii, tbai, verifactu]) => setState({ sii, tbai, verifactu, loading: false }))
       .catch(() => setState({ sii: null, tbai: null, verifactu: null, loading: false }));
-  }, [invoiceId, specName, profile, apiBaseUrl, apiFetch, orgId, refreshTick]);
+  }, [invoiceId, specName, profile, apiBaseUrl, apiFetch, orgId, territory, refreshTick]);
 
   return state;
 }

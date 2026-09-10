@@ -863,83 +863,56 @@ describe('shouldRefetchAfterSave', () => {
 });
 
 describe('resolveSavedRecordAfterSave', () => {
+  // ETP-5022: resolveSavedRecordAfterSave now takes the shared `apiFetch(path, options)`
+  // helper (already bound to the base URL and auth headers) instead of a raw `headers`
+  // object handed to the global `fetch`. These tests stub `apiFetch` directly rather than
+  // `globalThis.fetch`, since the function no longer calls fetch itself.
   const opts = (extra = {}) => ({
-    apiBaseUrl: '/api',
     entity: 'header',
-    headers: { Authorization: 'Bearer t' },
+    apiFetch: async () => { throw new Error('apiFetch stub not configured'); },
     refetchAfterSave: true,
     ...extra,
   });
 
   it('returns the saved record untouched when refetch is disabled', async () => {
     const saved = { id: '1', name: 'a' };
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = () => { throw new Error('must not be called'); };
-    try {
-      assert.equal(await resolveSavedRecordAfterSave(saved, opts({ refetchAfterSave: false })), saved);
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+    const apiFetch = () => { throw new Error('must not be called'); };
+    assert.equal(await resolveSavedRecordAfterSave(saved, opts({ refetchAfterSave: false, apiFetch })), saved);
   });
 
   it('returns the refetched record from the NEO response envelope', async () => {
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = async () => ({ ok: true, json: async () => ({ response: { data: [{ id: '1', name: 'fresh' }] } }) });
-    try {
-      const result = await resolveSavedRecordAfterSave({ id: '1', name: 'stale' }, opts());
-      assert.deepEqual(result, { id: '1', name: 'fresh' });
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+    const apiFetch = async () => ({ ok: true, json: async () => ({ response: { data: [{ id: '1', name: 'fresh' }] } }) });
+    const result = await resolveSavedRecordAfterSave({ id: '1', name: 'stale' }, opts({ apiFetch }));
+    assert.deepEqual(result, { id: '1', name: 'fresh' });
   });
 
   it('derives the id from $ref when the refetched record has none', async () => {
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = async () => ({ ok: true, json: async () => ({ $ref: '/sws/neo/spec/header/ABC', name: 'fresh' }) });
-    try {
-      const result = await resolveSavedRecordAfterSave({ id: 'ABC' }, opts());
-      assert.equal(result.id, 'ABC');
-      assert.equal(result.name, 'fresh');
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+    const apiFetch = async () => ({ ok: true, json: async () => ({ $ref: '/sws/neo/spec/header/ABC', name: 'fresh' }) });
+    const result = await resolveSavedRecordAfterSave({ id: 'ABC' }, opts({ apiFetch }));
+    assert.equal(result.id, 'ABC');
+    assert.equal(result.name, 'fresh');
   });
 
   it('keeps the saved record when the refetch responds non-ok', async () => {
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = async () => ({ ok: false, json: async () => ({}) });
+    const apiFetch = async () => ({ ok: false, json: async () => ({}) });
     const saved = { id: '1', name: 'stale' };
-    try {
-      assert.deepEqual(await resolveSavedRecordAfterSave(saved, opts()), saved);
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+    assert.deepEqual(await resolveSavedRecordAfterSave(saved, opts({ apiFetch })), saved);
   });
 
   it('keeps the saved record when the refetch throws', async () => {
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = async () => { throw new Error('network down'); };
+    const apiFetch = async () => { throw new Error('network down'); };
     const saved = { id: '1', name: 'stale' };
-    try {
-      assert.equal(await resolveSavedRecordAfterSave(saved, opts()), saved);
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+    assert.equal(await resolveSavedRecordAfterSave(saved, opts({ apiFetch })), saved);
   });
 
-  it('requests the record by id with the supplied headers', async () => {
-    const originalFetch = globalThis.fetch;
+  it('requests the record by path through apiFetch, with no options', async () => {
     const seen = [];
-    globalThis.fetch = async (url, init) => {
-      seen.push([url, init]);
+    const apiFetch = async (path, init) => {
+      seen.push([path, init]);
       return { ok: true, json: async () => ({ response: { data: [{ id: '1' }] } }) };
     };
-    try {
-      await resolveSavedRecordAfterSave({ id: '1' }, opts());
-      assert.equal(seen[0][0], '/api/header/1');
-      assert.deepEqual(seen[0][1], { headers: { Authorization: 'Bearer t' } });
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+    await resolveSavedRecordAfterSave({ id: '1' }, opts({ apiFetch }));
+    assert.equal(seen[0][0], '/header/1');
+    assert.equal(seen[0][1], undefined);
   });
 });

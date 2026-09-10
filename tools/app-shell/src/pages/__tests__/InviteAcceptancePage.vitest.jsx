@@ -133,7 +133,7 @@ describe('InviteAcceptancePage', () => {
         expect.stringContaining('/sws/go/company-invitations/accept'),
         expect.objectContaining({
           method: 'POST',
-          headers: expect.objectContaining({ Authorization: 'Bearer existing-session-token' }),
+          headers: expect.objectContaining({ Authorization: 'Bearer existing-session-token', 'Accept-Language': 'es_ES' }),
           body: JSON.stringify({ token: 'valid-token-123' }),
         })
       );
@@ -209,7 +209,7 @@ describe('InviteAcceptancePage', () => {
         expect.stringContaining('/sws/go/company-invitations/accept'),
         expect.objectContaining({
           method: 'POST',
-          headers: expect.objectContaining({ Authorization: 'Bearer sso-session-token' }),
+          headers: expect.objectContaining({ Authorization: 'Bearer sso-session-token', 'Accept-Language': 'es_ES' }),
           body: JSON.stringify({ token: 'valid-token-789' }),
         })
       );

@@ -28,7 +28,7 @@ model: inherit
 - Write code, tests, or documentation
 - Review PRs technically
 - Merge to `develop` or `main` — always human-only, manual
-- Target `main` directly with a PR — highest allowed target is the current epic branch
+- Target `main` directly with a PR — highest allowed target is `develop`
 - Squash merge — always regular merge (`--merge`), preserves commit history
 - Guess Jira issue keys, epic keys, or IDs — always confirmed by the coordinator or looked up first
 </what_i_never_do>
@@ -45,25 +45,34 @@ Same as documented in the root `CLAUDE.md`: `etendo_schema_forge` (functional, t
 </jira_conventions>
 
 <branch_conventions>
-Follow `docs/branch-workflow.md` exactly:
-- `feature/ETP-XXXX` naming, branched from the branch the coordinator specifies (current epic branch by default; a specific feature/task branch when the coordinator says the new work depends on it)
-- PRs target the branch the coordinator specifies (normally the current epic branch, or a grouping/umbrella feature branch when working a batched sweep)
+Follow `docs/branch-workflow.md` exactly. **Update (2026-08-30): the epic branch is retired
+as an integration tier** — `develop` is now both the default base and the default PR target.
+- `feature/ETP-XXXX` naming, branched from the branch the coordinator specifies (`develop` by
+  default; a specific feature/task branch when the coordinator says the new work depends on it)
+- PRs target the branch the coordinator specifies (normally `develop`, or a grouping/umbrella
+  feature branch when working a batched sweep)
 - Regular merge only, never squash, never `--no-verify` unless explicitly told
 - Never push directly to `develop` or `main`
 
 **Upstream tracking (MANDATORY).** A new branch must NEVER inherit the base branch as its upstream.
-`git checkout -b feature/ETP-XXXX origin/epic/ETP-YYYY` silently sets the upstream to the *epic*, which
-then shows up as `feature/ETP-XXXX:epic/ETP-YYYY` in the statusline and makes ahead/behind counts read
+`git checkout -b feature/ETP-XXXX origin/develop` silently sets the upstream to *develop*, which
+then shows up as `feature/ETP-XXXX:develop` in the statusline and makes ahead/behind counts read
 against the wrong ref. Correct sequence when creating a branch:
 
 ```bash
-git checkout -b feature/ETP-XXXX --no-track origin/epic/ETP-YYYY
+git checkout -b feature/ETP-XXXX --no-track origin/develop
 ```
 
 The end state of branch creation is: **no upstream at all**. The human pushes the branch himself with
 `git push -u origin feature/ETP-XXXX`, which is what sets the upstream to `origin/feature/ETP-XXXX`.
 Never push a branch to publish it just to fix its tracking, and never leave the base branch as upstream.
 Verify with `git rev-parse --abbrev-ref feature/ETP-XXXX@{upstream}` (expect "no upstream") and report it.
+
+**Legacy epic branches** (`epic/ETP-XXXX`) may still exist on old work — never use one as a
+base or PR target for new branches unless the coordinator explicitly says this specific task
+depends on one. If asked to check one for staleness, compare against `origin/develop`
+(`git log origin/epic/ETP-XXXX..origin/develop --oneline`) — a large commit count means it's
+stale and should not be used as a base.
 </branch_conventions>
 
 <pr_conventions>
@@ -88,6 +97,27 @@ printf '%s' "$TITLE" | LC_ALL=C grep -q "[\"'\\\`$]" && echo "REJECTED: prohibit
 
 Same convention as commits otherwise: `Feature ETP-1234: Description`, `Epic ETP-1234: ...`,
 `Issue #N: ...`.
+
+**The `Feature ETP-XXXX:` prefix is enforced on PR TITLES too, not only on commits.** A
+charset-clean title with no prefix is still closed on sight, with a different message:
+
+```
+Invalid pull request title. PR title must start with 'Feature etp-5184:'.
+```
+
+Observed in `etendo-go-docs` on PR #41 (2026-09-07), where a bare descriptive title was
+closed within minutes. Do not assume this is repo-specific — treat the prefix as required
+everywhere and let a repo that does not enforce it simply not care. So validate both:
+
+```bash
+TITLE="Feature ETP-1234: Some description"
+printf '%s' "$TITLE" | LC_ALL=C grep -q "[\"'\\`$]" && echo "REJECTED: prohibited char"
+printf '%s' "$TITLE" | grep -qE '^(Feature ETP-[0-9]+|Epic ETP-[0-9]+|Issue #[0-9]+): .' \
+  || echo "REJECTED: missing prefix"
+```
+
+A coordinator who dictates a PR title without the prefix is making this mistake — add it
+rather than submitting the title verbatim, and say so in the report.
 
 **Recovering a PR Git Police already closed.** Fix the title FIRST, then reopen — reopening
 with the bad title gets it closed again. Note `gh pr edit` may fail with

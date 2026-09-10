@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useAuth } from '@/auth/AuthContext.jsx';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { getApiBase } from './useNeoResource';
 
 /**
@@ -24,23 +24,18 @@ import { getApiBase } from './useNeoResource';
  * }}
  */
 export function useCreateStatement() {
-  const { token } = useAuth();
+  const apiFetch = useApiFetch(getApiBase());
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState(null);
 
   const createStatement = useCallback(async ({
     accountId, name, transactionDate, importDate, fileName, notes, process = true, lines,
   }) => {
-    const url = `${getApiBase()}/sws/neo/bank-statements?action=create`;
     setCreating(true);
     setError(null);
     try {
-      const res = await fetch(url, {
+      const res = await apiFetch('/sws/neo/bank-statements?action=create', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           FIN_Financial_Account_ID: accountId,
           name,
@@ -65,7 +60,7 @@ export function useCreateStatement() {
     } finally {
       setCreating(false);
     }
-  }, [token]);
+  }, [apiFetch]);
 
   return { createStatement, creating, error };
 }
