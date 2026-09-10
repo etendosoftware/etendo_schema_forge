@@ -1,8 +1,6 @@
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { toast } from 'sonner';
-import { translateBackendError } from '@/lib/backendErrors.js';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
@@ -16,6 +14,7 @@ import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import { useUI, useMenuLabel } from '@/i18n';
 import { useRowEmailModal } from '../shared/useRowEmailModal.jsx';
 import { SEND_VISIBLE_WHEN_CONFIRMED } from '../shared/sendActionVisibility.js';
+import { buildDocumentRowQuickActionsPostMenu } from '../shared/buildDocumentRowQuickActions.js';
 import { useShipmentPdf } from './useShipmentPdf';
 import GoodsShipmentPreview from './GoodsShipmentPreview';
 
@@ -116,26 +115,10 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
     onDelete: requestDelete,
     // ETP-5209 — Post reachable from the row-hover kebab, mirroring the same
     // posted/processed gate as the form-view kebab (GoodsShipmentPage's
-    // decisions-derived menuActions) and the bulk Post action.
-    menuActions: ({ row }) => {
-      const isPosted = row?.posted === 'Y' || row?.posted === true;
-      const isProcessed = row?.processed === 'Y' || row?.processed === true;
-      if (isPosted || !isProcessed) return [];
-      return [{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }];
-    },
-    // ETP-5209 follow-up — RowQuickActions deliberately never shows a toast itself
-    // ("toast/snackbar is the host's responsibility"); this was the missing host-side
-    // half for the row-kebab Post action, mirroring DetailMoreActionsMenu's
-    // runNeoMenuAction for the exact same neoAction shape.
-    onMenuActionExecuted: (action, result) => {
-      if (!action.neoAction) return;
-      if (result?.success === false) {
-        toast.error(translateBackendError(result?.message, ui) || ui('actionFailed'));
-      } else {
-        toast.success((action.successKey ? ui(action.successKey) : action.successMessage) || ui('actionCompleted'));
-      }
-      setRefreshKey(k => k + 1);
-    },
+    // decisions-derived menuActions) and the bulk Post action. Extracted to
+    // shared/buildDocumentRowQuickActions.js (rejection-cycle fix — this block was
+    // duplicated verbatim in goods-receipt/index.jsx).
+    ...buildDocumentRowQuickActionsPostMenu({ ui, onRefresh: () => setRefreshKey(k => k + 1) }),
   }), [navigate, windowName, requestDelete, onRowEmail, ui]);
 
   if (recordId) {
