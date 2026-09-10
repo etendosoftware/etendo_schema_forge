@@ -368,10 +368,12 @@ export function renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimen
       {visibleColumns.map((col, idx) => {
         const isDebit = col.key === balanceFooter.debitField;
         const isCredit = col.key === balanceFooter.creditField;
+        const testId = isDebit ? 'balance-footer-debit' : isCredit ? 'balance-footer-credit' : undefined;
+        const cellContent = isDebit ? balanceFooter.debitTotal : isCredit ? balanceFooter.creditTotal : '';
         return (
           <div
             key={col.key}
-            data-testid={isDebit ? 'balance-footer-debit' : isCredit ? 'balance-footer-credit' : undefined}
+            data-testid={testId}
             className="flex items-center tabular-nums"
             style={{
               padding: `0 ${TOKENS.cellPaddingX}px`,
@@ -380,7 +382,7 @@ export function renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimen
               minWidth: 0,
             }}
           >
-            {isDebit ? balanceFooter.debitTotal : isCredit ? balanceFooter.creditTotal : ''}
+            {cellContent}
           </div>
         );
       })}
