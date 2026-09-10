@@ -35,8 +35,24 @@ describe('PurchaseOrderActions', () => {
     assert.match(src, /document\.body/);
   });
 
-  it('renders ConfirmModal only when draft and showConfirm is true', () => {
-    assert.match(src, /\{isDraft && showConfirm && createPortal\(/);
+  // ETP-5255 — "renders ConfirmModal only when draft and showConfirm is true" used to live
+  // here as `assert.match(src, /\{isDraft && showConfirm && createPortal\(/)`. It is gone
+  // rather than re-pointed at the new expression, for two reasons.
+  //
+  // It was a source-text assertion, of the kind forbidden since ETP-4958. And it was pinning
+  // the defect: `isDraft` in that gate unmounted the modal the instant `onRefresh()` reloaded
+  // the just-confirmed record as CO, so a failed goods-receipt/invoice step was reported
+  // nowhere — no error, no toast, no retry path — and the expression could not be corrected
+  // without turning this test red. Re-writing the regex would have re-pinned whatever shape
+  // came next, which is the same mistake in a new form.
+  //
+  // The two real properties (the modal does not OPEN outside draft; once open it SURVIVES the
+  // DR→CO transition, on both render paths) are asserted behaviourally in
+  // tools/app-shell/src/windows/custom/purchase-order/__tests__/
+  //   GeneratedPurchaseOrderActions.confirmModalLifecycle.vitest.jsx
+  // which mounts THIS module (via `@generated/...`) and drives the real open event. Verified
+  // non-vacuous: both survival tests fail against the pre-fix source.
+  it('renders ConfirmModal through a portal', () => {
     assert.match(src, /<ConfirmModal/);
   });
 
