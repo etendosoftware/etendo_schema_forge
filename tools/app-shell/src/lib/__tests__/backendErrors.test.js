@@ -1193,9 +1193,14 @@ describe('translateBackendError — PSD2 connection-state sync messages (ETP-510
     // number: useUI()'s interpolation is `String.replace` with a STRING pattern, which substitutes
     // only the first occurrence, so a second `{days}` would reach the toast as literal text. Do not
     // "restore" the repetition to mirror the backend wording.
+    //
+    // Kept byte-identical to the real es_ES entry (reworded in the QA re-review of #1366) so this
+    // fake dictionary does not drift into showing wording the app never renders. The MATCHER keys
+    // off the untouched English wire text below, so the rewording changes nothing this suite tests
+    // — the literal is here only to make the assertions readable.
     'backendError.psd2ImportDateBeyondMaxInterval':
-      'La fecha de inicio solicitada supera el intervalo máximo de {days} días de este proveedor.'
-      + ' Sólo pueden estar disponibles los movimientos de ese período.',
+      'La fecha de inicio solicitada supera el intervalo máximo de {days} días que soporta este'
+      + ' proveedor. Sólo se sincronizarán los movimientos de ese período.',
     'backendError.psd2NoActiveConnection':
       'No se encontró una conexión bancaria activa para la cuenta. Conecta la cuenta primero.',
   });
@@ -1251,8 +1256,8 @@ describe('translateBackendError — PSD2 connection-state sync messages (ETP-510
     it('translates to es_ES, interpolating the day count into the single {days} slot', () => {
       assert.equal(
         translateBackendError(INTERVAL_RAW, es),
-        'La fecha de inicio solicitada supera el intervalo máximo de 90 días de este proveedor.'
-          + ' Sólo pueden estar disponibles los movimientos de ese período.',
+        'La fecha de inicio solicitada supera el intervalo máximo de 90 días que soporta este'
+          + ' proveedor. Sólo se sincronizarán los movimientos de ese período.',
       );
     });
 
@@ -1322,9 +1327,11 @@ describe('translateBackendError — multi-line backend messages (ETP-5109)', () 
     'backendError.psd2ConnectionWentInactive':
       'La conexión de la cuenta {account} se encontró inactiva durante la sincronización.'
       + ' Por favor, reconecta la cuenta.',
+    // Same literal as the ETP-5109 dictionary above — kept in step with the real es_ES entry
+    // (reworded in the QA re-review of #1366); `{days}` still appears exactly once.
     'backendError.psd2ImportDateBeyondMaxInterval':
-      'La fecha de inicio solicitada supera el intervalo máximo de {days} días de este proveedor.'
-      + ' Sólo pueden estar disponibles los movimientos de ese período.',
+      'La fecha de inicio solicitada supera el intervalo máximo de {days} días que soporta este'
+      + ' proveedor. Sólo se sincronizarán los movimientos de ese período.',
   });
 
   const INTERVAL_RAW = 'The requested start date exceeds the maximum fetch interval of 90 days'
@@ -1333,8 +1340,8 @@ describe('translateBackendError — multi-line backend messages (ETP-5109)', () 
     + ' was found inactive during synchronization. Please reconnect the account.';
   const UNKNOWN_RAW = 'Something else entirely went wrong.';
 
-  const INTERVAL_ES = 'La fecha de inicio solicitada supera el intervalo máximo de 90 días de este'
-    + ' proveedor. Sólo pueden estar disponibles los movimientos de ese período.';
+  const INTERVAL_ES = 'La fecha de inicio solicitada supera el intervalo máximo de 90 días que'
+    + ' soporta este proveedor. Sólo se sincronizarán los movimientos de ese período.';
   const INACTIVE_ES = 'La conexión de la cuenta Fake Demo Bank - Savings account ETP-5109 se'
     + ' encontró inactiva durante la sincronización. Por favor, reconecta la cuenta.';
 
