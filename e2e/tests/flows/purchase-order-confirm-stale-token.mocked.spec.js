@@ -370,10 +370,15 @@ async function dirtyTheHeader(page) {
   ).toBeEnabled({ timeout: 10_000 });
 }
 
-/** The two checkbox cards carry no `data-testid` (PoCheckboxCard drops the prop), so they
- *  are located by their own label, which resolves through `ui()` — hence both locales. */
-const receiptCard = (page) => page.getByText(/crear albarán de proveedor|create goods receipt/i).first();
-const invoiceCard = (page) => page.getByText(/^\s*(crear factura|create invoice)\s*$/i).first();
+/**
+ * The two checkbox cards. These locators were regex-on-translated-label until ETP-5255 gave
+ * `PoCheckboxCard` a `testId` prop it actually applies (it used to receive `data-testid`,
+ * destructure neither it nor `...rest`, and so reach the DOM with no id at all — and the value
+ * passed was one shared generated hash for both cards, which could not have told them apart
+ * anyway). Locale-independent now, which is the point.
+ */
+const receiptCard = (page) => page.getByTestId('purchase-order-docs-receipt-card');
+const invoiceCard = (page) => page.getByTestId('purchase-order-confirm-invoice-card');
 
 /**
  * Runs the reported flow up to the point where the modal sits on the receipt error, and

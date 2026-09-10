@@ -601,7 +601,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
             title={ui('poCreateReceiptTitle')}
             subtitle={receiptResult ? ui('soAlreadyCreated') : ui('poCreateReceiptCheckDesc')}
             disabled={Boolean(receiptResult)}
-            data-testid="PoCheckboxCard__8b5323" />
+            testId="purchase-order-confirm-receipt-card" />
           <PoCheckboxCard
             checked={createInvoice || Boolean(invoiceResult)}
             onChange={() => !invoiceResult && setCreateInvoice(v => !v)}
@@ -609,7 +609,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
             title={ui('soCreateInvoiceTitle')}
             subtitle={invoiceResult ? ui('soAlreadyCreated') : ui('poCreateInvoiceCheckDesc')}
             disabled={Boolean(invoiceResult)}
-            data-testid="PoCheckboxCard__8b5323" />
+            testId="purchase-order-confirm-invoice-card" />
         </div>
 
         {error && (
@@ -637,9 +637,16 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
 
 // ── PoCheckboxCard ─────────────────────────────────────────────────────────────
 
-function PoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled }) {
+// `testId` is a named prop, not `data-testid`, and it is APPLIED to the div (ETP-5255). Every
+// instance used to pass `data-testid`, which this component neither destructured nor spread, so
+// the cards reached the DOM with no test id at all — and the value passed was one shared generated
+// hash, so it could not have told the two cards apart even if it had been applied. The mocked
+// confirm spec had to locate them by their translated label in both locales as a result. Mirrors
+// `SoCheckboxCard` in sales-order, which already did this correctly.
+function PoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled, testId }) {
   return (
     <div
+      data-testid={testId}
       onClick={disabled ? undefined : onChange}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
@@ -791,7 +798,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
               icon="📦"
               title={ui('poCreateReceiptTitle')}
               subtitle={receiptSubtitle}
-              data-testid="PoCheckboxCard__8b5323" />
+              testId="purchase-order-docs-receipt-card" />
           )}
           {needsInvoice && (
             <PoCheckboxCard
@@ -800,7 +807,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
               icon="🧾"
               title={ui('soCreateInvoiceTitle')}
               subtitle={invoiceSubtitle}
-              data-testid="PoCheckboxCard__8b5323" />
+              testId="purchase-order-docs-invoice-card" />
           )}
         </div>
 
