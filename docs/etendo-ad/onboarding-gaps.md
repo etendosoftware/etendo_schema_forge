@@ -31,6 +31,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | K1 | Accounting dimension display | `AD_Client.Acctdim_Centrally_Maintained` hardcoded to `'Y'` for every new client, permanently routing dimension-field visibility through a fine-grained matrix Etendo GO has no screen for, making the "Dimensiones contables" screen a no-op | `OnboardingAcctdimCentrallyMaintainedService` — backfill `C_AcctSchema_Element.isactive` then flip the flag to `'N'` | ETP-4854 |
 | L1 | Tenant ownership | New `AD_User.EM_ETGO_Is_Owner` column (owner-lock enforcement) is only auto-set for tenants created AFTER ETP-4830 shipped — every pre-existing tenant has zero owner-flagged users, so the enforcement checks are silent no-ops for them | Preventive shipped (`OwnerSupport#markAsOwnerIfNoneExists`, wired into `EtendoGoJwtServlet#createClient`); corrective backfill (`R26-tenant-owner-and-personal-role-retrofit`) shipped 2026-08-26 — both fronts closed | ETP-4877 |
 | N1 | Tenant plan / fiscal test mode | A Demo/free tenant has no way to submit SII/TicketBAI/VeriFactu in test/sandbox mode without a manual `ETSG_ForceTestMode` edit in Classic — every self-registered free tenant defaults to real (production) fiscal submissions | Both fronts closed: `OnboardingForceTestModeService` (preventive, new step in `ensureOnboardingDataset`) + `R31-force-test-mode-demo-tenants` (corrective, also backfills already-existing SII/TicketBAI/VeriFactu config rows) | ETP-5117 |
+| N5 | Initial dataset configuration | No price list is flagged as default — the curated `M_PRICELIST.xml` shipped both tariffs with `ISDEFAULT='N'`, so the four consumers that disambiguate tariffs with `isdefault DESC` (the `ETGO_PRODUCT_SALE_PRICE`/`ETGO_PRODUCT_PURCHASE_PRICE` computed columns, `PriceListPicker.jsx`, `R33`'s standard-cost anchor, and ETP-5245's new default-tariff resolver) silently fall through to an arbitrary list | Both fronts closed: preventive is dataset-only (`ISDEFAULT` `N`→`Y` on both curated tariffs in `GOClient/M_PRICELIST.xml`, already in `INCLUDED_TABLES`); corrective data-fix (`R35`) marks one active list per trade direction on already-onboarded tenants. CUT deliberately NOT bumped — a newborn tenant is now born correct, so `R35`'s `@check` returns 0 rows for it | ETP-5245 |
 
 > **Label history note:** the ETP-4736 costing gap above was originally mislabeled `H1` when
 > authored, colliding with the pre-existing `H1` (webhook access, ETP-4520, superseded) and `H2`
@@ -2169,6 +2170,76 @@ JVM, while the XMLs are re-read on every provisioning — **a filter change need
 before it affects a newly provisioned tenant. Expected end state: GOClient at 5 products / 3
 financial accounts / 2 warehouses / 3 categories; a fresh tenant at 1 product (`ETGO_DTO` only) / 0
 accounts / 1 warehouse / 2 categories with `Generic` + `Genérico`.
+
+---
+
+### N5 — No price list flagged as default (ETP-5245, 2026-09-09)
+
+**Symptom.** On every already-onboarded tenant, `SELECT * FROM m_pricelist WHERE isdefault = 'Y'`
+returns nothing. The curated dataset shipped both tariffs with `ISDEFAULT='N'`:
+
+| `m_pricelist_id` | Name | `issopricelist` |
+|---|---|---|
+| `782B468DCC3948D69BC2AE5B68C3F4A4` | Tarifa de venta principal | `Y` (sales) |
+| `F888E6AAB93E44E88433C21A8F3C0161` | Tarifa de compra principal | `N` (purchase) |
+
+`M_PRICELIST` **is** in `OnboardingDatasetDefinition.INCLUDED_TABLES` (line 92), so that XML is what
+a new tenant actually gets — a defect in the dataset's *content*, which is what the `N` series is
+for (see §N4 for the series definition), not a missing provisioning step.
+
+**Why it matters — four consumers, all of which degrade silently rather than fail:**
+
+1. `com.etendoerp.go/src-db/database/model/functions/ETGO_PRODUCT_SALE_PRICE.xml` and
+   `ETGO_PRODUCT_PURCHASE_PRICE.xml`, line 15 of each: `ORDER BY (pl.isdefault = 'Y') DESC, …`.
+   With nothing flagged that first key is constant, so the *Precio de venta* / *Precio de compra*
+   columns of the Products list resolve through the remaining keys — an arbitrary tariff on any
+   tenant holding more than one.
+2. `schema_forge/tools/app-shell/src/components/contract-ui/PriceListPicker.jsx:70` —
+   `matches.find(p => p.default) || matches[0]`: the generic fallback never finds a default and
+   always lands on the first entry the API happened to return.
+3. `cli/src/data-fixes/sql/20260903T120000Z__R33-standard-cost-anchor-unified.sql:334,351` —
+   `ORDER BY pl.isdefault DESC, …` decides which tariff a standard-cost anchor is priced from. The
+   broken flag therefore degrades one of our own fixes.
+4. ETP-5245's new Java default-tariff resolver (sales + purchase), used to auto-create the
+   zero-price lines when a product is registered: with nothing flagged it has nothing to resolve.
+
+**Scope of the flag: per client × per direction, NOT per organization.** `m_pricelist` does carry
+`ad_org_id`, and nothing in the model enforces uniqueness (the only UNIQUE constraint is
+`m_pricelist_name (name, ad_org_id, ad_client_id)`; the sole trigger, core's `m_pricelist_trg`,
+only guards `istaxincluded` changes). But every consumer above reads the flag *without* an org
+filter, so a one-default-per-org reading would hand them several flagged rows per direction on a
+multi-org tenant and restore the exact arbitrary tie-breaking being fixed. The invariant is
+therefore: **at most one active default per `(ad_client_id, issopricelist)`**.
+
+**Both fronts.**
+
+| Front | Deliverable |
+|---|---|
+| Preventive | Dataset-only, no new service — `GOClient/M_PRICELIST.xml` flips `ISDEFAULT` `N`→`Y` on both curated tariffs. `ONBOARDING_PROVISIONED_THROUGH` deliberately **NOT bumped**: a newborn tenant is now born correct, so `R35`'s `@check` returns 0 rows for it and the runner records a clean `SKIPPED_NOT_NEEDED` — the case that constant's contract excludes from a bump (same reasoning as A9/`R34`). |
+| Corrective | `20260909T120000Z__R35-pricelist-isdefault.sql` — single guarded `UPDATE`, `@check`/`@apply` sharing a textually identical `ranked` CTE, plus an `@report` section. |
+
+**Deterministic pick** (only reached for a direction that has no active default at all):
+(1) most referencing `c_order` + `c_invoice` rows — the tariff the tenant actually transacts with,
+the one an operator would name; (2) has priced products in an already-valid version
+(`validfrom <= now()`), mirroring the computed-column functions' own second key; (3) oldest
+`created` — on a GO tenant, the tariff the dataset created first; (4) `m_pricelist_id ASC` as the
+absolute tie-break, which is **not** cosmetic: F&B International Group's eight purchase tariffs
+share a `created` to the millisecond, so without it the pick would not be reproducible.
+
+**Deliberately out of scope.** The fix never re-points a direction that already has an active
+default (an operator decision — QA Testing flags "Customer A" for sales), never de-duplicates a
+direction with several flagged lists (choosing which deliberate flag to clear is not a decision a
+data-fix can make), and never activates an inactive list. `@report` surfaces all three situations
+instead, and stays silent — leaving `detail` null — on the healthy GO shape of one active list and
+one default per direction.
+
+**Live validation (2026-09-09, shared dev DB, one rolled-back transaction per tenant).** All 5
+non-System clients that own price lists converge (post-apply `@check` = 0 rows in 5/5). GOClient and
+both E2E tenants: one candidate per direction, the two dataset rows, `@report` silent. F&B: sales
+"General Sales" (736 documents, 2 candidates) and purchase "Other services" (506 documents, 8
+candidates) — key 1 decided both. QA Testing: purchase "Purchase" (15 documents, 9 candidates);
+sales untouched, so `@check` returned only one row. Worst case 59 ms for the whole
+check → apply → report → re-check cycle.
 
 ---
 

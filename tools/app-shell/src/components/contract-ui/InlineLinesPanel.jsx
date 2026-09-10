@@ -11,8 +11,10 @@ import { ChevronDown, Layers, Pencil, Search, Trash2 } from 'lucide-react';
 import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
+import { DateField } from '@/components/ui/date-field';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useLabel, useLocaleSwitch, useUI } from '@/i18n';
+import { resolveRowCurrency } from '@/lib/rowCurrency.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatSignedDelta } from '@/lib/formatSigned.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
@@ -499,8 +501,18 @@ function ReadCell({ row, col, locale, t, ui }) {
     return col.render(row, {});
   }
   if (col.type === 'amount') {
-    // No currency symbol on line-level cells — the currency is shown at the header level.
-    return <span className="tabular-nums">{formatCurrency(undefined, row[col.key])}</span>;
+    // Line-level cells show no currency symbol by default — the currency belongs to the document
+    // and is shown at header level, so repeating it on every line is noise.
+    //
+    // ETP-5245 makes that opt-in per column: a column that declares `currencyField` in
+    // decisions.json is saying "these rows do NOT share one currency", which is true of any grid
+    // that is not a single document's lines. Product > Costing is the first: M_Costing rows carry
+    // their own currency and a real tenant holds 1663 USD rows next to 1545 EUR ones, so an
+    // unlabelled number there is ambiguous rather than tidy. Columns that declare nothing keep
+    // rendering exactly as before — this must stay opt-in, since it is shared by every
+    // inline-lines grid in the app.
+    const isoCode = col.currencyField ? resolveRowCurrency(row, col, undefined) : undefined;
+    return <span className="tabular-nums">{formatCurrency(isoCode, row[col.key])}</span>;
   }
   if (col.type === 'percent') {
     const val = Number(row[col.key]);
@@ -685,8 +697,27 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
     );
   }
 
+  // ETP-5245 — a date cell edits through the app's own date picker, the same control
+  // EntityForm's `renderDateField` and the add-row (DataTable.renderInlineAddFieldControl)
+  // use, instead of the browser's native `<input type="date">`: one look for a date across
+  // form, add-row and inline edit. Commits on pick/mask-commit like the enum and boolean
+  // branches above rather than on blur, and `DateField.onChange` always hands back
+  // `yyyy-MM-dd` — exactly what `onCommit` already PATCHes for this column type.
+  if (col.type === 'date') {
+    return (
+      <DateField
+        id={`field-${col.key}`}
+        name={col.key}
+        data-testid={`field-${col.key}`}
+        value={value ?? ''}
+        onChange={(iso) => onCommit(iso)}
+        required={col.required}
+        className={`h-7${isInvalid ? ' border-destructive focus-within:ring-destructive' : ''}`}
+      />
+    );
+  }
+
   const isNumeric = NUMERIC_TYPES.has(col.type);
-  const inputType = col.type === 'date' ? 'date' : 'text';
   // Numeric fields use type="text" + inputMode to avoid the browser's spinner
   // arrows on type="number" while still surfacing the numeric keyboard on mobile.
   const numericProps = isNumeric
@@ -707,7 +738,7 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
     <Input
       ref={inputRef}
       data-testid={`field-${col.key}`}
-      type={inputType}
+      type="text"
       defaultValue={formatForEdit(value)}
       onBlur={(e) => onCommit(e.target.value)}
       onKeyDown={(e) => {
@@ -929,16 +960,27 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     )),
     [columns, hiddenColumns]
   );
-  // The last "amount" column is the one that disappears on hover to make room
-  // for the action strip — its 160px width matches the strip so the swap is
-  // invisible. This only applies to monetary tables (sales-quotation, etc.).
-  // For tabs without an amount column (Cuenta Bancaria, Persona) we instead
-  // ALWAYS reserve the 160px slot, so values don't reflow when hovering.
+  // The LAST column disappears on hover to make room for the action strip — its
+  // width matches the strip so the swap is invisible. This only applies to monetary
+  // tables (sales-quotation, etc.), where that last column is an `amount`.
+  // For tabs without a trailing amount column (Cuenta Bancaria, Persona, and every
+  // tab whose amount sits mid-row) we instead ALWAYS reserve the 160px slot, so
+  // values don't reflow when hovering.
+  //
+  // ETP-5245 — this deliberately checks ONLY the last visible column. It used to
+  // scan backwards for the last column *of type amount* anywhere in the row, but
+  // the action strip is always appended at the END of the flex row: suppressing a
+  // cell that isn't the last one deletes a slot from the middle/start, so every
+  // following cell slides left and the body stops lining up with the (never
+  // suppressed) header. Product > Costo (`cost`, `startingDate`, `endingDate`) made
+  // it obvious — the amount is the FIRST column, so hovering a row made the cost
+  // vanish and the dates jump one slot left — but the same shape hits every lines /
+  // secondary tab whose amount is not last (e.g. purchase-invoice's Payment Details:
+  // `amount`, `invoicePaid`). Covered by InlineLinesPanel.trailingAmountColumn.vitest.jsx.
   const trailingColumn = useMemo(() => {
-    for (let i = visibleColumns.length - 1; i >= 0; i--) {
-      if (visibleColumns[i].type === 'amount' && !visibleColumns[i].noTrailing) return visibleColumns[i];
-    }
-    return null;
+    const last = visibleColumns[visibleColumns.length - 1];
+    if (!last || last.type !== 'amount' || last.noTrailing) return null;
+    return last;
   }, [visibleColumns]);
   const reserveActionSlot = trailingColumn == null;
   // Action strip must be the same width as the trailing column it replaces on hover.

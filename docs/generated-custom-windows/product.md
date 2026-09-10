@@ -651,16 +651,35 @@ Price → Attachments**. The label `"Costing"` resolves through `useMenuLabel` (
 
 | Field | Visibility | Why |
 |---|---|---|
-| `cost` | `editable`, `required`, `columnType: "amount"` | the value the user is here to enter |
+| `cost` | `editable`, `required`, `columnType: "amount"`, `summable: false`, `currencyField: "cCurrencyID"` | the value the user is here to enter — see **Cost column formatting** below |
 | `startingDate` | `editable`, `required` | relabelled **Start Date / Fecha de inicio** (the AD calls the column `DateFrom` → "From Date") |
 | `endingDate` | `editable`, optional | relabelled **Expiry Date / Fecha de expiración**; blank means "in force indefinitely" |
 | `costType` | `system` | the handler forces `'STA'`; it is not the user's decision, so it is not shown |
 | `manual`, `permanent`, `production` | `system` | **must be `system`, not `discarded`** — see the note below |
-| `cCurrencyID` | `system` | resolved from the organization, never picked |
+| `cCurrencyID` | `system` | resolved from the organization, never picked — but `system` (not `discarded`) also keeps `cCurrencyID$_identifier` in the NEO payload, which is what lets each row print its own currency symbol |
 | `quantity`, `warehouse`, `originalCost` | `discarded` | only ever carry a value on engine-generated rows; noise in a tab about cost history |
 
 The three `DateFrom`/`DateTo` label overrides were added to `window.labelOverrides` for `en_US`,
 `es_ES` **and** `es_AR`.
+
+**Cost column formatting (ETP-5245).** The column shipped as `98.47` / `100` — no decimals, no
+separators, no currency — because it had no `columnType`, so it fell through to the plain `number`
+renderer. Typing it `amount` fixes the formatting but, on its own, also drags in a footer **totals
+row**: `DataTable` sums every `amount` column. A sum of standard costs is meaningless — these are
+the values in force at different points in time, not amounts that accumulate — so the field
+declares `summable: false`, which keeps the money formatting and drops the aggregation.
+
+The currency needed a second, independent fix. `renderAmountCell` looked up one hardcoded property,
+`row['currency$_identifier']`, while `M_Costing`'s currency field is named `cCurrencyID`, so NEO
+emits `cCurrencyID$_identifier` and the symbol never appeared. `currencyField: "cCurrencyID"` points
+the renderer at the right property. The value arrives already legible (`"EUR"`, `"USD"`) because
+`C_Currency`'s identifier column is `ISO_Code` — no backend change was needed.
+
+The currency is resolved **per row**, never from the session: this tenant's `M_Costing` holds 1663
+rows in USD next to 1545 in EUR, so a single window-wide currency would be wrong for half the grid.
+Result: `98,47 €` and `100,00 $` side by side, and no totals row. Both keys are generic pipeline
+features, not a Product special case — see `docs/decisions-reference.md`
+§"Amount columns: formatting vs. totals".
 
 > **`system` vs `discarded` is load-bearing here.** `NeoFieldFilter.filterCreateRequest`
 > (com.etendoerp.go) strips `discarded` fields out of the POST body. `ProductCostingHandler` writes
@@ -753,6 +772,15 @@ the form. This is the same slot and the same `InfoBanner` primitive as the credi
 BP-on-hold notice (`BlockingBpBanner.jsx:127`); the one deliberate difference is the tone —
 `warning` (amber) rather than that banner's `info` (blue), because this one also blocks saving.
 The slot is documented generically in `docs/ui-customization.md` §4.
+
+**It can be closed, and it comes back on every refused save (ETP-5245).** `InfoBanner` is
+dismissible by default, so the user can put the strip away — but closing an explanation of a hard
+block must never leave someone refused with nothing on screen saying why. `useEntity`'s save gate
+announces each refusal on the save-block bus (`lib/saveBlockSignal.js`) under the same stable toast
+id it uses for the toast, `product-cost-required`; the banner subscribes through
+`useSaveBlockSignal('product-cost-required')` and re-opens on every fresh announcement. Because the
+product window autosaves on blur, a dismissed banner reappears at the next field the user leaves —
+which is the intended outcome: the save is still being refused.
 
 The predicate lives in `tools/app-shell/src/lib/productCostRequirement.js` and is deliberately a
 pure function with no React dependency, so the banner and the save gate can read the same rule:

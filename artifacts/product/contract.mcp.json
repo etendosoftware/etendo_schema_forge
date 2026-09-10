@@ -1,8 +1,8 @@
 {
-  "version": "0.1.1",
+  "version": "0.4.0",
   "generatedAt": "2026-07-31T19:26:42.054Z",
-  "updatedAt": "2026-08-27T15:11:37.217Z",
-  "contractChecksum": "b60ba2f38cc700e9",
+  "updatedAt": "2026-09-09T20:04:18.939Z",
+  "contractChecksum": "264951b105523e83",
   "apiPrediction": {
     "specName": "product",
     "baseUrl": "/sws/neo/product",
@@ -71,17 +71,13 @@
       "costing": {
         "get": true,
         "getById": true,
-        "post": false,
-        "put": false,
-        "patch": false,
-        "delete": false,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
         "listUrl": "/sws/neo/product/costing",
         "detailUrl": "/sws/neo/product/costing/{id}",
-        "supportedFilters": [],
-        "methods": [
-          "GET",
-          "GETBYID"
-        ]
+        "supportedFilters": []
       },
       "transactionAdjustments": {
         "get": true,
@@ -270,22 +266,6 @@
         "reference": "Product",
         "inputMode": "search",
         "url": "/sws/neo/product/billOfMaterials/selectors/bOMProduct"
-      },
-      {
-        "entity": "costing",
-        "field": "warehouse",
-        "column": "M_Warehouse_ID",
-        "reference": "Warehouse",
-        "inputMode": "selector",
-        "url": "/sws/neo/product/costing/selectors/warehouse"
-      },
-      {
-        "entity": "costing",
-        "field": "cCurrencyID",
-        "column": "C_Currency_ID",
-        "reference": "Currency",
-        "inputMode": "selector",
-        "url": "/sws/neo/product/costing/selectors/cCurrencyID"
       },
       {
         "entity": "transactionAdjustments",
@@ -614,12 +594,20 @@
     "labelOverrides": {
       "en_US": {
         "M_Product_Category_ID": "Category",
-        "ProductType": "Type"
+        "ProductType": "Type",
+        "DateFrom": "Start Date",
+        "DateTo": "Expiry Date"
       },
       "es_ES": {
         "M_Product_Category_ID": "Categoría",
         "ProductType": "Tipo",
-        "Value": "Código"
+        "Value": "Código",
+        "DateFrom": "Fecha de inicio",
+        "DateTo": "Fecha de expiración"
+      },
+      "es_AR": {
+        "DateFrom": "Fecha de inicio",
+        "DateTo": "Fecha de expiración"
       }
     }
   },
@@ -750,35 +738,13 @@
       },
       "costing": {
         "fields": {
-          "costType": {
-            "readOnly": true,
-            "required": true
-          },
           "cost": {
-            "readOnly": true
+            "required": true
           },
           "startingDate": {
-            "readOnly": true,
             "required": true
           },
-          "endingDate": {
-            "readOnly": true,
-            "required": true
-          },
-          "quantity": {
-            "readOnly": true
-          },
-          "warehouse": {
-            "readOnly": true
-          },
-          "cCurrencyID": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "100"
-          },
-          "originalCost": {
-            "readOnly": true
-          }
+          "endingDate": {}
         }
       },
       "transactionAdjustments": {
@@ -973,6 +939,8 @@
         "lineNo",
         "bOMProduct",
         "bOMQuantity",
+        "cost",
+        "startingDate",
         "costDate",
         "cost",
         "cCurrencyID",
@@ -1055,6 +1023,8 @@
           "lineNo",
           "bOMProduct",
           "bOMQuantity",
+          "cost",
+          "startingDate",
           "costDate",
           "cost",
           "cCurrencyID",
@@ -1087,5 +1057,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "8c7c572283033fee"
+  "checksum": "26f7ff4912b4b278"
 }

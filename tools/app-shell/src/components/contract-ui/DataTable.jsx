@@ -11,10 +11,13 @@ import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { resolveRowCurrency } from '@/lib/rowCurrency.js';
+import { useCurrency } from '@/hooks/useCurrency.jsx';
 import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
 import { columnMinWidthPx, columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
 import { CHEVRON_COLUMN_WIDTH } from './InlineLinesPanel.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DateField } from '@/components/ui/date-field';
 import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
 import { resolveFkNavigation } from './fkNavigation.js';
 import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
@@ -618,6 +621,37 @@ function renderInlineAddFieldControl(col, field, isFirst, fieldLabel, {
       handleChange, handleFieldChange, handleKeyDown, isFirst, firstInputRef,
       fieldLabel, selectorContext, token,
     });
+  }
+  // ETP-5245 — date columns get the app's own date picker (calendar icon + masked,
+  // locale-formatted text input), the SAME control EntityForm's `renderDateField`
+  // uses for a form-mode date. Without this branch a `type: 'date'` add-row field
+  // fell through to `renderInputCell` and rendered a bare text box with the field
+  // label as its placeholder: no calendar, no mask, and whatever free text the user
+  // typed went straight into the POST body. `DateField.onChange` always emits
+  // `yyyy-MM-dd` (or '' when cleared) — the exact wire format the rest of the add-row
+  // pipeline already assumes for a date (see normalizeCreationDefaults in
+  // hooks/useEntity.js, "dd-MM-yyyy → yyyy-MM-dd (HTML date input)").
+  //
+  // Two deliberate gaps, both pre-existing for the other rich controls in this
+  // dispatcher: DateField takes no `ref`, so a date column that happens to be the
+  // FIRST add-row field does not receive `firstInputRef` autofocus (same as the
+  // PillToggle branch below); and it takes no `onKeyDown`, so row-level Enter/Escape
+  // does not fire from inside it — DateField binds both itself (Enter commits and
+  // blurs, Escape reverts and blurs).
+  if (field.type === 'date') {
+    return (
+      <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
+        <DateField
+          id={`inline-add-field-${field.key}`}
+          name={field.key}
+          data-testid={`inline-add-field-${field.key}`}
+          value={values[field.key] ?? ''}
+          onChange={(iso) => handleFieldChange(field.key, iso)}
+          required={field.required}
+          className={`h-8${invalidFields.has(field.key) ? ' border-destructive focus-within:ring-destructive' : ''}`}
+        />
+      </TableCell>
+    );
   }
   if (field.type === 'checkbox' || field.type === 'boolean') {
     const checked = values[field.key] === true || values[field.key] === 'Y' || values[field.key] === 'true';
@@ -1845,7 +1879,7 @@ function renderTableRows({
 function renderFooterRow({
   totals, showFooterTotals, selectable, visibleColumns, filteredData,
   hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled,
-  hasDimensionsPanel = false,
+  hasDimensionsPanel = false, sessionCurrency,
 }) {
   if (!totals || !showFooterTotals) return null;
   return (
@@ -1859,8 +1893,13 @@ function renderFooterRow({
             key={col.key}
             className={col.type === 'amount' ? 'tabular-nums text-right font-semibold' : ''}
             data-testid="TableCell__eb5261">
-            {col.type === 'amount'
-              ? formatCurrency(filteredData[0]?.['currency$_identifier'], totals[col.key])
+            {/* ETP-5245 — an `amount` column excluded from the total (summable: false)
+                has no entry in `totals`, so its footer cell stays blank instead of
+                printing a formatted `undefined`. The currency comes from the same
+                resolver the cells use, so the total is labelled with the code the
+                rows actually carry. */}
+            {col.type === 'amount' && totals[col.key] !== undefined
+              ? formatCurrency(resolveRowCurrency(filteredData[0], col, sessionCurrency), totals[col.key])
               : ''}
           </TableCell>
         ))}
@@ -1979,6 +2018,11 @@ export function DataTable({
   const { locale } = useLocaleSwitch();
   // ETP-4520 — capability map for visibleWhenCapability-gated columns (below).
   const capabilities = useCapabilitiesSafe();
+  // ETP-5245 — last-resort currency for `amount` cells whose row carries none of
+  // its own. Safe without a CurrencyProvider (the context defaults to null), and
+  // deliberately the LOWEST-priority source: grids like M_Costing mix currencies
+  // per row, so the row's own value must always win. See lib/rowCurrency.js.
+  const sessionCurrency = useCurrency();
   const dateFormatter = useMemo(
     () => new Intl.DateTimeFormat(locale.replace('_', '-'), { year: 'numeric', month: '2-digit', day: '2-digit' }),
     [locale]
@@ -2086,8 +2130,14 @@ export function DataTable({
     return base;
   }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, capabilities]);
 
+  // Columns that feed the footer total. `amount` is a FORMATTING type (decimals,
+  // separators, symbol, right alignment, numeric filter) — it does not by itself
+  // mean the values are addable. ETP-5245 splits the two: an explicit
+  // `summable: false` (decisions.json) keeps the money formatting and drops the
+  // column from the total. `undefined` MUST keep summing — that is the historical
+  // behavior every existing amount column relies on.
   const amountColumns = useMemo(
-    () => visibleColumns.filter(col => col.type === 'amount'),
+    () => visibleColumns.filter(col => col.type === 'amount' && col.summable !== false),
     [visibleColumns]
   );
 
@@ -2155,6 +2205,7 @@ export function DataTable({
       dateFormatter,
       token,
       apiBaseUrl,
+      sessionCurrency,
     });
     if (!navigateTo) return rendered;
     return (
@@ -2351,7 +2402,7 @@ export function DataTable({
           {renderFooterRow({
             totals, showFooterTotals, selectable, visibleColumns, filteredData,
             hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled,
-            hasDimensionsPanel,
+            hasDimensionsPanel, sessionCurrency,
           })}
         </Table>
       </div>

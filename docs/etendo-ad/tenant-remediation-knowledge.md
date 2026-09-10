@@ -2792,3 +2792,49 @@ cash-close *difference* postings (GL-item `BPD`/`BPW`) and bank-fee (`BF`) lines
 ledger — silently, via the same gate. That is what ETP-5207 asked for, but it is broader than
 "reconciliations are not posted", so it needs a functional sign-off rather than being treated as an
 implementation detail.
+
+
+## ETP-5245 — `M_PriceList.IsDefault` never set by the onboarding dataset (N5 / R35, 2026-09-09)
+
+- **`m_pricelist` has an `ad_org_id`, but the default flag is a CLIENT-level × DIRECTION-level
+  singleton, not an org-level one.** Wrong assumption to avoid: "one default per org". Nothing in
+  the model enforces either reading — the only UNIQUE constraint is
+  `m_pricelist_name (name, ad_org_id, ad_client_id)`, and there is no check constraint or trigger on
+  `isdefault` at all. What settles it is the CONSUMERS: `ETGO_PRODUCT_SALE_PRICE.xml` /
+  `ETGO_PRODUCT_PURCHASE_PRICE.xml` (line 15, `ORDER BY (pl.isdefault = 'Y') DESC`) filter only on
+  `issopricelist`, and `PriceListPicker.jsx:70` filters only on `active`/`salesPriceList`. Neither
+  has an org filter, so one-default-per-org would hand them several flagged rows per direction on a
+  multi-org tenant — exactly the arbitrary tie-breaking the flag exists to prevent.
+  **Apply:** any fix or resolver touching this flag must maintain *at most one active default per
+  `(ad_client_id, issopricelist)`*, and must read it back the same way (no org filter).
+
+- **Only core trigger on `m_pricelist` is `m_pricelist_trg` (AFTER UPDATE), and it guards
+  `istaxincluded` only** — it raises `@IsTaxIncludedFlagWithDocuments@` when that flag changes on a
+  list already referenced by a `C_Order`/`C_Invoice`/`M_Requisition`/`M_RequisitionLine`. Verified
+  by reading the live `pg_proc` body. **Apply:** an `UPDATE` that writes only
+  `isdefault`/`updated`/`updatedby` cannot trip it, so no per-row guard is needed for trigger safety
+  (unlike `FIN_FINANCIAL_ACCOUNT_ACCT`, where `APRM_FIN_FINACC_ACCT_CHECK_TRG` fires on UPDATE and
+  can abort a whole tenant's transaction — see the A9/R34 entry).
+
+- **`created` is NOT a sufficient tie-break on sample-data-derived tenants.** F&B International
+  Group's eight purchase tariffs were all created within the same *millisecond*
+  (`2013-07-05T02:45:43.5xx`), and QA Testing has three at an identical `2013-07-05T02:38:16.000`.
+  **Apply:** any `row_number()`/`LIMIT 1` pick over master data seeded by a dataset import needs a
+  final `<pk> ASC` key, or the fix is not reproducible between runs. `_ID` columns are VARCHAR, so
+  that is a plain textual ordering.
+
+- **"Most referenced by `c_order` + `c_invoice`" is a cheap, defensible first ranking key for
+  picking a default among legacy master-data rows.** It answers "which one does this tenant actually
+  use", degrades to a no-op on a GO tenant (one candidate per direction) and on a brand-new tenant
+  (all zero), and measured 59 ms for the full check → apply → report → re-check cycle on the largest
+  tenant (10 candidate lists against ~1 200 documents). **Apply:** prefer it over a purely
+  structural pick when the fix must choose one row out of many on tenants that already transact.
+
+- **DB facts confirmed by query (2026-09-09, shared dev DB).** 5 of the non-System clients own price
+  lists; every GO-provisioned tenant (GOClient, both E2E tenants) has exactly ONE active list per
+  direction — the two dataset rows `782B468DCC3948D69BC2AE5B68C3F4A4` (sales) and
+  `F888E6AAB93E44E88433C21A8F3C0161` (purchase) — both `isdefault='N'`. Fleet-wide, the ONLY
+  pre-existing default anywhere is QA Testing's sales list "Customer A"
+  (`4028E6C72959682B01295B03CE480243`), which is F&B-derived and never ran the GO dataset.
+  **Apply:** a fix in this area is effectively a no-op-shaped one-row-per-direction UPDATE on GO
+  tenants and only becomes a real choice on the two legacy demo tenants.

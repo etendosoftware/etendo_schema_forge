@@ -1946,7 +1946,7 @@ broken for any Organization-level role; only a core fix closes them. Written up 
 ## [2026-09-09] ETP-5245 — Secondary tabs have no per-row delete gate (accepted debt)
 
 **Component:** `tools/app-shell/src/components/contract-ui/DetailView.jsx` +
-`DataTable.jsx` / `InlineLinesPanel.jsx` (the shared components live in `schema_forge_core`)
+`DataTable.jsx` / `InlineLinesPanel.jsx`
 
 **Symptom:** The Product window's new **Cost** tab (ETP-5245) lists the whole `M_Costing` history —
 rows the user typed *and* rows the costing engine generated. Engine rows must never be deleted, but
@@ -1970,11 +1970,180 @@ REST API and the MCP — a UI-only gate would have been the weaker half of the p
 
 **Open work:** a `canDeleteRow` predicate (record → boolean) on `DataTable` / `InlineLinesPanel`,
 plumbed from `DetailView`'s secondary-tab props and declarable from `decisions.json` the way
-`readOnlyLogicJs` already is for fields. Both components live in **`schema_forge_core`**, so the
-change belongs in that repo and needs a package publish + pin bump here
-(`docs/repo-topology.md`). Not scheduled.
+`readOnlyLogicJs` already is for fields. Corrected 2026-09-10: an earlier version of this entry
+claimed both components live in `schema_forge_core` and that the change would need a package
+publish plus a pin bump here. That is wrong — `DataTable.jsx` and `InlineLinesPanel.jsx` are both
+in this repo under `tools/app-shell/src/components/contract-ui/`, exported by the local barrel.
+The work is therefore a single-repo change and cheaper than this entry first estimated.
+Not scheduled.
 
 **Lesson:** A row-level invariant cannot be expressed with an entity-level flag. When a tab mixes
 records with different write rules — user-authored vs. machine-authored, draft vs. posted — the
 backend guard is mandatory and the UI gate is, at best, a courtesy. Ship the guard first, and record
 the missing affordance instead of pretending the UI covers it.
+
+---
+
+## [2026-09-10] ETP-5245 — Hovering a lines row deleted its amount cell when the amount was not the last column
+
+**Component:** `tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx` (`trailingColumn`)
+
+**Symptom:** In Product > **Cost**, hovering a row made the **Cost** value disappear and pushed the
+two date cells one slot to the left, while the header stayed put — the row's content and the header
+no longer lined up. The other rows were unaffected. Measured on the reporter's screenshots: the
+dates moved ~170px left, exactly one column width, and the edit/delete icons appeared on the far
+right.
+
+**Root cause:** `InlineLinesPanel` suppresses one cell while the hover/edit **action strip** is
+showing, so the icons can take that cell's space without the row reflowing. The strip is always
+appended at the **end** of the row's flex container, so this only works if the suppressed cell is
+the **last** one. The old `trailingColumn` instead scanned the columns *backwards for the last one
+of `type: 'amount'`*, wherever it sat. On the Cost tab the columns are `cost` (amount),
+`startingDate`, `endingDate`, so it picked `cost` — the **first** column: hover removed the leading
+flex child and every following cell slid left into the vacated slot. Because `trailingColumn` was
+non-null, `reserveActionSlot` stayed `false`, so neither the header nor the un-hovered rows reserved
+the strip's slot and the misalignment was visible.
+
+**Not specific to Cost.** Any lines / secondary tab whose amount column is not last had the same
+bug, e.g. purchase-invoice's Payment Details (`amount`, `invoicePaid`), sales-order's Payment Plan,
+price-list's lines. The main document Lines tabs never showed it because there the amount genuinely
+is the last grid column, which is why it went unnoticed since the layout shipped (ETP-3908).
+
+**Fix:** `trailingColumn` now only ever resolves to the **last visible column**, and only when that
+column is an `amount` (and not `noTrailing`). Every other shape falls into the pre-existing
+`reserveActionSlot` path, which reserves the 160px slot on the header and on every row, so nothing
+reflows on hover. Regression test:
+`tools/app-shell/src/components/contract-ui/__tests__/InlineLinesPanel.trailingAmountColumn.vitest.jsx`.
+
+**Lesson:** A "swap this cell for the hover actions" trick is a positional contract, not a type
+contract. If the replacement UI renders at a fixed position (here: appended last), the cell it
+replaces must be pinned to that same position — selecting it by column *type* silently breaks the
+moment a window orders its columns differently.
+
+---
+
+## [2026-09-10] ETP-5245 — Line date fields rendered as plain text boxes instead of the app date picker
+
+**Component:** `DataTable.jsx` (`renderInlineAddFieldControl`) and `InlineLinesPanel.jsx` (`EditCell`)
+
+**Symptom:** In Product > **Cost**, the add-line row rendered *Starting Date* / *Ending Date* as bare
+text inputs whose only affordance was the field label as a placeholder — no calendar, no mask, and
+whatever free text the user typed went into the POST body verbatim.
+
+**Root cause — two different renderers, three different date controls.** The same date column
+reaches the user through three independent code paths, and only one of them used the app's
+`DateField`:
+
+| Path | Renderer | Control (before) |
+|---|---|---|
+| Form / detail | `EntityForm.renderDateField` | `DateField` ✅ |
+| Add-line row | `DataTable.renderInlineAddFieldControl` | **none** → fell through to `renderInputCell`, a `type="text"` box |
+| Inline edit of an existing row | `InlineLinesPanel.EditCell` | native `<input type="date">` |
+
+The add-row of an `inlineEditable` tab is **not** `InlineLinesPanel` — the generated
+`<Window>Table.jsx` renders a header-hidden `<DataTable hideHeader hideDataRows>` as a sibling while
+`addRow.active` is true (see `docs/ui-customization.md`, "Add-line flow"). `renderInlineAddFieldControl`
+dispatches on lookup / search / static-select / selector / checkbox and then falls through to
+`renderInputCell`; it has **never** had a `date` branch (`git log -S "field.type === 'date'"` on
+`DataTable.jsx` returns nothing).
+
+**Fix:** both paths now render `DateField`. `DateField.onChange` always emits `yyyy-MM-dd` (or `''`
+when cleared) — the exact wire format the rest of the pipeline assumes for a date (see
+`normalizeCreationDefaults` in `hooks/useEntity.js`: "dd-MM-yyyy → yyyy-MM-dd (HTML date input)") —
+so the swap also *fixes* the format, which free text never guaranteed. Regression test:
+`tools/app-shell/src/components/contract-ui/__tests__/linesDateField.vitest.jsx`.
+
+**Two accepted gaps**, both pre-existing for the other rich controls in that dispatcher: `DateField`
+takes no `ref`, so a date column that is the FIRST add-row field gets no `firstInputRef` autofocus
+(same as the `PillToggle` branch); and it takes no `onKeyDown`, so row-level Enter/Escape does not
+fire from inside it — `DateField` binds both itself.
+
+**Generic, not Cost-specific.** Every window with a `type: 'date'` field in an `addLineFields.entry`
+was affected: `price-list` (`priceListVersion.validFromDate`), `purchase-order`
+(`orderLine.scheduledDeliveryDate`), `requisition` (`lines.needByDate`), `sii-monitor`
+(`issuedInvoices`: 4 date fields), plus `product` (`costing`).
+
+**Lesson:** the same column type is rendered by three sibling components here (form field, add-row
+cell, inline-edit cell) and each keeps its own type-dispatch `if` chain. When adding or fixing a
+field-type control, grep all three — a branch missing from one of them degrades silently into the
+fall-through renderer instead of erroring.
+
+---
+
+## [2026-09-10] ETP-5245 — A declared `javaQualifier` that was never pushed silently disables the whole handler
+
+**Component:** `ETGO_SF_ENTITY.Java_Qualifier` (config state) / `NeoHookDispatcher.dispatchWithHooks`
+
+**Symptom:** The Product > Cost add-row opened with **Starting Date empty**, even though
+`ProductCostingHandler.injectCostingDefaults` pre-fills it with the product's creation date and the
+backend was demonstrably deployed (the "stockable product with no cost" banner, fed by
+`etgoHasCost` from `ProductDefaultsHandler`, rendered fine).
+
+**Root cause — configuration, not code.** `NeoHookDispatcher.dispatchWithHooks`
+(`NeoHookDispatcher.java:77-79`) reads `entity.getJavaQualifier()` and, when it is blank, returns
+`defaultAction.get()` **without consulting any handler at all**. The DB said:
+
+```
+product | accounting | productAccountingHandler
+product | costing    | <NULL>          <-- declared in decisions.json, never pushed
+product | price      | productPriceHandler
+product | product    | productDefaultsHandler
+product | stock      | productStockWarehouseHandler
+```
+
+`costing.javaQualifier` exists only in the WORKING TREE of `artifacts/product/contract.json` — at
+`HEAD` and `HEAD~1` the key is absent. All five entity rows were written by the same push
+(`created = updated = 2026-09-09 14:11:42`), from a contract that did not yet carry it. The four
+older handlers landed; the new one could not.
+
+**This was never only about the date.** With the qualifier blank, `ProductCostingHandler` was
+**entirely inert** — `handle()` too, so `prepareCreate` (which forces `costType='STA'`,
+`permanent=false`, `production=false`, `manual=true`) and `guardEngineRow`'s 403 on engine rows
+were BOTH off. The tab looked like it worked while every guarantee the handler exists to provide
+was absent.
+
+**Fix:** re-push the spec (`sf-push-neo product`, i.e. `make regen ONLY=product PUSH_TO_NEO=1`),
+then `./gradlew export.database` in the Etendo root so the value survives a rebuild. Verified
+`costing → productCostingHandler` after the push. No restart needed: `NeoServlet.findEntity`
+(`NeoServlet.java:230`) reads `ETGO_SF_ENTITY` through an `OBCriteria` on every request, uncached.
+
+**Open gap (generic).** Nothing detects this. `sf-validate-pipeline` runs without DB access, so it
+cannot compare a declared `javaQualifier` against `ETGO_SF_ENTITY`, and NEO does not warn when it
+skips a handler. Any entity whose handler is declared but unpushed is silently dead, in any window.
+A DB-aware check ("every `backendContract.entities.*.javaQualifier` resolves to a non-null
+`Java_Qualifier` for that spec") would have caught this in one query.
+
+**Lesson:** a declared handler is not a deployed handler. When a NeoHandler "does not run", check
+`ETGO_SF_ENTITY.Java_Qualifier` in the DB **before** reading a single line of Java — the dispatcher
+fails open and silent, and a sibling handler working in the same window proves nothing about yours.
+
+---
+
+## [2026-09-10] ETP-5245 — Entity-level `orderBy` in decisions.json is a dead key
+
+**Component:** `decisions.json` (entity level) / `@etendosoftware/schema-forge-cli`
+
+**Symptom:** Four windows declare an entity-level `"orderBy"` in `decisions.json`
+(`chart-of-accounts`, `cost-center`, `matched-purchase-invoices`, `service-project`) and none of
+them is ordered by it. The key looks configured and does nothing.
+
+**Root cause:** no consumer. The key survives into no contract — `grep '"orderBy"'` returns 1 hit in
+each of those four `decisions.json` and **0** in each corresponding `contract.json`. The only
+`orderBy` in the published CLI is `extract-fields.js:199`, `ref_table_orderby`, which is a
+*selector's* reference-table order read out of `AD_REF_TABLE` — unrelated to an entity's row order.
+There is also no column to push it to: `ETGO_SF_ENTITY` has `SEQNO`, which orders the entities
+among themselves, not the rows within one.
+
+**Consequence:** row order is whatever the DAL returns, i.e. the database's plan. Four windows
+believe they are sorted and are not.
+
+**Workaround used for ETP-5245 (Cost tab):** the handler defaults the DAL `_sortBy` query param on
+a list GET when the caller sent none — see `ProductCostingHandler.applyDefaultSort`. Query-level,
+so it survives pagination, and it applies to UI, REST and MCP alike. It is per-entity Java, though,
+not configuration: it does not scale to the four windows above.
+
+**Lesson:** a decisions key with no consumer is worse than no key — it reads as configured
+behaviour. Either implement `orderBy` end to end (resolve → contract → a new `ETGO_SF_ENTITY`
+column → a default `_sortBy` in `NeoCrudHandler.buildDalParams`) or delete it from the four
+windows. Until then, treat any `orderBy` in a `decisions.json` as documentation of an intent, not
+as behaviour.
