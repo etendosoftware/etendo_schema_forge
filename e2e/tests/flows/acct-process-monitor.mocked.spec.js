@@ -204,11 +204,16 @@ test.describe('Accounting process monitor — page', () => {
   test('shows each status as a human label, never the raw three-letter code', async ({ page }) => {
     await openMonitor(page);
 
-    const row = page.getByTestId('AcctProcessMonitorPage__row-e2e-run-1');
-    const pill = row.locator('[data-status="SUC"]');
+    // Per-row testid since the codemod-collapsed ids were fixed — no CSS attribute selector.
+    const pill = page.getByTestId('AcctProcessMonitorPage__statusPill-e2e-run-1');
     await expect(pill).toBeVisible();
+    await expect(pill).toHaveAttribute('data-status', 'SUC');
     await expect(pill).not.toHaveText('SUC');
     await expect(pill).toHaveAttribute('data-tone', 'success');
+
+    const failed = page.getByTestId('AcctProcessMonitorPage__statusPill-e2e-run-2');
+    await expect(failed).toHaveAttribute('data-status', 'ERR');
+    await expect(failed).not.toHaveText('ERR');
   });
 
   test('Run now converges on the new run by polling, with no manual refresh', async ({ page }) => {

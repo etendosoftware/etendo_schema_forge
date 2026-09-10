@@ -356,3 +356,239 @@ describe('useAcctProcessMonitor', () => {
     });
   });
 });
+
+// ── awaitingRun: polling across the gap after a trigger ──────────────────────
+
+/**
+ * The W1 regression these tests exist for: polling used to be keyed on `running` alone, and a
+ * SUCCESSFUL trigger response structurally never reports `running: true` — the backend refuses
+ * outright when a run is already in progress, and `ProcessMonitor` writes the `AD_PROCESS_RUN` row
+ * on the scheduler's own thread, so the response usually predates the row entirely. The poll
+ * therefore never started: the page said the run would appear shortly and nothing ever did without
+ * a manual refresh.
+ *
+ * Every test below drives the clock explicitly — plain `vi.useFakeTimers()`, no
+ * `shouldAdvanceTime` — because the hook's deadline is computed from `Date.now()`, and a clock
+ * that also moves with wall time would make the deadline assertions depend on how long the test
+ * itself took. Assertions are on the NUMBER and TIMING of `fetchAcctProcessStatus` calls, never on
+ * elapsed real time.
+ */
+describe('useAcctProcessMonitor — awaitingRun polling', () => {
+  const RUN_OLD = Object.freeze({
+    id: 'run-old', status: 'SUC', startTime: '2026-09-10T18:00:00', manual: false,
+  });
+  /** The run the trigger creates. A DIFFERENT newest id is what makes it observable. */
+  const RUN_NEW = Object.freeze({
+    id: 'run-new', status: 'PRC', startTime: '2026-09-10T18:02:00', manual: true,
+  });
+  const STARTED = Object.freeze({ started: true, reason: 'started' });
+
+  /** How long the hook keeps waiting, and at what cadence. Mirrors the hook's own constants. */
+  const POLL_MS = 5_000;
+  const DEADLINE_MS = 60_000;
+
+  function status({ runs = [RUN_OLD], running = false, triggered } = {}) {
+    const payload = {
+      error: false,
+      processName: 'Accounting server process',
+      scheduled: true,
+      nextRunTime: '2026-09-10T18:05:00',
+      running,
+      lastRun: runs[0] ?? null,
+      history: runs,
+    };
+    if (triggered) payload.triggered = triggered;
+    return payload;
+  }
+
+  let advance;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function renderHook() {
+    const React = await import('react');
+    const { render, act } = await import('@testing-library/react');
+    let result;
+    function Probe() {
+      result = useAcctProcessMonitor();
+      return null;
+    }
+    let view;
+    // The mount effect's fetch resolves on a microtask; act() flushes it without any timer.
+    await act(async () => { view = render(React.createElement(Probe)); });
+    advance = async (ms) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); };
+    return { getResult: () => result, act, view };
+  }
+
+  /** Loads once, then triggers a run the backend accepts. Leaves the hook in `awaitingRun`. */
+  async function loadAndTrigger({ triggerResponse } = {}) {
+    fetchAcctProcessStatus.mockResolvedValue(status());
+    triggerAcctProcessRun.mockResolvedValue(triggerResponse ?? status({ triggered: STARTED }));
+    const harness = await renderHook();
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(1);
+    await harness.act(async () => { await harness.getResult().trigger(); });
+    return harness;
+  }
+
+  it('starts polling after a successful trigger even though the response reports running:false', async () => {
+    const { getResult } = await loadAndTrigger();
+
+    // Exactly the regression shape: the trigger succeeded, yet nothing is running and the newest
+    // run is still the pre-trigger one. `running` alone would leave the hook idle here forever.
+    expect(getResult().triggerOutcome).toEqual(STARTED);
+    expect(getResult().running).toBe(false);
+    expect(getResult().awaitingRun).toBe(true);
+    // Nothing polled yet — the interval has been armed, not fired.
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(1);
+
+    await advance(POLL_MS);
+
+    // 2 here, 1 under the regression. This single assertion is what W1 would fail.
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it('does NOT start polling when the trigger was refused — there is nothing coming', async () => {
+    const { getResult } = await loadAndTrigger({
+      triggerResponse: status({ triggered: { started: false, reason: 'alreadyRunning' } }),
+    });
+
+    expect(getResult().awaitingRun).toBe(false);
+
+    await advance(DEADLINE_MS);
+
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT start polling when the trigger itself rejected', async () => {
+    fetchAcctProcessStatus.mockResolvedValue(status());
+    triggerAcctProcessRun.mockRejectedValue(new Error('gateway timeout'));
+    const { getResult, act } = await renderHook();
+    await act(async () => { await getResult().trigger(); });
+
+    expect(getResult().awaitingRun).toBe(false);
+
+    await advance(DEADLINE_MS);
+
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops polling as soon as the started run becomes observable as a new newest run', async () => {
+    const { getResult } = await loadAndTrigger();
+    expect(getResult().awaitingRun).toBe(true);
+
+    // The run started AND finished between two polls — no PRC was ever visible, only a new row.
+    fetchAcctProcessStatus.mockResolvedValue(status({ runs: [RUN_NEW, RUN_OLD] }));
+    await advance(POLL_MS);
+
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(2);
+    expect(getResult().awaitingRun).toBe(false);
+    expect(getResult().data.history[0].id).toBe(RUN_NEW.id);
+
+    // And it really stops — not merely reports itself stopped.
+    await advance(DEADLINE_MS);
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it('hands over to the running poll when the run shows up as PRC, and stops when it finishes', async () => {
+    const { getResult } = await loadAndTrigger();
+
+    // Poll 1: the backend now reports the run in progress. `awaitingRun` has done its job.
+    fetchAcctProcessStatus.mockResolvedValue(status({ running: true }));
+    await advance(POLL_MS);
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(2);
+    expect(getResult().awaitingRun).toBe(false);
+    expect(getResult().running).toBe(true);
+
+    // Poll 2: it finished. Neither flag is set any more, so the polling must end.
+    fetchAcctProcessStatus.mockResolvedValue(status({ runs: [RUN_NEW, RUN_OLD] }));
+    await advance(POLL_MS);
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(3);
+    expect(getResult().running).toBe(false);
+    expect(getResult().awaitingRun).toBe(false);
+
+    await advance(DEADLINE_MS);
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(3);
+  });
+
+  it('gives up at the 60s deadline instead of polling forever when the run never appears', async () => {
+    // The scheduler silently dropped the job: no new run, no PRC, ever. Without the deadline this
+    // page would poll for as long as it stayed open.
+    const { getResult } = await loadAndTrigger();
+
+    await advance(DEADLINE_MS - POLL_MS);
+    expect(getResult().awaitingRun).toBe(true);
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(1 + (DEADLINE_MS - POLL_MS) / POLL_MS);
+
+    await advance(POLL_MS);
+    expect(getResult().awaitingRun).toBe(false);
+
+    const settledCallCount = fetchAcctProcessStatus.mock.calls.length;
+    await advance(DEADLINE_MS * 3);
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(settledCallCount);
+  });
+
+  it('polls at the 5s cadence — one request per interval, never a tight loop', async () => {
+    await loadAndTrigger();
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(1);
+
+    await advance(POLL_MS - 1);
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(1);
+
+    await advance(1);
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(2);
+
+    await advance(POLL_MS - 1);
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(2);
+
+    await advance(1);
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(3);
+  });
+
+  it('a second trigger while awaiting does not stack a second poll interval', async () => {
+    const { getResult, act } = await loadAndTrigger();
+
+    // Part-way through the first interval, fire another trigger. `shouldPoll` was already true, so
+    // the effect must NOT tear down and re-arm — a stacked interval would double every poll from
+    // here on, and the page would hammer the endpoint for the rest of the deadline.
+    await advance(2_000);
+    await act(async () => { await getResult().trigger(); });
+    expect(getResult().awaitingRun).toBe(true);
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(1);
+
+    // t = 7000. The original interval fires once (at 5000); a second one armed at 2000 would also
+    // fire here, giving 3.
+    await advance(POLL_MS);
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(2);
+
+    await advance(POLL_MS);
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not dedupe the trigger request itself — the disabled button is that guard', async () => {
+    // Stated as a fact, not an omission: two `trigger()` calls DO reach the backend twice. What
+    // stops a duplicate one-shot in the UI is the Run now button, which is disabled for the whole
+    // `triggering || running || awaitingRun` window — asserted in AcctProcessMonitorPage.vitest.jsx.
+    // The backend refuses a duplicate anyway (`alreadyRunning`, pending-one-shot guard).
+    const { getResult, act } = await loadAndTrigger();
+
+    await act(async () => { await getResult().trigger(); });
+
+    expect(triggerAcctProcessRun).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops the awaiting poll when the component unmounts mid-wait', async () => {
+    const { view } = await loadAndTrigger();
+
+    view.unmount();
+    await advance(DEADLINE_MS);
+
+    expect(fetchAcctProcessStatus).toHaveBeenCalledTimes(1);
+  });
+});

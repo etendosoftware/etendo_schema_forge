@@ -107,6 +107,27 @@ const LOADED = Object.freeze({
   history: RUNS,
 });
 
+/**
+ * A run Etendo vetoed for concurrency. `ProcessMonitor.stopConcurrency` writes a real
+ * `AD_PROCESS_RUN` row for it — status `ERR`, start and end on the same instant, duration
+ * `"00:00:00.000"` (the literal string that code produces). Kept out of `RUNS` so only the tests
+ * that are about it carry the extra row.
+ *
+ * The page must render it as an ordinary failed run and nothing more. A zero-duration `ERR` is NOT
+ * a reliable marker of a veto — a genuine failure that dies inside a millisecond renders the same
+ * duration, and the distinguishing text only ever lives in the `LOG` this endpoint never exposes —
+ * so nothing here should ever branch on that shape.
+ */
+const VETOED_RUN = Object.freeze({
+  id: 'run-vetoed',
+  status: 'ERR',
+  startTime: '2026-09-10T17:50:00',
+  endTime: '2026-09-10T17:50:00',
+  duration: '00:00:00.000',
+  manual: true,
+  log: LOG_SENTINEL,
+});
+
 /** Base hook return; every test overrides only what it is about. */
 function hookState(overrides = {}) {
   return {
@@ -116,6 +137,7 @@ function hookState(overrides = {}) {
     notInstalled: false,
     data: LOADED,
     running: false,
+    awaitingRun: false,
     triggering: false,
     triggerOutcome: null,
     trigger: vi.fn(),
@@ -295,10 +317,61 @@ describe('AcctProcessMonitorPage', () => {
       expect(screen.getByTestId('AcctProcessMonitorPage__runNow')).toBeDisabled();
     });
 
+    it('stays disabled across the awaitingRun gap, where the request is done but nothing is visible yet', async () => {
+      // This is THE window a duplicate one-shot was easiest to create: the request has returned
+      // (`triggering` false) and the backend does not report a run yet (`running` false), so
+      // without `awaitingRun` in the disabled condition the button re-enabled a moment after the
+      // click while the run was still on its way.
+      const trigger = vi.fn();
+      mockUseAcctProcessMonitor.mockReturnValue(hookState({
+        awaitingRun: true, triggering: false, running: false, trigger,
+      }));
+      const user = userEvent.setup();
+      render(<AcctProcessMonitorPage />);
+      const button = screen.getByTestId('AcctProcessMonitorPage__runNow');
+      expect(button).toBeDisabled();
+      await user.click(button, { pointerEventsCheck: 0 });
+      expect(trigger).not.toHaveBeenCalled();
+    });
+
     it('also locks refresh while a trigger is in flight', () => {
       mockUseAcctProcessMonitor.mockReturnValue(hookState({ triggering: true }));
       render(<AcctProcessMonitorPage />);
       expect(screen.getByTestId('AcctProcessMonitorPage__refresh')).toBeDisabled();
+    });
+
+    it('leaves refresh usable across the awaitingRun gap', () => {
+      // Only the in-flight request locks refresh. Re-reading while waiting is harmless — it is the
+      // same GET the poll makes — and an admin who does not want to wait out the poll should be
+      // able to ask again.
+      mockUseAcctProcessMonitor.mockReturnValue(hookState({ awaitingRun: true }));
+      render(<AcctProcessMonitorPage />);
+      expect(screen.getByTestId('AcctProcessMonitorPage__refresh')).toBeEnabled();
+    });
+  });
+
+  // ── the in-progress indicator ──────────────────────────────────────────────
+
+  describe('progress indicator', () => {
+    it('says the run is starting while awaiting one that is not observable yet', () => {
+      mockUseAcctProcessMonitor.mockReturnValue(hookState({ awaitingRun: true, running: false }));
+      render(<AcctProcessMonitorPage />);
+      // Saying nothing here would leave the page looking idle immediately after a click.
+      expect(screen.getByTestId('AcctProcessMonitorPage__running').textContent)
+        .toBe('acctProcessStartingNow');
+    });
+
+    it('switches to the running message once the backend reports the run in progress', () => {
+      mockUseAcctProcessMonitor.mockReturnValue(hookState({ awaitingRun: true, running: true }));
+      render(<AcctProcessMonitorPage />);
+      expect(screen.getByTestId('AcctProcessMonitorPage__running').textContent)
+        .toBe('acctProcessRunningNow');
+    });
+
+    it('shows nothing when neither flag is set', () => {
+      mockUseAcctProcessMonitor.mockReturnValue(hookState());
+      render(<AcctProcessMonitorPage />);
+      expect(screen.queryByTestId('AcctProcessMonitorPage__running')).toBeNull();
     });
   });
 
@@ -393,7 +466,42 @@ describe('AcctProcessMonitorPage', () => {
 
     it('renders an em dash for a run that has not finished, instead of an empty cell', () => {
       render(<AcctProcessMonitorPage />);
-      expect(screen.getByTestId('AcctProcessMonitorPage__row-run-2').textContent).toContain('—');
+      expect(screen.getByTestId('AcctProcessMonitorPage__end-run-2').textContent).toBe('—');
+    });
+
+    it('renders a concurrency-vetoed run — ERR with a zero duration — without crashing', () => {
+      // Etendo does not silently drop a run it refuses for concurrency: it writes a real
+      // AD_PROCESS_RUN row, status ERR, started and ended on the same instant. A zero duration is
+      // a legitimate string, not the missing value the em-dash fallback is for, so it must render
+      // as itself — and as an ordinary failed run, with no special-casing of the shape.
+      mockUseAcctProcessMonitor.mockReturnValue(hookState({
+        data: { ...LOADED, lastRun: VETOED_RUN, history: [VETOED_RUN, ...RUNS] },
+      }));
+      render(<AcctProcessMonitorPage />);
+
+      const row = screen.getByTestId('AcctProcessMonitorPage__row-run-vetoed');
+      expect(row).toBeInTheDocument();
+      expect(screen.getByTestId('AcctProcessMonitorPage__statusPill-run-vetoed'))
+        .toHaveAttribute('data-status', 'ERR');
+      expect(screen.getByTestId('AcctProcessMonitorPage__statusPill-run-vetoed').textContent)
+        .toBe('acctProcessStatusError');
+      expect(row.textContent).toContain(VETOED_RUN.duration);
+      expect(screen.getByTestId('AcctProcessMonitorPage__end-run-vetoed').textContent)
+        .not.toBe('—');
+      // It is the newest run, so it also drives the summary tile.
+      expect(screen.getByTestId('AcctProcessMonitorPage__lastStatusPill'))
+        .toHaveAttribute('data-status', 'ERR');
+      // No veto-specific affordance: it is indistinguishable from any other failed run here, and
+      // must stay that way.
+      expect(row.textContent).toContain('acctProcessTriggerManual');
+    });
+
+    it('never leaks the log of a concurrency-vetoed run either', () => {
+      mockUseAcctProcessMonitor.mockReturnValue(hookState({
+        data: { ...LOADED, lastRun: VETOED_RUN, history: [VETOED_RUN, ...RUNS] },
+      }));
+      render(<AcctProcessMonitorPage />);
+      expect(document.body.textContent).not.toContain(LOG_SENTINEL);
     });
 
     it('shows the empty state and no table when the process has never run', () => {
