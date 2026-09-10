@@ -555,7 +555,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
           { key: 'productExpense', column: 'P_Expense_Acct', type: 'selector', required: true, label: 'Product Expense', reference: 'ValidCombination', inputMode: 'selector' },
           { key: 'productRevenue', column: 'P_Revenue_Acct', type: 'selector', required: true, label: 'Product Revenue', reference: 'ValidCombination', inputMode: 'selector' },
           { key: 'productCOGS', column: 'P_Cogs_Acct', type: 'selector', label: 'Product COGS', reference: 'ValidCombination', inputMode: 'selector' },
-          ], derived: [], hidden: [] }, requireSavedRecord: true, maxDetailLines: 1, tabOrder: 1000, visibleWhenCapability: 'showAccountingFields' },
+          ], derived: [], hidden: [] }, requireSavedRecord: true, maxDetailLines: 1, tabOrder: 500, visibleWhenCapability: 'showAccountingFields' },
         ]}
         primaryTabs={[
           { key: 'general', label: 'General' },
@@ -574,7 +574,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
         toolbarPaddingX="px-2"
         contentBg="bg-card"
         formCardPadding="px-2"
-        customTabs={[{ key: 'pricing', labelKey: 'price', Component: ProductPriceBar, placement: 'tab' }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Product", config: {} } }]}
+        customTabs={[{ key: 'pricing', labelKey: 'price', Component: ProductPriceBar, placement: 'tab', tabOrder: 100 }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Product", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
         {...props} window={effectiveWindow}
