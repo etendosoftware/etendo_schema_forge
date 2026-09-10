@@ -1335,6 +1335,17 @@ plain `aeatsiiSend` kebab-menu entry (`window.menuActions`) that called the back
 `SendToSifButton` into sales-invoice's topbar instead (see `sales-invoice.md`), so purchase-invoice
 keeps this single, fiscal-profile-aware entry point and does not gain a duplicate kebab action.
 
+**Registry-error correction resend (ETP-5272):** this window shares `SendToSifButton.jsx` and
+`../shared/sifSending.js` with sales-invoice, so it gets the same fix — see
+`sales-invoice.md` §"Registry-error correction resend (ETP-5272)" for the full explanation. In
+short: `getPendingSifTargets()` now also offers `sendSii: true` whenever
+`invoice.aeatsiiErrorRegistral` is truthy, independently of `aeatsiiIssent`, so the `Send to SIF`
+button reappears after a registry-error correction cycle instead of staying hidden forever once
+`aeatsiiIssent` is `true`. The backend routing fix in `SiiSendHandler.java` (routes to
+`CorrectDuplicateInvoiceError`, AEAT communication type `A1`, instead of `MultiEnvioFactura`'s
+always-`A0` "alta" envelope, when `Invoice.isAeatsiiErrorRegistral()` is `true`) is also shared —
+it is not window-specific Java code.
+
 This runs `PurchaseInvoiceHeaderHandler` exactly as the UI does — including the total-discount
 line created before completion — because `neo_action` executes the entity's `NeoHandler` hooks
 (ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same

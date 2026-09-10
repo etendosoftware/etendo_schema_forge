@@ -954,6 +954,26 @@ which calls the same `SiiSendHandler` backend action (`POST .../action/Em_aeatsi
 No `decisions.json`/generator change was needed for this — `SalesInvoiceTopbar.jsx` is a plain
 custom React component, not generated output.
 
+**Registry-error correction resend (ETP-5272):** before this fix, once `aeatsiiIssent` became
+`true` — even from a first send that AEAT later rejected with a registry error — the `Send to SIF`
+button never reappeared, because `getPendingSifTargets()` (`../shared/sifSending.js`) only offered
+`sendSii` when `aeatsiiIssent` was falsy, and the classic backend never resets that flag after a
+registry-error correction cycle. `getPendingSifTargets()` now also offers `sendSii: true` whenever
+`invoice.aeatsiiErrorRegistral` is truthy (`true` or the AD raw flag `'Y'`, read through the same
+`isSent()` helper used for `aeatsiiIssent`/`tbaiIssent`), independently of `aeatsiiIssent` — so the
+button reappears exactly when the invoice has a pending registry-error correction. On the backend,
+`SiiSendHandler` (`com.etendoerp.go`, `src/com/etendoerp/go/schemaforge/SiiSendHandler.java`) now
+checks `Invoice.isAeatsiiErrorRegistral()` before choosing which classic AEAT process to invoke:
+when `true`, it calls `org.openbravo.module.sii.process.CorrectDuplicateInvoiceError` directly (a
+plain class, not a `BaseActionHandler`, so it bypasses the generic
+`NeoProcessService.executeObuiappClass` OBUIAPP bridge, which requires one) instead of
+`MultiEnvioFactura`. This matters because `MultiEnvioFactura` always sends AEAT communication type
+`A0` ("alta" / new registration) and additionally skips any invoice already marked as sent to SII —
+a silent no-op for a corrected invoice — whereas `CorrectDuplicateInvoiceError` sends the correct
+correction envelope, communication type `A1`. Both `sifSending.js` and `SiiSendHandler.java` are
+shared between sales-invoice and purchase-invoice — see `purchase-invoice.md` for this window's
+mirror of the same fix.
+
 This runs `SalesInvoiceHeaderHandler` exactly as the UI does — including the `ProcessInvoiceHook`
 routing on completion — because `neo_action` executes the entity's `NeoHandler` hooks
 (ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same
