@@ -97,8 +97,11 @@ TIMESTAMP=$((NOW + SKEW))
 
 # The signed bytes must be byte-identical to the bytes curl sends, so the
 # payload is built once and reused verbatim.
-PAYLOAD="$(printf '{"id":"%s","object":"event","type":"%s","data":{"object":{"id":"cs_sim_%s","object":"checkout.session","metadata":{"request_id":"%s","account_email":"%s","client_name":"%s"}}}}' \
-  "$EVENT_ID" "$EVENT_TYPE" "$NOW" "$REQUEST_ID" "$EMAIL" "$CLIENT_NAME")"
+# `customer` and `subscription` are present on every real checkout.session.completed
+# in subscription mode, and the handler persists both. Included here so the offline
+# simulation exercises that capture rather than silently leaving the columns empty.
+PAYLOAD="$(printf '{"id":"%s","object":"event","type":"%s","data":{"object":{"id":"cs_sim_%s","object":"checkout.session","customer":"cus_sim_%s","subscription":"sub_sim_%s","metadata":{"request_id":"%s","account_email":"%s","client_name":"%s"}}}}' \
+  "$EVENT_ID" "$EVENT_TYPE" "$NOW" "$NOW" "$NOW" "$REQUEST_ID" "$EMAIL" "$CLIENT_NAME")"
 
 SIGNATURE="$(printf '%s.%s' "$TIMESTAMP" "$PAYLOAD" \
   | openssl dgst -sha256 -hmac "$SECRET" -r | cut -d' ' -f1)"

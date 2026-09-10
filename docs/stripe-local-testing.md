@@ -27,17 +27,42 @@ All of it is implemented on this branch:
 - Server-side Price ID and subscription/payment mode configuration.
 - Paid onboarding resume: the `requestId` is passed back as `paymentToken` on the onboarding call.
 
-### Payment state is in memory
+### Payment state is durable (ETP-5045)
 
-`CheckoutPaymentRegistry` keeps both the recorded payments and the processed-event ids in static
-`ConcurrentHashMap`s. **Any Tomcat restart wipes them.** Consequences to plan around:
+Checkout state lives in `ETGO_CHECKOUT_REQUEST`, one row per attempt, written before Stripe is
+contacted and advanced by each step that succeeds:
 
-- Restarting the backend after a payment loses the `paid` state; re-deliver the event.
-- The duplicate-event scenario must run without an intervening restart, or the second delivery is
-  treated as new.
-- `GET /checkout/sessions/{requestId}` answers `200 {"status":"pending"}` for *any* unknown id. It
-  deliberately never 404s and never reveals another account's payment, so the "another user's
-  status" scenario is verified by a non-disclosing `pending`, not by an error code.
+```sql
+select request_id, checkout_status, creating_at, created_at, paid_at,
+       provisioning_at, provisioned_at, created_client_id, failure_reason
+  from etgo_checkout_request order by created desc limit 5;
+```
+
+Expect `CREATING -> CREATED -> PAID -> PROVISIONING -> PROVISIONED`. The status only moves
+forward: a replayed webhook or a browser reload is silently ignored rather than rewinding it,
+and each phase timestamp is first-write-wins, so `paid_at` keeps meaning *when the payment was
+confirmed*.
+
+Consequences to plan around:
+
+- **A Tomcat restart no longer loses a payment.** Restart between the webhook and the poll and
+  the status endpoint still answers `paid`. That is the acceptance criterion of ETP-5045 and is
+  worth re-running whenever this path changes.
+- **A webhook only records a payment against a request row that already exists.** An invented
+  `requestId` is accepted with `200 {"received":true}` and recorded nowhere -- silently. Start
+  the flow with `POST /checkout/sessions` first (see the offline stub in section 4), or the
+  simulation looks like it worked and did nothing.
+- `GET /checkout/sessions/{requestId}` answers `200 {"status":"pending"}` for *any* unknown id,
+  and for a request belonging to another account. It deliberately never 404s and never reveals
+  another account's payment or client name, so the "another user's status" scenario is verified
+  by a non-disclosing `pending`, not by an error code.
+- A second onboarding call with an already-claimed `paymentToken` is refused with
+  `409 PROVISIONING_ALREADY_IN_PROGRESS`. That is the reload-during-provisioning guard; it also
+  means a spent token cannot create a second environment.
+- `DERIVED_STATUS` is a computed column, not a stored one -- read it through the DAL or inline
+  the expression from `AD_COLUMN.SQLLOGIC`. `SELECT derived_status` fails. It reports `DONE`,
+  `IN_FLIGHT`, `ABANDONED`, `EXPIRED` or `STALLED`; **`STALLED` on a `PAID` row is the one that
+  should page someone** -- charged, not provisioned.
 
 ## 2. Base URL and ports
 
@@ -129,6 +154,54 @@ make stripe-simulate
 That posts a correctly signed `checkout.session.completed`, then logs in and polls the status
 endpoint until it reports `paid`. It prints the `requestId`, which is exactly what the upgrade page
 sends back as `paymentToken` to resume provisioning.
+
+### Starting the flow without Stripe
+
+Since ETP-5045 the webhook only records a payment against a request row that already exists, and
+that row is written by `POST /checkout/sessions` -- which calls the provider. So a webhook alone
+is no longer enough to reach `paid` on a fresh id: it is accepted and recorded nowhere.
+
+`tools/stripe-session-stub.py` closes that gap. It answers the one endpoint the backend calls
+with a plausible Checkout Session, so the whole flow runs with no Stripe account, no test key
+and no network access:
+
+```bash
+tools/stripe-session-stub.py &          # listens on 127.0.0.1:8099
+```
+
+Point the deployed `WEB-INF/Openbravo.properties` at it and restart Tomcat -- all three keys are
+required, because `isConfigured()` demands the secret key, the price id and the webhook secret:
+
+```properties
+etendo.go.checkout.secret.key=sk_test_offline_stub
+etendo.go.checkout.price.id=price_offline_stub
+etendo.go.checkout.api.base.url=http://localhost:8099
+etendo.go.checkout.webhook.secret=whsec_local_simulation
+```
+
+Then drive the full lifecycle:
+
+```bash
+TOKEN=$(curl -s -X POST "$ETENDO_BASE_URL/sws/go/login" -H 'Content-Type: application/json' \
+  -d '{"email":"'"$ETENDO_TEST_EMAIL"'","password":"'"$ETENDO_TEST_PASSWORD"'"}' \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+
+RID=$(curl -s -X POST "$ETENDO_BASE_URL/sws/go/checkout/sessions" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -H 'Origin: http://localhost:3100' -d '{"clientName":"Offline Test Tenant"}' \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["requestId"])')
+
+ETENDO_SESSION_TOKEN=$TOKEN tools/stripe-webhook-simulate.sh \
+  --request-id "$RID" --client-name "Offline Test Tenant" --status
+```
+
+The `requestId` then goes to `POST /sws/go/onboarding` as `paymentToken`. Note the paid path only
+engages for an account that **already owns an environment** -- the first one is always free, so a
+brand-new account provisions without touching the checkout row at all.
+
+To assert the failure path instead, stop the stub and submit an upgrade: the call answers `502
+CHECKOUT_PROVIDER_ERROR` and the `CREATING` row deliberately survives, because it is the evidence
+that someone tried to buy something.
 
 The underlying script covers the rest of the matrix:
 
