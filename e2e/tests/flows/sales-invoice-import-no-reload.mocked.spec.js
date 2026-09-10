@@ -61,7 +61,7 @@ const SHIPMENT = {
 const SHIP_LINE = {
   id: SHIP_LINE_ID,
   product: 'prod-001',
-  'product$_identifier': 'Cerveza',
+  'product$_identifier': 'Test Product',
   movementQuantity: 2,
   salesOrderLine: null,
 };
@@ -146,7 +146,7 @@ test.describe('Sales Invoice — import from shipment no-reload', () => {
     await shipmentRow.click();
 
     // Wait for lines to load inside the modal
-    const lineRow = page.getByText(/Cerveza/i).first();
+    const lineRow = page.getByText(/Test Product/i).first();
     await expect(lineRow).toBeVisible({ timeout: 5_000 });
 
     // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
@@ -203,7 +203,7 @@ test.describe('Sales Invoice — import from shipment no-reload', () => {
 
     await expect(page.getByText(/SHIP-MOCK-001/i).first()).toBeVisible({ timeout: 5_000 });
     await page.getByText(/SHIP-MOCK-001/i).first().click();
-    await expect(page.getByText(/Cerveza/i).first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText(/Test Product/i).first()).toBeVisible({ timeout: 5_000 });
 
     // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
     await clickLastCheckbox(page);
@@ -229,7 +229,7 @@ const ORDER_LINE_ID = 'order-line-discount-001';
 const SHIP_LINE_WITH_ORDER = {
   id: 'ship-line-disc-001',
   product: 'prod-001',
-  'product$_identifier': 'Cerveza',
+  'product$_identifier': 'Test Product',
   movementQuantity: 2,
   salesOrderLine: ORDER_LINE_ID,
 };
@@ -321,7 +321,7 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
 
     await expect(page.getByText(/SHIP-MOCK-001/i).first()).toBeVisible({ timeout: 5_000 });
     await page.getByText(/SHIP-MOCK-001/i).first().click();
-    await expect(page.getByText(/Cerveza/i).first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText(/Test Product/i).first()).toBeVisible({ timeout: 5_000 });
 
     // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
     await clickLastCheckbox(page);

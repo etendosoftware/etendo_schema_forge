@@ -302,6 +302,8 @@ The Accounting tab maps to `M_Warehouse_Acct` and exposes exactly one visible fi
 
 Regenerated via `make regen ONLY=warehouse`; `sf-validate-pipeline --scope=warehouse` reports 0 violations. Regression test: `artifacts/__tests__/etp-4565-accounting-tab-restrictions.test.js`.
 
+**ETP-5116 — hidden for roles without the accounting capability.** `window.secondaryTabs.accounting.visibleWhenCapability: "showAccountingFields"` added in `decisions.json`. For a role where the `showAccountingFields` capability (`AD_Role.EM_ETGO_Show_Acct_Fields`) resolves `false`, the whole Accounting tab is omitted from the tab strip (not merely disabled) and its `openSecondaryTab` deep link silently no-ops. Full mechanism reference: `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)" and `docs/ui-customization.md` §17.
+
 **Auto-creation (requirement 3) is a separate, still-open gap, independent of this wiring fix:** of the 18 most-recently-created warehouses (at the time of the original ETP-4565 investigation), 0 had a `M_Warehouse_Acct` row (older, non-GO-created warehouses in the same DB do have one — `m_warehouse_acct` had 14 rows total, all pre-dating the current onboarding flow). Backend auto-creation of the accounting row is out of scope for this frontend-wiring pass and remains flagged as follow-up work.
 
 ## Known gaps

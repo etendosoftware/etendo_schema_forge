@@ -14,7 +14,7 @@
     "handler": "agingReportHandler"
   },
   "columns": [
-    { "field": "bPartner", "label": { "en_US": "Contacts", "es_ES": "Contactos" }, "type": "string", "width": "20%", "sortable": true },
+    { "field": "bPartner", "label": { "en_US": "Contact", "es_ES": "Contacto" }, "type": "string", "width": "20%", "sortable": true },
     { "field": "current", "label": { "en_US": "Current", "es_ES": "Actual" }, "type": "amount", "width": "10%", "sortable": true },
     { "field": "days30", "label": { "en_US": "1-30", "es_ES": "1-30" }, "type": "amount", "width": "9%", "sortable": true },
     { "field": "days60", "label": { "en_US": "31-60", "es_ES": "31-60" }, "type": "amount", "width": "9%", "sortable": true },
@@ -38,10 +38,10 @@
     { "name": "currentDate", "label": { "en_US": "As of Date", "es_ES": "Fecha hasta" }, "type": "date", "required": true, "section": "periodo" },
     { "name": "bPartnerId", "label": { "en_US": "Contact", "es_ES": "Contacto" }, "type": "search", "selector": "bpartner", "inputStyle": "popup", "section": "alcance" },
     { "name": "showDetails", "label": { "en_US": "Show Details", "es_ES": "Mostrar Detalles" }, "type": "toggle", "section": "alcance" },
-    { "name": "column1", "label": { "en_US": "Number Of Days Overdue: Group One", "es_ES": "Días Tramo 1" }, "type": "number", "section": "tramos" },
-    { "name": "column2", "label": { "en_US": "Number Of Days Overdue: Group Two", "es_ES": "Días Tramo 2" }, "type": "number", "section": "tramos" },
-    { "name": "column3", "label": { "en_US": "Number Of Days Overdue: Group Three", "es_ES": "Días Tramo 3" }, "type": "number", "section": "tramos" },
-    { "name": "column4", "label": { "en_US": "Number Of Days Overdue: Group Four", "es_ES": "Días Tramo 4" }, "type": "number", "section": "tramos" }
+    { "name": "column1", "label": { "en_US": "Number Of Days Overdue: Group One", "es_ES": "Días Tramo 1" }, "type": "number", "section": "tramos", "default": 30 },
+    { "name": "column2", "label": { "en_US": "Number Of Days Overdue: Group Two", "es_ES": "Días Tramo 2" }, "type": "number", "section": "tramos", "default": 60 },
+    { "name": "column3", "label": { "en_US": "Number Of Days Overdue: Group Three", "es_ES": "Días Tramo 3" }, "type": "number", "section": "tramos", "default": 90 },
+    { "name": "column4", "label": { "en_US": "Number Of Days Overdue: Group Four", "es_ES": "Días Tramo 4" }, "type": "number", "section": "tramos", "default": 120 }
   ],
   "defaultSort": { "field": "bPartner", "direction": "asc" },
   "outputs": ["pdf", "xlsx", "csv", "html"],

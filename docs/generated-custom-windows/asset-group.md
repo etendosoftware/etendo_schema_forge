@@ -147,13 +147,15 @@ The dictionary key for this window is `"Asset Group"` — the stable AD window n
 "Asset Group": { "label": "Asset Group" }                            // menus
 
 // es_ES.json → windows and menus
-"Asset Group": { "label": "Grupo de activos", "newLabel": "Nuevo grupo" }   // windows
-"Asset Group": { "label": "Grupo de activos" }                             // menus
+"Asset Group": { "label": "Categoría de activo", "newLabel": "Nueva categoría" }   // windows
+"Asset Group": { "label": "Categoría de activo" }                                  // menus
 ```
 
 Both `windows["Asset Group"]` and `menus["Asset Group"]` carry the key, and both must be kept in sync — `tools/app-shell/src/menu.json`'s own `asset-group` entry (`label`/`favname`) is a third, separate copy that must also stay aligned (ETP-4945 fixed a case where `menu.json` still said `"Asset Category"` while `windows`/`menus` said `"Asset Group"` with the wrong label text — three disagreeing sources for the same window name).
 
-The generated page uses `entityLabel="Asset Category"` (for the detail title, resolved via the `tabs["Asset Category"]` field-label key — see the `A_Asset_Group_ID` column label, a different concept from the window name) and `entityLabel="Asset Group"` (for the list breadcrumb, resolved via `tMenu('Asset Group')` against `windows`/`menus`).
+The breadcrumb and menu title both resolve via `useMenuLabel()`. That hook searches `menus` before `windows`, so the `menus["Asset Group"]` entry takes precedence over the `windows` entry for the title and breadcrumb.
+
+The generated page still passes `entityLabel="Asset Category"` for the detail title (looked up against `tabs["Asset Category"]`) and `entityLabel="Asset Group"` for the list breadcrumb (looked up against `windows`/`menus`) — these dictionary keys are the stable AD names and are not renamed. As of ETP-4986, however, both keys' `label` values were unified across locales, so the two no longer diverge in what the user sees: `tabs["Asset Category"].label`, `windows["Asset Group"].label` and `menus["Asset Group"].label` all resolve to the same string per locale ("Asset Group" / "Categoría de activo"). Before this fix they showed different, inconsistent text across three rounds of naming ("Categoría de activos" vs "Grupo de activos", then "Grupo de activo" in both, then "Categoría de Activo" — still not the reporter's final, confirmed term). The Assets window header field, grid column and filter label for the same grouping (AD field `A_Asset_Group_ID`) resolve through `fields["A_Asset_Group_ID"].label`, unified to the same "Categoría de activo" string.
 
 ## Non-obvious gotchas
 
@@ -208,7 +210,7 @@ node cli/src/push-to-neo.js asset-group
 
 ## Automated evidence
 
-- `tools/app-shell/src/menu.json` places **Asset Group** under the Finance menu (after Assets), using `"name": "asset-group"`.
+- `tools/app-shell/src/menu.json` places **Asset Group** under the Finance menu (after Assets), using `"name": "asset-group"`. The raw `label`/`favname` in `menu.json` still read `"Asset Category"` — that string is not shown directly, it is used as the `useMenuLabel()` lookup key, which resolves through `dictionary.tabs["Asset Category"].label` (updated by ETP-4986) to the unified displayed text.
 - `tools/app-shell/src/windows/registry.js` maps `'asset-group'` to the generated page at `@generated/asset-group/generated/web/asset-group/...`.
 - `artifacts/asset-group/generated/web/asset-group/AssetCategoryForm.jsx` defines the header form fields: `name`, `description` (`span: 2`, `rows: 1`), `depreciate` (checkbox), and the conditional depreciation-policy fields, each carrying a `displayLogic: (record) => ...` arrow function and `section: 'principal'`.
 - `artifacts/asset-group/generated/web/asset-group/AssetCategoryPage.jsx` renders `ListView` for the list route and `DetailView` with `secondaryTabs` (Accounting), `linesLayout="inlineEditable"`, `hidePrint`, `noHeaderBorder`, and `AttachmentsTab` in `customTabs`.
@@ -314,3 +316,7 @@ Verified in `artifacts/asset-group/contract.json` and the regenerated
 ## ETP-4565 — Accounting tab: non-deletable record
 
 **`entities.accounting.hideDelete: true`** added — the Accounting tab's row can no longer be deleted (`apiPrediction.crud.accounting.delete: false`); confirmed this gates the `SecondaryTableTab` delete affordance in `DetailView.jsx` the same way it does for `product`'s `secondaryTabs.accounting`. **Resolved (follow-up pass):** the Accounting tab is now capped at one record via `window.secondaryTabs.accounting.maxDetailLines: 1` — the same generic `secondaryTabs`-pattern capability added for `product`/`contacts` (see `product.md` for the full mechanism). Note this window's Accounting tab declares no `addLineFields` at all (unlike `product`'s), so there is no manual add trigger in the SPA today regardless — the cap is declared anyway for forward-compatibility (if `addLineFields` is ever added, the "registro único" requirement is already enforced) and for consistency with the sibling windows. Regenerated via `make regen ONLY=asset-group`; `sf-validate-pipeline --scope=asset-group` reports 0 violations. Regression tests: `artifacts/__tests__/etp-4565-accounting-tab-restrictions.test.js` (decisions.json assertion) and `tools/app-shell/src/components/contract-ui/__tests__/DetailView.secondaryTabsMaxLines.vitest.jsx` (behavioral, shared across the family).
+
+## ETP-5116 — Accounting tab hidden for roles without the accounting capability
+
+`window.secondaryTabs.accounting.visibleWhenCapability: "showAccountingFields"` added in `decisions.json`. For a role where the `showAccountingFields` capability (`AD_Role.EM_ETGO_Show_Acct_Fields`) resolves `false`, the whole Accounting tab is omitted from the tab strip (not merely disabled) and its `openSecondaryTab` deep link silently no-ops. Full mechanism reference: `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)" and `docs/ui-customization.md` §17.

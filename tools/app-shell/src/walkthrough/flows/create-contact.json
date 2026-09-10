@@ -1,0 +1,178 @@
+{
+  "id": "create-contact",
+  "schemaVersion": 1,
+  "revision": 1,
+  "titleKey": "walkthroughContactTitle",
+  "descriptionKey": "walkthroughContactDescription",
+  "icon": "UserPlus",
+  "navPathSpeedMs": 3000,
+  "steps": [
+    {
+      "id": "open-new",
+      "route": "/contacts",
+      "navTimeoutMs": 15000,
+      "navPath": [
+        {
+          "targetTestId": "sidebar-expand",
+          "optional": true,
+          "timeoutMs": 800
+        },
+        {
+          "targetTestId": "menu-item-contacts"
+        }
+      ],
+      "targetTestId": "action-new",
+      "titleKey": "walkthroughContactStepNewTitle",
+      "bodyKey": "walkthroughContactStepNewBody",
+      "placement": "bottom",
+      "advance": {
+        "on": "targetClick"
+      }
+    },
+    {
+      "id": "contact-type",
+      "targetTestId": "contact-type-toggle",
+      "titleKey": "walkthroughContactStepTypeTitle",
+      "bodyKey": "walkthroughContactStepTypeBody",
+      "placement": "bottom",
+      "advance": {
+        "on": "manual"
+      }
+    },
+    {
+      "id": "legal-name",
+      "targetTestId": "field-name",
+      "titleKey": "walkthroughContactStepLegalNameTitle",
+      "bodyKey": "walkthroughContactStepLegalNameBody",
+      "placement": "right",
+      "advance": {
+        "on": "targetValue"
+      },
+      "optional": true
+    },
+    {
+      "id": "first-name",
+      "targetTestId": "field-etgoFirstname",
+      "optional": true,
+      "titleKey": "walkthroughContactStepFirstNameTitle",
+      "bodyKey": "walkthroughContactStepFirstNameBody",
+      "placement": "right",
+      "advance": {
+        "on": "targetValue"
+      }
+    },
+    {
+      "id": "last-name",
+      "targetTestId": "field-etgoLastname",
+      "optional": true,
+      "titleKey": "walkthroughContactStepLastNameTitle",
+      "bodyKey": "walkthroughContactStepLastNameBody",
+      "placement": "right",
+      "advance": {
+        "on": "targetValue"
+      }
+    },
+    {
+      "id": "category",
+      "targetTestId": "field-businessPartnerCategory",
+      "titleKey": "walkthroughContactStepCategoryTitle",
+      "bodyKey": "walkthroughContactStepCategoryBody",
+      "placement": "right",
+      "advance": {
+        "on": "manual",
+        "requireValue": true
+      }
+    },
+    {
+      "id": "tax-id",
+      "targetTestId": "field-oBTIKTaxIDKey",
+      "titleKey": "walkthroughContactStepTaxIdTitle",
+      "bodyKey": "walkthroughContactStepTaxIdBody",
+      "placement": "right",
+      "advance": {
+        "on": "manual"
+      }
+    },
+    {
+      "id": "email",
+      "targetTestId": "field-etgoEmail",
+      "titleKey": "walkthroughContactStepEmailTitle",
+      "bodyKey": "walkthroughContactStepEmailBody",
+      "placement": "right",
+      "advance": {
+        "on": "manual"
+      }
+    },
+    {
+      "id": "save",
+      "targetTestId": "action-save",
+      "titleKey": "walkthroughContactStepSaveTitle",
+      "bodyKey": "walkthroughContactStepSaveBody",
+      "placement": "bottom",
+      "advance": {
+        "on": "targetClick"
+      }
+    },
+    {
+      "id": "address-tab",
+      "targetTestId": "tab-locationAddress",
+      "titleKey": "walkthroughContactStepAddressTabTitle",
+      "bodyKey": "walkthroughContactStepAddressTabBody",
+      "placement": "bottom",
+      "advance": {
+        "on": "targetClick"
+      }
+    },
+    {
+      "id": "address-add",
+      "target": "[data-testid=\"secondary-tab-empty-state-add\"], [data-testid=\"secondary-add-line-locationAddress\"]",
+      "titleKey": "walkthroughContactStepAddressAddTitle",
+      "bodyKey": "walkthroughContactStepAddressAddBody",
+      "placement": "top",
+      "advance": {
+        "on": "targetClick"
+      }
+    },
+    {
+      "id": "address-street",
+      "targetTestId": "location-field-address",
+      "titleKey": "walkthroughContactStepAddressStreetTitle",
+      "bodyKey": "walkthroughContactStepAddressStreetBody",
+      "placement": "right",
+      "advance": {
+        "on": "targetValue"
+      }
+    },
+    {
+      "id": "address-city",
+      "targetTestId": "location-field-city",
+      "titleKey": "walkthroughContactStepAddressCityTitle",
+      "bodyKey": "walkthroughContactStepAddressCityBody",
+      "placement": "right",
+      "advance": {
+        "on": "targetValue"
+      }
+    },
+    {
+      "id": "address-country",
+      "targetTestId": "location-field-country",
+      "titleKey": "walkthroughContactStepAddressCountryTitle",
+      "bodyKey": "walkthroughContactStepAddressCountryBody",
+      "placement": "right",
+      "advance": {
+        "on": "manual",
+        "requireValue": true
+      }
+    },
+    {
+      "id": "address-save",
+      "targetTestId": "location-save",
+      "titleKey": "walkthroughContactStepAddressSaveTitle",
+      "bodyKey": "walkthroughContactStepAddressSaveBody",
+      "placement": "right",
+      "advance": {
+        "on": "targetClick"
+      }
+    }
+  ]
+}

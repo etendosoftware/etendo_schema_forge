@@ -176,10 +176,22 @@ describe('DetailView — "more actions" button gating (ETP-4097)', () => {
       );
     });
 
-    it('computes visibleActions by filtering out visible === false entries', () => {
+    it('normalizes resolvedActions to an array before the read-only branch', () => {
+      // ETP-5116 (Sonar S3358): the array-normalization ternary was extracted out
+      // of visibleActions' own ternary to avoid nesting — it must still run, and
+      // still fall back to [] for a non-array resolvedActions.
       assert.match(
         iife,
-        /const\s+visibleActions\s*=\s*\(Array\.isArray\(resolvedActions\)\s*\?\s*resolvedActions\s*:\s*\[\]\)\s*\.filter\(a\s*=>\s*a\.visible\s*!==\s*false\)/,
+        /const\s+normalizedActions\s*=\s*Array\.isArray\(resolvedActions\)\s*\?\s*resolvedActions\s*:\s*\[\]/,
+      );
+    });
+
+    it('computes visibleActions by filtering out visible === false entries (non-read-only branch)', () => {
+      // ETP-5116 wraps the normalized list in a `windowReadOnly ? [] : ...`
+      // ternary — the filter itself must still run, verbatim, on the else branch.
+      assert.match(
+        iife,
+        /const\s+visibleActions\s*=\s*windowReadOnly\s*\?\s*\[\]\s*:\s*normalizedActions\s*\.filter\(a\s*=>\s*a\.visible\s*!==\s*false\)/,
       );
     });
 
@@ -215,6 +227,48 @@ describe('DetailView — "more actions" button gating (ETP-4097)', () => {
       assert.match(menuSrc, /\{showMoreMenu\s*&&\s*\(/);
       const openStateIdx = menuSrc.indexOf('{showMoreMenu && (', buttonIdx);
       assert.ok(openStateIdx > buttonIdx, 'showMoreMenu dropdown must render after the button');
+    });
+  });
+
+  describe('source structure — read-only window gate (ETP-5116)', () => {
+    // A read-only window access role must not expose ANY write action through the
+    // kebab menu. The fix wraps both derived values (visibleActions,
+    // hasCustomContent) so the existing empty-state guard collapses the WHOLE
+    // button, not just its item list.
+    const buttonIdx = menuSrc.indexOf('data-testid="action-more"');
+    const moreBlock = menuSrc.slice(0, buttonIdx);
+    const commentIdx = moreBlock.lastIndexOf('More actions');
+    const iife = menuSrc.slice(commentIdx, buttonIdx);
+
+    it('destructures windowReadOnly as a prop of DetailMoreActionsMenu', () => {
+      const propsBlockIdx = menuSrc.indexOf('export function DetailMoreActionsMenu({');
+      const propsBlockEnd = menuSrc.indexOf('})', propsBlockIdx);
+      const propsBlock = menuSrc.slice(propsBlockIdx, propsBlockEnd);
+      assert.match(propsBlock, /\bwindowReadOnly\b/);
+    });
+
+    it('visibleActions is unconditionally [] when windowReadOnly is true', () => {
+      assert.match(
+        iife,
+        /const\s+visibleActions\s*=\s*windowReadOnly\s*\?\s*\[\]\s*:/,
+      );
+    });
+
+    it('hasCustomContent is unconditionally false when windowReadOnly is true', () => {
+      assert.match(
+        iife,
+        /const\s+hasCustomContent\s*=\s*!windowReadOnly\s*&&\s*customMenuContent\s*&&\s*customMenuHasContent\s*!==\s*false/,
+      );
+    });
+
+    it('the empty-state return-null guard (unchanged) still runs before the button under windowReadOnly', () => {
+      // Same invariant as the ETP-4097 guard above, re-asserted here because it is
+      // the mechanism that makes windowReadOnly collapse the WHOLE button (not
+      // just the dropdown items): visibleActions === [] && hasCustomContent ===
+      // false both hold under windowReadOnly, so this pre-existing guard fires.
+      const guardIdx = menuSrc.indexOf('if (visibleActions.length === 0 && !hasCustomContent) return null;');
+      assert.ok(guardIdx !== -1, 'empty-state guard must exist');
+      assert.ok(guardIdx < buttonIdx, 'guard must run before the action-more button render');
     });
   });
 });

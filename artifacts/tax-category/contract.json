@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.6.0",
   "generatedAt": "2026-06-26T17:01:05.650Z",
-  "updatedAt": "2026-07-21T12:35:24.346Z",
-  "checksum": "fe68572d8a6ad233",
+  "updatedAt": "2026-09-08T11:40:48.141Z",
+  "checksum": "f27c7fe59acde6e4",
   "frontendContract": {
     "window": {
       "id": "138",
@@ -14,7 +14,9 @@
       "hideMoreMenu": true,
       "hideDelete": true,
       "hideDeleteButton": true,
+      "breadcrumb": "Finance / Tax Category",
       "detailEntity": null,
+      "noHeaderBorder": true,
       "layoutType": "default"
     },
     "entities": {
@@ -55,7 +57,7 @@
             "grid": false,
             "form": true,
             "section": "principal",
-            "seq": 2,
+            "seq": 5,
             "validation": {
               "maxLength": 255
             }
@@ -73,31 +75,7 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 3,
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            }
-          },
-          {
-            "name": "asbom",
-            "apiKey": "asbom",
-            "column": "Asbom",
-            "label": "As per BOM",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "defaultValue": "N",
-            "section": "principal",
-            "seq": 4,
+            "seq": 6,
             "validation": {
               "required": true,
               "maxLength": 1
@@ -145,7 +123,7 @@
               }
             ],
             "section": "principal",
-            "seq": 5,
+            "seq": 2,
             "validation": {
               "maxLength": 60
             }
@@ -185,7 +163,7 @@
               }
             ],
             "section": "principal",
-            "seq": 6,
+            "seq": 3,
             "validation": {
               "maxLength": 60
             }
@@ -267,7 +245,7 @@
               }
             ],
             "section": "principal",
-            "seq": 7,
+            "seq": 4,
             "validation": {
               "maxLength": 60
             }
@@ -290,7 +268,7 @@
             },
             "defaultValue": "Y",
             "section": "principal",
-            "seq": 8,
+            "seq": 7,
             "validation": {
               "required": true,
               "maxLength": 1
@@ -301,13 +279,6 @@
           "name"
         ],
         "computedFields": [
-          {
-            "name": "asbom",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            }
-          },
           {
             "name": "aeatsiiDeclarable",
             "derivation": {
@@ -330,7 +301,9 @@
       "hideMoreMenu": true,
       "hideDelete": true,
       "hideDeleteButton": true,
-      "detailEntity": null
+      "breadcrumb": "Finance / Tax Category",
+      "detailEntity": null,
+      "noHeaderBorder": true
     },
     "entities": {
       "taxCategory": {
@@ -375,7 +348,7 @@
             "apiKey": "asbom",
             "column": "Asbom",
             "type": "boolean",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": true
           },
           {
@@ -560,28 +533,12 @@
         "description": "Default value for 'aeatsiiDeclarable' in taxCategory should be a string"
       },
       {
-        "id": "t-default-value-type-taxCategory-asbom",
-        "category": "default-value-type",
-        "entity": "taxCategory",
-        "field": "asbom",
-        "runner": "node",
-        "description": "Default value for 'asbom' in taxCategory should be a string"
-      },
-      {
         "id": "t-field-presence-taxCategory-aeatsiiDeclarable",
         "category": "field-presence",
         "entity": "taxCategory",
         "field": "aeatsiiDeclarable",
         "runner": "node",
         "description": "Field 'aeatsiiDeclarable' should be present in taxCategory"
-      },
-      {
-        "id": "t-field-presence-taxCategory-asbom",
-        "category": "field-presence",
-        "entity": "taxCategory",
-        "field": "asbom",
-        "runner": "node",
-        "description": "Field 'asbom' should be present in taxCategory"
       },
       {
         "id": "t-field-presence-taxCategory-default",
@@ -638,14 +595,6 @@
         "field": "aeatsiiDeclarable",
         "runner": "node",
         "description": "Field 'aeatsiiDeclarable' should have type 'boolean' in taxCategory"
-      },
-      {
-        "id": "t-field-type-taxCategory-asbom",
-        "category": "field-type",
-        "entity": "taxCategory",
-        "field": "asbom",
-        "runner": "node",
-        "description": "Field 'asbom' should have type 'boolean' in taxCategory"
       },
       {
         "id": "t-field-type-taxCategory-default",
@@ -719,6 +668,14 @@
         "description": "System field 'active' should exist in backend but not frontend for taxCategory"
       },
       {
+        "id": "t-system-field-taxCategory-asbom",
+        "category": "system-field",
+        "entity": "taxCategory",
+        "field": "asbom",
+        "runner": "node",
+        "description": "System field 'asbom' should exist in backend but not frontend for taxCategory"
+      },
+      {
         "id": "t-system-field-taxCategory-client",
         "category": "system-field",
         "entity": "taxCategory",
@@ -783,19 +740,19 @@
       }
     ],
     "summary": {
-      "total": 30,
+      "total": 28,
       "byCategory": {
         "crud-flags": 1,
-        "default-value-type": 2,
-        "field-presence": 8,
-        "field-type": 8,
+        "default-value-type": 1,
+        "field-presence": 7,
+        "field-type": 7,
         "rule-declared": 1,
         "searchable-filters": 1,
-        "system-field": 8,
+        "system-field": 9,
         "visibility": 1
       },
       "byRunner": {
-        "node": 30,
+        "node": 28,
         "junit": 0
       }
     }

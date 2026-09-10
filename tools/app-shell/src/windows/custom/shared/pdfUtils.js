@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { buildLocationAddressLines } from '@/lib/locationAddress.js';
-import { isAttachmentStale } from '@/lib/attachmentFreshness.js';
+import {
+  isAttachmentStale,
+  isCachedRenderingStale,
+  RENDERER_BUILD_EPOCH_MS,
+} from '@/lib/attachmentFreshness.js';
 import { fetchMainAttachment, fetchAttachmentBlob } from '@/components/copilot/ocr/listAttachments';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
@@ -309,18 +313,34 @@ export const MOVEMENT_TEMPLATE_FOOTER = `
 // Generic PDF hook — shared by all per-window pdf hooks
 // ---------------------------------------------------------------------------
 /**
+ * Which of the two causes made the cached rendering stale, for the `[pdf]` console
+ * line. Diagnosing a stale document from the console instead of by reading code is a
+ * documented requirement (`docs/document-printables.md`, criterion 5), and the two
+ * causes read very differently in practice: an edit invalidating one document is
+ * routine, whereas a whole deploy's worth of bundle-invalidations is expected exactly
+ * once per document — and neither should be mistaken for a cache that never converges.
+ */
+function staleReason(attachment, recordUpdated) {
+  const writtenAt = attachment.updatedAt || attachment.uploadedAt;
+  if (isAttachmentStale(attachment, recordUpdated)) {
+    return `written ${writtenAt}, record updated ${recordUpdated}`;
+  }
+  return `written ${writtenAt}, before this bundle built at ${new Date(RENDERER_BUILD_EPOCH_MS).toISOString()}`;
+}
+
+/**
  * The cached rendering of this record, or null when there is none or it no longer
- * matches the record (ETP-4787 — see `lib/attachmentFreshness.js`). Returning null on
- * staleness is all the invalidation the read side needs: the caller's next step is
- * already "render fresh".
+ * matches the record (ETP-4787) or the renderer that produced it (ETP-5125) — see
+ * `lib/attachmentFreshness.js`. Returning null on staleness is all the invalidation the
+ * read side needs: the caller's next step is already "render fresh".
  */
 async function fetchCachedBlob({ token, tableName, recordId, apiBaseUrl, recordUpdated, isCancelled }) {
   const main = await fetchMainAttachment({ token, tableName, recordId, apiBaseUrl });
   if (isCancelled() || !main?.id) return null;
-  if (isAttachmentStale(main, recordUpdated)) {
+  if (isCachedRenderingStale(main, recordUpdated)) {
     console.info(
       `[pdf] ${tableName}/${recordId}: cached attachment is stale `
-      + `(written ${main.updatedAt || main.uploadedAt}, record updated ${recordUpdated}) — re-rendering`,
+      + `(${staleReason(main, recordUpdated)}) — re-rendering`,
     );
     return null;
   }

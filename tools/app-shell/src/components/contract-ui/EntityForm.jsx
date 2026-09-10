@@ -105,6 +105,10 @@ function PopupSearchInput({ field, value, displayValue, onChange, label, selecto
         type="button"
         onClick={() => setOpen(true)}
         data-testid={`field-${field.key}`}
+        // See LookupField in DataTable.jsx: while empty this button renders its
+        // placeholder as its only text, so it must say so explicitly rather
+        // than let a reader mistake the placeholder for a value.
+        {...(displayText ? {} : { 'data-placeholder': '' })}
         className={`w-full ${FIELD_HEIGHT} text-sm rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-left flex items-center gap-2 shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
       >
         <Search

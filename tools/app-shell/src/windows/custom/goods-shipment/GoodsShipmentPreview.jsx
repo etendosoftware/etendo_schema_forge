@@ -70,6 +70,9 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
 
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendModalClosing, setSendModalClosing] = useState(false);
+  // ETP-5069 — see OrderPreview.jsx: bumped on a successful send so the
+  // email-history card refetches instead of showing its pre-send state.
+  const [emailsRefreshSignal, setEmailsRefreshSignal] = useState(0);
   const openEmailModal = useCallback(() => setShowSendModal(true), []);
   const closeEmailModal = useCallback(() => {
     setSendModalClosing(true);
@@ -211,7 +214,12 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
             movementDate={movementDate}
             ui={ui}
             data-testid="ShipmentStatsPanel__5d626b" />
-          <EmailsCard onSend={isSendable ? openEmailModal : undefined} data-testid="EmailsCard__5d626b" />
+          <EmailsCard
+            onSend={isSendable ? openEmailModal : undefined}
+            documentId={shipment.id}
+            apiBaseUrl={apiBaseUrl}
+            refreshSignal={emailsRefreshSignal}
+            data-testid="EmailsCard__5d626b" />
           <RelatedDocumentsCard
             documentId={shipment.id}
             token={token}
@@ -252,6 +260,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
           pdfBlobLoading={pdfLoading}
           isClosing={sendModalClosing}
           onClose={closeEmailModal}
+          onSent={() => setEmailsRefreshSignal(n => n + 1)}
           data-testid="SendDocumentModal__5d626b" />
       )}
     </>

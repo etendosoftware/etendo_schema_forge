@@ -713,6 +713,31 @@ describe('ListModalWindow — accounting-dimension gating (ETP-4950)', () => {
     expect(screen.getByTestId('list-modal-section-dimensions')).toBeInTheDocument();
   });
 
+  it('keeps the product field when product is the active dimension', async () => {
+    // The QA finding: with only `product` active, the product field must survive the gate.
+    // `M_Product_ID` is the product dimension, so the answer `['product']` keeps it — the very
+    // same answer that drops `project` in the first test of this suite.
+    mockFetch(() => ({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: { dimensions: ['product'] } } }),
+    }));
+    renderWindow({
+      fields: [
+        { key: 'name', column: 'Name', type: 'text', required: true, section: 'general' },
+        { key: 'product', column: 'M_Product_ID', type: 'selector', section: 'dimensions' },
+      ],
+      sections: DIMENSION_SECTIONS,
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('list-modal-new'));
+    });
+
+    await waitFor(() => expect(dimensionRequestCount()).toBe(1));
+    expect(screen.getByTestId('form-field-product')).toBeInTheDocument();
+    expect(screen.getByTestId('list-modal-section-dimensions')).toBeInTheDocument();
+  });
+
   it('fails open: keeps the dimension field when the dimensions request is not ok', async () => {
     mockFetch(() => ({ ok: false, status: 500, json: () => Promise.resolve({}) }));
     renderWindow({ fields: DIMENSION_FIELDS, sections: DIMENSION_SECTIONS });
@@ -758,7 +783,7 @@ describe('ListModalWindow — accounting-dimension gating (ETP-4950)', () => {
     expect(screen.getByTestId('form-field-name')).toBeInTheDocument();
   });
 
-  it('does not treat the contact column as a gated dimension', async () => {
+  it('does not request the active dimensions for a contact-only form', async () => {
     mockFetch(() => ({
       ok: true,
       json: () => Promise.resolve({ response: { data: { dimensions: [] } } }),
@@ -775,7 +800,9 @@ describe('ListModalWindow — accounting-dimension gating (ETP-4950)', () => {
       fireEvent.click(screen.getByTestId('list-modal-new'));
     });
 
-    // No dimension column at all → no request, and the contact stays visible.
+    // The contact IS a gated dimension, but it never triggers the fetch on its own: dozens of
+    // windows carry `C_BPartner_ID` without implementing `?action=activeDimensions`. No request
+    // means `activeDimensions` stays unknown, so gating fails open and the contact stays visible.
     expect(dimensionRequestCount()).toBe(0);
     expect(screen.getByTestId('form-field-bpartner')).toBeInTheDocument();
   });

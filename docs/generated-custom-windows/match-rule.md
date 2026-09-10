@@ -46,7 +46,7 @@ Because `match-rule`'s contract carries a real `window.id`, `generate-frontend.j
 ## Reactive behavior and dependencies
 
 - **Priority auto-seed**: opening the create modal pre-fills `priority` with `max(priority) + 10` computed in the **frontend** from the loaded list (`templateConfig.autoPriorityField`/`autoPriorityStep`). There is no backend defaults endpoint for it.
-- **Scope = financial account**: `financialAccount` ("Afecta a") scopes a rule to one account, or to all accounts when left empty. Priority uniqueness is enforced **within that scope**.
+- **Scope = tenant first, then financial account**: a rule always belongs to the client and organization it was created in, and is only ever evaluated for that tenant. Within it, `financialAccount` ("Afecta a") narrows the rule to one account, or leaves it applying to **all accounts of that tenant** when empty — "Todas las cuentas" never means all accounts in the instance. Priority uniqueness is enforced **within that scope**.
 - **FK selectors** (accounting account, financial account, business partner, transaction type, and the dimensions — project, cost center, 1st/2nd dimension, product) load from the generic `/sws/neo/match-rule/etgoMatchRuleHeader/selectors/<field>` endpoints that the W contract emits — no mock catalog.
 - **Transaction type (user-definable lookup)**: `transactionType` is a FK to `ETGO_Transaction_Type` (formerly a fixed `B`/`T`/`H` AD list). The selector is opt-in inline-creatable (`decisions.json`: `searchSelect`, `allowCreate`, `createSpec: "transaction-type"`, `createEntity: "transactionType"`). Creating one POSTs `{ name }` to the standalone W spec `transaction-type` (an AD window with **no menu**, exposed only for selector + create). Its `TransactionTypeHandler` pre-hook (`@Named("transaction-type")`) validates the name and derives the `Value` (search key) as an uppercase, accent-stripped slug, rejecting duplicates — HTTP 409.
 - **Validation** runs server-side in the `MatchRuleHandler` pre-hook before the generic CRUD persists:
@@ -72,7 +72,8 @@ delete DELETE /sws/neo/match-rule/etgoMatchRuleHeader/{id}
 
 The rules maintained here are now **consumed by the bank-reconciliation automatch engine** (`MatchRuleEngine` + `AutoMatchSupport`, invoked from `ReconciliationHandler`, `@Named("bankReconciliation")`):
 
-- Active rules for the account (specific or account-less = all), ordered by ascending `priority`, are evaluated against each pending statement line the standard Etendo algorithm could not match (invoice-backed lines are skipped). `textCondition` (`C`/`S`/`R`) is tested against the line's description + reference + partner name, reusing the same 200 ms regex guard as the validation hook.
+- Active rules **of the current tenant** for the account (specific or account-less = all of that tenant's accounts), ordered by ascending `priority`, are evaluated against each pending statement line the standard Etendo algorithm could not match (invoice-backed lines are skipped). `textCondition` (`C`/`S`/`R`) is tested against the line's description + reference + partner name, reusing the same 200 ms regex guard as the validation hook.
+- **Tenant isolation (ETP-4950 QA round).** `MatchRuleEngine.loadRules` reads through the DAL (`OBCriteria` over the `ETGO_Match_Rule` entity), which adds the readable-client / readable-organization predicates by itself. It used to be hand-written JDBC whose `WHERE` filtered on `isactive` and the account but **not** on `ad_client_id`, so an account-less rule of ANY tenant was loaded for EVERY account of EVERY tenant: Automatch matched lines against rules the user could not even see, since the list in this window goes through the DAL-backed generic CRUD and was correctly isolated all along. The DAL filter also survives the `setAdminMode(true)` this whole path runs in — admin mode only skips the entity-access check, not those predicates.
 - The first (lowest-priority) match wins; the rest rank as alternatives. A match can create a payment (G/L-item based) when the line has no counterpart, and on apply it **increments the rule's `matchCount`** — surfaced read-only as the "Conciliaciones" column here.
 - This window remains catalog-only (create / list / prioritize / toggle / delete); the matching itself runs in the reconciliation surface (see `docs/generated-custom-windows/financial-account.md` → "Automatch engine (T7)").
 
@@ -106,13 +107,20 @@ gap, decided out of scope for ETP-4950.
 **Gating.** A dimension switched off in the Esquema Contable disappears from the rule form *and* is
 never assigned to the generated movement:
 
-- Backend source of truth: `AccountingDimensionsSupport.activeHeaderDimensions*`, which resolves the
-  header-level set for document base type `FAT` — the same set the New Movement wizard renders
-  (`financial-account.md` → "Dimensiones contables"), which is correct because the movement Automatch
-  generates *is* a `FAT` document. It picks between the two configuration sources depending on
-  `AD_Client.Acctdim_Centrally_Maintained` (`C_AcctSchema_Element` when `'N'`, Core's
-  `DimensionDisplayUtility.getAccountingDimensionConfiguration` when `'Y'`), because reading
-  `C_AcctSchema_Element` directly is a no-op for centrally-maintained tenants — gap K1 / ETP-4854.
+- Backend source of truth: `AccountingDimensionsSupport.flatActiveDimensionsFor*`, i.e. the
+  **chart of accounts** (`C_AcctSchema_Element.IsActive`) — exactly what the "Esquema contable →
+  Dimensiones" screen writes (`GeneralLedgerConfigurationHandler` toggles that column and nothing
+  else), and therefore the only dimension configuration a user of Etendo GO can actually change. The
+  New Movement wizard and the propagation to the generated movement read the same set, so the three
+  surfaces always agree.
+- **Why not the `FAT` header set (ETP-4950 QA round).** Until QA returned the task this gated on
+  `activeHeaderDimensions*`, on the reasoning that the movement Automatch generates *is* a `FAT`
+  document. That set is the chart of accounts **minus** `AD_Client_AcctDimension.Show_In_Header='N'`,
+  and the shipped reference data marks Product hidden for `FAT` — so **Producto could never appear,
+  on any tenant provisioned from the published dataset, no matter what the user toggled**. Worse,
+  Etendo GO ships no screen for `AD_Client_AcctDimension`, so that row was unreachable. Project and
+  cost centre only "worked" by accident (no such row exists for them). The header helpers are now
+  `@Deprecated` and have no production consumer; gap K1 / ETP-4854 no longer applies here.
 - Read endpoint: `GET /sws/neo/match-rule/etgoMatchRuleHeader?action=activeDimensions` →
   `{ "response": { "data": { "dimensions": ["project", "costcenter", "product", ...] } } }`, served by
   `MatchRuleHandler.buildActiveDimensions()`. No AD registration needed — same `?action=` pattern as
@@ -122,6 +130,14 @@ never assigned to the generated movement:
   `hooks/useActiveAccountingDimensions.js`, and a section left with no visible field is dropped
   together with its heading. No `decisions.json` change, no `make regen`, no generator change — the
   generated `fields` array already carries `column`.
+- **Contacto is gated like the other three** (ETP-4950 QA round). On a rule the contact is an
+  *assignment* carried onto the generated movement, not a matching criterion — the engine only ever
+  matches on `textPattern` — so the Accounting Schema toggle governs it. It was previously ungated and
+  stayed visible even when switched off. Scope of that gate is the rule form only: on a
+  `FIN_FinaccTransaction` the contact is a first-class field and the New Movement wizard keeps it
+  visible regardless. Note `C_BPartner_ID` deliberately does **not** trigger the `activeDimensions`
+  request (`FETCH_TRIGGER_COLUMNS` in `lib/accountingDimensions.js`): it appears on dozens of windows
+  that do not implement that action, and letting it trigger the fetch would 404 on all of them.
 - Write path: `MatchRuleHandler.stripInactiveDimensions` removes an inactive dimension from the
   request body instead of rejecting it with a 400 — the clone and edit flows pre-fill from a stored
   row that may still hold a now-inactive value, and a hard error there would be a false alarm.
@@ -187,6 +203,8 @@ with one.
 5. Toggle a rule's Active switch in the grid and confirm it persists after refresh (PATCH, no modal). Creating a rule with the modal "Activa" check on must persist as active.
 6. Edit a rule by clicking its row, change a dimension under "Dimensiones" (e.g. Product), save, and confirm the change persists.
 6b. Deactivate the Proyecto dimension in the Esquema Contable (General Ledger Configuration → Dimensiones) and reload `/match-rule`: the Proyecto selector must be gone from both the create and the edit modal, while Producto and Centro de coste stay. Deactivate all three and the whole "Dimensiones" section (heading included) must disappear.
+6c. The symmetric case, which is what QA returned the task for: with **Producto ACTIVE** in the Esquema Contable, the Producto selector must be **present** — on a freshly provisioned tenant, not only on the hand-tuned `GOClient`. Do the same with Contacto in both directions (off → the field disappears; on → it comes back).
+6d. **Multi-tenant**: create an account-less rule ("Todas las cuentas") in client A, then log in as client B and open its bank reconciliation. A statement line matching that rule's pattern must stay `pending` — never `byRule` — and Automatch must not propose it. Repeat between two sibling organizations of the same client. A rule created on the `*` organization must still apply to every organization of its own client.
 7. Hover a row and click the **clone** (Copy) action: the create modal opens pre-filled with the source rule's values (same priority included); save creates an independent copy.
 8. Tick two rules with the row checkboxes, confirm the floating "2 Seleccionados" pill appears, press the trash and confirm: both rules disappear and the list reloads. Then tick one rule and type something in the search that excludes it — the pill must vanish (the selection is pruned, not silently kept).
 9. With a role whose `AD_Window_Access` for this window is read-only, open `/match-rule` and confirm the grid renders but "Nueva regla", the row pencil / clone / trash, the checkbox column and the *Activa* toggle are all gone or disabled.
@@ -205,6 +223,11 @@ with one.
 - `cli/test/generate-frontend-list-modal.test.js` + `cli/test/generate-contract-list-modal.test.js` — generator regression tests.
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/MatchRuleHandler.java` — the validation pre-hook,
   the `?action=activeDimensions` read endpoint and `stripInactiveDimensions` (ETP-4950).
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/MatchRuleEngine.java` + `src-test/.../MatchRuleEngineTest.java`
+  — the DAL-backed, tenant-scoped rule load (ETP-4950 QA round).
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/TenantOwnership.java` + `src-test/.../TenantOwnershipTest.java`
+  — the ownership guard for request-supplied ids. Its tests are the only place the isolating behaviour is
+  actually exercised: every other unit test runs with no `OBContext` on the thread, where the guard fails open.
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/AccountingDimensionsSupport.java` — the single
   source of truth for active accounting dimensions, shared with `FinancialAccountTransactionsHandler`.
 - `tools/app-shell/src/lib/accountingDimensions.js` + `tools/app-shell/src/hooks/useActiveAccountingDimensions.js`

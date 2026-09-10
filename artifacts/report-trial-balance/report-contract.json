@@ -21,7 +21,7 @@
   "sections": [
     { "id": "periodo", "label": { "en_US": "Period", "es_ES": "Periodo" } },
     { "id": "alcance", "label": { "en_US": "Scope", "es_ES": "Alcance" } },
-    { "id": "dimensiones", "label": { "en_US": "Dimensions", "es_ES": "Dimensiones" } },
+    { "id": "dimensiones", "label": { "en_US": "Dimensions", "es_ES": "Dimensiones" }, "visibleIf": { "param": "accountLevel", "equals": "S" } },
     { "id": "agrupacion", "label": { "en_US": "Grouping", "es_ES": "Agrupación" } },
     { "id": "opciones", "label": { "en_US": "Options", "es_ES": "Opciones" } }
   ],
@@ -43,7 +43,7 @@
       { "value": "C", "label": { "en_US": "Account",    "es_ES": "Cuenta"    } },
       { "value": "E", "label": { "en_US": "Heading",    "es_ES": "Epígrafe"  } }
     ] },
-    { "name": "groupBy", "label": { "en_US": "Group results by", "es_ES": "Agrupar por" }, "type": "select", "section": "agrupacion" },
+    { "name": "groupBy", "label": { "en_US": "Group results by", "es_ES": "Agrupar por" }, "type": "select", "section": "agrupacion", "visibleIf": { "param": "accountLevel", "equals": "S" } },
     { "name": "openingEntryAmount", "label": { "en_US": "Opening Entry Amount to Initial Balance", "es_ES": "Importe del asiento de apertura al saldo inicial" }, "type": "toggle", "default": true, "section": "opciones" }
   ],
   "labels": {

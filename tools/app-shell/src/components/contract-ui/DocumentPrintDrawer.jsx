@@ -275,10 +275,36 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
  * Any failure — including a jsreport outage — is caught here and surfaced via
  * `toast.error()` instead of propagating as an unhandled promise rejection
  * (the previous behavior: this function's caller never awaits/catches it).
+ *
+ * `documents` items are either a bare id (the single-document drawer print, or a
+ * window whose grid doesn't expose `documentStatus` — see ListView's
+ * `toPrintableDocument`) or `{ id, documentStatus }` (list multi-select, when the
+ * window's decisions.json declares `documentStatus` with `grid: true`, the same
+ * field `hidePrintWhen` already reads everywhere). ETP-5124 AC#6/AC#7: Draft
+ * ('DR') documents are excluded from a multi-select print batch before rendering
+ * anything — silently if some non-Draft documents remain, or with an
+ * informational notice (no PDF generated at all) if every selected document was
+ * Draft. A bare id (no status available) is never treated as Draft, so callers
+ * that can't supply a status keep printing everything, unchanged.
  */
-export async function printDocuments(windowName, documentIds, token, translate = (key) => key, apiBaseUrl = null) {
+export async function printDocuments(windowName, documents, token, translate = (key) => key, apiBaseUrl = null) {
   const reportId = `print-${windowName}`;
-  if (!reportId || !token || documentIds.length === 0) return;
+  if (!reportId || !token || !documents || documents.length === 0) return;
+
+  const normalizedDocuments = documents.map((doc) => (
+    doc && typeof doc === 'object'
+      ? { id: doc.id, documentStatus: doc.documentStatus }
+      : { id: doc, documentStatus: undefined }
+  ));
+  const printableDocuments = normalizedDocuments.filter((doc) => doc.documentStatus !== 'DR');
+
+  if (printableDocuments.length === 0) {
+    console.info(`[print-documents] ${windowName}: all ${normalizedDocuments.length} selected document(s) are Draft — nothing to print`);
+    toast.info(translate('printAllDraftExcluded'));
+    return;
+  }
+
+  const documentIds = printableDocuments.map((doc) => doc.id);
 
   try {
     // Which template each document uses — same rule as the drawer: design A when the

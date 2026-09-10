@@ -320,9 +320,9 @@ i18n key: `fiscalMonitor.refresh` → "Actualizar" / "Refresh".
 
 ## Fiscal Status in InvoicePreviewModal
 
-`StatsPanel` (inside `InvoicePreviewModal`) renders per-system submission status rows directly below the document "Estado" row. Visibility is driven by `getInvoiceFiscalTargets(specName, profile)` — only rows where `showSii`/`showTbai`/`showVerifactu` is `true` are rendered.
+`StatsPanel` (inside `InvoicePreviewModal`) renders per-system submission status rows directly below the document "Estado" row. Visibility is driven by `getInvoiceFiscalTargets(specName, profile, territory)` — only rows where `showSii`/`showTbai`/`showVerifactu` is `true` are rendered. `territory` (the active TBAI config's `etsgSifTerritory`) additionally restricts purchase-invoice TBAI to the Bizkaia territory — see `purchase-invoice.md` §"TBAI territory gating for purchase invoices (Batuz) — ETP-5087"; sales invoices are unaffected.
 
-Status is fetched by `useFiscalStatus(invoiceId, specName, profile, apiBaseUrl)` from `tools/app-shell/src/windows/custom/shared/useFiscalStatus.js`. It queries in parallel (via `Promise.all`) once per active system on mount:
+Status is fetched by `useFiscalStatus(invoiceId, specName, profile, apiBaseUrl, orgId, territory)` from `tools/app-shell/src/windows/custom/shared/useFiscalStatus.js`. It queries in parallel (via `Promise.all`) once per active system on mount:
 
 | System | Spec | Entity | FK field | Status field |
 |--------|------|--------|----------|--------------|

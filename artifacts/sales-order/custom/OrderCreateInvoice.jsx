@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useUI, useMenuLabel } from '@/i18n';
 import { trackTransactionPosted, trackDocumentCreated } from '@/lib/observability/health-events.js';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
@@ -11,6 +12,14 @@ import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { useOrderPdf } from '@/windows/custom/shared/useOrderPdf.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+// ETP-5024: headers built locally here (instead of the shared `buildHeaders()`
+// helper — see docs/request-policy.md) were missing `Accept-Language`. The backend
+// (NeoAuthenticator.applyRequestLanguage / NeoLanguage.applyToContext) silently
+// falls back to AD_User.AD_Language when that header is absent, so the "business
+// partner is on hold" refusal from documentAction/CO always rendered in English in
+// this modal, even though the same AD_MESSAGE already has a correct Spanish
+// AD_MESSAGE_TRL and the inline banner (useCallout.js) shows it translated fine.
+import { buildHeaders } from '@/auth/api.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -55,10 +64,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
   const isCompleted = status === 'CO';
 
   const base    = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => (buildHeaders(token)), [token]);
 
   // ETP-4372 — source the same client-rendered PDF the OrderPreview panel uses
   // so the form-view topbar Send modal shows the document instead of the
@@ -113,8 +119,12 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
     return () => { cancelled = true; };
   }, [isCompleted, recordId, base, headers, apiBaseUrl]);
 
-  // Modal shown after confirming — always, regardless of which docs were created
-  const confirmedPanel = confirmedDocs
+  // ETP-5063 — a confirm that created neither a shipment nor an invoice has
+  // nothing worth a blocking modal for; only render it when at least one
+  // related document actually exists.
+  const hasConfirmedDoc = Boolean(confirmedDocs?.shipment?.id || confirmedDocs?.invoice?.id);
+
+  const confirmedPanel = confirmedDocs && hasConfirmedDoc
     ? createPortal(
         <ConfirmResultModal
           title={confirmedTitle || ui('soConfirmedTitle')}
@@ -129,6 +139,19 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
         document.body,
       )
     : null;
+
+  // ETP-5063 — when confirming created no related document, skip the modal
+  // and communicate success via an auto-dismissing toast instead, matching
+  // the UX used everywhere else success is communicated.
+  useEffect(() => {
+    if (confirmedDocs && !hasConfirmedDoc) {
+      toast.success(confirmedTitle || ui('soConfirmedTitle'));
+      emitSurveyTrigger();
+      onRefresh?.();
+      setConfirmedDocs(null);
+      setConfirmedTitle(null);
+    }
+  }, [confirmedDocs, hasConfirmedDoc, confirmedTitle, onRefresh, ui]);
 
   const cloneButton = (
     <button type="button" onClick={() => setShowClone(true)} style={{...btnCloneStyle, background: isCloneHovered ? 'hsl(var(--card))' : 'hsl(var(--card))'}} title={ui('cloneOrderBtn')} onMouseEnter={() => setIsCloneHovered(true)} onMouseLeave={() => setIsCloneHovered(false)}>
@@ -828,10 +851,7 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
   const [fetched, setFetched] = useState(null);
 
   const base    = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  const headers = useMemo(() => (buildHeaders(token)), [token]);
 
   useEffect(() => {
     if (!orderId) return;

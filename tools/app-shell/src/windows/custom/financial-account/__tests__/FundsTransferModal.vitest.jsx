@@ -1,7 +1,20 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 
-// i18n → identity so assertions can match on the key.
-vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+/**
+ * i18n → identity so assertions can match on the key, with a per-key escape hatch.
+ *
+ * The escape hatch is load-bearing for the backend-error tests below.
+ * `translateBackendError` (lib/backendErrors.js) ends every lookup with
+ *   `return (translated && translated !== key) ? translated : null;`
+ * — a pure identity translator therefore reads as "translation missing" and the helper hands the
+ * ORIGINAL English message back, so a test asserting "the backend message is translated" would
+ * assert nothing. Overriding just the keys a test cares about restores real behaviour while every
+ * pre-existing test keeps asserting raw keys like `financeAccountTransferDescriptionDefault`.
+ *
+ * Kept empty by default and populated per test (restored in beforeEach) so ordering cannot leak.
+ */
+const UI_OVERRIDES = {};
+vi.mock('@/i18n', () => ({ useUI: () => (key) => UI_OVERRIDES[key] ?? key }));
 
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
@@ -599,6 +612,204 @@ describe('FundsTransferModal', () => {
       } finally {
         process.env.TZ = originalTz;
       }
+    });
+  });
+
+  // ── description max length (PSD-23) ─────────────────────────────────────────
+  //
+  // The reported bug, verbatim: a funds transfer whose description exceeds 255 characters
+  // is SENT to the backend, which rejects it with a 400. The message that comes back is
+  // already translated (matchFieldTooLong in lib/backendErrors.js), but the round-trip
+  // itself is the defect — no free-text field of this window validated its length on the
+  // client, so a value the column can never accept was allowed to leave the browser.
+  //
+  // 255 is the AD column width published by the window contract at
+  //   artifacts/financial-account/contract.json
+  //     → frontendContract.entities.transaction.fields[].validation.maxLength
+  // and is declared once, as FINANCIAL_ACCOUNT_FIELD_LIMITS.transactionDescription in
+  // windows/custom/financial-account/fieldLengthValidation.js (unit-tested separately in
+  // fieldLengthValidation.test.js). Nothing here may re-hardcode it in the component.
+  describe('description max length', () => {
+    const LIMIT = 255;
+    const AT_LIMIT = 'x'.repeat(LIMIT);
+    const OVER_LIMIT = 'x'.repeat(LIMIT + 1);
+
+    beforeEach(() => {
+      mockConversion = { rate: null, hasRate: false, loading: false };
+      conversionCalls.length = 0;
+    });
+
+    // Fills everything `canSubmit` requires (destination, amount > 0, GL item) so the ONLY
+    // thing that can hold Confirm back afterwards is the description length.
+    function makeOtherwiseValid() {
+      selectDest('DST');
+      fireEvent.change(screen.getByTestId('transfer-amount'), { target: { value: '100' } });
+      selectGl();
+    }
+
+    function typeDescription(value) {
+      fireEvent.change(screen.getByTestId('transfer-description'), { target: { value } });
+    }
+
+    it('shows no error and keeps Confirm enabled at exactly 255 characters', () => {
+      renderModal();
+      makeOtherwiseValid();
+      typeDescription(AT_LIMIT);
+
+      expect(screen.queryByTestId('transfer-description-error')).not.toBeInTheDocument();
+      expect(screen.getByTestId('transfer-confirm')).not.toBeDisabled();
+    });
+
+    it('surfaces the max-length error and disables Confirm at 256 characters', () => {
+      renderModal();
+      makeOtherwiseValid();
+      // Confirm is genuinely reachable before the over-long value is typed, so the disabled
+      // state asserted below is attributable to the length and to nothing else.
+      expect(screen.getByTestId('transfer-confirm')).not.toBeDisabled();
+
+      typeDescription(OVER_LIMIT);
+
+      // i18n is mocked as identity, so the shared key surfaces verbatim. The key already
+      // ships in both locale files ("Maximum length is {maxLength} characters" /
+      // "La longitud máxima es de {maxLength} caracteres"), so no new copy is needed.
+      expect(screen.getByTestId('transfer-description-error')).toHaveTextContent('fieldMaxLengthError');
+      expect(screen.getByTestId('transfer-confirm')).toBeDisabled();
+    });
+
+    // The heart of the ticket. Everything above is UI affordance; THIS is the regression
+    // that must never come back — the request reaching the network at all.
+    it('never calls transfer() when the description is over the limit (the request must not leave the browser)', async () => {
+      renderModal();
+      makeOtherwiseValid();
+      typeDescription(OVER_LIMIT);
+
+      fireEvent.click(screen.getByTestId('transfer-confirm'));
+
+      // Give any pending promise/effect a turn before concluding nothing was sent.
+      await Promise.resolve();
+      expect(transfer).not.toHaveBeenCalled();
+    });
+
+    it('still sends the transfer once the description is trimmed back to the limit', async () => {
+      renderModal();
+      makeOtherwiseValid();
+      typeDescription(OVER_LIMIT);
+      fireEvent.click(screen.getByTestId('transfer-confirm'));
+      await Promise.resolve();
+      expect(transfer).not.toHaveBeenCalled();
+
+      // The gate must be reactive, not a one-way latch: shortening the value clears it.
+      typeDescription(AT_LIMIT);
+      expect(screen.queryByTestId('transfer-description-error')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('transfer-confirm'));
+
+      await waitFor(() => expect(transfer).toHaveBeenCalledTimes(1));
+      expect(transfer.mock.calls[0][0]).toMatchObject({ description: AT_LIMIT });
+    });
+
+    it('renders a live character counter against the limit', () => {
+      renderModal();
+      typeDescription('abcde');
+      expect(screen.getByTestId('transfer-description-counter')).toHaveTextContent(`5/${LIMIT}`);
+
+      typeDescription(AT_LIMIT);
+      expect(screen.getByTestId('transfer-description-counter')).toHaveTextContent(`${LIMIT}/${LIMIT}`);
+
+      typeDescription(OVER_LIMIT);
+      expect(screen.getByTestId('transfer-description-counter')).toHaveTextContent(`${LIMIT + 1}/${LIMIT}`);
+    });
+
+    it('counts the prefilled default description on mount (counter is not seeded at 0)', () => {
+      renderModal();
+      // The field opens prefilled with ui('financeAccountTransferDescriptionDefault'); the
+      // counter must reflect what is actually in the box, not a stale zero.
+      const current = screen.getByTestId('transfer-description').value;
+      expect(current.length).toBeGreaterThan(0);
+      expect(screen.getByTestId('transfer-description-counter'))
+        .toHaveTextContent(`${current.length}/${LIMIT}`);
+    });
+
+    it('treats an emptied description as valid (length is not a required check)', () => {
+      renderModal();
+      makeOtherwiseValid();
+      typeDescription('');
+
+      expect(screen.queryByTestId('transfer-description-error')).not.toBeInTheDocument();
+      expect(screen.getByTestId('transfer-confirm')).not.toBeDisabled();
+    });
+  });
+
+  // ── backend error fallback (PSD-23) ─────────────────────────────────────────
+  //
+  // Dead-fallback regression. `useCreateMovement.postAction` builds its error as
+  //   const raw = await parseBackendErrorMessage(res);
+  //   const error = new Error(raw || `HTTP ${res.status}`);
+  // so a 400 whose body carries no readable message yields the literal message 'HTTP 400'.
+  // This modal then does
+  //   setError(translateBackendError(err?.message, ui) || ui('financeAccountTransferError'));
+  // and `translateBackendError` returns an UNMATCHED message verbatim — a truthy string — so
+  // the `||` fallback can never fire and the user is shown the raw 'HTTP 400'.
+  //
+  // The fix carries the distinction explicitly (`error.hasBackendMessage = Boolean(raw)`) and
+  // only translates when a real backend message exists; otherwise it shows the friendly copy.
+  describe('backend error fallback', () => {
+    beforeEach(() => {
+      mockConversion = { rate: null, hasRate: false, loading: false };
+      conversionCalls.length = 0;
+      for (const k of Object.keys(UI_OVERRIDES)) delete UI_OVERRIDES[k];
+    });
+
+    async function confirmAndFailWith(err) {
+      transfer.mockRejectedValueOnce(err);
+      renderModal();
+      selectDest('DST');
+      fireEvent.change(screen.getByTestId('transfer-amount'), { target: { value: '100' } });
+      selectGl();
+      fireEvent.click(screen.getByTestId('transfer-confirm'));
+      return waitFor(() => screen.getByTestId('transfer-error'));
+    }
+
+    it('shows the friendly message, not "HTTP 400", when the body carried no backend message', async () => {
+      const box = await confirmAndFailWith(
+        Object.assign(new Error('HTTP 400'), { status: 400, hasBackendMessage: false }),
+      );
+
+      expect(box).toHaveTextContent('financeAccountTransferError');
+      expect(box).not.toHaveTextContent('HTTP 400');
+    });
+
+    it('does not special-case the literal "HTTP 400" (any bare HTTP <status> falls back too)', async () => {
+      const box = await confirmAndFailWith(
+        Object.assign(new Error('HTTP 500'), { status: 500, hasBackendMessage: false }),
+      );
+
+      expect(box).toHaveTextContent('financeAccountTransferError');
+      expect(box).not.toHaveTextContent('HTTP 500');
+    });
+
+    it('still translates a real backend message (ETP-5085 must not regress)', async () => {
+      // The very message this ticket's 400 produces, and the reason matchFieldTooLong exists.
+      UI_OVERRIDES['backendError.fieldTooLong'] = 'La longitud máxima es de 255 caracteres';
+      const box = await confirmAndFailWith(Object.assign(
+        new Error('Value too long. Length 300, maximum allowed 255 [xxxxx]'),
+        { status: 400, hasBackendMessage: true },
+      ));
+
+      expect(box).toHaveTextContent('La longitud máxima es de 255 caracteres');
+      expect(box).not.toHaveTextContent('financeAccountTransferError');
+    });
+
+    it('still shows an untranslatable backend business message verbatim', async () => {
+      // No skeleton matches this, so translateBackendError hands it back unchanged. It is a
+      // real backend message, so it must reach the user — the fallback is only for the case
+      // where the backend said nothing at all.
+      const box = await confirmAndFailWith(Object.assign(
+        new Error('La cuenta destino está bloqueada.'),
+        { status: 400, hasBackendMessage: true },
+      ));
+
+      expect(box).toHaveTextContent('La cuenta destino está bloqueada.');
+      expect(box).not.toHaveTextContent('financeAccountTransferError');
     });
   });
 });

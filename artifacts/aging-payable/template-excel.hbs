@@ -5,8 +5,16 @@
       SAME report with showDetails=true + a bPartnerId filter, so its own
       Excel/CSV buttons hit these same templates):
         - meta.showDetails true  → one row per DOCUMENT (contact repeated on
-          every line, general-ledger-style), plus one subtotal row per contact
-          for the aggregates (credits/net) a single document doesn't carry.
+          every line, general-ledger-style), and NOTHING ELSE (ETP-4900: a
+          per-contact subtotal row used to sit between contacts here — dropped
+          on request, since a stray non-document row in the middle of an
+          otherwise one-row-per-document sheet is exactly what breaks a
+          pivot table / SUM() range someone builds over this export). Credits
+          is always 0 per document (AgingReportHandler.buildDocRow never sends
+          it — credit only ever applies at the contact level) and Net is that
+          document's own balance, the sum of its own bucket amounts — same
+          values the PDF's per-card subtotal already showed, just computed
+          per document now instead of read off a removed subtotal row.
         - meta.showDetails false → one row per CONTACT (the summary shown on
           the main report), unchanged from before.
       Never a grouped/banded layout — that's what the HTML view is for; Excel
@@ -55,23 +63,10 @@
         {{#if @root.meta.showBucket3}}<td data-cell-type="number">{{round2 days90}}</td>{{/if}}
         {{#if @root.meta.showBucket4}}<td data-cell-type="number">{{round2 days120}}</td>{{/if}}
         <td data-cell-type="number">{{round2 days150plus}}</td>
-        <td></td>
-        <td></td>
+        <td data-cell-type="number">{{round2 0}}</td>
+        <td data-cell-type="number">{{round2 (sumFields current days30 days60 days90 days120 days150plus)}}</td>
       </tr>
       {{/each}}
-      <tr>
-        <td>{{bPartner}}</td>
-        <td></td>
-        <td></td>
-        <td data-cell-type="number">{{round2 current}}</td>
-        <td data-cell-type="number">{{round2 days30}}</td>
-        {{#if @root.meta.showBucket2}}<td data-cell-type="number">{{round2 days60}}</td>{{/if}}
-        {{#if @root.meta.showBucket3}}<td data-cell-type="number">{{round2 days90}}</td>{{/if}}
-        {{#if @root.meta.showBucket4}}<td data-cell-type="number">{{round2 days120}}</td>{{/if}}
-        <td data-cell-type="number">{{round2 days150plus}}</td>
-        <td data-cell-type="number">{{round2 credits}}</td>
-        <td data-cell-type="number">{{round2 net}}</td>
-      </tr>
       {{/each}}
     </tbody>
     {{else}}

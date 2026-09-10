@@ -34,7 +34,7 @@ to fix.
 `useId` keys the entry, and the cleanup removes it on unmount. A form that unmounts while dirty
 must never leave the app permanently "dirty".
 
-## The five consumers
+## The six consumers
 
 | Surface | Mechanism | Ticket |
 |---|---|---|
@@ -43,6 +43,7 @@ must never leave the app permanently "dirty".
 | In-app navigation | the navigation gate → `UnsavedChangesNavigationDialog` | ETP-5073 |
 | Clone | `CloneOrderModal` disables its action and explains why | ETP-5073 |
 | Confirm / document actions | `maybeSaveBeforeConfirm` in `saveActions.jsx` | ETP-4940 |
+| Opening line-creation UI (add-line button, secondary-tab inline add, secondary-tab custom modal) on an already-saved record | `maybeSaveBeforeAddLine` in `detailViewHelpers.jsx`, via `runPrimaryAddLineFlow` / `runSecondaryAddLineFlow` | ETP-5147 |
 
 ## Guarding a navigation
 

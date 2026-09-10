@@ -286,22 +286,22 @@ describe.each([
 });
 
 describe.each([
-  ['es_ES', esES, 'Grupo de activos', 'Finanzas'],
+  ['es_ES', esES, 'Categoría de activo', 'Finanzas'],
   ['en_US', enUS, 'Asset Group', 'Finance'],
-  ['es_AR', esAR, 'Grupo de activos', 'Finanzas'],
+  ['es_AR', esAR, 'Categoría de activo', 'Finanzas'],
 ])('asset-group breadcrumb (%s)', (_locale, dictionary, expectedName, expectedSection) => {
   const tMenu = makeRealTMenu(dictionary);
 
   it(`resolves the window title to "${expectedName}" (not the stale "Asset Category" translation)`, () => {
     const title = getWindowTitle(ASSET_GROUP_BREADCRUMB, tMenu, 'ignored');
     expect(title).toBe(expectedName);
-    expect(title).not.toContain('Categoría de Activos');
+    expect(title).not.toContain('Grupo de activos');
     expect(title).not.toContain('Asset Category');
   });
 
   it(`resolves the full breadcrumb to "${expectedSection} / ${expectedName}"`, () => {
     const breadcrumb = getFullBreadcrumb(ASSET_GROUP_BREADCRUMB, tMenu, '', expectedName);
     expect(breadcrumb).toBe(`${expectedSection} / ${expectedName}`);
-    expect(breadcrumb).not.toContain('Categoría de Activos');
+    expect(breadcrumb).not.toContain('Grupo de activos');
   });
 });

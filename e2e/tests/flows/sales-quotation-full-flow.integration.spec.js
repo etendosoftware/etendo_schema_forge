@@ -3,7 +3,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login, navigateTo } from '../helpers/auth.js';
 import { ensureOpenPeriod } from '../helpers/period-helpers.js';
-import { ensureStockOnHand } from '../helpers/inventory-helpers.js';
+import { ensureStockOnHand, DEFAULT_WAREHOUSE_NAME } from '../helpers/inventory-helpers.js';
+import {
+  ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
+} from '../helpers/product-helpers.js';
 
 /**
  * Sales Quotation — Full flow: Presupuesto → Pedido de venta → Albarán →
@@ -208,8 +211,15 @@ async function waitForLinesSettled(page, count, message) {
  * Add a product line to the quotation's inline-add row (shared component
  * across every document window — mirrors purchase-helpers.js's
  * addProductLine, adapted to the quotation's "orderedQuantity" field key).
+ *
+ * ETP-5079: prefer `productName` (a `PRODUCT_FIXTURE_*.name`, ensured by
+ * `ensureProductFixtures()`) over `productIndex`. The onboarding dataset no
+ * longer seeds any visible product, so "the product at index N" is nothing at
+ * all on a fresh tenant; and on a long-lived dev tenant it silently binds this
+ * test's assertions to whatever leftover data a previous run created.
+ * `productIndex` is kept only so the signature stays backward compatible.
  */
-async function addLine(page, { productIndex = 0, quantity, isFirst = false } = {}) {
+async function addLine(page, { productName, productIndex = 0, quantity, isFirst = false } = {}) {
   if (isFirst) {
     let emptyStateBtn = page.getByTestId('action-add-lines-empty-state');
     if (!await emptyStateBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
@@ -235,11 +245,29 @@ async function addLine(page, { productIndex = 0, quantity, isFirst = false } = {
   const searchDrawer = page.getByTestId('product-search-drawer');
   await expect(searchDrawer).toBeVisible({ timeout: 10_000 });
 
-  const productOption = page.locator('[data-testid^="product-search-option-"]').nth(productIndex);
-  if (await productOption.isVisible({ timeout: 5_000 }).catch(() => false)) {
-    await productOption.click();
+  // Narrow the drawer to the requested fixture before resolving options. Typing
+  // re-queries the backend; the `hasText` filter below is a second, client-side
+  // guarantee rather than the only one.
+  if (productName) {
+    const searchInput = page.getByTestId('product-search-input');
+    await expect(searchInput).toBeVisible({ timeout: 10_000 });
+    await searchInput.fill(productName);
+  }
+
+  const optionLocator = page.locator('[data-testid^="product-search-option-"]');
+  if (productName) {
+    const namedOption = optionLocator.filter({ hasText: productName }).first();
+    await expect(namedOption,
+      `Product "${productName}" should appear in the search drawer — is ensureProductFixtures() called?`,
+    ).toBeVisible({ timeout: 20_000 });
+    await namedOption.click();
   } else {
-    await page.locator('[data-testid^="product-search-option-"]').first().click();
+    const productOption = optionLocator.nth(productIndex);
+    if (await productOption.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await productOption.click();
+    } else {
+      await optionLocator.first().click();
+    }
   }
   await slow(page);
   await expect(searchDrawer).toBeHidden({ timeout: 5_000 }).catch(() => {});
@@ -291,6 +319,11 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     await login(page, { user, password });
     await expect(page).toHaveURL(/dashboard/, { timeout: 30_000 });
     await slow(page);
+
+    // ETP-5079: the onboarding dataset no longer seeds any visible product, so
+    // the lines added below have nothing to pick unless the suite provisions
+    // its own fixtures first. See e2e/tests/helpers/product-helpers.js.
+    await ensureProductFixtures(page);
 
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 2: Create a quotation, select a Business Partner, save as draft
@@ -347,7 +380,7 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     // negative line is added
     // ═══════════════════════════════════════════════════════════════════════
 
-    await addLine(page, { isFirst: true, productIndex: 0 });
+    await addLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name });
 
     // [ETP-4567 check #4] Price column header reads "Precio", not the old
     // default AD label ("Precio tarifa" / "Net List Price"). Checked here,
@@ -370,7 +403,7 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     // quotation
     // ═══════════════════════════════════════════════════════════════════════
 
-    await addLine(page, { productIndex: 1, quantity: '-2' });
+    await addLine(page, { productName: PRODUCT_FIXTURE_BETA.name, quantity: '-2' });
 
     // Row-count-aware wait (mirrors purchase-order-full-flow.integration.spec.js) —
     // waiting for "at least one line row" was satisfied by the STEP 3 baseline
@@ -389,8 +422,8 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     ).toBeLessThan(0);
 
     // Known, intermittent, other-team-owned issue: adding a negative-quantity
-    // line for a product other than "Agua" (e.g. "Fernet") can sometimes
-    // render the gross-amount cell blank momentarily on the Quotation stage,
+    // line can sometimes (depending on the product's tax category) render the
+    // gross-amount cell blank momentarily on the Quotation stage,
     // self-correcting a few seconds later without any user action on that
     // row — a suspected client-side sign/tax-factor-resolution race in
     // `useLineGrossAmount.js`'s `resolveTaxFactor`, reproduced manually in a
@@ -438,24 +471,24 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
 
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 4.5: Ensure enough stock on hand for the negative line's ACTUAL
-    // product (read back from the row itself — never assume which product
-    // productIndex: 1 landed on). By the time this quotation becomes a
-    // shipment, confirming it inverts the normal stock-movement direction for
-    // a negative-quantity line, so Etendo's core M_CHECK_STOCK validation
-    // correctly rejects the confirm when on-hand is too low. This suite was
-    // observed draining shared dev-DB stock for whatever product landed at
-    // that index — "Cerveza", then "Queso Sardo" (warehouse "Almacen GO" /
-    // locator "AG-0-0-0") — down toward zero on 2026-08-17 from repeated
-    // runs. Provisioned via a real, audited Physical Inventory count
-    // (ensureStockOnHand) — never a raw SQL UPDATE. minQty=200 is a generous
-    // buffer meant to survive several repeated runs of this suite in a
-    // single day. Doing this now (while still a quotation, well before the
-    // Order → Shipment confirm several steps down) leaves plenty of margin.
+    // product. Still read back from the row itself rather than reusing
+    // PRODUCT_FIXTURE_BETA.name: the cell renders the persisted identifier,
+    // which is what ensureStockOnHand's own product selector has to match. By
+    // the time this quotation becomes a shipment, confirming it inverts the
+    // normal stock-movement direction for a negative-quantity line, so
+    // Etendo's core M_CHECK_STOCK validation correctly rejects the confirm
+    // when on-hand is too low. This suite was observed draining shared dev-DB
+    // stock down toward zero on 2026-08-17 from repeated runs. Provisioned via
+    // a real, audited Physical Inventory count (ensureStockOnHand) — never a
+    // raw SQL UPDATE. minQty=200 is a generous buffer meant to survive several
+    // repeated runs of this suite in a single day. Doing this now (while still
+    // a quotation, well before the Order → Shipment confirm several steps
+    // down) leaves plenty of margin.
     // ═══════════════════════════════════════════════════════════════════════
     const negQuotationProductName = (await negQuotationRow.locator('[data-cell-key="product"]').textContent())?.trim();
     await ensureStockOnHand(page, {
       productName: negQuotationProductName,
-      warehouseName: 'Almacen GO',
+      warehouseName: DEFAULT_WAREHOUSE_NAME,
       minQty: 200,
     });
 
@@ -535,8 +568,8 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     ).toBeLessThan(0);
 
     // Known, intermittent, other-team-owned issue: adding a negative-quantity
-    // line for a product other than "Agua" (e.g. "Fernet") can sometimes
-    // render the gross-amount cell blank momentarily on the Sales Order stage,
+    // line can sometimes (depending on the product's tax category) render the
+    // gross-amount cell blank momentarily on the Sales Order stage,
     // self-correcting a few seconds later without any user action on that
     // row — a suspected client-side sign/tax-factor-resolution race in
     // `useLineGrossAmount.js`'s `resolveTaxFactor`, reproduced manually in a
@@ -692,8 +725,8 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     //
     // Same known, intermittent, other-team-owned issue as the Sales Order
     // stage above (suspected client-side sign/tax-factor-resolution race in
-    // `useLineGrossAmount.js`'s `resolveTaxFactor`, reproduces with
-    // non-"Agua" products and a negative quantity, self-corrects after a
+    // `useLineGrossAmount.js`'s `resolveTaxFactor`, reproduces on some
+    // tax categories with a negative quantity, self-corrects after a
     // delay — not a data-loss bug, and not the ETP-4567/4722 root cause).
     // This check is intentionally non-blocking here.
     // The cell's `data-cell-key` attribute itself can disappear from the DOM
@@ -807,6 +840,10 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     await expect(page).toHaveURL(/dashboard/, { timeout: 30_000 });
     await slow(page);
 
+    // ETP-5079: no product is seeded on a fresh tenant — provision the two
+    // fixtures the negative lines below are built from.
+    await ensureProductFixtures(page);
+
     await navigateTo(page, 'sales-quotation');
     await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
     await slow(page);
@@ -858,8 +895,8 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     // total itself goes fully negative (unlike the mixed-sign case above).
     // ═══════════════════════════════════════════════════════════════════════
 
-    await addLine(page, { isFirst: true, productIndex: 0, quantity: '-2' });
-    await addLine(page, { productIndex: 1, quantity: '-3' });
+    await addLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name, quantity: '-2' });
+    await addLine(page, { productName: PRODUCT_FIXTURE_BETA.name, quantity: '-3' });
 
     await waitForLinesSettled(page, 2, 'Quotation should have 2 lines, both negative');
 
@@ -885,7 +922,7 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     // stock for BOTH lines' actual products now, well before that step.
     for (let i = 0; i < quotRowCount; i++) {
       const productName = (await quotRows.nth(i).locator('[data-cell-key="product"]').textContent())?.trim();
-      await ensureStockOnHand(page, { productName, warehouseName: 'Almacen GO', minQty: 200 });
+      await ensureStockOnHand(page, { productName, warehouseName: DEFAULT_WAREHOUSE_NAME, minQty: 200 });
     }
 
     // ═══════════════════════════════════════════════════════════════════════

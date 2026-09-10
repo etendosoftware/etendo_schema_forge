@@ -317,6 +317,13 @@ describe('GoodsShipmentPreview', () => {
       expect(result).toEqual([{ id: 'ret-1' }]);
     });
 
+    // What this guards is the CACHE around the shipment detail endpoint: the three
+    // related-document specs all read from the same `${base}/goodsShipment/${id}` payload,
+    // so they must share ONE request instead of issuing three. Counting every `fetch` call
+    // used to be a good enough proxy for that, but stopped being one in ETP-5069 — the
+    // preview now renders the real EmailsCard, which issues its own unrelated
+    // `/documentemailhistory` request. So the assertion counts calls to the detail endpoint
+    // itself, which is what the test always meant: no duplication of THAT call.
     it('all three specs share one HTTP call (caching)', async () => {
       mockDetailFetch({ linkedOrders: [{ id: 'ord-1' }], linkedInvoices: [{ id: 'inv-1' }], returnReceipts: [] });
       renderGSPreview();
@@ -326,7 +333,9 @@ describe('GoodsShipmentPreview', () => {
         specs[1].fetch(shipmentId, token, base),
         specs[2].fetch(shipmentId, token, base),
       ]);
-      expect(global.fetch).toHaveBeenCalledTimes(1);
+      const detailUrl = `${base}/goodsShipment/${shipmentId}`;
+      const detailCalls = global.fetch.mock.calls.filter(([url]) => String(url) === detailUrl);
+      expect(detailCalls).toHaveLength(1);
     });
 
     it('returns empty arrays when the fetch response is missing fields', async () => {

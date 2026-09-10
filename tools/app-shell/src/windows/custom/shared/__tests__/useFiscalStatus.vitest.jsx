@@ -221,6 +221,31 @@ describe('useFiscalStatus', () => {
     });
   });
 
+  // ETP-5087: territory must be forwarded to getInvoiceFiscalTargets so purchase-invoice
+  // TBAI status only gets fetched (and the badge only renders) for Bizkaia.
+  describe('territory forwarding (ETP-5087)', () => {
+    it('forwards the territory argument to getInvoiceFiscalTargets', async () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
+      globalThis.fetch = makeFetchMock([
+        ['tbai-facturas-enviadas', () => jsonResponse([{ estado: 'Enviado' }])],
+      ]);
+
+      const { result } = renderHook(() => useFiscalStatus('inv-1', 'purchase-invoice', 'tbai', API_BASE_URL, 'ORG_1', 'BIZKAIA'));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      expect(getInvoiceFiscalTargets).toHaveBeenCalledWith('purchase-invoice', 'tbai', 'BIZKAIA');
+    });
+
+    it('defaults territory to null when not provided', async () => {
+      getInvoiceFiscalTargets.mockReturnValue(NONE_SHOWN);
+      globalThis.fetch = vi.fn();
+
+      renderHook(() => useFiscalStatus('inv-1', 'purchase-invoice', 'tbai', API_BASE_URL, 'ORG_1'));
+
+      expect(getInvoiceFiscalTargets).toHaveBeenCalledWith('purchase-invoice', 'tbai', null);
+    });
+  });
+
   describe('regression: refetch triggered by the invoice-updated event', () => {
     it('re-fetches and updates tbai after a matching "{spec}:invoice-updated" event, proving the stale-pill bug is fixed', async () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);

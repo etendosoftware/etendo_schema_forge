@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  calendarISODaysAgo,
   formatCalendarDate,
   formatCalendarMonthYear,
   getCalendarDateRelation,
@@ -121,6 +122,57 @@ describe('dateOnly helpers', () => {
       // 2026-08-25 23:30 local is already 2026-08-26 in UTC; "tomorrow" from the
       // local calendar day must still be the 26th, not the 27th.
       assert.equal(tomorrowCalendarISO(new Date(2026, 7, 25, 23, 30, 0)), '2026-08-26');
+    });
+  });
+
+  // ETP-5181: introduced for the PSD2 "Importar desde" advisory, which needs the
+  // earliest date a provider will serve ("today − max_fetch_interval") as a
+  // `yyyy-MM-dd` bound it can compare lexicographically against the stored
+  // date-only field. Every case passes an explicit `reference` so the assertions
+  // never depend on the wall clock.
+  describe('calendarISODaysAgo', () => {
+    it('subtracts whole days from a mid-month reference', () => {
+      // 2026 is not a leap year: 2026-08-05 is day 217, and day 217 − 90 = 127 = May 7.
+      assert.equal(calendarISODaysAgo(90, new Date(2026, 7, 5, 12, 0, 0)), '2026-05-07');
+    });
+
+    it('rolls back over a month boundary', () => {
+      assert.equal(calendarISODaysAgo(1, new Date(2026, 2, 1, 12, 0, 0)), '2026-02-28');
+    });
+
+    it('rolls back over a year boundary', () => {
+      assert.equal(calendarISODaysAgo(10, new Date(2026, 0, 5, 12, 0, 0)), '2025-12-26');
+    });
+
+    it('lands on the leap day when stepping back into a leap February', () => {
+      assert.equal(calendarISODaysAgo(1, new Date(2028, 2, 1, 12, 0, 0)), '2028-02-29');
+    });
+
+    it('counts the extra leap day when spanning a leap February', () => {
+      // 2028 IS a leap year: 2028-05-01 is day 122, and day 122 − 90 = 32 = Feb 1.
+      // A run that ignored the leap day would answer 2028-02-02.
+      assert.equal(calendarISODaysAgo(90, new Date(2028, 4, 1, 12, 0, 0)), '2028-02-01');
+    });
+
+    it('does not drift to the UTC day for a late local evening', () => {
+      // Same concern the todayCalendarISO block above guards: 2026-08-25 23:30 local is
+      // already 2026-08-26 in UTC, so a `toISOString().slice(0, 10)` route (or a
+      // `getTime() - days * 86400000` one, which inherits the same UTC framing) would
+      // count back from the 26th and answer 2026-05-28. The local calendar day is the
+      // 25th, so 90 days earlier is the 27th.
+      assert.equal(calendarISODaysAgo(90, new Date(2026, 7, 25, 23, 30, 0)), '2026-05-27');
+    });
+
+    it('does not drift to the previous UTC day for an early local morning', () => {
+      assert.equal(calendarISODaysAgo(90, new Date(2026, 7, 25, 0, 30, 0)), '2026-05-27');
+    });
+
+    it('returns the reference day itself for zero days', () => {
+      assert.equal(calendarISODaysAgo(0, new Date(2026, 7, 25, 23, 30, 0)), '2026-08-25');
+    });
+
+    it('pads single-digit month and day', () => {
+      assert.equal(calendarISODaysAgo(2, new Date(2026, 0, 5, 12, 0, 0)), '2026-01-03');
     });
   });
 });

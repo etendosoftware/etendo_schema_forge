@@ -1770,6 +1770,153 @@ as the immutability trigger for a data-fix `.sql` file.
     OTHER (possibly orphan) element chains — this fix happened to be safe because GOClient's own
     orphan chain doesn't reach `5721`, not because the SQL guarantees it structurally.
 
+## ETP-5117 — Gap N1: forcing SII/TicketBAI/VeriFactu test mode for Demo/free tenants (2026-09-01)
+
+- **2026-09-01 — `Preferences.setPreferenceValue(...)` is the WRONG tool for a preference whose
+  consumer reads `Preference.client`, not `Preference.visibleAtClient` — verified by reading its
+  full source (`org.openbravo.erpCommon.businessUtility.Preferences`, not `secureApp` — that
+  package does not exist in this codebase).** Its insert branch (`prefs.size()==0`) ALWAYS does
+  `preference.setClient(OBDal.getInstance().get(Client.class, "0"))` (hardcoded System) and only
+  ever encodes the caller's `client` argument into `VisibleAtClient`. That is exactly right for
+  `TenantPlanService`'s own `ETGO_TenantPlan` preference, because `resolvePlan` reads it back via
+  `pref.visibleAtClient.id = :clientId` — a matched pair. It is exactly WRONG for
+  `ETSG_ForceTestMode`: `ForceTestModeEventHandler#findPreference` (VeriFactu) and its SII/
+  TicketBAI siblings (`SiiForceTestModeEventHandler`, `com.smf.ticketbai.events.
+  ForceTestModeEventHandler`) all resolve it with `Restrictions.eq(Preference.PROPERTY_CLIENT,
+  client)` — the row's own `AD_Client_ID` column, never `VisibleAtClient` — by deliberate design
+  (see that class's own javadoc: an earlier version DID use the standard
+  `Preferences.getPreferenceValue()` precedence engine and caused `HibernateException: Found
+  shared references to a collection` from repeatedly cycling `OBContext.setAdminMode()` across
+  many clients in one request; switched to a same-Client-only, no-admin-mode-bypass design
+  instead). **Apply generally: before reusing `Preferences.setPreferenceValue`/
+  `getPreferenceValue` for ANY `AD_Preference` property, read that property's own consumer(s)
+  first** — Etendo has (at least) two independent, incompatible preference-scoping conventions
+  live in this codebase (`VisibleAtClient`-based precedence vs. plain `Client`-ownership lookup),
+  and picking the wrong one silently writes a row nothing will ever find. Confirmed live: the 3
+  pre-existing `ETSG_ForceTestMode='Y'` rows on this DB (AyelenG, F&B International Group,
+  MariaG — created by hand via the Classic Preference window before this ticket) all have
+  `AD_Client_ID=<tenant>` / `VisibleAtClient_ID=NULL`, matching the `Preference.client`-scoped
+  read exactly, not the `setPreferenceValue` shape.
+- **2026-09-01 — The three fiscal event handlers' "cascade only on UPDATE, never on INSERT" guard
+  means raw SQL can NEVER trigger it, under any circumstance — confirmed by reading
+  `PersistenceEventOBInterceptor`/`EntityPersistenceEventObserver`.** `EntityNewEvent`/
+  `EntityUpdateEvent` are constructed ONLY by Openbravo's Hibernate `Interceptor` on a flush of
+  entities loaded/saved through `OBDal`/Hibernate. A plain JDBC/native-SQL `INSERT` or `UPDATE`
+  against `ad_preference` (or the config tables) never touches that pipeline, so it fires zero
+  observers — full stop, independent of the handlers' own insert-vs-update guard. **Apply:** a
+  corrective `.sql` data-fix for this preference's ALREADY-EXISTING config rows cannot rely on the
+  cascade at all; it must directly `UPDATE` each config table's own flag column
+  (`etvfac_verifactu_config.is_dev_env`, `aeatsii_config.produccion`,
+  `tbai_config.production_env`) in the same fix. The corresponding PREVENTIVE Java service, by
+  contrast, needs no such backfill — a freshly-onboarded tenant has zero config rows yet, so each
+  handler's Observer B correctly resolves the flag from the preference the first time the tenant's
+  own config row is ever created (whenever that happens, via the app, not onboarding).
+- **2026-09-01 — Physical column names for the 3 fiscal config tables' test-mode flag, and their
+  semantics are NOT uniform.** `etvfac_verifactu_config.is_dev_env` (`'Y'` = test/dev — INVERTED
+  vs. the other two), `aeatsii_config.produccion` (`'Y'` = production, so test mode = `'N'`),
+  `tbai_config.production_env` (`'Y'` = production, so test mode = `'N'`). Confirmed via `\d` on
+  each table (Postgres). Verified none of the "block"/"check" triggers on these 3 tables
+  (`etvfac_vfactu_config_block_trg`, `*_check_sifs_configs_trg`, `*_one_active_config_trg`) fire
+  on a plain flag UPDATE that leaves `isactive` unchanged — they only guard deactivation
+  (`isactive: Y→N`) and cross-SIF-module conflicts, so a corrective fix's direct column UPDATE is
+  safe without needing to touch `isactive`.
+- **2026-09-01 — On this shared dev DB, GOClient/QA Testing's `aeatsii_config`/`tbai_config` rows
+  already read `produccion='N'`/`production_env='N'` (test mode) even WITHOUT any
+  `ETSG_ForceTestMode` preference row at all — this is pre-existing dev-DB configuration noise,
+  not something this fix caused or should be read as "the fix already ran everywhere."** Only
+  AyelenG/F&B International Group/MariaG had an actual `ETSG_ForceTestMode='Y'` row before this
+  ticket. **Apply:** when live-validating a fix like this on a shared dev DB, don't assume a
+  tenant's current "looks-already-correct" state proves the preference mechanism is what put it
+  there — check the actual preference row's existence separately from the config table's flag
+  value.
+- **2026-09-01 — DECISION: SQL-only (`@type: sql`), not `@type: webhook`, despite the
+  Hibernate-cascade limitation above — because the corrective fix does not need the cascade at
+  all, it replicates its EFFECT directly.** The `sql_first_criterion` webhook escape hatch exists
+  for logic too complex/stateful to replicate in hand SQL; here the "logic" a webhook would add is
+  just "go through DAL so the observer fires" — but the observer's own effect (set 3 possible
+  target columns to a value derived from one preference) is itself trivial to write as 3 guarded
+  `UPDATE`s. No non-trivial logic is being duplicated. Also consistent with the standing
+  `@type: webhook` execution gap already recorded above (2026-08-03, R20 section): the runner
+  still throws `"@type webhook not implemented yet"`, so choosing SQL avoids building unused
+  execution-path plumbing for a single ticket, same reasoning R20 used to stay SQL-only for its
+  own 2-tenant edge case.
+- **2026-09-01 — RESOLVED same-day (was DEFERRED): `TenantPlanService#markProductive` (the
+  paid-upgrade path) now REMOVES an existing client-scoped `ETSG_ForceTestMode` row entirely —
+  it does NOT flip it to `'N'` and leave it.** Human follow-up correction to the original
+  delivery: a value-flip to `'N'` would still be a real, permanent per-client override sitting in
+  `AD_Preference`; the actual goal is for the tenant to fall back to inheriting the System-level
+  default row, which means the row must not exist (or not be active) at all.
+- **2026-09-01 — Confirmed by reading ALL THREE handlers' full source (not assumed, matching the
+  explicit instruction to verify before choosing delete vs. deactivate): NONE of
+  `ForceTestModeEventHandler` (com.etendoerp.verifactu), `SiiForceTestModeEventHandler`
+  (org.openbravo.module.sii), or TicketBAI's `ForceTestModeEventHandler` (com.smf.ticketbai)
+  declares an `EntityDeleteEvent`/`onDelete` observer at all.** Each only wires `onSave`
+  (`EntityNewEvent`, and even then explicitly skips the `Preference` entity — "creating a brand
+  new preference row is a rare, one-time setup action") and `onUpdate`/`handleEvent`
+  (`EntityUpdateEvent`). **Apply: a plain `OBDal.getInstance().remove(preference)` DELETE fires
+  ZERO cascade on any of the three** — safe in the sense that it can never mis-fire, but useless
+  on its own for reverting already-existing config rows to production; it must be preceded by an
+  UPDATE that actually changes the value (see next bullet).
+- **2026-09-01 — Equally important, easy-to-miss trap: NONE of the three handlers' Observer-A
+  cascade branches (`handlePreferenceChange`/`processPreferenceChange`/`processPreferenceEvent`)
+  reads `Preference.active` at all — only `Preference.searchKey` (the VALUE column).** So a
+  PLAIN DEACTIVATE-ONLY flip (`IsActive: Y→N`, `VALUE` left unchanged at `'Y'`) is NOT a safe
+  no-op: it still fires the cascade (ANY Hibernate/DAL update on the `Preference` entity does,
+  regardless of which column changed — `EntityUpdateEvent` doesn't carry a "did the observer's
+  own field of interest change" flag, only the event's target entity type), but the handler
+  recomputes `devEnv`/`produccin`/`productionEnv` from the STILL-'Y' current VALUE state and
+  keeps pushing TEST mode onto every active config row for that client — the exact OPPOSITE of
+  what reverting a now-productive tenant needs. **Apply: reverting to production correctly
+  requires a TWO-STEP DAL write** — (1) `preference.setSearchKey("N"); OBDal.save(preference);
+  OBDal.flush();` (this update's cascade correctly reverts every existing config row to
+  production, since it now reads the real new VALUE), THEN (2)
+  `OBDal.getInstance().remove(preference); OBDal.flush();` (fires nothing, per the previous
+  bullet, and leaves no lingering row of any value). Implemented as
+  `OnboardingForceTestModeService#revertTestModeForProductiveTenant`. **This class of bug (an
+  event-handler's cascade decision keyed on a business-value column, not the standard framework
+  `IsActive`/soft-delete convention) is worth checking for on ANY future Etendo entity observer
+  before assuming "deactivate" is equivalent to "revert to default" — it is only true if the
+  observer's own code explicitly reads `IsActive`, which none of these three do.**
+- **2026-09-01 — Corrective SQL fix (R32) does NOT need the two-step dance the Java preventive
+  service needs.** Raw SQL never fires ANY Hibernate/DAL observer regardless of which column
+  changes or whether it's an UPDATE vs DELETE (established earlier for R31 — the pipeline is
+  never entered at all for a plain `psql`/JDBC statement). So R32 directly performs both real
+  effects itself in one transaction: `UPDATE`s the 3 config tables' own columns back to
+  production, then `DELETE`s the stale preference row — no intermediate value-flip needed, because
+  there is no cascade to trigger correctly in the first place. **Apply generally: "does this
+  write need to go through DAL to trigger an observer's side effect" is a question that only
+  applies to the Java/preventive front; the SQL/corrective front should always just replicate the
+  observer's END STATE directly, since it can never rely on the observer firing.**
+- **2026-09-01 — Why R32 is a NEW dated fix, not an edit to R31.** By the time this follow-up
+  landed, R31 already carried a real `APPLIED`/`SKIPPED_NOT_NEEDED` row in
+  `ETGO_DATA_FIX_HISTORY` on the shared dev DB from this session's own live validation earlier
+  the same day — so the "editing an unshipped fix in place is OK only if zero ledger rows exist
+  ANYWHERE" precedent (2026-07-02 entry above, R9) no longer applied. A companion fix in the
+  OPPOSITE direction (target: `PLAN_PRODUCTIVE` tenants, not `PLAN_FREE` ones) was also a cleaner
+  fit as its own file regardless — R31 and R32 have disjoint `@check` gates (mutually exclusive
+  plan states) and could safely coexist forever without either ever undoing the other's effect for
+  the same tenant.
+- **2026-09-02 — `ad_preference` has a `Selected` column that R31 forgot: `character(1)`,
+  `NOT NULL DEFAULT 'N'`, check `Y`/`N`, exposed on the DAL model as `Preference.PROPERTY_SELECTED`
+  / `setSelected(Boolean)` / `isSelected()`.** Confirmed via `\d ad_preference` on the shared dev
+  DB. Rows an operator creates by hand in Classic for `ETSG_ForceTestMode` land with
+  `Selected='Y'` (verified: several real hand-made rows on the shared dev DB carry it) — but
+  `OnboardingForceTestModeService#forceTestModeForFreeTenant`'s original `Preference` build never
+  called `setSelected`, so every row it created (including the real R31 `APPLIED` row against
+  GOClient, 2026-09-01) landed at the schema default `'N'`. **None of the 3 consuming handlers
+  (`ForceTestModeEventHandler` VeriFactu/SII/TicketBAI) filters on `Selected` in their lookup — this
+  was NOT a functional/cascade bug, purely a data-correctness/consistency-with-Classic-conventions
+  one**, caught by explicit human review of the live DB rather than by any test. **Apply
+  generally: when building a DAL entity to mirror the shape of a row an operator creates by hand in
+  Classic, diff EVERY non-nullable/checkbox column on the real table against what the code sets —
+  `Selected` (and similarly-easy-to-miss checkbox-style columns) won't surface as a bug via any
+  functional test because the consuming code may not read it at all; only a direct DB comparison
+  against a hand-made row catches it.** Fixed: `OnboardingForceTestModeService` now calls
+  `preference.setSelected(true)` (preventive); `20260902T120000Z__R33-force-test-mode-selected-
+  backfill.sql` backfills existing `Selected='N'` rows for already-onboarded tenants (corrective,
+  NEW dated fix — R31 immutable, same precedent as R32 above). `ONBOARDING_PROVISIONED_THROUGH`
+  bumped to R33's timestamp, `2026-09-02T12:00:00Z`.
+
 ## ETP-5101 S2.2 — N1/N2: GL Item backfill for pre-ETP-5020 subaccounts (2026-09-01)
 
 - **2026-09-01 — `ElementValue.searchKey` (Java) stores in `C_ElementValue.Value` (DB), never a
@@ -2025,3 +2172,623 @@ as the immutability trigger for a data-fix `.sql` file.
   bullets) for the literal old separator, not just the SQL's own composed-name CASE expressions —
   a stale illustration elsewhere will mislead the next person into mirroring the wrong,
   now-superseded character.
+
+- **2026-09-04 — ETP-5122: `C_Tax` SIF fields (Verifactu/TBAI: `em_etvfac_vat_regime`, `em_etvfac_igic_regime`, `em_etvfac_ipsi_regime`, `em_etvfac_exemption_cause`, `em_etvfac_cause_not_taxable`, `em_tbai_claveregimeniva`, `em_tbai_nonsubjectcause`, `em_tbai_exemptioncause`) are a cross-tenant clobber bug, not a per-tenant gap.** `C_Tax` rows shared system-wide have `ad_client_id='0'`; whichever tenant configures its exemption cause first silently overwrites it for every tenant using that same shared rate. Fixed via a NEW client+org-scoped table `ETSG_Tax_SIF_Config` (module `com.etendoerp.sif.general`; columns: `etsg_tax_sif_config_id`, `ad_client_id`, `ad_org_id`, `isactive`, `c_tax_id`, + the same 8 fields; unique `(c_tax_id, ad_org_id)`; `ad_org_id` FK to `ad_org`) with read-precedence "System field wins if non-empty, else fall back to the override" (implemented in earlier ETP-5122 phases, outside schema_forge).
+- **2026-09-04 — This is the first data-fix pair in the catalog where the corrective front genuinely does NOT fit the per-`:client_id`-in-isolation model, and the resolution is to split it into two fixes with different scopes rather than force one fix to do both.** `R33-tax-sif-config-migration` (backfill) IS a normal per-tenant fix — it only ever reads System `c_tax` (safe, it's global/shared data) and writes rows scoped to the target tenant's own orgs. `R34-tax-sif-config-clear-system` (the destructive null-out) is NOT tenant-scoped — its subject (`c_tax` where `ad_client_id='0'`) is System-owned, so its `:client_id` literally IS `'0'`, and it must be run explicitly (`--fix R34-... --client 0`) since the runner's default sweep excludes client `'0'`. Its `@check` independently re-verifies live DB state (no active-config legal-entity org, across ANY client, still missing its override) rather than trusting that R33 was run everywhere first — this makes even a premature `--client 0` run a safe no-op. See `cli/src/data-fixes/sql/README.md` § "Fixes that target the System pseudo-tenant" for the general pattern this establishes.
+- **2026-09-04 — `AD_GET_ORG_LE_BU(org_id, 'LE')` dedup gotcha inside a data-fix `@apply`:** if two different `AD_OrgInfo` rows in the same tenant resolve to the SAME legal-entity org (e.g. a non-LE org and its own LE org both flagged active), a naive per-orginfo-row `INSERT ... SELECT` hits `ETSG_Tax_SIF_Config`'s unique `(c_tax_id, ad_org_id)` constraint twice in one statement (each candidate row independently passes `NOT EXISTS` against pre-statement table state, so `NOT EXISTS` alone does not dedupe within-statement). Fix: pre-aggregate with `GROUP BY le_org_id` + `bool_or(...)` for the config flags (see `R33-tax-sif-config-migration.sql`'s `targets` CTE) before the INSERT, not after.
+- **2026-09-04 — Capturing pre-image values for an audit trail inside a data-fix that both mutates and reports:** the runner's `@report` section runs in the SAME transaction right after `@apply` and therefore only ever sees POST-apply state (confirmed in `run.js` — the comment there says so explicitly). To report OLD values after nulling them, do the capture INSIDE `@apply` itself: a `CREATE TEMP TABLE ... ON COMMIT DROP` statement, populated either via `WITH ins AS (INSERT ... RETURNING ...) INSERT INTO tmp SELECT * FROM ins` (Postgres supports data-modifying statements inside a CTE, chainable) or by a plain `INSERT INTO tmp SELECT <old values> FROM t WHERE <about-to-be-cleared>` issued BEFORE the `UPDATE`/clear statement — then `@report` just does `SELECT * FROM tmp`. `ON COMMIT DROP` makes this safe to `CREATE TEMP TABLE IF NOT EXISTS` unconditionally every run (each run.js apply opens a fresh `client.connect()`, so no cross-run temp-table collision either).
+- **2026-09-04 — Live-verified on this dev DB (2026-09-04): only 1 org total (`CE4B41D3A99F4CA98926A070A79A1220`, client `5156F0D67F8E498F8B0F36E3E7C28DE2`) has any active SIF config (`em_etsg_has_vfactu_config='Y'`, `em_etsg_has_tbai_config='N'`), and it is self-referencing its own `AD_LEGALENTITY_ORG_ID`. Only 4 of the 653 System `c_tax` rows have any non-empty SIF field. Zero tenants currently have `em_etsg_has_tbai_config='Y'` anywhere — so on THIS DB, `R34`'s TBAI-field clearing fires immediately (vacuously safe, no active consumer) while its Verifactu-field clearing stays correctly blocked until `R33` runs for the one Verifactu-active tenant. The genuine 1:N (two+ orgs sharing the same System tax value) case was verified separately in a throwaway rolled-back transaction (temporarily flagging a second tenant's org active, running `R33`'s `@apply` body directly, confirming two independent override rows with the identical migrated value, then `ROLLBACK` — no permanent DB change from that probe).
+- **2026-09-03 — `StandardAlgorithm.getTransactionCost()`'s dispatch: which `TrxType`s fall to
+  `default:` (need a real Standard-cost anchor) vs. which are self-healing — ETP-5142
+  (R33-standard-cost-anchor-unified, supersedes R28/ETP-4706).** Traced
+  `CostingServer.process()` (`src/org/openbravo/costing/CostingServer.java:99-144`): it calls
+  `costingAlgorithm.getTransactionCost()` UNCONDITIONALLY for every `M_Transaction` row,
+  regardless of source document — there is no type-based gate at that level. Inside
+  `StandardAlgorithm.getTransactionCost()` (`src/org/openbravo/costing/StandardAlgorithm.java:36-47`):
+  ```java
+  switch (trxType) {
+    case InventoryOpening:
+      BigDecimal unitCost = transaction.getPhysicalInventoryLine().getCost();
+      if (unitCost != null && unitCost.signum() != 0) {
+        return getOpeningInventoryCost();
+      }
+    default:
+  }
+  return getOutgoingTransactionCost();
+  ```
+  Only `InventoryOpening` (`M_Inventory.Inventory_Type='O'`) is special-cased, and only when the
+  count line's own `Cost` is non-null/non-zero — `getOpeningInventoryCost()` then ALWAYS inserts
+  its own manual `CostType='STA'` anchor via `insertCost()` (closing any prior anchor at the
+  transaction's `MovementDate` and opening a new one), so it never throws and never needs an
+  external anchor. A `'O'`-type line with a NULL/zero `Cost` falls through the `if` (no `break`)
+  straight into the empty `default:` and then to `getOutgoingTransactionCost()` like everything
+  else — so the self-heal is conditional on a real cost being entered, not on `Inventory_Type='O'`
+  alone. **Every other `TrxType` needs a real Standard cost anchor to post/cost-calculate:**
+  `Shipment`/`ShipmentReturn`/`ShipmentNegative`/`Receipt`/`ReceiptReturn`/`ReceiptNegative` (R28's
+  original scope), `InventoryIncrease`/`InventoryDecrease`/`InventoryClosing` (regular Physical
+  Inventory — NOT the Opening flow), `IntMovementFrom`/`IntMovementTo` (Internal Movement),
+  `InternalCons`/`InternalConsNegative` (Internal Consumption), and
+  `ManufacturingConsumed`/`ManufacturingProduced`/`BOMPart`/`BOMProduct` (Production/BOM). This is
+  why R28 (Shipment/Receipt-only) was superseded by a unified fix sourced from `M_Transaction`
+  directly rather than living alongside 4 new per-doctype siblings — the SAME `m_costing` guard
+  covers all of them at once with one CTE keyed off `M_Transaction`'s own line-FK columns
+  (`m_inoutline_id`/`m_inventoryline_id`/`m_movementline_id`/`m_internal_consumptionline_id`/
+  `m_productionline_id`), rather than five separate LEFT-JOIN-from-the-line-table queries.
+- **2026-09-03 — The REAL lookup date is `TrxProcessDate`, not `MovementDate`, for every
+  `TrxType` except `InventoryOpening`/`InventoryClosing` or a costing rule with
+  `BackdatedTrxsFixed='Y'` — a correctness bug R28 carried silently.**
+  `StandardAlgorithm.getOutgoingTransactionCost()`:
+  ```java
+  Date date;
+  if (costingRule.isBackdatedTransactionsFixed() || trxType == TrxType.InventoryOpening
+      || trxType == TrxType.InventoryClosing) {
+    date = transaction.getMovementDate();
+  } else {
+    date = transaction.getTransactionProcessDate();
+  }
+  ```
+  `M_Costing_Rule.BackdatedTrxsFixed` (Java `CostingRule.PROPERTY_BACKDATEDTRANSACTIONSFIXED`,
+  confirmed against `src-gen/.../CostingRule.java` and `ad_column`) is a PER-TENANT/PER-RULE flag
+  — on this dev DB, ALL 5 Standard-cost tenants have it `'N'`, meaning the REAL query date for
+  Shipment/Receipt/Physical-Inventory-Increase-or-Decrease/Movement/Internal-Consumption/
+  Production is `M_Transaction.TrxProcessDate`, not `MovementDate`. Empirically (2026-09-03, live
+  DB): `TrxProcessDate` is ALWAYS populated (even for currently-stuck, never-yet-cost-calculated
+  transactions — it is stamped at transaction-creation time, not at successful cost-calculation
+  time) and is always `>= MovementDate` by anywhere from sub-second to several seconds, matching
+  "the actual FIFO processing/creation order" rather than the user-entered business date. R28
+  anchored its `datefrom` at `M_InOut.DateAcct` (confirmed empirically `== MovementDate` on every
+  sampled row) — this happened to be SAFE only because `datefrom <= date` in
+  `getStandardCostDefinition`'s lookup still held (`MovementDate <= TrxProcessDate` always), never
+  because it matched the real query date. R33 reproduces the exact formula per-tenant
+  (`M_Costing_Rule.BackdatedTrxsFixed`) and per-transaction (`M_Inventory.Inventory_Type IN
+  ('O','C')`), landing the anchor's `datefrom` exactly where core will actually look, not merely
+  early enough to still work by luck. **Apply generally:** any future `M_Costing`-anchor-seeding
+  fix must use this same `CASE` — a flat `MovementDate` (or a header's own `DateAcct`) is a latent
+  correctness gap disguised as a working fix, not a style choice; it only "worked" for R28's
+  narrow Shipment/Receipt scope by coincidence of the two dates tracking closely together.
+- **2026-09-03 — `M_Inventory`/`M_InventoryLine` schema facts (physical inventory / inventory
+  count-and-adjustment document), gathered while building R33.** `M_Inventory`
+  (`AD_Table_ID=321`) has NO `DocStatus`/`DocumentNo`/`C_DocType_ID` at all — confirmed via
+  `ad_column` for the whole table, not merely "not in this view." It tracks lifecycle purely via
+  `Posted` (domain observed live: `Y`/`N`/`E`/`T` — the fix only ever tests `<> 'Y'`, so the exact
+  non-Y code never mattered), `Processed`, `Processing`. Its accounting date is `MovementDate`
+  (no separate `DateAcct` column exists on this table, unlike `M_InOut`). `Inventory_Type` is a
+  header-level column (`AD_Reference_ID=80D920FE975340EDACC52885BA4C34D7`, "Inventory Types") with
+  observed live values `N` (Normal/regular count — the vast majority, 43/57 on this DB),
+  `O` (Opening — 7/57, the self-healing flow used at Standard-costing-rule activation), and `C`
+  (Closing — 7/57). `M_InventoryLine.Cost` is nullable and is exactly the field
+  `StandardAlgorithm.getOpeningInventoryCost()` reads to decide whether an `'O'`-type line
+  self-heals. `M_Transaction` links to a physical-inventory line via `m_inventoryline_id` (not a
+  header-level FK) — same shape as `m_inoutline_id`/`m_movementline_id`/
+  `m_internal_consumptionline_id`/`m_productionline_id`, all on the SAME `M_Transaction` row,
+  which is what makes sourcing an anchor-seeding fix from `M_Transaction` directly (one CTE,
+  `LEFT JOIN` to whichever line/header table the populated FK points at) simpler than five
+  separate per-doctype queries once more than one document family is in scope.
+- **2026-09-03 — Live gap census across all 5 stock-moving document families, informing the
+  R28→R33 (unified) decision (ETP-5142).** Fleet-wide sweep of `M_Transaction.IsCostCalculated='N'`
+  (the "stuck, needs a Standard cost anchor" state) across every Standard-cost tenant on the local
+  dev DB, grouped by which line-FK is populated: `inout: 28`, `inventory: 8`, `movement: 0`,
+  `internal_consumption: 0`, `production: 0`. Internal Consumption and Production have ZERO header
+  rows on ANY Standard-cost tenant at all (the features are simply unused there yet); Movement has
+  2 header rows on GOClient but both already `IsCostCalculated='Y'` (their doctype has
+  `Posted='D'`, Post Disabled — cost-neutral movements don't post in this fleet, but cost
+  CALCULATION is a separate, prior mechanism from posting and both transactions already cleared
+  it). Confirms Physical Inventory is a live, real, currently-affecting-real-tenants gap
+  (2 tenants, 5 product/org pairs, dated the day of authoring) while Internal
+  Consumption/Movement/Production are architecturally-identical-but-currently-dormant exposure —
+  R33's SQL for those three branches is REASONED THROUGH against source + live schema, not
+  empirically proven against real stuck rows the way the Shipment/Receipt and Physical Inventory
+  branches were (validated end-to-end via `parseFix`/`inlineParams` in rolled-back transactions:
+  `@check` fires, `@apply` inserts the right row(s), re-`@check`/re-`@apply` converge to 0/0).
+  **A useful emergent behavior observed during validation, not a bug:** when a SINGLE product has
+  BOTH a stuck inout transaction AND a stuck inventory transaction for the same cost org (real
+  case found on tenant `E61A24485E2343D988AA422E404FA254`), the unified `needed_products` CTE's
+  `DISTINCT ON (m_product_id, cost_org_id)` collapses them to ONE representative transaction
+  (earliest `needed_date` wins), producing exactly ONE anchor that correctly covers BOTH stuck
+  transactions (since the anchor's `datefrom` is the minimum of the two dates and `dateto` extends
+  to 9999-12-31 or the next real Standard row) — cleaner than two sibling fixes each guarding
+  against the other via `NOT EXISTS`, which also converges correctly but needs 2 sequential runs
+  instead of 1.
+- **2026-09-03 — One intentional scope narrowing vs. R28 when moving to an `M_Transaction`-sourced
+  design (ETP-5142).** R28's original query started from `m_inoutline` `LEFT JOIN m_transaction`,
+  so it ALSO caught lines where NO `M_Transaction` row exists at all (the exact edge case
+  `DocInOut.java`'s own pre-check handles via `line.transaction == null`, throwing
+  `InvalidCostWhichProduct` directly without ever reaching the cost-calculation engine). Sourcing
+  the unified fix FROM `m_transaction` directly means a transaction must exist by construction —
+  that edge case can no longer be represented in the same query. Verified empirically (2026-09-03):
+  zero `m_inoutline` rows on any Standard-cost tenant hit that branch on this DB today, so this is
+  a documented, currently-inert narrowing, not a live regression. If it recurs, it is arguably a
+  DIFFERENT gap (a transaction was never created at all, not merely uncosted) warranting its own
+  investigation rather than folding it back into an anchor-seeding fix. `C_ProjectIssue`-sourced
+  transactions (`M_Transaction.c_projectissue_id`) are also deliberately out of scope for the same
+  reason R28 never covered them — not one of the 5 document families this investigation traced.
+- **2026-09-07 — `P_InvoicePriceVariance_Acct` NULL fleet-wide, misdiagnosed via a PR review comment
+  as a business-partner config gap (ETP-5075, gap A8).** A `matched-purchase-invoices`
+  (`M_MatchInv`) record whose invoiced price differs from its receipt cost failed to post with
+  `Account could not be found. (Business Partner: <name>, BP Group: <group>)`; the reviewer checked
+  both and found them correctly configured. Two dead ends walked through before the real fix,
+  documented here so the next investigator doesn't repeat them:
+  - **Dead end 1 — "it needs a Purchase Order."** A receipt with a linked PO is usually valued at
+    the PO price, which usually equals the invoice price, so the difference is zero and the gap
+    never surfaces — but the PO itself plays no role in `DocMatchInv`'s posting decision at all.
+    Confirmed by reproducing the SAME failure on a brand-new match with NO PO on either side, and
+    by finding a Cerveza/Cerveza-Ale match on a completely different demo server that posted fine
+    WITHOUT any PO either — its invoice share and receipt cost simply happened to be numerically
+    equal (verified: `linenetamt * qty / qtyinvoiced` == the receipt's costed amount).
+  - **Dead end 2 — "run the Price Correction Background process."** This process (`org.openbravo.
+    costing.PriceDifferenceBackground`, flag `M_Transaction.checkpricedifference`) genuinely was
+    never scheduled for this client (only for a stale 2014 "QA Testing" client fleet-wide — 0
+    `M_CostAdjustment` rows existed anywhere before running it). Running it did correct the
+    receipt's COST (via a new `M_CostAdjustment`, `source_process='PDC'`) — but `DocMatchInv`
+    reads `MaterialTransaction.getTransactionCost()`, the DENORMALIZED `M_Transaction.
+    TransactionCost` column, which the cost-adjustment mechanism updates via a NEW
+    `M_Transaction_Cost` line but never writes back to that denormalized column. Measured:
+    202/205 clients fleet-wide had `M_Transaction.TransactionCost` mismatching the sum of their own
+    `M_Transaction_Cost` lines. Posting still failed afterward, unchanged.
+  - **The actual fix.** `ProductInfo.getAccount()` (`ProductInfo.java:99-162`) resolves
+    `ACCTTYPE_P_IPV` EXCLUSIVELY from `M_Product_Acct` for the line's own product+schema
+    (`ProductInfo_data.xsql`'s `selectProductAcct` — plain `WHERE M_Product_ID=? AND
+    C_AcctSchema_ID=?`, no fallback whatsoever) — confirmed live: setting `C_ACCTSCHEMA_DEFAULT.
+    P_InvoicePriceVariance_Acct` via Classic's own "Defaults" tab UI did NOT unblock posting,
+    because the product's own `M_Product_Acct` row already existed with this column NULL and
+    nothing re-syncs it from the schema after creation.
+  - **Which account.** GOClient's own `P_Expense_Acct` across all 3 levels already resolves to
+    `60000000 - Compras de mercaderías`. Confirmed via the "Pérdidas y Ganancias" (P&L) report for
+    both charts that GOClient's Spanish-PGC-style chart has NO dedicated price-variance account at
+    all (its "Aprovisionamientos" group only ever shows `600`/`610`) — unlike the F&B International
+    Group US-Dollar demo chart (Anglo-Saxon-style), whose P&L shows a full COGS breakdown including
+    a dedicated `5610 - Invoice price variance` sibling of `5360 - Product Expense`; that schema is
+    the ONLY one of 205 fleet-wide with this column genuinely configured. Live-verified: wiring
+    `P_InvoicePriceVariance_Acct` to the SAME account as `P_Expense_Acct` produced a balanced
+    3-line entry, the variance landing as a third line in that very same account.
+  - **`P_PurchasePriceVariance_Acct`** (sibling column, `ProductInfo.ACCTTYPE_P_PPV`) deliberately
+    left untouched: its Classic UI field on this same tab is `isactive='N'` (Etendo turned it off),
+    confirmed via `ad_field`, and `grep ACCTTYPE_P_PPV` across `org.openbravo.erpCommon.ad_forms`
+    shows no purchasing document class ever requests it.
+  - See `onboarding-gaps.md` §A8 and `onboarding-and-datafixes-map.md`'s `A8` row for the full
+    write-up; fix shipped as `R34-invoice-price-variance-backfill.sql` (corrective, all 3 levels)
+    + `OnboardingAccountingWiringService#backfillInvoicePriceVarianceDefault` (preventive,
+    schema-level only — sufficient because the existing product/category copy-down inserts source
+    from that same column).
+
+---
+
+## ETP-5079 — Initial onboarding dataset corrections (gap N4, 2026-09-01)
+
+> **SUPERSEDED — Outcome (2026-09-02, product owner Valeria):** the no-corrective decision below was
+> **partially reversed**: sequences DO have to be corrected on existing tenants, nothing else does.
+> `20260902T120000Z__R31-document-sequence-startno.sql` ships that one correction (the narrow redo of
+> the deleted draft's §3, same safety rule). The other seven corrections remain preventive-only for
+> the reason the 2026-09-01 note gives, which is exactly why the split falls where it does:
+> **`STARTNO` is metadata and free to correct; every other candidate repair was destructive.** The
+> watermark is STILL not bumped (see the dedicated entry at the end of this section) and
+> `R4-default-customer-location` is STILL retired — that decision was about the Default Customer BP,
+> not about sequences.
+>
+> **Outcome (2026-09-01) — superseded in part by the note above:** this ticket shipped **preventive-only**. A corrective fix (`R31`) was
+> drafted and EXPLAIN-validated, then **deleted unapplied** when the business decided existing
+> tenants are not repaired; `ONBOARDING_PROVISIONED_THROUGH` was consequently left at
+> `2026-08-28T14:00:00Z`. The safety reasoning below was worked out on that draft and is kept
+> because it is reusable — it is the analysis any future destructive corrective must repeat — but
+> **no `R31` existed in the catalog** *at that point* — one does again since 2026-09-02, but a
+> narrower one (`R31-document-sequence-startno`, not `R31-onboarding-dataset-corrections`).
+> `R4-default-customer-location` was retired in the same ticket.
+> The same session also removed the synthetic "Default Customer" business partner from onboarding
+> entirely (see the two entries added at the end of this section).
+
+### Corrected misinterpretations
+
+- **2026-09-01 — "Onboarding seeds sample contacts (Laura Morat / Juan Perez)" is FALSE.**
+  `C_BPARTNER` is **not** in `OnboardingDatasetDefinition.INCLUDED_TABLES`, so the onboarding
+  dataset import creates **zero** sample business partners. Those rows exist only in a developer's
+  own local database. The single BP a new tenant gets is the synthetic `ONBOARDING_DEFAULT_CUSTOMER`
+  created in Java by `OnboardingDefaultCustomerService`. **Apply:** before "fixing" a dataset XML,
+  check the table against `INCLUDED_TABLES` — editing a file whose table is not on that list changes
+  nothing for a new tenant. The GOClient directory has 120 XML files; only 38 (39 after this ticket)
+  are actually imported.
+
+- **2026-09-01 — Removing rows from the dataset is NOT always a pure data edit.**
+  `OnboardingDatasetImportService.validateImportedSeed` threw an `OBException` when the imported seed
+  had zero financial accounts, and `isSeedAlreadyPresent` reused the same four-way condition as the
+  idempotent-resume probe. Deleting `FIN_FINANCIAL_ACCOUNT.xml`'s rows without touching that Java
+  would have made **every new onboarding fail**; relaxing only the gate would have left the probe
+  permanently `false`, so every retry after a partial failure would re-import the dataset and
+  duplicate products, warehouses and price lists. **Apply:** whenever a dataset row is removed, grep
+  the onboarding Java for a validator or an existence probe that counts that entity. The seed gate
+  now covers products / warehouses / price lists only.
+
+- **2026-09-01 — The `M_PRODUCT` row `ETGO_DTO` ("Discount") is NOT sample data.** It is the product
+  the inline-discount feature resolves at runtime (`ETGO_DTO_PRODUCT_ID`); deleting it breaks
+  discounts across sales and purchase orders. Its category "Discounts"
+  (`B8FE24DC84A14783846F72A25DA9CBE4`) must survive with it, and the other two categories (Bebidas,
+  Otros) are referenced by `M_PRODUCT_CATEGORY_ACCT`. **Apply:** "remove the sample products" means
+  the four `SK-00x` rows, never the five `M_PRODUCT` rows.
+
+### Table & column quirks
+
+- **2026-09-01 — `C_DOCTYPE_TRL` was never imported.** Verified live on a fresh tenant: 49
+  `c_doctype` rows and **0** `c_doctype_trl` rows. Two compounding defects: the table was missing
+  from `INCLUDED_TABLES`, *and* the 47 `es_ES` rows in `GOClient/C_DOCTYPE_TRL.xml` carried the
+  **English** text (untranslated copies), so simply allowlisting the table would have fixed nothing.
+  Both had to change together. **Apply:** when a `_TRL` table is added to the allowlist, read its
+  actual `NAME`/`PRINTNAME` content first — an existing `_TRL` row is not evidence of an existing
+  translation. `C_PAYMENTTERM_TRL` is still deliberately excluded (asserted by
+  `OnboardingDatasetNormalizerTest`).
+
+- **2026-09-01 — `C_DOCTYPE` base names must be English; the Spanish wording belongs in
+  `C_DOCTYPE_TRL`.** ETP-4737/R17 created "Factura Rectificativa" and "Factura Rectificativa
+  (compras)" with Spanish base names; they were the only two of 49 without an `es_ES` translation
+  (nobody translates a row that is already in the target language). Renamed to
+  **`Corrective Sales Invoice`** / **`Corrective Purchase Invoice`** — "Reversed Sales/Purchase
+  Invoice" already exist and would have collided. Safe to rename: verified by grepping both repos
+  that **nothing resolves either doc type by `NAME`** — the runtime matches on `DOCBASETYPE` +
+  `EM_ETSG_ISRECTIFICATIVE` (`AbstractInvoiceHeaderHandler`, `RectificativeSupport`); the ~15 hits
+  are all comments/javadoc.
+
+- **2026-09-01 — `EM_ETVFAC_VERIFAC_DESC` stays Spanish.** On the AR rectificative doc type it holds
+  `"Rectificaciones de Ventas"`, an AEAT/Verifactu literal, not a UI label. Do not "translate" it
+  when Anglicising a doc type's `NAME`/`PRINTNAME`.
+
+- **2026-09-01 — `index.txt` for the bundled sampledata is generated, not committed.**
+  `tasks.gradle`'s `prepareOnboardingSampledata` enumerates
+  `referencedata/sampledata/GOClient/*.xml` at build time into
+  `WebContent/WEB-INF/classes/com/etendoerp/go/onboarding/sampledata/index.txt`. Adding a new XML to
+  the allowlist needs **no** manual index edit. (The `index.txt` under `src-test/resources` is a
+  two-file unit-test fixture, unrelated.)
+
+- **2026-09-01 — `AD_Table_ID` for `FIN_Reconciliation` is `B1B7075C46934F0A9FD4C4D0F1457B42`**, a
+  system-level row identical in every instance — safe to hardcode in a doc-type INSERT (confirmed by
+  query). The `REC` doc type also needs a GL category; GOClient uses `Financial`
+  (`categorytype='D'`), so resolve it as `COALESCE(name='Financial', isdefault='Y', any active)`.
+
+### Idempotency / safety gotchas
+
+- **2026-09-01 — Never move `AD_Sequence.CURRENTNEXT` backwards.** `STARTNO` is metadata (the base a
+  sequence is reset to) and can be corrected freely; `CURRENTNEXT` is the next number that will be
+  **issued**. Lowering it makes a tenant re-issue document numbers it already used — duplicate
+  invoice numbers, a fiscal defect, not just a data one. The drafted fix therefore set `STARTNO`
+  unconditionally and only ever raised `CURRENTNEXT` (`WHERE s.currentnext < target`), which merely skips unused
+  numbers. In practice tenants provisioned from the old dataset already sit above the target, so only
+  `STARTNO` moves — the visible effect is that Start Number and Next Assigned Number stop being
+  wildly out of step.
+
+- **2026-09-01 — Deactivate, never delete, when retrofitting a "row that should not have existed".**
+  Standing precedent since R17 (`Active=No only, never deleted`). A `DELETE` on `M_Product`,
+  `M_Warehouse` or `AD_User` can hit any of a wide FK fan-out; a foreign-key error rolls the whole
+  fix back **and halts that tenant's entire chain** (fail-fast per tenant). Deactivation removes the
+  row from every selector, which is the functional goal, at zero risk. The one exception considered
+  safe was `M_ProductPrice`, which has no children — `DELETE`able, and only for products the same
+  apply just deactivated.
+
+- **2026-09-01 — Distinguish "pristine seed row" from "row the tenant adopted".** A new tenant has no
+  transactions, so the preventive front can simply not create a row; an existing tenant may have
+  started using it. The drafted fix gated the secondary warehouse on no stock / no `m_transaction` /
+  no `c_order`, `c_orderline`, `m_inout`, `m_inventory`, `m_movementline` reference, and each
+  `SK-00x` product on no `c_orderline` / `c_invoiceline` / `m_inoutline` / `m_transaction` /
+  non-zero `m_storage_detail`. The warehouse guard also required another active warehouse to
+  survive, so a tenant could never be left with zero. Reuse this guard set for any future
+  retire-a-seed-row corrective.
+
+- **2026-09-01 — Financial accounts are never safe to retire automatically on a live tenant.** The
+  preventive front stops seeding "Caja"/"Cuenta de Banco"/"Tarjeta", but an account with **no
+  movements yet** is precisely the account a recently onboarded tenant is about to start using, and
+  deactivating it would silently break payment and receipt registration. Unused clutter is not a
+  data-integrity problem; a disabled cash account is. This was the one item excluded even from the
+  drafted corrective, before the whole corrective was dropped — the reasoning stands for any future
+  attempt.
+
+- **2026-09-01 — Key doc-type translations by English base NAME, not by id.** `C_DocType` ids differ
+  per tenant, so a corrective cannot copy GOClient's. Joining a `VALUES` catalog on `dt.name` means a
+  doc type a tenant renamed simply does not match and keeps its current label — an intentional no-op
+  rather than a wrong translation. Use `get_uuid()` (not `@uuid_<KEY>@`) when one statement must mint
+  **many** ids: the placeholder resolves to a single id per key per apply.
+
+### Validation technique
+
+- **2026-09-01 — `EXPLAIN` is a genuinely read-only way to validate a whole data-fix.** Parsing the
+  `.sql` with the runner's own `parse-fix.js` (`parseFix` / `inlineParams` / `inlineFreshUuids`),
+  substituting a real `ad_client_id`, then running `EXPLAIN <stmt>` on every statement catches every
+  syntax error, missing column and bad cast **without executing anything and without opening a write
+  transaction** — no `BEGIN…ROLLBACK` needed. All 16 statements of the drafted R31 were validated
+  this way (which is how the technique got proven, even though the fix itself was then dropped). Pair it
+  with an `information_schema.columns` sweep for the `NOT NULL`-without-default columns of every
+  table you `INSERT` into.
+
+### Default Customer removal (ETP-5079 follow-up, 2026-09-01)
+
+- **2026-09-01 — CORRECTION, supersedes the 2026-09-01 note earlier in this section:**
+  "`OnboardingAccountingWiringService.wireBusinessPartnerAccounts()` depends on the
+  `ONBOARDING_DEFAULT_CUSTOMER` business partner, so the BP must stay" is **WRONG**. Verified by
+  reading `BP_CUSTOMER_ACCT_SQL` / `BP_VENDOR_ACCT_SQL`: both are set-based
+  `INSERT ... SELECT ... FROM c_bpartner WHERE ad_client_id = :clientId AND iscustomer = 'Y'`. With
+  zero business partners they insert zero rows and return normally — there is no dependency, only a
+  no-op. **Apply:** before declaring a Java step "depended on" by another, read the SQL it actually
+  runs; a set-based statement over an empty table is not a dependency. The BP was removed entirely
+  and `wireBusinessPartnerAccounts` deleted with it (its only caller was the default-customer step);
+  `resolveImportedLedger` and both `*_ACCT_SQL` constants survive because `wire()`'s own
+  `provisionEntityPostingAccounts` still uses them.
+
+- **2026-09-01 — Removing an onboarding-seeded entity can lock the user out of their own new
+  tenant.** `tools/app-shell/src/pages/onboarding/onboardingReadiness.js` gated entry into the
+  freshly created environment on the `C_BPartner_ID` selector returning at least one usable item,
+  and `SetupProgressStep.jsx` (in `schema_forge_core`) calls `setResult({ status: 'failed' })` and
+  **returns without redirecting** on `!readiness.ready`. Removing the default customer without
+  removing that leg would have meant: onboarding provisions perfectly, then refuses to let the user
+  in. **Apply:** whenever an entity stops being seeded, grep the SPA for a readiness/precondition
+  gate that asserts its existence — not just the backend. Readiness legs should assert
+  *configuration* (session, document type, payment terms), never *sample data*. The orphaned
+  `onboardingReadinessCustomers` i18n key had to be removed from all three locales
+  (`en_US`/`es_ES`/`es_AR`) in the same change; the repo's quality gate treats an unreferenced key
+  as drift.
+
+- **2026-09-01 — `retired.json` supports "obsoleted", not only "superseded".** `loadRetiredList`
+  structurally requires only `fixId` and `checksum`; `reason`/`retiredBy`/`retiredUtc`/`supersededBy`
+  are documentation. `R4-default-customer-location` was retired by ETP-5079 with
+  `supersededBy: []` because nothing replaces it — its *subject* (the Default Customer BP) ceased to
+  exist. Leaving it live would have been actively harmful: it would keep minting the very "Default
+  Customer Contact" `AD_User` the same ticket stops creating. **Apply:** retire on "the old fix would
+  now do the wrong thing", not only on "a newer fix does it better". `verifyRetiredList` re-checks
+  the live file's sha256 on every run, so compute the checksum from the file (`shasum -a 256`) and
+  never hand-write it; a mismatch throws and aborts the whole run.
+
+- **2026-09-01 — Do not bump `ONBOARDING_PROVISIONED_THROUGH` for a preventive-only ticket.** The
+  watermark's only job is to tell the runner which corrective fixes a newborn tenant may skip. With
+  no corrective shipping there is nothing to skip, and raising it sweeps past any fix authored in
+  between that never bumped it itself (here `R30-financial-account-card-ledger-account` and
+  `R29-transfer-link-multicurrency`), silently suppressing those for every new tenant — the "CUT bump
+  without its `.sql`" hazard. Same conclusion the G1/G4 rows reached independently. **Apply:** bump
+  the CUT only in the PR that also adds the matching `.sql`, and only to that file's own timestamp.
+
+### Sequences corrective, reversal of the no-corrective decision (ETP-5079, 2026-09-02)
+
+- **2026-09-02 — SUPERSEDES the 2026-09-01 "no corrective ships for N4" decision, for sequences
+  only.** Product owner reversed it: document sequences DO get retrofitted on existing tenants,
+  nothing else does. The reversal is coherent rather than arbitrary, and the line it draws is the
+  reusable lesson: **`AD_Sequence.STARTNO` is metadata** — the base a sequence is *reset* to, never a
+  number a document already carries — so correcting it cannot renumber anything that exists and is
+  free of risk. Every OTHER correction in gap N4 required *deactivating* something a live tenant may
+  have adopted (a warehouse, sample products, financial accounts, a user), and those stayed out.
+  **Apply:** when a business asks "can we retrofit this?", sort the candidate corrections by whether
+  they mutate metadata or destroy/disable a row a tenant might be using. The first group is almost
+  always safe to ship; the second almost never is without per-row proof of non-use.
+
+- **2026-09-02 — A corrective must MIRROR its preventive front, never exceed it.** The dataset has 15
+  further sequences with a non-zero `STARTNO`/`CURRENTNEXT` delta (GL Journal, Quotation, Proposal,
+  Credit Order, POS Order, AR Credit Memo, MM Shipment Indirect, Purchase Requisition, Settlement,
+  Manual Settlement, Depreciation, Debt Payment Management, Prepay Order, Return Material, Warehouse
+  Order) plus 96 duplicated `DocumentNo_*` rows. It is tempting to "helpfully" include them since the
+  SQL is identical — **do not.** The preventive front (`AD_SEQUENCE.xml`) fixed only 11, so widening
+  the corrective would leave EXISTING tenants in a better state than NEW ones, which is a divergence
+  bug, not a bonus. `R31-document-sequence-startno`'s header states this boundary explicitly so a
+  future reader does not widen it. Widen both fronts together, or neither.
+
+- **2026-09-02 — In-scope sequences are matched by `AD_Sequence.NAME`, and some tenants have
+  duplicates under one name.** Sequence ids differ per tenant, so a corrective has no choice but to
+  join on `NAME`. Confirmed live (read-only): several tenants carry TWO rows each for
+  `DocumentNo_A_Asset` / `DocumentNo_C_Invoice` / `DocumentNo_M_InOut` / `DocumentNo_M_Movement` —
+  the known duplicated-`DocumentNo_*` artifact. A `NAME` join therefore updates every copy. That is
+  correct (each copy is a real sequence a document could number from) and safe (each row is guarded
+  independently), but it means the row count a `--dry-run` reports can exceed 11 for such a tenant.
+  Deduplicating them is a separate, undecided question and deliberately not attempted.
+
+- **2026-09-02 — A fix whose `@check` self-excludes new tenants needs no CUT bump.** Reinforces the
+  2026-09-01 entry below rather than contradicting it. A newborn tenant already gets correct
+  sequences from the corrected `AD_SEQUENCE.xml`, so R31's `@check` returns 0 rows there and the
+  runner records `SKIPPED_NOT_NEEDED` — the same terminal state a watermark skip would produce,
+  reached by actually looking instead of by date. Bumping the CUT to R31's timestamp would
+  additionally sweep past `R30-financial-account-card-ledger-account` (2026-08-30) and
+  `R29-transfer-link-multicurrency` (2026-08-31), neither of which bumped it, silently suppressing
+  both for every new tenant. **Apply:** a cheap, precise `@check` is a better skip mechanism than the
+  watermark; reserve CUT bumps for fixes whose `@check` would return rows on a correctly provisioned
+  new tenant (i.e. where onboarding genuinely does the work the fix would otherwise redo).
+
+- **2026-09-02 — Live read-only preview is worth running before shipping a fleet-wide fix.** A single
+  grouped `SELECT` over `ad_client` × `ad_sequence` joined to the fix's own `VALUES` list showed, per
+  tenant, how many rows each branch would touch: 58 tenants carry at least one in-scope sequence,
+  the worst (F&B International Group) has 12 `STARTNO` corrections and 2 `CURRENTNEXT` raises, and
+  most tenants have 6 corrections with 0 raises and 11–14 sequences legitimately left forward. This
+  costs nothing, needs no transaction, and validates the `@check`'s selectivity and the forward-only
+  branch's reachability before a single row is written.
+
+### Forward-only CURRENTNEXT rule — dropped, and the premise that allows it (ETP-5079, 2026-09-02)
+
+- **2026-09-02 — SUPERSEDES the "Never move `AD_Sequence.CURRENTNEXT` backwards" entry above, for
+  this environment only.** That entry stands as a general rule and is NOT deleted: on a tenant with
+  genuinely issued documents, lowering `CURRENTNEXT` makes the sequence hand out numbers it has
+  handed out before — duplicate invoice/shipment/payment numbers, a fiscal defect. What changed is
+  the *premise*, not the reasoning: **at the time of writing there are no production environments.**
+  Every existing tenant is a test tenant, plus one small pre-prod with a handful of clients, so
+  there are no real document numbers to re-issue. `R31-document-sequence-startno` therefore sets
+  `CURRENTNEXT` in BOTH directions (`IS DISTINCT FROM`, not `<`). **The conditional is the durable
+  part: if that fix — or any successor — is ever pointed at a tenant holding genuinely issued
+  documents, the forward-only guard must be restored first.** The SQL cannot tell the two situations
+  apart; only whoever runs it can. The instruction is repeated in the fix's own header.
+
+- **2026-09-02 — A safety guard that makes a fix unable to do its job is a bug, not caution.**
+  Measured live before changing anything: with the forward-only guard, `R31` was a **complete no-op
+  for 5 of its 11 sequences** — `DocumentNo_C_Invoice`, `DocumentNo_M_InOut`,
+  `DocumentNo_M_Movement`, `DocumentNo_A_Asset` and `Secuencia TICKETBAI` already carried the
+  correct `STARTNO`, so lowering `CURRENTNEXT` was the *only* correction they ever needed and the
+  guard refused it. Fleet-wide that was 460 rows across 39 tenants left untouched, and the ticket's
+  acceptance criterion (TC-6: `currentnext == startno`) was unreachable on any existing tenant —
+  only 19 of 58 satisfied it. **Apply:** after adding a guard to a corrective, measure how many rows
+  it excludes and check whether the fix can still satisfy its acceptance criterion. A guard that
+  suppresses the majority of the intended work needs its premise re-examined, not just its comment
+  improved. A read-only `count(*) FILTER (WHERE <each branch>)` grouped by sequence/entity answers
+  this in one query, before any code is written.
+
+- **2026-09-02 — `IS DISTINCT FROM` is the right idempotency guard for a bidirectional update.**
+  Once a corrective sets a column to a target in either direction, `<` and `>` stop being usable as
+  the re-run guard. `IS DISTINCT FROM <target>` keeps the statement a strict no-op on re-run and is
+  NULL-safe (unlike `<>`), so it works for a nullable column too. Both of R31's `@apply` statements
+  now use it, and its `@check` mirrors the same predicate on both columns — a `@check` that only
+  looked at `STARTNO`, or only at a `CURRENTNEXT` *below* target, would never make the fix reachable
+  for the five sequences whose only defect was a too-high `CURRENTNEXT`.
+
+- **2026-09-02 — When behaviour changes, repoint the `@report`, never leave it describing the old
+  behaviour.** R31's report used to list "sequences whose `CURRENTNEXT` was deliberately left above
+  `STARTNO`" — a set that is now always empty by construction. It was repointed to a post-condition
+  check (in-scope sequences *still* off target after the apply), which should always return zero
+  rows; a non-empty `detail` on the `APPLIED` ledger row is now a genuine signal worth investigating
+  rather than expected noise.
+
+### Product categories reduced to two (ETP-5079, 2026-09-02)
+
+- **2026-09-02 — SUPERSEDES the 2026-09-01 note above claiming the other two categories "are
+  referenced by `M_PRODUCT_CATEGORY_ACCT`" and must therefore survive.** That justification was
+  **wrong**, and in a way worth remembering: `M_PRODUCT_CATEGORY_ACCT` is **not in
+  `INCLUDED_TABLES`**, so it never reaches a tenant and cannot constrain what the dataset may drop.
+  After inspecting the live FranOB2 tenant the human removed **`Bebidas`**
+  (`0953563B605F4CD29A65A87F6F7F48B7`) from `M_PRODUCT_CATEGORY.xml`. Two rows remain: **`Otros`**
+  (`EBAE46FD129049DEB26B948E160C6AD8`), kept deliberately as the generic starter category, and
+  **`Discounts`** (`B8FE24DC84A14783846F72A25DA9CBE4`), which `ETGO_DTO` requires. **Apply:** before
+  citing table B as the reason row A must survive, check table B against `INCLUDED_TABLES` — a
+  reference from a non-imported table is not a constraint on the dataset. This is the third time the
+  allowlist has been the deciding fact in this ticket (`C_BPARTNER`, the warehouse cascade, and now
+  this one).
+
+- **2026-09-02 — `ETGO_DTO` ("Discount") re-confirmed as infrastructure, not sample data.** The
+  human considered removing it and decided to keep it after seeing the evidence:
+  `TotalDiscountService.java:58` states the product "must exist in the database before the feature
+  is used", and it is resolved from `OrderLineHandler`, `InOutLineFromOrderFactory`,
+  `NeoCommercialDocumentFactory`, `InvoiceFromOrderSupport`, `CreatePurchaseInvoiceHandler` and the
+  selector policies. It is already invisible in the UI because its category carries
+  `EM_Etgo_IsSystemCategory='Y'`, which `ProductSystemCategorySelectorPolicy` /
+  `ProductCategorySystemFlagSelectorPolicy` filter out of every generic FK selector and widget
+  ranking — so "it clutters the product list" is not a reason to remove it.
+
+- **2026-09-02 — Assert a surviving category by ID, not by name, in dataset regression tests.** The
+  string `"Otros"` also occurs in the Spanish chart of accounts (`C_ELEMENTVALUE.xml` /
+  `C_ELEMENTVALUE_TRL.xml`), both of which ARE imported, so
+  `assertTrue(xml.contains("Otros"))` would pass even if the category row were deleted — a silently
+  useless assertion. `testNormalizerShipsCorrectedInitialDataset` asserts
+  `EBAE46FD129049DEB26B948E160C6AD8` instead. `"Bebidas"` and `"Discounts"` are collision-free
+  across the imported set, so those two are safe as name assertions. **Apply:** before adding a
+  `contains(<name>)` assertion over the whole normalized dataset, grep that string across only the
+  `INCLUDED_TABLES` files first — the chart of accounts alone is 4.8 MB of Spanish nouns and
+  collides with a lot of plausible names.
+
+---
+
+## 2026-09-03 — Merge of ETP-5117 into `develop`: `N1`/`R31`/`R32` label collisions confirmed, only one side has a real ledger row
+
+- **Two independent branches (ETP-5117 and ETP-5101 S2.2) both claimed gap label `N1` AND both
+  minted a corrective `.sql` labeled `R31` on the same day, 2026-09-01** — resolved forward during
+  this merge by keeping BOTH sections/rows in `onboarding-gaps.md` and
+  `onboarding-and-datafixes-map.md` (two separate `## N —` headings, two separate table rows), each
+  flagged with an explicit collision note per this doc's own precedent (`L1`, see the earlier merge
+  entry above). **A second, previously-unnoticed collision surfaced while writing that flag: `R32`
+  is ALSO duplicated** — `20260901T130000Z__R32-revert-test-mode-productive-tenants.sql` (ETP-5117)
+  vs. `20260902T090000Z__R32-glitem-name-resync.sql` (ETP-5101 S2.2). Confirmed both pairs of files
+  physically exist under `cli/src/data-fixes/sql/` with those exact names — the collision is real,
+  not a doc-only artifact.
+- **Checked `ETGO_DATA_FIX_HISTORY` on the shared dev DB before recommending any action (per the
+  framework's own immutability rule, which keys off a REAL ledger row, not merely "the file
+  exists").** Of the four colliding files, only `20260901T120000Z__R31-force-test-mode-demo-tenants`
+  carries an actual row (`SKIPPED_NOT_NEEDED`, `remediated_client_id=802509E12436405C86BA1FD5B1DF508C`,
+  `applied_utc=2026-09-02T13:37:58.281Z`) — `SKIPPED_NOT_NEEDED` is a `PROCESSED`/success state per
+  the runner's own status set, so this file is immutable and must keep its current name. The other
+  three (`R31-glitem-subaccount-backfill`, `R32-revert-test-mode-productive-tenants`,
+  `R32-glitem-name-resync`) have **zero** ledger rows on this DB — every validation claimed for them
+  in `onboarding-gaps.md` was explicitly a rolled-back transaction, never a real run, matching what
+  their own delivery notes already say. **Apply generally:** when a label collision is found during
+  a merge, don't assume "immutable" from a file merely existing in git — query
+  `ETGO_DATA_FIX_HISTORY` for the specific `fix_id` (the filename minus `.sql`) before deciding
+  whether a rename is even on the table; a `.sql` with zero ledger rows anywhere is exactly as
+  renamable as a brand-new fix that hasn't shipped yet, regardless of how much prose describes it.
+- **Renaming was NOT done here** — flagged to the coordinator for a decision instead, since three of
+  the four files are technically renamable (no ledger row) but are already cross-referenced by
+  filename across multiple docs (`onboarding-gaps.md`, `onboarding-and-datafixes-map.md`, this
+  file's own N1/N2/N3 bullets above, and `OnboardingBaselineService.java`'s javadoc), so a rename
+  is a real multi-file edit, not a one-line fix, and is a product/process call (which ticket's
+  label "wins") as much as a technical one.
+## 2026-09-09 — Merge of `develop` into `feature/ETP-5207`: `A8`/`R34` label collision (ETP-5207 vs ETP-5075)
+
+- **Two independent branches (ETP-5207 and ETP-5075) both claimed gap label `A8`**, discovered as a
+  merge conflict when merging `origin/develop` into `feature/ETP-5207`. ETP-5075 authored it
+  2026-09-07 (already published on `develop`); ETP-5207 authored it 2026-09-08 (still on a feature
+  branch, unmerged).
+- **Both also minted a corrective `.sql` labeled `R34`** the same week —
+  `20260907T180000Z__R34-invoice-price-variance-backfill.sql` (ETP-5075) and
+  `20260908T120000Z__R34-fin-account-cleared-payment-accounts.sql` (ETP-5207) — but unlike the
+  `N1`/`R31` case above, this is NOT a filename collision: both full filenames are already distinct,
+  only the human-readable `Rnn` prefix repeats, which this catalog already treats as normal (see
+  R14/R17/R23/R26). Nothing to rename on the SQL side.
+- **The `A8` gap LABEL is the only real collision, and — unlike the `N1` case — it WAS renamed
+  during this merge rather than left as a duplicate.** ETP-5075's `A8` stays (published on
+  `develop` first); ETP-5207's is relabeled `A9`. The `N1` case's own "Apply generally" advice
+  (query `ETGO_DATA_FIX_HISTORY` before assuming a rename is cheap, and don't rename when a label is
+  already cross-referenced in many places) still holds — it just resolves differently here because
+  ETP-5207's `A8` was one day old, on a feature branch, and referenced in exactly 4 places (this
+  file, `onboarding-gaps.md`, `onboarding-and-datafixes-map.md`, and its own `.sql`/regression test),
+  none of them a real `ETGO_DATA_FIX_HISTORY` row keyed on the label itself (`@gap` is never stored
+  there). A rename was a one-line fix in each of those 4 places, not the "real multi-file edit" the
+  `N1` case flagged — so it was done directly instead of deferred to a separate decision.
+- **Apply generally:** "flag for a decision instead of renaming" (the `N1` precedent) is the right
+  default when a rename is expensive or ambiguous — many cross-references, unclear which ticket's
+  label should win, or a real ledger row under the disputed identifier. When the newer side is
+  still unmerged and lightly referenced, as here, renaming it during the merge is simpler and
+  leaves no dangling decision for someone else to pick up later.
+
+---
+
+## ETP-5207 — "Cleared payment account" (IN/OUT) pre-filled on Financial Account creation (A9, R34, 2026-09-08)
+
+Four reusable core/onboarding facts came out of this one. All four were verified by reading the
+code, not inferred.
+
+- **`FIN_FINANCIAL_ACCOUNT_ACCT` is NOT in `OnboardingDatasetDefinition.INCLUDED_TABLES`, so
+  `GOClient/FIN_FINANCIAL_ACCOUNT_ACCT.xml` is never imported into a tenant.** `INCLUDED_TABLES`
+  carries `FIN_FINANCIAL_ACCOUNT` but not the `_ACCT` child; `OnboardingSourceFiles`'
+  classpath provider filters every bundled XML through `shouldIncludeTable`, so that file is inert.
+  The row a new tenant actually receives is written by
+  `OnboardingAccountingWiringService#FIN_FINANCIAL_ACCOUNT_ACCT_SQL`.
+  **Apply:** before "fixing" a value in any `referencedata/sampledata/GOClient/*.xml`, check that
+  its table is actually in `INCLUDED_TABLES`. If it is not, the XML edit is cosmetic and the real
+  preventive front is the corresponding `*_SQL` constant in `OnboardingAccountingWiringService`.
+  Edit the XML anyway for template consistency, but never *instead of* the Java.
+
+- **`APRM_FIN_FINACC_ACCT_CHECK_TRG` fires `BEFORE INSERT` *and `UPDATE`*.** It raises
+  `@APRM_GainLossFeeAccountsError@` whenever a `fin_financial_account_acct` row whose account
+  `type='B'` has any of `fin_bankfee_acct` / `fin_bankrevaluationgain_acct` /
+  `fin_bankrevaluationloss_acct` NULL. In PostgreSQL that aborts the whole transaction.
+  **Apply:** any data-fix that `UPDATE`s this table must exclude such rows, or a single malformed
+  Bank row (typically a tenant with an incomplete `c_acctschema_default`, i.e. gap A2d) turns the
+  fix into `FAILED` for the entire tenant. It is not enough that the fix does not *write* those
+  three columns — the trigger re-validates the row on any update.
+
+- **`DocFINReconciliation`'s posting gate and its fact-building loop are asymmetric.**
+  `getDocumentConfirmation` (`:1351-1390`) decides *whether the document posts at all* by adding
+  transactions to `transactionsToBePosted` only when the relevant account is non-null (empty set →
+  `STATUS_DocumentDisabled`, a clean no-post, not an error). But once the gate passes, `createFact`
+  (`:722-734`) iterates **every** `p_lines` entry, not `transactionsToBePosted` — and
+  `createFactFee` (`:772`) / `createFactGLItem` call `getClearOutAccount`/`getAccount`
+  unconditionally, where `:1609-1611` dereferences `getClearedPaymentAccount(OUT)().getId()` with
+  **no null check** (NPE → `IllegalStateException` → `@InvalidAccount@`).
+  **Apply:** nulling a `*_acct` column that the gate consults is safe only while *nothing* passes
+  the gate. If one line can pass while another line in the same document needs the nulled account,
+  posting fails hard instead of skipping. For the ETP-5207 seeded configuration this is
+  unreachable (only "Recibo" carries `INUPONCLEARINGUSE=CLE`, and `AcctServer:859-860` gates
+  `post()` on `getDocumentConfirmation`, with no `createfact` template in the GOClient sampledata to
+  trigger `disableDocumentConfirmation()`), but a tenant that hand-configures a method with
+  `INUponClearingUse`/`OUTUponClearingUse` in `INT`/`DEP`/`WIT` re-opens it. Cheap pre-check:
+  `SELECT name, upondeposituse, uponwithdrawaluse, inuponclearinguse, outuponclearinguse FROM
+  fin_paymentmethod WHERE ad_client_id = '<client_id>';`
+
+- **`FIN_FINACC_PAYMENTMETHOD.INUPONCLEARINGUSE`/`OUTUPONCLEARINGUSE` have no column default
+  (empty `<default/>`), and `FinancialAccountSupport#createLink` copies all four use-fields from
+  the payment-method master.** So a link's clearing-use is whatever the master says, or NULL. In
+  the GOClient sampledata only **"Recibo"** carries `CLE` on both — and it is auto-assigned to
+  Banco and Tarjeta accounts by `PAYMENT_METHODS_BY_TYPE`, which is why the bug manifested on
+  exactly those two types.
+  **Apply:** when reasoning about which reconciliation path a tenant actually exercises, read the
+  *link* row (`FIN_FINACC_PAYMENTMETHOD`), not the master — and remember `UPONDEPOSITUSE`/
+  `UPONWITHDRAWALUSE` (transaction-time) are different fields from `INUPONCLEARINGUSE`/
+  `OUTUPONCLEARINGUSE` (reconciliation-time). Confusing the two pairs makes the whole gate analysis
+  wrong.
+
+**Non-obvious consequence worth carrying forward:** emptying these two columns also stops GO's
+cash-close *difference* postings (GL-item `BPD`/`BPW`) and bank-fee (`BF`) lines from reaching the
+ledger — silently, via the same gate. That is what ETP-5207 asked for, but it is broader than
+"reconciliations are not posted", so it needs a functional sign-off rather than being treated as an
+implementation detail.

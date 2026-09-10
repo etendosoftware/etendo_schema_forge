@@ -33,7 +33,8 @@ describe('accountCellTypes — module shape', () => {
 
   it('declares one renderer per cellType decisions.json can name', () => {
     for (const cellType of [
-      'accountName', 'accountType', 'accountCountry', 'accountBalance', 'reconcilePill',
+      'accountName', 'accountType', 'accountCountry', 'currencyChip', 'accountBalance',
+      'reconcilePill',
     ]) {
       assert.match(src, new RegExp(`\\n  ${cellType}: \\(row`));
     }
@@ -49,7 +50,7 @@ describe('accountCellTypes — module shape', () => {
     );
     assert.ok(sharedImport, 'the registry must import its cell bodies from accountColumns.jsx');
     const imported = sharedImport[1].split(',').map((name) => name.trim());
-    for (const cell of ['NameCell', 'TypeCell', 'CountryCell', 'BalanceCell']) {
+    for (const cell of ['NameCell', 'TypeCell', 'CountryCell', 'CurrencyCell', 'BalanceCell']) {
       assert.ok(imported.includes(cell), `${cell} must be reused from the shared module`);
     }
     assert.match(src, /import \{ ReconcilePill \} from '\.\/ReconcilePill\.jsx'/);

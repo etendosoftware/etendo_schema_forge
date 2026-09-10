@@ -170,35 +170,40 @@
 .inset-panel-exit { animation: inset-panel-exit 0.18s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
 
 /*
- * Switch (ToggleRow) disabled-track colours — ETP-4879.
+ * Switch (ToggleRow) track colours — ETP-4879, extended by ETP-5120.
  *
- * The core `Switch` primitive derives its disabled look purely from
- * `disabled:opacity-50` layered on top of `bg-primary` / `bg-input`. That makes the
- * disabled-checked colour a side effect of opacity math instead of a deliberate value,
- * and it lands at the wrong shade (measured live on a mandatory, checked-and-disabled
- * toggle: a muddy mid-grey instead of the intended one). Figma calls for 4 distinct
- * track colours (off-enabled, off-disabled, on-enabled, on-disabled); off-enabled and
- * on-enabled already match via `--input` / `--primary`, so only the two disabled
- * states need an explicit value here.
+ * The core `Switch` primitive derives its look from `bg-primary` / `bg-input` (enabled
+ * states) plus a blanket `disabled:opacity-50` on top of those same classes (disabled
+ * states). ETP-4879 found the disabled-checked colour was a side effect of opacity math
+ * instead of a deliberate value and landed at the wrong shade, and pinned the two
+ * disabled-state tracks here explicitly. ETP-5120 got a real Figma export (light + dark,
+ * all 4 states) and found the ETP-4879 assumption that the two enabled states "already
+ * match via `--input`/`--primary`" was wrong, and that the ETP-4879 dark disabled values
+ * (an unvalidated guess — no Figma export existed yet for dark) didn't match either. All
+ * 4 states are now pinned from the real export.
  *
- * These are NOT derived from opacity — each is a deliberate colour, faded toward the
- * theme's own background/card (same "reduced contrast toward the surface" relationship
- * `--text-disabled` already uses relative to `--foreground` in both light and dark).
+ * These are deliberate colours, not derived from opacity or from `--input`/`--primary`.
  * Kept in this app's own index.css (not the core's styles.css) because ToggleRow is the
  * only consumer and the fix must not touch the shared `Switch` primitive.
  *
- * Light values match the Figma export almost exactly (off-disabled within one hex step,
- * on-disabled exact). Dark values are not from a Figma export (none was provided) — they
- * apply the same fade-toward-surface ratio to `--input`/`--primary`'s dark HSL, then
- * desaturate, so the two disabled tracks stay visually distinct from their enabled
- * counterparts and from each other without ever reproducing `disabled:opacity-50`.
+ * Two of the four dark values are translucent white overlays. Stored as `H S% L%`
+ * (plus an optional `/ A` alpha component for those two), consumed uniformly as
+ * `hsl(var(--switch-track-*))` in ToggleRow.jsx — same convention as every other
+ * token in this file (e.g. `--floating-toolbar-fg` above via `hsl(var(--x) / 0.3)`).
+ * Values below are exact HSL conversions of the original Figma export's hex/rgba
+ * colors, verified to round-trip byte-for-byte back to those originals — not a
+ * visual approximation.
  */
 :root {
-  --switch-track-off-disabled: 223 18% 92%;
-  --switch-track-on-disabled: 224 12% 70%;
+  --switch-track-off-enabled: 222 12.2% 83.9%;
+  --switch-track-on-enabled: 240 12.2% 8%;
+  --switch-track-off-disabled: 222.9 17.9% 92.4%;
+  --switch-track-on-disabled: 224.2 12.4% 70%;
 }
 
 .dark {
-  --switch-track-off-disabled: 218 14% 30%;
-  --switch-track-on-disabled: 219 24% 38%;
+  --switch-track-off-enabled: 0 0% 100% / 0.30;
+  --switch-track-on-enabled: 240 12.2% 8%;
+  --switch-track-off-disabled: 0 0% 100% / 0.20;
+  --switch-track-on-disabled: 224.2 12.4% 70%;
 }

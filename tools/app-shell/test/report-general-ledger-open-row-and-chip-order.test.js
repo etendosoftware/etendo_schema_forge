@@ -7,11 +7,21 @@
  *     `.acct-open td` now carries `font-weight: 700` alongside its existing
  *     italic style, matching `.acct-total`'s weight.
  *
- *  2. The dimension chip header ("[CONTACTO] Blanquiceleste S.A.") read
- *     backwards next to a filled table body — the dimension VALUE now comes
- *     first (bold, on the left) and the dimension LABEL chip ("Contacto")
- *     moves to the right as a light-gray pill, via `justify-content:
- *     space-between` on `.dim-group-head` plus swapping the markup order.
+ *  2. The dimension chip header ("[CONTACTO] Blanquiceleste S.A.") originally
+ *     read backwards next to a filled table body, so ETP-5013 put the
+ *     dimension VALUE first (bold, on the left) and pushed the dimension
+ *     LABEL chip ("Contacto") to the right via `justify-content:
+ *     space-between` on `.dim-group-head`.
+ *
+ * ETP-5128 follow-up — that `space-between` layout made the chip read as
+ * effectively missing/lost in the real generated report (pushed far off to
+ * the right, away from the value it labels). Reversed again: `.dim-group-head`
+ * no longer sets `justify-content: space-between` (plain flex, natural
+ * width), and the markup order is swapped back to chip-first, value-second —
+ * `<span class="chip">...</span><span class="value">...</span>`. The chip's
+ * own visual style (filled light-gray pill) is unchanged, only its position.
+ * The same reversal was applied in lockstep to inventory-stock-report's
+ * `.stock-card-head` (see report-inventory-stock-grouped-cards.test.js).
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -36,17 +46,17 @@ describe('report-general-ledger — .acct-open bold, matching .acct-total (ETP-5
   });
 });
 
-describe('report-general-ledger — dim-group-head value/chip order (ETP-5013 follow-up)', () => {
-  it('.dim-group-head uses justify-content: space-between', () => {
+describe('report-general-ledger — dim-group-head value/chip order (ETP-5128 follow-up, reverses ETP-5013)', () => {
+  it('.dim-group-head does NOT use justify-content: space-between', () => {
     const body = ruleBody(src, '.dim-group-head');
     assert.ok(body, 'expected a .dim-group-head rule');
-    assert.match(body, /justify-content:\s*space-between/);
+    assert.doesNotMatch(body, /justify-content:\s*space-between/);
   });
 
-  it('the dimension VALUE renders BEFORE the chip in markup (value on the left, chip on the right)', () => {
+  it('the chip renders BEFORE the dimension VALUE in markup (chip on the left, value on the right)', () => {
     assert.match(
       src,
-      /<div class="dim-group-head"><span class="value">\{\{this\.dimensionValue\}\}<\/span><span class="chip">\{\{@root\.meta\.dimensionLabel\}\}<\/span><\/div>/
+      /<div class="dim-group-head"><span class="chip">\{\{@root\.meta\.dimensionLabel\}\}<\/span><span class="value">\{\{this\.dimensionValue\}\}<\/span><\/div>/
     );
   });
 

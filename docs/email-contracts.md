@@ -51,6 +51,8 @@ The browser must not send provider API keys, sender addresses, raw templates, or
 
 For the app-shell document send flow, `SendDocumentModal` posts only the contract command to `/sws/neo/email-contracts/{document-contract}/send`, such as `sales-invoice-send`, `sales-order-send`, or `sales-quotation-send`. The UI must not include `to`, `template`, `data`, `subject`, `body`, sender, Reply-To, or provider metadata in that request; those values are resolved by the server-side contract. The only recipient-related field the document-send UI may add is the allowlisted `recipientEdits` described below.
 
+Reading back what was sent is a separate, read-only endpoint: `GET /sws/neo/documentemailhistory?recordId=<documentId>` answers `{"result": "<JSON string>"}` on success (note `result` is a STRING the client parses) and `{"error": "<message>"}` on failure. The app-shell consumes it from `EmailsCard` in the preview panels (ETP-5069); only `SENT` and `DUPLICATE` are treated as successful sends — every other status (`PROVIDER_FAILED`, `THROTTLED`, `SUPPRESSED`, `NO_RECIPIENT`, `UNAUTHORIZED`, `VALIDATION_FAILED`) is a failure and is never presented as sent. There is no `DELIVERY_FAILED` status.
+
 ### `recipientEdits` (document-send family only)
 
 Document-send contracts accept an optional `recipientEdits` command field by default (ETP-4226). It carries the user's edits to the recipient lists in two channels — `to` (add/remove) and `cc` (add only; base recipients never originate in CC):

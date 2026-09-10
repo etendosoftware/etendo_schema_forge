@@ -44,6 +44,16 @@ describe('translateBackendError', () => {
         raw: 'Only processed statements can be reactivated',
         key: 'backendError.statementNotProcessed',
       },
+      // ETP-5121 (QA round) — the reconciliation write guards. `reconcileGroup`,
+      // `ReconciliationFlowSupport.prepareGroup` and `ReconciliationDifferenceSupport` all answer
+      // 409 with this sentence for a line whose statement is back in Borrador. The automatch no
+      // longer proposes such a line, so the way a user reaches it is a STALE preview — the
+      // statement was reactivated in another tab between opening the suggestions and applying
+      // them — and the toast that renders it is the only explanation they get.
+      {
+        raw: 'The bank statement is in draft; process it before reconciling its lines',
+        key: 'backendError.statementDraftNotReconcilable',
+      },
       // ETP-5085 — FinancialAccountTransactionsHandler.handleDelete's funds-transfer guard. The
       // 409 it returns replaced an opaque HTTP 500, and without this entry the user would read
       // the replacement in English.
@@ -1621,5 +1631,52 @@ describe('"Account <code> already exists." parameterized match', () => {
   it('does not match an unrelated message that merely mentions "already exists"', () => {
     const unrelated = 'A rule with this priority already exists for the selected scope';
     assert.equal(translateBackendError(unrelated, es), unrelated);
+  });
+});
+
+// GoodsMovementProcessGuard.java (com.etendoerp.go — ETP-5037), `ETGO_InsufficientStockProcess`.
+// Named by product, not counted by group/line (a single product can span several offending
+// lines summed into one group — a bare count like "1 line(s)" reads as if only one line were
+// at fault, when it is really the sum of two or more that goes over).
+describe('translateBackendError — "insufficient stock (process)" parameterized match, named by product (ETP-5037)', () => {
+  const en = fakeUiTranslator({
+    'backendError.insufficientStockProcess':
+      'This movement cannot be processed: the line(s) of {products} exceed the available source-warehouse stock: {details}',
+  });
+  const es = fakeUiTranslator({
+    'backendError.insufficientStockProcess':
+      'Este movimiento no se puede procesar: Las línea(s) de {products} superan el stock disponible del almacén origen: {details}',
+  });
+
+  it('translates a single-product violation, naming the product instead of a line count', () => {
+    const raw = 'This movement cannot be processed: the line(s) of SK-003 exceed the available source-warehouse stock: SK-003 (Almacen GO): 493 > 490';
+    assert.equal(
+      translateBackendError(raw, es),
+      'Este movimiento no se puede procesar: Las línea(s) de SK-003 superan el stock disponible del almacén origen: SK-003 (Almacen GO): 493 > 490',
+    );
+  });
+
+  it('translates a multi-product violation, listing every offending product comma-separated', () => {
+    const raw = 'This movement cannot be processed: the line(s) of SK-003, SK-004 exceed the available source-warehouse stock: SK-003 (Almacen GO): 493 > 490; SK-004 (Almacén Secundario): 60 > 50';
+    assert.equal(
+      translateBackendError(raw, es),
+      'Este movimiento no se puede procesar: Las línea(s) de SK-003, SK-004 superan el stock disponible del almacén origen: SK-003 (Almacen GO): 493 > 490; SK-004 (Almacén Secundario): 60 > 50',
+    );
+  });
+
+  it('translates to en_US unchanged in shape (identity template)', () => {
+    const raw = 'This movement cannot be processed: the line(s) of SK-003 exceed the available source-warehouse stock: SK-003 (Almacen GO): 493 > 490';
+    assert.equal(translateBackendError(raw, en), raw);
+  });
+
+  it('does not match the old "@count@ line(s)" shape (regression guard for the wording change)', () => {
+    const old = 'This movement cannot be processed: 1 line(s) exceed the available source-warehouse stock: SK-003 (Almacen GO): 493 > 490';
+    assert.equal(translateBackendError(old, es), old);
+  });
+
+  it('returns the original message unchanged when the translation key is missing (guard)', () => {
+    const raw = 'This movement cannot be processed: the line(s) of SK-003 exceed the available source-warehouse stock: SK-003 (Almacen GO): 493 > 490';
+    const missingT = (k) => k;
+    assert.equal(translateBackendError(raw, missingT), raw);
   });
 });

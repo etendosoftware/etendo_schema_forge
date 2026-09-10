@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../helpers/auth.js';
 import {
+  ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
+} from '../helpers/product-helpers.js';
+import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
   addProductLine, ensureVendorSetup, clickConfirmButton, expectStatusPill,
   dismissSuccessModal, safeReload, readDocumentTotals, verifyTotalsConsistency,
@@ -45,6 +48,13 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
 
     await test.step('Ensure the contact has isVendor = true', async () => {
       await ensureVendorSetup(page, { navigateTo });
+    });
+
+    // ETP-5079: the onboarding dataset no longer seeds any visible product, so the
+    // two lines below have nothing to pick unless the suite provisions its own
+    // fixtures first. See e2e/tests/helpers/product-helpers.js.
+    await test.step('Ensure product fixtures', async () => {
+      await ensureProductFixtures(page);
     });
 
     await test.step('Create a new Purchase Order', async () => {
@@ -104,8 +114,8 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
     });
 
     await test.step('Add two product lines', async () => {
-      await addProductLine(page, { isFirst: true, productIndex: 0 });
-      await addProductLine(page, { productIndex: 1, quantity: '3' });
+      await addProductLine(page, { isFirst: true, productName: PRODUCT_FIXTURE_ALPHA.name });
+      await addProductLine(page, { productName: PRODUCT_FIXTURE_BETA.name, quantity: '3' });
 
       await expect(page.locator('tbody tr'),
         'PO should have 2 lines after adding both products',

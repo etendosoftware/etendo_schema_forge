@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useUI, useMenuLabel } from '@/i18n';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
@@ -110,7 +111,12 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
     return () => { cancelled = true; };
   }, [isCompleted, recordId, base, headers, apiBaseUrl]);
 
-  const confirmedPanel = confirmedDocs
+  // ETP-5063 — a confirm that created neither a receipt nor an invoice has
+  // nothing worth a blocking modal for; only render it when at least one
+  // related document actually exists.
+  const hasConfirmedDoc = Boolean(confirmedDocs?.receipt?.id || confirmedDocs?.invoice?.id);
+
+  const confirmedPanel = confirmedDocs && hasConfirmedDoc
     ? createPortal(
         <ConfirmResultModal
           title={confirmedTitle || ui('poConfirmedTitle')}
@@ -125,6 +131,19 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
         document.body,
       )
     : null;
+
+  // ETP-5063 — when confirming created no related document, skip the modal
+  // and communicate success via an auto-dismissing toast instead, matching
+  // the UX used everywhere else success is communicated.
+  useEffect(() => {
+    if (confirmedDocs && !hasConfirmedDoc) {
+      toast.success(confirmedTitle || ui('poConfirmedTitle'));
+      emitSurveyTrigger();
+      onRefresh?.();
+      setConfirmedDocs(null);
+      setConfirmedTitle(null);
+    }
+  }, [confirmedDocs, hasConfirmedDoc, confirmedTitle, onRefresh, ui]);
 
   const cloneButton = (
     <button type="button" onClick={() => setShowClone(true)} style={{...btnCloneStyle, background: isCloneHovered ? 'hsl(var(--card))' : 'hsl(var(--card))'}} title={ui('cloneOrderBtn')} onMouseEnter={() => setIsCloneHovered(true)} onMouseLeave={() => setIsCloneHovered(false)}>

@@ -3,6 +3,50 @@ import { createPortal } from 'react-dom';
 
 /* eslint-disable react/prop-types */
 
+// `destructive` is the default because every original caller undoes something. `warning` is for a
+// blocking prompt whose confirm BUILDS something (configure and continue): the heading still
+// signals "stop and read", but a red confirm button would tell the user the save is dangerous.
+//
+// The heading stays plain text in the `warning` tone. Colouring it amber put a third warning signal
+// on a dialog that already has the amber strip and the amber consequence icons, and the heading is
+// a plain statement of fact ("no accounting account configured"), not the alarm. The destructive
+// tone keeps its red heading: there the title IS the alarm.
+const TONE_STYLES = {
+  destructive: {
+    accent: 'var(--status-destructive-fg)',
+    confirmBg: 'var(--status-destructive-fg)',
+    titleColor: 'var(--status-destructive-fg)',
+  },
+  warning: {
+    accent: 'var(--status-warning-fg)',
+    confirmBg: 'hsl(var(--text-primary))',
+    titleColor: 'hsl(var(--text-primary))',
+  },
+};
+
+/**
+ * Which consequence bullets this cartel lists.
+ *
+ * A caller either hands the list over ready-made through `items`, or hands over the three
+ * per-consequence labels and the record's flags and lets this pick. An EMPTY `items` array is a
+ * deliberate answer, not an absent one, so it is returned untouched — that is how a caller says
+ * "there is nothing to undo" (ETP-5111).
+ *
+ * Extracted from the component to keep its cognitive complexity under the limit: three
+ * flag-and-label pairs are six branches that have nothing to do with rendering.
+ */
+function resolveItems({
+  explicitItems, reconciled, hasTransaction, posted,
+  itemConciliacion, itemTransaccion, itemAsiento,
+}) {
+  if (explicitItems) return explicitItems;
+  const items = [];
+  if (reconciled && itemConciliacion) items.push(itemConciliacion);
+  if (hasTransaction && itemTransaccion) items.push(itemTransaccion);
+  if (posted && itemAsiento) items.push(itemAsiento);
+  return items;
+}
+
 /**
  * Generic confirmation dialog for destructive record-lifecycle actions
  * (Reactivar / Eliminar of a reconciled/posted record). Shared by Movimientos
@@ -22,6 +66,13 @@ import { createPortal } from 'react-dom';
  * bank-reconciliation Desconciliar / Reactivar dialog) can pass the ready-made {@code items} list
  * instead and skip the flags entirely; it takes precedence when provided.
  *
+ * <p>ETP-5111 — both halves of the body are optional. An empty item list renders no bulleted
+ * block, and a falsy {@code warning} renders no yellow box; with neither, the body is omitted
+ * altogether and the dialog is title + subtitle + buttons. That is the shape a confirmation for a
+ * record with nothing to undo needs (deleting a draft movement) — before this, an absent warning
+ * was impossible to express, so the Movimientos wrapper fell back to posted-state copy and told
+ * the user a nonexistent accounting entry would be reversed.
+ *
  * @param {{
  *   reconciled?: boolean,
  *   posted?: boolean,
@@ -30,7 +81,7 @@ import { createPortal } from 'react-dom';
  *   sub: string,
  *   confirmLabel: string,
  *   cancelLabel: string,
- *   warning: string,
+ *   warning?: string,
  *   itemConciliacion?: [string, string],
  *   itemAsiento?: [string, string],
  *   itemTransaccion?: [string, string],
@@ -39,14 +90,25 @@ import { createPortal } from 'react-dom';
  *   onConfirm: () => Promise<void> | void,
  *   onClose: () => void,
  *   testIdPrefix?: string,
+ *   tone?: 'destructive' | 'warning',
+ *   children?: import('react').ReactNode,
+ *   confirmDisabled?: boolean,
  * }} props
  */
 export default function LifecycleConfirmModal({
   reconciled, posted, hasTransaction, title, sub, confirmLabel, cancelLabel, warning,
   itemConciliacion, itemAsiento, itemTransaccion, items: explicitItems, confirmIcon = null,
-  onConfirm, onClose, testIdPrefix = 'lifecycle-confirm',
+  onConfirm, onClose, testIdPrefix = 'lifecycle-confirm', tone = 'destructive', children = null,
+  confirmDisabled = false,
 }) {
+  // An unrecognised tone falls back to `destructive`, which is what the previous per-property
+  // ternaries did by treating everything that was not `warning` as destructive.
+  const { accent, confirmBg, titleColor } = TONE_STYLES[tone] ?? TONE_STYLES.destructive;
   const [loading, setLoading] = useState(false);
+
+  // Read four times in the confirm button's markup; collapsing it here keeps the disabled visual
+  // state and the guard from drifting apart.
+  const confirmBlocked = loading || confirmDisabled;
 
   const handleConfirm = async () => {
     if (loading) return;
@@ -58,13 +120,10 @@ export default function LifecycleConfirmModal({
     }
   };
 
-  let items = explicitItems;
-  if (!items) {
-    items = [];
-    if (reconciled && itemConciliacion) items.push(itemConciliacion);
-    if (hasTransaction && itemTransaccion) items.push(itemTransaccion);
-    if (posted && itemAsiento) items.push(itemAsiento);
-  }
+  const items = resolveItems({
+    explicitItems, reconciled, hasTransaction, posted,
+    itemConciliacion, itemTransaccion, itemAsiento,
+  });
 
   // Portal to <body> so the overlay covers the whole viewport (incl. the left sidebar), escaping
   // any transformed/overflow ancestor that would otherwise clip a `position: fixed` layer.
@@ -88,7 +147,7 @@ export default function LifecycleConfirmModal({
         {/* Header */}
         <div style={{ padding: '22px 24px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ flex: 1, paddingRight: 12 }}>
-            <h3 style={{ margin: 0, font: '700 18px/24px Inter', color: 'var(--status-destructive-fg)' }}>{title}</h3>
+            <h3 style={{ margin: 0, font: '700 18px/24px Inter', color: titleColor }}>{title}</h3>
             <div style={{ font: '400 13px/19px Inter', color: 'hsl(var(--text-disabled))', marginTop: 6 }}>{sub}</div>
           </div>
           <button
@@ -102,14 +161,27 @@ export default function LifecycleConfirmModal({
           </button>
         </div>
 
-        {/* Body */}
+        {/* Body. ETP-5111 — the whole block is conditional: a confirmation for a record with
+            NOTHING to undo (a draft movement being deleted) has no effects to list and nothing to
+            warn about, and an unconditional body rendered as an empty 24px gap between the
+            subtitle and the buttons. Each half is guarded separately, so a caller with only one of
+            the two still looks right. */}
+        {(items.length > 0 || warning) && (
         <div style={{ padding: '4px 24px 20px' }}>
+          {items.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
             {items.map(([t, d]) => (
               <div key={t} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="var(--status-destructive-fg)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}>
-                  <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
-                </svg>
+                {/* Anchored to the FIRST text line's 18px line box rather than to an eyeballed
+                    margin, plus a 4px optical nudge down. Geometric centring alone still reads high:
+                    the line box includes the ascender space above the caps, so its midpoint sits
+                    above where the eye puts the text's centre of mass. The box keeps it stable if
+                    the line height changes; the nudge is the deliberate optical correction. */}
+                <span style={{ display: 'flex', alignItems: 'center', height: 18, marginTop: 4, flexShrink: 0 }}>
+                  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
+                  </svg>
+                </span>
                 <div>
                   <span style={{ font: '600 13px/18px Inter', color: 'hsl(var(--text-primary))' }}>{t}.</span>
                   <span style={{ font: '400 13px/18px Inter', color: 'hsl(var(--text-disabled))' }}> {d}</span>
@@ -117,15 +189,23 @@ export default function LifecycleConfirmModal({
               </div>
             ))}
           </div>
+          )}
 
-          {/* Yellow warning box */}
+          {/* Caller-supplied content (a picker, a field) between the consequences and the warning.
+              Absent for every confirm-only caller, so their layout is unchanged. */}
+          {children && <div style={{ marginBottom: 16 }}>{children}</div>}
+
+          {/* Yellow warning box — only when the caller actually has something to warn about. */}
+          {warning ? (
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '12px 14px', background: 'var(--status-warning-bg)', border: '1px solid var(--status-warning-border)', borderRadius: 8 }}>
             <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="var(--status-warning-fg)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
             <span style={{ font: '400 13px/18px Inter', color: 'var(--status-warning-fg)' }}>{warning}</span>
           </div>
+          ) : null}
         </div>
+        )}
 
         {/* Footer. Kept on the card surface rather than `--muted`: that token is blue-tinted
             (hue 210), which read as an unintended colour shift next to the plain ConfirmDialog
@@ -140,10 +220,10 @@ export default function LifecycleConfirmModal({
             {cancelLabel}
           </button>
           <button
-            disabled={loading}
+            disabled={confirmBlocked}
             onClick={handleConfirm}
             data-testid={`${testIdPrefix}-accept`}
-            style={{ height: 40, padding: '0 20px', borderRadius: 9999, border: 0, background: loading ? 'hsl(var(--muted))' : 'var(--status-destructive-fg)', font: '500 14px/1 Inter', color: loading ? 'hsl(var(--muted-foreground))' : 'hsl(var(--primary-foreground))', cursor: loading ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+            style={{ height: 40, padding: '0 20px', borderRadius: 9999, border: 0, background: confirmBlocked ? 'hsl(var(--muted))' : confirmBg, font: '500 14px/1 Inter', color: confirmBlocked ? 'hsl(var(--muted-foreground))' : 'hsl(var(--primary-foreground))', cursor: confirmBlocked ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}
           >
             {confirmIcon}
             {loading ? '…' : confirmLabel}

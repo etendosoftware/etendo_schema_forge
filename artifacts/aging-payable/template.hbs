@@ -3,8 +3,49 @@
 <html><head><meta charset="UTF-8"><style>
 {{{css}}}
 tfoot tr td { font-weight: bold; border-top: 2px solid #333; text-transform: uppercase; }
-.bp-header-row td { font-weight: bold; font-size: 13px; padding-top: 12px; padding-bottom: 2px; border: none; background: transparent; }
-.bp-subtotal-row td { font-weight: bold; border-top: 1px solid #aaa; border-bottom: 2px solid #333; }
+/* ETP-4900: one bordered box per contact in the detail view (.bp-cards/.bp-card),
+   matching the .acct-card pattern report-general-ledger already uses. The old
+   .bp-header-row was a bold row inside one shared table — it read as a faint
+   rule, not a real visual grouping between contacts. */
+.bp-cards { display: flex; flex-direction: column; gap: 3mm; }
+/* ETP-4900 follow-up: a flex item's default min-width is auto (= its content's
+   min-content size), not 0 — without this override, a wide document table
+   inside .bp-card forces the CARD itself past the flex container's width
+   instead of shrinking, and the overflow gets clipped at the PDF page edge
+   (confirmed against a real jsreport chrome-pdf render: everything past
+   "Cré[dito]" was cut off, while the plain, non-flex grand-total table below
+   the cards — same columns, same content — rendered every column fine). */
+.bp-card { border: 1px solid #e2e8f0; border-radius: 1.5mm; overflow: hidden; min-width: 0; }
+.bp-card-head { background: var(--color-accent-highlight-muted); color: var(--color-accent-highlight-foreground); padding: 2mm 4mm; font-size: 9pt; font-weight: 600; }
+/* ETP-4900 follow-up: the per-card table's 9 columns (plus report-trial-balance's
+   own precedent for this exact problem) push an auto-layout table's intrinsic
+   content width past the landscape page — confirmed against a REAL jsreport
+   chrome-pdf render, cut off mid-"Crédito". table-layout: fixed makes the
+   <colgroup> widths below authoritative instead of a floor, so the table can
+   never grow past 100% of the card regardless of container font metrics;
+   white-space: normal lets a header/value wrap onto a 2nd line instead of
+   forcing its column wider when it doesn't fit at that width. */
+.bp-cards .report-table { table-layout: fixed; }
+/* Header text (e.g. "Fecha Documento") may wrap onto a 2nd line — same
+   precedent as report-trial-balance's own thead-only white-space override.
+   Amount cells stay nowrap on purpose: a currency value breaking mid-digit
+   ("316.76" / "2,00") is worse than the overflow this whole fix removes, so
+   those columns are sized wide enough below to never need it. */
+.bp-cards .report-table thead th { white-space: normal; line-height: 1.2; font-size: 7pt; }
+.bp-cards .report-table td.cell-amount { white-space: nowrap; }
+/* ETP-4900 follow-up: the first pass fit every column by shrinking padding
+   down to the base .report-table's minimum, which read as visibly cramped
+   next to Classic's own (much roomier) PDF — confirmed side by side against
+   a real Classic export. Shrinking the FONT instead (not just the padding)
+   is what actually buys the room: it keeps normal-ish breathing space AND
+   still fits, and gives "Neto" the widest column below since it is the one
+   number a report can realistically carry into 7+ digits (millions). */
+.bp-cards .report-table td.cell-amount { font-size: 7.5pt; }
+.bp-cards .report-table th.cell-amount, .bp-cards .report-table td.cell-amount { padding-left: 2mm; padding-right: 2mm; }
+/* Fecha Documento is a fixed dd-mm-yyyy shape — never actually needs 2 lines,
+   so it stays on one like the amount columns above. */
+.bp-cards .report-table thead th:nth-child(2), .bp-cards .report-table tbody td:nth-child(2) { white-space: nowrap; }
+.bp-subtotal-row td { font-weight: bold; background: #f1f5f9; border-top: 1px solid #cbd5e1 !important; }
 .doc-row td { border: none; font-size: 11px; }
 /* ETP-5013 follow-up (re-added): the grayscale unification made screen and
    PDF colors match everywhere ELSE, but a drill-down link is a genuine
@@ -43,59 +84,82 @@ tfoot tr td { font-weight: bold; border-top: 2px solid #333; text-transform: upp
 
   {{#if meta.showDetails}}
 
-  {{!-- DETAIL VIEW: document rows grouped by business partner --}}
-  <table class="report-table">
-    <thead><tr>
-      <th style="width:18%">{{meta.labels.bPartner}}</th>
-      <th style="width:14%">{{meta.labels.documentNo}}</th>
-      <th style="width:10%">{{meta.labels.documentDate}}</th>
-      <th style="width:8%" class="cell-amount">{{meta.labels.current}}</th>
-      <th style="width:8%" class="cell-amount">1-{{meta.column1}}</th>
-      {{#if meta.showBucket2}}<th style="width:8%" class="cell-amount">{{meta.column1}}-{{meta.column2}}</th>{{/if}}
-      {{#if meta.showBucket3}}<th style="width:8%" class="cell-amount">{{meta.column2}}-{{meta.column3}}</th>{{/if}}
-      {{#if meta.showBucket4}}<th style="width:8%" class="cell-amount">{{meta.column3}}-{{meta.column4}}</th>{{/if}}
-      <th style="width:8%" class="cell-amount">{{meta.lastBucketLabel}}</th>
-      <th style="width:7%" class="cell-amount">{{meta.labels.credits}}</th>
-      <th style="width:7%" class="cell-amount">{{meta.labels.net}}</th>
-    </tr></thead>
-    <tbody>
-      {{#each rows}}
-      {{!-- BP header row --}}
-      <tr class="bp-header-row">
-        <td colspan="{{#if @root.meta.showBucket4}}10{{else}}{{#if @root.meta.showBucket3}}9{{else}}{{#if @root.meta.showBucket2}}8{{else}}7{{/if}}{{/if}}{{/if}}">{{bPartner}}</td>
-      </tr>
-      {{!-- Individual document rows --}}
-      {{#each docs}}<tr class="doc-row">
-        <td></td>
-        <td><span class="doc-link" onclick="window.parent.postMessage({type:'navigate-invoice',invoiceId:'{{invoiceId}}',docWindow:'purchase-invoice'},'*')">{{docNo}}</span></td>
-        <td>{{formatDateDisplay dateInvoiced}}</td>
-        <td class="cell-amount">{{formatCurrency current}}</td>
-        <td class="cell-amount">{{formatCurrency days30}}</td>
-        {{#if @root.meta.showBucket2}}<td class="cell-amount">{{formatCurrency days60}}</td>{{/if}}
-        {{#if @root.meta.showBucket3}}<td class="cell-amount">{{formatCurrency days90}}</td>{{/if}}
-        {{#if @root.meta.showBucket4}}<td class="cell-amount">{{formatCurrency days120}}</td>{{/if}}
-        <td class="cell-amount">{{formatCurrency days150plus}}</td>
-        <td class="cell-amount"></td>
-        <td class="cell-amount"></td>
-      </tr>{{/each}}
-      {{!-- BP subtotal row (amounts from summary) --}}
-      <tr class="bp-subtotal-row">
-        <td></td>
-        <td></td>
-        <td></td>
-        <td class="cell-amount">{{formatCurrency current}}</td>
-        <td class="cell-amount">{{formatCurrency days30}}</td>
-        {{#if @root.meta.showBucket2}}<td class="cell-amount">{{formatCurrency days60}}</td>{{/if}}
-        {{#if @root.meta.showBucket3}}<td class="cell-amount">{{formatCurrency days90}}</td>{{/if}}
-        {{#if @root.meta.showBucket4}}<td class="cell-amount">{{formatCurrency days120}}</td>{{/if}}
-        <td class="cell-amount">{{formatCurrency days150plus}}</td>
-        <td class="cell-amount">{{formatCurrency credits}}</td>
-        <td class="cell-amount">{{formatCurrency net}}</td>
-      </tr>
-      {{/each}}
-    </tbody>
+  {{!-- DETAIL VIEW: one bordered card per contact (ETP-4900), each with its OWN
+        document table and subtotal row — matches report-general-ledger's
+        .acct-card grouping instead of a bare bold row inside one shared table. --}}
+  <div class="bp-cards">
+    {{#each rows}}
+    <div class="bp-card">
+      <div class="bp-card-head">{{bPartner}}</div>
+      <table class="report-table">
+        <colgroup>
+          <col style="width:10%"><col style="width:11%"><col style="width:9%"><col style="width:9%">
+          {{#if @root.meta.showBucket2}}<col style="width:9%">{{/if}}
+          {{#if @root.meta.showBucket3}}<col style="width:9%">{{/if}}
+          {{#if @root.meta.showBucket4}}<col style="width:9%">{{/if}}
+          <col style="width:9%"><col style="width:9%"><col style="width:16%">
+        </colgroup>
+        <thead><tr>
+          <th>{{@root.meta.labels.documentNo}}</th>
+          <th>{{@root.meta.labels.documentDate}}</th>
+          <th class="cell-amount">{{@root.meta.labels.current}}</th>
+          <th class="cell-amount">1-{{@root.meta.column1}}</th>
+          {{#if @root.meta.showBucket2}}<th class="cell-amount">{{@root.meta.column1}}-{{@root.meta.column2}}</th>{{/if}}
+          {{#if @root.meta.showBucket3}}<th class="cell-amount">{{@root.meta.column2}}-{{@root.meta.column3}}</th>{{/if}}
+          {{#if @root.meta.showBucket4}}<th class="cell-amount">{{@root.meta.column3}}-{{@root.meta.column4}}</th>{{/if}}
+          <th class="cell-amount">{{@root.meta.lastBucketLabel}}</th>
+          <th class="cell-amount">{{@root.meta.labels.credits}}</th>
+          <th class="cell-amount">{{@root.meta.labels.net}}</th>
+        </tr></thead>
+        <tbody>
+          {{#each docs}}<tr class="doc-row">
+            <td><span class="doc-link" onclick="window.parent.postMessage({type:'navigate-invoice',invoiceId:'{{invoiceId}}',docWindow:'purchase-invoice'},'*')">{{docNo}}</span></td>
+            <td>{{formatDateDisplay dateInvoiced}}</td>
+            <td class="cell-amount">{{formatCurrency current}}</td>
+            <td class="cell-amount">{{formatCurrency days30}}</td>
+            {{#if @root.meta.showBucket2}}<td class="cell-amount">{{formatCurrency days60}}</td>{{/if}}
+            {{#if @root.meta.showBucket3}}<td class="cell-amount">{{formatCurrency days90}}</td>{{/if}}
+            {{#if @root.meta.showBucket4}}<td class="cell-amount">{{formatCurrency days120}}</td>{{/if}}
+            <td class="cell-amount">{{formatCurrency days150plus}}</td>
+            {{!-- Per-document Crédito/Neto (ETP-4900): AgingReportHandler.buildDocRow
+                  never sends credits/net per document — credit application only ever
+                  happens at the contact level. Crédito shows the (always-zero) 0,00
+                  a document carries; Neto is that document's own balance, the sum of
+                  its own bucket amounts, matching Classic's per-row "Balance" column. --}}
+            <td class="cell-amount">{{formatCurrency 0}}</td>
+            <td class="cell-amount">{{formatCurrency (sumFields current days30 days60 days90 days120 days150plus)}}</td>
+          </tr>{{/each}}
+          {{!-- Contact subtotal row (amounts from summary) --}}
+          <tr class="bp-subtotal-row">
+            <td colspan="2"></td>
+            <td class="cell-amount">{{formatCurrency current}}</td>
+            <td class="cell-amount">{{formatCurrency days30}}</td>
+            {{#if @root.meta.showBucket2}}<td class="cell-amount">{{formatCurrency days60}}</td>{{/if}}
+            {{#if @root.meta.showBucket3}}<td class="cell-amount">{{formatCurrency days90}}</td>{{/if}}
+            {{#if @root.meta.showBucket4}}<td class="cell-amount">{{formatCurrency days120}}</td>{{/if}}
+            <td class="cell-amount">{{formatCurrency days150plus}}</td>
+            <td class="cell-amount">{{formatCurrency credits}}</td>
+            <td class="cell-amount">{{formatCurrency net}}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    {{/each}}
+  </div>
+
+  {{!-- Grand total across every contact — column widths mirror the per-card
+        headers above so it lines up under the cards despite living in its own
+        table. --}}
+  <table class="report-table" style="margin-top: 3mm;">
+    <colgroup>
+      <col style="width:10%"><col style="width:11%"><col style="width:9%"><col style="width:9%">
+      {{#if meta.showBucket2}}<col style="width:9%">{{/if}}
+      {{#if meta.showBucket3}}<col style="width:9%">{{/if}}
+      {{#if meta.showBucket4}}<col style="width:9%">{{/if}}
+      <col style="width:9%"><col style="width:9%"><col style="width:16%">
+    </colgroup>
     <tfoot><tr>
-      <td colspan="3">{{meta.ui.total}}:</td>
+      <td colspan="2">{{meta.ui.total}}:</td>
       <td class="cell-amount">{{formatCurrency (sumField rows 'current')}}</td>
       <td class="cell-amount">{{formatCurrency (sumField rows 'days30')}}</td>
       {{#if meta.showBucket2}}<td class="cell-amount">{{formatCurrency (sumField rows 'days60')}}</td>{{/if}}

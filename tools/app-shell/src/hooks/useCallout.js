@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { detectBlockingBpCondition } from '@/lib/blockingBpConditions.js';
 function sanitizeCalloutMessage(raw) {
   return raw
     .replace(/<br[^>]{0,10}>/gi, ' ')
@@ -18,11 +19,14 @@ function sanitizeCalloutMessage(raw) {
  *
  * Returns { calloutResult, calloutLoading, executeCallout }.
  *
- * calloutResult: { updates, combos, messages, triggerField, meta } from the last
- * callout response. `meta` is an opaque passthrough of whatever the caller
+ * calloutResult: { updates, combos, triggerField, meta, blockingCondition } from the
+ * last callout response. `meta` is an opaque passthrough of whatever the caller
  * passed to executeCallout (e.g. a per-field generation snapshot used by
  * DetailView to detect and discard stale responses — ETP-4772); this hook
- * does not interpret it.
+ * does not interpret it. `blockingCondition` (ETP-5024) is
+ * `{ kind: 'creditLimit' | 'onHold', text }` when this response's messages included
+ * one of those two conditions, or `null` otherwise — consumers (DetailView) use it
+ * to show/clear the persistent inline banner; see `lib/blockingBpConditions.js`.
  * executeCallout(field, value, formState, meta): triggers the callout (debounced 300ms).
  */
 export function useCallout(entity, { token, apiBaseUrl }) {
@@ -72,17 +76,28 @@ export function useCallout(entity, { token, apiBaseUrl }) {
         const combos = data.combos ?? {};
         const messages = data.messages ?? [];
 
-        // Show callout messages via toast
+        // ETP-5024: a "credit limit exceeded" / "Business Partner on hold" message
+        // must render as a PERSISTENT inline banner, not an auto-dismissing toast —
+        // so it is pulled out of the loop below instead of being toasted. Every
+        // other callout message keeps the existing toast behavior unchanged. Only
+        // the last match wins if a response somehow carried more than one (in
+        // practice the backend only ever sends one of these per callout).
+        let blockingCondition = null;
         for (const msg of messages) {
           const text = sanitizeCalloutMessage(msg.text || msg.message || '');
           if (!text) continue;
+          const condition = detectBlockingBpCondition(text);
+          if (condition) {
+            blockingCondition = condition;
+            continue;
+          }
           const type = (msg.type || '').toUpperCase();
           if (type === 'ERROR') toast.error(text);
           else if (type === 'WARNING') toast.warning(text);
           else toast.info(text);
         }
 
-        setCalloutResult({ updates, combos, triggerField: field, meta });
+        setCalloutResult({ updates, combos, triggerField: field, meta, blockingCondition });
       } catch (err) {
         if (err.name !== 'AbortError') {
           // Callout is best-effort — do not block the user on failure
