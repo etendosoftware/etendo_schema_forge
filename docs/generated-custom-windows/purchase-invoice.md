@@ -1351,6 +1351,37 @@ line created before completion — because `neo_action` executes the entity's `N
 (ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same
 change: it is the only thing telling the agent what is legal.
 
+**"Fecha Registro Contable" column mapping verified — ETP-5272 point 2 (no bug found):**
+investigated whether this window's "Fecha Registro Contable" field (`aeatsiiFechaRegCont` in
+`decisions.json`/schema-raw, still `"visibility": "editable"`, `"form": false` here — unlike
+sales-invoice, this field stays as-is on purchase-invoice) actually persists into Classic's
+accounting-registration-date column, or was silently writing into `DateAcct` ("Fecha Contable" /
+Accounting Date) instead. Verdict: **the mapping is correct, no fix needed.** Evidence:
+- `AD_Column` for the field (`F2759A840ED24FEEAB925A72B6D85717`, `columnname =
+  EM_Aeatsii_Fecha_Reg_Cont`) is a distinct column from `DateAcct` (`AD_Column_ID 3508`,
+  `columnname = DateAcct`) on `C_Invoice` — confirmed by direct DB query, not assumed from naming.
+- The pushed NEO config (`ETGO_SF_FIELD` row `355844B956484233873562F30BDAC4CA` for
+  purchase-invoice's header entity) has `ad_column_id = F2759A840ED24FEEAB925A72B6D85717` — i.e.
+  it is bound to `EM_Aeatsii_Fecha_Reg_Cont`, not `DateAcct`. `decisions.json` has no property that
+  can override a field's column binding (it always comes 1:1 from `AD_Column.columnname` at
+  extraction time), so there is no schema_forge-side mechanism that could misdirect this write in
+  the first place.
+- Classic backend: `AEATSII_C_INVOICE_POST_EP.xml` (`org.openbravo.module.sii`, the DB function
+  that runs on invoice posting) sets `em_aeatsii_fecha_reg_cont = Cur_Sii_Invoice.fecha_reg_cont`
+  (derived from `current_date`) — it never touches `dateacct`. No Java handler (classic SII module
+  or `com.etendoerp.go`) was found that writes this field's value into `DateAcct` or vice versa.
+- Empirical DB check across 1918 purchase invoices: 1772 have `em_aeatsii_fecha_reg_cont IS NULL`
+  (never triggered — expected, only posting-with-SII-active populates it) and, of the remainder,
+  only 2 rows have a `DateAcct` that differs from `em_aeatsii_fecha_reg_cont` on the date they
+  disagree — i.e. the two columns are independently maintained, not aliased; the near-identical
+  values seen on same-day-posted demo invoices are coincidental (both default to "today" around
+  posting time), not evidence of a shared column.
+
+No `decisions.json`/NEO change was made for this window as part of this investigation — this
+field's configuration is untouched. See `sales-invoice.md` §"'Fecha Registro Contable' field
+removed — ETP-5272 point 2" for that window's field-removal change (out of scope here — this
+window keeps the field per this ticket's scope).
+
 ### Write off the invoice difference (ETP-4797)
 
 When the amount entered covers **less** than the invoice outstanding, the modal now offers an

@@ -979,6 +979,33 @@ routing on completion — because `neo_action` executes the entity's `NeoHandler
 (ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same
 change: it is the only thing telling the agent what is legal.
 
+**"Fecha Registro Contable" (Accounting Registration Date) field removed — ETP-5272 point 2:**
+`aeatsiiFechaRegCont` (AD column `EM_Aeatsii_Fecha_Reg_Cont` on `C_Invoice`) is now
+`"visibility": "discarded"` in `artifacts/sales-invoice/decisions.json` (was `"editable"` with
+`"form": false` — reachable via API but not shown on the generic form). Discarding it removes the
+field from the frontend contract entirely and from `isIncluded`/`isReadOnly` NEO write filtering
+(`field-visibility-types.md`: a discarded field is no longer accepted in POST/PATCH nor returned in
+GET). This column is unrelated to `DateAcct` ("Fecha Contable" / Accounting Date) — see
+`purchase-invoice.md`'s matching ETP-5272 entry for the full mapping verification that motivated
+this change.
+
+**Known follow-up — SIF tab still renders the field (needs a Developer fix):** the "Fecha Registro
+Contable" field was never on the generic header form; it lives in the shared `SifTab.jsx`
+(`tools/app-shell/src/windows/custom/shared/SifTab.jsx`, ~line 576, `ui('sifDataTabs.field.
+accountingRegDate')` / `getDateVal('aeatsiiFechaRegCont')`), rendered unconditionally as the `sif`
+custom tab on **both** sales-invoice and purchase-invoice (`customTabs` entry `{ key: 'sif', ...,
+Component: SifTab }` in this window's generated `HeaderPage.jsx`). Discarding the field in
+`decisions.json` only fixes the contract/API surface — `SifTab.jsx` has no per-window
+conditional and will keep showing that input row on Sales Invoice, now permanently blank
+(`getDateVal` reads a field no longer in the payload) with edits silently dropped server-side
+(discarded fields are rejected on PATCH). `SifTab.jsx` is a shared generic component, not
+generated output or a per-window custom override, so this repo's window-agent tooling
+(decisions.json only) cannot fix it — it needs a Schema Forge Developer change to make that field
+row conditional per window (e.g. read the field's contract visibility, or add an explicit
+`hideAccountingRegDate`-style prop wired from `decisions.json`'s `window.customComponents`
+config) so purchase-invoice keeps showing it unchanged. Tracked as an open item for this ticket;
+not fixed in this change.
+
 ## Print button — added, visible only in Completado — ETP-4714
 
 This window previously suppressed the generic detail-view Print button entirely

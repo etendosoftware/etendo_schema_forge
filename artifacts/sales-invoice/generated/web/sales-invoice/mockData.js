@@ -44,7 +44,6 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-15",
     "eTGOCurrencyRate": "USD",
     "eTGODeliveryStatus": "DR",
     "eTGODueDate": "2026-01-15"
@@ -92,7 +91,6 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-16",
     "eTGOCurrencyRate": "EUR",
     "eTGODeliveryStatus": "CO",
     "eTGODueDate": "2026-01-16"
@@ -140,7 +138,6 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-17",
     "eTGOCurrencyRate": "GBP",
     "eTGODeliveryStatus": "VO",
     "eTGODueDate": "2026-01-17"
@@ -188,7 +185,6 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-18",
     "eTGOCurrencyRate": "USD",
     "eTGODeliveryStatus": "IP",
     "eTGODueDate": "2026-01-18"
@@ -236,7 +232,6 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-19",
     "eTGOCurrencyRate": "EUR",
     "eTGODeliveryStatus": "DR",
     "eTGODueDate": "2026-01-19"
@@ -284,7 +279,6 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-20",
     "eTGOCurrencyRate": "GBP",
     "eTGODeliveryStatus": "CO",
     "eTGODueDate": "2026-01-20"
@@ -332,7 +326,6 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-21",
     "eTGOCurrencyRate": "USD",
     "eTGODeliveryStatus": "VO",
     "eTGODueDate": "2026-01-21"
@@ -380,7 +373,6 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-22",
     "eTGOCurrencyRate": "EUR",
     "eTGODeliveryStatus": "IP",
     "eTGODueDate": "2026-01-22"
@@ -428,7 +420,6 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-23",
     "eTGOCurrencyRate": "GBP",
     "eTGODeliveryStatus": "DR",
     "eTGODueDate": "2026-01-23"
@@ -476,7 +467,6 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-24",
     "eTGOCurrencyRate": "USD",
     "eTGODeliveryStatus": "CO",
     "eTGODueDate": "2026-01-24"
@@ -524,7 +514,6 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-25",
     "eTGOCurrencyRate": "EUR",
     "eTGODeliveryStatus": "VO",
     "eTGODueDate": "2026-01-25"
@@ -572,7 +561,6 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-26",
     "eTGOCurrencyRate": "GBP",
     "eTGODeliveryStatus": "IP",
     "eTGODueDate": "2026-01-26"
