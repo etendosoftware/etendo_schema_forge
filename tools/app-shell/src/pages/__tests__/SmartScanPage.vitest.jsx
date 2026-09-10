@@ -26,16 +26,18 @@ vi.mock('@/components/layout/FavoritesContext', () => ({
 
 let currentWindowAccessTier = 'full';
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useWindowAccess: () => currentWindowAccessTier,
+  useWindowAccess: vi.fn(() => currentWindowAccessTier),
   WindowAccessGuard: (props) => (
     <div data-testid="window-access-guard" data-window-id={props.windowId} />
   ),
 }));
 
 import SmartScanPage from '../SmartScanPage.jsx';
+import { useWindowAccess } from '@/auth/AuthContext.jsx';
 
 describe('SmartScanPage — window access gate (ETP-5116)', () => {
   beforeEach(() => {
+    vi.mocked(useWindowAccess).mockClear();
     currentWindowAccessTier = 'full';
   });
 
@@ -58,6 +60,7 @@ describe('SmartScanPage — window access gate (ETP-5116)', () => {
     currentWindowAccessTier = 'none';
     render(<SmartScanPage />);
 
+    expect(useWindowAccess).toHaveBeenCalledWith('33705E0F52874D91B0BB2FF8BB648B8E');
     expect(screen.getByTestId('window-access-guard')).toHaveAttribute(
       'data-window-id',
       '33705E0F52874D91B0BB2FF8BB648B8E',
