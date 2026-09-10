@@ -56,7 +56,11 @@ export function resolveWindowPath(reference, index) {
  */
 export function withRecordSegment(path, recordId) {
   if (recordId === undefined || recordId === null || recordId === '') return path;
-  const base = String(path).replace(/\/+$/, '').replace(/\/new$/, '');
+  // The trailing slashes come off in a loop, not with `/\/+$/`: an anchored `+` retries from
+  // every start position, which is super-linear on a long run of slashes (javascript:S5852).
+  let trimmed = String(path);
+  while (trimmed.endsWith('/')) trimmed = trimmed.slice(0, -1);
+  const base = trimmed.replace(/\/new$/, '');
   return `${base}/${encodeURIComponent(String(recordId))}`;
 }
 
