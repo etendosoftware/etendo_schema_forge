@@ -491,7 +491,10 @@
           "visibility": "discarded"
         },
         "invoicePriceVariance": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "grid": true,
+          "grow": true,
+          "seq": 5
         },
         "productRevenueReturn": {
           "visibility": "discarded"
