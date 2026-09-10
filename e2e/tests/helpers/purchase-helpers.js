@@ -836,6 +836,41 @@ export async function saveDraft(page) {
  * @param {string} [opts.quantity] - Optional quantity to set
  * @param {boolean} [opts.isFirst=false] - True if this is the first line (uses empty-state button)
  */
+/**
+ * The lines a window has actually PERSISTED — deliberately excluding the open
+ * inline-add row.
+ *
+ * Two renderers are in play and this helper is shared by both: saved lines are
+ * `data-testid="line-row-<ID>"` divs in `InlineLinesPanel.jsx`, while the
+ * inline-add row is a real `<tr>` (`DataTable.jsx`, `<TableRow
+ * data-testid="inline-add-row">`). That mix is exactly what made the previous
+ * gate lie: it matched `'tbody tr:visible, [data-testid^="line-row-"]'` and
+ * `:visible` excludes only the hidden attachments table — NOT the add row's own
+ * `<tr>`. So a line whose values sat unsaved in the add row satisfied the gate,
+ * `addProductLine()` returned as if it had saved, and the caller then waited out
+ * its whole budget for a `line-row-` that was never going to appear.
+ *
+ * That is not hypothetical: captured on
+ * `purchase-order-return-rectificativa.integration.spec.js` with the header
+ * saved (breadcrumb `1000007`), the row still holding live textboxes
+ * (`Cant. pedido` "1", `Precio` "12"), "Confirmar" `[disabled]` because no line
+ * was persisted, and `[data-testid^="line-row-"]` resolving to 0 elements for 49
+ * consecutive polls over 45s.
+ *
+ * Note the loose matcher upstream: `expectSaveResponse()` accepts ANY
+ * POST/PUT/PATCH to `/sws/neo/` under 400, so a header autosave or a callout
+ * write satisfies it too — which is how the run above got past `await
+ * linePromise` with no line created. Tightening that matcher would touch every
+ * caller (`saveDraft`, the specs' own waiters); this count gate closes the hole
+ * where it matters instead, and catches the same class of false pass regardless
+ * of which write the response listener happened to match.
+ */
+function savedLineRows(page) {
+  return page.locator(
+    '[data-testid^="line-row-"], tbody tr:visible:not([data-testid="inline-add-row"])',
+  );
+}
+
 export async function addProductLine(page, { productName, productIndex = 0, quantity, isFirst = false } = {}) {
   // Click add-line button — retry the whole click→inline-add-row sequence
   if (isFirst) {
@@ -924,31 +959,38 @@ export async function addProductLine(page, { productName, productIndex = 0, quan
     }
   }
 
+  // Count the lines ALREADY persisted before committing, so the gate below can
+  // assert this call added one rather than that "some row exists" — see
+  // savedLineRows() for why an existence check is not enough here.
+  const linesBefore = await savedLineRows(page).count();
+
   // Submit the line — declare response listener BEFORE pressing Enter
   const linePromise = expectSaveResponse(page);
   await page.keyboard.press('Enter');
   await linePromise;
   await slow(page);
 
-  // Verify the line was saved: the inline-add-row must disappear (or be
-  // replaced by the next empty row) and the saved line must appear in the
-  // grid. Without this gate the caller can race into a second
-  // addProductLine() before the first line is committed to the DOM.
+  // The inline-add row closing is a HINT, not the gate: some windows replace it
+  // with a fresh empty row straight away, which is why the failure is swallowed.
   await expect(page.getByTestId('inline-add-row')).toBeHidden({ timeout: 15_000 })
     .catch(() => {}); // OK if already gone or immediately replaced
 
-  // Two different grid renderers share this helper: the classic <table> (real
-  // <tbody><tr> rows) and InlineLinesPanel.jsx (data-testid="line-row-<ID>"
-  // divs, used by e.g. the purchase-order/rectificativa windows). A bare
-  // 'tbody tr' silently matches on BOTH kinds of window, because every page
-  // also carries a hidden (display:none) attachments <table> — so on an
-  // InlineLinesPanel window this gate used to report the line saved by
-  // finding that unrelated hidden row, before the real one had rendered.
-  // ':visible' excludes that hidden table without needing to know which
-  // renderer this window uses.
-  await expect(page.locator('tbody tr:visible, [data-testid^="line-row-"]').first(),
-    'Saved line should appear in the lines grid',
-  ).toBeVisible({ timeout: 15_000 });
+  // THE gate: one more persisted line than before this call.
+  //
+  // 45s deliberately matches what purchase-order-return-rectificativa measured
+  // empirically for this row to render (ETP-5093). It costs nothing on the happy
+  // path — the assertion resolves the moment the row appears — and a stingy
+  // budget here is what turned a late row into a failure before.
+  //
+  // Asserting a COUNT INCREASE, not existence: a window can carry other visible
+  // <tbody> rows that have nothing to do with the lines grid, and a bare
+  // existence check passes on those. Any such row contributes the same constant
+  // to both readings, so only a genuinely new line can move this number.
+  await expect(savedLineRows(page),
+    'The line should be PERSISTED after pressing Enter — one more row in the '
+    + 'lines grid than before this call. Equal counts mean the values stayed in '
+    + 'the inline-add row and were never committed (see savedLineRows()).',
+  ).toHaveCount(linesBefore + 1, { timeout: 45_000 });
 }
 
 /**
