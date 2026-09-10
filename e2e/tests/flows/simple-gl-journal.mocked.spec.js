@@ -4,9 +4,20 @@ import { login } from '../helpers/auth.js';
 /**
  * Simple G/L Journal — balance footer (mocked).
  *
- * Exercises the window's defining feature: the generic debit/credit balance
- * footer (BalanceFooterPanel) plus the save-gate that blocks saving while the
- * journal is unbalanced (blockSaveForBalance in DetailView).
+ * Exercises the window's defining feature: the aligned debit/credit balance
+ * row rendered inline inside the lines grid, plus the save-gate that blocks
+ * saving while the journal is unbalanced (blockSaveForBalance in DetailView).
+ *
+ * `simple-g-l-journal` uses `linesLayout: 'inlineEditable'`, so as of ETP-5210
+ * ("Align balance totals under their grid columns") `renderTotalsBlock()`
+ * (tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx) early-
+ * returns null for this window and the old standalone `BalanceFooterPanel`
+ * never mounts. The totals now render as a dedicated row inside the lines
+ * grid itself, via `renderBalanceFooterRow()` in
+ * tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
+ * (`data-testid="balance-footer-row"`, with the debit/credit cells tagged
+ * `balance-footer-debit` / `balance-footer-credit` so each total lines up
+ * under its own grid column instead of sitting in a separate panel below).
  *
  * Mock mode only. The spec opens an EXISTING draft journal in detail view and
  * feeds its `gLJournalLine` children through a window-specific route installed
@@ -132,8 +143,8 @@ async function openJournal(page, lines) {
   const ctx = await installJournalMock(page, lines);
   await page.goto(`/${SPEC}/${RECORD_ID}`);
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-  // The balance footer renders once the children resolve.
-  await expect(page.getByTestId('balance-footer')).toBeVisible();
+  // The balance footer row renders once the children resolve.
+  await expect(page.getByTestId('balance-footer-row')).toBeVisible();
   return ctx;
 }
 
@@ -141,13 +152,14 @@ test.describe('Simple G/L Journal — balance footer', () => {
   test('balanced journal: status is balanced and save is enabled, save succeeds', async ({ page }) => {
     const ctx = await openJournal(page, BALANCED_LINES);
 
-    // Footer reflects the balanced totals (debit 100 / credit 100). The
+    // Footer row reflects the balanced totals (debit 100 / credit 100). The
     // difference amount and the balanced/unbalanced badge were removed from
-    // BalanceFooterPanel (ETP-4917, DF Contabilidad §2.1 point 3) — only the
-    // two debit/credit totals render now; balance status is asserted through
-    // the save-gate behavior below instead.
-    await expect(page.getByTestId('balance-total-debit')).toContainText('100');
-    await expect(page.getByTestId('balance-total-credit')).toContainText('100');
+    // BalanceFooterPanel (ETP-4917, DF Contabilidad §2.1 point 3), and the
+    // footer itself moved inline under the grid columns (ETP-5210) — only the
+    // two debit/credit totals render now, with no "Total debe"/"Total haber"
+    // labels; balance status is asserted through the save-gate behavior below.
+    await expect(page.getByTestId('balance-footer-debit')).toContainText('100');
+    await expect(page.getByTestId('balance-footer-credit')).toContainText('100');
 
     // Make the form dirty without unbalancing it (edit a header text field) so
     // the existing-record save gate (!isDirty) clears and we isolate the
@@ -167,11 +179,11 @@ test.describe('Simple G/L Journal — balance footer', () => {
   test('unbalanced journal: status is unbalanced, save is disabled', async ({ page }) => {
     await openJournal(page, UNBALANCED_LINES);
 
-    // debit 100 / credit 60 → not balanced. The footer no longer renders a
+    // debit 100 / credit 60 → not balanced. The footer row no longer renders a
     // difference amount or a balanced/unbalanced badge (ETP-4917) — the
     // unbalanced status is proven by the save-gate staying disabled below.
-    await expect(page.getByTestId('balance-total-debit')).toContainText('100');
-    await expect(page.getByTestId('balance-total-credit')).toContainText('60');
+    await expect(page.getByTestId('balance-footer-debit')).toContainText('100');
+    await expect(page.getByTestId('balance-footer-credit')).toContainText('60');
 
     // Even after making the form dirty, the balance gate keeps save DISABLED.
     const descInput = page.getByTestId('field-description');
