@@ -338,6 +338,18 @@ export default function ImportLinesModal({
                                     {(() => {
                                       const draft = qtyDrafts[line.id];
                                       const draftInvalid = draft !== undefined && !classifyQtyDraft(draft, maxQty).valid;
+                                      let borderColor;
+                                      let backgroundColor;
+                                      if (draftInvalid) {
+                                        borderColor = '1px solid hsl(var(--destructive))';
+                                        backgroundColor = 'hsl(var(--destructive) / 0.08)';
+                                      } else if (qtyEdited) {
+                                        borderColor = '1px solid var(--color-border-warning, var(--status-warning-fg))';
+                                        backgroundColor = 'var(--color-background-warning, var(--status-warning-bg))';
+                                      } else {
+                                        borderColor = '0.5px solid var(--color-border-secondary, hsl(var(--text-disabled)))';
+                                        backgroundColor = 'hsl(var(--card))';
+                                      }
                                       return (
                                         <input
                                           type="number"
@@ -366,8 +378,8 @@ export default function ImportLinesModal({
                                           className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                           style={{
                                             width: 60, fontSize: 12, padding: '3px 4px', borderRadius: 4, textAlign: 'center', fontVariantNumeric: 'tabular-nums', outline: 'none',
-                                            border: draftInvalid ? '1px solid hsl(var(--destructive))' : qtyEdited ? '1px solid var(--color-border-warning, var(--status-warning-fg))' : '0.5px solid var(--color-border-secondary, hsl(var(--text-disabled)))',
-                                            background: draftInvalid ? 'hsl(var(--destructive) / 0.08)' : qtyEdited ? 'var(--color-background-warning, var(--status-warning-bg))' : 'hsl(var(--card))',
+                                            border: borderColor,
+                                            background: backgroundColor,
                                           }}
                                         />
                                       );
