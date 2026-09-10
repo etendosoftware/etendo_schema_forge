@@ -83,6 +83,21 @@ vi.mock('@/hooks/useViewerRole.js', () => ({
   useViewerRole: () => mockUseViewerRole(),
 }));
 
+// ETP-5195 Bugs 1&2 — `useAdminPromotionExtraActions` (index.jsx) now calls `useAuth()` for
+// `token`/`refreshToken` and `decodeJwtUser(token)` to detect a self-promote/demote. Mocked
+// (rather than wrapped in a real `AuthProvider`) so every pre-existing test in this file — none
+// of which care about self-refresh — keeps rendering `<UserWindow>` bare, the way it always has;
+// `beforeEach` below defaults `mockDecodeJwtUser` to a viewer id distinct from every `data.id`
+// this file uses ('u1', 'user-1', ...), so those tests exercise the "different user" branch
+// (refreshToken never called) without needing to know that branch exists. Dedicated tests further
+// down override the return value to exercise the "self" branch.
+const mockRefreshToken = vi.fn();
+const mockDecodeJwtUser = vi.fn();
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => ({ token: 'viewer-token', refreshToken: mockRefreshToken }),
+  decodeJwtUser: (token) => mockDecodeJwtUser(token),
+}));
+
 import { useRoleSelection } from '../roleSelectionContext.js';
 
 /** Renders inside the mocked UserPage, giving tests a hook to drive the shared
@@ -177,6 +192,10 @@ beforeEach(() => {
   // pre-existing promote/demote tests (which never asserted on the VIEWER's own role) keep
   // exercising exactly what they always did; tests for the new gating itself override this.
   mockUseViewerRole.mockReturnValue({ roleId: 'admin-role', isClientAdmin: true });
+  // ETP-5195 — default the decoded viewer id to something that never matches this file's
+  // pre-existing `data.id` fixtures ('u1', 'user-1', ...), so every pre-existing test exercises
+  // the "acting on someone else" branch (refreshToken never called) by construction.
+  mockDecodeJwtUser.mockReturnValue('some-other-viewer-id');
 });
 
 describe('UserWindow — fetching applied roles on load', () => {
@@ -1024,5 +1043,139 @@ describe('UserWindow — admin promote/demote buttons (ETP-5019, merged into the
 
     resolvePromote({ success: true, userId: 'u1', roleId: 'admin-role' });
     await waitFor(() => expect(screen.getByTestId('PromoteToAdminButton').closest('button')).not.toBeDisabled());
+  });
+});
+
+describe('UserWindow — admin promote/demote SELF-refresh (ETP-5195 Bugs 1&2)', () => {
+  it('calls refreshToken() after a successful SELF-promote, in addition to onRefresh', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    promoteUserToAdmin.mockResolvedValue({ success: true, userId: 'u1', roleId: 'admin-role' });
+    mockDecodeJwtUser.mockReturnValue('u1');
+    const onRefresh = vi.fn();
+    render(
+      <UserWindow
+        recordId="u1"
+        data={{ id: 'u1', isOwner: false, defaultRole: 'personal-role-1' }}
+        onRefresh={onRefresh} />,
+    );
+
+    fireEvent.click(await screen.findByTestId('PromoteToAdminButton'));
+
+    await waitFor(() => expect(promoteUserToAdmin).toHaveBeenCalledWith('u1'));
+    expect(onRefresh).toHaveBeenCalled();
+    await waitFor(() => expect(mockRefreshToken).toHaveBeenCalledTimes(1));
+  });
+
+  it('does NOT call refreshToken() after promoting a DIFFERENT user', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    promoteUserToAdmin.mockResolvedValue({ success: true, userId: 'u1', roleId: 'admin-role' });
+    mockDecodeJwtUser.mockReturnValue('some-other-viewer-id');
+    const onRefresh = vi.fn();
+    render(
+      <UserWindow
+        recordId="u1"
+        data={{ id: 'u1', isOwner: false, defaultRole: 'personal-role-1' }}
+        onRefresh={onRefresh} />,
+    );
+
+    fireEvent.click(await screen.findByTestId('PromoteToAdminButton'));
+
+    await waitFor(() => expect(promoteUserToAdmin).toHaveBeenCalledWith('u1'));
+    await waitFor(() => expect(onRefresh).toHaveBeenCalled());
+    expect(mockRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it('calls refreshToken() after a successful SELF-demote, in addition to onRefresh', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    demoteUserFromAdmin.mockResolvedValue({ success: true, userId: 'u1', roleId: 'personal-role' });
+    mockDecodeJwtUser.mockReturnValue('u1');
+    const onRefresh = vi.fn();
+    render(
+      <UserWindow
+        recordId="u1"
+        data={{ id: 'u1', isOwner: false, defaultRole: 'admin-role' }}
+        onRefresh={onRefresh} />,
+    );
+
+    fireEvent.click(await screen.findByTestId('DemoteFromAdminButton'));
+
+    await waitFor(() => expect(demoteUserFromAdmin).toHaveBeenCalledWith('u1'));
+    expect(onRefresh).toHaveBeenCalled();
+    await waitFor(() => expect(mockRefreshToken).toHaveBeenCalledTimes(1));
+  });
+
+  it('does NOT call refreshToken() after demoting a DIFFERENT user', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    demoteUserFromAdmin.mockResolvedValue({ success: true, userId: 'u1', roleId: 'personal-role' });
+    mockDecodeJwtUser.mockReturnValue('some-other-viewer-id');
+    const onRefresh = vi.fn();
+    render(
+      <UserWindow
+        recordId="u1"
+        data={{ id: 'u1', isOwner: false, defaultRole: 'admin-role' }}
+        onRefresh={onRefresh} />,
+    );
+
+    fireEvent.click(await screen.findByTestId('DemoteFromAdminButton'));
+
+    await waitFor(() => expect(demoteUserFromAdmin).toHaveBeenCalledWith('u1'));
+    await waitFor(() => expect(onRefresh).toHaveBeenCalled());
+    expect(mockRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it('does NOT call refreshToken() when the SELF-promote request fails', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    promoteUserToAdmin.mockRejectedValue(new Error('boom'));
+    mockDecodeJwtUser.mockReturnValue('u1');
+    render(
+      <UserWindow recordId="u1" data={{ id: 'u1', isOwner: false, defaultRole: 'personal-role-1' }} />,
+    );
+
+    fireEvent.click(await screen.findByTestId('PromoteToAdminButton'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(mockRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it('does NOT call refreshToken() when the SELF-demote request fails', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    demoteUserFromAdmin.mockRejectedValue(new Error('boom'));
+    mockDecodeJwtUser.mockReturnValue('u1');
+    render(
+      <UserWindow recordId="u1" data={{ id: 'u1', isOwner: false, defaultRole: 'admin-role' }} />,
+    );
+
+    fireEvent.click(await screen.findByTestId('DemoteFromAdminButton'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(mockRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it('compares the decoded viewer id against the record id via String(), so a numeric claim still matches', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    promoteUserToAdmin.mockResolvedValue({ success: true, userId: '101', roleId: 'admin-role' });
+    mockDecodeJwtUser.mockReturnValue(101);
+    render(
+      <UserWindow recordId="101" data={{ id: '101', isOwner: false, defaultRole: 'personal-role-1' }} />,
+    );
+
+    fireEvent.click(await screen.findByTestId('PromoteToAdminButton'));
+
+    await waitFor(() => expect(promoteUserToAdmin).toHaveBeenCalledWith('101'));
+    await waitFor(() => expect(mockRefreshToken).toHaveBeenCalledTimes(1));
+  });
+
+  it('does NOT call refreshToken() when the viewer id cannot be decoded at all (falsy claim)', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    promoteUserToAdmin.mockResolvedValue({ success: true, userId: 'u1', roleId: 'admin-role' });
+    mockDecodeJwtUser.mockReturnValue(null);
+    render(
+      <UserWindow recordId="u1" data={{ id: 'u1', isOwner: false, defaultRole: 'personal-role-1' }} />,
+    );
+
+    fireEvent.click(await screen.findByTestId('PromoteToAdminButton'));
+
+    await waitFor(() => expect(promoteUserToAdmin).toHaveBeenCalled());
+    expect(mockRefreshToken).not.toHaveBeenCalled();
   });
 });

@@ -12,6 +12,7 @@ import { resendInvitation } from '@/lib/resendInvitationApi.js';
 import { promoteUserToAdmin, demoteUserFromAdmin } from '@/lib/promoteUserRoleApi.js';
 import { fetchRolesOverview } from '@/lib/rolesApi.js';
 import { useViewerRole } from '@/hooks/useViewerRole.js';
+import { useAuth, decodeJwtUser } from '@/auth/AuthContext.jsx';
 import { resolveDefaultRoleId } from './RoleChipsCell.jsx';
 import { RECORD_SAVE_TOAST_ID } from '@/hooks/useEntity';
 import { runInlineToggleRequest } from '@/components/contract-ui/DataTable.jsx';
@@ -223,16 +224,36 @@ function useAdminRoleId() {
  * `callerIsOwnerOrAdmin` check); this is UX-only, closing the previously
  * documented gap where any viewer who could open a User's detail page saw a
  * button that would always fail for them.
+ *
+ * **Immediate self-refresh (ETP-5195 Bugs 1&2).** A client-admin can promote/demote
+ * their OWN user record (e.g. two admins swapping roles, or an admin stepping down).
+ * Every NEO request authenticates off the `role` claim embedded in the bearer token at
+ * login time, which never re-derives from the DB on its own — so without this, the
+ * caller's OWN session would keep acting under their pre-change role until a full
+ * logout/login or the next silent-refresh trigger (mount/tab-focus, see
+ * `AuthContext.jsx`'s `silentlyRefreshToken`). `currentViewerUserId` (decoded from the
+ * SAME bearer token via `decodeJwtUser` — the `user` claim
+ * `SecureWebServicesUtils#getJwtBuilder` embeds) detects that self-service case by
+ * comparing it against the target record's own `id`; when they match, `refreshToken()`
+ * (the imperative export `AuthContext.jsx` added alongside `silentlyRefreshToken`) is
+ * called right after the promote/demote succeeds, IN ADDITION to `onRefresh?.()` (the
+ * window's own data refetch) — no page reload needed. When it's some OTHER user being
+ * promoted/demoted, this is a no-op here: that user's own mount/tab-focus effect, in
+ * their own browser tab, picks up the fresh role next time they interact (Task 3).
  */
 function useAdminPromotionExtraActions(adminRoleId, viewerRole) {
   const ui = useUI();
   const [working, setWorking] = useState(false);
+  const { token, refreshToken } = useAuth();
+  const currentViewerUserId = decodeJwtUser(token);
 
   return useCallback(({ data, onRefresh }) => {
     const id = data?.id;
     if (!id || id === 'new' || data?.isOwner) return [];
     if (!adminRoleId) return [];
     if (viewerRole?.isClientAdmin !== true) return [];
+
+    const isSelf = !!currentViewerUserId && String(currentViewerUserId) === String(id);
 
     const currentDefaultRoleId = resolveDefaultRoleId(data);
     const isAdmin = !!(adminRoleId && currentDefaultRoleId && currentDefaultRoleId === adminRoleId);
@@ -243,6 +264,7 @@ function useAdminPromotionExtraActions(adminRoleId, viewerRole) {
         await promoteUserToAdmin(id);
         toast.success(ui('promoteToAdminSuccessToast'));
         onRefresh?.();
+        if (isSelf) refreshToken?.();
       } catch (err) {
         toast.error(err?.message || ui('promoteToAdminErrorFallback'));
       } finally {
@@ -256,6 +278,7 @@ function useAdminPromotionExtraActions(adminRoleId, viewerRole) {
         await demoteUserFromAdmin(id);
         toast.success(ui('demoteFromAdminSuccessToast'));
         onRefresh?.();
+        if (isSelf) refreshToken?.();
       } catch (err) {
         toast.error(err?.message || ui('demoteFromAdminErrorFallback'));
       } finally {
@@ -277,7 +300,7 @@ function useAdminPromotionExtraActions(adminRoleId, viewerRole) {
       onClick: handlePromote,
       label: <span data-testid="PromoteToAdminButton">{ui('promoteToAdminAction')}</span>,
     }];
-  }, [adminRoleId, viewerRole, working, ui]);
+  }, [adminRoleId, viewerRole, working, ui, currentViewerUserId, refreshToken]);
 }
 
 /**
