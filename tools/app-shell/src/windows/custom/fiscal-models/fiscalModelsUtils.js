@@ -343,6 +343,22 @@ export const STATUS_ICON = {
 
 export const STATUS_ORDER = [...STATUSES];
 
+// Resultado sign-coloring (ETP-5236 / M303-01): 'I' (a ingresar — org owes money) is
+// green, 'V'/'C' (a devolver / a compensar — refundable or offsettable) are blue, and
+// 'N'/null/anything else (no result) keeps the neutral styling this always had.
+// Shared by the Modelo 303 detail KPI (FmModel303Page.jsx) and the declarations list's
+// "Resultado" column (FmListPage.jsx) — single source of truth for both call sites.
+export const RESULT_COLOR_MAP = {
+  I: { valueColor: 'var(--status-success-fg)', badgeBg: 'var(--status-success-bg)', badgeColor: 'var(--status-success-fg)' },
+  V: { valueColor: 'var(--status-info-fg)', badgeBg: 'var(--status-info-bg)', badgeColor: 'var(--status-info-fg)' },
+  C: { valueColor: 'var(--status-info-fg)', badgeBg: 'var(--status-info-bg)', badgeColor: 'var(--status-info-fg)' },
+};
+export const RESULT_COLOR_NEUTRAL = { valueColor: 'hsl(var(--foreground))', badgeBg: 'hsl(var(--muted))', badgeColor: 'hsl(var(--muted-foreground))' };
+
+export function resolveResultColors(resultKind) {
+  return RESULT_COLOR_MAP[resultKind] ?? RESULT_COLOR_NEUTRAL;
+}
+
 export function formatPeriod(period) {
   if (!period) return '—';
   if (/^T\d$/.test(period)) return period;

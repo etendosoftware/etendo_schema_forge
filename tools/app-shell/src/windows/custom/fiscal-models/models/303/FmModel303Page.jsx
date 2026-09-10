@@ -16,7 +16,7 @@ import AeatSubmitFlow, { isMissingDefaultIaeActivity } from './AeatSubmitFlow.js
 import { isLastPeriodOfYear } from './fm303Layouts.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents, persistManualData } from '../../fiscalModelsUtils.js';
+import { formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents, persistManualData, resolveResultColors } from '../../fiscalModelsUtils.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
@@ -31,20 +31,6 @@ const FISCAL_DECL_TABLE = 'ETGO_Fiscal_Decl';
 // rendered alongside the badge below, never inside the badge text itself.
 function statusLabelKey(status) {
   return status === 'submitted_ack' ? 'submitted' : status;
-}
-
-// Resultado KPI color coding (ETP-5236 / M303-01): 'I' (a ingresar — org owes money) is
-// green, 'V'/'C' (a devolver / a compensar — refundable or offsettable) are blue, and
-// 'N'/null/anything else (no result) keeps the neutral styling this KPI always had.
-const RESULT_COLOR_MAP = {
-  I: { valueColor: 'var(--status-success-fg)', badgeBg: 'var(--status-success-bg)', badgeColor: 'var(--status-success-fg)' },
-  V: { valueColor: 'var(--status-info-fg)', badgeBg: 'var(--status-info-bg)', badgeColor: 'var(--status-info-fg)' },
-  C: { valueColor: 'var(--status-info-fg)', badgeBg: 'var(--status-info-bg)', badgeColor: 'var(--status-info-fg)' },
-};
-const RESULT_COLOR_NEUTRAL = { valueColor: 'hsl(var(--foreground))', badgeBg: 'hsl(var(--muted))', badgeColor: 'hsl(var(--muted-foreground))' };
-
-function resolveResultColors(resultKind) {
-  return RESULT_COLOR_MAP[resultKind] ?? RESULT_COLOR_NEUTRAL;
 }
 
 function toBoxArray(src) {

@@ -8,7 +8,7 @@ import { EmptyState, KpiWidget, MoreOptionsMenu } from './FmCommon.jsx';
 import { Checkbox } from '@/components/ui/checkbox';
 import { NewDeclModal } from './FmOverlays.jsx';
 import FmCatalogPage from './FmCatalogPage.jsx';
-import { formatAmount, countUpcomingDeadlines, isUpcomingDeadline, checkModified303, checkModified349, compute349Operators, fetchDeclarationIncidents } from './fiscalModelsUtils.js';
+import { formatAmount, countUpcomingDeadlines, isUpcomingDeadline, checkModified303, checkModified349, compute349Operators, fetchDeclarationIncidents, resolveResultColors } from './fiscalModelsUtils.js';
 import useFiscalAutoCompute from './useFiscalAutoCompute.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -230,11 +230,15 @@ function ResultText({ isComputing, error, result, t }) {
       : <span style={RESULT_BADGE_STYLE}>{t('fm.result.info') ?? 'Informativa'}</span>;
   }
   const label = t(`fm.result.${result.kind}`) ?? result.kind;
+  // Resultado sign-coloring (ETP-5236 / M303-01): 'I' (a ingresar) green, 'V'/'C'
+  // (a devolver / a compensar) blue — same rule as the Modelo 303 detail KPI, via
+  // the shared fiscalModelsUtils.js helper so both call sites stay in sync.
+  const colors = resolveResultColors(result.kind);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-      <span style={RESULT_BADGE_STYLE}>{label}</span>
+      <span style={{ ...RESULT_BADGE_STYLE, background: colors.badgeBg, color: colors.badgeColor }}>{label}</span>
       {result.amount != null && (
-        <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, fontWeight: 500, color: 'hsl(var(--foreground))' }}>
+        <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, fontWeight: 500, color: colors.valueColor }}>
           {formatAmount(result.amount)}
         </span>
       )}
