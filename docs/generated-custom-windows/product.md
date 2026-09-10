@@ -782,6 +782,19 @@ id it uses for the toast, `product-cost-required`; the banner subscribes through
 product window autosaves on blur, a dismissed banner reappears at the next field the user leaves —
 which is the intended outcome: the save is still being refused.
 
+**It also clears the moment a cost line exists, with no reload (ETP-5245 follow-up).**
+`etgoHasCost` is stamped by the backend on the *product* record, but adding a cost line is a
+`POST /product/costing` — a different entity — so nothing re-read the product and the header held
+in memory kept saying `false`. The banner stayed up even with the tab showing `Costo 1`, and the
+save gate kept refusing, since both read that same record.
+`withHeaderRefreshOnChildWrite` (`components/contract-ui/detailViewHelpers.jsx`) now wraps the
+secondary-tab hooks so a successful child add or delete also calls the MAIN hook's
+`refreshHeaderTotals`, re-reading the product. This covers both directions: adding the first line
+removes the banner, deleting the last one brings it back. It is gated on the header actually
+carrying a field listed in `HEADER_FIELDS_DERIVED_FROM_CHILD_ROWS`, so no other window pays for the
+extra GET, and the server stays the single source of truth — nothing recomputes the flag locally,
+so the banner and the save gate can never disagree.
+
 The predicate lives in `tools/app-shell/src/lib/productCostRequirement.js` and is deliberately a
 pure function with no React dependency, so the banner and the save gate can read the same rule:
 

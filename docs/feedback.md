@@ -2147,3 +2147,49 @@ behaviour. Either implement `orderBy` end to end (resolve → contract → a new
 column → a default `_sortBy` in `NeoCrudHandler.buildDalParams`) or delete it from the four
 windows. Until then, treat any `orderBy` in a `decisions.json` as documentation of an intent, not
 as behaviour.
+
+---
+
+## [2026-09-10] `FinancialAccountsPageHandler` echoes `updated` without the XSD colon (latent, not failing)
+
+**Component:** `com.etendoerp.go` — `FinancialAccountsPageHandler` (its `row.updated`, ~line 343)
+
+**Status:** NOT a live bug. Noted while fixing ETP-5245 in `ProductPriceHandler`, deliberately left
+alone: it is out of that ticket's scope and it works today. Recorded so somebody picks it up on
+purpose rather than rediscovering it under a production incident.
+
+**Symptom:** none yet. The value it emits is accepted and every edit saves.
+
+**The fragility:** it formats `updated` with `JsonUtils.createDateTimeFormat()` alone, which yields
+an RFC-822 offset with **no colon** (`2026-08-15T10:30:00-0300`). Core's reader repair step,
+`JsonUtils.convertFromXSDToJavaFormat` (`modules_core/org.openbravo.service.json/.../JsonUtils.java`
+lines 159-172), recognises **only** the colon form: it checks `charAt(length-3) == ':'` and, for
+anything else, falls through to `return dateValue + "+0000"`. So the colon-less token becomes
+`2026-08-15T10:30:00-0300+0000`, and it parses correctly **only** because `SimpleDateFormat.parse`
+stops at the end of the pattern and ignores the trailing characters. The offset that wins is the
+real one, by accident of parser leniency — not by the repair step doing its job.
+
+**Why this is worth fixing anyway:** the value feeds optimistic-locking, whose comparison is exact
+equality to the second (`NeoRecordVersion#equalToTheSecond`, mirroring core's
+`JsonToDataConverter#areDatesEqual(d1, d2, true, false)`). If that leniency ever changes — a
+stricter parser, a reader that validates the repaired string, a caller that round-trips the token
+through anything else — the failure is not a parse error. It is `stale_record` on every single
+write, with the row untouched and nothing in the logs pointing at a date format. That is precisely
+what ETP-5245 was: `ProductPriceHandler` dropped the offset entirely, the reader read the value as
+UTC, and on a UTC-3 server **no price could be edited at all**.
+
+**The fix, when someone takes it:** wrap the output in `JsonUtils.convertToCorrectXSDFormat(...)`,
+as `ProductPriceHandler#toXsdStamp` now does. The reader then strips the colon back out and parses
+exactly what was written, with the repair branch never entered. Verified across offsets: `-03:00`,
+`+00:00`, `+05:30` and `+12:45` all round-trip to the original instant — `convertToCorrectXSDFormat`
+inserts the colon by position (`length-2`), which is safe because the RFC-822 offset is always
+exactly four digits.
+
+**Regression guard to copy:** assert that the reader RECOGNISES the offset rather than repairing it,
+i.e. `convertFromXSDToJavaFormat(echoed) != echoed + "+0000"`. That one assertion catches both the
+missing offset and the colon-less offset, and it is zone-independent. See
+`ProductPriceHandlerTest#testEchoedUpdatedRoundTripsToTheStoredInstantUnderAnyServerZone`.
+
+**Lesson:** "it parses" is not "it is read correctly". When a value crosses into core's readers,
+write the shape core's own writers emit — the shape its repair step was built to accept — instead
+of a shape that survives on parser leniency.

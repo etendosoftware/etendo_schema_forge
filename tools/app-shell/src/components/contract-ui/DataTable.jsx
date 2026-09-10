@@ -16,6 +16,7 @@ import { useCurrency } from '@/hooks/useCurrency.jsx';
 import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
 import { columnMinWidthPx, columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
 import { CHEVRON_COLUMN_WIDTH } from './InlineLinesPanel.jsx';
+import { ACTION_SLOT_WIDTH_PX, reservesActionSlot } from '@/lib/linesActionSlot.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DateField } from '@/components/ui/date-field';
 import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
@@ -761,7 +762,7 @@ function applyResolvedIdentifiers(empty, resolvedDefaults, fieldMap) {
   return empty;
 }
 
-const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, onValuesChange, selectable, hasDeleteColumn, hasCloneColumn, hoverRowActions, hoverRowHasDelete, hasQuickActionsColumn, token, apiBaseUrl, entity, specName, selectorContext, seedValues = EMPTY_SEED, resolvedDefaults = EMPTY_SEED, ilpHasNoAmountCol = false, ilpTrailing = false, labelOverrides, convertOptimisticPrice, hasDimensionsPanel = false }, ref) {
+const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, onValuesChange, selectable, hasDeleteColumn, hasCloneColumn, hoverRowActions, hoverRowHasDelete, hasQuickActionsColumn, token, apiBaseUrl, entity, specName, selectorContext, seedValues = EMPTY_SEED, resolvedDefaults = EMPTY_SEED, ilpReservesActionSlot = false, ilpTrailing = false, labelOverrides, convertOptimisticPrice, hasDimensionsPanel = false }, ref) {
   const t = useLabel(labelOverrides);
   const ui = useUI();
   const { locale } = useLocaleSwitch();
@@ -1085,7 +1086,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
         </>
       ))}
       {!ilpTrailing && hasQuickActionsColumn && <TableCell className="w-10" data-testid="TableCell__eb5261" />}
-      {ilpHasNoAmountCol && <TableCell aria-hidden="true" data-testid="TableCell__eb5261" />}
+      {ilpReservesActionSlot && <TableCell aria-hidden="true" data-testid="TableCell__eb5261" />}
       {ilpTrailing && <TableCell aria-hidden="true" data-testid="TableCell__eb5261" />}
     </TableRow>
   );
@@ -1377,7 +1378,7 @@ function getRowClassName({
 // own branch instead of adding flat complexity to the caller.
 function computeActionColsWidthPx({
   selectable, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
-  onCloneRow, quickActionsEnabled, ilpHasNoAmountCol, hasDimensionsPanel,
+  onCloneRow, quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel,
 }) {
   const showHoverActions = !ilpTrailing && hoverRowActions;
   const showHoverDelete = showHoverActions && onDeleteRow;
@@ -1397,7 +1398,7 @@ function computeActionColsWidthPx({
     + oneIfTrue(showLegacyDelete) * 40
     + oneIfTrue(showLegacyClone) * 40
     + oneIfTrue(showQuickActions) * 40
-    + oneIfTrue(ilpHasNoAmountCol) * 160
+    + oneIfTrue(ilpReservesActionSlot) * ACTION_SLOT_WIDTH_PX
     + oneIfTrue(ilpTrailing) * 48;
 }
 
@@ -1419,7 +1420,7 @@ function computeActionColsWidthPx({
 export function renderLinesColgroup({
   hideHeader, selectable, visibleColumns, colFlexSpecs, fixedColsTotalPx, growCount,
   ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow,
-  quickActionsEnabled, ilpHasNoAmountCol, hasDimensionsPanel,
+  quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel,
 }) {
   if (!hideHeader) return null;
   return (
@@ -1440,7 +1441,7 @@ export function renderLinesColgroup({
       {!ilpTrailing && !hoverRowActions && legacyDeleteEnabled && <col style={{ width: 40 }} />}
       {!ilpTrailing && !hoverRowActions && onCloneRow && !quickActionsEnabled && <col style={{ width: 40 }} />}
       {!ilpTrailing && quickActionsEnabled && <col style={{ width: 40 }} />}
-      {ilpHasNoAmountCol && <col style={{ width: 160 }} />}
+      {ilpReservesActionSlot && <col style={{ width: ACTION_SLOT_WIDTH_PX }} />}
       {ilpTrailing && <col style={{ width: 48 }} />}
     </colgroup>
   );
@@ -2284,10 +2285,18 @@ export function DataTable({
 
   // In inlineEditable add-row mode (hideHeader=true), the DataTable only renders
   // the new-line form while InlineLinesPanel owns the existing rows. InlineLinesPanel
-  // always appends a 48px right spacer, plus a 160px action slot when no amount column
-  // exists. Mirror those here so flexible columns grow to the same width in both.
-  const ilpHasNoAmountCol = hideHeader && linesLayout === 'inlineEditable'
-    && !visibleColumns.some(c => c.type === 'amount');
+  // always appends a 48px right spacer, plus an ACTION_SLOT_WIDTH_PX action slot when
+  // no column can be swapped for the hover action strip. Mirror those here so flexible
+  // columns grow to the same width in both.
+  //
+  // ETP-5245 — this MUST be `reservesActionSlot()`, the same predicate
+  // InlineLinesPanel uses, not a local "is there any amount column?" guess: the panel
+  // only ever swaps the LAST column, so a tab whose amount sits earlier (Producto >
+  // Costo: `cost`, `startingDate`, `endingDate`) reserves the slot there while this
+  // table did not — handing those 160px to `growColumnWidth()`'s grow columns and
+  // pushing every add-row input right of its header.
+  const ilpReservesActionSlot = hideHeader && linesLayout === 'inlineEditable'
+    && reservesActionSlot(visibleColumns);
   const ilpTrailing = hideHeader && linesLayout === 'inlineEditable';
 
   // Precompute the flex specs once so the colgroup below can both build the
@@ -2299,7 +2308,7 @@ export function DataTable({
   const fixedColsBasisPx = colFlexSpecs.filter((s) => s.grow === 0).reduce((sum, s) => sum + s.basis, 0);
   const fixedColsTotalPx = fixedColsBasisPx + computeActionColsWidthPx({
     selectable, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
-    onCloneRow, quickActionsEnabled, ilpHasNoAmountCol, hasDimensionsPanel,
+    onCloneRow, quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel,
   });
 
   return (
@@ -2324,7 +2333,7 @@ export function DataTable({
           {renderLinesColgroup({
             hideHeader, selectable, visibleColumns, colFlexSpecs, fixedColsTotalPx, growCount,
             ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow,
-            quickActionsEnabled, ilpHasNoAmountCol, hasDimensionsPanel,
+            quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel,
           })}
           <TableHeader
             className={linesLayout === 'inlineEditable' ? 'sticky top-0 z-20 bg-card' : ''}
@@ -2392,7 +2401,7 @@ export function DataTable({
                 entity={entity}
                 specName={specName}
                 selectorContext={selectorContext}
-                ilpHasNoAmountCol={ilpHasNoAmountCol}
+                ilpReservesActionSlot={ilpReservesActionSlot}
                 ilpTrailing={ilpTrailing}
                 labelOverrides={labelOverrides}
                 hasDimensionsPanel={hasDimensionsPanel}

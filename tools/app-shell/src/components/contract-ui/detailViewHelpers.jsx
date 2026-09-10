@@ -24,6 +24,79 @@ import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 // pure helper. Canonical implementation lives in `@/lib/backendErrors.js`.
 export {parseBackendErrorMessage} from '@/lib/backendErrors.js';
 
+/**
+ * Header fields that are COMPUTED BY THE BACKEND FROM CHILD ROWS, and that therefore go stale the
+ * moment a secondary tab writes one (ETP-5245).
+ *
+ * `etgoHasCost` (Product) is the first: `ProductDefaultsHandler.annotateCostPresence` derives it
+ * from the existence of an `M_Costing` row and stamps it on every single-record product response.
+ * Adding a cost line is a `POST /product/costing` — a DIFFERENT entity — so nothing re-reads the
+ * product, and the header the form holds in memory keeps saying `false`. That left the "no cost
+ * defined" banner on screen after the Costing tab already showed `Costo 1`, and (worse) left the
+ * save gate in `useEntity.performSave` still refusing the save, since both read the SAME record.
+ *
+ * Add a field here only when the backend computes it from child rows AND a stale value is
+ * user-visible. Anything else does not justify the extra GET.
+ */
+export const HEADER_FIELDS_DERIVED_FROM_CHILD_ROWS = ['etgoHasCost'];
+
+/**
+ * Whether this header carries any of the fields above, i.e. whether a child write can invalidate
+ * it. Gating on the DATA rather than on a window or tab name keeps
+ * `withHeaderRefreshOnChildWrite` generic: no other window pays for a request it does not need,
+ * and a window that starts emitting one of these flags is covered without touching DetailView.
+ */
+export function headerHasChildDerivedFields(header) {
+  if (!header?.id) return false;
+  return HEADER_FIELDS_DERIVED_FROM_CHILD_ROWS.some(key => header[key] !== undefined && header[key] !== null);
+}
+
+/**
+ * Wrap the per-tab secondary hooks so a successful child add/delete also re-reads the HEADER
+ * record into the main hook (ETP-5245).
+ *
+ * Each secondary hook is its own `useEntity` instance over the same parent entity, so it already
+ * calls `refreshHeaderTotals` after a child write — but into ITS OWN `selected`/`editing`, which
+ * nothing renders. The form, the banner and the save gate all read the MAIN hook's `editing`, so
+ * that refresh never reaches them. This wraps the two mutating handlers to also refresh the main
+ * hook, which is what makes the banner disappear when a cost line is added and — the inverse case,
+ * equally required — come back when the last one is deleted, both without a page reload.
+ *
+ * The server stays the single source of truth: nothing here recomputes the flag client-side, so
+ * the banner and the save gate can never end up disagreeing about the same record.
+ *
+ * Returns the array unchanged (same identity) when the header has no child-derived field, so the
+ * wrapping is genuinely inert for every other window.
+ */
+export function withHeaderRefreshOnChildWrite(secondaryHooks, hook) {
+  const header = hook?.editing ?? hook?.selected;
+  if (!headerHasChildDerivedFields(header)) return secondaryHooks;
+  const refresh = () => {
+    const id = hook?.selected?.id ?? hook?.editing?.id;
+    if (id) hook?.refreshHeaderTotals?.(id);
+  };
+  return secondaryHooks.map(sh => {
+    if (!sh) return sh;
+    return {
+      ...sh,
+      handleAddChild: async (...args) => {
+        const result = await sh.handleAddChild?.(...args);
+        // Only on success — a refused POST changed nothing on the server.
+        if (result) refresh();
+        return result;
+      },
+      // Called once per row by the batch-delete loop, and once by the confirm dialog; both call
+      // it only after the DELETE succeeded. Mirrors the per-row `refreshHeaderTotals` the child
+      // hook itself already performs, so multi-row deletes are no chattier in kind than today.
+      handleDeleteChild: (...args) => {
+        const result = sh.handleDeleteChild?.(...args);
+        refresh();
+        return result;
+      },
+    };
+  });
+}
+
 export function sidePanelWrapperCls(hasSidePanel, linesLayout) {
   // Stack the side panel below the content on narrow viewports (e.g. when the
   // devtools console is open) and only place it beside the content once there

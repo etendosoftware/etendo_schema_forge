@@ -17381,7 +17381,7 @@
     "importFromSalesOrder": "Añadir desde pedido",
     "importFromSourceInvoice": "Importar desde factura origen",
     "noLinesYet": "Sin líneas todavía",
-    "productCostRequired": "Este producto no tiene costo definido. Añade una línea en la solapa Costo para poder guardarlo.",
+    "productCostRequired": "Sin costo definido no se podrán calcular los costes ni contabilizar los movimientos de este producto. Añade una línea en la solapa Costo.",
     "addLinesManuallyOrImportFromShipment": "Añade líneas manualmente o impórtalas desde un envío",
     "linesImportOnlyFromShipment": "Importa las líneas desde el envío a devolver",
     "addLinesManuallyOrImportFromShipmentOrOrder": "Añade líneas manualmente o impórtalas desde un envío o pedido",

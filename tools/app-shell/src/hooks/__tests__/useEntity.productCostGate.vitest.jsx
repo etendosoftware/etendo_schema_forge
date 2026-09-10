@@ -161,6 +161,62 @@ describe('useEntity — product cost save gate (ETP-5245)', () => {
     expect(getSaveBlockCount(TOAST_ID)).toBe(0);
   });
 
+  /**
+   * ETP-5245 follow-up — the banner did not disappear when a cost line was added; it only cleared
+   * on a page reload. `etgoHasCost` is stamped on the PRODUCT record, but a cost line is a POST to
+   * another entity, so nothing re-read the product. `withHeaderRefreshOnChildWrite`
+   * (detailViewHelpers.jsx) now calls `refreshHeaderTotals` after a child add/delete; these tests
+   * close the loop on THIS side — that the refreshed value really lands in the record the banner
+   * and the save gate both read, in both directions.
+   */
+  describe('a header refresh flips the gate without a reload', () => {
+    /** Answers the header GET with `etgoHasCost: flag`, everything else as usual. */
+    function mockHeaderGetReturning(flag) {
+      globalThis.fetch = vi.fn(async (url, opts) => ({
+        ok: true,
+        json: async () => ({
+          response: {
+            data: [
+              (!opts?.method || opts.method === 'GET') && String(url).includes('/header/prod-1')
+                ? { ...BLOCKING_PRODUCT, etgoHasCost: flag }
+                : { id: 'prod-1', name: 'Widget' },
+            ],
+          },
+        }),
+      }));
+    }
+
+    it('stops refusing the save once the refreshed header reports a cost', async () => {
+      const { result } = renderEntity({ specName: 'product' });
+      act(() => { result.current.handleSelect(BLOCKING_PRODUCT); });
+
+      mockHeaderGetReturning(true);
+      await act(async () => { result.current.refreshHeaderTotals('prod-1'); });
+
+      expect(result.current.editing.etgoHasCost).toBe(true);
+      act(() => { result.current.handleChange('name', 'Widget renamed'); });
+      let saved;
+      await act(async () => { saved = await result.current.handleSave(); });
+      expect(saved).not.toBeNull();
+    });
+
+    // The inverse case, equally required: remove the only cost line and the block must come back.
+    it('starts refusing again once the refreshed header reports no cost', async () => {
+      const { result } = renderEntity({ specName: 'product' });
+      act(() => { result.current.handleSelect({ ...BLOCKING_PRODUCT, etgoHasCost: true }); });
+
+      mockHeaderGetReturning(false);
+      await act(async () => { result.current.refreshHeaderTotals('prod-1'); });
+
+      expect(result.current.editing.etgoHasCost).toBe(false);
+      act(() => { result.current.handleChange('name', 'Widget renamed'); });
+      let saved;
+      await act(async () => { saved = await result.current.handleSave(); });
+      expect(saved).toBeNull();
+      expect(getSaveBlockCount(TOAST_ID)).toBe(1);
+    });
+  });
+
   // ── no regression for anything else ───────────────────────────────────────
 
   it('does not block another window whose record happens to look like a costless product', async () => {

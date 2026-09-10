@@ -17150,7 +17150,7 @@
     "importFromSalesOrder": "Add from order",
     "importFromSourceInvoice": "Import from source invoice",
     "noLinesYet": "No lines yet",
-    "productCostRequired": "This product has no cost defined. Add a line on the Costing tab to be able to save it.",
+    "productCostRequired": "Without a defined cost, this product's costs cannot be calculated and its movements cannot be posted. Add a line on the Costing tab.",
     "addLinesManuallyOrImportFromShipment": "Add lines manually or import from a shipment",
     "linesImportOnlyFromShipment": "Import the lines from the shipment to return",
     "addLinesManuallyOrImportFromShipmentOrOrder": "Add lines manually or import from a shipment or order",

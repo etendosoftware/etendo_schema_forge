@@ -25,6 +25,7 @@ import { PillToggle } from '@/components/PillToggle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { resolveLookupDrawer } from './lookupDrawers.js';
 import { columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
+import { ACTION_SLOT_WIDTH_PX, resolveTrailingColumn } from '@/lib/linesActionSlot.js';
 import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
 import { getContactsTextFieldError } from './contactsFieldValidation.js';
 // ETP-4529 — shared "Dimensiones contables" expand-row UX (extracted from
@@ -977,16 +978,16 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // vanish and the dates jump one slot left — but the same shape hits every lines /
   // secondary tab whose amount is not last (e.g. purchase-invoice's Payment Details:
   // `amount`, `invoicePaid`). Covered by InlineLinesPanel.trailingAmountColumn.vitest.jsx.
-  const trailingColumn = useMemo(() => {
-    const last = visibleColumns[visibleColumns.length - 1];
-    if (!last || last.type !== 'amount' || last.noTrailing) return null;
-    return last;
-  }, [visibleColumns]);
+  //
+  // The predicate itself lives in `@/lib/linesActionSlot.js` because DataTable's
+  // add-row companion table must reserve the very same slot — see that module's
+  // header for why the two renderers may never answer this question apart.
+  const trailingColumn = useMemo(() => resolveTrailingColumn(visibleColumns), [visibleColumns]);
   const reserveActionSlot = trailingColumn == null;
   // Action strip must be the same width as the trailing column it replaces on hover.
   const actionStripFlex = trailingColumn
     ? columnFlex(trailingColumn, visibleColumns.indexOf(trailingColumn))
-    : '0 0 160px';
+    : `0 0 ${ACTION_SLOT_WIDTH_PX}px`;
 
   // ETP-4529 — at most one column may declare `type: 'dimensionsPanel'` (see
   // InvoiceLinesTable.jsx for a caller example). When present (and at least one
@@ -1263,9 +1264,11 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
             </div>
           ))}
           {/* Reserve the same 160 px slot the action strip will occupy so the
-              header columns align with the body rows even when hovering. */}
+              header columns align with the body rows even when hovering — and
+              so DataTable's add-row colgroup (same predicate, see
+              `@/lib/linesActionSlot.js`) lines its inputs up with these headers. */}
           {reserveActionSlot && (
-            <div style={{ flex: '0 0 160px' }} aria-hidden="true" />
+            <div style={{ flex: `0 0 ${ACTION_SLOT_WIDTH_PX}px` }} aria-hidden="true" />
           )}
           {/* Right spacer — mirrors the Figma right margin without adding padding
               to the root (which would clip the row border-b lines). */}
