@@ -92,7 +92,7 @@ function CompanyStepWithTaxId({ onNext, ...stepProps }) {
   }, [onNext, reportIfInvalid]);
 
   if (!CoreCompanyStep) return null;
-  return <CoreCompanyStep {...stepProps} onNext={handleNext} />;
+  return <CoreCompanyStep {...stepProps} onNext={handleNext} data-testid="CoreCompanyStep__606e28" />;
 }
 
 /**

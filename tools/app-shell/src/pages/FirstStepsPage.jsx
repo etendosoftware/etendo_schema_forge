@@ -42,7 +42,11 @@ function StepDoneBadge({ stepId }) {
       className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--status-done-badge))] text-[hsl(var(--status-done-badge-fg))]"
       data-testid={`first-steps-done-${stepId}`}
     >
-      <Check className="h-5 w-5" strokeWidth={3} aria-hidden="true" />
+      <Check
+        className="h-5 w-5"
+        strokeWidth={3}
+        aria-hidden="true"
+        data-testid="Check__45a28a" />
     </span>
   );
 }
@@ -60,7 +64,13 @@ function isStepLocked(step, done) {
 function StepAction({ step, done, ui, onConfigure }) {
   const locked = isStepLocked(step, done);
   if (step.action === 'import') {
-    return <FirstStepsImportButton step={step} ui={ui} disabled={locked} />;
+    return (
+      <FirstStepsImportButton
+        step={step}
+        ui={ui}
+        disabled={locked}
+        data-testid="FirstStepsImportButton__45a28a" />
+    );
   }
   if (!step.to) return null;
   return (
@@ -109,9 +119,14 @@ function StepRow({ step, done, expanded, loading, onToggle, onOpen, onConfigure,
               {step.descKey && (
                 <p className="text-xs text-muted-foreground">{ui(step.descKey)}</p>
               )}
-              {step.action === 'company' && <CompanyDataSummary ui={ui} />}
+              {step.action === 'company' && <CompanyDataSummary ui={ui} data-testid="CompanyDataSummary__45a28a" />}
               <div className="flex items-center gap-3">
-                <StepAction step={step} done={done} ui={ui} onConfigure={onConfigure} />
+                <StepAction
+                  step={step}
+                  done={done}
+                  ui={ui}
+                  onConfigure={onConfigure}
+                  data-testid="StepAction__45a28a" />
                 {Boolean(step.minutes) && (
                   <span className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Clock className="h-3.5 w-3.5" data-testid={`first-steps-time-${step.id}`} />
@@ -151,7 +166,7 @@ function StepRow({ step, done, expanded, loading, onToggle, onOpen, onConfigure,
               {step.minutes} {ui('minutes')}
             </span>
           )}
-          {done && <StepDoneBadge stepId={step.id} />}
+          {done && <StepDoneBadge stepId={step.id} data-testid="StepDoneBadge__45a28a" />}
           {!done && expanded && (
             <Circle
               className="h-8 w-8 text-muted-foreground/30"
@@ -253,7 +268,8 @@ export default function FirstStepsPage() {
                 onToggle={handleToggle}
                 onOpen={handleOpen}
                 onConfigure={(target) => navigate(target.to)}
-                ui={ui} />
+                ui={ui}
+                data-testid="StepRow__45a28a" />
             ))}
           </div>
 

@@ -64,6 +64,26 @@ async function installFirstStepsMock(page, initial = null) {
 const progress = (page) => page.getByTestId('first-steps-progress');
 
 /**
+ * Opens the sidebar, which starts COLLAPSED.
+ *
+ * Collapsed, `SideMenu` renders group icons only: the `menu-item-*` links live in a Radix
+ * popover that mounts on hover, and the `x/7` badge is replaced by a different element
+ * (`menu-first-steps-progress-collapsed`, just the outstanding count — `3/7` does not fit in a
+ * 40px tile). So neither `menu-first-steps-progress` nor `menu-item-first-steps` is in the DOM
+ * until this runs. Same helper as `window-visibility-etp4249.mocked.spec.js`, kept local for
+ * the same reason it is there: it is two lines and anchoring it on the translated aria-label
+ * is the only stable handle.
+ */
+async function expandSidebar(page) {
+  const expandBtn = page.getByRole('button', { name: /Expand menu|Expandir menú/i });
+  if (await expandBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    await expandBtn.click();
+    // The width transition is 200ms; the items are only hit-testable once it settles.
+    await page.waitForTimeout(400);
+  }
+}
+
+/**
  * Until the locale slice resolves, `ui()` returns the raw key, so any copy read before that
  * point is `firstStepsPrepareAccount` rather than the translated string. Anchoring on the
  * key prefix keeps this locale-agnostic.
@@ -183,8 +203,10 @@ test.describe('First Steps page — completion run', () => {
     await page.getByTestId('first-steps-title-products').click();
     await expect(page.getByTestId('first-steps-import-products')).toBeEnabled();
 
+    // No second click on the title here: the row is still open (completeStep ticks the
+    // checkbox INSIDE the expanded row) and the title is a disclosure toggle, so clicking it
+    // again would collapse the row and take the import button out of the DOM entirely.
     await completeStep(page, 'products');
-    await page.getByTestId('first-steps-title-products').click();
     await expect(page.getByTestId('first-steps-import-products')).toBeDisabled();
 
     // Fully reversible — the checkbox is the switch, not a one-way door.
@@ -275,8 +297,11 @@ test.describe('First Steps page — completion run', () => {
     await expect(page.getByTestId('first-steps-page')).toBeVisible();
     await expect(progress(page)).toContainText('2/7');
     await expect(page.getByTestId('first-steps-done-company-data')).toBeVisible();
-    // The default expansion follows the persisted state, not the page load order.
-    await expect(page.getByTestId('first-steps-toggle-invoice-sequence')).toBeVisible();
+    // The default expansion follows the persisted state, not the page load order: with
+    // company-data ticked, findExpandedStepId() opens the next incomplete row, which is
+    // fiscal-config. The toggle only exists inside an expanded row, so its presence IS the
+    // assertion that the right row opened.
+    await expect(page.getByTestId('first-steps-toggle-fiscal-config')).toBeVisible();
   });
 
   test('Configure on the expanded row opens that step target window', async ({ page }) => {
@@ -287,6 +312,7 @@ test.describe('First Steps page — completion run', () => {
   test('mirrors the progress on the sidebar entry, live', async ({ page }) => {
     // The badge and the page read one shared state, so ticking a step here must move the
     // sidebar count in the same commit — no reload. Before that was shared they disagreed.
+    await expandSidebar(page);
     const badge = page.getByTestId('menu-first-steps-progress');
     await expect(badge).toHaveText('1/7');
 
@@ -299,6 +325,7 @@ test.describe('First Steps page — completion run', () => {
     // un-tick a step, so it must survive completion.
     for (const id of TOGGLEABLE) await completeStep(page, id);
     await expect(progress(page)).toContainText('7/7');
+    await expandSidebar(page);
     await expect(page.getByTestId('menu-first-steps-progress')).toHaveText('7/7');
     await expect(page.getByTestId('menu-item-first-steps')).toBeVisible();
   });

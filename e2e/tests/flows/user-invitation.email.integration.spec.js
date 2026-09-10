@@ -362,6 +362,23 @@ async function acceptExistingInvitation(browser, inviteLink, email, password, {
     await page.getByTestId('action-go-to-app').click();
     await page.waitForURL('**/dashboard', { timeout: 60_000 });
     await expect(page).toHaveURL(/\/dashboard/);
+
+    // ETP-5190 — an invited user is a NEW account, so the dashboard spends its one-time First
+    // Steps redirect on this very first visit. `waitForURL('**/dashboard')` above wins the race
+    // (the redirect only fires once the server's `firstSteps.seen` arrives), so the URL check
+    // passes and the dashboard is then navigated away from underneath the next assertion. That
+    // is the real product behaviour, not a defect: wait the redirect out, then come back.
+    //
+    // `markSeen()` is POSTed as the redirect is taken, so the second visit is the steady state
+    // and lands on the dashboard for good. Tolerant of either destination on purpose — this
+    // spec is about the invitation reaching the app, and it must not start failing the day the
+    // checklist stops being shown to invited members.
+    await page.waitForURL(/\/(first-steps|dashboard)$/, { timeout: 60_000 });
+    if (new URL(page.url()).pathname === '/first-steps') {
+      await expect(page.getByTestId('first-steps-page')).toBeVisible({ timeout: 30_000 });
+      await page.goto('/dashboard');
+      await expect(page).toHaveURL(/\/dashboard/);
+    }
     await expect(page.getByText(/Estas son tus tareas pendientes|These are your pending tasks/)).toBeVisible({ timeout: 60_000 });
     await captureScreenshot(page, {
       path: `../artifacts/delivery-evidence/ETP-4894/${evidenceStem}-dashboard.png`,

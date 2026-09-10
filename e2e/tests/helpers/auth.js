@@ -174,6 +174,7 @@ export async function login(page, {
     if (!page.url().includes('/dashboard')) {
       await page.goto('/dashboard', { waitUntil: 'domcontentloaded', timeout: 10_000 });
     }
+    await settleFirstStepsRedirect(page);
     return;
   }
 
@@ -188,12 +189,38 @@ export async function login(page, {
 
   await expectAnyEnvironmentOrDashboard(page);
 
-  if (page.url().includes('/dashboard')) return;
+  if (page.url().includes('/dashboard')) {
+    await settleFirstStepsRedirect(page);
+    return;
+  }
 
   const enterButton = page.locator('[data-testid^="action-enter-environment-"]').first();
   await enterButton.click({ timeout: 30_000 });
   await page.waitForURL('**/dashboard', { timeout: 30_000 });
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  await settleFirstStepsRedirect(page);
+}
+
+/**
+ * Spends the one-time First Steps redirect, if this account still has it (ETP-5190).
+ *
+ * Real-backend counterpart to the `/sws/go/onboarding/first-steps` stub in mock mode above.
+ * The dashboard bounces to /first-steps once per account, server-side, and there is no
+ * stubbing it out here — so the first spec of a clean-database run lands on the checklist
+ * instead of the dashboard. Visiting it is what marks it seen (`markSeen()` POSTs as the
+ * redirect is taken), so one extra navigation puts every later spec in the steady state.
+ *
+ * Cheap and silent on an account that has already seen it: the URL is already /dashboard, so
+ * this returns after one short wait and navigates nowhere.
+ */
+async function settleFirstStepsRedirect(page) {
+  // The gate fires only once the state arrives from the server, i.e. AFTER the dashboard has
+  // already rendered — so a URL check right now would pass and prove nothing.
+  const bounced = await page.waitForURL('**/first-steps', { timeout: 5_000 })
+    .then(() => true).catch(() => false);
+  if (!bounced) return;
+  await page.goto('/dashboard', { waitUntil: 'domcontentloaded', timeout: 10_000 });
+  await page.waitForURL('**/dashboard', { timeout: 10_000 });
 }
 
 async function expectAnyEnvironmentOrDashboard(page) {

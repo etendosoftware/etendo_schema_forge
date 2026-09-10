@@ -212,8 +212,10 @@ test.describe('Onboarding — Full registration flow', () => {
     await page.locator('#clientName').fill('Mi Empresa E2E');
     await expect(startBtn).toBeEnabled();
 
-    // Fill fiscal ID (optional) — stays enabled
-    await page.locator('#fiscalIdValue').fill('B12345678');
+    // Fill fiscal ID (optional) — stays enabled. The value is a check-digit-valid CIF because
+    // ETP-5190 guards "Empezar" with the NIF validator: optional means "may be left empty",
+    // not "may be wrong", so an invalid id would block PART 7 below.
+    await page.locator('#fiscalIdValue').fill('B12345674');
     await expect(startBtn).toBeEnabled();
 
     // Address label carries the "(opcional)" tag. Fiscal id also renders "opcional"
