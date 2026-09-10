@@ -3,7 +3,7 @@ import { DataTable } from '@/components/contract-ui';
 import { useLocale } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
-import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
+import { getInvoiceFiscalTargets, isSifEligibleByDate } from '@/windows/custom/shared/fiscalTargets.js';
 import { FiscalStatusBadge } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 
 const BASE_COLUMNS = [
@@ -29,7 +29,7 @@ export default function InvoiceHeaderTable(props) {
 
   const { selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
-  const { profile } = useFiscalConfig(orgId, apiBaseUrl);
+  const { profile, siiRecord } = useFiscalConfig(orgId, apiBaseUrl);
 
   const targets = useMemo(() => getInvoiceFiscalTargets('purchase-invoice', profile), [profile]);
 
@@ -37,14 +37,22 @@ export default function InvoiceHeaderTable(props) {
 
   const columns = useMemo(() => {
     const fiscalCols = [];
+    // ETP-5122: gate the cell (not just the column) by per-row date eligibility
+    // — SII books by accounting date, not invoice date (mirrors Classic's
+    // AEATSII_PreSII_Invoice auxiliary input, which compares DateAcct). A row
+    // dated before the org's SII adoption date renders no status at all.
     if (targets.showSii) {
       fiscalCols.push({
         key: '_siiStatus', type: 'custom', label: siiColLabel,
-        render: (row) => <FiscalStatusBadge status={row.aeatsiiEstado ?? null} />,
+        render: (row) => (
+          isSifEligibleByDate(row.accountingDate, siiRecord?.fechaAcogidaSII)
+            ? <FiscalStatusBadge status={row.aeatsiiEstado ?? null} />
+            : null
+        ),
       });
     }
     return [...BASE_COLUMNS, ...fiscalCols, ...TAIL_COLUMNS];
-  }, [targets, siiColLabel]);
+  }, [targets, siiColLabel, siiRecord]);
 
   return <DataTable columns={columns} filters={FILTERS} {...props} />;
 }

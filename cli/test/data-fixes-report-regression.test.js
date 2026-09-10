@@ -60,6 +60,25 @@ const FIXES_WITH_REPORT = new Set([
   // back empty and leave `detail` null on the APPLIED ledger row. A non-empty detail means a
   // row was skipped or something raced the update, and is worth investigating.
   '20260902T120000Z__R31-document-sequence-startno',
+  // R33 (ETP-5122) backfills ETSG_Tax_SIF_Config overrides from the shared System
+  // C_Tax row before its sibling R34 clears the System fields; its @report is a
+  // diagnostic audit listing every override row this run just created (read back
+  // from @apply's RETURNING via a temp table, since @report runs after @apply).
+  '20260904T120000Z__R33-tax-sif-config-migration',
+  // R34 (ETP-5122) is the destructive cutover that nulls the shared System C_Tax
+  // SIF fields once every active-config legal-entity org already has its own R33
+  // override; its @report is the full before/after audit (old values + which group
+  // was cleared) stored verbatim in the ledger's `detail` column as the secondary
+  // revert trail.
+  '20260904T130000Z__R34-tax-sif-config-clear-system',
+  // R34 (ETP-5207) blanks FIN_FINANCIAL_ACCOUNT_ACCT's cleared-payment IN/OUT columns, but
+  // deliberately skips two populations it must not touch: an account with a POSTED reconciliation
+  // (its FACT_ACCT entries were produced USING the cleared account) and a type-'B' row missing
+  // bankfee/revaluation accounts (APRM_FIN_FINACC_ACCT_CHECK_TRG fires BEFORE UPDATE too and would
+  // abort the whole tenant's transaction). Its @report lists each skipped (account, ledger) pair
+  // AND which of the two guards protected it — the canonical "skipped part of its own work" case,
+  // same pattern as R19. See cli/test/data-fixes-r34-fin-account-cleared-payment-accounts.test.js.
+  '20260908T120000Z__R34-fin-account-cleared-payment-accounts',
 ]);
 
 async function loadCatalogFiles() {
