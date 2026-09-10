@@ -1,4 +1,6 @@
 import { buildMenuGroups, getAllWindowNames, apiOnlyWindows, buildWindowMap, filterMenuGroupsByAccess } from '../registry';
+import menuConfig from '../../menu.json';
+import { defaultNavigation, optionalNavigation, hiddenNavigation, navigationProfiles, expectedNavigation, navigationPermissions, expectNavigation } from './navigationExpectations.js';
 
 describe('registry', () => {
   // ETP-4598 — calling filterMenuGroupsByAccess() directly with synthetic
@@ -144,6 +146,274 @@ describe('registry', () => {
       const settings = result.find(g => g.group === 'Settings');
       expect(settings).toBeDefined();
       expect(settings.items.map(i => i.name)).toContain('roles');
+    });
+  });
+
+  // ETP-5240 — a third, independent axis for items that declare
+  // `"accessWindowId": "<AD_Window_ID>"` (report viewers, Smart Scan): windows
+  // that exist only as a permission anchor with no active AD_Menu node, so
+  // they can never be matched via the `windowId`/allowedIds axis above. This
+  // check fails CLOSED, same convention as the `capability` axis: hidden
+  // unless `windowAccess[item.accessWindowId]` is a defined access tier.
+  describe('filterMenuGroupsByAccess — windowAccess axis (ETP-5240)', () => {
+    it('hides an accessWindowId-gated item when windowAccess is null/omitted (fails closed)', () => {
+      // allowedIds is set to a non-null Set here (rather than null) so the
+      // function's own "all three axes falsy -> back-compat passthrough" guard
+      // (mirrors the pre-ETP-4513 2-arg signature) doesn't mask the assertion —
+      // same reasoning as the capability-axis test right above this one.
+      const groups = [{
+        group: 'Reports',
+        items: [{ name: 'report-viewer-finance', accessWindowId: 'AW1' }],
+      }];
+      const result = filterMenuGroupsByAccess(groups, new Set(['999']), null, null);
+      expect(result.find(g => g.group === 'Reports')).toBeUndefined();
+    });
+
+    it('hides an accessWindowId-gated item when windowAccess is loaded but has no matching key', () => {
+      const groups = [{
+        group: 'Reports',
+        items: [{ name: 'report-viewer-finance', accessWindowId: 'AW1' }],
+      }];
+      const result = filterMenuGroupsByAccess(groups, null, null, {});
+      expect(result.find(g => g.group === 'Reports')).toBeUndefined();
+    });
+
+    it('shows an accessWindowId-gated item when windowAccess[id] is "full"', () => {
+      const groups = [{
+        group: 'Reports',
+        items: [{ name: 'report-viewer-finance', accessWindowId: 'AW1' }],
+      }];
+      const result = filterMenuGroupsByAccess(groups, null, null, { AW1: 'full' });
+      const reports = result.find(g => g.group === 'Reports');
+      expect(reports).toBeDefined();
+      expect(reports.items.map(i => i.name)).toContain('report-viewer-finance');
+    });
+
+    it('shows an accessWindowId-gated item when windowAccess[id] is "read-only" (presence, not tier value, is what is checked)', () => {
+      const groups = [{
+        group: 'Reports',
+        items: [{ name: 'report-viewer-finance', accessWindowId: 'AW1' }],
+      }];
+      const result = filterMenuGroupsByAccess(groups, null, null, { AW1: 'read-only' });
+      const reports = result.find(g => g.group === 'Reports');
+      expect(reports).toBeDefined();
+      expect(reports.items.map(i => i.name)).toContain('report-viewer-finance');
+    });
+
+    it('does not affect an item with no accessWindowId, regardless of windowAccess contents', () => {
+      const groups = [{
+        group: 'Reports',
+        items: [{ name: 'dashboard' }],
+      }];
+      const result = filterMenuGroupsByAccess(groups, null, null, {});
+      const reports = result.find(g => g.group === 'Reports');
+      expect(reports).toBeDefined();
+      expect(reports.items.map(i => i.name)).toContain('dashboard');
+    });
+
+    it('interaction: an item carrying BOTH windowId and accessWindowId must pass both axes independently (defensive/future-proofing — no real menu.json entry combines them today)', () => {
+      const bothIds = { name: 'hybrid', windowId: '111', accessWindowId: 'AW1' };
+
+      // allowedIds says yes, windowAccess says no -> hidden.
+      const hiddenByWindowAccess = filterMenuGroupsByAccess(
+        [{ group: 'Mixed', items: [bothIds] }],
+        new Set(['111']),
+        null,
+        {},
+      );
+      expect(hiddenByWindowAccess.find(g => g.group === 'Mixed')).toBeUndefined();
+
+      // windowAccess says yes, allowedIds says no -> hidden.
+      const hiddenByAllowedIds = filterMenuGroupsByAccess(
+        [{ group: 'Mixed', items: [bothIds] }],
+        new Set(['999']),
+        null,
+        { AW1: 'full' },
+      );
+      expect(hiddenByAllowedIds.find(g => g.group === 'Mixed')).toBeUndefined();
+
+      // Both say yes -> shown.
+      const shown = filterMenuGroupsByAccess(
+        [{ group: 'Mixed', items: [bothIds] }],
+        new Set(['111']),
+        null,
+        { AW1: 'full' },
+      );
+      const mixed = shown.find(g => g.group === 'Mixed');
+      expect(mixed).toBeDefined();
+      expect(mixed.items.map(i => i.name)).toContain('hybrid');
+    });
+
+    it('drops a group whose every item is filtered out by the windowAccess axis, same as the other axes', () => {
+      const groups = [{
+        group: 'Reports',
+        items: [{ name: 'report-viewer-finance', accessWindowId: 'AW1' }],
+      }];
+      const result = filterMenuGroupsByAccess(groups, null, null, {});
+      expect(result.find(g => g.group === 'Reports')).toBeUndefined();
+    });
+
+    // ETP-5240 follow-up (96dff5d7e) — none of the 3 permission-anchor windows
+    // backs an active ETGO_SF_SPEC row, so SFWindowAccessMap's admin bypass
+    // never populates `windowAccess` for them even for GOClient Admin. The
+    // accessWindowId check now short-circuits on `capabilities.isAdminOrClientAdmin`
+    // so the proactive sidebar filter matches the reactive Java content gate
+    // (NeoAccessHelper.hasWindowAccess(), which bypasses unconditionally for
+    // admin regardless of spec).
+    describe('admin/client-admin bypass on the accessWindowId axis', () => {
+      it('shows an accessWindowId-gated item for an admin/client-admin even when windowAccess is null/{}/missing the key', () => {
+        const item = { name: 'report-viewer-finance', accessWindowId: 'AW1' };
+        const adminCaps = { isAdminOrClientAdmin: true };
+
+        for (const windowAccess of [null, {}, { OTHER_ID: 'full' }]) {
+          const result = filterMenuGroupsByAccess(
+            [{ group: 'Reports', items: [item] }],
+            null,
+            adminCaps,
+            windowAccess,
+          );
+          const reports = result.find(g => g.group === 'Reports');
+          expect(reports).toBeDefined();
+          expect(reports.items.map(i => i.name)).toContain('report-viewer-finance');
+        }
+      });
+
+      it('still hides an accessWindowId-gated item for a non-admin when windowAccess lacks the key (bypass does not leak into the normal case)', () => {
+        const item = { name: 'report-viewer-finance', accessWindowId: 'AW1' };
+
+        // capabilities: { isAdminOrClientAdmin: false } — distinct shape from
+        // `null`/omitted, which the earlier tests in this block already cover.
+        const result = filterMenuGroupsByAccess(
+          [{ group: 'Reports', items: [item] }],
+          null,
+          { isAdminOrClientAdmin: false },
+          {},
+        );
+        expect(result.find(g => g.group === 'Reports')).toBeUndefined();
+      });
+
+      it('interaction: the accessWindowId admin-bypass does not exempt the independent capability axis on the same item', () => {
+        // Item gated on BOTH axes: `capability` (checked first, unaffected by
+        // the admin-bypass — that bypass only reads `capabilities.isAdminOrClientAdmin`
+        // for the accessWindowId line, one line below) and `accessWindowId`.
+        const item = {
+          name: 'hybrid-anchor',
+          capability: 'someOtherCapability',
+          accessWindowId: 'AW1',
+        };
+
+        // Admin-bypass satisfies the accessWindowId line, but `someOtherCapability`
+        // is not true -> still hidden by the capability axis.
+        const stillHidden = filterMenuGroupsByAccess(
+          [{ group: 'Mixed', items: [item] }],
+          null,
+          { isAdminOrClientAdmin: true, someOtherCapability: false },
+          {},
+        );
+        expect(stillHidden.find(g => g.group === 'Mixed')).toBeUndefined();
+
+        // Both satisfied -> shown.
+        const shown = filterMenuGroupsByAccess(
+          [{ group: 'Mixed', items: [item] }],
+          null,
+          { isAdminOrClientAdmin: true, someOtherCapability: true },
+          {},
+        );
+        const mixed = shown.find(g => g.group === 'Mixed');
+        expect(mixed).toBeDefined();
+        expect(mixed.items.map(i => i.name)).toContain('hybrid-anchor');
+      });
+    });
+  });
+
+  describe('shipped navigation catalog (ETP-5240)', () => {
+    const gated = defaultNavigation.filter(entry => entry.windowId || entry.processId || entry.obuiappProcessId || entry.accessWindowId || entry.capability);
+    const ungated = defaultNavigation.filter(entry => !gated.includes(entry));
+    const proof = optionalNavigation.filter(entry => entry.proof);
+
+    it('requires review of every default, optional and hidden catalog entry', () => {
+      expect(menuConfig.menu.flatMap(group => group.items.map(item => item.name)).sort()).toEqual([
+        ...defaultNavigation.map(entry => entry.name),
+        ...optionalNavigation.filter(entry => !entry.app).map(entry => entry.name),
+        ...hiddenNavigation,
+      ].sort());
+      expect(getAllWindowNames().sort()).toEqual([
+        ...defaultNavigation.map(entry => entry.name), ...optionalNavigation.map(entry => entry.name), ...hiddenNavigation,
+      ].sort());
+    });
+
+    it('keeps permission namespaces and identities aligned with independent sources', () => {
+      const items = menuConfig.menu.flatMap(group => group.items);
+      const keys = ['windowId', 'processId', 'obuiappProcessId', 'accessWindowId', 'capability'];
+      for (const expected of [...defaultNavigation, ...optionalNavigation.filter(entry => !entry.app)]) {
+        const actual = items.find(item => item.name === expected.name);
+        expect(actual, expected.name).toBeDefined();
+        for (const key of keys) expect(actual[key], `${expected.name}.${key}`).toBe(expected[key]);
+      }
+    });
+
+    it('keeps intentionally hidden entries hidden independently of role grants', () => {
+      for (const name of hiddenNavigation) {
+        const group = menuConfig.menu.find(candidate => candidate.items.some(item => item.name === name));
+        const item = group?.items.find(candidate => candidate.name === name);
+        expect(item, name).toBeDefined();
+        expect(Boolean(group.hidden || item.hidden), name).toBe(true);
+      }
+    });
+
+    it.each(navigationProfiles)('admin catalog: $label', profile => {
+      const { allowedIds, capabilities, windowAccess } = navigationPermissions();
+      const groups = filterMenuGroupsByAccess(
+        buildMenuGroups(profile.apps, { appStoreUnlocked: profile.marketplace }), allowedIds, capabilities, windowAccess,
+      );
+      // Proof visibility belongs to SideMenu, not the registry. Its real flag
+      // behavior is exercised in SideMenu.vitest.jsx using these same profiles.
+      expectNavigation(groups, expectedNavigation({ ...profile, proof: true }));
+    });
+
+    it.each(navigationProfiles)('ungated optional navigation without role grants: $label', profile => {
+      const groups = filterMenuGroupsByAccess(
+        buildMenuGroups(profile.apps, { appStoreUnlocked: profile.marketplace }), new Set(), {}, {},
+      );
+      expectNavigation(groups, expectedNavigation({ ...profile, proof: true }).filter(entry => !gated.includes(entry)));
+    });
+
+    it.each(gated)('single grant: $name', entry => {
+      const { allowedIds, capabilities, windowAccess } = navigationPermissions([entry]);
+      const groups = filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess);
+      const bypassedAnchors = entry.capability === 'isAdminOrClientAdmin'
+        ? defaultNavigation.filter(candidate => candidate.accessWindowId) : [];
+      expectNavigation(groups, [...ungated, ...proof, entry, ...bypassedAnchors]);
+    });
+
+    it.each(gated)('revoked grant: $name', entry => {
+      // Non-admin exercises anchor denial rather than its admin bypass.
+      const remaining = defaultNavigation.filter(candidate => candidate !== entry && !candidate.capability);
+      const { allowedIds, capabilities, windowAccess } = navigationPermissions(remaining);
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess), [...remaining, ...proof]);
+    });
+
+    it.each(defaultNavigation.filter(entry => entry.accessWindowId))('read-only anchor grant: $name', entry => {
+      const { allowedIds, capabilities, windowAccess } = navigationPermissions([entry], 'read-only');
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess), [...ungated, ...proof, entry]);
+    });
+
+    it.each([{}, null])('admin bypass with window map %j preserves the entire catalog', windowAccess => {
+      const { allowedIds, capabilities } = navigationPermissions();
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess), [...defaultNavigation, ...proof]);
+    });
+
+    it.each([
+      { label: 'denied', allowedIds: new Set(), capabilities: {}, windowAccess: {} },
+      { label: 'maps loading', allowedIds: new Set(), capabilities: null, windowAccess: null },
+    ])('$label exposes only ungated entries', ({ allowedIds, capabilities, windowAccess }) => {
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess), [...ungated, ...proof]);
+    });
+
+    it('null role-menu fallback opens only the membership axis, not capabilities or anchors', () => {
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), null, {}, {}), [
+        ...defaultNavigation.filter(entry => !entry.accessWindowId && !entry.capability), ...proof,
+      ]);
     });
   });
 
