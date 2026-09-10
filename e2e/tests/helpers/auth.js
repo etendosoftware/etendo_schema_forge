@@ -174,7 +174,6 @@ export async function login(page, {
     if (!page.url().includes('/dashboard')) {
       await page.goto('/dashboard', { waitUntil: 'domcontentloaded', timeout: 10_000 });
     }
-    await settleFirstStepsRedirect(page);
     return;
   }
 
@@ -189,40 +188,33 @@ export async function login(page, {
 
   await expectAnyEnvironmentOrDashboard(page);
 
-  if (page.url().includes('/dashboard')) {
-    await settleFirstStepsRedirect(page);
-    return;
-  }
+  if (page.url().includes('/dashboard')) return;
 
   const enterButton = page.locator('[data-testid^="action-enter-environment-"]').first();
   await enterButton.click({ timeout: 30_000 });
   await page.waitForURL('**/dashboard', { timeout: 30_000 });
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-  await settleFirstStepsRedirect(page);
 }
 
 /**
- * Spends the one-time First Steps redirect, if this account still has it (ETP-5190).
+ * ETP-5190 — deliberately NOT absorbed by `login()`: the one-time dashboard redirect to
+ * /first-steps.
  *
- * Real-backend counterpart to the `/sws/go/onboarding/first-steps` stub in mock mode above.
- * The dashboard bounces to /first-steps once per account, server-side, and there is no
- * stubbing it out here — so the first spec of a clean-database run lands on the checklist
- * instead of the dashboard. Visiting it is what marks it seen (`markSeen()` POSTs as the
- * redirect is taken), so one extra navigation puts every later spec in the steady state.
+ * On a real backend a brand-new account IS bounced once (mock mode stubs it away — see the
+ * `/sws/go/onboarding/first-steps` branch above), and the bounce lands AFTER the dashboard has
+ * rendered, because the gate waits for that GET to resolve. An earlier revision of this helper
+ * handled it here — wait up to 5s for the bounce, then navigate back — and that was a bad trade:
+ * the redirect is once per account EVER, so nearly every integration login paid the full wait in
+ * the steady state, to protect specs that immediately navigate somewhere else anyway, where being
+ * bounced is harmless.
  *
- * Cheap and silent on an account that has already seen it: the URL is already /dashboard, so
- * this returns after one short wait and navigates nowhere.
+ * A spec that genuinely asserts DASHBOARD content right after a fresh login has to absorb it
+ * itself — and must not do so by sampling the URL: `waitForURL` resolves IMMEDIATELY when the
+ * current URL already matches, so the check reads /dashboard and skips, a moment before the bounce
+ * fires. Retry the navigation instead. It converges in two rounds, because the visit that takes
+ * the redirect is also the one that POSTs `markSeen()`. Worked example:
+ * `user-invitation.email.integration.spec.js#acceptExistingInvitation`.
  */
-async function settleFirstStepsRedirect(page) {
-  // The gate fires only once the state arrives from the server, i.e. AFTER the dashboard has
-  // already rendered — so a URL check right now would pass and prove nothing.
-  const bounced = await page.waitForURL('**/first-steps', { timeout: 5_000 })
-    .then(() => true).catch(() => false);
-  if (!bounced) return;
-  await page.goto('/dashboard', { waitUntil: 'domcontentloaded', timeout: 10_000 });
-  await page.waitForURL('**/dashboard', { timeout: 10_000 });
-}
-
 async function expectAnyEnvironmentOrDashboard(page) {
   await Promise.race([
     page.waitForURL('**/dashboard', { timeout: 30_000 }),
