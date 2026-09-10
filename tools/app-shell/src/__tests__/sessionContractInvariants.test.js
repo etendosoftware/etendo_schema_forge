@@ -163,6 +163,27 @@ function callArgs(src, at) {
 }
 
 /**
+ * The declaration of `id`, plus up to `span` characters of whatever follows it.
+ *
+ * Deliberately NOT a regex built from `id`: interpolating an identifier into a
+ * pattern with an unbounded-scan quantifier is what Sonar flags as ReDoS-prone
+ * (javascript:S5852), and it re-parses the whole file once per lookup. One
+ * static pattern enumerates the declarations instead, and the name is compared
+ * as a plain string — same answer, linear, no interpolation.
+ *
+ * Returns `null` when nothing declares that name.
+ */
+const DECLARATION = /(?:const|let|var|function)\s+([A-Za-z_$][\w$]*)/g;
+function declarationSlice(src, id, span) {
+  DECLARATION.lastIndex = 0;
+  let m;
+  while ((m = DECLARATION.exec(src))) {
+    if (m[1] === id) return src.slice(m.index, m.index + m[0].length + span);
+  }
+  return null;
+}
+
+/**
  * Unsafe-method fetch sites in one file that carry no write proof.
  *
  * Deliberately LENIENT: when the headers come from an identifier it resolves that
@@ -194,8 +215,8 @@ function unsafeSitesWithoutProof(raw) {
     const named = seg.match(/headers\s*:\s*([A-Za-z_$][\w$]*)/);
     const id = named ? named[1] : (/headers\s*,/.test(seg) ? 'headers' : null);
     if (id) {
-      const def = src.match(new RegExp(`(?:const|let|var|function)\\s+${id}\\b[\\s\\S]{0,800}`));
-      if (def && PROOF.test(def[0])) continue;
+      const def = declarationSlice(src, id, 800);
+      if (def && PROOF.test(def)) continue;
     }
     hits.push(method);
   }
@@ -331,18 +352,18 @@ function credentiallessBackendSites(raw) {
     // before judging: that call site is G1's problem, not G4's.
     const spread = seg.match(/headers\s*:\s*\{[^}]*\.\.\.\s*([A-Za-z_$][\w$]*)/);
     if (spread) {
-      const def = src.match(new RegExp(`(?:const|let|var|function)\\s+${spread[1]}\\b[\\s\\S]{0,600}`));
-      if (!def || CREDENTIAL.test(def[0])) continue;
+      const def = declarationSlice(src, spread[1], 600);
+      if (!def || CREDENTIAL.test(def)) continue;
     }
     const named = seg.match(/headers\s*:\s*([A-Za-z_$][\w$]*)/)
       || (/\bheaders\b\s*[},]/.test(seg) ? [, 'headers'] : null);
     if (named) {
-      const def = src.match(new RegExp(`(?:const|let|var|function)\\s+${named[1]}\\b[\\s\\S]{0,600}`));
-      if (!def || CREDENTIAL.test(def[0])) continue;
-      const hop = def[0].match(/=\s*([A-Za-z_$][\w$]*)\s*\(\s*\)/);
+      const def = declarationSlice(src, named[1], 600);
+      if (!def || CREDENTIAL.test(def)) continue;
+      const hop = def.match(/=\s*([A-Za-z_$][\w$]*)\s*\(\s*\)/);
       if (hop) {
-        const viaHop = src.match(new RegExp(`(?:const|let|var|function)\\s+${hop[1]}\\b[\\s\\S]{0,600}`));
-        if (!viaHop || CREDENTIAL.test(viaHop[0])) continue;
+        const viaHop = declarationSlice(src, hop[1], 600);
+        if (!viaHop || CREDENTIAL.test(viaHop)) continue;
       }
     }
     hits.push(seg.slice(0, 80));
