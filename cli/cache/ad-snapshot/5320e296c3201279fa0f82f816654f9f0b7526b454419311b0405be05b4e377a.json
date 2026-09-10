@@ -11419,6 +11419,86 @@
         }
       ]
     },
+    "d861dd664adc2a7f0d8b8d9364724120621ce74e3b8db5af805bc32c77f9fc9b": {
+      "checksum": "211003b160a2b577a8d172cceccb3e761acc1b67ddd9258bd007c205c32d1d7c",
+      "params": [
+        "112"
+      ],
+      "rows": [
+        {
+          "columnname": "CurrentNext",
+          "displaylogic": "@IsAutoSequence@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Next Assigned Number",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "CurrentNextSys",
+          "displaylogic": "@IsAutoSequence@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Current Next (System)",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "IncrementNo",
+          "displaylogic": "@IsAutoSequence@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Increment By",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "IsTableID",
+          "displaylogic": "@IsAutoSequence@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Used for Record ID",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Prefix",
+          "displaylogic": "@IsTableID@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Prefix",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "StartNewYear",
+          "displaylogic": "@IsAutoSequence@='Y' & @IsTableID@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Restart sequence every Year",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "StartNo",
+          "displaylogic": "@IsAutoSequence@='Y' & @IsTableID@='N' & @StartNewYear@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Starting No.",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Suffix",
+          "displaylogic": "@IsTableID@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Suffix",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "VFormat",
+          "displaylogic": "@IsAutoSequence@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Value Format",
+          "readonlylogic": null
+        }
+      ]
+    },
     "d8b3062e19579428542c960b281edd38c8b4c4bae753749e7360902192d4cec1": {
       "checksum": "a181b48d5ea23246438c62a78dfad1394d607975632c43c18b729831e634f454",
       "params": [

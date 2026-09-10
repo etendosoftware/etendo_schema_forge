@@ -16999,6 +16999,122 @@
         }
       ]
     },
+    "d861dd664adc2a7f0d8b8d9364724120621ce74e3b8db5af805bc32c77f9fc9b": {
+      "checksum": "dcdc18e29c88b35a735e65de7a2643d6a9029fe8efcdaa17a15df9264193471d",
+      "params": [
+        "112"
+      ],
+      "rows": [
+        {
+          "column_id": "2747",
+          "columnname": "IncrementNo",
+          "displaylogic": "@IsAutoSequence@='Y'",
+          "field_id": "1554",
+          "name": "Increment By",
+          "readonlylogic": null,
+          "tab_id": "146",
+          "tab_name": "Sequence",
+          "table_id": "115",
+          "table_name": "AD_Sequence"
+        },
+        {
+          "column_id": "220",
+          "columnname": "CurrentNext",
+          "displaylogic": "@IsAutoSequence@='Y'",
+          "field_id": "329",
+          "name": "Next Assigned Number",
+          "readonlylogic": null,
+          "tab_id": "146",
+          "tab_name": "Sequence",
+          "table_id": "115",
+          "table_name": "AD_Sequence"
+        },
+        {
+          "column_id": "2746",
+          "columnname": "StartNo",
+          "displaylogic": "@IsAutoSequence@='Y' & @IsTableID@='N' & @StartNewYear@='Y'",
+          "field_id": "1555",
+          "name": "Starting No.",
+          "readonlylogic": null,
+          "tab_id": "146",
+          "tab_name": "Sequence",
+          "table_id": "115",
+          "table_name": "AD_Sequence"
+        },
+        {
+          "column_id": "223",
+          "columnname": "Prefix",
+          "displaylogic": "@IsTableID@='N'",
+          "field_id": "332",
+          "name": "Prefix",
+          "readonlylogic": null,
+          "tab_id": "146",
+          "tab_name": "Sequence",
+          "table_id": "115",
+          "table_name": "AD_Sequence"
+        },
+        {
+          "column_id": "224",
+          "columnname": "Suffix",
+          "displaylogic": "@IsTableID@='N'",
+          "field_id": "333",
+          "name": "Suffix",
+          "readonlylogic": null,
+          "tab_id": "146",
+          "tab_name": "Sequence",
+          "table_id": "115",
+          "table_name": "AD_Sequence"
+        },
+        {
+          "column_id": "3887",
+          "columnname": "CurrentNextSys",
+          "displaylogic": "@IsAutoSequence@='Y'",
+          "field_id": "3055",
+          "name": "Current Next (System)",
+          "readonlylogic": null,
+          "tab_id": "146",
+          "tab_name": "Sequence",
+          "table_id": "115",
+          "table_name": "AD_Sequence"
+        },
+        {
+          "column_id": "225",
+          "columnname": "StartNewYear",
+          "displaylogic": "@IsAutoSequence@='Y' & @IsTableID@='N'",
+          "field_id": "335",
+          "name": "Restart sequence every Year",
+          "readonlylogic": null,
+          "tab_id": "146",
+          "tab_name": "Sequence",
+          "table_id": "115",
+          "table_name": "AD_Sequence"
+        },
+        {
+          "column_id": "1187",
+          "columnname": "VFormat",
+          "displaylogic": "@IsAutoSequence@='N'",
+          "field_id": "635",
+          "name": "Value Format",
+          "readonlylogic": null,
+          "tab_id": "146",
+          "tab_name": "Sequence",
+          "table_id": "115",
+          "table_name": "AD_Sequence"
+        },
+        {
+          "column_id": "350",
+          "columnname": "IsTableID",
+          "displaylogic": "@IsAutoSequence@='Y'",
+          "field_id": "331",
+          "name": "Used for Record ID",
+          "readonlylogic": null,
+          "tab_id": "146",
+          "tab_name": "Sequence",
+          "table_id": "115",
+          "table_name": "AD_Sequence"
+        }
+      ]
+    },
     "d8b3062e19579428542c960b281edd38c8b4c4bae753749e7360902192d4cec1": {
       "checksum": "1686fe93b142599b7dab9684df714bec2c710992708f937f2d6f2b2fa8a1a2e1",
       "params": [

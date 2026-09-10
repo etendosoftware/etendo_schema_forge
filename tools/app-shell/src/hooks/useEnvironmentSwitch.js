@@ -20,23 +20,36 @@ import { sortEnvironments } from '../lib/environmentPresentation.js';
 export function useEnvironmentSwitch({ enabled = true } = {}) {
   const [environments, setEnvironments] = useState([]);
   const [switching, setSwitching] = useState(null);
+  // ETP-5190 — additive. `environments` alone cannot tell "still fetching" from "cannot know"
+  // (both are the empty array), and a caller that derives the tenant plan from this list needs
+  // that difference: rendering a plan-dependent view against a list that has not arrived yet
+  // shows the wrong one and then swaps it under the user. Ends up false in EVERY exit path,
+  // including no token and a thrown request.
+  const [loading, setLoading] = useState(enabled);
 
   useEffect(() => {
     if (!enabled) {
       setEnvironments([]);
+      setLoading(false);
       return;
     }
     // Environment discovery is account-scoped. Prefer the platform session because the active
     // tenant JWT may be expired while the account session remains valid after a credential change.
     const token = localStorage.getItem('sf_platform_token') || localStorage.getItem('sf_auth_token');
-    if (!token) return;
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
+    setLoading(true);
     (async () => {
       try {
         const envs = await fetchEnvironments(fetch, getApiBase(), token);
         if (!cancelled) setEnvironments(sortEnvironments(envs));
       } catch {
         // A switcher that cannot list stays closed; the current company still shows.
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
@@ -109,5 +122,5 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
 
   const currentClientId = localStorage.getItem('sf_auth_client_id') || undefined;
 
-  return { environments, switchTo, enterByClientName, switching, currentClientId };
+  return { environments, loading, switchTo, enterByClientName, switching, currentClientId };
 }

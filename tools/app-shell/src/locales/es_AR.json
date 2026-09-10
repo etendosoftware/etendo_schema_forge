@@ -19266,7 +19266,6 @@
     "onboardingBusinessTypeLabel": "Tipo de negocio",
     "onboardingBusinessTypeCompany": "Empresa",
     "onboardingBusinessTypeFreelancer": "Autónomo",
-    "onboardingBusinessTypeAdvisory": "Asesoría",
     "onboardingContinueAction": "Continuar",
     "onboardingCompanyTitle": "Datos para empezar a facturar",
     "onboardingCompanySubtitle": "Puedes editarlos más adelante",
@@ -20390,8 +20389,6 @@
     "recentActivities": "Actividades recientes",
     "teamActivity": "Actividad del equipo",
     "firstStepsPageTitle": "Primeros pasos",
-    "firstStepsCopilotBanner": "Copilot puede ayudarte a configurarlo",
-    "firstStepsStart": "Empezar",
     "firstStepsPrepareAccount": "Vamos a preparar tu cuenta",
     "firstStepsSubtitle": "Sigue estos pasos y en menos de 10 minutos tendrás todo listo para empezar.",
     "completed": "Completados",
@@ -20401,10 +20398,23 @@
     "firstStepsCreateAccount": "Crear cuenta",
     "firstStepsCompanyData": "Datos de tu empresa",
     "firstStepsCompanyDataDesc": "Añade la información básica para emitir documentos.",
+    "firstStepsCompanyName": "Nombre de la empresa",
+    "firstStepsCompanyTradeName": "Nombre comercial",
+    "firstStepsCompanyTaxId": "CUIT",
+    "firstStepsCompanyAddress": "Dirección",
     "firstStepsCustomizeInvoices": "Personaliza tus facturas",
+    "firstStepsCustomizeInvoicesDesc": "Definí el prefijo y el número inicial que van a usar tus facturas.",
     "firstStepsConnectBank": "Conecta tu banco",
     "firstStepsSetupPayments": "Configura métodos de pago",
     "firstStepsInviteTeam": "Invita a tu equipo",
+    "firstStepsFiscalConfig": "Configuración fiscal",
+    "firstStepsProducts": "Carga masiva de productos",
+    "firstStepsProductsDesc": "Importa tu catálogo desde una hoja de cálculo, o crea los productos uno a uno.",
+    "firstStepsContacts": "Carga masiva de contactos",
+    "firstStepsContactsDesc": "Importa tus clientes y proveedores para poder empezar a facturar cuanto antes.",
+    "firstStepsTeamDesc": "Invita a las personas que trabajarán contigo y decide qué puede hacer cada una.",
+    "firstStepsAllSetTitle": "Ya lo tienes todo listo",
+    "firstStepsAllSetSubtitle": "Tu cuenta está configurada. Crea tu primera factura y empieza a trabajar.",
     "inviteUser": "Invitar usuario",
     "inviteUserDescriptionTitle": "Invitaciones de usuarios",
     "inviteUserDescription": "Invita personas a unirse a tu empresa por correo. Pueden aceptar con una cuenta existente o registrar una nueva.",
@@ -21155,6 +21165,17 @@
     "fm.m349.rectif.col.base_products": "Base · Productos",
     "fm.m349.rectif.col.base_services": "Base · Servicios",
     "fm.col.date": "Fecha",
+    "backendError": {
+      "sequencePrefixTooLong": "El prefijo no puede tener más de 20 caracteres.",
+      "sequencePrefixLowerOrAccent": "El prefijo no puede contener minúsculas ni letras acentuadas.",
+      "sequencePrefixForbiddenLetters": "El prefijo no puede contener las letras I, O, Y, W ni Ñ.",
+      "sequencePrefixInvalidChars": "El prefijo solo puede contener mayúsculas, números y guiones.",
+      "taxIdInvalidFormat": "Ingresá un NIF, CIF o NIE válido.",
+      "taxIdInvalidCheckDigit": "El dígito de control no coincide. Revisá el número."
+    },
+    "firstStepsFiscalConfigDesc": "Revisá los impuestos y los datos fiscales que usarán tus documentos.",
+    "taxIdInvalidFormat": "Ingresá un NIF, CIF o NIE válido.",
+    "taxIdInvalidCheckDigit": "El dígito de control no coincide. Revisá el número.",
     "walkthroughContactStepAddressTabTitle": "Abrí la pestaña Dirección",
     "walkthroughContactStepAddressTabBody": "El contacto ya existe, pero todavía no tiene dirección. Sin ella no se puede usar en un pedido: de acá salen las direcciones de envío y de facturación.",
     "walkthroughContactStepAddressAddTitle": "Agregá una dirección",
@@ -21865,7 +21886,7 @@
       "label": "Rol"
     },
     "Document Sequence": {
-      "label": "Secuencia de documento (numeración)"
+      "label": "Secuencias de documentos"
     },
     "Currency": {
       "label": "Moneda"

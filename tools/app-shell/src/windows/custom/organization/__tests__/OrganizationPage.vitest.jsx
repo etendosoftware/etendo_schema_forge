@@ -60,14 +60,14 @@ describe('OrganizationPage', () => {
   it('renders the loaded header/info fields and hides the unsaved-changes banner until something changes', async () => {
     globalThis.fetch = makeFetchMock([
       [`/organization/organization/${ORG_ID}`, () => jsonResponse({ name: 'Acme', socialName: 'Acme S.A.', 'currency$_identifier': 'EUR', etgoBusinessType: 'CO' })],
-      [`/organization/information/${ORG_ID}`, () => jsonResponse({ taxID: 'B123', locationAddress: 'LOC_1', 'locationAddress$_identifier': 'Main St - Madrid - España' })],
+      [`/organization/information/${ORG_ID}`, () => jsonResponse({ taxID: 'B1234567D', locationAddress: 'LOC_1', 'locationAddress$_identifier': 'Main St - Madrid - España' })],
     ]);
 
     render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
 
     await waitFor(() => expect(screen.getByTestId('OrganizationPage__name')).toHaveValue('Acme'));
     expect(screen.getByTestId('OrganizationPage__legal-name')).toHaveValue('Acme S.A.');
-    expect(screen.getByTestId('OrganizationPage__taxid')).toHaveValue('B123');
+    expect(screen.getByTestId('OrganizationPage__taxid')).toHaveValue('B1234567D');
     // Country/Currency render as read-only flag/code pills (not <input>s) per the
     // reference design — see countryFlag.js for the name -> emoji lookup.
     expect(screen.getByTestId('OrganizationPage__currency')).toHaveTextContent('EUR');
@@ -122,6 +122,25 @@ describe('OrganizationPage', () => {
     expect(screen.getByTestId('BusinessTypeCards__option-FL').className).toContain('border-[var(--eg-yellow-line)]');
     expect(screen.getByTestId('BusinessTypeCards__dot-FL').className).toContain('bg-[var(--eg-yellow)]');
     expect(screen.getByTestId('BusinessTypeCards__option-CO').className).not.toContain('bg-[var(--eg-yellow-soft)]');
+  });
+
+  it('offers exactly Empresa and Autónomo — Asesoría was retired from the product', async () => {
+    // ETP-5190 removed the AD=Advisory option from Etendo GO entirely (signup wizard, this
+    // window, and the module's AD_Ref_List dataset). Guarding the absence here because the
+    // card list is a hardcoded array in BusinessTypeCards: re-adding the entry would restore
+    // the option silently, with no failing test anywhere else.
+    globalThis.fetch = makeFetchMock([
+      [`/organization/organization/${ORG_ID}`, () => jsonResponse({ name: 'Acme' })],
+      [`/organization/information/${ORG_ID}`, () => jsonResponse({})],
+    ]);
+
+    render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
+    await waitFor(() => expect(screen.getByTestId('OrganizationPage__name')).toBeInTheDocument());
+
+    expect(screen.getByTestId('BusinessTypeCards__option-CO')).toBeInTheDocument();
+    expect(screen.getByTestId('BusinessTypeCards__option-FL')).toBeInTheDocument();
+    expect(screen.queryByTestId('BusinessTypeCards__option-AD')).not.toBeInTheDocument();
+    expect(screen.getByTestId('BusinessTypeCards__root').children).toHaveLength(2);
   });
 
   it('preselects no business type card when etgoBusinessType is absent', async () => {
@@ -249,7 +268,7 @@ describe('OrganizationPage', () => {
   it('Save PATCHes organization + information (including etgoEmail/Phone/Web) and shows a success toast', async () => {
     globalThis.fetch = makeFetchMock([
       [`/organization/organization/${ORG_ID}`, () => jsonResponse({ name: 'Acme', socialName: 'Acme SL', etgoBusinessType: 'CO' })],
-      [`/organization/information/${ORG_ID}`, () => jsonResponse({ taxID: 'B1', locationAddress: 'LOC_1', etgoEmail: 'hi@acme.com' })],
+      [`/organization/information/${ORG_ID}`, () => jsonResponse({ taxID: 'B1234567D', locationAddress: 'LOC_1', etgoEmail: 'hi@acme.com' })],
     ]);
 
     render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
@@ -282,11 +301,11 @@ describe('OrganizationPage', () => {
     it('blocks Save, shows an inline error under NIF, and never calls the backend when NIF is emptied', async () => {
       globalThis.fetch = makeFetchMock([
         [`/organization/organization/${ORG_ID}`, () => jsonResponse({ name: 'Acme', socialName: 'Acme SL', etgoBusinessType: 'CO' })],
-        [`/organization/information/${ORG_ID}`, () => jsonResponse({ taxID: 'B123', locationAddress: 'LOC_1' })],
+        [`/organization/information/${ORG_ID}`, () => jsonResponse({ taxID: 'B1234567D', locationAddress: 'LOC_1' })],
       ]);
 
       render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
-      await waitFor(() => expect(screen.getByTestId('OrganizationPage__taxid')).toHaveValue('B123'));
+      await waitFor(() => expect(screen.getByTestId('OrganizationPage__taxid')).toHaveValue('B1234567D'));
 
       fireEvent.change(screen.getByTestId('OrganizationPage__taxid'), { target: { value: '' } });
       fireEvent.click(screen.getByTestId('OrganizationPage__save'));
@@ -301,7 +320,7 @@ describe('OrganizationPage', () => {
       expect(patchCalls).toHaveLength(0);
 
       // Fixing the field and retrying clears that specific error.
-      fireEvent.change(screen.getByTestId('OrganizationPage__taxid'), { target: { value: 'B999' } });
+      fireEvent.change(screen.getByTestId('OrganizationPage__taxid'), { target: { value: 'B12345674' } });
       expect(screen.queryByTestId('OrganizationPage__error-taxID')).not.toBeInTheDocument();
     });
 
@@ -333,13 +352,13 @@ describe('OrganizationPage', () => {
     // required-field guard runs first and would otherwise mask these.
     const VALID_BASE = () => makeFetchMock([
       [`/organization/organization/${ORG_ID}`, () => jsonResponse({ name: 'Acme', socialName: 'Acme SL', etgoBusinessType: 'CO' })],
-      [`/organization/information/${ORG_ID}`, () => jsonResponse({ taxID: 'B123', locationAddress: 'LOC_1' })],
+      [`/organization/information/${ORG_ID}`, () => jsonResponse({ taxID: 'B1234567D', locationAddress: 'LOC_1' })],
     ]);
 
     it('blocks Save with the same sendModalInvalidEmail toast Contacts uses, when Email is malformed', async () => {
       globalThis.fetch = VALID_BASE();
       render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
-      await waitFor(() => expect(screen.getByTestId('OrganizationPage__taxid')).toHaveValue('B123'));
+      await waitFor(() => expect(screen.getByTestId('OrganizationPage__taxid')).toHaveValue('B1234567D'));
 
       fireEvent.change(screen.getByTestId('OrganizationPage__email'), { target: { value: 'not-an-email' } });
       fireEvent.click(screen.getByTestId('OrganizationPage__save'));
@@ -362,7 +381,7 @@ describe('OrganizationPage', () => {
     it('filters non-phone characters out of Teléfono as the user types, before Save is ever reachable', async () => {
       globalThis.fetch = VALID_BASE();
       render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
-      await waitFor(() => expect(screen.getByTestId('OrganizationPage__taxid')).toHaveValue('B123'));
+      await waitFor(() => expect(screen.getByTestId('OrganizationPage__taxid')).toHaveValue('B1234567D'));
 
       fireEvent.change(screen.getByTestId('OrganizationPage__phone'), { target: { value: 'abc!@#123' } });
 
@@ -372,7 +391,7 @@ describe('OrganizationPage', () => {
     it('blocks Save with the same phoneInvalidChars toast Contacts uses, when Teléfono has no digits at all', async () => {
       globalThis.fetch = VALID_BASE();
       render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
-      await waitFor(() => expect(screen.getByTestId('OrganizationPage__taxid')).toHaveValue('B123'));
+      await waitFor(() => expect(screen.getByTestId('OrganizationPage__taxid')).toHaveValue('B1234567D'));
 
       // '()' passes the keystroke filter's charset (it's all allowed punctuation)
       // but isValidPhone still requires at least one digit — so this is the real,
@@ -389,7 +408,7 @@ describe('OrganizationPage', () => {
     it('blocks Save with the same websiteInsecureUrl toast Contacts uses, reconstructing the fixed https:// prefix before checking', async () => {
       globalThis.fetch = VALID_BASE();
       render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
-      await waitFor(() => expect(screen.getByTestId('OrganizationPage__taxid')).toHaveValue('B123'));
+      await waitFor(() => expect(screen.getByTestId('OrganizationPage__taxid')).toHaveValue('B1234567D'));
 
       // A leading space survives the "https://" + form.web reconstruction (isSecureUrl only
       // trims the OUTER edges of the full string, not internal whitespace right after the
@@ -406,7 +425,7 @@ describe('OrganizationPage', () => {
     it('never blocks Save when email/phone/website are left blank — all three are optional', async () => {
       globalThis.fetch = VALID_BASE();
       render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
-      await waitFor(() => expect(screen.getByTestId('OrganizationPage__taxid')).toHaveValue('B123'));
+      await waitFor(() => expect(screen.getByTestId('OrganizationPage__taxid')).toHaveValue('B1234567D'));
 
       // Something must change for the unsaved-banner (and thus Save) to be reachable —
       // email/phone/web themselves stay blank the whole time.
@@ -420,7 +439,7 @@ describe('OrganizationPage', () => {
     it('allows Save when Email/Teléfono/Sitio web are all well-formed', async () => {
       globalThis.fetch = VALID_BASE();
       render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
-      await waitFor(() => expect(screen.getByTestId('OrganizationPage__taxid')).toHaveValue('B123'));
+      await waitFor(() => expect(screen.getByTestId('OrganizationPage__taxid')).toHaveValue('B1234567D'));
 
       fireEvent.change(screen.getByTestId('OrganizationPage__email'), { target: { value: 'hi@acme.com' } });
       fireEvent.change(screen.getByTestId('OrganizationPage__phone'), { target: { value: '+34 123 456' } });
@@ -440,6 +459,93 @@ describe('OrganizationPage', () => {
         etgoPhone: '+34 123 456',
         etgoWeb: 'acme.com',
       });
+    });
+  });
+  describe('NIF format validation (ETP-5190) — the second of the two places a tenant sets it', () => {
+    // Every other required field is pre-filled and valid, so only the NIF check under test can
+    // block Save — BUG-1's required-field guard runs first and would otherwise mask these.
+    const BASE = (taxID) => makeFetchMock([
+      [`/organization/organization/${ORG_ID}`, () => jsonResponse({ name: 'Acme', socialName: 'Acme SL', etgoBusinessType: 'CO' })],
+      [`/organization/information/${ORG_ID}`, () => jsonResponse({ taxID, locationAddress: 'LOC_1' })],
+    ]);
+
+    const editAndSave = async (value) => {
+      render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
+      await waitFor(() => expect(screen.getByTestId('OrganizationPage__taxid')).toBeInTheDocument());
+      fireEvent.change(screen.getByTestId('OrganizationPage__taxid'), { target: { value } });
+      fireEvent.click(screen.getByTestId('OrganizationPage__save'));
+    };
+
+    const patchCount = () =>
+      globalThis.fetch.mock.calls.filter(([, opts]) => opts?.method === 'PATCH').length;
+
+    it('blocks Save on a wrong check digit, inline and with a toast, without calling the backend', async () => {
+      globalThis.fetch = BASE('B1234567D');
+      await editAndSave('B12345679');
+
+      expect(await screen.findByTestId('OrganizationPage__error-taxID'))
+        .toHaveTextContent('taxIdInvalidCheckDigit');
+      expect(toastError).toHaveBeenCalledWith('taxIdInvalidCheckDigit');
+      expect(toastSuccess).not.toHaveBeenCalled();
+      // The whole point: a wrong NIF must not reach AD_OrgInfo, where nothing in classic
+      // Etendo would have caught it either — it would only surface weeks later, as a failure
+      // to complete an invoice.
+      expect(patchCount()).toBe(0);
+    });
+
+    it('reports a malformed value differently from a wrong check digit', async () => {
+      // The two send the user to different places: "this is not a NIF" vs "one character of
+      // this NIF is wrong". Collapsing them into one message loses that.
+      globalThis.fetch = BASE('B1234567D');
+      await editAndSave('not-a-nif');
+
+      expect(await screen.findByTestId('OrganizationPage__error-taxID'))
+        .toHaveTextContent('taxIdInvalidFormat');
+      expect(patchCount()).toBe(0);
+    });
+
+    it('lets a valid CIF through and saves it', async () => {
+      globalThis.fetch = BASE('B1234567D');
+      await editAndSave('B12345674');
+
+      await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('savedSuccessfully'));
+      expect(screen.queryByTestId('OrganizationPage__error-taxID')).not.toBeInTheDocument();
+    });
+
+    it('lets a natural-person DNI through — an autónomo has no CIF', async () => {
+      // REGRESSION GUARD: the signup wizard offers businessType `freelancer`. Accepting only
+      // the company form would lock every autónomo out of their own Organización screen.
+      globalThis.fetch = BASE('B1234567D');
+      await editAndSave('12345678Z');
+
+      await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('savedSuccessfully'));
+    });
+
+    it('accepts a NIF pasted with the separators a document carries', async () => {
+      globalThis.fetch = BASE('B1234567D');
+      await editAndSave('  b-1234567d ');
+
+      await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('savedSuccessfully'));
+    });
+
+    it('still reports an emptied NIF as required, not as malformed', async () => {
+      // The two mechanisms must not fight over the same field: requiredness is BUG-1's guard
+      // and runs first, so clearing the field says "required" rather than "invalid format".
+      globalThis.fetch = BASE('B1234567D');
+      await editAndSave('');
+
+      expect(await screen.findByTestId('OrganizationPage__error-taxID'))
+        .toHaveTextContent('fieldRequired');
+      expect(patchCount()).toBe(0);
+    });
+
+    it('clears the inline error as soon as the field is edited again', async () => {
+      globalThis.fetch = BASE('B1234567D');
+      await editAndSave('B12345679');
+      expect(await screen.findByTestId('OrganizationPage__error-taxID')).toBeInTheDocument();
+
+      fireEvent.change(screen.getByTestId('OrganizationPage__taxid'), { target: { value: 'B1234567D' } });
+      expect(screen.queryByTestId('OrganizationPage__error-taxID')).not.toBeInTheDocument();
     });
   });
 });

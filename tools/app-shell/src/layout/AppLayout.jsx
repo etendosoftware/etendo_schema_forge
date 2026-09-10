@@ -15,6 +15,7 @@ import { GlobalSearchProvider } from '@/components/global-search/GlobalSearchCon
 import { CopilotProvider } from '@/components/CopilotContext';
 import { CopilotWidget } from '@/components/CopilotWidget';
 import { CurrentWindowProvider } from '@/components/CurrentWindowContext';
+import { FirstStepsProvider } from '@/pages/first-steps/FirstStepsContext.jsx';
 import { SupportChatProvider, useSupportChat } from '@/components/support/SupportChatContext.jsx';
 import { SupportChatWidget } from '@/components/support/SupportChatWidget.jsx';
 import { Button } from '@/components/ui/button';
@@ -313,10 +314,12 @@ export default function AppLayout({ menuGroups }) {
                   flows={WALKTHROUGH_FLOWS}
                   onFinish={reportWalkthroughFinish}
                   data-testid="WalkthroughProvider__488148">
-                  <AppLayoutInner
-                    menuGroups={filteredMenuGroups}
-                    embedded={embedded}
-                    data-testid="AppLayoutInner__488148" />
+                  <FirstStepsProvider data-testid="FirstStepsProvider__488148">
+                    <AppLayoutInner
+                      menuGroups={filteredMenuGroups}
+                      embedded={embedded}
+                      data-testid="AppLayoutInner__488148" />
+                  </FirstStepsProvider>
                 </WalkthroughProvider>
               </PageMetaProvider>
             </SidebarProvider>

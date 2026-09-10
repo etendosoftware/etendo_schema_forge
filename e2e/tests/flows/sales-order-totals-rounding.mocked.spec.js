@@ -294,18 +294,39 @@ test.describe('Sales Order — totals rounding (ETP-4017)', () => {
     await installSalesOrderMocks(page, { header: BUG_HEADER, line: BUG_LINE });
     await page.goto(`/sales-order/${ORDER_ID_BUG}`);
 
-    const total = await pollAmount(page, 'totals-row-total-value');
-    const subtotal = parseAmount(
-      (await page.getByTestId('totals-row-subtotal-value').textContent()) || '',
-    );
-    const tax = parseAmount(
-      (await page.getByTestId('totals-row-tax-value').textContent()) || '',
-    );
+    // All three amounts are read INSIDE the retry, not once after a separate wait, because the
+    // panel settles in two phases: it first renders the live recompute and then prefers the
+    // backend-persisted header totals (the ETP-4777 change described in this file's header).
+    // `pollAmount()` only waits for the first NON-ZERO render, which is phase one — so sampling
+    // the total through it and then reading subtotal/tax a few milliseconds later can mix a
+    // value from each phase, and the invariant compares two states that never coexisted.
+    //
+    // That is not hypothetical: captured here as total 43.56 (the settled figure — it matches
+    // the 37.22 + 6.34 the sibling test above asserts) against a subtotal + tax of 48.47, read
+    // while those two rows were still on their earlier values. Nothing was wrong with the panel.
+    //
+    // The non-zero guard has to live inside the block for the same reason it cannot be a
+    // separate wait: before the data lands every row reads 0, and `0 === 0 + 0` satisfies the
+    // invariant vacuously — the assertion would pass on an empty panel and stop retrying.
+    await expect(async () => {
+      const read = async (testId) => parseAmount(
+        (await page.getByTestId(testId).textContent()) || '',
+      );
+      const total = await read('totals-row-total-value');
+      const subtotal = await read('totals-row-subtotal-value');
+      const tax = await read('totals-row-tax-value');
 
-    // Tolerate at most 0.005 of float-arithmetic noise — strictly under 1 cent.
-    const sum = Math.round((subtotal + tax) * 100) / 100;
-    const rounded = Math.round(total * 100) / 100;
-    expect(rounded).toBe(sum);
+      expect(
+        Number.isFinite(total) && Number.isFinite(subtotal) && Number.isFinite(tax) && total !== 0,
+        `the totals panel should have rendered real amounts (total=${total}, `
+        + `subtotal=${subtotal}, tax=${tax})`,
+      ).toBe(true);
+
+      // Tolerate at most 0.005 of float-arithmetic noise — strictly under 1 cent.
+      const sum = Math.round((subtotal + tax) * 100) / 100;
+      const rounded = Math.round(total * 100) / 100;
+      expect(rounded).toBe(sum);
+    }).toPass({ timeout: 15_000 });
   });
 
   test('confirm modal mirrors the panel total (40.94 — server-resolved fixture)', async ({ page }) => {
