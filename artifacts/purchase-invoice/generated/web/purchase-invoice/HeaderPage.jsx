@@ -995,7 +995,8 @@ export const api = {
       "em_etgo_delivery_status": "Estado de recepción",
       "C_DocTypeTarget_ID": "Tipo de documento",
       "PriceList": "Precio",
-      "Foreign_Amount": "Importe en Moneda Objetivo"
+      "Foreign_Amount": "Importe en Moneda Objetivo",
+      "em_etgo_tbai_status": "Estado Batuz"
     },
     "en_US": {
       "POReference": "Document No.",
@@ -1003,7 +1004,8 @@ export const api = {
       "EM_Etgo_Due_Date": "Due Date",
       "em_etgo_delivery_status": "Reception Status",
       "C_DocTypeTarget_ID": "Document Type",
-      "Foreign_Amount": "Target Currency Amount"
+      "Foreign_Amount": "Target Currency Amount",
+      "em_etgo_tbai_status": "Batuz Status"
     },
     "es_AR": {
       "OutstandingAmt": "Saldo pendiente"
