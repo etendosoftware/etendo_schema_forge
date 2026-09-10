@@ -72,14 +72,25 @@ function renderAt(path, {
 }
 
 describe('buildRuntimeRoutes through the real AppShellRuntime', () => {
-  it('routes a window path through WindowLoader with the given windowMap', () => {
+  it('routes a window path through WindowLoader with the given windowMap', async () => {
     renderAt('/sales-order');
-    expect(screen.getByTestId('window-loader')).toHaveTextContent('sales-order:http://x/api');
+    // ETP-5195: AppShellRuntime now gates authenticated routes behind an async
+    // session-readiness cycle (AppShellRuntime.jsx returns `pendingFallback` while
+    // `isSessionReady === false`). The `auth.initialSession` here carries a real
+    // token with no mocked `/sws/neo/refreshtoken` fetch, so the refresh attempt
+    // fails and the session becomes ready on the next tick (by design, per
+    // sessionController.js) — wait it out instead of asserting synchronously.
+    await waitFor(() => {
+      expect(screen.getByTestId('window-loader')).toHaveTextContent('sales-order:http://x/api');
+    });
   });
 
-  it('routes a window record path through WindowLoader too', () => {
+  it('routes a window record path through WindowLoader too', async () => {
     renderAt('/sales-order/123');
-    expect(screen.getByTestId('window-loader')).toBeInTheDocument();
+    // Same session-readiness gate as above.
+    await waitFor(() => {
+      expect(screen.getByTestId('window-loader')).toBeInTheDocument();
+    });
   });
 
   it('renders a business landing page for a known path', async () => {
