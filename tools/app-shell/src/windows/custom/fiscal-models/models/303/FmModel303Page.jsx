@@ -33,6 +33,20 @@ function statusLabelKey(status) {
   return status === 'submitted_ack' ? 'submitted' : status;
 }
 
+// Resultado KPI color coding (ETP-5236 / M303-01): 'I' (a ingresar — org owes money) is
+// green, 'V'/'C' (a devolver / a compensar — refundable or offsettable) are blue, and
+// 'N'/null/anything else (no result) keeps the neutral styling this KPI always had.
+const RESULT_COLOR_MAP = {
+  I: { valueColor: 'var(--status-success-fg)', badgeBg: 'var(--status-success-bg)', badgeColor: 'var(--status-success-fg)' },
+  V: { valueColor: 'var(--status-info-fg)', badgeBg: 'var(--status-info-bg)', badgeColor: 'var(--status-info-fg)' },
+  C: { valueColor: 'var(--status-info-fg)', badgeBg: 'var(--status-info-bg)', badgeColor: 'var(--status-info-fg)' },
+};
+const RESULT_COLOR_NEUTRAL = { valueColor: 'hsl(var(--foreground))', badgeBg: 'hsl(var(--muted))', badgeColor: 'hsl(var(--muted-foreground))' };
+
+function resolveResultColors(resultKind) {
+  return RESULT_COLOR_MAP[resultKind] ?? RESULT_COLOR_NEUTRAL;
+}
+
 function toBoxArray(src) {
   if (Array.isArray(src)) return src;
   if (src && typeof src === 'object') return Object.entries(src).map(([n, v]) => ({ num: Number(n), value: v }));
@@ -437,6 +451,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
 
   // Derive result sublabel from kind
   const resultSubLabel = resultKind ? (t(`fm.result.${resultKind}`) ?? resultKind) : (t('fm.m303.summary.result_sub') ?? 'Resultado');
+  const resultColors = resolveResultColors(resultKind);
 
 
   const { tone: incidentBadgeTone, iconColor: incidentIconColor, badge: incidentBadge } =
@@ -595,15 +610,17 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           badgeColor="hsl(var(--muted-foreground))"
           data-testid="KpiWidget__4f6c0d" />
 
-        {/* Resultado */}
+        {/* Resultado — color-coded by sign (ETP-5236 / M303-01): green when the org owes
+            money ('I'), blue when refundable/offsettable ('V'/'C'), neutral otherwise. */}
         <KpiWidget
           icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__4f6c0d" />}
           iconColor="hsl(var(--foreground))"
           label={t('fm.m303.summary.result') ?? 'Resultado'}
           value={formatAmount(summary.result ?? 0)}
+          valueColor={resultColors.valueColor}
           badge={resultSubLabel}
-          badgeBg="hsl(var(--muted))"
-          badgeColor="hsl(var(--muted-foreground))"
+          badgeBg={resultColors.badgeBg}
+          badgeColor={resultColors.badgeColor}
           data-testid="KpiWidget__4f6c0d" />
       </div>
       {/* ── Inline generate error ────────────────────────────────── */}
