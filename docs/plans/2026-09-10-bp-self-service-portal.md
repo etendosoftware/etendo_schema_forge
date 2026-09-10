@@ -56,7 +56,7 @@ link goes out until an account is named.
 
 | Question it answers | Mechanism | Granularity |
 |---|---|---|
-| Is the portal link switched on for *this sending account*? | `bp-portal-link` feature flag, per-account allowlist (below) | one `ETGO_ACCOUNT`, or everyone via the bare boolean |
+| Is the portal link switched on for *this sending account*? | `bp-portal-link` feature flag, targeted on the account email (below) | one `ETGO_ACCOUNT` via a ConfigCat rule, or everyone via the local boolean |
 
 This is the answer to "depende del usuario logueado" (decided 2026-09-10). There is deliberately **no
 second condition** — no environment master switch on top of it, and no `AD_Preference`. Two earlier
@@ -64,28 +64,32 @@ shapes were tried and rejected the same day: an environment flag ANDed with a pe
 preference (nothing worked until two unrelated things were configured), and the preference alone
 (the user wants the flag to be the mechanism). One gate, one place to configure it.
 
-### How the per-account allowlist works
+### How per-account targeting works
 
-The capability is generic and lives in `PropertiesFeatureProvider`, not in portal code — the user
-asked for per-account targeting as a platform capability ("nos sirve para otras funcionalidades"),
-so any future flag gets it for free.
+The capability is generic and lives in the flag stack, not in portal code — the user asked for it as
+a platform capability ("nos sirve para otras funcionalidades"), so any future backend flag gets it
+for free.
 
-```
-etendo.go.flags.bp-portal-link.emails = someone@example.com, other@example.com
-```
+`GoFeatureFlags.createProvider()` installs the **ConfigCat** OpenFeature provider when
+`etendo.go.configcat.sdkKey` (env `ETGO_CONFIGCAT_SDK_KEY`) resolves, and
+`PropertiesFeatureProvider` when it does not. The backend publishes the sending account's
+`ETGO_ACCOUNT` email as both the OpenFeature targeting key and the `Email` attribute, so a ConfigCat
+targeting rule written against either one matches.
 
-- A targeting key listed there resolves **true** (reason `TARGETING_MATCH`); anything else falls
-  through to the flag's own boolean value; nothing configured ⇒ **false**.
-- **The allowlist and the boolean are an OR, not an AND** — naming an account is sufficient on its
-  own. Setting the bare `etendo.go.flags.bp-portal-link=true` still enables it for *everyone*, which
-  is the pre-existing environment-wide switch and unchanged.
-- **No wildcard**, and an empty allowlist never means "everyone": a blank entry cannot match,
-  because the targeting key is non-blank by the time it is compared.
-- A flag with no `.emails` property behaves exactly as before the capability existed, which is what
-  leaves every other flag unaffected.
+- **Enablement is a ConfigCat targeting rule**, live within one poll interval
+  (`CONFIGCAT_POLL_SECONDS`, 60 s) with **no restart**.
+- **Evaluation costs no network call.** `autoPoll` fetches in the background and evaluation reads the
+  in-memory snapshot, so a flag check inside request handling is a map lookup.
+- **A flag absent from ConfigCat resolves to its `false` code default** — an undefined key is never
+  an error.
+- **With no SDK key the flag is a plain per-environment boolean.** A dev box has one user, so that is
+  enough locally; a shared environment must have ConfigCat configured before the link is switched on
+  for anyone, because the local arm can only answer "everyone" or "nobody".
+- **There is deliberately no local per-account mechanism.** An `etendo.go.flags.<key>.emails`
+  allowlist was built and removed the same day: it would be inert wherever an SDK key is set (only
+  one provider is ever installed), and a knob that silently does nothing is the ETP-4966 shape again.
 
-Full reference, including the config precedence: `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md`
-→ *Per-account targeting*.
+Full reference: `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` → *Per-account targeting*.
 
 ### The identity is the ETGO_ACCOUNT email — not `AD_User.email`
 
@@ -115,12 +119,15 @@ Route registration follows the pattern `docs/feature-flags.md` already documents
 `/upgrade` — registered **unconditionally**, because hiding a route would imply something was
 protecting it, which nothing here is.
 
-### Changing it needs a restart, and revocation is the fast lever
+### Changing it, and why revocation is still the fast lever
 
-`bp-portal-link` and its allowlist are both resolved by the config-backed provider, so changing
-either is a deploy/restart rather than a toggle. For a link that is **already out**, the lever is
-per-BP revocation (§1) — which deliberately sits outside the gate and works whatever the flag says.
-Do not plan an incident response around flipping the flag.
+On the **ConfigCat arm** a change — the flag itself or a targeting rule — is live within one poll
+interval, no restart. On the **local arm** the flag is config-backed, so changing it is a
+deploy/restart.
+
+Either way, for a link that is **already out** the lever is per-BP revocation (§1), which
+deliberately sits outside the gate and works whatever the flag says: the gate only decides whether
+NEW links go out. Turning the flag off does not invalidate a link a customer already has.
 
 ### Why "always live" is not an exposure
 
@@ -202,14 +209,15 @@ reuses the same link — never rotates on its own.
   revoke then re-send mints a new row/token; revoked token is rejected identically to an unknown one.
 - `sales-invoice-send` email contains exactly one portal link, stable across sends to the same BP.
 - **The gate, both cases** (§2.5) — with one gate there are two, not four. The link appears when the
-  sending account is allowlisted. When it is not, assert the email is byte-identical to today's
-  **and that no `etgo_portal_access` row was minted** — check the row count, not just the email
-  body, because minting on a gated-off send is the failure mode that leaks the feature early.
-- **Allowlist matching** (unit, on the provider — generic, not portal-specific): a listed email
-  resolves true; matching is trimmed and case-insensitive; an unlisted email, a null targeting key,
-  a blank entry and an unset `.emails` property all resolve to the flag's boolean value; **a flag
-  with no `.emails` behaves exactly as before**, which is the backward-compatibility guarantee.
-- **Account resolution:** a sender whose `ETGO_ACCOUNT` email is allowlisted gets the link even
+  flag resolves true for the sending account. When it does not, assert the email is byte-identical to
+  today's **and that no `etgo_portal_access` row was minted** — check the row count, not just the
+  email body, because minting on a gated-off send is the failure mode that leaks the feature early.
+- **Provider selection** (unit, on `GoFeatureFlags` — generic, not portal-specific): no SDK key
+  installs `PropertiesFeatureProvider`; a key installs the ConfigCat one. **A blank or wrong key
+  resolves every flag to `false`, never to true** — that is the ETP-4966 shape and the single most
+  important assertion in the flag stack. A provider that fails to install must leave flags `false`
+  rather than propagating an exception into an invoice send.
+- **Account resolution:** a sender whose `ETGO_ACCOUNT` email the flag matches gets the link even
   though `AD_User.email` is empty (the normal Etendo Go case, since onboarding only writes
   `username`); a sender with no resolvable account gets **no link** rather than an error.
 - **The endpoints never read the gate** — same token, same answer, flag on or off. Assert it
