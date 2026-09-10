@@ -191,6 +191,13 @@ const BACKEND_ERROR_MAP = {
   'You cannot deactivate your own user account': 'backendError.cannotDeactivateOwnAccount',
   'Cannot deactivate the last active administrator for this client':
     'backendError.cannotDeactivateLastAdmin',
+  // UserRoleAssignmentHandler (com.etendoerp.go, ETP-5195 Bug 3) — hardcoded English literals,
+  // no AD_Message involvement, thrown when a DELETE targets the acting user's own record, the
+  // client's tenant owner (EM_ETGO_Is_Owner), or the client's last remaining active admin.
+  'You cannot delete your own user account': 'backendError.cannotDeleteOwnAccount',
+  'This user is the tenant owner and cannot be deleted': 'backendError.cannotDeleteOwner',
+  'Cannot delete the last active administrator for this client':
+    'backendError.cannotDeleteLastAdmin',
 };
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a
