@@ -1742,7 +1742,10 @@ selection bar were made directly in the wrapper files and their shared helper
 (`tools/app-shell/src/windows/custom/shared/useInvoiceWindow.js`,
 `tools/app-shell/src/windows/custom/{purchase-invoice,sales-invoice,goods-receipt,goods-shipment}/index.jsx`),
 plus two new exports on the generic `tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx`
-(`buildPostActions`, `createPostRowFilter`) reused across all four. `decisions.json` was
+(`buildPostActions`, `postRowFilter` — a plain `(row, action, ui) => ...` function, not a
+`createPostRowFilter(ui)` factory; a factory would force every `bulkActions` wrapper to call
+`useUI()` itself, which is the Rules-of-Hooks violation this ticket also fixes) reused across all
+four. `decisions.json` was
 deliberately left untouched for these four windows' list-view wiring — editing it would have been
 inert busywork requiring a `make regen` cycle for a config path the runtime never reads.
 
@@ -1755,3 +1758,232 @@ generated default entirely, and the actual fix belongs in the wrapper (or a `sha
 imports), not in the pipeline artifact. This same shadow pattern already applied to `topbarRight`
 for `sales-invoice` (see ETP-5027 comment in that window's `index.jsx`), so it is not new to this
 window family — just previously undocumented for `rowQuickActions`/`bulkActions` specifically.
+
+---
+
+## [2026-09-07] ETP-5233 — Kebab menu hid Post/Unpost on every statically read-only window, for every user, regardless of role access
+
+**Component:** `DetailView.jsx` — `windowReadOnly` derivation and its single `DetailMoreActionsMenu`
+render call site. Regression introduced by ETP-5116 (2026-09-07), surfaced the same day while
+manually testing an unrelated ticket (ETP-5175) after rebasing onto `develop`.
+
+**Symptom.** `matched-purchase-invoices` lost its documented, sanctioned kebab exception —
+Post/Unpost disappeared from the "more" menu for every user, including ones with full read-write
+role access. The window is statically read-only for CRUD (`decisions.json` `window.readOnly:
+true`) but was explicitly designed to keep Post/Unpost as a document action anyway (see
+`docs/generated-custom-windows/matched-purchase-invoices.md`).
+
+**Cause.** `windowReadOnly` is an intentional OR of two different concepts: a **static**
+`decisions.json` "this window's data is view-only by design" flag (`api?.window?.readOnly`) and a
+**runtime** ETP-4520 per-role access-tier flag ("this user's role only has read-only access",
+`windowProp?.readOnly`). ETP-5116 closed a real gap — `DetailMoreActionsMenu` wasn't gated by
+either — but wired the kebab to the *combined* flag, same as every other consumer (save, delete,
+add-line). Unlike those, the kebab is not supposed to inherit the static half: a window can be
+CRUD-read-only by design while still exposing a hand-picked document action in its menu.
+
+**Fix.** Added a second, narrower derivation — `menuActionsReadOnly = windowProp?.readOnly ===
+true` (role-tier signal only) — and passed *that* to `DetailMoreActionsMenu`'s one render call
+site instead of `windowReadOnly`. The combined flag is untouched everywhere else (save/delete
+gates, process buttons, field read-only) — those correctly still want the OR of both signals.
+
+**Lesson.** When a boolean is a deliberate OR of two distinct concepts (a static design-time
+declaration and a runtime access-tier check), wiring a *new* consumer straight to that combined
+flag is not automatically correct just because every existing consumer does. Check which half of
+the OR the new consumer actually needs — here the kebab needed only the role-tier half, and
+gating it on the union silently regressed a documented per-window exception. Full history:
+`docs/superpowers/specs/2026-07-15-window-readonly-capability-design.md` § "Correction
+(2026-09-08)".
+
+---
+
+## [2026-09-08] ETP-5234 — Copilot markdown: an external link href truncates at the first `)`
+
+**Component:** `tools/app-shell/src/components/copilot/MarkdownContent.jsx` — `INLINE_RE`
+
+**Status:** Known issue, **logged not fixed** (deliberate user decision). **Pre-existing** — not a
+regression from the GFM-table/internal-link work in ETP-5234; the old regex used the same `[^\s)]`
+href class.
+
+**Symptom:** A link whose URL legitimately contains a closing parenthesis renders a **live but
+truncated** anchor, so the user lands on a 404. Verified output for
+`[w](https://en.wikipedia.org/wiki/Foo_(bar)) tail`:
+
+```html
+<a href="https://en.wikipedia.org/wiki/Foo_(bar" target="_blank">w</a>) tail
+```
+
+**Root cause:** the href group of `INLINE_RE` is `([^\s)]{1,2000})` — it stops at the first `)`
+because that is the delimiter closing the markdown link. Balanced parentheses in a URL are legal
+markdown (GFM handles them) but need paren-counting, which a single regex alternation cannot do.
+
+**Why not fixed:** `INLINE_RE` is one alternation that governs **all** inline formatting — bold,
+italic, inline code and links. Rewriting the link branch to match balanced parens changes the regex
+every inline construct in every Copilot message flows through, so the fix carries its own regression
+risk out of proportion to a cosmetic 404.
+
+**Not a security issue — verified.** The infidelity is cosmetic only. Truncation happens *after* the
+href policy has already classified the scheme, so a refused scheme is still refused: for
+`[x](data:text/html,<script>alert(1)</script>)` the whole construct degrades to React-escaped text
+with **zero anchors** in the output.
+
+**Lesson:** when a single regex carries several unrelated grammars, the blast radius of "just fix the
+link case" is every case. Log the narrow cosmetic bug rather than widening a shared pattern.
+
+---
+
+## [2026-09-08] ETP-5234 — `assertInternalPath` returns the original string, not the normalized one (OPEN QUESTION)
+
+**Component:** `tools/app-shell/src/components/copilot/windowRoutes.js` — `assertInternalPath()`
+
+**Status:** **Open question for the team**, raised by developer-1 during ETP-5234. Not a decided bug,
+and **not a security issue**. Recorded so the next reader does not have to re-derive the trade-off.
+
+**Behavior:** `assertInternalPath()` is *identity-or-throw*. It normalizes the path (strip TAB/LF/CR,
+`\` → `/`) only to make the **decision** on the same string the WHATWG URL parser will see, then
+returns the caller's **original** string. See `docs/copilot-markdown-rendering.md` §4 for why the
+normalization itself is mandatory.
+
+**Consequence:** for an *allowed* path that contains `\` or a stripped character mid-string, the two
+navigation mechanisms disagree on the destination. For `/a\b`:
+
+- `<Link to="/a\b">` — react-router navigates the SPA to the literal `/a\b`.
+- Ctrl/Cmd-click or "open in new tab" on the same `href` — the browser resolves it to
+  `http://<app-origin>/a/b`.
+
+**Why this is not a vulnerability:** both destinations are **on-origin**. Origin escape depends only
+on the leading authority prefix, which the guard has already rejected; any string whose normalized
+form is on-origin is itself on-origin. The worst case is a 404 or landing on another screen of the
+same tenant.
+
+**Why it was not simply "fixed" by returning the sanitized form:** that would close the divergence
+but changes a guard that is currently identity-or-throw, and it affects **both** consumers:
+
+- `navigate_to` / `open_form` (`useAiCopilotChat.js:229`, `:235`, via `resolveWindowPath()` at `:19`)
+  would navigate somewhere other than the path the model asked for — silently rewriting a tool
+  argument.
+- `resolveWindowPath()` would start returning a rewritten string to every caller that reads it.
+
+**What to decide:** whether the guard's contract is "validate" (today) or "validate and canonicalize".
+Do not change it as a drive-by; it needs a call on both consumers at once.
+
+---
+
+## [2026-09-08] ETP-5234 — `data-testid="MarkdownContent__61b427"` is silently dropped and does not exist in the DOM
+
+**Component:** `tools/app-shell/src/components/copilot/ChatView.jsx:134` →
+`tools/app-shell/src/components/copilot/MarkdownContent.jsx` — `MarkdownContent({ children })`
+
+**Status:** Known issue, **logged not fixed** in ETP-5234 (deliberate user decision).
+**Pre-existing** — not introduced by the GFM-table/internal-link work. Not user-facing, not a
+security issue: it is a **test-authoring trap**.
+
+**Symptom you will actually see:** a Playwright spec (or any query by test id) that waits on
+`[data-testid="MarkdownContent__61b427"]` inside a Copilot chat bubble **times out after 30 s**
+looking for a selector that cannot exist. Nothing is logged, nothing warns, and the surrounding
+markup renders perfectly — so the natural conclusion is "the chat did not render" or "the message
+never arrived", and the search goes to the chat transport rather than to the renderer.
+
+**Root cause:** `ChatView` renders
+`<MarkdownContent data-testid="MarkdownContent__61b427">{message.text}</MarkdownContent>`, but
+`MarkdownContent` destructures **only** `{ children }` and spreads nothing onto its root
+`<div className="space-y-2 leading-6">`. React does not forward unknown props to a function
+component's DOM output, so the attribute is discarded with no error.
+
+**Fix:** delete the `data-testid` prop from the `<MarkdownContent>` call site in `ChatView.jsx`.
+It is a dead attribute, not a missing feature — do **not** add a prop spread to `MarkdownContent`
+just to make the testid appear. The renderer already emits real, reachable test ids for the nodes
+worth targeting (`MarkdownLink__e0b411`, `MarkdownInternalLink__e0b411`, `MarkdownTable__e0b411`);
+target those, or the bubble container in `ChatView`.
+
+**Lesson:** a `data-testid` on a **function component** is inert unless that component explicitly
+forwards it. Auto-generated testids applied uniformly across a file will land on both host elements
+(where they work) and custom components (where they vanish). Before writing a selector against a
+testid, grep the component it names and confirm it reaches a DOM element.
+
+---
+
+## [2026-09-08] ETP-5230 — a role's User Level can silently revoke an organization access the UI still shows it has
+
+**Component:** `com.etendoerp.go` — `schemaforge/{ReconciliationHandler,PaymentRegistrationService,AddPaymentService,CashCloseHandler}.java`
+
+**Symptom.** On a freshly onboarded tenant, every invited user with a fixed GO role (Finance, Sales, …)
+got HTTP 400 on **every** reconciliation and **every** payment; only the tenant owner could perform
+them. Reported from `go.experimental.etendo.cloud` with three verbatim payloads, all of this shape:
+
+```
+Organization 0 of object (ADSequence(D6A6995B1B5E48BDBE76DA3FC95E262D) (name: Reconciliation))
+is not present in OrganizationList [8CF2FCD6E86746918C5449635CBB030F]
+```
+
+The tell that it was not a reconciliation bug: the error names an `AD_Sequence`, not a document, and
+the flows that "worked" (bank statements, movements) also number documents.
+
+**Root cause — two facts, neither a bug alone.**
+
+1. `OBContext#setWritableOrganizations` (`src/org/openbravo/dal/core/OBContext.java:622`) does
+   `if (localUserLevel.equals("O")) writableOrganizations.remove("0")`. Every GO fixed role and every
+   per-user personal role is created with `UserLevel = "  O"`
+   (`SystemRoleTemplates.java:56`). The role **does** hold `AD_Role_OrgAccess` to `*` and the UI shows
+   it — core removes it silently when computing the session. The owner role ships `" CO"`
+   (`GOClient/AD_ROLE.xml:14`) and keeps it. That one field is the entire difference.
+2. The APRM numbering path bumps the sequence **through the DAL**
+   (`Fin_UtilityLegacy#incrementSeqIfUpdateNext`), so the write is security-checked on flush and
+   rejected — the record being written is the sequence row, whose org is `0`. All 143 sequences in the
+   onboarding dataset live at org `*`, which is valid, standard configuration.
+
+Bank statements and movements are unaffected because they number through the **SQL** path (the
+`AD_SEQUENCE_DOC` PL function), which performs no org check. Two numbering mechanisms in core, only
+one of them checked — that asymmetry is the whole bug.
+
+**Fix.** `schemaforge/StarOrgWriteScope.java` grants org `*` write access for the duration of one
+document-number expression, flushes the counter while the grant is open, and restores the org lists in
+a `finally` — core's own `InitialOrgSetup` idiom (`InitialOrgSetup.java:352`, cleanup at
+`ad_forms/InitialOrgSetup.java:79-80`). Applied at 5 call sites. Documented in the module's
+`docs/neo-headless.md` §7.
+
+Three traps, all verified in the source and all recorded in the helper's javadoc:
+
+- **`OBContext.setAdminMode(false)` does not work here, and fails silently.**
+  `doOrgClientAccessCheck` reads the *innermost* admin frame, and core pushes its own
+  `setAdminMode(true)` inside `APRM_MatchingUtility#addNewDraftReconciliation`. An outer frame is
+  never the one consulted. The grant has to change the writable-organization **set**.
+- **The check fires on flush, not on save**, so the flush must be inside the scope. At the cash-close
+  site nothing flushes in the enclosing method at all.
+- The cleanup needs **both** `removeWritableOrganization` (the "additional" set) and a forced
+  recompute; removing from only one set leaves `"0"` writable for the rest of the request.
+
+**Verification — the part that mattered most.** The first local run was green, but nobody had ever
+seen it red *locally*, so green proved nothing. Reverting the fix via patch, recompiling, and
+reproducing both 400s first turned it into a controlled experiment:
+
+| | reconcile | invoice payment |
+|---|---|---|
+| fix reverted | 400 `Reconciliation` | 400 `AR Receipt` |
+| fix applied | doc `1000021` | payment `1000002` |
+| sequence at org `*` | → 1000023 | → 1000003 |
+
+Both written by a `[  O]` role, sequence counter and document created in the same second. The
+sequence ids in the local errors matched the ids read out of the onboarding dataset during the
+investigation, independently confirming the dataset analysis.
+
+**Out of scope, recorded as a follow-up.** Etendo Classic and ~15 other core APRM call sites stay
+broken for any Organization-level role; only a core fix closes them. Written up in
+`docs/etendo-ad/document-sequence-star-org-write-core-proposal.md`.
+
+**Lessons.**
+
+- **A green result proves nothing until you have seen it red in the same environment.** Ask "have I
+  ever observed this failing here?" before accepting a passing test as evidence. The reporter caught
+  this, not the agent.
+- **An error naming an infrastructure record (`AD_Sequence`, `AD_Role`, a counter) is rarely a bug in
+  the feature that surfaced it.** Read what the message says is being *written* before reading the
+  handler.
+- **Two mechanisms for the same job will diverge, and the unchecked one hides the bug in the checked
+  one.** The SQL and DAL numbering paths disagreeing about whether bumping a counter is a
+  security-relevant write is why five flows failed and a dozen similar ones did not.
+- **A silently revoked permission is worse than a missing one.** The role showed `*` in the UI the
+  whole time. When a permission looks present but does not apply, suspect a derived field
+  (`UserLevel`) over the visible grant.
+- **Back up before you destroy, and verify the backup.** `git diff > file` in this repo produces
+  RTK's prettified summary, not an applicable patch — discovered *after* reverting. Use
+  `rtk proxy git diff`, and validate with `git apply --check` before relying on it.
