@@ -585,7 +585,12 @@ export function ListView({
     resolveQuickFilterIndicesFromPreset(quickFilters, preset, setActiveFilterIndices);
   }, [filterPresets, subsetFilters, quickFilters]);
 
-  const saveCurrentAsPreset = useCallback((name) => {
+  // ETP-5007: the builder hands over the advanced filter it currently holds in
+  // its DRAFT. `advancedFilter` is only the last APPLIED value, so relying on it
+  // saved an empty preset when the user configured a filter without applying it,
+  // and a stale one when they edited an applied filter before saving. The
+  // fallback keeps callers that pass no draft (there are none today) working.
+  const saveCurrentAsPreset = useCallback((name, draftAdvancedFilter) => {
     const subsetLabel = (subsetFilters && activeSubsetIndex != null)
       ? (subsetFilters[activeSubsetIndex]?.label ?? null)
       : null;
@@ -596,7 +601,7 @@ export function ListView({
       : [];
     savePreset(name, {
       columnFilters,
-      advancedFilter,
+      advancedFilter: draftAdvancedFilter !== undefined ? draftAdvancedFilter : advancedFilter,
       subsetLabel,
       quickFilterLabels,
     });

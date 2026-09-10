@@ -44,13 +44,26 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
 
   const switchTo = useCallback(async (env) => {
     const token = localStorage.getItem('sf_platform_token') || localStorage.getItem('sf_auth_token');
-    if (!token || !env?.adminUserId) return;
+    if (!token || !env?.adminUserId) return false;
     setSwitching(env.clientId);
     try {
       const data = await loginEnvironment(fetch, getApiBase(), token, env);
       if (!data?.token) {
         setSwitching(null);
-        return;
+        return false;
+      }
+      // ETP-5202 — refuse to enter an environment the user has no role in. `GET /sws/go/login`
+      // does NOT fail in that case: it calls generateToken(user, null) and answers 200 with an
+      // empty roleList, so entering would write a session with no role and drop the user into an
+      // empty app. The invited-user path makes this reachable — an admin-created user has zero
+      // roles until somebody assigns one (ETP-4830).
+      //
+      // Only an explicitly EMPTY array blocks: a missing roleList is left to the existing
+      // behaviour, since `buildEnvironmentSessionStorage` already treats it as optional and an
+      // older backend must not be locked out.
+      if (Array.isArray(data.roleList) && data.roleList.length === 0) {
+        setSwitching(null);
+        return false;
       }
       Object.entries(buildEnvironmentSessionStorage(env, data)).forEach(([key, value]) => {
         localStorage.setItem(key, value);
@@ -58,8 +71,10 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
       // The flag targeting identity belongs to the account, not the tenant, so it
       // survives — but anything cached per tenant must not, hence the full load.
       window.location.href = '/';
+      return true;
     } catch {
       setSwitching(null);
+      return false;
     }
   }, []);
 
@@ -85,8 +100,7 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
         setSwitching(null);
         return false;
       }
-      await switchTo(match);
-      return true;
+      return await switchTo(match);
     } catch {
       setSwitching(null);
       return false;

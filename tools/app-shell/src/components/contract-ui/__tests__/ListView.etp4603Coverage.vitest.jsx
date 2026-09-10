@@ -282,6 +282,36 @@ describe('ListView — ETP-4603 coverage top-up', () => {
     }));
   });
 
+  // ETP-5007: the builder now hands its DRAFT advanced filter to onSavePreset.
+  // The preset must store that draft, never the last APPLIED advancedFilter.
+  it('stores the draft advanced filter handed by the builder instead of the applied one', () => {
+    const applied = { rowOperator: 'and', conditions: [{ field: 'name', operator: 'iContains', value: 'applied' }] };
+    const draft = { rowOperator: 'or', conditions: [{ field: 'amount', operator: 'greaterThan', value: '100' }] };
+    renderListView({ initialAdvancedFilter: applied });
+
+    act(() => { filterBarProps.onSavePreset('fromDraft', draft); });
+
+    expect(savePresetMock).toHaveBeenCalledWith('fromDraft', expect.objectContaining({
+      advancedFilter: draft,
+    }));
+  });
+
+  // Pins the fallback semantics of `draftAdvancedFilter !== undefined ? ... : advancedFilter`.
+  // A `null` draft is a REAL value (the builder saves it for a preset that carries
+  // only column filters) and must reach savePreset untouched. Writing the fallback
+  // as `draftAdvancedFilter || advancedFilter` would silently substitute the stale
+  // applied filter here — that is the regression this test exists to catch.
+  it('forwards a null draft verbatim instead of falling back to the applied filter', () => {
+    const applied = { rowOperator: 'and', conditions: [{ field: 'name', operator: 'iContains', value: 'applied' }] };
+    renderListView({ initialAdvancedFilter: applied });
+
+    act(() => { filterBarProps.onSavePreset('columnsOnly', null); });
+
+    expect(savePresetMock).toHaveBeenCalledWith('columnsOnly', expect.objectContaining({
+      advancedFilter: null,
+    }));
+  });
+
   // ── refresh effects: columnFilters change + refreshTrigger bump ───────
   it('refetches when columnFilters change after the initial mount (skips the very first run)', () => {
     renderListView();
