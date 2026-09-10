@@ -18243,6 +18243,8 @@
     "emailHistoryStatusNoRecipient": "Sin destinatario",
     "emailHistoryStatusUnauthorized": "Sin autorización",
     "emailHistoryStatusValidationFailed": "Validación fallida",
+    "emailHistoryStatusSuccess": "Enviado",
+    "emailHistoryStatusFailed": "Fallido",
     "previewCardCategorization": "Categorización",
     "previewCardRelatedDocuments": "Documentos relacionados",
     "previewCardPayments": "Pagos",

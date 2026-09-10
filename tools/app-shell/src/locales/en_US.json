@@ -18071,6 +18071,8 @@
     "emailHistoryStatusNoRecipient": "No recipient",
     "emailHistoryStatusUnauthorized": "Not authorized",
     "emailHistoryStatusValidationFailed": "Validation failed",
+    "emailHistoryStatusSuccess": "Sent",
+    "emailHistoryStatusFailed": "Failed",
     "previewCardCategorization": "Categorization",
     "previewCardRelatedDocuments": "Related documents",
     "previewCardPayments": "Payments",
