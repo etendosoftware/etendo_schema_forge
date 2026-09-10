@@ -72,7 +72,7 @@ import {
 import { cn } from '@/lib/utils.js';
 import { useMenuLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { useFavorites } from '@/components/layout/FavoritesContext';
-import { useFeatureFlag, PROOF_OF_CONCEPT_MENU } from '@/lib/flags';
+import { useFeatureFlag, PROOF_OF_CONCEPT_MENU, ACCT_PROCESS_MONITOR } from '@/lib/flags';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { environmentPlanLabelKey } from '@/lib/environmentPresentation.js';
 import menuConfig from '@/menu.json';
@@ -559,6 +559,9 @@ export default function SideMenu({
   // This is visual gating only. The windows remain protected by normal AD role
   // filtering; the flag merely stops offering this internal menu section.
   const showProofOfConceptMenu = useFeatureFlag(PROOF_OF_CONCEPT_MENU);
+  // ETP-5269. Item-level flag gating, where Proof of Concept above gates a whole group. Visual
+  // only: the route is registered unconditionally and SFAcctProcessMonitor enforces admin access.
+  const showAcctProcessMonitor = useFeatureFlag(ACCT_PROCESS_MONITOR);
   // Unconditional since ETP-4966: owning more than one environment is a shipped
   // capability, so the switcher is always available. The hook already returns an
   // empty list for a session that cannot list environments, which is what keeps
@@ -577,11 +580,15 @@ export default function SideMenu({
     return map;
   }, []);
 
+  // Menu items hidden behind a feature flag, by item name. An item absent from this map is never
+  // flag-gated, so the common case costs one lookup and nothing else.
+  const flagGatedItems = { 'acct-process-monitor': showAcctProcessMonitor };
+
   const resolvedMenuGroups = menuGroups
     .filter(g => g.group !== 'Proof of Concept' || showProofOfConceptMenu)
     .map((g) => {
-      if (g.group !== 'Favorites') return g;
-      return { ...g, items: favorites };
+      if (g.group === 'Favorites') return { ...g, items: favorites };
+      return { ...g, items: (g.items || []).filter(i => flagGatedItems[i.name] !== false) };
     });
 
   const activeGroup = findActiveGroup(resolvedMenuGroups, location.pathname, location.search);

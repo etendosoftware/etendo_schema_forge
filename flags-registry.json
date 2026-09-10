@@ -305,6 +305,95 @@
           }
         ]
       }
+    },
+    {
+      "id": "acct-process-monitor",
+      "description": "Admin-only page to monitor the scheduled accounting server process and launch a run manually, without waiting for its next automatic execution.",
+      "owner": "sebastianbarrozo",
+      "jira": "ETP-5269",
+      "created": "2026-09-10",
+      "flag": {
+        "key": "acct-process-monitor",
+        "defaultValue": false,
+        "ttl": "2026-12-31",
+        "ttlNote": "Removal target once the manual trigger has been exercised against a real accounting backlog and the page is accepted as permanent.",
+        "symbols": [
+          "acct-process-monitor",
+          "ACCT_PROCESS_MONITOR",
+          "AcctProcessMonitorPage",
+          "acctProcessMonitorApi",
+          "useAcctProcessMonitor",
+          "SFAcctProcessMonitor",
+          "acctprocessmonitor"
+        ],
+        "$symbolsComment": "The page/hook/api/handler names are listed alongside the key because the shared toggle points reference the feature by those identifiers rather than by the flag key: runtime-routes.jsx registers AcctProcessMonitorPage, menu.json carries the acct-process-monitor item name, and NeoPseudoSpecDispatcher routes the lowercase acctprocessmonitor pseudo-spec to SFAcctProcessMonitor. A grep for the key alone would miss every one of them."
+      },
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/pages/AcctProcessMonitorPage.jsx",
+          "tools/app-shell/src/pages/acct-process-monitor/",
+          "tools/app-shell/src/lib/acctProcessMonitorApi.js"
+        ],
+        "backend": [
+          "src/com/etendoerp/go/schemaforge/webhooks/SFAcctProcessMonitor.java"
+        ]
+      },
+      "$pathsComment": "Owned code only. menu.json, runtime-routes.jsx, SideMenu.jsx, flag-keys.js, lib/flags/index.js and NeoPseudoSpecDispatcher.java are shared toggle points, not owned paths: each holds a single registration/gating line naming one of the symbols above, and no feature logic. Retiring the flag is deleting the owned paths plus removing what a grep for those symbols finds.",
+      "deferredItems": [
+        {
+          "id": "unit-and-e2e-coverage",
+          "kind": "open",
+          "note": "DEV delivered the implementation only; tests are the test-generator agent's separate task in this same ticket and had not been written when this entry was created. Needs: a vitest spec for the page's loading/error/denied/notInstalled/content branches and the trigger-refusal reasons, a spec for the SideMenu item-level flag gate, and a mocked Playwright flow. Backend needs a JUnit test for the admin gate and for the one-shot-request construction.",
+          "refs": [
+            "tools/app-shell/src/pages/AcctProcessMonitorPage.jsx",
+            "tools/app-shell/src/pages/acct-process-monitor/useAcctProcessMonitor.js",
+            "com.etendoerp.go src/com/etendoerp/go/schemaforge/webhooks/SFAcctProcessMonitor.java"
+          ]
+        },
+        {
+          "id": "manual-trigger-runtime-verification",
+          "kind": "open",
+          "note": "The trigger mechanism is verified from core source and from existing DB evidence (OBScheduler.schedule(ProcessBundle) inserts a fresh request with null timing, TriggerProvider maps that to IMMEDIATE, ProcessMonitor writes the AD_PROCESS_RUN row for any Quartz job regardless of channel), but no manual run has been executed against a deployed build yet — the Java was compile-checked only. QA must press the button on a real instance and confirm a new AD_PROCESS_RUN row appears AND that AD_PROCESS_REQUEST 9B2B32C0BAF146F783A50C6F69251BC4 is byte-for-byte unchanged apart from its scheduler-owned next_fire_time.",
+          "refs": [
+            "org.openbravo.scheduling.OBScheduler#schedule(ProcessBundle)",
+            "org.openbravo.scheduling.trigger.TriggerProvider#getTimingOption",
+            "org.openbravo.scheduling.ProcessMonitor#jobToBeExecuted"
+          ]
+        },
+        {
+          "id": "system-scope-of-a-tenant-triggered-run",
+          "kind": "open",
+          "note": "The accounting request on the reference instance is a System row (AD_Client_ID '0', user 100), and the manual run deliberately reuses its stored ob_context so a manual run does exactly what the automatic one does. Consequence: a client-admin of one tenant starts a run whose scope is the same System-wide scope the 5-minute schedule already has. That grants no capability the schedule does not already exercise unattended — it only makes it happen sooner — but whether a per-tenant admin should be able to advance a System-wide job is a product decision that has not been taken. Raised for the human, deliberately NOT self-accepted.",
+          "refs": [
+            "SFAcctProcessMonitor#triggerManualRun",
+            "AD_PROCESS_REQUEST 9B2B32C0BAF146F783A50C6F69251BC4 (ad_client_id '0')"
+          ]
+        }
+      ],
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/__tests__/AcctProcessMonitorPage.vitest.jsx",
+            "expected": true,
+            "note": "Not yet written — owned by the test-generator agent's task for ETP-5269."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/layout/SideMenu/__tests__/SideMenu.vitest.jsx",
+            "expected": true,
+            "note": "Existing spec; needs a case for the new item-level flag gate."
+          }
+        ],
+        "e2e": [
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/acct-process-monitor.mocked.spec.js",
+            "expected": true,
+            "note": "Not yet written — owned by the test-generator agent's task for ETP-5269."
+          }
+        ]
+      }
     }
   ]
 }
