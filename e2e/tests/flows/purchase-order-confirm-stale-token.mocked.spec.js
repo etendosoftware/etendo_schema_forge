@@ -377,7 +377,7 @@ async function dirtyTheHeader(page) {
  * passed was one shared generated hash for both cards, which could not have told them apart
  * anyway). Locale-independent now, which is the point.
  */
-const receiptCard = (page) => page.getByTestId('purchase-order-docs-receipt-card');
+const receiptCard = (page) => page.getByTestId('purchase-order-confirm-receipt-card');
 const invoiceCard = (page) => page.getByTestId('purchase-order-confirm-invoice-card');
 
 /**
