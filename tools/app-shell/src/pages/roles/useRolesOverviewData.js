@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Settings, TrendingUp, FileText, Landmark, Package } from 'lucide-react';
 import { fetchRolesOverview } from '@/lib/rolesApi.js';
+import menuConfig from '../../menu.json' with { type: 'json' };
 
 /**
  * ETP-4907 — data module for the redesigned "Configuración > Roles" overview
@@ -165,19 +166,207 @@ function adaptCards(roles) {
   }));
 }
 
-/** Adapts the backend's `matrix.categories[]` into this page's category-grouped row shape, normalizing every cell's tier (see `normalizeTier`). */
-function adaptMatrix(matrix) {
+/**
+ * ETP-5071 — `windowId -> { group, label, groupOrder }` index built from `menu.json`,
+ * this app's real source of truth for category/window display (imported the same way
+ * `windows/registry.js` does). The backend's `matrix.categories[]` sources its category
+ * names and window labels from the classic AD menu tree instead (`SFRolesOverview.java`,
+ * out of scope here) — e.g. "Product" shows under "Master Data Management" instead of
+ * "Inventory". `adaptMatrix` below re-resolves both against this index.
+ *
+ * Flattens every `menu[].items[]` entry that carries an identity id. Same convention as
+ * `windows/registry.js`'s `filterMenuGroupsByAccess()` (its own `itemIds` helper treats
+ * `windowId`/`processId`/`obuiappProcessId` as equivalent/interchangeable identity keys
+ * for menu-filtering) — here each item's identity resolves as `item.windowId ??
+ * item.obuiappProcessId ?? item.processId` (first non-null wins; no item sets more than
+ * one of these today, so precedence between them doesn't actually arise in practice, but
+ * it's written defensively). This is what lets ETP-5071's 3 windowless-but-proxied menu
+ * items (`fiscal-monitor`/`fiscal-models` via `windowId`, `not-posted-documents` via
+ * `obuiappProcessId`) resolve through this same index like any real window.
+ *
+ * `groupOrder` is the index of that entry's `menu[]` group in menu.json's OWN declaration
+ * order — ETP-5071's product decision is to sort categories by that declaration order,
+ * not alphabetically. `itemOrder` (ETP-5071 follow-up) is that same entry's index WITHIN
+ * `group.items` — `menu.json`'s `items[]` array is already in the exact order the real
+ * sidebar renders them, confirmed live against the Finance group's own order, so
+ * `adaptMatrix` below sorts each category's ROWS by `itemOrder` too, not just the
+ * categories themselves by `groupOrder` — the backend's `matrix.categories[].windows[]`
+ * order is its own alphabetical-by-raw-classic-`AD_Window.name` sort
+ * (`SFRolesOverview.java`, out of scope), unrelated to the sidebar's order.
+ *
+ * Precedence for an id shared by 2+ items (confirmed live, today always a same-group
+ * visible/hidden pair — `"123"` People: `contacts`/`business-partner`, `"117"` Finance:
+ * `calendar`/`fiscal-calendar` — never cross-group, though this does not assume that can
+ * never happen): prefer the entry WITHOUT `hidden: true`; if every entry for that id is
+ * hidden (or the first-seen entry already isn't), keep the first one encountered.
+ * `itemOrder` travels with whichever candidate wins, same as `group`/`label`. The winning
+ * candidate's own `hidden` flag is therefore `true` only when EVERY menu.json entry for
+ * that id is hidden (no visible alternative exists) — `adaptMatrix` uses exactly that
+ * signal to drop sidebar-hidden windows from the matrix (see ETP-5071 below).
+ */
+export function buildMenuWindowIndex() {
+  const index = new Map();
+  const groups = menuConfig?.menu ?? [];
+  groups.forEach((group, groupOrder) => {
+    group.items?.forEach((item, itemOrder) => {
+      const rawId = item?.windowId ?? item?.obuiappProcessId ?? item?.processId;
+      if (rawId == null) return;
+      const windowId = String(rawId);
+      const candidate = { group: group.group, label: item.label, groupOrder, itemOrder, hidden: !!item.hidden };
+      const existing = index.get(windowId);
+      // Prefer this candidate when there's no existing entry yet, or when the
+      // first-seen entry for this id was hidden but this one isn't. Any other
+      // combination (existing already visible, or both hidden) keeps the
+      // first-encountered entry.
+      if (!existing || (existing.hidden && !candidate.hidden)) {
+        index.set(windowId, candidate);
+      }
+    });
+  });
+  return index;
+}
+
+const MENU_WINDOW_INDEX = buildMenuWindowIndex();
+
+/**
+ * ETP-5071 — shared "ordered-first, then alphabetical fallback" comparator shape used by
+ * both `compareCategoriesByOrder` and `compareRowsByItemOrder`: an entry with a known
+ * order value always sorts before one without; two known order values sort numerically
+ * between themselves; two entries with no order at all fall back to `fallbackCompare()`.
+ */
+function compareByOrderThenFallback(orderA, orderB, fallbackCompare) {
+  if (orderA != null && orderB != null) return orderA - orderB;
+  if (orderA != null) return -1;
+  if (orderB != null) return 1;
+  return fallbackCompare();
+}
+
+/**
+ * Resolves a single backend window `w` (from `category.windows[]`) against `menuIndex`
+ * (see `buildMenuWindowIndex`) instead of trusting the backend's classic-AD-tree grouping.
+ * Returns `null` when the window must be excluded from the matrix entirely — ETP-5071: a
+ * `menuIndex` match whose own `hidden` flag is `true` (meaning every menu.json entry for
+ * that id is hidden — see `buildMenuWindowIndex`'s precedence rule: a visible alternative,
+ * if one exists, always wins the index slot first). Two confirmed real cases: Match Rule
+ * and Periods (`Finance`), both hidden-only in menu.json yet granted real
+ * `AD_Window_Access` — an admin configuring "what can this role see" should never be
+ * shown a toggle for something nobody can navigate to.
+ *
+ * Otherwise returns the resolved `resolvedCategory` (falls back to the backend's raw
+ * `category.name` when the window isn't in `menuIndex` — e.g. "Roles"/"Usuario",
+ * deliberately granted to none of the 4 templates — it must never disappear from the
+ * matrix just because it isn't in menu.json), the adapted `row` (with a transient
+ * `_itemOrder`, that window's index within its menu.json group or `null` if absent from
+ * `menuIndex`, used by `compareRowsByItemOrder` and stripped again by `adaptMatrix` before
+ * it returns), and the window's own `groupOrder` (that window's menu.json group's own
+ * declaration-order index, or `null` if absent from `menuIndex`) for
+ * `trackBestGroupOrder` to fold into the running per-category best.
+ */
+function resolveMatrixRow(w, category, menuIndex) {
+  const match = menuIndex.get(String(w.id));
+  if (match?.hidden) return null;
+  const resolvedCategory = match?.group ?? category.name;
+  const row = {
+    windowId: w.id,
+    windowName: match?.label ?? w.name,
+    access: Object.fromEntries(
+      Object.entries(w.access ?? {}).map(([roleId, tier]) => [roleId, normalizeTier(tier)])
+    ),
+    _itemOrder: match?.itemOrder ?? null,
+  };
+  return { resolvedCategory, row, groupOrder: match?.groupOrder ?? null };
+}
+
+/**
+ * Folds one window's `groupOrder` (see `resolveMatrixRow`) into `groupOrderByCategory`,
+ * keeping the smallest value seen so far for `resolvedCategory` — used by
+ * `compareCategoriesByOrder` to sort categories by menu.json's own declaration order
+ * rather than alphabetically. A `null` `groupOrder` (window absent from `menuIndex`)
+ * leaves the map untouched; `0` is a real, trackable value (not treated as absent).
+ * Mutates `groupOrderByCategory` in place.
+ */
+function trackBestGroupOrder(groupOrderByCategory, resolvedCategory, groupOrder) {
+  if (groupOrder == null) return;
+  const currentBest = groupOrderByCategory.get(resolvedCategory);
+  if (currentBest == null || groupOrder < currentBest) {
+    groupOrderByCategory.set(resolvedCategory, groupOrder);
+  }
+}
+
+/**
+ * Flattens `matrix.categories[].windows[]` and buckets rows by their RESOLVED category
+ * (see `resolveMatrixRow`) — since two different backend `category.name` buckets can map
+ * to the same menu.json `group` (or vice versa), every window is flattened across all
+ * backend categories first, then re-bucketed by its resolved category string. Windows
+ * excluded by `resolveMatrixRow` (sidebar-hidden, ETP-5071) are skipped entirely. Also
+ * tracks, per resolved category, the smallest `groupOrder` seen among its windows via
+ * `trackBestGroupOrder`.
+ */
+function bucketRowsByResolvedCategory(categories, menuIndex) {
+  const rowsByCategory = new Map();
+  const groupOrderByCategory = new Map();
+
+  for (const category of categories) {
+    for (const w of category.windows ?? []) {
+      const resolved = resolveMatrixRow(w, category, menuIndex);
+      if (!resolved) continue;
+      const { resolvedCategory, row, groupOrder } = resolved;
+      if (!rowsByCategory.has(resolvedCategory)) rowsByCategory.set(resolvedCategory, []);
+      rowsByCategory.get(resolvedCategory).push(row);
+      trackBestGroupOrder(groupOrderByCategory, resolvedCategory, groupOrder);
+    }
+  }
+
+  return { rowsByCategory, groupOrderByCategory };
+}
+
+/**
+ * Sorts resolved category names by the smallest `groupOrder` seen among that category's
+ * windows (see `bucketRowsByResolvedCategory`) — menu.json's own declaration order, not
+ * alphabetical. A category with no `groupOrder` at all (100% fallback windows) sorts
+ * last, alphabetically among themselves.
+ */
+function compareCategoriesByOrder(a, b, groupOrderByCategory) {
+  return compareByOrderThenFallback(groupOrderByCategory.get(a), groupOrderByCategory.get(b), () =>
+    a.localeCompare(b)
+  );
+}
+
+/**
+ * ETP-5071 follow-up — sorts rows within a category by `_itemOrder` (see
+ * `bucketRowsByResolvedCategory`): the backend's own `category.windows[]` order is just
+ * an alphabetical-by-raw-classic-name sort, unrelated to the real sidebar's order, which
+ * `menu.json`'s `items[]` array declaration order already matches. A row with no
+ * `_itemOrder` at all (the same menu.json-absent fallback case handled above) sorts
+ * AFTER every ordered row in that category, alphabetically by `windowName` among
+ * themselves.
+ */
+function compareRowsByItemOrder(a, b) {
+  return compareByOrderThenFallback(a._itemOrder, b._itemOrder, () => a.windowName.localeCompare(b.windowName));
+}
+
+/**
+ * Adapts the backend's `matrix.categories[]` into this page's category-grouped row
+ * shape, normalizing every cell's tier (see `normalizeTier`). Delegates: bucketing +
+ * category/name resolution + hidden-window exclusion to `bucketRowsByResolvedCategory`,
+ * category ordering to `compareCategoriesByOrder`, and row ordering within each category
+ * to `compareRowsByItemOrder`. See those functions' JSDoc for the full ETP-5071 rules.
+ */
+function adaptMatrix(matrix, menuIndex) {
   const categories = matrix?.categories ?? [];
-  return categories.map((category) => ({
-    category: category.name,
-    rows: (category.windows ?? []).map((w) => ({
-      windowId: w.id,
-      windowName: w.name,
-      access: Object.fromEntries(
-        Object.entries(w.access ?? {}).map(([roleId, tier]) => [roleId, normalizeTier(tier)])
-      ),
-    })),
-  }));
+  const { rowsByCategory, groupOrderByCategory } = bucketRowsByResolvedCategory(categories, menuIndex);
+
+  const categoryNames = [...rowsByCategory.keys()].sort((a, b) =>
+    compareCategoriesByOrder(a, b, groupOrderByCategory)
+  );
+
+  return categoryNames.map((category) => {
+    const rows = [...rowsByCategory.get(category)].sort(compareRowsByItemOrder);
+    return {
+      category,
+      rows: rows.map(({ _itemOrder, ...row }) => row),
+    };
+  });
 }
 
 /**
@@ -196,7 +385,7 @@ export function useRolesOverviewData() {
           loading: false,
           error: null,
           cards: sortByRoleOrder(adaptCards(data?.roles)),
-          matrix: adaptMatrix(data?.matrix),
+          matrix: adaptMatrix(data?.matrix, MENU_WINDOW_INDEX),
         });
       })
       .catch((err) => {

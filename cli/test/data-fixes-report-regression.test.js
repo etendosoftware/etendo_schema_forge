@@ -50,6 +50,35 @@ const FIXES_WITH_REPORT = new Set([
   // the pre-apply name is gone by the time @report runs. Operator visibility, not a "skipped work"
   // flag: empty on a clean re-run. See cli/test/data-fixes-r32-glitem-name-resync.test.js.
   '20260902T090000Z__R32-glitem-name-resync',
+  // ETP-5079 realigns the seeded document sequences' STARTNO/CURRENTNEXT. The R31 number is
+  // reused here — R-number collisions are normal in this catalog (R14, R17, R23 and R26 each
+  // occur three times); the timestamped id is the real key, and this fix has already been
+  // applied under it, so renaming would orphan its etgo_data_fix_history row and re-run it.
+  // Unlike every entry above, its @report is a pure POST-CONDITION: it lists any in-scope
+  // sequence still off target after the apply, and because CURRENTNEXT is now set in both
+  // directions there is no legitimate "left off target" case left — so it should always come
+  // back empty and leave `detail` null on the APPLIED ledger row. A non-empty detail means a
+  // row was skipped or something raced the update, and is worth investigating.
+  '20260902T120000Z__R31-document-sequence-startno',
+  // R33 (ETP-5122) backfills ETSG_Tax_SIF_Config overrides from the shared System
+  // C_Tax row before its sibling R34 clears the System fields; its @report is a
+  // diagnostic audit listing every override row this run just created (read back
+  // from @apply's RETURNING via a temp table, since @report runs after @apply).
+  '20260904T120000Z__R33-tax-sif-config-migration',
+  // R34 (ETP-5122) is the destructive cutover that nulls the shared System C_Tax
+  // SIF fields once every active-config legal-entity org already has its own R33
+  // override; its @report is the full before/after audit (old values + which group
+  // was cleared) stored verbatim in the ledger's `detail` column as the secondary
+  // revert trail.
+  '20260904T130000Z__R34-tax-sif-config-clear-system',
+  // R34 (ETP-5207) blanks FIN_FINANCIAL_ACCOUNT_ACCT's cleared-payment IN/OUT columns, but
+  // deliberately skips two populations it must not touch: an account with a POSTED reconciliation
+  // (its FACT_ACCT entries were produced USING the cleared account) and a type-'B' row missing
+  // bankfee/revaluation accounts (APRM_FIN_FINACC_ACCT_CHECK_TRG fires BEFORE UPDATE too and would
+  // abort the whole tenant's transaction). Its @report lists each skipped (account, ledger) pair
+  // AND which of the two guards protected it — the canonical "skipped part of its own work" case,
+  // same pattern as R19. See cli/test/data-fixes-r34-fin-account-cleared-payment-accounts.test.js.
+  '20260908T120000Z__R34-fin-account-cleared-payment-accounts',
 ]);
 
 async function loadCatalogFiles() {
@@ -64,7 +93,10 @@ async function loadCatalogFiles() {
 }
 
 describe('data-fixes catalog — @report is opt-in and backward compatible', () => {
-  it('has at least one fix WITH @report (R19, R24, R28) so this guard is not vacuous', async () => {
+  // The title deliberately does not enumerate the fixes: FIXES_WITH_REPORT grows every time a
+  // new fix opts in, and an enumerating title goes stale silently while the assertion below
+  // keeps passing (it already claimed "R19, R24, R28" long after R26 and R27 had joined).
+  it('has at least one fix WITH @report so this guard is not vacuous', async () => {
     const catalog = await loadCatalogFiles();
     const withReport = catalog.filter(({ fix }) => fix.report.length > 0);
     assert.ok(withReport.length >= 1, 'expected at least one fix with a non-empty @report section');

@@ -52,6 +52,56 @@ function renderModal(overrides = {}) {
   return { ...render(<LocationEditorModal {...defaults} {...overrides} />), props: { ...defaults, ...overrides } };
 }
 
+// Shared fixtures. Note the default `global.fetch` in `beforeEach` answers every
+// selector page with an EMPTY item list, so the ETP-5103 default-country prefill
+// resolves to nothing and the country stays empty unless a test opts in by mocking
+// a selector response that contains Spain.
+const SPAIN_OPTION = { id: 'ES', label: 'Spain' };
+const ADDRESS_LINE_VALUE = '123 Main Street';
+const DEFAULT_COUNTRY_QUERY_PARAM = 'q=Spain';
+
+/**
+ * Whether a field label carries the ETP-5103 mandatory asterisk. RequiredMark renders
+ * it as a sibling <span> inside the label element; Testing Library's text queries read
+ * only an element's DIRECT text nodes, so the label is still located by its plain key.
+ */
+function hasRequiredMark(labelKey) {
+  const label = screen.getByText(labelKey);
+  return Array.from(label.querySelectorAll('span')).some(s => s.textContent === '*');
+}
+
+/** The Save button. The modal labels it with the `save` UI key. */
+function saveButton() {
+  return screen.getByText('save').closest('button');
+}
+
+/** Address line 1 input — the first textbox of the form (it carries autoFocus). */
+function addressLineInput() {
+  return screen.getAllByRole('textbox')[0];
+}
+
+/**
+ * Fill address line 1, the field ETP-5103 made mandatory. Every save path needs it
+ * now, so the flows that exercise POST/PUT go through this helper.
+ */
+function typeAddressLine(value = ADDRESS_LINE_VALUE) {
+  fireEvent.change(addressLineInput(), { target: { value } });
+}
+
+/** Open the country picker and choose Spain. Requires a selector mock returning it. */
+async function selectSpain() {
+  const countryBtn = screen
+    .getAllByRole('button')
+    .find(b => b.getAttribute('aria-haspopup') === 'dialog' && !b.disabled);
+  fireEvent.click(countryBtn);
+  fireEvent.click(await screen.findByText(SPAIN_OPTION.label));
+}
+
+/** URLs of every selector page requested so far, for prefill assertions. */
+function fetchedUrls() {
+  return global.fetch.mock.calls.map(([url]) => url);
+}
+
 // --- Tests ----------------------------------------------------------------
 
 describe('LocationEditorModal', () => {
@@ -210,10 +260,13 @@ describe('LocationEditorModal', () => {
     expect(global.fetch).toHaveBeenCalled();
   });
 
-  it('renders save button that is not disabled for new records', () => {
+  // ETP-5103 reframed this case: a brand-new record starts with address line 1 AND
+  // country empty, so Save is now gated instead of clickable. What used to be asserted
+  // here (Save is reachable on a new record) is covered by the CP-4 case below, which
+  // fills the mandatory fields first.
+  it('renders save button disabled for new records with empty mandatory fields', () => {
     renderModal();
-    const saveBtn = screen.getByText('save');
-    expect(saveBtn.closest('button')).not.toBeDisabled();
+    expect(saveButton()).toBeDisabled();
   });
 
   it('allows typing in address fields', async () => {
@@ -269,20 +322,13 @@ describe('LocationEditorModal', () => {
       });
     });
 
-    const { props } = renderModal();
+    renderModal();
 
-    // We need to set a country first (required for save)
-    // Click the country button to open picker
-    const buttons = screen.getAllByRole('button');
-    const countryBtn = buttons.find(b => b.getAttribute('aria-haspopup') === 'dialog' && !b.disabled);
-    fireEvent.click(countryBtn);
+    // Both mandatory fields first: address line 1 (ETP-5103) and country.
+    typeAddressLine();
+    await selectSpain();
 
-    // Wait for country picker to appear, then click Spain
-    const spainBtn = await screen.findByText('Spain');
-    fireEvent.click(spainBtn);
-
-    // Now click save
-    fireEvent.click(screen.getByText('save'));
+    fireEvent.click(saveButton());
 
     // Wait for async save to complete
     await vi.waitFor(() => {
@@ -293,14 +339,28 @@ describe('LocationEditorModal', () => {
     });
   });
 
-  it('shows toast error when saving without country', async () => {
+  /**
+   * ETP-5103 reframed this case. Country was already mandatory — handleSave refused to
+   * save without it and showed the `locationCountryRequired` toast — but the refusal only
+   * happened after the click. Now `saveDisabled` covers an empty country, so the button
+   * is unreachable and the toast never fires. What still matters, and is asserted here,
+   * is the invariant the old test protected: no save request leaves without a country.
+   * The toast guard remains in handleSave as defence in depth.
+   */
+  it('keeps save disabled and issues no request when the country is empty', async () => {
     const { toast } = await import('sonner');
+    vi.mocked(toast.error).mockClear();
     renderModal();
 
-    // Click save without selecting a country
-    fireEvent.click(screen.getByText('save'));
+    // Address line 1 filled, country still empty (the default mock returns no options).
+    typeAddressLine();
+    expect(saveButton()).toBeDisabled();
 
-    expect(toast.error).toHaveBeenCalledWith('locationCountryRequired');
+    fireEvent.click(saveButton());
+
+    expect(toast.error).not.toHaveBeenCalled();
+    const writeCalls = global.fetch.mock.calls.filter(([, opts]) => opts?.method);
+    expect(writeCalls).toHaveLength(0);
   });
 
   it('disables save button during initial loading when editing', () => {
@@ -473,12 +533,9 @@ describe('LocationEditorModal', () => {
 
       renderModal({ onSaved, onParentRefresh });
 
-      const buttons = screen.getAllByRole('button');
-      const countryBtn = buttons.find(b => b.getAttribute('aria-haspopup') === 'dialog' && !b.disabled);
-      fireEvent.click(countryBtn);
-      const spainBtn = await screen.findByText('Spain');
-      fireEvent.click(spainBtn);
-      fireEvent.click(screen.getByText('save'));
+      typeAddressLine();
+      await selectSpain();
+      fireEvent.click(saveButton());
 
       await vi.waitFor(() => {
         expect(global.fetch).toHaveBeenCalledWith(
@@ -586,16 +643,11 @@ describe('LocationEditorModal', () => {
         onSaved,
       });
 
-      // Select a country (required for save)
-      const buttons = screen.getAllByRole('button');
-      const countryBtn = buttons.find(
-        (b) => b.getAttribute('aria-haspopup') === 'dialog' && !b.disabled,
-      );
-      fireEvent.click(countryBtn);
-      const spainBtn = await screen.findByText('Spain');
-      fireEvent.click(spainBtn);
+      // Fill both mandatory fields: address line 1 (ETP-5103) and country.
+      typeAddressLine();
+      await selectSpain();
 
-      fireEvent.click(screen.getByText('save'));
+      fireEvent.click(saveButton());
 
       let postCall;
       await vi.waitFor(() => {
@@ -696,6 +748,230 @@ describe('LocationEditorModal', () => {
       await vi.waitFor(() => {
         expect(onSaved).toHaveBeenCalledWith('c-loc-77', 'Updated Location');
       });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // ETP-5103 — Spain preselected on create, address line 1 mandatory
+  // ---------------------------------------------------------------------------
+
+  describe('ETP-5103 — default country and mandatory fields', () => {
+    // The prefill asks the selector for Spain by name; the response carries the
+    // TRANSLATED label, which is what the picker button ends up showing.
+    const SPAIN_PREFILL_OPTION = { id: '106', label: 'España' };
+    const FRANCE_OPTION = { id: 'FR', label: 'Francia' };
+
+    /**
+     * Mock the selector endpoints, routing by URL:
+     *   - the `?q=Spain` prefill request  → `prefill`
+     *   - every other selector page      → `catalog` (what the picker lists)
+     * Splitting the two makes the assertions unambiguous: the country can only be set
+     * by the prefill when it came from the `?q=` request, never from the first page.
+     * Any request carrying an HTTP method (the save) resolves as a successful write.
+     *
+     * `catalog` must be non-empty by default: the modal only records which of its 8
+     * selector fallbacks answered when a page comes back with rows, and the prefill
+     * reuses that resolved base. An always-empty catalog would therefore disable the
+     * prefill — which is production behaviour when there are no countries at all, and
+     * is covered by its own case below.
+     */
+    function mockSelectors({ prefill = [SPAIN_PREFILL_OPTION], catalog = [FRANCE_OPTION] } = {}) {
+      global.fetch = vi.fn((url, opts) => {
+        if (opts?.method) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              response: { status: 0, data: [{ id: 'saved-1', name: 'Saved' }] },
+            }),
+          });
+        }
+        const items = String(url).includes(DEFAULT_COUNTRY_QUERY_PARAM) ? prefill : catalog;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ items, hasMore: false }) });
+      });
+    }
+
+    /** The country picker trigger — the first button with aria-haspopup in the form. */
+    function countryButton() {
+      return screen
+        .getAllByRole('button')
+        .find(b => b.getAttribute('aria-haspopup') === 'dialog');
+    }
+
+    /** Wait until the country trigger displays `label`. */
+    function waitForCountry(label) {
+      return vi.waitFor(() => expect(countryButton()).toHaveTextContent(label));
+    }
+
+    /** CP-1 */
+    it('preselects Spain when the popup opens in create mode', async () => {
+      mockSelectors();
+      renderModal();
+
+      await waitForCountry(SPAIN_PREFILL_OPTION.label);
+      expect(
+        fetchedUrls().some(url => url.includes(DEFAULT_COUNTRY_QUERY_PARAM)),
+      ).toBe(true);
+    });
+
+    /** CP-2 */
+    it('lets the user replace the preselected country, and does not restore it', async () => {
+      mockSelectors({ catalog: [FRANCE_OPTION] });
+      renderModal();
+
+      await waitForCountry(SPAIN_PREFILL_OPTION.label);
+
+      fireEvent.click(countryButton());
+      fireEvent.click(await screen.findByText(FRANCE_OPTION.label));
+
+      expect(countryButton()).toHaveTextContent(FRANCE_OPTION.label);
+      // The one-shot guard must keep the default from snapping back over the choice.
+      await vi.waitFor(() => {
+        expect(countryButton()).not.toHaveTextContent(SPAIN_PREFILL_OPTION.label);
+      });
+    });
+
+    /** CP-3 */
+    it('keeps save disabled while address line 1 is empty, even with Spain preselected', async () => {
+      mockSelectors();
+      renderModal();
+
+      await waitForCountry(SPAIN_PREFILL_OPTION.label);
+      expect(saveButton()).toBeDisabled();
+    });
+
+    /** CP-4 */
+    it('enables save as soon as address line 1 has one character', async () => {
+      mockSelectors();
+      renderModal();
+
+      await waitForCountry(SPAIN_PREFILL_OPTION.label);
+      typeAddressLine('C');
+
+      expect(saveButton()).toBeEnabled();
+    });
+
+    /** CP-5 */
+    it('disables save again when address line 1 is cleared', async () => {
+      mockSelectors();
+      renderModal();
+
+      await waitForCountry(SPAIN_PREFILL_OPTION.label);
+      typeAddressLine();
+      expect(saveButton()).toBeEnabled();
+
+      typeAddressLine('');
+      expect(saveButton()).toBeDisabled();
+    });
+
+    /** CP-6 */
+    it('marks address line 1 and country as mandatory, and no other field', () => {
+      renderModal();
+
+      expect(hasRequiredMark('addressLine1')).toBe(true);
+      expect(hasRequiredMark('countryLabel')).toBe(true);
+      for (const label of ['addressLine2', 'postalCodeLabel', 'cityLabel', 'regionLabel']) {
+        expect(hasRequiredMark(label)).toBe(false);
+      }
+    });
+
+    it('treats whitespace-only address line 1 as empty', async () => {
+      mockSelectors();
+      renderModal();
+
+      await waitForCountry(SPAIN_PREFILL_OPTION.label);
+      typeAddressLine('   ');
+
+      expect(saveButton()).toBeDisabled();
+    });
+
+    it('keeps save disabled without a country, and enables it once one is picked', async () => {
+      // Prefill resolves nothing (no Spain in the response), so the country starts empty.
+      mockSelectors({ prefill: [], catalog: [FRANCE_OPTION] });
+      renderModal();
+
+      typeAddressLine();
+      expect(saveButton()).toBeDisabled();
+
+      fireEvent.click(countryButton());
+      fireEvent.click(await screen.findByText(FRANCE_OPTION.label));
+
+      expect(saveButton()).toBeEnabled();
+    });
+
+    it('leaves the country empty when the default cannot be resolved', async () => {
+      mockSelectors({ prefill: [] });
+      renderModal();
+
+      await vi.waitFor(() => {
+        expect(fetchedUrls().some(url => url.includes(DEFAULT_COUNTRY_QUERY_PARAM))).toBe(true);
+      });
+      expect(countryButton()).toHaveTextContent('—');
+      expect(screen.getByText('locationSelectorTitle')).toBeInTheDocument();
+    });
+
+    it('skips the prefill entirely when no selector fallback returns countries', async () => {
+      // Every selector page is empty, so no base URL is ever resolved. The prefill has
+      // nothing to hang off and must simply not run — no request, no crash.
+      mockSelectors({ prefill: [], catalog: [] });
+      renderModal();
+
+      await vi.waitFor(() => expect(global.fetch).toHaveBeenCalled());
+      expect(fetchedUrls().some(url => url.includes(DEFAULT_COUNTRY_QUERY_PARAM))).toBe(false);
+      expect(countryButton()).toHaveTextContent('—');
+      expect(saveButton()).toBeDisabled();
+    });
+
+    it('does not prefill when editing, and keeps the loaded country', async () => {
+      const rowId = 'loc-edit-1';
+      global.fetch = vi.fn((url, opts) => {
+        if (String(url).includes(`/locationAddress/${rowId}`) && !opts?.method) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              response: {
+                data: [{
+                  id: rowId,
+                  address: '10 Rue de Rivoli',
+                  country: FRANCE_OPTION.id,
+                  'country$_identifier': FRANCE_OPTION.label,
+                }],
+              },
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ items: [SPAIN_PREFILL_OPTION], hasMore: false }),
+        });
+      });
+
+      renderModal({ rowId });
+
+      await waitForCountry(FRANCE_OPTION.label);
+      // The prefill request must never be issued in edit mode, so the record's own
+      // country can never be overwritten by the default.
+      expect(fetchedUrls().some(url => url.includes(DEFAULT_COUNTRY_QUERY_PARAM))).toBe(false);
+      expect(saveButton()).toBeEnabled();
+    });
+
+    it('keeps save disabled while a save is in flight', async () => {
+      let resolveSave;
+      global.fetch = vi.fn((url, opts) => {
+        if (opts?.method) return new Promise(resolve => { resolveSave = resolve; });
+        const isPrefill = String(url).includes(DEFAULT_COUNTRY_QUERY_PARAM);
+        const items = isPrefill ? [SPAIN_PREFILL_OPTION] : [FRANCE_OPTION];
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ items, hasMore: false }) });
+      });
+
+      renderModal();
+
+      await waitForCountry(SPAIN_PREFILL_OPTION.label);
+      typeAddressLine();
+      fireEvent.click(saveButton());
+
+      await vi.waitFor(() => expect(saveButton()).toBeDisabled());
+
+      resolveSave({ ok: true, json: () => Promise.resolve({ response: { status: 0, data: [] } }) });
     });
   });
 });

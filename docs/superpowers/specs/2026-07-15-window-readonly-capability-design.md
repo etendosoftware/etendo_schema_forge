@@ -153,6 +153,59 @@ other windows is unchanged). `Save`/add-line/inline-edit/bulk-delete were alread
 All fixes are in `schema_forge` (`tools/app-shell/`), so this ships from this repo with no
 core publish.
 
+### Correction (2026-09-07) — process buttons and detail-view kebab menu gap (ETP-5116)
+
+Two more mutating surfaces were found ungated by `window.readOnly`, both in `DetailView.jsx`
+(not the list-level `RowQuickActions.jsx` covered by the 2026-07-16 correction above, and
+unrelated to it):
+
+- **Process buttons** (the header and detail-line process-button rows, e.g. a custom
+  "Create Amortization"-style action) rendered regardless of `windowReadOnly` — a read-only
+  window's detail toolbar still exposed every process action. Fixed by adding
+  `!windowReadOnly &&` to both button-list guards in `DetailView.jsx`.
+- **`DetailMoreActionsMenu.jsx`** (the detail view's own "more" kebab menu — a distinct
+  component from the list-row kebab inside `RowQuickActions.jsx` that step 5 / line 111 above
+  refers to) rendered every `menuActions[]` item and any `customMenuContent` regardless of
+  `windowReadOnly`. Every existing `customMenuContent` implementation
+  (`GoodsShipmentMoreMenu`, `InventoryMenuContent`, `InternalConsumptionActions`) fires a write
+  action on click, so it cannot be assumed read-only by default. Fixed by threading a new
+  `windowReadOnly` prop into `DetailMoreActionsMenu`, forcing `visibleActions = []` and
+  `hasCustomContent = false` when the window is read-only.
+
+Neither surface was mentioned in the original architecture/data-flow diagram or the step-5/6
+change list above — this closes that gap rather than contradicting either. The line-111 claim
+("kebab menu actions stay gated by their own config") remains accurate as written: it describes
+`RowQuickActions.jsx`'s own kebab (list view, per row), which this pass did not touch and which
+is still gated only by its own `menuActions`/`visibleWhen` config, not by `windowReadOnly`.
+
+### Correction (2026-09-08) — ETP-5116's kebab fix conflated two different `readOnly` sources (ETP-5233)
+
+`windowReadOnly` (`DetailView.jsx`) is actually an OR of two semantically different flags:
+`api?.window?.readOnly` — the **static** `decisions.json` "this window's data is view-only by
+design" declaration this whole doc is about — and `windowProp?.readOnly` — the **runtime**
+ETP-4520 per-role access-tier override ("this user's role only has read-only access", see
+`buildWindowAccessWiring`/`effectiveWindow` in `ListView.jsx`/`DetailView.jsx`). Every consumer
+listed above (save, delete, add-line, inline edits, process buttons) legitimately wants the OR of
+both — a window is non-editable either because it's declared read-only or because this user's
+role can't write to it.
+
+The 2026-09-07 correction above wired `DetailMoreActionsMenu` to that same combined
+`windowReadOnly`, but the kebab is not like those other consumers: a window can be statically
+`window.readOnly: true` for CRUD (no create/edit/delete) while still declaring a sanctioned
+document-action exception in its kebab — `matched-purchase-invoices` keeps Post/Unpost this way
+(see `docs/generated-custom-windows/matched-purchase-invoices.md`). Gating the kebab on the
+combined flag hid Post/Unpost for every user on that window, including ones with full read-write
+role access, which is a functional regression, not the intended "hide mutating actions from a
+read-only role" behavior.
+
+Fixed by giving the kebab its own, narrower signal: `menuActionsReadOnly = windowProp?.readOnly
+=== true` (role-tier only, no `api?.window?.readOnly`), passed to `DetailMoreActionsMenu`'s single
+render call site instead of `windowReadOnly`. Every other consumer of the combined flag is
+unchanged — they still correctly straddle both signals. The lesson for the next window-builder:
+when a flag is a deliberate OR of "static declaration" and "runtime role tier", a NEW consumer
+must be checked against which half of that OR it actually needs before being wired to the
+combined flag — the kebab needed only the role-tier half.
+
 ## Testing strategy
 
 - **Core:** generator fixtures — `window.readOnly` in decisions produces `crud` all-false on

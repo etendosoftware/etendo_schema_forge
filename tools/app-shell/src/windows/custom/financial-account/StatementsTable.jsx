@@ -42,7 +42,15 @@ const STATEMENT_CELL_RENDERERS = {
     // Sorts by what the cell shows, which for a nameless statement is the formatted
     // periodFrom–periodTo range, not the empty `name`.
     sortValue: (s, ctx) => ctx.displayName(s),
-    render: (s, ctx) => <span className="truncate text-[hsl(var(--foreground))]">{ctx.displayName(s)}</span>,
+    // `title` for the same reason the fileName and notes cells carry one: the column is
+    // `truncate`d, so a long statement name is unreadable without hovering. Native tooltip rather
+    // than the Tooltip component, matching those two siblings — a table cell that only needs to
+    // reveal its own overflowing text does not need a portal.
+    render: (s, ctx) => (
+      <span className="truncate text-[hsl(var(--foreground))]" title={ctx.displayName(s)}>
+        {ctx.displayName(s)}
+      </span>
+    ),
   },
   fileName: {
     width: 'minmax(0,1fr)',
@@ -390,6 +398,7 @@ function RowActions({ statement: s, actions, ui, bankConnected = false }) {
         statement={s}
         onProcess={actions.onProcess}
         onReactivate={actions.onReactivate}
+        onDelete={actions.onDelete}
         bankConnected={bankConnected}
         data-testid="StatementRowKebab__3acaeb" />
       {isDraft ? (

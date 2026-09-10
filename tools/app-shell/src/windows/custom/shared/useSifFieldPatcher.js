@@ -20,10 +20,16 @@ export const PURCHASE_CLAVE_TIPO_FC_OPTIONS = [
   { value: 'F1', labelKey: 'sifDataTabs.option.invoice' },
 ];
 
+// ETP-5117: F3 ("Factura emitida en sustitución de simplificadas") is hidden from
+// GO's Verifactu invoice-type dropdown — Classic keeps offering it unchanged. A
+// Draft record whose etvfacInvType already reads 'F3' (set via Classic, or an
+// older record) can still exist; SifTab falls back to showing the raw value
+// when no option in this array matches it (see the SelectValue children logic
+// around the vfInvType Select). The 'sifDataTabs.option.vfF3' locale key is
+// intentionally left in place — it's harmless and may still be referenced.
 export const VERIFACTU_INV_TYPE_OPTIONS = [
   { value: 'F1', labelKey: 'sifDataTabs.option.vfF1' },
   { value: 'F2', labelKey: 'sifDataTabs.option.vfF2' },
-  { value: 'F3', labelKey: 'sifDataTabs.option.vfF3' },
   { value: 'R1', labelKey: 'sifDataTabs.option.vfR1' },
   { value: 'R2', labelKey: 'sifDataTabs.option.vfR2' },
   { value: 'R3', labelKey: 'sifDataTabs.option.vfR3' },

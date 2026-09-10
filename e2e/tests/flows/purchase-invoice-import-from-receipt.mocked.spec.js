@@ -65,7 +65,7 @@ const RECEIPT_HEADER = {
 const RECEIPT_LINE_1 = {
   id: RECEIPT_LINE_ID,
   product: 'prod-1',
-  'product$_identifier': 'Queso Sardo',
+  'product$_identifier': 'Test Product',
   movementQuantity: 2,
   uOM: 'uom-1',
   salesOrderLine: PO_LINE_ID_REF,
@@ -285,7 +285,7 @@ test.describe('Purchase Invoice — Import from Goods Receipt (mocked)', () => {
     await expandFirstDocRow(page, 'GR-TEST-001');
 
     // Product line appears after callout resolves prices (async per-line)
-    await expect(page.getByText('Queso Sardo').first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Test Product').first()).toBeVisible({ timeout: 10_000 });
 
     // Qty input pre-filled with movementQuantity=2
     const qtyInput = page.locator('input[type="number"]').first();

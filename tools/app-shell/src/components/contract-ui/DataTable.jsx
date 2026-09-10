@@ -60,30 +60,31 @@ function getByPath(obj, path) {
 }
 
 /**
- * Apply a field's declarative `onSelectMappings` after a lookup selection.
- * Each mapping copies a value from the selected `item` into another field on
- * the row, optionally with a display label resolved from one of several keys.
- * Replaces window-specific branches like `if (entity === 'internalConsumptionLine')`
- * with metadata declared in the contract.
+ * Resolves a field's declarative `onSelectMappings` against a selected lookup
+ * item into a plain list of `{ to, value, label }` results — pure, no React
+ * side effects. Each mapping copies a value into another field on the row —
+ * either read from the selected `item` (`from`, a dot path) or a fixed
+ * literal (`value`, used as-is, no `item` lookup) — optionally with a display
+ * label resolved from one of several keys. Replaces window-specific branches
+ * like `if (entity === 'internalConsumptionLine')` with metadata declared in
+ * the contract.
  *
- * ETP-5039: every mapped target is reported through the optional `markTouched`
- * callback. A value the user selected in the lookup drawer is an explicit user
- * choice, so a callout fired by the same selection (e.g. the product callout
- * returning the default locator) must not overwrite it — see
- * `applyCalloutUpdates`, which skips touched fields and their `$_identifier`
- * companions.
+ * Shared by both places a lookup selection lands: the add-line form
+ * (`applyOnSelectMappings` below, which also updates local row state) and the
+ * persisted-line inline-edit PATCH (`DetailView.jsx`'s
+ * `buildInlineRowUpdateHandler`, which folds these into the write body).
  *
- * @param {object}   field        Field whose `onSelectMappings` are applied
- * @param {object}   item         Item selected in the lookup
- * @param {Function} handleChange (key, value) row-state setter
- * @param {Function} [markTouched] (key) called for every mapped target field
+ * @param {object} field Field whose `onSelectMappings` are applied
+ * @param {object} item  Item selected in the lookup
+ * @returns {Array<{to: string, value: unknown, label: unknown}>}
  */
-export function applyOnSelectMappings(field, item, handleChange, markTouched) {
+export function resolveOnSelectMappings(field, item) {
   const mappings = field?.onSelectMappings;
-  if (!Array.isArray(mappings) || mappings.length === 0) return;
+  if (!Array.isArray(mappings) || mappings.length === 0) return [];
+  const results = [];
   for (const m of mappings) {
-    if (!m?.from || !m.to) continue;
-    const value = getByPath(item, m.from);
+    if (!m?.to || (m.from == null && m.value === undefined)) continue;
+    const value = m.value !== undefined ? m.value : getByPath(item, m.from);
     if (value == null) continue;
     const labelKeys = getLabelArray(m);
     let label;
@@ -91,9 +92,37 @@ export function applyOnSelectMappings(field, item, handleChange, markTouched) {
       const v = getByPath(item, key);
       if (v != null && v !== '') { label = v; break; }
     }
-    handleChange(`${m.to}$_identifier`, label == null ? value : label);
-    handleChange(m.to, value);
-    markTouched?.(m.to);
+    results.push({ to: m.to, value, label });
+  }
+  return results;
+}
+
+/**
+ * Apply a field's declarative `onSelectMappings` after a lookup selection,
+ * updating the add-line form's local row state. See `resolveOnSelectMappings`
+ * for the resolution rules.
+ *
+ * ETP-5039: every mapped target is reported through the optional `markTouched`
+ * callback. A value the user selected in the lookup drawer is an explicit user
+ * choice, so a callout fired by the same selection (e.g. the product callout
+ * returning the default locator) must not overwrite it — see
+ * `applyCalloutUpdates`, which skips touched fields and their `$_identifier`
+ * companions. This is also what makes a `value` mapping (ETP-5037, Goods
+ * Movements: force Cantidad to `0` on every product selection) stick — the
+ * classic product callout separately returns the on-hand quantity at the
+ * auto-filled locator, but the touched-guard blocks it from overwriting the
+ * `0` this mapping just set.
+ *
+ * @param {object}   field        Field whose `onSelectMappings` are applied
+ * @param {object}   item         Item selected in the lookup
+ * @param {Function} handleChange (key, value) row-state setter
+ * @param {Function} [markTouched] (key) called for every mapped target field
+ */
+export function applyOnSelectMappings(field, item, handleChange, markTouched) {
+  for (const { to, value, label } of resolveOnSelectMappings(field, item)) {
+    handleChange(`${to}$_identifier`, label == null ? value : label);
+    handleChange(to, value);
+    markTouched?.(to);
   }
 }
 
@@ -1126,6 +1155,13 @@ function LookupField({ value, fieldKey, placeholder, selectorUrl, selectorContex
         ref={btnRef}
         type="button"
         data-testid={fieldKey ? `inline-add-field-${fieldKey}` : undefined}
+        // Marks "nothing picked yet" the way Radix's own triggers do. The
+        // button's text is its PLACEHOLDER while empty ("Producto"), so
+        // anything reading the rendered text as the current value — the
+        // walkthrough's `targetValue` gate, an e2e assertion — would read a
+        // placeholder as a filled field. Presence of the attribute is the
+        // signal; its value is deliberately empty.
+        {...(value ? {} : { 'data-placeholder': '' })}
         onClick={() => setOpen(true)}
         onKeyDown={(e) => {
           // Once a value is selected, Enter should bubble up so the row's
@@ -1209,8 +1245,21 @@ function oneIfTrue(bool) {
   return bool ? 1 : 0;
 }
 
-function getTableContainerStyle(hideHeader) {
-  return hideHeader ? { tableLayout: 'fixed', width: '100%' } : undefined;
+// ETP-5182 — column widths used to jump on every sort/re-fetch in normal
+// list-header mode (`hideHeader` false, e.g. Contacts): this returned
+// `undefined` for that mode, so the `<Table>` element got no `table-layout`
+// at all and the browser fell back to `table-layout: auto`, which recomputes
+// every column's width from ALL currently-rendered body-row content on every
+// re-render. Sorting re-fetches a different page of rows (backend-driven sort
+// via `onFilterChange`, see `filteredData` below), so the visible content per
+// column changed and every column width recalculated and visibly jumped.
+// `table-layout: fixed` derives column widths from the first row's cells
+// (here, the header row — `<TableHeader>` precedes `<TableBody>` in the DOM)
+// ONCE, and does not recompute them from body content afterward, so applying
+// it unconditionally (not just when hideHeader) stops the resize in both
+// modes. Exported so `DataTable.helpers.vitest.jsx` can assert this directly.
+export function getTableContainerStyle() {
+  return { tableLayout: 'fixed', width: '100%' };
 }
 
 function renderRowActionHeaderCells(hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled) {
@@ -2218,7 +2267,7 @@ export function DataTable({
           rowHoverStyle === 'elevated' ? 'pb-6' : '',
         ].filter(Boolean).join(' ')}
       >
-        <Table style={getTableContainerStyle(hideHeader)} data-testid="Table__eb5261">
+        <Table style={getTableContainerStyle()} data-testid="Table__eb5261">
           {/* When hideHeader is true (add-row-only mode), a <colgroup> drives column
               widths — see renderLinesColgroup() above for the full rationale. */}
           {renderLinesColgroup({

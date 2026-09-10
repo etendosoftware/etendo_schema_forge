@@ -56,8 +56,18 @@ describe('getContractGridColumns', () => {
   // field, which is what lets AccountsHeaderTable stop hand-appending it as a literal.
   it('returns the account (Cuentas list) grid columns in order', () => {
     const cols = getContractGridColumns('account').map((c) => c.name);
-    // ETP-4896 follow-up: Country inserted right after Type (gridOrder 3).
-    expect(cols).toEqual(['name', 'type', 'country', 'currentBalance', 'eTGOPendingCount']);
+    // ETP-4896 inserted Country right after Type; ETP-5113 then inserted Currency ahead of
+    // it, so the visible order is Cuenta · Tipo & IBAN · Moneda · País · Saldo · Por conciliar.
+    expect(cols).toEqual([
+      'name', 'type', 'currency', 'country', 'currentBalance', 'eTGOPendingCount',
+    ]);
+  });
+
+  // ETP-5113 — the Moneda column is declared on the `C_Currency_ID` FK so its header can sort
+  // server-side, while the cell paints the enriched `currencyIso` (see CurrencyCell).
+  it('places the currency column third, per its declared gridOrder', () => {
+    const cols = getContractGridColumns('account');
+    expect(cols[2].name).toBe('currency');
   });
 
   it('places the pending column last, per its declared gridOrder', () => {
@@ -83,6 +93,11 @@ describe('getContractGridColumns', () => {
       column: 'Type',
       gridLabelKey: 'financeAccountsColType',
       cellType: 'accountType',
+    });
+    expect(byName.currency).toMatchObject({
+      column: 'C_Currency_ID',
+      gridLabelKey: 'financeAccountsColCurrency',
+      cellType: 'currencyChip',
     });
     expect(byName.currentBalance).toMatchObject({
       column: 'Currentbalance',

@@ -15,7 +15,7 @@ import { login } from '../helpers/auth.js';
  * The backend fix lives in
  *   com.etendoerp.go.schemaforge.InvoiceFromOrderSupport.applyOrderDiscountToInvoice
  * and makes the new invoice carry:
- *   summedLineAmount   = 41.80   (Fernet line 44.00 − 2.20 ETGO_DTO discount)
+ *   summedLineAmount   = 41.80   (Test Product line 44.00 − 2.20 ETGO_DTO discount)
  *   grandTotalAmount   = 45.98   (41.80 + 4.18 tax)
  *   etgoTotalDiscount  = 5       (the % the order had)
  *   one ETGO_DTO line whose listPrice/grossAmount carry the negative discount
@@ -45,7 +45,7 @@ const INVOICE_ID = 'mock-si-disc-001';
 
 // ─── Fixtures ───────────────────────────────────────────────────────────────
 
-// Sales order in DR with one line (Fernet 44.00) and a 5% total discount.
+// Sales order in DR with one line (Test Product 44.00) and a 5% total discount.
 //   gross line 44.00 × 1.10 tax = 48.40
 //   subtotal sin descuento     = 44.00
 //   descuento total (5%)       = -2.20
@@ -69,8 +69,8 @@ const ORDER_HEADER = {
 const ORDER_LINE = {
   id: 'mock-so-line-disc-001',
   lineNo: 10,
-  product: 'prod-fernet',
-  'product$_identifier': 'Fernet',
+  product: 'prod-1',
+  'product$_identifier': 'Test Product',
   orderedQuantity: 1,
   listPrice: 44,
   discount: 0,
@@ -122,8 +122,8 @@ const INVOICE_HEADER_CO = {
 const INVOICE_PRODUCT_LINE = {
   id: 'mock-si-line-prod-001',
   lineNo: 10,
-  product: 'prod-fernet',
-  'product$_identifier': 'Fernet',
+  product: 'prod-1',
+  'product$_identifier': 'Test Product',
   invoicedQuantity: 1,
   listPrice: 44,
   etgoDiscount: 0,

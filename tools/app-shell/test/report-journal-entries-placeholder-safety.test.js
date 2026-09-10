@@ -44,7 +44,7 @@ function rewrite(params = {}) {
 describe('report-journal-entries — SQL survives applyPlaceholders (ETP-5013)', () => {
   it('keeps every projected drill-down column intact with no params supplied', () => {
     const sql = rewrite();
-    for (const col of ['doc_window', 'doc_record_id', 'doc_query_key']) {
+    for (const col of ['doc_window', 'doc_record_id', 'doc_query_key', 'doc_query_value']) {
       assert.match(sql, new RegExp(`AS ${col}\\b`), `${col} was mangled by the rewrite`);
     }
   });

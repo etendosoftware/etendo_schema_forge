@@ -130,6 +130,14 @@ function CollapsedGroupPopover({
         <button
           type="button"
           aria-label={tMenu(group)}
+          // Same hook as the EXPANDED group header (line ~296). Without it
+          // `menu-group-<slug>` simply does not exist while the menu is
+          // collapsed, so anything navigating the menu by that selector -- an
+          // e2e spec, a walkthrough `navPath` hop -- silently fails to find a
+          // group that is right there on screen. The slug derivation is
+          // duplicated rather than shared because the two renderers already
+          // duplicate the `menu-item-` one; keep the three in step.
+          data-testid={`menu-group-${group.replace(/\s+/g, '-').toLowerCase()}`}
           onMouseEnter={() => { cancelClose(); setOpen(true); }}
           onMouseLeave={scheduleClose}
           className={cn(
@@ -669,10 +677,16 @@ export default function SideMenu({
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+            {/* data-testid="sidebar-collapse" / "sidebar-expand" are the stable
+                hooks for this pair (same contract as "company-switcher"
+                above). The guided walkthrough's `navPath` clicks
+                "sidebar-expand" to open the menu before clicking a section, so
+                renaming either one breaks a shipped tour, not just a test. */}
             <button
               type="button"
               onClick={onToggle}
               aria-label={ui('collapseMenu')}
+              data-testid="sidebar-collapse"
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
             >
               <PanelLeftClose className="h-4 w-4" data-testid="PanelLeftClose__247c75" />
@@ -688,6 +702,7 @@ export default function SideMenu({
                     type="button"
                     onClick={onToggle}
                     aria-label={ui('expandMenu')}
+                    data-testid="sidebar-expand"
                     className="flex h-10 w-10 items-center justify-center rounded-lg bg-page-bg text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <PanelLeftOpen className="h-5 w-5" data-testid="PanelLeftOpen__247c75" />

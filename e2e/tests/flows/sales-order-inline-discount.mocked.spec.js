@@ -22,7 +22,7 @@ const LINE = {
   id: LINE_ID,
   lineNo: 10,
   product: 'prod-1',
-  'product$_identifier': 'Cerveza',
+  'product$_identifier': 'Test Product',
   orderedQuantity: 2,
   listPrice: 23,
   discount: 0,

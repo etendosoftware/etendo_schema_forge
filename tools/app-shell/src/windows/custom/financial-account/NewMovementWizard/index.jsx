@@ -14,6 +14,8 @@ import { X, Check, ChevronDown, Wallet, Percent, Info } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useUI } from '@/i18n';
 import { useCreateMovement, useCreatePayment } from '@/hooks/useCreateMovement';
+import { FINANCIAL_ACCOUNT_FIELD_LIMITS, getMaxLengthError } from '../fieldLengthValidation.js';
+import { FieldLengthCounter, FieldLengthError } from '../FieldLengthHint.jsx';
 import { useDimensionValues } from '@/hooks/useDimensionValues';
 import { useGLItemLookup } from '@/hooks/useMovementLookups';
 import {
@@ -21,6 +23,16 @@ import {
 } from '@/components/forms/fields';
 import { PaymentForm } from '@/components/payment/PaymentForm';
 import { parseAmount, todayISO, DIM_META, DIM_ORDER } from './movementWizardData';
+
+// PSD-23: the movement lands in FIN_Finacc_Transaction.Description (255 chars). Two
+// components need this — the stage-1 form that renders the message, and the wizard shell
+// that gates its Next button — and they are not in a parent/child prop relationship at the
+// point of use, so it lives here as one pure function of `form` instead of being computed
+// (and drifting) in each.
+const getDescriptionError = (form) => getMaxLengthError(
+  form.description,
+  FINANCIAL_ACCOUNT_FIELD_LIMITS.transactionDescription,
+);
 
 // Transaction types we surface in the wizard. We still receive Bank Fee (BF)
 // from the backend, but only expose the two user-facing flows: Cobro / Pago.
@@ -41,6 +53,7 @@ function MovementBasics({ form, set, dimensions, optionsByDim, trxTypes }) {
   const ui = useUI();
   const visibleDims = DIM_ORDER.filter((k) => dimensions.includes(k) && DIM_META[k]);
   const setDim = (key, v) => set({ dims: { ...form.dims, [key]: v } });
+  const descriptionError = getDescriptionError(form);
   // Cobro (BPD) → deposit editable; Pago (BPW) → withdrawal editable.
   const depositEditable = form.trxType !== 'BPW';
   return (
@@ -75,7 +88,20 @@ function MovementBasics({ form, set, dimensions, optionsByDim, trxTypes }) {
             placeholder={ui('financeAccountMovementsWizardDescriptionPlaceholder')}
             value={form.description}
             onChange={(e) => set({ description: e.target.value })}
+            data-testid="wizard-description"
           />
+          <div className="mt-1 flex items-baseline justify-end gap-2">
+            <FieldLengthError
+              error={descriptionError}
+              testId="wizard-description"
+              data-testid="FieldLengthError__e2e571" />
+            <FieldLengthCounter
+              value={(form.description || '')}
+              limit={FINANCIAL_ACCOUNT_FIELD_LIMITS.transactionDescription}
+              error={descriptionError}
+              testId="wizard-description"
+              data-testid="FieldLengthCounter__e2e571" />
+          </div>
         </Field>
       </div>
       <SectionLabel data-testid="SectionLabel__e2e571">{ui('financeAccountMovementsWizardAmounts')}</SectionLabel>
@@ -286,6 +312,7 @@ export function NewMovementWizard({ open, accountId, accountCurrency, dimensions
   }, [open, optionsByDim, defaultOrgId, form.dims.organization]);
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
+  const descriptionError = getDescriptionError(form);
   const movementAmount = useMemo(
     () => (form.trxType !== 'BPW' ? parseAmount(form.deposit) : parseAmount(form.withdrawal)),
     [form.trxType, form.deposit, form.withdrawal],
@@ -501,7 +528,7 @@ export function NewMovementWizard({ open, accountId, accountCurrency, dimensions
             <>
               <span className="mr-auto text-xs leading-4 text-[hsl(var(--muted-foreground))]">{ui('financeAccountMovementsWizardStep1Footer')}</span>
               <button type="button" className={BTN_GHOST} onClick={onClose}>{ui('financeAccountMovementsNewCancel')}</button>
-              <button type="button" className={BTN_PRIMARY} onClick={() => setStage(2)}>{ui('financeAccountMovementsWizardNext')} <ChevronDown
+              <button type="button" className={BTN_PRIMARY} disabled={!!descriptionError} onClick={() => setStage(2)}>{ui('financeAccountMovementsWizardNext')} <ChevronDown
                 className="h-[15px] w-[15px] -rotate-90"
                 data-testid="ChevronDown__e2e571" /></button>
             </>

@@ -4,20 +4,10 @@ import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } fro
 import { useLocation, useNavigate } from 'react-router-dom';
 import { authHeaders } from '@/auth/api.js';
 import { useMenuLabel } from '@/i18n';
-import { AmbiguousWindowError, UnknownWindowError, buildWindowRouteIndex, knownWindowSlugs, normalizeWindowKey } from './windowRoutes.js';
+import { AmbiguousWindowError, UnknownWindowError, assertInternalPath, buildWindowRouteIndex, knownWindowSlugs, normalizeWindowKey } from './windowRoutes.js';
 
-/**
- * Guard the router against anything that is not an in-app path. This is the
- * security boundary of the navigation tools (see the ETP-5064 acceptance
- * criteria) and its message must never be reused for a reference the index
- * simply could not resolve — see UnknownWindowError in ./windowRoutes.js.
- */
-export function assertInternalPath(path) {
-  if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//')) {
-    throw new Error('Only internal application paths are allowed');
-  }
-  return path;
-}
+// Re-exported so existing importers of the guard keep their current path.
+export { assertInternalPath } from './windowRoutes.js';
 
 /**
  * Resolve whatever the model sent — an explicit path or a window name in any
@@ -44,12 +34,52 @@ export function resolveWindowPath(reference, index) {
   throw new UnknownWindowError(reference, index);
 }
 
+/**
+ * Append a record id to a resolved window path as the PATH SEGMENT the router
+ * actually reads.
+ *
+ * The app routes a single record at `:windowName/:recordId` (runtime-routes.jsx)
+ * — `/contacts/BC8D…`, never `/contacts?recordId=BC8D…`. `open_form` used to set
+ * a `recordId` SEARCH PARAM, which no route or page reads: the navigation
+ * succeeded, the list view rendered, and the tool answered `{ ok: true }` with a
+ * URL that looked right. The model had no way to tell it had not opened the
+ * record, so it reported success too.
+ *
+ * A trailing `/new` is dropped rather than kept: `/contacts/new/BC8D…` matches
+ * no route, and between "create a blank record" and "open this specific one"
+ * the explicit id is the more specific request. (`new` is itself just a
+ * `:recordId` value — see the note in BlockingBpBanner.jsx.)
+ *
+ * The id is encoded as one segment, so a value containing `/`, `?`, `#` or a
+ * backslash cannot add segments or escape the window — which is why this needs
+ * no second pass through assertInternalPath.
+ */
+export function withRecordSegment(path, recordId) {
+  if (recordId === undefined || recordId === null || recordId === '') return path;
+  const base = String(path).replace(/\/+$/, '').replace(/\/new$/, '');
+  return `${base}/${encodeURIComponent(String(recordId))}`;
+}
+
 const DOM_INTERACTIVE_SELECTOR = [
   'a[href]', 'button', 'input:not([type="hidden"]):not([type="password"])',
   'textarea', 'select', '[contenteditable="true"]',
   '[role="button"]', '[role="link"]', '[role="tab"]', '[role="menuitem"]',
   '[role="checkbox"]', '[role="combobox"]',
 ].join(',');
+
+let fallbackSessionSequence = 0;
+
+function createOpencodeSessionId() {
+  const webCrypto = globalThis.crypto;
+  if (webCrypto?.randomUUID) return webCrypto.randomUUID();
+  if (webCrypto?.getRandomValues) {
+    const randomValue = webCrypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+    return `etendo-${Date.now()}-${randomValue}`;
+  }
+  // This ID correlates a browser conversation; it is not a secret.
+  fallbackSessionSequence += 1;
+  return `etendo-${Date.now()}-${fallbackSessionSequence}`;
+}
 
 function isVisibleElement(element) {
   const style = window.getComputedStyle(element);
@@ -200,6 +230,10 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
   const messagesRef = useRef([]);
   const domRegistryRef = useRef(new Map());
   const pageHelpPendingRef = useRef(false);
+  const opencodeSessionRef = useRef(null);
+  if (!opencodeSessionRef.current) {
+    opencodeSessionRef.current = createOpencodeSessionId();
+  }
   const [pageHelpSuggestion, setPageHelpSuggestion] = useState('');
   const [pageHelpActive, setPageHelpActive] = useState(false);
   const [pageHelpError, setPageHelpError] = useState('');
@@ -225,11 +259,9 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
           break;
         }
         case 'open_form': {
-          const path = resolveWindowPath(args.path, windowRouteIndex);
-          const target = new URL(path, window.location.origin);
-          if (args.recordId) target.searchParams.set('recordId', String(args.recordId));
-          navigate(`${target.pathname}${target.search}`);
-          result = { ok: true, path: `${target.pathname}${target.search}` };
+          const path = withRecordSegment(resolveWindowPath(args.path, windowRouteIndex), args.recordId);
+          navigate(path);
+          result = { ok: true, path };
           break;
         }
         case 'get_current_context':
@@ -317,7 +349,10 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
 
   const transport = useMemo(() => new DefaultChatTransport({
     api: '/api/ai/chat',
-    headers: authHeaders(token),
+    headers: {
+      ...authHeaders(token),
+      'x-opencode-session': opencodeSessionRef.current,
+    },
   }), [token]);
   const [input, setInput] = useState('');
   const handlePageHelpFinish = useCallback(({ message }) => {
@@ -427,6 +462,8 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
     setInput,
     resetConversation: () => chat.setMessages([]),
     startNewConversation: () => chat.setMessages([]),
+    retry: chat.regenerate,
+    dismissError: chat.clearError,
     stop: chat.stop,
     addToolResult: chat.addToolOutput,
     requestPageHelp,

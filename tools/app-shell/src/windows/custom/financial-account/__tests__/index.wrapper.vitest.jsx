@@ -42,7 +42,10 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 
 // Detail-only dependency graph — stubbed so mounting the detail branch stays cheap.
 vi.mock('@/hooks/useReconciliationList', () => ({
-  useReconciliations: () => ({ reconciliations: [], loading: false }),
+  // `reload` included on purpose: the real hook always returns one, and the account page calls
+  // it as part of its full refresh. A mock missing it throws only once some path happens to
+  // reach that call — which is how it stayed unnoticed until saving the edit modal did.
+  useReconciliations: () => ({ reconciliations: [], loading: false, reload: vi.fn() }),
   useClearedItems: () => ({ items: [], loading: false }),
 }));
 vi.mock('@/hooks/useFinancialAccount', () => ({

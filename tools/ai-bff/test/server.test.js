@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { browserTools, createServer, handleChat, hasConfiguredSecret } from '../src/server.js';
+import { browserTools, createServer, handleChat, hasConfiguredSecret, mcpClientOptions, opencodeProviderOptions, opencodeSessionId } from '../src/server.js';
 
 function request(headers = {}) {
   const req = new EventEmitter();
@@ -31,6 +31,24 @@ test('rejects missing and literal null model credentials', () => {
   assert.equal(hasConfiguredSecret('null'), false);
   assert.equal(hasConfiguredSecret(' undefined '), false);
   assert.equal(hasConfiguredSecret('configured-secret'), true);
+});
+
+test('uses the legacy MCP handshake supported by Etendo Go', () => {
+  const options = mcpClientOptions('Bearer test-session-token');
+  assert.equal(options.protocolVersionDiscovery, false);
+  assert.equal(options.transport.type, 'http');
+  assert.equal(options.transport.headers.Authorization, 'Bearer test-session-token');
+});
+
+test('preserves a valid OpenCode session and creates a fallback when absent', () => {
+  assert.equal(opencodeSessionId('chat-session-1'), 'chat-session-1');
+  assert.match(opencodeSessionId(undefined), /^[0-9a-f-]{36}$/);
+  assert.match(opencodeSessionId('x'.repeat(129)), /^[0-9a-f-]{36}$/);
+});
+
+test('forwards the OpenCode session header to the model provider', () => {
+  const options = opencodeProviderOptions('chat-session-1');
+  assert.equal(options.headers['x-opencode-session'], 'chat-session-1');
 });
 
 test('creates an HTTP server without opening a listener on import', () => {

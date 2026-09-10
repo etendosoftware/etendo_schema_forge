@@ -1,7 +1,7 @@
 /**
  * Tests for pure exported helpers in DataTable.jsx.
  */
-import { applyOnSelectMappings, buildDisplayCatalogMaps } from '../DataTable.jsx';
+import { applyOnSelectMappings, buildDisplayCatalogMaps, getTableContainerStyle } from '../DataTable.jsx';
 
 // Mock the heavy dependencies
 vi.mock('react-dom', () => ({ createPortal: (c) => c }));
@@ -123,6 +123,33 @@ describe('DataTable helpers', () => {
       expect(result.has('warehouse')).toBe(true);
       expect(result.get('warehouse').get('W1')).toBe('Main');
       expect(result.has('name')).toBe(false);
+    });
+  });
+
+  // ETP-5182 — Bug 1: sorting the Contacts list (or any normal-mode,
+  // non-hideHeader list) visibly resized every column. Root cause:
+  // `getTableContainerStyle` only set `tableLayout: 'fixed'` in the
+  // hideHeader (add-row-only) mode; the normal list-header mode got no style
+  // at all, so the browser fell back to `table-layout: auto`, which
+  // recomputes each column's width from ALL currently-rendered body-row
+  // content on every re-render — and sorting swaps in a different page of
+  // rows (see the `onFilterChange`/backend-sort comment above `filteredData`
+  // in DataTable.jsx), so the widths visibly jumped. Per the CSS spec,
+  // `table-layout: fixed` derives column widths from the first row's cells
+  // (here, the header row, since <TableHeader> precedes <TableBody> in the
+  // DOM) ONCE, and does not recompute from body content afterward — so
+  // applying it unconditionally stops the resize regardless of hideHeader.
+  describe('getTableContainerStyle', () => {
+    it('sets table-layout: fixed in hideHeader (add-row-only) mode', () => {
+      expect(getTableContainerStyle(true)).toEqual({ tableLayout: 'fixed', width: '100%' });
+    });
+
+    it('also sets table-layout: fixed in normal list-header mode (ETP-5182 fix)', () => {
+      expect(getTableContainerStyle(false)).toEqual({ tableLayout: 'fixed', width: '100%' });
+    });
+
+    it('returns the same style object shape regardless of hideHeader', () => {
+      expect(getTableContainerStyle(true)).toEqual(getTableContainerStyle(false));
     });
   });
 });

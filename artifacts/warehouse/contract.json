@@ -1,8 +1,8 @@
 {
   "version": "0.22.0",
   "generatedAt": "2026-04-29T18:11:37.816Z",
-  "updatedAt": "2026-08-13T16:50:52.377Z",
-  "checksum": "cf15c6b1fc80d5d8",
+  "updatedAt": "2026-09-07T16:05:38.409Z",
+  "checksum": "b5f1e44bf34e418e",
   "frontendContract": {
     "window": {
       "id": "139",
@@ -19,7 +19,8 @@
         },
         "accounting": {
           "tabOrder": 2,
-          "label": "Accounting"
+          "label": "Accounting",
+          "visibleWhenCapability": "showAccountingFields"
         }
       },
       "detailEntity": null,
@@ -841,7 +842,8 @@
         },
         "accounting": {
           "tabOrder": 2,
-          "label": "Accounting"
+          "label": "Accounting",
+          "visibleWhenCapability": "showAccountingFields"
         }
       },
       "detailEntity": null,

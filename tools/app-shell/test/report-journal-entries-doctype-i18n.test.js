@@ -7,7 +7,7 @@ import {
   registerReportHelpers,
   buildJsreportHelpersString,
 } from '../../../templates/reports/helpers/report-html-helpers.js';
-import { RETURN_LABELS } from '@etendosoftware/schema-forge-cli/src/report-i18n.js';
+import { RETURN_LABELS, DOC_TYPE_LABEL_OVERRIDES } from '@etendosoftware/schema-forge-cli/src/report-i18n.js';
 
 // ETP-5013 — Journal Entries "Detail"/"Detalle" column (document_type) i18n.
 //
@@ -173,7 +173,7 @@ const CASES = [
   ['ARI', 'N', 'AR Invoice', 'AR Invoice', 'AR Invoice'],
   ['API', 'N', 'AP Invoice', 'AP Invoice', 'AP Invoice'],
   ['FAT', null, 'Financial Account Transaction', 'Financial Account Transaction', 'Financial Account Transaction'],
-  ['MXI', null, 'Match Invoice', 'Match Invoice', 'Match Invoice'],
+  ['MXI', null, 'Match Invoice', DOC_TYPE_LABEL_OVERRIDES.en_US.MXI, DOC_TYPE_LABEL_OVERRIDES.es_ES.MXI],
   ['MMI', null, 'Material Physical Inventory', 'Material Physical Inventory', 'Material Physical Inventory'],
   ['AMZ', null, 'Amortization', 'Amortization', 'Amortization'],
   [null, null, 'Journal', 'Journal', 'Journal'],

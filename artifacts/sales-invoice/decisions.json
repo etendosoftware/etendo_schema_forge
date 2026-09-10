@@ -4,6 +4,7 @@
     "category": "sales",
     "name": "Sales Invoice",
     "documentDateField": "invoiceDate",
+    "selectorPriceCurrency": "org",
     "salesTheme": true,
     "lineEntityConfig": "invoice",
     "relatedDocuments": true,
