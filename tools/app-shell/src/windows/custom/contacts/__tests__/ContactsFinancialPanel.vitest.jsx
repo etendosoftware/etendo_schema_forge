@@ -91,4 +91,11 @@ describe('ContactsFinancialPanel', () => {
     render(<ContactsFinancialPanel {...defaultProps} />);
     expect(screen.getByTestId('fiscal-defaults-section')).toBeInTheDocument();
   });
+
+  // The panel stacks three unrelated blocks (credit, billing preferences, fiscal defaults);
+  // the rules between them are what keeps them readable as separate sections.
+  it('separates its three sections with rendered rules', () => {
+    const { container } = render(<ContactsFinancialPanel {...defaultProps} />);
+    expect(container.querySelectorAll('hr')).toHaveLength(2);
+  });
 });
