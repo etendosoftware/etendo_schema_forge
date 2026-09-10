@@ -33,6 +33,14 @@ import { detectBaseUrl } from '@etendosoftware/app-shell-core/auth/api';
 const PORTAL_API_PREFIX = '/sws/portal';
 
 /**
+ * Rows per page.
+ *
+ * Matches the backend's own default so the first render and a later "load more" agree on page
+ * boundaries; the backend clamps anything larger, so this is a preference, never a guarantee.
+ */
+export const PORTAL_PAGE_SIZE = 50;
+
+/**
  * The error codes this module raises, mapped to i18n keys by `PortalPage`.
  *
  * `invalidLink` covers unknown AND revoked AND out-of-scope, on purpose: the page renders one
@@ -129,7 +137,36 @@ export async function fetchPortalIdentity(fetchImpl, token) {
   return {
     businessPartnerName: readableText(data?.businessPartnerName),
     tenantName: readableText(data?.tenantName),
+    // The backend says whether there is a logo, so the page never requests one that does not
+    // exist and never has to hide a broken image. Defaults to false: a backend that predates
+    // this field shows no logo rather than a placeholder.
+    hasLogo: data?.hasLogo === true,
   };
+}
+
+/**
+ * The tenant's logo as a `Blob`, or `null` when there is none.
+ *
+ * Fetched as a blob and turned into an object URL by the caller, rather than pointed at from an
+ * `<img src>` directly. That is not indirection for its own sake: a browser issues an `<img>`
+ * request itself, with no opportunity to attach an `Authorization` header, so a direct `src`
+ * would force the token into the query string — where it lands in every access log along the way
+ * and breaks §5.4. Going through `apiFetch` keeps the token in the header, exactly like every
+ * other portal request.
+ *
+ * A missing logo (404) resolves to `null` rather than throwing: branding is decoration, and a
+ * tenant without a logo must not degrade the page.
+ */
+export async function fetchPortalLogoBlob(fetchImpl, token) {
+  try {
+    const response = await portalGet(fetchImpl, token, '/logo', {
+      invalidOn: INVALID_TOKEN_STATUSES_PDF,
+      failure: PORTAL_ERROR.downloadFailed,
+    });
+    return await response.blob();
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -142,14 +179,24 @@ export async function fetchPortalIdentity(fetchImpl, token) {
  * @returns {Promise<{ currency: string|null, outstandingAmount: number|null,
  *   invoices: Array<ReturnType<typeof normalizePortalInvoice>> }>}
  */
-export async function fetchPortalInvoices(fetchImpl, token) {
-  const response = await portalGet(fetchImpl, token, '/invoices');
+export async function fetchPortalInvoices(fetchImpl, token, { offset = 0, limit = PORTAL_PAGE_SIZE } = {}) {
+  const query = `?limit=${encodeURIComponent(limit)}&offset=${encodeURIComponent(offset)}`;
+  const response = await portalGet(fetchImpl, token, `/invoices${query}`);
   const data = await response.json().catch(() => ({}));
   const rows = Array.isArray(data?.invoices) ? data.invoices : [];
+  const invoices = rows.map((row) => normalizePortalInvoice(row, readableText(data?.currency)));
   return {
     currency: readableText(data?.currency),
+    // Whole-set totals, NOT page totals — the backend computes them over every invoice in scope.
+    // Never re-derive these by summing `invoices`: that would silently turn the balance into "the
+    // balance of what you happen to be looking at", which is a wrong number shown confidently.
     outstandingAmount: readableAmount(data?.outstandingAmount),
-    invoices: rows.map((row) => normalizePortalInvoice(row, readableText(data?.currency))),
+    invoices,
+    // `totalCount` falls back to what arrived, so a backend that predates paging reports the full
+    // list it sent and `hasMore` is correctly false. Without the fallback the page would offer a
+    // "load more" that returns nothing.
+    totalCount: Number.isFinite(data?.totalCount) ? data.totalCount : invoices.length,
+    offset: Number.isFinite(data?.offset) ? data.offset : offset,
   };
 }
 

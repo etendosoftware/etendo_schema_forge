@@ -24851,6 +24851,8 @@
     "portalOutstandingTitle": "Saldo pendiente",
     "portalOutstandingHint": "Total sin pagar de todas tus facturas",
     "portalInvoiceCountTitle": "Facturas emitidas",
+    "portalLoadMore": "Cargar más",
+    "portalShowingCount": "Mostrando {shown} de {total} facturas",
     "portalEmptyTitle": "Todavía no hay facturas",
     "portalEmptyDescription": "Las facturas que se te emitan aparecerán aquí.",
     "portalInvalidLinkTitle": "Este enlace ya no es válido",

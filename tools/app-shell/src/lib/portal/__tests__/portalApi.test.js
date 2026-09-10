@@ -102,11 +102,18 @@ describe('portal request contract', () => {
     await fetchPortalInvoices(fetchImpl, TOKEN);
     await fetchInvoicePdfBlob(fetchImpl, TOKEN, 'inv-1');
 
-    assert.deepEqual(calls.map((call) => call.path), [
+    // Compared on the path before any query string: `/invoices` carries `?limit&offset` since
+    // paging landed, and pinning that here would make this test fail on an unrelated page-size
+    // change while still not guarding the thing it exists to guard.
+    assert.deepEqual(calls.map((call) => call.path.split('?')[0]), [
       '/sws/portal/me',
       '/sws/portal/invoices',
       '/sws/portal/invoices/inv-1/pdf',
     ]);
+    // The token must never reach the URL, query string included (plan §5.4).
+    for (const call of calls) {
+      assert.ok(!call.path.includes(TOKEN), `token leaked into ${call.path}`);
+    }
   });
 
   it('escapes the invoice id in the PDF path', async () => {
@@ -134,6 +141,7 @@ describe('fetchPortalIdentity', () => {
     assert.deepEqual(await fetchPortalIdentity(fetchImpl, TOKEN), {
       businessPartnerName: 'Cliente Uno',
       tenantName: 'Acme SA',
+      hasLogo: false,
     });
   });
 
@@ -143,6 +151,7 @@ describe('fetchPortalIdentity', () => {
     assert.deepEqual(await fetchPortalIdentity(fetchImpl, TOKEN), {
       businessPartnerName: null,
       tenantName: null,
+      hasLogo: false,
     });
   });
 
@@ -152,6 +161,7 @@ describe('fetchPortalIdentity', () => {
     assert.deepEqual(await fetchPortalIdentity(fetchImpl, TOKEN), {
       businessPartnerName: null,
       tenantName: null,
+      hasLogo: false,
     });
   });
 });

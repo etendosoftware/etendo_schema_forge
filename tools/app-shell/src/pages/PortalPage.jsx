@@ -16,6 +16,7 @@ import {
   fetchInvoicePdfBlob,
   fetchPortalIdentity,
   fetchPortalInvoices,
+  fetchPortalLogoBlob,
   resolvePortalBaseUrl,
 } from '@/lib/portal/portalApi.js';
 import { portalPdfFileName, resolveInvoiceStatus } from '@/lib/portal/portalInvoices.js';
@@ -86,8 +87,18 @@ function PortalNotice({ testId, icon, title, description, children }) {
   );
 }
 
-/** Tenant name + greeting. Both names are optional, so the header degrades instead of breaking. */
-function PortalHeader({ identity, ui }) {
+/**
+ * Whose portal this is, then who is looking at it.
+ *
+ * The tenant identity leads deliberately. A customer arrives here from an email, with no app
+ * context and possibly several suppliers who all use Etendo GO — so "which company am I looking
+ * at" is the first question the page has to answer, before the greeting. The logo carries that
+ * faster than any text, which is why it sits beside the name rather than decorating a corner.
+ *
+ * Every part degrades independently: no logo, no tenant name and no BP name each drop out on
+ * their own rather than breaking the header.
+ */
+function PortalHeader({ identity, logoUrl, ui }) {
   const greeting = identity?.businessPartnerName
     ? ui('portalGreeting', { name: identity.businessPartnerName })
     : ui('portalPageTitle');
@@ -96,16 +107,32 @@ function PortalHeader({ identity, ui }) {
     : ui('portalIntroGeneric');
 
   return (
-    <header className="space-y-1" data-testid="portal-header">
-      {identity?.tenantName && (
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground" data-testid="portal-tenant-name">
-          {identity.tenantName}
-        </p>
+    <header className="space-y-3" data-testid="portal-header">
+      {(logoUrl || identity?.tenantName) && (
+        <div className="flex items-center gap-3" data-testid="portal-brand">
+          {logoUrl && (
+            <img
+              src={logoUrl}
+              // The tenant name, not "logo": a screen reader should say the company, and when the
+              // name is missing an empty alt correctly marks the image as decorative.
+              alt={identity?.tenantName ?? ''}
+              className="h-10 w-auto max-w-[160px] object-contain"
+              data-testid="portal-logo"
+            />
+          )}
+          {identity?.tenantName && (
+            <p className="text-base font-semibold text-foreground" data-testid="portal-tenant-name">
+              {identity.tenantName}
+            </p>
+          )}
+        </div>
       )}
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground" data-testid="portal-greeting">
-        {greeting}
-      </h1>
-      <p className="text-sm text-muted-foreground" data-testid="portal-intro">{intro}</p>
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground" data-testid="portal-greeting">
+          {greeting}
+        </h1>
+        <p className="text-sm text-muted-foreground" data-testid="portal-intro">{intro}</p>
+      </div>
     </header>
   );
 }
@@ -248,6 +275,8 @@ export default function PortalPage() {
   const [attempt, setAttempt] = useState(0);
   const [downloadingId, setDownloadingId] = useState(null);
   const [downloadFailed, setDownloadFailed] = useState(false);
+  const [logoUrl, setLogoUrl] = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
     const trimmed = token.trim();
@@ -278,6 +307,52 @@ export default function PortalPage() {
 
     return () => { active = false; };
   }, [token, apiFetch, attempt]);
+
+  // The logo loads separately from the page's own gate, and never blocks it: branding arriving a
+  // moment late is invisible, whereas making the invoice list wait on an image would be felt.
+  // Only requested when /me said there is one, so a tenant without a logo costs no request.
+  useEffect(() => {
+    if (!identity?.hasLogo) return undefined;
+    let objectUrl = null;
+    let active = true;
+    fetchPortalLogoBlob(apiFetch, token.trim()).then((blob) => {
+      if (!active || !blob) return;
+      objectUrl = URL.createObjectURL(blob);
+      setLogoUrl(objectUrl);
+    });
+    // Revoked on unmount: an object URL pins its blob in memory until it is released, and this
+    // page can be reopened repeatedly from a bookmarked link.
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [identity?.hasLogo, apiFetch, token]);
+
+  /**
+   * Appends the next page.
+   *
+   * Accumulates rather than replacing: a customer reading a long history should not lose the rows
+   * above when asking for more. The whole-set totals come from the newest response and are
+   * therefore never recomputed from the accumulated rows — summing the page would turn the
+   * balance into "the balance of what is currently on screen".
+   */
+  const handleLoadMore = useCallback(async () => {
+    setLoadingMore(true);
+    try {
+      const next = await fetchPortalInvoices(apiFetch, token.trim(), {
+        offset: summary?.invoices?.length ?? 0,
+      });
+      setSummary((current) => (current ? {
+        ...next,
+        invoices: [...(current.invoices ?? []), ...next.invoices],
+      } : next));
+    } catch (error) {
+      if (error?.code === PORTAL_ERROR.invalidLink) setView(VIEW.invalid);
+      else setDownloadFailed(true);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [apiFetch, token, summary?.invoices?.length]);
 
   const handleDownload = useCallback(async (invoice) => {
     setDownloadingId(invoice.id);
@@ -357,10 +432,14 @@ export default function PortalPage() {
 
   const invoices = summary?.invoices ?? [];
   const summaryCurrency = summary?.currency || invoices[0]?.currency || null;
+  // Falls back to the loaded length so a backend that predates paging still reports a truthful
+  // count and offers no "load more" that would return nothing.
+  const totalCount = Number.isFinite(summary?.totalCount) ? summary.totalCount : invoices.length;
+  const hasMore = invoices.length < totalCount;
 
   return (
     <PortalFrame data-testid="PortalFrame__3db5f6">
-      <PortalHeader identity={identity} ui={ui} data-testid="PortalHeader__3db5f6" />
+      <PortalHeader identity={identity} logoUrl={logoUrl} ui={ui} data-testid="PortalHeader__3db5f6" />
       <div className="grid gap-4 sm:grid-cols-2">
         <PortalSummaryCard
           testId="portal-outstanding"
@@ -371,7 +450,9 @@ export default function PortalPage() {
         <PortalSummaryCard
           testId="portal-invoice-count"
           title={ui('portalInvoiceCountTitle')}
-          value={String(invoices.length)}
+          // The whole-set count, not the number of rows loaded so far. Showing the loaded count
+          // would make the figure shrink-wrap to the page and quietly contradict the list below.
+          value={String(totalCount)}
           data-testid="PortalSummaryCard__3db5f6" />
       </div>
       <section className="space-y-3" data-testid="portal-invoices-section">
@@ -398,6 +479,28 @@ export default function PortalPage() {
               onDownload={handleDownload}
               data-testid="PortalInvoiceTable__3db5f6" />
           )}
+
+        {hasMore && (
+          <div className="flex flex-col items-center gap-2 pt-2" data-testid="portal-pagination">
+            {/* Stated before the button, so the reader knows how much is left before clicking
+                rather than discovering it one page at a time. */}
+            <p className="text-xs text-muted-foreground" data-testid="portal-pagination-status">
+              {ui('portalShowingCount', { shown: invoices.length, total: totalCount })}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLoadMore}
+              // Disabled while in flight: without it, repeated clicks each fetch the same offset
+              // (the length has not changed yet) and append the same rows twice.
+              disabled={loadingMore}
+              data-testid="portal-load-more"
+            >
+              {loadingMore && <Loader2 className="mr-2 h-4 w-4 animate-spin" data-testid="Loader2__loadmore" />}
+              {loadingMore ? ui('loading') : ui('portalLoadMore')}
+            </Button>
+          </div>
+        )}
       </section>
     </PortalFrame>
   );

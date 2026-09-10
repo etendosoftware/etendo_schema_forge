@@ -24613,6 +24613,8 @@
     "portalOutstandingTitle": "Outstanding balance",
     "portalOutstandingHint": "Total still unpaid across your invoices",
     "portalInvoiceCountTitle": "Invoices issued",
+    "portalLoadMore": "Load more",
+    "portalShowingCount": "Showing {shown} of {total} invoices",
     "portalEmptyTitle": "No invoices yet",
     "portalEmptyDescription": "Invoices issued to you will appear here.",
     "portalInvalidLinkTitle": "This link is no longer valid",
