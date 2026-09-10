@@ -1,8 +1,8 @@
 {
-  "version": "0.23.0",
+  "version": "0.24.0",
   "generatedAt": "2026-06-16T16:34:09.049Z",
-  "updatedAt": "2026-09-09T19:37:17.173Z",
-  "checksum": "c423de6afac97532",
+  "updatedAt": "2026-09-10T10:50:12.143Z",
+  "checksum": "0b3a0e1340266588",
   "frontendContract": {
     "window": {
       "id": "B917E8A7B0864ACEA9D941E3B7494E53",
@@ -101,6 +101,7 @@
               "es_ES": "Fecha"
             },
             "gridOrder": 2,
+            "dot": false,
             "validation": {
               "required": true,
               "maxLength": 10

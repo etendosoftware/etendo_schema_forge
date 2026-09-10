@@ -31,7 +31,7 @@ The header form shows **exactly 6 editable fields**, in this order: Accounting D
 
 | Field (curated) | Column | Visibility | Notes |
 |---|---|---|---|
-| `accountingDate` | DateAcct | editable | `seq: 10`. The only date shown. Defaults to today. Grid column + searchable (ETP-4917). Displays as **Fecha**/**Date** in this window via a `labels` override on the field — see the ETP-4917 note below for why the shared `accountingDate` locale key was left untouched. |
+| `accountingDate` | DateAcct | editable | `seq: 10`. The only date shown. Defaults to today. Grid column + searchable (ETP-4917). Displays as **Fecha**/**Date** in this window via a `labels` override on the field — see the ETP-4917 note below for why the shared `accountingDate` locale key was left untouched. `dot: false` (ETP-5210) — the grid's past-date red-dot ("overdue") indicator is suppressed: an accounting date is historical by nature, not a due date, so the overdue signal does not apply here. |
 | `period` | C_Period_ID | editable | `seq: 20`. Accounting period. Grid column + searchable (ETP-4917). |
 | `description` | Description | editable | `seq: 30` — placed after the dates. Required. Grid column + searchable (pre-existing). |
 | `documentDate` | DateDoc | system | **Hidden.** Unified into Accounting Date — not on the form and not sent; the backend resolves `DateDoc` from its AD default (`to_date(@HeaderDateAcct@)`). |
@@ -253,6 +253,13 @@ Four decisions.json-level changes, all header-scoped, none touching the balance/
   component; this window is its only consumer) no longer renders the Difference amount or the
   balanced ✓/✗ badge. Display-only change; `computeBalance` and the save/complete blocking gates
   are unchanged.
+- **Date-dot indicator suppressed (follow-up, ETP-5210).** Making `accountingDate` a grid column
+  above (ETP-4917) had an unwanted side effect: `DataTable.cellRenderers.jsx`'s generic
+  `getDateDotColor` paints a red dot on any `type: 'date'` grid column whose value is in the past,
+  which reads as an "overdue" signal. That does not make sense for a Manual Journal's accounting
+  date — it is historical by nature, not a due date. Fixed at the `decisions.json` level with the
+  existing, already-precedented `"dot": false` opt-out (see the header fields table above) — no
+  generator or component change needed.
 
 ### Posting & completion status correction (doc fix, spotted during ETP-4917 documentation pass)
 

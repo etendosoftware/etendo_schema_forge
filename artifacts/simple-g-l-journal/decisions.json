@@ -80,7 +80,9 @@
           },
           "grid": true,
           "gridOrder": 2,
-          "searchable": true
+          "searchable": true,
+          "dot": false,
+          "reason": "ETP-5210 — accounting date is historical by nature (not a due date); the grid's past-date red-dot indicator does not apply here."
         },
         "period": {
           "visibility": "editable",
