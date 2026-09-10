@@ -20509,6 +20509,7 @@
     "fiscal.sii.legend.specialAuth": "Special AEAT authorizations",
     "fiscal.sii.field.authRegNo": "Authorization registration number",
     "fiscal.sii.action.validateHash": "Validate Hash",
+    "fiscal.sii.err.authRegNoTooLong": "Authorization registration number cannot exceed 15 characters.",
     "fiscal.sii.err.deadline": "The SII submission deadline is required.",
     "fiscal.sii.err.noRecordId": "Missing SII record identifier.",
     "fiscal.tbai.legend.env": "Environment",
