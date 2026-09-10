@@ -56,6 +56,7 @@ export default function ProductAdditionalInfoPanel({ entity, data, token, apiBas
 
   const readOnly = !editing;
   const isNonStockable = NON_STOCKABLE_PRODUCT_TYPES.has(data?.productType);
+  const prevNonStockableRef = useRef(isNonStockable);
 
   // ETP-4943 / ETP-5091: Service, Expense and Resource products have no
   // physical existence, so the Logistics section (weight/UOM,
@@ -63,10 +64,22 @@ export default function ProductAdditionalInfoPanel({ entity, data, token, apiBas
   // stock-management flags off as soon as the type becomes one of those, the
   // same rule ProductSidebar.jsx already applies to hide the stock widget
   // (ETP-4606 / ETP-5091: `NON_STOCKABLE_PRODUCT_TYPES.has(data?.productType)` → no stock UI at all).
+  //
+  // ETP-5091 follow-up: switching back to a stockable type (Artículo) must
+  // reset both flags to their default (true) — only on the transition itself
+  // (detected via prevNonStockableRef), not on every render while already
+  // stockable, so a manual uncheck afterwards is not fought/reverted.
   useEffect(() => {
-    if (!editing || !isNonStockable) return;
-    if (isCheckedYN(data?.stocked)) onChange?.('stocked', false, 'IsStocked');
-    if (isCheckedYN(data?.returnable)) onChange?.('returnable', false, 'Returnable');
+    if (!editing) return;
+    const wasNonStockable = prevNonStockableRef.current;
+    prevNonStockableRef.current = isNonStockable;
+    if (isNonStockable) {
+      if (isCheckedYN(data?.stocked)) onChange?.('stocked', false, 'IsStocked');
+      if (isCheckedYN(data?.returnable)) onChange?.('returnable', false, 'Returnable');
+    } else if (wasNonStockable) {
+      if (!isCheckedYN(data?.stocked)) onChange?.('stocked', true, 'IsStocked');
+      if (!isCheckedYN(data?.returnable)) onChange?.('returnable', true, 'Returnable');
+    }
   }, [editing, isNonStockable, data?.stocked, data?.returnable, onChange]);
 
   return (
