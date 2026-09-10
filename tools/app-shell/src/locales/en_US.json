@@ -18075,7 +18075,7 @@
     "ocrRetryingLines": "Retrying line creation...",
     "recordCreated": "Record created",
     "recordSaved": "Record saved",
-    "saveConflictRecordChanged": "Someone else edited this record while you were working on it, so nothing was saved. You can keep your changes and try again later, or discard them and load the current version.",
+    "saveConflictRecordChanged": "This record changed after you opened it, so your changes were not applied. You can cancel the save to review or copy what you had edited, or discard your changes and load the current version.",
     "saveConflictDiscardAndReload": "Discard my changes and refresh",
     "saveConflictKeepEditing": "Cancel save",
     "saveConflictTitle": "Cannot save this record",

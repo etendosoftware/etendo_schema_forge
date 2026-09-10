@@ -18247,7 +18247,7 @@
     "ocrRetryingLines": "Reintentando la creación de líneas...",
     "recordCreated": "Registro creado",
     "recordSaved": "Registro guardado",
-    "saveConflictRecordChanged": "Otra persona editó este registro mientras trabajabas en él, así que no se guardó nada. Puedes conservar tus cambios e intentarlo más tarde, o descartarlos y cargar la versión actual.",
+    "saveConflictRecordChanged": "Este registro cambió después de que lo abriste, por lo que tus cambios no se aplicaron. Puedes cancelar el guardado para revisar o copiar lo que habías editado, o descartar tus cambios y cargar la versión actual.",
     "saveConflictDiscardAndReload": "Descartar mis cambios y refrescar",
     "saveConflictKeepEditing": "Cancelar guardado",
     "saveConflictTitle": "No se puede guardar este registro",
