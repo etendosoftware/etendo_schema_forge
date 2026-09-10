@@ -242,6 +242,84 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   // they track.
   const manualDataSaveTimer = useRef(null);
   const isFirstManualDataRender = useRef(true);
+  /**
+   * Single-flight state for that autosave (ETP-5255). `clearTimeout` only prevents overlapping
+   * TIMERS; when a PUT outlives the 800 ms debounce and the user keeps editing, a second PUT used
+   * to go out while the first was still open.
+   *
+   * A ref, not state: the timer callback has to read the guard synchronously, and state is always
+   * one render behind — exactly the mistake that made the equivalent contacts bug (ETP-5263)
+   * intermittent.
+   *
+   * `manualDataSavePending` records that a newer edit arrived while a PUT was open, and
+   * `manualDataLatest` holds the value it produced: the timer closure captures
+   * identChecks/manualOverrides at SCHEDULE time, so replaying that closure would resend a stale
+   * snapshot. A queued save is never dropped for being late — this endpoint has NO
+   * optimistic-locking check (`FiscalDeclCrudHandler#handleDeclPut` never compares `updated`), so a
+   * lost edit here produces no 409 and no error of any kind, just silently missing data. It IS
+   * dropped when it becomes ineligible; see `isManualDataEligible`.
+   */
+  const manualDataSaveInFlight = useRef(false);
+  const manualDataSavePending = useRef(false);
+  const manualDataLatest = useRef(null);
+  /** Guards the queued replay: after unmount there is nothing left to autosave for. */
+  const isManualDataMounted = useRef(true);
+  useEffect(() => () => { isManualDataMounted.current = false; }, []);
+  /**
+   * Mirror of the effect's own preconditions (`!isSubmitted && token && apiBaseUrl`), kept in a
+   * ref for the same reason `manualDataLatest` is: a queued replay fires from a `finally` long
+   * after its closure was created, so it cannot read that state fresh.
+   *
+   * Without it this was reachable: PUT(A) in flight → user edits again (queued) → user submits the
+   * declaration → PUT(A) settles → the replay writes manualData to a declaration that is now
+   * filed. The server does not stop it — `FiscalDeclCrudHandler#handleDeclPut` has no submitted
+   * guard, it applies whatever fields it receives (its own comments only defend field-by-field
+   * against a "stray/racy PUT"), so this ref is the sole gate.
+   *
+   * Kept in sync by its own effect rather than written during render, so it always reflects the
+   * render that actually committed.
+   */
+  const isManualDataEligible = useRef(false);
+
+  /**
+   * The single write path for manualData. At most one PUT is open at a time; a save requested
+   * while one is in flight is queued and replayed when it settles, reading `manualDataLatest`
+   * again so the replay carries the newest value rather than the one current when it was queued.
+   */
+  async function flushManualData() {
+    // Re-checked on EVERY entry, so it gates the queued replay and not just the arming of the
+    // timer. A save that has become ineligible is DROPPED — the pending flag is cleared rather
+    // than carried forward: once the declaration is submitted its content is a filed record, and a
+    // late autosave silently mutating it is worse than losing an unsaved tweak made seconds before
+    // filing. This is the one place in this flow where dropping beats queueing.
+    if (!isManualDataEligible.current) {
+      manualDataSavePending.current = false;
+      return;
+    }
+    if (manualDataSaveInFlight.current) {
+      manualDataSavePending.current = true;
+      return;
+    }
+    const snapshot = manualDataLatest.current;
+    if (!snapshot) return;
+    manualDataSaveInFlight.current = true;
+    try {
+      await persistManualData(snapshot.id, snapshot.manualData, {
+        token: snapshot.token,
+        apiBaseUrl: snapshot.apiBaseUrl,
+      });
+    } finally {
+      // Cleared on EVERY path — success, `{ ok: false }`, or an unexpected throw. A flag left set
+      // would stop the panel autosaving for the rest of the session with nothing on screen to say
+      // so, which is a worse failure than the duplicate write this guard removes.
+      manualDataSaveInFlight.current = false;
+      const hadPending = manualDataSavePending.current;
+      manualDataSavePending.current = false;
+      // Sequential by construction: this runs only after the previous PUT has settled, so the
+      // replay can never overlap it.
+      if (hadPending && isManualDataMounted.current) flushManualData();
+    }
+  }
 
   // Only used to grab `upload()` for the manual acuse-de-recibo path below —
   // isActive: false keeps it from eagerly listing/fetching attachments on
@@ -405,6 +483,14 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const incidentCount = blocking + warning;
   const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
 
+  // Keeps `isManualDataEligible` current so a queued autosave replay can re-check the same
+  // preconditions the effect below checks before arming its timer. Runs before that effect on
+  // every commit (declaration order), so an edit and the eligibility it was made under can never
+  // disagree.
+  useEffect(() => {
+    isManualDataEligible.current = !isSubmitted && !!token && !!apiBaseUrl;
+  }, [isSubmitted, token, apiBaseUrl]);
+
   // Debounced autosave of identChecks/manualOverrides via PUT /fiscal303/declarations, so
   // manual identification/box edits survive a page refresh (ETP-4755). Skipped once the
   // declaration is submitted (nothing is editable at that point) and on the very first render
@@ -415,9 +501,18 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
       return;
     }
     if (isSubmitted || !token || !apiBaseUrl) return;
+    // Publish the edit to a ref BEFORE arming the timer: this is what both the debounced save and
+    // any queued replay read, so whichever one ends up firing sends the latest value.
+    manualDataLatest.current = {
+      id: decl.id,
+      manualData: { identification: identChecks, manualOverrides },
+      token,
+      apiBaseUrl,
+    };
     if (manualDataSaveTimer.current) clearTimeout(manualDataSaveTimer.current);
     manualDataSaveTimer.current = setTimeout(() => {
-      persistManualData(decl.id, { identification: identChecks, manualOverrides }, { token, apiBaseUrl });
+      manualDataSaveTimer.current = null;
+      flushManualData();
     }, 800);
     return () => { if (manualDataSaveTimer.current) clearTimeout(manualDataSaveTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
