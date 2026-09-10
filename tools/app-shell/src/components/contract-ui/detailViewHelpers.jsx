@@ -224,7 +224,27 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     appliedFields.set(key, entry.value);
     hook.handleChange(key, entry.value);
     handleEntryIdentifierChange(entry, hook, key, api, catalogs);
-    bumpFieldGeneration(key, fieldGenerationRef);
+    // ETP-4772 follow-up: only a write that actually LEFT A VALUE may advance the
+    // generation. A callout answering empty for a still-empty field is a no-op with
+    // nothing to protect (the empty-skip guard above deliberately lets it through so
+    // an intentional clear still reaches the form), but bumping the generation for it
+    // made every OLDER in-flight response for that same field look stale — and
+    // nothing ever retries a dropped response, so the field stayed empty for good.
+    //
+    // That is the whole failure: selecting a BP fires ~7 header callouts in ~1.6s,
+    // one of them answers empty for warehouse/partnerAddress, and the later response
+    // carrying the REAL value is discarded as stale. It poisons the combo path too —
+    // `applyOneComboEntry` reads the same generation this bumped, which is why a
+    // warehouse delivered as `combos.warehouse.selected` vanished. It surfaced two
+    // windows later as a permanently disabled Guardar
+    // (`data-missing-required="partnerAddress,warehouse"`); see the measurement in
+    // e2e/tests/helpers/purchase-helpers.js (ETP-5190).
+    //
+    // The empty write itself is still applied above — only the generation is left
+    // alone, so ETP-4772's protection of a real user edit is untouched.
+    if (entry.value !== '' && entry.value != null) {
+      bumpFieldGeneration(key, fieldGenerationRef);
+    }
   }
 }
 
