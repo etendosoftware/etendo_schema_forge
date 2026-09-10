@@ -32,6 +32,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | L1 | Tenant ownership | New `AD_User.EM_ETGO_Is_Owner` column (owner-lock enforcement) is only auto-set for tenants created AFTER ETP-4830 shipped — every pre-existing tenant has zero owner-flagged users, so the enforcement checks are silent no-ops for them | Preventive shipped (`OwnerSupport#markAsOwnerIfNoneExists`, wired into `EtendoGoJwtServlet#createClient`); corrective backfill (`R26-tenant-owner-and-personal-role-retrofit`) shipped 2026-08-26 — both fronts closed | ETP-4877 |
 | N1 | Tenant plan / fiscal test mode | A Demo/free tenant has no way to submit SII/TicketBAI/VeriFactu in test/sandbox mode without a manual `ETSG_ForceTestMode` edit in Classic — every self-registered free tenant defaults to real (production) fiscal submissions | Both fronts closed: `OnboardingForceTestModeService` (preventive, new step in `ensureOnboardingDataset`) + `R31-force-test-mode-demo-tenants` (corrective, also backfills already-existing SII/TicketBAI/VeriFactu config rows) | ETP-5117 |
 | N5 | Initial dataset configuration | No price list is flagged as default — the curated `M_PRICELIST.xml` shipped both tariffs with `ISDEFAULT='N'`, so the four consumers that disambiguate tariffs with `isdefault DESC` (the `ETGO_PRODUCT_SALE_PRICE`/`ETGO_PRODUCT_PURCHASE_PRICE` computed columns, `PriceListPicker.jsx`, `R33`'s standard-cost anchor, and ETP-5245's new default-tariff resolver) silently fall through to an arbitrary list | Both fronts closed: preventive is dataset-only (`ISDEFAULT` `N`→`Y` on both curated tariffs in `GOClient/M_PRICELIST.xml`, already in `INCLUDED_TABLES`); corrective data-fix (`R35`) marks one active list per trade direction on already-onboarded tenants. CUT deliberately NOT bumped — a newborn tenant is now born correct, so `R35`'s `@check` returns 0 rows for it | ETP-5245 |
+| P1 | Scheduled processes | A GO-onboarded tenant has NO scheduled "Costing Background process" (`AD_PROCESS_REQUEST`, `CostingBackground`), so product costs are never calculated automatically — `M_Transaction.iscostcalculated` stays `'N'` forever unless an operator launches the process by hand. NOT the same as J1 (which was the missing `M_Costing_Rule`): here the rule exists and is validated, the engine that consumes it is simply never scheduled | **Split across two PRs.** Corrective only in ETP-5245: data-fix (`R36`) backfills already-onboarded tenants. The preventive half (an onboarding service; the `AD_PROCESS_REQUEST` dataset table is and must stay excluded) is closed by a **separate PR authored by someone else** — ETP-5245 touches `com.etendoerp.go` not at all. CUT deliberately NOT bumped: with no preventive front in this PR a newborn tenant is still born broken and must keep seeing `R36`; once the other PR lands, `R36`'s `@check` self-heals to 0 | ETP-5245 (corrective) + a separate PR (preventive) |
 
 > **Label history note:** the ETP-4736 costing gap above was originally mislabeled `H1` when
 > authored, colliding with the pre-existing `H1` (webhook access, ETP-4520, superseded) and `H2`
@@ -2242,6 +2243,119 @@ sales untouched, so `@check` returned only one row. Worst case 59 ms for the who
 check → apply → report → re-check cycle.
 
 ---
+
+## P — Scheduled Processes
+
+### P1 — No scheduled "Costing Background process" reaches a new tenant (ETP-5245, 2026-09-10)
+
+**Symptom.** A tenant created through GO onboarding never calculates product costs automatically.
+Live on the shared dev DB: "E2E User 1 5b33eb60" has 20 `M_TRANSACTION` rows, **all 20** with
+`iscostcalculated='N'`, while carrying a perfectly valid, validated Standard-Algorithm
+`M_COSTING_RULE`. The rule is there (J1 fixed that); the engine that consumes it is not.
+
+This is the second half of the warning ETP-5245 added to the Product window — *"sin costo no se
+podrán calcular los costes ni contabilizar los movimientos"*. On a GO tenant that sentence stayed
+true even AFTER the user defined a cost, because nothing was scheduled to do the calculating.
+
+**Measured state (2026-09-10, `etendo_go_merge`).** `AD_PROCESS_REQUEST` rows per client:
+
+| Tenant | Total rows | Scheduled (`SCH`) costing request |
+|---|---|---|
+| GOClient (dataset source) | 27 | yes (freq 1) |
+| F&B International Group (core sampledata) | 72 | yes (freq 2, org `'0'`, user `'100'`) |
+| QA Testing | 16 | **no** — only a completed `COM` run |
+| E2E User 1 5b33eb60 | **2** | **no** |
+| E2E User 2 8bc91bf1 | **2** | **no** |
+| Empresa madera (onboarded 2026-09-10) | **2** | **no** |
+
+**Root cause.** `AD_PROCESS_REQUEST` is in `OnboardingDatasetDefinition.EXCLUDED_TABLES`
+(`OnboardingDatasetDefinition.java:37` — inside the `EXCLUDED_TABLES` literal spanning lines 28–47,
+*not* the `INCLUDED_TABLES` one that starts at line 49). `shouldIncludeTable()` requires
+`INCLUDED_TABLES.contains(t) && !EXCLUDED_TABLES.contains(t)`, so **zero** of the 24 rows in
+`referencedata/sampledata/GOClient/AD_PROCESS_REQUEST.xml` ever reach a new tenant.
+
+**The exclusion is correct and must stay.** Two independent reasons:
+
+1. **23 of the 24 rows are `STATUS='COM'`** — completed one-shot executions (Process Order ×13,
+   Process Inventory Count ×3, Set as Ready ×3, Create Periods, Create Price List, Generate Invoice
+   from Receipt, Post Amortization, Process Movements, Calculate Standard Costs, Update Quantity).
+   They are GOClient's execution *history*, not scheduled jobs. Importing them would copy another
+   tenant's audit trail into every new tenant, and would schedule nothing.
+2. **Every row carries cross-tenant references the normalizer does not rewrite.** `AD_USER_ID`
+   points at GOClient's own `GOAdmin` (`47EAF009B7BB42BBB663C7BA1792D958`) and `OB_CONTEXT` is a
+   JSON blob naming GOClient's user, role, client and org. `OnboardingDatasetNormalizer` remaps
+   `AD_ORG_ID` only (`OnboardingDatasetNormalizer.java:209`); `AD_USER` and `AD_ROLE` are themselves
+   excluded tables. Un-excluding `AD_PROCESS_REQUEST` would plant dangling FKs in every tenant.
+
+So **exactly one** of the 24 rows is a real scheduled job: `STATUS='SCH'`,
+`AD_PROCESS_ID=3F2B4AAC707B4CE7B98D2005CF7310B5` = `CostingBackground`. Nothing else of value is
+being lost.
+
+**Why the two rows that DO arrive, arrive.** Neither comes from the dataset:
+
+- `Get Bank Statements` (`SCH`) is built programmatically by `OnboardingBankConnectionSyncService`
+  from the tenant's own client/org/user/role.
+- `Set as Ready` (`COM`) is not provisioned at all — it is the residue of
+  `OnboardingMarkOrgReadyService` running the `AD_Org_Ready` process.
+
+That is the whole explanation for "2 of 24": the dataset contributes **nothing**, and the two
+survivors are side-effects of onboarding code.
+
+**Why it matters technically.** `org.openbravo.costing.CostingBackground` is strictly
+**client-scoped** — it lists the organizations to process with
+`ad_isorgincluded(o.id, :orgId, :clientId) <> -1`, binding `bundle.getContext().getClient()`
+(`src/org/openbravo/costing/CostingBackground.java:90-95`). No system-level or other-tenant run ever
+covers this client, so a per-tenant `AD_PROCESS_REQUEST` is genuinely required. (Contrast: Alert
+Process, Acct Server Process, Payment Monitor, Log Clean Up, Analytics Sync, Stored Column Queue
+Processor and Refresh Pending Payments are all scheduled once at System level and are *not*
+per-tenant gaps.)
+
+**Fix — the two fronts are split across two PRs.**
+
+- **Corrective (this ticket, ETP-5245):**
+  `20260910T120000Z__R36-costing-background-schedule.sql`. Creates the missing request for tenants
+  already onboarded without it. Self-contained SQL — it depends on nothing from the preventive side.
+- **Preventive (NOT this ticket):** closed by a **separate PR, authored by someone else**. ETP-5245
+  deliberately touches `com.etendoerp.go` not at all. A preventive service was drafted here and then
+  dropped once that overlap surfaced, so the two PRs do not both wire a step into
+  `ensureOnboardingDataset`.
+
+**Notes for whoever writes the preventive half** (the traps this investigation already paid for):
+
+- **Do not lift the exclusion.** The fix has to be *code*, not dataset — for the two reasons in the
+  root-cause section above (23 of 24 rows are `COM` history; every row drags GOClient's `AD_USER_ID`
+  and an `OB_CONTEXT` blob the normalizer never rewrites). The shape to copy is
+  `OnboardingBankConnectionSyncService`: build the `ProcessRequest` from the tenant's OWN client,
+  organization, admin user and admin role; create the row inside the onboarding transaction and
+  activate it in Quartz *after* the commit.
+- **Judge "already provisioned" on `status='SCH'`, never on row existence.** QA Testing has a `COM`
+  row for `CostingBackground` — a completed manual run. An existence-only probe would read that as
+  provisioned and leave the tenant permanently unscheduled. R36's `@check` gates on `SCH` for
+  exactly this reason.
+- **The request org may differ from R36's without conflict.** R36 uses the client root `'0'` because
+  `CostingBackground` only processes orgs *included in* the request's org and a legacy tenant can be
+  multi-org (QA Testing has validated costing rules on both "USA" and "Spain"). A newborn GO tenant
+  has exactly one business org, so using it there is equivalent. R36's `@check` keys on the client,
+  not the org, so either shape satisfies it.
+- **Do not bump `ONBOARDING_PROVISIONED_THROUGH` for this gap, in either PR.** See below.
+
+**Why the CUT stays put.** `ONBOARDING_PROVISIONED_THROUGH` (in `OnboardingBaselineService`)
+remains at `2026-09-02T12:00:00Z`. R36's own timestamp (`2026-09-10T12:00:00Z`) sits *above* it, so a
+freshly onboarded tenant's BASELINE watermark does not cover R36 and the runner still evaluates it
+for that tenant — which is correct while no preventive front exists: a tenant onboarded today is
+still born without the schedule. Bumping the CUT would push R36 under every new tenant's watermark
+and silently skip it for exactly the tenants that need it. Note this inverts the reasoning used for
+`R34`, which could skip its bump because its preventive front shipped in the same PR. Once the
+separate onboarding PR merges, no bump is needed either: a newborn tenant already has the `SCH` row,
+so `@check` returns 0 and the runner records `SKIPPED_NOT_NEEDED` on its own. Do **not** retire R36 —
+legacy tenants still need it.
+
+**Idempotency note that matters for BOTH halves of the gap (this fix and the separate PR).** "Already provisioned" must be judged on
+`status='SCH'`, not on the mere existence of an `AD_PROCESS_REQUEST` row for the process. QA Testing
+has a `COM` row for `CostingBackground` — a completed manual run — and treating that as a schedule
+would leave the tenant permanently unscheduled. Both `findExistingRequest` and the fix's `@check`
+gate on `SCH`.
+
 
 ## Recommended Order of Operations
 
