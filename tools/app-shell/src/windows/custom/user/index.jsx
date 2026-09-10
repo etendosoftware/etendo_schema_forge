@@ -510,11 +510,26 @@ export default function UserWindow(props) {
     // only ever fires from `onAfterExistingSave` (see B above) — the create path here
     // never assigns template roles, and `selectedRoleIds` is explicitly reset to `[]`
     // whenever this window is on the `'new'` route (see the effect above) — so under
-    // the CURRENT architecture this is always empty at create time, and the action
-    // would always render regardless. Gating on it anyway is a cheap, safe defensive
-    // guard against that invariant changing later (e.g. a future "duplicate user"
-    // flow that could pre-populate roles on creation), rather than a fix for a
-    // presently-reachable state.
+    // the CURRENT architecture this guard's own `hasRolesAlready` branch is always
+    // false at create time (confirmed, not just theorized — this remains a defensive
+    // guard against that invariant changing later, e.g. a future "duplicate user" flow
+    // that could pre-populate roles on creation, rather than a fix for a
+    // presently-reachable state HERE).
+    //
+    // That reachability finding does NOT mean this toast's action can never leak,
+    // though — manual testing surfaced a DIFFERENT, real bug with the same visible
+    // symptom (the button showing when it shouldn't): sonner shallow-merges this
+    // toast's options when updating an existing `RECORD_SAVE_TOAST_ID`, so the
+    // `action` set below used to survive, unmodified, onto the NEXT plain "saved"
+    // toast fired by ANY later Guardar on this same record (e.g. the very next save
+    // after assigning a role via `onAfterExistingSave`) — the id-based update this
+    // toast relies on (see the doc comment above `RECORD_SAVE_TOAST_ID`,
+    // `useEntity.js`) only replaces keys the later call explicitly passes. Fixed at
+    // the source: `showSaveSuccessToast` (`useEntity.js`) now explicitly passes
+    // `action: undefined` on every generic save, so no window's one-off action can
+    // ever leak past the toast that was meant to carry it. See that function's own
+    // comment for the full sonner mechanism, and `docs/generated-custom-windows/
+    // user.md`'s "Roles selector visual fixes (ETP-5193)" for the user-facing writeup.
     const hasRolesAlready = selectedRoleIds.length > 0;
     toast.success(ui('userCreatedInvitationSentToast'), {
       id: RECORD_SAVE_TOAST_ID,

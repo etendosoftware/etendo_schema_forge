@@ -855,7 +855,27 @@ export function showSaveSuccessToast(silent, isNew, ui) {
     // Dismissing a DIFFERENT id than the one we are about to create means there is no
     // cross-timer race here — unlike ETP-4830's dismiss-then-add of the same toast.
     dismissSaveBlockToasts(toast.dismiss);
-    toast.success(getSaveSuccessMessage(isNew, ui), { id: RECORD_SAVE_TOAST_ID });
+    // ETP-5193 — explicitly clear `action` (and not just omit it). sonner's
+    // `Observer.create()` (node_modules/sonner/dist/index.mjs) shallow-merges the new
+    // call's options onto whatever it already has on record for this id when that id
+    // already exists in its internal `this.toasts` registry:
+    //   this.toasts.map(t => t.id === id ? { ...t, ...data, id, dismissible, title } : t)
+    // A key simply ABSENT from `data` (this call's options) is NOT cleared — it is
+    // inherited from the prior entry. And that registry entry is never pruned: sonner's
+    // dismiss()/auto-expiry only hides the toast from the rendered list (a separate,
+    // per-Toaster-instance React state array) — `Observer.toasts` itself keeps the full
+    // merged object forever, for any id ever used. Concretely: the User window's
+    // `onAfterCreate` (`windows/custom/user/index.jsx`) reuses this SAME id to attach a
+    // "Configurar roles" `action` to the create-success toast. Without clearing it here,
+    // that `action` silently carried forward onto EVERY later plain save of the SAME
+    // record using this generic toast (e.g. the very next Guardar after assigning a
+    // role via `onAfterExistingSave` — see user.md's "Roles selector visual fixes
+    // (ETP-5193)") — the toast looked like a fresh "saved successfully" message but
+    // still rendered a stale, no-longer-applicable action button. Passing `action:
+    // undefined` here IS a key present in `data`, so the merge above does overwrite it.
+    // This stays a single atomic id-based `toast.success()` call — it does not
+    // reintroduce the dismiss()-then-create() race documented above RECORD_SAVE_TOAST_ID.
+    toast.success(getSaveSuccessMessage(isNew, ui), { id: RECORD_SAVE_TOAST_ID, action: undefined });
 }
 
 function afterSaveNotifications(data, { silent, isNew, entity, specName, ui }) {
