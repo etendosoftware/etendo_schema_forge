@@ -24,7 +24,13 @@ import { useLogout } from '@/auth/useLogout.js';
 export function useApiFetch(baseUrl) {
   const auth = useAuthOptional();
   const token = auth?.token ?? null;
-  const apiSessionScope = auth?.apiSessionScope ?? null;
+  // ETP-5195 — no `?? null` here: `createApiFetch`'s 4th arg distinguishes `null` ("opt out
+  // of ambient inheritance entirely") from `undefined` ("inherit whatever scope is
+  // registered ambiently"). When there's no local session (`auth` is null, e.g. this hook is
+  // called outside any AuthProvider), we still want to inherit the app's ambient session's
+  // scope if one is registered elsewhere — matching the core hook's own contract — not force
+  // an opt-out that would silently disable the stale-request guard for that call site.
+  const apiSessionScope = auth?.apiSessionScope;
   const logout = useLogout();
   // Depend on WHETHER there is a session, never on the context object's identity: a provider
   // (or a test double) that hands back a fresh object each render would otherwise produce a

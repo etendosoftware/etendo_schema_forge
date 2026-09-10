@@ -35,20 +35,28 @@ describe('useApiFetch', () => {
     expect(mockCreateApiFetch).toHaveBeenCalledWith('/api', expect.any(Function), mockLogout, 'scope-1');
   });
 
-  it('forwards null as the 4th arg when the session has no apiSessionScope', () => {
+  it('forwards undefined as the 4th arg when the session has no apiSessionScope', () => {
+    // createApiFetch distinguishes null ("opt out of ambient inheritance") from undefined
+    // ("inherit whatever scope is registered ambiently") — a session object that simply
+    // doesn't carry apiSessionScope must produce undefined, not force an opt-out.
     mockUseAuthOptional.mockReturnValue({ token: 'tok-1' });
 
     renderHook(() => useApiFetch('/api'));
 
-    expect(mockCreateApiFetch).toHaveBeenCalledWith('/api', expect.any(Function), mockLogout, null);
+    expect(mockCreateApiFetch).toHaveBeenCalledWith('/api', expect.any(Function), mockLogout, undefined);
   });
 
-  it('forwards null as the 4th arg when there is no session at all (ambient fallback)', () => {
+  it('forwards undefined as the 4th arg when there is no session at all (ambient fallback)', () => {
+    // ETP-5195 regression guard: this hook works without an AuthProvider above it (see its
+    // own doc comment), falling back to the ambient session for both token AND scope. Forcing
+    // null here would silently disable the stale-request guard for every call site that only
+    // has the ambient session, not a local one -- undefined lets createApiFetch inherit
+    // whatever scope is registered ambiently, matching the core hook's own contract exactly.
     mockUseAuthOptional.mockReturnValue(null);
 
     renderHook(() => useApiFetch());
 
-    expect(mockCreateApiFetch).toHaveBeenCalledWith(undefined, expect.any(Function), mockLogout, null);
+    expect(mockCreateApiFetch).toHaveBeenCalledWith(undefined, expect.any(Function), mockLogout, undefined);
   });
 
   it('recomputes (calls createApiFetch again) when apiSessionScope changes between renders', () => {
