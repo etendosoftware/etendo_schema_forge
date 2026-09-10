@@ -308,11 +308,24 @@
     },
     {
       "id": "bp-self-service-portal",
-      "description": "Read-only self-service portal where a tenant's Business Partner opens a magic link and sees their completed invoices, outstanding balance and invoice PDFs. The portal surface, its three /sws/portal/* endpoints and the access table are UNCONDITIONAL; a per-sender AD_Preference decides only whether the sales-invoice email carries the link.",
+      "description": "Read-only self-service portal where a tenant's Business Partner opens a magic link and sees their completed invoices, outstanding balance and invoice PDFs. The portal surface, its three /sws/portal/* endpoints and the access table are UNCONDITIONAL; the flag gates only whether the sales-invoice email carries the link, and is targeted at the ETGO_ACCOUNT email of the user sending the invoice.",
       "owner": "sebastianbarrozo",
       "jira": "ETP-5267",
       "created": "2026-09-10",
-      "$gatingComment": "ONE GATE, and it is not a flag. The capability is always on; the only condition per send is a PERMANENT per-sender AD_Preference (ETGO_BPPortalLinkEnabled) read from OBContext (pattern: NeoFavoritesService), which answers 'depende del usuario logueado'. Unset ⇒ no link, so the safe default is the preference's own. It is deliberately NOT a flag and could not be one: PropertiesFeatureProvider ignores the evaluation context ('environment-level rollout, not per-user targeting'), per-user flag targeting needs the hosted control plane, and that swap is blocked by the open targeting-key-divergence precondition on paid-second-tenant. Because the preference resolves most-specific-first (user > role > org > client), setting it at client level enables a whole tenant -- so there is no separate per-tenant gap. A bp-portal-link environment flag was built and retired the same day (2026-09-10): ANDing it in front of the preference left the feature off until two separate things were configured, and being config-backed it needed a property edit plus a restart to flip. Redundant, not protective -- retired per the feature-debt rule that a permanent per-account condition is backend business logic, never a flag's job.",
+      "flag": {
+        "key": "bp-portal-link",
+        "defaultValue": false,
+        "ttl": "2026-12-31",
+        "ttlNote": "PLACEHOLDER, not a commitment: removal target once the read-only MVP is validated with a first real tenant. Revisit the date when that tenant goes live rather than letting it drift.",
+        "symbols": [
+          "bp-portal-link",
+          "BP_PORTAL_LINK",
+          "ETGO_FLAG_BP_PORTAL_LINK",
+          "etendo.go.flags.bp-portal-link"
+        ],
+        "$symbolsComment": "Backend-only flag: no frontend symbol exists because nothing in the browser evaluates it and no key is declared in flag-keys.js. Deliberate -- see $gatingComment. The property and env-var spellings are listed because a grep for the bare key misses Openbravo.properties and the ECS task definition; the allowlist spellings (etendo.go.flags.bp-portal-link.emails, ETGO_FLAG_BP_PORTAL_LINK_EMAILS) are prefixed by the entries above, so a grep for those finds them too."
+      },
+      "$gatingComment": "ONE GATE: this flag, evaluated PER SENDING ACCOUNT. Default false -- no link goes out until an ETGO_ACCOUNT email is named in etendo.go.flags.bp-portal-link.emails. That answers 'depende del usuario logueado' (the user's words) with the flag itself rather than a second mechanism. TARGETING IS A PLATFORM CAPABILITY, NOT PORTAL CODE: PropertiesFeatureProvider matches the allowlist against the OpenFeature targeting key, so any future backend flag gets it free -- the user asked for it on those terms ('nos sirve para otras funcionalidades'). The allowlist and the flag's bare boolean are an OR, never an AND, so enabling one person is one property, and there is no second gate to configure. THE IDENTITY IS THE ETGO_ACCOUNT EMAIL, NOT AD_User.email: onboarding never writes AD_User.email (InitialSetupUtility only writes username, as EtendoGoJwtDalHelper documents), so targeting the AD user's email would read null for essentially every GO user and match nobody -- PortalLinkPolicy resolves the account via GoAccountResolver instead. No account, no email, or a failed lookup means no link, never allow. Two earlier shapes were tried and rejected the same day (2026-09-10): an environment flag ANDed with a per-sender AD_Preference (nothing worked until two unrelated things were configured), then the AD_Preference alone with no flag. This does NOT reopen targeting-key-divergence on paid-second-tenant: that divergence needs two evaluators disagreeing, and this flag is backend-only with no frontend key -- none must ever be added (ETP-4966).",
       "paths": {
         "frontend": [
           "tools/app-shell/src/pages/PortalPage.jsx",
@@ -322,9 +335,19 @@
           "src/com/etendoerp/go/portal/"
         ]
       },
-      "$pathsComment": "Owned code = the portal feature itself, which is deleted only if the FEATURE is killed. It was NOT deleted when bp-portal-link retired: the flag gated one conditional in the email contract, so shipping it unwrapped that conditional and left every path here in place (same shape as paid-second-tenant, which kept its paths after tenant-upgrade retired). Shared touch points, NOT owned: the sales-invoice email contract, runtime-routes.jsx.",
-      "deferredItems": [],
-      "$deferredItemsComment": "No open items that are not test gaps. Two questions raised during design are closed, not deferred: per-tenant enablement (AD_Preference resolution at client level covers it -- see $gatingComment), and 'flipping the gate needs a redeploy', which was recorded while bp-portal-link existed and disappeared with it -- an AD_Preference row is data, edited in the running instance, and per-BP revocation is the kill switch for a link already out.",
+      "$pathsComment": "Owned code = the portal feature itself, which is deleted only if the FEATURE is killed. It is NOT deleted when the flag retires: the flag gates one conditional in the email contract, so shipping it unwraps that conditional and leaves every path here in place (same shape as paid-second-tenant, which kept its paths after tenant-upgrade retired). Shared touch points, NOT owned: the sales-invoice email contract, runtime-routes.jsx, GoFeatureFlags, and PropertiesFeatureProvider -- the per-account targeting added there is a platform capability that outlives this flag and must not be removed with it.",
+      "deferredItems": [
+        {
+          "id": "flag-flip-requires-redeploy",
+          "kind": "cosmetic",
+          "note": "bp-portal-link AND its per-account allowlist are both resolved by the config-backed PropertiesFeatureProvider (JVM property, Openbravo.properties, or ETGO_FLAG_* env var), so changing either is a deploy/restart rather than a toggle. AND THEREFORE: the flag cannot be used to react quickly in production -- if a link has to stop working at short notice, the lever is per-BP revocation, which deliberately sits outside the gate and needs no restart. Recorded so nobody plans an incident response around flipping the flag or editing the allowlist. Not a defect: it is the documented behaviour of the only backend provider installed today, and it disappears if the hosted control plane ever lands.",
+          "refs": [
+            "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md -- section 'Per-account targeting'",
+            "docs/plans/2026-09-10-bp-self-service-portal.md -- section 'Changing it needs a restart, and revocation is the fast lever'"
+          ]
+        }
+      ],
+      "$deferredItemsComment": "Open items that are not test gaps. The per-tenant-enablement question raised during design is deliberately absent: with the gate keyed on the sending account, enabling a tenant means listing that tenant's senders, and no separate mechanism is planned -- closed, not deferred.",
       "testSpecs": {
         "unit": [
           {
@@ -358,7 +381,7 @@
           }
         ]
       },
-      "$testSpecsComment": "expected:true means agreed but not yet written (pending Tester). Paths follow each suite's existing naming convention. The two load-bearing assertions, both named in the plan's Testing section: cross-BP isolation (neither token can reach the other's invoices or PDF under any endpoint), and no etgo_portal_access row is minted while the gate is closed -- asserted on the row count, not the email body."
+      "$testSpecsComment": "expected:true means agreed but not yet written (pending Tester). Paths follow each suite's existing naming convention. The two load-bearing assertions, both named in the plan's Testing section: cross-BP isolation (neither token can reach the other's invoices or PDF under any endpoint), and no etgo_portal_access row is minted while the gate is closed -- asserted on the row count, not the email body. The provider's allowlist matching is a THIRD load-bearing case and belongs in the platform suite (PropertiesFeatureProviderTest), not here: a flag with no .emails property must behave exactly as before, which is what keeps every other flag unaffected."
     }
   ]
 }

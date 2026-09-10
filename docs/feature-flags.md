@@ -65,15 +65,26 @@ The `/upgrade` route is the worked example — it is registered
 Hiding the route would imply the flag was protecting something, which it is not.
 
 `/portal/:token` (ETP-5267, the Business Partner self-service portal) is the
-same pattern taken to its conclusion: registered unconditionally, and gated by
-**no flag at all** — not even a backend one. Whether the sales-invoice email
-*carries a portal link* is decided server-side by a permanent per-sender
-`AD_Preference`, which is backend business logic and was never a flag's job (an
-environment flag was built for it and retired the same day; see
-`docs/plans/2026-09-10-bp-self-service-portal.md` §2.5). Nothing in the browser
-evaluates anything for this page, and no key for it exists in `flag-keys.js`.
-What protects the portal's data is the opaque token in the URL, validated
-server-side on every request.
+same pattern taken to its conclusion. It too is registered unconditionally, but
+its flag — `bp-portal-link` — is declared and evaluated **only** in
+`com.etendoerp.go`: no key for it exists in `flag-keys.js`, nothing in the
+browser reads it, and **none must be added**. The flag gates whether the
+sales-invoice email *carries a portal link*, which is decided entirely
+server-side while the email is built; giving the browser a key would create a
+second evaluator with nothing to evaluate, and a flag whose two ends read from
+different control planes has no single truth (ETP-4966). What protects the
+portal's data is the opaque token in the URL, validated on every request.
+
+That flag is also this codebase's first **per-account targeted** one: it is
+`false` for everyone until an `ETGO_ACCOUNT` email is named in
+`etendo.go.flags.bp-portal-link.emails`, matched against the backend evaluation
+context's targeting key. The mechanism is generic and lives in
+`PropertiesFeatureProvider`, so any future backend flag can use it. It does not
+reopen the `targeting-key-divergence` item below — that divergence needs two
+evaluators, and this flag has only one. See
+`docs/plans/2026-09-10-bp-self-service-portal.md` §2.5 and
+`com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` → *Per-account
+targeting*.
 
 ## Adding a flag
 

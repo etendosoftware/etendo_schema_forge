@@ -31,11 +31,11 @@ import { saveBlobAsFile } from '@/lib/portal/portalDownload.js';
  * Three properties of this page follow from that and are not free to change:
  *
  * - **It is public and unconditional.** The route is registered with no feature-flag check,
- *   and there is no flag to check: whether the *email carries a link* is decided server-side
- *   by a per-sender `AD_Preference`, which is business logic and never an authorization
+ *   because the flag (`bp-portal-link`, backend-only, targeted at the sending account) gates
+ *   whether the *email carries a link* — it is a rollout control, never an authorization
  *   boundary. What protects the data is the token, enforced server-side. Nothing in the
- *   browser evaluates anything for this page, and no key for it exists in `flag-keys.js`
- *   (plan §2.5).
+ *   browser evaluates the flag, no key for it exists in `flag-keys.js`, and none must be
+ *   added (plan §2.5).
  * - **It renders no tenant chrome.** Public routes mount outside `ShellLayout`, so the page
  *   owns its own full-page frame the way `InviteAcceptancePage` does.
  * - **Invalid and revoked look identical.** The backend answers the same to both, and the UI
