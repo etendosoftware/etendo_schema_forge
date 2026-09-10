@@ -40,8 +40,20 @@ export function useApiFetch(baseUrl) {
 
   return useMemo(() => createApiFetch(
     baseUrl,
-    hasSession ? () => token : getAmbientToken,
+    // [ETP-5195 follow-up] When a scope (the session controller) is available, read the
+    // token LIVE off it at request time instead of closing over the `token` const captured
+    // by THIS render — matches the core `useApiFetch`'s own pattern. This is what lets
+    // `token` be dropped from the dependency array below: the returned function's identity
+    // no longer needs to change on every token rotation (the backend mints a fresh JWT on
+    // every silent refresh, even with zero role/org change) for it to still send the
+    // freshest token on every call. Before this, every `useApiFetch`-based hook's own
+    // data-fetch effect (keyed on this function's identity) refired on every tab-focus
+    // silent refresh — confirmed live via Network tab showing unrelated windows (their
+    // record data, images, related lookups) all refetch together on a plain alt-tab with no
+    // role change.
+    apiSessionScope ? () => apiSessionScope.getSnapshot().session.token
+      : hasSession ? () => token : getAmbientToken,
     logout,
     apiSessionScope,
-  ), [baseUrl, hasSession, token, logout, apiSessionScope]);
+  ), [baseUrl, hasSession, logout, apiSessionScope]);
 }
