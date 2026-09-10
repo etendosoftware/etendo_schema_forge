@@ -100,7 +100,10 @@ vi.mock('../StatementsToolbar', () => ({
 }));
 
 vi.mock('../StatementsTable', () => ({
-  StatementsTable: ({ statements, loading, currency, actions, selectedIds, onSelectionChange }) => (
+  StatementsTable: ({
+    statements, loading, currency, actions, selectedIds, onSelectionChange,
+    sortKey, sortDirection, onSort,
+  }) => (
     <div
       data-testid="stub-table"
       data-len={statements.length}
@@ -108,7 +111,15 @@ vi.mock('../StatementsTable', () => ({
       data-currency={currency}
       data-has-actions={actions ? 'true' : 'false'}
       data-selected={selectedIds ? Array.from(selectedIds).join(',') : ''}
+      data-sort-key={sortKey ?? ''}
+      data-sort-direction={sortDirection ?? ''}
     >
+      {/* ETP-4972 — drives the tab's own useClientSort (via onSort=toggleSort)
+          so a "sort must NOT clear selection" test has a way to trigger a
+          sort change; the toolbar's real ListSortPopover has no columns to
+          click in this harness (buildStatementSortColumns is stubbed to
+          return []). */}
+      <button type="button" data-testid="trigger-sort" onClick={() => onSort('name')} />
       {statements.map((s) => (
         <div key={s.id}>
           <button type="button" data-testid={`row-${s.id}`} onClick={() => s.__select?.()}>
@@ -453,6 +464,90 @@ describe('ImportedStatementsTab', () => {
     await user.click(screen.getByTestId('confirm-run'));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('financeAccountStatementsDeleteError'));
     expect(reloadFn).not.toHaveBeenCalled();
+  });
+
+  // ETP-4972 QA finding (comment 145559) — changing the search box, date
+  // range, status quick filter or the advanced ("by conditions") filter must
+  // drop the current checkbox selection (and hide BulkDeleteSelectionBar's
+  // floating pill), so a bulk "Delete selected" can never fire against
+  // statements no longer visible under the new filter. Sorting must NOT
+  // clear the selection — same rows, different order. See
+  // ImportedStatementsTab.jsx's didInitialSelectionClearRef effect, keyed on
+  // [search, dateRange, status, advancedFilter, clearSelection] (deliberately
+  // excluding sortKey/sortDirection).
+  describe('selection clears on filter change (ETP-4972)', () => {
+    it('does not clear an immediate post-mount selection (initial-mount guard)', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+
+      await user.click(screen.getByTestId('row-select-s1'));
+
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', 's1');
+      expect(screen.getByTestId('bulk-delete-selection-count')).toBeInTheDocument();
+    });
+
+    it('clears the selection and hides the bar when the search filter changes', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+
+      await user.click(screen.getByTestId('row-select-s1'));
+      expect(screen.getByTestId('bulk-delete-selection-count')).toBeInTheDocument();
+
+      await user.click(screen.getByTestId('toolbar-search'));
+
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', '');
+      expect(screen.queryByTestId('bulk-delete-selection-count')).not.toBeInTheDocument();
+    });
+
+    it('clears the selection when the status quick filter changes', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+
+      await user.click(screen.getByTestId('row-select-s2'));
+
+      await user.click(screen.getByTestId('toolbar-status'));
+
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', '');
+      expect(screen.queryByTestId('bulk-delete-selection-count')).not.toBeInTheDocument();
+    });
+
+    it('clears the selection when the date range filter changes', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+
+      await user.click(screen.getByTestId('row-select-s1'));
+
+      await user.click(screen.getByTestId('toolbar-daterange'));
+
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', '');
+      expect(screen.queryByTestId('bulk-delete-selection-count')).not.toBeInTheDocument();
+    });
+
+    it('clears the selection when the advanced (by conditions) filter changes', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+
+      await user.click(screen.getByTestId('row-select-s3'));
+
+      await user.click(screen.getByTestId('toolbar-advanced'));
+
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', '');
+      expect(screen.queryByTestId('bulk-delete-selection-count')).not.toBeInTheDocument();
+    });
+
+    it('does NOT clear the selection when only the sort changes', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+
+      await user.click(screen.getByTestId('row-select-s1'));
+      expect(screen.getByTestId('bulk-delete-selection-count')).toBeInTheDocument();
+
+      await user.click(screen.getByTestId('trigger-sort'));
+
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-sort-key', 'name');
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-selected', 's1');
+      expect(screen.getByTestId('bulk-delete-selection-count')).toBeInTheDocument();
+    });
   });
 
   // ── ETP-4656 (Gap 3) — bulk "Delete selected" over the existing checkbox

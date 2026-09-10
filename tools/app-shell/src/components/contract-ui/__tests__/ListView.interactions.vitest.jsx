@@ -879,6 +879,120 @@ describe('ListView — selection bar actions', () => {
   });
 });
 
+// ─── Selection clears on filter change (ETP-4972 QA fix) ───────────────────
+//
+// QA finding (comment 145559): selecting rows, then applying a filter that
+// changes the visible record set, left the old selection (and the floating
+// SelectionToolbar) active over rows no longer on screen — risking a
+// destructive bulk action firing blind. The fix is a useEffect keyed on
+// [columnFilters, effectiveFilter, advancedFilterPart, clearSelection] (see
+// ListView.jsx ~line 763) that calls clearSelection(), guarded by a
+// didInitialSelectionClearRef so mounting doesn't wipe a selection made in
+// the same tick. `clearSelection()` both empties `selectedRows` (hides the
+// toolbar, since it's gated by `selectedRows.length > 0`) and bumps
+// `clearSelectionTrigger` (forwarded to the table as
+// `tableProps.clearSelectionTrigger`), which is what actually resets
+// DataTable's own internal checkbox Set in the real app — asserting on it
+// here is the only way (short of un-mocking DataTable) to prove the "reset
+// the table's internal Set too" half of the fix, not just the toolbar half.
+describe('ListView — selection clears on filter change (ETP-4972)', () => {
+  function selectRows() {
+    act(() => { tableProps.onSelectionChange(SELECTED); });
+  }
+
+  it('does not bump clearSelectionTrigger on initial mount (initial-mount guard)', () => {
+    render(<ListView {...defaultProps} initialColumnFilters={{ status: { value: 'DR' } }} />);
+    expect(tableProps.clearSelectionTrigger).toBe(0);
+  });
+
+  it('clears the selection and hides the floating toolbar when a column filter changes', () => {
+    render(<ListView {...defaultProps} />);
+    selectRows();
+    expect(screen.getByTestId('selection-count')).toBeInTheDocument();
+
+    act(() => { tableProps.onFilterChange('name', { operator: 'contains', value: 'abc' }); });
+
+    expect(tableProps.selectedRows).toEqual([]);
+    expect(tableProps.clearSelectionTrigger).toBe(1);
+    expect(screen.queryByTestId('selection-count')).not.toBeInTheDocument();
+  });
+
+  it('clears the selection when a quick filter is toggled', async () => {
+    const user = userEvent.setup();
+    render(<ListView {...defaultProps} quickFilters={QUICK_FILTERS} />);
+    selectRows();
+
+    await user.click(screen.getByTestId('quick-filter-mine'));
+
+    expect(tableProps.selectedRows).toEqual([]);
+    expect(tableProps.clearSelectionTrigger).toBe(1);
+    expect(screen.queryByTestId('selection-count')).not.toBeInTheDocument();
+  });
+
+  it('clears the selection when the active subset filter changes', async () => {
+    const user = userEvent.setup();
+    render(<ListView {...defaultProps} subsetFilters={SUBSET_FILTERS} />);
+    selectRows();
+
+    await user.click(screen.getByTestId('filter-open'));
+
+    expect(tableProps.selectedRows).toEqual([]);
+    expect(screen.queryByTestId('selection-count')).not.toBeInTheDocument();
+  });
+
+  it('clears the selection when the advanced (funnel) filter changes', () => {
+    render(<ListView {...defaultProps} />);
+    selectRows();
+
+    act(() => { filterBarProps.onAdvancedFilterChange({ token: 'zz' }); });
+
+    expect(tableProps.selectedRows).toEqual([]);
+    expect(screen.queryByTestId('selection-count')).not.toBeInTheDocument();
+  });
+
+  it('clears the selection on "clear all filters" (handleClearAllFilters)', () => {
+    render(<ListView {...defaultProps} initialColumnFilters={{ status: { value: 'DR' } }} />);
+    selectRows();
+
+    act(() => { tableProps.onClearAllFilters(); });
+
+    expect(tableProps.selectedRows).toEqual([]);
+    expect(screen.queryByTestId('selection-count')).not.toBeInTheDocument();
+  });
+
+  it('clears the selection when a saved filter preset is applied (applyPreset)', () => {
+    mockPresets = {
+      P1: {
+        columnFilters: { name: { value: 'x' } },
+        advancedFilter: null,
+        subsetLabel: null,
+        quickFilterLabels: [],
+      },
+    };
+    render(<ListView {...defaultProps} />);
+    selectRows();
+
+    act(() => { filterBarProps.onApplyPreset('P1'); });
+
+    expect(tableProps.selectedRows).toEqual([]);
+    expect(screen.queryByTestId('selection-count')).not.toBeInTheDocument();
+  });
+
+  it('does NOT clear the selection (nor bump clearSelectionTrigger) when only the sort changes', () => {
+    render(<ListView {...defaultProps} />);
+    selectRows();
+    expect(screen.getByTestId('selection-count')).toBeInTheDocument();
+    const triggerBefore = tableProps.clearSelectionTrigger;
+
+    act(() => { tableProps.onSort('name'); });
+
+    expect(tableProps.sortColumn).toBe('name');
+    expect(tableProps.selectedRows).toEqual(SELECTED);
+    expect(tableProps.clearSelectionTrigger).toBe(triggerBefore);
+    expect(screen.getByTestId('selection-count')).toBeInTheDocument();
+  });
+});
+
 // ─── Refresh & paging ───────────────────────────────────────────────────────
 
 describe('ListView — refresh and paging', () => {

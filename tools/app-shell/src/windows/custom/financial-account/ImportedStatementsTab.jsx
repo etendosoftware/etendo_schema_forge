@@ -1,4 +1,4 @@
-import { useCallback, useState, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useCallback, useEffect, useState, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { toast } from 'sonner';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { translateBackendError } from '@/lib/backendErrors.js';
@@ -96,6 +96,24 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   // StatementRowKebab's comment), so a non-draft in the selection surfaces as a
   // normal per-row failure in the 3-outcome toast rather than being pre-filtered.
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  // ETP-4972 QA finding (comment 145559) — applying/changing the search box,
+  // date range, status quick filter or the advanced filter must drop the
+  // current checkbox selection, so a bulk "Delete selected" can never fire
+  // against statements the user is no longer looking at (same generic rule
+  // applied to ListView; this tab keeps its own local filter + selection
+  // state instead of ListView's). Deliberately excludes `sortKey`/
+  // `sortDirection` (useClientSort below): reordering the same filtered rows
+  // doesn't change which ones are visible.
+  const didInitialSelectionClearRef = useRef(false);
+  useEffect(() => {
+    if (!didInitialSelectionClearRef.current) {
+      didInitialSelectionClearRef.current = true;
+      return;
+    }
+    clearSelection();
+  }, [search, dateRange, status, advancedFilter, clearSelection]);
+
   const { requestBatchDelete, batchDeleteDialog, deleting: bulkDeleting } = useBatchDeleteDialog({
     deleteOneFn: (id) => deleteStatement(id),
     onOutcome: (succeeded, failed) => {

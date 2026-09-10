@@ -139,6 +139,24 @@ export const MovementsTab = forwardRef(function MovementsTab(
   // 3-outcome toast rather than being pre-filtered out of the selection.
   const { deleteMovement } = useDeleteMovement();
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  // ETP-4972 QA finding (comment 145559) — applying/changing the quick filters
+  // (date range, type, search) or the advanced filter must drop the current
+  // checkbox selection, so a bulk "Delete selected" can never fire against
+  // movements the user is no longer looking at (same generic rule applied to
+  // ListView; this tab keeps its own local filter + selection state instead
+  // of ListView's). Deliberately excludes `sortKey`/`sortDirection`
+  // (useClientSort below): reordering the same filtered rows doesn't change
+  // which ones are visible.
+  const didInitialSelectionClearRef = useRef(false);
+  useEffect(() => {
+    if (!didInitialSelectionClearRef.current) {
+      didInitialSelectionClearRef.current = true;
+      return;
+    }
+    clearSelection();
+  }, [filters, advancedFilter, clearSelection]);
+
   const { requestBatchDelete, batchDeleteDialog, deleting: bulkDeleting } = useBatchDeleteDialog({
     deleteOneFn: (id) => deleteMovement({ id }),
     onOutcome: (succeeded, failed) => {

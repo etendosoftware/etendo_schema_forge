@@ -604,6 +604,32 @@ a custom `headerTable` slot's *own* hand-built toolbar still unmounts while a
 selection is active, because that toolbar and the grid live in the same
 slot; see the corrected note there.)
 
+**A filter change MUST clear the selection (QA finding, ETP-4972).** Any
+component that combines its own filtering state with its own selection state
+(checkbox `Set`/array feeding a `SelectionToolbar`) must clear that selection
+— and, for `ListView`, bump `clearSelectionCounter` via `clearSelection()`
+rather than a bare `setSelectedRows([])`, so `DataTable`'s own internal
+checkbox `Set` resets too (see its `clearSelectionTrigger` effect) — whenever
+a filter changes the visible row set. Otherwise a destructive bulk action
+(e.g. "Eliminar") can fire against rows the user is no longer looking at,
+which is exactly the QA-reported risk: select rows, change a filter, the
+floating pill stays up over records that scrolled out of the filtered view.
+**A sort-only change must NOT clear the selection** — reordering the same
+rows doesn't change which ones are visible, so treat this as a bug if someone
+"fixes" it by folding sort state into the same effect. The fix lives in a
+`useEffect` keyed on the component's filter state (never its sort state),
+guarded by a "skip the first render" ref so mounting doesn't spuriously clear
+an initial selection. Implemented in:
+- `ListView.jsx` — keyed on `[columnFilters, effectiveFilter, advancedFilterPart]` (covers column filters, subset/quick filters, the advanced-filter popover, `handleClearAllFilters` and `applyPreset`, since all of them flow through those same state variables).
+- `windows/custom/financial-account/MovementsTab.jsx` — keyed on `[filters, advancedFilter]`.
+- `windows/custom/financial-account/ImportedStatementsTab.jsx` — keyed on `[search, dateRange, status, advancedFilter]`.
+
+A component whose selection is scoped to a sub-view that already unmounts on
+navigation needs no separate fix — e.g. `PeriodsExpandablePanel.jsx` already
+clears `selectedDocIds` inside `toggleExpand` because the visible documents
+are only ever the currently-expanded period's, and `AssetsAmortizationPanel.jsx`
+clears on `[lines]` because it has no filter UI of its own.
+
 **Composition — children, not a data-driven `actions[]` prop.**
 `SelectionToolbar` is deliberately a dumb positioning/chrome "shell": it owns
 the portal, the true fixed placement, the dark-pill visual chrome (radius,

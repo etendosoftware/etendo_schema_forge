@@ -99,11 +99,12 @@ vi.mock('../AccountSummaryStrip.jsx', () => ({
 }));
 
 vi.mock('../MovementsTable.jsx', () => ({
-  MovementsTable: ({ movements, selectedIds, onSelectionChange }) => (
+  MovementsTable: ({ movements, selectedIds, onSelectionChange, sortKey, sortDirection, onSort }) => (
     <div data-testid="table">
       <span data-testid="row-count">{movements.length}</span>
       <span data-testid="row-ids">{movements.map((m) => m.id).join(',')}</span>
       <span data-testid="selected-ids">{[...(selectedIds ?? [])].join(',')}</span>
+      <span data-testid="sort-state">{JSON.stringify({ sortKey, sortDirection })}</span>
       {/* Toggles selection of movement "a" — exercises both the select and
           deselect branches of handleSelectionChange. */}
       <button data-testid="toggle-select-a" onClick={() => onSelectionChange('a')}>
@@ -111,6 +112,14 @@ vi.mock('../MovementsTable.jsx', () => ({
       </button>
       <button data-testid="toggle-select-b" onClick={() => onSelectionChange('b')}>
         toggle b
+      </button>
+      {/* ETP-4972 — drives the tab's own useClientSort (via onSort=toggleSort)
+          so a "sort must NOT clear selection" regression test has a way to
+          trigger a sort change; the toolbar's real ListSortPopover has no
+          columns to click in this harness (buildMovementSortColumns is
+          stubbed to return []). */}
+      <button data-testid="trigger-sort" onClick={() => onSort('id')}>
+        sort by id
       </button>
     </div>
   ),
@@ -335,6 +344,77 @@ describe('MovementsTab — selection toggle', () => {
       screen.getByTestId('toggle-select-a').click();
     });
     expect(screen.getByTestId('selected-ids').textContent).toBe('');
+  });
+});
+
+// ETP-4972 QA finding (comment 145559) — changing a quick/advanced filter must
+// drop the current checkbox selection (and hide BulkDeleteSelectionBar's
+// floating pill), so a bulk "Delete selected" can never fire against
+// movements no longer visible under the new filter. Sorting must NOT clear
+// the selection — same rows, different order. See MovementsTab.jsx's
+// didInitialSelectionClearRef effect, keyed on [filters, advancedFilter,
+// clearSelection] (deliberately excluding sortKey/sortDirection).
+describe('MovementsTab — selection clears on filter change (ETP-4972)', () => {
+  it('does not clear an immediate post-mount selection (initial-mount guard)', () => {
+    renderTab();
+    act(() => screen.getByTestId('toggle-select-a').click());
+    expect(screen.getByTestId('selected-ids').textContent).toBe('a');
+    expect(screen.getByTestId('bulk-delete-selection-count')).toBeInTheDocument();
+  });
+
+  it('clears the selection and hides the bar when a quick filter (type) changes', () => {
+    renderTab();
+    act(() => screen.getByTestId('toggle-select-a').click());
+    expect(screen.getByTestId('bulk-delete-selection-count')).toBeInTheDocument();
+
+    act(() => screen.getByTestId('set-type-bpd').click());
+
+    expect(screen.getByTestId('selected-ids').textContent).toBe('');
+    expect(screen.queryByTestId('bulk-delete-selection-count')).not.toBeInTheDocument();
+  });
+
+  it('clears the selection when the search filter changes', () => {
+    renderTab();
+    act(() => screen.getByTestId('toggle-select-a').click());
+
+    act(() => screen.getByTestId('set-search-acme').click());
+
+    expect(screen.getByTestId('selected-ids').textContent).toBe('');
+    expect(screen.queryByTestId('bulk-delete-selection-count')).not.toBeInTheDocument();
+  });
+
+  it('clears the selection when the date range filter changes', () => {
+    renderTab();
+    act(() => screen.getByTestId('toggle-select-a').click());
+
+    act(() => screen.getByTestId('set-date-null').click());
+
+    expect(screen.getByTestId('selected-ids').textContent).toBe('');
+    expect(screen.queryByTestId('bulk-delete-selection-count')).not.toBeInTheDocument();
+  });
+
+  it('clears the selection when the advanced (by conditions) filter changes', () => {
+    renderTab();
+    act(() => screen.getByTestId('toggle-select-a').click());
+
+    act(() => screen.getByTestId('set-status-reconciled').click());
+
+    expect(screen.getByTestId('selected-ids').textContent).toBe('');
+    expect(screen.queryByTestId('bulk-delete-selection-count')).not.toBeInTheDocument();
+  });
+
+  it('does NOT clear the selection when only the sort changes', () => {
+    renderTab();
+    act(() => screen.getByTestId('toggle-select-a').click());
+    expect(screen.getByTestId('bulk-delete-selection-count')).toBeInTheDocument();
+
+    act(() => screen.getByTestId('trigger-sort').click());
+
+    expect(screen.getByTestId('sort-state').textContent).toBe(
+      JSON.stringify({ sortKey: 'id', sortDirection: 'asc' }),
+    );
+    expect(screen.getByTestId('selected-ids').textContent).toBe('a');
+    expect(screen.getByTestId('bulk-delete-selection-count')).toBeInTheDocument();
   });
 });
 
