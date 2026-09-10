@@ -796,6 +796,31 @@ export async function selectVendorBP(page, { name } = {}) {
   // address callout hadn't landed yet when the caller sampled its value).
   await waitForDerivedFieldValue(page, 'paymentTerms', { timeout: 30_000 });
   await waitForDerivedFieldValue(page, 'partnerAddress', { timeout: 30_000 });
+
+  // And `warehouse`, which is the field that actually GATES the save — and the one this settle
+  // used to leave out, which is how a dropped warehouse surfaced two windows later as an
+  // unexplained "Guardar stays disabled" instead of here, where the cause is.
+  //
+  // It settles through a different code path from its two siblings above. The BP callout
+  // delivers paymentTerms/priceList/partnerAddress as `updates.<field>.value`, applied
+  // directly; warehouse comes back as **`combos.warehouse.selected`** (verified in the callout
+  // payload: `combos.warehouse.selected = DE68F430…`, with no `_identifier` and no `entries`),
+  // so it is routed through `applyOneComboEntry()` in `detailViewHelpers.jsx` instead —
+  // which drops the entry silently when `isStaleCalloutResponse()` says so. Selecting a vendor
+  // fires SEVEN header callouts inside ~1.6s, so that guard has ample opportunity to fire, and
+  // nothing ever retries a dropped combo: the field then stays empty for good.
+  //
+  // Which is why this is a real assertion and not a longer timeout. Captured on
+  // purchase-order-full-flow: 19 polls across 15s, every one of them reading
+  // `data-missing-required="warehouse"` on a still-disabled Guardar. A field that never
+  // arrives does not arrive later either.
+  //
+  // Conditional because `selectVendorBP` is shared with documents that HAVE no warehouse
+  // (purchase invoice, the cash-close payment flow): absent field → nothing to settle. On a
+  // document that does have one it is `required`, so waiting for it is never wrong there.
+  if (await derivedFieldLocator(page, 'warehouse').count() > 0) {
+    await waitForDerivedFieldValue(page, 'warehouse', { timeout: 30_000 });
+  }
   await slow(page);
 }
 
