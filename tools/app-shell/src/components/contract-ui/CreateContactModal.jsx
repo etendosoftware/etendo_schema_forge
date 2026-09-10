@@ -6,6 +6,7 @@ import FinancialSection from './FinancialSection.jsx';
 import AddressSection from './AddressSection.jsx';
 import { contactModalConfig } from './contactModalConfig.js';
 import { matchOptionByLabel } from '@/lib/matchOptionLabel';
+import { resolveDefaultCountryId } from '@/lib/defaultCountry.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const COMPONENT_MAP = { AddressSection, FinancialSection };
@@ -30,6 +31,15 @@ const EMPTY_OPTS = {
  * rejects. Maps form field id → key in `opts`.
  */
 const OPTION_PREFILL_FIELDS = { country: 'countries', region: 'regions' };
+
+/**
+ * Mandatory fields shared by both contact types — only the name fields differ.
+ *
+ * One list drives two things: AddressSection renders the asterisk for the ids it
+ * finds here, and EntityCreationModal keeps Save disabled until every one of them
+ * holds a value. `address` (Primera línea) joined `country` in ETP-5103.
+ */
+const COMMON_REQUIRED_FIELDS = ['businessPartnerCategory', 'taxIdType', 'taxID', 'address', 'country'];
 
 function buildPersonName(firstName, lastName) {
   return [firstName, lastName]
@@ -316,6 +326,49 @@ export default function CreateContactModal({
     if (resolved.country) setCurrentCountry(c => c || resolved.country);
   }, [prefill, opts.countries, opts.regions]);
 
+  /**
+   * ETP-5103 — the address of a new contact opens with Spain preselected.
+   *
+   * The whole country catalog is already in `opts` (fetchCountries pages through
+   * it), so the default is resolved locally instead of asking the selector for it
+   * again — unlike LocationEditorModal, which only holds one page.
+   *
+   * An explicit pre-fill always wins over a system default, so a country the OCR
+   * extracted skips this entirely. That also keeps the two out of a race for the
+   * same field: the prefill resolves in an effect that runs *after* the one
+   * applying `patchValues`, so merging them by precedence would not be enough.
+   *
+   * Depends on the extracted label rather than on `prefill` itself, which callers
+   * build inline and hand over as a fresh object on every render.
+   */
+  const prefilledCountry = prefill?.country;
+  const defaultCountryId = useMemo(
+    () => (prefilledCountry ? '' : resolveDefaultCountryId(opts.countries?.options)),
+    [prefilledCountry, opts.countries],
+  );
+
+  /*
+   * Regions are fetched off `currentCountry`, which only `onChange` feeds. A
+   * defaulted country is written straight into the form by the `patchValues`
+   * merge and never passes through it, so seed it here — otherwise the Región
+   * picker unlocks on an empty list. `c || …` leaves a country the user already
+   * picked untouched, matching the pre-fill effect above.
+   */
+  useEffect(() => {
+    if (!defaultCountryId) return;
+    setCurrentCountry(c => c || defaultCountryId);
+  }, [defaultCountryId]);
+
+  /*
+   * `patchValues` writes only still-empty fields (see EntityCreationModal), which
+   * is exactly what a default needs: it acts as the one-shot guard, so nothing the
+   * user typed while the catalog loaded is overwritten and no ref is required.
+   */
+  const patchValues = useMemo(() => {
+    if (!defaultCountryId) return resolvedOptionPrefill;
+    return { country: defaultCountryId, ...resolvedOptionPrefill };
+  }, [defaultCountryId, resolvedOptionPrefill]);
+
   const handleFieldChange = useCallback((id, value) => {
     if (id === 'country') setCurrentCountry(value);
   }, []);
@@ -361,9 +414,8 @@ export default function CreateContactModal({
 
   const requiredFields = useMemo(
     () => {
-      return contactType === 'company'
-        ? ['name', 'businessPartnerCategory', 'taxIdType', 'taxID', 'country']
-        : ['etgoFirstname', 'etgoLastname', 'businessPartnerCategory', 'taxIdType', 'taxID', 'country'];
+      if (contactType === 'company') return ['name', ...COMMON_REQUIRED_FIELDS];
+      return ['etgoFirstname', 'etgoLastname', ...COMMON_REQUIRED_FIELDS];
     },
     [contactType],
   );
@@ -570,7 +622,7 @@ export default function CreateContactModal({
       requiredFields={requiredFields}
       progressFields={progressFields}
       validate={validateForm}
-      patchValues={resolvedOptionPrefill}
+      patchValues={patchValues}
       initialValues={{
         name: initialQuery || '',
         etgoFirstname: '',
