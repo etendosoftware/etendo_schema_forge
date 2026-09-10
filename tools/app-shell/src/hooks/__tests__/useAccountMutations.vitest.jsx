@@ -15,6 +15,15 @@ const wrapper = ({ children }) => (
 
 const ENTITY_URL = '/etendo/sws/neo/financial-account/account';
 
+// ETP-5195: AuthProvider now fires a silent `GET /sws/neo/refreshtoken` on mount, which lands
+// in `globalThis.fetch.mock.calls` alongside the hook's own call. Find the hook's own call by
+// URL instead of assuming it is always at index 0.
+function findFetchCall(url) {
+  const call = globalThis.fetch.mock.calls.find(([calledUrl]) => calledUrl === url);
+  expect(call).toBeTruthy();
+  return call;
+}
+
 function okResponse(rows) {
   return { ok: true, json: async () => ({ response: { data: rows } }) };
 }
@@ -52,7 +61,7 @@ describe('useAccountMutations', () => {
       created = await result.current.createAccount({ name: 'BBVA', currencyId: '102' });
     });
 
-    const [url, init] = globalThis.fetch.mock.calls[0];
+    const [url, init] = findFetchCall(ENTITY_URL);
     expect(url).toBe(ENTITY_URL);
     expect(url).not.toContain('action=');
     expect(init.method).toBe('POST');
@@ -75,7 +84,7 @@ describe('useAccountMutations', () => {
       });
     });
 
-    const [, init] = globalThis.fetch.mock.calls[0];
+    const [, init] = findFetchCall(ENTITY_URL);
     expect(JSON.parse(init.body)).toEqual({
       name: 'BBVA',
       type: 'B',
@@ -93,7 +102,7 @@ describe('useAccountMutations', () => {
       await result.current.createAccount({ name: 'Caja', currencyId: '102' });
     });
 
-    const [, init] = globalThis.fetch.mock.calls[0];
+    const [, init] = findFetchCall(ENTITY_URL);
     const body = JSON.parse(init.body);
     expect(body).toEqual({ name: 'Caja', currency: '102' });
     expect(body).not.toHaveProperty('swiftCode');
@@ -110,7 +119,7 @@ describe('useAccountMutations', () => {
       await result.current.createAccount({ name: 'BBVA', currencyId: '102', countryId: '106' });
     });
 
-    const [, init] = globalThis.fetch.mock.calls[0];
+    const [, init] = findFetchCall(ENTITY_URL);
     expect(JSON.parse(init.body)).toEqual({ name: 'BBVA', currency: '102', country: '106' });
   });
 
@@ -205,7 +214,7 @@ describe('useAccountMutations', () => {
       });
     });
 
-    const [url, init] = globalThis.fetch.mock.calls[0];
+    const [url, init] = findFetchCall(`${ENTITY_URL}/acc-1`);
     expect(url).toBe(`${ENTITY_URL}/acc-1`);
     expect(url).not.toContain('action=');
     expect(init.method).toBe('PUT');
@@ -229,7 +238,7 @@ describe('useAccountMutations', () => {
       await result.current.updateAccount('acc-1', { dateTolerance: 3, amountTolerance: 0 });
     });
 
-    const [, init] = globalThis.fetch.mock.calls[0];
+    const [, init] = findFetchCall(`${ENTITY_URL}/acc-1`);
     expect(JSON.parse(init.body)).toEqual({
       eTGODateTolerance: 3,
       eTGOAmountTolerance: 0,
@@ -244,7 +253,7 @@ describe('useAccountMutations', () => {
       await result.current.updateAccount('acc-1', { countryId: '106' });
     });
 
-    const [, init] = globalThis.fetch.mock.calls[0];
+    const [, init] = findFetchCall(`${ENTITY_URL}/acc-1`);
     expect(JSON.parse(init.body)).toEqual({ country: '106' });
   });
 
@@ -256,7 +265,7 @@ describe('useAccountMutations', () => {
       await result.current.updateAccount('acc-1', { name: 'Renamed' });
     });
 
-    const [, init] = globalThis.fetch.mock.calls[0];
+    const [, init] = findFetchCall(`${ENTITY_URL}/acc-1`);
     const body = JSON.parse(init.body);
     expect(body).not.toHaveProperty('eTGODateTolerance');
     expect(body).not.toHaveProperty('eTGOAmountTolerance');
@@ -270,7 +279,7 @@ describe('useAccountMutations', () => {
       await result.current.updateAccount('acc/with space', { name: 'x' });
     });
 
-    const [url] = globalThis.fetch.mock.calls[0];
+    const [url] = findFetchCall(`${ENTITY_URL}/acc%2Fwith%20space`);
     expect(url).toBe(`${ENTITY_URL}/acc%2Fwith%20space`);
   });
 
@@ -300,7 +309,7 @@ describe('useAccountMutations', () => {
       res = await result.current.archiveAccount('acc-1');
     });
 
-    const [url, init] = globalThis.fetch.mock.calls[0];
+    const [url, init] = findFetchCall(`${ENTITY_URL}/acc-1`);
     expect(url).toBe(`${ENTITY_URL}/acc-1`);
     expect(init.method).toBe('PATCH');
     expect(JSON.parse(init.body)).toEqual({ active: false });
@@ -335,7 +344,7 @@ describe('useAccountMutations', () => {
       res = await result.current.deleteAccount('acc-1');
     });
 
-    const [url, init] = globalThis.fetch.mock.calls[0];
+    const [url, init] = findFetchCall(`${ENTITY_URL}/acc-1`);
     expect(url).toBe(`${ENTITY_URL}/acc-1`);
     expect(init.method).toBe('DELETE');
     expect(init.headers.Authorization).toBe('Bearer test-token');
@@ -366,7 +375,7 @@ describe('useAccountMutations', () => {
       res = await result.current.unarchiveAccount('acc-1');
     });
 
-    const [url, init] = globalThis.fetch.mock.calls[0];
+    const [url, init] = findFetchCall(`${ENTITY_URL}/acc-1`);
     expect(url).toBe(`${ENTITY_URL}/acc-1`);
     // PATCH rather than a dedicated endpoint: `active` is hardcoded writable in NeoFieldFilter,
     // so the generic CRUD persists it with no backend change.
@@ -396,6 +405,11 @@ describe('useAccountMutations', () => {
   /** Routes the fetch mock by URL: selector rows + defaults envelope. */
   function mockDefaultsFetch({ selectorJson, defaultsJson, defaultsFails } = {}) {
     globalThis.fetch.mockImplementation(async (url) => {
+      if (url.endsWith('/refreshtoken')) {
+        // AuthProvider's own silent-refresh call (ETP-5195) — unrelated to this hook, give it a
+        // harmless response so it doesn't fall through to the "unexpected fetch" branch below.
+        return { ok: true, json: async () => ({}) };
+      }
       if (url.includes('/selectors/C_Currency_ID')) {
         return { ok: true, json: async () => selectorJson };
       }
@@ -423,8 +437,8 @@ describe('useAccountMutations', () => {
       defaults = await result.current.fetchDefaults();
     });
 
-    const [selectorsUrl, selectorsInit] = globalThis.fetch.mock.calls[0];
-    const [defaultsUrl, defaultsInit] = globalThis.fetch.mock.calls[1];
+    const [selectorsUrl, selectorsInit] = findFetchCall(SELECTORS_URL);
+    const [defaultsUrl, defaultsInit] = findFetchCall(DEFAULTS_URL);
     expect(selectorsUrl).toBe(SELECTORS_URL);
     expect(defaultsUrl).toBe(DEFAULTS_URL);
     // GETs: no explicit method passed to fetch
@@ -579,8 +593,9 @@ describe('useAccountMutations', () => {
         status: 500,
       });
     });
-    // The best-effort defaults call must not happen when selectors fail.
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    // The best-effort defaults call must not happen when selectors fail. (AuthProvider's own
+    // silent-refresh call, ETP-5195, is unrelated and may or may not have also fired.)
+    expect(globalThis.fetch.mock.calls.some(([url]) => url === DEFAULTS_URL)).toBe(false);
   });
 
   // ── returned shape ──────────────────────────────────────────────────────────
