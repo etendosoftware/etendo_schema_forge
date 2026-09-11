@@ -70,10 +70,15 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
 
   // draftMode confirm button (DetailView) dispatches this event to open the confirm modal
   useEffect(() => {
-    const handler = () => setShowConfirm(true);
+    // ETP-5255 — `isDraft` gates OPENING the modal, never keeping it mounted. Confirming the
+    // order flips the record to CO, and the modal has to outlive that: it is where the result of
+    // the receipt/invoice steps is reported.
+    const handler = () => { if (isDraft) setShowConfirm(true); };
     window.addEventListener('purchase-order:open-confirm-modal', handler);
     return () => window.removeEventListener('purchase-order:open-confirm-modal', handler);
-  }, []);
+    // `isDraft` is read inside the handler, so an empty dep array would pin the value this effect
+    // first saw and the modal would stop opening after any status change.
+  }, [isDraft]);
 
   // PurchaseOrderDraftChips (topbarExtra) dispatches this event when a grouped chip is clicked
   useEffect(() => {
@@ -166,8 +171,39 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
     document.body,
   ) : null;
 
+  // ETP-5255 — gated on `showConfirm` ALONE, and hoisted above the early return below, because
+  // both of those unmounted it at the exact moment it had something to say. Confirming the order
+  // moves it DR→CO, so `isDraft` goes false and `fetched` resets to null while the CO effect
+  // reloads; the modal then vanished mid-flow and the failure of a receipt/invoice step was
+  // reported nowhere at all — no error, no toast, and no way to retry, since the draft Confirm
+  // button is not rendered in CO either. That is strictly worse than the 409 it replaced: a
+  // recoverable conflict traded for a silent failure. `onClose` is the only thing that may close
+  // it.
+  const confirmPortal = showConfirm ? createPortal(
+    <ConfirmModal
+      orderId={recordId}
+      data={data}
+      apiBaseUrl={apiBaseUrl}
+      headers={headers}
+      onSave={onSave}
+      onRefresh={onRefresh}
+      onClose={() => setShowConfirm(false)}
+      onConfirmed={(docs) => { setShowConfirm(false); setConfirmedDocs(docs); }}
+      data-testid="ConfirmModal__8b5323" />,
+    document.body,
+  ) : null;
+
   // ── COMPLETED (loading) ────────────────────────────────────────────────────
-  if (isCompleted && !fetched) {
+  // `!showConfirm` (ETP-5255) — an open modal must never cross between this return and the main
+  // one. Rendering it from BOTH is not enough and was the second wrong fix: the portal sits at a
+  // different child index in each fragment, so React reconciles it as a new element and REMOUNTS
+  // `ConfirmModal`, wiping `error`, `orderConfirmed`, `receiptResult` and `invoiceResult`. The
+  // modal then came back blank with both checkboxes cleared, and pressing Confirm re-ran
+  // `documentAction` on an order already in CO (`@AlreadyPosted@`) while the receipt — the step
+  // that actually failed — was never retried. Staying on ONE return path keeps the element's
+  // position, and therefore its state, stable. Safe because everything below that needs `fetched`
+  // is guarded on it.
+  if (isCompleted && !fetched && !showConfirm) {
     return <>{confirmedPanel}<CopyRecordLinkButton recordId={recordId} windowName="purchase-order" /><span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '4px 8px' }}>…</span></>;
   }
 
@@ -175,7 +211,8 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
   let buttonLabel = null;
   let derived = null;
   let currency = '';
-  if (isCompleted) {
+  // `fetched` can be null here now that the loading return above yields to an open modal.
+  if (isCompleted && fetched) {
     const { receipts, invoices, orderLines } = fetched;
 
     const receiptsDraft    = receipts.filter(r => r.documentStatus === 'DR');
@@ -223,18 +260,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
         data-testid="SendDocumentButton__8b5323" />}
       <CopyRecordLinkButton recordId={recordId} windowName="purchase-order" />
       {clonePortal}
-      {isDraft && showConfirm && createPortal(
-        <ConfirmModal
-          orderId={recordId}
-          data={data}
-          apiBaseUrl={apiBaseUrl}
-          headers={headers}
-          onSave={onSave}
-          onClose={() => setShowConfirm(false)}
-          onConfirmed={(docs) => { setShowConfirm(false); setConfirmedDocs(docs); }}
-          data-testid="ConfirmModal__8b5323" />,
-        document.body,
-      )}
+      {confirmPortal}
       {isCompleted && showActions && createPortal(
         <CreateDocsModal
           orderId={recordId}
@@ -271,7 +297,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
 
 // ── ConfirmModal ───────────────────────────────────────────────────────────────
 
-export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onConfirmed, onSave }) {
+export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onConfirmed, onSave, onRefresh }) {
   const ui      = useUI();
   const [createReceipt,  setCreateReceipt]  = useState(false);
   const [createInvoice,  setCreateInvoice]  = useState(false);
@@ -450,8 +476,30 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     // user can retry. The successful steps are already locked via state, so
     // the next attempt will skip them.
     if (errors.length > 0) {
+      // ETP-5255 — reload the record before letting the user retry. Reaching here means the order
+      // was confirmed (step 1 returned, or had already succeeded in an earlier attempt) and only a
+      // document step failed, so the row on the server is NOT what this window is showing any
+      // more: `documentAction=CO` moved it out of draft and recalculated its totals.
+      //
+      // Two things were broken by not doing this, and the second is why the retry could never
+      // work. The window kept displaying the pre-confirmation order — a screen that lies. And the
+      // `updated` token cached for the record was the pre-action one, so `onSave()` at the top of
+      // the retry PATCHed with a superseded token and the server refused it 409 `stale_record`,
+      // surfaced to the user as "somebody else edited this record" — about a change they had just
+      // made themselves, on a retry that would fail identically forever.
+      //
+      // Awaited on purpose: the retry's very first act is `onSave()`, so the reload has to have
+      // landed before the user can press the button again.
+      // Errors are shown FIRST: the reload is best-effort, and the user must not be left staring
+      // at a spinner while it happens, nor lose the message if it throws.
       setError(errors.join('\n'));
       setLoading(false);
+      try {
+        await onRefresh?.();
+      } catch {
+        // A failed reload must not replace the process errors with its own. The user still needs
+        // to read which document step failed; a stale screen is the lesser problem.
+      }
       return;
     }
 
@@ -560,7 +608,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
             title={ui('poCreateReceiptTitle')}
             subtitle={receiptResult ? ui('soAlreadyCreated') : ui('poCreateReceiptCheckDesc')}
             disabled={Boolean(receiptResult)}
-            data-testid="PoCheckboxCard__8b5323" />
+            testId="purchase-order-confirm-receipt-card" />
           <PoCheckboxCard
             checked={createInvoice || Boolean(invoiceResult)}
             onChange={() => !invoiceResult && setCreateInvoice(v => !v)}
@@ -568,7 +616,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
             title={ui('soCreateInvoiceTitle')}
             subtitle={invoiceResult ? ui('soAlreadyCreated') : ui('poCreateInvoiceCheckDesc')}
             disabled={Boolean(invoiceResult)}
-            data-testid="PoCheckboxCard__8b5323" />
+            testId="purchase-order-confirm-invoice-card" />
         </div>
 
         {error && (
@@ -596,9 +644,16 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
 
 // ── PoCheckboxCard ─────────────────────────────────────────────────────────────
 
-function PoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled }) {
+// `testId` is a named prop, not `data-testid`, and it is APPLIED to the div (ETP-5255). Every
+// instance used to pass `data-testid`, which this component neither destructured nor spread, so
+// the cards reached the DOM with no test id at all — and the value passed was one shared generated
+// hash, so it could not have told the two cards apart even if it had been applied. The mocked
+// confirm spec had to locate them by their translated label in both locales as a result. Mirrors
+// `SoCheckboxCard` in sales-order, which already did this correctly.
+function PoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled, testId }) {
   return (
     <div
+      data-testid={testId}
       onClick={disabled ? undefined : onChange}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
@@ -750,7 +805,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
               icon="📦"
               title={ui('poCreateReceiptTitle')}
               subtitle={receiptSubtitle}
-              data-testid="PoCheckboxCard__8b5323" />
+              testId="purchase-order-docs-receipt-card" />
           )}
           {needsInvoice && (
             <PoCheckboxCard
@@ -759,7 +814,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
               icon="🧾"
               title={ui('soCreateInvoiceTitle')}
               subtitle={invoiceSubtitle}
-              data-testid="PoCheckboxCard__8b5323" />
+              testId="purchase-order-docs-invoice-card" />
           )}
         </div>
 

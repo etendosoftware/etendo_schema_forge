@@ -279,9 +279,14 @@ describe('ProductPriceBar', () => {
     renderBar();
 
     await screen.findByDisplayValue('Sales List v1');
-    const spinbuttons = screen.getAllByRole('spinbutton');
-    expect(spinbuttons[0]).toHaveValue(23);
-    expect(spinbuttons[1]).toHaveValue(25);
+    // ETP-5107 — the stepper's inner input is now a bare MaskedAmountInput
+    // (type="text", role textbox — no longer a native type="number" spinbutton),
+    // so it's queried by its own stable data-testid instead of role. Idle
+    // display routes through the canonical formatCurrency(), Spanish
+    // comma-decimal with two fixed decimals (Bug 3's literal fix).
+    const spinbuttons = screen.getAllByTestId('PriceStepperInput__d76b90');
+    expect(spinbuttons[0]).toHaveValue('23,00');
+    expect(spinbuttons[1]).toHaveValue('25,00');
   });
 
   it('renders purchase row in purchase section', async () => {
@@ -317,7 +322,7 @@ describe('ProductPriceBar', () => {
 
     await screen.findByDisplayValue('Sales List v1');
 
-    const spinbuttons = screen.getAllByRole('spinbutton');
+    const spinbuttons = screen.getAllByTestId('PriceStepperInput__d76b90');
     await user.clear(spinbuttons[0]);
     await user.type(spinbuttons[0], '99');
     await user.tab(); // blur
@@ -348,7 +353,7 @@ describe('ProductPriceBar', () => {
 
     await screen.findByDisplayValue('Sales List v1');
 
-    const spinbuttons = screen.getAllByRole('spinbutton');
+    const spinbuttons = screen.getAllByTestId('PriceStepperInput__d76b90');
     await user.clear(spinbuttons[1]);
     await user.type(spinbuttons[1], '50');
     await user.tab();
@@ -362,6 +367,60 @@ describe('ProductPriceBar', () => {
     const body = JSON.parse(patch.body);
     expect(body).toHaveProperty('listPrice');
     expect(body).not.toHaveProperty('standardPrice');
+  });
+
+  // -----------------------------------------------------------------------
+  // ETP-5107 Bug 3 regression — comma-decimal input on the stepper commits the
+  // correctly parsed value (used to be a native type="number" input, always
+  // '.'-decimal regardless of locale; typing a comma either did nothing or was
+  // silently dropped).
+  // -----------------------------------------------------------------------
+  it('typing a comma-decimal price into the stepper commits the correctly parsed value (ETP-5107 Bug 3)', async () => {
+    const calls = [];
+    global.fetch = buildFetch(
+      {
+        'GET /price?parentId=': { response: { data: [salesRow({ standardPrice: 10 })] } },
+        'PATCH /price/price-s1': { response: { data: [] } },
+      },
+      calls,
+    );
+
+    const user = userEvent.setup();
+    renderBar();
+
+    await screen.findByDisplayValue('Sales List v1');
+
+    const spinbuttons = screen.getAllByTestId('PriceStepperInput__d76b90');
+    await user.clear(spinbuttons[0]);
+    await user.type(spinbuttons[0], '12,50');
+    expect(spinbuttons[0]).toHaveValue('12,50');
+    await user.tab();
+
+    await waitFor(() => {
+      const patches = calls.filter((c) => c.method === 'PATCH' && c.url.includes('/price/price-s1'));
+      expect(patches).toHaveLength(1);
+    });
+
+    const patch = calls.find((c) => c.method === 'PATCH');
+    const body = JSON.parse(patch.body);
+    // patchField sends String(theParsedNumber) — 12.5, not the literal "12,50"
+    // display string or a truncated/garbled value.
+    expect(body.standardPrice).toBe('12.5');
+  });
+
+  it('the Price tab idle display routes through the canonical formatCurrency (Spanish comma-decimal), not a raw period-decimal number (ETP-5107 Bug 3)', async () => {
+    global.fetch = buildFetch({
+      'GET /price?parentId=': { response: { data: [salesRow({ standardPrice: 79.9, listPrice: 14 })] } },
+    });
+
+    renderBar();
+    await screen.findByDisplayValue('Sales List v1');
+
+    const spinbuttons = screen.getAllByTestId('PriceStepperInput__d76b90');
+    // Live-confirmed bug (plan §5): the Product Price tab used to show "€ 79.9"
+    // (period, single decimal digit) instead of "79,90" (comma, two fixed decimals).
+    expect(spinbuttons[0]).toHaveValue('79,90');
+    expect(spinbuttons[1]).toHaveValue('14,00');
   });
 
   it('does NOT fire PATCH when the value is unchanged after blur', async () => {
@@ -378,7 +437,7 @@ describe('ProductPriceBar', () => {
     renderBar();
 
     await screen.findByDisplayValue('Sales List v1');
-    const spinbuttons = screen.getAllByRole('spinbutton');
+    const spinbuttons = screen.getAllByTestId('PriceStepperInput__d76b90');
     await user.click(spinbuttons[0]);
     await user.tab();
 
@@ -804,7 +863,7 @@ describe('ProductPriceBar', () => {
     const row = await screen.findByTestId('price-add-tariff-row');
     // Name selector + unit-price stepper + list-price stepper + cancel button.
     expect(within(row).getByTestId('field-priceListVersion')).toBeInTheDocument();
-    expect(within(row).getAllByRole('spinbutton')).toHaveLength(2);
+    expect(within(row).getAllByTestId('PriceStepperInput__d76b90')).toHaveLength(2);
     expect(within(row).getByTestId('price-add-cancel')).toBeInTheDocument();
   });
 
@@ -856,7 +915,7 @@ describe('ProductPriceBar', () => {
 
     // No saved rows in this section, so the only steppers are the add-row drafts:
     // [0] = unit price, [1] = list price. Each commits on blur.
-    const spinbuttons = screen.getAllByRole('spinbutton');
+    const spinbuttons = screen.getAllByTestId('PriceStepperInput__d76b90');
     await user.clear(spinbuttons[0]);
     await user.type(spinbuttons[0], '15');
     await user.tab();
@@ -902,7 +961,7 @@ describe('ProductPriceBar', () => {
     await waitFor(() => expect(screen.getByTestId('price-add-tariff')).toBeInTheDocument());
     await user.click(addTariffButton());
 
-    const spinbuttons = screen.getAllByRole('spinbutton');
+    const spinbuttons = screen.getAllByTestId('PriceStepperInput__d76b90');
     await user.clear(spinbuttons[0]);
     await user.type(spinbuttons[0], '15');
     await user.tab();

@@ -8,6 +8,17 @@ const BACKEND_ERROR_MAP = {
     'backendError.staleRecord',
   'The record you are saving has already been changed by another user or process. Cancel your changes and refresh the data by clicking the refresh button.':
     'backendError.staleRecord',
+  // ETP-5245 — ProductCostingHandler. The Costing tab writes into M_Costing, the costing
+  // engine's own table, so the handler is what keeps a hand-entered row safe; these are the
+  // refusals it can return. English on purpose: the message crosses the wire as-is and is
+  // translated here, the pattern ChartOfAccountsSaveValidationSupport documents as correct.
+  'A cost line must belong to a product.': 'backendError.costingNoProduct',
+  'The cost is required.': 'backendError.costingCostRequired',
+  'The cost cannot be negative.': 'backendError.costingCostNegative',
+  'The expiry date must be later than the start date.': 'backendError.costingInvalidDateRange',
+  'This cost was calculated by the system and cannot be modified or deleted.':
+    'backendError.costingEngineRowLocked',
+  'The cost line could not be prepared. Try again.': 'backendError.costingPrepareFailed',
   'The start date field is mandatory': 'backendError.amortizationStartDateRequired',
   'Depreciation Amount field cannot be empty, zero or negative.': 'backendError.amortizationDepreciationAmountRequired',
   'Usable Life - Months field cannot be empty, zero or negative.': 'backendError.amortizationUsableLifeMonthsRequired',
@@ -191,6 +202,18 @@ const BACKEND_ERROR_MAP = {
   'You cannot deactivate your own user account': 'backendError.cannotDeactivateOwnAccount',
   'Cannot deactivate the last active administrator for this client':
     'backendError.cannotDeactivateLastAdmin',
+  // UserRoleAssignmentHandler (com.etendoerp.go, ETP-5264) — the admin-facing "create user" form
+  // never shows a username field, so a raw DB username-unique-constraint message would confusingly
+  // name a field the user never typed. rejectDuplicateEmail() proactively rejects a duplicate
+  // email with this fixed English literal instead.
+  'A user with this email address already exists': 'backendError.duplicateUserEmail',
+  // UserRoleAssignmentHandler (com.etendoerp.go, ETP-5195 Bug 3) — hardcoded English literals,
+  // no AD_Message involvement, thrown when a DELETE targets the acting user's own record, the
+  // client's tenant owner (EM_ETGO_Is_Owner), or the client's last remaining active admin.
+  'You cannot delete your own user account': 'backendError.cannotDeleteOwnAccount',
+  'This user is the tenant owner and cannot be deleted': 'backendError.cannotDeleteOwner',
+  'Cannot delete the last active administrator for this client':
+    'backendError.cannotDeleteLastAdmin',
 };
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a

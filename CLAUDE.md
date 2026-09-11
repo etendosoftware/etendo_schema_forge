@@ -334,9 +334,14 @@ Every process must declare >=3 edge cases. Every kept rule must have a behaviora
 - **Pre-commit:** `make install` activates `.githooks/pre-commit` — runs only on staged artifact/generator/registry files
 - **CI:** `.github/workflows/pipeline-validate.yml` runs `npx sf-validate-pipeline` in shadow mode (annotates, doesn't block) until P3 backfill lands
 
-**Bypass:** `git commit --no-verify` (WIP only — never on a PR targeting `develop`). Note that
-`git push --no-verify` is a different matter and is blocked for agents — see
-**Agent Guardrails** below.
+**Bypass:** none for agents. `git commit --no-verify` (and its short form `-n`) is
+**forbidden** — it does not skip the validation, it relocates it to a more expensive
+place: `.githooks/pre-commit` leaves an execution proof that `.githooks/commit-msg`
+stamps into the message, and an unstamped commit is rejected later by the push gate
+and by the CI hooks check (`.githooks/lib/hooks-proof.sh`). If a commit hook fails,
+fixing what it reports IS the task; if the hook itself is broken, say so and stop.
+`git push --no-verify` is blocked outright for agents — see **Agent Guardrails**
+below. A human can always run either bypass in their own terminal.
 
 ## Agent Guardrails (committed Claude hooks)
 
@@ -360,9 +365,12 @@ spans, drops `VAR=value` prefixes, then requires the segment to *start* with
 --no-verify` and `HUSKY=0 git push --no-verify` are caught, while a commit message
 or grep pattern that merely mentions the flag is not.
 
-Deliberately NOT blocked: `git commit --no-verify` (documented WIP escape hatch)
-and `git push -n` (that's `--dry-run`, not a bypass). The hook only constrains the
-Bash tool — a human can always run the bypass in their own terminal.
+Not blocked by this hook: `git commit --no-verify` and `git push -n` (that's
+`--dry-run`, not a bypass). Note the asymmetry — `git commit --no-verify` is
+forbidden by policy (see **Bypass** above and `.claude/agents/workflow.md`) even
+though no hook denies it, so an agent must not reach for it on the grounds that it
+went through. The hook only constrains the Bash tool — a human can always run the
+bypass in their own terminal.
 
 Adding a hook: drop an executable script in `.claude/hooks/`, register it in
 `.claude/settings.json`, and pipe-test it with a synthetic payload
