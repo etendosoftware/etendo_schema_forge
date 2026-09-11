@@ -16,7 +16,7 @@ import AeatSubmitFlow, { isMissingDefaultIaeActivity } from './AeatSubmitFlow.js
 import { isLastPeriodOfYear, getMissingRequiredFields } from './fm303Layouts.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents, persistManualData, deriveResultKind } from '../../fiscalModelsUtils.js';
+import { formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents, persistManualData, resolveResultColors, deriveResultKind } from '../../fiscalModelsUtils.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
@@ -492,6 +492,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
 
   // Derive result sublabel from kind
   const resultSubLabel = resultKind ? (t(`fm.result.${resultKind}`) ?? resultKind) : (t('fm.m303.summary.result_sub') ?? 'Resultado');
+  const resultColors = resolveResultColors(resultKind);
 
 
   const { tone: incidentBadgeTone, iconColor: incidentIconColor, badge: incidentBadge } =
@@ -715,15 +716,17 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           badgeColor="hsl(var(--muted-foreground))"
           data-testid="KpiWidget__4f6c0d" />
 
-        {/* Resultado */}
+        {/* Resultado — color-coded by sign (ETP-5236 / M303-01): green when the org owes
+            money ('I'), blue when refundable/offsettable ('V'/'C'), neutral otherwise. */}
         <KpiWidget
           icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__4f6c0d" />}
           iconColor="hsl(var(--foreground))"
           label={t('fm.m303.summary.result') ?? 'Resultado'}
           value={formatAmount(summary.result ?? 0)}
+          valueColor={resultColors.valueColor}
           badge={resultSubLabel}
-          badgeBg="hsl(var(--muted))"
-          badgeColor="hsl(var(--muted-foreground))"
+          badgeBg={resultColors.badgeBg}
+          badgeColor={resultColors.badgeColor}
           data-testid="KpiWidget__4f6c0d" />
       </div>
       {/* ── Inline generate error ────────────────────────────────── */}

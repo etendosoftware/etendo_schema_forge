@@ -20748,6 +20748,7 @@
     "fiscal.sii.legend.specialAuth": "Autorizaciones especiales AEAT",
     "fiscal.sii.field.authRegNo": "N.º de registro de la autorización",
     "fiscal.sii.action.validateHash": "Validar Hash",
+    "fiscal.sii.err.authRegNoTooLong": "El número de registro de la autorización no puede superar los 15 caracteres.",
     "fiscal.sii.err.deadline": "El plazo de envío SII es obligatorio.",
     "fiscal.sii.err.noRecordId": "Identificador de registro SII no encontrado.",
     "fiscal.tbai.legend.env": "Entorno",
