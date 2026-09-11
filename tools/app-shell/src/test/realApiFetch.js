@@ -15,14 +15,50 @@
  * it, at a path whose (entity, id) matches the write — which is exactly what makes the
  * server-side concurrency check pass instead of answering 400 `missing_updated`.
  */
+import { beforeEach } from 'vitest';
 import { createApiFetch } from '@etendosoftware/app-shell-core/auth';
+// The `auth/api` subpath, not the `auth` barrel: the barrel does not re-export the write-chain
+// test seam (it only forwards the public helpers), and it also pulls in `AuthContext.jsx`.
+import { resetRecordWriteChainsForTests } from '@etendosoftware/app-shell-core/auth/api';
+import {
+  resetRecordVersionsForTests as resetCoreRecordVersions,
+  rememberRecordVersion as rememberCoreRecordVersion,
+} from '@etendosoftware/app-shell-core/lib/recordVersions.js';
 
 // `rememberRecordVersion` is re-exported for the panels that never read at all: they get
 // `data` through props from `useEntity`, which remembers the token under the `null` bucket.
 // Seeding it directly is how a test stands in for that provider.
-export {
-  resetRecordVersionsForTests, rememberRecordVersion,
-} from '@etendosoftware/app-shell-core/lib/recordVersions.js';
+export { rememberCoreRecordVersion as rememberRecordVersion };
+
+/**
+ * Drops BOTH pieces of module-level state the real `apiFetch` keeps per record: the `updated`
+ * token cache (ETP-5112) and the pending write chains (ETP-5255).
+ *
+ * The second one is not an optimisation — do NOT "simplify" this back into a plain re-export of
+ * the core's `resetRecordVersionsForTests`. Since ETP-5255 the core serialises `PUT`/`PATCH` per
+ * (entity, id): each write awaits the previous write to the SAME record, and its chain entry is
+ * removed only when it settles. The suites that use this harness prove single-flight behaviour by
+ * deliberately holding a write OPEN and never settling it, which is the whole technique — so a
+ * chain entry survives the test that created it, and the next test in the file that writes the
+ * same record would await it forever, never reaching `globalThis.fetch`. The symptom is a bizarre
+ * order-dependent failure: the test passes alone and reports `expected [] to have a length of 1`
+ * when run with its siblings.
+ *
+ * Both caches are therefore cleared HERE, in the one place every such suite already goes through,
+ * rather than in each suite — a per-suite call is exactly the trap that was hit once and would be
+ * hit again by the next suite written.
+ */
+export function resetRecordVersionsForTests() {
+  resetCoreRecordVersions();
+  resetRecordWriteChainsForTests();
+}
+
+// Importing this harness is enough to be protected: not every suite that drives the real
+// `apiFetch` needs the `updated`-token seam (some only want `jsonResponse`), and such a suite has
+// no reason to guess that it must reset per-record state it never touches by name.
+beforeEach(() => {
+  resetRecordVersionsForTests();
+});
 
 /**
  * A `useApiFetch` replacement backed by the real core helper.

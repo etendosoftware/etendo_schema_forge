@@ -75,6 +75,170 @@ function StateTag({ payment, ui }) {
   );
 }
 
+// Resolves the title-right slot (credit-note badge / add-payment action / blocked hint / fully-paid
+// check) shown next to the "Payments" section title. No hooks used — pure derivation from props.
+function resolvePaymentsTitleRight({ isCreditNote, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isIn, onAddPayment, ui }) {
+  if (isCreditNote) {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 500, padding: '1px 8px', borderRadius: 5, background: 'var(--status-info-bg)', color: 'var(--status-info-fg)' }}>
+        <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--status-info-fg)', flexShrink: 0 }} />
+        {ui('creditBalance')}
+      </span>
+    );
+  }
+  if (canAddPayment) {
+    return (
+      <button
+        onClick={onAddPayment}
+        className="text-xs font-medium text-foreground underline decoration-gray-600 hover:decoration-gray-900 transition-colors"
+      >
+        {ui(isIn ? 'previewCardAddCollection' : 'previewCardAddPayment')}
+      </button>
+    );
+  }
+  if (addPaymentBlockedByDraft) {
+    // Shown, but inert: the reason it is unavailable is what the user needs to act on.
+    return (
+      <span
+        className="text-xs font-medium text-muted-foreground"
+        title={ui('cpAddPaymentBlockedByDraft')}
+      >
+        {ui(isIn ? 'previewCardAddCollection' : 'previewCardAddPayment')}
+      </span>
+    );
+  }
+  if (isFullyPaid) {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 500, color: 'var(--status-success-fg)' }}>
+        <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        {isIn ? ui('cobrada') : ui('pagada')}
+      </span>
+    );
+  }
+  return null;
+}
+
+// Resolves the empty-state label shown when there are no payments yet.
+function resolvePaymentsEmptyLabel({ isCreditNote, isIn, ui }) {
+  if (isCreditNote) return ui('noApplicationsRegistered');
+  return isIn ? ui('noCobroYet') : ui('noPagoYet');
+}
+
+function PaymentsEmptyState({ emptyLabel }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 16px', gap: 8 }}>
+      {/* Neutral document icon — the empty state has no direction, so no in/out arrow. */}
+      <div style={{ width: 36, height: 36, borderRadius: 8, background: 'hsl(var(--muted))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-disabled))', flexShrink: 0 }}>
+        <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="8" y1="13" x2="16" y2="13" />
+          <line x1="8" y1="17" x2="16" y2="17" />
+        </svg>
+      </div>
+      <p style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', textAlign: 'center', margin: 0 }}>
+        {emptyLabel}
+      </p>
+    </div>
+  );
+}
+
+function PaymentRow({ payment: p, idx, isLast, isIn, currencyCode, paymentWindow, ui, navigate }) {
+  const methodRaw = p['paymentMethod$_identifier'] || p.paymentMethod || '';
+  const methodKey = resolveMethodKey(methodRaw);
+  const amtColor = isIn ? 'var(--status-success-fg)' : 'hsl(var(--foreground))';
+  const amtSign = isIn ? '+ ' : '− ';
+  const currency = currencyCode || p['currency$_identifier'] || '';
+  return (
+    <div
+      onClick={() => navigate(`/${paymentWindow}/${p.id}`)}
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '26px 1fr auto',
+        gap: 8,
+        padding: '11px 14px',
+        borderBottom: isLast ? 'none' : '0.5px solid hsl(var(--muted))',
+        alignItems: 'center',
+        cursor: 'pointer',
+      }}
+      className="hover:bg-muted transition-colors"
+      data-testid={`PaymentsCard__row-${idx}`}
+    >
+      <DirBadge isIn={isIn} data-testid="DirBadge__c6fe34" />
+      <div style={{ minWidth: 0 }}>
+        <div style={{ font: '600 12px/16px JetBrains Mono, monospace', color: 'hsl(var(--foreground))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {p.documentNo || p.id}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2, color: 'hsl(var(--text-disabled))' }}>
+          <span style={{ display: 'inline-flex' }}>{METHOD_ICONS[methodKey]}</span>
+          <span style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {methodRaw || fmtPayDate(p.paymentDate)}
+          </span>
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
+        <span className="tabular-nums" style={{ font: '600 13px/17px Inter', color: amtColor, whiteSpace: 'nowrap' }}>
+          {amtSign}{formatCurrency(currency, p.amount)}
+        </span>
+        <StateTag payment={p} ui={ui} data-testid="StateTag__c6fe34" />
+      </div>
+    </div>
+  );
+}
+
+function PaymentsList({ payments, isIn, currencyCode, totalOutstanding, paymentWindow, ui, navigate }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {payments.map((p, idx) => (
+        <PaymentRow
+          key={p.id || idx}
+          payment={p}
+          idx={idx}
+          isLast={idx === payments.length - 1}
+          isIn={isIn}
+          currencyCode={currencyCode}
+          paymentWindow={paymentWindow}
+          ui={ui}
+          navigate={navigate}
+          data-testid="PaymentRow__c6fe34"
+        />
+      ))}
+      {totalOutstanding > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 14px', borderTop: '0.5px solid hsl(var(--muted))', background: 'var(--status-warning-bg)' }}>
+          <span style={{ fontSize: 12, color: 'var(--status-warning-fg)' }}>{ui('invoicePendingPayment')}</span>
+          <span className="tabular-nums" style={{ fontSize: 12, fontWeight: 600, color: 'var(--status-warning-fg)' }}>
+            {formatCurrency(currencyCode, totalOutstanding)}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Resolves the card body: loading spinner text / empty state / payments list. No hooks used —
+// navigate and ui are passed in from the caller, which is the component that owns them.
+function resolvePaymentsContent({ loading, payments, isCreditNote, isIn, currencyCode, totalOutstanding, paymentWindow, ui, navigate }) {
+  if (loading) {
+    return <p className="text-xs text-muted-foreground py-4 text-center">{ui('loading')}</p>;
+  }
+  if (payments.length === 0) {
+    const emptyLabel = resolvePaymentsEmptyLabel({ isCreditNote, isIn, ui });
+    return <PaymentsEmptyState emptyLabel={emptyLabel} data-testid="PaymentsEmptyState__c6fe34" />;
+  }
+  return (
+    <PaymentsList
+      payments={payments}
+      isIn={isIn}
+      currencyCode={currencyCode}
+      totalOutstanding={totalOutstanding}
+      paymentWindow={paymentWindow}
+      ui={ui}
+      navigate={navigate}
+      data-testid="PaymentsList__c6fe34"
+    />
+  );
+}
+
 /**
  * PaymentsCard — payment history in invoice preview panel.
  *
@@ -107,131 +271,12 @@ export default function PaymentsCard({
   const isIn = specName === 'sales-invoice';
   const paymentWindow = isIn ? 'payment-in' : 'payment-out';
 
-  let titleRight = null;
-  if (isCreditNote) {
-    titleRight = (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 500, padding: '1px 8px', borderRadius: 5, background: 'var(--status-info-bg)', color: 'var(--status-info-fg)' }}>
-        <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--status-info-fg)', flexShrink: 0 }} />
-        {ui('creditBalance')}
-      </span>
-    );
-  } else if (canAddPayment) {
-    titleRight = (
-      <button
-        onClick={onAddPayment}
-        className="text-xs font-medium text-foreground underline decoration-gray-600 hover:decoration-gray-900 transition-colors"
-      >
-        {ui('previewCardAddPayment')}
-      </button>
-    );
-  } else if (addPaymentBlockedByDraft) {
-    // Shown, but inert: the reason it is unavailable is what the user needs to act on.
-    titleRight = (
-      <span
-        className="text-xs font-medium text-muted-foreground"
-        title={ui('cpAddPaymentBlockedByDraft')}
-      >
-        {ui('previewCardAddPayment')}
-      </span>
-    );
-  } else if (isFullyPaid) {
-    titleRight = (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 500, color: 'var(--status-success-fg)' }}>
-        <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-        {isIn ? ui('cobrada') : ui('pagada')}
-      </span>
-    );
-  }
-
-  let content;
-  if (loading) {
-    content = <p className="text-xs text-muted-foreground py-4 text-center">{ui('loading')}</p>;
-  } else if (payments.length === 0) {
-    let emptyLabel;
-    if (isCreditNote) {
-      emptyLabel = ui('noApplicationsRegistered');
-    } else if (isIn) {
-      emptyLabel = ui('noCobroYet');
-    } else {
-      emptyLabel = ui('noPagoYet');
-    }
-    content = (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 16px', gap: 8 }}>
-        {/* Neutral document icon — the empty state has no direction, so no in/out arrow. */}
-        <div style={{ width: 36, height: 36, borderRadius: 8, background: 'hsl(var(--muted))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-disabled))', flexShrink: 0 }}>
-          <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="8" y1="13" x2="16" y2="13" />
-            <line x1="8" y1="17" x2="16" y2="17" />
-          </svg>
-        </div>
-        <p style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', textAlign: 'center', margin: 0 }}>
-          {emptyLabel}
-        </p>
-      </div>
-    );
-  } else {
-    content = (
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {payments.map((p, idx) => {
-          const methodRaw = p['paymentMethod$_identifier'] || p.paymentMethod || '';
-          const methodKey = resolveMethodKey(methodRaw);
-          const amtColor = isIn ? 'var(--status-success-fg)' : 'hsl(var(--foreground))';
-          const amtSign = isIn ? '+ ' : '− ';
-          const currency = currencyCode || p['currency$_identifier'] || '';
-          return (
-            <div
-              key={p.id || idx}
-              onClick={() => navigate(`/${paymentWindow}/${p.id}`)}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '26px 1fr auto',
-                gap: 8,
-                padding: '11px 14px',
-                borderBottom: idx < payments.length - 1 ? '0.5px solid hsl(var(--muted))' : 'none',
-                alignItems: 'center',
-                cursor: 'pointer',
-              }}
-              className="hover:bg-muted transition-colors"
-              data-testid={`PaymentsCard__row-${idx}`}
-            >
-              <DirBadge isIn={isIn} data-testid="DirBadge__c6fe34" />
-              <div style={{ minWidth: 0 }}>
-                <div style={{ font: '600 12px/16px JetBrains Mono, monospace', color: 'hsl(var(--foreground))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {p.documentNo || p.id}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2, color: 'hsl(var(--text-disabled))' }}>
-                  <span style={{ display: 'inline-flex' }}>{METHOD_ICONS[methodKey]}</span>
-                  <span style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {methodRaw || fmtPayDate(p.paymentDate)}
-                  </span>
-                </div>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
-                <span className="tabular-nums" style={{ font: '600 13px/17px Inter', color: amtColor, whiteSpace: 'nowrap' }}>
-                  {amtSign}{formatCurrency(currency, p.amount)}
-                </span>
-                <StateTag payment={p} ui={ui} data-testid="StateTag__c6fe34" />
-              </div>
-            </div>
-          );
-        })}
-        {totalOutstanding > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 14px', borderTop: '0.5px solid hsl(var(--muted))', background: 'var(--status-warning-bg)' }}>
-            <span style={{ fontSize: 12, color: 'var(--status-warning-fg)' }}>{ui('invoicePendingPayment')}</span>
-            <span className="tabular-nums" style={{ fontSize: 12, fontWeight: 600, color: 'var(--status-warning-fg)' }}>
-              {formatCurrency(currencyCode, totalOutstanding)}
-            </span>
-          </div>
-        )}
-      </div>
-    );
-  }
+  const titleRight = resolvePaymentsTitleRight({ isCreditNote, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isIn, onAddPayment, ui });
+  const content = resolvePaymentsContent({ loading, payments, isCreditNote, isIn, currencyCode, totalOutstanding, paymentWindow, ui, navigate });
 
   return (
     <SectionCard
-      title={ui('previewCardPayments')}
+      title={ui(isIn ? 'previewCardCollectionsTitle' : 'previewCardPayments')}
       titleRight={titleRight}
       data-testid="SectionCard__c6fe34">
       {content}

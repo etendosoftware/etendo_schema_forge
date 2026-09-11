@@ -2,6 +2,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 
 import { AuthProvider } from '@/auth/AuthContext.jsx';
 import { useStatementActions } from '../useStatementActions.js';
+import { findFetchCall } from './findFetchCall.js';
 
 // ETP-5022: useStatementActions now goes through useApiFetch, which reads the
 // token from the real core AuthProvider (or falls back to the ambient session)
@@ -50,7 +51,7 @@ describe('useStatementActions', () => {
     let res;
     await act(async () => { res = await result.current.reactivateStatement('st-4'); });
 
-    const [url, init] = globalThis.fetch.mock.calls[0];
+    const [url, init] = findFetchCall('/etendo/sws/neo/bank-statements?action=reactivate');
     expect(url).toBe('/etendo/sws/neo/bank-statements?action=reactivate');
     expect(init.method).toBe('POST');
     // Goes through the shared authenticated helper, so the session token is attached.
@@ -60,7 +61,6 @@ describe('useStatementActions', () => {
     expect(JSON.parse(init.body)).toEqual({ id: 'st-4' });
     // The backend echoes the new draft state, which is what the caller reloads on.
     expect(res).toEqual({ id: 'st-4', processed: false });
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 
   it('flips busy during a reactivate and clears it on success', async () => {
@@ -119,7 +119,7 @@ describe('useStatementActions', () => {
     let res;
     await act(async () => { res = await result.current.processStatement('st-1'); });
 
-    const [url, init] = globalThis.fetch.mock.calls[0];
+    const [url, init] = findFetchCall('/etendo/sws/neo/bank-statements?action=process');
     expect(url).toBe('/etendo/sws/neo/bank-statements?action=process');
     expect(init.method).toBe('POST');
     expect(init.headers.Authorization).toBe('Bearer test-token');
@@ -142,7 +142,7 @@ describe('useStatementActions', () => {
     };
     await act(async () => { await result.current.updateStatement(payload); });
 
-    const [url, init] = globalThis.fetch.mock.calls[0];
+    const [url, init] = findFetchCall('/etendo/sws/neo/bank-statements?action=update');
     expect(url).toBe('/etendo/sws/neo/bank-statements?action=update');
     expect(JSON.parse(init.body)).toEqual({ ...payload, process: false });
   });
@@ -153,7 +153,7 @@ describe('useStatementActions', () => {
 
     await act(async () => { await result.current.deleteStatement('st-3'); });
 
-    const [url, init] = globalThis.fetch.mock.calls[0];
+    const [url, init] = findFetchCall('/etendo/sws/neo/bank-statements?action=delete');
     expect(url).toBe('/etendo/sws/neo/bank-statements?action=delete');
     expect(JSON.parse(init.body)).toEqual({ id: 'st-3' });
   });

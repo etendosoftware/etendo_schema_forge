@@ -51,13 +51,27 @@ const mockHook = {
 const SECONDARY_ROWS = [{ id: 'ADDR-1', street: 'Main St' }];
 const secondaryHandleDeleteChild = vi.fn();
 
+// ETP-5245 — extra header fields injected per test. `withHeaderRefreshOnChildWrite` only wraps the
+// secondary hooks when the header carries a child-derived field, so this stays empty (and the
+// wrapper stays inert) for every pre-existing test in this file.
+const refreshHeaderTotals = vi.fn();
+let headerExtraFields = {};
+
+function mockHeaderState() {
+  return {
+    selected: { ...mockHook.selected, ...headerExtraFields },
+    editing: { ...mockHook.editing, ...headerExtraFields },
+    refreshHeaderTotals,
+  };
+}
+
 vi.mock('@/hooks/useEntity', () => ({
   useEntity: (entity, detailEntity) => {
-    if (detailEntity === 'lines') return mockHook;
+    if (detailEntity === 'lines') return { ...mockHook, ...mockHeaderState() };
     if (detailEntity === 'addresses') {
-      return { ...mockHook, children: SECONDARY_ROWS, handleDeleteChild: secondaryHandleDeleteChild };
+      return { ...mockHook, ...mockHeaderState(), children: SECONDARY_ROWS, handleDeleteChild: secondaryHandleDeleteChild };
     }
-    return { ...mockHook, children: [] };
+    return { ...mockHook, ...mockHeaderState(), children: [] };
   },
   extractErrorMessage: async () => 'Error',
 }));
@@ -260,6 +274,50 @@ function renderDetailView(props = {}) {
 describe('DetailView secondaryDeleteConfirm dialog (real onDeleteLine flow)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    headerExtraFields = {};
+  });
+
+  /** Runs the row-click -> sidebar delete -> confirm flow with a successful DELETE. */
+  async function deleteSecondaryRowAndConfirm() {
+    const user = userEvent.setup();
+    renderDetailView();
+    await user.click(screen.getByTestId('tab-addresses'));
+    await user.click(await screen.findByTestId('secondary-row-ADDR-1'));
+    await screen.findByTestId('stub-secondary-form');
+    const sidebarDeleteButtons = screen.getAllByRole('button', { name: 'delete' })
+      .filter(b => b.getAttribute('data-testid') !== 'action-delete');
+    await user.click(sidebarDeleteButtons[sidebarDeleteButtons.length - 1]);
+    const dialogDeleteButtons = await screen.findAllByRole('button', { name: 'delete' });
+    await user.click(dialogDeleteButtons[dialogDeleteButtons.length - 1]);
+  }
+
+  /**
+   * ETP-5245 follow-up — the wiring half of the "cost banner does not clear" fix. The helper
+   * (`withHeaderRefreshOnChildWrite`) has its own unit suite; what this pins is that DetailView
+   * actually routes the secondary hooks through it, so a child delete really does re-read the
+   * header record the banner and the save gate both read.
+   */
+  it('re-reads the header after a child delete when it carries a child-derived field', async () => {
+    headerExtraFields = { etgoHasCost: true };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: true }));
+
+    await deleteSecondaryRowAndConfirm();
+
+    await waitFor(() => expect(secondaryHandleDeleteChild).toHaveBeenCalledWith('ADDR-1'));
+    expect(refreshHeaderTotals).toHaveBeenCalledWith('123');
+
+    vi.unstubAllGlobals();
+  });
+
+  it('does NOT re-read the header for a window with no child-derived field', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: true }));
+
+    await deleteSecondaryRowAndConfirm();
+
+    await waitFor(() => expect(secondaryHandleDeleteChild).toHaveBeenCalledWith('ADDR-1'));
+    expect(refreshHeaderTotals).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
   });
 
   it('selects a secondary row, opens the sidebar, and deletes it after confirming', async () => {

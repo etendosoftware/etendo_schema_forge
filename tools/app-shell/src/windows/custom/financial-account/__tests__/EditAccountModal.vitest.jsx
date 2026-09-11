@@ -2675,9 +2675,12 @@ describe('EditAccountModal', () => {
     // translation, so backendErrors.js maps it to a frontend key.
     it('CP-1: routes the max-fetch-interval sync WARNING to toast.warning, translated', async () => {
       const user = userEvent.setup();
+      // Stands in for the real es_ES entry (reworded in the QA re-review of #1366) so the toast
+      // asserted below is the sentence the app actually renders. The wording itself is pinned
+      // structurally in locales/__tests__, not here.
       uiMock.mockImplementation((key, params) => (
         key === 'backendError.psd2ImportDateBeyondMaxInterval'
-          ? `La fecha de inicio solicitada supera el intervalo máximo de ${params.days} días de este proveedor.`
+          ? `La fecha de inicio solicitada supera el intervalo máximo de ${params.days} días que soporta este proveedor.`
           : key));
       sync.mockResolvedValue({
         status: 'WARNING',
@@ -2693,7 +2696,7 @@ describe('EditAccountModal', () => {
       await user.click(screen.getByTestId('bank-connection-edit-sync'));
 
       await waitFor(() => expect(toastWarning).toHaveBeenCalledWith(
-        'La fecha de inicio solicitada supera el intervalo máximo de 90 días de este proveedor.',
+        'La fecha de inicio solicitada supera el intervalo máximo de 90 días que soporta este proveedor.',
       ));
       // The two branches this must NOT fall into: the neutral notice it used to be, and the
       // "everything went fine" success it never was.
@@ -2728,6 +2731,214 @@ describe('EditAccountModal', () => {
       await waitFor(() => expect(onSaved).toHaveBeenCalled());
       // Syncing is not saving — the modal stays open, same as the OK path.
       expect(onClose).not.toHaveBeenCalled();
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────
+    // QA re-review of #1366. Two rejections landed on this same panel:
+    //
+    //   * CP-2 — the fetch-interval advisory sat ABOVE the date grid while the re-authorization
+    //     notice sat at the foot, so the panel's two standing notices read as two unrelated
+    //     things. Both are now stacked at the FOOT, the fetch-interval one first (it is the one
+    //     the date box directly above it can fix). They were NOT merged: they answer different
+    //     questions and appear independently.
+    //   * the re-auth banner was amber for all ~90 days of a PSD2 consent — a permanent warning,
+    //     which is no warning at all. It is now tone-driven: informational blue until the last
+    //     week, amber inside it (and for an already-lapsed consent).
+    //
+    // The resolved tone is published as `data-tone` on the banner precisely so this suite can
+    // assert the DECISION rather than the Tailwind classes that render it; a class-string
+    // assertion would break on any token rename while proving nothing about the threshold.
+    // ─────────────────────────────────────────────────────────────────────────────────────────
+    describe('QA re-review — re-auth banner tone and banner placement', () => {
+      const REAUTH_TESTID = 'bank-connection-edit-reauth-banner';
+      const TO_BOX = 'field-date-bank-connection-import-to';
+      // Mirrors REAUTH_WARNING_DAYS in EditAccountModal.jsx. Restated rather than imported on
+      // purpose: the threshold is a product decision, and a test that read the constant back from
+      // the source would keep passing if it were quietly changed to 30.
+      const WARNING_DAYS = 7;
+
+      /**
+       * A live connection publishing a consent expiry, plus a countdown.
+       *
+       * Built on `statusWith`, so `maxFetchInterval` stays absent and the fetch-interval banner
+       * does NOT render — these cases must observe the re-auth banner's tone on its own.
+       */
+      function statusExpiringIn(daysUntilExpires) {
+        return statusWith({ consentExpiresAt: '2026-12-31', daysUntilExpires });
+      }
+
+      async function renderWithConsent(status) {
+        fetchStatus.mockResolvedValue(status);
+        const result = await openConnectedModal();
+        return { ...result, banner: await screen.findByTestId(REAUTH_TESTID) };
+      }
+
+      // The whole table in one place: the tone is a pure function of the countdown, so the cases
+      // that matter are the two sides of the threshold plus the ends of the range.
+      const TONE_CASES = [
+        { days: 89, tone: 'info', why: 'the bulk of a 90-day consent is informational' },
+        { days: WARNING_DAYS + 1, tone: 'info', why: 'one day outside the threshold' },
+        { days: WARNING_DAYS, tone: 'warning', why: 'the threshold itself is inclusive' },
+        { days: 1, tone: 'warning', why: 'the last full day' },
+        { days: 0, tone: 'warning', why: 'the consent lapses today' },
+        { days: -3, tone: 'warning', why: 'already lapsed — sync is broken' },
+      ];
+
+      TONE_CASES.forEach(({ days, tone, why }) => {
+        it(`resolves the ${tone} tone at ${days} days until expiry (${why})`, async () => {
+          const { banner } = await renderWithConsent(statusExpiringIn(days));
+          expect(banner).toHaveAttribute('data-tone', tone);
+        });
+      });
+
+      // The edge the requirement is actually about, asserted as ONE transition rather than two
+      // independent cases: an off-by-one in the comparison (`<` instead of `<=`) passes every
+      // other case in the table above and fails only here.
+      it(`flips from info to warning between ${WARNING_DAYS + 1} and ${WARNING_DAYS} days`, async () => {
+        const outside = await renderWithConsent(statusExpiringIn(WARNING_DAYS + 1));
+        expect(outside.banner).toHaveAttribute('data-tone', 'info');
+        // Unmount before the second render: two live modals would make the testid ambiguous.
+        outside.unmount();
+
+        const inside = await renderWithConsent(statusExpiringIn(WARNING_DAYS));
+        expect(inside.banner).toHaveAttribute('data-tone', 'warning');
+      });
+
+      // Tone and copy have to agree. An expired consent shows the `…ReauthExpired` wording and is
+      // the one case where amber is unambiguously right, so pin them together — a refactor that
+      // moved the expiry cutoff in only one of the two would show up here.
+      it('keeps the expired copy and the warning tone in step', async () => {
+        const { banner } = await renderWithConsent(statusExpiringIn(-2));
+        expect(banner).toHaveTextContent('financeAccountsBankConnectionReauthExpired');
+        expect(banner).toHaveAttribute('data-tone', 'warning');
+      });
+
+      it('keeps the countdown copy informational outside the threshold', async () => {
+        const { banner } = await renderWithConsent(statusExpiringIn(30));
+        expect(banner).toHaveTextContent('financeAccountsBankConnectionReauthBanner');
+        expect(banner).toHaveAttribute('data-tone', 'info');
+      });
+
+      // No countdown means nothing to call urgent. The banner still renders (the expiry date is
+      // known), it just must not guess its way into amber.
+      it('falls back to the info tone when the bridge publishes no countdown at all', async () => {
+        const { banner } = await renderWithConsent(statusWith({ consentExpiresAt: '2026-12-31' }));
+        expect(banner).toHaveAttribute('data-tone', 'info');
+      });
+
+      // `null` and a numeric STRING are the two shapes a JSON bridge realistically produces for a
+      // "missing"/loosely-typed countdown. Both must take the same non-numeric path — note `'1'`
+      // would compare `<= 7` as true under a coercing comparison, so this is not academic.
+      [null, '1'].forEach((raw) => {
+        it(`falls back to the info tone for a non-numeric countdown (${JSON.stringify(raw)})`, async () => {
+          const { banner } = await renderWithConsent(statusExpiringIn(raw));
+          expect(banner).toHaveAttribute('data-tone', 'info');
+        });
+      });
+
+      // CP-2 proper: where the two notices sit relative to each other and to the date boxes.
+      describe('CP-2 — both notices stacked at the foot of the panel', () => {
+        // A connection that trips BOTH: an out-of-range "Importar desde" and a live consent. The
+        // 89-day countdown deliberately puts the re-auth banner in its info tone, so this also
+        // covers the case the tone change was made for — one amber notice next to one blue one.
+        function bothStatus() {
+          return statusWith({
+            importFromDate: BEYOND_LIMIT,
+            maxFetchInterval: LIMIT,
+            consentExpiresAt: '2026-12-31',
+            daysUntilExpires: 89,
+          });
+        }
+
+        async function renderBothBanners() {
+          fetchStatus.mockResolvedValue(bothStatus());
+          await openConnectedModal();
+          return {
+            fetchIntervalBanner: await screen.findByTestId(WARNING_TESTID),
+            reauthBanner: await screen.findByTestId(REAUTH_TESTID),
+          };
+        }
+
+        // The regression the fix could most easily have introduced: collapsing two notices into
+        // one "block of advice". They are separate elements with separate copy and separate
+        // trigger conditions, and both have to survive.
+        it('renders both banners at once rather than merging them into one', async () => {
+          const { fetchIntervalBanner, reauthBanner } = await renderBothBanners();
+
+          expect(fetchIntervalBanner).toBeInTheDocument();
+          expect(reauthBanner).toBeInTheDocument();
+          expect(fetchIntervalBanner).not.toBe(reauthBanner);
+          expect(reauthBanner).not.toContainElement(fetchIntervalBanner);
+          expect(fetchIntervalBanner).not.toContainElement(reauthBanner);
+
+          // Each keeps its own message, and only its own.
+          expect(fetchIntervalBanner).toHaveTextContent(WARNING_KEY);
+          expect(fetchIntervalBanner).not.toHaveTextContent('financeAccountsBankConnectionReauth');
+          expect(reauthBanner).toHaveTextContent('financeAccountsBankConnectionReauthBanner');
+          expect(reauthBanner).not.toHaveTextContent(WARNING_KEY);
+          // The re-auth action survived the move with its banner.
+          expect(within(reauthBanner).getByTestId('bank-connection-edit-reauth-link'))
+            .toBeInTheDocument();
+        });
+
+        it('places the fetch-interval banner before the re-auth banner in document order', async () => {
+          const { fetchIntervalBanner, reauthBanner } = await renderBothBanners();
+
+          expect(
+            fetchIntervalBanner.compareDocumentPosition(reauthBanner)
+              & Node.DOCUMENT_POSITION_FOLLOWING,
+          ).toBeTruthy();
+          expect(
+            reauthBanner.compareDocumentPosition(fetchIntervalBanner)
+              & Node.DOCUMENT_POSITION_PRECEDING,
+          ).toBeTruthy();
+        });
+
+        // "Stacked" is stronger than "in order": the two must be adjacent children of the same
+        // panel, which is what makes them read as one block instead of two notices with the form
+        // between them.
+        it('stacks them as immediate siblings of the same panel', async () => {
+          const { fetchIntervalBanner, reauthBanner } = await renderBothBanners();
+
+          expect(fetchIntervalBanner.parentElement).toBe(reauthBanner.parentElement);
+          expect(fetchIntervalBanner.nextElementSibling).toBe(reauthBanner);
+        });
+
+        // The other half of the move: neither banner may sit above the date grid any more. Done
+        // as an INDEX over the panel's own children rather than a bare compareDocumentPosition,
+        // because "follows" is also true for a descendant — an index cannot be fooled that way.
+        it('orders the date grid, then the fetch-interval banner, then the re-auth banner', async () => {
+          const { fetchIntervalBanner, reauthBanner } = await renderBothBanners();
+          const panel = fetchIntervalBanner.parentElement;
+          const children = Array.from(panel.children);
+
+          const gridIndex = children.findIndex((el) => el.contains(screen.getByTestId(FROM_BOX)));
+          expect(gridIndex, 'the import-date grid must be a child of the same panel')
+            .toBeGreaterThanOrEqual(0);
+          // Both date boxes live in that one grid — neither banner splits the pair.
+          expect(children[gridIndex].contains(screen.getByTestId(TO_BOX))).toBe(true);
+
+          expect(children.indexOf(fetchIntervalBanner)).toBeGreaterThan(gridIndex);
+          expect(children.indexOf(reauthBanner))
+            .toBeGreaterThan(children.indexOf(fetchIntervalBanner));
+        });
+
+        // The fetch-interval banner moved for good, not only when a re-auth notice happens to be
+        // there to anchor it: on its own it must still render below the inputs, not above them.
+        it('keeps the fetch-interval banner below the inputs with no re-auth notice present', async () => {
+          fetchStatus.mockResolvedValue(
+            statusWith({ importFromDate: BEYOND_LIMIT, maxFetchInterval: LIMIT }),
+          );
+          await openConnectedModal();
+
+          const banner = await screen.findByTestId(WARNING_TESTID);
+          expect(screen.queryByTestId(REAUTH_TESTID)).toBeNull();
+
+          const children = Array.from(banner.parentElement.children);
+          const gridIndex = children.findIndex((el) => el.contains(screen.getByTestId(FROM_BOX)));
+          expect(children.indexOf(banner)).toBeGreaterThan(gridIndex);
+        });
+      });
     });
   });
 

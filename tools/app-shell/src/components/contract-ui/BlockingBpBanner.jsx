@@ -8,7 +8,15 @@ import { useCurrency } from '@/hooks/useCurrency';
  * ETP-5024 — persistent inline notice for the two Business-Partner blocking
  * conditions (credit limit exceeded / BP on hold) that used to surface only as an
  * auto-dismissing toast. Renders nothing until one of the two sources below reports
- * a condition, then stays visible — unlike a toast — until it is explicitly cleared.
+ * a condition, then stays visible — unlike a toast, it never fades on a timer — until it is
+ * explicitly cleared by one of the triggers described below, or closed by the user.
+ *
+ * ETP-5245 made every `InfoBanner` dismissible by default, so this one gained a close button too.
+ * That is a deliberate product choice, not a regression of ETP-5024: the point of replacing the
+ * toast was that the notice must not disappear ON ITS OWN, and it still doesn't. The two layers
+ * of state do not fight — when a trigger below clears `banner`, this component returns null, the
+ * `InfoBanner` unmounts, and its own "closed" state goes with it, so the next condition raised
+ * shows a fresh banner.
  *
  * Tone: `info` (blue), not `warning` (amber) — confirmed with product (Vale) on
  * the Jira ticket: "el tipo de mensaje que será tipo info (azul) y no una warning

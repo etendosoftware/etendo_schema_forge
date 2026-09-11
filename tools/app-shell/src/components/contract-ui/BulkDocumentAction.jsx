@@ -15,6 +15,32 @@ export const buildInOutActions = (rows) => {
   return hasDraft ? [{ value: 'CO', labelKey: 'book' }] : [];
 };
 
+// ETP-5209 — generic bulk "Contabilizar" (post) action, reused by
+// purchase-invoice/sales-invoice/goods-receipt/goods-shipment. Mirrors the same
+// posted/processed gate as the row-kebab and form-view Post menu action: a
+// document must be processed (completed) and not yet posted.
+const isRowPosted = (row) => row.posted === 'Y' || row.posted === true;
+const isRowProcessed = (row) => row.processed === 'Y' || row.processed === true;
+
+export const buildPostActions = (rows) =>
+  (rows.some((row) => !isRowPosted(row) && isRowProcessed(row)) ? [{ value: 'post', labelKey: 'post' }] : []);
+
+// Plain function (not a hook-producing factory): `ui` is passed in at call
+// time by BulkDocumentAction's own `handleDone`, which already holds a safe
+// `useUI()` result from its own top-level hook call. A caller-side factory
+// like `createPostRowFilter(ui)` would force every `bulkActions` wrapper
+// (a plain function invocation, not JSX — see ListView.jsx) to call
+// `useUI()` itself, which is a Rules-of-Hooks violation once that wrapper's
+// hook count becomes conditional on whether the selection toolbar is
+// mounted (ETP-5209 production bug — "Rendered more hooks than during the
+// previous render").
+export const postRowFilter = (row, action, ui) => {
+  if (action !== 'post') return true;
+  if (isRowPosted(row)) return ui('bulkRowAlreadyPosted');
+  if (!isRowProcessed(row)) return ui('bulkRowNotCompleted');
+  return true;
+};
+
 export default function BulkDocumentAction({
   selectedRows, clearSelection, token, apiBaseUrl, windowName,
   entity = 'header',
@@ -70,16 +96,20 @@ export default function BulkDocumentAction({
     if (running || !selectedAction) return;
     setRunning(true);
 
+    // ETP-5209 — `omitted` (pre-blocked by `rowFilter`, never sent to the API) is kept
+    // separate from `failed` (the API call was actually attempted and threw). Merging
+    // them used to make a correctly-skipped "not eligible yet" row read as a genuine
+    // failure in the toast — see useBulkActionToast.js for how the 3 counts render.
     let rowsToProcess = selectedRows;
-    let preBlocked = [];
+    const omitted = [];
     if (rowFilter) {
       rowsToProcess = [];
       for (const row of selectedRows) {
-        const result = rowFilter(row, selectedAction);
+        const result = rowFilter(row, selectedAction, ui);
         if (result === true || result == null) {
           rowsToProcess.push(row);
         } else {
-          preBlocked.push({ documentNo: row.documentNo || row.id, message: result });
+          omitted.push({ documentNo: row.documentNo || row.id, message: result });
         }
       }
     }
@@ -87,19 +117,18 @@ export default function BulkDocumentAction({
     const outcomes = await Promise.allSettled(
       rowsToProcess.map((row) => execute(row.id, selectedAction).then(() => row)),
     );
-    const apiFailed = outcomes
+    const failed = outcomes
       .map((o, i) => ({ o, row: rowsToProcess[i] }))
       .filter(({ o }) => o.status === 'rejected')
       .map(({ o, row }) => ({
         documentNo: row.documentNo || row.id,
         message: o.reason?.message || 'Unknown error',
       }));
-    const failed = [...preBlocked, ...apiFailed];
-    const ok = rowsToProcess.length - apiFailed.length;
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ ok, failed }));
+    const ok = rowsToProcess.length - failed.length;
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ ok, omitted, failed }));
     setRunning(false);
     setOpen(false);
-    const delay = failed.length === 0 ? 600 : 1500;
+    const delay = (failed.length === 0 && omitted.length === 0) ? 600 : 1500;
     setTimeout(() => {
       clearSelection();
       window.location.reload();

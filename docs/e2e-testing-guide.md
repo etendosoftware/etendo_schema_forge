@@ -418,6 +418,117 @@ the write moved the `updated` token on, and the restoring PATCH needs the curren
 
 ---
 
+## Per-Record Write Serialisation — the `openOnArrival` pattern (ETP-5255)
+
+Four panels wrote one record from two independent UI triggers and let the two writes overlap.
+Etendo's optimistic lock is per RECORD: a write must echo the `updated` token it read, and
+`apiFetch` injects the remembered one from a cache that is only refreshed by a *response*. Two
+overlapping writes to one record therefore both carry the token the first is about to consume, and
+the server refuses the second with a 409 `stale_record` against a record nobody else touched.
+
+Four mocked specs guard it, one per panel:
+
+| Spec | Panel | The two triggers on one record |
+|---|---|---|
+| `amortization-lines-single-flight.mocked.spec.js` | `AmortizationLinesTable` | percentage `onBlur` + amount `onBlur` (four triggers exist; two are enough) |
+| `product-price-single-flight.mocked.spec.js` | `ProductPriceBar` | the row's two `PriceStepper`s, `standardPrice` and `listPrice` |
+| `contacts-credit-limit-single-flight.mocked.spec.js` | `ContactsFinancialPanel` | two commits of `creditLimit` (only one field persists today) |
+| `fiscal-303-manual-data-single-flight.mocked.spec.js` | `FmModel303Page` | two identification edits inside the 800ms autosave debounce |
+
+### Assert non-overlap, never arrival order
+
+**An order-only assertion passes against the exact bug.** Anything that dispatches two writes also
+dispatches them in order — `Promise.all` does, and so did every one of the four broken panels. The
+property under test is that the second write *starts* only after the first one *finished*.
+
+The route handler holds each write open and records, per request, **how many earlier writes were
+still unanswered when this one arrived**:
+
+```js
+const entry = {
+  body, startedAt: Date.now(), finishedAt: null,
+  openOnArrival: journal.writes.filter((w) => w.finishedAt == null).length,
+};
+journal.writes.push(entry);            // appended on ARRIVAL, not on response
+if (holdMs > 0) await new Promise((r) => { setTimeout(r, holdMs); });
+entry.finishedAt = Date.now();
+```
+
+Then:
+
+- **serialised:** `expect(second.openOnArrival).toBe(0)`
+- **still parallel (different records):** `expect(writeB.openOnArrival).toBeGreaterThanOrEqual(1)`
+
+`openOnArrival` is measured at arrival and is therefore stable; comparing timestamps *after* the
+test finishes is not — by then the first write has usually closed, so `writeB.startedAt <
+writeA.finishedAt` reads as "no overlap" for a genuinely concurrent pair. Keep the timestamp
+comparison as a secondary assertion and a good failure message, not as the primary one.
+
+Two things the pattern depends on:
+
+- **Append the journal entry on arrival, with `finishedAt: null`.** Appending after the response
+  makes an in-flight write invisible, so a test cannot act "while the first one is open".
+- **`holdMs` must exceed the panel's own debounce.** Otherwise the second commit lands after the
+  first write already closed and there is nothing to observe. 400ms stepper → hold 800ms+;
+  800ms autosave → hold 2500ms.
+
+### Always include the "different records stay parallel" test
+
+It is the guard against closing the race by serialising *everything*, which would turn the fix
+into a latency regression. It is also the assertion with the most teeth: reverting the queue's key
+from `recordId` to `fieldKey` leaves the non-overlap tests green (see below) but breaks these two
+immediately — two rows editing the same field collapse onto one key and one row's write is lost.
+
+### Where the guarantee actually lives (and what that costs the tests)
+
+There are two layers, and they were fixed in that order:
+
+1. **The panel:** `tools/app-shell/src/hooks/useRecordWriteQueue.js` serialises per record and
+   coalesces a mid-flight edit (last value wins per field, edits to different fields all survive,
+   a refusal discards what was queued behind it).
+2. **The transport:** `@etendosoftware/app-shell-core` (`auth/api.js`) serialises versioned writes
+   per `(canonical entity, id)` and awaits the version harvest before releasing the next write.
+   Layer 1 alone did NOT close the defect — it stopped the overlap but the replay still went out
+   with the consumed token, because the harvest (`res.clone().json().then(remember)`) was a
+   floating promise the queue's `finally` outran. That reproduced 12/12 at `--workers=1` and passed
+   about once in 30 runs under load, i.e. an intermittent 409.
+
+Consequence worth knowing before you trust a green run: **with layer 2 in place, a mutation that
+breaks layer 1's single-flight no longer turns the non-overlap tests red** — `apiFetch` catches it.
+Measured: reverting the hook's key to `fieldKey` fails only the two parallelism tests; bypassing a
+panel's queue entirely fails nothing. What still discriminates per layer is:
+
+| Mutation | Red |
+|---|---|
+| hook key `recordId` → `fieldKey` | the two parallelism tests |
+| `auth/api.js` reverted (no serialisation, floating harvest) | the three token tests |
+| amortization's `if (!res.ok)` removed (silent refusal) | the error-toast test |
+
+So when you add a panel to this family, mutate the layer you mean to cover and confirm the red
+before believing the green. A test nobody has seen fail is not a regression test — that is the
+mistake that produced this whole class of bugs (class D of
+`docs/plans/2026-09-10-stale-record-defect-detection-plan.md`).
+
+### Missing `data-testid`s these specs had to route around
+
+None of these were patched from a spec (tests do not edit production code), so they are still
+worth fixing at the component level:
+
+- `AmortizationLinesTable`: the percentage/amount `<input type="number">` and the row's edit
+  pencil have none — located by input type scoped to `[data-row-id]`, and by `aria-label`.
+- `ProductPriceBar`: both `PriceStepper`s of a row share one codemod-generated testid and their
+  `−`/`+` buttons have none — reached by XPath sibling from the numeric input, with the row
+  anchored on `price-delete-{row.id}`.
+- `ContactsFinancialPanel`: `CreditLimitStepper` destructures its props and never spreads them, so
+  its testid never reaches the DOM — located from its label via `xpath=../..`.
+- `DetailView`'s primary tabs (`renderPrimaryTabButtons`) emit no testid — reached by translated
+  label.
+- 303 identification checkboxes share one testid. Note the shared `Checkbox` renders its `<input>`
+  `sr-only`, so **click the `<label>`, not the input** — clicking the input fails actionability
+  with "…intercepts pointer events" until it times out.
+
+---
+
 ## Deployed MCP OAuth2 Smoke
 
 `e2e/tests/flows/mcp-oauth-pkce.smoke.spec.js` validates the public MCP/OAuth integration after deploy. It models the browser flow started by `opencode mcp auth etendo`: clean session, OAuth authorize URL, login, requested permissions, explicit authorization, local callback, and PKCE token exchange. The UI preserves the original `/authorize?...` URL through onboarding with a local-only `returnTo` parameter, then resumes the authorization screen after environment login. It is skipped by default because it targets a deployed environment, uses real smoke credentials, can create an OAuth client through DCR, and binds a local callback server.

@@ -5,6 +5,7 @@ import {
 } from '../helpers/purchase-helpers.js';
 import { ensureStockOnHand, DEFAULT_WAREHOUSE_NAME } from '../helpers/inventory-helpers.js';
 import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../helpers/product-helpers.js';
+import { selectCustomerWithAddress } from '../helpers/sales-helpers.js';
 import {
   loginAndAssertJsreport, waitUntilCompleted, downloadAndAssertPdf,
 } from '../helpers/printable-helpers.js';
@@ -82,10 +83,9 @@ async function createDraftWithLine(page, windowSlug) {
         .toBeVisible({ timeout: 5_000 });
     }).toPass({ timeout: 15_000 });
 
-    const bpOption = page.locator('[data-testid^="option-businessPartner-"]')
-      .filter({ hasNotText: /crear|create/i }).first();
-    await expect(bpOption).toBeVisible({ timeout: 15_000 });
-    await bpOption.click();
+    // A customer with no C_BPartner_Location leaves partnerAddress empty, which keeps
+    // action-save-draft disabled forever — see selectCustomerWithAddress.
+    await selectCustomerWithAddress(page);
 
     // Selecting a BP fires chained callouts (price list, payment terms, currency,
     // address, warehouse). Wait for a derived field instead of networkidle.

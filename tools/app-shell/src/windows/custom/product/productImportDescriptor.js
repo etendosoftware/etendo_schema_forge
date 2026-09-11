@@ -71,6 +71,16 @@ function getSalesFlag(item) {
   return null;
 }
 
+// ETP-5245: the tenant's own "default tariff" flag, exposed on the selector by
+// ProductPriceHandler.enrichSelectorItem. Read explicitly rather than by key sniffing (unlike
+// getSalesFlag above, which has to cope with the flag arriving under several key shapes) —
+// "default" is a common enough word that a substring match would risk false positives.
+function getDefaultFlag(item) {
+  if (!item || typeof item !== 'object') return null;
+  const raw = item.default ?? item['priceListVersion$default'];
+  return raw === undefined || raw === null ? null : parseBoolean(raw);
+}
+
 function extractId(value) {
   if (value == null) return null;
   if (typeof value === 'string') return value.trim() || null;
@@ -124,14 +134,25 @@ async function fetchPriceListVersion(spec, token, wantSales) {
   if (!res.ok) return null;
   const payload = await res.json().catch(() => null);
   const items = Array.isArray(payload?.items) ? payload.items : [];
-  // Sales: prefer an explicitly sales-flagged version, otherwise an unflagged one (the
-  // catalog may not expose the flag — a human sees those in the Sales tab too).
-  // Purchase: require the flag to be explicitly false. An unflagged version must NOT be
-  // assumed to be a purchase list, or a sale price would silently land on it.
-  const chosen = wantSales
-    ? (items.find((it) => getSalesFlag(it) === true) ?? items.find((it) => getSalesFlag(it) === null) ?? null)
-    : (items.find((it) => getSalesFlag(it) === false) ?? null);
-  return chosen ? extractId(chosen.id ?? chosen) : null;
+  // Direction first, exactly as before:
+  //   Sales: prefer an explicitly sales-flagged version, otherwise an unflagged one (the
+  //   catalog may not expose the flag — a human sees those in the Sales tab too).
+  //   Purchase: require the flag to be explicitly false. An unflagged version must NOT be
+  //   assumed to be a purchase list, or a sale price would silently land on it.
+  const groups = wantSales
+    ? [items.filter((it) => getSalesFlag(it) === true), items.filter((it) => getSalesFlag(it) === null)]
+    : [items.filter((it) => getSalesFlag(it) === false)];
+  // ETP-5245: within a direction, honour the tenant's default tariff instead of taking whichever
+  // version the selector happened to return first. That first-wins behaviour was invisible while
+  // the shipped dataset had no default flagged at all; now that it does, an import must land on
+  // the same tariff as PriceListVersionResolver (backend seeding), PriceListPicker (the UI) and
+  // the ETGO_PRODUCT_*_PRICE computed columns — otherwise the imported price and the price shown
+  // in the product list come from two different price lists.
+  for (const group of groups) {
+    const chosen = group.find((it) => getDefaultFlag(it) === true) ?? group[0];
+    if (chosen) return extractId(chosen.id ?? chosen);
+  }
+  return null;
 }
 
 function resolvePlv(spec, token, wantSales) {

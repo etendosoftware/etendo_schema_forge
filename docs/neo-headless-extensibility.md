@@ -532,12 +532,14 @@ private void scheduleAutoSendIfActive(NeoContext context, String recordId) {
 ```
 
 The `AD_Process` to schedule is resolved by search key, never a hardcoded UUID (module
-sourcedata) — same defensive, non-fatal null-guard as `OnboardingBankConnectionSyncService`.
+sourcedata) — same defensive, non-fatal null-guard as `SiiTbaiAutoSendScheduleService`.
 
 **Activation timing differs from an onboarding-triggered schedule.** A schedule created during
 onboarding is provisioned inside a multi-step orchestrated transaction, with an explicit
 post-commit call to activate it (the orchestrator calls the "create" step, commits, then calls
-"activate" separately — see `OnboardingBankConnectionSyncService`). A `NeoHandler.afterHandle`
+"activate" separately). Onboarding no longer creates any schedule — `OnboardingBankConnectionSyncService`
+was that pattern's only instance and ETP-5275 deleted it — but the timing contrast below is still
+what governs a handler-created schedule. A `NeoHandler.afterHandle`
 hook has no equivalent "after commit" callback to hang activation off. The pattern here is to
 attempt activation **immediately**, still best-effort (caught, logged, swallowed): if the
 enclosing request's transaction has not committed yet when `OBScheduler` queries the row on its

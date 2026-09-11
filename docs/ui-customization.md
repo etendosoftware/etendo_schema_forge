@@ -146,6 +146,7 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 "window": {
   "customComponents": {
     "topbarRight":    "GoodsShipmentActions",
+    "subHeader":      "ProductCostBanner",
     "bottomSection":  "InvoiceBottomPanel",
     "sidePanel":      "PaymentActivityPanel",
     "sidePanelStyle": { "width": "40%", "minWidth": 260 },
@@ -157,6 +158,7 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 | Key | Prop emitted | Renders where | Props received |
 |-----|-------------|---------------|----------------|
 | `topbarRight` | `topbarRight={X}` | Right side of detail topbar (replaces status badge) | `data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess`, `onRefresh`, `onSave`, `isDirty` |
+| `subHeader` | `headerContent={(data) => <X data={data} />}` | Full-width strip between the toolbar and the form — the first child of the detail content container | `data` |
 | `bottomSection` | `bottomSection={X}` | Bottom of detail view (replaces totals + footer) | `recordId`, `data`, `token`, `apiBaseUrl`, `api`, `summary`, `notesField`, `onFieldChange`, `notesFocused`, `setNotesFocused` |
 | `sidePanel` | `sidePanel={X}` | Right-side panel alongside the detail form | `recordId`, `data`, `token`, `apiBaseUrl` |
 | `sidePanelStyle` | `sidePanelStyle={…}` | CSS style for the side panel container | — (style object, not a component) |
@@ -164,9 +166,14 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 
 **Real examples:**
 - `topbarRight`: `goods-shipment` (`GoodsShipmentActions`), `sales-invoice` (`InvoiceTopbarExtra`)
+- `subHeader`: `product` (`ProductCostBanner`, ETP-5245 — the "this stocked product has no cost" warning, see `docs/generated-custom-windows/product.md`)
 - `bottomSection`: `payment-in` (`PaymentBottomPanel`), `sales-invoice` (`InvoiceBottomPanel`)
 - `sidePanel`: `payment-in` (`PaymentActivityPanel`)
 - `headerTable`: `sales-invoice` (`InvoiceHeaderTable`), `user` (`UserHeaderTable`, ETP-4906 — swaps in a role-chips cell + toolbar role filter, see `docs/generated-custom-windows/user.md`)
+
+**`subHeader` is the slot for a page-wide notice** (ETP-5245). Use it when the message belongs to the whole record rather than to one field: a blocking warning, a state explanation, a "this record is locked because…" strip. The generator emits it as `DetailView`'s `headerContent` prop, so it renders above the form, above the primary-tab content, and at full content width — the same place the built-in credit-limit / BP-on-hold banner (`BlockingBpBanner.jsx`) occupies. The component receives only `data` (the current record), so any other state it needs must be derived from the record or fetched by the component itself. Return `null` to render nothing — the slot has no visibility gate of its own. Pair it with the shared `InfoBanner` primitive (`@/components/InfoBanner`) rather than a bespoke box, and pick the tone deliberately: `info` (blue) for a notice, `warning` (amber) when the condition also blocks an action, `danger` for an error. If the notice must also **prevent saving**, keep the banner and the save gate reading one shared predicate (product puts it in `lib/productCostRequirement.js`, consumed by both `ProductCostBanner.jsx` and `useEntity.js`) so the two can never disagree.
+
+**Every `InfoBanner` is dismissible by default (ETP-5245).** The X is rendered unless the caller passes `dismissible={false}`, and with no `onDismiss` the banner hides itself — supplying `onDismiss` switches it to controlled mode, where the caller owns visibility (that is what `ListModalWindow` does). A banner that explains a **block** must not stay closed while the user keeps hitting that block: pass `reopenSignal={useSaveBlockSignal('<stable-toast-id>')}` (`@/hooks/useSaveBlockSignal.js`) and it re-opens itself every time `useEntity`'s save gate actually refuses a save for that reason. The id is the same stable toast id the gate already passes to `reportInvalidFormatField`, so the banner and the toast can never describe different refusals; a new blocking rule gets the behaviour just by passing a `toastId`. See `ProductCostBanner.jsx` for the reference wiring.
 
 **Save-before-confirm contract for `topbarRight` and `CustomLines` (ETP-4940 follow-up).** If a `topbarRight` component (e.g. `return-material-receipt`/`return-to-vendor-shipment`'s `ConfirmWithCreditButtonBase`) or a `CustomLines` component (e.g. `payment-in`'s `ApplyToInvoices.jsx`, whose "apply + process" flow fires its own `documentAction` request) triggers its own documentAction request, it MUST call `maybeSaveBeforeConfirm({ isDirty, handleSave: onSave })` (`@/components/contract-ui/detailViewHelpers.jsx`) before that request fires — otherwise a header edit made without clicking Save first is silently discarded, and the action runs against the last-persisted value. This mirrors the guard `DetailView.jsx`'s own draftMode Confirm button and `DetailMoreActionsMenu.jsx`'s kebab documentAction already apply; `topbarRight` and `CustomLines` were the two choke points that bypassed it until this fix. `onSave` and `isDirty` are always passed to every `topbarRight` component, and both are also passed into `CustomLines` alongside its existing `onSave` — a component that never fires its own documentAction (e.g. a payment-status badge) can ignore both.
 
@@ -675,6 +682,32 @@ a custom `headerTable` slot's *own* hand-built toolbar still unmounts while a
 selection is active, because that toolbar and the grid live in the same
 slot; see the corrected note there.)
 
+**A filter change MUST clear the selection (QA finding, ETP-4972).** Any
+component that combines its own filtering state with its own selection state
+(checkbox `Set`/array feeding a `SelectionToolbar`) must clear that selection
+— and, for `ListView`, bump `clearSelectionCounter` via `clearSelection()`
+rather than a bare `setSelectedRows([])`, so `DataTable`'s own internal
+checkbox `Set` resets too (see its `clearSelectionTrigger` effect) — whenever
+a filter changes the visible row set. Otherwise a destructive bulk action
+(e.g. "Eliminar") can fire against rows the user is no longer looking at,
+which is exactly the QA-reported risk: select rows, change a filter, the
+floating pill stays up over records that scrolled out of the filtered view.
+**A sort-only change must NOT clear the selection** — reordering the same
+rows doesn't change which ones are visible, so treat this as a bug if someone
+"fixes" it by folding sort state into the same effect. The fix lives in a
+`useEffect` keyed on the component's filter state (never its sort state),
+guarded by a "skip the first render" ref so mounting doesn't spuriously clear
+an initial selection. Implemented in:
+- `ListView.jsx` — keyed on `[columnFilters, effectiveFilter, advancedFilterPart]` (covers column filters, subset/quick filters, the advanced-filter popover, `handleClearAllFilters` and `applyPreset`, since all of them flow through those same state variables).
+- `windows/custom/financial-account/MovementsTab.jsx` — keyed on `[filters, advancedFilter]`.
+- `windows/custom/financial-account/ImportedStatementsTab.jsx` — keyed on `[search, dateRange, status, advancedFilter]`.
+
+A component whose selection is scoped to a sub-view that already unmounts on
+navigation needs no separate fix — e.g. `PeriodsExpandablePanel.jsx` already
+clears `selectedDocIds` inside `toggleExpand` because the visible documents
+are only ever the currently-expanded period's, and `AssetsAmortizationPanel.jsx`
+clears on `[lines]` because it has no filter UI of its own.
+
 **Composition — children, not a data-driven `actions[]` prop.**
 `SelectionToolbar` is deliberately a dumb positioning/chrome "shell": it owns
 the portal, the true fixed placement, the dark-pill visual chrome (radius,
@@ -1121,8 +1154,10 @@ Default: `"classic"`. Validator F12 enforces the enum (`"classic"` | `"inlineEdi
 **MVP scope (current iteration):**
 - Inline edit covers all column types: `string`, `number`, `amount`, `percent`, `date`, `selector` and `search`. Selector/search columns use `InlineSearchCombo` — a compact text input with server-side search (`?q=term`) and portal dropdown — so FK fields with many options (e.g., tax rates) are filterable by typing. Lookup/popup columns (e.g., product) continue to open `ProductSearchDrawer`.
 - Pencil and trash carry full logic. No other action icons are rendered in this iteration.
+- **Where the hover-action strip goes (ETP-5245):** the strip is always appended at the **end** of the row's flex container. When the **last** visible column is an `amount`, that cell is suppressed while the strip shows and the icons take its space (`trailingColumn`), so nothing reflows. In **every other** shape — no amount column at all (Cuenta Bancaria, Persona) *or* an amount that is not last (Product > Cost: `cost`, `startingDate`, `endingDate`) — `reserveActionSlot` reserves a permanent 160px slot on the header and on every row instead. Selecting the sacrificed cell by column *type* rather than by position was the ETP-5245 bug: on the Cost tab it suppressed the **first** cell, so hovering deleted the amount and slid the dates one slot left, out of alignment with the header. See `docs/feedback.md` and `InlineLinesPanel.trailingAmountColumn.vitest.jsx`.
 - **Delete icon gating (ETP-4565):** the trash icon only renders when the caller passes a real `onDeleteRow` handler — `InlineLinesPanel` derives `canDelete = onDeleteRow != null` and wraps the Trash2 button in it, mirroring `DataTable`'s pre-existing `{onDeleteRow && (...)}` gate on its own row-delete button. When an entity declares `hideDelete: true` (see `docs/decisions-reference.md`), `apiPrediction.crud.<entity>.delete` resolves to `false` and `DetailView` never passes `onDeleteRow` down — before this fix, the icon still rendered on `inlineEditable` tabs and silently no-opped on click (the frontend simply had no handler to call; nothing told the user why nothing happened). Purely additive: every caller that already passes `onDeleteRow` (the default for every window with a deletable lines entity) renders byte-for-byte the same as before. **Correction (ETP-4745):** the original write-up here claimed "the backend correctly rejected the delete" — that was inaccurate even at ETP-4565 time. `hideDelete` did not reach `ETGO_SF_ENTITY.ISDELETE` until ETP-4745; before that fix a raw API `DELETE` against this same entity (`userRoles` on the `user` window) would have succeeded server-side. The ETP-4565 fix genuinely removed the dead UI affordance, it just didn't (and couldn't, at the time) rely on any real backend rejection.
 - Designed for desktop. Tablet/mobile responsive support (a genuinely reflowed/stacked layout) is still out of scope for this iteration — but **ETP-5133** fixed the specific narrow-viewport failure mode: at laptop widths (e.g. 1366×768) with a wide column set, the table now scrolls horizontally within its own bounds instead of overflowing past the detail pane and overlapping the sidebar (and, on windows with a right-side panel, that panel too). See "How horizontal overflow is scoped" below.
+- **Date columns (ETP-5245):** a `type: 'date'` column renders the shared `DateField` (calendar trigger + locale-masked text input, emitting `yyyy-MM-dd`) in **all three** paths that can edit it — `EntityForm.renderDateField` (form mode), `DataTable.renderInlineAddFieldControl` (the add-line row) and `InlineLinesPanel.EditCell` (inline edit of an existing row). Each of those keeps its **own** field-type `if` chain, so a new field-type control has to be added to all three or it degrades silently into that path's fall-through renderer — which is exactly how add-row dates shipped as bare text boxes. Two accepted limits inside the add-row/inline-edit cells: `DateField` takes no `ref` (no `firstInputRef` autofocus if it is the first add-row field) and no `onKeyDown` (row-level Enter/Escape does not fire from inside it; `DateField` binds both itself).
 - **Add-line flow** keeps using the existing `DataTable` inline-add row (callouts, focus management, defaults from header context). The generated `<Window>LineTable.jsx` falls back to `<DataTable>` while `addRow.active` is true and returns to `<InlineLinesPanel>` once the new line is saved or cancelled. This avoids duplicating the heavyweight add-row machinery and keeps a single source of truth for line creation.
 - **Dynamic column visibility (ETP-4543):** `InlineLinesPanel` accepts a `hiddenColumns = []` prop (mirroring `DataTable`'s existing one) that hides columns whose key is in the list, on top of any static `col.hidden` flag. `DetailView.jsx` computes this list from `lineDisplayLogic.visibility` (the same live evaluate-display map already threaded into the secondary `DetailForm`) and passes it to the primary lines table — so a grid column whose field resolves to `visibility: false` (e.g. a config-gated accounting dimension behind `@ACCT_DIMENSION_DISPLAY@`) is hidden at runtime rather than always shown just because it exists as a column. This makes `grid: true` fields under `inlineEditable` layouts respect the same runtime visibility rules non-grid fields already got via `DetailForm` — see `docs/feedback.md` ("ETP-4543") and `docs/generated-custom-windows/sales-invoice.md` for the full write-up.
 
@@ -1283,9 +1318,17 @@ One more request precedes the paging: the selector **fails closed** (returns an 
 
 ---
 
-### 15. `window.balanceFooter` — debit/credit balance footer
+### 15. `window.balanceFooter` — debit/credit balance totals
 
-**What it does:** replaces the product/discount/tax totals panel with a `BalanceFooterPanel` for double-entry windows. It shows **Σ debit**, **Σ credit**, the **difference**, and a **balanced ✓ / unbalanced ✗** badge, and **disables the Save button** (with a tooltip) only when the entry is **unbalanced** (`Σ debit ≠ Σ credit`). An empty/zero entry is balanced and savable as a draft; the badge stays hidden until the lines carry amounts.
+**What it does:** replaces the product/discount/tax totals panel with debit/credit totals (**Σ debit**, **Σ credit**) for double-entry windows, and **disables the Save button** (with a tooltip) only when the entry is **unbalanced** (`Σ debit ≠ Σ credit`). An empty/zero entry is balanced and savable as a draft.
+
+**Where the totals render depends on `linesLayout` (ETP-5210):**
+- `linesLayout: "inlineEditable"` (the common case) — `InlineLinesPanel` renders the totals as a row **inside the lines grid itself**, pixel-aligned under the actual `debitField`/`creditField` columns (via the grid's own `columnFlex()` — no parallel width math, no drift). Every other column gets a blank cell. No Difference amount, no balanced ✓/✗ badge — display-only totals, trimmed since ETP-4917.
+- classic (`DataTable`) `linesLayout` — no window uses this combination yet. `renderTotalsBlock()` falls back to the older standalone `BalanceFooterPanel`, rendered **below** the grid (not column-aligned), which still shows only Σ debit/Σ credit for the same ETP-4917 reason.
+
+Either way the **save/complete gating logic is identical and unaffected** — both paths read `computeBalanceGate()`'s `balanceState` directly, never anything a renderer displays.
+
+**Add-row and `DataTable`'s generic footer-totals (ETP-5210):** for `inlineEditable` windows, when the add-row form is active `GLJournalLineTable` (and every generated `*LineTable.jsx` for this layout) renders `InlineLinesPanel` (existing lines + the balanceFooter row above) **alongside** a second, header/data-hidden `DataTable` instance used only to host the add-row form. `DataTable` has its own, unrelated, longstanding generic footer-totals feature (`showFooterTotals`, on by default whenever amount columns exist) — without a guard, that hidden instance would render a *second*, unformatted totals row directly under the add-row form, stacked below the properly `€`-formatted, column-aligned one from `InlineLinesPanel`. `DataTable` now accepts a `balanceFooter` prop (already threaded through via `{...props}` at the `*LineTable.jsx` call site) whose mere presence forces its own `showFooterTotals` to `false`, regardless of the `showFooterTotals` prop's own value — the specialized row already covers it. Windows without `window.balanceFooter` configured are unaffected: `balanceFooter` is `null`/absent for them, so `DataTable`'s generic footer-totals still renders exactly as before.
 
 **When to use:** manual journals and any double-entry document where lines carry separate debit and credit amount columns that must balance before saving.
 
@@ -1304,10 +1347,12 @@ Both `debitField` and `creditField` must be amount-typed fields on the **lines**
 - `cli/src/resolve-curated.js` — added to `WINDOW_TRUTHY_PROPS` (auto-passes through).
 - `cli/src/generate-contract.js` — copied into `frontendContract.window.balanceFooter`.
 - `cli/src/generate-frontend.js` — emits `balanceFooter={...}` on `<DetailView>` when present.
-- `tools/app-shell/src/components/contract-ui/DetailView.jsx` — renders `BalanceFooterPanel` instead of `DocumentTotalsPanel` and gates the Save buttons via `blockSaveForBalance`.
-- `tools/app-shell/src/lib/balanceTotals.js` / `BalanceFooterPanel.jsx` — pure aggregation + rendering.
+- `tools/app-shell/src/components/contract-ui/DetailView.jsx` — `computeBalanceGate()` produces `balanceState` (gates Save/Complete) and, for `inlineEditable` windows, `buildBalanceFooterGridTotals()` (in `detailViewHelpers.jsx`) formats it into the `balanceFooter` prop threaded into `<DetailTable>` → `InlineLinesPanel`. `renderTotalsBlock()` renders the classic-layout `BalanceFooterPanel` fallback instead of `DocumentTotalsPanel` only when `linesLayout !== "inlineEditable"`.
+- `tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx` — `renderBalanceFooterRow()` renders the column-aligned totals row for `inlineEditable` windows.
+- `tools/app-shell/src/lib/balanceTotals.js` / `BalanceFooterPanel.jsx` — pure aggregation + the classic-layout fallback renderer.
+- `tools/app-shell/src/components/contract-ui/DataTable.jsx` — accepts `balanceFooter` and, when truthy, suppresses its own generic per-amount-column footer-totals row (see "Add-row and `DataTable`'s generic footer-totals" above).
 
-**Real example:** `simple-g-l-journal` (Manual Journals — the first window to ship the balance footer).
+**Real example:** `simple-g-l-journal` (Manual Journals — the first and only window to ship the balance footer, on `inlineEditable` `linesLayout`).
 
 ---
 
@@ -1661,6 +1706,9 @@ I need to customize the UI of a window
 │   │
 │   ├─ Replace the master list table
 │   │   └─ → window.customComponents.headerTable
+│   │
+│   ├─ Full-width notice/banner above the form (record-wide warning, locked state)
+│   │   └─ → window.customComponents.subHeader
 │   │
 │   ├─ Stack title + code + image into one sortable/filterable list column
 │   │   └─ → multiField decorator on the host grid field (decisions.json)
