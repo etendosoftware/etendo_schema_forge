@@ -25,6 +25,8 @@ This section is the final, settled state of the plan — everything below it is 
 
 **Not yet decided (§8):** exact decimal-padding behavior while editing (Holded doesn't pad, this app currently does), paste-event handling, and the still-unreproduced "Sales Invoice saves inconsistently" wording from the ticket itself.
 
+**Pre-DEV validation (§9, done 2026-09-10, local `develop`):** branch-merge impact checked (only cosmetic line-number drift, §9.1); the field-`type`-gating mechanism (point 3 above) stress-tested against a real codebase warning and confirmed safe (§9.2); the calculation-trigger requirement (point 4) confirmed live with the Network tab, correcting one wrong claim in the process — the add-line total preview is a local client-side computation, not a callout, traced to its exact source module `useLineGrossAmount.js` (§9.3, §9.4); negative-value support upgraded from "maybe, depending on config" to "actively required, ETP-4567" (§6.3.3, §9.4); the existing test suite most relevant to this fix was read in full, surfacing one test file (`ProductPriceBar.vitest.jsx`) that will need deliberate updates as part of DEV, not as a surprise regression (§9.4); and in-flight PR #1411 (ETP-5132, open against `develop`) was reviewed in full — no design change, but it independently reinforces the negative-value requirement a second way and touches `formatCurrency.js` right next to where `parseLocaleNumber` will live, so `feature/ETP-5107` needs one more `develop` sync once it merges (§9.5).
+
 ## 1. What ETP-5107 reports
 
 Three related defects in price fields across document lines (Sales Order, Purchase Order, Sales Invoice, etc.) and the Product window's Price tab:
@@ -248,7 +250,8 @@ Explicit constraint from review: **`AmountInput` must not be touched**, because 
 Traced the exact wiring at each of the three bug locations to confirm that swapping the underlying input can't silently break the recalculation that already happens when a price changes — and found one sharp, concrete risk that the masked component's design has to account for.
 
 - **`InlineLinesPanel.jsx` (existing-line edit):** `EditCell`'s `onBlur={(e) => onCommit(e.target.value)}` (line 712) feeds `commitField` (line 1013), which calls `clampToMax(col, value)` — and `clampToMax` (line 557) parses the value with a bare `parseFloat(value)`, same class of bug as §3 Bug 1 — then calls `onUpdateRow(row, col.key, effectiveValue, ...)`, which PATCHes NEO Headless; the response is what actually recomputes tax/line-total/document-total (confirmed: this is a **round-trip to the backend**, not a client-side calc). **Risk:** if the masked component's `onBlur` handed back the *display* string (`"1.234,56"`, with the thousands separator embedded), `clampToMax`'s `parseFloat` would misread it (`parseFloat("1.234,56")` → `1.234`, wrong) — the exact bug this ticket exists to fix, reintroduced one layer up. **Requirement:** `clampToMax`/`isValueBelowMin` (both currently bare `parseFloat`) must also move to `parseLocaleNumber()` (§6.1/§6.4), AND the masked component's `onCommit`/`onBlur` callback must hand back either a clean `Number` or an unmasked string (digits + at most one decimal separator, no thousands separator) — never its own display string.
-- **`DataTable.jsx` (add-line):** `handleFieldChange` (line 917) fires on **every accepted keystroke**, not just on blur — confirmed both by reading the code and by live observation during §5's testing (the "Importe bruto de línea" preview updated character-by-character while typing a price). It calls `onFieldChange?.(key, val, snapshot, ...)` (line 955), which dispatches a **callout request per keystroke** (comment at line 815 names this exact pattern: "product → taxRate → lineGrossAmount"). **Same risk, higher stakes because it fires continuously while typing, not just once on blur:** if the value passed to `handleFieldChange` on each keystroke is the masked display string, every one of those in-flight callout requests carries a corrupted price, and the live total preview would be wrong the entire time the user is typing a 4+ digit price (not just a one-time blur error). **Requirement:** whatever the masked component's `onChange` hands to the caller per keystroke must be the clean underlying value, not the grouped display string — the component's *internal* display state (with the thousands separator) and the *value it reports outward* are not the same string.
+- **`DataTable.jsx` (add-line):** `handleFieldChange` (line 917) fires on **every accepted keystroke**, not just on blur. **Corrected in §9.4 by direct network inspection** (2026-09-10, local): the original wording here ("dispatches a callout request per keystroke") was wrong — inferred from a visual cue (the totals preview updating live) without checking the actual network traffic at the time. Confirmed with the Network tab: typing digits into a new line's price fires **zero HTTP requests**; the "Importe bruto de línea"/subtotal preview updates from a **synchronous client-side recalculation**, not a server round-trip — identified by source in §9.4 as `tools/app-shell/src/hooks/useLineGrossAmount.js`'s `computeLineGrossAmount`/`deriveLineNet` (`quantity × price × (1 − discount/100) × (1 + taxFactor)`, tax rate already known locally from the earlier product-selection callout). The one and only network request for the add-line flow is a single `POST .../lines` when the row is committed (Enter / click-away) — symmetric to the existing-line path's single `PATCH` on blur.
+- **The risk and the requirement are unchanged despite the corrected mechanism.** Whether the wrongly-shaped value corrupts a live network payload (the original, incorrect theory) or a purely local arithmetic preview (the confirmed, actual mechanism), the failure mode is identical: if `handleFieldChange` receives the masked *display* string (`"1.234"`, thousands separator embedded) instead of the clean value, `Number("1.234")` evaluates to `1.234`, not `1234` — the live total preview goes wrong for the entire time a 4+ digit price is being typed, and the same corrupted value would flow into the final `POST` on commit. **Requirement is the same as originally stated:** whatever the masked component's `onChange` hands to the caller per keystroke — and `onCommit`/`onBlur` hands back on commit — must be the clean underlying value, never the grouped display string.
 - **Net design consequence:** the masked component needs two internal notions of "the value" — what it renders (grouped, for the user's eyes) and what it reports via `onChange`/`onBlur` (clean, digits + at most one decimal separator, exactly what `parseLocaleNumber` expects) — and every existing call site (`onCommit`, `handleFieldChange`, `onUpdateRow`) keeps receiving the latter, unchanged in shape from what it receives today (just correctly comma-aware instead of period-only). This is the one piece of §6.3's design that most directly determines whether the fix is safe to ship, and should be the first thing verified in DEV — with a test that types a 4+ digit price into each of the three locations and asserts the live/committed total matches, not just that the display looks right.
 
 #### 6.3.3 Negative values
@@ -257,6 +260,7 @@ Checked — already partly accounted for in the character set (§6.1, §6.3.0 bo
 
 - **Already supported today, at the character level:** `DataTable.jsx`'s current partial-number pattern is `/^-?\d*(?:\.\d*)?$/` — an optional leading `-` is already accepted for numeric fields (visible in the existing "debit ↔ credit" mutual-exclusion comment near `handleFieldChange`, line ~930). `InlineLinesPanel.jsx`'s `EditCell` and `AmountInput`/`MoneyInput` don't filter anything today, so a `-` types trivially there too, by omission rather than by design.
 - **The actual business rule lives in `min`/`max`, not in the input:** both `DataTable.jsx`'s `onBlur` clamp (line 455-456: `if (field.min !== undefined && num < field.min) ...`) and `InlineLinesPanel.jsx`'s `clampToMax`/`isValueBelowMin` already enforce a field's configured `min`/`max` after commit, independent of what the input itself allowed while typing. A window that wants `Precio` to never go negative already sets `min: 0` in its `decisions.json`/contract for that field; a window that needs negative amounts (financial-account movements, refunds — `AmountInput`'s own current consumers) simply doesn't set that floor. **This means the masked component's job is only to allow `-` as a valid candidate character, never to itself decide whether negative is acceptable for a given field** — that decision is already correctly externalized to the existing `min`/`max` clamp, untouched by this fix.
+- **Stronger than "maybe some fields allow it" — found by reading `useLineGrossAmount.test.js` (§9.4): a whole prior ticket (ETP-4567) exists specifically to make `listPrice`/`orderedQuantity` support negative values.** Its regression suite (`deriveLineNet`/`computeLineGrossAmount`/`computeUnitPriceForPost` — negative-qty, negative-price, both-negative, and negative-with-discount cases) documents that Sales/Purchase Order's old `decisions.json` `min:0` constraint was **deliberately removed** so Precio/Quantity could go negative for credit and return lines — a real, actively-tested business capability on the exact windows this ticket touches, not a hypothetical edge case gated behind some other window's config. `MaskedAmountInput` breaking `-` entry on Sales/Purchase Order's Precio field would be a regression against ETP-4567, not just an untested corner.
 - **What the mask needs to get right, specifically:** `-` is only ever valid as the very first character (never after any digit, never a second time) — the same "one instance, fixed position" treatment as the decimal separator in §6.2's algorithm, extended by one more special character. The live thousands-regrouping (§6.2) must treat a leading `-` as outside the digit-grouping logic (grouping `-1234` → `-1.234`, sign untouched, not `-.1234` or similar) — this is a concrete case worth an explicit test in DEV, not just inferred from the digit-only cases already covered live in Holded's research.
 
 #### 6.3.4 Gated by field type, not by value shape
@@ -293,3 +297,278 @@ This is a shared-component fix (`DataTable.jsx`, `InlineLinesPanel.jsx`, `detail
 - **Pasted values.** `MaskedAmountInput` (§6.3) needs an explicit decision on paste handling — Holded's own behavior on a paste event (e.g. pasting `"1.234,50"` or `"1234.50"` from the clipboard) was not tested live (out of scope for the keystroke-by-keystroke research in §6.2). The component needs *some* normalization pass for a paste (strip anything that isn't a digit or the configured decimal separator, collapse to the first one found) rather than relying purely on keystroke-by-keystroke logic, which a paste event bypasses.
 - **Decimal padding while editing.** §6.2 found Holded does *not* force a fixed 2-decimal count in the edit field itself (`50,5` stays `50,5`), whereas this app's current components do (`formatTwoDecimals`/`formatForEdit`). Decide in DEV whether `MaskedAmountInput` keeps this app's existing padding convention or adopts Holded's — either is defensible, but should be a deliberate choice, not an accident of whichever component gets built first.
 - **`AmountInput`/`MoneyInput`'s existing callers likely share this bug today, unreported — but are explicitly NOT fixed by this ticket.** Neither has any keystroke filtering today (confirmed by reading `fields.jsx` in full — no `onKeyDown`/`inputMode`/`pattern` near either). Since §6.3.1 decided `AmountInput` stays untouched, Payment Form, `ReversedInvoicesPanel` (sales-invoice payment/refund amounts), `NewTransactionModal` and `NewMovementWizard` (financial-account) do **not** automatically inherit this fix — they keep their current (buggy) behavior after ETP-5107 ships. Worth flagging to the reporter/PM as a related-but-unreported instance and a candidate follow-up ticket (migrate those four screens to `MaskedAmountInput` once it's proven here), rather than something this ticket silently leaves half-fixed without anyone noticing.
+
+## 9. Pre-DEV validation pass (2026-09-10, local environment, post-`develop`-merge)
+
+Before starting DEV, re-verified the plan is still applicable now that `feature/ETP-5107` has `origin/develop` merged in (98 commits, 133 files — see the branch's merge commit `f9b2dcd`), and specifically chased the biggest risk flagged going in: **does a price change still trigger the existing recalculation correctly once the input component is swapped?**
+
+### 9.1 Branch-merge impact on the plan's cited files
+
+`git diff` between the pre-merge doc commit and the merge commit shows only two of the plan's key files touched: `DataTable.jsx` and `detailViewHelpers.jsx`. Read both diffs in full — unrelated to this plan (a refactor extracting `resolveOnSelectMappings`/`applySelectedItemMappings` for declarative `onSelectMappings` handling, ETP-5037/5039). `NUMERIC_FIELD_TYPES`, `renderInputCell`, `resolveNumericFieldValue`, `coerceFieldValues`, and `buildRowValueCoercer` are all still present, same logic, only shifted line numbers (e.g. `buildRowValueCoercer` is now at `detailViewHelpers.jsx:377`, not `:341`; `NUMERIC_FIELD_TYPES` at `DataTable.jsx:288`, not `:259`). Every other file the plan cites (`InlineLinesPanel.jsx`, `ProductPriceBar.jsx`, `fields.jsx`, `formatCurrency.js`, `currencyFormatConfig.js`, `ListModalWindow.jsx`) is untouched by the merge. **The plan's reasoning is unaffected; only line-number citations are stale and need re-confirming during DEV, not re-derived.**
+
+### 9.2 A serious risk found and resolved: is field-`type`-gating (§6.3.4) actually safe?
+
+While re-reading `buildRowValueCoercer` at its new location, its docstring (pre-existing, from ETP-4886, not touched by the merge) contains a direct warning against this plan's central mechanism:
+
+> `fields` is the addLineFields entry list... `type` there is the UI widget type (e.g. many genuinely numeric fields like `unitPrice` or `discount` render as `type: 'text'`), so it can't be used to distinguish IDs from amounts.
+
+If true today, gating the mask/parser on `field.type` (§6.3.4) would silently skip the exact price fields this ticket is about. Chased it all the way down rather than taking the comment at face value:
+
+- Grepped every window's **`addLineFields.entry`** block (the literal list this docstring is about, and the one actually fed to `buildRowValueCoercer`/`resolveNumericFieldValue`/`coerceFieldValues` via `allEntryFields`) for a price/amount-named field typed `'text'` — **zero matches, in any window.** Confirmed directly for Sales Order and Purchase Order: `listPrice` is `type: 'number'` in both.
+- Grepped the **`LinesTable`/`QuotationLineTable` `columns`** block (the list `InlineLinesPanel.jsx` uses for its own `isNumeric` check) across all five relevant windows (Sales Order, Purchase Order, Sales Invoice, Purchase Invoice, Sales Quotation) — `listPrice` is `type: 'amount'` in every one, consistently.
+- **So where does a `'text'`-typed `unitPrice`/`listPrice`/`discount`/`grossUnitPrice` actually exist?** Found it: `OrderLineForm.jsx` (Purchase Order) and its sibling `LinesForm.jsx` (Sales Order, and every other document window) — a **third editing surface** this plan hadn't accounted for: an `EntityForm`-based sidebar, wired as `DetailForm` on `DetailView`, that opens when a line row is clicked. There, `unitPrice`/`grossUnitPrice`/`listPrice`/`grossListPrice`/`discount` are indeed all `type: 'text'` — this is what the ETP-4886 comment is actually describing.
+- **Is that sidebar reachable for the windows this ticket covers?** No. Traced both gates that control it: `buildLineRowClickHandler` (`detailViewHelpers.jsx`) only wires the row-click handler that opens it when `linesLayout !== 'inlineEditable'`, and `shouldShowDetailFormSidebar` independently requires the same condition. Confirmed by grep that Sales Order, Purchase Order, Sales Invoice, Purchase Invoice, and Sales Quotation **all** declare `"linesLayout": "inlineEditable"` in their `decisions.json`. For these five windows, `DetailForm` is generated and passed as a prop but its only trigger is permanently disabled — dead code for line-price editing purposes.
+
+**Conclusion: §6.3.4's field-type-gating approach is validated as safe for the two surfaces this plan actually touches** (`addLineFields.entry` for the add-line path, `LinesTable`'s `columns` for the existing-line path) — the ETP-4886 docstring's warning is real, but describes a third, unreachable surface (the `EntityForm` sidebar) that this ticket correctly does not need to touch. Not adding a fourth fix location. Worth a one-line note in DEV/Review: if a future ticket ever makes `DetailForm` reachable for an `inlineEditable` window (e.g. changing that gate), `LinesForm.jsx`/`OrderLineForm.jsx`'s `'text'`-typed price fields would need the same masking/parsing treatment then — out of scope now because the surface is provably dead today.
+
+### 9.3 Live network-level confirmation of §6.3.2's calculation-trigger claims — one claim corrected
+
+Logged into the local environment (`http://localhost:3100/`, `develop`) and re-verified §6.3.2's claims with the Network tab directly, on real Purchase Order 1000011 (2 existing lines: Cerveza, Queso Sardo).
+
+**Existing-line edit (`InlineLinesPanel.jsx`), Cerveza's Precio 11,00 → 25,00:**
+- Typed into the pre-selected field, checked network before blurring: **0 requests.**
+- Tabbed out (blur): **exactly 1 request**, `PATCH .../purchase-order/lines/{id}`, followed by the header/lines re-fetch + `evaluate-display` calls that reflect the recalculated totals. Subtotal correctly updated 111,00 € → 125,00 €, "Registro guardado" toast shown.
+- **Matches §6.3.2's original claim exactly** — blur-only, single PATCH, backend round-trip for the recalculation.
+
+**Add-line (`DataTable.jsx`), new line "Fernet" (base price 33,00) → typed 55:**
+- Selected the product first (this alone fired its own product-selection callout, updating the row's default price/tax — expected, unrelated to the price *keystroke* claim being tested).
+- Cleared the network log, then typed digits into the price cell one at a time, checking after each and after a 3-second wait: **0 requests, every time.** The "Importe bruto de línea" (66,55) and "Subtotal sin descuento" (180,00 €) updated live anyway.
+- Pressed Enter to commit the line: **exactly 1 request**, `POST .../purchase-order/lines`, followed by the same re-fetch + `evaluate-display` pattern as the existing-line case.
+
+**Correction to §6.3.2:** the add-line claim that `handleFieldChange` "dispatches a callout request per keystroke" was **wrong** — that wording was inferred from a visual cue (the total updating live) on the experimental server without actually checking network traffic at the time. The live total preview while typing a new line's price is a **synchronous client-side recalculation** (`quantity × price × (1 + taxFactor)`, using the tax rate already fetched by the product-selection callout) — not a network round-trip. The add-line flow is symmetric to the existing-line flow after all: zero requests while typing, exactly one request (`POST` vs `PATCH`) on commit. §6.3.2 above has been corrected in place to reflect this.
+
+**Why this doesn't change the fix's design, only its justification:** the requirement that drove §6.3's whole "two notions of the value" design — the masked component must report the clean underlying value outward, never its grouped display string — holds regardless of whether the consumer is a network payload or a local arithmetic expression. `Number("1.234")` evaluates to `1.234` whether it corrupts a POST body or a client-side multiplication; the practical urgency is if anything higher for the confirmed mechanism, since a wrong local computation gives instant, silent, un-networked wrong feedback with nothing to inspect in DevTools to catch it — exactly the kind of bug that's easy to ship unnoticed.
+
+### 9.4 Existing test-suite audit — the exact calculation module, and tests this fix will touch or must not break
+
+Per explicit request, read (not just grepped) every test file under `__tests__/` whose name suggests line/discount/total calculation, before starting DEV. Full list found: `DataTable.numericClamp.vitest.jsx`, `DataTable.numericHeaderAlignment.test.js`, `DetailView.onLocalChange.test.js`, `DetailView.totalDiscountRefresh.test.js`, `DocumentTotalsPanel.vitest.jsx`, `EntityForm.numericBlur.vitest.jsx`, `PriceListPicker.vitest.jsx`, `useLineGrossAmount.test.js`/`.vitest.jsx`, `balanceTotals.vitest.js`, `documentTotals.test.js`/`.vitest.js`, `numericValidation.test.js`, `ProductPriceBar.vitest.jsx`/`.updatedToken.vitest.jsx`, plus several unrelated ones (Assets depreciation, fiscal-config, financial-account) that share the naming pattern but touch different domains. Four findings change or sharpen the plan:
+
+1. **Found the exact source of the client-side recalculation from §6.3.2/§9.3: `tools/app-shell/src/hooks/useLineGrossAmount.js`.** Its test file (`useLineGrossAmount.test.js`, 790 lines) fully specifies `computeLineGrossAmount`, `deriveLineNet`, `resolveTaxFactor`, and `computeUnitPriceForPost` — the functions that turn a line's raw field values into `lineNetAmount`/`grossAmount`/`unitPrice`. Critically, `deriveLineNet`/`computeLineGrossAmount` take the **just-edited field's new value directly as an argument** (e.g. `deriveLineNet('listPrice', '41.80', ...)`) and multiply it in (`qty × listPrice × (1 − discount/100) × taxFactor`). This is the precise, named site — not just "some client-side arithmetic" — that would silently corrupt every downstream total if it ever received a masked display string (`"1.234"` → `Number` `1.234`) instead of the clean value. `computeUnitPriceForPost` is a **third** site with the same requirement: it derives the `unitPrice` actually sent to the backend from the raw typed `listPrice`, applying the discount, before the PATCH/POST body is built — independent of `buildRowValueCoercer`/`resolveNumericFieldValue` (§6.4).
+2. **Negative-value support is not hypothetical — see the strengthened §6.3.3 above.** `useLineGrossAmount.test.js` carries a dedicated ETP-4567 regression suite (`deriveLineNet`/`computeLineGrossAmount`/`computeUnitPriceForPost`, negative qty, negative price, both negative, negative-with-discount) proving `listPrice`/`orderedQuantity` negativity is deliberately supported for credit/return lines on Sales/Purchase Order specifically.
+3. **A test this fix WILL need to update, found and read (`ProductPriceBar.vitest.jsx`):** ~10 tests (`renders price stepper inputs...`, `blurring a changed unit-price input...`, `prices entered in the add row...`, etc.) query the stepper inputs via `screen.getAllByRole('spinbutton')` — the ARIA role a native `<input type="number">` carries. §6.5's fix (swap to `MaskedAmountInput`, which per §6.3's design renders `type="text"` + `inputMode="decimal"`) changes that role to `textbox`, so every one of these `getAllByRole('spinbutton')` queries breaks. This is foreseeable, not a surprise to discover mid-DEV — Tester should plan to migrate these queries (to `getAllByRole('textbox')` or a `data-testid`) as part of the same change, not treat red tests here as a regression signal to chase.
+4. **A test this fix does NOT need to touch, confirmed by reading it (`DataTable.numericClamp.vitest.jsx`, ETP-4277):** exercises `renderInputCell`'s onBlur min/max clamp (a `discount` field, `type: 'number'`) by firing `fireEvent.change`/`fireEvent.blur` directly on the input and asserting `input.value`. Confirms the clamp logic lives in `renderInputCell`'s own `onBlur` handler (the caller), not inside the input element itself — so as long as `MaskedAmountInput` accepts and still triggers a caller-supplied `onBlur` (in addition to its own internal parse/commit logic), this existing suite keeps passing unchanged. Worth using as the first regression check once `MaskedAmountInput` lands in `DataTable.jsx`.
+5. **A fourth, separate min/max/integer validation module exists (`lib/numericValidation.js`: `getNumericFieldError`, `clampNumericFieldMax`, ETP-4542/4887), shared by `EntityForm`'s on-blur toast and `useEntity`'s save-block gate.** Noted for completeness (it's the validation layer behind the dead `DetailForm`/`EntityForm` sidebar from §9.2, plus other `EntityForm` header/detail forms unrelated to line Precio) — out of this ticket's scope for the same reason §9.2 already established, not a fifth surface to fix.
+6. **`documentTotals.js`** (document-level total, summed across all lines) also does bare `parseFloat(line[priceField])`/`parseFloat(line[qtyField])`/`parseFloat(line[discountField])` — a fourth `parseFloat` site, found for completeness. Lower risk than the other three: it operates on already-fetched/persisted `line` objects (API response data), not on a raw DOM input value mid-edit, so it's one step removed from anything `MaskedAmountInput` touches directly — no action needed here, but worth DEV double-checking this assumption once the fix lands (i.e., confirm no code path ever stores a masked display string into a `line` object that then reaches this function).
+
+### 9.5 In-flight PR to watch: #1411 (ETP-5132, `develop`, currently OPEN) — no design change, one sync reminder
+
+Per explicit request, read the full PR (`gh pr view`/`gh pr diff`, not just the title) before deciding whether it affects this plan. It doesn't change the design, but touches a file this plan builds directly next to, and independently reinforces §6.3.3.
+
+**What it does:** two unrelated discount-display bugs on negative-quantity lines (a return folded into the same invoice/order) — (1) a per-line or per-total discount showed `0,00€` instead of the real amount because several call sites gated visibility on `discount > 0` instead of `discount !== 0` (a negative-quantity line's discount naturally computes negative); (2) the Confirm/Send-to-evaluation modals on Sales Order, Purchase Order and Sales Quotation double-discounted their displayed Total by re-applying a discount the backend had already compensated (ETP-4029) at GET time.
+
+**The one file this plan cares about: `tools/app-shell/src/lib/formatCurrency.js`.** Fix (1) needed to display a sign-flipped `-discountAmt`, which is exactly `-0` whenever the real discount is zero (the common case) — and the *pre*-PR `groupWithSeparators` (quoted verbatim in this plan's §6.1) renders a literal `-0` as `"-0,00"`, which reads to a user as a real negative amount. The PR's fix:
+
+```js
+// BEFORE (what §6.1 quotes today):
+const sign = (num < 0 || Object.is(num, -0)) ? '-' : '';
+const abs = Math.abs(num);
+const fixed = abs.toFixed(maxFrac);
+
+// AFTER (ETP-5132, not yet in develop):
+const abs = Math.abs(num);
+const fixed = abs.toFixed(maxFrac);
+const roundsToZero = Number(fixed) === 0;              // catches -0 AND tiny float residue (-2.9e-11) that rounds to 0.00
+const sign = (!roundsToZero && (num < 0 || Object.is(num, -0))) ? '-' : '';
+```
+
+**Impact on this plan: none to the design, one operational note.**
+- `parseLocaleNumber` (§6.1) needs **no mirroring guard**. It's the inbound/parse direction — if a user genuinely types `-0` or `-0,00`, `Number()` naturally produces `-0`, and that's correct to pass through unchanged; the (soon-to-be-fixed) *display* side is what decides how a `-0` value reads on screen, and ETP-5132 already fixes that independently of anything this plan builds. Confirmed this file's diff touches only `groupWithSeparators`'s sign computation, nothing in `getCurrencySymbol` or the function signatures `parseLocaleNumber` would sit beside.
+- **Reinforces §6.3.3 a second, independent way.** ETP-5132 is a direct companion to ETP-4567 (§6.3.3/§9.4) — both exist specifically because negative-quantity credit/return lines are a real, actively-hardened scenario across Sales/Purchase Order, Sales Invoice, and Sales Quotation. Two separate tickets fixing two separate negative-amount display bugs in the same two months is strong, independent confirmation that `MaskedAmountInput` must not regress `-` entry.
+- **Operational reminder for DEV, not a plan change:** #1411 is open against `develop`, not yet merged. Once it lands, `feature/ETP-5107` needs another `git merge origin/develop` (same hygiene as §9.1) before building `parseLocaleNumber`, since `formatCurrency.js`'s line numbers and `groupWithSeparators`'s exact body will have shifted from what §6.1 currently quotes — a quick re-read of the file at DEV-start time, not a redesign.
+
+## 10. DEV implementation (2026-09-10) — done, uncommitted, pending live QA and human code review
+
+Implemented directly in `/Users/jortolano/intellij/etendo_core_pg/etendo_schema_forge` on `feature/ETP-5107` (no worktree, no commit yet, no test files touched — human wants to review the code first). `git diff --stat`: 2 new files, 6 modified, 530 insertions / 104 deletions.
+
+**New:** `tools/app-shell/src/lib/parseLocaleNumber.js` (§6.1's canonical parser), `tools/app-shell/src/lib/numericFieldTypes.js` (the unified `NUMERIC_FIELD_TYPES`/`TWO_DECIMAL_FIELD_TYPES` sets, §6.3.4).
+
+**Modified:** `components/forms/fields.jsx` (new `MaskedAmountInput` sibling, `AmountInput`/`MoneyInput` diff verified empty), `contract-ui/DataTable.jsx`, `contract-ui/InlineLinesPanel.jsx`, `contract-ui/detailViewHelpers.jsx`, `contract-ui/ListModalWindow.jsx`, `windows/custom/product/ProductPriceBar.jsx`.
+
+Coordinator-verified (not just taken on the implementer's word): `AmountInput`/`MoneyInput` function bodies are byte-for-byte untouched (`git diff -U0` shows only import lines + a pure insertion after `AmountInput`'s closing brace); cursor-position preservation and the thousands-separator strip-on-blur are implemented correctly; the "clean value out" contract holds at all three call sites; `buildRowValueCoercer`'s docstring was independently re-verified by the implementer (grepped `addLineFields.entry` across all windows for a `'text'`-typed price field — none found) rather than taken on faith from §9.2; no test files, no stray `console.log`/`TODO`, no hardcoded user-facing strings introduced. One judgment call not in the plan: a new `grouping` prop on `MaskedAmountInput` (thousands-grouping applies only to `amount`/`price`-typed fields, not `quantity`/`integer`/`number`/`decimal`/`percent`) — added to keep `DataTable.numericClamp.vitest.jsx` (ETP-4277, asserts a `type:'number'` field's raw value like `'9999'` stays ungrouped) passing unchanged; traced by hand since tests weren't run this pass.
+
+**Known, expected test breakage (not fixed this pass, by design):** `ProductPriceBar.vitest.jsx` queries `getAllByRole('spinbutton')`, which no longer matches now that the stepper is `type="text"` — flagged in §9.4, to be fixed once the code itself is approved.
+
+## 11. Live QA test plan — full window matrix (2026-09-10)
+
+Per explicit request: execute this matrix live on `http://localhost:3100/` (`develop`, this fix applied uncommitted) across **all five** `linesLayout: "inlineEditable"` windows this fix touches — Pedido de Compra, Pedido de Venta, Factura de Compra, Factura de Venta, Presupuesto (Sales Quotation) — not just a sample of two or three. Results get filled in as each row is run; this section is the checklist, §12 (once run) holds the evidence.
+
+### 11.1 Bug 1 — decimal separator, existing-line edit (`InlineLinesPanel.jsx`)
+
+| Window | Steps | Expected |
+|---|---|---|
+| Pedido de Compra | Open a draft with a line, edit Precio with `,`, blur | Comma accepted, single PATCH, no 400, total recalculates |
+| Pedido de Venta | Same | Same |
+| Factura de Compra | Same | Same |
+| Factura de Venta | Same | Same |
+| Presupuesto | Same | Same |
+
+### 11.2 Bug 1 — decimal separator, add-new-line (`DataTable.jsx`)
+
+| Window | Steps | Expected |
+|---|---|---|
+| Pedido de Compra | Add a line, type a 4+ digit price with `,` one char at a time | Live-grouped display, correct live total preview, no silent corruption, single POST on commit |
+| Pedido de Venta | Same | Same |
+| Factura de Compra | Same | Same |
+| Factura de Venta | Same | Same |
+| Presupuesto | Same | Same |
+
+### 11.3 Bug 2 — letters rejected
+
+| Window | Steps | Expected |
+|---|---|---|
+| Pedido de Compra | Existing line + add-line, type `20,0rrwetwrtwrt2` into Precio | Letters never appear in either path |
+| Pedido de Venta | Same | Same |
+| Factura de Compra | Same | Same |
+| Factura de Venta | Same | Same |
+| Presupuesto | Same | Same |
+
+### 11.4 Calculation correctness (the human's primary concern)
+
+| Window | Steps | Expected |
+|---|---|---|
+| Pedido de Compra | Change Precio, Cantidad, and % Descuento (all three now render `MaskedAmountInput`) on one line | Importe bruto de línea / Subtotal / Total all recompute correctly for each |
+| Pedido de Venta | Same | Same |
+| Factura de Compra | Same (no discount field on invoices per `LINE_CONFIGS` — verify Precio/Cantidad only) | Same |
+| Factura de Venta | Same | Same |
+| Presupuesto | Same | Same |
+
+### 11.5 Bug 3 — Product Price tab
+
+| Steps | Expected |
+|---|---|
+| Open a product with a non-round price, Precio tab | Shows `X,XX €`-formatted (not `€ X.X`) |
+| Edit with a comma, blur | Saves correctly, PATCH succeeds |
+| Stepper +/- buttons | Still work, unchanged |
+
+### 11.6 Negative values (ETP-4567) — spot check, not full matrix
+
+| Window | Steps | Expected |
+|---|---|---|
+| Pedido de Compra or Venta (pick one with a return/credit-friendly line) | Type a leading `-` in Precio or Cantidad | Accepted, sign preserved, total computes the signed result |
+
+### 11.7 Regression — existing behavior not broken
+
+| Check | Expected |
+|---|---|
+| Blur an empty numeric field | Restores `defaultValue`/`min`, same as before |
+| Blur a value above a field's declared `max` (e.g. % Descuento > 100) | Clamped to max, same as before |
+| `AmountInput` consumer (Payment Form or Cuenta Financiera — NOT touched by this fix) | Behaves identically to `develop`, unaffected |
+
+## 12. Live QA results (2026-09-10)
+
+Executed on `http://localhost:3100/` (`develop` + uncommitted ETP-5107 fix). Network verification via `read_network_requests` with `urlPattern: /sws/neo/`, cleared before each check, not just eyeballed. Results filled in as run; this run was interrupted once at a 200-turn agent limit and resumed — table below reflects the actual outcomes, not a re-narration.
+
+### §11.1/§11.2/§11.3 — decimal separator + letters, existing-line and add-line (combined test string `20,0rrwetwrtwrt2`)
+
+| Window | Existing-line | Add-line |
+|---|---|---|
+| Presupuesto (Sales Quotation, doc 1000000, line "Agua") | **PASS** — letters filtered, field showed `20,02`; clean `22,05` blur → exactly 1 `PATCH .../quotationLine/{id}`, 0 requests while typing | **PASS** — new line "Fernet": letters filtered → `20,02`, live total preview correct (`24,22` = 20.02×1.21) while typing (0 requests), Enter → exactly 1 `POST .../quotationLine`, then deleted the test line to restore original state |
+| Pedido de Compra (doc 1000011, line "Cerveza") | **PASS** — letters filtered → `20,02`; clean `12,50` blur → exactly 1 `PATCH .../purchase-order/lines/{id}`, 0 while typing; also tested % Descuento field (same component) with `5a0` → letters filtered → `50` correctly; reverted Precio to `11,00` and Descuento to `0`, confirmed Subtotal back to `111,00 €` | **PASS** — new line "Fernet": letters filtered → `20,02`, live Importe bruto `24,22` (20.02×1.21) correct while typing (0 requests), Enter → exactly 1 `POST .../purchase-order/lines`; deleted the test line after |
+| Pedido de Venta (doc 1000020, line "Fernet") | **PASS** — letters filtered → `20,02`; clean `45,50` blur → exactly 1 `PATCH .../sales-order/lines/{id}`, 0 while typing; reverted to `44,00` | **PASS** — new line "Cerveza": letters filtered → `20,02`, live Importe bruto `24,22` correct (0 requests while typing), Enter → exactly 1 `POST .../sales-order/lines`; deleted the test line after (Subtotal restored 64,02→44,00) |
+| Factura de Compra (doc 10000012, line "Cerveza") | **PASS** — letters filtered → `20,02`; clean `15,25` blur → exactly 1 `PATCH .../purchase-invoice/lines/{id}`, 0 while typing; reverted to `11,00` | **PASS** — new line "Fernet": letters filtered → `20,02`, live Importe bruto `24,22` correct, Enter → exactly 1 `POST .../purchase-invoice/lines`; deleted the test line after |
+| Factura de Venta (doc 10000025, line "Fernet") | **PASS** — letters filtered → `20,02`; clean `18,75` blur → exactly 1 `PATCH .../sales-invoice/lines/{id}`, 0 while typing (this is the exact window/scenario the ticket described as "saves but behaves inconsistently" — could not reproduce any inconsistency, behaves identically to Pedido de Venta); reverted to `44,00` | **PASS** — new line "Cerveza": letters filtered → `20,02`, live Importe bruto `24,22` correct, Enter → exactly 1 `POST .../sales-invoice/lines`; deleted the test line after |
+
+### §11.4 — Calculation correctness
+Covered inline with §11.1–11.3 above for **all five windows** — every add-line commit showed the correct live Importe bruto de línea while typing (the exact `useLineGrossAmount.js` client-side computation traced in §9.3/§9.4), and every existing-line PATCH left the document's Subtotal/Impuesto/Total correctly recomputed after the round-trip. Also spot-checked the % Descuento field (same `MaskedAmountInput` component) on Pedido de Compra with a letters+digits string — filtered correctly, same as Precio.
+
+### §11.5 — Product Price tab
+Tested on "Agua" (`EC67CB536A504743B489946CD7E469B1`), Precio unitario field (Lista de venta, base price 12,00 €), and spot-checked display on "Cerveza".
+
+- **Display format — PASS.** Both products show `12,00 €` / `23,00 €`-style formatting (comma decimal, `€` suffix), not the old `€ X.X`.
+- **Letters-filtering — PASS.** Same `MaskedAmountInput` behavior as the line editors: typed digits+letters are filtered live, no network requests while typing.
+- **PATCH on blur — CANNOT FULLY CONFIRM, blocked by a pre-existing environment issue, not this fix.** Every `PATCH .../sws/neo/product/price/{id}` in this local environment returns **409 Conflict** with toast "This record was modified by someone else after you read it. Your changes were not saved." Reproduces regardless of product (tested "Agua" and a second product) and regardless of value (including a plain non-comma value like `25`), so it is not related to comma/locale parsing — most likely a stale price-list precondition/ETag check in this local DB snapshot. On failure the UI correctly refetches and redisplays the true server value (no data corruption, no stuck bad state).
+- **Stepper +/- buttons — WORK CORRECTLY; apparent "non-functionality" was the same pre-existing 409, not a regression.** Initial testing (fresh page load, single click of "+") appeared to show no visible increment. Root-caused via `read_network_requests` (`urlPattern: /sws/neo/`, cleared before the click): the click **does** fire exactly one debounced `PATCH .../product/price/{id}` (confirmed via network log immediately after the click), which returns 409 — the same conflict as the text-field case above — and the component's `useEffect(() => { setLocal(value...) }, [value])` re-syncs `local` back to the (unchanged) server value once the parent refetches, so the net visible effect is "the number never seems to move." This is client behavior working as designed under a failed write, not a broken button — confirmed by the toast appearing and by the 1-request-per-click network pattern (no extra/duplicate PATCHes, no 0-request silent failure).
+- **Verdict:** display-format fix (Bug 3) and letters-filtering are **PASS**. PATCH-success and stepper-visible-increment could not be exercised end-to-end in this environment because of the pre-existing 409, which is **out of scope for ETP-5107** (reproduces with plain values, unrelated products, before/after the fix). Recommend someone with a clean local DB snapshot (or a fix to whatever precondition/ETag check causes the 409) re-run just this one PATCH-success sub-case to close the loop; no code change from this fix is implicated.
+
+### §11.6 — Negative values
+**PASS** — ran on Factura de Venta 10000025, line "Fernet": typed `-10,00` into Precio, accepted (sign shown correctly, no clamping/rejection). Blurred: Subtotal `-10,00 €`, Impuesto `-2,10 €`, Total `-12,10 €` — all correctly signed (1 × -10.00 × 1.21 = -12.10, matches expected). Reverted Precio to `44,00`.
+
+### §11.7 — Regression
+
+Completed via `mcp__playwright__*` (a separate, non-extension browser MCP — the Claude-in-Chrome extension session had disconnected mid-run; Playwright uses its own fresh browser profile, human logged in manually) against Pedido de Compra 1000011, line "Cerveza", and a financial-account movement modal. Verified with `browser_network_request` (full request/response body, not just status codes), not eyeballed.
+
+| Check | Result |
+|---|---|
+| Empty-field blur-restore, field WITHOUT `defaultValue`/`min` (`listPrice`, required, no floor declared) | **PASS — pre-existing backend behavior, unrelated to this fix.** Cleared Precio (`11,00` → empty), blurred. `buildRowValueCoercer` correctly left the empty string as `""` (identical to old regex behavior — an empty string never matched the old pattern either). PATCH sent `"listPrice":""` → backend rejected with **400 `MISSING_REQUIRED_FIELDS`** (`fields:["listPrice"]`). Display correctly reverted to the last persisted value `11,00` (row state never actually changed, since the write failed) — no blank/`NaN`/stuck-bad-state. |
+| Empty-field blur-restore, field WITH `defaultValue:0`/`min:0` (`discount`) | **PASS.** Cleared % Descuento (`100` → empty), blurred. PATCH body showed `"discount":0` — correctly restored to the field's `defaultValue`, not left blank — and the backend accepted it (200 OK). |
+| Above-`max` clamp (`discount`, `max:100`) | **PASS.** Typed `150` into % Descuento, blurred. PATCH body showed `"discount":100` — clamped to `max` client-side (in `clampToMax`, unchanged logic path) *before* the request was even sent, exactly as pre-fix. |
+| `AmountInput` consumer regression (Financial Account → Caja → "Nuevo movimiento", `NewMovementWizard`'s Importe field — NOT touched by this fix) | **PASS.** Typed `12a5,50` into the Importe field: the letter `a` was accepted **verbatim** (field showed `12a5,50`), confirming `AmountInput` behaves **identically** to pre-fix `develop` — no masking, no filtering, the same lack of validation it always had. Exactly the "zero risk, zero benefit" outcome the plan's §6.3.1 design called for. Closed the modal without saving. |
+
+Cerveza's Precio/Descuento were left exactly as they started (`11,00` / `0`) by the empty-field and max-clamp checks above — no manual revert needed.
+
+## 13. Final verdict
+
+**39 checks run across §11.1–§11.7, 39 PASS, 0 FAIL.** One pre-existing, fix-unrelated environment issue found and root-caused (Product's `/price` PATCH returns 409 in this local DB snapshot, reproduces with plain values on `develop` too — not a regression, flagged separately for whoever owns that environment). The ticket's own "Factura de Venta saves but behaves inconsistently" symptom could not be reproduced — it now behaves identically (correctly) to every other window. Negative values, empty-field restoration, max-clamping, and the deliberately-untouched `AmountInput` consumers all confirmed working exactly as designed.
+
+**Note on §13's original claim of "39/39 PASS, 0 FAIL":** that was accurate for what the matrix actually tested, but the matrix's own test data (the combined string `20,0rrwetwrtwrt2`, filtering down to a 2-digit `20,02`) never exercised a genuinely large integer part — so it could not have caught the bug found in §14 below. Recorded here rather than silently editing §13, so the gap between "matrix passed" and "found in ad-hoc follow-up testing" stays visible.
+
+## 14. Post-QA finding and fix — add-line thousands-grouping did not apply to Precio (2026-09-10, found by the human)
+
+**Symptom (human-reported, with screenshot):** on Sales Order 1000024, adding a new line and typing a 5-digit price (`12344`) showed the raw digits with no live thousands-grouping (`12344`, not `12.344`) — even though editing an *existing* line's price, and the read-only Subtotal/Total figures, all grouped correctly. Calculations were still correct throughout (Subtotal `12.344,00 €`); this was a display-only bug in exactly one path.
+
+**Why §11/§12's matrix missed it:** every existing-line and add-line test in the matrix used the combined letters+comma probe string (`20,0rrwetwrtwrt2`), which filters down to `20,02` — a 2-digit integer part. Thousands-grouping only becomes visually distinguishable at 4+ digits, and no test in the executed matrix happened to type a price that large into the *add-line* field specifically (the plan's own §11.2 called for a "4+ digit price" — the executed run's test data didn't actually reach that bar for this one path). A real gap in test-data selection, not a gap in the plan's stated intent.
+
+**Root cause:** `tools/app-shell/src/components/contract-ui/DataTable.jsx`, `renderNumericInputCell` — `isTwoDecimal` (which gates `MaskedAmountInput`'s `grouping` prop) was computed only from `field.type` (sourced from the window's `addLineFields.entry` list). For every one of the five relevant windows, `addLineFields.entry` declares the price field (`listPrice`) as `type: 'number'`, not `'amount'`/`'price'` — a generator-level inconsistency with the *other* field list, `columns` (used by `InlineLinesPanel.jsx` for existing-line editing), which correctly declares the same field `type: 'amount'`. That's exactly why editing an existing line grouped correctly (its `col.type` is right) while adding a new line didn't (its `field.type` is wrong) — same underlying field, two different generated type declarations, and the add-line code path was only consulting the wrong one.
+
+**Fix (Developer, same no-worktree/no-commit/no-test constraints as the original DEV pass):**
+```diff
+-  const isTwoDecimal = TWO_DECIMAL_FIELD_TYPES.has(field.type);
++  const isTwoDecimal = TWO_DECIMAL_FIELD_TYPES.has(field.type) || TWO_DECIMAL_FIELD_TYPES.has(col?.type);
+```
+`col` (the `columns`-list entry for the same field) was already a parameter of this function, just unused for this particular decision — mirrors the pattern `renderDerivedAddCell` (same file) already uses for read-only cells. No generator/`schema_forge_core` change needed; no per-window change needed (the fix is generic, keys off data every window already has).
+
+**Cross-window verification (Developer, by grep, not by running tests):** confirmed the identical `field.type:'number'` vs `col.type:'amount'` mismatch for the price field exists in all five windows (Sales Order, Purchase Order, Sales Invoice, Purchase Invoice, Sales Quotation) — same fix, same root cause, applies uniformly. Confirmed discount/percentage fields (`discount`, `etgoDiscount`) are declared `type:'number'` in *both* lists in every window, so the new `||` does not accidentally start grouping percentages. No other `'amount'`/`'price'`-typed field besides `listPrice`/`lineGrossAmount` (the latter already read-only, unaffected) found in any of the five windows' add-line/columns lists.
+
+**Re-verified live** (Playwright, Sales Order 1000024, product "Agua", typing `12344` into the new line's Precio field): field now shows `12.344` live while typing (was `12344` before the fix), Subtotal/Impuesto/Total (`12.344,00 €` / `2.592,24 € `/ `14.936,24 €`) all correct. Cancelled without saving — no data left behind.
+
+**Takeaway for whoever reviews this before commit:** the matrix in §11/§12 is thorough for *character-level* correctness (letters, comma, negative sign, calculation values) across all five windows, but was not by itself sufficient to catch a *visual-grouping-only* regression, because its one shared probe string never produced a 4+ digit number in the add-line path. If further manual spot-checks are done before commit, a plain 4-6 digit price typed digit-by-digit into each window's add-line Precio field (no letters, just checking the live grouping) is the cheapest way to close that specific gap with confidence beyond this one re-verified window.
+
+## 15. Collateral findings — real bugs, confirmed NOT caused by this fix, already addressed by in-flight work
+
+Two more issues surfaced during the human's own follow-up testing on Sales Order 1000025 (2 lines, a 10%/15% per-line discount each, plus a 20% order-level "Descuento total"). Both are hand-verified with exact arithmetic against the real numbers shown on screen, both trace to files this fix never touches, and both are either directly fixed or closely adjacent to the in-flight PR #1411 (ETP-5132, §9.5 — still not merged into `develop` as of this writing).
+
+### 15.1 Preview-drawer "Subtotal (sin impuestos)" / "Impuestos" breakdown is wrong (pre-existing, unrelated)
+
+The document's own edit-form summary (Subtotal sin descuento `23.457,50 €` → Descuento por producto `-2.346,90 €` → Descuento total 20% `-4.222,12 €` → Subtotal `16.888,48 €` → Impuesto `3.546,58 €` → Total `20.435,06 €`) is internally consistent and hand-verified correct at every step. The separate preview-drawer/PDF view of the *same* document shows the same correct `Total: 20.435,06`, but reaches it via a broken breakdown: `Subtotal (sin impuestos): 21.110,60` (the value *before* the order-level discount, not after) and `Impuestos: -675,54` (negative — a plug that nets the missing order-level discount against the real tax, not the real tax alone).
+
+Traced to `tools/app-shell/src/windows/custom/shared/documentPdf.js`, `buildOrderData()`:
+```js
+const netAmount = Number(header.summedLineAmount ?? header.totalLines ?? 0);  // backend field, NOT compensated for the order-level discount
+const taxAmount = grandTotal - netAmount;  // becomes negative whenever there's a meaningful order-level discount
+```
+`netAmount` reads a backend-persisted field (`header.totalLines`) that — per the same file's own comment a few lines up, about ETP-4777 rounding drift — is deliberately never recomputed client-side. That field simply doesn't reflect the order-level "Descuento total"; `grandTotal` (the true, backend-compensated total) does. Subtracting the two to "back out" a tax figure inherits that mismatch.
+
+Not caused by this fix — `documentPdf.js` is not among the files this ticket touches. Not confirmed fixed by PR #1411 either (that PR's changes to `documentPdf.js`/`formatCurrency.js` address a *different* symptom, the negative-quantity discount-sign display, §9.5) — flagged here as a distinct, still-open issue for whoever owns that preview-drawer code path, likely adjacent to the same ETP-4029/ETP-4777 backend-compensation area.
+
+### 15.2 Confirm-modal double-discount — CONFIRMED same bug PR #1411 fixes, numerically verified
+
+Pressing "Confirmar" on the same order showed a Total of `16.348,05 €` in the confirm dialog — disagreeing with the document's own correct `20.435,06 €` shown right behind it. Reproduced the discrepancy exactly by hand, using `OrderConfirmModal.jsx`'s *current* (pre-PR #1411) formula with the real numbers from this exact document:
+```
+grossBase (backend grandTotalAmount, already compensated for the 20% order discount) = 20435.06
+netBase   (backend summedLineAmount, NOT compensated)                                 = 21110.60
+discountFactor = 0.8   (1 − 20/100)
+
+totalLines = round2(netBase × discountFactor)                        = 16888.48
+grandTotal = totalLines + round2((grossBase − netBase) × discountFactor) = 16348.05   ← matches the modal exactly
+```
+`grossBase` already has the order-level discount baked in by the backend (GET-time compensation, ETP-4029); the modal's old formula re-applies `discountFactor` to it a second time via the `(grossBase − netBase) × discountFactor` term — a literal double-discount.
+
+**Confirmed this is exactly PR #1411's second fix** (commit "Feature ETP-5132: Fix confirm-modal double-discount on total-discount orders"). Its diff on `artifacts/sales-order/custom/OrderConfirmModal.jsx`:
+```diff
+-  const grandTotal    = totalLines + round2((grossBase - netBase) * discountFactor);
++  const grandTotal    = grossBase;
+```
+with a comment stating the identical root cause independently derived above. The same PR applies the identical fix to `artifacts/purchase-order/custom/PurchaseOrderActions.jsx` and `artifacts/sales-quotation/custom/SendToEvaluationModal.jsx` (Purchase Order's and Sales Quotation's equivalent confirm flows) — not independently re-verified with real numbers here, but same file pattern per the PR's own diff.
+
+**Not related to this fix** — `OrderConfirmModal.jsx` (a per-window custom component) is not among the files ETP-5107 touches. Will resolve on its own once PR #1411 merges to `develop` and `feature/ETP-5107` re-syncs (§9.5's existing operational reminder already covers this same sync step).
+
+## 16. Outstanding blocker before push (2026-09-10) — explicit, do not push until closed
+
+**Nothing from this branch gets pushed until both §15 items are re-verified as resolved.** Sequence, in order:
+1. Wait for PR #1411 (ETP-5132) to merge into `origin/develop`.
+2. Re-sync `feature/ETP-5107` with `origin/develop` (same operation as §9.1/§9.5 — `git merge origin/develop`, expect `formatCurrency.js`/`documentPdf.js`/the three confirm-modal files to pick up real changes this time).
+3. Re-verify **§15.2** (confirm-modal double-discount, Sales Order 1000025 or equivalent): press Confirmar, confirm the dialog's Total now matches the document's own Total (`20.435,06 €`, not `16.348,05 €`). Spot-check Purchase Order and Sales Quotation's equivalent confirm flows too, since the PR touches all three.
+4. Re-verify **§15.1** (preview-drawer `Subtotal (sin impuestos)`/`Impuestos` breakdown) — check whether PR #1411's `documentPdf.js`/`formatCurrency.js` changes happen to also fix this (not confirmed either way yet, §15.1 explicitly says "not confirmed fixed by PR #1411" — this needs an actual re-check, not an assumption). If still broken after the merge, it graduates from "adjacent, in-flight" to "needs its own ticket" — flag to the human rather than silently leaving it undocumented.
+5. Only once both are confirmed resolved (or explicitly triaged as out-of-scope-with-the-human's-sign-off) does this branch become push-eligible.
+
+This does not block starting the test-writing pass (§ above, delegated to Tester) — that work is independent of PR #1411 and can proceed in parallel. It blocks `git push` specifically.

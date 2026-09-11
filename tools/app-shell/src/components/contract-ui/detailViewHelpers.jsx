@@ -18,6 +18,8 @@ import DocumentStatusPill from './DocumentStatusPill.jsx';
 import { BlockingBpBanner } from './BlockingBpBanner.jsx';
 import { resolveOnSelectMappings } from './DataTable.jsx';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
+import { NUMERIC_FIELD_TYPES } from '@/lib/numericFieldTypes.js';
+import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 // Re-exported (not defined here) so this file's own React-component-heavy import
 // graph (PaymentLifecycleConfirmModal et al.) doesn't get pulled into callers —
 // like DataTable.jsx's inline-toggle error handling — that only need this one
@@ -368,18 +370,37 @@ export function collectRowFieldValues(cleanRow, fieldValues, coerce) {
  * `fields` is the addLineFields entry list (`{ key, column, ... }`); each
  * field's `column` is the real AD DB column backing it, which is the most
  * reliable signal already available on the field object — `type` there is
- * the UI widget type (e.g. many genuinely numeric fields like `unitPrice` or
- * `discount` render as `type: 'text'`), so it can't be used to distinguish
- * IDs from amounts. A key with no matching field (not in `fields`) falls
- * back to the original numeric-looking heuristic to avoid regressing any
+ * the UI widget type. For the `addLineFields.entry` surface this coercer
+ * actually runs against (the live inline PATCH flow), every price/amount
+ * field across Sales/Purchase Order, Sales/Purchase Invoice and Sales
+ * Quotation declares a genuinely numeric `type` (verified by grep — no
+ * window declares `type: 'text'` for a price-shaped `addLineFields.entry`
+ * field; the `'text'`-typed `unitPrice`/`listPrice`/`discount` the comment
+ * above used to warn about live only on the `EntityForm`/`DetailForm`
+ * sidebar, a surface unreachable for any `linesLayout: "inlineEditable"`
+ * window — see docs/plans/2026-09-08-etp5107-price-input-locale-fix.md §9.2),
+ * so gating by `type` here is safe. A key with no matching field (not in
+ * `fields`) falls back to the original numeric-looking heuristic (now via
+ * `parseLocaleNumber`, so it is comma-aware too) to avoid regressing any
  * coercion path this fix doesn't have field metadata for.
+ *
+ * ETP-5107 — was a bare `/^-?\d+(\.\d+)?$/` shape test + `parseFloat`, so a
+ * value typed with a comma (`"10,4"`) was NEVER coerced and reached NEO
+ * Headless as the literal string `"10,4"`, which the backend rejects as an
+ * invalid `BigDecimal` (Error 400). Now gated by the field's declared type
+ * (not the value's shape) and parsed via the canonical `parseLocaleNumber`.
  */
 export function buildRowValueCoercer(fields) {
   const fieldsByKey = new Map((fields || []).map(f => [f.key, f]));
   const isIdColumn = (key) => /_ID$/i.test(fieldsByKey.get(key)?.column || '');
-  return (v, key) => (
-      typeof v === 'string' && !isIdColumn(key) && /^-?\d+(\.\d+)?$/.test(v) ? parseFloat(v) : v
-  );
+  return (v, key) => {
+    if (typeof v !== 'string' || isIdColumn(key)) return v;
+    const field = fieldsByKey.get(key);
+    const isNumericField = field ? NUMERIC_FIELD_TYPES.has(field.type) : /^-?\d+(\.\d+)?$/.test(v);
+    if (!isNumericField) return v;
+    const { value, isValid } = parseLocaleNumber(v);
+    return isValid && value != null ? value : v;
+  };
 }
 
 /**
