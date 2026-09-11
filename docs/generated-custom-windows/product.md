@@ -22,7 +22,7 @@ identity of separate data series and is not a UI status or theme role.
 - Inspect stock availability and stock movement context from the custom sidebar.
 - Record the product's **standard cost** over time from the generated **Cost** tab (`Costing` in `decisions.json`, "Costo" in Spanish), the first tab in the unified secondary tab strip (Cost, Accounting, Price, Attachments). Engine-generated cost rows are shown but cannot be edited or deleted; only hand-entered ones can. See the ETP-5245 section below.
 - Be stopped from saving a stockable product that has no cost defined at all: a full-width warning banner appears above the form and the save is refused until a cost line exists (ETP-5245).
-- Maintain the product's GL accounting accounts (Fixed Asset, Product Expense, Product Revenue, Product COGS) per accounting schema from the generated **Accounting** tab, the second tab in that strip.
+- Maintain the product's GL accounting accounts (Fixed Asset, Product Expense, Product Revenue, Product COGS, Invoice Price Variance) per accounting schema from the generated **Accounting** tab, the first tab in the unified secondary tab strip (Accounting, Price, Attachments).
 - Use the contract-backed product children and actions when the generated page exposes them, while treating the exact visible tab set beyond the custom surfaces as partially evidenced.
 
 ## Interaction model
@@ -108,7 +108,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 11. In `Summary`, confirm `Available` and `Reserved` stat cards are hidden when `reserved === 0`. Open a product that has reserved stock and confirm those cards are visible.
 12. If the business depends on BOM, transactions, characteristics, stock, category price rule version, alternate UOM, or variant actions, verify which of those surfaces are actually visible in the running page. Current repo evidence does not fully prove all of them. (Costing was removed from this list in ETP-5245 — it now has its own tab, verified in step 15.)
 13. Select the **Attachments** tab (sits in the same tab strip as **Cost**, **Accounting** and **Price**, after the primary tab strip). Upload a file, verify it shows up in the table with name, size, and upload date, and that downloading and deleting it work correctly. When multiple files exist, confirm "Download all (ZIP)" and "Delete all" appear and that "Delete all" prompts a confirmation dialog.
-14. Open an existing product and confirm the secondary tab strip (below `General`/`Additional Info`) shows tabs in this exact order: **Cost**, **Accounting**, **Price**, **Attachments**. Select `Accounting` and confirm it renders as a classic grid+form (not a separate panel above the tab strip) with `Fixed Asset`, `Product Expense`, `Product Revenue`, `Product COGS` add/edit fields.
+14. Open an existing product and confirm the secondary tab strip (below `General`/`Additional Info`) shows tabs in this exact order: **Cost**, **Accounting**, **Price**, **Attachments**. Select `Accounting` and confirm it renders as a classic grid+form (not a separate panel above the tab strip) with `Fixed Asset`, `Product Expense`, `Product Revenue`, `Product COGS`, `Invoice Price Variance` add/edit fields.
 15. See "Manual verification (ETP-5245)" below for the Cost tab, the blocking banner and the seeded zero prices.
 
 ## Automated evidence
@@ -131,7 +131,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
   - `labelOverrides` — overrides `M_Product_Category_ID` to "Category"/"Categoría" and `ProductType` to "Type"/"Tipo" using the locale-nested format `{ "en_US": {...}, "es_ES": {...} }`
   - `sidebarClassName`, `formCardPadding`, `toolbarPaddingX`, `tabsBarPaddingX`, `listbarPaddingX`, `tablePaddingX` — layout props for 30%-width sidebar with left border, 8px horizontal padding throughout
   - `primaryTabsVariant: "pill"` — pill-style primary tab bar
-  - `secondaryTabs.accounting` — exposes the GL-accounting tab (Fixed Asset, Product Expense, Product Revenue, Product COGS) in the unified secondary tab strip (`tabOrder: 1`, so it renders first, ahead of the `customPanelTabs` entries), using the classic grid+form layout (not `inlineEditable`). `detailEntity` is explicitly `null` (not omitted — an omitted key falls back to auto-selecting the first non-primary entity, which would have picked `price` and produced an unintended extra detail section)
+  - `secondaryTabs.accounting` — exposes the GL-accounting tab (Fixed Asset, Product Expense, Product Revenue, Product COGS, Invoice Price Variance) in the unified secondary tab strip (`tabOrder: 1`, so it renders first, ahead of the `customPanelTabs` entries), using the classic grid+form layout (not `inlineEditable`). `detailEntity` is explicitly `null` (not omitted — an omitted key falls back to auto-selecting the first non-primary entity, which would have picked `price` and produced an unintended extra detail section)
   - `vectorSearch.target: "product"` — opts Product into the global semantic search; windows without this declaration do not participate.
 - `tools/app-shell/src/windows/custom/product/__tests__/ProductSidebar.test.js` verifies that `ProductSidebar` uses the shared `formatDashboardAxisTick` utility for Y-axis labels and does not define a local formatting function. Beyond that, automated evidence in this repo is structural and contract-backed rather than end-to-end proof of the full product workflow.
 
@@ -140,9 +140,9 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 Added on 2026-07-01 as part of feature/ETP-4402. New GL-accounting detail entity — no changes to the pricing, sidebar, or image-field behavior documented above.
 
 - **New Accounting detail tab:** `window.detailEntity` changed from `null` to `"accounting"` in `decisions.json`. The `accounting` entity (backed by `M_Product_Acct`, one row per accounting schema) is no longer excluded — it is exposed as a header-level detail entity, structurally the same pattern already used by `product-category.md`'s Accounting tab.
-- **Exposed fields (editable, grid):** `Fixed Asset` (`P_Asset_Acct`), `Product Expense` (`P_Expense_Acct`, required), `Product Revenue` (`P_Revenue_Acct`, required), `Product COGS` (`P_Cogs_Acct`). All four are `ValidCombination` FK selectors, matching the four exposed on Product Category.
+- **Exposed fields (editable, grid):** `Fixed Asset` (`P_Asset_Acct`), `Product Expense` (`P_Expense_Acct`, required), `Product Revenue` (`P_Revenue_Acct`, required), `Product COGS` (`P_Cogs_Acct`). All four are `ValidCombination` FK selectors, matching the four exposed on Product Category. **`Invoice Price Variance` (`P_InvoicePriceVariance_Acct`) joined this set in ETP-5222** — see that section below.
 - **`accountingSchema` (`C_AcctSchema_ID`):** classified as `system` with `addLineFromSibling: true` — a new accounting row auto-copies the accounting schema from the most recently added sibling row, sparing the user from re-selecting it every time. `addLineHiddenFromSibling` confirmed present in the generated contract.
-- **Discarded fields (out of scope, mirrors Product Category's own accounting scope call):** `pDefExpenseAcct` (`P_Def_Expense_Acct`), `productDeferredRevenue` (`P_Def_Revenue_Acct`), `invoicePriceVariance`, `productRevenueReturn`, `productCOGSReturn`, `purchasePriceVariance`, `tradeDiscountReceived`, `tradeDiscountGranted` — all advanced accounting variance/return accounts, not used in day-to-day product maintenance.
+- **Discarded fields (out of scope, mirrors Product Category's own accounting scope call):** `pDefExpenseAcct` (`P_Def_Expense_Acct`), `productDeferredRevenue` (`P_Def_Revenue_Acct`), `productRevenueReturn`, `productCOGSReturn`, `purchasePriceVariance`, `tradeDiscountReceived`, `tradeDiscountGranted` — all advanced accounting variance/return accounts, not used in day-to-day product maintenance. `invoicePriceVariance` was originally in this list too; **promoted to editable in ETP-5222** (see below) once the ETP-5222/ETP-5075 onboarding wiring gave it a real default value to work with.
 - **Layout note — differs from Product Category:** `window.linesLayout` was **not** set to `"inlineEditable"` for this change, so the Accounting tab renders with the classic layout: a plain grid (`AccountingTable.jsx` → `DataTable`) plus a separate add/edit form (`AccountingForm.jsx`), not Product Category's pencil/trash inline-row editing. This was a deliberate scope boundary for this change, not an oversight — switching to `inlineEditable` here is an open follow-up decision for a human to make (it affects UX, not just data wiring).
 - **Backend follow-up — resolved:** `decisions.json` declares `javaQualifier: "productAccountingHandler"` on the `accounting` entity, matching the `NeoHandler` pattern already used by Product Category's `ProductCategoryAccountingHandler`. `ProductAccountingHandler.java` (`@Named("productAccountingHandler")`) now exists under `com.etendoerp.go`, auto-filling `accountingSchema` from the client's default active `AcctSchema` on POST when the field is absent — covering the first-row case where `addLineFromSibling` has no prior sibling to copy from.
 
@@ -930,3 +930,18 @@ and why the invariant is per client × per direction rather than per organizatio
   `DefaultPriceListSampleDataTest` pinning `ISDEFAULT='Y'` in the shipped dataset.
 - **Gap:** there is no `ProductCostingHandlerTest` and no E2E spec for the Cost tab. The handler's
   behaviour is currently evidenced only by the manual steps above.
+
+## ETP-5222 — Invoice Price Variance exposed in the Accounting tab
+
+**`decisions.json → entities.accounting.fields.invoicePriceVariance`** flipped from
+`"visibility": "discarded"` to `"editable"` (`grid: true, grow: true, seq: 5`), joining `Fixed
+Asset`/`Product Expense`/`Product Revenue`/`Product COGS` as a fifth `ValidCombination` FK selector
+in the Accounting tab's classic grid+form (add/edit fields, not `inlineEditable`). Label
+("Invoice Price Variance") is AD_Field-sourced, same as its siblings — no new i18n keys needed.
+
+This makes visible a field that had a real, populated value all along on the backend once
+`OnboardingAccountingWiringService#backfillInvoicePriceVarianceDefault` started resolving a
+non-null default for it (see `com.etendoerp.go/docs/onboarding-flow.md` and this repo's
+`docs/etendo-ad/onboarding-gaps.md` → §A8/§A8b for the onboarding-wiring side of this ticket — no
+change to that wiring lives in this repo). Regenerated via `make regen ONLY=product`; no changes to
+the pricing, sidebar, or image-field behavior documented above.

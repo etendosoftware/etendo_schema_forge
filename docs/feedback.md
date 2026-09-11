@@ -1749,6 +1749,63 @@ gating it on the union silently regressed a documented per-window exception. Ful
 
 ---
 
+## [2026-09-08] ETP-5216 — A list column that no backend query can see is unfilterable AND unfailable, and both halves are silent
+
+**Component:** the "Estado TicketBAI" / "Estado Batuz" list column —
+`artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx`,
+`tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceHeaderTable.jsx`,
+`com.etendoerp.go/src/com/etendoerp/go/schemaforge/TbaiSyncStatusInjector.java` (deleted).
+
+**Symptom:** users could not filter or sort the invoice list by TicketBAI status. Nothing in the UI
+said why — the field simply was not offered in "Filtro por condicionales".
+
+**Root cause.** The column was declared `{ key: '_tbaiStatus', type: 'custom' }` with no `column`
+and no `backendFilterKey`, rendering `row.tbaiSyncEstado` — a field that exists nowhere in the
+Application Dictionary, stamped onto each row at runtime by `TbaiSyncStatusInjector.afterHandle()`.
+`isFilterableColumn` (core `AdvancedFilterBuilder.jsx`) drops exactly that shape from the advanced
+filter, with no error, no warning and no log. Even had it been offered, the emitted criteria
+`fieldName` would have been `_tbaiStatus`, a name the DAL model does not know.
+
+**The second, worse half.** An injected field is invisible to the backend query, so an injector
+failure is undetectable from the UI. ETP-4391 is the proof: a swallowed `MappingException` killed
+this very injector for months while every invoice rendered the client-side `?? 'Pendiente'`
+fallback and real data sat unread in `tbai_syncinvoice`. The two failure modes share one cause — the
+value never existed as a queryable column — and they close together.
+
+**Fix.** The value is now the stored computed AD column `EM_ETGO_Tbai_Status` on `C_Invoice`
+(`Computation_Mode = 'S'`, `Refresh_Mode = 'S'`, function `ETGO_GET_TBAI_STATUS`, dependency on
+`TBAI_SyncInvoice` watching `Estado` with insert/update/delete all `Y`). A plain physical column:
+filterable, sortable, indexable, recomputed in the same transaction that writes the sync row, and
+incapable of failing silently. The columns keep their `FiscalStatusBadge` cell and pair it with
+`column: 'em_etgo_tbai_status'` + `filterMode: 'text'` — a custom renderer and a real column are not
+mutually exclusive. The injector, its two wirings and its two test classes are deleted.
+`'Pendiente'` now lives in the database, so the meaning is authored once instead of being invented
+by a `??` in two JSX files.
+
+**Lesson 1 — `afterHandle()` injection is not a cheap way to add a column; it is a way to add a
+column that cannot be filtered, cannot be sorted, and cannot report its own failure.** Reserve it
+for genuinely per-request, non-queryable data. If a user could plausibly want to filter or sort by a
+value, it must be an AD column — an existing one, or a stored computed one. `CLAUDE.md`'s
+"List Columns Must Be Real Columns" decision tree exists precisely to catch this before the JSX is
+written.
+
+**Lesson 2 — `UPDATE_EVENT = Y` is not boilerplate.** TicketBAI sets `ESTADO` on an
+already-inserted row (`SynchronizeUtils.java:382-390`), so the state transition
+`NULL → Recibido/Rechazado` is an UPDATE, not an INSERT. Had the dependency watched inserts only,
+every invoice would have frozen at `'Pendiente'` forever — the exact ETP-4391 failure shape,
+reproduced by a different mechanism. Verify after deployment with
+`SELECT ad_scd_check('<AD_Column_ID>');`, which must return `0`.
+
+**Lesson 3 — under `Refresh_Mode = 'S'` a computation error rolls back the business transaction, so
+the computation function must be total.** `ETGO_GET_TBAI_STATUS` uses a plain `SELECT … INTO` (never
+`INTO STRICT`, which raises `NO_DATA_FOUND` on zero rows), collapses multiple rows with `LIMIT 1`
+plus a deterministic `tbai_syncinvoice_id DESC` tiebreak, answers `'Pendiente'` for a null/blank
+estado, passes an unknown status through unchanged, and ends in a `WHEN OTHERS` catch. The tiebreak
+is not cosmetic: `ad_scd_recompute` writes unconditionally with no `IS DISTINCT FROM` guard, so a
+non-deterministic result would make the column flap and `ad_scd_check` report phantom drift forever.
+An invoice that cannot be saved because computing its fiscal *display status* failed is far worse
+than the filtering bug this ticket fixes.
+
 ## [2026-09-08] ETP-5234 — Copilot markdown: an external link href truncates at the first `)`
 
 **Component:** `tools/app-shell/src/components/copilot/MarkdownContent.jsx` — `INLINE_RE`
@@ -2193,3 +2250,90 @@ missing offset and the colon-less offset, and it is zone-independent. See
 **Lesson:** "it parses" is not "it is read correctly". When a value crosses into core's readers,
 write the shape core's own writers emit — the shape its repair step was built to accept — instead
 of a shape that survives on parser leniency.
+
+## [2026-09-09] ETP-5216 — Making a column filterable moves the goalposts for every rule that was living in its cell
+
+**Component:** the TicketBAI / Batuz list column —
+`artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx`,
+`tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceHeaderTable.jsx`,
+`com.etendoerp.go/src-db/database/model/functions/ETGO_GET_TBAI_STATUS.xml`.
+
+**Symptom:** none visible. Two branches merged cleanly in intent and produced a column whose
+filter and whose cell answered different questions.
+
+**What happened.** ETP-5216 turned the column into a stored computed column so it could be
+filtered and sorted. In parallel, ETP-5122 added an *adoption-date gate* to the same column on
+`develop`: an invoice dated before its organization joined TicketBAI is never submitted, so it
+shows a dash rather than a fabricated "Pendiente". Each change is correct on its own. Together
+they are not, because ETP-5122 put its rule in the React cell:
+
+```jsx
+isSifEligibleByDate(row.invoiceDate, tbaiRecord?.tbaisystemdate)
+  ? <FiscalStatusBadge status={...} /> : <span>—</span>
+```
+
+A rule in the cell is invisible to the backend. Once the column filtered on
+`em_etgo_tbai_status`, filtering by "Pendiente" returned rows the grid then drew as a dash. No
+error, no warning — the two halves simply disagreed.
+
+**The lesson, and it generalizes past this column.** *A `type: 'custom'` cell is allowed to hold
+business rules only for as long as the column is unfilterable.* The moment a `column:` is added,
+every rule in that cell's `render` becomes a candidate defect: the database now answers questions
+about this column, and it does not know any of them. Adding `column:` to an existing custom cell
+is therefore not a one-line change — it is a review of everything that cell decides.
+
+**A second, independent bug found on the way.** `useFiscalConfig(orgId)` is called with
+`selectedOrg?.id` — the organization chosen in the session selector, not the organization of each
+invoice. Every row in a multi-organization list was measured against one adoption date. This was
+wrong before the migration too; nobody had noticed because the wrong answer looks exactly like the
+right one unless you happen to be looking at a list that spans organizations. Moving the rule into
+the function fixed it as a side effect, because the function starts from `c_invoice.ad_org_id`.
+
+**Fix.** The gate moved into `ETGO_GET_TBAI_STATUS`, which reads `tbai_config` for the invoice's
+own organization and returns `'NoAplica'`. A second `AD_COLUMN_COMP_DEPENDENCY` watches
+`TBAI_Config` so an organization that joins later has its invoices recomputed automatically. Cost
+accepted knowingly: changing an adoption date recomputes every invoice of that organization inside
+the saving transaction — an event that happens about once in an organization's lifetime, and the
+alternative (no dependency) leaves those invoices permanently wrong until somebody runs
+`ad_scd_rebuild` by hand.
+
+**Still open.** The SII and VERI*FACTU columns keep the same gate in the browser, and carry the
+same selected-organization bug. They are not stored computed columns, so they do not have the
+filter inconsistency — but the organization bug is real for them today.
+
+## [2026-09-09] ETP-5216 — A stored computed column cannot be verified inside a transaction you roll back
+
+**Component:** the EPL-1807 stored-computed-column engine (`ad_scd_*` triggers), exercised on
+`EM_ETGO_Tbai_Status`.
+
+**Symptom:** a freshly deployed dependency looks dead. You change the source row inside
+`BEGIN … ROLLBACK`, read the target column back, and it has not moved. Every instinct says the
+trigger was not generated — which is exactly the failure mode this engine is notorious for, so the
+wrong conclusion is very easy to reach.
+
+**Why it happens.** Synchronous refresh (`Refresh_Mode = 'S'`) runs in **deferred constraint
+triggers**, which fire at COMMIT. A transaction that is rolled back never reaches that point. The
+enqueue half runs immediately; the recompute half never does.
+
+**The tell.** `ad_scd_check('<AD_Column_ID>')` *inside* the rolled-back transaction returned the
+exact number of affected rows (8, matching by hand the invoices dated after the new adoption date).
+A non-zero `ad_scd_check` there is evidence the enqueue trigger works — the opposite of what a
+non-zero check means outside a transaction, where it means drift. Reading it as drift is the trap.
+
+**How to verify instead.** Commit the change, assert, then revert in a second committed step and
+assert again. That round trip is safe precisely because the computation is deterministic: restoring
+the original source value recomputes the same rows back. Asserting the return leg is worth doing —
+it proves the recompute is driven by the data rather than by a one-way migration.
+
+**Second trap, same session: `update.database` does not repopulate an existing column.** Changing
+the function of a column that already exists regenerates its triggers and deliberately leaves the
+stored values untouched. `ad_scd_check` reported all 2709 rows stale until `ad_scd_rebuild` ran.
+Expected behaviour, but between deploy and rebuild the column serves stale values with no warning
+anywhere.
+
+**Third: after the rebuild, the correct answer looked exactly like the bug.** Every invoice
+resolved to `NoAplica`, so the column rendered as a dash on every row — visually identical to the
+dead column the ticket set out to fix. It was right (both configured organizations adopted on
+2026-09-08 and no invoice is later than that), but a reviewer opening a dev instance would have
+filed it as a regression. When a column's correct state in dev data is uniform, say so out loud
+before somebody else looks at it.

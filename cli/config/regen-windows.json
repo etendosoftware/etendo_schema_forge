@@ -11,6 +11,11 @@
       "menuName": "Organization"
     },
     {
+      "name": "document-sequence",
+      "windowId": "112",
+      "menuName": "Document Sequence"
+    },
+    {
       "name": "conversion-rates",
       "windowId": "116"
     },

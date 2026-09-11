@@ -434,7 +434,7 @@ function LookupTrigger({ field, displayLabel, selectorUrl, selectorContext, toke
         type="button"
         data-testid={`field-${field.key}`}
         onClick={() => setOpen(true)}
-        className="w-full flex items-center gap-2 h-7 rounded-md border border-input bg-card px-2 text-sm text-left hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors"
+        className="w-full flex items-center gap-2 h-7 rounded-md border border-input bg-card px-2 text-sm text-left hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring focus-visible:outline-none transition-colors"
       >
         <Search
           className="h-3.5 w-3.5 text-muted-foreground shrink-0"
@@ -671,7 +671,7 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
         <SelectTrigger
           ref={inputRef}
           data-testid={`field-${col.key}`}
-          className="w-full h-7 text-sm bg-card focus:ring-2 focus:ring-primary"
+          className="w-full h-7 text-sm bg-card focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring"
         >
           <SelectValue data-testid="SelectValue__3b7ec2" />
         </SelectTrigger>
@@ -1280,11 +1280,12 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           pane into the sidebar (and, on windows with a right-side panel,
           into that panel too). Mirrors the scoped `overflow-x-auto` wrapper
           DataTable's classic (non-inlineEditable) path already uses around
-          its own `<Table>`. `pb-6` mirrors that same wrapper's bottom padding
-          — the CSS overflow spec forces this box's `overflow-y` to `auto`
-          too (see the header comment above), so without it a hovered last
-          row's shadow would get clipped instead of spilling past the row. */}
-      <div ref={bodyScrollRef} className="overflow-x-auto pb-6" onScroll={handleBodyScroll}>
+          its own `<Table>`. Unlike that wrapper, this one never carries
+          `rowHoverStyle="elevated"`/`shadow-lg` — InlineLinesPanel has no
+          elevated hover shadow to protect from the overflow-y:auto clipping
+          DataTable's `pb-6` compensates for (ETP-5216), so no bottom padding
+          is added here. */}
+      <div ref={bodyScrollRef} className="overflow-x-auto" onScroll={handleBodyScroll}>
       {selectableRows.map((row) => {
         const isEditing = editingRowId === row.id;
         const isHovered = hoveredRowId === row.id;

@@ -28,7 +28,7 @@
     "attachments": true,
     "detailEntity": null,
     "customPanelTabs": [
-      { "key": "pricing", "labelKey": "price", "component": "ProductPriceBar" }
+      { "key": "pricing", "labelKey": "price", "component": "ProductPriceBar", "tabOrder": 100 }
     ],
     "labelOverrides": {
       "en_US": {
@@ -69,7 +69,7 @@
         ]
       },
       "accounting": {
-        "tabOrder": 1000,
+        "tabOrder": 500,
         "label": "Accounting",
         "addLineFields": [
           "fixedAsset",
@@ -512,7 +512,10 @@
           "visibility": "discarded"
         },
         "invoicePriceVariance": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "grid": true,
+          "grow": true,
+          "seq": 5
         },
         "productRevenueReturn": {
           "visibility": "discarded"

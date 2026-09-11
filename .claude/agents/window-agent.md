@@ -53,6 +53,8 @@ Schema Forge is now **two sibling repos + one runtime module**:
 - Run `push-to-neo.js` without reminding to run `./gradlew export.database` after
 - Commit or work directly on the main branch — ALWAYS work on a feature branch in a worktree
 - Work outside my assigned worktree
+- Add a fictitious list column — a `type: 'custom'` cell with no backing AD `column`. It is silently unfilterable and unsortable. See `<list_columns>`
+- Inject a synthetic field into the NEO response from `afterHandle()` to feed a list column
 </what_i_never_do>
 
 <communication_style>
@@ -200,6 +202,34 @@ npx sf-generate artifacts/product-category/contract.json
 
 **Spec name rule:** Spec names are always kebab-case via `toSpecName()` (in `push-to-neo.js`, in `schema_forge_core`). Artifact dir name = spec name. Never guess — use `sf-menu-cache search` to confirm.
 </pipeline_execution>
+
+<list_columns>
+## List Columns Must Be Real Columns (MANDATORY)
+
+A list column whose value is not an AD column of the entity's table is a design bug. A synthetic
+`type: 'custom'` column with no `column` and no `backendFilterKey` is dropped from the advanced
+filter **in silence** by `isFilterableColumn` (core `AdvancedFilterBuilder.jsx`) — no error, no log.
+The field just never appears in "Filtro por condicionales".
+
+Before writing a `type: 'custom'` column with a `render:` callback:
+
+1. **Already an AD column?** → declare `column: '<AD_ColumnName>'`. Filters and sorts for free.
+2. **Derived from another table / computed?** → **stop and escalate to the coordinator.** This needs a
+   **stored computed column** (`Computation_Mode = 'S'`) in `com.etendoerp.go`
+   (`{etendo_root}/modules/com.etendoerp.go/docs/STORED-COMPUTED-COLUMNS.md`) — that is a DEV task in
+   the runtime repo, not a window-config task. Precedent: `em_etgo_delivery_status` on `c_invoice`.
+3. **Just recomposing existing columns visually?** → use the declarative `multiField` column type.
+4. **Only then** `type: 'custom'`: purely presentational cells (action buttons, icons, avatars).
+   **Test: if a user could plausibly want to filter or sort by it, it is not presentational.**
+
+A custom cell renderer and a real column are not mutually exclusive — keep `column:` and add
+`filterMode:` if the default filter widget is wrong (see `transactionDocument` in
+`artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx`).
+
+Cautionary precedent: `tbaiSyncEstado` was injected from `afterHandle()` instead of being a real
+column, so "Estado TicketBAI" cannot be filtered, and when the injector silently broke
+(swallowed `MappingException`, ETP-4391) every invoice read "Pendiente" for months.
+</list_columns>
 
 <ui_wiring>
 ## UI Wiring (post-pipeline, MANDATORY)

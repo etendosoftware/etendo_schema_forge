@@ -1,4 +1,4 @@
-import { Building2, User, Briefcase, Check } from 'lucide-react';
+import { Building2, User, Check } from 'lucide-react';
 import { useUI } from '@/i18n';
 
 /**
@@ -6,7 +6,10 @@ import { useUI } from '@/i18n';
  *
  * Value codes come from the real AD_Ref_List rows created for this column
  * (see engram topic etp4749/organization-settings-exploration): CO=Company,
- * FL=Freelancer, AD=Advisory. Rendered as selection cards per the ticket design
+ * FL=Freelancer. A third value, AD=Advisory (Asesoría), was retired from the product by
+ * ETP-5190 — its AD_Ref_List row is gone from the module dataset and no organization ever
+ * carried it (verified on the instance: 86 rows CO, 53 unset, 0 AD), so nothing is stranded.
+ * Rendered as selection cards per the ticket design
  * ("no editable como dropdown" = a picker widget, not a <select>), matching the
  * reference HTML: icon + name + short description + a check-dot when selected.
  *
@@ -25,14 +28,13 @@ import { useUI } from '@/i18n';
 const OPTIONS = [
   { value: 'CO', labelKey: 'orgBusinessTypeCompany', descKey: 'orgBusinessTypeCompanyDesc', Icon: Building2 },
   { value: 'FL', labelKey: 'orgBusinessTypeFreelancer', descKey: 'orgBusinessTypeFreelancerDesc', Icon: User },
-  { value: 'AD', labelKey: 'orgBusinessTypeAdvisory', descKey: 'orgBusinessTypeAdvisoryDesc', Icon: Briefcase },
 ];
 
 export default function BusinessTypeCards({ value, onChange, readOnly = false }) {
   const ui = useUI();
 
   return (
-    <div className="grid grid-cols-3 gap-2.5 max-w-xl" data-testid="BusinessTypeCards__root">
+    <div className="grid grid-cols-2 gap-2.5 max-w-md" data-testid="BusinessTypeCards__root">
       {OPTIONS.map(({ value: optValue, labelKey, descKey, Icon }) => {
         const selected = value === optValue;
         return (
