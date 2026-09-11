@@ -44,12 +44,16 @@ export default function InvoiceHeaderTable(props) {
     // its ELIGIBILITY is gated on the EARLIEST-ever SII cutover across ALL of
     // the org's config rows (active or deactivated), so a row dated before SII
     // ever existed for this org shows a dash instead of a stray DB value.
+    // ETP-5229 item #17: eligible-but-not-yet-sent must render as "Pendiente"
+    // (SII's real `'PE'` AD code, the same code `UpdateInvoicesPreSii` writes
+    // once an invoice is queued), not as the same dash used for not-eligible —
+    // see `useFiscalStatus.js` for the full writeup.
     if (targets.showSii) {
       fiscalCols.push({
         key: '_siiStatus', type: 'custom', label: siiColLabel,
         render: (row) => (
           <FiscalStatusBadge
-            status={isSifEligibleByDate(row.accountingDate, earliestSiiCutoverDate) ? (row.aeatsiiEstado ?? null) : null}
+            status={isSifEligibleByDate(row.accountingDate, earliestSiiCutoverDate) ? (row.aeatsiiEstado ?? 'PE') : null}
           />
         ),
       });

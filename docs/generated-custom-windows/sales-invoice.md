@@ -874,6 +874,60 @@ Regression coverage (added on top of the set above):
 `artifacts/sales-invoice/custom/__tests__/InvoiceHeaderTable.test.js`,
 `tools/app-shell/src/windows/custom/purchase-invoice/__tests__/PurchaseInvoiceHeaderTable.vitest.jsx`.
 
+### Third refinement — "not applicable" and "applicable but unsent" both showed a dash (ETP-5229, item #17)
+
+The gate above (item #16) correctly distinguishes "predates the system's existence for this
+org" from "post-cutover" — but within the post-cutover (eligible) branch, the code still
+collapsed TWO different meanings into the same dash: a system genuinely not applicable to
+the invoice, and a system that DOES apply but whose persisted status field is simply empty
+because the invoice was never sent yet. Both rendered "—", so a user could not tell "this
+will never go to TBAI" from "this needs to be sent to TBAI".
+
+**Repro:** invoice `REC-1000000` (client "Pruebas Localizacion"), dated 11/09/2026, TBAI
+eligible (org's earliest-ever TBAI cutover is 09/09/2026, well before this invoice), never
+sent (`em_tbai_issent='N'`). "Estado TicketBAI" showed the same dash a genuinely-inapplicable
+invoice would show — even though the "Enviar a SIF" button correctly offered to send this
+exact invoice to TBAI (proving it IS eligible).
+
+**Fix:** the not-eligible branch is unchanged (still `null` → dash). Only the
+eligible-but-empty branch changed, in `useFiscalStatus.js` and the three list/grid columns
+that read the raw fields directly (`artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx`,
+`artifacts/purchase-invoice/custom/InvoiceHeaderTable.jsx`,
+`tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceHeaderTable.jsx`). Each
+system's eligible-but-empty fallback now resolves to a distinct PENDING marker instead of
+`null`, reusing an existing `FiscalStatusBadge` pill (no new pill style needed — both
+locales already had these labelKeys from earlier work):
+
+- **SII**: `invoice.aeatsiiEstado ?? 'PE'` (was `?? null`). `'PE'` is a real AD status code —
+  `UpdateInvoicesPreSii.SII_STATUS` in `org.openbravo.module.sii` writes this exact code when
+  Classic queues an invoice for SII — so reusing it here just covers the window before that
+  queueing happens. Maps to the existing `fiscalMonitor.status.sii.PE` ("Pendiente") pill.
+- **TBAI**: `invoice.tbaiSyncEstado ?? (isSent(invoice.tbaiIssent) ? 'Enviada' : 'Pendiente')`
+  (was `... : null`). TBAI has no persisted pending code of its own — an absent
+  `tbaiSyncEstado` while eligible genuinely means "not sent yet". Maps to the existing
+  `fiscalMonitor.tbai.status.Pendiente` pill. (The grid columns already had this exact
+  fallback before this change — only `useFiscalStatus.js`, i.e. the detail/preview badge,
+  was missing it; this was the discrepancy the live repro above actually surfaced.)
+- **VERI\*FACTU**: `mapVfStatus(invoice.etvfacInvoiceStatus ?? 'PE')` (was `?? null`), which
+  resolves through `VF_STATUS_MAP` to `'vf_pending'`. `GenerateRF.SENDING_STATUS_PENDING` in
+  `com.etendoerp.verifactu` writes this same raw `'PE'` code when the billing record is
+  generated, so this only covers the brief window before that happens (or a failure path that
+  leaves it unset). Maps to the existing `fiscalMonitor.status.vf.pending` pill.
+
+**Scope of the SII fix beyond the hook:** the SII eligible-but-empty gap existed in ALL FOUR
+render sites (the hook plus all three grid files) — it was not TBAI-only. Verifactu's gap
+existed in `useFiscalStatus.js` and the sales-invoice grid column (Verifactu has no
+purchase-invoice column, per the sales-only rule documented above).
+
+Regression coverage (added on top of the sets above):
+`tools/app-shell/src/windows/custom/shared/__tests__/useFiscalStatus.vitest.jsx`,
+`artifacts/sales-invoice/custom/__tests__/InvoiceHeaderTable.test.js`,
+`artifacts/purchase-invoice/custom/__tests__/InvoiceHeaderTable.test.js`,
+`tools/app-shell/src/windows/custom/purchase-invoice/__tests__/PurchaseInvoiceHeaderTable.test.js`.
+Each covers, per system: eligible + never-sent → pending marker (not dash); not-eligible
+(pre-cutover) → still dash (regression guard); eligible + already-has-a-real-status →
+unchanged real status (regression guard).
+
 ## Accounting dimension visibility per section — ETP-4529
 
 Per-entity, per-section visibility for the four accounting dimensions (Contacto/`businessPartner`,

@@ -87,10 +87,19 @@ describe('Purchase InvoiceHeaderTable — SII badge gated on earliest-ever cutov
     );
   });
 
-  it('gates the badge on isSifEligibleByDate(row.accountingDate, earliestSiiCutoverDate), falling back to null', () => {
+  // ETP-5229 item #17: eligible-but-empty now falls back to the 'PE' pending
+  // marker, not a fabricated null — the ineligible branch (`: null` at the
+  // end) still yields the dash, unchanged.
+  it('gates the badge on isSifEligibleByDate(row.accountingDate, earliestSiiCutoverDate), falling back to "PE" when eligible but empty, and null when ineligible', () => {
     assert.match(
       src,
-      /render:\s*\(row\)\s*=>\s*\(\s*<FiscalStatusBadge\s*\n\s*status=\{isSifEligibleByDate\(row\.accountingDate, earliestSiiCutoverDate\) \? \(row\.aeatsiiEstado \?\? null\) : null\}/,
+      /render:\s*\(row\)\s*=>\s*\(\s*<FiscalStatusBadge\s*\n\s*status=\{isSifEligibleByDate\(row\.accountingDate, earliestSiiCutoverDate\) \? \(row\.aeatsiiEstado \?\? 'PE'\) : null\}/,
     );
+  });
+
+  it('preserves a real persisted aeatsiiEstado unchanged (the ?? fallback only applies when the field is empty)', () => {
+    // The `?? 'PE'` operator only substitutes on null/undefined — a real code
+    // like 'CO' always wins, regardless of eligibility gating.
+    assert.match(src, /row\.aeatsiiEstado \?\? 'PE'/);
   });
 });

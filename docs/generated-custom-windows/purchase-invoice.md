@@ -576,6 +576,21 @@ earliest-cutover value is computed and why no new API call was needed) lives in
 [`sales-invoice.md` — "Second correction — 'no date gate at all' was itself wrong
 (ETP-5229, item #16)"](sales-invoice.md#second-correction--no-date-gate-at-all-was-itself-wrong-etp-5229-item-16).
 
+**Refinement (ETP-5229, item #17) — "not applicable" and "applicable but unsent" both
+showed a dash.** Within the eligible branch above, an empty `row.aeatsiiEstado` still
+collapsed to the same dash as a not-eligible row, so a user could not tell "SII will never
+apply" from "SII applies, just not sent yet". `PurchaseInvoiceHeaderTable.jsx` (and the
+dead-code duplicate `artifacts/purchase-invoice/custom/InvoiceHeaderTable.jsx`) now fall
+back to `row.aeatsiiEstado ?? 'PE'` instead of `?? null` when eligible — `'PE'` is the real
+AD code Classic itself writes when an invoice is queued for SII
+(`UpdateInvoicesPreSii.SII_STATUS`), and `FiscalStatusBadge` already renders it as a
+"Pendiente" pill. The TBAI/Batuz column in this file already had the equivalent
+`?? 'Pendiente'` fallback before this change — the gap was SII-only here. Not-eligible rows
+are unaffected (still a dash). Full writeup, including the Verifactu/TBAI side (sales-only
+and detail-badge respectively) and why SII genuinely had this gap in all four render sites,
+lives in [`sales-invoice.md` — "Third refinement — 'not applicable' and 'applicable but
+unsent' both showed a dash (ETP-5229, item #17)"](sales-invoice.md#third-refinement--not-applicable-and-applicable-but-unsent-both-showed-a-dash-etp-5229-item-17).
+
 ## Bank transfer (PIS) via Salt Edge — ETP-4406
 
 Purchase invoices can now be paid by a **real bank transfer** initiated inline from the

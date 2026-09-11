@@ -109,12 +109,16 @@ export default function PurchaseInvoiceHeaderTable(props) {
     // which would incorrectly blank a real historical status. The column
     // itself still only appears when the profile enables SII
     // (`targets.showSii`) — org/territory-scoped, not date-scoped.
+    // ETP-5229 item #17: eligible-but-not-yet-sent must render as "Pendiente"
+    // (SII's real `'PE'` AD code, the same code `UpdateInvoicesPreSii` writes
+    // once an invoice is queued), not as the same dash used for not-eligible —
+    // see `useFiscalStatus.js` for the full writeup.
     if (targets.showSii) {
       fiscalCols.push({
         key: '_siiStatus', type: 'custom', label: siiColLabel,
         render: (row) => (
           <FiscalStatusBadge
-            status={isSifEligibleByDate(row.accountingDate, earliestSiiCutoverDate) ? (row.aeatsiiEstado ?? null) : null}
+            status={isSifEligibleByDate(row.accountingDate, earliestSiiCutoverDate) ? (row.aeatsiiEstado ?? 'PE') : null}
             data-testid="FiscalStatusBadge__6b7cdb" />
         ),
       });

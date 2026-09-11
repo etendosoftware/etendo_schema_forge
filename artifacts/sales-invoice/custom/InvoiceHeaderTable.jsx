@@ -87,12 +87,22 @@ export default function InvoiceHeaderTable(props) {
     // which would incorrectly blank a real historical status. The column
     // itself still only appears when the profile enables the system
     // (`targets.showX`) — that check is org/territory-scoped, not date-scoped.
+    // ETP-5229 item #17: eligible-but-not-yet-sent is a DIFFERENT state from
+    // not-eligible-at-all, and collapsing both to `null`/dash reads as "does
+    // not apply" when it actually means "applies, just not sent yet". So each
+    // eligible-but-empty fallback below uses the system's own existing
+    // "pending" FiscalStatusBadge key — SII/Verifactu's raw `'PE'` code (the
+    // same code Classic itself writes once queued/generated: see
+    // `UpdateInvoicesPreSii.SII_STATUS` / `GenerateRF.SENDING_STATUS_PENDING`)
+    // and TBAI's synthetic `'Pendiente'` (TBAI has no persisted pending code).
+    // Not-eligible still returns `null` (dash), unchanged — see
+    // `useFiscalStatus.js` for the full writeup.
     if (targets.showSii) {
       fiscalCols.push({
         key: '_siiStatus', type: 'custom', label: siiColLabel,
         render: (row) => (
           <FiscalStatusBadge
-            status={isSifEligibleByDate(row.accountingDate, earliestSiiCutoverDate) ? (row.aeatsiiEstado ?? null) : null}
+            status={isSifEligibleByDate(row.accountingDate, earliestSiiCutoverDate) ? (row.aeatsiiEstado ?? 'PE') : null}
           />
         ),
       });
@@ -111,7 +121,7 @@ export default function InvoiceHeaderTable(props) {
         key: '_vfStatus', type: 'custom', label: vfColLabel,
         render: (row) => {
           const eligible = isVerifactuEligibleByDate(row.created, earliestVerifactuCutoverDate);
-          return <FiscalStatusBadge status={eligible ? normalizeVerifactuStatus(row.etvfacInvoiceStatus ?? null) : null} />;
+          return <FiscalStatusBadge status={eligible ? normalizeVerifactuStatus(row.etvfacInvoiceStatus ?? 'PE') : null} />;
         },
       });
     }

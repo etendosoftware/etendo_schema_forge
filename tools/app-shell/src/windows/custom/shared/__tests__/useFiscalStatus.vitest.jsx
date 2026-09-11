@@ -77,24 +77,48 @@ describe('useFiscalStatus', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    // ETP-5229 regression: a genuinely un-sent-to-SII invoice must show a dash,
-    // never a fabricated 'PE'/'Pendiente'.
-    it('returns null (not a fabricated pending value) when aeatsiiEstado is null', () => {
+    // ETP-5229 item #17: eligible + never-sent now resolves to the 'PE' pending
+    // marker (the same code Classic's UpdateInvoicesPreSii writes when queuing),
+    // not a fabricated null/dash — "not sent yet" and "not eligible" must render
+    // differently.
+    it('returns "PE" (pending marker, not a dash) when aeatsiiEstado is null but SII is eligible', () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_SII);
       const invoice = { aeatsiiEstado: null, accountingDate: '2026-06-15' };
 
       const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii', null, FAR_PAST_CUTOVERS));
 
-      expect(result.current.sii).toBeNull();
+      expect(result.current.sii).toBe('PE');
     });
 
-    it('returns null when aeatsiiEstado is undefined (field absent from the record)', () => {
+    it('returns "PE" when aeatsiiEstado is undefined (field absent from the record) but SII is eligible', () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_SII);
       const invoice = { accountingDate: '2026-06-15' };
 
       const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii', null, FAR_PAST_CUTOVERS));
 
+      expect(result.current.sii).toBe('PE');
+    });
+
+    // Regression guard (unchanged half of the ETP-5229 fix): when SII is NOT
+    // eligible at all, the pending fallback must never kick in — still a dash.
+    it('still returns null (not "PE") when SII is not eligible for this invoice, even with no aeatsiiEstado', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_SII);
+      const invoice = { accountingDate: '2026-01-01' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii', null, {
+        sii: '2026-06-01T00:00:00.000Z',
+      }));
+
       expect(result.current.sii).toBeNull();
+    });
+
+    it('returns the real persisted status unchanged when SII is eligible and aeatsiiEstado already holds a real code', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_SII);
+      const invoice = { aeatsiiEstado: 'CO', accountingDate: '2026-06-15' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii', null, FAR_PAST_CUTOVERS));
+
+      expect(result.current.sii).toBe('CO');
     });
 
     it('is null when showSii is false, even if aeatsiiEstado is set', () => {
@@ -167,23 +191,50 @@ describe('useFiscalStatus', () => {
       expect(result.current.tbai).toBe('Enviada');
     });
 
-    it('does NOT treat the AD-style "N" string as sent (isSent contract)', () => {
+    // ETP-5229 item #17: the AD-style "N" string still isn't "sent", but the
+    // invoice IS eligible for TBAI, so it now resolves to the "Pendiente"
+    // marker instead of a dash.
+    it('does NOT treat the AD-style "N" string as sent (isSent contract) — falls back to "Pendiente" since TBAI is eligible', () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
       const invoice = { tbaiIssent: 'N', invoiceDate: '2026-06-15' };
 
       const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, FAR_PAST_CUTOVERS));
 
-      expect(result.current.tbai).toBeNull();
+      expect(result.current.tbai).toBe('Pendiente');
     });
 
-    // ETP-5229 regression: "never relevant to TBAI" must render as a dash, not 'Pendiente'.
-    it('returns null (not "Pendiente") when both tbaiSyncEstado and tbaiIssent are absent', () => {
+    // ETP-5229 item #17: eligible + never-sent (no tbaiSyncEstado, no tbaiIssent)
+    // now resolves to "Pendiente", not a dash — "not sent yet" and "not
+    // eligible" must render differently.
+    it('returns "Pendiente" (not a dash) when both tbaiSyncEstado and tbaiIssent are absent but TBAI is eligible', () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
       const invoice = { invoiceDate: '2026-06-15' };
 
       const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, FAR_PAST_CUTOVERS));
 
+      expect(result.current.tbai).toBe('Pendiente');
+    });
+
+    // Regression guard (unchanged half of the ETP-5229 fix): when TBAI is NOT
+    // eligible at all, the pending fallback must never kick in — still a dash.
+    it('still returns null (not "Pendiente") when TBAI is not eligible for this invoice, even with no tbaiSyncEstado/tbaiIssent', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
+      const invoice = { invoiceDate: '2026-01-01' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, {
+        tbai: '2026-06-01T00:00:00.000Z',
+      }));
+
       expect(result.current.tbai).toBeNull();
+    });
+
+    it('returns the real persisted status unchanged when TBAI is eligible and tbaiSyncEstado already holds a real value', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
+      const invoice = { tbaiSyncEstado: 'Recibido', invoiceDate: '2026-06-15' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, FAR_PAST_CUTOVERS));
+
+      expect(result.current.tbai).toBe('Recibido');
     });
 
     it('is null when showTbai is false, even if tbaiSyncEstado is set', () => {
@@ -242,24 +293,47 @@ describe('useFiscalStatus', () => {
       expect(result.current.verifactu).toBe('WEIRD');
     });
 
-    // ETP-5229 regression: never fabricate a pending status for a genuinely
-    // not-applicable invoice.
-    it('returns null (not "vf_pending") when etvfacInvoiceStatus is null', () => {
+    // ETP-5229 item #17: eligible + never-sent now resolves to 'PE' -> 'vf_pending'
+    // via mapVfStatus (the same code GenerateRF writes when the billing record is
+    // generated), not a fabricated null/dash.
+    it('returns "vf_pending" (not a dash) when etvfacInvoiceStatus is null but Verifactu is eligible', () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_VF);
       const invoice = { etvfacInvoiceStatus: null, created: '2026-06-15T00:00:00.000Z' };
 
       const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'verifactu', null, FAR_PAST_CUTOVERS));
 
-      expect(result.current.verifactu).toBeNull();
+      expect(result.current.verifactu).toBe('vf_pending');
     });
 
-    it('returns null when etvfacInvoiceStatus is undefined (field absent)', () => {
+    it('returns "vf_pending" when etvfacInvoiceStatus is undefined (field absent) but Verifactu is eligible', () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_VF);
       const invoice = { created: '2026-06-15T00:00:00.000Z' };
 
       const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'verifactu', null, FAR_PAST_CUTOVERS));
 
+      expect(result.current.verifactu).toBe('vf_pending');
+    });
+
+    // Regression guard (unchanged half of the ETP-5229 fix): when Verifactu is
+    // NOT eligible at all, the pending fallback must never kick in — still a dash.
+    it('still returns null (not "vf_pending") when Verifactu is not eligible for this invoice, even with no etvfacInvoiceStatus', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_VF);
+      const invoice = { created: '2026-01-01T00:00:00.000Z' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'verifactu', null, {
+        verifactu: '2026-06-01T00:00:00.000Z',
+      }));
+
       expect(result.current.verifactu).toBeNull();
+    });
+
+    it('returns the real persisted status unchanged when Verifactu is eligible and etvfacInvoiceStatus already holds a real code', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_VF);
+      const invoice = { etvfacInvoiceStatus: 'AC', created: '2026-06-15T00:00:00.000Z' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'verifactu', null, FAR_PAST_CUTOVERS));
+
+      expect(result.current.verifactu).toBe('accepted');
     });
 
     it('is null when showVerifactu is false, even if etvfacInvoiceStatus is set', () => {

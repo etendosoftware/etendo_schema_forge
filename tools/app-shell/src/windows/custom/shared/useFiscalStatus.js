@@ -57,16 +57,34 @@ export const mapVfStatus = (raw) => VF_STATUS_MAP[raw] ?? raw;
  * config-exists val rule) only ever gate on "does an ACTIVE config exist for this org" —
  * never a status lookup scoped to one particular config row.
  *
- * A field that is genuinely `null`/`undefined` (the invoice was never relevant to that
- * fiscal system) is passed through as `null` here — never coerced into a fabricated
- * "Pendiente"/`'PE'` value. `StatusPill`/`FiscalStatusBadge` already render `null` as a
- * dash; the caller must not override that by defaulting the returned value before handing
- * it to the badge (that was the second half of the ETP-5229 bug — see `InvoicePreview.jsx`).
+ * A field that is genuinely `null`/`undefined` **because the system is not eligible for
+ * this invoice at all** (date predates the org's earliest-ever cutover, or no config
+ * exists) is passed through as `null` here — never coerced into a fabricated status.
+ * `StatusPill`/`FiscalStatusBadge` already render `null` as a dash; the caller must not
+ * override that by defaulting the returned value before handing it to the badge (that was
+ * the second half of the original ETP-5229 bug — see `InvoicePreview.jsx`).
  *
- * TBAI has no persisted "PE" code — a not-yet-synced invoice reports no status row at all
- * — so, when the invoice IS in scope for TBAI (`targets.showTbai`, gated by the caller's
- * eligibility checks), an absent `tbaiSyncEstado` genuinely means "not sent yet" and falls
- * back to `'Enviada'`/`'Pendiente'` via `isSent(tbaiIssent)`, exactly like the list column.
+ * ETP-5229 refinement (item #17 — live-tested gap): eligibility and "has data" are TWO
+ * DIFFERENT questions, and collapsing both to the same dash is itself confusing — a real
+ * user mistook "TBAI not sent yet" for "TBAI does not apply here" because both rendered as
+ * "—", even though the "Enviar a SIF" button correctly offered to send the very same
+ * invoice. So, once a system IS eligible (`<system>Eligible` is true) but its persisted
+ * status field is empty (never sent), the return value is now a distinct PENDING marker
+ * instead of `null` — reusing each system's own existing "pending" `FiscalStatusBadge` key
+ * so no new pill style is needed:
+ *   - **SII**: falls back to the raw AD code `'PE'` (`UpdateInvoicesPreSii.SII_STATUS`
+ *     already writes this same code when Classic queues an invoice for SII — reusing it
+ *     here just covers the window before that queueing happens).
+ *   - **TBAI**: falls back to `'Enviada'` (via `isSent(tbaiIssent)`) or `'Pendiente'` — TBAI
+ *     has no persisted "PE" code, so a not-yet-synced invoice reports no status row at all;
+ *     an absent `tbaiSyncEstado` while eligible genuinely means "not sent yet", exactly
+ *     like the list column (`PurchaseInvoiceHeaderTable.jsx`) already did before this fix.
+ *   - **VERI*FACTU**: falls back to the raw code `'PE'` before `mapVfStatus` (→
+ *     `'vf_pending'`) — `GenerateRF.java` writes this same code when the billing record is
+ *     generated, so this only covers the brief window before that happens (or a failure
+ *     path that leaves it unset).
+ * Only the EMPTY-while-eligible case gets this treatment; not-eligible still returns
+ * `null` (dash), unchanged.
  *
  * No network call is needed: the invoice header GET response already carries
  * `aeatsiiEstado`, `tbaiSyncEstado` (injected server-side by `TbaiSyncStatusInjector`) and
@@ -111,11 +129,11 @@ export function useFiscalStatus(invoice, specName, profile, territory = null, cu
     const tbaiEligible = targets.showTbai && isSifEligibleByDate(invoice.invoiceDate, tbaiCutover);
     const verifactuEligible = targets.showVerifactu && isVerifactuEligibleByDate(invoice.created, verifactuCutover);
 
-    const sii = siiEligible ? (invoice.aeatsiiEstado ?? null) : null;
+    const sii = siiEligible ? (invoice.aeatsiiEstado ?? 'PE') : null;
     const tbai = tbaiEligible
-      ? (invoice.tbaiSyncEstado ?? (isSent(invoice.tbaiIssent) ? 'Enviada' : null))
+      ? (invoice.tbaiSyncEstado ?? (isSent(invoice.tbaiIssent) ? 'Enviada' : 'Pendiente'))
       : null;
-    const verifactu = verifactuEligible ? mapVfStatus(invoice.etvfacInvoiceStatus ?? null) : null;
+    const verifactu = verifactuEligible ? mapVfStatus(invoice.etvfacInvoiceStatus ?? 'PE') : null;
 
     return { sii, tbai, verifactu, loading: false };
   }, [invoice, specName, profile, territory, siiCutover, tbaiCutover, verifactuCutover]);

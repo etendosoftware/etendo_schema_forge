@@ -234,7 +234,10 @@ describe('PurchaseInvoiceHeaderTable — fiscal status badges gated on earliest-
     const cell = src.match(/if \(targets\.showSii\) \{[\s\S]*?\}\)?;\s*\}/);
     assert.ok(cell, 'expected the showSii column-push block');
     assert.match(cell[0], /isSifEligibleByDate\(row\.accountingDate, earliestSiiCutoverDate\)/);
-    assert.match(cell[0], /row\.aeatsiiEstado \?\? null/);
+    // ETP-5229 item #17: eligible-but-empty falls back to the 'PE' pending
+    // marker, not a fabricated null — not-eligible (outside this expression)
+    // still yields the dash, verified separately below.
+    assert.match(cell[0], /row\.aeatsiiEstado \?\? 'PE'/);
   });
 
   it('gates the Batuz/TBAI badge on isSifEligibleByDate(row.invoiceDate, earliestTbaiCutoverDate)', () => {
@@ -250,6 +253,20 @@ describe('PurchaseInvoiceHeaderTable — fiscal status badges gated on earliest-
       assert.ok(cell, `expected the ${key} column-push block`);
       assert.match(cell[0], /\? .*? : null/, `${key} branch must fall back to null (dash) when ineligible`);
     }
+  });
+
+  // ETP-5229 item #17: eligible-but-empty must resolve to a distinct pending
+  // marker per system, never the same dash used for genuine ineligibility.
+  it('falls back to a pending marker (not null) for each system when eligible but the persisted status is empty', () => {
+    const siiCell = src.match(/if \(targets\.showSii\) \{[\s\S]*?\}\)?;\s*\}/);
+    assert.match(siiCell[0], /row\.aeatsiiEstado \?\? 'PE'/, 'SII pending marker is the raw PE code');
+
+    const tbaiCell = src.match(/if \(targets\.showTbai\) \{[\s\S]*?\}\)?;\s*\}/);
+    assert.match(
+      tbaiCell[0],
+      /row\.tbaiSyncEstado \?\? \(isSent\(row\.tbaiIssent\) \? 'Enviada' : 'Pendiente'\)/,
+      'TBAI pending marker is "Pendiente" when never sent',
+    );
   });
 });
 
