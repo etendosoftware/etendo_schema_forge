@@ -198,9 +198,14 @@ function positionAfterSignificant(str, sigCount, thousandsSeparator) {
  * itself always accepts (plan §6.1) — this also fixes Bug 1 for these types.
  */
 function filterMaskChars(raw, decimalSeparator, strictDecimal) {
-  const acceptedDecimalChars = strictDecimal
-    ? [decimalSeparator]
-    : (decimalSeparator === '.' ? ['.'] : [decimalSeparator, '.']);
+  let acceptedDecimalChars;
+  if (strictDecimal) {
+    acceptedDecimalChars = [decimalSeparator];
+  } else if (decimalSeparator === '.') {
+    acceptedDecimalChars = ['.'];
+  } else {
+    acceptedDecimalChars = [decimalSeparator, '.'];
+  }
   let result = '';
   let seenDecimal = false;
   for (const ch of raw) {
@@ -215,7 +220,6 @@ function filterMaskChars(raw, decimalSeparator, strictDecimal) {
       // only need to recognize one shape.
       result += decimalSeparator;
       seenDecimal = true;
-      continue;
     }
     // A stray thousands separator, a letter, a second decimal separator, a
     // misplaced '-' — dropped outright, never transiently inserted.
@@ -370,7 +374,10 @@ export function MaskedAmountInput({
     onBlur?.();
   };
 
-  const paddingClass = symbol ? (rightSide ? 'pr-8' : 'pl-8') : '';
+  let paddingClass = '';
+  if (symbol) {
+    paddingClass = rightSide ? 'pr-8' : 'pl-8';
+  }
   // `bare` (the 3 real call sites): `className` is the caller's own full cell
   // styling, applied directly to the input — mirrors DataTable's/InlineLinesPanel's
   // pre-existing raw-<input>/<Input> contract. Non-bare (unused today, kept for
