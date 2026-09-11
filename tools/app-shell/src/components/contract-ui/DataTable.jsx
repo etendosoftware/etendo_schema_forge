@@ -2479,7 +2479,7 @@ export function DataTable({
         balanceFooter,
         visibleColumns,
         hasDimensionsPanel,
-        reserveActionSlot: ilpHasNoAmountCol,
+        reserveActionSlot: ilpReservesActionSlot,
         cellStyle: buildLineCellStyle(),
       })}
     </div>
