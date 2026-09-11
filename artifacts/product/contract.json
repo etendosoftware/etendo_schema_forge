@@ -1,8 +1,8 @@
 {
-  "version": "0.10.0",
+  "version": "0.11.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-09-11T17:08:49.831Z",
-  "checksum": "f2447f268343171e",
+  "updatedAt": "2026-09-11T17:31:31.863Z",
+  "checksum": "bad220067d7dd649",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -1258,6 +1258,8 @@
             "grid": true,
             "form": true,
             "columnType": "amount",
+            "summable": false,
+            "currencyField": "cCurrencyID",
             "validation": {
               "required": true,
               "maxLength": 10
@@ -1300,6 +1302,9 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
+            "derivation": {
+              "type": "fromConfig"
+            },
             "validation": {
               "maxLength": 10
             },
@@ -1310,7 +1315,14 @@
           }
         ],
         "searchableFields": [],
-        "computedFields": [],
+        "computedFields": [
+          {
+            "name": "endingDate",
+            "derivation": {
+              "type": "fromConfig"
+            }
+          }
+        ],
         "javaQualifier": "productCostingHandler"
       },
       "transactionAdjustments": {
