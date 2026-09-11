@@ -1,8 +1,8 @@
 {
-  "version": "0.87.0",
+  "version": "0.88.0",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-09-08T16:31:10.515Z",
-  "checksum": "07a7d437b563521d",
+  "updatedAt": "2026-09-11T16:44:00.941Z",
+  "checksum": "817993e5bf95f50d",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -758,6 +758,38 @@
               "raw": "@Processed@='Y'",
               "evaluable": true,
               "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "accountingDate",
+            "apiKey": "accountingDate",
+            "column": "DateAcct",
+            "label": "Accounting Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "@#Date@"
+            },
+            "defaultValue": "@#Date@",
+            "section": "principal",
+            "seq": 35,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_TaxDate"
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -1747,6 +1779,13 @@
             "derivation": {
               "type": "computed",
               "source": "0"
+            }
+          },
+          {
+            "name": "accountingDate",
+            "derivation": {
+              "type": "computed",
+              "source": "@#Date@"
             }
           },
           {
@@ -3235,7 +3274,7 @@
             "apiKey": "accountingDate",
             "column": "DateAcct",
             "type": "date",
-            "visibility": "system",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -6248,6 +6287,14 @@
         "description": "Default value for 'foreignAmount' in exchangeRates should be a string"
       },
       {
+        "id": "t-default-value-type-header-accountingDate",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Default value for 'accountingDate' in header should be a string"
+      },
+      {
         "id": "t-default-value-type-header-adOrgId",
         "category": "default-value-type",
         "entity": "header",
@@ -6992,6 +7039,14 @@
         "description": "Field 'toCurrency' should be present in exchangeRates"
       },
       {
+        "id": "t-field-presence-header-accountingDate",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Field 'accountingDate' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-adOrgId",
         "category": "field-presence",
         "entity": "header",
@@ -7622,6 +7677,14 @@
         "field": "toCurrency",
         "runner": "node",
         "description": "Field 'toCurrency' should have type 'string' in exchangeRates"
+      },
+      {
+        "id": "t-field-type-header-accountingDate",
+        "category": "field-type",
+        "entity": "header",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Field 'accountingDate' should have type 'string' in header"
       },
       {
         "id": "t-field-type-header-adOrgId",
@@ -8256,6 +8319,14 @@
         "description": "Read-only logic for 'toCurrency' in exchangeRates should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-accountingDate",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Read-only logic for 'accountingDate' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-adOrgId",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -8654,6 +8725,14 @@
         "field": "toCurrency",
         "runner": "node",
         "description": "Read-only logic for 'toCurrency' in exchangeRates should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-accountingDate",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Read-only logic for 'accountingDate' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-adOrgId",
@@ -9412,14 +9491,6 @@
         "field": "updatedBy",
         "runner": "node",
         "description": "System field 'updatedBy' should exist in backend but not frontend for exchangeRates"
-      },
-      {
-        "id": "t-system-field-header-accountingDate",
-        "category": "system-field",
-        "entity": "header",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "System field 'accountingDate' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-activity",
@@ -10986,25 +11057,25 @@
       }
     ],
     "summary": {
-      "total": 626,
+      "total": 630,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 5,
-        "default-value-type": 26,
+        "default-value-type": 27,
         "displaylogic-evaluable": 32,
         "displaylogic-valid": 32,
-        "field-presence": 79,
-        "field-type": 79,
-        "readonlylogic-evaluable": 50,
-        "readonlylogic-valid": 50,
+        "field-presence": 80,
+        "field-type": 80,
+        "readonlylogic-evaluable": 51,
+        "readonlylogic-valid": 51,
         "rule-declared": 10,
         "searchable-filters": 6,
         "selector-endpoint": 21,
-        "system-field": 205,
+        "system-field": 204,
         "visibility": 5
       },
       "byRunner": {
-        "node": 626,
+        "node": 630,
         "junit": 0
       }
     }
