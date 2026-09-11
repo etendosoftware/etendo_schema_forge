@@ -191,6 +191,14 @@ const BACKEND_ERROR_MAP = {
   'You cannot deactivate your own user account': 'backendError.cannotDeactivateOwnAccount',
   'Cannot deactivate the last active administrator for this client':
     'backendError.cannotDeactivateLastAdmin',
+  // CreateGoodsReceiptHandler.createReceiptLines (com.etendoerp.go, ETP-5276) — the
+  // purchase-side sibling of 'No hay líneas pendientes de entrega en este pedido' above
+  // (backendError.noPendingLinesToDeliverOrder), hardcoded in ENGLISH instead of Spanish
+  // (an inconsistency that predates ETP-5276, not introduced by it). Previously unmapped:
+  // the goods-receipt path showed this raw, untranslated backend string. Kept at the end
+  // of the map rather than next to its sibling to stay clear of the pre-existing
+  // duplicate block Sonar flags across lines ~41-189 of this file.
+  'No pending lines to receive in this purchase order': 'backendError.noPendingLinesToReceiveOrder',
 };
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a

@@ -581,6 +581,28 @@ describe('translateBackendError — ETP-4831 case 4 (9 more hardcoded messages)'
     });
   });
 
+  // A.1b) CreateGoodsReceiptHandler.createReceiptLines (com.etendoerp.go) — the
+  // purchase-side sibling of A.1 above, hardcoded in ENGLISH (ETP-5276). Was
+  // previously unmapped, so the goods-receipt path showed this raw string
+  // untranslated. Suggested key: backendError.noPendingLinesToReceiveOrder.
+  describe('"no pending lines to receive" exact match (CreateGoodsReceiptHandler)', () => {
+    const RAW = 'No pending lines to receive in this purchase order';
+
+    it('translates the raw English literal to en_US', () => {
+      const t = (k) => (k === 'backendError.noPendingLinesToReceiveOrder'
+        ? 'There are no pending lines to receive for this purchase order.'
+        : k);
+      assert.equal(translateBackendError(RAW, t), 'There are no pending lines to receive for this purchase order.');
+    });
+
+    it('translates the raw English literal to es_ES', () => {
+      const t = (k) => (k === 'backendError.noPendingLinesToReceiveOrder'
+        ? 'No hay líneas pendientes de recepción en este pedido de compra.'
+        : k);
+      assert.equal(translateBackendError(RAW, t), 'No hay líneas pendientes de recepción en este pedido de compra.');
+    });
+  });
+
   // A.2) CreateInvoiceShipmentHandler.java:200 — hardcoded Spanish literal, no
   // AD_Message involvement, thrown when an invoice has zero lines with a
   // product. Suggested key: backendError.noProductLinesInInvoice.
