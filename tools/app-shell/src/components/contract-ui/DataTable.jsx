@@ -1477,13 +1477,22 @@ function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, lo
  * arrow. Extracted from the `visibleColumns.map(...)` callback in DataTable's
  * header row so its onSort/isSorted branching lives in its own function.
  */
-function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort, linesLayout, locale, t }) {
+function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort, locale, t }) {
   const colLabel = resolveColumnLabel(col, locale, t);
   const isSorted = sortColumn === col.key;
   const isSortable = col.sortable !== false;
-  const headStyle = linesLayout === 'inlineEditable'
-    ? { minWidth: columnMinWidthPx(col, colIdx) }
-    : undefined;
+  // ETP-5281 — apply the same minWidth baseline in EVERY layout, not just
+  // inlineEditable. Normal list mode has no <colgroup> (renderLinesColgroup
+  // only renders when hideHeader is true), so without this the header had no
+  // width floor at all and columns could collapse below their content,
+  // causing header/body text to overlap on narrow viewports.
+  // Skipped when `col.headClass` is set: that opt-in chrome already pins the
+  // column's own width (e.g. financial-account's Figma-pinned Cuentas grid,
+  // artifacts/financial-account/custom/AccountsHeaderTable.jsx, which narrows
+  // `currency`/`country` below this type's generic floor) — CSS always renders
+  // at least `min-width` regardless of a smaller `width`, so a competing
+  // default here would silently widen a deliberately narrower pinned column.
+  const headStyle = col.headClass ? undefined : { minWidth: columnMinWidthPx(col, colIdx) };
   // `multiField` columns expose N constituent fields as independently
   // sortable header segments (e.g. "Identifier & Name"); each part cycles the
   // sort on its own NEO field key. Non-multiField columns keep the single-label
@@ -1630,7 +1639,7 @@ function TableDataRow({
             data-testid="Checkbox__eb5261" />
         </TableCell>
       )}
-      {visibleColumns.map(col => {
+      {visibleColumns.map((col, colIdx) => {
         const isTrailingHover = trailingHoverColumn != null && col === trailingHoverColumn;
         return (
           <TableCell
@@ -1645,6 +1654,16 @@ function TableDataRow({
               // column's width so header and cells stay aligned. Absent = unchanged.
               col.cellClass || '',
             ].filter(Boolean).join(' ')}
+            // ETP-5281 — mirrors the header's minWidth floor (renderColumnHeaderCell).
+            // Body cells previously had NO width constraint in normal list mode, so
+            // a long value in one column could push into the next column's space.
+            // Skipped when `col.cellClass` is set (same reasoning as `headClass`
+            // above): CSS always renders at least `min-width` regardless of a
+            // smaller `width` class, so this default would otherwise override a
+            // column that deliberately pins itself narrower (e.g. financial-account's
+            // `currency`/`country` columns, pinned to 120px/160px below this type's
+            // 192px selector-baseline floor).
+            style={col.cellClass ? undefined : { minWidth: columnMinWidthPx(col, colIdx) }}
           >
             {isTrailingHover ? (
               <span className="block transition-opacity group-hover/row:opacity-0 group-focus-within/row:opacity-0">
@@ -1749,8 +1768,13 @@ function TableDataRow({
             </TableCell>
           )}
           {onCloneRow && !quickActionsEnabled && (
+            // ETP-5281 — `overflow-visible` overrides the shared TableCell's new
+            // default `overflow-hidden` (see packages/app-shell-core ui/table.jsx):
+            // the tooltip below is `absolute bottom-full`, deliberately escaping
+            // this cell's own box to float above the button, and would otherwise
+            // get silently clipped.
             <TableCell
-              className="w-10 px-2"
+              className="w-10 px-2 overflow-visible"
               onClick={(e) => e.stopPropagation()}
               data-testid="TableCell__eb5261">
               <div className="relative group/clonebtn flex items-center justify-center">
@@ -1772,8 +1796,13 @@ function TableDataRow({
         </>
       )}
       {quickActionsEnabled && (
+        // ETP-5281 — same `overflow-visible` override: per RowQuickActions.jsx's
+        // own doc comment, "the wrapping <td> uses absolute positioning so the
+        // icons overlay the trailing grid columns" — an intentional overflow
+        // beyond this cell's bounds that the new shared `overflow-hidden`
+        // default would otherwise clip.
         <TableCell
-          className="w-10 px-2 relative"
+          className="w-10 px-2 relative overflow-visible"
           onClick={(e) => e.stopPropagation()}
           data-testid="TableCell__eb5261">
           <RowQuickActions

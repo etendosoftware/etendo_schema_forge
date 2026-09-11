@@ -347,7 +347,11 @@ function ProgressCell({ line, currency, cellClassName }) {
   const pending = Math.abs(Number(line.pendingAmount) || 0);
   const tip = ui('financeReconcilePendingLabel', { amount: formatCurrency(currency, pending) });
   return (
-    <TableCell className={cn('h-[62px] w-[90px] px-3', cellClassName)} data-testid="TableCell__d0f4d5">
+    // ETP-5281 — `overflow-visible` overrides the shared TableCell's new default
+    // `overflow-hidden` (packages/app-shell-core ui/table.jsx): the tooltip below
+    // is `absolute bottom-full`, deliberately floating above this cell's own box,
+    // and would otherwise get silently clipped.
+    <TableCell className={cn('h-[62px] w-[90px] px-3 overflow-visible', cellClassName)} data-testid="TableCell__d0f4d5">
       <div className="group relative flex items-center" data-testid={`recon-progress-${line.id}`}>
         <div className="h-1 w-full overflow-hidden rounded-[2px] bg-[hsl(var(--border))]">
           <span className="block h-full bg-[hsl(var(--foreground))]" style={{ width: `${pct}%` }} />
