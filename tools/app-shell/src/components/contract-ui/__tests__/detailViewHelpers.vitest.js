@@ -249,14 +249,16 @@ describe('buildRowValueCoercer (ETP-4886, comma-awareness ETP-5107)', () => {
     expect(coerce('-3,5', 'discount')).toBe(-3.5);
   });
 
-  // ETP-5107 — a MATCHED field (present in `fields`) with no declared `type`
-  // is now never coerced, even though it isn't an _ID column either: the gate
-  // is strictly "is this field's declared type numeric", not "does this key
-  // have no column metadata". Only a key entirely ABSENT from `fields` falls
-  // back to the legacy shape heuristic (covered by the test above/below).
-  it('a matched field with no declared type is NOT coerced (type-gated, no heuristic fallback for a known field)', () => {
+  // ETP-5107 regression fix — a MATCHED field (present in `fields`) whose
+  // `type` is simply undeclared (not merely non-numeric) still falls back to
+  // the legacy shape heuristic, exactly like a key entirely ABSENT from
+  // `fields`: the gate is "is `type` declared at all" (`field?.type != null`),
+  // not "does a field object exist". Only a field whose `type` IS declared —
+  // even to something non-numeric like `'text'` — skips the heuristic
+  // fallback and is left uncoerced.
+  it('a matched field with no declared type still falls back to the legacy numeric heuristic', () => {
     const coerce = buildRowValueCoercer([{ key: 'weirdField' }]);
-    expect(coerce('42', 'weirdField')).toBe('42');
+    expect(coerce('42', 'weirdField')).toBe(42);
   });
 
   it('a key with NO matching field at all still falls back to the legacy numeric heuristic', () => {

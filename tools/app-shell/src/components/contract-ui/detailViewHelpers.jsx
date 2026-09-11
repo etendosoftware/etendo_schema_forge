@@ -399,8 +399,9 @@ export function collectRowFieldValues(cleanRow, fieldValues, coerce) {
  * above used to warn about live only on the `EntityForm`/`DetailForm`
  * sidebar, a surface unreachable for any `linesLayout: "inlineEditable"`
  * window — see docs/plans/2026-09-08-etp5107-price-input-locale-fix.md §9.2),
- * so gating by `type` here is safe. A key with no matching field (not in
- * `fields`) falls back to the original numeric-looking heuristic (now via
+ * so gating by `type` here is safe. A key whose field has no declared `type`
+ * (either no matching field object at all, or a matching field that simply
+ * omits `type`) falls back to the original numeric-looking heuristic (now via
  * `parseLocaleNumber`, so it is comma-aware too) to avoid regressing any
  * coercion path this fix doesn't have field metadata for.
  *
@@ -416,7 +417,9 @@ export function buildRowValueCoercer(fields) {
   return (v, key) => {
     if (typeof v !== 'string' || isIdColumn(key)) return v;
     const field = fieldsByKey.get(key);
-    const isNumericField = field ? NUMERIC_FIELD_TYPES.has(field.type) : /^-?\d+(\.\d+)?$/.test(v);
+    const isNumericField = field?.type != null
+      ? NUMERIC_FIELD_TYPES.has(field.type)
+      : /^-?\d+(\.\d+)?$/.test(v);
     if (!isNumericField) return v;
     const { value, isValid } = parseLocaleNumber(v);
     return isValid && value != null ? value : v;
