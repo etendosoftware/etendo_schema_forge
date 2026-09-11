@@ -1680,3 +1680,59 @@ describe('translateBackendError — "insufficient stock (process)" parameterized
     assert.equal(translateBackendError(raw, missingT), raw);
   });
 });
+
+// GoodsMovementProcessGuard.java (com.etendoerp.go — ETP-5037), `ETGO_ZeroOrNegativeQtyProcess`.
+// Raised when "Procesar" would complete a Goods Movement with a line whose quantity is zero or
+// negative — named by product, same convention as the "insufficient stock (process)" match above.
+describe('translateBackendError — "zero or negative quantity (process)" parameterized match (ETP-5037)', () => {
+  const en = fakeUiTranslator({
+    'backendError.zeroOrNegativeQtyProcess':
+      'This movement cannot be processed: the line(s) of {products} have a zero or negative quantity.',
+  });
+  const es = fakeUiTranslator({
+    'backendError.zeroOrNegativeQtyProcess':
+      'Este movimiento no se puede procesar: la(s) línea(s) de {products} tienen una cantidad cero o negativa.',
+  });
+
+  it('translates a single-product violation into es_ES', () => {
+    const raw = 'This movement cannot be processed: the line(s) of SK-003 have a zero or negative quantity.';
+    assert.equal(
+      translateBackendError(raw, es),
+      'Este movimiento no se puede procesar: la(s) línea(s) de SK-003 tienen una cantidad cero o negativa.',
+    );
+  });
+
+  it('translates to en_US unchanged in shape (identity template)', () => {
+    const raw = 'This movement cannot be processed: the line(s) of SK-003 have a zero or negative quantity.';
+    assert.equal(translateBackendError(raw, en), raw);
+  });
+
+  it('passes a multi-product {products} segment through as one opaque, comma-joined param', () => {
+    const raw = 'This movement cannot be processed: the line(s) of SK-003, SK-004 have a zero or negative quantity.';
+    assert.equal(
+      translateBackendError(raw, es),
+      'Este movimiento no se puede procesar: la(s) línea(s) de SK-003, SK-004 tienen una cantidad cero o negativa.',
+    );
+  });
+
+  it('returns the message unchanged when the prefix matches but the suffix does not', () => {
+    const raw = 'This movement cannot be processed: the line(s) of SK-003 have a zero or negative amount.';
+    assert.equal(translateBackendError(raw, es), raw);
+  });
+
+  it('returns the message unchanged when the products segment is empty', () => {
+    const raw = 'This movement cannot be processed: the line(s) of  have a zero or negative quantity.';
+    assert.equal(translateBackendError(raw, es), raw);
+  });
+
+  it('leaves an unrelated message untouched (missing trailing period)', () => {
+    const raw = 'This movement cannot be processed: the line(s) of SK-003 have a zero or negative quantity';
+    assert.equal(translateBackendError(raw, es), raw);
+  });
+
+  it('returns the original message unchanged when the translation key is missing (guard)', () => {
+    const raw = 'This movement cannot be processed: the line(s) of SK-003 have a zero or negative quantity.';
+    const missingT = (k) => k;
+    assert.equal(translateBackendError(raw, missingT), raw);
+  });
+});
