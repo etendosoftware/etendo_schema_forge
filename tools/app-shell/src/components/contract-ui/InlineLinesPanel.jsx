@@ -743,12 +743,10 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
   // ProductSearchDrawer modal is used for fields flagged as lookup/popup (e.g., product).
   // The selector URL is derived from the entity + DB column, mirroring DataTable's pattern.
   if (col.type === 'selector' || col.type === 'search') {
-    const selectorUrl = apiBaseUrl && col.column
-      ? `${apiBaseUrl}/${entity}/selectors/${col.column}`
-      : null;
-    if (!selectorUrl) {
+    if (!apiBaseUrl || !col.column) {
       return <span className="text-muted-foreground/60 text-xs">—</span>;
     }
+    const selectorUrl = `${apiBaseUrl}/${entity}/selectors/${col.column}`;
     if (col.lookup || col.popup) {
       return (
         <LookupTrigger
@@ -846,13 +844,13 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
     );
   }
 
-  const inputType = col.type === 'date' ? 'date' : 'text';
-
+  // Always `text`: the `col.type === 'date'` branch above returns EditDateCell, so a date
+  // column can never reach here (ETP-5245 left the ternary behind when it added that branch).
   return (
     <Input
       ref={inputRef}
       data-testid={`field-${col.key}`}
-      type={inputType}
+      type="text"
       defaultValue={value ?? ''}
       onBlur={(e) => onCommit(e.target.value)}
       onKeyDown={(e) => {
