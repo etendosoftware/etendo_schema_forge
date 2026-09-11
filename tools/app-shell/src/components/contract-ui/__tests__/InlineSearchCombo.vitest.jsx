@@ -304,6 +304,58 @@ describe('InlineSearchCombo — ETP-4600 empty-search-on-open parity with the he
 });
 
 // ---------------------------------------------------------------------------
+// 6c. ETP-5005 — the committed label stays legible as the input's placeholder
+// while the combo is open, so a click-to-edit never LOOKS like the value was
+// cleared (the search box itself stays empty per ETP-4600 — only the
+// placeholder changes).
+// ---------------------------------------------------------------------------
+
+describe('InlineSearchCombo — ETP-5005 committed label as placeholder while open', () => {
+  it('shows the committed label as the placeholder (not the default placeholder) once opened, while the input value stays empty', async () => {
+    const user = userEvent.setup();
+    const { onChange } = renderCombo({ value: 'iva10', options: OPTIONS, placeholder: 'Search tax' });
+
+    // Closed: chip, not the plain input.
+    const chip = screen.getByTestId('inline-add-field-tax-chip');
+    expect(chip).toHaveTextContent('IVA 10%');
+
+    await user.click(chip);
+
+    const input = await screen.findByTestId('inline-add-field-tax');
+    // The search box is still empty (ETP-4600 is unchanged)...
+    await waitFor(() => expect(input).toHaveValue(''));
+    // ...but its placeholder now shows the committed value, not the generic "Search tax".
+    expect(input).toHaveAttribute('placeholder', 'IVA 10%');
+
+    // Nothing was cleared — no onChange('', '') fired just by opening.
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the caller-provided placeholder when there is no committed value', () => {
+    renderCombo({ value: '', options: OPTIONS, placeholder: 'Search tax' });
+    // No value -> no chip -> the plain input renders directly, already "open"-agnostic.
+    const input = screen.getByTestId('inline-add-field-tax');
+    expect(input).toHaveAttribute('placeholder', 'Search tax');
+  });
+
+  it('reverts the placeholder to the caller-provided one once the combo closes again', async () => {
+    const user = userEvent.setup();
+    renderCombo({ value: 'iva10', options: OPTIONS, placeholder: 'Search tax', clearOnType: false });
+
+    await user.click(screen.getByTestId('inline-add-field-tax-chip'));
+    const input = await screen.findByTestId('inline-add-field-tax');
+    expect(input).toHaveAttribute('placeholder', 'IVA 10%');
+
+    // Close without selecting — the cell goes back to the closed chip, so the placeholder
+    // question becomes moot again the next time it re-opens (re-asserted via a fresh chip).
+    await user.click(document.body);
+    await waitFor(() => {
+      expect(screen.getByTestId('inline-add-field-tax-chip')).toHaveTextContent('IVA 10%');
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 7. onWheel avoids double-scroll outside a Dialog (review fix)
 // ---------------------------------------------------------------------------
 
