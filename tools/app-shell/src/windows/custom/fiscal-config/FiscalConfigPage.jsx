@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
+import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { useFiscalConfig } from './useFiscalConfig.js';
 import { detectProfile } from './fiscalConfig.utils.js';
 import { useCertExpiry } from './useCertExpiry.js';
@@ -343,17 +344,12 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
 
         {showContent && forceTestMode && renderProfile !== 'conflict' && (
           <div className="px-6 pt-4">
-            <div
-              className="rounded-lg border border-[hsl(var(--border-subtle))] bg-muted/40 p-4 text-sm text-[hsl(var(--foreground))]"
+            <InfoBanner
+              tone="warning"
+              icon={AlertTriangle}
               data-testid="FiscalConfigPage__testModeBanner">
-              <div className="flex items-center gap-2 font-medium">
-                <AlertTriangle
-                  size={15}
-                  className="text-status-warning-foreground"
-                  data-testid="FiscalConfigPage__testModeBannerIcon" />
-                {ui('fiscal.testModeLock.warning')}
-              </div>
-            </div>
+              {ui('fiscal.testModeLock.warning')}
+            </InfoBanner>
           </div>
         )}
 

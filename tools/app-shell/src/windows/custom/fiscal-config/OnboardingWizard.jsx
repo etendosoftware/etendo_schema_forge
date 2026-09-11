@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { ArrowRight, ArrowLeft, FileText, Check, ChevronRight, Pencil, AlertTriangle } from 'lucide-react';
+import { InfoBanner } from '@/components/InfoBanner.jsx';
 import FiscalStepItem from './FiscalStepItem.jsx';
 import OrgDropdown from './FiscalOrgDropdown.jsx';
 import { Button } from '@/components/ui/button';
@@ -1377,17 +1378,12 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
     <div className="relative h-full flex flex-col overflow-hidden">
       {forceTestMode && (
         <div className="px-5 pt-4 flex-shrink-0">
-          <div
-            className="rounded-lg border border-[hsl(var(--border-subtle))] bg-muted/40 p-4 text-sm text-[hsl(var(--foreground))]"
+          <InfoBanner
+            tone="warning"
+            icon={AlertTriangle}
             data-testid="OnboardingWizard__testModeBanner">
-            <div className="flex items-center gap-2 font-medium">
-              <AlertTriangle
-                size={15}
-                className="text-status-warning-foreground"
-                data-testid="OnboardingWizard__testModeBannerIcon" />
-              {ui('fiscal.testModeLock.warning')}
-            </div>
-          </div>
+            {ui('fiscal.testModeLock.warning')}
+          </InfoBanner>
         </div>
       )}
       <div className="flex-1 min-h-0 overflow-hidden">
