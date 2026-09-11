@@ -94,6 +94,15 @@ async function fetchMenuAccess() {
 }
 
 export async function fetchWindowAccess(session) {
+  // ETP-5189 — kicked off in PARALLEL with the windowaccessmap fetch below, not
+  // sequentially after it. `AuthContext.jsx` calls this on every silent refresh
+  // (bootstrap, tab focus/visibility, the 5-min poll), so a sequential extra
+  // round-trip here compounds under high refresh frequency — confirmed live via
+  // an E2E regression: awaiting it AFTER the windowaccessmap fetch measurably
+  // slowed down interaction-heavy specs (attachments upload/delete) enough to
+  // push already-borderline waits past their timeout. Already fails open on its
+  // own (see below), so racing it in parallel is safe.
+  const menuAccessPromise = fetchMenuAccess().catch(() => ({}));
   try {
     // Reached via `/sws/neo/windowaccessmap` (NEO Headless's own JWT auth), not
     // `/webhooks/SFWindowAccessMap` — the Webhooks module additionally requires a
@@ -139,10 +148,9 @@ export async function fetchWindowAccess(session) {
     // auth.js`) deliberately `route.abort()`s `/sws/neo/listmenu` to exercise that exact
     // fallback — lumping this into the outer catch nulled out windowAccess/capabilities
     // too, breaking every window's WindowAccessGuard across ~40 unrelated mocked specs.
-    let menuAccess = {};
-    try {
-      menuAccess = await fetchMenuAccess();
-    } catch { /* fail open: no menu-only diff signal this cycle, nothing else affected */ }
+    // Already in flight (started above, in parallel) — `.catch()` there means this
+    // never rejects, so no separate try/catch is needed here.
+    const menuAccess = await menuAccessPromise;
     return { ...payload, menuAccess };
   } catch {
     return null;
