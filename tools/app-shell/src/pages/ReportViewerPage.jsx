@@ -240,7 +240,7 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30" onMouseDown={onClose}>
-      <div className="bg-card rounded-xl shadow-2xl w-96 max-h-[480px] flex flex-col" onMouseDown={e => e.stopPropagation()}>
+      <div className="bg-card rounded-xl shadow-2xl w-[42rem] max-w-[90vw] max-h-[480px] flex flex-col" onMouseDown={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-border/30">
           <span className="text-sm font-semibold">{title}</span>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" data-testid="X__3c998a" /></button>
