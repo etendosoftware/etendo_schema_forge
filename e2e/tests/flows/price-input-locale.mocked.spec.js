@@ -247,10 +247,12 @@ test.describe('Existing-line price — comma-decimal commit (ETP-5107 Bug 1 regr
     }).toBeGreaterThan(0);
 
     const patch = patchCalls.find((c) => c.body.listPrice !== undefined);
-    // Clean, locale-independent value — never "25,50" (the display string) and
-    // never rejected as an invalid BigDecimal by the backend (the pre-fix
-    // Error 400, plan §3 Bug 1 / §5).
-    expect(patch.body.listPrice).toBe('25.50');
+    // parseLocaleNumber('25,50').value is the real JS Number 25.5 (by design —
+    // see parseLocaleNumber.js's own JSDoc/tests), which JSON-serializes as the
+    // bare number 25.5, never a zero-padded string. Never "25,50" (the display
+    // string) and never rejected as an invalid BigDecimal by the backend (the
+    // pre-fix Error 400, plan §3 Bug 1 / §5).
+    expect(patch.body.listPrice).toBe(25.5);
   });
 
   test('letters typed into an existing line price are filtered live, never reach the DOM value', async ({ page }) => {
