@@ -13,6 +13,28 @@ The invitation API and NEO API use different tokens:
 
 Using the account session token directly against NEO produces `401 Invalid or expired token` even though the account login itself succeeded.
 
+## Opening /invite with a session already open (ETP-5202)
+
+`/invite` is a public route, but it now inspects the session before rendering any credential
+surface. What a test sees depends on who is signed in:
+
+- **No session** (a fresh browser context — every project in `e2e/playwright.config.js` runs this
+  way, none sets `storageState`): the acceptance flow renders directly, unchanged.
+- **A session whose account email matches the invitation**: no prompt, and on the
+  `existing_account` branch the login step is skipped entirely — the page goes straight to
+  `invite-authenticated-step`. A spec that expects `invite-shared-login` here will fail.
+- **A session belonging to anybody else**, or one whose identity cannot be resolved:
+  `invite-session-conflict` renders instead of the acceptance flow. Continuing requires clicking
+  `action-close-session`, which logs the previous user out and reloads `/invite?token=…`.
+
+The identity comes from `GET /sws/neo/session` (`accountEmail`), tried with the tenant JWT first
+and the platform token second. Add it to the routes a mocked spec stubs, or the guard will fail
+safe into the conflict screen.
+
+After accepting, `action-go-to-app` no longer means `navigate('/')`: it enters the inviting tenant
+through `useEnvironmentSwitch.enterByClientName`, which is a full page load. When the signed-in
+user has a tenant to return to, `action-stay-in-current` offers staying put.
+
 ## Invitation fixture contract
 
 The invitation flow assumes that the administrator has already created:

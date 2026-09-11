@@ -16,6 +16,10 @@ const headerFormSrc = readFileSync(
 const windowContract = contract.frontendContract.window;
 const header = contract.frontendContract.entities.header;
 
+const decisions = JSON.parse(
+  readFileSync(join(__dirname, '..', 'decisions.json'), 'utf8'),
+);
+
 function headerField(name) {
   return header.fields.find((field) => field.name === name);
 }
@@ -153,13 +157,16 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
     );
   });
 
-  // Guards the actual ETP-5087 bug: the Batuz column used to render
-  // `row.tbaiSyncEstado ?? 'Pendiente'`. That field is not part of any contract —
-  // it is injected into the GET response at runtime by TbaiSyncStatusInjector,
-  // called from SalesInvoiceHeaderHandler and (since ETP-5087) also from
-  // PurchaseInvoiceHeaderHandler.afterHandle(). Because it only ever exists in
-  // the response payload, it must never appear as a contract field.
-  it('has no tbaiSyncEstado field in either contract (it is a server-side response injection)', () => {
+  // Guards the ETP-5087/ETP-4391 bug, now resolved by ETP-5216: the Batuz
+  // column used to render `row.tbaiSyncEstado ?? 'Pendiente'`, a field that
+  // existed in no contract — it was injected into the GET response at runtime
+  // by TbaiSyncStatusInjector (SalesInvoiceHeaderHandler, then also
+  // PurchaseInvoiceHeaderHandler.afterHandle()). That injector is now DELETED
+  // (ETP-5216 migration plan §8 Step 9): the column is a real stored computed
+  // AD column (`em_etgo_tbai_status`, contract field `eTGOTbaiStatus`).
+  // `tbaiSyncEstado` must never reappear as a contract field — that would mean
+  // someone reverted to the synthetic-column design this ticket removed.
+  it('has no tbaiSyncEstado field in either contract (the injector that fed it was deleted, ETP-5216)', () => {
     assert.equal(
       headerField('tbaiSyncEstado'),
       undefined,
@@ -171,5 +178,33 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
       undefined,
       'tbaiSyncEstado is not a purchase-invoice contract field',
     );
+  });
+
+  // ETP-5216: EM_ETGO_Tbai_Status is a `Computation_Mode='S'` / `Refresh_Mode='S'`
+  // stored computed AD column — `ISUPDATEABLE='N'` at the DB level, but the
+  // migration plan's own R9 states this in plain terms: "read-only enforcement
+  // is weaker than the doc claims" — `schema-forge-cli@0.3.47` does NOT force
+  // readOnly for a computed column at any pipeline layer (extractor, resolver,
+  // validator). `decisions.json`'s explicit `visibility: "readOnly"` + `form:
+  // false` is therefore the ONLY thing standing between the pipeline and an
+  // editable input bound to a column the DAL maps insert="false" update="false".
+  // This test reads decisions.json directly (not contract.json, which still
+  // predates the `make regen` run that requires the AD column to exist in the
+  // DB first — ETP-5216 plan §8 Step 15/R8) so it is meaningful before and
+  // after that regen.
+  it('declares eTGOTbaiStatus readOnly and out of the form in decisions.json (ETP-5216 / R9 — pipeline does not enforce this itself)', () => {
+    const decision = decisions?.entities?.header?.fields?.eTGOTbaiStatus;
+    assert.ok(decision, 'decisions.json must declare a field override for eTGOTbaiStatus');
+    assert.equal(
+      decision.visibility,
+      'readOnly',
+      'a stored computed column must never be user-editable — the pipeline does not enforce this on its own (R9)',
+    );
+    assert.equal(
+      decision.form,
+      false,
+      'eTGOTbaiStatus is a list-only value; it must stay out of the generated header form',
+    );
+    assert.equal(decision.grid, true, 'eTGOTbaiStatus must reach the grid — that is the entire point of the migration');
   });
 });
