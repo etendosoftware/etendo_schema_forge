@@ -1,5 +1,6 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
+import { useAuth } from '@/auth/AuthContext';
 import { useDashboardData } from '../useDashboardData';
 
 // Mock external dependencies
@@ -16,11 +17,11 @@ vi.mock('@/auth/AuthContext', () => ({
   // about the mapping, not the gating, so they run as a client-admin (every gate open), which is
   // exactly how they behaved before the gating landed. The gating itself is covered by
   // `src/lib/__tests__/dashboardWidgetAccess.test.js` and `pages/__tests__/DashboardPage.vitest.jsx`.
-  useAuth: () => ({
+  useAuth: vi.fn(() => ({
     token: 'test-token',
     windowAccess: {},
     capabilities: { isAdminOrClientAdmin: true },
-  }),
+  })),
 }));
 
 vi.mock('@/auth/useApiFetch.js', () => ({
@@ -207,6 +208,43 @@ describe('useDashboardData', () => {
 
     // All widgets failed, should get empty fallback
     expect(result.current.kpis[0].value).toBe(0);
+  });
+
+  // [ETP-5195 follow-up] Regression test: the backend mints a fresh JWT (new iat/exp) on every
+  // silent session refresh — mount, tab-focus regain, the 5-minute background poll — even when
+  // the user's role/permissions haven't changed at all. `fetchData` must key off WHETHER a token
+  // exists, never its VALUE, or a plain alt-tab with zero role change refetches all nine widgets
+  // and produces a visible flicker.
+  it('does not refetch widgets when only the token VALUE changes (silent refresh, no role change)', async () => {
+    mockAllEndpointsOk();
+    vi.mocked(useAuth).mockReturnValue({
+      token: 'token-v1',
+      windowAccess: {},
+      capabilities: { isAdminOrClientAdmin: true },
+    });
+
+    const { result, rerender } = renderHook(() => useDashboardData());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    const callsAfterInitialFetch = globalThis.fetch.mock.calls.length;
+    expect(callsAfterInitialFetch).toBeGreaterThan(0);
+
+    // Simulate a silent refresh minting a brand-new JWT string for the SAME role — nothing else
+    // the hook depends on (range, widget access, apiFetch) changes.
+    vi.mocked(useAuth).mockReturnValue({
+      token: 'token-v2-rotated-by-silent-refresh',
+      windowAccess: {},
+      capabilities: { isAdminOrClientAdmin: true },
+    });
+    rerender();
+
+    // Give any potential re-fetch effect a tick to fire before asserting it did not.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(globalThis.fetch.mock.calls.length).toBe(callsAfterInitialFetch);
   });
 
   it('handles response without response.data field', async () => {
