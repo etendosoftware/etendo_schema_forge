@@ -20953,6 +20953,7 @@
     "sendToSifErrorSii": "Error sending to SII.",
     "sendToSifErrorTbai": "Error sending to TicketBAI.",
     "sendToSifErrorTbaiPurchase": "Error sending to Batuz.",
+    "sendToSifSaveError": "Could not save pending changes. The invoice was not sent.",
     "sifDataTabs.sectionTitle": "SIF",
     "sifDataTabs.tab.sii": "SII",
     "sifDataTabs.tab.tbai": "TicketBAI",

@@ -979,6 +979,25 @@ a plain two-way split, with no dependency on the invoice's AEAT error code:
   `org.openbravo.module.sii.process.CorrectDuplicateInvoiceError` directly — that branch was
   scope creep beyond what was asked and has been removed.
 
+**Follow-up bug fixed — "Enviar a SIF" now flushes pending header edits first (ETP-5272):**
+since ETP-4463, SIF-tab fields (e.g. `aeatsiiErrorRegistral`, the "Modificada error registral"
+checkbox) no longer persist via per-field PATCH on change — they only live in the in-memory
+pending-edits state until a full header Save/Confirm/Reactivate flushes them to the DB. But
+`SifSendingModal.jsx` (`handleSend`) used to call the SII/TBAI process actions directly, with no
+intervening save: `getPendingSifTargets` computes the button's own enablement from that SAME
+in-memory `data` (per the ETP-4463 design), so the button looked correctly enabled right after the
+user ticked the checkbox even though the backend still held the OLD persisted value — a silent
+desync between what `SiiSendHandler` actually routed on and what the user had just set. Fixed
+generically in the shared `SifSendingModal.jsx`: it now accepts `onSave`/`isDirty` props (plumbed
+from `DetailView`'s existing `hook.handleSave`/`isDirty`, through `SalesInvoiceTopbar.jsx` →
+`InvoiceTopbarExtra.jsx` → `SendToSifButton.jsx`, mirroring the save-then-act pattern
+`useEntity.js`'s `handleSaveAndProcess` already uses elsewhere) and, when there is a dirty header,
+awaits the save BEFORE calling `Em_aeatsii_send`/`Em_Tbai_Xmlgenerator`. A clean (non-dirty) header
+skips the save entirely — no redundant round-trip on the common path. A failed save blocks the send
+outright (surfaced both via the save's own toast and a dedicated `sendToSifSaveError` result line in
+the modal) rather than falling through to sending stale data. No window-name branching — see
+`purchase-invoice.md` for this window's identical wiring through `PurchaseInvoiceTopbar.jsx`.
+
 Both `sifSending.js` and `SiiSendHandler.java` are shared between sales-invoice and
 purchase-invoice — see `purchase-invoice.md` for this window's mirror of the same fix.
 

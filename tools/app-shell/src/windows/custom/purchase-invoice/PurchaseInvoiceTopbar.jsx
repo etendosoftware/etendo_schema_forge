@@ -12,7 +12,7 @@ import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.j
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
 
 import { buildHeaders } from '@/auth/api.js';
-export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUrl, onProcess, onRefresh }) {
+export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUrl, onProcess, onRefresh, onSave, isDirty }) {
   const navigate = useNavigate();
   const ui = useUI();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -61,6 +61,8 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
             recordId={recordId}
             apiBaseUrl={apiBaseUrl}
             status={data?.documentStatus}
+            onSave={onSave}
+            isDirty={isDirty}
             data-testid="SendToSifButton__8addd1" />
           <CopyRecordLinkButton
             recordId={recordId}

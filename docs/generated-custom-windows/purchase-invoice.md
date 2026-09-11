@@ -1351,6 +1351,19 @@ earlier version of this fix also special-cased error code `"3000"` to route into
 `CorrectDuplicateInvoiceError` (a read-back/sync against AEAT, not a resend) — that 3-way split
 was scope creep beyond what was asked and has been removed.
 
+**Follow-up bug fixed — "Enviar a SIF" now flushes pending header edits first (ETP-5272):** this
+window shares the fix with sales-invoice — see `sales-invoice.md` §"Follow-up bug fixed — 'Enviar
+a SIF' now flushes pending header edits first (ETP-5272)" for the full explanation. In short:
+`SifSendingModal.jsx` used to call `Em_aeatsii_send`/`Em_Tbai_Xmlgenerator` without first saving
+any pending header edit (e.g. a just-ticked `aeatsiiErrorRegistral`), which only lives in the
+in-memory pending-edits state since ETP-4463 until a full header save flushes it — a silent
+desync between what the button showed and what the backend actually routed on. `SifSendingModal`
+now accepts generic `onSave`/`isDirty` props, plumbed here through `PurchaseInvoiceTopbar.jsx` →
+`SendToSifButton.jsx` from `DetailView`'s existing `hook.handleSave`/`isDirty` (the same values
+`SalesInvoiceTopbar.jsx` plumbs on the sales side), and awaits the save before sending whenever the
+header is dirty — skipping it entirely on a clean header. A failed save blocks the send and
+surfaces the error instead of proceeding with stale data.
+
 This runs `PurchaseInvoiceHeaderHandler` exactly as the UI does — including the total-discount
 line created before completion — because `neo_action` executes the entity's `NeoHandler` hooks
 (ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same

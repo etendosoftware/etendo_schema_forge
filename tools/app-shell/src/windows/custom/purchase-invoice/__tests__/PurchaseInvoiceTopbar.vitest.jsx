@@ -29,8 +29,16 @@ vi.mock('@/components/contract-ui/CloneOrderModal', () => ({
   ),
 }));
 
+// ETP-5272 follow-up: capture the props SendToSifButton actually receives, so a
+// dedicated describe block below can assert onSave/isDirty are forwarded
+// unchanged from PurchaseInvoiceTopbar's own props.
+const sendToSifButtonMock = vi.hoisted(() => ({ propsSpy: vi.fn() }));
+
 vi.mock('@/windows/custom/shared/SendToSifButton.jsx', () => ({
-  default: () => <div data-testid="send-to-sif-btn" />,
+  default: (props) => {
+    sendToSifButtonMock.propsSpy(props);
+    return <div data-testid="send-to-sif-btn" />;
+  },
 }));
 
 vi.mock('@/windows/custom/shared/CloneButton.jsx', () => ({
@@ -657,5 +665,42 @@ describe('PurchaseInvoiceTopbar — branch/fallback coverage (ETP-4738)', () => 
     );
     expect(screen.queryByTestId('payment-status-badge')).toBeNull();
     expect(screen.queryByTestId('payment-history-modal')).toBeNull();
+  });
+});
+
+// ETP-5272 follow-up: "Enviar a SIF" must flush pending header edits before
+// sending. PurchaseInvoiceTopbar mounts SendToSifButton directly (no
+// InvoiceTopbarExtra layer, unlike sales-invoice), so onSave/isDirty must be
+// forwarded straight from this component's own props.
+describe('PurchaseInvoiceTopbar — forwards onSave/isDirty to SendToSifButton (ETP-5272)', () => {
+  const baseProps = {
+    data: BASE_DATA,
+    recordId: 'inv-001',
+    token: 'test-token',
+    apiBaseUrl: '/api',
+    onRefresh: vi.fn(),
+    onProcess: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('forwards a dirty header (isDirty=true) and its onSave callback unchanged', () => {
+    const onSave = vi.fn();
+    render(<PurchaseInvoiceTopbar {...baseProps} onSave={onSave} isDirty />);
+
+    expect(sendToSifButtonMock.propsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ onSave, isDirty: true }),
+    );
+  });
+
+  it('forwards a clean header (isDirty=false) unchanged', () => {
+    const onSave = vi.fn();
+    render(<PurchaseInvoiceTopbar {...baseProps} onSave={onSave} isDirty={false} />);
+
+    expect(sendToSifButtonMock.propsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ onSave, isDirty: false }),
+    );
   });
 });

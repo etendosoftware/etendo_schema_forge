@@ -21189,6 +21189,7 @@
     "sendToSifErrorSii": "Error al enviar al SII.",
     "sendToSifErrorTbai": "Error al enviar a TicketBAI.",
     "sendToSifErrorTbaiPurchase": "Error al enviar a Batuz.",
+    "sendToSifSaveError": "No se pudieron guardar los cambios pendientes. La factura no fue enviada.",
     "sifDataTabs.sectionTitle": "SIF",
     "sifDataTabs.tab.sii": "SII",
     "sifDataTabs.tab.tbai": "TicketBAI",

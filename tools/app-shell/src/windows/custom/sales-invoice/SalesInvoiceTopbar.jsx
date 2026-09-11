@@ -11,7 +11,7 @@ import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.j
 import { buildHeaders } from '@/auth/api.js';
 /* eslint-disable react/prop-types */
 
-export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, api, onProcess, onRefresh }) {
+export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, api, onProcess, onRefresh, onSave, isDirty }) {
   const navigate = useNavigate();
   const ui = useUI();
   const [showClone, setShowClone] = useState(false);
@@ -43,6 +43,8 @@ export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, 
         apiBaseUrl={apiBaseUrl}
         api={api}
         onProcess={onProcess}
+        onSave={onSave}
+        isDirty={isDirty}
         data-testid="InvoiceTopbarExtra__5c4da7" />
       {showClone && createPortal(
         <CloneOrderModal
