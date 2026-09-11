@@ -64,6 +64,28 @@ The `/upgrade` route is the worked example — it is registered
 **unconditionally**, and only the menu entry pointing at it is flag-gated.
 Hiding the route would imply the flag was protecting something, which it is not.
 
+`/acct-process-monitor` (ETP-5269, the accounting process monitor) is the second
+instance of the `/upgrade` shape, and the one that made the rule concrete: the
+page can schedule a real accounting run, so it is the first flag-gated surface
+where treating the flag as a boundary would have had teeth. It is still
+registered unconditionally, and what actually refuses a non-admin — on the read
+*and* on the trigger — is `NeoAccessHelper.isAdminOrClientAdmin` inside
+`SFAcctProcessMonitor`. Its E2E spec pins the behaviour with an explicit test
+named *flag off: the route still works*, so a later attempt to "harden" this by
+wrapping the route in the flag fails the build rather than quietly hiding where
+the real gate lives. See
+[generated-custom-windows/acct-process-monitor.md](generated-custom-windows/acct-process-monitor.md).
+
+It also introduced **item-level** menu gating. `SideMenu` previously flag-gated
+whole groups only (`Proof of Concept`); it now also carries a small
+`flagGatedItems` map keyed by the `menu.json` item name, so a single entry can
+be hidden without inventing a group for it. An item absent from that map is
+never flag-gated. **The filter is applied to the Favorites group too** — and it
+must stay that way: Favorites are rebuilt from the user's own saved list rather
+than from `menuGroups`, so the earlier early-return for that group let a
+favourited flag-gated item stay visible with the flag off. That was the one hole
+through which a gated entry could still be reached.
+
 ## Adding a flag
 
 1. Declare the key and its safe default in `lib/flags/flag-keys.js`:
