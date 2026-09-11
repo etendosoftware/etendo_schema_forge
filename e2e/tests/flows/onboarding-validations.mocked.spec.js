@@ -177,10 +177,13 @@ test.describe('Onboarding — Full registration flow', () => {
     // Country selector visible
     await expect(page.locator('#countryCode')).toBeVisible();
 
-    // Business type options visible
+    // Business type options visible — Empresa and Autónomo only. "Asesoría" was retired
+    // from the product by ETP-5190, so its absence is asserted rather than left untested:
+    // the option comes back the moment `businessTypeValues` in OnboardingPage.jsx drops
+    // the explicit list (the core ProfileStep's own fallback still includes 'advisory').
     await expect(page.getByText(/empresa/i).first()).toBeVisible();
     await expect(page.getByText(/autónomo|autonomo/i).first()).toBeVisible();
-    await expect(page.getByText(/asesoría|asesoria/i).first()).toBeVisible();
+    await expect(page.getByText(/asesor[íi]a/i)).toHaveCount(0);
 
     // Continue disabled without name
     const continueBtn = page.getByRole('button', { name: /continuar|continue/i });
@@ -209,8 +212,10 @@ test.describe('Onboarding — Full registration flow', () => {
     await page.locator('#clientName').fill('Mi Empresa E2E');
     await expect(startBtn).toBeEnabled();
 
-    // Fill fiscal ID (optional) — stays enabled
-    await page.locator('#fiscalIdValue').fill('B12345678');
+    // Fill fiscal ID (optional) — stays enabled. The value is a check-digit-valid CIF because
+    // ETP-5190 guards "Empezar" with the NIF validator: optional means "may be left empty",
+    // not "may be wrong", so an invalid id would block PART 7 below.
+    await page.locator('#fiscalIdValue').fill('B12345674');
     await expect(startBtn).toBeEnabled();
 
     // Address label carries the "(opcional)" tag. Fiscal id also renders "opcional"

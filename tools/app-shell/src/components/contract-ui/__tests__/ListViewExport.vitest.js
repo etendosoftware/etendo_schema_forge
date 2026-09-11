@@ -7,9 +7,11 @@ const read = (f) => readFileSync(join(dirname(fileURLToPath(import.meta.url)), '
 const src = read('ListView.jsx');
 // The button, its format menu and the request composition were extracted to their own component
 // in PR review (SonarQube S3776 on ListView). The assertions below follow the text: `exportSrc`
-// for anything that moved, `src` for what ListView still owns — the import button it sits beside,
-// the header-scope resolver it shares with ImportDialog, and the labels it forwards.
+// for anything that moved there, `importSrc` for the ImportDialog wiring that ETP-5190 moved to
+// a hook shared with the First Steps checklist, and `src` for what ListView still owns — the
+// import button it sits beside, and the props it forwards.
 const exportSrc = read('ListExportButton.jsx');
+const importSrc = read('useWindowImportDialog.js');
 
 /**
  * Source-contract checks for the ETP-4997 export wiring.
@@ -89,14 +91,17 @@ describe('ListView export wiring', () => {
   // one value ("contact") for everything off the header entity, so the five address columns were
   // labelled "Dirección (Contacto)" — naming the wrong tab in an exported file.
   it('names the tab a column belongs to, not just "contact"', () => {
-    expect(src).toMatch(/contact: ui\('importHeaderScopeContact'\)/);
-    expect(src).toMatch(/address: ui\('importHeaderScopeAddress'\)/);
+    expect(importSrc).toMatch(/contact: ui\('importHeaderScopeContact'\)/);
+    expect(importSrc).toMatch(/address: ui\('importHeaderScopeAddress'\)/);
     // Driven by a lookup, so an unknown scope yields no qualifier instead of a raw key.
-    expect(src).toMatch(/importHeaderScopeLabels\[field\.headerScope\]/);
-    expect(src).not.toMatch(/field\.headerScope === 'contact'/);
+    expect(importSrc).toMatch(/importHeaderScopeLabels\[field\.headerScope\]/);
+    expect(importSrc).not.toMatch(/field\.headerScope === 'contact'/);
     // The address column's own label is the scope word; qualifying it would read
     // "Dirección (Dirección)".
-    expect(src).toMatch(/if \(!scope \|\| sameLabel\(base, scope\)\) return base;/);
+    expect(importSrc).toMatch(/if \(!scope \|\| sameLabel\(base, scope\)\) return base;/);
+    // ListView must still be the one that hands the resolver to the export button, or the
+    // template headers silently lose their qualifier again.
+    expect(src).toMatch(/importFieldLabel=\{importDialogProps\.fieldLabelFn\}/);
   });
 
   it('localizes every string it puts on screen', () => {
@@ -142,9 +147,9 @@ describe('ListView export wiring', () => {
   });
 
   it('tells the dialog which formats to accept and offer as templates', () => {
-    expect(src).toMatch(/downloadTemplateCsv: ui\('importDownloadTemplateCsv'\)/);
-    expect(src).toMatch(/downloadTemplateXlsx: ui\('importDownloadTemplateXlsx'\)/);
+    expect(importSrc).toMatch(/downloadTemplateCsv: ui\('importDownloadTemplateCsv'\)/);
+    expect(importSrc).toMatch(/downloadTemplateXlsx: ui\('importDownloadTemplateXlsx'\)/);
     // The hint must carry the {formats} placeholder key, not the old fixed-format sentence.
-    expect(src).toMatch(/dropHint: ui\('importDropHintFormats'\)/);
+    expect(importSrc).toMatch(/dropHint: ui\('importDropHintFormats'\)/);
   });
 });

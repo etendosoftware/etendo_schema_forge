@@ -56,11 +56,13 @@ const MOCK_SUMMARY = {
 // FmListPage.jsx's FileCell, which renders this value verbatim as text.
 const MOCK_FILE_NAME = '303_B12345678_2026_T1.303';
 
+// `regime` fields (ETP-5187): removed together with the "Régimen" column in the real Sources
+// tab (`FmTabContent.jsx`) — these were demo-only data feeding that column and nothing else.
 const MOCK_SOURCES = [
-  { date: '2026-03-21', ref: 'F-2026-0188', type: 'Venta',  party: 'Catering Pirineos S.L.',   regime: 'General 21%',    base: 1200, vat: 252,  total: 1452,  boxes: '7, 8' },
-  { date: '2026-03-18', ref: 'F-2026-0185', type: 'Venta',  party: 'Bodegas El Mirador S.A.',  regime: 'General 21%',    base: 8200, vat: 1722, total: 9922,  boxes: '7, 8' },
-  { date: '2026-03-09', ref: 'C-2026-0044', type: 'Compra', party: 'Süd Logistik GmbH',        regime: 'Intracomun. UE', base: 1450, vat: 0,    total: 1450,  boxes: '10, 11, 36, 37' },
-  { date: '2026-02-22', ref: 'F-2026-0117', type: 'Venta',  party: 'Distribuidora Sur S.A.',   regime: 'General 21%',    base: 9300, vat: 1953, total: 11253, boxes: '7, 8' },
+  { date: '2026-03-21', ref: 'F-2026-0188', type: 'Venta',  party: 'Catering Pirineos S.L.',   base: 1200, vat: 252,  total: 1452,  boxes: '7, 8' },
+  { date: '2026-03-18', ref: 'F-2026-0185', type: 'Venta',  party: 'Bodegas El Mirador S.A.',  base: 8200, vat: 1722, total: 9922,  boxes: '7, 8' },
+  { date: '2026-03-09', ref: 'C-2026-0044', type: 'Compra', party: 'Süd Logistik GmbH',        base: 1450, vat: 0,    total: 1450,  boxes: '10, 11, 36, 37' },
+  { date: '2026-02-22', ref: 'F-2026-0117', type: 'Venta',  party: 'Distribuidora Sur S.A.',   base: 9300, vat: 1953, total: 11253, boxes: '7, 8' },
 ];
 
 const MOCK_HISTORY = [

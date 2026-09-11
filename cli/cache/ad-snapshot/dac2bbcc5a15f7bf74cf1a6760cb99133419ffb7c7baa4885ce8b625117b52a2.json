@@ -6697,7 +6697,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "5a73097d105c05f5415151f3c25f206ae05f31b2b42fe4ff1635780f876cb682",
+      "checksum": "50ddfd693d05e69cba23fb46c798310469b27f7c4f85cdf3db18bbc6a6d21835",
       "params": [
         "183"
       ],
@@ -7461,7 +7461,7 @@
         {
           "column_id": "67A5B95304E546F68639F62C4E45761F",
           "columnname": "EM_Tbai_Xmlgenerator",
-          "displaylogic": "@EM_Tbai_Issent@='N' & (@docstatus@='CO') & @TBAI_ExistConfigAndIsAvailable@",
+          "displaylogic": "@EM_Tbai_Issent@='N' & (@docstatus@='CO') & @TBAI_IsBizkaiaPurchaseEligible@=1",
           "field_id": "89AFFB9B66F54EA3AEAA3FEBA6432028",
           "name": "Registrar Factura en Batuz",
           "readonlylogic": null,
@@ -16996,6 +16996,122 @@
           "tab_name": "Product Price",
           "table_id": "251",
           "table_name": "M_ProductPrice"
+        }
+      ]
+    },
+    "d861dd664adc2a7f0d8b8d9364724120621ce74e3b8db5af805bc32c77f9fc9b": {
+      "checksum": "dcdc18e29c88b35a735e65de7a2643d6a9029fe8efcdaa17a15df9264193471d",
+      "params": [
+        "112"
+      ],
+      "rows": [
+        {
+          "column_id": "2747",
+          "columnname": "IncrementNo",
+          "displaylogic": "@IsAutoSequence@='Y'",
+          "field_id": "1554",
+          "name": "Increment By",
+          "readonlylogic": null,
+          "tab_id": "146",
+          "tab_name": "Sequence",
+          "table_id": "115",
+          "table_name": "AD_Sequence"
+        },
+        {
+          "column_id": "220",
+          "columnname": "CurrentNext",
+          "displaylogic": "@IsAutoSequence@='Y'",
+          "field_id": "329",
+          "name": "Next Assigned Number",
+          "readonlylogic": null,
+          "tab_id": "146",
+          "tab_name": "Sequence",
+          "table_id": "115",
+          "table_name": "AD_Sequence"
+        },
+        {
+          "column_id": "2746",
+          "columnname": "StartNo",
+          "displaylogic": "@IsAutoSequence@='Y' & @IsTableID@='N' & @StartNewYear@='Y'",
+          "field_id": "1555",
+          "name": "Starting No.",
+          "readonlylogic": null,
+          "tab_id": "146",
+          "tab_name": "Sequence",
+          "table_id": "115",
+          "table_name": "AD_Sequence"
+        },
+        {
+          "column_id": "223",
+          "columnname": "Prefix",
+          "displaylogic": "@IsTableID@='N'",
+          "field_id": "332",
+          "name": "Prefix",
+          "readonlylogic": null,
+          "tab_id": "146",
+          "tab_name": "Sequence",
+          "table_id": "115",
+          "table_name": "AD_Sequence"
+        },
+        {
+          "column_id": "224",
+          "columnname": "Suffix",
+          "displaylogic": "@IsTableID@='N'",
+          "field_id": "333",
+          "name": "Suffix",
+          "readonlylogic": null,
+          "tab_id": "146",
+          "tab_name": "Sequence",
+          "table_id": "115",
+          "table_name": "AD_Sequence"
+        },
+        {
+          "column_id": "3887",
+          "columnname": "CurrentNextSys",
+          "displaylogic": "@IsAutoSequence@='Y'",
+          "field_id": "3055",
+          "name": "Current Next (System)",
+          "readonlylogic": null,
+          "tab_id": "146",
+          "tab_name": "Sequence",
+          "table_id": "115",
+          "table_name": "AD_Sequence"
+        },
+        {
+          "column_id": "225",
+          "columnname": "StartNewYear",
+          "displaylogic": "@IsAutoSequence@='Y' & @IsTableID@='N'",
+          "field_id": "335",
+          "name": "Restart sequence every Year",
+          "readonlylogic": null,
+          "tab_id": "146",
+          "tab_name": "Sequence",
+          "table_id": "115",
+          "table_name": "AD_Sequence"
+        },
+        {
+          "column_id": "1187",
+          "columnname": "VFormat",
+          "displaylogic": "@IsAutoSequence@='N'",
+          "field_id": "635",
+          "name": "Value Format",
+          "readonlylogic": null,
+          "tab_id": "146",
+          "tab_name": "Sequence",
+          "table_id": "115",
+          "table_name": "AD_Sequence"
+        },
+        {
+          "column_id": "350",
+          "columnname": "IsTableID",
+          "displaylogic": "@IsAutoSequence@='Y'",
+          "field_id": "331",
+          "name": "Used for Record ID",
+          "readonlylogic": null,
+          "tab_id": "146",
+          "tab_name": "Sequence",
+          "table_id": "115",
+          "table_name": "AD_Sequence"
         }
       ]
     },

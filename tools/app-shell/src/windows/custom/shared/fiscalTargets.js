@@ -177,3 +177,33 @@ export function isVerifactuEligibleByDate(createdRaw, adoptionDateRaw) {
 export function isTbaiEligibleByDate(invoiceDateRaw, tbaiSystemDateRaw) {
   return isSifEligibleByDate(invoiceDateRaw, tbaiSystemDateRaw);
 }
+
+/**
+ * The value `ETGO_GET_TBAI_STATUS` stores for an invoice its organization can
+ * never submit: one dated before the organization joined TicketBAI/Batuz, or
+ * belonging to an organization with no active TBAI config at all.
+ *
+ * The adoption-date gate used to live in the React cell as
+ * {@link isSifEligibleByDate} (ETP-5122). It moved into the stored computed
+ * column (ETP-5216 follow-up) because a decision taken in the cell is invisible
+ * to the backend: the column filters and sorts on `em_etgo_tbai_status`, so
+ * filtering by "Pendiente" returned rows the grid then drew as a dash. The cell
+ * also compared every row against the SELECTED organization's adoption date
+ * rather than the invoice's own, which is wrong for any list spanning
+ * organizations.
+ *
+ * `isSifEligibleByDate` remains in use for SII and VERI*FACTU, whose columns are
+ * NOT stored computed columns and therefore still decide this in the browser.
+ */
+export const TBAI_STATUS_NOT_APPLICABLE = 'NoAplica';
+
+/**
+ * Whether a stored TBAI status means "does not apply" and should render as a
+ * dash rather than a status badge.
+ *
+ * @param {string|null|undefined} status the raw `eTGOTbaiStatus` value
+ * @returns {boolean}
+ */
+export function isTbaiStatusNotApplicable(status) {
+  return status === TBAI_STATUS_NOT_APPLICABLE;
+}
