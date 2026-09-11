@@ -5,6 +5,7 @@ import { useUI } from '@/i18n';
 import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
+import { buildHeaders } from '@/auth/api.js';
 import CloneButton from './CloneButton.jsx';
 
 /**
@@ -88,7 +89,7 @@ export default function DocumentSecondaryActions({
   if (!recordId) return null;
 
   const cloneConfig = clone === true ? {} : (clone || null);
-  const headers = headersProp ?? (token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : undefined);
+  const headers = headersProp ?? (token ? buildHeaders(token) : undefined);
 
   return (
     <>
