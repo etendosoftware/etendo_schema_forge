@@ -1432,7 +1432,16 @@ function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, lo
       className={['align-middle', col.headClass || ''].filter(Boolean).join(' ')}
       style={headStyle}
     >
-      <span className="inline-flex items-center text-xs leading-4 font-semibold text-text-primary tracking-normal">
+      {/* ETP-5281 — same cap as the single-label branch (renderColumnHeaderCell):
+          a multiField header ("Tipo & IBAN") had no width ceiling either, so it
+          could overflow into the next header cell exactly like a plain label.
+          Truncating the whole joined string as one unit (rather than shrinking
+          each part individually) is a deliberate, proportionate fix — this
+          layout is niche (today, only financial-account's headClass-pinned
+          340px "Tipo & IBAN" column uses it) and per-part truncation would need
+          restructuring every part into its own flex item, not worth it for a
+          case that isn't the reported overlap. */}
+      <span className="inline-flex max-w-full min-w-0 items-center overflow-hidden text-ellipsis whitespace-nowrap text-xs leading-4 font-semibold text-text-primary tracking-normal">
         {col.parts.map((part, partIdx) => {
           const partLabel = resolveColumnLabel(part, locale, t);
           const partSorted = sortColumn === part.key;
@@ -1521,22 +1530,40 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
       {onSort && isSortable ? (
         <button
           type="button"
-          className={`relative inline-block text-xs leading-4 font-semibold text-text-primary tracking-normal cursor-pointer select-none transition-colors bg-transparent border-0 p-0 ${NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : 'text-left'}`}
+          // ETP-5281 \u2014 `max-w-full` caps this at the header cell's (now
+          // minWidth-floored) available width WITHOUT changing `inline-block`'s
+          // shrink-to-fit sizing: a label that already fits is completely
+          // unaffected (the cap never engages, so the sort arrow \u2014 anchored to
+          // this element's own edge below \u2014 stays exactly where it always was,
+          // right next to the label). Only a label that would otherwise overflow
+          // gets capped, at which point the inner label span's own `truncate`
+          // (below) shows the "\u2026". Do NOT swap this to `block`/`w-full` \u2014 that
+          // would ALSO stretch the (common, non-overflowing) short-label case to
+          // the cell's full width, dragging the arrow away from the label.
+          className={`relative inline-block max-w-full text-xs leading-4 font-semibold text-text-primary tracking-normal cursor-pointer select-none transition-colors bg-transparent border-0 p-0 ${NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : 'text-left'}`}
           onClick={() => onSort(col.key)}
         >
-          <span className="inline-flex items-center gap-1 align-middle">
-            {colLabel}
-            {col.computed?.mode === 'stored' && <ComputedFreshnessHint computed={col.computed} data-testid="ComputedFreshnessHint__eb5261" />}
+          <span className="inline-flex max-w-full min-w-0 items-center gap-1 align-middle">
+            <span className="min-w-0 truncate" title={typeof colLabel === 'string' ? colLabel : undefined}>{colLabel}</span>
+            {col.computed?.mode === 'stored' && (
+              <span className="shrink-0">
+                <ComputedFreshnessHint computed={col.computed} data-testid="ComputedFreshnessHint__eb5261" />
+              </span>
+            )}
           </span>
           {isSorted && (
             <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
           )}
         </button>
       ) : (
-        <span className={`relative inline-block text-xs leading-4 font-semibold text-text-primary tracking-normal${NUMERIC_FIELD_TYPES.has(col.type) ? ' text-right' : ''}`}>
-          <span className="inline-flex items-center gap-1 align-middle">
-            {colLabel}
-            {col.computed?.mode === 'stored' && <ComputedFreshnessHint computed={col.computed} data-testid="ComputedFreshnessHint__eb5261" />}
+        <span className={`relative inline-block max-w-full text-xs leading-4 font-semibold text-text-primary tracking-normal${NUMERIC_FIELD_TYPES.has(col.type) ? ' text-right' : ''}`}>
+          <span className="inline-flex max-w-full min-w-0 items-center gap-1 align-middle">
+            <span className="min-w-0 truncate" title={typeof colLabel === 'string' ? colLabel : undefined}>{colLabel}</span>
+            {col.computed?.mode === 'stored' && (
+              <span className="shrink-0">
+                <ComputedFreshnessHint computed={col.computed} data-testid="ComputedFreshnessHint__eb5261" />
+              </span>
+            )}
           </span>
           {isSorted && (
             <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>

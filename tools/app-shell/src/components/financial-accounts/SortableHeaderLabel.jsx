@@ -44,14 +44,20 @@ export function SortableHeaderLabel({ label, sortKey, activeKey, direction, onSo
       // the same. The arrow is aria-hidden, so the state is conveyed visually only — a known
       // gap shared with DataTable rather than a new one introduced here.
       onClick={() => onSort(sortKey)}
+      // ETP-5281 — `max-w-full` caps this button (an `inline-flex`, so it
+      // otherwise shrink-wraps to its content with no ceiling) at whatever
+      // width its container (the Movimientos `<TableHead>`) actually has,
+      // mirroring `DataTable.renderColumnHeaderCell`'s identical fix — without
+      // it, a long label overflowed the header cell into its neighbor exactly
+      // like DataTable's did before that fix.
       className={[
-        'inline-flex cursor-pointer select-none items-center gap-0.5 border-0 bg-transparent p-0',
+        'inline-flex max-w-full cursor-pointer select-none items-center gap-0.5 border-0 bg-transparent p-0',
         'font-semibold text-inherit transition-colors',
         align === 'right' ? 'flex-row-reverse' : '',
       ].filter(Boolean).join(' ')}
     >
       {arrow}
-      <span>{label}</span>
+      <span className="min-w-0 truncate" title={typeof label === 'string' ? label : undefined}>{label}</span>
     </button>
   );
 }
@@ -73,7 +79,10 @@ export function SortableHeaderLabel({ label, sortKey, activeKey, direction, onSo
  */
 export function SortableHeaderSegments({ parts, activeKey, direction, onSort }) {
   return (
-    <span className="inline-flex items-center">
+    // ETP-5281 — same cap as DataTable.renderMultiFieldHeaderCell's outer span:
+    // truncates the whole joined label as one unit rather than letting it
+    // overflow into the next header cell.
+    <span className="inline-flex max-w-full min-w-0 items-center overflow-hidden text-ellipsis whitespace-nowrap">
       {parts.map((part, idx) => (
         <span key={part.key} className="inline-flex items-center">
           {idx > 0 && (
