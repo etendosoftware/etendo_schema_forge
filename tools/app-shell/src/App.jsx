@@ -131,10 +131,18 @@ export async function fetchWindowAccess(session) {
     } else {
       return null;
     }
-    // Same fail-closed contract as the block above: a menu-fetch failure falls
-    // through to the outer `catch` (returns `null`), resetting windowAccess/
-    // capabilities/menuAccess together rather than diffing a half-fetched result.
-    const menuAccess = await fetchMenuAccess();
+    // Deliberately NOT the same fail-closed contract as the block above — a menu-fetch
+    // failure must NOT take windowAccess/capabilities down with it. Mirrors
+    // `useRoleMenu()`'s own fail-OPEN philosophy for SFListMenu specifically (an
+    // unreachable menu webhook falls back to "don't filter", not "deny everything").
+    // Confirmed live (2026-09-11): the E2E mocked-spec harness (`e2e/tests/helpers/
+    // auth.js`) deliberately `route.abort()`s `/sws/neo/listmenu` to exercise that exact
+    // fallback — lumping this into the outer catch nulled out windowAccess/capabilities
+    // too, breaking every window's WindowAccessGuard across ~40 unrelated mocked specs.
+    let menuAccess = {};
+    try {
+      menuAccess = await fetchMenuAccess();
+    } catch { /* fail open: no menu-only diff signal this cycle, nothing else affected */ }
     return { ...payload, menuAccess };
   } catch {
     return null;

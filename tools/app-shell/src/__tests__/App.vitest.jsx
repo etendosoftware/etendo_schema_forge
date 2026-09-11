@@ -305,24 +305,30 @@ describe('fetchWindowAccess', () => {
     expect(result).toBeNull();
   });
 
-  // ETP-5189 — the menu fetch (SFListMenu) is inside the SAME top-level `try` as the
-  // windowaccessmap parsing, so a menu-fetch failure must fail the WHOLE call closed
-  // (return `null`), not return a partial `{ ...payload, menuAccess: {} }` result — that
-  // would silently reset windowAccess/capabilities/menuAccess together, per the existing
-  // fail-closed contract for a SFWindowAccessMap failure.
-  it('fails closed (null) — not a partial result — when the menu fetch (SFListMenu) itself fails', async () => {
+  // ETP-5189 — the menu fetch (SFListMenu) is wrapped in its OWN try/catch, decoupled
+  // from the windowaccessmap parsing above — a menu-fetch failure fails OPEN for
+  // `menuAccess` alone (falls back to `{}`), leaving `windowAccess`/`capabilities` from
+  // the already-successful SFWindowAccessMap fetch untouched. This mirrors
+  // `useRoleMenu()`'s own fail-open philosophy for SFListMenu specifically (an
+  // unreachable menu webhook means "don't filter", not "deny everything"). Confirmed
+  // live: the E2E mocked-spec harness (`e2e/tests/helpers/auth.js`) deliberately
+  // `route.abort()`s `/sws/neo/listmenu` to exercise this exact fallback — an earlier
+  // version of `fetchWindowAccess` lumped the menu fetch into the outer catch, which
+  // nulled out `windowAccess`/`capabilities` too and broke every window's
+  // WindowAccessGuard across ~40 unrelated mocked specs.
+  it('keeps windowAccess/capabilities and falls back to an empty menuAccess when the menu fetch (SFListMenu) itself fails', async () => {
     stubFetch(jsonResponse(PAYLOAD), menuTextResponse('<!doctype html><html><body>App</body></html>'));
     const result = await fetchWindowAccess({ token: 'tok' });
-    expect(result).toBeNull();
+    expect(result).toEqual({ ...PAYLOAD, menuAccess: {} });
   });
 
-  it('fails closed (null) when the menu fetch (SFListMenu) rejects outright', async () => {
+  it('keeps windowAccess/capabilities and falls back to an empty menuAccess when the menu fetch (SFListMenu) rejects outright', async () => {
     vi.stubGlobal('fetch', vi.fn((url) => (
       String(url).includes('/listmenu')
         ? Promise.reject(new Error('network down'))
         : Promise.resolve(jsonResponse(PAYLOAD))
     )));
     const result = await fetchWindowAccess({ token: 'tok' });
-    expect(result).toBeNull();
+    expect(result).toEqual({ ...PAYLOAD, menuAccess: {} });
   });
 });
