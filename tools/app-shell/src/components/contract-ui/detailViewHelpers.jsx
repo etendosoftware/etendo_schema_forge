@@ -830,8 +830,23 @@ export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
     children: hook.children,
     // ETP-4999 — matches `topbarExtra`'s own `onRefresh` exactly (DetailView.jsx),
     // so an `extraActions` entry can refresh the record after a side-effecting
-    // action (e.g. resend-invitation) the same way a `topbarExtra` component can.
-    onRefresh: () => hook.fetchById?.(data?.id),
+    // action (e.g. resend-invitation, admin promote/demote) the same way a
+    // `topbarExtra` component can.
+    // ETP-5290 — `{ force: true }` is REQUIRED, not optional, here: without it
+    // `fetchById` serves the pre-mutation record straight out of the in-memory
+    // cache for up to `staleTime` (30s) — or indefinitely, if nothing else reads
+    // this id in the meantime — so a just-completed action's toast fires but the
+    // chip/subtab/button the user is looking at never updates until a full page
+    // reload starts with an empty cache. Every sibling `onRefresh` in
+    // DetailView.jsx itself already passes `force: true`; this was the one call
+    // site that didn't. `hook.refresh?.()` additionally force-reloads the LIST
+    // (mirrors `handleProcessSuccess`'s `fetchById(...); refresh();` pattern in
+    // useEntity.js) so the grid row reflects the change too, not just the open
+    // detail form.
+    onRefresh: () => {
+      hook.fetchById?.(data?.id, { force: true });
+      hook.refresh?.();
+    },
   }) : extraActions).map((action, i) => (
       action.visible !== false && (
           <Button
