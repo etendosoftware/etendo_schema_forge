@@ -1318,6 +1318,18 @@ describe('useEntity helpers', () => {
       expect(setIsSaving).toHaveBeenCalledWith(false);
       expect(toast.error).toHaveBeenCalledWith('websiteInsecureUrl');
     });
+
+    it('reuses/replaces an existing toast id when one is supplied (ETP-4542)', () => {
+      const ui = (k, p) => (p ? `${k}:${JSON.stringify(p)}` : k);
+      const setSaveError = vi.fn();
+      const setIsSaving = vi.fn();
+      toast.error.mockClear();
+
+      const result = reportInvalidFormatField('phoneInvalid', ui, setSaveError, setIsSaving, 'toast-7', { field: 'phone' });
+
+      expect(result).toBeNull();
+      expect(toast.error).toHaveBeenCalledWith('phoneInvalid:{"field":"phone"}', { id: 'toast-7' });
+    });
   });
 
   describe('getInvalidWebsiteFields', () => {

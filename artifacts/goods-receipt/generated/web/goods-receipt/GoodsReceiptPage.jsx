@@ -43,7 +43,10 @@ const draftMode = {
   "enabled": true,
   "processField": "documentAction",
   "processValue": "CO",
-  "label": "Confirmar"
+  "label": "Confirmar",
+  "keepSaveWhenCompletedFields": [
+    "orderReference"
+  ]
 };
 // @sf-generated-end draftMode:goodsReceipt
 

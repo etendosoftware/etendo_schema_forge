@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import LocationModalField from '@/components/contract-ui/LocationModalField.jsx';
 import PrefixedInput from '@/components/contract-ui/PrefixedInput.jsx';
 import { getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
+import { getTaxIdError } from '@/lib/taxIdValidation.js';
 import { filterPhoneCharacters } from '@/components/contract-ui/contactsFieldValidation.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useOrganizationData } from './useOrganizationData.js';
@@ -78,6 +79,19 @@ function getMissingRequiredFields(form) {
 // page hand-rolling that reconstruction itself. Checked in the same order
 // useEntity.js checks them (email, website, phone), stopping at the first failure —
 // one toast, not a stack of them, same UX as Contacts.
+// ETP-5190 — the NIF is validated apart from the three optional contact fields above, for two
+// reasons: it is REQUIRED on this window (so it is already in getMissingRequiredFields), and it
+// is one of only two places a tenant sets its fiscal identifier, which makes a wrong value
+// expensive — it surfaces as a failure to invoice, weeks later. It therefore gets the inline
+// FieldError treatment the required checks get, not just a toast.
+//
+// The same rules run server-side in `SpanishTaxIdValidator` (Etendo GO), which is the binding
+// check; this is the one that answers before the round trip. Nothing in classic Etendo
+// validates AD_OrgInfo.TaxID at all.
+function getTaxIdErrorKey(form) {
+  return getTaxIdError(form.taxID);
+}
+
 const EMAIL_FIELD_DESCRIPTOR = { key: 'email' };
 const WEBSITE_FIELD_DESCRIPTOR = { key: 'web', inputPrefix: 'https://' };
 const PHONE_FIELD_DESCRIPTOR = { key: 'phone' };
@@ -213,6 +227,12 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
     // useEntity.js), reused directly rather than duplicated. Toast-only, no inline
     // FieldError, matching Contacts' UX exactly (unlike BUG-1's required-field errors,
     // which do get an inline message under the field).
+    const taxIdErrorKey = getTaxIdErrorKey(form);
+    if (taxIdErrorKey) {
+      setFieldErrors({ taxID: ui(taxIdErrorKey) });
+      toast.error(ui(taxIdErrorKey));
+      return;
+    }
     const formatErrorKey = getInvalidFormatErrorKey(form);
     if (formatErrorKey) {
       toast.error(ui(formatErrorKey));
