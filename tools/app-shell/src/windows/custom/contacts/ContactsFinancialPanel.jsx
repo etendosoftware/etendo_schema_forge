@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Minus, Plus } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { useContactsCacheInvalidation } from './contactsCacheInvalidation';
 import BillingPreferencesForm from './BillingPreferencesForm';
 import FiscalDefaultsSection from './FiscalDefaultsSection';
 import ContactsSummaryWidget from './ContactsSummaryWidget';
@@ -112,6 +113,7 @@ function normalizeCreditTaxValue(fieldKey, value) {
 
 export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalogs, api, editing, onChange }) {
   const ui = useUI();
+  const { invalidateBusinessPartner, invalidateFinanceKpis } = useContactsCacheInvalidation();
   const apiFetch = useApiFetch(apiBaseUrl);
   const [creditTaxDraft, setCreditTaxDraft] = useState({});
   const [savingField, setSavingField] = useState(null);
@@ -198,11 +200,16 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
       if (saved && typeof onChange === 'function') {
         onChange(fieldKey, finalValue);
       }
+      // Credit-limit / tax-id change affects the partner record and finance KPIs.
+      invalidateBusinessPartner();
+      invalidateFinanceKpis();
+      // `true` is what lets the write queue replay a value committed mid-flight; anything falsy
+      // drops it (see the refusal path above, which returns `false` deliberately).
       return true;
     } finally {
       setSavingField(null);
     }
-  }, [apiFetch, onChange]);
+  }, [apiFetch, onChange, invalidateBusinessPartner, invalidateFinanceKpis]);
 
   /**
    * Serialises per BUSINESS PARTNER, not per field (ETP-5255).
