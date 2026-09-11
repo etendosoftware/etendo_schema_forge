@@ -322,6 +322,29 @@ function matchInsufficientStockProcess(msg) {
   return { products, details };
 }
 
+// GoodsMovementProcessGuard.java (com.etendoerp.go — ETP-5037), `ETGO_ZeroOrNegativeQtyProcess`
+// AD_MESSAGE — raised when "Procesar" would complete a Goods Movement with a line whose quantity
+// is zero or negative (mirrors classic core's M_MOVEMENT_POST condition: only blocks when the
+// source or destination locator disallows overissue). Before this guard existed, a zero/negative
+// line fell through to classic core's own check, which raises `GoodsMovementsWithNegativeQty`
+// naming only the raw line number (QA finding, Emilio Polliotti) — this message names the
+// product(s) instead, same convention as matchInsufficientStockProcess above.
+const ZERO_OR_NEGATIVE_QTY_PROCESS_PREFIX = 'This movement cannot be processed: the line(s) of ';
+const ZERO_OR_NEGATIVE_QTY_PROCESS_SUFFIX = ' have a zero or negative quantity.';
+
+function matchZeroOrNegativeQtyProcess(msg) {
+  if (!msg.startsWith(ZERO_OR_NEGATIVE_QTY_PROCESS_PREFIX)
+      || !msg.endsWith(ZERO_OR_NEGATIVE_QTY_PROCESS_SUFFIX)) {
+    return null;
+  }
+  const products = msg.slice(
+    ZERO_OR_NEGATIVE_QTY_PROCESS_PREFIX.length,
+    -ZERO_OR_NEGATIVE_QTY_PROCESS_SUFFIX.length,
+  );
+  if (!products) return null;
+  return { products };
+}
+
 // CreateDraftInvoiceHandler.java:606 (com.etendoerp.go) — "Order not found: " +
 // orderId. Fixed English prefix + dynamic order id appended, no closing delimiter
 // (ETP-4831 case 4, family B). Same plain-string-slicing rationale as
@@ -655,6 +678,7 @@ const PARAMETERIZED_MATCHERS = [
   [matchInvoiceLineAlreadyInvoiced, 'backendError.invoiceLineAlreadyInvoiced'],
   [matchInsufficientStockLine, 'backendError.insufficientStockLine'],
   [matchInsufficientStockProcess, 'backendError.insufficientStockProcess'],
+  [matchZeroOrNegativeQtyProcess, 'backendError.zeroOrNegativeQtyProcess'],
   [matchOrderNotFound, 'backendError.orderNotFound'],
   [matchShipmentNotFound, 'backendError.shipmentNotFound'],
   [matchAccountAlreadyExists, 'backendError.accountAlreadyExists'],
