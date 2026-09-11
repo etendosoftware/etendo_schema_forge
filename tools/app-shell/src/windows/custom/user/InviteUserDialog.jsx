@@ -15,14 +15,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog.jsx';
 
-function invitationErrorMessage(ui, code, message) {
+function invitationErrorMessage(ui, code) {
   const messages = {
     USER_ALREADY_MEMBER: 'inviteUserAlreadyMember',
     INVITED_USER_NOT_FOUND: 'inviteUserNotFound',
     INVITED_USER_NO_ROLE: 'inviteUserNoRole',
     INVALID_EMAIL_FORMAT: 'onboardingInvalidEmailFormat',
   };
-  return messages[code] ? ui(messages[code]) : message || ui('invitePageInvalidDescription');
+  // ETP-5206 — never surface raw/English backend text (the old `message` fallback) to the
+  // user; an unrecognized code always falls back to the generic, cataloged Spanish string.
+  return messages[code] ? ui(messages[code]) : ui('invitePageInvalidDescription');
 }
 
 /**
@@ -80,7 +82,7 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.error) {
-        setError(invitationErrorMessage(ui, data.code, data.message));
+        setError(invitationErrorMessage(ui, data.code));
         setLoading(false);
         return;
       }
@@ -92,7 +94,8 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
       setLoading(false);
       onSuccess?.(data);
     } catch (err) {
-      setError(err.message || ui('invitePageInvalidDescription'));
+      // ETP-5206 — never surface raw/English backend text to the user.
+      setError(ui('invitePageInvalidDescription'));
       setLoading(false);
     }
   };
