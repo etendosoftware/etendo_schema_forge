@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
-import { ArrowRight, ArrowLeft, FileText, Check, ChevronRight, Pencil } from 'lucide-react';
+import { ArrowRight, ArrowLeft, FileText, Check, ChevronRight, Pencil, AlertTriangle } from 'lucide-react';
 import FiscalStepItem from './FiscalStepItem.jsx';
 import OrgDropdown from './FiscalOrgDropdown.jsx';
 import { Button } from '@/components/ui/button';
@@ -423,7 +423,7 @@ function AppliedScreen({ orgId, orgName, selectedOrg, orgList, onSelectOrg, syst
   );
 }
 
-function DetailScreen({ system, selectedTerritory, createdRecords, orgId, orgName, selectedOrg, orgList, onSelectOrg, apiBaseUrl, error, ui, SYSTEMS, siiRef, tbaiRef, verifactuRef, onBack, onApplied, onComplete }) {
+function DetailScreen({ system, selectedTerritory, createdRecords, orgId, orgName, selectedOrg, orgList, onSelectOrg, apiBaseUrl, error, ui, SYSTEMS, siiRef, tbaiRef, verifactuRef, onBack, onApplied, onComplete, locked }) {
   const sys = SYSTEMS[system];
   const [activeTab, setActiveTab] = useState(0);
 
@@ -433,6 +433,11 @@ function DetailScreen({ system, selectedTerritory, createdRecords, orgId, orgNam
   useSetPageMeta({ title: pageTitle, breadcrumb: `${ui('settings')} / ${ui('fiscal.monitor.nav')} / ${pageTitle}` });
 
   async function handleSaveDetail() {
+    // ETP-5272 follow-up: block the wizard's own detail-editing save too — the
+    // records were already created by the Confirm step (which is itself locked
+    // by `locked` in ConfirmScreen), but this guard covers the case where
+    // forceTestMode flips on mid-session, after the records already exist.
+    if (locked) return;
     if (system === 'SII+TBAI') {
       // One after the other, NOT `Promise.allSettled([...])` (ETP-5112): each save is a PUT
       // carrying the record's `updated` token, and core parses it through a non-thread-safe
@@ -470,7 +475,10 @@ function DetailScreen({ system, selectedTerritory, createdRecords, orgId, orgNam
   const headerActions = (
     <div className="flex items-center gap-2">
       <Button variant="outline" onClick={onBack} data-testid="Button__e9ef3f">{ui('fiscal.cancel')}</Button>
-      <Button onClick={handleSaveDetail} data-testid="Button__e9ef3f">{ui('fiscal.save')}</Button>
+      <Button
+        onClick={handleSaveDetail}
+        disabled={locked}
+        data-testid="OnboardingWizard__detailSaveButton">{ui('fiscal.save')}</Button>
     </div>
   );
 
@@ -498,6 +506,7 @@ function DetailScreen({ system, selectedTerritory, createdRecords, orgId, orgNam
               onSave={() => {}}
               variant={selectedTerritory === 'navarra' ? 'sii-navarra' : 'sii'}
               hideSave
+              locked={locked}
               data-testid="SiiSection__e9ef3f" />
           </div>
         )}
@@ -513,6 +522,7 @@ function DetailScreen({ system, selectedTerritory, createdRecords, orgId, orgNam
               onSave={() => {}}
               hideSave
               hideCert={isSiiTbai}
+              locked={locked}
               data-testid="TbaiSection__e9ef3f" />
           </div>
         )}
@@ -525,6 +535,7 @@ function DetailScreen({ system, selectedTerritory, createdRecords, orgId, orgNam
             orgId={orgId}
             onSave={() => {}}
             hideSave
+            locked={locked}
             data-testid="VerifactuSection__e9ef3f" />
         )}
 
@@ -534,7 +545,7 @@ function DetailScreen({ system, selectedTerritory, createdRecords, orgId, orgNam
   );
 }
 
-function ConfirmScreen({ resolvedSystem, selectedTerritory, alsoNational, volume, lowChoice, manualSystem, saving, error, orgName, selectedOrg, orgList, onSelectOrg, onGoToManual, ui, SYSTEMS, TERRITORIES, goTo, onCreateRecords }) {
+function ConfirmScreen({ resolvedSystem, selectedTerritory, alsoNational, volume, lowChoice, manualSystem, saving, error, orgName, selectedOrg, orgList, onSelectOrg, onGoToManual, ui, SYSTEMS, TERRITORIES, goTo, onCreateRecords, locked }) {
   const sys = SYSTEMS[resolvedSystem];
   const terr = TERRITORIES[selectedTerritory ?? ''];
   const prevStep = manualSystem ? 'manual' : (terr && (terr.askNational || terr.askVolume) ? 'subquestion' : 'territory');
@@ -568,9 +579,9 @@ function ConfirmScreen({ resolvedSystem, selectedTerritory, alsoNational, volume
           </button>
           <Button
             onClick={onCreateRecords}
-            disabled={saving}
+            disabled={saving || locked}
             className="flex items-center gap-1.5"
-            data-testid="Button__e9ef3f">
+            data-testid="OnboardingWizard__confirmActivateButton">
             <Check size={15} data-testid="Check__e9ef3f" />
             {saving ? ui('fiscal.onboarding.confirm.creating') : ui('fiscal.onboarding.confirm.btn')}
           </Button>
@@ -1147,7 +1158,7 @@ function TerritoryScreen({ selectedTerritory, selectedOrg, orgList, onSelectOrg,
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome }) {
+export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, forceTestMode = false }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const { selectedOrg, selectedRole, selectOrg } = useAuth();
@@ -1216,6 +1227,12 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome }) {
   const resolvedSystem = manualSystem ?? resolveSystem({ regime: t?.regime ?? null, alsoNational, volume, lowChoice });
 
   async function createRecords() {
+    // ETP-5272 follow-up: the "Confirm" button is already disabled while
+    // forceTestMode is true, but guard the actual write here too — first-time
+    // activation of a fiscal system is exactly what the forced-test-mode lock
+    // exists to block (no carve-out for onboarding), and this keeps the check
+    // next to the call it protects instead of only in the button's JSX.
+    if (forceTestMode) return;
     const sys = resolvedSystem;
     const terrId = selectedTerritory;
     setSaving(true);
@@ -1247,98 +1264,136 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome }) {
   const onGoToManual = () => { setManualSystem(null); goTo('manual'); };
   const shared = { orgName, selectedOrg, orgList, onSelectOrg: handleSelectOrg, ui, TERRITORIES, SYSTEMS, goTo, onGoToManual };
 
-  if (step === 'skipped') return (
-    <SkippedScreen
-      {...shared}
-      onGoHome={onGoHome}
-      onComplete={onComplete}
-      data-testid="SkippedScreen__e9ef3f" />
-  );
-
-  if (step === 'applied') return (
-    <AppliedScreen
-      {...shared}
-      orgId={orgId}
-      system={system}
-      selectedTerritory={selectedTerritory}
-      alsoNational={alsoNational}
-      volume={volume}
-      lowChoice={lowChoice}
-      createdRecords={createdRecords}
-      apiBaseUrl={apiBaseUrl}
-      apiFetch={apiFetch}
-      locale={locale}
-      onComplete={onComplete}
-      onGoHome={onGoHome}
-      data-testid="AppliedScreen__e9ef3f" />
-  );
-
-  if (step === 'detail') return (
-    <DetailScreen
-      {...shared}
-      orgId={orgId}
-      system={system}
-      selectedTerritory={selectedTerritory}
-      createdRecords={createdRecords}
-      apiBaseUrl={apiBaseUrl}
-      error={error}
-      siiRef={siiRef}
-      tbaiRef={tbaiRef}
-      verifactuRef={verifactuRef}
-      onBack={() => goTo('applied')}
-      onApplied={() => goTo('applied')}
-      onComplete={onComplete}
-      data-testid="DetailScreen__e9ef3f" />
-  );
-
-  if (step === 'confirm') return (
-    <ConfirmScreen
-      {...shared}
-      resolvedSystem={resolvedSystem}
-      selectedTerritory={selectedTerritory}
-      alsoNational={alsoNational}
-      volume={volume}
-      lowChoice={lowChoice}
-      manualSystem={manualSystem}
-      saving={saving}
-      error={error}
-      TERRITORY_GROUPS={TERRITORY_GROUPS}
-      onCreateRecords={createRecords}
-      data-testid="ConfirmScreen__e9ef3f" />
-  );
-
-  if (step === 'manual') return (
-    <ManualScreen
-      {...shared}
-      selectedTerritory={selectedTerritory}
-      manualSystem={manualSystem}
-      TERRITORY_GROUPS={TERRITORY_GROUPS}
-      onSelectTerritory={handleTerritorySelection}
-      onSetManualSystem={setManualSystem}
-      data-testid="ManualScreen__e9ef3f" />
-  );
-
-  if (step === 'subquestion') return (
-    <SubquestionScreen
-      {...shared}
-      t={t}
-      alsoNational={alsoNational}
-      volume={volume}
-      lowChoice={lowChoice}
-      onSetAlsoNational={setAlsoNational}
-      onSetVolume={setVolume}
-      onSetLowChoice={setLowChoice}
-      data-testid="SubquestionScreen__e9ef3f" />
-  );
+  // ETP-5272 follow-up: forced test mode must lock the wizard too — it is the
+  // ONLY path that performs a first-time fiscal-system ACTIVATION (creating the
+  // sii-config/tbai-config/verifactu-config record), which is exactly what
+  // "Fuerza SII/TicketBAI/VeriFactu a modo prueba" exists to block. There is no
+  // carve-out for "first-time setup" in the requirement. `conflict` is a
+  // separate, non-activation data-integrity screen (both a SII/TBAI record AND
+  // a VERI*FACTU record exist for the org) that never reaches this wizard at
+  // all — `detectProfile()` only resolves to 'unconfigured' (which renders
+  // this wizard) when NONE of the three config records exist — so it needs no
+  // handling here.
+  let stepContent;
+  if (step === 'skipped') {
+    stepContent = (
+      <SkippedScreen
+        {...shared}
+        onGoHome={onGoHome}
+        onComplete={onComplete}
+        data-testid="SkippedScreen__e9ef3f" />
+    );
+  } else if (step === 'applied') {
+    stepContent = (
+      <AppliedScreen
+        {...shared}
+        orgId={orgId}
+        system={system}
+        selectedTerritory={selectedTerritory}
+        alsoNational={alsoNational}
+        volume={volume}
+        lowChoice={lowChoice}
+        createdRecords={createdRecords}
+        apiBaseUrl={apiBaseUrl}
+        apiFetch={apiFetch}
+        locale={locale}
+        onComplete={onComplete}
+        onGoHome={onGoHome}
+        data-testid="AppliedScreen__e9ef3f" />
+    );
+  } else if (step === 'detail') {
+    stepContent = (
+      <DetailScreen
+        {...shared}
+        orgId={orgId}
+        system={system}
+        selectedTerritory={selectedTerritory}
+        createdRecords={createdRecords}
+        apiBaseUrl={apiBaseUrl}
+        error={error}
+        siiRef={siiRef}
+        tbaiRef={tbaiRef}
+        verifactuRef={verifactuRef}
+        onBack={() => goTo('applied')}
+        onApplied={() => goTo('applied')}
+        onComplete={onComplete}
+        locked={forceTestMode}
+        data-testid="DetailScreen__e9ef3f" />
+    );
+  } else if (step === 'confirm') {
+    stepContent = (
+      <ConfirmScreen
+        {...shared}
+        resolvedSystem={resolvedSystem}
+        selectedTerritory={selectedTerritory}
+        alsoNational={alsoNational}
+        volume={volume}
+        lowChoice={lowChoice}
+        manualSystem={manualSystem}
+        saving={saving}
+        error={error}
+        TERRITORY_GROUPS={TERRITORY_GROUPS}
+        onCreateRecords={createRecords}
+        locked={forceTestMode}
+        data-testid="ConfirmScreen__e9ef3f" />
+    );
+  } else if (step === 'manual') {
+    stepContent = (
+      <ManualScreen
+        {...shared}
+        selectedTerritory={selectedTerritory}
+        manualSystem={manualSystem}
+        TERRITORY_GROUPS={TERRITORY_GROUPS}
+        onSelectTerritory={handleTerritorySelection}
+        onSetManualSystem={setManualSystem}
+        data-testid="ManualScreen__e9ef3f" />
+    );
+  } else if (step === 'subquestion') {
+    stepContent = (
+      <SubquestionScreen
+        {...shared}
+        t={t}
+        alsoNational={alsoNational}
+        volume={volume}
+        lowChoice={lowChoice}
+        onSetAlsoNational={setAlsoNational}
+        onSetVolume={setVolume}
+        onSetLowChoice={setLowChoice}
+        data-testid="SubquestionScreen__e9ef3f" />
+    );
+  } else {
+    stepContent = (
+      <TerritoryScreen
+        {...shared}
+        selectedTerritory={selectedTerritory}
+        TERRITORY_GROUPS={TERRITORY_GROUPS}
+        onPick={handleTerritorySelection}
+        onGoToManual={() => { setManualSystem(null); goTo('manual'); }}
+        data-testid="TerritoryScreen__e9ef3f" />
+    );
+  }
 
   return (
-    <TerritoryScreen
-      {...shared}
-      selectedTerritory={selectedTerritory}
-      TERRITORY_GROUPS={TERRITORY_GROUPS}
-      onPick={handleTerritorySelection}
-      onGoToManual={() => { setManualSystem(null); goTo('manual'); }}
-      data-testid="TerritoryScreen__e9ef3f" />
+    <div className="relative h-full flex flex-col overflow-hidden">
+      {forceTestMode && (
+        <div className="px-5 pt-4 flex-shrink-0">
+          <div
+            className="rounded-lg border border-[hsl(var(--border-subtle))] bg-muted/40 p-4 text-sm text-[hsl(var(--foreground))]"
+            data-testid="OnboardingWizard__testModeBanner">
+            <div className="flex items-center gap-2 font-medium">
+              <AlertTriangle
+                size={15}
+                className="text-status-warning-foreground"
+                data-testid="OnboardingWizard__testModeBannerIcon" />
+              {ui('fiscal.testModeLock.warning')}
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {stepContent}
+      </div>
+    </div>
   );
 }
 

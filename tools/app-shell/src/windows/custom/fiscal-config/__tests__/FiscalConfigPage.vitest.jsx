@@ -103,7 +103,11 @@ vi.mock('../FiscalConfigDebugPanel.jsx', () => ({
 }));
 
 vi.mock('../OnboardingWizard.jsx', () => ({
-  default: () => <div data-testid="onboarding-wizard" />,
+  default: (props) => (
+    <div
+      data-testid="onboarding-wizard"
+      data-force-test-mode={String(!!props.forceTestMode)} />
+  ),
 }));
 
 vi.mock('../CertExpiryBanner.jsx', () => ({
@@ -1031,7 +1035,12 @@ describe('FiscalConfigPage — forceTestMode (ETP-5272)', () => {
     expect(screen.queryByTestId('FiscalConfigPage__addComplementary')).not.toBeInTheDocument();
   });
 
-  it('does not show the banner in the "unconfigured" (wizard) state, even when forceTestMode is true', () => {
+  it('does not render its own top-level banner in the "unconfigured" (wizard) state — the wizard renders its own', () => {
+    // FiscalConfigPage.testModeBanner belongs to the configured-profile branch;
+    // the 'unconfigured' profile takes the early-return wizard branch instead,
+    // which never mounts that banner markup. This does NOT mean the wizard is
+    // unlocked — see the next test: forceTestMode is forwarded as a prop, and
+    // OnboardingWizard renders its own equivalent banner/lock (ETP-5272 follow-up).
     vi.mocked(useFiscalTestMode).mockReturnValue({ forceTestMode: true });
     vi.mocked(useFiscalConfig).mockReturnValue({
       loading: false,
@@ -1045,5 +1054,35 @@ describe('FiscalConfigPage — forceTestMode (ETP-5272)', () => {
     renderPage();
     expect(screen.getByTestId('onboarding-wizard')).toBeInTheDocument();
     expect(screen.queryByTestId('FiscalConfigPage__testModeBanner')).not.toBeInTheDocument();
+  });
+
+  it('forwards forceTestMode=true to OnboardingWizard in the "unconfigured" state (ETP-5272 follow-up)', () => {
+    vi.mocked(useFiscalTestMode).mockReturnValue({ forceTestMode: true });
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false,
+      error: null,
+      profile: 'unconfigured',
+      siiRecord: null,
+      tbaiRecord: null,
+      verifactuRecord: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    expect(screen.getByTestId('onboarding-wizard')).toHaveAttribute('data-force-test-mode', 'true');
+  });
+
+  it('forwards forceTestMode=false to OnboardingWizard in the "unconfigured" state (no regression)', () => {
+    vi.mocked(useFiscalTestMode).mockReturnValue({ forceTestMode: false });
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false,
+      error: null,
+      profile: 'unconfigured',
+      siiRecord: null,
+      tbaiRecord: null,
+      verifactuRecord: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    expect(screen.getByTestId('onboarding-wizard')).toHaveAttribute('data-force-test-mode', 'false');
   });
 });

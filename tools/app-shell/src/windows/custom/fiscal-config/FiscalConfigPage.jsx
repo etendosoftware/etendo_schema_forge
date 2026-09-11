@@ -228,6 +228,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
             apiBaseUrl={apiBaseUrl}
             onComplete={refetch}
             onGoHome={() => navigate('/dashboard')}
+            forceTestMode={forceTestMode}
             data-testid="OnboardingWizard__310303" />
         </div>
       </>

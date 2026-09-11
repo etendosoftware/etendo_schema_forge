@@ -246,10 +246,31 @@ When `forceTestMode` is `true` the window becomes **read-only**:
 - The certificate upload flow (`CertSection`/`CertModal`) and "Change SIF" (deactivation only,
   never an activation) are intentionally **not** locked — same precedent as the pre-existing
   `isReady` lock, which never blocked "Change SIF" either.
-- The onboarding wizard (`unconfigured` profile) is **not** locked by this check — it is a
-  distinct UI outside the investigated scope; the banner and section locks only apply once a
-  profile is resolved (`sii`, `sii-navarra`, `sii+tbai`, `tbai`, `verifactu`), and never for
-  `conflict`.
+- **The onboarding/setup wizard (`unconfigured` profile) IS locked too** (`OnboardingWizard.jsx`,
+  `forceTestMode` prop forwarded from `FiscalConfigPage`). This closed a scope gap in the initial
+  ETP-5272 delivery: the wizard is the **only** path that performs a first-time fiscal-system
+  **activation** (the `createRecords()` POST to `sii-config`/`tbai-config`/`verifactu-config` on
+  the confirm step) — exactly the action the AD_Preference exists to block, with no carve-out for
+  "first-time setup" in the requirement. Concretely:
+  - The same `OnboardingWizard__testModeBanner` warning (`fiscal.testModeLock.warning`) is shown
+    above every wizard step while `forceTestMode` is true. Territory/system browsing stays usable
+    (nothing is written to the DB by picking options), but:
+  - The confirm screen's activate button (`OnboardingWizard__confirmActivateButton`) is disabled,
+    and `createRecords()` itself also short-circuits on `forceTestMode` (belt-and-suspenders next
+    to the network call, not just in the button's `disabled` prop) — so the wizard can never reach
+    the `detail`/`applied` steps while locked.
+  - The `detail` step's own Save button (`OnboardingWizard__detailSaveButton`) and its
+    `SiiSection`/`TbaiSection`/`VerifactuSection` instances also receive `locked={forceTestMode}`,
+    covering the edge case where the preference flips on mid-session after records already exist.
+  - `conflict` is **not** reached through this wizard at all and needed no locking decision here:
+    `detectProfile()` only resolves to `'unconfigured'` (which renders the wizard) when NONE of
+    the SII/TBAI/Verifactu records exist; `conflict` requires a Verifactu record **plus** a
+    SII-or-TBAI record to already be present (`verifactu && (sii || tbai)`), which is a
+    data-integrity anomaly between two already-created configs, not an activation step. Confirmed
+    separately: the `conflict` branch in `FiscalConfigPage.jsx` renders only a static warning card
+    (`fiscal.conflict.title`/`fiscal.conflict.body`) — no `SiiSection`/`TbaiSection`/
+    `VerifactuSection`, no Save action, nothing to lock — so its exemption from this check remains
+    correct and is unrelated to the wizard fix.
 
 **Fail-open on fetch error:** any network/HTTP/parse failure from `/fiscal-test-mode` leaves
 `forceTestMode` at `false` — the window stays fully usable — but the failure is always
@@ -301,6 +322,7 @@ For `sii+tbai` both records must report production for the row to read "Producci
 12. (Verifactu, `isReady=true`) Confirm the Verifactu section fields are locked for editing but the "Change SIF" button still works — the lock does not block the change.
 13. (ETP-5272) With the AD_Preference "Fuerza SII/TicketBAI/VeriFactu a modo prueba" active, open `/fiscal-config` for a configured org and confirm: the `FiscalConfigPage__testModeBanner` warning appears, all section inputs are disabled, the page Save button is disabled, and "Add SII"/"Add TBAI" is absent from the kebab menu — while "Change SIF" (if present) and certificate upload remain usable. Deactivate the preference and confirm the window returns to its normal editable state.
 14. (ETP-5272) Simulate a `/sws/neo/fiscal-test-mode` fetch failure (network block or 500 in devtools) and confirm the window stays fully editable — fail-open — while a `console.warn` is logged.
+15. (ETP-5272 follow-up — wizard lock) With the AD_Preference active, open `/fiscal-config` for a brand-new org (no SII/TBAI/Verifactu records) and confirm the onboarding wizard shows the `OnboardingWizard__testModeBanner` warning on every step. Pick a territory and reach the confirm screen — the activate button (`OnboardingWizard__confirmActivateButton`) must be disabled, and clicking it must not create any config record (check the DB / network tab). Deactivate the preference and confirm the same wizard flow now creates the record and reaches the detail/applied steps normally.
 
 ## Automated evidence
 
@@ -320,6 +342,10 @@ For `sii+tbai` both records must report production for the row to read "Producci
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/useFiscalTestMode.test.js` / `useFiscalTestMode.vitest.js` — source-guard + behavioral tests: endpoint call, strict `=== true` check, AbortController cleanup, and every fail-open path (non-ok, rejected fetch, malformed json) resolving to `false` with a `console.warn`.
 - `tools/app-shell/src/windows/custom/fiscal-config/FiscalConfigPage.jsx` — ETP-5272: wires `useFiscalTestMode`, renders the `FiscalConfigPage__testModeBanner` warning card, disables the page Save button, hides "Add complementary", and passes `locked={forceTestMode}` to `SiiSection`/`TbaiSection`/`VerifactuSection`.
 - `tools/app-shell/src/windows/custom/fiscal-config/SiiSection.jsx` / `TbaiSection.jsx` / `VerifactuSection.jsx` — ETP-5272: all three now accept a `locked` prop that gates their `set()` updater and disables their input controls; `VerifactuSection` ORs it into its existing `isReady`-derived `isLocked` (same mechanism, not a parallel one).
+- `tools/app-shell/src/windows/custom/fiscal-config/OnboardingWizard.jsx` — ETP-5272 follow-up: accepts a `forceTestMode` prop (default `false`); renders `OnboardingWizard__testModeBanner` above every step; `ConfirmScreen`'s activate button (`OnboardingWizard__confirmActivateButton`) and `createRecords()` itself are gated on it (no first-time record creation while locked); `DetailScreen`'s Save button (`OnboardingWizard__detailSaveButton`) and its `SiiSection`/`TbaiSection`/`VerifactuSection` also receive `locked={forceTestMode}` as defense-in-depth for the case where the preference flips on after the records already exist.
+- `tools/app-shell/src/windows/custom/fiscal-config/FiscalConfigPage.jsx` — ETP-5272 follow-up: forwards `forceTestMode` to `OnboardingWizard` (the `'unconfigured'`-profile early return renders the wizard before the page's own banner/lock branch, so the wizard owns its own equivalent banner/lock rather than inheriting the page's).
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/OnboardingWizard.vitest.jsx` — ETP-5272 follow-up: banner shown/hidden by `forceTestMode`; territory→confirm navigation unaffected (browsing is not blocked); confirm/activate button disabled when locked and enabled when not; `createRecords()` never calls the API when locked; default (`forceTestMode` omitted) behaves as unlocked.
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/FiscalConfigPage.vitest.jsx` — ETP-5272 follow-up: `forceTestMode` is forwarded to `OnboardingWizard` as a prop (both `true` and `false`); the page's own `FiscalConfigPage__testModeBanner` correctly does NOT render in the `'unconfigured'` branch (that banner belongs to the configured-profile branch — the wizard renders its own).
 - DB triggers (com.etendoerp.go SIF modules) — `AEATSII_ONE_ACTIVE_CONFIG_TRG`, `TBAI_ONE_ACTIVE_CONFIG_TRG`, `ETVFAC_ONE_ACTIVE_CONFIG_TRG` enforce one *active* config per org (relaxed from one config per org).
 - `cli/test/fiscal-config.utils.test.js` — 92 regression tests covering profile detection, onboarding payloads, contract-specific ids, Verifactu save guards, SII field mapping, CertModal upload flow, and confirmNif flow (all passing).
 - `tools/app-shell/src/windows/custom/fiscal-config/useFiscalConfig.js` — parallel fetcher hook for the 3 config records; filters inactive trace rows (`activeOrNull`) before `detectProfile` so a "Change SIF" leftover never masks the live config.
