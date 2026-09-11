@@ -9,11 +9,12 @@ import { useCreateContactModal } from '@/components/contract-ui/useCreateContact
 import GoodsShipmentPage from '@generated/goods-shipment/generated/web/goods-shipment/GoodsShipmentPage';
 import GoodsShipmentTable from '@generated/goods-shipment/generated/web/goods-shipment/GoodsShipmentTable';
 import BulkInvoiceFromShipment from '@generated/goods-shipment/custom/BulkInvoiceFromShipment';
-import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
-import { useMenuLabel } from '@/i18n';
+import { useUI, useMenuLabel } from '@/i18n';
 import { useRowEmailModal } from '../shared/useRowEmailModal.jsx';
 import { SEND_VISIBLE_WHEN_CONFIRMED } from '../shared/sendActionVisibility.js';
+import { buildDocumentRowQuickActionsPostMenu } from '../shared/buildDocumentRowQuickActions.js';
 import { useShipmentPdf } from './useShipmentPdf';
 import GoodsShipmentPreview from './GoodsShipmentPreview';
 
@@ -46,6 +47,15 @@ function GoodsShipmentBulkActions(props) {
         buildActions={buildInOutActions}
         labelKey="confirmBulk"
         data-testid="BulkDocumentAction__9851c7" />
+      {/* ETP-5209 — bulk Contabilizar (post), gated to processed & not-yet-posted rows */}
+      <BulkDocumentAction
+        {...props}
+        entity="goodsShipment"
+        actionMode="neoAction"
+        buildActions={buildPostActions}
+        rowFilter={postRowFilter}
+        labelKey="post"
+        data-testid="BulkDocumentActionPost__9851c7" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
@@ -65,6 +75,7 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
 
   const [cloneTargets, setCloneTargets] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const ui = useUI();
   const tMenu = useMenuLabel();
 
   const { requestDelete, deleteDialog } = useRowDelete({
@@ -102,7 +113,13 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
     onClone: (row) => setCloneTargets([row]),
     onEmail: onRowEmail,
     onDelete: requestDelete,
-  }), [navigate, windowName, requestDelete, onRowEmail]);
+    // ETP-5209 — Post reachable from the row-hover kebab, mirroring the same
+    // posted/processed gate as the form-view kebab (GoodsShipmentPage's
+    // decisions-derived menuActions) and the bulk Post action. Extracted to
+    // shared/buildDocumentRowQuickActions.js (rejection-cycle fix — this block was
+    // duplicated verbatim in goods-receipt/index.jsx).
+    ...buildDocumentRowQuickActionsPostMenu({ ui, onRefresh: () => setRefreshKey(k => k + 1) }),
+  }), [navigate, windowName, requestDelete, onRowEmail, ui]);
 
   if (recordId) {
     return (

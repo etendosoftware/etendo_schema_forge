@@ -16,12 +16,21 @@ import { fetchMenuTree, collectAllowedIds } from '@/lib/menuTree.js';
  * - `Set<string>` — resolved successfully; the real allowed-id set.
  */
 export function useRoleMenu() {
-  const { isAuthenticated } = useAuth();
+  const {
+    isAuthenticated, isSessionReady, authRevision, captureSession, isCurrentSession,
+  } = useAuth();
   const [allowedIds, setAllowedIds] = useState(undefined);
 
   useEffect(() => {
     if (!isAuthenticated) {
       setAllowedIds(null);
+      return undefined;
+    }
+    // Authenticated but not yet coherent (a refresh/context change may still be in flight):
+    // keep returning `undefined` rather than fetching against a session that might change
+    // out from under us before the request resolves.
+    if (!isSessionReady) {
+      setAllowedIds(undefined);
       return undefined;
     }
     // Reset to the in-flight state on every new authenticated fetch — otherwise a
@@ -30,17 +39,17 @@ export function useRoleMenu() {
     // branch until this fetch resolves, re-enabling the unfiltered sidebar and
     // reintroducing the flash-of-full-menu-then-shrink this hook exists to avoid.
     setAllowedIds(undefined);
-    let cancelled = false;
+    const snapshot = captureSession();
     fetchMenuTree()
       .then((data) => {
-        if (cancelled) return;
+        if (!isCurrentSession(snapshot)) return;
         setAllowedIds(collectAllowedIds(data?.tree));
       })
       .catch(() => {
-        if (!cancelled) setAllowedIds(null);
+        if (isCurrentSession(snapshot)) setAllowedIds(null);
       });
-    return () => { cancelled = true; };
-  }, [isAuthenticated]);
+    return undefined;
+  }, [isAuthenticated, isSessionReady, authRevision, captureSession, isCurrentSession]);
 
   return allowedIds;
 }

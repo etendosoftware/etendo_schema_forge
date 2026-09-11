@@ -79,6 +79,14 @@ const FIXES_WITH_REPORT = new Set([
   // AND which of the two guards protected it — the canonical "skipped part of its own work" case,
   // same pattern as R19. See cli/test/data-fixes-r34-fin-account-cleared-payment-accounts.test.js.
   '20260908T120000Z__R34-fin-account-cleared-payment-accounts',
+  // R35 (ETP-5245) marks one default price list per trade direction. Its @report is an
+  // AMBIGUITY report rather than a "skipped work" one: @apply always resolves a direction that
+  // has candidates, so what needs a human is the direction with no active list at all, the one
+  // carrying SEVERAL pre-existing defaults (deliberately not de-duplicated — choosing which
+  // deliberate flag to clear is not a data-fix's decision), and the one whose single default sits
+  // among N>1 active lists. Empty — `detail` null — on the healthy GO shape of exactly one active
+  // list and one default per direction.
+  '20260909T120000Z__R35-pricelist-isdefault',
 ]);
 
 async function loadCatalogFiles() {

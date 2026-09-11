@@ -371,7 +371,10 @@ describe('DataTable coverage-oriented paths', () => {
     const debit = screen.getByTestId('inline-add-field-debit');
     fireEvent.change(debit, { target: { value: '99' } });
     fireEvent.blur(debit);
-    await waitFor(() => expect(debit).toHaveValue('50.00'));
+    // ETP-5107 — clamped-to-max display now goes through MaskedAmountInput's
+    // canonical formatCurrency() idle format (Spanish comma-decimal), not the
+    // old period-decimal n.toFixed(2).
+    await waitFor(() => expect(debit).toHaveValue('50,00'));
     fireEvent.keyDown(debit, { key: 'Enter' });
 
     await waitFor(() => expect(onAdd).toHaveBeenCalled());

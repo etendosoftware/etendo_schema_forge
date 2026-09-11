@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { login, navigateTo } from '../helpers/auth.js';
 import { ensureOpenPeriod } from '../helpers/period-helpers.js';
 import { ensureStockOnHand, DEFAULT_WAREHOUSE_NAME } from '../helpers/inventory-helpers.js';
+import { selectCustomerWithAddress } from '../helpers/sales-helpers.js';
 import {
   ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
 } from '../helpers/product-helpers.js';
@@ -344,10 +345,9 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     await bpField.click();
     await slow(page);
 
-    const bpOption = page.locator('[data-testid^="option-businessPartner-"]')
-      .filter({ hasNotText: /crear|create/i }).first();
-    await expect(bpOption).toBeVisible({ timeout: 15_000 });
-    await bpOption.click();
+    // A customer with no C_BPartner_Location leaves partnerAddress empty, which keeps
+    // action-save-draft disabled forever — see selectCustomerWithAddress.
+    await selectCustomerWithAddress(page);
     await slow(page);
 
     await page.waitForResponse(
@@ -859,10 +859,9 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     await bpField.click();
     await slow(page);
 
-    const bpOption = page.locator('[data-testid^="option-businessPartner-"]')
-      .filter({ hasNotText: /crear|create/i }).first();
-    await expect(bpOption).toBeVisible({ timeout: 15_000 });
-    await bpOption.click();
+    // A customer with no C_BPartner_Location leaves partnerAddress empty, which keeps
+    // action-save-draft disabled forever — see selectCustomerWithAddress.
+    await selectCustomerWithAddress(page);
     await slow(page);
 
     await page.waitForResponse(

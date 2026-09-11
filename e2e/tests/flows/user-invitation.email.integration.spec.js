@@ -333,6 +333,16 @@ function invitePathFromLink(inviteLink) {
 async function acceptExistingInvitation(browser, inviteLink, email, password, {
   evidenceStem = 'ETP-4894-existing-account',
   afterDashboard = null,
+  // InviteAcceptancePage's success screen renders a choice once the invitee's
+  // browser session already belongs to another company (`canStayInCurrent`):
+  // 'go-to-app' (default) clicks `action-go-to-app`, which now ENTERS the
+  // just-joined company (`handleEnterCompany`); 'stay-in-current' clicks
+  // `action-stay-in-current`, which navigates home ('/') and leaves the
+  // session in whatever company it was already in. When the invitee has no
+  // other company yet (a fresh account accepting its first-ever invitation),
+  // `action-stay-in-current` does not render at all and this option is moot —
+  // 'go-to-app' is the only choice and remains correct.
+  landingButton = 'go-to-app',
 } = {}) {
   const context = await browser.newContext({ baseURL: process.env.BASE_URL });
   const page = await context.newPage();
@@ -359,7 +369,8 @@ async function acceptExistingInvitation(browser, inviteLink, email, password, {
       path: `../artifacts/delivery-evidence/ETP-4894/${evidenceStem}-joined-company.png`,
       fullPage: true,
     });
-    await page.getByTestId('action-go-to-app').click();
+    const landingTestId = landingButton === 'stay-in-current' ? 'action-stay-in-current' : 'action-go-to-app';
+    await page.getByTestId(landingTestId).click();
     await page.waitForURL('**/dashboard', { timeout: 60_000 });
     await expect(page).toHaveURL(/\/dashboard/);
 
@@ -571,6 +582,13 @@ test.describe('Company User Invitations — email integration E2E — ETP-4894',
       invitee.password,
       {
         evidenceStem: 'ETP-4894-cross-client-org2',
+        // By this point the invitee already belongs to org1 (accepted just above), so
+        // `canStayInCurrent` is true and BOTH landing buttons render. Explicitly pick
+        // 'stay-in-current' so this acceptance exercises the "accepting does not move
+        // your session" contract the `afterDashboard` assertions below rely on — the
+        // default 'go-to-app' would now ENTER org2 instead, which is a different (also
+        // valid) UI path but would falsify the `toContainText(org1Name)` assertion.
+        landingButton: 'stay-in-current',
         afterDashboard: async (page) => {
           // Selected by data-testid, NOT by aria-label: that label is ui('switchCompany'),
           // i.e. the TRANSLATED string ("Cambiar empresa"/"Switch company"), so
@@ -600,10 +618,16 @@ test.describe('Company User Invitations — email integration E2E — ETP-4894',
           };
 
           await openSideMenu();
-          // Accepting an invitation does NOT move the session into the invited company:
-          // InviteAcceptancePage's "go to app" only does navigate('/'), so the session opens
-          // on the user's OWN default client. What this test proves is that both memberships
-          // now exist and are reachable from the switcher — hence org1, then org2, then back.
+          // Accepting an invitation does NOT have to move the session into the invited
+          // company. InviteAcceptancePage's success screen offers a choice once the
+          // invitee already belongs to another company: `action-go-to-app` enters the
+          // just-joined company, while `action-stay-in-current` (only rendered in that
+          // same situation) calls navigate('/') and leaves the session in whatever
+          // company it was already in. The `acceptExistingInvitation` call above for
+          // this org2 invitation explicitly clicked `action-stay-in-current`
+          // (`landingButton: 'stay-in-current'`), so the session should still be in
+          // org1 here. What this test proves is that both memberships now exist and are
+          // reachable from the switcher regardless — hence org1, then org2, then back.
           await expect(companySwitcher).toContainText(org1Name);
           await switchToCompany(org2Name);
           await switchToCompany(org1Name);

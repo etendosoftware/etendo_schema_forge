@@ -52,7 +52,6 @@ const requiredHeaderFields = ['description', 'accountingDate', 'period', 'curren
 const addLineFields = {
   entry: [
     { key: 'accountingCombination', column: 'C_ValidCombination_ID', type: 'selector', label: 'Account', reference: 'ValidCombination', inputMode: 'selector' },
-    { key: 'description', column: 'Description', type: 'textarea', label: 'Description', defaultValue: '@DESCRIPTION1@' },
     { key: 'foreignCurrencyDebit', column: 'AmtSourceDr', type: 'number', required: true, label: 'Debit', labels: {"en_US":"Debit","es_ES":"Débito"}, clearsField: 'foreignCurrencyCredit' },
     { key: 'foreignCurrencyCredit', column: 'AmtSourceCr', type: 'number', required: true, label: 'Credit', labels: {"en_US":"Credit","es_ES":"Crédito"}, clearsField: 'foreignCurrencyDebit' },
     { key: 'openItems', column: 'Open_Items', type: 'checkbox', required: true, label: 'Open Items' },

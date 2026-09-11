@@ -4,10 +4,14 @@ import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import ProductTable from './ProductTable';
 import ProductForm from './ProductForm';
+import CostingTable from './CostingTable';
+import CostingForm from './CostingForm';
 import AccountingTable from './AccountingTable';
 import AccountingForm from './AccountingForm';
+import ProductStockDefaultsWatcher from '@/windows/custom/product/ProductStockDefaultsWatcher';
 import ProductAdditionalInfoPanel from '@/windows/custom/product/ProductAdditionalInfoPanel';
 import { AttachmentsTab } from '@/components/attachments';
+import ProductCostBanner from '@/windows/custom/product/ProductCostBanner';
 import ProductPriceBar from '@/windows/custom/product/ProductPriceBar';
 import catalogs from './mockCatalogs';
 import ProductGallery from '@/windows/custom/product/ProductGallery';
@@ -114,17 +118,13 @@ export const api = {
     "costing": {
       "get": true,
       "getById": true,
-      "post": false,
-      "put": false,
-      "patch": false,
-      "delete": false,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
       "listUrl": "/sws/neo/product/costing",
       "detailUrl": "/sws/neo/product/costing/{id}",
-      "supportedFilters": [],
-      "methods": [
-        "GET",
-        "GETBYID"
-      ]
+      "supportedFilters": []
     },
     "transactionAdjustments": {
       "get": true,
@@ -323,22 +323,6 @@ export const api = {
       "url": "/sws/neo/product/billOfMaterials/selectors/bOMProduct"
     },
     {
-      "entity": "costing",
-      "field": "warehouse",
-      "column": "M_Warehouse_ID",
-      "reference": "Warehouse",
-      "inputMode": "selector",
-      "url": "/sws/neo/product/costing/selectors/warehouse"
-    },
-    {
-      "entity": "costing",
-      "field": "cCurrencyID",
-      "column": "C_Currency_ID",
-      "reference": "Currency",
-      "inputMode": "selector",
-      "url": "/sws/neo/product/costing/selectors/cCurrencyID"
-    },
-    {
       "entity": "transactionAdjustments",
       "field": "cCurrencyID",
       "column": "C_Currency_ID",
@@ -520,12 +504,20 @@ export const api = {
   "labelOverrides": {
     "en_US": {
       "M_Product_Category_ID": "Category",
-      "ProductType": "Type"
+      "ProductType": "Type",
+      "DateFrom": "Start Date",
+      "DateTo": "Expiry Date"
     },
     "es_ES": {
       "M_Product_Category_ID": "Categoría",
       "ProductType": "Tipo",
-      "Value": "Código"
+      "Value": "Código",
+      "DateFrom": "Fecha de inicio",
+      "DateTo": "Fecha de expiración"
+    },
+    "es_AR": {
+      "DateFrom": "Fecha de inicio",
+      "DateTo": "Fecha de expiración"
     }
   }
 };
@@ -558,6 +550,11 @@ export default function ProductPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         secondaryTabs={[
+          { key: 'costing', label: 'Costing', Table: CostingTable, Form: CostingForm, addLineFields: { entry: [
+          { key: 'cost', column: 'Cost', type: 'number', required: true, label: 'Cost' },
+          { key: 'startingDate', column: 'DateFrom', type: 'date', required: true, label: 'Starting Date' },
+          { key: 'endingDate', column: 'DateTo', type: 'date', label: 'Ending Date' },
+          ], derived: [], hidden: [] }, requireSavedRecord: true, tabOrder: 500 },
           { key: 'accounting', label: 'Accounting', Table: AccountingTable, Form: AccountingForm, addLineFields: { entry: [
           { key: 'fixedAsset', column: 'P_Asset_Acct', type: 'selector', label: 'Product Asset', reference: 'ValidCombination', inputMode: 'selector' },
           { key: 'productExpense', column: 'P_Expense_Acct', type: 'selector', required: true, label: 'Product Expense', reference: 'ValidCombination', inputMode: 'selector' },
@@ -565,6 +562,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
           { key: 'productCOGS', column: 'P_Cogs_Acct', type: 'selector', label: 'Product COGS', reference: 'ValidCombination', inputMode: 'selector' },
           ], derived: [], hidden: [] }, requireSavedRecord: true, maxDetailLines: 1, tabOrder: 500, visibleWhenCapability: 'showAccountingFields' },
         ]}
+        formFooter={ProductStockDefaultsWatcher}
         primaryTabs={[
           { key: 'general', label: 'General' },
           { key: 'additionalInfo', label: 'Additional Info', Panel: ProductAdditionalInfoPanel },
@@ -583,6 +581,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
         contentBg="bg-card"
         formCardPadding="px-2"
         customTabs={[{ key: 'pricing', labelKey: 'price', Component: ProductPriceBar, placement: 'tab', tabOrder: 100 }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Product", config: {} } }]}
+        headerContent={(data) => <ProductCostBanner data={data} />}
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
         {...props} window={effectiveWindow}

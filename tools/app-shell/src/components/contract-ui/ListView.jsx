@@ -764,6 +764,30 @@ export function ListView({
     setClearSelectionCounter((c) => c + 1);
   }, []);
 
+  // ETP-4972 QA finding (comment 145559) — changing which records are VISIBLE
+  // must drop any selection made under the previous view, so a destructive
+  // bulk action (e.g. "Eliminar") can never fire against rows the user is no
+  // longer looking at (Gmail/Drive-style behavior). Keyed on `columnFilters`,
+  // `effectiveFilter` (base + subset + quick filters) and `advancedFilterPart`
+  // (funnel) — i.e. everything that changes the visible row set, including
+  // `handleClearAllFilters` and `applyPreset` since both flow through these
+  // same state variables. Deliberately EXCLUDES `hook.sortColumn`/
+  // `hook.sortDirection`: reordering the same rows does not change which
+  // records are on screen, so a sort-only change must not clear selection —
+  // that would be a regression QA did not ask for.
+  // Uses `clearSelection()` (not a bare `setSelectedRows([])`) so DataTable's
+  // own internal checkbox `Set` is reset too via `clearSelectionCounter` —
+  // otherwise rows would stay visually checked while the floating toolbar
+  // disappears (see DataTable's `clearSelectionTrigger` effect).
+  const didInitialSelectionClearRef = useRef(false);
+  useEffect(() => {
+    if (!didInitialSelectionClearRef.current) {
+      didInitialSelectionClearRef.current = true;
+      return;
+    }
+    clearSelection();
+  }, [columnFilters, effectiveFilter, advancedFilterPart, clearSelection]);
+
   // ETP-4656 — shared outcome handler for ANY bulk-delete flow that reports back
   // (succeeded, failed) rows, per the standardized delete UX:
   //   - all succeeded  → refetch (deleted rows disappear) + clear selection.

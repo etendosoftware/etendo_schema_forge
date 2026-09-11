@@ -28,7 +28,9 @@ import { fetchMenuTree } from '@/lib/menuTree.js';
  * request becomes an actual, measured problem.
  */
 export function useViewerRole() {
-  const { isAuthenticated } = useAuth();
+  const {
+    isAuthenticated, isSessionReady, authRevision, captureSession, isCurrentSession,
+  } = useAuth();
   const [viewerRole, setViewerRole] = useState(undefined);
 
   useEffect(() => {
@@ -36,11 +38,18 @@ export function useViewerRole() {
       setViewerRole(null);
       return undefined;
     }
+    // Authenticated but not yet coherent (a refresh/context change may still be in flight):
+    // keep returning `undefined` rather than fetching against a session that might change
+    // out from under us before the request resolves.
+    if (!isSessionReady) {
+      setViewerRole(undefined);
+      return undefined;
+    }
     setViewerRole(undefined);
-    let cancelled = false;
+    const snapshot = captureSession();
     fetchMenuTree()
       .then((data) => {
-        if (cancelled) return;
+        if (!isCurrentSession(snapshot)) return;
         if (data?.viewerRoleId == null) {
           setViewerRole(null);
           return;
@@ -51,10 +60,10 @@ export function useViewerRole() {
         });
       })
       .catch(() => {
-        if (!cancelled) setViewerRole(null);
+        if (isCurrentSession(snapshot)) setViewerRole(null);
       });
-    return () => { cancelled = true; };
-  }, [isAuthenticated]);
+    return undefined;
+  }, [isAuthenticated, isSessionReady, authRevision, captureSession, isCurrentSession]);
 
   return viewerRole;
 }

@@ -11,10 +11,14 @@ import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { resolveRowCurrency } from '@/lib/rowCurrency.js';
+import { useCurrency } from '@/hooks/useCurrency.jsx';
 import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
 import { columnMinWidthPx, columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
-import { CHEVRON_COLUMN_WIDTH } from './InlineLinesPanel.jsx';
+import { CHEVRON_COLUMN_WIDTH, renderBalanceFooterRow, buildLineCellStyle } from './InlineLinesPanel.jsx';
+import { ACTION_SLOT_WIDTH_PX, reservesActionSlot } from '@/lib/linesActionSlot.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DateField } from '@/components/ui/date-field';
 import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
 import { resolveFkNavigation } from './fkNavigation.js';
 import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
@@ -22,6 +26,9 @@ import { getContactsTextFieldError, filterContactsInputValue } from './contactsF
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { parseBackendErrorMessage, translateBackendError } from '@/lib/backendErrors.js';
+import { MaskedAmountInput } from '@/components/forms/fields.jsx';
+import { NUMERIC_FIELD_TYPES, TWO_DECIMAL_FIELD_TYPES } from '@/lib/numericFieldTypes.js';
+import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 
 // Extracts grow flag and basis (px) from a columnFlex() shorthand string.
 function flexSpec(col, idx) {
@@ -285,8 +292,6 @@ function EmptyState({ hasFilter, totalCount }) {
   );
 }
 
-const NUMERIC_FIELD_TYPES = new Set(['number', 'integer', 'decimal', 'quantity', 'amount']);
-
 function isMissingRequired(f, valuesRef, fields = []) {
   if (!f.required) return false;
   // A boolean/checkbox always carries a valid value (false = deliberately
@@ -354,12 +359,6 @@ function resolveNumericInputMode(field, isNumeric) {
     numericInputMode = field.type === 'integer' ? 'numeric' : 'decimal';
   }
   return numericInputMode;
-}
-
-function formatNumericInputValue(isTwoDecimal, rawValue, formatTwoDecimals) {
-  return isTwoDecimal && rawValue !== '' && rawValue != null
-    ? formatTwoDecimals(rawValue)
-    : (rawValue ?? '');
 }
 
 function isLookupSearchField(field) {
@@ -436,12 +435,60 @@ function renderSelectorCell({
   );
 }
 
-// Two-decimal display formatter for amount/price inputs. Pure (only reads `raw`),
-// kept at module scope so it doesn't count against renderInputCell's complexity.
-function formatTwoDecimals(raw) {
-  if (raw == null || raw === '') return '';
-  const n = typeof raw === 'string' ? Number.parseFloat(raw) : raw;
-  return Number.isFinite(n) ? n.toFixed(2) : raw;
+// ETP-5107 — the numeric branch of the inline-add-row cell now renders
+// MaskedAmountInput (digit + single configured-decimal-separator keystroke
+// filtering, live thousands-grouping for amount/price fields); this stays
+// the plain, contacts-aware text branch for everything else. Split out of
+// the old single `renderInputCell` so the numeric/non-numeric paths don't
+// share one over-branched function — see plan §6.3.4 for why the gate must
+// be the field's declared TYPE, never the string's shape.
+function renderNumericInputCell({
+  field, col, values, invalidFields, isFirst, firstInputRef,
+  handleFieldChange, handleKeyDown, fieldLabel,
+}) {
+  // ETP-5107 QA follow-up — `field.type` comes from `addLineFields.entry`
+  // (add-new-line metadata), which for price-like fields is often declared
+  // as generic 'number' rather than 'amount'/'price'. `col` (the matching
+  // entry from the `columns` list, used by the existing-line editor) is
+  // already available here and carries the more specific type — mirror
+  // `renderDerivedAddCell`'s `col.type` check below so a new line's price
+  // input groups live the same way an existing line's does.
+  const isTwoDecimal = TWO_DECIMAL_FIELD_TYPES.has(field.type) || TWO_DECIMAL_FIELD_TYPES.has(col?.type);
+  const numericInputMode = resolveNumericInputMode(field, true);
+  const onBlur = () => {
+    const raw = values[field.key];
+    if (raw === '' || raw == null) {
+      // Empty numeric → restore defaultValue (or min) so the POST body never
+      // omits the field and lets the backend apply a wrong implicit default.
+      if (field.defaultValue !== undefined) handleFieldChange(field.key, String(field.defaultValue));
+      else if (field.min !== undefined) handleFieldChange(field.key, String(field.min));
+      return;
+    }
+    // `raw` here is always the CLEAN value MaskedAmountInput's onChange
+    // reported (digits + at most one '.' + optional leading '-'), never a
+    // grouped display string — plain Number() keeps working unchanged.
+    const num = Number(raw);
+    if (isNaN(num)) return;
+    if (field.max !== undefined && num > field.max) handleFieldChange(field.key, String(field.max));
+    if (field.min !== undefined && num < field.min) handleFieldChange(field.key, String(field.min));
+  };
+  return (
+    <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
+      <MaskedAmountInput
+        bare
+        grouping={isTwoDecimal}
+        inputMode={numericInputMode}
+        inputRef={isFirst ? firstInputRef : undefined}
+        value={values[field.key]}
+        onChange={(raw) => handleFieldChange(field.key, raw)}
+        onBlur={onBlur}
+        onKeyDown={handleKeyDown}
+        placeholder={fieldLabel}
+        required={field.required}
+        className={`w-full h-8 text-sm rounded-md border bg-card px-2 focus:ring-2 focus:outline-none${invalidFields.has(field.key) ? ' border-destructive focus:ring-destructive' : ' border-input focus:ring-primary'}`}
+        data-testid={`inline-add-field-${field.key}`} />
+    </TableCell>
+  );
 }
 
 function renderInputCell({
@@ -449,58 +496,31 @@ function renderInputCell({
   handleFieldChange, handleKeyDown, fieldLabel, specName,
 }) {
   const isNumeric = NUMERIC_FIELD_TYPES.has(field.type);
-  const isTwoDecimal = field.type === 'amount' || field.type === 'price';
-  // Numeric `inputMode` only for numeric fields — integers get the digits-only
-  // on-screen keyboard, the rest the decimal pad (Sonar S3358: flat conditional).
-  const numericInputMode = resolveNumericInputMode(field, isNumeric);
-  const displayValue = formatNumericInputValue(isTwoDecimal, values[field.key], formatTwoDecimals);
-  // Unambiguous partial-number patterns: no two adjacent unbounded `\d*`, so no
-  // super-linear backtracking (ReDoS-safe). Integer -> digits; decimal -> digits
-  // then an optional `.digits` group. Raw strings are kept while typing so
-  // in-progress decimals ("1.") survive; numeric coercion happens at commit.
-  const partialPattern = field.type === 'integer' ? /^-?\d*$/ : /^-?\d*(?:\.\d*)?$/;
+  if (isNumeric) {
+    return renderNumericInputCell({
+      field, col, values, invalidFields, isFirst, firstInputRef, handleFieldChange, handleKeyDown, fieldLabel,
+    });
+  }
   const onChange = (e) => {
     // ETP-5031 — Contacts phone-like fields never even display a disallowed
-    // character (filtered at keystroke time), so this happens before the
-    // partial-number-pattern gate below. No-op for every window/field this
-    // doesn't apply to — filterContactsInputValue returns the raw value unchanged.
+    // character (filtered at keystroke time). No-op for every window/field
+    // this doesn't apply to — filterContactsInputValue returns the raw value
+    // unchanged.
     const raw = filterContactsInputValue(specName, field, e.target.value);
-    if (!isNumeric || raw === '' || partialPattern.test(raw)) {
-      handleFieldChange(field.key, raw);
-    }
+    handleFieldChange(field.key, raw);
   };
-  const onBlur = isNumeric
-    ? () => {
-        const raw = values[field.key];
-        if (raw === '' || raw == null) {
-          // Empty numeric → restore defaultValue (or min) so the POST body never
-          // omits the field and lets the backend apply a wrong implicit default.
-          if (field.defaultValue !== undefined) handleFieldChange(field.key, String(field.defaultValue));
-          else if (field.min !== undefined) handleFieldChange(field.key, String(field.min));
-          return;
-        }
-        const num = Number(raw);
-        if (isNaN(num)) return;
-        if (field.max !== undefined && num > field.max) handleFieldChange(field.key, String(field.max));
-        if (field.min !== undefined && num < field.min) handleFieldChange(field.key, String(field.min));
-      }
-    : undefined;
-  // Always type="text" — numeric type renders spinner buttons; the numeric
-  // on-screen keyboard is preserved via inputMode.
   return (
     <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
       <input
         data-testid={`inline-add-field-${field.key}`}
         ref={isFirst ? firstInputRef : undefined}
         type="text"
-        inputMode={numericInputMode}
-        value={displayValue}
+        value={values[field.key] ?? ''}
         onChange={onChange}
-        onBlur={onBlur}
         onKeyDown={handleKeyDown}
         placeholder={fieldLabel}
         required={field.required}
-        className={`w-full h-8 text-sm rounded-md border bg-card px-2 focus:ring-2 focus:outline-none${isNumeric ? ' text-right tabular-nums' : ''}${invalidFields.has(field.key) ? ' border-destructive focus:ring-destructive' : ' border-input focus:ring-primary'}`}
+        className={`w-full h-8 text-sm rounded-md border bg-card px-2 focus:ring-2 focus:outline-none${invalidFields.has(field.key) ? ' border-destructive focus:ring-destructive' : ' border-input focus:ring-primary'}`}
       />
     </TableCell>
   );
@@ -512,11 +532,32 @@ function renderDerivedAddCell(col, values) {
   const rawVal = values[col.key];
   const identVal = values[col.key + '$_identifier'];
   const isNumericDerived = NUMERIC_FIELD_TYPES.has(col.type);
-  const isTwoDecimalDerived = col.type === 'amount' || col.type === 'price';
+  const isTwoDecimalDerived = TWO_DECIMAL_FIELD_TYPES.has(col.type);
   const displayVal = formatDerivedCellValue(identVal, rawVal, isTwoDecimalDerived);
   return (
     <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className={`text-muted-foreground text-sm${getNumericCellAlignClass(isNumericDerived)}`}>
       {displayOrDash(displayVal)}
+    </TableCell>
+  );
+}
+
+// Date cell of the inline-add row. Split out of renderInlineAddFieldControl so that
+// function stays under the cognitive-complexity budget: the dispatch chain there is long
+// enough that each branch has to earn its place, and this one is self-contained.
+// `h-8` matches the height of the other add-row controls (tailwind-merge wins over
+// DateField's own FIELD_HEIGHT).
+function renderInlineAddDateField(col, field, { values, handleFieldChange, invalidFields }) {
+  return (
+    <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
+      <DateField
+        id={`inline-add-field-${field.key}`}
+        name={field.key}
+        data-testid={`inline-add-field-${field.key}`}
+        value={values[field.key] ?? ''}
+        onChange={(iso) => handleFieldChange(field.key, iso)}
+        required={field.required}
+        className={`h-8${invalidFields.has(field.key) ? ' border-destructive focus-within:ring-destructive' : ''}`}
+      />
     </TableCell>
   );
 }
@@ -618,6 +659,25 @@ function renderInlineAddFieldControl(col, field, isFirst, fieldLabel, {
       handleChange, handleFieldChange, handleKeyDown, isFirst, firstInputRef,
       fieldLabel, selectorContext, token,
     });
+  }
+  // ETP-5245 — date columns get the app's own date picker (calendar icon + masked,
+  // locale-formatted text input), the SAME control EntityForm's `renderDateField`
+  // uses for a form-mode date. Without this branch a `type: 'date'` add-row field
+  // fell through to `renderInputCell` and rendered a bare text box with the field
+  // label as its placeholder: no calendar, no mask, and whatever free text the user
+  // typed went straight into the POST body. `DateField.onChange` always emits
+  // `yyyy-MM-dd` (or '' when cleared) — the exact wire format the rest of the add-row
+  // pipeline already assumes for a date (see normalizeCreationDefaults in
+  // hooks/useEntity.js, "dd-MM-yyyy → yyyy-MM-dd (HTML date input)").
+  //
+  // Two deliberate gaps, both pre-existing for the other rich controls in this
+  // dispatcher: DateField takes no `ref`, so a date column that happens to be the
+  // FIRST add-row field does not receive `firstInputRef` autofocus (same as the
+  // PillToggle branch below); and it takes no `onKeyDown`, so row-level Enter/Escape
+  // does not fire from inside it — DateField binds both itself (Enter commits and
+  // blurs, Escape reverts and blurs).
+  if (field.type === 'date') {
+    return renderInlineAddDateField(col, field, { values, handleFieldChange, invalidFields });
   }
   if (field.type === 'checkbox' || field.type === 'boolean') {
     const checked = values[field.key] === true || values[field.key] === 'Y' || values[field.key] === 'true';
@@ -727,7 +787,7 @@ function applyResolvedIdentifiers(empty, resolvedDefaults, fieldMap) {
   return empty;
 }
 
-const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, onValuesChange, selectable, hasDeleteColumn, hasCloneColumn, hoverRowActions, hoverRowHasDelete, hasQuickActionsColumn, token, apiBaseUrl, entity, specName, selectorContext, seedValues = EMPTY_SEED, resolvedDefaults = EMPTY_SEED, ilpHasNoAmountCol = false, ilpTrailing = false, labelOverrides, convertOptimisticPrice, hasDimensionsPanel = false }, ref) {
+const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, onValuesChange, selectable, hasDeleteColumn, hasCloneColumn, hoverRowActions, hoverRowHasDelete, hasQuickActionsColumn, token, apiBaseUrl, entity, specName, selectorContext, seedValues = EMPTY_SEED, resolvedDefaults = EMPTY_SEED, ilpReservesActionSlot = false, ilpTrailing = false, labelOverrides, convertOptimisticPrice, hasDimensionsPanel = false }, ref) {
   const t = useLabel(labelOverrides);
   const ui = useUI();
   const { locale } = useLocaleSwitch();
@@ -1051,7 +1111,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
         </>
       ))}
       {!ilpTrailing && hasQuickActionsColumn && <TableCell className="w-10" data-testid="TableCell__eb5261" />}
-      {ilpHasNoAmountCol && <TableCell aria-hidden="true" data-testid="TableCell__eb5261" />}
+      {ilpReservesActionSlot && <TableCell aria-hidden="true" data-testid="TableCell__eb5261" />}
       {ilpTrailing && <TableCell aria-hidden="true" data-testid="TableCell__eb5261" />}
     </TableRow>
   );
@@ -1123,8 +1183,15 @@ function resolveNumericFieldValue(f, val) {
     return val;
   }
   const raw = String(val);
-  const parsed = f.type === 'integer' ? Number.parseInt(raw, 10) : Number.parseFloat(raw);
-  return Number.isNaN(parsed) ? val : parsed;
+  if (f.type === 'integer') {
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isNaN(parsed) ? val : parsed;
+  }
+  // ETP-5107 — comma-aware: raw may still be a user-typed string that
+  // bypassed MaskedAmountInput's own masking (e.g. a value set outside the
+  // input, or a pasted value coerced elsewhere upstream).
+  const { value, isValid } = parseLocaleNumber(raw);
+  return isValid && value != null ? value : val;
 }
 
 function coerceFieldValues(valuesRef, fields) {
@@ -1343,7 +1410,7 @@ function getRowClassName({
 // own branch instead of adding flat complexity to the caller.
 function computeActionColsWidthPx({
   selectable, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
-  onCloneRow, quickActionsEnabled, ilpHasNoAmountCol, hasDimensionsPanel,
+  onCloneRow, quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel,
 }) {
   const showHoverActions = !ilpTrailing && hoverRowActions;
   const showHoverDelete = showHoverActions && onDeleteRow;
@@ -1363,7 +1430,7 @@ function computeActionColsWidthPx({
     + oneIfTrue(showLegacyDelete) * 40
     + oneIfTrue(showLegacyClone) * 40
     + oneIfTrue(showQuickActions) * 40
-    + oneIfTrue(ilpHasNoAmountCol) * 160
+    + oneIfTrue(ilpReservesActionSlot) * ACTION_SLOT_WIDTH_PX
     + oneIfTrue(ilpTrailing) * 48;
 }
 
@@ -1385,7 +1452,7 @@ function computeActionColsWidthPx({
 export function renderLinesColgroup({
   hideHeader, selectable, visibleColumns, colFlexSpecs, fixedColsTotalPx, growCount,
   ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow,
-  quickActionsEnabled, ilpHasNoAmountCol, hasDimensionsPanel,
+  quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel,
 }) {
   if (!hideHeader) return null;
   return (
@@ -1406,7 +1473,7 @@ export function renderLinesColgroup({
       {!ilpTrailing && !hoverRowActions && legacyDeleteEnabled && <col style={{ width: 40 }} />}
       {!ilpTrailing && !hoverRowActions && onCloneRow && !quickActionsEnabled && <col style={{ width: 40 }} />}
       {!ilpTrailing && quickActionsEnabled && <col style={{ width: 40 }} />}
-      {ilpHasNoAmountCol && <col style={{ width: 160 }} />}
+      {ilpReservesActionSlot && <col style={{ width: ACTION_SLOT_WIDTH_PX }} />}
       {ilpTrailing && <col style={{ width: 48 }} />}
     </colgroup>
   );
@@ -1845,7 +1912,7 @@ function renderTableRows({
 function renderFooterRow({
   totals, showFooterTotals, selectable, visibleColumns, filteredData,
   hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled,
-  hasDimensionsPanel = false,
+  hasDimensionsPanel = false, sessionCurrency,
 }) {
   if (!totals || !showFooterTotals) return null;
   return (
@@ -1859,8 +1926,13 @@ function renderFooterRow({
             key={col.key}
             className={col.type === 'amount' ? 'tabular-nums text-right font-semibold' : ''}
             data-testid="TableCell__eb5261">
-            {col.type === 'amount'
-              ? formatCurrency(filteredData[0]?.['currency$_identifier'], totals[col.key])
+            {/* ETP-5245 — an `amount` column excluded from the total (summable: false)
+                has no entry in `totals`, so its footer cell stays blank instead of
+                printing a formatted `undefined`. The currency comes from the same
+                resolver the cells use, so the total is labelled with the code the
+                rows actually carry. */}
+            {col.type === 'amount' && totals[col.key] !== undefined
+              ? formatCurrency(resolveRowCurrency(filteredData[0], col, sessionCurrency), totals[col.key])
               : ''}
           </TableCell>
         ))}
@@ -1887,6 +1959,10 @@ function renderFooterRow({
  *  - onDeleteRow: (row) => void — when provided, renders a per-row delete button (trash icon)
  *      that appears on row hover and on keyboard focus. Invoked with the row object; click
  *      propagation is stopped so it does not trigger row selection or navigation.
+ *  - balanceFooter: object | null — presence (not shape) suppresses this table's own generic
+ *      per-amount-column footer-totals row, regardless of showFooterTotals. Set when a caller
+ *      renders a specialized, grid-aligned totals row elsewhere (e.g. InlineLinesPanel's
+ *      balanceFooter row) so the two do not stack (ETP-5210).
  */
 export function DataTable({
   entity,
@@ -1917,6 +1993,16 @@ export function DataTable({
   token,
   apiBaseUrl,
   showFooterTotals = true,
+  // ETP-5210 — when a window has opted into the specialized balanceFooter
+  // totals row (InlineLinesPanel's grid-aligned debit/credit totals), this
+  // same balanceFooter object is also spread into the hidden, add-row-only
+  // DataTable instance rendered alongside it (see GLJournalLineTable). That
+  // instance must NOT also render its own generic per-amount-column footer
+  // totals — doing so produced two stacked totals rows (one €-formatted and
+  // aligned, one unformatted) whenever "Añadir línea" was active. A truthy
+  // balanceFooter always suppresses the generic footer, regardless of the
+  // showFooterTotals prop's own value.
+  balanceFooter = null,
   selectorContext,
   onDataMutated,
   labelOverrides,
@@ -1979,6 +2065,11 @@ export function DataTable({
   const { locale } = useLocaleSwitch();
   // ETP-4520 — capability map for visibleWhenCapability-gated columns (below).
   const capabilities = useCapabilitiesSafe();
+  // ETP-5245 — last-resort currency for `amount` cells whose row carries none of
+  // its own. Safe without a CurrencyProvider (the context defaults to null), and
+  // deliberately the LOWEST-priority source: grids like M_Costing mix currencies
+  // per row, so the row's own value must always win. See lib/rowCurrency.js.
+  const sessionCurrency = useCurrency();
   const dateFormatter = useMemo(
     () => new Intl.DateTimeFormat(locale.replace('_', '-'), { year: 'numeric', month: '2-digit', day: '2-digit' }),
     [locale]
@@ -2086,8 +2177,14 @@ export function DataTable({
     return base;
   }, [columns, hiddenColumns, displayIfControllers, data, addRowValues, capabilities]);
 
+  // Columns that feed the footer total. `amount` is a FORMATTING type (decimals,
+  // separators, symbol, right alignment, numeric filter) — it does not by itself
+  // mean the values are addable. ETP-5245 splits the two: an explicit
+  // `summable: false` (decisions.json) keeps the money formatting and drops the
+  // column from the total. `undefined` MUST keep summing — that is the historical
+  // behavior every existing amount column relies on.
   const amountColumns = useMemo(
-    () => visibleColumns.filter(col => col.type === 'amount'),
+    () => visibleColumns.filter(col => col.type === 'amount' && col.summable !== false),
     [visibleColumns]
   );
 
@@ -2155,6 +2252,7 @@ export function DataTable({
       dateFormatter,
       token,
       apiBaseUrl,
+      sessionCurrency,
     });
     if (!navigateTo) return rendered;
     return (
@@ -2233,10 +2331,18 @@ export function DataTable({
 
   // In inlineEditable add-row mode (hideHeader=true), the DataTable only renders
   // the new-line form while InlineLinesPanel owns the existing rows. InlineLinesPanel
-  // always appends a 48px right spacer, plus a 160px action slot when no amount column
-  // exists. Mirror those here so flexible columns grow to the same width in both.
-  const ilpHasNoAmountCol = hideHeader && linesLayout === 'inlineEditable'
-    && !visibleColumns.some(c => c.type === 'amount');
+  // always appends a 48px right spacer, plus an ACTION_SLOT_WIDTH_PX action slot when
+  // no column can be swapped for the hover action strip. Mirror those here so flexible
+  // columns grow to the same width in both.
+  //
+  // ETP-5245 — this MUST be `reservesActionSlot()`, the same predicate
+  // InlineLinesPanel uses, not a local "is there any amount column?" guess: the panel
+  // only ever swaps the LAST column, so a tab whose amount sits earlier (Producto >
+  // Costo: `cost`, `startingDate`, `endingDate`) reserves the slot there while this
+  // table did not — handing those 160px to `growColumnWidth()`'s grow columns and
+  // pushing every add-row input right of its header.
+  const ilpReservesActionSlot = hideHeader && linesLayout === 'inlineEditable'
+    && reservesActionSlot(visibleColumns);
   const ilpTrailing = hideHeader && linesLayout === 'inlineEditable';
 
   // Precompute the flex specs once so the colgroup below can both build the
@@ -2248,7 +2354,7 @@ export function DataTable({
   const fixedColsBasisPx = colFlexSpecs.filter((s) => s.grow === 0).reduce((sum, s) => sum + s.basis, 0);
   const fixedColsTotalPx = fixedColsBasisPx + computeActionColsWidthPx({
     selectable, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
-    onCloneRow, quickActionsEnabled, ilpHasNoAmountCol, hasDimensionsPanel,
+    onCloneRow, quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel,
   });
 
   return (
@@ -2273,7 +2379,7 @@ export function DataTable({
           {renderLinesColgroup({
             hideHeader, selectable, visibleColumns, colFlexSpecs, fixedColsTotalPx, growCount,
             ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow,
-            quickActionsEnabled, ilpHasNoAmountCol, hasDimensionsPanel,
+            quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel,
           })}
           <TableHeader
             className={linesLayout === 'inlineEditable' ? 'sticky top-0 z-20 bg-card' : ''}
@@ -2341,7 +2447,7 @@ export function DataTable({
                 entity={entity}
                 specName={specName}
                 selectorContext={selectorContext}
-                ilpHasNoAmountCol={ilpHasNoAmountCol}
+                ilpReservesActionSlot={ilpReservesActionSlot}
                 ilpTrailing={ilpTrailing}
                 labelOverrides={labelOverrides}
                 hasDimensionsPanel={hasDimensionsPanel}
@@ -2349,9 +2455,9 @@ export function DataTable({
             )}
           </TableBody>
           {renderFooterRow({
-            totals, showFooterTotals, selectable, visibleColumns, filteredData,
+            totals, showFooterTotals: showFooterTotals && !balanceFooter, selectable, visibleColumns, filteredData,
             hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled,
-            hasDimensionsPanel,
+            hasDimensionsPanel, sessionCurrency,
           })}
         </Table>
       </div>
@@ -2360,6 +2466,22 @@ export function DataTable({
           {ui('inlineAddHint')}
         </p>
       )}
+      {/* ETP-5210 follow-up — this DataTable instance is InlineLinesPanel's
+          hidden add-row-only companion table (hideHeader + hideDataRows, see
+          the generated *LineTable wrapper's `addRow?.active` branch). While
+          that add-row form is showing, InlineLinesPanel suppresses its own
+          balanceFooter row (its `lineFormActive` prop, set from the very same
+          addRow.active value in DetailView.jsx) so it renders here instead —
+          always AFTER the add-row form (this element sits below it), never
+          between the saved lines and it. Reuses InlineLinesPanel's exact
+          renderer + cell typography so the two never drift in alignment. */}
+      {hideDataRows && addRow?.active && balanceFooter && renderBalanceFooterRow({
+        balanceFooter,
+        visibleColumns,
+        hasDimensionsPanel,
+        reserveActionSlot: ilpReservesActionSlot,
+        cellStyle: buildLineCellStyle(),
+      })}
     </div>
   );
 }
