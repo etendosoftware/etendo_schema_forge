@@ -56,6 +56,7 @@ Observed reactive behavior:
 - **Currency (ETP-4028)**: header field `etgoCurrency` (`M_InOut.EM_Etgo_Currency_ID`, mandatory). Defaults to the organization's currency (`defaultExpr: "@C_Currency_ID@"`), editable while the receipt is in draft, and becomes read-only once the receipt is processed (`readOnlyLogic: "@Processed@='Y'"`). Changing the currency after lines already exist does **not** recalculate those existing lines' prices — only new lines are affected. A receipt created from a purchase order inherits that order's currency; return receipts inherit the currency of the original receipt being returned. As with Goods Shipment, no total/amount conversion display was implemented — `M_InOutLine` has no monetary columns, so there is no reliable receipt "total" to convert (scoped out of ETP-4028, open question left on the ticket).
 - Currency filter on line import (ETP-4028): the receipt's own `etgoCurrency` value determines which source documents appear in **Import from Purchase Order** / **Import from Purchase Invoice**. Each modal self-fetches the current receipt header to read its currency and filters candidates to matching-currency documents only, showing a dedicated empty-state message (`noPurchaseOrdersMatchReceiptCurrency` / `noPurchaseInvoicesMatchReceiptCurrency`) when nothing matches.
 - Invoice creation from a completed receipt (via `ReceiptInvoicePreview`, action `createPurchaseInvoice`) now presents the same `CreateInvoiceConfirmModal` price-list picker used by Goods Shipment: Currency shown read-only (inherited from the receipt), Tarifa (price list) required and user-selectable. `CreatePurchaseInvoiceHandler.java` applies the chosen `priceListId` to the invoice (both the linked-PO path and the no-PO fallback path, which otherwise defaults to the vendor's purchase price list) before invoice lines are priced.
+- **`orderReference` (`M_InOut.POReference`, "Nº documento") — editable and saveable regardless of document status (ETP-4839).** See the dedicated section below.
 
 No current evidence shows:
 
@@ -74,6 +75,7 @@ Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears 
 - The contract includes line-level fields such as operative quantity, operative UOM, storage bin defaulting, and additional accounting dimensions, but the custom receipt view intentionally hides most of them. If users are expected to review or adjust those values during receipt execution, that expectation is not clearly supported by the current visible UI.
 - Related documents are available through custom code even though the contract does not advertise `relatedDocuments: true`. That means the linkage is real in the current SPA, but it is a customization-specific behavior rather than a generic contract guarantee.
 - There is no dedicated automated UI test proving the receipt confirmation flow, the import flow, or the received-line behavior end to end.
+- **ETP-4839:** no automated regression test yet proves `orderReference` stays editable/saveable on a Completed receipt, that "Confirmar" never reappears once completed, or that "Guardar" correctly disables when a non-allowlisted field is dirty alongside it (`draftMode.keepSaveWhenCompletedFields`). See the dedicated section above.
 
 ## Manual verification
 
@@ -95,6 +97,7 @@ Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears 
 16. On a draft receipt with existing lines, change Currency and add a new line; confirm existing lines are unaffected.
 17. On a receipt with a non-default Currency, open **Import from Purchase Order** / **Import from Purchase Invoice** and confirm only matching-currency source documents are listed, with a dedicated empty-state message when none match.
 18. From a completed receipt's preview, use **Create Invoice** and confirm the popup shows Currency read-only (inherited) and a required Tarifa selector; confirm the generated invoice's lines price off the selected price list.
+19. **ETP-4839:** open a Completed (`DocStatus='CO'`) receipt and confirm: the "Confirmar" button is **not** rendered; the "Nº documento" (`orderReference`) input is enabled (not disabled) while every other principal field (Warehouse, Contacto, Fecha de movimiento, etc.) remains disabled as before; "Guardar" is visible and enabled while only `orderReference` is dirty, and editing+saving it persists the change without reactivating the receipt; then edit `orderReference` together with another field (e.g. Description) and confirm "Guardar" becomes disabled with an explanatory tooltip instead of silently saving a subset.
 
 ## Automated evidence
 
@@ -127,6 +130,100 @@ Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears 
 - **ETP-5178 — Free-typing quantity field in import modals**: the shared `tools/app-shell/src/components/contract-ui/ImportLinesModal.jsx` per-line quantity input (used here by `ImportFromPurchaseOrderModal.jsx` / `ImportFromPurchaseInvoiceModal.jsx`) no longer clamps the value on every keystroke — typing, select-all, delete, and decimal entry all work freely. Range/validity (numeric, non-zero, magnitude ≤ the line's available quantity, i.e. the modal-calculated remaining-to-receive amount described above) is checked only on `onBlur`: an invalid value reverts to the last committed value and shows a `toast.error`, either `qtyMaxAllowed` ("The maximum allowed is {max}" / "El máximo permitido es {max}") when it exceeds the available quantity, or `qtyMustBePositive` ("The quantity must be greater than 0" / "La cantidad debe ser mayor a 0") for zero/negative/empty/non-numeric input. Fixed once in the shared component; applies identically across sales-invoice, purchase-invoice, and goods-shipment.
 - **ETP-4028 — Price-list picker at invoice time**: `GoodsReceiptActions.jsx` wires the shared `CreateInvoiceConfirmModal` (`showPriceListPicker`, `isSOTrx={false}`) and forwards `priceListId` to the `createPurchaseInvoice` endpoint. `CreatePurchaseInvoiceHandler.java` gained `applyPriceListOverride`/`resolvePriceListOverride` helpers, applied in the linked-PO path (before `createInvoiceLinesFromDocumentLines`) and threaded through the no-PO fallback (`createFromReceiptNoPo`, now 3-arg, with a backward-compatible 2-arg overload), where it takes precedence over the vendor's default purchase price list when provided.
 - **ETP-4706 QA follow-up — posting cost-message fallback**: core Etendo can return `InvalidCostWhichProduct` as the raw English text `There is no cost defined for the product: @Product@ on @Date@` with unresolved placeholders. The SPA maps that exact backend literal through `tools/app-shell/src/lib/backendErrors.js` to the existing user-facing `backendError.costNotCalculated` message, so Spanish users see the friendly retry guidance instead of costing-rule internals. The same follow-up retires the old R18 Average-cost data-fix and replaces it with a Standard-cost anchor data-fix for current Etendo Go tenants.
+
+## `orderReference` — editable and saveable regardless of completion, "Confirmar" never reappears (ETP-4839)
+
+### Problem
+
+`orderReference` (DB column `POReference`, labeled "Nº documento" in the UI) is the **vendor's own
+document reference** — not the internal AD document number — and users occasionally need to correct
+it after the receipt has already been confirmed. Before this fix, `artifacts/goods-receipt/decisions.json`
+carried an explicit field-level override:
+
+```json
+"orderReference": { "readOnlyLogic": "@Processed@='Y'" }
+```
+
+This locked the field hard once the receipt reached `DocStatus='CO'` — no amount of re-editing was
+possible without reactivating the document, which was the exact symptom reported in ETP-4839: *"el
+campo N° documento queda directamente bloqueado en solo lectura"*. On top of that, even a field
+without its own lock would have hit a second, window-level barrier: the generic `getDraftModeCompleted()`
+default hides the WHOLE Save/Confirm button pair once the document is completed, so there was no Save
+action available on a completed receipt at all, regardless of any single field's own state.
+
+### Fix
+
+Two changes, both in `artifacts/goods-receipt/decisions.json` (plus the matching custom-wrapper
+override — see below), nothing in `contract.json` or generated output directly:
+
+1. **`entities.header.fields.orderReference.readOnlyLogic`**: `"@Processed@='Y'"` → `null`. The raw
+   AD metadata for `M_InOut.POReference` (`schema-raw.json`) carries no `readOnlyLogic` of its own,
+   so the field now has none at all — always editable, matching `purchase-invoice`'s intent for its
+   own `orderReference` field (see `docs/generated-custom-windows/purchase-invoice.md`). No
+   SII-equivalent business gate exists for Goods Receipt today, so no replacement lock was added.
+2. **`window.draftMode.keepSaveWhenCompletedFields`**: `["orderReference"]`. This is a per-field
+   allowlist (see `docs/decisions-reference.md`'s `keepSaveWhenCompletedFields` entry): once the
+   receipt is Completed, the plain "Guardar" button stays visible — but it is only **enabled** while
+   every currently-dirty header field is in this list; if the user has any other field dirty at the
+   same time, Save is disabled with an explanatory tooltip (fails closed, never a silent partial or
+   full save). The "Confirmar" ("Save & Confirm") button, which is the one that actually resends
+   `documentAction=CO`, is **never** re-exposed once the receipt is Completed, regardless of this
+   list — that decision is unconditional and window-independent (see next section).
+
+**Two places needed this config, not one.** `tools/app-shell/src/windows/custom/goods-receipt/index.jsx`
+passes its own hand-built `draftMode` object straight to the generated app, which shadows whatever
+`decisions.json`/`contract.json` would otherwise produce — the same pattern already known from
+`purchase-invoice/index.jsx`. Missing this the first time meant the `decisions.json` fix alone had zero
+effect in the running app (caught in manual browser testing, `make dev`, before this was closed) — the
+custom wrapper's literal `draftMode` object needed the identical
+`keepSaveWhenCompletedFields: ['orderReference']` key added alongside its existing `onConfirm` callback:
+
+```js
+draftMode={{
+  enabled: true,
+  processField: 'documentAction',
+  processValue: 'CO',
+  label: ui('confirm'),
+  keepSaveWhenCompletedFields: ['orderReference'],
+  onConfirm: () => window.dispatchEvent(new CustomEvent('goods-receipt:open-confirm-modal')),
+}}
+```
+`keepSaveWhenCompletedFields` is orthogonal to `onConfirm` — `getDraftModeCompleted()` only reads the
+former, and `onConfirm` is only consulted by the Confirm button's own click handler — so this change
+does not affect the custom confirm-modal flow at all.
+
+**Any window with a hand-built `draftMode` override in its `windows/custom/{window}/index.jsx` needs
+this key applied in BOTH places** (`decisions.json` for the generated fallback, and the custom
+override for what actually renders) — check `git grep -n "draftMode={{" tools/app-shell/src/windows/custom/`
+before assuming a `decisions.json`-only fix is enough.
+
+### Why the design changed from a per-window `completedStatuses` exception to a unified per-field allowlist
+
+An earlier iteration of this fix used `window.draftMode.completedStatuses: ["CL", "RE", "VO"]`
+(excluding `"CO"`) to keep the **entire** Save/Confirm pair visible on a Completed receipt, reasoning
+that `M_INOUT_POST.xml`'s completion branch is gated on `DocStatus='DR'` (confirmed via direct reading
+of the procedure: it only ever assigns `DocStatus='CO'` or `'VO'` to an `M_InOut` record, and a resent
+`documentAction=CO` on an already-`CO` receipt matches no branch and silently no-ops) — unlike
+`C_INVOICE_POST.xml` (Purchase Invoice), whose `AP`/`CO` branch (~line 1169) has no such gate and would
+re-run an unconditional discount-line insertion loop, creating duplicate lines on a resent `CO`.
+
+That made Goods Receipt's backend safe to re-expose "Confirmar" on a Completed document, while Purchase
+Invoice's was not — but the human decided **not** to ship a per-window exception that depends on one
+specific stored procedure staying idempotent forever. The unified design instead never re-exposes
+"Confirmar" on ANY completed document, in ANY window, and solves the "user needs to fix one specific
+field" need with the narrower, always-safe `keepSaveWhenCompletedFields` allowlist — "Guardar" alone
+(a plain field PATCH, `hook.handleSave`, which never sends `processField`/`processValue`) can never
+re-trigger `ProcessInvoiceUtil.process()`/`C_INVOICE_POST`/`M_INOUT_POST` regardless of which stored
+procedure backs the window. `purchase-invoice` uses the exact same mechanism for the exact same field
+(`keepSaveWhenCompletedFields: ["orderReference"]`) — see `docs/generated-custom-windows/purchase-invoice.md`.
+
+### Regression tests
+
+None yet — see Gap assessment below. A future Playwright/Vitest addition should assert: on a Completed
+(`DocStatus='CO'`) receipt, "Confirmar" is never rendered, "Guardar" is visible and enabled while only
+`orderReference` is dirty, "Guardar" becomes disabled (with the `saveBlockedFieldsNotAllowedWhenCompleted`
+tooltip) if any other field is also dirty at the same time, and editing+saving `orderReference` alone
+persists without reactivating the document.
 
 ## Accounting dimension visibility per section — ETP-4529
 
