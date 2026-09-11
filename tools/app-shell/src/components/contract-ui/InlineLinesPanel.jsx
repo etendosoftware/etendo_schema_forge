@@ -723,7 +723,14 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
   // branches above rather than on blur, and `DateField.onChange` always hands back
   // `yyyy-MM-dd` — exactly what `onCommit` already PATCHes for this column type.
   if (col.type === 'date') {
-    return <EditDateCell col={col} value={value} onCommit={onCommit} isInvalid={isInvalid} />;
+    return (
+      <EditDateCell
+        col={col}
+        value={value}
+        onCommit={onCommit}
+        isInvalid={isInvalid}
+        data-testid="EditDateCell__3b7ec2" />
+    );
   }
 
   const isNumeric = NUMERIC_TYPES.has(col.type);
