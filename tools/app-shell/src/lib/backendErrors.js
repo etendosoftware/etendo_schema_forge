@@ -143,16 +143,10 @@ const BACKEND_ERROR_MAP = {
   // string: capShipmentLineOverrides (~L952) and the line-selection loop inside
   // createFromShipments (~L1123). One entry covers both (ETP-4831 case 3).
   'No hay líneas pendientes de facturar en este albarán': 'backendError.noPendingLinesToInvoiceShipment',
-  // CreateShipmentHandler.createShipmentLines (com.etendoerp.go) — hardcoded Spanish
-  // literal, no AD_Message involvement, thrown when an order has zero pending-delivery
-  // lines (ETP-4831 case 4, family A). ETP-5276 moved the throw earlier in the method
-  // (before the header is persisted) but kept the exact string.
+  // CreateShipmentHandler.java:136 (com.etendoerp.go) — hardcoded Spanish literal, no
+  // AD_Message involvement, thrown when an order has zero pending-delivery lines
+  // (ETP-4831 case 4, family A).
   'No hay líneas pendientes de entrega en este pedido': 'backendError.noPendingLinesToDeliverOrder',
-  // CreateGoodsReceiptHandler.createReceiptLines (com.etendoerp.go) — the purchase-side
-  // sibling of the shipment message above, hardcoded in ENGLISH instead of Spanish (an
-  // inconsistency already present before ETP-5276, not introduced by it). Previously
-  // unmapped: the goods-receipt path showed this raw, untranslated backend string.
-  'No pending lines to receive in this purchase order': 'backendError.noPendingLinesToReceiveOrder',
   // CreateInvoiceShipmentHandler.java:200 (com.etendoerp.go) — hardcoded Spanish
   // literal, thrown when an invoice has zero lines with a product (ETP-4831 case 4,
   // family A).
@@ -197,6 +191,14 @@ const BACKEND_ERROR_MAP = {
   'You cannot deactivate your own user account': 'backendError.cannotDeactivateOwnAccount',
   'Cannot deactivate the last active administrator for this client':
     'backendError.cannotDeactivateLastAdmin',
+  // CreateGoodsReceiptHandler.createReceiptLines (com.etendoerp.go, ETP-5276) — the
+  // purchase-side sibling of 'No hay líneas pendientes de entrega en este pedido' above
+  // (backendError.noPendingLinesToDeliverOrder), hardcoded in ENGLISH instead of Spanish
+  // (an inconsistency that predates ETP-5276, not introduced by it). Previously unmapped:
+  // the goods-receipt path showed this raw, untranslated backend string. Kept at the end
+  // of the map rather than next to its sibling to stay clear of the pre-existing
+  // duplicate block Sonar flags across lines ~41-189 of this file.
+  'No pending lines to receive in this purchase order': 'backendError.noPendingLinesToReceiveOrder',
 };
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a
