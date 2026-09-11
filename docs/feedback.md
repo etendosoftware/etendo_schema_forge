@@ -347,6 +347,109 @@ Regression coverage: `tools/app-shell/src/components/contract-ui/__tests__/Detai
 
 **Why it wasn't fixed here:** out of scope for ETP-4609 (that ticket's QA pass found this only as a cross-window regression check while verifying the real fix, and the bug predates ETP-4609). Since the file is currently unreachable from any live window, there is no user-facing impact today.
 
+---
+
+## [2026-09-11] ETP-5273 — Second scope reversal on the same field: independent accounting date, again, but not the same design as before
+
+**Note:** this is not a bug entry — it records a second scope reversal on `accountingDate`, on the
+same field that `docs/feedback.md`'s own `[2026-07-17] ETP-4531` entry above already documents
+once. Read that entry first; this one assumes it. A future reader who only sees "independent
+accounting date, editable, `readOnlyLogic: @Posted@='Y'`" and reaches for the pre-ETP-4531 design
+(the `blockCalloutFieldUpdate` guard) will implement the WRONG thing — see below.
+
+**What changed.** ETP-5273 re-reverts ETP-4531's unification for exactly two windows —
+`sales-invoice` and `purchase-invoice`. `accountingDate` goes back to `visibility: "editable"`,
+`section: "principal"`, `seq: 35`, `readOnlyLogic: "@Posted@='Y'"`. `sales-order`, `purchase-order`,
+`goods-shipment`, and `goods-receipt` are explicitly OUT of this ticket's final scope and keep
+`accountingDate` as `visibility: system`, unified with the document date on every write.
+
+**Why it is a re-revert and not a feature:** the field, the guard pattern, and the design already
+existed once (pre-ETP-4531) and were removed inside a single PR with no separate revert PR — see
+the July entry above for the full commit trail (`c6d0aabc`, `aa009f51`, PR 741/914). There was no
+technical defect in the original implementation; ETP-4531 was a pure product scope call. ETP-5273
+restores editability on product's request to "align the behavior with Classic."
+
+**The scope also moved mid-implementation.** The ticket, as originally read, covered SIX windows:
+`sales-invoice`, `purchase-invoice`, `goods-shipment`, `goods-receipt`, `sales-order`, and
+`purchase-order`. Work started on that basis and produced a real, tested implementation for all
+six — including a restored `blockCalloutFieldUpdate` guard and brand-new `afterCallout()` overrides
+on `AbstractOrderHeaderHandler` for the two order windows, which had never had this guard before.
+Partway through, the ticket's author rewrote the ticket to cover invoices only. **All of the
+order/shipment/receipt work was reverted, not merely abandoned** — `AbstractOrderHeaderHandler`,
+`GoodsReceiptHeaderHandler`, `GoodsShipmentHeaderHandler`, `NeoDefaultsCascadeHelper`,
+`NeoCrudHandler`, and the four windows' `artifacts/` were restored to their pre-task state, and NEO
+was re-pushed so those four windows' `ETGO_SF_FIELD` rows went back to `isreadonly='Y'` /
+`visibility='system'` (verified directly against the DB). If you find any trace of order/shipment
+guard code in a stale branch or worktree, it does not reflect the shipped design — discard it.
+
+**ETP-5273 is a THIRD design, not the same one as before ETP-4531— read this before reaching for
+`blockCalloutFieldUpdate`.** The pre-ETP-4531 implementation kept `documentDate` and
+`accountingDate` fully decoupled in both directions via a guard that stripped the classic AD
+callout cascade. Once ETP-5273's guard was actually restored and tested against the acceptance
+criteria, it turned out to make the field NOT follow the document date at all — the opposite of
+what the ticket's CA/CP-1 asked for ("al crear un documento, la fecha contable toma el mismo valor
+que la fecha del documento" — and implicitly, changing the document date should still visibly move
+the accounting date, matching Classic). The shipped design instead:
+- lets the native classic callout (`SifInvoiceOperationDateCallout` → `SE_Invoice_AccountingDate`
+  on `C_Invoice.DateInvoiced`) run completely unguarded, so `invoiceDate → accountingDate` syncs
+  one-way on every write, exactly like Classic;
+- relies on `NeoHandlerUtils.mirrorAccountingDateOnCreate` — POST-only, and only when the client
+  sent no explicit `accountingDate` — instead of a per-write unconditional mirror, so a manually
+  edited `accountingDate` survives later saves of unrelated header fields.
+
+`blockCalloutFieldUpdate` has zero call sites left in `com.etendoerp.go`; it is not merely dormant,
+it does not exist. See `docs/neo-headless-extensibility.md`'s "Post-hook: Guard a Field Against
+Callout Cross-Updates" section for the up-to-date state of that pattern.
+
+**Frontend bug uncovered along the way, not introduced by this ticket:** once `accountingDate`
+became editable and testable end-to-end on GO, a "field gets permanently stuck" bug surfaced —
+change the invoice date, hand-edit the accounting date, then change the invoice date again: in
+Classic the accounting date keeps following; in GO (before the fix) it stopped moving after the
+manual edit. Root cause: the "protect user-touched fields from callout overwrites" guard added by
+ETP-3836 (`detailViewHelpers.jsx`, `applyCalloutFieldUpdates`) marks any field the user has typed
+into as permanently exempt from later callout updates, and never re-arms it except on a full
+record change. That guard is correct for genuinely independent fields (picking a new business
+partner should not silently overwrite payment terms the user just adjusted), but `accountingDate`
+under ETP-5273 is not an independent field being collaterally touched — it is the declared,
+one-way cascade target of the document date's own callout, which Classic re-applies on every
+change. **Fix:** `isDocumentDateCascadeTarget(key, triggerField, documentDateField)`, a narrow
+exemption keyed off the window's own declared `documentDateField` prop (already threaded through
+`DetailView.jsx`, so no pipeline/generator change was needed). Anyone touching
+`detailViewHelpers.jsx`'s user-touched-field guard in the future should know this exemption exists
+and why — it is easy to mistake for scope creep on the guard rather than a required carve-out for
+one-way cascades declared by the window itself.
+
+`goods-shipment` and `goods-receipt` were deliberately NOT given this same frontend fix, even
+though they have the identical underlying vulnerability if their accounting date is ever made
+visible: neither window declares `window.documentDateField`, so the prop falls back to its default
+(`'orderDate'`, a field that does not exist on either window) and the exemption never activates.
+See the collateral-finding entry immediately below for why this was left alone.
+
+**Two collateral findings — explicitly OUT of scope for ETP-5273, not resolved, flagged for their
+own ticket:**
+1. **Currency conversion is silently disabled on `goods-shipment`/`goods-receipt`.** Both windows
+   fall back to the nonexistent `documentDateField` default described above, which also feeds
+   `DetailView.jsx`'s currency-conversion effect (`hook.selected?.[documentDateField]` is always
+   `undefined` there, so the effect aborts every time). Both windows do have a currency field
+   (`etgoCurrency`), so this is a real, live gap, not theoretical. Declaring
+   `documentDateField: "movementDate"` on these windows would fix both this and the frontend
+   cascade-guard gap above in one move, but doing so was judged out of scope for a fecha ticket —
+   flipping on currency conversion is an unrelated behavior change and deserves its own ticket and
+   its own validation.
+2. **AD drift in `goods-receipt`:** regenerating this window with a fresh extract surfaced a
+   `descriptionOnly` (`IsDescription`) line field absent from the committed `contract.json`. It was
+   excluded from this changeset as out of scope, but the NEO push performed while restoring the
+   revert DID include it, so the local DB now has that field configured while the repo does not.
+   Whoever picks up `goods-receipt` next should regenerate and commit it deliberately to close this
+   gap, rather than being surprised by an untracked NEO/repo mismatch.
+
+**Lesson:** the same field flip-flopped design twice inside four months on the same underlying
+tension — "independent" vs. "unified" accounting date — with no code defect driving either change,
+only a product scope call each time. Before restoring ANY previously-removed guard or mirror
+pattern for a field, re-derive the desired behavior against Classic first (as ETP-5273 ultimately
+did) rather than assuming the last implementation you can find in git history is the target — it
+may be exactly the design the ticket is asking you to move away from.
+
 **Evidence:** `tools/app-shell/src/windows/custom/contacts/__tests__/ContactsTable.vitest.jsx` has a corresponding `it.skip(...)` test (`'keeps HIDDEN_COLS even when the parent forwards its own hiddenColumns=[] (ListView default)'`) that reproduces the clobbering and is skipped rather than deleted, precisely so it stays discoverable.
 
 **If `ContactsTable.jsx` is ever un-deadened (imported/mounted again):** apply the same destructure-and-merge fix used in `ProductCustomTable.jsx` before shipping, and un-skip the test above (or delete both the component and the test if the file is instead removed as confirmed dead code during cleanup).
