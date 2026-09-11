@@ -79,6 +79,11 @@ const FIXES_WITH_REPORT = new Set([
   // AND which of the two guards protected it — the canonical "skipped part of its own work" case,
   // same pattern as R19. See cli/test/data-fixes-r34-fin-account-cleared-payment-accounts.test.js.
   '20260908T120000Z__R34-fin-account-cleared-payment-accounts',
+  // R35 (ETP-5247) backfills/corrects the "Acreedor" C_BP_Group's 5 posting accounts,
+  // resolving each by account VALUE against the tenant's own chart; its @report lists
+  // any of the 5 target account codes that genuinely does not exist in that chart —
+  // same "flag, don't guess" pattern as R19/R28/R31.
+  '20260909T120000Z__R35-acreedor-bp-group-acct-accounts',
 ]);
 
 async function loadCatalogFiles() {
