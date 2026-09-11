@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchEnvironments, loginEnvironment } from '@etendosoftware/etendo-go-core/onboarding/api';
 import { rememberEnvironment } from '@etendosoftware/etendo-go-core/onboarding/state';
-import { useAuth } from '@/auth/AuthContext.jsx';
+import { useAuthOptional } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource.js';
 import { sortEnvironments } from '../lib/environmentPresentation.js';
 
@@ -21,7 +21,14 @@ import { sortEnvironments } from '../lib/environmentPresentation.js';
  * listing them is a GET and carries none.
  */
 export function useEnvironmentSwitch({ enabled = true } = {}) {
-  const { isAuthenticated, csrfToken, clientId } = useAuth();
+  // `useAuthOptional`, not `useAuth`: ETP-5216 mounts InviteAcceptancePage in trees that have
+  // no AuthProvider above them (accepting an invitation is something you do while signed out),
+  // and the strict hook throws there. Reading the session optionally lands on exactly the state
+  // the block comment above describes — not authenticated, so no environments and no switcher.
+  const auth = useAuthOptional();
+  const isAuthenticated = auth?.isAuthenticated ?? false;
+  const csrfToken = auth?.csrfToken ?? null;
+  const clientId = auth?.clientId ?? null;
   const [environments, setEnvironments] = useState([]);
   const [switching, setSwitching] = useState(null);
   // ETP-5190 — additive. `environments` alone cannot tell "still fetching" from "cannot know"

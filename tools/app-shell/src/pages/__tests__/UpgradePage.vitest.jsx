@@ -12,8 +12,13 @@ vi.mock('@/i18n', () => ({
 // ETP-4576 — UpgradePage reaches useEnvironmentSwitch, which now proves the account with
 // `isAuthenticated` off the auth context rather than a token it can read. Nothing here renders
 // an AuthProvider, so the context is mocked instead of wrapping every case.
+// Both accessors, same session: useEnvironmentSwitch reads the optional one (ETP-5216 mounts
+// its callers in trees with no provider), and a mock that declares only the strict one makes
+// every render of this page throw before it can assert anything.
+const UPGRADE_SESSION = { isAuthenticated: true, csrfToken: null, session: null };
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ isAuthenticated: true, csrfToken: null, session: null }),
+  useAuth: () => UPGRADE_SESSION,
+  useAuthOptional: () => UPGRADE_SESSION,
 }));
 
 vi.mock('@/auth/api.js', () => ({

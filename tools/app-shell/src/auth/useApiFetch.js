@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import {
-  createApiFetch, getSessionCsrfToken, useAuthOptional,
+  createApiFetch, getAmbientToken, useAuthOptional,
 } from '@etendosoftware/app-shell-core/auth';
 import { useLogout } from '@/auth/useLogout.js';
 
@@ -23,26 +23,28 @@ import { useLogout } from '@/auth/useLogout.js';
  */
 export function useApiFetch(baseUrl) {
   const auth = useAuthOptional();
-  // ETP-4576 — the CSRF proof, never the credential. createApiFetch puts this argument into
-  // `X-Go-CSRF` on unsafe methods: handing it `auth.token` (or the ambient bearer) sent the
-  // credential out in the proof's header under the bearer scheme, and under the cookie one
-  // put a value that is not the proof where the backend expects it — a 403 on every write.
-  const csrfToken = auth?.csrfToken ?? null;
+  // ETP-4576 x ETP-5195 — this slot is the TOKEN getter, not the CSRF one. It used to be the
+  // proof, and this wrapper kept passing the proof after the core moved the slot: the core then
+  // read a csrfToken (null under bearer) as the session's bearer, found it different from the
+  // live one the ambient session reports, and aborted EVERY request from this hook as belonging
+  // to a superseded session. The proof is no longer injected at all — api.js reads it from
+  // ./sessionCredentials.js, whose single writer is AuthProvider — so under the cookie scheme
+  // this getter simply returns null and the `__Host-` session travels on its own.
+  const token = auth?.token ?? null;
   const logout = useLogout();
   // Depend on WHETHER there is a session, never on the context object's identity: a provider
   // (or a test double) that hands back a fresh object each render would otherwise produce a
   // fresh request function each render, and any effect that lists it as a dependency would
   // re-fire forever.
   const hasSession = auth != null;
+  // ETP-5195's session scope. Passing it is what lets a write that sat in the queue re-read the
+  // bearer when it finally dispatches, instead of going out under the one its render saw.
+  const scope = auth?.apiSessionScope;
 
-  // Falls back to the published store rather than trusting the context alone: a provider
-  // that holds no `csrfToken` (it is populated by the session restore, and a host can mount
-  // one before that settles) would otherwise hand back null and send an unsafe request with
-  // no proof at all — a 403 on the write while every read still succeeds. The context value
-  // still wins when it has one, so a fresher provider value is not lost.
   return useMemo(() => createApiFetch(
     baseUrl,
-    hasSession ? () => csrfToken ?? getSessionCsrfToken() : getSessionCsrfToken,
+    scope ? () => scope.getSnapshot().session.token : hasSession ? () => token : getAmbientToken,
     logout,
-  ), [baseUrl, hasSession, csrfToken, logout]);
+    scope,
+  ), [baseUrl, hasSession, token, logout, scope, auth?.authRevision]);
 }
