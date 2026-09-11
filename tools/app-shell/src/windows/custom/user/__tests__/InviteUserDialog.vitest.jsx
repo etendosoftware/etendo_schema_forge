@@ -76,4 +76,51 @@ describe('InviteUserDialog', () => {
       expect(screen.getByTestId('invite-user-error')).toHaveTextContent('inviteUserAlreadyMember');
     });
   });
+
+  // ETP-5206 — `invitationErrorMessage`'s unmapped-code fallback used to read the backend's
+  // raw `message` field; it now always falls back to the generic, cataloged description.
+  it('ETP-5206: falls back to the generic description for an unmapped error code, never the raw backend message', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({
+        error: true,
+        code: 'SOME_UNMAPPED_CODE',
+        message: 'boom from backend',
+      }),
+    });
+    globalThis.fetch = fetchMock;
+
+    render(<InviteUserDialog open={true} onOpenChange={() => {}} />);
+
+    fireEvent.change(screen.getByTestId('invite-user-email'), {
+      target: { value: 'existing@example.com' },
+    });
+    fireEvent.click(screen.getByTestId('invite-user-submit'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('invite-user-error')).toBeInTheDocument();
+      expect(screen.getByTestId('invite-user-error')).toHaveTextContent('invitePageInvalidDescription');
+    });
+    expect(screen.getByTestId('invite-user-error')).not.toHaveTextContent('boom from backend');
+  });
+
+  // ETP-5206 — the catch-all (network/fetch exception) path used to read `err.message`; it
+  // now always shows the same generic, cataloged description.
+  it('ETP-5206: falls back to the generic description when the request throws, never the raw exception message', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('boom from backend'));
+    globalThis.fetch = fetchMock;
+
+    render(<InviteUserDialog open={true} onOpenChange={() => {}} />);
+
+    fireEvent.change(screen.getByTestId('invite-user-email'), {
+      target: { value: 'existing@example.com' },
+    });
+    fireEvent.click(screen.getByTestId('invite-user-submit'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('invite-user-error')).toBeInTheDocument();
+      expect(screen.getByTestId('invite-user-error')).toHaveTextContent('invitePageInvalidDescription');
+    });
+    expect(screen.getByTestId('invite-user-error')).not.toHaveTextContent('boom from backend');
+  });
 });
