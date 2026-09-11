@@ -266,6 +266,23 @@ function OperationDateField({ ui, getDateVal, onChange, disabled }) {
   );
 }
 
+// ETP-5272: "Fecha Registro Contable" (aeatsiiFechaRegCont) is `discarded` in some windows'
+// decisions.json (e.g. sales-invoice) and stays `editable` in others (e.g. purchase-invoice).
+// SifTab is a SHARED component mounted unconditionally as the `sif` custom tab on every invoice
+// window, and receives no `contract`/`fields` prop that could tell it per-window field visibility
+// directly (the generator that could add one — `generate-frontend.js` — lives in the separate
+// `schema_forge_core` repo, out of reach from here; see docs/repo-topology.md). Rather than
+// hardcode a window/spec-name check, this reads the one generic signal SifTab DOES already
+// receive: the NEO backend (`NeoFieldFilter#filterGetResponse`, `docs/field-visibility-types.md`)
+// strips any `discarded` (IsIncluded=N) field's KEY out of the GET/PATCH payload entirely — it is
+// not merely null. So "is this key present on `data`" is a per-entity, contract-driven check that
+// automatically follows whatever decisions.json says for the CURRENT window, with no window-name
+// branching needed here and no change required if a future window reuses SifTab with a different
+// visibility for this same field.
+function hasAccountingRegDateField(data) {
+  return Boolean(data) && Object.prototype.hasOwnProperty.call(data, 'aeatsiiFechaRegCont');
+}
+
 // Classic displayLogic: `@etvfac_has_configuration@='Y' & @EM_Etvfac_Inv_Type@!'R5' & @EM_Etvfac_Inv_Type@!'F2'`
 function shouldShowSimplifiedArt7273(invType) {
   return invType !== 'R5' && invType !== 'F2';
@@ -574,17 +591,19 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 ui={ui}
                 data-testid="ReadOnlyField__b99c8b" />
             )}
-            <Field
-              label={ui('sifDataTabs.field.accountingRegDate')}
-              htmlFor="sif-accountingRegDate"
-              data-testid="Field__b99c8b">
-              <DateField
-                id="sif-accountingRegDate"
-                value={getDateVal('aeatsiiFechaRegCont')}
-                onChange={iso => onChange?.('aeatsiiFechaRegCont', iso)}
-                disabled={siiSentReadOnly}
-                data-testid="DateField__b99c8b" />
-            </Field>
+            {hasAccountingRegDateField(data) && (
+              <Field
+                label={ui('sifDataTabs.field.accountingRegDate')}
+                htmlFor="sif-accountingRegDate"
+                data-testid="Field__b99c8b">
+                <DateField
+                  id="sif-accountingRegDate"
+                  value={getDateVal('aeatsiiFechaRegCont')}
+                  onChange={iso => onChange?.('aeatsiiFechaRegCont', iso)}
+                  disabled={siiSentReadOnly}
+                  data-testid="DateField__b99c8b" />
+              </Field>
+            )}
             {siiSentReadOnly && (
               <Field
                 label={ui('sifDataTabs.field.registerError')}

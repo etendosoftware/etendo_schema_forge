@@ -989,22 +989,31 @@ GET). This column is unrelated to `DateAcct` ("Fecha Contable" / Accounting Date
 `purchase-invoice.md`'s matching ETP-5272 entry for the full mapping verification that motivated
 this change.
 
-**Known follow-up — SIF tab still renders the field (needs a Developer fix):** the "Fecha Registro
-Contable" field was never on the generic header form; it lives in the shared `SifTab.jsx`
-(`tools/app-shell/src/windows/custom/shared/SifTab.jsx`, ~line 576, `ui('sifDataTabs.field.
-accountingRegDate')` / `getDateVal('aeatsiiFechaRegCont')`), rendered unconditionally as the `sif`
-custom tab on **both** sales-invoice and purchase-invoice (`customTabs` entry `{ key: 'sif', ...,
-Component: SifTab }` in this window's generated `HeaderPage.jsx`). Discarding the field in
-`decisions.json` only fixes the contract/API surface — `SifTab.jsx` has no per-window
-conditional and will keep showing that input row on Sales Invoice, now permanently blank
-(`getDateVal` reads a field no longer in the payload) with edits silently dropped server-side
-(discarded fields are rejected on PATCH). `SifTab.jsx` is a shared generic component, not
-generated output or a per-window custom override, so this repo's window-agent tooling
-(decisions.json only) cannot fix it — it needs a Schema Forge Developer change to make that field
-row conditional per window (e.g. read the field's contract visibility, or add an explicit
-`hideAccountingRegDate`-style prop wired from `decisions.json`'s `window.customComponents`
-config) so purchase-invoice keeps showing it unchanged. Tracked as an open item for this ticket;
-not fixed in this change.
+**Follow-up closed — SIF tab row hidden generically (ETP-5272, Developer fix):** the open item
+below (originally logged by the window-agent when point 2 discarded the field) is now fixed. The
+shared `SifTab.jsx` (`tools/app-shell/src/windows/custom/shared/SifTab.jsx`) previously rendered
+the "Fecha Registro Contable" input row unconditionally on **both** sales-invoice and
+purchase-invoice. It now wraps that row in `hasAccountingRegDateField(data)`, a small predicate
+that checks whether the `aeatsiiFechaRegCont` KEY is present on the `data` prop at all — the NEO
+backend (`NeoFieldFilter#filterGetResponse`, `field-visibility-types.md`) strips a `discarded`
+field's key entirely out of the GET/PATCH payload rather than sending it as `null`, so key
+presence is a generic, per-entity, contract-driven signal that needs no window/spec-name branch:
+it hides the row on sales-invoice (key absent) and keeps it unchanged on purchase-invoice (key
+present, `"editable"` per that window's decisions.json), and will do the same automatically for
+any future window that reuses `SifTab` with a different visibility for this field. A window-name
+check was considered and rejected — `SifTab` receives no `contract`/`fields` prop, but this
+key-presence check achieves the same contract-driven result without needing one (the generator
+that could add such a prop, `generate-frontend.js`, lives in the separate `schema_forge_core`
+repo, out of reach from a change scoped to this repo). Covered by
+`tools/app-shell/src/windows/custom/shared/__tests__/SifTab.vitest.jsx`'s "accountingRegDate row
+visibility (ETP-5272)" suite (row hidden when the key is absent, shown when present — including
+with a `null` value — and edits still call `onChange` when the row is shown).
+
+Previously (now resolved), this section documented the field as never on the generic header
+form and the row as rendered unconditionally on both windows, with edits on sales-invoice silently
+dropped server-side (discarded fields are rejected on PATCH). See `purchase-invoice.md`'s matching
+ETP-5272 entry for the column-mapping verification that motivated discarding the field here in the
+first place.
 
 ## Print button — added, visible only in Completado — ETP-4714
 
