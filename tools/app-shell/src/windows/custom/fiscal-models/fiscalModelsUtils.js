@@ -253,7 +253,10 @@ export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUr
  * Returns { ok: true } on success, or { ok: false, error: string } on failure.
  */
 export async function deleteDeclaration(id, { token, apiBaseUrl } = {}) {
-  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  // ETP-4576: gated on apiBaseUrl alone, exactly like validate349Vies below. Under the
+  // cookie session the client holds no token, so a `!token` gate is permanently false and
+  // the DELETE is simply never issued - the row's delete action does nothing, silently.
+  if (!apiBaseUrl) return { ok: false, error: 'no_token' };
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const res = await apiFetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
