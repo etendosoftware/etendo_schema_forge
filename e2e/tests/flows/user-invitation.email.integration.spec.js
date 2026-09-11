@@ -362,7 +362,29 @@ async function acceptExistingInvitation(browser, inviteLink, email, password, {
     await page.getByTestId('action-go-to-app').click();
     await page.waitForURL('**/dashboard', { timeout: 60_000 });
     await expect(page).toHaveURL(/\/dashboard/);
-    await expect(page.getByText(/Estas son tus tareas pendientes|These are your pending tasks/)).toBeVisible({ timeout: 60_000 });
+
+    // ETP-5190 — an invited user is a NEW account, so the dashboard spends its one-time First
+    // Steps redirect on this very first visit, and it does so LATE: the gate only fires once the
+    // server's `firstSteps.seen` arrives, which is after the dashboard has already rendered. So
+    // `waitForURL('**/dashboard')` above wins the race, the URL assertion passes, and the page is
+    // then navigated out from underneath the next assertion.
+    //
+    // Sampling the URL does not fix it and must not be attempted: `waitForURL` resolves
+    // IMMEDIATELY when the current URL already matches, so any "is it /first-steps yet?" check
+    // reads /dashboard and skips — the exact race it was meant to close (the first attempt at this
+    // fix did precisely that, and failed the same way).
+    //
+    // Retrying the navigation is what converges, and in at most two rounds: the visit that takes
+    // the redirect also POSTs `markSeen()`, so the next one lands on the dashboard for good.
+    // Deliberately indifferent to which view it hit — this spec is about the invitation reaching
+    // the app, and it must not start failing the day the checklist stops being shown to invited
+    // members (nor the day it starts being shown to more of them).
+    await expect(async () => {
+      await page.goto('/dashboard');
+      await expect(page.getByText(/Estas son tus tareas pendientes|These are your pending tasks/))
+        .toBeVisible({ timeout: 20_000 });
+    }, 'the invited user should reach the dashboard once the one-time First Steps redirect is spent')
+      .toPass({ timeout: 90_000 });
     await captureScreenshot(page, {
       path: `../artifacts/delivery-evidence/ETP-4894/${evidenceStem}-dashboard.png`,
       fullPage: true,

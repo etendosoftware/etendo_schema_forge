@@ -2792,3 +2792,101 @@ cash-close *difference* postings (GL-item `BPD`/`BPW`) and bank-fee (`BF`) lines
 ledger — silently, via the same gate. That is what ETP-5207 asked for, but it is broader than
 "reconciliations are not posted", so it needs a functional sign-off rather than being treated as an
 implementation detail.
+
+---
+
+## 2026-09-09 — ETP-5222: how `referencedata/sampledata/GOClient/*.xml` actually becomes a new tenant's chart of accounts (traced end-to-end)
+
+- **This is the LIVE source of a brand-new tenant's `C_AcctSchema`/`C_AcctSchema_Default`/chart of
+  accounts — not a separate "new client wizard."** Chain, file:line: `EtendoGoJwtServlet.
+  handleOnboarding` → `importOnboardingDataset` (`EtendoGoJwtServlet.java:2442,2515-2528`) →
+  `OnboardingDatasetImportService#importDataset` (`OnboardingDatasetImportService.java:69-99`) →
+  `normalizer.buildDatasetXml(orgId)` → `DataImportService.getInstance().importDataFromXML(...)`
+  (core's OWN generic reference-data importer, `OnboardingDatasetImportService.java:119-126`). The
+  normalizer's source files are the classpath resource root `com/etendoerp/go/onboarding/sampledata/
+  GOClient` (`OnboardingSourceFiles.java:37-40`), which is STAGED (Gradle task
+  `prepareOnboardingSampledata`, `com.etendoerp.go/tasks.gradle:4-9,18-57`, wired via `dependsOn`
+  onto `smartbuild`/`war`/`antWar`) by copying `modules/com.etendoerp.go/referencedata/sampledata/
+  GOClient/*.xml` VERBATIM — i.e. editing a file under that directory directly changes what a new
+  tenant is provisioned with. `OnboardingDatasetDefinition.INCLUDED_TABLES` decides which tables
+  ride along — `C_ACCTSCHEMA`, `C_ACCTSCHEMA_DEFAULT`, `C_ACCTSCHEMA_ELEMENT`, `C_ELEMENTVALUE`,
+  `C_VALIDCOMBINATION` are ALL included, so the whole chart-of-accounts graph is one import batch.
+- **Every id in this bundle is REGENERATED per tenant, never reused verbatim — confirmed at the
+  source-code level, not just by trusting the doc.** `DataImportService#saveUpdateConvertedObjects`
+  (`DataImportService.java:520-589`): each inserted row gets a FRESH auto-generated PK via the
+  standard DAL insert (`insertObjectGraph`, NOT the literal XML id); then, only for a non-
+  client-import (`!isClientImport`), `(generic=<literal XML id>, specific=<the fresh id just
+  created>)` is recorded into `ReferenceDataStore`/`AD_REF_DATA_LOADED`, scoped per client. Any OTHER
+  reference in the SAME XML batch to that same literal id resolves, via `EntityResolver#getId`
+  (`EntityResolver.java:501-508`), to the freshly-generated id for THIS client — so referencing
+  another file's literal id WITHIN THE SAME `referencedata/sampledata/GOClient/` bundle (e.g.
+  `C_ACCTSCHEMA_DEFAULT.xml`'s `P_EXPENSE_ACCT` pointing at a `C_VALIDCOMBINATION.xml` row's own id)
+  is exactly the safe, established pattern to follow for any NEW `*_ACCT`-style column — it is NOT
+  the same thing as hardcoding a live-DB-only artifact. **Apply:** when adding a new default-account
+  value to this bundle, source the id by grepping it as a literal row PK somewhere else IN THE SAME
+  `referencedata/sampledata/GOClient/` directory (not from a live DB query) — confirm with `xmllint`/
+  grep, not inference. Empirically confirmed too: two already-onboarded local tenants (GOClient
+  itself, whose LIVE DB row IS this bundle byte-for-byte — same `C_ACCTSCHEMA_DEFAULT_ID` in both —
+  and "SantoEmpresa") hold DIFFERENT `c_elementvalue_id`/`c_validcombination_id` pairs for the exact
+  same account code (`99904000`), proving the translation is real, not just theoretical.
+- **The bundle's own referential-integrity test (`OnboardingDatasetReferentialIntegrityTest.java`)
+  only scans columns ending in `_ID`** — a new `*_ACCT`-named FK column (like
+  `P_INVOICEPRICEVARIANCE_ACCT`) is silently out of its scope, so it will NOT catch a dangling
+  reference in one of these columns. Verify a new `*_ACCT` reference manually (grep the referenced
+  id as a row PK elsewhere in the bundle) rather than trusting that test to catch a mistake there.
+- **The established regression-test pattern for "a freshly-provisioned tenant gets X" IS
+  `pathBackedNormalizer().buildDatasetXml()` in `OnboardingDatasetNormalizerTest.java`** — it reads
+  `referencedata/sampledata/GOClient` directly off disk (not the staged classpath copy) and asserts
+  a literal id/value string appears in the built XML. See
+  `testNormalizerIncludesAcctSchemaDefaultDoubtfulDebtAndDeferredAccounts` (R11) and
+  `testNormalizerIncludesAcctSchemaDefaultInvoicePriceVarianceAccount` (ETP-5222) as worked examples
+  — copy this pattern for any future "does the bundled dataset now include X" test rather than
+  inventing a new mechanism.
+
+## 2026-09-09 — ETP-5222 R35 simplification: same-transaction `@apply` visibility, and a COALESCE-from-parent cascade's real blast radius
+
+- **A multi-statement `@apply` body in the data-fixes framework runs sequentially on ONE already-open
+  transaction — a later statement in the SAME `@apply` block is GUARANTEED to see an earlier
+  statement's own writes.** Confirmed by reading `run.js#applyFix` (lines 339-424): the whole
+  `@apply` text is one `client.query(applySql)` call (`runBody`, node-postgres simple-query
+  protocol) between an explicit `BEGIN` and `COMMIT` on one pooled connection. This means a later
+  `UPDATE` in the same fix file can safely `COALESCE`/read a value an EARLIER `UPDATE` in the same
+  file just wrote, ordinary same-transaction SQL semantics, no special guard needed. **`@check`,
+  however, runs on the plain `pool` (not the transaction `client`), entirely BEFORE `@apply` even
+  starts** — so a `@check` clause that intends to mirror a cascaded `@apply` value must reason about
+  the PRE-fix state, not "what an earlier level's apply would produce" — correctness in that gap
+  relies on an independent, earlier-in-file level's OWN `@check` clause firing the overall `@check`
+  when the chain's root value itself still needs fixing (see the R35 SQL file's own "Ordering/
+  visibility" comment for the full worked argument). This is a durable pattern applicable to any
+  future multi-level cascade fix in this framework, not specific to IPV.
+- **A `COALESCE`-from-schema-default cascade propagates WHATEVER the parent row holds, including a
+  genuine manual override that has nothing to do with the specific account code the fix's own
+  `@description` names.** Concretely: simplifying R35's Levels 2/3 to copy
+  `c_acctschema_default.p_invoicepricevariance_acct` (instead of each independently re-deriving
+  99904000) meant a real client, "F&B International Group" (`23C59575B9CF467C9620760EB255B389`,
+  schema `732913485BB040FFA4643FF06D1AA095`), whose chart doesn't use GOClient's numbering at all
+  (its own dedicated "Invoice price variance" account is `5610`, not `99904000` — confirmed: that
+  schema's `C_AcctSchema_Element`/`elementtype='AC'` has NO `99904000` `C_ElementValue` whatsoever)
+  went from "0 rows touched" (first-shipped, independently-re-deriving version) to "35 product rows
+  correctly inherit the tenant's OWN `5610` combination" (simplified cascade version) — a real,
+  materially different outcome for a real client, not a hypothetical edge case. This was the
+  CORRECT, originally-intended behavior (the plan doc's "Layer B" always said "COALESCE from the
+  schema default," generically, not "chase this one specific account code at every level") — but
+  it's a live example of the general principle: **when refactoring an independent-per-row derivation
+  into a COALESCE-from-parent cascade, always live-check every multi-schema/non-standard-chart
+  client on the environment, not just the ones the original fix was validated against** — the
+  parent's value can carry information (a different, tenant-specific account) the child-level
+  re-derivation would never have surfaced or touched.
+- **A guard like `d.p_invoicepricevariance_acct IS NOT NULL` on the CHILD level is load-bearing when
+  cascading from a nullable parent column** — omitting it means a client whose parent value is
+  genuinely still NULL (chart lacks the standard account, no override either) gets that NULL
+  actively `UPDATE`d onto child rows, ERASING whatever fallback value (e.g. an older fix's
+  `P_Expense_Acct`-derived one) was already there. Verified live: "QA Testing" (2 schemas, neither
+  resolves 99904000) — with the guard, `@apply` correctly touches 0 rows on both schemas.
+- **`c_acctschema_default` has `UNIQUE(c_acctschema_id)`** (confirmed via
+  `pg_constraint`/`pg_get_constraintdef`) — NOT `UNIQUE(c_acctschema_id, ad_client_id)` as one might
+  assume from how it's usually queried. In practice this doesn't create a gotcha (a schema belongs to
+  exactly one client anyway), but it means a plain `JOIN c_acctschema_default d ON d.c_acctschema_id
+  = <child>.c_acctschema_id AND d.ad_client_id = <child>.ad_client_id` is already guaranteed
+  at-most-one-match by the `c_acctschema_id` half alone — the `ad_client_id` half is redundant-but-
+  harmless extra tenant-isolation documentation in the SQL, not load-bearing for uniqueness.
