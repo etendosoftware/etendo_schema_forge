@@ -24,6 +24,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('../../../fiscalModelsUtils.js', () => ({
   formatAmount: (n) => (n == null ? '—' : String(n)),
+  formatPeriod: (p) => p,
   compute349Operators: vi.fn().mockResolvedValue(null),
   generate349File: vi.fn().mockResolvedValue(false),
 }));
@@ -215,7 +216,7 @@ describe('FmModel349Page — real PresentModal: acuse-de-recibo MIME-type gap (p
   it("uploads a non-PDF file selected through the modal's own file input with no MIME check", async () => {
     render(<FmModel349Page decl={makeDecl({ id: 'decl-mime' })} {...defaultProps} />);
 
-    const presentBtn = screen.getByText((t) => t.includes('fm.action.present') || t.includes("Marcar como 'Presentado'"));
+    const presentBtn = screen.getByText((t) => t.includes('fm.action.present'));
     fireEvent.click(presentBtn);
 
     // Select the "Presentación con Acuse de recibo" path (first PATHS entry).

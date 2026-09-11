@@ -1,10 +1,11 @@
 // Vitest tests for FmModel303Page's ETP-4975 missing-default-IAE-activity
 // pre-flight guard in handleGenerate ("Generar fichero 303"). Mirrors the
-// identical guard already covered on AeatSubmitFlow's "Marcar como Presentado"
-// button — see AeatSubmitFlow.jsx's own handleSubmit and its docstring for the
-// full rationale (Classic's Modelo 303 code, reused via reflection, throws an
-// untranslated IndexOutOfBoundsException on the last period of the fiscal year
-// when the organization has no default IAE activity with a code).
+// identical guard already covered on AeatSubmitFlow's own submit button
+// (reached via PresentModal's "aeat_telematic" path) — see AeatSubmitFlow.jsx's
+// own handleSubmit and its docstring for the full rationale (Classic's Modelo
+// 303 code, reused via reflection, throws an untranslated
+// IndexOutOfBoundsException on the last period of the fiscal year when the
+// organization has no default IAE activity with a code).
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';

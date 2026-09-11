@@ -92,7 +92,7 @@ Modelo 349:
 them — the only component that could ever set them (`StatusPillMenu`/`StatusMenu` in
 `FmCommon.jsx`) was never wired into any real page and has been deleted.
 
-Status transitions are driven by the detail page action buttons. Clicking **"Marcar como 'Presentado'"** opens `PresentModal`, which now offers only **2 submission paths**: `submitted_ack` (upload a PDF/XML receipt) and `submitted` (mark as submitted without a receipt). The "Otra Plataforma" path — which used to set `submitted_ext` — was removed from `PresentModal`; `submitted_ext` itself is still a valid, fully-rendered status (color, label, stepper index) for any declaration that already carries it from before this change, it just can no longer be newly selected from the modal.
+Status transitions are driven by the detail page action buttons. Clicking **"Registrar/Presentar"** (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10, see the "Action bar" and "AEAT electronic submission" sections below) opens `PresentModal`, which offers **3 paths on Modelo 303** (`submitted_ack`, `submitted`, and the opt-in `aeat_telematic` sentinel card) and **2 on Modelo 349** (`submitted_ack`, `submitted` — 349 never passes `showAeatPath`). The "Otra Plataforma" path — which used to set `submitted_ext` — was removed from `PresentModal`; `submitted_ext` itself is still a valid, fully-rendered status (color, label, stepper index) for any declaration that already carries it from before this change, it just can no longer be newly selected from the modal.
 
 ### `submissionMethod` — telling apart the 3 paths that lead to "Presentado" (ETP-4755)
 
@@ -208,7 +208,7 @@ A former 6th tab, **Historial** (`HistoryTab`), was removed together with this p
 
 ### Action bar
 
-Left to right: **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Calcular** (`handleCompute`, spinner while `computing`), a standalone **"Generar fichero 303"** button, and, only while the declaration is not yet submitted (`!isSubmitted`), **"Marcar como 'Presentado'"** opening `PresentModal`. "Generar fichero 303" is always visible regardless of submission status — it is not gated the way "Marcar como 'Presentado'" is. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
+Left to right: **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Calcular** (`handleCompute`, spinner while `computing`), a standalone **"Generar fichero 303"** button, and, only while the declaration is not yet submitted (`!isSubmitted`), a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. "Generar fichero 303" is always visible regardless of submission status — it is not gated the way "Registrar/Presentar" is. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
 
 ### Sources tab — "Régimen" column removed (ETP-5187)
 
@@ -441,12 +441,52 @@ A `GET /session` call on mount populates the NIF/nombre fields used in the gener
 
 ### AEAT electronic submission (`AeatSubmitFlow`) — ETP-4456
 
-`PresentModal` (`FmOverlays.jsx`) gained a 3rd, opt-in path (`showAeatPath` prop, only passed by `FmModel303Page`): **"Presentación telemática AEAT"**. It reports the sentinel status `aeat_telematic` — never a real declaration status — which `FmModel303Page.handlePresent` intercepts to open `models/303/AeatSubmitFlow.jsx` instead of changing the status directly (the other 2 manual paths still call `handleStatusChange` as before). A 4th path, "Otra Plataforma" (`submitted_ext`), existed at one point but was removed from the modal (ETP-4755) — `submitted_ext` remains a valid, fully-rendered status for declarations that already carry it, it just can no longer be newly selected here.
+`PresentModal` (`FmOverlays.jsx`) has a 3rd, opt-in path (`showAeatPath` prop, only passed by
+`FmModel303Page`): **"Presentación telemática AEAT"**. It reports the sentinel status
+`aeat_telematic` — never a real declaration status — which `FmModel303Page.handlePresent`
+intercepts to open `models/303/AeatSubmitFlow.jsx` instead of changing the status directly (the
+other 2 manual paths still call `handleStatusChange` as before). A 4th path, "Otra Plataforma"
+(`submitted_ext`), existed at one point but was removed from the modal (ETP-4755) —
+`submitted_ext` remains a valid, fully-rendered status for declarations that already carry it, it
+just can no longer be newly selected here.
+
+**ETP-5229 item #10 — trigger rename, split-and-revert:** the single trigger button/modal was
+renamed from "Marcar como 'Presentado'"/"Marcar como presentada" to **"Registrar/Presentar"**
+(`fm.action.submit` / `fm.action.present` / `fm.present.title`) — a broader label that covers
+both "recording a declaration already filed elsewhere" and "actually filing it via AEAT" in one
+picker. Mid-implementation this same item briefly split the AEAT path OUT into its own standalone
+button next to "Marcar como 'Presentado'", wired directly to `AeatSubmitFlow` with no modal in
+between — that approach was reconsidered and reverted before delivery: there is **no separate
+standalone AEAT button** in the action bar, and the 3-path-in-one-modal structure described above
+is the final shape. `PresentModal` keeps its `showAeatPath` prop and its `aeat_telematic` card.
+
+**Two-column redesign (ETP-5229 item #10, follow-up — Figma mockup):** `PresentModal`'s body was
+restyled from a single stacked-card list into a two-column layout, mirroring the mockup: a left
+column **"Registrar presentación"** (`fm.present.register_section.title`/`.desc`) always holds the
+2 manual cards (`submitted_ack`, `submitted`), and a right column **"Presentar a la AEAT"**
+(`fm.present.aeat_section.title`/`.desc`) holds the `aeat_telematic` card — rendered, with its
+vertical separator, **only when `showAeatPath` is true**. On Modelo 349 (which never passes
+`showAeatPath`) the modal shows a single full-width left column and no separator, matching the
+pre-redesign single-path-set behavior. The per-card icon avatars (`Star`/`Play`/`Landmark`) were
+removed; each column now carries one small header icon instead (`FileText` for "Registrar
+presentación", `Landmark` for "Presentar a la AEAT"). The modal header subtitle became dynamic —
+`"Modelo <model> · <period> <year>"` (reusing `fm.new_decl.preview`'s existing interpolation
+pattern and `formatPeriod` from `fiscalModelsUtils.js`) — falling back to the old generic
+`fm.present.subtitle` text when `decl` doesn't carry `model`/`year`/`period` (e.g. legacy test
+stubs). The modal's `maxWidth` grows from 500px to 760px when the AEAT column is present, 500px
+otherwise (widened from an initial 420px/640px pass after visual review found the two-column body
+too cramped). None of this touches the underlying `path` selection state, `canConfirm`, or
+`handleConfirm` — purely a visual/DOM restructuring, extracted into two new internal helper
+components in `FmOverlays.jsx`: `PresentOptionCard` (one selectable card) and `PresentModalColumn`
+(icon + heading + description + its stack of cards). The footer's separator rule line was also
+dropped for this modal only (`.fm-present-modal .fm-config-modal__footer { border-top: none; }`
+in `fiscal-models.css`) — the card area already reads as visually distinct from the footer, so the
+divider was redundant; sibling modals (`FileGenModal`, `NewDeclModal`) keep it.
 
 **Flow (single dedicated component, not folded into `PresentModal`** — the multi-step submit/result logic and the real API call make it noticeably heavier than the 2 simple manual paths, so keeping it in its own file avoids bloating `FmOverlays.jsx` further):
 
 **Trigger path (and the REVIEW-cycle bug fixed in it):** the AEAT path is a card inside
-`PresentModal`, not a separate button — the user opens "Mark submitted" (`PresentModal`), picks the
+`PresentModal`, not a separate button — the user opens "Registrar/Presentar" (`PresentModal`), picks the
 3rd card ("Presentación telemática AEAT" / `aeat_telematic`), and confirms. `handlePresent` in
 `FmModel303Page.jsx` intercepts that sentinel status and opens `AeatSubmitFlow` **instead of**
 changing the status directly, like the other 2 manual paths do. Alex's REVIEW (cycle 1) found a
@@ -498,7 +538,17 @@ parity verified — 39 keys each as of ETP-5187, up from the 36 this flow origin
 the 3 added since are `fm.aeat.action.go_to_organization`, `fm.aeat.error.missingDefaultIae` (both
 ETP-4975) and `fm.aeat.reminder.iaeActivity` (ETP-5187) — see "IAE-activity activation reminder"
 below), plus 2 new `fm.present.path.aeat`/`aeat_desc` keys for the
-`PresentModal` card and one `fm.action.continue` reused for the card's confirm-button label.
+`PresentModal` card and one `fm.action.continue` reused for the card's confirm-button label. The
+two-column redesign added 4 more keys (parity verified in both locales):
+`fm.present.register_section.title`/`.desc` and `fm.present.aeat_section.title`/`.desc` — the
+section headings/subtexts above the left and right columns. No new key was needed for the dynamic
+subtitle; it reuses `fm.new_decl.preview` verbatim.
+**ETP-5229 item #10** renamed the shared trigger keys `fm.action.submit` (303) and
+`fm.action.present` (349) plus `fm.present.title` (the modal title) from "Marcar
+presentado"/"Marcar como presentada" to **"Registrar/Presentar"** ("Register/Submit" in English)
+— no new keys were needed for this, since both flows already read those existing keys. The
+short-lived standalone-button key `fm.action.aeat_telematic` (added, then removed, in the same
+item's split-and-revert) was deleted from both locale files rather than left dangling.
 
 ### "Justificante" tab — AEAT receipt storage (ETP-4456)
 
@@ -663,6 +713,23 @@ accumulate them, and this applies to both severities together (a clean submissio
 `block` AND stale `warn` rows alike). A **successful** submission with no errors and no warnings
 (test or production) leaves the tab **empty**, not stale from a prior attempt.
 
+**Dismissible warning banner (ETP-5229 item #11).** The amber "Resuélvelas antes de generar el
+fichero" bar at the top of the tab (`fm.incidents.block_sub`, rendered whenever `blocking > 0 ||
+warning > 0`) has a close ("×") button that was never wired to anything — clicking it did
+nothing, so the banner was effectively permanent. It is now backed by local component state
+(`dismissed`, plain `useState` in `IncidentsTab`) gating the banner's render, mirroring the only
+other dismissible-banner precedent in this codebase, `CertExpiryBanner.jsx`
+(`tools/app-shell/src/windows/custom/fiscal-config/`), which also uses a session-only local
+`useState` rather than `localStorage` — no persisted-dismissal precedent was found anywhere in
+the app, so this stays per-session/per-mount, not persisted across reloads. A `useEffect` keyed
+on `[blocking, warning]` resets `dismissed` back to `false` whenever either count changes: fixing
+an incident (count drops) or a new one appearing (count rises) both re-surface the banner rather
+than leaving it silenced by a stale dismissal of a now-different problem set. Known limitation
+(accepted, not fixed): if the *set* of incidents changes while the *total count* stays exactly
+the same (one resolved, a different one appears in the same submission), the effect's dependency
+array won't fire and the banner stays dismissed — judged an acceptable simplification since
+`IncidentsTab`'s current props only expose the two counts, not the incident list, to key off of.
+
 ## Modelo 349 detail page (`FmModel349Page`)
 
 Full intra-EU recapitulative declaration view. Auto-compute runs via `useFiscalAutoCompute` (same hook as 303) using `compute349Operators` / `checkModified349`.
@@ -821,7 +888,7 @@ pending NIF-IVAs — before ETP-5027 it was a `<button>` with no `onClick` at al
 
 ### Action bar and kebab menu
 
-The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"Vista previa PDF"**. "Generar fichero 349" is no longer in the kebab — it is a standalone, always-visible button in the action bar (`onClick={() => setShowFilegen(true)}`), positioned next to **"Marcar como 'Presentado'"** and, unlike that button, not gated on submission status (`!isSubmitted`).
+The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"Vista previa PDF"**. "Generar fichero 349" is no longer in the kebab — it is a standalone, always-visible button in the action bar (`onClick={() => setShowFilegen(true)}`), positioned next to **"Registrar/Presentar"** (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) and, unlike that button, not gated on submission status (`!isSubmitted`).
 
 ### PDF preview and file generation
 

@@ -372,6 +372,133 @@ describe('SifTab', () => {
     });
   });
 
+  // ── SII panel: completion-based read-only gating (ETP-5229 item #3) ────────
+  // Manual testing found the SII sub-panel left Tipo factura, Descripción SII,
+  // Fecha registro contable, Autorización and Fecha operación editable on a
+  // COMPLETED invoice that had not yet been sent to SII — the fields were gated
+  // only on `aeatsiiIssent`, not on `processed`. `isProcessed`/`dateReadOnly`/
+  // `siiFieldReadOnly` (useSifFieldPatcher.js) and `siiCompletionLockedReadOnly`
+  // (SifTab.jsx) now fold completion into the lock. `siiSentReadOnly` itself
+  // (the "Modificada error registral" visibility gate) is deliberately left
+  // untouched — covered by the regression guard below.
+  describe('SII panel — completion-based read-only gating (ETP-5229)', () => {
+    beforeEach(() => {
+      mockFiscalConfig('sii');
+    });
+
+    it('Tipo factura select is enabled for a draft, unprocessed invoice', () => {
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', processed: false } })} />);
+      const wrapper = document.querySelector('#sif-siiType').closest('[data-testid="select-wrapper"]');
+      expect(wrapper).toHaveAttribute('data-disabled', 'false');
+    });
+
+    it('Tipo factura select stays enabled when documentStatus looks completed but processed is still false', () => {
+      render(<SifTab {...makeProps({ data: { documentStatus: 'CO', processed: false } })} />);
+      const wrapper = document.querySelector('#sif-siiType').closest('[data-testid="select-wrapper"]');
+      expect(wrapper).toHaveAttribute('data-disabled', 'false');
+    });
+
+    it('Tipo factura select is disabled once the invoice is processed, regardless of aeatsiiIssent', () => {
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'CO', processed: true, aeatsiiIssent: false },
+      })} />);
+      const wrapper = document.querySelector('#sif-siiType').closest('[data-testid="select-wrapper"]');
+      expect(wrapper).toHaveAttribute('data-disabled', 'true');
+    });
+
+    it('Descripción SII input is enabled for a draft, unprocessed invoice', () => {
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', processed: false, aeatsiiDescripcionSii: 'Draft desc' },
+      })} />);
+      expect(screen.getByTestId('input-sif-siiDesc')).not.toBeDisabled();
+    });
+
+    it('Descripción SII input is disabled on a completed-but-unsent invoice — the reported bug', () => {
+      render(<SifTab {...makeProps({
+        data: {
+          documentStatus: 'CO',
+          processed: true,
+          aeatsiiIssent: false,
+          aeatsiiDescripcionSii: 'Completed desc',
+        },
+      })} />);
+      expect(screen.getByTestId('input-sif-siiDesc')).toBeDisabled();
+    });
+
+    it('Fecha registro contable is enabled for a draft, unprocessed invoice', () => {
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', processed: false } })} />);
+      expect(screen.getByTestId('date-sif-accountingRegDate')).not.toBeDisabled();
+    });
+
+    it('Fecha registro contable is disabled on a completed-but-unsent invoice — the reported bug', () => {
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'CO', processed: true, aeatsiiIssent: false },
+      })} />);
+      expect(screen.getByTestId('date-sif-accountingRegDate')).toBeDisabled();
+    });
+
+    it('Autorización checkbox is enabled for a draft, unprocessed invoice', () => {
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', processed: false } })} />);
+      const checkbox = screen.getByRole('checkbox', { name: 'sifDataTabs.field.authorization' });
+      expect(checkbox).not.toBeDisabled();
+    });
+
+    it('Autorización checkbox is disabled on a completed-but-unsent invoice — the reported bug', () => {
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'CO', processed: true, aeatsiiIssent: false },
+      })} />);
+      const checkbox = screen.getByRole('checkbox', { name: 'sifDataTabs.field.authorization' });
+      expect(checkbox).toBeDisabled();
+    });
+
+    it('Fecha operación is disabled once processed, even if documentStatus is still DR', () => {
+      // Defends the `isProcessed` OR-branch added to `dateReadOnly` — processed is
+      // authoritative even when documentStatus hasn't (or can't) reflect it yet.
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', processed: true } })} />);
+      const dateInput = screen.getByTestId('date-sif-etsgDateOperation');
+      expect(dateInput).toBeDisabled();
+    });
+
+    it('does NOT show the "Modificada error registral" checkbox on a completed-but-unsent invoice', () => {
+      // Regression guard: `siiSentReadOnly` (visibility gate) must stay strictly tied
+      // to `aeatsiiIssent` — folding `isProcessed` into it would make this checkbox
+      // appear on every completed invoice, not just ones actually sent to SII.
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'CO', processed: true, aeatsiiIssent: false },
+      })} />);
+      expect(screen.queryByRole('checkbox', { name: 'sifDataTabs.field.registerError' })).not.toBeInTheDocument();
+    });
+
+    it('shows the "Modificada error registral" checkbox once the invoice has been sent to SII', () => {
+      render(<SifTab {...makeProps({
+        data: {
+          documentStatus: 'CO',
+          processed: true,
+          aeatsiiIssent: true,
+          aeatsiiEstado: 'CO',
+        },
+      })} />);
+      expect(screen.getByRole('checkbox', { name: 'sifDataTabs.field.registerError' })).toBeInTheDocument();
+    });
+
+    it('Causa exención renders read-only (no SelectorInput) on a completed invoice with an exempt tax', () => {
+      render(<SifTab {...makeProps({
+        data: {
+          documentStatus: 'CO',
+          processed: true,
+          hasExemptTaxes: true,
+          aeatsiiIssent: false,
+          aeatsiiCauseExemption: 'E1',
+          'aeatsiiCauseExemption$_identifier': 'Exempt reason 1',
+        },
+      })} />);
+      expect(screen.queryByTestId('mock-selector-input')).not.toBeInTheDocument();
+      const readOnly = screen.getByTestId('input-sif-exemption');
+      expect(readOnly).toHaveValue('Exempt reason 1');
+      expect(readOnly).toBeDisabled();
+    });
+  });
+
   // ── SII exemption cause: editable FK selector + Classic gating (ETP-4751 Block B) ──
   // Previously the exemption cause always rendered read-only. It is now editable via a
   // SelectorInput (backed by /header/selectors/aeatsiiCauseExemption) ONLY when the
@@ -685,6 +812,89 @@ describe('SifTab', () => {
       render(<SifTab {...makeProps({ apiBaseUrl: '/sws/neo/purchase-invoice' })} />);
       expect(screen.queryByText('sifDataTabs.tab.tbai')).not.toBeInTheDocument();
       expect(screen.getByText('sifDataTabs.sectionTitle')).toBeInTheDocument();
+    });
+  });
+
+  // ── TBAI: tbaiReverseinvoicecode field visibility + completion gate (ETP-5229) ──
+  // ETP-4783 moved this field into the TBAI panel — it is shown only when the
+  // record is flagged rectificative (`isRectificative`, injected by
+  // AbstractInvoiceHeaderHandler.enrichIsRectificative) and, like the SII/Verifactu
+  // fields above, must be locked once the invoice is processed/completed so a
+  // completed rectificative invoice can't have its reversal code edited afterwards.
+
+  describe('tbaiReverseinvoicecode field (isRectificative gate + processed gate) — ETP-5229', () => {
+    beforeEach(() => {
+      mockFiscalConfig('tbai');
+    });
+
+    it('does not render when isRectificative is falsy', () => {
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', isRectificative: false } })} />);
+      expect(screen.queryByText('sifDataTabs.field.tbaiReverseinvoicecode')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('SelectTrigger__tbai_reversecode')).not.toBeInTheDocument();
+    });
+
+    it('does not render when isRectificative is absent', () => {
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR' } })} />);
+      expect(screen.queryByText('sifDataTabs.field.tbaiReverseinvoicecode')).not.toBeInTheDocument();
+    });
+
+    it('renders the Select when isRectificative is true', () => {
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', isRectificative: true } })} />);
+      expect(screen.getByText('sifDataTabs.field.tbaiReverseinvoicecode')).toBeInTheDocument();
+      const wrapper = document.querySelector('#tbai-reverseinvoicecode').closest('[data-testid="select-wrapper"]');
+      expect(wrapper).toBeInTheDocument();
+    });
+
+    it('renders all 5 TBAI_REVERSEINVOICECODE_OPTIONS', () => {
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', isRectificative: true } })} />);
+      ['R1', 'R2', 'R3', 'R4', 'R5'].forEach((v) => {
+        expect(screen.getByText(`${v} — sifDataTabs.option.tbaiReverse${v}`)).toBeInTheDocument();
+      });
+    });
+
+    it('is enabled for a draft rectificative invoice (processed falsy)', () => {
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', isRectificative: true, processed: false } })} />);
+      const wrapper = document.querySelector('#tbai-reverseinvoicecode').closest('[data-testid="select-wrapper"]');
+      expect(wrapper).toHaveAttribute('data-disabled', 'false');
+    });
+
+    it('is enabled for a draft rectificative invoice when processed is absent', () => {
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', isRectificative: true } })} />);
+      const wrapper = document.querySelector('#tbai-reverseinvoicecode').closest('[data-testid="select-wrapper"]');
+      expect(wrapper).toHaveAttribute('data-disabled', 'false');
+    });
+
+    it('is disabled once the rectificative invoice is processed/completed', () => {
+      render(<SifTab {...makeProps({ data: { documentStatus: 'CO', isRectificative: true, processed: true } })} />);
+      const wrapper = document.querySelector('#tbai-reverseinvoicecode').closest('[data-testid="select-wrapper"]');
+      expect(wrapper).toHaveAttribute('data-disabled', 'true');
+    });
+
+    it('calls onChange with the picked value when a user selects an option', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'DR', isRectificative: true, processed: false },
+        onChange,
+      })} />);
+      fireEvent.click(screen.getByTestId('mock-select-option-R3'));
+      expect(onChange).toHaveBeenCalledWith('tbaiReverseinvoicecode', 'R3');
+    });
+
+    it('renders under the TBAI panel specifically — the field is absent from the SII panel even for a rectificative invoice', () => {
+      mockFiscalConfig('sii');
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', isRectificative: true } })} />);
+      expect(screen.getByText('sifDataTabs.panel.sii.title')).toBeInTheDocument();
+      expect(screen.queryByText('sifDataTabs.field.tbaiReverseinvoicecode')).not.toBeInTheDocument();
+    });
+
+    it('renders under the TBAI panel when reached via the sii+tbai combined profile by switching rails', () => {
+      mockFiscalConfig('sii+tbai');
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', isRectificative: true } })} />);
+      // Combined profile defaults to the SII panel — the TBAI field is not shown yet.
+      expect(screen.queryByText('sifDataTabs.field.tbaiReverseinvoicecode')).not.toBeInTheDocument();
+      // Switch to the TBAI rail.
+      fireEvent.click(screen.getByText('sifDataTabs.tab.tbai'));
+      expect(screen.getByText('sifDataTabs.field.tbaiReverseinvoicecode')).toBeInTheDocument();
     });
   });
 

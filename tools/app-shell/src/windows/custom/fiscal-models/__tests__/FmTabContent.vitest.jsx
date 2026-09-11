@@ -128,4 +128,77 @@ describe('IncidentsTab', () => {
     fireEvent.click(link);
     expect(onGoToSources).toHaveBeenCalled();
   });
+
+  // ── Dismissible warning banner (ETP-5229 item #11) ──────────────────────
+
+  function findCloseButton() {
+    return screen.getByLabelText('fm.action.close');
+  }
+
+  it('is absent entirely (not just dismissed) when blocking === 0 && warning === 0', () => {
+    render(<IncidentsTab decl={baseDecl} blocking={0} warning={0} t={t} />);
+    expect(screen.queryByText('fm.incidents.block_sub')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('fm.action.close')).not.toBeInTheDocument();
+    // The dedicated empty-state branch renders instead.
+    expect(document.body.textContent).toContain('fm.incidents.empty');
+  });
+
+  it('clicking the close button hides the banner', () => {
+    const decl = { incidents: { items: [{ origin: 'Box', severity: 'warn', message: 'Check this' }] } };
+    render(<IncidentsTab decl={decl} blocking={0} warning={1} t={t} />);
+    expect(screen.getByText('fm.incidents.block_sub')).toBeInTheDocument();
+
+    fireEvent.click(findCloseButton());
+
+    expect(screen.queryByText('fm.incidents.block_sub')).not.toBeInTheDocument();
+  });
+
+  it('keeps the banner hidden across a re-render with the same blocking/warning counts', () => {
+    const decl = { incidents: { items: [{ origin: 'Box', severity: 'block', message: 'Still there' }] } };
+    const { rerender } = render(<IncidentsTab decl={decl} blocking={2} warning={0} t={t} />);
+    fireEvent.click(findCloseButton());
+    expect(screen.queryByText('fm.incidents.block_sub')).not.toBeInTheDocument();
+
+    // Same counts, same decl reference — dismissal must persist.
+    rerender(<IncidentsTab decl={decl} blocking={2} warning={0} t={t} />);
+    expect(screen.queryByText('fm.incidents.block_sub')).not.toBeInTheDocument();
+  });
+
+  it('re-shows the banner when the blocking count increases after dismissal (new incident)', () => {
+    const decl = { incidents: { items: [{ origin: 'Box', severity: 'block', message: 'One' }] } };
+    const { rerender } = render(<IncidentsTab decl={decl} blocking={1} warning={0} t={t} />);
+    fireEvent.click(findCloseButton());
+    expect(screen.queryByText('fm.incidents.block_sub')).not.toBeInTheDocument();
+
+    const decl2 = {
+      incidents: {
+        items: [
+          { origin: 'Box', severity: 'block', message: 'One' },
+          { origin: 'Box2', severity: 'block', message: 'Two' },
+        ],
+      },
+    };
+    rerender(<IncidentsTab decl={decl2} blocking={2} warning={0} t={t} />);
+    expect(screen.getByText('fm.incidents.block_sub')).toBeInTheDocument();
+  });
+
+  it('re-shows the banner when the blocking count decreases (but not to zero) after dismissal', () => {
+    const decl = {
+      incidents: {
+        items: [
+          { origin: 'Box', severity: 'block', message: 'One' },
+          { origin: 'Box2', severity: 'block', message: 'Two' },
+        ],
+      },
+    };
+    const { rerender } = render(<IncidentsTab decl={decl} blocking={2} warning={0} t={t} />);
+    fireEvent.click(findCloseButton());
+    expect(screen.queryByText('fm.incidents.block_sub')).not.toBeInTheDocument();
+
+    // One incident resolved (2 -> 1), but not down to zero — the banner branch
+    // still applies (a drop to 0 would hit the separate empty-state branch instead).
+    const decl2 = { incidents: { items: [{ origin: 'Box', severity: 'block', message: 'One' }] } };
+    rerender(<IncidentsTab decl={decl2} blocking={1} warning={0} t={t} />);
+    expect(screen.getByText('fm.incidents.block_sub')).toBeInTheDocument();
+  });
 });

@@ -30,6 +30,8 @@ Global semantic search opts this window in through `go.purchase-invoice`. It ind
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
 - A **SIF** tab (Suministro Inmediato de Facturación) is available in the detail tab strip when the organisation is configured for SII, or for TBAI on a Bizkaia (Batuz) territory (Verifactu is never shown for purchase invoices — see below, and see "TBAI territory gating for purchase invoices (Batuz) — ETP-5087" below for the TBAI condition). The tab is declared in `decisions.json → window.extraTabs` and rendered by the shared `tools/app-shell/src/windows/custom/shared/SifTab.jsx` component. For purchase invoices the SII panel uses the `aeatsiiClaveTipoFc` field and the purchase-specific invoice type options (F6 / LC / F5 / F1). **ETP-4401:** the per-invoice `tbaiSequence`/`tbaiInvoicenum`/`tbaiInvoiceseq` fields (and, at the time, `tbaiIssent`) were given an explicit `"visibility": "discarded"` override in `decisions.json` so they no longer reach the frontend contract, because TBAI chaining sequences are now generated automatically per fiscal configuration by the `TbaiConfigSequenceHandler` NeoHandler instead of being tracked per invoice. **ETP-5087 partially reverses this for `tbaiIssent` only:** it is now `{ "visibility": "readOnly", "form": false }`, which puts the value back in the frontend contract as data for the list's Batuz column while still keeping it off the detail form. The sequencing fields stay `discarded`. When no fiscal target is active for the organisation, the SIF tab now disappears entirely from the detail tab strip instead of showing an empty-state message: `SifTab.jsx` reports its own visibility via the `onVisibilityChange` callback that `tools/app-shell/src/components/contract-ui/DetailView.jsx` passes to every `placement: 'tab'` custom tab, and the view redirects to the first remaining tab if the hidden tab was the active one. Editable fields are patched immediately on blur via `PATCH /sws/neo/purchase-invoice/header/{id}`.
 - **Line-level "tax needs SIF configuration" shortcut (ETP-4888 point 5):** on the lines grid's `tax` cell, an amber warning-color badge (`text-status-warning-foreground`) renders inline right next to the tax value itself (`InlineLinesPanel`'s `cellBadges` slot, `docs/ui-customization.md` §14e) ONLY when the selected tax is missing its TBAI/Verifactu key — never for SII, which has nothing to configure at tax level (its equivalent, `aeatsiiCauseExemption`, lives on the invoice header and is handled by the SIF tab above, unaffected by this feature). Clicking it opens `TaxSifModal.jsx` — a standalone dialog shared with sales-invoice (own vertical layout: tax-name pill, single-line label, `EnumSearchSelect` code+description picker, caption, footer — see `docs/ui-design-guidelines.md`), that reuses `TaxSifField.jsx`'s pure `selectSifFields()` to show the same 0–2 applicable fields the Tax window's own header form would, and saves the fix directly without leaving the invoice. Gated by `decisions.json → window.lineTaxSifTrigger` (see `docs/decisions-reference.md`); the "missing" check is driven by a backend selector enrichment (`InvoiceLineTaxSifSelectorPolicy`, `com.etendoerp.go`) that projects the relevant `C_Tax` columns onto the tax selector's response, scoped to this window and sales-invoice only — see `docs/ui-customization.md` §14e for the full mechanism. **ETP-5027 — document-direction gate:** the badge (and therefore the modal) is additionally gated by `getInvoiceFiscalTargets(specName, profile, tbaiRecord.etsgSifTerritory)`, threaded into `selectSifFields({ targets })` via `useTaxSifLineRowActions`. On a PURCHASE document VERI*FACTU **never** applies (it only ever sends sales — `VerifactuUtils.java:159,507`, `ETVFAC_C_INVOICE_SET_VERIFACTU.xml:71`) and TicketBAI applies **only when the TBAI territory is BIZKAIA** (Batuz/LROE is the sole purchase path — `PurchaseInvoiceBatuzRegister.java`, `SynchronizeUtils.java:266`; there is no Gipuzkoa/Araba purchase schema). Outside those cases no badge is shown and the modal never opens, because the key could never be transmitted.
+
+  **ETP-5229 (item #1):** the modal now forwards the invoice/order's own organization as the `sifContextOrgId` query param on save, so the tax-level SIF override is written under the SAME legal entity the badge-read path resolves it from — fixing a bug where the save succeeded but the warning badge stayed stuck when the user's session org differed from the document's own org. Shared fix across all four windows (`useTaxSifLineRowActions.jsx` / `TaxSifModal.jsx` / `helpers.js`'s `patchById`) — full writeup in `docs/generated-custom-windows/sales-invoice.md` §"Line-tax SIF quick-fix modal now saves under the invoice's own org, not the session org (ETP-5229, item #1)". **ETP-5229 (item #1, follow-up correction):** a SECOND, independent root cause was found for the same never-clearing badge on compound taxes — the tax selector permanently excludes a compound tax's rate-component children (`AD_Ref_Table` reference 158's `Parent_Tax_ID IS NULL` filter), so the completeness check always fell back to the summary tax's own (always-blank) columns. Fixed via an additive `includeTaxChildren` selector param — full writeup in `docs/generated-custom-windows/sales-invoice.md` §"Compound-tax children invisible to the tax selector — second, independent root cause (ETP-5229)".
 - **SIF error banner removed from the header (ETP-5057):** the invoice header no longer renders a red `SifErrorBanner` card for SII submission errors — the `headerExtra.customForm: "SifErrorBanner"` wiring was removed from `decisions.json` and the (now-orphaned) `SifErrorBanner.jsx` component (both the shared implementation and the per-window re-export) was deleted. SII incident detail — rejection reasons, error codes, structured AEAT responses — now lives exclusively in the Fiscal Monitor (`/fiscal-monitor`; see `docs/generated-custom-windows/fiscal-monitor.md`, section "SII section (`SiiMonitorSection`)"). VeriFactu does not apply to purchase invoices (see "Verifactu does not apply to purchase invoices" below), so this window's banner only ever showed the SII half. The invoice itself still shows its existing minimal sending-status indicator unchanged by this removal: the SII `FiscalStatusBadge` status pill column in `PurchaseInvoiceHeaderTable` (list) and the status badge in the SIF tab panel (detail) — no new indicator was added.
 
 ## Reactive behavior and dependencies
@@ -69,7 +71,7 @@ The territory value comes from `tbaiRecord?.etsgSifTerritory` (via `useFiscalCon
 - `sifSending.js` (`getPendingSifTargets`) — now accepts `territory` as a fourth argument, defaulting to `null`, and forwards it to `getInvoiceFiscalTargets`.
 - `useInvoicePreview.js` — computes `territory` and returns it alongside `profile` for `InvoicePreview.jsx` to consume.
 - `InvoicePreview.jsx` (`InvoiceGeneralTab`) — passes `territory` into both `getInvoiceFiscalTargets` and `useFiscalStatus`.
-- `useFiscalStatus.js` — now accepts `territory` as a sixth argument (default `null`) and includes it in the effect's dependency array so a territory change re-derives which fiscal statuses to fetch.
+- `useFiscalStatus.js` — accepts `territory` as its fourth argument (default `null`) and includes it in the `useMemo` dependency array so a territory change re-derives which fiscal statuses are shown. **(ETP-5229 update:** the hook's signature is `useFiscalStatus(invoice, specName, profile, territory, cutoverDates)` — the `orgId`/`apiBaseUrl` arguments described when this paragraph was first written no longer exist, and a 5th `cutoverDates` argument (`{ sii, tbai, verifactu }`, each an earliest-ever cutover ISO date from `useFiscalConfig`) was added back in item #16 to gate eligibility; see [`sales-invoice.md` — "Config-independent fiscal status badge in invoice preview — ETP-5229"](sales-invoice.md#config-independent-fiscal-status-badge-in-invoice-preview--etp-5229) and its "Second correction" subsection.)
 - `useSifFieldPatcher.js` — gates which SIF fields are editable inline on the SIF tab using the same territory-aware `getInvoiceFiscalTargets` call.
 - `PurchaseInvoiceHeaderTable.jsx` also derives `territory` locally from `useFiscalConfig`'s `tbaiRecord`.
 
@@ -79,7 +81,7 @@ The territory value comes from `tbaiRecord?.etsgSifTerritory` (via `useFiscalCon
 
 The fix exposes the invoice's own organization as a header field: `artifacts/purchase-invoice/decisions.json → entities.header.fields.organization` is promoted from the extraction default (`system`, backend-only) to `{ "name": "adOrgId", "visibility": "readOnly", "form": false }` — the same override `sales-invoice` already carried. `adOrgId` now appears in `contract.json`'s `frontendContract` (readOnly, not shown in the form) so every fetched invoice record carries `data.adOrgId` (`AD_Org_ID`) alongside the rest of its header fields.
 
-`tools/app-shell/src/windows/custom/shared/resolveInvoiceOrgId.js` centralizes the resolution: `data?.adOrgId ?? selectedOrgId ?? null`, i.e. prefer the invoice's own org, falling back to the top-nav selector only when the record hasn't exposed `adOrgId` (e.g. a stale cached record). `SendToSifButton.jsx`, `useSifFieldPatcher.js`, and `useInvoicePreview.js` all call it now. `useFiscalStatus.js` and `InvoicePreview.jsx` needed no change — they already accept/forward `orgId` as a parameter/prop rather than resolving it themselves, so fixing the source (`useInvoicePreview.js`) fixes them transitively.
+`tools/app-shell/src/windows/custom/shared/resolveInvoiceOrgId.js` centralizes the resolution: `data?.adOrgId ?? selectedOrgId ?? null`, i.e. prefer the invoice's own org, falling back to the top-nav selector only when the record hasn't exposed `adOrgId` (e.g. a stale cached record). `SendToSifButton.jsx`, `useSifFieldPatcher.js`, and `useInvoicePreview.js` all call it now. At the time this was written, `useFiscalStatus.js` and `InvoicePreview.jsx` needed no change — they already accepted/forwarded `orgId` as a parameter/prop rather than resolving it themselves. **(ETP-5229 update:** `useFiscalStatus.js` no longer takes an `orgId`/`apiBaseUrl` at all — it reads the invoice's own header fields directly and needs no org resolution of any kind for the fiscal STATUS badge. `resolveInvoiceOrgId`/`orgId` remain in use for the fiscal CONFIG lookup (`useFiscalConfig`, eligibility-by-date gating), which is a separate, still-legitimate per-org concern — see the ETP-5229 writeup linked above.)
 
 **`PurchaseInvoiceHeaderTable.jsx` stays on the global `selectedOrg` — deliberately.** An intermediate revision of ETP-5087 argued the opposite (each row carries its own `adOrgId`, so a page could span legal entities with different TBAI territories) and rebuilt the list column on a per-row async org resolution. That was reverted: the extra asynchrony caused three consecutive regressions and bought no capability an invoice list needs, since a list is browsed one org at a time. Both fiscal columns are resolved from the top-nav org in a single synchronous memo — see "List Batuz column — real sync state with a send-flag fallback, synchronous global visibility (ETP-5087)" below. Per-row org resolution (`resolveInvoiceOrgId`) remains correct and in use on the **detail/preview** path, which genuinely operates on one record.
 
@@ -135,7 +137,7 @@ The consequence, accepted deliberately: a page that mixes legal entities from *d
 
 None of that bought a capability the list actually needs: an invoice list is browsed one org at a time. `useOrgFiscalConfigs.js` and its test file have been deleted; `resolveInvoiceOrgId.js` remains, still used by the **detail** path (`SendToSifButton.jsx`, `useSifFieldPatcher.js`, `useInvoicePreview.js`), which is genuinely per-record and unaffected.
 
-**Detail panel is unchanged.** `useFiscalStatus.js` still fetches the `tbai-facturas-enviadas` spec per invoice when a detail/preview is opened. That is one request per record on an explicit user action — correct there, and out of scope for the list.
+**Detail panel — updated by ETP-5229.** `useFiscalStatus.js` no longer fetches the `tbai-facturas-enviadas` spec (or any other network resource) at all — it derives the TBAI status synchronously from the invoice's own `tbaiSyncEstado`/`tbaiIssent` header fields, the same fields this list column reads. See [`sales-invoice.md` — "Config-independent fiscal status badge in invoice preview — ETP-5229"](sales-invoice.md#config-independent-fiscal-status-badge-in-invoice-preview--etp-5229) for why the previous per-invoice config-scoped fetch was itself a bug, not just an efficiency concern.
 
 **Popup wording (`sifSending.js`) — confirmation AND result:** every user-visible string in the `Enviar a SIF` popup that names the TBAI scheme uses the Batuz wording on a purchase invoice and the generic TicketBAI wording on a sales invoice. All three selectors live in `sifSending.js` and switch on the same strict `specName === 'purchase-invoice'` check:
 
@@ -525,6 +527,75 @@ SII status pill (the only one of the three that applies to purchase invoices —
 stale pre-send value. The fix and full root-cause writeup live in
 [`sales-invoice.md` — "TBAI status staleness fix in invoice preview — ETP-4391"](sales-invoice.md#tbai-status-staleness-fix-in-invoice-preview--etp-4391);
 only the spec name and which of the three panels apply differ between the two windows.
+
+**Superseded by ETP-5229.** The mechanism this fix relied on (an event-driven
+network re-fetch) was removed when `useFiscalStatus.js` was rearchitected to read the
+invoice's own header fields synchronously instead of querying config-scoped monitor
+specs — see [`sales-invoice.md` — "Config-independent fiscal status badge in invoice
+preview — ETP-5229"](sales-invoice.md#config-independent-fiscal-status-badge-in-invoice-preview--etp-5229).
+The observable behavior this section describes (the pill updates after a same-session
+send) is preserved, now as a natural consequence of `p.displayInvoice` refreshing.
+
+**Second/third fix under the same ticket — list column and preview InfoRow gates
+(ETP-5229).** The original ETP-5229 pass only fixed `useFiscalStatus.js`; live testing
+then found the exact same config-date-gating bug still live in two more places for this
+window:
+
+- **List column.** `PurchaseInvoiceHeaderTable.jsx` (the component actually served at
+  runtime — see `customLoaders['purchase-invoice']` in
+  `tools/app-shell/src/windows/registry.js`) gated its `_siiStatus`/`_tbaiStatus`
+  `FiscalStatusBadge` cell renders with
+  `isSifEligibleByDate(row.accountingDate/invoiceDate, siiRecord/tbaiRecord?.<adoptionDate>)`,
+  which resolves against the org's single **currently active** fiscal config. An invoice
+  dated before that config's own cutover rendered a dash even when
+  `row.aeatsiiEstado`/`row.tbaiSyncEstado` held a real status from a previous config. The
+  gate was removed; the badge now renders unconditionally off the row's own field, gated
+  only by `targets.showSii`/`targets.showTbai` (org/territory eligibility, not date).
+  `artifacts/purchase-invoice/custom/InvoiceHeaderTable.jsx` — a pipeline-generated
+  duplicate that is **not** wired into `windowLoaders`/`customLoaders` and therefore not
+  currently live — carried the identical SII-only bug and was fixed the same way for
+  consistency.
+- **Preview InfoRow.** `InvoicePreview.jsx`'s `InvoiceGeneralTab` (shared with
+  sales-invoice) additionally gated each `InfoRow` with a `*EligibleByDate` check on top
+  of `fiscalTargets.showX`, so even after `useFiscalStatus` was fixed to return the
+  correct status, the row that would have shown it stayed hidden for a pre-cutover
+  invoice. The date checks were removed; visibility is now `fiscalTargets.showX` alone.
+
+Full writeup, the org-scoped-vs-date-scoped distinction, and the one call site that is
+correctly LEFT date-gated (`sifSending.js`'s new-send eligibility) live in
+[`sales-invoice.md` — "Config-independent fiscal status badge in invoice preview —
+ETP-5229"](sales-invoice.md#config-independent-fiscal-status-badge-in-invoice-preview--etp-5229).
+
+**Correction (ETP-5229, item #16) — "no date gate at all" was itself wrong.** Live
+testing found that removing the gate entirely made SII/TBAI status badges show for
+invoices dated before the org ever configured that system at all — e.g. an invoice dated
+09/09/2026 showed "Estado SII: Pendiente" for an org whose only-ever SII config has an
+acogida date of 10/09/2026. `PurchaseInvoiceHeaderTable.jsx` (and the dead-code duplicate)
+now re-gate each fiscal column's `render()` on `isSifEligibleByDate(row.accountingDate /
+row.invoiceDate, earliestSiiCutoverDate / earliestTbaiCutoverDate)`, where the earliest-*
+values come from `useFiscalConfig` and are the MINIMUM cutover date across **all** of the
+org's config rows for that system ever created (active or deactivated) — not the currently
+active config's own date. This still correctly shows a real status for an invoice sent
+under an old, superseded config, while correctly hiding a status for an invoice that
+predates the system's existence for the org entirely. Full writeup (including where the
+earliest-cutover value is computed and why no new API call was needed) lives in
+[`sales-invoice.md` — "Second correction — 'no date gate at all' was itself wrong
+(ETP-5229, item #16)"](sales-invoice.md#second-correction--no-date-gate-at-all-was-itself-wrong-etp-5229-item-16).
+
+**Refinement (ETP-5229, item #17) — "not applicable" and "applicable but unsent" both
+showed a dash.** Within the eligible branch above, an empty `row.aeatsiiEstado` still
+collapsed to the same dash as a not-eligible row, so a user could not tell "SII will never
+apply" from "SII applies, just not sent yet". `PurchaseInvoiceHeaderTable.jsx` (and the
+dead-code duplicate `artifacts/purchase-invoice/custom/InvoiceHeaderTable.jsx`) now fall
+back to `row.aeatsiiEstado ?? 'PE'` instead of `?? null` when eligible — `'PE'` is the real
+AD code Classic itself writes when an invoice is queued for SII
+(`UpdateInvoicesPreSii.SII_STATUS`), and `FiscalStatusBadge` already renders it as a
+"Pendiente" pill. The TBAI/Batuz column in this file already had the equivalent
+`?? 'Pendiente'` fallback before this change — the gap was SII-only here. Not-eligible rows
+are unaffected (still a dash). Full writeup, including the Verifactu/TBAI side (sales-only
+and detail-badge respectively) and why SII genuinely had this gap in all four render sites,
+lives in [`sales-invoice.md` — "Third refinement — 'not applicable' and 'applicable but
+unsent' both showed a dash (ETP-5229, item #17)"](sales-invoice.md#third-refinement--not-applicable-and-applicable-but-unsent-both-showed-a-dash-etp-5229-item-17).
 
 ## Bank transfer (PIS) via Salt Edge — ETP-4406
 

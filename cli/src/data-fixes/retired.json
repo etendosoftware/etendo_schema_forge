@@ -45,6 +45,17 @@
     ]
   },
   {
+    "fixId": "20260813T120000Z__R23-verifactu-doctype-fields",
+    "checksum": "41f1e35483731a075940f7de70c1ae7a25f98d21df5fb03aa0831210f7d1ffce",
+    "checksumAlgorithm": "sha256",
+    "reason": "R23's rectificative-sales-invoice branch hardcoded em_etvfac_inv_type = 'R1'. Per the field's own AD_Ref_List, 'R1' is a specific rectification cause, not the catch-all generic reason -- the correct default is 'R4' ('Factura rectificativa: Resto.'), confirmed against the same catch-all semantics already used by SII and by TicketBAI (fixed the same day, ETP-5229, as a callout bug). R23's own @check (IS NULL guard) has no awareness it was superseded and would keep seeding NEW/untouched DocTypes with the wrong R1 forever if left active. R23's .sql file stays byte-for-byte untouched (may already be APPLIED against real tenants outside this local dev DB, immutable, checksum tracked here) -- this retirement list is the mechanism, not an edit to the fix. R35-verifactu-doctype-fields-corrected is a strict superset: reproduces R23's still-correct standard-invoice branch (F1/Ventas) unchanged, and replaces the rectificative branch with the corrected R4 value, with a widened guard (IS NULL OR = 'R1') that ALSO retroactively repairs any DocType R23 already mis-populated. em_etvfac_verifac_desc and em_etvfac_reverseinvtype for the rectificative case were not flagged as wrong and are carried over unchanged.",
+    "retiredBy": "ETP-5229",
+    "retiredUtc": "2026-09-11T12:00:00.000Z",
+    "supersededBy": [
+      "20260911T120000Z__R35-verifactu-doctype-fields-corrected"
+    ]
+  },
+  {
     "fixId": "20260616T130000Z__R4-default-customer-location",
     "checksum": "732f3b3a1278f34759b5be0369b98bba9cc9d4be8569b3ed8e7c8b9a881a22a8",
     "checksumAlgorithm": "sha256",

@@ -25,13 +25,10 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipProvider: ({ children }) => children,
   TooltipTrigger: ({ children }) => children,
 }));
-vi.mock('../useFiscalMonitor.js', () => ({
-  VF_SPEC: 'monitor-verifactu',
-  VF_ACEPTADAS_ENTITY: 'facturasAceptadas',
-  VF_PARCIAL_ENTITY: 'facturasParcialmenteAceptadas',
-  VF_RECHAZADAS_ENTITY: 'facturasRechazadas',
-  VF_INVALIDAS_ENTITY: 'facturasInvalidas',
-}));
+vi.mock('../useFiscalMonitor.js', async () => {
+  const { verifactuFiscalMonitorMock } = await import('./testHelpers/verifactuCutoverStub.js');
+  return verifactuFiscalMonitorMock;
+});
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';

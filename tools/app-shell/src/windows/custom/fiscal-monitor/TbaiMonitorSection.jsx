@@ -4,7 +4,18 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, isPendingStatus, fmtDate, PAGE_SIZE, ExportIcon, useFmSelection, fetchCsvAndDownload, selectedRowClassName } from './FmPrimitives.jsx';
-import { TBAI_SPEC, TBAI_ENTITY } from './useFiscalMonitor.js';
+import { TBAI_SPEC, TBAI_ENTITY, buildCutoverCriteria } from './useFiscalMonitor.js';
+
+// ETP-5229 #14 — a sales and a purchase invoice have INDEPENDENT documentno
+// sequences, so they can share the same number. `issotrx` ('Y'/'N', boolean,
+// or truthy/falsy) comes back on the row the same way `invoiceDate` and
+// `invoice$_identifier` already do (joined companion fields NEO projects for
+// the `invoice` FK) — no backend change needed, just consuming what NEO
+// already returns.
+function isSalesRow(row) {
+  const v = row?.issotrx ?? row?.['invoice$issotrx'];
+  return v === true || v === 'Y' || v === 'y';
+}
 
 /**
  * Groups resultadoValidación rows by tbaiSyncinvoiceID (FK → sincronización row id).
@@ -45,7 +56,7 @@ function resolveStatusPillClick(row, { onErrorClick, onBpClick, onInvoiceOpen })
       : () => onBpClick?.(row.businessPartner);
   }
   if (isPendingStatus(row.estado) && row.invoice) {
-    return () => onInvoiceOpen?.(row.invoice, 'sales-invoice');
+    return () => onInvoiceOpen?.(row.invoice, isSalesRow(row) ? 'sales-invoice' : 'purchase-invoice');
   }
   return undefined;
 }
@@ -66,6 +77,7 @@ function buildTbaiExportCols(validationMap) {
   return [
     { label: 'Date',        get: r => { const inv = parseIdentifier(r); return r.invoiceDate ?? inv.date ?? ''; } },
     { label: 'Invoice No.', get: r => parseIdentifier(r).docNo },
+    { label: 'Direction',   get: r => isSalesRow(r) ? 'Sales' : 'Purchase' },
     { label: 'Description', get: r => r['invoice$description'] ?? r.descripcion ?? '' },
     { label: 'Signature',   get: r => r.estado === 'Recibido' ? 'Yes' : 'No' },
     { label: 'Status',      get: r => r.estado ?? '' },
@@ -83,17 +95,24 @@ function parseIdentifier(row) {
   return { docNo: parts[0]?.trim() || raw, date: parts[1]?.trim() || '—' };
 }
 
-async function fetchTbaiList(apiFetch, orgId, page, filterKey) {
+/**
+ * @param {string|null} earliestCutoverDate lower-bound applied the same way as
+ * the KPI counts in useFiscalMonitor.js's fetchTbaiData() — see buildCutoverCriteria
+ * (ETP-5229 #13). Keeps the list in sync with the pill counts above it.
+ */
+async function fetchTbaiList(apiFetch, orgId, page, filterKey, earliestCutoverDate) {
   const params = new URLSearchParams({
     organization: orgId,
     _startRow: String((page - 1) * PAGE_SIZE),
     _endRow:   String(page * PAGE_SIZE),
   });
+  const criteria = [...buildCutoverCriteria(earliestCutoverDate)];
   if (filterKey === FILTER_SENT) {
-    params.set('criteria', JSON.stringify([{ fieldName: STATUS_FIELD, operator: 'equals', value: 'Recibido' }]));
+    criteria.push({ fieldName: STATUS_FIELD, operator: 'equals', value: 'Recibido' });
   } else if (filterKey === FILTER_REJECTED) {
-    params.set('criteria', JSON.stringify([{ fieldName: STATUS_FIELD, operator: 'inSet', value: ['Rechazado', 'Error'] }]));
+    criteria.push({ fieldName: STATUS_FIELD, operator: 'inSet', value: ['Rechazado', 'Error'] });
   }
+  if (criteria.length) params.set('criteria', JSON.stringify(criteria));
   const res = await apiFetch(`/${TBAI_SPEC}/${encodeURIComponent(TBAI_ENTITY)}?${params}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const json = await res.json();
@@ -119,6 +138,7 @@ export default function TbaiMonitorSection({
   refreshKey = 0, onInvoiceOpen, onBpClick, onErrorClick,
   kpis,
   validationResults,
+  earliestCutoverDate = null,
   noWrap,
 }) {
   const ui = useUI();
@@ -154,14 +174,14 @@ export default function TbaiMonitorSection({
     if (!orgId) return;
     setLoading(true);
     setError(null);
-    fetchTbaiList(apiFetch, orgId, page, filter)
+    fetchTbaiList(apiFetch, orgId, page, filter, earliestCutoverDate)
       .then(({ data, totalRows }) => {
         setRows(prev => page === 1 ? data : [...prev, ...data]);
         setTotalRows(totalRows);
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [orgId, filter, page, apiFetch, mockRows, refreshKey]);
+  }, [orgId, filter, page, apiFetch, mockRows, refreshKey, earliestCutoverDate]);
 
   // Reset to first page, rows and selection when filter changes
   useEffect(() => { setPage(1); setRows([]); setSelectedIds(new Set()); }, [filter, setSelectedIds]);
@@ -171,11 +191,13 @@ export default function TbaiMonitorSection({
     setExporting(true);
     try {
       const params = { organization: orgId };
+      const criteria = [...buildCutoverCriteria(earliestCutoverDate)];
       if (filter === FILTER_SENT) {
-        params.criteria = JSON.stringify([{ fieldName: 'estado', operator: 'equals', value: 'Recibido' }]);
+        criteria.push({ fieldName: 'estado', operator: 'equals', value: 'Recibido' });
       } else if (filter === FILTER_REJECTED) {
-        params.criteria = JSON.stringify([{ fieldName: 'estado', operator: 'inSet', value: ['Rechazado', 'Error'] }]);
+        criteria.push({ fieldName: 'estado', operator: 'inSet', value: ['Rechazado', 'Error'] });
       }
+      if (criteria.length) params.criteria = JSON.stringify(criteria);
       await fetchCsvAndDownload(
         apiFetch,
         `/${TBAI_SPEC}/${encodeURIComponent(TBAI_ENTITY)}`,
@@ -240,6 +262,7 @@ export default function TbaiMonitorSection({
                   data-testid="Checkbox__dd7710" /></th>
                 <th className="sortable sorted">{ui('fiscalMonitor.col.date')}</th>
                 <th>{ui('fiscalMonitor.col.invoiceNumber')}</th>
+                <th>{ui('fiscalMonitor.col.direction')}</th>
                 <th>{ui('fiscalMonitor.col.description')}</th>
                 <th>{ui('fiscalMonitor.col.signature')}</th>
                 <th>{ui('fiscalMonitor.col.status')}</th>
@@ -249,13 +272,14 @@ export default function TbaiMonitorSection({
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--fm-fg-3)' }}> {/* 7 cols: checkbox + 6 data */}
+                  <td colSpan={8} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--fm-fg-3)' }}> {/* 8 cols: checkbox + 7 data */}
                     {ui('fiscalMonitor.empty')}
                   </td>
                 </tr>
               ) : rows.map((row, i) => {
                 const inv = parseIdentifier(row);
                 const isSigned = row.estado === 'Recibido';
+                const rowIsSales = isSalesRow(row);
                 const rowErrors = validationMap[row.id] ?? [];
                 const pillClick = resolveStatusPillClick(row, { onErrorClick, onBpClick, onInvoiceOpen });
                 return (
@@ -268,8 +292,17 @@ export default function TbaiMonitorSection({
                     <td className="num-factura">
                       <NumFactura
                         n={inv.docNo}
-                        onOpen={() => onInvoiceOpen?.(row.invoice, 'sales-invoice')}
+                        onOpen={() => onInvoiceOpen?.(row.invoice, rowIsSales ? 'sales-invoice' : 'purchase-invoice')}
                         data-testid="NumFactura__dd7710" />
+                    </td>
+                    <td>
+                      <span
+                        className={`fm-pill ${rowIsSales ? 'info' : 'neutral'}`}
+                        data-testid="tbai-direction-badge"
+                        data-direction={rowIsSales ? 'sales' : 'purchase'}
+                      >
+                        {ui(rowIsSales ? 'fiscalMonitor.direction.sales' : 'fiscalMonitor.direction.purchase')}
+                      </span>
                     </td>
                     <td>{row['invoice$description'] ?? row.descripcion ?? '—'}</td>
                     <td>

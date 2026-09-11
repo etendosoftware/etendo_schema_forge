@@ -91,6 +91,44 @@ describe('patchById — success handling', () => {
   });
 });
 
+// ETP-5229 — optional 7th `queryParams` argument, forwarded verbatim via
+// `buildUrlWithParams`. Not re-testing `buildUrlWithParams` itself here, only
+// that `patchById` wires it in correctly.
+describe('patchById — queryParams (ETP-5229)', () => {
+  it('appends a non-blank queryParams entry to the URL', async () => {
+    mockFetchOnce(() => Promise.resolve({ ok: true, json: async () => ({ response: { data: [{ id: 'tax-1' }] } }) }));
+
+    await patchById('tax', 'tax', 'tax-1', {}, TOKEN, '/sws/neo/sales-invoice', { sifContextOrgId: 'ORG-1' });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/sws/neo/tax/tax/tax-1?sifContextOrgId=ORG-1',
+      expect.objectContaining({ method: 'PATCH' }),
+    );
+  });
+
+  it('produces a URL with NO query string when queryParams value is null (blank treated as absent)', async () => {
+    mockFetchOnce(() => Promise.resolve({ ok: true, json: async () => ({ response: { data: [{ id: 'tax-1' }] } }) }));
+
+    await patchById('tax', 'tax', 'tax-1', {}, TOKEN, '/sws/neo/sales-invoice', { sifContextOrgId: null });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/sws/neo/tax/tax/tax-1',
+      expect.objectContaining({ method: 'PATCH' }),
+    );
+  });
+
+  it('produces a URL with NO query string when queryParams is omitted entirely (default {})', async () => {
+    mockFetchOnce(() => Promise.resolve({ ok: true, json: async () => ({ response: { data: [{ id: 'tax-1' }] } }) }));
+
+    await patchById('tax', 'tax', 'tax-1', {}, TOKEN, '/sws/neo/sales-invoice');
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/sws/neo/tax/tax/tax-1',
+      expect.objectContaining({ method: 'PATCH' }),
+    );
+  });
+});
+
 describe('patchById — error handling (errors are NOT swallowed, unlike fetchById)', () => {
   it('rejects with the server text message when the response is not ok', async () => {
     mockFetchOnce(() => Promise.resolve({ ok: false, status: 400, text: async () => 'Invalid regime code' }));

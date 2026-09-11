@@ -1,4 +1,5 @@
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 export function formatAmount(val, currency) {
@@ -44,9 +45,17 @@ export function fetchById(specName, entityName, id, token, apiBaseUrl) {
 // Unlike `fetchById`, errors are NOT swallowed — a failed write must surface to the
 // caller (toast) rather than silently resolve to null. First consumer: TaxSifModal.jsx
 // (ETP-4888), saving a tax record's SIF fields from an invoice-line quick-fix modal.
-export function patchById(specName, entityName, id, payload, token, apiBaseUrl) {
+//
+// `queryParams` (ETP-5229) is optional and forwarded verbatim via `buildUrlWithParams`,
+// which already drops null/undefined/'' values — the same "blank treated as absent"
+// contract `TaxSifOverrideHandler`'s `sifContextOrgId` param expects on the backend.
+// First use: TaxSifModal.jsx sends `{ sifContextOrgId }` so the tax-level SIF override
+// is written (and read back) under the invoice/order line's OWN organization instead of
+// the caller's current session org, which can legitimately differ (ETP-5229).
+export function patchById(specName, entityName, id, payload, token, apiBaseUrl, queryParams = {}) {
   const base = neoBase(apiBaseUrl);
-  return apiFetch(`${base}/${specName}/${entityName}/${id}`, {
+  const url = buildUrlWithParams(`${base}/${specName}/${entityName}/${id}`, queryParams);
+  return apiFetch(url, {
     method: 'PATCH',
     baseUrl: '',
     token,

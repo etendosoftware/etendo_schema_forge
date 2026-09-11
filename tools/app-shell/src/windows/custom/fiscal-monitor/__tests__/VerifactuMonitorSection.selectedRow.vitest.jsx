@@ -50,13 +50,10 @@ vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => stableApiFetch }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
 vi.mock('lucide-react', () => ({}));
-vi.mock('../useFiscalMonitor.js', () => ({
-  VF_SPEC: 'monitor-verifactu',
-  VF_ACEPTADAS_ENTITY: 'facturasAceptadas',
-  VF_PARCIAL_ENTITY: 'facturasParcialmenteAceptadas',
-  VF_RECHAZADAS_ENTITY: 'facturasRechazadas',
-  VF_INVALIDAS_ENTITY: 'facturasInvalidas',
-}));
+vi.mock('../useFiscalMonitor.js', async () => {
+  const { verifactuFiscalMonitorMock } = await import('./testHelpers/verifactuCutoverStub.js');
+  return verifactuFiscalMonitorMock;
+});
 // FmPrimitives is stubbed the same way its sibling suites stub it — with ONE
 // difference that is the whole point of this file: `useFmSelection` is a real,
 // stateful re-implementation (identical to FmPrimitives' own) instead of a

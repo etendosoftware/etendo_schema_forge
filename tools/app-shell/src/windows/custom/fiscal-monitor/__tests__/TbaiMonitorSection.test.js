@@ -87,8 +87,10 @@ describe('TbaiMonitorSection — pending status opens invoice preview', () => {
     assert.match(src, /onInvoiceOpen\??\.\(row\.invoice/);
   });
 
-  it('always uses sales-invoice hint for TBAI (TBAI is sales-only)', () => {
-    assert.match(src, /sales-invoice/);
+  it('picks sales-invoice or purchase-invoice hint based on the row direction (ETP-5229 #14)', () => {
+    // TBAI is NOT sales-only — a row's own issotrx now decides the spec hint,
+    // instead of the old hardcoded 'sales-invoice' for every row.
+    assert.match(src, /isSalesRow\(row\)\s*\?\s*'sales-invoice'\s*:\s*'purchase-invoice'/);
   });
 });
 

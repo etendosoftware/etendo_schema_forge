@@ -307,6 +307,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
     dateReadOnly,
     siiFieldReadOnly,
     isDraft,
+    isProcessed,
     getVal,
     getDateVal,
   } = useSifFieldPatcher({ data, recordId, token, apiBaseUrl, onChange });
@@ -348,11 +349,21 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
   }, [apiBaseUrl, token, apiFetch, data, onChange]);
 
   // ETP-4783: Per-field lock conditions that differ from the general siiFieldReadOnly gate.
-  // Classic parity: SII desc and accounting-register date are editable even on completed
-  // invoices — they only lock once the invoice has been sent to SII (aeatsiiIssent = 'Y').
+  // `siiSentReadOnly` also gates the visibility of the "Modificada error registral"
+  // checkbox below (it must only appear once the invoice was actually sent to SII) —
+  // keep it strictly tied to `aeatsiiIssent` and do NOT fold `isProcessed` into it, or
+  // that checkbox would start appearing on any completed-but-unsent invoice.
   // aeatsiiIssent has type=boolean in the contract, so the server returns true/false;
   // handle both boolean and legacy string serializations.
   const siiSentReadOnly = data?.aeatsiiIssent === true || data?.aeatsiiIssent === 'Y';
+  // ETP-5229 (item #3): manual testing found Descripción SII and Fecha registro
+  // contable still editable on a COMPLETED invoice that had not yet been sent to
+  // SII — the previous comment here claimed Classic parity kept them editable
+  // until sent, but that is wrong: it left every completed-but-unsent invoice's
+  // SII sub-panel fully editable, which is exactly the bug ETP-5229 reported.
+  // Lock these two fields (independently of the `siiSentReadOnly` visibility gate
+  // above) as soon as the document is processed, same as every other SII field.
+  const siiCompletionLockedReadOnly = siiSentReadOnly || isProcessed;
   // Modificada-error-registral follows AD readOnly logic: editable only when SII estado
   // is CO (Correcto) or AE (Aceptado con errores) and the invoice is not voided.
   const errorRegistralReadOnly =
@@ -543,7 +554,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 type="text"
                 value={getVal('aeatsiiDescripcionSii')}
                 onChange={e => onChange?.('aeatsiiDescripcionSii', e.target.value)}
-                disabled={siiSentReadOnly}
+                disabled={siiCompletionLockedReadOnly}
                 className="bg-card"
                 data-testid="Input__b99c8b" />
             </Field>
@@ -582,7 +593,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 id="sif-accountingRegDate"
                 value={getDateVal('aeatsiiFechaRegCont')}
                 onChange={iso => onChange?.('aeatsiiFechaRegCont', iso)}
-                disabled={siiSentReadOnly}
+                disabled={siiCompletionLockedReadOnly}
                 data-testid="DateField__b99c8b" />
             </Field>
             {siiSentReadOnly && (

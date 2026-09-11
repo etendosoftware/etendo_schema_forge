@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import { SUPPORTED_YEARS } from './models/303/fm303Layouts';
 import { neoBase } from '@/components/related-documents/helpers.js';
-import { Star, Play, Landmark, OctagonAlert, TriangleAlert, X, Check, ChevronDown, Search } from 'lucide-react';
+import { FileText, Landmark, OctagonAlert, TriangleAlert, X, Check, ChevronDown, Search } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
-import { showIaeActivityReminder } from './fiscalModelsUtils.js';
+import { formatPeriod, showIaeActivityReminder } from './fiscalModelsUtils.js';
 import './fiscal-models.css';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -30,7 +30,98 @@ function parseCityLine(cityLine) {
   return { postal, city: rest, province: '' };
 }
 
-// PresentModal — 2 manual paths + 1 opt-in AEAT sentinel path:
+// PresentOptionCard — a single selectable radio-style option row shared by both
+// columns of PresentModal. Extracted so the "Registrar presentación" and
+// "Presentar a la AEAT" columns render identical card visuals without duplicating
+// the inline-style block twice.
+function PresentOptionCard({ p, selected, onSelect, t, acuseFile, onPickFile, fileRef }) {
+  return (
+    <div
+      onClick={onSelect}
+      style={{
+        display: 'flex', alignItems: 'flex-start', gap: 12,
+        padding: '14px 16px', borderRadius: 12, cursor: 'pointer',
+        border: `1px solid ${selected ? 'hsl(var(--primary))' : 'hsl(var(--border-subtle))'}`,
+        background: selected ? 'hsl(var(--muted))' : 'hsl(var(--card))',
+        boxShadow: selected ? '0 0 0 2px hsl(var(--primary) / .15)' : 'none',
+        transition: 'border-color .12s, background .12s, box-shadow .12s',
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))', lineHeight: '20px' }}>
+          {t(p.titleKey)}
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 400, color: 'hsl(var(--text-disabled))', lineHeight: '18px', marginTop: 2 }}>
+          {t(p.descKey)}
+        </div>
+        {p.id === 'submitted_ack' && selected && (
+          <div style={{ marginTop: 10 }}>
+            <button
+              type="button"
+              style={{
+                fontSize: 12, padding: '5px 12px',
+                border: '1px solid hsl(var(--border-control))', borderRadius: 8,
+                cursor: 'pointer', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))',
+              }}
+              onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
+            >
+              {acuseFile ? acuseFile.name : t('fm.present.upload_acuse')}
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf,.xml"
+              style={{ display: 'none' }}
+              onChange={onPickFile}
+            />
+          </div>
+        )}
+      </div>
+      <span style={{
+        width: 18, height: 18, borderRadius: '50%', flexShrink: 0, marginTop: 1,
+        border: `2px solid ${selected ? 'hsl(var(--primary))' : 'hsl(var(--border-control))'}`,
+        background: selected ? 'hsl(var(--primary))' : 'transparent',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'border-color .12s, background .12s',
+      }}>
+        {selected && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(var(--card))', display: 'block' }} />}
+      </span>
+    </div>
+  );
+}
+
+// PresentModalColumn — one of the two columns in the redesigned picker: a small
+// section icon + title + description, followed by its stack of PresentOptionCard.
+function PresentModalColumn({ icon, titleKey, descKey, paths, path, setPath, t, acuseFile, onPickFile, fileRef }) {
+  return (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+        <span style={{ color: 'hsl(var(--text-disabled))', display: 'flex' }}>{icon}</span>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{t(titleKey)}</div>
+      </div>
+      <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', lineHeight: '16px', marginBottom: 12 }}>
+        {t(descKey)}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {paths.map(p => (
+          <PresentOptionCard
+            key={p.id}
+            p={p}
+            selected={path === p.id}
+            onSelect={() => setPath(p.id)}
+            t={t}
+            acuseFile={acuseFile}
+            onPickFile={onPickFile}
+            fileRef={fileRef}
+            data-testid="PresentOptionCard__cda0bb" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// PresentModal — 2 manual paths (left column, "Registrar presentación") + 1
+// opt-in AEAT sentinel path (right column, "Presentar a la AEAT"):
 //   1. submitted_ack   — upload PDF/XML receipt; status → submitted_ack
 //   2. submitted       — submitted without receipt; status → submitted
 //   3. aeat_telematic  — opt-in sentinel path (showAeatPath, 303 only):
@@ -38,10 +129,22 @@ function parseCityLine(cityLine) {
 //      never a real declaration status — the caller (FmModel303Page)
 //      intercepts it and opens the dedicated AeatSubmitFlow instead of
 //      changing the declaration status directly.
+// ETP-5229 item #10: this was briefly split into a separate standalone
+// button/flow outside this modal, then reverted — all 3 paths belong in
+// one "Registrar/Presentar" picker (the trigger's label was renamed from
+// "Marcar como Presentado" to reflect that it now also covers live filing).
 // The former "Otra Plataforma" (external-agency) path was removed from
 // this modal — its status remains valid and fully-rendered for any
 // declaration that already carries it, it just can no longer be newly
 // selected here.
+// Two-column redesign (ETP-5229 item #10, from Figma mockup): left column
+// ("Registrar presentación") always holds the 2 manual paths; right column
+// ("Presentar a la AEAT") holds the aeat_telematic path and only renders at
+// all when `showAeatPath` is true (303 only — 349 has no telematic path, so
+// it shows a single full-width column, matching the pre-redesign behavior).
+// The underlying `path` selection state and `canConfirm`/`handleConfirm`
+// logic are unchanged from the single-column version — only the visual
+// grouping changed.
 export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
   const ui = useUI();
   const t = ui;
@@ -56,93 +159,70 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
     onClose();
   }
 
-  const PATHS = [
-    { id: 'submitted_ack', icon: <Star size={16} strokeWidth={1.75} data-testid="Star__cda0bb" />, titleKey: 'fm.present.path.acuse',      descKey: 'fm.present.path.acuse_desc' },
-    { id: 'submitted',     icon: <Play size={16} strokeWidth={1.75} data-testid="Play__cda0bb" />, titleKey: 'fm.present.path.sin_acuse',  descKey: 'fm.present.path.sin_acuse_desc' },
-    ...(showAeatPath ? [
-      { id: 'aeat_telematic', icon: <Landmark size={16} strokeWidth={1.75} data-testid="Landmark__cda0bb" />, titleKey: 'fm.present.path.aeat', descKey: 'fm.present.path.aeat_desc' },
-    ] : []),
+  const onPickFile = (e) => setAcuseFile(e.target.files?.[0] ?? null);
+
+  const REGISTER_PATHS = [
+    { id: 'submitted_ack', titleKey: 'fm.present.path.acuse',     descKey: 'fm.present.path.acuse_desc' },
+    { id: 'submitted',     titleKey: 'fm.present.path.sin_acuse', descKey: 'fm.present.path.sin_acuse_desc' },
   ];
+  const AEAT_PATHS = showAeatPath
+    ? [{ id: 'aeat_telematic', titleKey: 'fm.present.path.aeat', descKey: 'fm.present.path.aeat_desc' }]
+    : [];
+
+  // Dynamic subtitle: "Modelo <model> · <period> <year>" (reuses the same
+  // formatting key NewDeclModal's preview line already uses). Falls back to
+  // the generic instructional subtitle when decl doesn't carry model/year/period
+  // (e.g. tests that pass a bare `{ id }` stub).
+  const subtitle = (decl?.model && decl?.year && decl?.period)
+    ? t('fm.new_decl.preview', { model: decl.model, period: formatPeriod(decl.period), year: decl.year })
+    : (t('fm.present.subtitle') ?? 'Selecciona cómo fue presentada la declaración');
 
   return (
     <div className="fm-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="fm-config-modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+      <div className="fm-config-modal fm-present-modal" style={{ maxWidth: showAeatPath ? 760 : 500 }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="fm-config-modal__header">
           <div className="fm-config-modal__titles">
             <div className="fm-config-modal__title">{t('fm.present.title')}</div>
-            <div className="fm-config-modal__sub">{t('fm.present.subtitle') ?? 'Selecciona cómo fue presentada la declaración'}</div>
+            <div className="fm-config-modal__sub">{subtitle}</div>
           </div>
           <button className="fm-config-modal__close" onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
         </div>
 
-        {/* Body */}
-        <div className="fm-config-modal__body" style={{ minHeight: 'auto', padding: '16px 20px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {PATHS.map(p => (
-              <div
-                key={p.id}
-                onClick={() => setPath(p.id)}
-                style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 12,
-                  padding: '14px 16px', borderRadius: 12, cursor: 'pointer',
-                  border: `1px solid ${path === p.id ? 'hsl(var(--foreground))' : 'hsl(var(--border-subtle))'}`,
-                  background: path === p.id ? 'hsl(var(--muted))' : 'hsl(var(--card))',
-                  transition: 'border-color .12s, background .12s',
-                }}
-              >
-                <span style={{
-                  width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: path === p.id ? 'hsl(var(--foreground))' : 'hsl(var(--muted))',
-                  color: path === p.id ? 'hsl(var(--card))' : 'hsl(var(--text-disabled))',
-                  transition: 'background .12s, color .12s',
-                }}>
-                  {p.icon}
-                </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))', lineHeight: '20px' }}>
-                    {t(p.titleKey)}
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 400, color: 'hsl(var(--text-disabled))', lineHeight: '18px', marginTop: 2 }}>
-                    {t(p.descKey)}
-                  </div>
-                  {p.id === 'submitted_ack' && path === 'submitted_ack' && (
-                    <div style={{ marginTop: 10 }}>
-                      <button
-                        type="button"
-                        style={{
-                          fontSize: 12, padding: '5px 12px',
-                          border: '1px solid hsl(var(--border-control))', borderRadius: 8,
-                          cursor: 'pointer', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))',
-                        }}
-                        onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
-                      >
-                        {acuseFile ? acuseFile.name : t('fm.present.upload_acuse')}
-                      </button>
-                      <input
-                        ref={fileRef}
-                        type="file"
-                        accept=".pdf,.xml"
-                        style={{ display: 'none' }}
-                        onChange={e => setAcuseFile(e.target.files?.[0] ?? null)}
-                      />
-                    </div>
-                  )}
-                </div>
-                <span style={{
-                  width: 18, height: 18, borderRadius: '50%', flexShrink: 0, marginTop: 1,
-                  border: `2px solid ${path === p.id ? 'hsl(var(--foreground))' : 'hsl(var(--border-control))'}`,
-                  background: path === p.id ? 'hsl(var(--foreground))' : 'transparent',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'border-color .12s, background .12s',
-                }}>
-                  {path === p.id && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(var(--card))', display: 'block' }} />}
-                </span>
-              </div>
-            ))}
-          </div>
+        {/* Body — two columns divided by a vertical separator when the AEAT
+            path is available; a single full-width column otherwise (349). */}
+        <div className="fm-config-modal__body" style={{ minHeight: 'auto', padding: '16px 20px', display: 'flex', gap: 20 }}>
+          <PresentModalColumn
+            icon={<FileText size={16} strokeWidth={1.75} data-testid="FileText__cda0bb" />}
+            titleKey="fm.present.register_section.title"
+            descKey="fm.present.register_section.desc"
+            paths={REGISTER_PATHS}
+            path={path}
+            setPath={setPath}
+            t={t}
+            acuseFile={acuseFile}
+            onPickFile={onPickFile}
+            fileRef={fileRef}
+            data-testid="PresentModalColumn__cda0bb" />
+
+          {showAeatPath && (
+            <>
+              <div style={{ width: 1, alignSelf: 'stretch', background: 'hsl(var(--border-subtle))' }} aria-hidden="true" />
+              <PresentModalColumn
+                icon={<Landmark size={16} strokeWidth={1.75} data-testid="Landmark__cda0bb" />}
+                titleKey="fm.present.aeat_section.title"
+                descKey="fm.present.aeat_section.desc"
+                paths={AEAT_PATHS}
+                path={path}
+                setPath={setPath}
+                t={t}
+                acuseFile={acuseFile}
+                onPickFile={onPickFile}
+                fileRef={fileRef}
+                data-testid="PresentModalColumn__cda0bb" />
+            </>
+          )}
         </div>
 
         {/* Footer */}

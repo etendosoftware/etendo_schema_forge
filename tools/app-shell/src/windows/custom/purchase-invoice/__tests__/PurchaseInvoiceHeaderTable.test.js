@@ -194,6 +194,101 @@ describe('PurchaseInvoiceHeaderTable — custom column filter modes (ETP-4681)',
 // Both are now decided by resolveInvoicePaymentBadge; getApSubtype survives only
 // as the doc-type badge's input.
 
+// ── ETP-5229 (corrected design): SII/Batuz VALUE is date-independent, but
+// per-row ELIGIBILITY is gated on the EARLIEST-ever cutover for that system ──
+// This is the component ACTUALLY served at runtime for the purchase-invoice
+// window (routed via `customLoaders['purchase-invoice']`). A row genuinely
+// sent/processed under a PREVIOUS, since-superseded config must keep showing
+// its real persisted status (see useFiscalStatus.js for the root-cause
+// writeup), but an invoice dated before the system EVER existed for this org
+// must show a dash. Both hold via a per-row gate against the EARLIEST cutover
+// across ALL of the org's config rows (active or inactive) — never the active
+// config's own (possibly later) cutover. Column *existence*
+// (targets.showSii/showTbai) remains org/territory-scoped, never date-scoped.
+describe('PurchaseInvoiceHeaderTable — fiscal status badges gated on earliest-ever cutover (ETP-5229 corrected)', () => {
+  it('imports isSifEligibleByDate and isTbaiStatusNotApplicable', () => {
+    assert.match(
+      src,
+      /import\s*\{\s*getInvoiceFiscalTargets,\s*isSifEligibleByDate,\s*isTbaiStatusNotApplicable\s*\}\s*from '@\/windows\/custom\/shared\/fiscalTargets\.js'/,
+      'the SII earliest-cutover gate and the TBAI NoAplica helper must both come from fiscalTargets.js',
+    );
+  });
+
+  it('destructures earliestSiiCutoverDate from useFiscalConfig (TBAI has no client-side cutover — ETP-5216/ETP-5229)', () => {
+    const destructure = src.match(/const\s*\{\s*\n?\s*profile,\s*tbaiRecord,[\s\S]*?\}\s*=\s*useFiscalConfig\(orgId,\s*apiBaseUrl\)/);
+    assert.ok(destructure, 'expected the useFiscalConfig destructure block');
+    assert.match(
+      destructure[0],
+      /const\s*\{\s*\n?\s*profile,\s*tbaiRecord,\s*\n?\s*earliestSiiCutoverDate,?\s*\n?\s*\}/,
+      'the earliest-ever SII cutover must be pulled from useFiscalConfig to gate the SII badge',
+    );
+    assert.doesNotMatch(
+      destructure[0],
+      /earliestTbaiCutoverDate/,
+      'TBAI no longer reads a client-side cutover date — its gate moved into the stored DB column',
+    );
+  });
+
+  it('does not destructure siiRecord (the active-only record) anymore', () => {
+    assert.doesNotMatch(
+      src,
+      /const\s*\{\s*profile,\s*siiRecord/,
+      'the badge gate uses the earliest-ever cutover, not the active config\'s own adoption-date record',
+    );
+  });
+
+  it('gates the SII badge on isSifEligibleByDate(row.accountingDate, earliestSiiCutoverDate)', () => {
+    const cell = src.match(/if \(targets\.showSii\) \{[\s\S]*?\}\)?;\s*\}/);
+    assert.ok(cell, 'expected the showSii column-push block');
+    assert.match(cell[0], /isSifEligibleByDate\(row\.accountingDate, earliestSiiCutoverDate\)/);
+    // ETP-5229 item #17: eligible-but-empty falls back to the 'PE' pending
+    // marker, not a fabricated null — not-eligible (outside this expression)
+    // still yields the dash, verified separately below.
+    assert.match(cell[0], /row\.aeatsiiEstado \?\? 'PE'/);
+  });
+
+  it('the Batuz/TBAI badge reads eTGOTbaiStatus directly, with no client-side date gate (ETP-5216/ETP-5229)', () => {
+    const cell = src.match(/if \(targets\.showTbai\) \{[\s\S]*?\}\)?;\s*\}/);
+    assert.ok(cell, 'expected the showTbai column-push block');
+    // Strip comments: the block's own prose narrates the migration (it names
+    // isSifEligibleByDate/earliestTbaiCutoverDate on purpose), so a raw-text
+    // match would fail on the documentation rather than the code it describes.
+    const code = cell[0].replace(/^\s*\/\/.*$/gm, '');
+    assert.doesNotMatch(code, /isSifEligibleByDate/,
+      'TBAI eligibility now lives inside the stored function backing eTGOTbaiStatus, not here');
+    assert.match(cell[0], /key: 'eTGOTbaiStatus', column: 'em_etgo_tbai_status', type: 'custom'/);
+    assert.match(cell[0], /isTbaiStatusNotApplicable\(row\.eTGOTbaiStatus\)/);
+    assert.match(
+      cell[0],
+      /row\.eTGOTbaiStatus \?\? \(isSent\(row\.tbaiIssent\) \? 'Enviada' : 'Pendiente'\)/,
+      'eTGOTbaiStatus stays primary; tbaiIssent remains only the fallback for a row fetched before backfill',
+    );
+  });
+
+  it('renders a null status (dash) for SII when the eligibility check fails', () => {
+    const cell = src.match(/if \(targets\.showSii\) \{[\s\S]*?\}\)?;\s*\}/);
+    assert.ok(cell, 'expected the showSii column-push block');
+    assert.match(cell[0], /\? .*? : null/, 'SII branch must fall back to null (dash) when ineligible');
+  });
+
+  // TBAI is the ONE system with no eligibility ternary in this file — its dash
+  // comes from `isTbaiStatusNotApplicable(row.eTGOTbaiStatus)` reading the DB's
+  // 'NoAplica' literal, not a `? ... : null` client-side date check.
+  it('renders the Batuz/TBAI dash via isTbaiStatusNotApplicable, not a `? ... : null` eligibility ternary', () => {
+    const cell = src.match(/if \(targets\.showTbai\) \{[\s\S]*?\}\)?;\s*\}/);
+    assert.ok(cell, 'expected the showTbai column-push block');
+    assert.match(cell[0], /isTbaiStatusNotApplicable\(row\.eTGOTbaiStatus\)\s*\n\s*\?\s*<span className="text-muted-foreground">—<\/span>/);
+  });
+
+  // ETP-5229 item #17: eligible-but-empty must resolve to a distinct pending
+  // marker, never the same dash used for genuine ineligibility (SII only —
+  // TBAI's fallback chain is asserted above).
+  it('falls back to the "PE" pending marker for SII when eligible but the persisted status is empty', () => {
+    const siiCell = src.match(/if \(targets\.showSii\) \{[\s\S]*?\}\)?;\s*\}/);
+    assert.match(siiCell[0], /row\.aeatsiiEstado \?\? 'PE'/, 'SII pending marker is the raw PE code');
+  });
+});
+
 describe('PurchaseInvoiceHeaderTable — sign-driven payment badge (ETP-4841)', () => {
   it('imports the shared resolveInvoicePaymentBadge helper', () => {
     assert.match(

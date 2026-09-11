@@ -1013,7 +1013,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
             onClick={() => setShowPresent(true)}
           >
             <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__346dd5" />
-            {t('fm.action.present') ?? "Marcar como 'Presentado'"}
+            {t('fm.action.present') ?? 'Registrar/Presentar'}
           </button>
         )}
       </div>
