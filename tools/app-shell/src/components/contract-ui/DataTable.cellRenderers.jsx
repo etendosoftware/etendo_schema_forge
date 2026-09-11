@@ -4,6 +4,7 @@ import { Tag } from '@/components/ui/tag';
 import { BoxIcon } from '@/components/ui/box-icon';
 import { useNeoImage } from '@/hooks/useNeoImage';
 import { formatAmount } from '@/lib/formatAmount.js';
+import { resolveRowCurrency } from '@/lib/rowCurrency.js';
 import { formatSignedDelta } from '@/lib/formatSigned.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { getStatusDotColor, getStatusTone, statusLabel } from '@/lib/statusBadge.js';
@@ -220,8 +221,8 @@ export function renderDateCell({ row, col, dateFormatter }) {
 // Generic `amount`-type column renderer used by almost every window's DataTable.
 // This is the reference pattern for any new amount column — copy this, don't
 // reimplement Intl.NumberFormat locally (see CLAUDE.md § Currency & Amount Formatting).
-export function renderAmountCell({ row, col }) {
-  return <span className="tabular-nums">{formatAmount(row[col.key], row['currency$_identifier'])}</span>;
+export function renderAmountCell({ row, col, sessionCurrency }) {
+  return <span className="tabular-nums">{formatAmount(row[col.key], resolveRowCurrency(row, col, sessionCurrency))}</span>;
 }
 
 // Mirrors TONE_CLASS in components/ui/money-amount.jsx and the sibling

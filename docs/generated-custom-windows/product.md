@@ -20,6 +20,8 @@ identity of separate data series and is not a UI status or theme role.
 - Review and edit pricing from a dedicated `Price` tab without leaving the product page. Pricing tables are entered via per-table pencil icons (one for Sales lists, one for Purchase lists) that open a focused dialog.
 - Click a product image to open a lightbox for full-size inspection. Upload, replace, and remove the image from within the same field in the form grid.
 - Inspect stock availability and stock movement context from the custom sidebar.
+- Record the product's **standard cost** over time from the generated **Cost** tab (`Costing` in `decisions.json`, "Costo" in Spanish), the first tab in the unified secondary tab strip (Cost, Accounting, Price, Attachments). Engine-generated cost rows are shown but cannot be edited or deleted; only hand-entered ones can. See the ETP-5245 section below.
+- Be stopped from saving a stockable product that has no cost defined at all: a full-width warning banner appears above the form and the save is refused until a cost line exists (ETP-5245).
 - Maintain the product's GL accounting accounts (Fixed Asset, Product Expense, Product Revenue, Product COGS, Invoice Price Variance) per accounting schema from the generated **Accounting** tab, the first tab in the unified secondary tab strip (Accounting, Price, Attachments).
 - Use the contract-backed product children and actions when the generated page exposes them, while treating the exact visible tab set beyond the custom surfaces as partially evidenced.
 
@@ -31,13 +33,15 @@ identity of separate data series and is not a UI status or theme role.
 
 The list surface is gallery-based rather than a plain grid. Product cards show the image when one exists and fall back to a package icon when no image is available. Opening a record takes the user into a detail screen with two primary tabs: `General` and `Additional Info`.
 
-The detail screen also changes the standard generated behavior in four visible ways:
+The detail screen also changes the standard generated behavior in six visible ways:
+- the product's standard-cost history is surfaced through a **Cost** tab (classic grid+form, `CostingTable`/`CostingForm`), declared via `secondaryTabs` in `decisions.json` (ETP-5245)
 - the product's GL accounting accounts are surfaced through an **Accounting** tab (classic grid+form, `AccountingTable`/`AccountingForm`), declared via `secondaryTabs` in `decisions.json`
 - pricing is surfaced through a custom **Price** tab (`ProductPriceBar`), declared via `customPanelTabs` in `decisions.json`
+- a blocking cost warning is injected above the form through `window.customComponents.subHeader` (`ProductCostBanner`, ETP-5245)
 - the sidebar is product-specific (`ProductSidebar`)
 - print and the generic More menu are hidden
 
-**Accounting**, **Price**, and **Attachments** render together in one unified tab strip, in that order — Accounting first because `secondaryTabs` entries are appended before `customPanelTabs` entries in the generated tab array (see `resolveSecondaryTabDefs` / `DetailView.jsx`; there is no decisions.json-level control over relative order between the two groups, and no way to put a `secondaryTabs` entry after a `customPanelTabs` entry without changing `DetailView.jsx`/`generate-frontend.js` — tracked as a follow-up in ETP-4415). Before ETP-4402's follow-up, Accounting was wired as `window.detailEntity`, which rendered it in a separate block above this tab strip instead of inside it.
+**Cost**, **Accounting**, **Price**, and **Attachments** render together in one unified tab strip, in that order. The two `secondaryTabs` entries come first because `secondaryTabs` entries are appended before `customPanelTabs` entries in the generated tab array (see `resolveSecondaryTabDefs` / `DetailView.jsx`; there is no decisions.json-level control over relative order between the two groups, and no way to put a `secondaryTabs` entry after a `customPanelTabs` entry without changing `DetailView.jsx`/`generate-frontend.js` — tracked as a follow-up in ETP-4415). Within the `secondaryTabs` group the order *is* controllable, and Cost sits before Accounting because it declares `tabOrder: 500` against Accounting's `1000`. Before ETP-4402's follow-up, Accounting was wired as `window.detailEntity`, which rendered it in a separate block above this tab strip instead of inside it.
 
 The product image field is `inline: true` in `decisions.json`, which keeps it inside the four-column form grid spanning two rows (`row-span-2`) rather than rendering it separately above the form. The field renders with an upload button inside the container, a hover overlay with zoom and remove/replace actions, and a lightbox via a portal to `document.body` (ESC to close). When an image is present the cursor is `cursor-zoom-in`.
 
@@ -61,6 +65,11 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
   - The dropdown is left to auto-flip (`preferDown` is deliberately **not** passed). The add row is the last element of the tab, so forcing the panel downward drew it past the viewport edge — and because the panel is `position: fixed`, no amount of scrolling could reveal it.
   - When every tariff of the active side already has a price, the tab renders an explicit hint (`priceAllSalesTariffsAssigned` / `priceAllPurchaseTariffsAssigned`, `data-testid="price-no-available-tariffs"`). Without it the dropdown showed only `+ Create tariff` with no explanation, which reads as a rendering bug. The hint is gated on the fetch having resolved so it never flashes while loading.
   - Selector catalogs are not eagerly loaded (`useCatalogs` is a no-op **and** `DetailView` does not pass `catalogs` to custom tab components), so the lazy fetch above is the only live path in the running app; the eager branch is exercised only by tests.
+- **Cost tab states (ETP-5245):**
+  - The tab declares `requireSavedRecord: true`, so on `/product/new` it blocks opening/adding until the header itself has been saved — the cost lines have no parent to hang from yet.
+  - Rows the costing engine generated (`M_Costing.ISMANUAL = 'N'`) render read-only: every editable field carries `readOnlyLogic: (record) => record.manual === false || record.manual === 'N'` (`artifacts/product/generated/web/product/CostingForm.jsx:4-6`). The same rows are refused a `PATCH`/`PUT`/`DELETE` server-side with a `403`.
+  - The **save gate** is window-scoped and lives in the shared hook: `useEntity.js` (in `performSave`, right after the phone-format check) calls `isProductMissingRequiredCost(specName, clampedEditing)` and, when it is true, aborts the save with the `productCostRequired` message under the stable toast id `product-cost-required`. It is inert for every other window because the predicate returns `false` unless `specName === 'product'` — the same shape as `getContactsTextFieldViolation`.
+  - `ProductCostBanner` reads the same predicate, so the banner and the refusal can never disagree. Both clear on their own as soon as a cost line exists, because the backend re-emits `etgoHasCost` on the next read.
 - **Sidebar reactions:**
   - The inventory sidebar has two tabs: `Summary` and `Warehouses`. A shared `SidebarPeriodSelector` (3M / 6M / 12M) sits at the top of each tab and drives the inline chart's time window. The selector is disabled when no transaction history exists.
   - `Summary` shows an **On Hand** `AvailabilityWidget` card. The widget is hidden when there are no transactions — a product that sold all its stock still has transactions and will display the widget showing `0`; a product with no history at all omits it entirely.
@@ -77,7 +86,8 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 ## Gap assessment
 - The generated contract declares many child datasets and actions, but the inspected page code makes only the gallery, the two primary tabs, the pricing footer, and the product sidebar explicit. Treat the exact visible availability of every child surface beyond those areas as partially evidenced.
 - The pricing selector excludes already-priced tariffs by **price-list-version** id. Today that is exact (every price list in the inspected tenants has exactly one version, and `PriceListVersionHandler` refuses to create a second), but a legacy price list carrying two versions would appear twice in the selector under the same tariff name. Fixing it properly needs a price-list id on the row payload (`ProductPriceHandler`'s list SQL selects `pl.name` but not `pl.m_pricelist_id`).
-- Variant management, service/tax helper actions, and transaction-level manual cost adjustment remain declared in metadata, but the inspected page code does not make their live entry points explicit.
+- Variant management and service/tax helper actions remain declared in metadata, but the inspected page code does not make their live entry points explicit. **Standard cost is no longer in this list** — since ETP-5245 the `costing` entity has a visible, writable entry point (the **Cost** tab). Transaction-level manual cost *adjustment* (`transactionAdjustments`) is still metadata-only.
+- **No per-row delete gate on secondary tabs (accepted debt, ETP-5245).** The Cost tab shows the whole `M_Costing` history, engine-generated rows included, and those rows must not be deleted. The delete affordance, however, is decided **per entity, not per row**: `DetailView.jsx:638` derives `onDeleteRow` from `crud?.[st.key]?.delete`, and `DataTable.jsx:1689` renders the trash cell for every row once that handler exists. The bin is therefore visible on engine rows too, and clicking it produces a backend **403** (`ProductCostingHandler.guardEngineRow`) surfaced as a translated error rather than the button being absent. This was reviewed and accepted for ETP-5245: the guarantee is server-side and covers the API and MCP as well as the UI. The complete fix is a `canDeleteRow` predicate on `DataTable`/`InlineLinesPanel`, which lives in `schema_forge_core` — logged in `docs/feedback.md` under the ETP-5245 entry.
 - `ProductDetailHeader.jsx` still returns `null`, so any richer standalone product header is not part of the current visible behavior.
 
 ## Manual verification
@@ -96,9 +106,10 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 9. Open a product with an image. Verify the image renders inside the form grid (not above it), spanning two rows alongside adjacent fields. Click the image and confirm the lightbox opens portal-rendered over the page. Press ESC and confirm the lightbox closes. Hover the image thumbnail in the form and confirm the overlay appears with zoom, remove, and replace actions.
 10. Confirm the sidebar exposes `Summary` and `Warehouses`, and that `Stock movement` only appears when the product has transaction history. When it appears, verify the chart uses smooth curves, dashed gridlines, and a pill-style period-switch row. Click "Expand" below the chart title and verify the modal opens with the period switches and warehouse drill-down.
 11. In `Summary`, confirm `Available` and `Reserved` stat cards are hidden when `reserved === 0`. Open a product that has reserved stock and confirm those cards are visible.
-12. If the business depends on BOM, costing, transactions, characteristics, stock, category price rule version, alternate UOM, or variant actions, verify which of those surfaces are actually visible in the running page. Current repo evidence does not fully prove all of them.
-13. Select the **Attachments** tab (sits in the same tab strip as **Accounting** and **Price**, after the primary tab strip). Upload a file, verify it shows up in the table with name, size, and upload date, and that downloading and deleting it work correctly. When multiple files exist, confirm "Download all (ZIP)" and "Delete all" appear and that "Delete all" prompts a confirmation dialog.
-14. Open an existing product and confirm the secondary tab strip (below `General`/`Additional Info`) shows tabs in this exact order: **Accounting**, **Price**, **Attachments**. Select `Accounting` and confirm it renders as a classic grid+form (not a separate panel above the tab strip) with `Fixed Asset`, `Product Expense`, `Product Revenue`, `Product COGS`, `Invoice Price Variance` add/edit fields.
+12. If the business depends on BOM, transactions, characteristics, stock, category price rule version, alternate UOM, or variant actions, verify which of those surfaces are actually visible in the running page. Current repo evidence does not fully prove all of them. (Costing was removed from this list in ETP-5245 — it now has its own tab, verified in step 15.)
+13. Select the **Attachments** tab (sits in the same tab strip as **Cost**, **Accounting** and **Price**, after the primary tab strip). Upload a file, verify it shows up in the table with name, size, and upload date, and that downloading and deleting it work correctly. When multiple files exist, confirm "Download all (ZIP)" and "Delete all" appear and that "Delete all" prompts a confirmation dialog.
+14. Open an existing product and confirm the secondary tab strip (below `General`/`Additional Info`) shows tabs in this exact order: **Cost**, **Accounting**, **Price**, **Attachments**. Select `Accounting` and confirm it renders as a classic grid+form (not a separate panel above the tab strip) with `Fixed Asset`, `Product Expense`, `Product Revenue`, `Product COGS`, `Invoice Price Variance` add/edit fields.
+15. See "Manual verification (ETP-5245)" below for the Cost tab, the blocking banner and the seeded zero prices.
 
 ## Automated evidence
 - Route registration and menu visibility are grounded in `tools/app-shell/src/windows/registry.js` and `tools/app-shell/src/menu.json`, which register `product` as a generated/custom window reachable from the Inventory section.
@@ -604,6 +615,321 @@ Coverage:
   and renders normally for Article.
 - `com.etendoerp.go`'s `ProductDefaultsHandlerTest.java` — the ETP-4943 Service POST/PATCH/absent-flags
   cases mirrored for Expense and Resource.
+
+## ETP-5245 — Cost tab, blocking cost banner, and zero-priced default tariffs
+
+Three related changes, all driven by the same problem: a stockable product created in Etendo Go
+could reach the warehouse with neither a **cost** nor a **price**, and the failure only surfaced
+much later — at the first shipment, receipt or inventory count — as
+`@NoStandardCostDefined@` / `@NoPriceListOrStandardCostForProduct@`, far from whoever created the
+product. This ticket moves both failures forward to the moment the product is created.
+
+### 1. The Costing tab becomes writable
+
+`decisions.json → entities.costing` lost its `readOnly: true` and gained
+`javaQualifier: "productCostingHandler"`. A new `window.secondaryTabs.costing` entry renders it:
+
+```json
+"secondaryTabs": {
+  "costing": {
+    "tabOrder": 500,
+    "label": "Costing",
+    "requireSavedRecord": true,
+    "addLineFields": ["cost", "startingDate", "endingDate"]
+  },
+  "accounting": { "tabOrder": 1000, "…": "…" }
+}
+```
+
+`tabOrder: 500` puts it before Accounting (`1000`); the tab strip is now **Cost → Accounting →
+Price → Attachments**. The label `"Costing"` resolves through `useMenuLabel` (`DetailView.jsx`:
+`(st.labelKey && ui(st.labelKey)) || tMenu(st.label)`), so the tab reads **Costing** in English and
+**Costo** in Spanish.
+
+**Exactly three columns are shown** — `cost`, `startingDate`, `endingDate` — in both
+`CostingTable.jsx` and `CostingForm.jsx`. Everything else was deliberately taken off the screen:
+
+| Field | Visibility | Why |
+|---|---|---|
+| `cost` | `editable`, `required`, `columnType: "amount"`, `summable: false`, `currencyField: "cCurrencyID"` | the value the user is here to enter — see **Cost column formatting** below |
+| `startingDate` | `editable`, `required` | relabelled **Start Date / Fecha de inicio** (the AD calls the column `DateFrom` → "From Date") |
+| `endingDate` | `editable`, optional | relabelled **Expiry Date / Fecha de expiración**; blank means "in force indefinitely" |
+| `costType` | `system` | the handler forces `'STA'`; it is not the user's decision, so it is not shown |
+| `manual`, `permanent`, `production` | `system` | **must be `system`, not `discarded`** — see the note below |
+| `cCurrencyID` | `system` | resolved from the organization, never picked — but `system` (not `discarded`) also keeps `cCurrencyID$_identifier` in the NEO payload, which is what lets each row print its own currency symbol |
+| `quantity`, `warehouse`, `originalCost` | `discarded` | only ever carry a value on engine-generated rows; noise in a tab about cost history |
+
+The three `DateFrom`/`DateTo` label overrides were added to `window.labelOverrides` for `en_US`,
+`es_ES` **and** `es_AR`.
+
+**Cost column formatting (ETP-5245).** The column shipped as `98.47` / `100` — no decimals, no
+separators, no currency — because it had no `columnType`, so it fell through to the plain `number`
+renderer. Typing it `amount` fixes the formatting but, on its own, also drags in a footer **totals
+row**: `DataTable` sums every `amount` column. A sum of standard costs is meaningless — these are
+the values in force at different points in time, not amounts that accumulate — so the field
+declares `summable: false`, which keeps the money formatting and drops the aggregation.
+
+The currency needed a second, independent fix. `renderAmountCell` looked up one hardcoded property,
+`row['currency$_identifier']`, while `M_Costing`'s currency field is named `cCurrencyID`, so NEO
+emits `cCurrencyID$_identifier` and the symbol never appeared. `currencyField: "cCurrencyID"` points
+the renderer at the right property. The value arrives already legible (`"EUR"`, `"USD"`) because
+`C_Currency`'s identifier column is `ISO_Code` — no backend change was needed.
+
+The currency is resolved **per row**, never from the session: this tenant's `M_Costing` holds 1663
+rows in USD next to 1545 in EUR, so a single window-wide currency would be wrong for half the grid.
+Result: `98,47 €` and `100,00 $` side by side, and no totals row. Both keys are generic pipeline
+features, not a Product special case — see `docs/decisions-reference.md`
+§"Amount columns: formatting vs. totals".
+
+> **`system` vs `discarded` is load-bearing here.** `NeoFieldFilter.filterCreateRequest`
+> (com.etendoerp.go) strips `discarded` fields out of the POST body. `ProductCostingHandler` writes
+> `manual`, `permanent`, `production` and `costType` into that same body, so leaving them
+> `discarded` would silently drop the handler's own values and the row would be created with the
+> AD defaults — indistinguishable from an engine row. `manual` in particular also feeds the
+> per-row read-only rule below, so it has to survive the filter.
+
+**Per-row lock on engine rows.** The three editable fields carry
+`readOnlyLogicJs: "record.manual === false || record.manual === 'N'"`, which the generator emits as
+a real predicate on the form fields (`CostingForm.jsx:4-6`). `readOnlyLogic: null` is set alongside
+it on each of the three fields, per the rule in `docs/decisions-reference.md`: when both keys are
+present the raw AD value must be silenced explicitly, or the two compile into contradictory or
+redundant checks. Note the
+predicate lands on the **form** fields only — `CostingTable.jsx`'s columns carry no
+`readOnlyLogic`, which is one half of the accepted debt recorded in the Gap assessment above; the
+other half is the always-visible trash icon. The server-side `403` is what actually guarantees the
+rule, for the UI, the REST API and the MCP alike.
+
+### 2. `ProductCostingHandler` (com.etendoerp.go)
+
+New `NeoHandler` at
+`{etendo_root}/modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/ProductCostingHandler.java`,
+registered through `ETGO_SF_ENTITY.Java_Qualifier = "productCostingHandler"`. `@Named` only, never
+a normal scope (see `docs/neo-headless-extensibility.md` §2.2). `M_Costing` is the costing engine's
+own table, so writing into it by hand is only safe under a specific set of column values — the
+handler is what makes those values true regardless of what the client sends.
+
+| Hook | Method | What it does |
+|---|---|---|
+| `handle` | POST | `prepareCreate`: resolve the owning product, force the derived columns, inject organization + currency + open-ended expiry date, then validate |
+| `handle` | PATCH / PUT / DELETE | `guardEngineRow`: **403** on a row with `ISMANUAL != 'Y'`; on a manual row, strip the immutable columns from the body |
+| `afterHandle` | POST | `closeAdjacentRanges`: shorten the previous row and clamp the new one so the history stays contiguous |
+| `afterHandle` | `/defaults` | pre-fill `startingDate` with the product's creation date and `costType` with `'STA'` |
+
+**Why each derived value is forced** (the class javadoc is the canonical version; this is the
+summary):
+
+- **`costType = 'STA'`** — a manual `'AVA'` row would be read by `AverageAlgorithm#getProductCost`
+  as the current average cost while `getLastCumulatedCosting` skipped it (it filters on non-null
+  cumulative columns), so stock valuation and running cost would silently diverge. The user never
+  picks the type.
+- **`permanent = false`** — `M_COSTING_TRG` (`src-db/database/model/triggers/M_COSTING_TRG.xml:41,43`)
+  raises `@CannotModifyPermanentCost@` / `@CannotDeletePermanentCost@` on any row flagged permanent
+  once the product has document lines. The engine writes its own rows permanent precisely so nobody
+  touches them; ours must stay editable.
+- **`production = false`** — `MA_PRODUCTION_COST` does a `SELECT … INTO` over production rows with
+  no `TOO_MANY_ROWS` handler, so a duplicate would stop production from being processed.
+- **`manual = true`** — purely our own marker. Nothing in core writes or reads `ISMANUAL`; it is
+  what lets the UI predicate and `guardEngineRow` tell a hand-entered row from an engine one.
+- **currency** — the AD default for `C_Currency_ID` is `100` (USD), wrong on every euro instance.
+  Resolved from the organization via `OBCurrencyUtils.getOrgCurrency`.
+- **quantity / price / cumulative columns** — removed from the body. They only mean something for
+  engine rows, and `AverageAlgorithm#getLastCumulatedCosting` deliberately excludes rows whose
+  cumulative columns are null.
+
+**Why adjacent ranges are closed instead of overlaps being rejected.**
+`CostingUtils#getStandardCostDefinition` (`src/org/openbravo/costing/CostingUtils.java:282-343`)
+resolves a cost with `startingDate <= date AND endingDate > date`, and on more than one match it
+logs a warning and returns `obcCostingList.get(0)` — the criteria carries **no `addOrder`**. Two
+valid rows on the same date therefore make the applied cost depend on Postgres's execution plan.
+Rather than reject the overlap, `closeAdjacentRanges` shortens the neighbouring rows around the new
+one — the same thing `StandardAlgorithm#insertCost` does — so the user simply says "from this date
+the cost is X" and the history follows. Only `DateTo` is ever touched, which `M_COSTING_TRG` allows
+even on permanent rows, so an engine-generated neighbour can be closed safely. It is best-effort:
+the cost line is already valid on its own, so failing to tidy the neighbours must not turn a
+successful save into an error.
+
+**Validation errors.** The handler returns English strings, which
+`tools/app-shell/src/lib/backendErrors.js` maps to locale keys (the pattern
+`ChartOfAccountsSaveValidationSupport` documents as correct):
+
+| Handler message | Locale key |
+|---|---|
+| `A cost line must belong to a product.` | `backendError.costingNoProduct` |
+| `The cost is required.` | `backendError.costingCostRequired` |
+| `The cost cannot be negative.` | `backendError.costingCostNegative` |
+| `The expiry date must be later than the start date.` | `backendError.costingInvalidDateRange` |
+| `This cost was calculated by the system and cannot be modified or deleted.` | `backendError.costingEngineRowLocked` |
+
+All five exist in `en_US`, `es_ES` and `es_AR`.
+
+### 3. The blocking cost banner
+
+`ProductCostBanner.jsx` is mounted through the **`window.customComponents.subHeader`** slot, which
+`generate-frontend.js` (`schema_forge_core`, line ~1026) emits as
+`headerContent={(data) => <ProductCostBanner data={data} />}`. `DetailView` renders `headerContent`
+as the first child of the detail content container, i.e. a full-width strip between the toolbar and
+the form. This is the same slot and the same `InfoBanner` primitive as the credit-limit /
+BP-on-hold notice (`BlockingBpBanner.jsx:127`); the one deliberate difference is the tone —
+`warning` (amber) rather than that banner's `info` (blue), because this one also blocks saving.
+The slot is documented generically in `docs/ui-customization.md` §4.
+
+**It can be closed, and it comes back on every refused save (ETP-5245).** `InfoBanner` is
+dismissible by default, so the user can put the strip away — but closing an explanation of a hard
+block must never leave someone refused with nothing on screen saying why. `useEntity`'s save gate
+announces each refusal on the save-block bus (`lib/saveBlockSignal.js`) under the same stable toast
+id it uses for the toast, `product-cost-required`; the banner subscribes through
+`useSaveBlockSignal('product-cost-required')` and re-opens on every fresh announcement. Because the
+product window autosaves on blur, a dismissed banner reappears at the next field the user leaves —
+which is the intended outcome: the save is still being refused.
+
+**It also clears the moment a cost line exists, with no reload (ETP-5245 follow-up).**
+`etgoHasCost` is stamped by the backend on the *product* record, but adding a cost line is a
+`POST /product/costing` — a different entity — so nothing re-read the product and the header held
+in memory kept saying `false`. The banner stayed up even with the tab showing `Costo 1`, and the
+save gate kept refusing, since both read that same record.
+`withHeaderRefreshOnChildWrite` (`components/contract-ui/detailViewHelpers.jsx`) now wraps the
+secondary-tab hooks so a successful child add or delete also calls the MAIN hook's
+`refreshHeaderTotals`, re-reading the product. This covers both directions: adding the first line
+removes the banner, deleting the last one brings it back. It is gated on the header actually
+carrying a field listed in `HEADER_FIELDS_DERIVED_FROM_CHILD_ROWS`, so no other window pays for the
+extra GET, and the server stays the single source of truth — nothing recomputes the flag locally,
+so the banner and the save gate can never disagree.
+
+The predicate lives in `tools/app-shell/src/lib/productCostRequirement.js` and is deliberately a
+pure function with no React dependency, so the banner and the save gate can read the same rule:
+
+```js
+isProductMissingRequiredCost(specName, record)
+// true only when ALL of these hold:
+//   specName === 'product'
+//   record.id exists and is not 'new'        → never on creation
+//   record.productType === 'I'               → only physically valued items
+//   parseBoolean(record.stocked) === true
+//   parseBoolean(record.bookUsingPurchaseOrderPrice) !== true
+//   record.etgoHasCost is present (not undefined/null)
+//   parseBoolean(record.etgoHasCost) !== true
+```
+
+- **Never on creation.** The Cost tab declares `requireSavedRecord: true`, so it needs a saved
+  product to hang its lines from. Blocking the first save would make a stockable product impossible
+  to create at all. The rule therefore only applies to *editing* an existing record.
+- **`etgoHasCost` is a backend-emitted, per-record flag**, not a `decisions.json` field — the same
+  pattern as `pisLocked`. `ProductDefaultsHandler.annotateCostPresence` adds it in `afterHandle` on
+  a **GET with a record id**, from a `Costing` existence query (`hasCostDefined`). A payload that
+  does not carry the flag (a list row, an older backend) yields `false` from the predicate, so the
+  banner and the gate stay silent rather than blocking on missing information.
+- **`bookUsingPurchaseOrderPrice`** was added to the `product` entity as `visibility: "system"` so
+  the flag reaches the client without appearing in the form. A product valued at its purchase-order
+  price needs no standard-cost anchor — which is also why the costing backfill
+  (`R33-standard-cost-anchor-unified.sql`) skips it.
+- **Product types with no physical existence** (`'S'`, `'E'`, `'R'` — Service / Expense / Resource,
+  see ETP-4943 / ETP-5091 above) are never valued, so `productType === 'I'` is the only case that
+  can be missing a cost.
+
+**The save gate** is in `tools/app-shell/src/hooks/useEntity.js`, inside `performSave`, immediately
+after the phone-format check. It is window-scoped in exactly the same shape as
+`getContactsTextFieldViolation` (`useEntity.js:629`) — a no-op for every other window because the
+predicate short-circuits on `specName`. It reports through `reportInvalidFormatField` with the
+`productCostRequired` message and the **fixed toast id `product-cost-required`**: product
+auto-saves on blur (`autoSaveOnBlur: true`), so without a stable id every field the user leaves
+would stack another copy of the same toast.
+
+> **Copy note (not fixed here):** the English message reads "Add a line on the **Cost** tab" while
+> the English tab label renders as "**Costing**". The Spanish strings are consistent ("la solapa
+> **Costo**", matching `tMenu('Costing') → "Costo"`).
+
+### 4. Prices default to zero on a new product
+
+A brand-new product previously had no `M_ProductPrice` row at all, so the Products list showed
+empty price columns and any document line had nothing to resolve.
+
+- **`PriceListVersionResolver.resolveDefaultVersionId(obContext, salesPriceList)`** (new) is now the
+  single answer to "which tariff does Etendo Go use when nobody said otherwise". Two passes: first
+  honouring `M_PriceList.IsDefault`, then — only if **no** direction-matching list is flagged at all
+  — the previous behaviour (most recent `ValidFromDate`). Organization precedence inside each pass
+  is org-specific then shared `'0'`, the same COALESCE semantics
+  `ProductDefaultsHandler#resolveDefaultId` uses for the other tenant-wide defaults. A tenant that
+  never set the flag keeps working exactly as before. It replaces the old private
+  `resolveDefaultSalesPriceListVersionId` in `ProductPriceHandler`.
+- **`ProductDefaultsHandler.seedDefaultPrices`** runs in the POST `afterHandle` and creates a
+  zero-valued `ProductPrice` (`standardPrice`, `listPrice`, `priceLimit` all `BigDecimal.ZERO`) on
+  the default sales tariff and the default purchase tariff. The row is owned by the **product's**
+  organization, not the tariff's: a default tariff often lives in the shared organization `'0'`, and
+  a price row there pointing at a product in a child organization is the direction Etendo's
+  organization tree forbids. Best-effort — a tenant with no default tariff logs and moves on.
+- **`ProductPriceHandler.updateInsteadOfDuplicating`** turns a POST for an already-priced tariff
+  into an update of that row instead of a raw unique-constraint violation. ETP-5245 makes that pair
+  much easier to hit: the seeded row already exists by the time the products import posts the real
+  price for the same tariff in the same `/batch` call. The shared lookup is
+  `ProductHandlerUtils.findExistingPrice`. **It deliberately ignores `ISACTIVE`**, because
+  `M_PRODUCTPRICE_PRICELIST_VE_UN` spans `(M_PriceList_Version_ID, M_Product_ID)` and nothing else —
+  a deactivated row still occupies the pair, so skipping it would report the pair as free and the
+  insert would hit the very constraint the lookup exists to prevent. A row found inactive is
+  reactivated, since posting a price for that tariff means it back in use.
+- **`ProductPriceHandler.enrichSelectorItem`** now also exposes `default` /
+  `priceListVersion$default` on every selector item, and
+  **`productImportDescriptor.js → fetchPriceListVersion`** consumes it: direction is resolved first,
+  exactly as before, and *within* a direction the tenant's default tariff now wins over "whichever
+  version the selector returned first". Without it an imported price and the price shown in the
+  product list could come from two different price lists. The flag is read explicitly
+  (`item.default ?? item['priceListVersion$default']`) rather than by key sniffing — "default" is a
+  common enough word that a substring match would risk false positives.
+
+### 5. Dataset and the corrective data-fix
+
+`referencedata/sampledata/GOClient/M_PRICELIST.xml` (com.etendoerp.go) shipped both curated tariffs
+with `ISDEFAULT='N'`; both are now `'Y'` (one per direction: `Tarifa de venta principal`
+`ISSOPRICELIST='Y'`, `Tarifa de compra principal` `ISSOPRICELIST='N'`). That is the **preventive**
+front — a newly onboarded tenant is born correct.
+
+The **corrective** front for tenants already onboarded is
+`cli/src/data-fixes/sql/20260909T120000Z__R35-pricelist-isdefault.sql`, which marks at most one
+active default per `(ad_client_id, issopricelist)` and never overrides a direction that already has
+one. It is documented in full — symptom, the four independent consumers that degrade silently,
+and why the invariant is per client × per direction rather than per organization — in
+**`docs/etendo-ad/onboarding-gaps.md` § N5**. Do not duplicate that analysis here.
+
+### Manual verification (ETP-5245)
+
+1. Open an existing stocked product (`Tipo = Artículo`, `Almacenable` checked) that has no cost.
+   Confirm an amber banner appears full-width between the toolbar and the form, reading "Este
+   producto es stockeable pero no tiene costo definido…". Change any field and blur: the auto-save
+   must be refused with the same message, and repeating it must **not** stack duplicate toasts.
+2. Confirm the secondary tab strip reads **Costo → Contabilidad → Precio → Adjuntos** (Spanish) /
+   **Costing → Accounting → Price → Attachments** (English).
+3. Open the Cost tab and confirm the grid shows exactly three columns — *Costo*, *Fecha de inicio*,
+   *Fecha de expiración* — with no cost type, quantity, warehouse or currency column.
+4. Add a line: confirm the start date is pre-filled with the product's creation date, and that
+   leaving the expiry date blank is accepted. Save. The banner must disappear and the product must
+   now save normally.
+5. Add a second line with an earlier start date and confirm the neighbouring row's expiry date is
+   pulled back so the two ranges do not overlap.
+6. Try to edit a row the engine generated (one whose values you did not type): the fields must
+   render read-only, and deleting it via the still-visible trash icon must fail with "Este costo lo
+   calculó el sistema y no se puede modificar ni eliminar." (accepted debt — see Gap assessment).
+7. Enter a negative cost, and an expiry date earlier than the start date: both must be refused with
+   their own translated message.
+8. Open `/product/new` and confirm the Cost tab refuses to open until the product is saved.
+9. Create a brand-new product and open its Price tab: it must already list the default sales tariff
+   and the default purchase tariff, each at `0`. Confirm the tariffs chosen are the ones flagged
+   `ISDEFAULT='Y'` for the tenant.
+10. Import a CSV carrying `salesPrice`/`purchasePrice` for a product that already exists and confirm
+    the price lands on the **default** tariff, and that re-importing updates that row rather than
+    failing on the unique constraint.
+
+### Coverage
+
+- `tools/app-shell/src/lib/__tests__/productCostRequirement.vitest.js` — the predicate, axis by axis.
+- `tools/app-shell/src/windows/custom/product/__tests__/ProductCostBanner.vitest.jsx` — renders /
+  does not render, and the `warning` tone tokens.
+- `tools/app-shell/src/windows/custom/product/__tests__/productImportDescriptor.vitest.js` —
+  default-tariff preference within a direction, and the unchanged direction rules.
+- `cli/test/data-fixes-report-regression.test.js` — the R35 entry.
+- com.etendoerp.go: `PriceListVersionResolverTest`, `ProductDefaultsHandlerTest`,
+  `ProductHandlerUtilsTest`, `ProductPriceHandlerTest`, plus the new
+  `DefaultPriceListSampleDataTest` pinning `ISDEFAULT='Y'` in the shipped dataset.
+- **Gap:** there is no `ProductCostingHandlerTest` and no E2E spec for the Cost tab. The handler's
+  behaviour is currently evidenced only by the manual steps above.
 
 ## ETP-5222 — Invoice Price Variance exposed in the Accounting tab
 

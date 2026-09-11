@@ -74,7 +74,7 @@ const baseProps = {
   legacyDeleteEnabled: false,
   onCloneRow: undefined,
   quickActionsEnabled: false,
-  ilpHasNoAmountCol: true,
+  ilpReservesActionSlot: true,
 };
 
 describe('renderLinesColgroup — ETP-4735 dimensions-panel chevron alignment', () => {
