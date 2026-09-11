@@ -91,8 +91,20 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange }) {
 
   const isDraft = data?.documentStatus === 'DR';
   const isSentToSii = data?.aeatsiiIssent === true || data?.aeatsiiIssent === 'Y';
-  const dateReadOnly = !isDraft;
-  const siiFieldReadOnly = isSentToSii;
+  // ETP-5229 (item #3): manual testing confirmed the SII sub-panel fields (Tipo
+  // factura, Descripción SII, Causa exención, Fecha registro contable,
+  // Autorización) stayed editable on a COMPLETED invoice that had not yet been
+  // sent to SII — `siiFieldReadOnly`/the old `siiSentReadOnly` in SifTab.jsx were
+  // gated only on `aeatsiiIssent`, with no completion check at all. The AD
+  // contract's own readOnlyLogic for these columns (see
+  // `artifacts/sales-invoice/contract.json`, e.g. `aeatsiiClaveTipo`) always ANDs
+  // in `@Processed@='Y'`, and `etsgDateOperation`'s raw logic is simply
+  // `record['processed'] === true`. `isProcessed` mirrors that flag so every SII
+  // field locks once the document is completed, matching the pattern already
+  // used for `tbaiReverseinvoicecode` (`disabled={data?.processed === true}`).
+  const isProcessed = data?.processed === true;
+  const dateReadOnly = !isDraft || isProcessed;
+  const siiFieldReadOnly = isSentToSii || isProcessed;
 
   const vfInvTypeDefaultedRef = useRef(null);
   const vfReverseTypeRef = useRef(null);
@@ -169,6 +181,7 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange }) {
     showVerifactu,
     isDraft,
     isSentToSii,
+    isProcessed,
     dateReadOnly,
     siiFieldReadOnly,
     getVal,

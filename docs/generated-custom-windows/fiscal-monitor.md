@@ -53,6 +53,35 @@ useFiscalMonitor(orgId, apiBaseUrl)
 
 Each section component fetches its own paginated rows independently, on tab/page/filter change.
 
+### SII parentId resolution — active-row preference (ETP-5229)
+
+The SII section's 4 count entities (`issuedInvoices`, `receivedInvoices`, and their
+`(previousPeriod)` siblings — see "SII section" below) are child tabs of the
+`organizations` entity (backed by `aeatsii_config`) and require a `parentId` query
+param to resolve their tab HQL correctly (current period filters by `monitordate`;
+previous period uses `aeatsii_presii_invoice()`, both keyed off the org's SII
+enrollment/config row).
+
+`fetchSiiParentId()` in `useFiscalMonitor.js` resolves that `parentId` by querying
+`sii-monitor/organizations`. **Bug (reported as "GO's SII monitor shows different
+invoices than Classic — extra ones in the previous period, missing ones in the
+current period"):** the function used to fetch only 1 row (`_limit: '1'`) and take
+`resp.data?.[0]` unconditionally — with no check for whether that row is the
+**active** `aeatsii_config` record. NEO reads with `NO_ACTIVE_FILTER=true` (see
+`fetchConfigRecord` above and `useFiscalConfig.js`'s `fetchRecord`), so an org that
+went through a "Change SIF" flow can carry an inactive trace row alongside the live
+one; picking the wrong row meant `parentId` pointed at a stale/deactivated config
+whose `monitordate` (and SII enrollment state) didn't match the org's real active
+config — desyncing which invoices land in "current" vs. "previous" period relative
+to what Classic's SII monitor shows for the same org.
+
+**Fix:** `fetchSiiParentId()` now fetches `_limit: '10'` rows and does
+`rows.find(isActiveRecord) ?? rows[0]` — the exact same active-row-preference
+pattern already used by `fetchConfigRecord()` (same file) and by `fetchRecord()` in
+`fiscal-config/useFiscalConfig.js`. `isActiveRecord` comes from the shared
+`fiscal-config/fiscalConfig.utils.js`. The PK-extraction fallback chain
+(`row.id` → `$ref` suffix → `row.configuracinSII`) is unchanged.
+
 ## SII section (`SiiMonitorSection`)
 
 **Tabs:** Emitidas | Recibidas (with upload/download icon)
@@ -364,7 +393,7 @@ i18n keys: `invoicePreview.fiscalStatus.sii`, `invoicePreview.fiscalStatus.tbai`
 - `artifacts/fiscal-monitor/decisions.json` — `layoutType: "custom"`, window registered.
 - `tools/app-shell/src/windows/registry.js` — `fiscal-monitor` in `customLoaders` at `customLoaders['fiscal-monitor']`.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/FiscalMonitorPage.jsx` — profile-routing orchestrator; debug mode integration.
-- `tools/app-shell/src/windows/custom/fiscal-monitor/useFiscalMonitor.js` — parallel config + monitor data fetcher; exports entity/spec constants for section components; fetches `resultadoValidación` (TBAI error reasons) in parallel with the TBAI count fetches, exposed as `tbaiValidationResults`.
+- `tools/app-shell/src/windows/custom/fiscal-monitor/useFiscalMonitor.js` — parallel config + monitor data fetcher; exports entity/spec constants for section components; fetches `resultadoValidación` (TBAI error reasons) in parallel with the TBAI count fetches, exposed as `tbaiValidationResults`. `fetchSiiParentId()` prefers the active `organizations` row (see "SII parentId resolution" above, ETP-5229).
 - `tools/app-shell/src/windows/custom/fiscal-monitor/fiscalMonitor.utils.js` — `buildMonitorFetchPlan`, `computeKpis`, `pickMostRecentMotivo` (pure functions, fully tested). `pickMostRecentMotivo` builds the invoice → most-recent-`motivo` lookup used by `SiiMonitorSection`'s "Motivo error" header-empty fallback (ETP-4784 correction #2 — see above); since correction #4, it also skips a `*SiiData` row as a motivo source when that row's own `estadoRegistro` is not an error status (see "Fallback gated by the invoice's CURRENT status" above).
 - `tools/app-shell/src/windows/custom/fiscal-monitor/FiscalKpiCards.jsx` — clickable metric cards per system variant.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/SiiMonitorSection.jsx` — emitidas/recibidas × actual/anterior; `onTabChange` callback with combined key; dedicated "Error reason" column (`aeatsiiErrorCode`/`aeatsiiErrorMsg`) between Status and CSV AEAT, same visual pattern as Verifactu's column (see "Same layout for all three monitors" above); `fetchSubtab()` also builds a `motivoMap` (invoice → most-recent `motivo`) from the already-fetched `*SiiData` response, used to fill the column when the header field is empty (see "Header-empty fallback" above). `handleExport()` re-fetches the `*SiiData` sibling entity independently and rebuilds an `exportMotivoMap` via `pickMostRecentMotivo()`, feeding `buildSiiExportCols(motivoMap)` — the CSV export's Error column applies the same fallback as the on-screen column (see "CSV export replicates the same fallback" above). Since correction #4, both the on-screen `errorMsg` and `buildSiiExportCols` gate the header/`motivoMap` fallback on `isErrorStatus(row.aeatsiiEstado)` — the invoice's CURRENT status — so a `*SiiData` history entry never resurfaces after the invoice moves out of an error state (see "Fallback gated by the invoice's CURRENT status" above).

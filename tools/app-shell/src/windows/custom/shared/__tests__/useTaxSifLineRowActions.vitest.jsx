@@ -245,6 +245,51 @@ describe('isTaxSifMissing — pure completeness check', () => {
       expect(isTaxSifMissing(taxRow, { ...ctx, taxById })).toBe(true);
     });
   });
+
+  // ETP-5229 regression — reproduces the exact reported bug shape: a compound/summary
+  // Spanish tax ("Entregas IVA+RE 21+5.2%") and its rate-component child arriving
+  // TOGETHER in the SAME selector `items` array, as InvoiceLineTaxSifSelectorPolicy now
+  // additively appends the child alongside the summary on the same response — instead
+  // of the child never being present at all (the pre-fix bug: AD_Ref_Table 158's
+  // `Parent_Tax_ID IS NULL` clause permanently hid it, so resolution always fell back
+  // to the summary's own always-blank columns and the badge never cleared).
+  describe('ETP-5229 — summary + child additive-append (both items in the SAME array)', () => {
+    const summaryTax = { id: 'tax-summary-compound', isSummary: 'Y', name: 'Entregas IVA+RE 21+5.2%' };
+
+    function buildTaxById(childOverrides) {
+      return {
+        [summaryTax.id]: summaryTax,
+        'child-rate-component': {
+          id: 'child-rate-component',
+          parentTaxId: summaryTax.id,
+          isEquivalentCharge: 'N',
+          EM_Etvfac_Vat_Regime: null,
+          ...childOverrides,
+        },
+      };
+    }
+
+    const verifactuCtx = { profile: 'verifactu', verifactuRecord: { tAXType: '01' }, ui: (k) => k };
+
+    it('resolveEffectiveTaxRow resolves the SUMMARY to the CHILD once both are present in taxById', () => {
+      const taxById = buildTaxById({ EM_Etvfac_Vat_Regime: '01' });
+      const resolved = resolveEffectiveTaxRow(summaryTax, taxById);
+      expect(resolved.id).toBe('child-rate-component');
+    });
+
+    it('isTaxSifMissing returns FALSE once the child carries a non-blank SIF value (badge correctly does NOT fire)', () => {
+      const taxById = buildTaxById({ EM_Etvfac_Vat_Regime: '01' });
+      expect(isTaxSifMissing(summaryTax, { ...verifactuCtx, taxById })).toBe(false);
+    });
+
+    it('isTaxSifMissing still returns TRUE when the child is present but its own SIF value is blank (not a blanket false positive)', () => {
+      const taxById = buildTaxById({ EM_Etvfac_Vat_Regime: null });
+      expect(isTaxSifMissing(summaryTax, { ...verifactuCtx, taxById })).toBe(true);
+
+      const taxByIdEmptyString = buildTaxById({ EM_Etvfac_Vat_Regime: '' });
+      expect(isTaxSifMissing(summaryTax, { ...verifactuCtx, taxById: taxByIdEmptyString })).toBe(true);
+    });
+  });
 });
 
 describe('useTaxSifLineRowActions — fetch gating', () => {
@@ -449,6 +494,58 @@ describe('useTaxSifLineRowActions — pagination (556d032c8)', () => {
 
   // TAX_SELECTOR_MAX_PAGES = 20 — a pathological `hasMore: true` forever case
   // must stop, not hang the effect in an infinite fetch loop.
+  // ETP-5229 — the selector endpoint only appends a compound tax's rate-component
+  // children when this flag is present; `buildUrlWithParams` merges it in inside
+  // fetchAllTaxPages()'s per-page URL construction, so a regression that moves it
+  // outside the loop (e.g. hoists it to only the first request) would silently drop
+  // the fix for any tax living past page 1.
+  it('every paginated selector request includes includeTaxChildren=true, not just the first page', async () => {
+    const page1 = Array.from({ length: 2 }, (_, i) => ({ id: `tax-${i}` }));
+    globalThis.fetch = vi.fn((url) => {
+      if (String(url).includes('/header/')) return headerResponse({ id: RECORD_ID });
+      const u = String(url);
+      if (u.includes('offset=0')) return taxSelectorResponse(page1, true);
+      if (u.includes('offset=2')) return taxSelectorResponse([], false);
+      throw new Error(`Unexpected selector URL: ${u}`);
+    });
+    renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+    }));
+
+    await waitFor(() => {
+      const selectorCalls = globalThis.fetch.mock.calls.filter(([url]) => String(url).includes('/lines/selectors/C_Tax_ID'));
+      expect(selectorCalls).toHaveLength(2);
+      selectorCalls.forEach(([url]) => expect(url).toContain('includeTaxChildren=true'));
+    });
+  });
+
+  // ETP-5229 regression: the backend now appends a compound tax's child on a LATER
+  // page than its summary parent (the append happens per-page, not globally), so the
+  // fix must survive the child arriving in a separate response than the summary.
+  it('resolves a summary tax whose child arrives on a LATER page than the summary itself (badge clears once merged)', async () => {
+    const page1 = [{ id: 'tax-summary', isSummary: 'Y' }];
+    const page2 = [{ id: 'child-base', parentTaxId: 'tax-summary', isEquivalentCharge: 'N', EM_Tbai_Claveregimeniva: '05' }];
+    globalThis.fetch = vi.fn((url) => {
+      if (String(url).includes('/header/')) return headerResponse({ id: RECORD_ID });
+      const u = String(url);
+      if (u.includes('offset=0')) return taxSelectorResponse(page1, true);
+      if (u.includes('offset=1')) return taxSelectorResponse(page2, false);
+      throw new Error(`Unexpected selector URL: ${u}`);
+    });
+
+    const { result } = renderHook(() => useTaxSifLineRowActions({
+      apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales',
+    }));
+
+    await waitFor(() => {
+      const selectorCalls = globalThis.fetch.mock.calls.filter(([url]) => String(url).includes('/lines/selectors/C_Tax_ID'));
+      expect(selectorCalls).toHaveLength(2);
+    });
+    // The row's own tax is the SUMMARY id — completeness must resolve through the
+    // child that only showed up on page 2, once both pages are merged into taxById.
+    expect(result.current.cellBadges.tax({ tax: 'tax-summary' })).toBeNull();
+  });
+
   it('a pathological hasMore:true forever case stops after TAX_SELECTOR_MAX_PAGES (20) pages, does not hang', async () => {
     let callCount = 0;
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -968,5 +1065,81 @@ describe('useTaxSifLineRowActions — document-direction gate (ETP-5027)', () =>
     expect(taxSifModalProps).toHaveBeenCalled();
     const { targets } = taxSifModalProps.mock.calls.at(-1)[0];
     expect(targets).toEqual({ showSii: false, showTbai: true, showVerifactu: false });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5229 — `invoiceOrgId` state, read off the header record's own
+// `organization` column, forwarded to TaxSifModal as `sifContextOrgId` so a
+// save is keyed off the SAME legal entity the read-side badge check resolves
+// from, instead of the user's current session org.
+// ---------------------------------------------------------------------------
+describe('useTaxSifLineRowActions — sifContextOrgId forwarding to TaxSifModal (ETP-5229)', () => {
+  it('forwards the header record\'s own "organization" column as sifContextOrgId when the badge is clicked', async () => {
+    globalThis.fetch = vi.fn((url) => {
+      if (String(url).includes('/header/')) return headerResponse({ id: RECORD_ID, organization: 'ORG-INVOICE-1' });
+      return taxSelectorResponse([{ id: 'tax-1', EM_Tbai_Claveregimeniva: null }], false);
+    });
+
+    render(<Harness options={{ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales' }} />);
+    const button = await screen.findByTestId('line-action-tax-sif');
+    await act(async () => { button.click(); });
+
+    expect(taxSifModalProps).toHaveBeenCalled();
+    expect(taxSifModalProps.mock.calls.at(-1)[0].sifContextOrgId).toBe('ORG-INVOICE-1');
+  });
+
+  it('forwards null when the header record has no "organization" column', async () => {
+    installDefaultFetch({ taxItems: [{ id: 'tax-1', EM_Tbai_Claveregimeniva: null }] });
+
+    render(<Harness options={{ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: RECORD_ID, windowCategory: 'sales' }} />);
+    const button = await screen.findByTestId('line-action-tax-sif');
+    await act(async () => { button.click(); });
+
+    expect(taxSifModalProps).toHaveBeenCalled();
+    expect(taxSifModalProps.mock.calls.at(-1)[0].sifContextOrgId).toBeNull();
+  });
+
+  it('recordId change resets invoiceOrgId to null BEFORE the new header fetch resolves — no stale org leak from the previous invoice, mirroring the taxById reset', async () => {
+    let resolveInv2Header;
+    const inv2HeaderPromise = new Promise((resolve) => { resolveInv2Header = resolve; });
+
+    globalThis.fetch = vi.fn((url) => {
+      const u = String(url);
+      if (u.includes('/header/inv-1')) return headerResponse({ id: 'inv-1', organization: 'ORG-OLD' });
+      if (u.includes('/header/inv-2')) return inv2HeaderPromise; // held pending on purpose
+      if (u.includes('parentId=inv-1')) return taxSelectorResponse([{ id: 'tax-1', EM_Tbai_Claveregimeniva: null }], false);
+      if (u.includes('parentId=inv-2')) return taxSelectorResponse([{ id: 'tax-1', EM_Tbai_Claveregimeniva: null }], false);
+      throw new Error(`Unexpected URL: ${u}`);
+    });
+
+    const { rerender } = render(
+      <Harness options={{ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: 'inv-1', windowCategory: 'sales' }} />,
+    );
+    const button = await screen.findByTestId('line-action-tax-sif');
+    await act(async () => { button.click(); });
+    expect(taxSifModalProps.mock.calls.at(-1)[0].sifContextOrgId).toBe('ORG-OLD');
+
+    // The modal opened for inv-1 stays mounted across the recordId change (its own
+    // `modalTaxId` state is independent of `recordId`); its props re-render live off
+    // the SAME `invoiceOrgId` state the effect resets, so this proves the reset
+    // synchronously, without waiting for inv-2's own header fetch to resolve at all.
+    await act(async () => {
+      rerender(
+        <Harness options={{ apiBaseUrl: API_BASE_URL, token: TOKEN, enabled: true, recordId: 'inv-2', windowCategory: 'sales' }} />,
+      );
+    });
+
+    // inv-2's own header fetch (inv2HeaderPromise) is still pending here — the reset
+    // happens up-front, not as a byproduct of the new fetch resolving.
+    expect(taxSifModalProps.mock.calls.at(-1)[0].sifContextOrgId).toBeNull();
+
+    // Let inv-2's own header fetch resolve (still no "organization" column), to close
+    // out the effect cleanly and confirm the previous org never resurfaces.
+    await act(async () => {
+      resolveInv2Header({ ok: true, json: async () => ({ response: { data: [{ id: 'inv-2' }] } }) });
+      await Promise.resolve();
+    });
+    expect(taxSifModalProps.mock.calls.at(-1)[0].sifContextOrgId).toBeNull();
   });
 });

@@ -186,6 +186,239 @@ en la sede electrónica de la AEAT» **or** the «VERI\*FACTU» mark, and the ph
 |----|----------|--------|-------------|--------|
 | JB-03 | Media | sales-invoice | Confirmed invoice lines do not display the line discount percentage (`etgoDiscount`) in the web interface. Investigation needed on whether `DiscountLineFilter` (or a similar filter applied when `processed=true`) strips the `etgoDiscount` field from confirmed line GET responses. Draft invoice lines are unaffected. | Open — not fixed in ETP-4007 |
 
+## SIF field completion-readOnly audit — ETP-5229
+
+Verified every field the SIF tab reads for both invoice windows against the "must not be
+editable once completed" requirement:
+
+- **purchase-invoice:** no gap. `tbaiIsreverseinvoice`/`tbaiReverseinvoicetype` are not present
+  in `artifacts/purchase-invoice/decisions.json` at all (VERI\*FACTU/TBAI reverse-invoice concepts
+  don't apply to purchases here — see `SifTab.jsx`'s note that VERI\*FACTU never sends purchases
+  and TicketBAI only sends them under BIZKAIA), and every SII field it does render goes through
+  the same shared `siiFieldReadOnly`/`siiSentReadOnly`/`errorRegistralReadOnly` gates as
+  sales-invoice (the component is shared — see below).
+- **sales-invoice, rendered fields:** `etvfacInvType` and `etvfacVerifacDesc` (Verifactu panel)
+  are `disabled={dateReadOnly}`, and `tbaiReverseinvoicecode` (TBAI panel) is
+  `disabled={data?.processed === true}` — all three already correctly gated in `SifTab.jsx`.
+- **sales-invoice, `tbaiIsreverseinvoice` / `tbaiReverseinvoicetype`:** `decisions.json` carries
+  both as `visibility: "editable"`, `form: false`, but neither is rendered anywhere under
+  `tools/app-shell/src/windows/custom/` — confirmed by a full-tree grep. Traced their actual
+  lifecycle instead of just flagging them as dead config:
+  - Both are computed exclusively by `InvoiceCalloutHelper.applyRectificativeFieldsFromDocType`
+    (`com.etendoerp.go`), fired server-side on the header's `transactionDocument` callout, and
+    returned to the frontend in the callout's `updates` map — the same mechanism
+    `aeatsiiIsauthorization`'s authorization-number injection uses.
+  - `tbaiIsreverseinvoice` is then read directly by the classic `ProcessInvoiceTbaiHook` at
+    document completion (`invoice.isTbaiIsreverseinvoice()`) to decide whether to run the
+    rectificative-invoice TBAI flow — it is a real, load-bearing value, not orphaned config.
+  - Unlike `etvfacReverseinvtype` (which has a completion-time SQL `COALESCE` fallback from
+    `C_DocType` in `AbstractInvoiceHeaderHandler.populateVerifactuFieldsFromDocType`, so it can
+    safely be `visibility: "system"` even though the frontend never persists it), no equivalent
+    fallback exists for either TBAI field. The callout-injected value only reaches the DB via the
+    ordinary NEO write path.
+  - `NeoFieldFilter.filterCalloutResponse`/`filterWriteRequest` (`com.etendoerp.go`) strip any
+    field whose contract visibility is `readOnly`/`system` — both from the callout response
+    itself and from the save PATCH. Reclassifying either field in `decisions.json` without a
+    coordinated `com.etendoerp.go` change (e.g. a capture/persist pair mirroring
+    `pendingSiiAuthorizationno`/`persistSiiAuthorizationno`) would silently break the
+    rectificative-invoice TBAI flow — the callout value would never reach the client, let alone
+    the DB.
+  - The only UI trigger for the callout, `transactionDocument`, already carries AD's own
+    `readOnlyLogic: "@Processed@='Y'"` and is a standard `form: true` header field, so the
+    generated header form already disables it post-completion — there is no live path for a user
+    to re-trigger this callout (and therefore no way to alter either field) once the invoice is
+    completed.
+  - **Decision: left `visibility: "editable"` unchanged for both fields.** Neither "wire into a
+    visible Select" (would let a user override a value the design intends to be purely
+    doctype-derived) nor "reclassify to readOnly/system" (breaks the write path with no
+    backend-side safety net) is correct without a `com.etendoerp.go` change, which is out of
+    scope for a schema_forge-only PR. A defense-in-depth backend fix — mirroring the SII
+    authorization-number capture/persist pattern — is a legitimate follow-up for
+    `com.etendoerp.go`, not filed here.
+- **Process gap flagged for a follow-up ticket (not fixed here):** all 5 of these fields have
+  `form: false` in `contract.json`, so they render through `SifTab.jsx` rather than the standard
+  generated header grid. CLAUDE.md's Window Change Integrity Protocol Step 3 (the
+  `readOnlyLogic`-null-audit python snippet) only iterates fields where `form` is truthy, so it
+  silently skips every `form: false` field — including ones, like these, whose completion-readOnly
+  behavior is entirely hand-written inside a custom component instead of generator-driven. The
+  checker gives a false "clean" signal for this whole class of field. Worth a dedicated ticket to
+  extend the Step 3 script (or add an equivalent custom-tab check) rather than folding into this
+  change.
+
+Test coverage: `tools/app-shell/src/windows/custom/shared/__tests__/SifTab.vitest.jsx` already
+covered the `dateReadOnly` gate on `etvfacInvType`/`etvfacVerifacDesc` (draft vs completed).
+ETP-5229 added coverage for `tbaiReverseinvoicecode`'s `disabled={data?.processed === true}` gate,
+which had zero prior test coverage despite already being correctly wired in source.
+
+### Correction — the SII sub-panel was NOT covered by the audit above (ETP-5229, item #3)
+
+The audit above only walked the TBAI/Verifactu fields it names explicitly
+(`tbaiIsreverseinvoice`, `tbaiReverseinvoicetype`, `tbaiReverseinvoicecode`, `etvfacInvType`,
+`etvfacVerifacDesc`). It did **not** cover the **SII** sub-panel of the same `SifTab.jsx`
+component, and manual testing on a completed Sales Invoice with SII configured found that panel
+genuinely broken: Tipo factura (`aeatsiiClaveTipo`/`aeatsiiClaveTipoFc`), Descripción SII
+(`aeatsiiDescripcionSii`), Causa exención (`aeatsiiCauseExemption`), Fecha registro contable
+(`aeatsiiFechaRegCont`), Autorización (`aeatsiiIsauthorization`), and Fecha operación
+(`etsgDateOperation`) all stayed editable after completion, as long as the invoice had not yet
+been sent to SII.
+
+Root cause: `siiFieldReadOnly` (gating Tipo factura, the rectification-reason select, and the
+Autorización checkbox) and the local `siiSentReadOnly` (gating Descripción SII and Fecha registro
+contable) in `SifTab.jsx` were both derived only from `aeatsiiIssent` ("sent to SII"), with no
+completion check at all — a completed-but-unsent invoice left every one of those fields wide
+open. This contradicts the AD contract's own `readOnlyLogic` for these columns (see
+`artifacts/sales-invoice/contract.json`, e.g. `aeatsiiClaveTipo`'s
+`(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'`, and
+`etsgDateOperation`'s plain `@Processed@='Y'`), which always ANDs in the document's `Processed`
+flag — but since these fields are `form: false`, that AD-declared `readOnlyLogic` is never
+auto-applied by the generic form renderer (per this doc's earlier note); it must be hand-wired in
+`SifTab.jsx`, and it wasn't for the SII panel.
+
+Fix (`tools/app-shell/src/windows/custom/shared/useSifFieldPatcher.js` and `SifTab.jsx`):
+- The hook now computes `isProcessed = data?.processed === true` and folds it into both
+  `dateReadOnly` (`!isDraft || isProcessed`) and `siiFieldReadOnly` (`isSentToSii || isProcessed`),
+  matching the pattern already used for `tbaiReverseinvoicecode`
+  (`disabled={data?.processed === true}`).
+- `SifTab.jsx` adds a local `siiCompletionLockedReadOnly = siiSentReadOnly || isProcessed` used
+  only for the Descripción SII input and Fecha registro contable date field's `disabled` prop. The
+  original `siiSentReadOnly` (`aeatsiiIssent`-only) is deliberately left untouched for the
+  visibility of the "Modificada error registral" checkbox, which must keep appearing only once the
+  invoice was actually sent to SII — not merely completed.
+- Causa exención required no code change: `exemptionCauseEditable` already ANDs in `isDraft`
+  (`hasExemptTaxes && isDraft && !siiFieldReadOnly`), and `isDraft` already flips to `false` on
+  completion, so the field was already rendering as the read-only value once completed.
+
+Test coverage: `SifTab.vitest.jsx` gained a dedicated `describe` block covering the SII panel's
+completion-based gating for all five affected fields plus a regression guard confirming
+"Modificada error registral" still only appears once actually sent to SII (not merely completed).
+
+## Line-tax SIF quick-fix modal now saves under the invoice's own org, not the session org (ETP-5229, item #1)
+
+**Bug:** opening the line-level "tax needs SIF configuration" shortcut (see the ETP-4888 point 5
+paragraph above, `TaxSifModal.jsx`) and saving a fix (e.g. filling "01 — Operación de régimen
+general" for a composite tax like "Entregas IVA+RE 21+5.2% (+21%) ISP") could leave the warning
+badge on the line permanently stuck, even though the save itself succeeded. Root cause was on the
+backend (`com.etendoerp.go`, `TaxSifOverrideHandler`): the tax-level SIF override
+(`etsg_tax_sif_config`) is keyed by `(c_tax_id, legal entity)`, and the write path resolved the
+legal entity from the user's currently-active session organization, while the read path (the
+badge/warning check, `InvoiceLineTaxSifSelectorPolicy`) always resolves it from the **invoice's
+own** organization. When a user's session org and the invoice's own org resolve to different
+legal entities (e.g. navigating a multi-org tree), the override landed under one legal entity and
+the badge kept looking it up under another.
+
+**Fix (this repo's half):** the backend now accepts an optional `sifContextOrgId` query param on
+the tax PATCH/PUT that, when present, is used for both the write and its immediate read-back
+instead of the session org. The frontend now supplies it whenever the modal is opened from an
+invoice/order line:
+
+- `tools/app-shell/src/windows/custom/shared/useTaxSifLineRowActions.jsx` already fetches the
+  invoice/order's own header record (`/header/{recordId}`) to build the tax selector context: it
+  now also reads that record's own `organization` field into `invoiceOrgId` state (reset whenever
+  `recordId` changes, alongside the existing `taxById` reset) and passes it down as
+  `<TaxSifModal sifContextOrgId={invoiceOrgId} ... />`.
+- `tools/app-shell/src/windows/custom/shared/TaxSifModal.jsx` accepts the new `sifContextOrgId`
+  prop (default `null`) and forwards it as `{ sifContextOrgId }` on the save PATCH.
+- `tools/app-shell/src/components/related-documents/helpers.js`'s `patchById()` gained an optional
+  7th `queryParams` argument, appended to the URL via `buildUrlWithParams` (which already drops
+  `null`/`undefined`/`''` values) — matching the backend's own "blank query param treated as
+  absent" contract, so the standalone-Tax-window fallback (there is currently no such entry point
+  for this modal, but the contract is defensive) and any context where the invoice org genuinely
+  isn't available yet keep working exactly as before.
+
+This modal has exactly one caller (`useTaxSifLineRowActions`), used by sales-invoice,
+purchase-invoice, sales-order, and purchase-order — all invoice/order-LINE contexts, so an org is
+normally always available; the fix applies uniformly to all four windows via the shared hook/modal,
+not a per-window patch.
+
+**Verification:** confirmed via the source trail above and the existing/extended unit and
+integration test suite (`TaxSifModal.vitest.jsx`,
+`useTaxSifLineRowActions.integration.vitest.jsx`, `helpers.patchById.vitest.jsx`). This change did
+NOT touch a running Etendo instance — end-to-end confirmation that the warning badge now clears
+after a save under a mismatched session/invoice org requires a manual live test against a real
+multi-org tenant; ask before running anything that starts/recompiles the app.
+
+## Compound-tax children invisible to the tax selector — second, independent root cause (ETP-5229)
+
+**This SUPERSEDES the implication of the section above** that the org-mismatch fix alone explains
+every case of the composite-tax badge (e.g. "Entregas IVA+RE 21+5.2% (+21%) ISP") never clearing.
+Live verification (browser Network tab, not theoretical) found a SECOND, independent bug that is
+very likely the actual root cause of the ORIGINAL bug report, not merely a secondary org-mismatch
+symptom.
+
+**Root cause:** the `/lines/selectors/C_Tax_ID` selector endpoint — the same endpoint
+`useTaxSifLineRowActions.jsx`'s `fetchAllTaxPages()`/`loadTaxCatalog()` calls to build the
+`taxById` completeness catalog — NEVER returns the CHILD/rate-component rows of a compound tax,
+under any paging. Confirmed by querying `AD_Column_ID 3848` (the invoice/order line's `Tax`
+column): its reference (`AD_Reference_Value_ID 158`) is an `AD_Ref_Table` row targeting `C_Tax`
+with `SQLWhereClause = "C_Tax.Parent_Tax_ID IS NULL"`. `SelectorDescriptorResolver` (com.etendoerp.go)
+translates that into an HQL fragment (`SqlToHqlTranslator`) that `SelectorQueryExecutor` applies to
+EVERY call of this selector — there is no "unfiltered" variant. This filter is intentional and
+correct for its original purpose: a user must never be offered a bare rate-component
+("...(+21%)") as a line's own tax, only the summary tax. But it also means the catalog fetch —
+which reuses the SAME endpoint purely to build a background completeness map, not to render a
+picker — never receives the children either.
+
+**Why this broke the badge:** `resolveEffectiveTaxRow()` in `useTaxSifLineRowActions.jsx` looks
+for a summary tax's children INSIDE the already-fetched `taxById` map
+(`Object.values(taxById).filter(t => t.parentTaxId === taxRow.id)`). Since the children were never
+present there, `children` was always `[]`, `pickRegimeChild([])` always returned `null`, and the
+check always fell back to the summary tax's own record — which never carries the TBAI/Verifactu
+SIF value columns. Result: `isTaxSifMissing()` reported "missing" for every compound tax
+unconditionally, regardless of whether its actual (child) configuration was complete.
+
+**Fix — additive, backend + frontend, no picker impact:**
+
+- `com.etendoerp.go`, `InvoiceLineTaxSifSelectorPolicy.java`: `enrich()` now recognizes an extra
+  raw query param, `includeTaxChildren` (constant `INCLUDE_CHILDREN_PARAM`). When present and
+  truthy, and when the page being enriched contains at least one summary tax
+  (`isSummary == "Y"`), the policy runs two additional direct JDBC queries — bypassing the
+  `AD_Ref_Table` filter entirely, the same way the existing enrichment query already bypasses it
+  for the summary rows themselves: first `SELECT c_tax_id FROM c_tax WHERE parent_tax_id IN (...)`
+  to find the children, then the existing `querySifColumns()` helper (reused, not duplicated) to
+  fetch their structural + SIF value columns. Each resolved child is APPENDED as a brand-new item
+  on the SAME selector response — nothing is removed, replaced, or hidden. The flag defaults to
+  off, so a request that never sets it (i.e. the actual `InlineSearchCombo` tax-picker dropdown)
+  behaves byte-for-byte as before.
+- `tools/app-shell/src/windows/custom/shared/useTaxSifLineRowActions.jsx`: `fetchAllTaxPages()`
+  now always adds `includeTaxChildren: 'true'` to every page request of the tax selector. This is
+  the ONLY caller that ever sets this param — the live tax-picker combo box does not use this
+  hook and never sends it, so its own search-as-you-type behavior (and the "never let a user pick
+  a bare rate-component" invariant) is unaffected.
+
+**Why this design, not a server-side single-source-of-truth rewrite:** an alternative would have
+been to compute "is this summary tax's effective child missing its SIF config" entirely
+server-side (adding e.g. `effectiveRegime`/`resolvedChildId` onto the summary tax's own
+enrichment payload) and drop the frontend's own `resolveEffectiveTaxRow()`/`pickRegimeChild()`
+child-selection logic. That was considered and rejected for this round: it would mean
+re-implementing (or moving) `pickRegimeChild()`'s "pick the non-equivalent-charge child" criterion
+on both sides during a transition, and changes the enrichment response's shape for any other
+future consumer. The additive-append design keeps EXACTLY ONE implementation of "pick the right
+child" (the existing frontend `pickRegimeChild()` in `TaxSifField.jsx`, unchanged) and adds
+exactly one new, narrowly-scoped server capability (fetch children given known parents) reusing
+the existing `querySifColumns()` projection logic rather than a third parallel implementation.
+
+**Scope of the fix:** since `InvoiceLineTaxSifSelectorPolicy` and `useTaxSifLineRowActions.jsx`
+are both shared across sales-invoice, purchase-invoice, sales-order, and purchase-order, this fix
+applies uniformly to all four windows — see the equivalent notes in `purchase-invoice.md`,
+`sales-order.md`, and `purchase-order.md`.
+
+**Tests:** backend — `InvoiceLineTaxSifSelectorPolicyTest.java` gained
+`enrichAppendsSummaryTaxChildrenWhenIncludeChildrenParamIsTrue`,
+`enrichDoesNotAppendChildrenWhenFlagIsAbsent`, and
+`enrichSkipsChildLookupWhenNoSummaryTaxesPresentEvenWithFlagSet` — run via
+`./gradlew :test --tests "com.etendoerp.go.schemaforge.selector.policy.InvoiceLineTaxSifSelectorPolicyTest"`
+(32/32 passing). Frontend — see `useTaxSifLineRowActions.vitest.jsx` /
+`useTaxSifLineRowActions.integration.vitest.jsx` for the added coverage of the
+`includeTaxChildren` request param and the completeness check once a child arrives as a separate
+catalog item.
+
+**Verification:** confirmed via live Network-tab inspection of the actual `/C_Tax_ID` selector
+response (both pages, before the fix) and the source trail above. The fix itself has NOT been
+verified against a live running instance yet — it is a Java change (`com.etendoerp.go`), so it
+requires a backend recompile + restart before it is observable in the browser; a plain refresh is
+NOT sufficient. The frontend-only `includeTaxChildren` param addition has no effect until the
+backend change is deployed.
+
 ## Gap assessment
 
 - The `DocumentTotalsPanel` inside `InvoiceBottomPanel` computes subtotal, discount, tax, and total client-side from the saved lines plus the live add-row (`pendingLine`) and sidebar editing state (`editingLine`), so totals update in real time as the user types — without waiting for a server save. The panel is the source of truth for displayed amounts; it does not read from server-side header fields.

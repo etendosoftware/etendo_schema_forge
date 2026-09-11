@@ -68,9 +68,17 @@ async function fetchSiiParentId(apiFetch, orgId) {
   // a parentId (the aeatsii_config record PK) to correctly resolve the tab HQL tokens.
   // NEO does not expose `id` for this entity — extract the PK from the $ref field
   // (format: "aeatsii_config/<UUID>") or fall back to the configuracínSII field.
-  const resp = await get(apiFetch, SII_SPEC, 'organizations', { organization: orgId, _limit: '1' });
-  const row = resp.data?.[0];
-  if (!row) return null;
+  //
+  // NEO reads with NO_ACTIVE_FILTER=true, so an org can carry an inactive
+  // ("Change SIF") trace row alongside a live one. Pull a small page and prefer
+  // the active row — same pattern as fetchConfigRecord() above — instead of
+  // blindly taking index 0 (ETP-5229): resolving to a stale/deactivated config
+  // row's monitordate desynced the current/previous period buckets shown here
+  // from the org's real active config, which is what Classic's SII monitor uses.
+  const resp = await get(apiFetch, SII_SPEC, 'organizations', { organization: orgId, _limit: '10' });
+  const rows = resp.data ?? [];
+  if (rows.length === 0) return null;
+  const row = rows.find(isActiveRecord) ?? rows[0];
   if (row.id) return row.id;
   const ref = row['$ref'];
   if (ref) return ref.split('/').pop() ?? null;
