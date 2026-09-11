@@ -963,22 +963,21 @@ registry-error correction cycle. `getPendingSifTargets()` now also offers `sendS
 `isSent()` helper used for `aeatsiiIssent`/`tbaiIssent`), independently of `aeatsiiIssent` — so the
 button reappears exactly when the invoice has a pending registry-error correction. On the backend,
 `SiiSendHandler` (`com.etendoerp.go`, `src/com/etendoerp/go/schemaforge/SiiSendHandler.java`) now
-checks `Invoice.isAeatsiiErrorRegistral()` before choosing which classic AEAT process to invoke,
-and — when that flag is set — further branches on the invoice's actual AEAT error code
-(`Invoice.getAeatsiiErrorCode()`), mirroring classic Etendo's own two-button split for this case:
-- **error code exactly `"3000"`** (duplicate registration) — routes to
-  `org.openbravo.module.sii.process.CorrectDuplicateInvoiceError` directly (a plain class, not a
-  `BaseActionHandler`, so it bypasses the generic `NeoProcessService.executeObuiappClass` OBUIAPP
-  bridge, which requires one). This is classic's "Corregir" action: it does a `ConsultaLR*`
-  read-back against AEAT and syncs local fields — it does **not** resend the invoice.
-  `CorrectDuplicateInvoiceError` itself hard-gates on this code, throwing if it doesn't match.
-- **any other registry error, or no error code at all** — routes to
+checks `Invoice.isAeatsiiErrorRegistral()` before choosing which classic AEAT process to invoke —
+a plain two-way split, with no dependency on the invoice's AEAT error code:
+- **`aeatsiiErrorRegistral` not set** — the normal send path, unchanged: routes to
+  `org.openbravo.module.sii.process.MultiEnvioFactura` (communication type `A0`, "alta" / new
+  registration) through `NeoProcessService.executeObuiappClass`.
+- **`aeatsiiErrorRegistral = true`** — always routes to
   `org.openbravo.module.sii.process.MultiInvoiceSIIModification` through the same
-  `NeoProcessService.executeObuiappClass` bridge `MultiEnvioFactura` uses (it is also a
-  `BaseActionHandler`). This is classic's "Modificar" action and the actual resend for this case:
-  it sends AEAT communication type `A1`, unlike `MultiEnvioFactura`'s always-`A0` ("alta" / new
-  registration) envelope — a mismatch that would otherwise be a silent no-op for a corrected
-  invoice.
+  `NeoProcessService.executeObuiappClass` bridge (it is also a `BaseActionHandler`). This is
+  classic's "Modificar" action and the actual resend for this case: it sends AEAT communication
+  type `A1`, unlike `MultiEnvioFactura`'s always-`A0` envelope — a mismatch that would otherwise
+  be a silent no-op for a corrected invoice. This branch is taken regardless of the invoice's
+  actual AEAT error code (`Invoice.getAeatsiiErrorCode()`); an earlier version of this fix also
+  special-cased error code `"3000"` to route into
+  `org.openbravo.module.sii.process.CorrectDuplicateInvoiceError` directly — that branch was
+  scope creep beyond what was asked and has been removed.
 
 Both `sifSending.js` and `SiiSendHandler.java` are shared between sales-invoice and
 purchase-invoice — see `purchase-invoice.md` for this window's mirror of the same fix.

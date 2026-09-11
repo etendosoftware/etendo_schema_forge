@@ -1342,14 +1342,14 @@ short: `getPendingSifTargets()` now also offers `sendSii: true` whenever
 `invoice.aeatsiiErrorRegistral` is truthy, independently of `aeatsiiIssent`, so the `Send to SIF`
 button reappears after a registry-error correction cycle instead of staying hidden forever once
 `aeatsiiIssent` is `true`. The backend routing fix in `SiiSendHandler.java` — also shared, not
-window-specific Java code — is a 3-way split, not a straight swap: when
-`Invoice.isAeatsiiErrorRegistral()` is `true`, it further branches on the invoice's actual AEAT
-error code (`Invoice.getAeatsiiErrorCode()`). Error code exactly `"3000"` (duplicate registration)
-routes to `CorrectDuplicateInvoiceError` — a read-back/sync against AEAT, not a resend, and the
-only code that class accepts. Any other registry error, or no error code at all, routes to
-`MultiInvoiceSIIModification` (communication type `A1`, via the same
-`NeoProcessService.executeObuiappClass` bridge `MultiEnvioFactura` uses) — the real resend for
-that case, instead of `MultiEnvioFactura`'s always-`A0` "alta" envelope.
+window-specific Java code — is a plain 2-way split: normal send goes to `MultiEnvioFactura`
+(communication type `A0`, "alta") as before; whenever `Invoice.isAeatsiiErrorRegistral()` is
+`true`, it routes to `MultiInvoiceSIIModification` instead (communication type `A1`, via the
+same `NeoProcessService.executeObuiappClass` bridge `MultiEnvioFactura` uses) — the real resend
+for a corrected invoice, unconditionally, with no branch on the invoice's AEAT error code. An
+earlier version of this fix also special-cased error code `"3000"` to route into
+`CorrectDuplicateInvoiceError` (a read-back/sync against AEAT, not a resend) — that 3-way split
+was scope creep beyond what was asked and has been removed.
 
 This runs `PurchaseInvoiceHeaderHandler` exactly as the UI does — including the total-discount
 line created before completion — because `neo_action` executes the entity's `NeoHandler` hooks
