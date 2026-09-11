@@ -18,6 +18,31 @@ tools/app-shell/src/windows/custom/{window}/ (your hand-written components)
 - Add/change a key in `decisions.json` and re-run the generator, or
 - Write/update a component in `windows/custom/{window}/` that the generator already imports via a config key.
 
+### Gotcha — a hand-rolled `index.jsx` prop can silently shadow `decisions.json` (ETP-4839)
+
+Some windows have a hand-written `windows/custom/{window}/index.jsx` wrapper (not the pipeline-window
+`artifacts/{name}/custom/` convention) that renders `<HeaderPage>` itself and passes a prop it built by
+hand instead of the one the generator would have produced from `decisions.json`/`contract.json`. When
+that happens, **the hand-rolled prop wins completely** — the generated value is never even reached, and
+`decisions.json` looks correct while the running UI does something else entirely.
+
+Real example: `purchase-invoice/index.jsx` and `sales-invoice/index.jsx` both call the shared
+`getInvoiceDraftMode(ui, options)` helper (`windows/custom/shared/useInvoiceWindow.js`) and pass its
+return value as `draftMode={draftModeOverride}` to `<HeaderPage>`. This completely replaces the
+`draftMode` object the generator would otherwise have built from `decisions.json → window.draftMode`.
+Adding a new `draftMode` key in `decisions.json` (e.g. `keepSaveWhenCompletedFields`, see
+`docs/decisions-reference.md`) regenerates a perfectly correct `contract.json`/generated `HeaderPage.jsx`
+— and still does **nothing** in the browser for these two windows, because their `index.jsx` never reads
+the generated value at all. The fix has to be made by hand at the override site (here, by adding a new
+option to `getInvoiceDraftMode` and passing it from the one window that needs it), not by touching
+`decisions.json` again.
+
+**When adding/changing a `decisions.json → window.*` key, grep for a hand-rolled prop with the same
+name** (`grep -rn "draftMode={" tools/app-shell/src/windows/custom/`, or the equivalent for the prop
+you're changing) before assuming a `make regen` alone is enough. This is the same "custom files are
+never overwritten by the pipeline" guarantee working against you: it also means they are never
+auto-synced when a generated prop's shape changes.
+
 ---
 
 ## Customization options reference

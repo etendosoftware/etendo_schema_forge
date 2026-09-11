@@ -1,7 +1,8 @@
 {
   "version": "0.1.0",
   "generatedAt": "2026-09-09T11:18:23.940Z",
-  "checksum": "c9701b214fb19991",
+  "updatedAt": "2026-09-09T21:57:21.690Z",
+  "checksum": "cb326c3a095037fe",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -1517,14 +1518,20 @@
             "apiKey": "eTGOLocation",
             "column": "em_etgo_location",
             "label": "em_etgo_location",
-            "type": "string",
+            "type": "foreignKey",
             "tsType": "string",
             "visibility": "readOnly",
             "required": false,
             "grid": false,
             "form": false,
+            "reference": "Location",
+            "inputMode": "search",
+            "computed": {
+              "mode": "stored",
+              "refresh": "synchronous"
+            },
             "validation": {
-              "maxLength": 0
+              "maxLength": 32
             }
           }
         ],
@@ -6604,7 +6611,7 @@
             "name": "eTGOLocation",
             "apiKey": "eTGOLocation",
             "column": "em_etgo_location",
-            "type": "string",
+            "type": "foreignKey",
             "visibility": "readOnly",
             "required": false
           }
@@ -7508,7 +7515,7 @@
             "name": "eTGOLocation",
             "apiKey": "eTGOLocation",
             "column": "em_etgo_location",
-            "type": "string",
+            "type": "foreignKey",
             "visibility": "system",
             "required": false
           }
@@ -8666,7 +8673,7 @@
             "name": "eTGOLocation",
             "apiKey": "eTGOLocation",
             "column": "em_etgo_location",
-            "type": "string",
+            "type": "foreignKey",
             "visibility": "system",
             "required": false
           }
@@ -9832,7 +9839,7 @@
             "name": "eTGOLocation",
             "apiKey": "eTGOLocation",
             "column": "em_etgo_location",
-            "type": "string",
+            "type": "foreignKey",
             "visibility": "system",
             "required": false
           }
@@ -11858,6 +11865,14 @@
         "reference": "PriceList",
         "inputMode": "selector",
         "url": "/sws/neo/contacts/businessPartner/selectors/purchasePricelist"
+      },
+      {
+        "entity": "businessPartner",
+        "field": "eTGOLocation",
+        "column": "em_etgo_location",
+        "reference": "Location",
+        "inputMode": "search",
+        "url": "/sws/neo/contacts/businessPartner/selectors/eTGOLocation"
       },
       {
         "entity": "customer",
@@ -16768,6 +16783,14 @@
         "description": "Selector endpoint for 'businessPartnerCategory' in businessPartner should exist"
       },
       {
+        "id": "t-selector-endpoint-businessPartner-eTGOLocation",
+        "category": "selector-endpoint",
+        "entity": "businessPartner",
+        "field": "eTGOLocation",
+        "runner": "node",
+        "description": "Selector endpoint for 'eTGOLocation' in businessPartner should exist"
+      },
+      {
         "id": "t-selector-endpoint-businessPartner-greeting",
         "category": "selector-endpoint",
         "entity": "businessPartner",
@@ -21274,7 +21297,7 @@
       }
     ],
     "summary": {
-      "total": 1154,
+      "total": 1155,
       "byCategory": {
         "action-endpoint": 6,
         "crud-flags": 15,
@@ -21285,12 +21308,12 @@
         "field-type": 144,
         "rule-declared": 104,
         "searchable-filters": 4,
-        "selector-endpoint": 39,
+        "selector-endpoint": 40,
         "system-field": 517,
         "visibility": 15
       },
       "byRunner": {
-        "node": 1154,
+        "node": 1155,
         "junit": 0
       }
     }

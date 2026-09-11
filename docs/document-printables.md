@@ -155,14 +155,20 @@ exactly as it did before ETP-4787 rather than silently switching itself off. The
 strict, and both timestamps are truncated to whole seconds on the wire, so an edit landing in the
 same second as the upload reads as fresh.
 
-**Three windows deliberately opt out** by passing no `recordUpdated`: purchase-invoice,
-goods-receipt and return-material-receipt. Their attachment slot holds the *counterparty's* own
-document (the OCR source, the supplier's delivery note, the customer's signed receipt), not a
-cache of something we rendered — no edit of ours can make it stale. They also pass no
-`sourceBlob`, so the write half cannot fire either: two independent guards, because the failure
-mode here is overwriting a real user file. **That opt-out is load-bearing for every future
-invalidation rule added to this module — keep new checks behind the `recordUpdated` guard, never
-above it.**
+**Two windows deliberately opt out** by passing no `recordUpdated`: purchase-invoice and
+goods-receipt. Their attachment slot holds the *counterparty's* own document (the OCR source, the
+supplier's delivery note), not a cache of something we rendered — no edit of ours can make it
+stale. They also pass no `sourceBlob`, so the write half cannot fire either: two independent
+guards, because the failure mode here is overwriting a real user file. **That opt-out is
+load-bearing for every future invalidation rule added to this module — keep new checks behind the
+`recordUpdated` guard, never above it.**
+
+return-material-receipt used to opt out here too, for the same stated reason (its attachment
+slot held the customer's signed return receipt via `attachmentConfig`). ETP-5124 removed that
+upload slot from the preview panel entirely — see D18 — so the reason no longer applies, but the
+window still passes no `cacheConfig`/`recordUpdated` today; the fix reverted the panel to render
+the system PDF fresh on every open, same as before ETP-4315 ever shipped, deliberately without
+adopting the caching layer its sibling `return-to-vendor-shipment` already has. See D18 for why.
 
 The bug this closes:
 
@@ -251,7 +257,8 @@ PDF becomes ready — decide it deliberately, do not slip it into an unrelated c
 | D15 | The commercial template's tax labels are **generic** ("Impuesto" / "Impuestos" / "Subtotal (sin impuestos)"), not "IVA" | ETP-5125 | The lines-table tax column prints the tax *name* (`tax$_identifier`, e.g. "IVA 21%"), so a `%` header was wrong; and non-IVA taxes exist. The on-screen `DocumentTotalsPanel` already said "Impuesto", so the PDF contradicted the screen |
 | D16 | The cache is invalidated by **bundle identity** too, not only by the record's `updated` | ETP-5125 | A PDF depends on the template/labels/helpers as much as on the data, and changing those moves no timestamp — a cached document served the old design forever. Deliberately over-invalidates (one cold cache per deploy): the same "re-rendering beats serving stale" trade this cache already takes for `updated` |
 | D17 | The invalidation marker is the **build instant**, not a hand-bumped constant nor a stored renderer fingerprint | ETP-5125 | A constant has to be remembered on every future template change (this repo has shipped the same formatting bug 3× for exactly that reason) and leaves a deploy-slip window. A fingerprint is exact but needs a metadata field the upload cannot carry, and the only free-text column that round-trips is user-editable in the Adjuntos tab |
-| D18 | The detail-view **Send button** moved to `topbarSecondary` (left of Save), but its `SendDocumentModal` did **not** move out of the window's `topbarRight` component; the two are bridged by a `window` `CustomEvent` (`'<window>:open-send-modal'`) | ETP-5260 | The button is a plain visibility/order concern (DF wants it left of Save), but the modal needs client-rendered PDF/`documentType` context (`pdfBlobUrl`, status-derived copy) that the generic, window-agnostic `DocumentSecondaryActions` does not carry and should not be taught per-window. Two windows (`purchase-order`, `goods-shipment`) already used the identical event-bridge pattern for their Confirm/action modals, so this reuses an established shape rather than inventing a second one. Affects `purchase-order`, `sales-order`, `sales-quotation`, `goods-shipment`, `sales-invoice` (5 of the 9 ETP-5260 windows — `purchase-invoice`/`goods-receipt` have no Send button, and the two return windows have neither Clone nor Send in `topbarSecondary`) |
+| D18 | return-material-receipt's preview left panel reverted to the system-generated PDF (`leftPanel` + `PreviewPdfPanel`); the ETP-4408 customer-upload `attachmentConfig` slot is removed outright, not just hidden | ETP-5124 | PM (Valeria, with Emilio Polliotti) confirmed the original requirement was the Etendo-issued PDF, matching every other document window; QA (Isaías) rejected the ETP-4408 behavior. The customer's own return document is attached only via the generic Attachments tab now — it was never meant to *replace* the Etendo document, per the ticket. Deliberately did **not** adopt the `pdfCacheConfig`/`attachmentConfig` caching layer `return-to-vendor-shipment` uses for the same movement template: any record opened under the ETP-4408 code (2026-07-06 onward) may already carry a customer file marked as the main `M_InOut` attachment, and enabling the read-side cache today would serve that stale file back as a "cached PDF" — the same class of bug, through the cache path instead of the panel wiring. Revisit once a data check confirms no such attachments remain |
+| D19 | The detail-view **Send button** moved to `topbarSecondary` (left of Save), but its `SendDocumentModal` did **not** move out of the window's `topbarRight` component; the two are bridged by a `window` `CustomEvent` (`'<window>:open-send-modal'`) | ETP-5260 | The button is a plain visibility/order concern (DF wants it left of Save), but the modal needs client-rendered PDF/`documentType` context (`pdfBlobUrl`, status-derived copy) that the generic, window-agnostic `DocumentSecondaryActions` does not carry and should not be taught per-window. Two windows (`purchase-order`, `goods-shipment`) already used the identical event-bridge pattern for their Confirm/action modals, so this reuses an established shape rather than inventing a second one. Affects `purchase-order`, `sales-order`, `sales-quotation`, `goods-shipment`, `sales-invoice` (5 of the 9 ETP-5260 windows — `purchase-invoice`/`goods-receipt` have no Send button, and the two return windows have neither Clone nor Send in `topbarSecondary`) |
 
 **Normative order for any conflict: the AEAT spec > the ticket's example images > classic's
 implementation.** Applied three times in ETP-4912 (quiet zone, font size, placement).
