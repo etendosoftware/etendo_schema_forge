@@ -44,6 +44,10 @@ vi.mock('../useCertExpiry.js', () => ({
   useCertExpiry: () => ({ daysLeft: null }),
 }));
 
+vi.mock('../useFiscalTestMode.js', () => ({
+  useFiscalTestMode: vi.fn(() => ({ forceTestMode: false })),
+}));
+
 vi.mock('../fiscalConfig.utils.js', async (importActual) => ({
   ...(await importActual()),
   detectProfile: vi.fn(() => 'sii'),
@@ -76,21 +80,21 @@ vi.mock('../ChangeSifDialog.jsx', async () => {
 vi.mock('../SiiSection.jsx', () => ({
   default: React.forwardRef((props, ref) => {
     React.useImperativeHandle(ref, () => ({ save: vi.fn().mockResolvedValue(undefined) }));
-    return <div data-testid="sii-section" />;
+    return <div data-testid="sii-section" data-locked={String(!!props.locked)} />;
   }),
 }));
 
 vi.mock('../TbaiSection.jsx', () => ({
   default: React.forwardRef((props, ref) => {
     React.useImperativeHandle(ref, () => ({ save: vi.fn().mockResolvedValue(undefined) }));
-    return <div data-testid="tbai-section" />;
+    return <div data-testid="tbai-section" data-locked={String(!!props.locked)} />;
   }),
 }));
 
 vi.mock('../VerifactuSection.jsx', () => ({
   default: React.forwardRef((props, ref) => {
     React.useImperativeHandle(ref, () => ({ save: vi.fn().mockResolvedValue(undefined) }));
-    return <div data-testid="verifactu-section" />;
+    return <div data-testid="verifactu-section" data-locked={String(!!props.locked)} />;
   }),
 }));
 
@@ -137,6 +141,7 @@ vi.mock('lucide-react', () => ({
   RefreshCw: () => <svg data-testid="icon-refresh" />,
   PlusCircle: () => <svg data-testid="icon-plus-circle" />,
   MoreVertical: () => <svg data-testid="icon-more-vertical" />,
+  AlertTriangle: () => <svg data-testid="icon-alert-triangle" />,
 }));
 
 // DropdownMenu: stub out Radix primitives so the content renders only when the
@@ -193,6 +198,7 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
 
 import FiscalConfigPage from '../FiscalConfigPage.jsx';
 import { useFiscalConfig } from '../useFiscalConfig.js';
+import { useFiscalTestMode } from '../useFiscalTestMode.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useNavigate } from 'react-router-dom';
 
@@ -906,5 +912,138 @@ describe('FiscalConfigPage — handles deleted:true response from backend', () =
     await waitFor(() => expect(refetch).toHaveBeenCalled());
     expect(screen.queryByTestId('ChangeSifDialog__error')).not.toBeInTheDocument();
     expect(screen.queryByText('fiscal.loadError')).not.toBeInTheDocument();
+  });
+});
+
+// ETP-5272 — AD_Preference "Fuerza SII/TicketBAI/VeriFactu a modo prueba":
+// GET /sws/neo/fiscal-test-mode → { forceTestMode }. When true, the window
+// must lock its editable sections and show a warning banner; the page must
+// behave exactly as before when false or when the check fails (fail-open).
+describe('FiscalConfigPage — forceTestMode (ETP-5272)', () => {
+  function setupSiiProfile() {
+    vi.mocked(useAuth).mockReturnValue({
+      selectedOrg: { id: 'org-1', name: 'Test Org' },
+      selectedRole: { orgList: [{ id: 'org-1', name: 'Test Org' }] },
+      selectOrg: vi.fn(),
+    });
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false,
+      error: null,
+      profile: 'sii',
+      siiRecord: { id: 'sii-1' },
+      tbaiRecord: null,
+      verifactuRecord: null,
+      refetch: vi.fn(),
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupSiiProfile();
+  });
+
+  it('shows the test-mode warning banner when forceTestMode is true', () => {
+    vi.mocked(useFiscalTestMode).mockReturnValue({ forceTestMode: true });
+    renderPage();
+    expect(screen.getByTestId('FiscalConfigPage__testModeBanner')).toBeInTheDocument();
+    expect(screen.getByText('fiscal.testModeLock.warning')).toBeInTheDocument();
+  });
+
+  it('does not show the test-mode banner when forceTestMode is false', () => {
+    vi.mocked(useFiscalTestMode).mockReturnValue({ forceTestMode: false });
+    renderPage();
+    expect(screen.queryByTestId('FiscalConfigPage__testModeBanner')).not.toBeInTheDocument();
+  });
+
+  it('disables the page Save button when forceTestMode is true', () => {
+    vi.mocked(useFiscalTestMode).mockReturnValue({ forceTestMode: true });
+    renderPage();
+    const saveBtn = screen.getByText('fiscal.save').closest('button');
+    expect(saveBtn).toBeDisabled();
+  });
+
+  it('re-enables the page Save button when forceTestMode is false (no regression)', () => {
+    vi.mocked(useFiscalTestMode).mockReturnValue({ forceTestMode: false });
+    renderPage();
+    const saveBtn = screen.getByText('fiscal.save').closest('button');
+    expect(saveBtn).not.toBeDisabled();
+  });
+
+  it('passes locked=true down to SiiSection when forceTestMode is true', () => {
+    vi.mocked(useFiscalTestMode).mockReturnValue({ forceTestMode: true });
+    renderPage();
+    expect(screen.getByTestId('sii-section')).toHaveAttribute('data-locked', 'true');
+  });
+
+  it('passes locked=false down to SiiSection when forceTestMode is false', () => {
+    vi.mocked(useFiscalTestMode).mockReturnValue({ forceTestMode: false });
+    renderPage();
+    expect(screen.getByTestId('sii-section')).toHaveAttribute('data-locked', 'false');
+  });
+
+  it('passes locked=true down to TbaiSection when forceTestMode is true', () => {
+    vi.mocked(useFiscalTestMode).mockReturnValue({ forceTestMode: true });
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false,
+      error: null,
+      profile: 'tbai',
+      siiRecord: null,
+      tbaiRecord: { id: 'tbai-1' },
+      verifactuRecord: null,
+      refetch: vi.fn(),
+      createComplementary: vi.fn(),
+    });
+    renderPage();
+    expect(screen.getByTestId('tbai-section')).toHaveAttribute('data-locked', 'true');
+  });
+
+  it('passes locked=true down to VerifactuSection when forceTestMode is true', () => {
+    vi.mocked(useFiscalTestMode).mockReturnValue({ forceTestMode: true });
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false,
+      error: null,
+      profile: 'verifactu',
+      siiRecord: null,
+      tbaiRecord: null,
+      verifactuRecord: { id: 'ver-1' },
+      refetch: vi.fn(),
+    });
+    renderPage();
+    expect(screen.getByTestId('verifactu-section')).toHaveAttribute('data-locked', 'true');
+  });
+
+  it('does NOT show the "Add SII" kebab item when forceTestMode is true (no new activation)', () => {
+    vi.mocked(useFiscalTestMode).mockReturnValue({ forceTestMode: true });
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false,
+      error: null,
+      profile: 'tbai',
+      siiRecord: null,
+      tbaiRecord: { id: 'tbai-1' },
+      verifactuRecord: null,
+      refetch: vi.fn(),
+      createComplementary: vi.fn(),
+    });
+    renderPage();
+    // canChangeSif is still true for 'tbai', so the kebab itself renders —
+    // only the "Add SII" item must be gone.
+    fireEvent.click(screen.getByTestId('FiscalConfigPage__actionsMenu'));
+    expect(screen.queryByTestId('FiscalConfigPage__addComplementary')).not.toBeInTheDocument();
+  });
+
+  it('does not show the banner in the "unconfigured" (wizard) state, even when forceTestMode is true', () => {
+    vi.mocked(useFiscalTestMode).mockReturnValue({ forceTestMode: true });
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false,
+      error: null,
+      profile: 'unconfigured',
+      siiRecord: null,
+      tbaiRecord: null,
+      verifactuRecord: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    expect(screen.getByTestId('onboarding-wizard')).toBeInTheDocument();
+    expect(screen.queryByTestId('FiscalConfigPage__testModeBanner')).not.toBeInTheDocument();
   });
 });

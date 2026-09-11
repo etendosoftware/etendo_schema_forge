@@ -219,6 +219,44 @@ i18n keys used:
 
 Debug: the debug panel exposes a "Cert expiry" section with three toggle buttons (None / 45d warn / 20d crit) that inject a mock `daysLeft` value into the hook, bypassing the API entirely.
 
+## Forced test mode lock (ETP-5272)
+
+The window queries `GET /sws/neo/fiscal-test-mode` on mount (via `useFiscalTestMode.js`) to
+read whether the AD_Preference *"Fuerza SII/TicketBAI/VeriFactu a modo prueba"* is effectively
+active for the current client. The endpoint returns `{ "forceTestMode": true|false }`, is
+authenticated (`Authorization: Bearer <token>`, 401 on missing/invalid token), and is served by
+`com.etendoerp.go` (branch `feature/ETP-5272`, commit `87a9546e`).
+
+When `forceTestMode` is `true` the window becomes **read-only**:
+
+- The active section (`SiiSection`, `TbaiSection`, `VerifactuSection`) is rendered with a
+  `locked` prop that gates its own `set()` state updater and disables its input controls
+  (`Input`/`Switch`) — the SAME mechanism `VerifactuSection` already used for its `isReady`
+  lock (ETP-4785), OR'd together: `isLocked = isEtendoTrue(record?.isReady) || !!locked`.
+  `SiiSection` and `TbaiSection` gained the identical `locked` prop and guard so all three
+  sections lock the same way.
+- The page-level Save button is disabled (`disabled={saving || !orgId || forceTestMode}`).
+- The "Add SII"/"Add TBAI" complementary action (`canAddComplementary`) is hidden — creating
+  a new active fiscal system record is itself a kind of activation forced-test-mode must block.
+- A warning banner (`data-testid="FiscalConfigPage__testModeBanner"`) is shown above the
+  section content, using the same bordered-card + `AlertTriangle` icon visual pattern as the
+  "Change SIF" permanence notice (`ChangeSifDialog__notice`). Message key:
+  `fiscal.testModeLock.warning` — "You can only activate a fiscal system in a production
+  environment." / "Solo podrá activar un sistema fiscal en un entorno productivo."
+- The certificate upload flow (`CertSection`/`CertModal`) and "Change SIF" (deactivation only,
+  never an activation) are intentionally **not** locked — same precedent as the pre-existing
+  `isReady` lock, which never blocked "Change SIF" either.
+- The onboarding wizard (`unconfigured` profile) is **not** locked by this check — it is a
+  distinct UI outside the investigated scope; the banner and section locks only apply once a
+  profile is resolved (`sii`, `sii-navarra`, `sii+tbai`, `tbai`, `verifactu`), and never for
+  `conflict`.
+
+**Fail-open on fetch error:** any network/HTTP/parse failure from `/fiscal-test-mode` leaves
+`forceTestMode` at `false` — the window stays fully usable — but the failure is always
+surfaced via `console.warn` (never a silent catch). See `useFiscalTestMode.js`.
+
+See items 13–14 of "Manual verification" below for the full checklist.
+
 ## `onGoHome` prop
 
 `OnboardingWizard` accepts an optional `onGoHome` prop. If provided, "Ir al inicio" (applied screen) and "Ir al inicio" (skipped screen) will call it instead of `onComplete`. This allows the host application to navigate to a dashboard or first-steps screen rather than staying in the fiscal-config window. When omitted, both buttons fall back to `onComplete`.
@@ -261,6 +299,8 @@ For `sii+tbai` both records must report production for the row to read "Producci
 10. Repeat with a `sii+tbai` org and confirm **both** the SII and TBAI rows are deactivated (two-step) and the wizard reappears.
 11. Open `/fiscal-config` with an org that has NO config, or one in a `conflict` state — confirm the "Change SIF" button is NOT shown.
 12. (Verifactu, `isReady=true`) Confirm the Verifactu section fields are locked for editing but the "Change SIF" button still works — the lock does not block the change.
+13. (ETP-5272) With the AD_Preference "Fuerza SII/TicketBAI/VeriFactu a modo prueba" active, open `/fiscal-config` for a configured org and confirm: the `FiscalConfigPage__testModeBanner` warning appears, all section inputs are disabled, the page Save button is disabled, and "Add SII"/"Add TBAI" is absent from the kebab menu — while "Change SIF" (if present) and certificate upload remain usable. Deactivate the preference and confirm the window returns to its normal editable state.
+14. (ETP-5272) Simulate a `/sws/neo/fiscal-test-mode` fetch failure (network block or 500 in devtools) and confirm the window stays fully editable — fail-open — while a `console.warn` is logged.
 
 ## Automated evidence
 
@@ -276,6 +316,10 @@ For `sii+tbai` both records must report production for the row to read "Producci
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/ChangeSifDialog.vitest.jsx` — dialog tests: notice selection per profile, deactivation PUT path, sii+tbai two-step, partial-failure message, INFORM-not-block posture.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/FiscalConfigPage.vitest.jsx` — page tests including `canChangeSif` visibility gating (`CONFIGURED_PROFILES`, no mock override) and dialog wiring.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/useFiscalConfig.activeRow.vitest.js` — active-row resolution: inactive trace rows dropped before `detectProfile`, `rows.find(isActiveRecord) ?? rows[0]` preference.
+- `tools/app-shell/src/windows/custom/fiscal-config/useFiscalTestMode.js` — ETP-5272: fetches `GET /sws/neo/fiscal-test-mode` via `useApiFetch`; fails open (`forceTestMode: false`) with a `console.warn` on any network/HTTP/parse error; never silently swallows a failure.
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/useFiscalTestMode.test.js` / `useFiscalTestMode.vitest.js` — source-guard + behavioral tests: endpoint call, strict `=== true` check, AbortController cleanup, and every fail-open path (non-ok, rejected fetch, malformed json) resolving to `false` with a `console.warn`.
+- `tools/app-shell/src/windows/custom/fiscal-config/FiscalConfigPage.jsx` — ETP-5272: wires `useFiscalTestMode`, renders the `FiscalConfigPage__testModeBanner` warning card, disables the page Save button, hides "Add complementary", and passes `locked={forceTestMode}` to `SiiSection`/`TbaiSection`/`VerifactuSection`.
+- `tools/app-shell/src/windows/custom/fiscal-config/SiiSection.jsx` / `TbaiSection.jsx` / `VerifactuSection.jsx` — ETP-5272: all three now accept a `locked` prop that gates their `set()` updater and disables their input controls; `VerifactuSection` ORs it into its existing `isReady`-derived `isLocked` (same mechanism, not a parallel one).
 - DB triggers (com.etendoerp.go SIF modules) — `AEATSII_ONE_ACTIVE_CONFIG_TRG`, `TBAI_ONE_ACTIVE_CONFIG_TRG`, `ETVFAC_ONE_ACTIVE_CONFIG_TRG` enforce one *active* config per org (relaxed from one config per org).
 - `cli/test/fiscal-config.utils.test.js` — 92 regression tests covering profile detection, onboarding payloads, contract-specific ids, Verifactu save guards, SII field mapping, CertModal upload flow, and confirmNif flow (all passing).
 - `tools/app-shell/src/windows/custom/fiscal-config/useFiscalConfig.js` — parallel fetcher hook for the 3 config records; filters inactive trace rows (`activeOrNull`) before `detectProfile` so a "Change SIF" leftover never masks the live config.

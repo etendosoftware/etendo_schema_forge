@@ -20419,6 +20419,7 @@
     "fiscal.changeSif.cancel": "Cancel",
     "fiscal.changeSif.err.noRecordId": "Could not resolve the fiscal configuration record to deactivate.",
     "fiscal.changeSif.err.partial": "The following system(s) were already deactivated: {deactivated}. The remaining one(s) could not be deactivated: {error}. Re-open this dialog to finish deactivating the rest.",
+    "fiscal.testModeLock.warning": "You can only activate a fiscal system in a production environment.",
     "fiscal.save": "Save",
     "fiscal.saving": "Saving…",
     "fiscal.noOrg": "No organization selected in the current session.",

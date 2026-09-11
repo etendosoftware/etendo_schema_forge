@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Save, RefreshCw, PlusCircle, MoreVertical } from 'lucide-react';
+import { Save, RefreshCw, PlusCircle, MoreVertical, AlertTriangle } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -16,6 +16,7 @@ import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFiscalConfig } from './useFiscalConfig.js';
 import { detectProfile } from './fiscalConfig.utils.js';
 import { useCertExpiry } from './useCertExpiry.js';
+import { useFiscalTestMode } from './useFiscalTestMode.js';
 import { useDebugMode } from '../fiscal-monitor/useDebugMode.js';
 import CertExpiryBanner from './CertExpiryBanner.jsx';
 import OnboardingWizard from './OnboardingWizard.jsx';
@@ -135,13 +136,18 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
 
   const { daysLeft: certDaysLeft } = useCertExpiry(apiBaseUrl, { mockDaysLeft: mockCertDays, orgId });
 
+  // ETP-5272 — AD_Preference "Fuerza SII/TicketBAI/VeriFactu a modo prueba":
+  // when active, the whole window becomes read-only (no new SIF activation is
+  // allowed outside a production environment). Fails open on fetch error.
+  const { forceTestMode } = useFiscalTestMode(apiBaseUrl);
+
   const siiRef       = useRef(null);
   const tbaiRef      = useRef(null);
   const verifactuRef = useRef(null);
 
   // "Add complementary SIF" — only when real API data (not mock), org selected,
   // and profile is singly sii or tbai (not already combined or verifactu).
-  const canAddComplementary = !mockOverride && !!orgId &&
+  const canAddComplementary = !mockOverride && !!orgId && !forceTestMode &&
     effectiveProfile === 'tbai';
 
   async function handleAddComplementary() {
@@ -295,7 +301,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
           </Button>
           <Button
             onClick={handleSave}
-            disabled={saving || !orgId}
+            disabled={saving || !orgId || forceTestMode}
             className={resolveSaveClass(savedOk)}
             data-testid="Button__310303">
             <Save size={14} className="mr-1.5" data-testid="Save__310303" />
@@ -333,6 +339,22 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
       )}
       <div className="relative h-full flex flex-col overflow-hidden">
         {orgBar}
+
+        {showContent && forceTestMode && renderProfile !== 'conflict' && (
+          <div className="px-6 pt-4">
+            <div
+              className="rounded-lg border border-[hsl(var(--border-subtle))] bg-muted/40 p-4 text-sm text-[hsl(var(--foreground))]"
+              data-testid="FiscalConfigPage__testModeBanner">
+              <div className="flex items-center gap-2 font-medium">
+                <AlertTriangle
+                  size={15}
+                  className="text-status-warning-foreground"
+                  data-testid="FiscalConfigPage__testModeBannerIcon" />
+                {ui('fiscal.testModeLock.warning')}
+              </div>
+            </div>
+          </div>
+        )}
 
         {!orgId && !mockOverride && (
           <div className="flex-1 flex items-center justify-center">
@@ -387,6 +409,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
                 onSave={() => {}}
                 variant={effectiveProfile}
                 hideSave
+                locked={forceTestMode}
                 data-testid="SiiSection__310303" />
               <CertExpiryBanner
                 daysLeft={certDaysLeft}
@@ -416,6 +439,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
                     onSave={() => {}}
                     variant="sii"
                     hideSave
+                    locked={forceTestMode}
                     data-testid="SiiSection__310303" />
                 )}
                 {activeTab === 1 && (
@@ -428,6 +452,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
                     onSave={() => {}}
                     hideSave
                     hideCert
+                    locked={forceTestMode}
                     data-testid="TbaiSection__310303" />
                 )}
                 <CertExpiryBanner
@@ -452,6 +477,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
                 orgId={orgId}
                 onSave={() => {}}
                 hideSave
+                locked={forceTestMode}
                 data-testid="TbaiSection__310303" />
               <CertExpiryBanner
                 daysLeft={certDaysLeft}
@@ -474,6 +500,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
                 orgId={orgId}
                 onSave={() => {}}
                 hideSave
+                locked={forceTestMode}
                 data-testid="VerifactuSection__310303" />
               <CertExpiryBanner
                 daysLeft={certDaysLeft}
