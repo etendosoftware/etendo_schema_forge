@@ -564,6 +564,8 @@
           "visibility": "editable",
           "grid": true,
           "required": false,
+          "derivation": "fromConfig",
+          "reason": "ETP-5245 - DateTo is NOT NULL in the dictionary but optional for the user: an empty expiry means 'in force indefinitely'. ProductCostingHandler.injectDefaultEndingDate() fills the blank server-side with CostingUtils.getLastDate() (31-12-9999) before the row reaches the CRUD layer, so the column is never written NULL. Declared as a fromConfig server default so the NOT NULL invariant is satisfied by the handler instead of by forcing the field required in the UI.",
           "readOnlyLogic": null,
           "readOnlyLogicJs": "record.manual === false || record.manual === 'N'"
         },

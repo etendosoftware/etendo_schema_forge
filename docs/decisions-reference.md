@@ -910,6 +910,52 @@ Field keys use **camelCase from raw schema** (e.g., `"businessPartner"`, `"order
 | `system` | false | false | false |
 | `discarded` | false | false | false |
 
+### Derivation (`derivation`) — ETP-5245
+
+Declares (or suppresses) **where a field's value comes from when the user does not supply it**.
+The raw schema extracts a derivation from the AD column; `decisions.json` owns the final word and
+is applied **after** the raw copy, so a declaration always wins.
+
+| Value in `decisions.json` | Resolved `field.derivation` | Use it when |
+|---|---|---|
+| _absent_ | the raw AD-derived value, unchanged | default — no opinion |
+| `"fromConfig"` (any string) | `{ "type": "fromConfig" }` | the raw schema carries **no** derivation but the value really is filled server-side |
+| `{ "type": "fromField", "source": "email" }` | copied verbatim | the derivation needs more than a type (a `source`, a literal `value`, …) |
+| `null` | key removed | the raw schema derives a value the user must now provide — a field moving from `system`/`readOnly` to `editable`, so NEO does not overwrite the user's input on save |
+
+Recognized types: `fromConfig`, `fromParent`, `fromField`, `lookup`, `computed`, `sequence`.
+
+**The string shorthand is expanded to `{ type: … }` on purpose.** Every consumer reads
+`derivation.type` — the quality gate's `hasServerDefault` (`quality-gate/checks/invariants.js`),
+`validate-schema.js` (`SYSTEM_NO_DERIVATION`, `INVALID_FROM_PARENT`, `COMPUTED_NO_RULE`) and the
+contract's `computedFields` array — so a bare string would be carried through and match nothing.
+A value that is neither a non-empty string, a plain object, nor `null` (e.g. `false`, `""`) is not
+a declaration and leaves the raw derivation untouched.
+
+**Where it surfaces.** For a **visible** field the derivation is emitted into `contract.json`
+(both on the field and in the entity's `computedFields`); a `system` field never reaches the
+frontend contract, so declaring a derivation on one only affects schema validation. It is **not**
+pushed to NEO — `push-to-neo.js` does not read `derivation`, so `ETGO_SF_FIELD` and the exported
+`ETGO_SF_*.xml` are unaffected either way.
+
+**Quality gate.** `validateNotNullRequirements` fails a field that is `required: false` while its
+source column is `NOT NULL`, *unless* the field has a callout or a server-default derivation
+(`fromConfig`, `fromParent`, `sequence`). Declaring the derivation is how a field backed by a real
+server-side default is made legitimately optional in the UI.
+
+**Shipped example — `product` → `costing.endingDate`:** the column is `NOT NULL`, but
+`ProductCostingHandler.injectDefaultEndingDate()` fills it with `CostingUtils.getLastDate()`
+(31-12-9999) before the row reaches the CRUD, so the field is optional for the user.
+
+```json
+"endingDate": {
+  "visibility": "editable",
+  "required": false,
+  "derivation": "fromConfig",
+  "reason": "Server-side default injected by ProductCostingHandler; never written NULL."
+}
+```
+
 ### Grid cell flags
 
 Applied to fields with `grid: true` to control how the list cell renders.

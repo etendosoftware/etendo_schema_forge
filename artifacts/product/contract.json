@@ -1,7 +1,8 @@
 {
-  "version": "0.8.0",
+  "version": "0.9.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "checksum": "0b644127f9fdcb75",
+  "updatedAt": "2026-09-11T04:01:43.024Z",
+  "checksum": "e7721b8a0998c794",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -1299,6 +1300,9 @@
             "grid": true,
             "form": true,
             "sourceRequired": true,
+            "derivation": {
+              "type": "fromConfig"
+            },
             "validation": {
               "maxLength": 10
             },
@@ -1309,7 +1313,14 @@
           }
         ],
         "searchableFields": [],
-        "computedFields": [],
+        "computedFields": [
+          {
+            "name": "endingDate",
+            "derivation": {
+              "type": "fromConfig"
+            }
+          }
+        ],
         "javaQualifier": "productCostingHandler"
       },
       "transactionAdjustments": {
