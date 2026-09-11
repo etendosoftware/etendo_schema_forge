@@ -58,7 +58,10 @@ export default function PurchaseInvoiceHeaderTable(props) {
 
   const { selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
-  const { profile, siiRecord, tbaiRecord } = useFiscalConfig(orgId, apiBaseUrl);
+  const {
+    profile, tbaiRecord,
+    earliestSiiCutoverDate, earliestTbaiCutoverDate,
+  } = useFiscalConfig(orgId, apiBaseUrl);
   const territory = tbaiRecord?.etsgSifTerritory ?? null;
 
   // ETP-5087: BOTH fiscal columns resolve synchronously from the single,
@@ -90,20 +93,29 @@ export default function PurchaseInvoiceHeaderTable(props) {
 
   const columns = useMemo(() => {
     const fiscalCols = [];
-    // ETP-5122: SII books by accounting date, not invoice date (mirrors
-    // Classic's AEATSII_PreSII_Invoice auxiliary input, which compares
-    // DateAcct). A row dated before the org's SII adoption date shows no
-    // status at all — the column stays as long as the profile enables SII,
-    // since other rows may still be eligible.
+    // ETP-5229 (corrected): the status badge VALUE reads directly off the
+    // invoice's OWN persisted status field — no config-scoped lookup. Classic
+    // never links a sent invoice's status to any particular fiscal config row
+    // (see useFiscalStatus.js for the full root-cause writeup), so an invoice
+    // genuinely sent under a PREVIOUS, since-superseded config must keep
+    // showing its real status forever.
+    //
+    // But live user testing found that removing ALL date gating was wrong: a
+    // row dated BEFORE the system's earliest-ever cutover for this org (e.g. an
+    // invoice from before SII was ever configured) must show a dash. Each
+    // column is gated per-row on isSifEligibleByDate against the EARLIEST
+    // cutover across ALL of the org's config rows (active or deactivated) —
+    // never the currently active config's own (possibly later) cutover date,
+    // which would incorrectly blank a real historical status. The column
+    // itself still only appears when the profile enables SII
+    // (`targets.showSii`) — org/territory-scoped, not date-scoped.
     if (targets.showSii) {
       fiscalCols.push({
         key: '_siiStatus', type: 'custom', label: siiColLabel,
         render: (row) => (
-          isSifEligibleByDate(row.accountingDate, siiRecord?.fechaAcogidaSII)
-            ? <FiscalStatusBadge
-                status={row.aeatsiiEstado ?? null}
-                data-testid="FiscalStatusBadge__6b7cdb" />
-            : <span className="text-muted-foreground">—</span>
+          <FiscalStatusBadge
+            status={isSifEligibleByDate(row.accountingDate, earliestSiiCutoverDate) ? (row.aeatsiiEstado ?? null) : null}
+            data-testid="FiscalStatusBadge__6b7cdb" />
         ),
       });
     }
@@ -122,18 +134,18 @@ export default function PurchaseInvoiceHeaderTable(props) {
         // fabricated status. `isSent` is used rather than a plain truthy test
         // because NEO may deliver the flag as the AD character `'N'`, truthy in JS.
         //
-        // ETP-5122: Batuz is the territorial variant of TBAI and shares the same
-        // adoption date field (`tbaisystemdate`), but the column must gate against
-        // `invoiceDate`, NOT `accountingDate` — that is the one real difference
-        // from the SII column above. A row dated before the org's Batuz adoption
-        // date shows a dash instead of a fabricated status.
-        render: (row) => (
-          isSifEligibleByDate(row.invoiceDate, tbaiRecord?.tbaisystemdate)
-            ? <FiscalStatusBadge
-                status={row.tbaiSyncEstado ?? (isSent(row.tbaiIssent) ? 'Enviada' : 'Pendiente')}
-                data-testid="FiscalStatusBadge__tbai_6b7cdb" />
-            : <span className="text-muted-foreground">—</span>
-        ),
+        // ETP-5229: the earliest-cutover date gate (see the SII comment above)
+        // is applied on top of this. Batuz is the territorial variant of TBAI;
+        // territorial eligibility (Bizkaia-only) is still decided entirely by
+        // `getInvoiceFiscalTargets` via `targets.showTbai`.
+        render: (row) => {
+          const eligible = isSifEligibleByDate(row.invoiceDate, earliestTbaiCutoverDate);
+          return (
+            <FiscalStatusBadge
+              status={eligible ? (row.tbaiSyncEstado ?? (isSent(row.tbaiIssent) ? 'Enviada' : 'Pendiente')) : null}
+              data-testid="FiscalStatusBadge__tbai_6b7cdb" />
+          );
+        },
       });
     }
 
@@ -289,7 +301,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
       },
       { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent' },
     ];
-  }, [gl, ui, locale, targets, siiColLabel, tbaiColLabel, siiRecord, tbaiRecord]);
+  }, [gl, ui, locale, targets, siiColLabel, tbaiColLabel, earliestSiiCutoverDate, earliestTbaiCutoverDate]);
 
   return (
     <>

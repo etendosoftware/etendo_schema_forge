@@ -105,3 +105,128 @@ describe('useFiscalConfig — active-row preference (N1)', () => {
     expect(result.current.profile).toBe('sii+tbai');
   });
 });
+
+// ETP-5229 — earliestSiiCutoverDate/earliestTbaiCutoverDate/earliestVerifactuCutoverDate:
+// the MIN cutover across ALL rows for a system (active or inactive), computed independently
+// of the active-row projection (siiRecord/tbaiRecord/verifactuRecord) covered above.
+describe('useFiscalConfig — earliest-ever cutover date (ETP-5229)', () => {
+  it('is the accounting-cutover (monitordate) of the SOLE sii row when there is only one', async () => {
+    mockApiFetch.mockImplementation(
+      apiFor({ ...EMPTY, 'sii-config': [{ id: 'sii-1', active: 'Y', monitordate: '2026-06-01T00:00:00.000Z' }] }),
+    );
+    const { result } = renderHook(() => useFiscalConfig('org-1', '/api'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.earliestSiiCutoverDate).toBe('2026-06-01T00:00:00.000Z');
+  });
+
+  // Scenario B: an OLD deactivated config has an EARLIER cutover than the
+  // currently-active one — the earliest-ever value must come from the
+  // deactivated (inactive) row, not the active row's own (later) date.
+  it('picks the EARLIEST monitordate across an inactive-old + active-new sii pair (scenario B)', async () => {
+    mockApiFetch.mockImplementation(
+      apiFor({
+        ...EMPTY,
+        'sii-config': [
+          { id: 'sii-old', active: 'N', monitordate: '2026-01-01T00:00:00.000Z' },
+          { id: 'sii-new', active: 'Y', monitordate: '2026-06-01T00:00:00.000Z' },
+        ],
+      }),
+    );
+    const { result } = renderHook(() => useFiscalConfig('org-1', '/api'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.earliestSiiCutoverDate).toBe('2026-01-01T00:00:00.000Z');
+    // The active-row projection is UNAFFECTED — it still resolves to the
+    // active row's own record, not the earlier one.
+    expect(result.current.siiRecord).toMatchObject({ id: 'sii-new' });
+  });
+
+  it('is order-independent — the same MIN is picked regardless of row order in the API response', async () => {
+    mockApiFetch.mockImplementation(
+      apiFor({
+        ...EMPTY,
+        'tbai-config': [
+          { id: 'tbai-newest', active: 'Y', tbaisystemdate: '2026-09-01T00:00:00.000Z' },
+          { id: 'tbai-oldest', active: 'N', tbaisystemdate: '2026-01-01T00:00:00.000Z' },
+          { id: 'tbai-middle', active: 'N', tbaisystemdate: '2026-05-01T00:00:00.000Z' },
+        ],
+      }),
+    );
+    const { result } = renderHook(() => useFiscalConfig('org-1', '/api'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.earliestTbaiCutoverDate).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('is null when no row for that system carries the cutover field at all', async () => {
+    mockApiFetch.mockImplementation(
+      apiFor({ ...EMPTY, 'verifactu-config': [{ id: 'vf-1', active: 'Y' }] }),
+    );
+    const { result } = renderHook(() => useFiscalConfig('org-1', '/api'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.earliestVerifactuCutoverDate).toBeNull();
+  });
+
+  // Never-configured-for-this-system case: no row at all for a system → null,
+  // regardless of the other two systems being configured.
+  it('is null for verifactu when the org has zero verifactu rows, even though sii/tbai are configured', async () => {
+    mockApiFetch.mockImplementation(
+      apiFor({
+        'sii-config': [{ id: 'sii-1', active: 'Y', monitordate: '2026-01-01T00:00:00.000Z' }],
+        'tbai-config': [{ id: 'tbai-1', active: 'Y', tbaisystemdate: '2026-01-01T00:00:00.000Z' }],
+        'verifactu-config': [],
+      }),
+    );
+    const { result } = renderHook(() => useFiscalConfig('org-1', '/api'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.earliestVerifactuCutoverDate).toBeNull();
+    expect(result.current.earliestSiiCutoverDate).toBe('2026-01-01T00:00:00.000Z');
+    expect(result.current.earliestTbaiCutoverDate).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('is null for every system when the org has zero rows anywhere', async () => {
+    mockApiFetch.mockImplementation(apiFor(EMPTY));
+    const { result } = renderHook(() => useFiscalConfig('org-1', '/api'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.earliestSiiCutoverDate).toBeNull();
+    expect(result.current.earliestTbaiCutoverDate).toBeNull();
+    expect(result.current.earliestVerifactuCutoverDate).toBeNull();
+  });
+
+  it('ignores an unparsable cutover value on one row but still picks the earliest VALID one', async () => {
+    mockApiFetch.mockImplementation(
+      apiFor({
+        ...EMPTY,
+        'sii-config': [
+          { id: 'sii-bad', active: 'N', monitordate: 'not-a-date' },
+          { id: 'sii-good', active: 'Y', monitordate: '2026-03-01T00:00:00.000Z' },
+        ],
+      }),
+    );
+    const { result } = renderHook(() => useFiscalConfig('org-1', '/api'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.earliestSiiCutoverDate).toBe('2026-03-01T00:00:00.000Z');
+  });
+
+  // Verifactu's cutover field is `inVfactuSystem`, distinct from sii's
+  // `monitordate` and tbai's `tbaisystemdate` — pin the field mapping itself.
+  it('reads the verifactu cutover from inVfactuSystem specifically (not monitordate/tbaisystemdate)', async () => {
+    mockApiFetch.mockImplementation(
+      apiFor({
+        ...EMPTY,
+        'verifactu-config': [{ id: 'vf-1', active: 'Y', inVfactuSystem: '2026-04-01T00:00:00.000Z' }],
+      }),
+    );
+    const { result } = renderHook(() => useFiscalConfig('org-1', '/api'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.earliestVerifactuCutoverDate).toBe('2026-04-01T00:00:00.000Z');
+  });
+
+  it('sets all three earliestXCutoverDate fields to null when orgId is null, without calling the API', async () => {
+    mockApiFetch.mockClear();
+    const { result } = renderHook(() => useFiscalConfig(null, '/api'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.earliestSiiCutoverDate).toBeNull();
+    expect(result.current.earliestTbaiCutoverDate).toBeNull();
+    expect(result.current.earliestVerifactuCutoverDate).toBeNull();
+    expect(mockApiFetch).not.toHaveBeenCalled();
+  });
+});

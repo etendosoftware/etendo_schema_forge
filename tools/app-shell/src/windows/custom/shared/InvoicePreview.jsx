@@ -11,7 +11,7 @@ import { useInvoicePreview } from './useInvoicePreview.js';
 import { resolveInvoicePaymentBadge } from './invoicePaymentBadge.js';
 import { useFiscalStatus } from './useFiscalStatus.js';
 import { StatusPill } from '@/windows/custom/fiscal-monitor/FmPrimitives.jsx';
-import { getInvoiceFiscalTargets, isSifEligibleByDate, isVerifactuEligibleByDate } from './fiscalTargets.js';
+import { getInvoiceFiscalTargets } from './fiscalTargets.js';
 import SifSendingModal from './SifSendingModal.jsx';
 import SummaryCard, { InfoRow } from './preview-cards/SummaryCard.jsx';
 import PaymentsCard from './preview-cards/PaymentsCard.jsx';
@@ -102,20 +102,25 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
 
 // ── General tab content ───────────────────────────────────────────────────────
 
-function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, orgId, profile, territory, siiRecord, tbaiRecord, verifactuRecord, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision, emailsRefreshSignal }) {
+function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, addPaymentBlockedByDraft, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, profile, territory, earliestSiiCutoverDate, earliestTbaiCutoverDate, earliestVerifactuCutoverDate, onAddPayment, onSend, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision, emailsRefreshSignal }) {
   const ui = useUI();
   const fiscalTargets = getInvoiceFiscalTargets(specName, profile, territory);
-  // ETP-5122: a single invoice this time (not a grid row), but the same rule —
-  // no status before the org's adoption date for that system. SII compares
-  // accounting date (Classic books SII by DateAcct, not DateInvoiced); TBAI
-  // compares invoice date. VERI*FACTU is its own gate (ETP-5122 follow-up):
-  // Classic compares the invoice's record CREATION timestamp, not invoiceDate
-  // — see isVerifactuEligibleByDate in fiscalTargets.js.
-  const siiEligibleByDate = isSifEligibleByDate(invoice?.accountingDate, siiRecord?.fechaAcogidaSII);
-  const tbaiEligibleByDate = isSifEligibleByDate(invoice?.invoiceDate, tbaiRecord?.tbaisystemdate);
-  const verifactuEligibleByDate = isVerifactuEligibleByDate(invoice?.created, verifactuRecord?.inVfactuSystem);
+  // ETP-5229 (corrected): the status VALUE below still reads directly off the
+  // invoice's own persisted status field via useFiscalStatus — config-independent
+  // by construction, no network call needed. But live user testing found "no gate
+  // at all" was WRONG: an invoice dated before the org's SII/TBAI/VERI*FACTU ever
+  // existed must not show a status at all, even if a stale DB value happens to be
+  // present. useFiscalStatus now gates eligibility on the EARLIEST-ever cutover
+  // date across ALL of the org's config rows for that system (active or
+  // deactivated) — not the currently active config's own (possibly later) date,
+  // which would incorrectly blank out a real historical status. See
+  // useFiscalStatus.js and useFiscalConfig.js's earliestCutoverDate() for the
+  // full writeup. `fiscalTargets.showX` still only decides whether the SYSTEM
+  // applies to this org/territory at all (org-scoped, not date-scoped) — the
+  // InfoRow visibility below is unchanged.
   const { sii: siiStatus, tbai: tbaiStatus, verifactu: vfStatus, loading: fiscalLoading } = useFiscalStatus(
-    invoice?.id, specName, profile, apiBaseUrl, orgId, territory,
+    invoice, specName, profile, territory,
+    { sii: earliestSiiCutoverDate, tbai: earliestTbaiCutoverDate, verifactu: earliestVerifactuCutoverDate },
   );
   const invoiceRelatedSpecs = useMemo(() => {
     const orderId = invoice?.salesOrder;
@@ -145,16 +150,19 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
         orgGrandTotal={orgGrandTotal}
         ratePrecision={ratePrecision}
         data-testid="SummaryCard__cf88e6">
-        {fiscalTargets.showSii && siiEligibleByDate && (
+        {fiscalTargets.showSii && (
           <InfoRow
             label={ui('invoicePreview.fiscalStatus.sii')}
             data-testid="InfoRow__cf88e6">
             {fiscalLoading
               ? <span className="h-5 w-16 bg-muted rounded animate-pulse inline-block" />
-              : <StatusPill estado={siiStatus ?? 'PE'} data-testid="StatusPill__cf88e6" />}
+              // ETP-5229: a null/undefined status (invoice never relevant to SII) must
+              // render as a dash via StatusPill's own fallback, never a fabricated 'PE'
+              // ("Pendiente") — do not reintroduce a `?? 'PE'` default here.
+              : <StatusPill estado={siiStatus} data-testid="StatusPill__cf88e6" />}
           </InfoRow>
         )}
-        {fiscalTargets.showTbai && tbaiEligibleByDate && (
+        {fiscalTargets.showTbai && (
           <InfoRow
             // ETP-5027: a purchase invoice's TBAI is always Batuz specifically
             // (fiscalTargets.js only ever grants it for the Bizkaia territory —
@@ -164,16 +172,20 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
             data-testid="InfoRow__cf88e6">
             {fiscalLoading
               ? <span className="h-5 w-16 bg-muted rounded animate-pulse inline-block" />
-              : <StatusPill estado={tbaiStatus ?? 'Pendiente'} data-testid="StatusPill__cf88e6" />}
+              // ETP-5229: `useFiscalStatus` already resolves the correct 'Pendiente'
+              // fallback (via `isSent(tbaiIssent)`) when TBAI is in scope; a bare `null`
+              // here means "not relevant at all" and must stay a dash.
+              : <StatusPill estado={tbaiStatus} data-testid="StatusPill__cf88e6" />}
           </InfoRow>
         )}
-        {fiscalTargets.showVerifactu && verifactuEligibleByDate && (
+        {fiscalTargets.showVerifactu && (
           <InfoRow
             label={ui('invoicePreview.fiscalStatus.verifactu')}
             data-testid="InfoRow__cf88e6">
             {fiscalLoading
               ? <span className="h-5 w-16 bg-muted rounded animate-pulse inline-block" />
-              : <StatusPill estado={vfStatus ?? 'PE'} data-testid="StatusPill__cf88e6" />}
+              // ETP-5229: same rule as SII above — no fabricated 'PE' default.
+              : <StatusPill estado={vfStatus} data-testid="StatusPill__cf88e6" />}
           </InfoRow>
         )}
       </SummaryCard>
@@ -339,12 +351,11 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           specName={specName}
           apiBaseUrl={apiBaseUrl}
           token={token}
-          orgId={p.orgId}
           profile={p.profile}
           territory={p.territory}
-          siiRecord={p.siiRecord}
-          tbaiRecord={p.tbaiRecord}
-          verifactuRecord={p.verifactuRecord}
+          earliestSiiCutoverDate={p.earliestSiiCutoverDate}
+          earliestTbaiCutoverDate={p.earliestTbaiCutoverDate}
+          earliestVerifactuCutoverDate={p.earliestVerifactuCutoverDate}
           onAddPayment={() => p.setShowPaymentModal(true)}
           onSend={isSendable ? p.openEmailModal : undefined}
           orgCurrencyCode={orgCurrencyCode}

@@ -1,318 +1,493 @@
 // Mocks must come before imports (Vitest hoisting)
 
-import { createStableUseApiFetchMock } from '@/test/mockUseApiFetch.js';
+// ETP-5229 — useFiscalStatus.js now calls isSifEligibleByDate/isVerifactuEligibleByDate
+// (real date-gate logic, already thoroughly unit-tested in fiscalTargets.test.js) in
+// addition to getInvoiceFiscalTargets. Mocking only getInvoiceFiscalTargets (as this file
+// used to) leaves the other two exports `undefined` on the mocked module and throws the
+// moment a target flag is true — so we keep the REAL eligibility functions via
+// importActual and only replace getInvoiceFiscalTargets, which is what every test here
+// actually wants to control.
+vi.mock('../fiscalTargets.js', async () => {
+  const actual = await vi.importActual('../fiscalTargets.js');
+  return {
+    ...actual,
+    getInvoiceFiscalTargets: vi.fn(),
+  };
+});
 
-vi.mock('@/auth/useApiFetch.js', () => ({
-  useApiFetch: createStableUseApiFetchMock(),
-}));
-
-vi.mock('../fiscalTargets.js', () => ({
-  getInvoiceFiscalTargets: vi.fn(),
-}));
-
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook } from '@testing-library/react';
 import { useFiscalStatus } from '../useFiscalStatus.js';
 import { getInvoiceFiscalTargets } from '../fiscalTargets.js';
 
 const SPEC = 'sales-invoice';
-const API_BASE_URL = '/sws/neo/sales-invoice';
 const ALL_SHOWN = { showSii: true, showTbai: true, showVerifactu: true };
 const NONE_SHOWN = { showSii: false, showTbai: false, showVerifactu: false };
 const ONLY_TBAI = { showSii: false, showTbai: true, showVerifactu: false };
 const ONLY_SII = { showSii: true, showTbai: false, showVerifactu: false };
+const ONLY_VF = { showSii: false, showTbai: false, showVerifactu: true };
 
-function jsonResponse(data) {
-  return Promise.resolve({ ok: true, json: async () => ({ response: { data } }) });
-}
-
-/**
- * Generic fetch router keyed by substring match against the request URL.
- * Each handler receives the running call count for that substring, so tests
- * can return different payloads across successive calls (e.g. before/after
- * a refetch triggered by the invoice-updated event).
- */
-function makeFetchMock(handlers) {
-  const counts = {};
-  return vi.fn((url) => {
-    for (const [substr, handler] of handlers) {
-      if (url.includes(substr)) {
-        counts[substr] = (counts[substr] ?? 0) + 1;
-        return handler(counts[substr]);
-      }
-    }
-    return jsonResponse([]);
-  });
-}
+// A cutoverDates fixture that makes every system eligible for any date used in these
+// tests (all in 2024+) — mirrors the FAR_PAST_ADOPTION fixture used elsewhere.
+const FAR_PAST_CUTOVERS = {
+  sii: '2000-01-01T00:00:00.000Z',
+  tbai: '2000-01-01T00:00:00.000Z',
+  verifactu: '2000-01-01T00:00:00.000Z',
+};
 
 describe('useFiscalStatus', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  describe('invoiceId falsy', () => {
-    it('returns nulls without loading and without calling getInvoiceFiscalTargets or fetch', () => {
-      globalThis.fetch = vi.fn();
-      const { result } = renderHook(() => useFiscalStatus(null, SPEC, 'tbai', API_BASE_URL, 'ORG_1'));
-
-      expect(result.current).toEqual({ sii: null, tbai: null, verifactu: null, loading: false });
-      expect(getInvoiceFiscalTargets).not.toHaveBeenCalled();
-      expect(globalThis.fetch).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('all fiscal targets disabled (e.g. unconfigured org)', () => {
-    it('returns nulls without fetching any of the three specs', () => {
+  describe('invoice falsy', () => {
+    it('returns nulls with loading true, without needing getInvoiceFiscalTargets to be meaningful', () => {
       getInvoiceFiscalTargets.mockReturnValue(NONE_SHOWN);
-      globalThis.fetch = vi.fn();
+      const { result } = renderHook(() => useFiscalStatus(null, SPEC, 'sii'));
 
-      const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'unconfigured', API_BASE_URL, 'ORG_1'));
+      expect(result.current).toEqual({ sii: null, tbai: null, verifactu: null, loading: true });
+    });
+
+    it('also returns loading:true for an undefined invoice', () => {
+      getInvoiceFiscalTargets.mockReturnValue(NONE_SHOWN);
+      const { result } = renderHook(() => useFiscalStatus(undefined, SPEC, 'sii'));
+
+      expect(result.current).toEqual({ sii: null, tbai: null, verifactu: null, loading: true });
+    });
+  });
+
+  describe('all fiscal targets disabled', () => {
+    it('returns nulls with loading false regardless of the fields the invoice carries', () => {
+      getInvoiceFiscalTargets.mockReturnValue(NONE_SHOWN);
+      const invoice = { aeatsiiEstado: 'CO', tbaiSyncEstado: 'Recibido', etvfacInvoiceStatus: 'AC' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'unconfigured'));
 
       expect(result.current).toEqual({ sii: null, tbai: null, verifactu: null, loading: false });
-      expect(globalThis.fetch).not.toHaveBeenCalled();
     });
   });
 
-  describe('initial fetch on mount', () => {
-    it('resolves sii, tbai and verifactu from their respective specs when all targets are enabled', async () => {
-      getInvoiceFiscalTargets.mockReturnValue(ALL_SHOWN);
-      globalThis.fetch = makeFetchMock([
-        ['sii-monitor/organizations', () => jsonResponse([{ id: 'PARENT_1' }])],
-        ['sii-monitor/issuedInvoices', () => jsonResponse([{ aeatsiiEstado: 'Enviada' }])],
-        ['tbai-facturas-enviadas', () => jsonResponse([{ estado: 'Enviado' }])],
-        ['monitor-verifactu/facturasAceptadas', () => jsonResponse([{ verifactuSendingStatus: 'AC' }])],
-      ]);
-
-      const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'sii+tbai', API_BASE_URL, 'ORG_1'));
-
-      expect(result.current.loading).toBe(true);
-      await waitFor(() => expect(result.current.loading).toBe(false));
-
-      expect(result.current.sii).toBe('Enviada');
-      expect(result.current.tbai).toBe('Enviado');
-      expect(result.current.verifactu).toBe('accepted');
-    });
-
-    it('falls through the verifactu entity list until one returns a non-null status', async () => {
-      getInvoiceFiscalTargets.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: true });
-      globalThis.fetch = makeFetchMock([
-        ['monitor-verifactu/facturasAceptadas', () => jsonResponse([])],
-        ['monitor-verifactu/facturasParcialmenteAceptadas', () => jsonResponse([])],
-        ['monitor-verifactu/facturasRechazadas', () => jsonResponse([{ verifactuSendingStatus: 'ER' }])],
-      ]);
-
-      const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'verifactu', API_BASE_URL, 'ORG_1'));
-
-      await waitFor(() => expect(result.current.loading).toBe(false));
-      // ETP-4783: raw DB code 'ER' is mapped to 'rejected' via VF_STATUS_MAP to avoid
-      // collision with SII's own 'IN' code ("Rechazado" vs "Inválido").
-      expect(result.current.verifactu).toBe('rejected');
-      expect(result.current.sii).toBeNull();
-      expect(result.current.tbai).toBeNull();
-    });
-
-    it('maps VF_STATUS_MAP code AC to "accepted"', async () => {
-      getInvoiceFiscalTargets.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: true });
-      globalThis.fetch = makeFetchMock([
-        ['monitor-verifactu/facturasAceptadas', () => jsonResponse([{ verifactuSendingStatus: 'AC' }])],
-      ]);
-
-      const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'verifactu', API_BASE_URL, 'ORG_1'));
-      await waitFor(() => expect(result.current.loading).toBe(false));
-
-      // 'AC' (Aceptada) is the real Verifactu AD code; 'CO' never existed here.
-      // Passing through raw made StatusPill render "AC" with the yellow pending style.
-      expect(result.current.verifactu).toBe('accepted');
-    });
-
-    it('maps VF_STATUS_MAP code AE to "partiallyAccepted"', async () => {
-      getInvoiceFiscalTargets.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: true });
-      globalThis.fetch = makeFetchMock([
-        ['monitor-verifactu/facturasAceptadas', () => jsonResponse([])],
-        ['monitor-verifactu/facturasParcialmenteAceptadas', () => jsonResponse([{ verifactuSendingStatus: 'AE' }])],
-      ]);
-
-      const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'verifactu', API_BASE_URL, 'ORG_1'));
-      await waitFor(() => expect(result.current.loading).toBe(false));
-
-      // AE (aceptado con errores) maps to 'partiallyAccepted' — ETP-4783
-      expect(result.current.verifactu).toBe('partiallyAccepted');
-    });
-
-    it('maps VF_STATUS_MAP code IN to "invalid"', async () => {
-      getInvoiceFiscalTargets.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: true });
-      globalThis.fetch = makeFetchMock([
-        ['monitor-verifactu/facturasAceptadas', () => jsonResponse([])],
-        ['monitor-verifactu/facturasParcialmenteAceptadas', () => jsonResponse([])],
-        ['monitor-verifactu/facturasRechazadas', () => jsonResponse([])],
-        ['monitor-verifactu/facturasInv%C3%A1lidas', () => jsonResponse([{ verifactuSendingStatus: 'IN' }])],
-      ]);
-
-      const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'verifactu', API_BASE_URL, 'ORG_1'));
-      await waitFor(() => expect(result.current.loading).toBe(false));
-
-      // IN maps to 'invalid' — without VF_STATUS_MAP this would collide with SII's 'IN' code ("Rechazado") — ETP-4783
-      expect(result.current.verifactu).toBe('invalid');
-    });
-
-    it('maps VF_STATUS_MAP code PE to "vf_pending"', async () => {
-      getInvoiceFiscalTargets.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: true });
-      globalThis.fetch = makeFetchMock([
-        ['monitor-verifactu/facturasAceptadas', () => jsonResponse([{ verifactuSendingStatus: 'PE' }])],
-      ]);
-
-      const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'verifactu', API_BASE_URL, 'ORG_1'));
-      await waitFor(() => expect(result.current.loading).toBe(false));
-
-      // 'pending' has no StatusPill entry, so it used to render the literal word.
-      expect(result.current.verifactu).toBe('vf_pending');
-    });
-  });
-
-  describe('showSii/showTbai/showVerifactu gating', () => {
-    it('only queries the SII endpoints when showSii is the only enabled target', async () => {
+  describe('SII', () => {
+    it('reads aeatsiiEstado directly off the invoice when showSii is true and the accountingDate is eligible', () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_SII);
-      globalThis.fetch = makeFetchMock([
-        ['sii-monitor/organizations', () => jsonResponse([{ id: 'PARENT_1' }])],
-        ['sii-monitor/issuedInvoices', () => jsonResponse([{ aeatsiiEstado: 'Enviada' }])],
-      ]);
+      const invoice = { aeatsiiEstado: 'CO', accountingDate: '2026-06-15' };
 
-      const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'sii', API_BASE_URL, 'ORG_1'));
-      await waitFor(() => expect(result.current.loading).toBe(false));
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii', null, FAR_PAST_CUTOVERS));
 
-      expect(result.current.sii).toBe('Enviada');
+      expect(result.current.sii).toBe('CO');
+      expect(result.current.loading).toBe(false);
+    });
+
+    // ETP-5229 regression: a genuinely un-sent-to-SII invoice must show a dash,
+    // never a fabricated 'PE'/'Pendiente'.
+    it('returns null (not a fabricated pending value) when aeatsiiEstado is null', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_SII);
+      const invoice = { aeatsiiEstado: null, accountingDate: '2026-06-15' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii', null, FAR_PAST_CUTOVERS));
+
+      expect(result.current.sii).toBeNull();
+    });
+
+    it('returns null when aeatsiiEstado is undefined (field absent from the record)', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_SII);
+      const invoice = { accountingDate: '2026-06-15' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii', null, FAR_PAST_CUTOVERS));
+
+      expect(result.current.sii).toBeNull();
+    });
+
+    it('is null when showSii is false, even if aeatsiiEstado is set', () => {
+      getInvoiceFiscalTargets.mockReturnValue(NONE_SHOWN);
+      const invoice = { aeatsiiEstado: 'CO', accountingDate: '2026-06-15' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, FAR_PAST_CUTOVERS));
+
+      expect(result.current.sii).toBeNull();
+    });
+
+    // ETP-5229 (corrected design): eligibility gate on the EARLIEST-ever cutover.
+    it('is null when showSii is true but the invoice accountingDate predates the earliest SII cutover on file', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_SII);
+      const invoice = { aeatsiiEstado: 'CO', accountingDate: '2026-01-01' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii', null, {
+        sii: '2026-06-01T00:00:00.000Z',
+      }));
+
+      expect(result.current.sii).toBeNull();
+    });
+
+    it('is null when showSii is true but no cutover date is on file at all (fail-safe)', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_SII);
+      const invoice = { aeatsiiEstado: 'CO', accountingDate: '2026-06-15' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii'));
+
+      expect(result.current.sii).toBeNull();
+    });
+
+    it('is eligible when accountingDate exactly equals the cutover date (inclusive)', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_SII);
+      const invoice = { aeatsiiEstado: 'CO', accountingDate: '2026-06-01' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii', null, {
+        sii: '2026-06-01T00:00:00.000Z',
+      }));
+
+      expect(result.current.sii).toBe('CO');
+    });
+  });
+
+  describe('TBAI', () => {
+    it('prefers tbaiSyncEstado over the tbaiIssent fallback when both are present', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
+      const invoice = { tbaiSyncEstado: 'Recibido', tbaiIssent: true, invoiceDate: '2026-06-15' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, FAR_PAST_CUTOVERS));
+
+      expect(result.current.tbai).toBe('Recibido');
+    });
+
+    it('falls back to "Enviada" when tbaiSyncEstado is absent and tbaiIssent is boolean true', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
+      const invoice = { tbaiIssent: true, invoiceDate: '2026-06-15' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, FAR_PAST_CUTOVERS));
+
+      expect(result.current.tbai).toBe('Enviada');
+    });
+
+    it('falls back to "Enviada" when tbaiSyncEstado is absent and tbaiIssent is the AD-style "Y" string', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
+      const invoice = { tbaiIssent: 'Y', invoiceDate: '2026-06-15' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, FAR_PAST_CUTOVERS));
+
+      expect(result.current.tbai).toBe('Enviada');
+    });
+
+    it('does NOT treat the AD-style "N" string as sent (isSent contract)', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
+      const invoice = { tbaiIssent: 'N', invoiceDate: '2026-06-15' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, FAR_PAST_CUTOVERS));
+
       expect(result.current.tbai).toBeNull();
+    });
+
+    // ETP-5229 regression: "never relevant to TBAI" must render as a dash, not 'Pendiente'.
+    it('returns null (not "Pendiente") when both tbaiSyncEstado and tbaiIssent are absent', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
+      const invoice = { invoiceDate: '2026-06-15' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, FAR_PAST_CUTOVERS));
+
+      expect(result.current.tbai).toBeNull();
+    });
+
+    it('is null when showTbai is false, even if tbaiSyncEstado is set', () => {
+      getInvoiceFiscalTargets.mockReturnValue(NONE_SHOWN);
+      const invoice = { tbaiSyncEstado: 'Recibido', invoiceDate: '2026-06-15' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii', null, FAR_PAST_CUTOVERS));
+
+      expect(result.current.tbai).toBeNull();
+    });
+
+    // ETP-5229 (corrected design): eligibility gate on the EARLIEST-ever cutover.
+    it('is null when showTbai is true but invoiceDate predates the earliest TBAI cutover on file', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
+      const invoice = { tbaiSyncEstado: 'Recibido', invoiceDate: '2026-01-01' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, {
+        tbai: '2026-06-01T00:00:00.000Z',
+      }));
+
+      expect(result.current.tbai).toBeNull();
+    });
+
+    it('is null when showTbai is true but no cutover date is on file at all (fail-safe)', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
+      const invoice = { tbaiSyncEstado: 'Recibido', invoiceDate: '2026-06-15' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai'));
+
+      expect(result.current.tbai).toBeNull();
+    });
+  });
+
+  describe('Verifactu', () => {
+    it.each([
+      ['AC', 'accepted'],
+      ['AE', 'partiallyAccepted'],
+      ['ER', 'rejected'],
+      ['IN', 'invalid'],
+      ['PE', 'vf_pending'],
+    ])('maps etvfacInvoiceStatus %s to %s via mapVfStatus', (raw, mapped) => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_VF);
+      const invoice = { etvfacInvoiceStatus: raw, created: '2026-06-15T00:00:00.000Z' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'verifactu', null, FAR_PAST_CUTOVERS));
+
+      expect(result.current.verifactu).toBe(mapped);
+    });
+
+    it('passes through an unrecognized code unchanged', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_VF);
+      const invoice = { etvfacInvoiceStatus: 'WEIRD', created: '2026-06-15T00:00:00.000Z' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'verifactu', null, FAR_PAST_CUTOVERS));
+
+      expect(result.current.verifactu).toBe('WEIRD');
+    });
+
+    // ETP-5229 regression: never fabricate a pending status for a genuinely
+    // not-applicable invoice.
+    it('returns null (not "vf_pending") when etvfacInvoiceStatus is null', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_VF);
+      const invoice = { etvfacInvoiceStatus: null, created: '2026-06-15T00:00:00.000Z' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'verifactu', null, FAR_PAST_CUTOVERS));
+
       expect(result.current.verifactu).toBeNull();
-
-      const calledUrls = globalThis.fetch.mock.calls.map(([url]) => url);
-      expect(calledUrls.some((u) => u.includes('tbai-facturas-enviadas'))).toBe(false);
-      expect(calledUrls.some((u) => u.includes('monitor-verifactu'))).toBe(false);
     });
 
-    it('only queries the TBAI endpoint when showTbai is the only enabled target', async () => {
-      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
-      globalThis.fetch = makeFetchMock([
-        ['tbai-facturas-enviadas', () => jsonResponse([{ estado: 'Enviado' }])],
-      ]);
+    it('returns null when etvfacInvoiceStatus is undefined (field absent)', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_VF);
+      const invoice = { created: '2026-06-15T00:00:00.000Z' };
 
-      const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'tbai', API_BASE_URL, 'ORG_1'));
-      await waitFor(() => expect(result.current.loading).toBe(false));
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'verifactu', null, FAR_PAST_CUTOVERS));
 
-      expect(result.current.tbai).toBe('Enviado');
-      const calledUrls = globalThis.fetch.mock.calls.map(([url]) => url);
-      expect(calledUrls.some((u) => u.includes('sii-monitor'))).toBe(false);
-      expect(calledUrls.some((u) => u.includes('monitor-verifactu'))).toBe(false);
+      expect(result.current.verifactu).toBeNull();
     });
 
-    it('does not fetch SII status when showSii is enabled but orgId is missing', async () => {
-      getInvoiceFiscalTargets.mockReturnValue(ONLY_SII);
-      globalThis.fetch = makeFetchMock([
-        ['sii-monitor/organizations', () => jsonResponse([{ id: 'PARENT_1' }])],
-      ]);
+    it('is null when showVerifactu is false, even if etvfacInvoiceStatus is set', () => {
+      getInvoiceFiscalTargets.mockReturnValue(NONE_SHOWN);
+      const invoice = { etvfacInvoiceStatus: 'AC', created: '2026-06-15T00:00:00.000Z' };
 
-      const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'sii', API_BASE_URL, null));
-      await waitFor(() => expect(result.current.loading).toBe(false));
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii', null, FAR_PAST_CUTOVERS));
 
-      expect(result.current.sii).toBeNull();
-      expect(globalThis.fetch).not.toHaveBeenCalled();
+      expect(result.current.verifactu).toBeNull();
+    });
+
+    // ETP-5229 (corrected design): eligibility gate on the EARLIEST-ever cutover.
+    it('is null when showVerifactu is true but the invoice created timestamp predates the earliest Verifactu cutover on file', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_VF);
+      const invoice = { etvfacInvoiceStatus: 'AC', created: '2026-01-01T00:00:00.000Z' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'verifactu', null, {
+        verifactu: '2026-06-01T00:00:00.000Z',
+      }));
+
+      expect(result.current.verifactu).toBeNull();
+    });
+
+    it('is null when showVerifactu is true but no cutover date is on file at all (fail-safe — org never configured Verifactu)', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_VF);
+      const invoice = { etvfacInvoiceStatus: 'AC', created: '2026-06-15T00:00:00.000Z' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'verifactu'));
+
+      expect(result.current.verifactu).toBeNull();
     });
   });
 
-  // ETP-5087: territory must be forwarded to getInvoiceFiscalTargets so purchase-invoice
-  // TBAI status only gets fetched (and the badge only renders) for Bizkaia.
-  describe('territory forwarding (ETP-5087)', () => {
-    it('forwards the territory argument to getInvoiceFiscalTargets', async () => {
-      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
-      globalThis.fetch = makeFetchMock([
-        ['tbai-facturas-enviadas', () => jsonResponse([{ estado: 'Enviado' }])],
-      ]);
+  // ETP-5229 headline scenario: an invoice genuinely sent under an old/deactivated
+  // fiscal config must still show its status, because the hook reads exclusively
+  // off the invoice's own header record — as long as it is date-eligible against
+  // the EARLIEST-ever cutover (not the currently active config's own cutover).
+  describe('config-independence of the VALUE (ETP-5229 headline regression)', () => {
+    it('resolves the status of an invoice sent under a config the org no longer uses, as long as it is date-eligible', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ALL_SHOWN);
+      const invoiceUnderOldConfig = {
+        aeatsiiEstado: 'CO',
+        tbaiSyncEstado: 'Recibido',
+        etvfacInvoiceStatus: 'AC',
+        accountingDate: '2026-03-15',
+        invoiceDate: '2026-03-15',
+        created: '2026-03-15T00:00:00.000Z',
+      };
 
-      const { result } = renderHook(() => useFiscalStatus('inv-1', 'purchase-invoice', 'tbai', API_BASE_URL, 'ORG_1', 'BIZKAIA'));
-      await waitFor(() => expect(result.current.loading).toBe(false));
+      const { result } = renderHook(() => useFiscalStatus(
+        invoiceUnderOldConfig, SPEC, 'sii+tbai', null, FAR_PAST_CUTOVERS,
+      ));
+
+      expect(result.current).toEqual({
+        sii: 'CO',
+        tbai: 'Recibido',
+        verifactu: 'accepted',
+        loading: false,
+      });
+    });
+
+    it('is unaffected by adding unrelated config/org-shaped fields to the invoice object', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ALL_SHOWN);
+      const base = {
+        aeatsiiEstado: 'CO', tbaiSyncEstado: 'Recibido', etvfacInvoiceStatus: 'AC',
+        accountingDate: '2026-03-15', invoiceDate: '2026-03-15', created: '2026-03-15T00:00:00.000Z',
+      };
+      const withStaleConfigFields = {
+        ...base,
+        organizationId: 'ORG_OLD',
+        aeatsiiConfigId: 'CONFIG_DEACTIVATED',
+        tbaiConfigId: 'CONFIG_DEACTIVATED',
+      };
+
+      const { result: withoutExtra } = renderHook(() => useFiscalStatus(base, SPEC, 'sii+tbai', null, FAR_PAST_CUTOVERS));
+      const { result: withExtra } = renderHook(() => useFiscalStatus(withStaleConfigFields, SPEC, 'sii+tbai', null, FAR_PAST_CUTOVERS));
+
+      expect(withExtra.current).toEqual(withoutExtra.current);
+    });
+
+    // Scenario B from the corrected design: an OLD deactivated config had an
+    // EARLIER cutover than the currently-active one. The invoice, dated between
+    // the two, must still show its real historical status — because the caller
+    // passes the EARLIEST-ever cutover (across active+inactive rows), not the
+    // active config's own (later) one.
+    it('shows the real historical status for an invoice dated between an old deactivated config cutover and the newer active one (scenario B)', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_SII);
+      const invoice = { aeatsiiEstado: 'CO', accountingDate: '2026-03-15' };
+      // Earliest-ever cutover (from the deactivated row) is 2026-01-01, well
+      // before the invoice — even though the active config's OWN cutover
+      // (2026-06-01, not passed here) would have rejected it.
+      const earliestCutoverAcrossAllRows = '2026-01-01T00:00:00.000Z';
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii', null, {
+        sii: earliestCutoverAcrossAllRows,
+      }));
+
+      expect(result.current.sii).toBe('CO');
+    });
+  });
+
+  // Scenario A from the corrected design (the exact live repro): TBAI and SII
+  // have independent earliest-cutover dates for the same org, and the SAME
+  // invoice must resolve each system by its own reference date/cutover pair —
+  // one dash, one real value.
+  describe('independent per-system cutovers on the SAME invoice (ETP-5229 scenario A)', () => {
+    it('shows a dash for SII (before its only-ever cutover) while showing the real TBAI status (on/after its cutover)', () => {
+      getInvoiceFiscalTargets.mockReturnValue({ showSii: true, showTbai: true, showVerifactu: false });
+      const invoice = {
+        invoiceDate: '2026-09-09',
+        accountingDate: '2026-09-09',
+        aeatsiiEstado: 'PE',
+        tbaiSyncEstado: 'Recibido',
+      };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii+tbai', null, {
+        tbai: '2026-09-09T00:00:00.000Z', // adopted the same day, inclusive → eligible
+        sii: '2026-09-10T00:00:00.000Z',  // adopted the NEXT day → invoice ineligible
+      }));
+
+      expect(result.current.sii).toBeNull();
+      expect(result.current.tbai).toBe('Recibido');
+    });
+  });
+
+  describe('memoization', () => {
+    it('does not recompute (same object reference) when rerendered with unchanged inputs', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_SII);
+      const invoice = { aeatsiiEstado: 'CO', accountingDate: '2026-06-15' };
+
+      const { result, rerender } = renderHook(
+        ({ inv, spec, profile }) => useFiscalStatus(inv, spec, profile, null, FAR_PAST_CUTOVERS),
+        { initialProps: { inv: invoice, spec: SPEC, profile: 'sii' } },
+      );
+
+      const firstResult = result.current;
+      rerender({ inv: invoice, spec: SPEC, profile: 'sii' });
+
+      expect(result.current).toBe(firstResult);
+      expect(getInvoiceFiscalTargets).toHaveBeenCalledTimes(1);
+    });
+
+    it('recomputes when the invoice reference changes', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_SII);
+
+      const { result, rerender } = renderHook(
+        ({ inv }) => useFiscalStatus(inv, SPEC, 'sii', null, FAR_PAST_CUTOVERS),
+        { initialProps: { inv: { aeatsiiEstado: 'CO', accountingDate: '2026-06-15' } } },
+      );
+
+      const firstResult = result.current;
+      rerender({ inv: { aeatsiiEstado: 'PE', accountingDate: '2026-06-15' } });
+
+      expect(result.current).not.toBe(firstResult);
+      expect(result.current.sii).toBe('PE');
+    });
+
+    // ETP-5229: the memo dependency array must include the 3 cutover dates so a
+    // refetch of useFiscalConfig (e.g. after a "Change SIF" flow) recomputes
+    // eligibility instead of serving a stale memoized result.
+    it('recomputes when a cutover date changes even though the invoice reference is unchanged', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_SII);
+      const invoice = { aeatsiiEstado: 'CO', accountingDate: '2026-03-15' };
+
+      const { result, rerender } = renderHook(
+        ({ cutoverDates }) => useFiscalStatus(invoice, SPEC, 'sii', null, cutoverDates),
+        { initialProps: { cutoverDates: { sii: '2026-06-01T00:00:00.000Z' } } },
+      );
+
+      expect(result.current.sii).toBeNull();
+
+      rerender({ cutoverDates: { sii: '2026-01-01T00:00:00.000Z' } });
+
+      expect(result.current.sii).toBe('CO');
+    });
+  });
+
+  // ETP-5087: territory must still be forwarded to getInvoiceFiscalTargets.
+  describe('territory forwarding (ETP-5087)', () => {
+    it('forwards the territory argument to getInvoiceFiscalTargets', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
+      const invoice = { tbaiSyncEstado: 'Recibido', invoiceDate: '2026-06-15' };
+
+      renderHook(() => useFiscalStatus(invoice, 'purchase-invoice', 'tbai', 'BIZKAIA', FAR_PAST_CUTOVERS));
 
       expect(getInvoiceFiscalTargets).toHaveBeenCalledWith('purchase-invoice', 'tbai', 'BIZKAIA');
     });
 
-    it('defaults territory to null when not provided', async () => {
+    it('defaults territory to null when not provided', () => {
       getInvoiceFiscalTargets.mockReturnValue(NONE_SHOWN);
-      globalThis.fetch = vi.fn();
+      const invoice = { tbaiSyncEstado: 'Recibido' };
 
-      renderHook(() => useFiscalStatus('inv-1', 'purchase-invoice', 'tbai', API_BASE_URL, 'ORG_1'));
+      renderHook(() => useFiscalStatus(invoice, 'purchase-invoice', 'tbai'));
 
       expect(getInvoiceFiscalTargets).toHaveBeenCalledWith('purchase-invoice', 'tbai', null);
     });
   });
 
-  describe('regression: refetch triggered by the invoice-updated event', () => {
-    it('re-fetches and updates tbai after a matching "{spec}:invoice-updated" event, proving the stale-pill bug is fixed', async () => {
-      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
-      globalThis.fetch = makeFetchMock([
-        ['tbai-facturas-enviadas', (n) => (n === 1 ? jsonResponse([]) : jsonResponse([{ estado: 'Enviado' }]))],
-      ]);
+  // ETP-5229: cutoverDates is optional and defaults to {} so pre-existing call
+  // sites (tests or components not yet updated to pass it) degrade to "not
+  // eligible" instead of throwing.
+  describe('cutoverDates defaulting (backward compatibility)', () => {
+    it('defaults every system to ineligible (dash) when cutoverDates is omitted entirely', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ALL_SHOWN);
+      const invoice = {
+        aeatsiiEstado: 'CO', tbaiSyncEstado: 'Recibido', etvfacInvoiceStatus: 'AC',
+        accountingDate: '2026-06-15', invoiceDate: '2026-06-15', created: '2026-06-15T00:00:00.000Z',
+      };
 
-      const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'tbai', API_BASE_URL, 'ORG_1'));
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii+tbai'));
 
-      await waitFor(() => expect(result.current.loading).toBe(false));
-      expect(result.current.tbai).toBeNull();
-      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-
-      act(() => {
-        window.dispatchEvent(new CustomEvent(`${SPEC}:invoice-updated`, { detail: { invoiceId: 'inv-1' } }));
-      });
-
-      await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
-      await waitFor(() => expect(result.current.tbai).toBe('Enviado'));
-      expect(result.current.loading).toBe(false);
+      expect(result.current).toEqual({ sii: null, tbai: null, verifactu: null, loading: false });
     });
 
-    it('re-fetches sii and verifactu too (not just tbai) after a matching invoice-updated event', async () => {
+    it('defaults a partially-provided cutoverDates object — only the given system is eligible', () => {
       getInvoiceFiscalTargets.mockReturnValue(ALL_SHOWN);
-      globalThis.fetch = makeFetchMock([
-        ['sii-monitor/organizations', () => jsonResponse([{ id: 'PARENT_1' }])],
-        ['sii-monitor/issuedInvoices', (n) => (n === 1 ? jsonResponse([]) : jsonResponse([{ aeatsiiEstado: 'Enviada' }]))],
-        ['tbai-facturas-enviadas', (n) => (n === 1 ? jsonResponse([]) : jsonResponse([{ estado: 'Enviado' }]))],
-        ['monitor-verifactu/facturasAceptadas', (n) => (n === 1 ? jsonResponse([]) : jsonResponse([{ verifactuSendingStatus: 'AC' }]))],
-      ]);
+      const invoice = {
+        aeatsiiEstado: 'CO', tbaiSyncEstado: 'Recibido', etvfacInvoiceStatus: 'AC',
+        accountingDate: '2026-06-15', invoiceDate: '2026-06-15', created: '2026-06-15T00:00:00.000Z',
+      };
 
-      const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'sii+tbai', API_BASE_URL, 'ORG_1'));
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii+tbai', null, {
+        sii: '2000-01-01T00:00:00.000Z',
+      }));
 
-      await waitFor(() => expect(result.current.loading).toBe(false));
-      expect(result.current.sii).toBeNull();
+      expect(result.current.sii).toBe('CO');
       expect(result.current.tbai).toBeNull();
       expect(result.current.verifactu).toBeNull();
-
-      act(() => {
-        window.dispatchEvent(new CustomEvent(`${SPEC}:invoice-updated`, { detail: { invoiceId: 'inv-1' } }));
-      });
-
-      await waitFor(() => expect(result.current.sii).toBe('Enviada'));
-      expect(result.current.tbai).toBe('Enviado');
-      expect(result.current.verifactu).toBe('accepted');
-    });
-
-    it('does NOT re-fetch when the event carries a different invoiceId', async () => {
-      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
-      globalThis.fetch = makeFetchMock([
-        ['tbai-facturas-enviadas', () => jsonResponse([])],
-      ]);
-
-      const { result } = renderHook(() => useFiscalStatus('inv-1', SPEC, 'tbai', API_BASE_URL, 'ORG_1'));
-      await waitFor(() => expect(result.current.loading).toBe(false));
-      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-
-      act(() => {
-        window.dispatchEvent(new CustomEvent(`${SPEC}:invoice-updated`, { detail: { invoiceId: 'inv-OTHER' } }));
-      });
-
-      // Give any (incorrect) async refetch a chance to run before asserting it didn't.
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      });
-      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-      expect(result.current.tbai).toBeNull();
     });
   });
 });

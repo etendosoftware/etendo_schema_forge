@@ -39,9 +39,14 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ selectedOrg: authMock.selectedOrg, logout: vi.fn() }),
 }));
 
-// ETP-5122: default the SII adoption date to "long ago" so pre-existing tests
-// (written before the date gate) keep passing without knowing about it. Tests
-// that specifically exercise the gate override this via useFiscalConfig.mockReturnValue(...).
+// Stable default adoption-date fixture for useFiscalConfig's siiRecord/tbaiRecord
+// shape. ETP-5229 (corrected design): the badge VALUE reads unconditionally off
+// the row's own status field, but per-row ELIGIBILITY is gated on the
+// earliestSiiCutoverDate/earliestTbaiCutoverDate fields (the EARLIEST-ever
+// cutover across all of the org's config rows, active or not) — defaulting
+// these to "long in the past" keeps every pre-existing test (written before
+// the eligibility gate) passing without having to know about it. Tests that
+// specifically exercise the gate override these via useFiscalConfig.mockReturnValue(...).
 const FAR_PAST_ADOPTION = '2000-01-01T00:00:00.000Z';
 
 vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
@@ -49,6 +54,8 @@ vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
     profile: null,
     siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION },
     tbaiRecord: null,
+    earliestSiiCutoverDate: FAR_PAST_ADOPTION,
+    earliestTbaiCutoverDate: FAR_PAST_ADOPTION,
   })),
 }));
 
@@ -291,8 +298,8 @@ const AP_INVOICE_ROW = {
   'transactionDocument$_identifier': 'AP Invoice',
   aeatsiiEstado: 'sent',
   accountingDate: '2026-01-01',
-  // ETP-5122: Batuz gates on invoiceDate (not accountingDate) — see the
-  // "fiscal columns (ETP-5087)" describe block below.
+  // invoiceDate kept for the "fiscal columns (ETP-5087)" describe block below
+  // (no date gate applies to the badge value since ETP-5229).
   invoiceDate: '2026-01-01',
 };
 
@@ -448,31 +455,73 @@ describe('PurchaseInvoiceHeaderTable', () => {
     expect(screen.getAllByTestId('fiscal-status-badge').length).toBeGreaterThan(0);
   });
 
-  // ── ETP-5122: no SII status before the org's adoption date ─────────────────
-  // SII books by accounting date, not invoice date (mirrors Classic's
-  // AEATSII_PreSII_Invoice auxiliary input, which compares DateAcct).
-  describe('ETP-5122 — SII column gated by fechaAcogidaSII (accountingDate)', () => {
-    it('shows the badge for every row when adopted long before all their accounting dates', () => {
+  // ── ETP-5229 (corrected design): SII badge VALUE is date-independent, but
+  // per-row ELIGIBILITY is gated on the EARLIEST-ever cutover for this org ──
+  // A row genuinely sent/processed under a PREVIOUS, since-superseded config
+  // must keep showing its real persisted status (see useFiscalStatus.js for
+  // the full root-cause writeup), but a row dated before SII EVER existed for
+  // this org must show a dash. Both hold via a per-row gate against
+  // earliestSiiCutoverDate — the MIN cutover across ALL of the org's config
+  // rows (active or inactive) — never the active config's own (possibly
+  // later) cutover. `targets.showSii` (column existence) remains the separate,
+  // org/territory-scoped gate.
+  describe('ETP-5229 — SII badge gated on earliest-ever cutover (corrected design)', () => {
+    it('shows the badge for every row when the earliest-ever cutover is long in the past', () => {
       getInvoiceFiscalTargets.mockReturnValue({ showSii: true, showTbai: false, showVerifactu: false });
-      useFiscalConfig.mockReturnValue({ profile: 'sii', siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION } });
-      renderWithRow(AP_INVOICE_ROW);
-      // Every MOCK_ROWS entry carries accountingDate '2026-01-01', after FAR_PAST_ADOPTION.
-      expect(screen.getByTestId('col-render-_siiStatus').querySelectorAll('[data-testid="fiscal-status-badge"]').length)
-        .toBe(9);
-    });
-
-    it('hides the badge for every row when adopted after all their accounting dates', () => {
-      getInvoiceFiscalTargets.mockReturnValue({ showSii: true, showTbai: false, showVerifactu: false });
-      useFiscalConfig.mockReturnValue({ profile: 'sii', siiRecord: { fechaAcogidaSII: '2099-01-01T00:00:00.000Z' } });
+      useFiscalConfig.mockReturnValue({ profile: 'sii', earliestSiiCutoverDate: FAR_PAST_ADOPTION });
       renderWithRow(AP_INVOICE_ROW);
       expect(screen.getByTestId('col-render-_siiStatus').querySelectorAll('[data-testid="fiscal-status-badge"]').length)
-        .toBe(0);
+        .toBe(11);
     });
 
-    it('fails safe (no badge) when there is no SII adoption record at all', () => {
+    // Scenario B: an OLD deactivated config's cutover is EARLIER than the
+    // currently-active config's own cutover. This used to hide the badge when
+    // gated on the active record's own (later) adoption date — exactly the bug
+    // an invoice sent under a previous, superseded config would trip. Passing
+    // the EARLIEST-ever cutover (as the real hook now computes) fixes it.
+    it('still shows the badge for every row when the earliest-ever cutover predates all their accounting dates, even if the ACTIVE config alone was adopted later (scenario B)', () => {
       getInvoiceFiscalTargets.mockReturnValue({ showSii: true, showTbai: false, showVerifactu: false });
-      useFiscalConfig.mockReturnValue({ profile: 'sii', siiRecord: null });
+      // earliestSiiCutoverDate simulates the MIN across an old deactivated row
+      // (long past) and a newer active row (would have been 2099, rejecting
+      // everything, if used alone).
+      useFiscalConfig.mockReturnValue({ profile: 'sii', earliestSiiCutoverDate: FAR_PAST_ADOPTION });
       renderWithRow(AP_INVOICE_ROW);
+      expect(screen.getByTestId('col-render-_siiStatus').querySelectorAll('[data-testid="fiscal-status-badge"]').length)
+        .toBe(11);
+    });
+
+    it('renders every badge empty (dash) when the earliest-ever cutover is still AFTER all their accounting dates (no config, active or not, existed early enough)', () => {
+      getInvoiceFiscalTargets.mockReturnValue({ showSii: true, showTbai: false, showVerifactu: false });
+      useFiscalConfig.mockReturnValue({ profile: 'sii', earliestSiiCutoverDate: '2099-01-01T00:00:00.000Z' });
+      renderWithRow(AP_INVOICE_ROW);
+      const badges = [...screen.getByTestId('col-render-_siiStatus').querySelectorAll('[data-testid="fiscal-status-badge"]')];
+      expect(badges.length).toBe(11);
+      expect(badges.every((b) => b.textContent === '')).toBe(true);
+    });
+
+    it('renders every badge empty (dash) when there is no SII adoption record at all (org never configured SII — fail-safe)', () => {
+      getInvoiceFiscalTargets.mockReturnValue({ showSii: true, showTbai: false, showVerifactu: false });
+      useFiscalConfig.mockReturnValue({ profile: 'sii', earliestSiiCutoverDate: null });
+      renderWithRow(AP_INVOICE_ROW);
+      const badges = [...screen.getByTestId('col-render-_siiStatus').querySelectorAll('[data-testid="fiscal-status-badge"]')];
+      expect(badges.length).toBe(11);
+      expect(badges.every((b) => b.textContent === '')).toBe(true);
+    });
+
+    it('renders a dash for a row with a genuinely null status even when eligible, never a fabricated one', () => {
+      // MOCK_ROWS[1] has aeatsiiEstado: null.
+      getInvoiceFiscalTargets.mockReturnValue({ showSii: true, showTbai: false, showVerifactu: false });
+      useFiscalConfig.mockReturnValue({ profile: 'sii', earliestSiiCutoverDate: FAR_PAST_ADOPTION });
+      renderWithRow(AP_INVOICE_ROW);
+      const badges = [...screen.getByTestId('col-render-_siiStatus').querySelectorAll('[data-testid="fiscal-status-badge"]')];
+      expect(badges.some((b) => b.textContent === '')).toBe(true);
+    });
+
+    it('renders no badge at all when showSii is false, regardless of any date', () => {
+      getInvoiceFiscalTargets.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: false });
+      useFiscalConfig.mockReturnValue({ profile: null, earliestSiiCutoverDate: FAR_PAST_ADOPTION });
+      renderWithRow(AP_INVOICE_ROW);
+      expect(screen.queryByTestId('col-render-_siiStatus')).toBeNull();
       expect(screen.queryByTestId('fiscal-status-badge')).toBeNull();
     });
   });
@@ -1163,19 +1212,18 @@ describe('PurchaseInvoiceHeaderTable — fiscal columns (ETP-5087)', () => {
     return (capturedColumnsHolder.value || []).find((c) => c.key === key);
   }
 
-  // ETP-5122: these tests predate the SII date gate and assert against rows
-  // dated 2026-01-01, so siiRecord defaults to a "long ago" adoption date
-  // (same FAR_PAST_ADOPTION default used elsewhere in this file) unless a test
-  // explicitly overrides it to exercise the gate itself.
+  // ETP-5229 (corrected design): the badge VALUE still reads unconditionally off
+  // the row's own status field, gated only by per-row date-eligibility against
+  // earliestSiiCutoverDate/earliestTbaiCutoverDate (defaulted here to "long in
+  // the past" so column-VISIBILITY tests below are unaffected by the
+  // eligibility gate). `tbaiRecord` is kept for territory resolution only.
   function renderWith(profile, territory, data = [AP_INVOICE_ROW]) {
     useFiscalConfig.mockReturnValue({
       profile,
-      // ETP-5122: default the Batuz adoption date to "long ago" (mirrors
-      // FAR_PAST_ADOPTION for SII above) so pre-existing tests written before
-      // the date gate keep passing. Tests exercising the gate itself override
-      // `tbaisystemdate` explicitly.
       tbaiRecord: territory ? { etsgSifTerritory: territory, tbaisystemdate: FAR_PAST_ADOPTION } : null,
       siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION },
+      earliestSiiCutoverDate: FAR_PAST_ADOPTION,
+      earliestTbaiCutoverDate: FAR_PAST_ADOPTION,
     });
     return render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} data={data} />);
   }
@@ -1297,51 +1345,64 @@ describe('PurchaseInvoiceHeaderTable — fiscal columns (ETP-5087)', () => {
     expect(container.textContent).toBe('CO');
   });
 
-  // ── ETP-5122 (bug fix): Batuz column must gate on invoiceDate eligibility,
-  // exactly like the SII column already gates on accountingDate. Before this
-  // fix the Batuz/TBAI cell had no date gate at all — territory alone
-  // (`targets.showTbai`) decided visibility, so a Bizkaia purchase invoice
-  // dated before the org's Batuz adoption date still showed a fabricated
-  // "Pendiente"/"Enviada" badge on every row.
-  describe('Batuz column gated by tbaisystemdate (invoiceDate, ETP-5122)', () => {
-    function renderBatuzCell(row, tbaisystemdate) {
+  // ── ETP-5229 (corrected design): the Batuz cell's status VALUE no longer
+  // gates on the currently-active config's OWN tbaisystemdate — but per-row
+  // ELIGIBILITY is gated on earliestTbaiCutoverDate, the MIN cutover across
+  // ALL of the org's Batuz config rows (active or inactive). A Bizkaia
+  // purchase invoice genuinely sent under a PREVIOUS, since-superseded config
+  // must keep showing its real status, but one dated before Batuz EVER existed
+  // for this org must show a dash. Territory eligibility (`targets.showTbai`,
+  // Bizkaia-only) remains the separate, independent gate on column existence
+  // — see the 'fiscal columns (ETP-5087)' describe above.
+  describe('Batuz badge gated on earliest-ever cutover (ETP-5229 corrected design)', () => {
+    function renderBatuzCell(row, earliestTbaiCutoverDate) {
       useFiscalConfig.mockReturnValue({
         profile: 'sii+tbai',
-        tbaiRecord: { etsgSifTerritory: 'BIZKAIA', tbaisystemdate },
+        tbaiRecord: { etsgSifTerritory: 'BIZKAIA' },
         siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION },
+        earliestSiiCutoverDate: FAR_PAST_ADOPTION,
+        earliestTbaiCutoverDate,
       });
       render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} data={[row]} />);
       return render(<>{getColumn('_tbaiStatus').render(row)}</>);
     }
 
-    it('shows the dash, not the badge, for a row dated BEFORE the org Batuz adoption date', () => {
-      const row = { ...AP_INVOICE_ROW, tbaiSyncEstado: 'Recibido', invoiceDate: '2026-01-01' };
-      const { container } = renderBatuzCell(row, '2026-06-01T00:00:00.000Z');
-      expect(container.textContent).toBe('—');
-      expect(container.querySelector('[data-testid="fiscal-status-badge"]')).toBeNull();
+    // Scenario B: an OLD deactivated Batuz config's cutover predates a NEWER
+    // active one. Passing the EARLIEST-ever cutover (as the real hook computes)
+    // still shows the real status for a row dated between the two — this is
+    // the exact bug a "gate on the active config's own cutover" design would
+    // trip, since that later date alone would have rejected the row.
+    it('shows the real status for a row dated BEFORE the currently-active Batuz config\'s own cutover, when the earliest-ever cutover predates it too (scenario B)', () => {
+      const row = { ...AP_INVOICE_ROW, tbaiSyncEstado: 'Recibido', invoiceDate: '2026-03-15' };
+      // Simulates earliestTbaiCutoverDate resolving to an OLD deactivated
+      // row's cutover, well before the row's invoiceDate.
+      const { container } = renderBatuzCell(row, '2026-01-01T00:00:00.000Z');
+      expect(container.textContent).toBe('Recibido');
     });
 
-    it('shows the badge normally for a row dated ON/AFTER the org Batuz adoption date', () => {
+    it('hides the status (renders a dash) for a row dated BEFORE the earliest-ever Batuz cutover for this org', () => {
+      const row = { ...AP_INVOICE_ROW, tbaiSyncEstado: 'Recibido', invoiceDate: '2026-01-01' };
+      const { container } = renderBatuzCell(row, '2026-06-01T00:00:00.000Z');
+      expect(container.textContent).toBe('');
+    });
+
+    it('keeps showing the status normally for a row dated ON/AFTER the earliest-ever Batuz cutover (no regression)', () => {
       const row = { ...AP_INVOICE_ROW, tbaiSyncEstado: 'Recibido', invoiceDate: '2026-07-01' };
       const { container } = renderBatuzCell(row, '2026-06-01T00:00:00.000Z');
       expect(container.textContent).toBe('Recibido');
     });
 
-    it('gates on invoiceDate, NOT accountingDate — a row with an eligible accountingDate but an ineligible invoiceDate still shows the dash', () => {
-      const row = {
-        ...AP_INVOICE_ROW,
-        tbaiSyncEstado: 'Recibido',
-        accountingDate: '2026-07-01', // eligible if this were used
-        invoiceDate: '2026-01-01',    // ineligible — this is what must be used
-      };
-      const { container } = renderBatuzCell(row, '2026-06-01T00:00:00.000Z');
-      expect(container.textContent).toBe('—');
-    });
-
-    it('fails safe (dash) when there is no Batuz adoption record at all', () => {
+    it('hides the status when there is no Batuz adoption record at all (org never configured Batuz — fail-safe)', () => {
       const row = { ...AP_INVOICE_ROW, tbaiSyncEstado: 'Recibido' };
       const { container } = renderBatuzCell(row, undefined);
-      expect(container.textContent).toBe('—');
+      expect(container.textContent).toBe('');
+    });
+
+    it('a row genuinely never sent to Batuz (no tbaiSyncEstado, no tbaiIssent) falls back to the real Pendiente default when eligible, not a dash', () => {
+      const row = { ...AP_INVOICE_ROW };
+      delete row.tbaiSyncEstado;
+      const { container } = renderBatuzCell(row, FAR_PAST_ADOPTION);
+      expect(container.textContent).toBe('Pendiente');
     });
   });
 });

@@ -662,6 +662,218 @@ affected and required no change.
 Regression coverage:
 `tools/app-shell/src/windows/custom/shared/__tests__/useFiscalStatus.vitest.jsx`.
 
+**Superseded by ETP-5229 (see below).** The `refreshTick`/`useInvoiceUpdatedListener`
+mechanism described above, and the direct `sii-monitor`/`tbai-facturas-enviadas`/
+`monitor-verifactu` network calls it re-triggered, no longer exist in
+`useFiscalStatus.js` — the hook was rearchitected to read the invoice's own header
+fields synchronously instead of querying those config-scoped specs at all. The
+"re-fetch after send" behavior this fix introduced still works, but for a different
+reason: `useInvoicePreview.js`'s `refetchInvoice()` already updates `p.displayInvoice`
+(the record `useFiscalStatus` now reads directly) after a successful send, so the pill
+recomputes as a side effect of that state update — no dedicated event listener inside
+`useFiscalStatus` is needed anymore.
+
+## Config-independent fiscal status badge in invoice preview — ETP-5229
+
+**Symptom:** on an invoice's detail/preview view, the SII/TBAI/Verifactu status badge
+(Pendiente/Aceptado/Error/etc.) could silently disappear for an invoice that WAS
+genuinely sent/processed under a since-deactivated or superseded fiscal configuration,
+once the organisation's fiscal config changed (a new config created, the old one
+deactivated) and the user navigated back to that older invoice.
+
+**Root cause.** `useFiscalStatus.js` used to resolve *"a"* fiscal config row for the
+invoice's organisation — `fetchSiiParentId()` (and the TBAI/Verifactu equivalents) took
+`json?.response?.data?.[0]?.id` from `/{spec}/organizations?organization=orgId&_limit=1`
+with no preference for the currently-active row — and then queried a config-**scoped**
+monitor entity (`sii-monitor`, `tbai-facturas-enviadas`, `monitor-verifactu`) for the
+invoice's status. Those monitor entities are Classic `AD_TAB`s nested as children of
+**one specific** config row (`@aeatsii_config_id@` is a literal parent-scoping
+placeholder in the underlying HQL, confirmed against `org.openbravo.module.sii`'s
+`AD_TAB.xml`), so resolving to any single config row — old, new, active, or otherwise —
+only ever surfaced invoices whose sync data lines up with **that** config's own scope.
+Once the org's config changed, an invoice genuinely sent under the OLD config lost its
+badge the moment the parent-config lookup resolved to a different (or no) row.
+
+Verified against Classic's real behaviour: Classic's own field-visibility checks
+(`TBAI_ExistConfigAndIsAvailable`, `etvfac_has_conf_tax`, SII's config-exists val rule)
+only ever check "does an ACTIVE config exist for this org" — never a status lookup
+scoped to a particular config row. The status value itself has **zero** linkage to any
+config row in Classic's data model: `em_aeatsii_estado` (SII) is a plain nullable string
+column directly on `C_Invoice` with no FK to `aeatsii_config`; `tbai_syncinvoice` FKs
+only to `c_invoice_id`, not to `tbai_config`; `em_etvfac_invoice_status` (Verifactu, via
+`ETVFAC_INV_SENT_STATUS_V`) is likewise a plain per-invoice value.
+
+**Fix.** `useFiscalStatus(invoice, specName, profile, territory)` was rewritten to
+derive all three statuses **synchronously**, straight off the invoice's own header
+record — no network call, no config resolution, no `apiBaseUrl`/`orgId` parameters at
+all:
+
+- SII: `invoice.aeatsiiEstado` (raw AD code — same field the list column already reads).
+- TBAI: `invoice.tbaiSyncEstado` (server-injected by `TbaiSyncStatusInjector`, same as
+  the list column), falling back to `'Enviada'` only when `isSent(invoice.tbaiIssent)`
+  and there is no sync row status yet.
+- Verifactu: `invoice.etvfacInvoiceStatus`, mapped through the existing `mapVfStatus`/
+  `VF_STATUS_MAP`.
+
+This is exactly the pattern `PurchaseInvoiceHeaderTable.jsx`'s list columns already used
+(`row.aeatsiiEstado` / `row.tbaiSyncEstado` read directly off the header GET response, no
+secondary lookup) — the detail/preview badge now follows the same rule instead of a
+separate, config-dependent code path. Because `InvoicePreview.jsx` already passes
+`p.displayInvoice` (kept fresh by `refetchInvoice()` after a send) into this hook, no
+event-listening/refetch scaffolding is needed to keep the badge current within an open
+preview session either.
+
+**Second bug fixed in the same pass — "no status" was rendered as "Pendiente".**
+`InvoicePreview.jsx`'s three `StatusPill` call sites used to default a `null`/`undefined`
+status to a fabricated value before handing it to the badge (`siiStatus ?? 'PE'`,
+`tbaiStatus ?? 'Pendiente'`, `vfStatus ?? 'PE'`). `StatusPill` (`FmPrimitives.jsx`)
+already renders an unrecognized/`null` estado as a dash (`—`), so this silently turned
+"this invoice was never relevant to this fiscal system" (a genuinely `NULL` DB column)
+into a false "Pendiente" the moment that system's config became active for the org —
+regardless of whether the invoice would ever actually be sent through it. The three
+call sites now pass the raw hook value straight to `StatusPill`, so a truly inapplicable
+invoice renders a dash, never a fabricated pending state.
+
+**Scope:** shared-hook + shared-component fix — applies identically to both
+`sales-invoice` and `purchase-invoice` (both render their preview badge through the same
+`InvoicePreview.jsx` / `useFiscalStatus.js`).
+
+**Correction — the claim above that the list columns "required no change" was wrong.**
+Live testing plus a follow-up code pass found the SAME config-date-gating bug in
+**three more places**, none of which route through `useFiscalStatus.js`:
+
+1. **List/grid status columns** — `artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx`
+   and `tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceHeaderTable.jsx`
+   (the live one for purchase-invoice — see the routing note below) gated every
+   `FiscalStatusBadge` cell render with
+   `isSifEligibleByDate(row.accountingDate/invoiceDate, <record>?.<adoptionDate>) ? <FiscalStatusBadge .../> : <span>—</span>`
+   (and a VERI\*FACTU equivalent using `isVerifactuEligibleByDate` in the sales-invoice
+   file). `<record>` comes from `useFiscalConfig`, which resolves to the org's single
+   **currently active** config row — so an invoice dated before THAT config's own cutover
+   rendered a dash in the grid even when `row.aeatsiiEstado`/`row.tbaiSyncEstado`/
+   `row.etvfacInvoiceStatus` held a real, already-sent status from a previous,
+   since-superseded config. Confirmed live: invoice `10000001` (`em_aeatsii_estado='CO'`)
+   showed blank in "Estado SII"; invoice `10000000` (`tbai_syncinvoice.estado='Recibido'`)
+   showed blank in "Estado TicketBAI" — both dated before the org's active config's
+   cutover. **Fix:** the date-eligibility gate was removed from the cell `render`
+   entirely; the badge now renders unconditionally from the row's own persisted field,
+   gated only by `targets.showX` (does the profile/territory enable this system at all —
+   org-scoped, not date-scoped), exactly mirroring `useFiscalStatus.js`.
+   `artifacts/purchase-invoice/custom/InvoiceHeaderTable.jsx` (a second, currently
+   unrouted copy of the purchase-invoice header table — see routing note) carried the
+   identical bug for SII and was fixed the same way for consistency, in case it is ever
+   reactivated.
+2. **Preview/detail panel — a second, surviving gate `useFiscalStatus.js` didn't
+   remove.** `InvoicePreview.jsx`'s `InvoiceGeneralTab` still computed
+   `siiEligibleByDate`/`tbaiEligibleByDate`/`verifactuEligibleByDate` via
+   `isSifEligibleByDate`/`isVerifactuEligibleByDate` and used them (ANDed with
+   `fiscalTargets.showX`) to decide whether to render each `InfoRow` at all — even
+   though `useFiscalStatus` (used *inside* those same `InfoRow`s) had already been fixed
+   to return the correct, config-independent status. The `InfoRow` gate was still
+   date-based, so a genuinely-sent pre-cutover invoice's `useFiscalStatus` value was
+   computed correctly and then never rendered. **Fix:** the three `*EligibleByDate`
+   variables and their imports were removed; each `InfoRow` now renders whenever
+   `fiscalTargets.showX` is true, letting `useFiscalStatus`'s own `null` handling
+   (already correct, no fabricated default) decide the dash case.
+
+**Routing note (purchase-invoice only):** the window actually served at runtime for
+`purchase-invoice` resolves through `customLoaders['purchase-invoice']` in
+`tools/app-shell/src/windows/registry.js` → `./custom/purchase-invoice/index.jsx` →
+`PurchaseInvoiceHeaderTable.jsx`. The pipeline-generated artifact at
+`artifacts/purchase-invoice/generated/web/purchase-invoice/HeaderPage.jsx` (importing
+`artifacts/purchase-invoice/custom/InvoiceHeaderTable.jsx`) is **not** in
+`windowLoaders`/`customLoaders` and is therefore currently dead code — kept in sync with
+the same fix as a precaution, not because it is live.
+
+**Genuinely different usage, left untouched:** `isSifEligibleByDate` in
+`sifSending.js`'s `getPendingSifTargets()` decides whether a **NEW send** to TBAI is
+currently allowed (`sendTbai`) — that must stay date-gated, since you cannot send a
+document to a fiscal system before the org adopted it. This is a distinct concern from
+displaying an already-known historical status and was not touched.
+
+Regression coverage:
+`tools/app-shell/src/windows/custom/shared/__tests__/useFiscalStatus.vitest.jsx`,
+`tools/app-shell/src/windows/custom/shared/__tests__/InvoicePreview.vitest.jsx`,
+`artifacts/sales-invoice/custom/__tests__/InvoiceHeaderTable.test.js`,
+`tools/app-shell/src/windows/custom/purchase-invoice/__tests__/PurchaseInvoiceHeaderTable.vitest.jsx`.
+
+### Second correction — "no date gate at all" was itself wrong (ETP-5229, item #16)
+
+The section above ends with the eligibility gate **removed entirely** from all four render
+sites, on the theory that the badge VALUE is config-independent so it never needs a date
+check. Live user testing on a real tenant found that conclusion overclaimed: it conflated
+"the badge value doesn't need to resolve a config" (still true) with "the badge should show
+regardless of date" (false).
+
+**Repro:** an org with TicketBAI configured (acogida 09/09/2026, still active, only ever one
+TBAI config) and SII configured for the FIRST time ever (acogida 10/09/2026, still active, no
+prior SII config ever existed). An invoice dated 09/09/2026 showed **"Estado SII: Pendiente"**
+— but SII did not exist for this org at all on 09/09; the underlying `em_aeatsii_estado='PE'`
+value is an unrelated completion-time default (out of scope here), and displaying it implies
+the invoice was sent to SII when SII wasn't even configured yet.
+
+**Corrected rule:** eligibility is not "no gate" and not "gate on the currently active
+config's own date" (both tried and rejected). It is **gate on the EARLIEST cutover date
+across ALL of the org's config rows for that system ever created — active or
+deactivated.** If the invoice's reference date is on/after that minimum, show the real
+value (or a dash if the field is genuinely empty); if before, show a dash unconditionally —
+the system did not exist for this org yet, regardless of what any column happens to hold.
+This correctly keeps showing a real historical status for an invoice sent under an OLD,
+since-superseded config (its date is still on/after the org's *earliest* cutover, even
+though it's before the *current* config's cutover) while still hiding a status for an
+invoice that predates the system's existence for the org entirely.
+
+**Where the earliest-cutover date lives:** `useFiscalConfig.js` now fetches ALL rows per
+system (`fetchAllRows`, not just the previously-preferred active-or-first row) and derives
+`earliestSiiCutoverDate` / `earliestTbaiCutoverDate` / `earliestVerifactuCutoverDate` from
+them (`earliestCutoverDate()`, `MIN` over `monitordate` / `tbaisystemdate` /
+`inVfactuSystem` across active AND inactive rows). This required **no new API call** — NEO
+already reads fiscal-config specs with `NO_ACTIVE_FILTER=true`, so the existing 3 requests
+already returned inactive rows; only the page size (`_limit`) was bumped from 10 to 50 and
+the "pick one row" step was split from the "compute the minimum" step. `siiRecord` /
+`tbaiRecord` / `verifactuRecord` (the active-row projections used everywhere else, including
+`sifSending.js`) are unchanged.
+
+**Where the gate is applied (all 4 sites, using the SAME earliest-cutover values from one
+`useFiscalConfig` call per surface):**
+
+- `useFiscalStatus(invoice, specName, profile, territory, cutoverDates)` — new 5th
+  parameter `{ sii, tbai, verifactu }`. Re-applies `isSifEligibleByDate`/
+  `isVerifactuEligibleByDate` (SII vs. `invoice.accountingDate`, TBAI vs.
+  `invoice.invoiceDate`, Verifactu vs. `invoice.created`) against the earliest-cutover
+  values instead of a single record's own date.
+- `InvoicePreview.jsx` — `useInvoicePreview.js` now also destructures
+  `earliestSiiCutoverDate`/`earliestTbaiCutoverDate`/`earliestVerifactuCutoverDate` from
+  `useFiscalConfig` and passes them through `p` to `InvoiceGeneralTab`, which forwards them
+  as `useFiscalStatus`'s 5th argument. `InfoRow` visibility itself is unchanged
+  (`fiscalTargets.showX` only) — the gate now lives inside `useFiscalStatus`'s returned
+  value, not as a second wrapper around the `InfoRow`.
+- `artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx` — each of the three fiscal
+  columns' `render()` now checks `isSifEligibleByDate`/`isVerifactuEligibleByDate` per row
+  against the earliest-cutover value before reading `row.aeatsiiEstado` /
+  `row.tbaiSyncEstado` / `row.etvfacInvoiceStatus`; ineligible rows render `null` (dash via
+  `FiscalStatusBadge`).
+- `tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceHeaderTable.jsx` (the
+  live purchase-invoice table) — same pattern for its SII and Batuz/TBAI columns.
+- `artifacts/purchase-invoice/custom/InvoiceHeaderTable.jsx` (the dead-code duplicate, see
+  the routing note above) — kept in sync for its SII column, same reasoning as before: not
+  live, fixed anyway as a precaution.
+
+**Untouched, confirmed still correct:** `sifSending.js`'s `getPendingSifTargets()` keeps
+gating a **new send** on the currently ACTIVE config's own date (`tbaiRecord?.tbaisystemdate`)
+— a brand-new send obviously cannot predate the org's current configuration, so the "earliest
+ever" relaxation does not apply there. This is a genuinely different question from "should an
+already-known historical status be displayed."
+
+Regression coverage (added on top of the set above):
+`tools/app-shell/src/windows/custom/fiscal-config/__tests__/useFiscalConfig.vitest.js`
+(earliest-cutover computation across active + inactive rows),
+`tools/app-shell/src/windows/custom/shared/__tests__/useFiscalStatus.vitest.jsx`
+(pre-cutover dash vs. post-cutover real value, including the old-deactivated-config case),
+`tools/app-shell/src/windows/custom/shared/__tests__/InvoicePreview.vitest.jsx`,
+`artifacts/sales-invoice/custom/__tests__/InvoiceHeaderTable.test.js`,
+`tools/app-shell/src/windows/custom/purchase-invoice/__tests__/PurchaseInvoiceHeaderTable.vitest.jsx`.
+
 ## Accounting dimension visibility per section — ETP-4529
 
 Per-entity, per-section visibility for the four accounting dimensions (Contacto/`businessPartner`,

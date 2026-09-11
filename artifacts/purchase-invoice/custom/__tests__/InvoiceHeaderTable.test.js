@@ -57,3 +57,40 @@ describe('Purchase InvoiceHeaderTable — fiscal status columns (ETP-4125)', () 
       'token prop was removed when the batch fetch was eliminated');
   });
 });
+
+// ── ETP-5229 (corrected design): SII badge is gated on the EARLIEST-ever
+// cutover for this org, not the currently-active config's own cutover ────────
+// This is a currently-unrouted duplicate of the pipeline artifact (not wired
+// into windowLoaders/customLoaders — see PurchaseInvoiceHeaderTable.jsx for the
+// component actually served at runtime), kept in sync for consistency. A row
+// genuinely sent under a PREVIOUS, since-superseded SII config must keep
+// showing its real persisted status (see useFiscalStatus.js for the
+// root-cause writeup), but a row dated before SII ever existed for this org
+// must show a dash.
+describe('Purchase InvoiceHeaderTable — SII badge gated on earliest-ever cutover (ETP-5229 corrected)', () => {
+  it('imports isSifEligibleByDate', () => {
+    assert.match(
+      src,
+      /import\s*\{\s*getInvoiceFiscalTargets,\s*isSifEligibleByDate\s*\}\s*from '@\/windows\/custom\/shared\/fiscalTargets\.js'/,
+    );
+  });
+
+  it('destructures earliestSiiCutoverDate from useFiscalConfig, not siiRecord', () => {
+    assert.match(
+      src,
+      /const\s*\{\s*profile,\s*earliestSiiCutoverDate\s*\}\s*=\s*useFiscalConfig\(orgId,\s*apiBaseUrl\)/,
+    );
+    assert.doesNotMatch(
+      src,
+      /const\s*\{\s*profile,\s*siiRecord/,
+      'the SII adoption-date record is no longer needed to render the badge',
+    );
+  });
+
+  it('gates the badge on isSifEligibleByDate(row.accountingDate, earliestSiiCutoverDate), falling back to null', () => {
+    assert.match(
+      src,
+      /render:\s*\(row\)\s*=>\s*\(\s*<FiscalStatusBadge\s*\n\s*status=\{isSifEligibleByDate\(row\.accountingDate, earliestSiiCutoverDate\) \? \(row\.aeatsiiEstado \?\? null\) : null\}/,
+    );
+  });
+});

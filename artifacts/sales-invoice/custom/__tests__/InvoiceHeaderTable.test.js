@@ -281,6 +281,72 @@ describe('Sales InvoiceHeaderTable — custom column filter modes (ETP-4681)', (
 // reproduced the same "Factura Rectificativa" wrap here, because it was never
 // applied to sales-invoice — mirrors PurchaseInvoiceHeaderTable.jsx's
 // equivalent NOWRAP_FLEX assertions.
+// ── ETP-5229 (corrected design): fiscal status VALUE is date-independent, but
+// per-row ELIGIBILITY is gated on the EARLIEST-ever cutover for that system ──
+// A row genuinely sent/processed under a PREVIOUS, since-superseded fiscal
+// config must keep showing its real persisted status — comparing the row's own
+// date against the org's CURRENTLY ACTIVE config's cutover date would silently
+// hide it. But an invoice dated before the system EVER existed for this org
+// (no config, active or not, ever adopted before it) must show a dash, not a
+// stray DB value. Both are true at once: each column's render gates on
+// isSifEligibleByDate/isVerifactuEligibleByDate against the EARLIEST cutover
+// across ALL of the org's rows (active or inactive) — never the active
+// config's own (possibly later) cutover.
+describe('Sales InvoiceHeaderTable — fiscal status badges gated on earliest-ever cutover (ETP-5229 corrected)', () => {
+  it('imports isSifEligibleByDate and isVerifactuEligibleByDate', () => {
+    assert.match(
+      src,
+      /import\s*\{\s*getInvoiceFiscalTargets,\s*isSifEligibleByDate,\s*isVerifactuEligibleByDate\s*\}\s*from '@\/windows\/custom\/shared\/fiscalTargets\.js'/,
+      'the per-row earliest-cutover gate must be imported from fiscalTargets.js',
+    );
+  });
+
+  it('destructures earliestSiiCutoverDate/earliestTbaiCutoverDate/earliestVerifactuCutoverDate from useFiscalConfig', () => {
+    assert.match(
+      src,
+      /const\s*\{\s*\n?\s*profile,\s*\n?\s*earliestSiiCutoverDate,\s*earliestTbaiCutoverDate,\s*earliestVerifactuCutoverDate,?\s*\n?\s*\}\s*=\s*useFiscalConfig\(orgId,\s*apiBaseUrl\)/,
+      'the earliest-ever cutover per system must be pulled from useFiscalConfig to gate each badge',
+    );
+  });
+
+  it('does NOT destructure siiRecord/tbaiRecord/verifactuRecord (the active-only records) anymore', () => {
+    assert.doesNotMatch(
+      src,
+      /const\s*\{\s*profile,\s*(siiRecord|tbaiRecord|verifactuRecord)/,
+      'the badge gate uses the earliest-ever cutover, not the active config\'s own adoption-date record',
+    );
+  });
+
+  it('gates the SII badge on isSifEligibleByDate(row.accountingDate, earliestSiiCutoverDate)', () => {
+    const cell = src.match(/if \(targets\.showSii\) \{[\s\S]*?\}\)?;\s*\}/);
+    assert.ok(cell, 'expected the showSii column-push block');
+    assert.match(cell[0], /isSifEligibleByDate\(row\.accountingDate, earliestSiiCutoverDate\)/);
+    assert.match(cell[0], /row\.aeatsiiEstado \?\? null/);
+  });
+
+  it('gates the TBAI badge on isSifEligibleByDate(row.invoiceDate, earliestTbaiCutoverDate)', () => {
+    const cell = src.match(/if \(targets\.showTbai\) \{[\s\S]*?\}\)?;\s*\}/);
+    assert.ok(cell, 'expected the showTbai column-push block');
+    assert.match(cell[0], /isSifEligibleByDate\(row\.invoiceDate, earliestTbaiCutoverDate\)/);
+    assert.match(cell[0], /row\.tbaiSyncEstado \?\? 'Pendiente'/);
+  });
+
+  it('gates the Verifactu badge on isVerifactuEligibleByDate(row.created, earliestVerifactuCutoverDate)', () => {
+    const cell = src.match(/if \(targets\.showVerifactu\) \{[\s\S]*?\}\)?;\s*\}/);
+    assert.ok(cell, 'expected the showVerifactu column-push block');
+    assert.match(cell[0], /isVerifactuEligibleByDate\(row\.created, earliestVerifactuCutoverDate\)/);
+    assert.match(cell[0], /normalizeVerifactuStatus\(row\.etvfacInvoiceStatus \?\? null\)/);
+  });
+
+  it('renders a null status (dash) when the eligibility check fails, for all three systems', () => {
+    for (const key of ['showSii', 'showTbai', 'showVerifactu']) {
+      const cell = src.match(new RegExp(`if \\(targets\\.${key}\\) \\{[\\s\\S]*?\\}\\)?;\\s*\\}`));
+      assert.ok(cell, `expected the ${key} column-push block`);
+      assert.match(cell[0], /\? .*? : null/, `${key} branch must fall back to null (dash) when ineligible`);
+    }
+  });
+});
+
 describe('Sales InvoiceHeaderTable — badge/button nowrap styling (ETP-4833)', () => {
   it('declares a shared NOWRAP_FLEX style with whiteSpace nowrap and flexShrink 0', () => {
     assert.match(
