@@ -7,6 +7,9 @@ import { collectAllowedIds } from '../../lib/menuTree.js';
 // Sources: docs/generated-custom-windows/INDEX.md and each window's guide;
 // runtime-routes.jsx for synthetic destinations. Additions/removals need review.
 const groups = {
+  // ETP-5190 — ungated, like Home: the checklist is every tenant's landing page,
+  // so menu.json declares it with no windowId and no capability.
+  'First Steps': 'first-steps',
   Home: 'dashboard',
   People: 'contacts',
   Sales: 'sales-quotation sales-order goods-shipment sales-invoice return-material-receipt',
@@ -14,13 +17,14 @@ const groups = {
   Inventory: 'product product-category physical-inventory goods-movements internal-consumption warehouse report-viewer-inventory',
   Finance: 'payment-in payment-out financial-account chart-of-accounts cost-center service-project general-ledger-configuration calendar assets asset-group amortization not-posted-documents simple-g-l-journal fiscal-monitor conversion-rates fiscal-models tax tax-category report-viewer-finance',
   Connections: 'authorize',
-  Settings: 'organization price-list payment-term business-partner-category user roles smart-scan fiscal-config',
+  Settings: 'organization document-sequence price-list payment-term business-partner-category user roles smart-scan fiscal-config',
 };
 
 // Composition aliases documented in calendar/fiscal-monitor/fiscal-config guides.
 const aliases = { calendar: 'fiscal-calendar', 'fiscal-monitor': 'sii-monitor', 'fiscal-config': 'sii-config' };
 const exceptions = {
   dashboard: {},
+  'first-steps': {},
   authorize: {},
   roles: { capability: 'isAdminOrClientAdmin' },
   // Tax Report AD window: core-maps/ad-menu-cache.json (typed window entry),

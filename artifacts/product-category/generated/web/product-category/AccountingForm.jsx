@@ -6,6 +6,7 @@ const fields = [
   { key: 'productExpense', column: 'P_Expense_Acct', type: 'selector', label: 'Product Expense', required: true, section: 'principal', reference: 'ValidCombination', inputMode: 'selector' },
   { key: 'productRevenue', column: 'P_Revenue_Acct', type: 'selector', label: 'Product Revenue', required: true, section: 'principal', reference: 'ValidCombination', inputMode: 'selector' },
   { key: 'productCOGS', column: 'P_Cogs_Acct', type: 'selector', label: 'Product COGS', required: true, section: 'principal', reference: 'ValidCombination', inputMode: 'selector' },
+  { key: 'invoicePriceVariance', column: 'P_InvoicePriceVariance_Acct', type: 'selector', label: 'Invoice Price Variance', section: 'other', reference: 'ValidCombination', inputMode: 'selector' },
 ];
 // @sf-generated-end fields:accounting
 

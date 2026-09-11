@@ -5,6 +5,7 @@ import { PillToggle } from '@/components/PillToggle';
 import { SquareCheckbox } from '../shared/SquareCheckbox';
 import { ChevronDown, Tag } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { useContactsCacheInvalidation } from './contactsCacheInvalidation';
 import { extractApiErrorMessage } from '@/lib/apiError';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -126,6 +127,7 @@ async function createDiscount(newDiscountId, bpId, data, apiFetch, setDiscountRe
 
 export default function BillingPreferencesForm(props) {
   const ui = useUI();
+  const { invalidateBusinessPartner, invalidateFinanceKpis } = useContactsCacheInvalidation();
   const { data, api, token, onChange, apiBaseUrl } = props;
   const bpId = data?.id;
   const canEditBillingPreferences = Boolean(bpId);
@@ -265,6 +267,9 @@ export default function BillingPreferencesForm(props) {
         // Create new record with required auto-flags
         await createDiscount(newDiscountId, bpId, data, apiFetch, setDiscountRecord);
       }
+      // Discount change affects finance KPIs and the partner record.
+      invalidateFinanceKpis();
+      invalidateBusinessPartner();
     } finally {
       setSaving(false);
     }

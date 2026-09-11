@@ -8,7 +8,7 @@ import { translateBackendError } from '../../../lib/backendErrors.js';
 import { SEND_VISIBLE_WHEN_CONFIRMED } from './sendActionVisibility.js';
 
 export function getInvoiceDraftMode(ui, options = {}) {
-  const { showVerifactuProcessingModal = false } = options;
+  const { showVerifactuProcessingModal = false, keepSaveWhenCompletedFields = [] } = options;
   return {
     enabled: true,
     processField: 'documentAction',
@@ -23,6 +23,17 @@ export function getInvoiceDraftMode(ui, options = {}) {
     processingModal: showVerifactuProcessingModal
       ? { body: ui('fiscal.verifactu.processing.body') }
       : null,
+    // ETP-4839: only purchase-invoice opts in (keeps "Save" visible, "Confirm"
+    // NEVER reappears, once the invoice is completed — see decisions.json ->
+    // window.draftMode.keepSaveWhenCompletedFields). Save is then enabled only
+    // while every dirty header field is named in this array (e.g.
+    // ['orderReference']) — see saveActions.jsx's buildCompletedFieldsGate.
+    // Omitted entirely (not even as []) when the caller passes no array or an
+    // empty one, so sales-invoice's draftMode object — and its tests/snapshots
+    // — stay byte-identical to before.
+    ...(Array.isArray(keepSaveWhenCompletedFields) && keepSaveWhenCompletedFields.length > 0
+      ? { keepSaveWhenCompletedFields }
+      : {}),
   };
 }
 

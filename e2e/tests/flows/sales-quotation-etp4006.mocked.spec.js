@@ -6,6 +6,22 @@ const CLONE_ID = 'quot-clone-001';
 const UE_ID = 'quot-ue-001';
 const DELETE_ID = 'quot-delete-001';
 
+// grandTotalAmount models a REALISTICALLY-compensated backend GET response:
+// 100 * (1 - 10/100) = 90 exactly (no backend rounding surprises). Before
+// ETP-5132, this fixture held the raw, pre-discount 100 — a state that models
+// what the backend returned only before ETP-4029's applyTotalDiscountToRecord()
+// shipped; today, any DR quotation with a pending total discount gets
+// grandTotalAmount compensated on every GET, so 100 was no longer a realistic
+// value. SendToEvaluationModal.jsx's Fix B (docs/bug-reports/2026-09-09-etp5132-
+// confirm-modal-double-discount.md) makes the confirm modal show grandTotalAmount
+// verbatim (`grandTotal = grossBase`) instead of re-deriving it — with the raw
+// 100, the old (buggy) re-derivation happened to also land near 90, which is
+// what masked this fixture being unrealistic for as long as it was. No other
+// test in this file asserts the panel (not the modal) shows this fixture's raw,
+// uncompensated value verbatim, so BASE_DRAFT itself was updated directly
+// rather than introducing a second fixture (see the sales-order-totals-rounding
+// spec for the pattern used when a panel-verbatim test DOES still need the raw
+// value alongside a fixed fixture).
 const BASE_DRAFT = {
   documentStatus: 'DR',
   'documentStatus$_identifier': 'Draft',
@@ -21,7 +37,7 @@ const BASE_DRAFT = {
   'paymentMethod$_identifier': 'Cash',
   paymentTerms: 'pt-1',
   'paymentTerms$_identifier': '30 Days',
-  grandTotalAmount: 100,
+  grandTotalAmount: 90,
   summedLineAmount: 80,
   etgoTotalDiscount: 10,
   description: '',
@@ -273,7 +289,15 @@ test.describe('Sales Quotation — ETP-4006 regressions (mocked)', () => {
     await expect(page.getByTestId('field-priceList-chip')).toContainText(CLONED_QUOTE['priceList$_identifier']);
 
     await openQuotationConfirmModal(page);
+    // Opens SendToEvaluationModal (status is DR). Per ETP-5132's Fix B, its
+    // grandTotal is grossBase verbatim (BASE_DRAFT.grandTotalAmount = 90, the
+    // realistically-compensated value — see the fixture's own comment), so
+    // this is no longer the old client-side re-derivation happening to land
+    // on 90 — it's the persisted total shown as-is.
     await expect(page.getByTestId('confirm-summary-total')).toHaveText(/90([.,])00/, { timeout: 5_000 });
+    // totalLines (subtotal) is unaffected by Fix B — it's still round2(netBase
+    // × discountFactor) = round2(80 × 0.9) = 72, since summedLineAmount is
+    // never backend-compensated.
     await expect(page.getByTestId('confirm-summary-subtotal')).toHaveText(/72([.,])00/);
   });
 
