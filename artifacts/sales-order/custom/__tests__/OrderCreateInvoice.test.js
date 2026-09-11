@@ -79,6 +79,54 @@ describe('OrderCreateInvoice', () => {
     assert.match(src, /soManageInvoice/);
   });
 
+  // ETP-5024 QA rejection: confirming a Sales Order from the detail page (the
+  // draftMode "Confirm" button → 'sales-order:open-confirm-modal' event → this
+  // module's own <ConfirmModal>) showed the "business partner is on hold"
+  // documentAction refusal in English, even though the same AD_MESSAGE already
+  // has a correct Spanish AD_MESSAGE_TRL and the inline banner (useCallout.js,
+  // fixed earlier in this ticket) renders it correctly translated. Root cause:
+  // both `headers` objects in this file (OrderCreateInvoice's own useMemo, and
+  // ManageDocsLauncher's) were hand-rolled with only Authorization +
+  // Content-Type, unlike the shared buildHeaders() helper used everywhere else
+  // (useEntity.js, useConfirmWithCredit.js, useCreateContactModal.jsx, …) — so
+  // every fetch in this file, including the documentAction/CO POST that
+  // surfaces this exact message, never sent Accept-Language. The backend
+  // (NeoAuthenticator.applyRequestLanguage / NeoLanguage.applyToContext)
+  // silently falls back to AD_User.AD_Language when that header is absent.
+  describe('Confirm-modal request headers carry Accept-Language (ETP-5024)', () => {
+    it('imports the shared buildHeaders() helper instead of hand-rolling headers', () => {
+      assert.match(src, /import \{ buildHeaders \} from '@\/auth\/api\.js';/);
+    });
+
+    it('OrderCreateInvoice builds its headers via buildHeaders(token)', () => {
+      const fnBody = src.slice(
+        src.indexOf('export default function OrderCreateInvoice'),
+        src.indexOf('export function ConfirmModal'),
+      );
+      assert.match(fnBody, /const headers = useMemo\(\(\) => \(buildHeaders\(token\)\), \[token\]\);/);
+    });
+
+    it('ManageDocsLauncher builds its headers via buildHeaders(token)', () => {
+      const fnBody = src.slice(src.indexOf('export function ManageDocsLauncher'));
+      assert.match(fnBody, /const headers = useMemo\(\(\) => \(buildHeaders\(token\)\), \[token\]\);/);
+    });
+
+    it('no header object in this file is hand-rolled with only Authorization/Content-Type (would silently drop Accept-Language)', () => {
+      assert.doesNotMatch(src, /Authorization: `Bearer \$\{token\}`/);
+    });
+
+    it('the documentAction/CO POST that surfaces the on-hold refusal reuses this same headers value', () => {
+      const confirmModalSrc = src.slice(
+        src.indexOf('export function ConfirmModal'),
+        src.indexOf('export function CreateDocsModal'),
+      );
+      assert.match(
+        confirmModalSrc,
+        /fetch\(\s*`\$\{apiBaseUrl\}\/header\/\$\{orderId\}\/action\/documentAction`,\s*\{ method: 'POST', headers, body: JSON\.stringify\(\{ docAction: 'CO' \}\) \},?\s*\);/,
+      );
+    });
+  });
+
   describe('ConfirmModal total-discount preview (ETP-4006)', () => {
     it('applies the total-discount factor only while the order is still in DR', () => {
       assert.match(src, /const discountPct\s*=\s*Number\(d\.etgoTotalDiscount \?\? 0\)/);
