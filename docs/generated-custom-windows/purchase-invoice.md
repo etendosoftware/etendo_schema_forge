@@ -558,6 +558,13 @@ Because that select takes a typed IBAN as well as a listed one, it overrides
 `CreatableSearchSelect`'s generic `searchLabelPrefix {label}...` placeholder with its own
 `cpPisIbanPlaceholder` ("Buscar o introducir IBAN destino...", ETP-5177) so both paths are visible;
 the hand-typed one is what `createLabel`/`onCreateRequest` (`cpPisIbanUseTyped`) commits.
+A typed IBAN is checked with the shared `isValidIban` (ISO 13616 mod-97) and an invalid one both
+disables Confirmar and shows `financeAccountsNewIbanInvalid` under the select. That message sits in
+a line the `ControlWithError` wrapper reserves **permanently** — the slot is rendered whether or not
+there is an error, only the `<p>` is conditional — because the modal has a fixed width but an
+automatic height and is vertically centred, so a message mounting used to resize it and make it
+jump (ETP-5177). The same wrapper carries the two conversion-field messages; anything added to this
+modal that validates inline must go through it rather than rendering its own conditional `<p>`.
 The primary footer button changes to **"Continuar al banco"** (`cpPisConfirmButton`).
 
 The default is re-derived whenever the selected account's currency changes, so switching to a

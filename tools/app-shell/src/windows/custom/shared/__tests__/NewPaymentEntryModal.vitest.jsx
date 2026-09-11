@@ -184,6 +184,35 @@ function renderModal(overrides = {}) {
   return { ...render(<NewPaymentEntryModal {...props} />), props };
 }
 
+// ETP-5177 — reserved inline-validation line (ControlWithError).
+// The modal has a fixed 940px width, an automatic height and is vertically centred in its overlay,
+// so mounting/unmounting an inline message used to resize it and make it jump — the reason QA
+// rejected the previous markup. Every field wrapped in ControlWithError therefore renders its
+// `<testid>-slot` container UNCONDITIONALLY, with a permanently reserved minimum height; only the
+// <p> inside it is conditional. That distinction is what the helper below pins: the <p> coming and
+// going is the expected behaviour, the SLOT disappearing (or losing its reserved height) is the
+// regression that brings the modal jump back.
+const RESERVED_ERROR_LINE_HEIGHT = '16px';
+
+/**
+ * Assert the permanently reserved validation line of a ControlWithError-wrapped field.
+ * @param {string} testid  testid of the message <p> (the slot is `${testid}-slot`)
+ * @param {{withMessage?: string|null}} opts  expected i18n KEY when a message must be shown
+ *   (useUI is mocked to echo the key), or nothing when the field must be error-free
+ */
+function expectReservedErrorSlot(testid, { withMessage = null } = {}) {
+  const slot = screen.getByTestId(`${testid}-slot`);
+  // Reserved height, present in BOTH states — this is what keeps the modal from resizing.
+  expect(slot).toHaveStyle({ minHeight: RESERVED_ERROR_LINE_HEIGHT });
+  if (withMessage) {
+    const message = within(slot).getByTestId(testid);
+    expect(message).toHaveAttribute('role', 'alert');
+    expect(message).toHaveTextContent(withMessage);
+  } else {
+    expect(within(slot).queryByTestId(testid)).not.toBeInTheDocument();
+  }
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('NewPaymentEntryModal', () => {
@@ -894,6 +923,42 @@ describe('NewPaymentEntryModal', () => {
       // would only clobber the value on the FOLLOWING render/microtask, cannot slip past this
       // check by coincidence.
       expect(readout).toHaveValue('50');
+    });
+
+    // ETP-5177: both conversion fields share the same message, so they light up and clear
+    // together — which is precisely when a non-reserved line resized the modal the most. The
+    // assertion that matters is the SLOT: it must already be mounted, at its reserved height,
+    // while the message is showing, so that clearing the message changes nothing but the text.
+    it('shows the rate message inside a permanently reserved line under BOTH conversion fields (ETP-5177)', async () => {
+      mockApiFetch = buildApiFetch({ accounts: FOREIGN_ACCOUNTS });
+      // No DB rate → the invalid (missing-rate) state, where both messages are visible.
+      mockConversion = { rate: null, hasRate: false, loading: false };
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100 });
+
+      await screen.findByTestId('cp-conversion-fields');
+      expectReservedErrorSlot('cp-conversion-rate-error', { withMessage: 'cpConversionRateRequired' });
+      expectReservedErrorSlot('cp-amount-in-account-error', { withMessage: 'cpConversionRateRequired' });
+    });
+
+    // The other half of the same regression: once the rate becomes valid the <p> unmounts, but
+    // the reserved line must STAY. If the slot disappeared with the message, the modal would
+    // shrink by one text line and jump on the screen — the QA rejection of ETP-5177.
+    it('keeps the reserved line under BOTH conversion fields after the rate becomes valid (ETP-5177)', async () => {
+      mockApiFetch = buildApiFetch({ accounts: FOREIGN_ACCOUNTS });
+      mockConversion = { rate: null, hasRate: false, loading: false };
+      renderModal({ invoiceData: USD_INVOICE, outstanding: 100 });
+
+      await screen.findByTestId('cp-conversion-fields');
+      // Typing a valid, non-1 rate clears both messages...
+      fireEvent.change(screen.getByTestId('cp-conversion-rate-input'), { target: { value: '0.92' } });
+      await waitFor(() => {
+        expect(screen.queryByTestId('cp-conversion-rate-error')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('cp-amount-in-account-error')).not.toBeInTheDocument();
+      });
+
+      // ...while both reserved lines survive at the very same height they had with a message.
+      expectReservedErrorSlot('cp-conversion-rate-error');
+      expectReservedErrorSlot('cp-amount-in-account-error');
     });
 
     it('includes conversionRate in the register body only in the foreign-currency case', async () => {
@@ -2575,6 +2640,36 @@ describe('NewPaymentEntryModal', () => {
         // satisfied, leaves Confirmar enabled.
         await waitFor(() => expect(screen.getByTestId('cp-confirm')).not.toBeDisabled());
         expect(screen.queryByTestId('cp-pis-iban-error')).not.toBeInTheDocument();
+      });
+
+      // ETP-5177: "IBAN Destino" sits mid-form, so its message appearing/clearing as the user
+      // picks or types an IBAN was the most visible source of the modal jump QA rejected. The
+      // message now lives inside a line that is reserved whether or not it is filled.
+      it('renders the IBAN message inside a permanently reserved error line while the IBAN is invalid (ETP-5177)', async () => {
+        mockApiFetch = buildPisApiFetch({
+          pisAccounts: [{ id: INVALID_IBAN, name: 'Cuenta inválida', iban: INVALID_IBAN, default: true }],
+        });
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+        await screen.findByTestId('cp-pis-iban-error');
+
+        expectReservedErrorSlot('cp-pis-iban-error', { withMessage: 'financeAccountsNewIbanInvalid' });
+      });
+
+      // The half that actually prevents the regression: with a valid IBAN the <p> is gone but the
+      // line it would occupy is still there, so the modal keeps the exact same height in both
+      // states and never jumps when the validation flips.
+      it('keeps the reserved IBAN error line mounted when the IBAN is valid (ETP-5177)', async () => {
+        mockApiFetch = buildPisApiFetch({
+          pisAccounts: [{ id: VALID_IBAN, name: 'Cuenta válida', iban: VALID_IBAN, default: true }],
+        });
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+        // Confirmar enabling is the signal that the supplier IBAN loaded AND validated — the
+        // same gate the sibling "no IBAN error" test uses.
+        await waitFor(() => expect(screen.getByTestId('cp-confirm')).not.toBeDisabled());
+
+        expectReservedErrorSlot('cp-pis-iban-error');
       });
 
       it('does not POST registerPayment while the IBAN is invalid (Confirmar stays disabled)', async () => {

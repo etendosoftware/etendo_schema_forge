@@ -541,6 +541,31 @@ function Field({ label, required = false, children }) {
   );
 }
 
+/** Height of one inline validation line (12px/16px Inter). Reserved permanently so the modal
+ *  keeps its height when a message appears or clears — see ControlWithError (ETP-5177). */
+const FIELD_ERROR_LINE_HEIGHT = 16;
+const fieldErrorStyle = { font: '400 12px/16px Inter', color: RED_FG };
+
+/**
+ * Wraps a form control with a line that is ALWAYS reserved for its inline validation message.
+ * Only the <p> is conditional — the gap exists with and without an error — so mounting or
+ * unmounting the message never resizes the modal, which has a fixed width but an automatic
+ * height and is vertically centred in its overlay (QA of ETP-5177).
+ *
+ * The control and its message are grouped into a single child of Field so the wrapper does not
+ * inherit Field's `gap: 8`, which would otherwise apply between them.
+ */
+function ControlWithError({ error, testid, children }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {children}
+      <div style={{ minHeight: FIELD_ERROR_LINE_HEIGHT, marginTop: 4 }} data-testid={`${testid}-slot`}>
+        {error && <p role="alert" style={fieldErrorStyle} data-testid={testid}>{error}</p>}
+      </div>
+    </div>
+  );
+}
+
 /**
  * The rate + converted-amount pair, shown only when the invoice currency differs from the selected
  * account's (ETP-4504). Its own component for the same reason as PisTransferSection below: it is a
@@ -557,44 +582,44 @@ function ConversionFields({
   const errorText = ui(rateIsOne ? 'cpConversionRateInvalid' : 'cpConversionRateRequired');
   const boxStyle = { display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 };
   const inputStyle = { flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' };
-  const errorStyle = { font: '400 12px/16px Inter', color: RED_FG, marginTop: 4 };
+  // Both fields share the same error, so they light up and clear together; the reserved line
+  // keeps the pair (and the modal) at a constant height either way (ETP-5177).
+  const errorMessage = invalid ? errorText : null;
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '0 20px' }} data-testid="cp-conversion-fields">
       <Field label={ui('cpConversionRate')} required data-testid="Field__conversion-rate">
-        <div style={boxStyle}>
-          <input
-            type="text" inputMode="decimal" value={rateStr}
-            onChange={onRateChange}
-            data-testid="cp-conversion-rate-input"
-            style={inputStyle}
-          />
-        </div>
-        {invalid && (
-          <p style={errorStyle} data-testid="cp-conversion-rate-error">{errorText}</p>
-        )}
+        <ControlWithError error={errorMessage} testid="cp-conversion-rate-error" data-testid="ControlWithError__conversion-rate">
+          <div style={boxStyle}>
+            <input
+              type="text" inputMode="decimal" value={rateStr}
+              onChange={onRateChange}
+              data-testid="cp-conversion-rate-input"
+              style={inputStyle}
+            />
+          </div>
+        </ControlWithError>
       </Field>
       {/* Editable, like the rate field — changing either recomputes the other (Classic parity). */}
       <Field label={ui('cpAmountInAccount')} required data-testid="Field__amount-in-account">
-        <div style={boxStyle}>
-          {(() => {
-            // ETP-4314: the currency symbol sits on whichever side the instance-wide
-            // currency format declares — never hardcoded after the amount.
-            const amountInput = (
-              <input
-                type="text" inputMode="decimal" value={amountStr}
-                onChange={onAmountChange}
-                data-testid="cp-amount-in-account-input"
-                style={inputStyle}
-              />
-            );
-            const amountSuffix = <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(accountCurrency)}</span>;
-            return isCurrencySymbolRightSide(accountCurrency) ? <>{amountInput}{amountSuffix}</> : <>{amountSuffix}{amountInput}</>;
-          })()}
-        </div>
-        {invalid && (
-          <p style={errorStyle} data-testid="cp-amount-in-account-error">{errorText}</p>
-        )}
+        <ControlWithError error={errorMessage} testid="cp-amount-in-account-error" data-testid="ControlWithError__amount-in-account">
+          <div style={boxStyle}>
+            {(() => {
+              // ETP-4314: the currency symbol sits on whichever side the instance-wide
+              // currency format declares — never hardcoded after the amount.
+              const amountInput = (
+                <input
+                  type="text" inputMode="decimal" value={amountStr}
+                  onChange={onAmountChange}
+                  data-testid="cp-amount-in-account-input"
+                  style={inputStyle}
+                />
+              );
+              const amountSuffix = <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(accountCurrency)}</span>;
+              return isCurrencySymbolRightSide(accountCurrency) ? <>{amountInput}{amountSuffix}</> : <>{amountSuffix}{amountInput}</>;
+            })()}
+          </div>
+        </ControlWithError>
       </Field>
     </div>
   );
@@ -874,6 +899,10 @@ function PisTransferSection({
         {show.iban && (
           <div style={{ flex: '1 1 45%', minWidth: 0 }}>
             <Field label={ui('cpPisIbanLabel')} required data-testid="Field__pis-iban">
+              <ControlWithError
+                error={ibanInvalid ? ui('financeAccountsNewIbanInvalid') : null}
+                testid="cp-pis-iban-error"
+                data-testid="ControlWithError__pis-iban">
               {/* White wrapper — see the template select above. */}
               <div style={{ background: 'hsl(var(--card))', borderRadius: 8 }}>
               <CreatableSearchSelect
@@ -896,11 +925,7 @@ function PisTransferSection({
                 }}
                 data-testid="cp-pis-iban-select" />
               </div>
-              {ibanInvalid && (
-                <p style={{ font: '400 12px/16px Inter', color: RED_FG, marginTop: 4 }} data-testid="cp-pis-iban-error">
-                  {ui('financeAccountsNewIbanInvalid')}
-                </p>
-              )}
+              </ControlWithError>
             </Field>
           </div>
         )}
