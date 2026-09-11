@@ -19,8 +19,10 @@ import { hasUnsavedChanges, suppressNextUnloadPrompt, installUnloadGuard } from 
 import { LocaleChangeConfirmDialog } from './components/LocaleChangeConfirmDialog.jsx';
 import { UnsavedChangesNavigationDialog } from './components/UnsavedChangesNavigationDialog.jsx';
 import { SaveConflictDialog } from './components/SaveConflictDialog.jsx';
+import { RoleChangedBanner } from './components/RoleChangedBanner.jsx';
 import { useLocaleDictionaries } from './i18n/useLocaleDictionaries.js';
 import { useServiceWorker } from './hooks/useServiceWorker.js';
+import { fetchMenuTree, collectAllowedIds } from './lib/menuTree.js';
 import { useInstalledApps } from './hooks/useInstalledApps.js';
 import { useAppStoreUnlock, attachKeySequenceWatcher } from './hooks/useAppStoreUnlock.js';
 import { buildOnboardingReturnTo } from './lib/oauthReturnTo.js';
@@ -78,6 +80,19 @@ function looksLikeWindowAccessPayload(value) {
     && ('windowAccess' in value || 'capabilities' in value);
 }
 
+// ETP-5189 — the role-filtered menu's allowed window/process/obuiappProcess ids
+// (SFListMenu, same source `useRoleMenu()` reads), flattened into `{id: true}` so
+// AuthContext's generic `sameFlatMap` diff (built for windowAccess/capabilities) can
+// compare it the same way. This is what lets a menu-only or process-only grant/
+// revocation — one that never touches SFWindowAccessMap's tiers — still flip
+// `accessChanged` and bump `authRevision`, instead of silently never refreshing the
+// menu (see AuthContext.jsx's [ETP-5189] comment on `menuAccess`).
+async function fetchMenuAccess() {
+  const tree = await fetchMenuTree();
+  const ids = collectAllowedIds(tree?.tree);
+  return Object.fromEntries([...ids].map((id) => [id, true]));
+}
+
 export async function fetchWindowAccess(session) {
   try {
     // Reached via `/sws/neo/windowaccessmap` (NEO Headless's own JWT auth), not
@@ -106,16 +121,21 @@ export async function fetchWindowAccess(session) {
     //    right, otherwise fail closed (return `null`) rather than handing
     //    AuthProvider the wrong shape (e.g. the outer `{result: ...}`
     //    wrapper itself, which would silently deny every window/field).
+    let payload;
     if (typeof data?.result === 'string') {
-      try { return JSON.parse(data.result); } catch { return null; }
+      try { payload = JSON.parse(data.result); } catch { return null; }
+    } else if (data?.result && typeof data.result === 'object' && !Array.isArray(data.result)) {
+      payload = data.result;
+    } else if (looksLikeWindowAccessPayload(data)) {
+      payload = data;
+    } else {
+      return null;
     }
-    if (data?.result && typeof data.result === 'object' && !Array.isArray(data.result)) {
-      return data.result;
-    }
-    if (looksLikeWindowAccessPayload(data)) {
-      return data;
-    }
-    return null;
+    // Same fail-closed contract as the block above: a menu-fetch failure falls
+    // through to the outer `catch` (returns `null`), resetting windowAccess/
+    // capabilities/menuAccess together rather than diffing a half-fetched result.
+    const menuAccess = await fetchMenuAccess();
+    return { ...payload, menuAccess };
   } catch {
     return null;
   }
@@ -331,6 +351,11 @@ export default function App() {
         <ServiceWorkerManager data-testid="ServiceWorkerManager__ecaf3f" />
         <AppStoreKeyWatcher data-testid="AppStoreKeyWatcher__ecaf3f" />
         <SurveyManager data-testid="SurveyManager__ecaf3f" />
+        {/* ETP-5189 — notifies the active user their role/permissions changed elsewhere.
+            Mounted here (not inside AppLayout) so it is visible regardless of which
+            window is open when the change lands; see RoleChangedBanner.jsx's own
+            doc comment for why it's a fixed overlay rather than a layout-flow element. */}
+        <RoleChangedBanner data-testid="RoleChangedBanner__ecaf3f" />
         <LocaleChangeConfirmDialog
           open={pendingLocale !== null}
           onConfirm={() => applyLocaleAndReload(pendingLocale)}

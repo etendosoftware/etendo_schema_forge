@@ -204,38 +204,81 @@ describe('App', () => {
  * inconsistent backend that returns `data.result` as a plain object, or the
  * fully unwrapped `{windowAccess, capabilities}` payload with no wrapper at
  * all.
+ *
+ * ETP-5189 — `fetchWindowAccess` now ALSO calls the SFListMenu webhook (via
+ * `fetchMenuTree()`/`collectAllowedIds()` in `lib/menuTree.js`) to build the
+ * `menuAccess` map it merges into its return value. That call goes through the
+ * SAME global `fetch` stub, so every success-path test below must be able to
+ * answer BOTH `/sws/neo/windowaccessmap` and `/sws/neo/listmenu` — hence the
+ * URL-branching `stubFetch` (unlike the single-response stub this replaced,
+ * which made `fetchMenuTree()`'s internal `res.text()` call throw, since the
+ * old `jsonResponse` helper had no `.text()`).
  */
 describe('fetchWindowAccess', () => {
   const PAYLOAD = { windowAccess: { W1: 'full' }, capabilities: { showAccountingFields: true } };
+
+  // A realistic role-filtered menu tree: 3 levels deep, mixing all three id
+  // kinds `collectAllowedIds` recognizes (windowId/processId/obuiappProcessId),
+  // including two on the SAME node — mirrors `lib/__tests__/menuTree.vitest.js`'s
+  // own coverage of `collectAllowedIds` so the flattening behavior is exercised
+  // here too, end-to-end through `fetchWindowAccess`.
+  const MENU_TREE = {
+    tree: [
+      {
+        windowId: 'W1',
+        processId: 'P1',
+        children: [
+          {
+            obuiappProcessId: 'OP1',
+            children: [{ windowId: 'W2' }],
+          },
+        ],
+      },
+    ],
+    count: 1,
+  };
+  const EXPECTED_MENU_ACCESS = { W1: true, P1: true, OP1: true, W2: true };
 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  function stubFetch(response) {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response));
-  }
-
   function jsonResponse(body, ok = true) {
     return { ok, json: async () => body };
+  }
+
+  // `callMenuWebhook` (lib/menuTree.js) reads the body via `res.text()`, not `.json()`.
+  function menuTextResponse(body, ok = true) {
+    return { ok, text: async () => (typeof body === 'string' ? body : JSON.stringify(body)) };
+  }
+
+  /**
+   * Branches the global `fetch` stub by URL: `/sws/neo/listmenu` (SFListMenu,
+   * read via `.text()`) gets `menuResponse`; everything else (SFWindowAccessMap,
+   * read via `.json()`) gets `windowAccessResponse`.
+   */
+  function stubFetch(windowAccessResponse, menuResponse = menuTextResponse(MENU_TREE)) {
+    vi.stubGlobal('fetch', vi.fn((url) => Promise.resolve(
+      String(url).includes('/listmenu') ? menuResponse : windowAccessResponse,
+    )));
   }
 
   it('parses data.result when it is a JSON string (real/current backend shape)', async () => {
     stubFetch(jsonResponse({ result: JSON.stringify(PAYLOAD) }));
     const result = await fetchWindowAccess({ token: 'tok' });
-    expect(result).toEqual(PAYLOAD);
+    expect(result).toEqual({ ...PAYLOAD, menuAccess: EXPECTED_MENU_ACCESS });
   });
 
   it('uses data.result directly when it is already a plain object', async () => {
     stubFetch(jsonResponse({ result: PAYLOAD }));
     const result = await fetchWindowAccess({ token: 'tok' });
-    expect(result).toEqual(PAYLOAD);
+    expect(result).toEqual({ ...PAYLOAD, menuAccess: EXPECTED_MENU_ACCESS });
   });
 
   it('falls back to data itself when there is no result wrapper and the shape looks right', async () => {
     stubFetch(jsonResponse(PAYLOAD));
     const result = await fetchWindowAccess({ token: 'tok' });
-    expect(result).toEqual(PAYLOAD);
+    expect(result).toEqual({ ...PAYLOAD, menuAccess: EXPECTED_MENU_ACCESS });
   });
 
   it('fails closed (null) when data.result is an unparsable string', async () => {
@@ -258,6 +301,27 @@ describe('fetchWindowAccess', () => {
 
   it('fails closed (null) when fetch throws', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
+    const result = await fetchWindowAccess({ token: 'tok' });
+    expect(result).toBeNull();
+  });
+
+  // ETP-5189 — the menu fetch (SFListMenu) is inside the SAME top-level `try` as the
+  // windowaccessmap parsing, so a menu-fetch failure must fail the WHOLE call closed
+  // (return `null`), not return a partial `{ ...payload, menuAccess: {} }` result — that
+  // would silently reset windowAccess/capabilities/menuAccess together, per the existing
+  // fail-closed contract for a SFWindowAccessMap failure.
+  it('fails closed (null) — not a partial result — when the menu fetch (SFListMenu) itself fails', async () => {
+    stubFetch(jsonResponse(PAYLOAD), menuTextResponse('<!doctype html><html><body>App</body></html>'));
+    const result = await fetchWindowAccess({ token: 'tok' });
+    expect(result).toBeNull();
+  });
+
+  it('fails closed (null) when the menu fetch (SFListMenu) rejects outright', async () => {
+    vi.stubGlobal('fetch', vi.fn((url) => (
+      String(url).includes('/listmenu')
+        ? Promise.reject(new Error('network down'))
+        : Promise.resolve(jsonResponse(PAYLOAD))
+    )));
     const result = await fetchWindowAccess({ token: 'tok' });
     expect(result).toBeNull();
   });
