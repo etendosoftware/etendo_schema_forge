@@ -612,6 +612,24 @@ function renderInlineSearchCell({ col, row, value, displayLabel, selectorUrl, se
 }
 
 /**
+ * Date cell in edit mode. Split out of EditCell to keep that dispatch chain under the
+ * cognitive-complexity budget; `h-7` matches the row height of the other inline editors.
+ */
+function EditDateCell({ col, value, onCommit, isInvalid }) {
+  return (
+    <DateField
+      id={`field-${col.key}`}
+      name={col.key}
+      data-testid={`field-${col.key}`}
+      value={value ?? ''}
+      onChange={(iso) => onCommit(iso)}
+      required={col.required}
+      className={`h-7${isInvalid ? ' border-destructive focus-within:ring-destructive' : ''}`}
+    />
+  );
+}
+
+/**
  * Edit-mode cell. Returns null for non-editable types so the caller falls back to read mode.
  */
 function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, token, apiBaseUrl, selectorContext, isInvalid, ui, locale, t }) {
@@ -705,17 +723,7 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
   // branches above rather than on blur, and `DateField.onChange` always hands back
   // `yyyy-MM-dd` — exactly what `onCommit` already PATCHes for this column type.
   if (col.type === 'date') {
-    return (
-      <DateField
-        id={`field-${col.key}`}
-        name={col.key}
-        data-testid={`field-${col.key}`}
-        value={value ?? ''}
-        onChange={(iso) => onCommit(iso)}
-        required={col.required}
-        className={`h-7${isInvalid ? ' border-destructive focus-within:ring-destructive' : ''}`}
-      />
-    );
+    return <EditDateCell col={col} value={value} onCommit={onCommit} isInvalid={isInvalid} />;
   }
 
   const isNumeric = NUMERIC_TYPES.has(col.type);

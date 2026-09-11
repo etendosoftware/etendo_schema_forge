@@ -525,6 +525,27 @@ function renderDerivedAddCell(col, values) {
   );
 }
 
+// Date cell of the inline-add row. Split out of renderInlineAddFieldControl so that
+// function stays under the cognitive-complexity budget: the dispatch chain there is long
+// enough that each branch has to earn its place, and this one is self-contained.
+// `h-8` matches the height of the other add-row controls (tailwind-merge wins over
+// DateField's own FIELD_HEIGHT).
+function renderInlineAddDateField(col, field, { values, handleFieldChange, invalidFields }) {
+  return (
+    <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
+      <DateField
+        id={`inline-add-field-${field.key}`}
+        name={field.key}
+        data-testid={`inline-add-field-${field.key}`}
+        value={values[field.key] ?? ''}
+        onChange={(iso) => handleFieldChange(field.key, iso)}
+        required={field.required}
+        className={`h-8${invalidFields.has(field.key) ? ' border-destructive focus-within:ring-destructive' : ''}`}
+      />
+    </TableCell>
+  );
+}
+
 // Renders the interactive control for an editable inline-add field, dispatching
 // on its type (lookup, search, static select, selector, boolean, or plain input).
 function renderInlineAddFieldControl(col, field, isFirst, fieldLabel, {
@@ -640,19 +661,7 @@ function renderInlineAddFieldControl(col, field, isFirst, fieldLabel, {
   // does not fire from inside it — DateField binds both itself (Enter commits and
   // blurs, Escape reverts and blurs).
   if (field.type === 'date') {
-    return (
-      <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
-        <DateField
-          id={`inline-add-field-${field.key}`}
-          name={field.key}
-          data-testid={`inline-add-field-${field.key}`}
-          value={values[field.key] ?? ''}
-          onChange={(iso) => handleFieldChange(field.key, iso)}
-          required={field.required}
-          className={`h-8${invalidFields.has(field.key) ? ' border-destructive focus-within:ring-destructive' : ''}`}
-        />
-      </TableCell>
-    );
+    return renderInlineAddDateField(col, field, { values, handleFieldChange, invalidFields });
   }
   if (field.type === 'checkbox' || field.type === 'boolean') {
     const checked = values[field.key] === true || values[field.key] === 'Y' || values[field.key] === 'true';
