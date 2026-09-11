@@ -17399,6 +17399,8 @@
     "loadingLines": "Cargando líneas...",
     "noLinesFound": "No se encontraron líneas",
     "importQty": "Cant. a importar",
+    "qtyMaxAllowed": "El máximo permitido es {max}",
+    "qtyMustBePositive": "La cantidad debe ser mayor a 0",
     "alreadyFullyReceived": "ya recibido completamente",
     "selectedLinesCount": "{count} línea(s) seleccionada(s)",
     "selectLinesToImport": "Selecciona líneas para importar",

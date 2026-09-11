@@ -17168,6 +17168,8 @@
     "loadingLines": "Loading lines...",
     "noLinesFound": "No lines found",
     "importQty": "Import Qty",
+    "qtyMaxAllowed": "The maximum allowed is {max}",
+    "qtyMustBePositive": "The quantity must be greater than 0",
     "alreadyFullyReceived": "already fully received",
     "selectedLinesCount": "{count} line(s) selected",
     "selectLinesToImport": "Select lines to import",
