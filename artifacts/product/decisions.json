@@ -41,7 +41,7 @@
         "Value": "Código"
       }
     },
-    "headerExtra": {},
+    "headerExtra": { "customForm": "ProductStockDefaultsWatcher" },
     "primaryTabs": [
       { "key": "general", "label": "General" },
       { "key": "additionalInfo", "label": "Additional Info", "panel": "ProductAdditionalInfoPanel" }

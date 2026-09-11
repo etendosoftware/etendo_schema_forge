@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Minus, Plus } from 'lucide-react';
 import { EntityForm } from '@/components/contract-ui';
 import { useUI, useLabel } from '@/i18n';
-import CheckboxGroup, { isCheckedYN } from '@/windows/custom/shared/CheckboxGroup';
+import CheckboxGroup from '@/windows/custom/shared/CheckboxGroup';
 
 // ETP-5091: Expense (E, "Gasto") and Resource (R, "Recurso") have no physical
 // existence either — same rule as Service (S, ETP-4943).
@@ -55,32 +55,19 @@ export default function ProductAdditionalInfoPanel({ entity, data, token, apiBas
   const t = useLabel();
 
   const readOnly = !editing;
-  const isNonStockable = NON_STOCKABLE_PRODUCT_TYPES.has(data?.productType);
-  const prevNonStockableRef = useRef(isNonStockable);
-
-  // ETP-4943 / ETP-5091: Service, Expense and Resource products have no
-  // physical existence, so the Logistics section (weight/UOM,
-  // "Almacenable"/Returnable) does not apply to them — force both
-  // stock-management flags off as soon as the type becomes one of those, the
-  // same rule ProductSidebar.jsx already applies to hide the stock widget
+  // ETP-4943 / ETP-5091: Service, Expense and Resource products have no physical
+  // existence, so the Logistics section (weight/UOM, "Almacenable"/Returnable) does
+  // not apply to them — hidden the same way ProductSidebar.jsx hides the stock widget
   // (ETP-4606 / ETP-5091: `NON_STOCKABLE_PRODUCT_TYPES.has(data?.productType)` → no stock UI at all).
   //
-  // ETP-5091 follow-up: switching back to a stockable type (Artículo) must
-  // reset both flags to their default (true) — only on the transition itself
-  // (detected via prevNonStockableRef), not on every render while already
-  // stockable, so a manual uncheck afterwards is not fought/reverted.
-  useEffect(() => {
-    if (!editing) return;
-    const wasNonStockable = prevNonStockableRef.current;
-    prevNonStockableRef.current = isNonStockable;
-    if (isNonStockable) {
-      if (isCheckedYN(data?.stocked)) onChange?.('stocked', false, 'IsStocked');
-      if (isCheckedYN(data?.returnable)) onChange?.('returnable', false, 'Returnable');
-    } else if (wasNonStockable) {
-      if (!isCheckedYN(data?.stocked)) onChange?.('stocked', true, 'IsStocked');
-      if (!isCheckedYN(data?.returnable)) onChange?.('returnable', true, 'Returnable');
-    }
-  }, [editing, isNonStockable, data?.stocked, data?.returnable, onChange]);
+  // Forcing `stocked`/`returnable` to match `productType` is NOT done here (ETP-5091
+  // follow-up): `productType` lives on the General tab, and this panel unmounts
+  // whenever that tab (not "Información adicional") is active, so an effect here
+  // never observes a live productType transition — only fresh mounts where there is
+  // no "previous" to compare against. See `ProductStockDefaultsWatcher.jsx`, wired as
+  // this window's `formFooter` (`decisions.json`'s `window.headerExtra.customForm`),
+  // which stays mounted regardless of the active tab and owns this enforcement.
+  const isNonStockable = NON_STOCKABLE_PRODUCT_TYPES.has(data?.productType);
 
   return (
     <div className="space-y-2 pb-6 [&_input]:bg-card">

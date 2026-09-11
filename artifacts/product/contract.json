@@ -1,8 +1,8 @@
 {
   "version": "0.1.1",
   "generatedAt": "2026-07-31T19:26:42.054Z",
-  "updatedAt": "2026-09-07T16:05:38.276Z",
-  "checksum": "b60ba2f38cc700e9",
+  "updatedAt": "2026-09-10T19:41:15.903Z",
+  "checksum": "d1d2bfcdf5d3a047",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -31,7 +31,9 @@
         }
       },
       "detailEntity": null,
-      "headerExtra": {},
+      "headerExtra": {
+        "customForm": "ProductStockDefaultsWatcher"
+      },
       "labelOverrides": {
         "en_US": {
           "M_Product_Category_ID": "Category",
@@ -2469,7 +2471,9 @@
         }
       },
       "detailEntity": null,
-      "headerExtra": {},
+      "headerExtra": {
+        "customForm": "ProductStockDefaultsWatcher"
+      },
       "labelOverrides": {
         "en_US": {
           "M_Product_Category_ID": "Category",

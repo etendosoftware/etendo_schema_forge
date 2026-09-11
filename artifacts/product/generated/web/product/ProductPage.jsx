@@ -6,6 +6,7 @@ import ProductTable from './ProductTable';
 import ProductForm from './ProductForm';
 import AccountingTable from './AccountingTable';
 import AccountingForm from './AccountingForm';
+import ProductStockDefaultsWatcher from '@/windows/custom/product/ProductStockDefaultsWatcher';
 import ProductAdditionalInfoPanel from '@/windows/custom/product/ProductAdditionalInfoPanel';
 import { AttachmentsTab } from '@/components/attachments';
 import ProductPriceBar from '@/windows/custom/product/ProductPriceBar';
@@ -557,6 +558,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
           { key: 'productCOGS', column: 'P_Cogs_Acct', type: 'selector', label: 'Product COGS', reference: 'ValidCombination', inputMode: 'selector' },
           ], derived: [], hidden: [] }, requireSavedRecord: true, maxDetailLines: 1, tabOrder: 1000, visibleWhenCapability: 'showAccountingFields' },
         ]}
+        formFooter={ProductStockDefaultsWatcher}
         primaryTabs={[
           { key: 'general', label: 'General' },
           { key: 'additionalInfo', label: 'Additional Info', Panel: ProductAdditionalInfoPanel },
