@@ -120,6 +120,22 @@ const BASE_DECL = {
   id: '303-2026-T2', model: '303', year: 2026, period: 'T2', type: 'ord',
   status: 'draft', result: null, incidents: { blocking: 0, warning: 0 },
   _precomputed: null, boxes: null, sources: [], history: [],
+  // `tipo_declaracion` is NOT decoration here — do not "clean up" this manualData.
+  //
+  // ETP-5187 added a required-field pre-flight gate: `getMissingRequiredFields` (fm303Layouts.js)
+  // reports every visible layout field marked `required: true` whose value is empty, and both
+  // `handlePresent` and the "Marcar como Presentado" button pre-check return early with a toast
+  // while that list is non-empty. `identChecks` is seeded from `decl.manualData?.identification`,
+  // so with no seed it starts as `{}`, `tipo_declaracion` (always visible, always required) is
+  // reported missing, and PresentModal NEVER MOUNTS — which breaks `submitDeclaration()` below,
+  // and with it the eligibility property (3) documented at the top of this file.
+  //
+  // 'N' (resultado cero) is chosen deliberately: it is a valid option AND it is not one of
+  // U/D/X, so the `datos_bancarios` section stays hidden and its own `required: true`
+  // `bank_iban` does not become required too. `rectificativa` is left unset for the same reason.
+  // Hydrating manualData costs no extra PUT — the autosave effect skips its very first run
+  // (`isFirstManualDataRender`), so the `toHaveLength(1)` counts below are unaffected.
+  manualData: { identification: { tipo_declaracion: 'N' } },
 };
 
 const TOKEN = 'test-token';
@@ -217,7 +233,22 @@ function submitDeclaration() {
     .find(b => b.textContent.includes('fm.action.submit'));
   if (!submitBtn) throw new Error('submitDeclaration(): the submit action is not on screen');
   fireEvent.click(submitBtn);
-  fireEvent.click(screen.getByTestId('present-confirm-submitted'));
+  // Self-diagnosing on purpose. When the first click is silently refused by a pre-flight gate
+  // (ETP-5187's required-field check, `requiresRectificativa`, …) the modal never mounts and a
+  // bare `getByTestId` dies in a raw DOM dump that says nothing about the cause — that exact
+  // failure cost real time to trace once already. Still a genuine hard failure: nothing here
+  // skips or tolerates the condition.
+  const confirmBtn = screen.queryByTestId('present-confirm-submitted');
+  if (!confirmBtn) {
+    throw new Error(
+      'submitDeclaration(): PresentModal did not mount after clicking the submit action. '
+      + 'The click was most likely refused by a pre-flight gate before `setShowPresent(true)` — '
+      + 'check that BASE_DECL still satisfies every `required: true` field the resolved layout '
+      + 'considers visible (see the note on BASE_DECL.manualData), and that no new gate has been '
+      + 'added to the button handler in FmModel303Page.jsx.',
+    );
+  }
+  fireEvent.click(confirmBtn);
 }
 
 beforeEach(() => {
