@@ -3,7 +3,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:costing
 const columns = [
-  { key: 'cost', column: 'Cost', type: 'amount', label: 'Cost', summable: false, required: true, currencyField: 'cCurrencyID' },
+  { key: 'cost', column: 'Cost', type: 'amount', label: 'Cost', required: true },
   { key: 'startingDate', column: 'DateFrom', type: 'date', label: 'Starting Date', required: true },
   { key: 'endingDate', column: 'DateTo', type: 'date', label: 'Ending Date' },
 ];
