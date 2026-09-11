@@ -50,13 +50,19 @@ export default function ReturnToVendorShipmentWindow({ windowName, recordId, api
       bulkActions={ReturnToVendorShipmentBulkActions}
       // ETP-4717 — no `emailAction`: the row-hover "Enviar" trigger this window had
       // (ETP-4718) called an email contract (`${windowName}-send`) the backend never
-      // registered (it only has `return-to-vendor-send`), so every send failed with
-      // "Unknown email contract". QA asked to remove the action outright rather than
-      // reconcile the name. `decisions.json → window.sendDocument.enabled: false`
-      // already suppresses the row Email icon via `sendDocument` threaded into
-      // RowQuickActions (it takes precedence over `documentPreview`); omitting
-      // `emailAction` here too keeps this window consistent with the sibling
-      // `return-material-receipt` (same shell, no `emailAction`, no live trigger).
+      // registered (it only has `return-to-vendor-send`, which — per that contract's
+      // own Javadoc — actually resolves a Purchase Order return, not this M_InOut
+      // window; see DefaultDocumentSendEmailContract#getSpecName), so every send
+      // failed with "Unknown email contract". QA asked to remove the action outright
+      // rather than reconcile the name. `decisions.json → window.sendDocument.enabled:
+      // false` already suppresses the row Email icon via `sendDocument` threaded into
+      // RowQuickActions (it takes precedence over `documentPreview`).
+      //
+      // ETP-5124 gave the sibling `return-material-receipt` its own working backend
+      // contract (`return-material-receipt-send`), so that window now HAS a live
+      // `emailAction` — this window's gap is unrelated (no contract for THIS window's
+      // name exists at all) and stays open until a `return-to-vendor-shipment-send`
+      // contract is built.
       {...rest}
       data-testid="ReturnWindowShell__a5f79c" />
   );

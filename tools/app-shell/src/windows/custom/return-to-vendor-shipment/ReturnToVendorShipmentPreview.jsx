@@ -72,14 +72,18 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
   // ETP-4717 — QA (Emilio Polliotti) rejected the ETP-4718 "Enviar" action on this
   // window: the frontend derives the email contract name as `${windowName}-send`
   // (`return-to-vendor-shipment-send`), but the backend only registers
-  // `ReturnToVendorSendEmailContract.NAME` = `return-to-vendor-send`, so every click
-  // fails with "Unknown email contract". QA explicitly asked to remove the action
-  // from this window rather than reconcile the contract name — no `onEmail` is wired
-  // to `buildReturnPreviewContent`, matching the sibling `return-material-receipt`
-  // preview's pattern (see `ReturnMaterialReceiptPreview.jsx`), so the "Enviar" button
-  // never renders here (`PreviewActionButtons` only shows it when `onEmail` is set).
-  // `sendModal`/`ReceiptSendModal` stay wired below in case a future ticket fixes the
-  // contract mismatch and re-enables Send for this window.
+  // `ReturnToVendorSendEmailContract.NAME` = `return-to-vendor-send` (which actually
+  // targets a Purchase Order return, not this M_InOut window), so every click fails
+  // with "Unknown email contract". QA explicitly asked to remove the action from this
+  // window rather than reconcile the contract name — no `onEmail` is wired to
+  // `buildReturnPreviewContent`, so the "Enviar" button never renders here
+  // (`PreviewActionButtons` only shows it when `onEmail` is set). `sendModal`/
+  // `ReceiptSendModal` stay wired below in case a future ticket builds a
+  // `return-to-vendor-shipment-send` contract and re-enables Send for this window.
+  //
+  // ETP-5124 — the sibling `return-material-receipt` preview now DOES wire `onEmail`
+  // (its own contract, `return-material-receipt-send`, exists), so it is no longer an
+  // example of this same gap — do not cite it as one in a future edit here.
   const { actionButtons, tabs } = buildReturnPreviewContent({
     doc: shipment, pdfBlob, handleDownload, modalRef,
     specs, partnerName, movementDate, token, apiBaseUrl, ui,
