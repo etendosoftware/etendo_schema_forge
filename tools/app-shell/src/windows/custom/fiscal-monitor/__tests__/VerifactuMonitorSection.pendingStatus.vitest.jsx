@@ -25,20 +25,10 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipProvider: ({ children }) => children,
   TooltipTrigger: ({ children }) => children,
 }));
-vi.mock('../useFiscalMonitor.js', () => ({
-  VF_SPEC: 'monitor-verifactu',
-  VF_ACEPTADAS_ENTITY: 'facturasAceptadas',
-  VF_PARCIAL_ENTITY: 'facturasParcialmenteAceptadas',
-  VF_RECHAZADAS_ENTITY: 'facturasRechazadas',
-  VF_INVALIDAS_ENTITY: 'facturasInvalidas',
-  VF_DATE_FIELD: 'invoiceDate',
-  // ETP-5229 #17 — real implementation stubbed here rather than imported:
-  // this suite never passes earliestCutoverDate, so [] (no-op) is always
-  // correct. Mirrors the TBAI stub in TbaiMonitorSection.vitest.jsx.
-  buildCutoverCriteria: (cutoverDate, fieldName = 'invoiceDate') => (cutoverDate
-    ? [{ fieldName, operator: 'greaterOrEqual', value: cutoverDate.slice(0, 10) }]
-    : []),
-}));
+vi.mock('../useFiscalMonitor.js', async () => {
+  const { verifactuFiscalMonitorMock } = await import('./testHelpers/verifactuCutoverStub.js');
+  return verifactuFiscalMonitorMock;
+});
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';

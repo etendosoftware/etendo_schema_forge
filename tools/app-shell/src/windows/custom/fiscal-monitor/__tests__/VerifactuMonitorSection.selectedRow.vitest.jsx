@@ -50,20 +50,10 @@ vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => stableApiFetch }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
 vi.mock('lucide-react', () => ({}));
-vi.mock('../useFiscalMonitor.js', () => ({
-  VF_SPEC: 'monitor-verifactu',
-  VF_ACEPTADAS_ENTITY: 'facturasAceptadas',
-  VF_PARCIAL_ENTITY: 'facturasParcialmenteAceptadas',
-  VF_RECHAZADAS_ENTITY: 'facturasRechazadas',
-  VF_INVALIDAS_ENTITY: 'facturasInvalidas',
-  VF_DATE_FIELD: 'invoiceDate',
-  // ETP-5229 #17 — real implementation stubbed here rather than imported:
-  // this suite never passes earliestCutoverDate, so [] (no-op) is always
-  // correct. Mirrors the TBAI stub in TbaiMonitorSection.vitest.jsx.
-  buildCutoverCriteria: (cutoverDate, fieldName = 'invoiceDate') => (cutoverDate
-    ? [{ fieldName, operator: 'greaterOrEqual', value: cutoverDate.slice(0, 10) }]
-    : []),
-}));
+vi.mock('../useFiscalMonitor.js', async () => {
+  const { verifactuFiscalMonitorMock } = await import('./testHelpers/verifactuCutoverStub.js');
+  return verifactuFiscalMonitorMock;
+});
 // FmPrimitives is stubbed the same way its sibling suites stub it — with ONE
 // difference that is the whole point of this file: `useFmSelection` is a real,
 // stateful re-implementation (identical to FmPrimitives' own) instead of a
