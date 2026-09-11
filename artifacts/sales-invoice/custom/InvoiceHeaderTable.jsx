@@ -11,7 +11,7 @@ import {
   getDueDateTextStyle,
 } from '@/lib/invoiceDueDate';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
-import { getInvoiceFiscalTargets, isSifEligibleByDate, isVerifactuEligibleByDate } from '@/windows/custom/shared/fiscalTargets.js';
+import { getInvoiceFiscalTargets, isSifEligibleByDate, isVerifactuEligibleByDate, isTbaiStatusNotApplicable } from '@/windows/custom/shared/fiscalTargets.js';
 import { FiscalStatusBadge, normalizeVerifactuStatus } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
@@ -85,11 +85,26 @@ export default function InvoiceHeaderTable(props) {
     }
     if (targets.showTbai) {
       fiscalCols.push({
-        key: '_tbaiStatus', type: 'custom', label: tbaiColLabel,
+        // ETP-5216: backed by the stored computed AD column EM_ETGO_Tbai_Status.
+        // It used to be key '_tbaiStatus' with no `column`, fed by the response
+        // injector — which made isFilterableColumn drop it from the advanced
+        // filter in SILENCE, and hid a dead injector for months (ETP-4391).
+        // `type: 'custom'` still drives the badge cell; `column` + `filterMode`
+        // give the filter and the sort a real backend field to work with, the
+        // same pairing already used by `transactionDocument` below.
+        key: 'eTGOTbaiStatus', column: 'em_etgo_tbai_status', type: 'custom',
+        filterMode: 'text', label: tbaiColLabel,
+        // The database answers 'Pendiente' for "no resolved submission", so the
+        // ?? is only a guard for a row fetched before the column was backfilled.
+        // 'NoAplica' means the invoice predates the organization's TBAI adoption
+        // date (or the organization never joined): it is not pending anything and
+        // never will be, so it gets a dash instead of a badge. That gate used to
+        // run here as isSifEligibleByDate(); it now lives in the stored column so
+        // the filter and the sort agree with the cell.
         render: (row) => (
-          isSifEligibleByDate(row.invoiceDate, tbaiRecord?.tbaisystemdate)
-            ? <FiscalStatusBadge status={row.tbaiSyncEstado ?? 'Pendiente'} />
-            : <span className="text-muted-foreground">—</span>
+          isTbaiStatusNotApplicable(row.eTGOTbaiStatus)
+            ? <span className="text-muted-foreground">—</span>
+            : <FiscalStatusBadge status={row.eTGOTbaiStatus ?? 'Pendiente'} />
         ),
       });
     }

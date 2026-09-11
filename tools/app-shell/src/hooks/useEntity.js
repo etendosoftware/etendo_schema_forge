@@ -16,6 +16,7 @@ import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { isInvoiceSpec, isOrderSpec } from '@/lib/surveys/surveys.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { isEmailField, getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
+import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
 import { getContactsTextFieldError } from '@/components/contract-ui/contactsFieldValidation.js';
 import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
@@ -335,6 +336,34 @@ function normalizeRecord(record, entityName) {
     // primary key would make every injection lookup miss.
     rememberRecordVersion(normalized);
     return normalized;
+}
+
+/**
+ * ETP-5034 — pull the single row out of a get-by-id payload, or `null` when it carried none.
+ *
+ * NEO answers a GET `/{entity}/{id}` for an unknown / invisible id with HTTP 200 and
+ * `{"response":{"data":[],"status":0}}` — an EMPTY envelope, not an error status (verified against
+ * a live instance; see the `recordError` state comment for why there is no 404/403 to key off).
+ * The previous `payload?.response?.data?.[0] ?? payload` fell through to the envelope itself and
+ * handed it on as if it were the record.
+ *
+ * The bare-object fallback (no `response.data` at all → treat the payload as the record) is
+ * DEFENSIVE, carried over verbatim from the `?? payload` it replaced. There is no known call site:
+ * every get-by-id handler in `com.etendoerp.go` today wraps its answer in
+ * `{"response":{"data":[…]}}`. It stays reachable only because `NeoResponse.ok(JSONObject)`
+ * (`schemaforge/NeoResponse.java`) accepts an arbitrary body, so a future or bespoke handler could
+ * answer unwrapped. It cannot reintroduce ETP-5034: `fetchById` additionally rejects any row whose
+ * `id` is null, which is what an envelope leaking through here would look like.
+ *
+ * @param {any} payload parsed JSON body of the get-by-id response
+ * @returns {object|null} the row, or null when the response carried no record
+ */
+export function extractSingleRow(payload) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+    const rows = payload?.response?.data;
+    if (Array.isArray(rows)) return rows.length > 0 ? rows[0] : null;
+    // No `response.data` at all → defensive unwrapped-record path; see the note above.
+    return payload;
 }
 
 function normalizeRows(rows, entityName) {
@@ -921,6 +950,24 @@ export function useEntity(entity, childEntity, {
     const [childDefaults, setChildDefaults] = useState({});
     const [childrenLoading, setChildrenLoading] = useState(false);
     const [loading, setLoading] = useState(false);
+    // ETP-5034: outcome of the last fetchById, when it did NOT yield a record.
+    // null = nothing wrong (never fetched, or the record loaded fine).
+    // 'notFound' = the backend answered but carried no row: the id does not exist,
+    //              or the current role/organization cannot see it. NEO does not
+    //              distinguish the two — a GET by id answers 200 with
+    //              `{"response":{"data":[],"status":0}}` in BOTH cases (there is no
+    //              403 anywhere in NeoCrudHandler's read path; the MCP layer
+    //              synthesizes its own 404 from this very shape, see
+    //              McpToolRouterSupport.buildNotFoundError / IMP-5).
+    // 'error'    = transport/HTTP failure (network down, 401, 500…).
+    // Before this, the empty envelope was swallowed by `?? data` in fetchById and
+    // normalized into an id-less pseudo-record, so `editing` became a blank object
+    // and the detail route silently rendered an empty form indistinguishable from
+    // the creation form.
+    const [recordError, setRecordError] = useState(null);
+    // ETP-5034: monotonically increasing id for fetchById calls, so a response that arrives after
+    // a newer fetchById was issued is discarded instead of overwriting the newer one's outcome.
+    const fetchByIdSeqRef = useRef(0);
     // ETP-4741: true while handleNew's defaults request is in flight, so the
     // creation form can gate itself instead of letting the user race the merge.
     const [defaultsLoading, setDefaultsLoading] = useState(false);
@@ -981,6 +1028,10 @@ export function useEntity(entity, childEntity, {
     // Keyed by a stable formId (React.useId) so multiple EntityForms accumulate rather than
     // overwrite each other. handleSave flattens all entries to validate the complete form.
     const formFieldsRef = useRef(new Map());
+    // ETP-4563: monotonic mutation counter. A read (fetchById) captures its value
+    // at start; if a mutation bumps it before the read resolves, the read is stale
+    // and must not overwrite newer state (anti-clobber guard).
+    const opSeqRef = useRef(0);
     // ETP-4933: reactive mirror of the registry above, so the Save button can gate on
     // required-field completeness instead of only reporting it after the click.
     //
@@ -996,22 +1047,57 @@ export function useEntity(entity, childEntity, {
         setRegisteredFieldsKey(prev => (prev === next ? prev : next));
     }, []);
 
-    // True when editing has diverged from the last-saved selected state.
-    // For new records (selected === null): dirty as soon as any non-id field has a value.
-    const isDirtyHeader = useMemo(() => {
+    // ETP-4839 follow-up: the field-level keys behind isDirtyHeader below, generalized
+    // from a boolean to a list so a caller (DetailView's completed-document save gate)
+    // can tell WHICH fields are dirty, not just whether any are. Same divergence rule
+    // as before, unchanged: for new records (selected === null), dirty as soon as any
+    // non-id field has a value; otherwise, dirty when editing[key] !== selected[key].
+    const dirtyHeaderFieldKeys = useMemo(() => {
         if (!selected) {
-            return Object.keys(editing || {}).some(
+            return Object.keys(editing || {}).filter(
                 k => k !== 'id' && editing[k] != null && editing[k] !== ''
             );
         }
-        return Object.entries(editing || {}).some(
-            ([key, val]) => key !== 'id' && val !== selected[key]
-        );
+        return Object.entries(editing || {})
+            .filter(([key, val]) => key !== 'id' && val !== selected[key])
+            .map(([key]) => key);
     }, [editing, selected]);
+
+    // True when editing has diverged from the last-saved selected state.
+    const isDirtyHeader = useMemo(() => dirtyHeaderFieldKeys.length > 0, [dirtyHeaderFieldKeys]);
+
+    // ETP-4563: shared client-side cache (app-shell-core). Null when no
+    // DataProvider is mounted (e.g. isolated unit tests) — every read below then
+    // falls back to a direct fetch, preserving the pre-cache behavior exactly.
+    const dataCache = useOptionalDataCache();
+    const cacheScope = dataCache?.scope;
+
+    // Route a read through the cache when available: identical keys dedupe the
+    // in-flight request and reuse fresh entries; `force` bypasses freshness.
+    const runQuery = useCallback((key, fetcher, { force = false } = {}) => {
+        if (dataCache?.cache && key) {
+            return dataCache.cache.fetchQuery({
+                key,
+                fetcher: ({ signal }) => fetcher(signal),
+                force,
+                staleTime: dataCache.recordStaleTime,
+            });
+        }
+        return fetcher();
+    }, [dataCache]);
+
+    // Full identity of the page-0 list query: sort + all filter layers.
+    const buildListKey = useCallback(() => {
+        if (!cacheScope) return null;
+        return createQueryKey({
+            ...cacheScope, apiBase: apiBaseUrl, spec: specName, entity,
+            filters: { baseFilter, columnFilters, trailingFilter, sortColumn, sortDirection },
+        });
+    }, [cacheScope, apiBaseUrl, specName, entity, baseFilter, columnFilters, trailingFilter, sortColumn, sortDirection]);
 
     /**
      * The list query minus its row window: the sort plus every filter layer, composed exactly
-     * as `refresh` composes it.
+     * as the list loader composes it.
      *
      * Exposed (ETP-4997) so a feature that must re-run the SAME server-side query the grid is
      * showing — the CSV export — reuses this composition instead of re-deriving it. The grid
@@ -1027,7 +1113,9 @@ export function useEntity(entity, childEntity, {
         return queryParams;
     }, [sortColumn, sortDirection, baseFilter, columnFilters, columnDefs, trailingFilter]);
 
-    const refresh = useCallback(() => {
+    // Shared list loader. `force=false` (mount) reuses a fresh cached page;
+    // `force=true` (explicit refresh) always reaches the backend.
+    const loadList = useCallback((force) => {
         startRowRef.current = 0;
         setHasMore(true);
         setLoading(true);
@@ -1042,15 +1130,20 @@ export function useEntity(entity, childEntity, {
 
         applyFilterParams(queryParams, baseFilter, columnFilters, columnDefs, trailingFilter);
 
-        apiFetch(`/${entity}?${queryParams.toString()}`)
+        const fetcher = (signal) => apiFetch(`/${entity}?${queryParams.toString()}`, { signal })
             .then(res => {
                 if (!res.ok) throw new Error(`${res.status}`);
                 return res.json();
             })
-            .then(data => {
-                const rows = normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), entity);
+            .then(data => ({
+                rows: normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), entity),
+                meta: extractResponseMeta(data),
+            }));
+
+        runQuery(buildListKey(), fetcher, { force })
+            .then(({ rows, meta }) => {
                 setItems(rows);
-                setMeta(extractResponseMeta(data));
+                setMeta(meta);
                 startRowRef.current = rows.length;
                 if (rows.length < BATCH_SIZE) setHasMore(false);
                 setLoading(false);
@@ -1062,7 +1155,27 @@ export function useEntity(entity, childEntity, {
                 setHasMore(false);
                 setLoading(false);
             });
-    }, [entity, sortColumn, sortDirection, baseFilter, columnFilters, columnDefs, trailingFilter, apiFetch]);
+    }, [apiBaseUrl, entity, apiFetch, sortColumn, sortDirection, baseFilter, columnFilters, columnDefs, trailingFilter, runQuery, buildListKey]);
+
+    // Explicit reload always forces a network round-trip.
+    const refresh = useCallback(() => loadList(true), [loadList]);
+
+    // ETP-4563: after a header mutation, invalidate this entity's cached lists and
+    // records, and bump the anti-stale counter so any read still in flight is
+    // discarded on resolve instead of overwriting the newer mutation result.
+    const invalidateEntityCache = useCallback(() => {
+        opSeqRef.current += 1;
+        if (dataCache?.cache && cacheScope) {
+            dataCache.cache.invalidate({ ...cacheScope, apiBase: apiBaseUrl, spec: specName, entity });
+        }
+    }, [dataCache, cacheScope, apiBaseUrl, specName, entity]);
+
+    // Invalidate only the child collection of a specific parent.
+    const invalidateChildrenCache = useCallback((parentId) => {
+        if (dataCache?.cache && cacheScope && parentId) {
+            dataCache.cache.invalidate({ ...cacheScope, apiBase: apiBaseUrl, spec: specName, entity: childEntity, parentId });
+        }
+    }, [dataCache, cacheScope, apiBaseUrl, specName, childEntity]);
 
     const loadMore = useCallback(() => {
         if (!hasMore || loadingMore || loading) return;
@@ -1111,10 +1224,11 @@ export function useEntity(entity, childEntity, {
         if (didListFetchRef.current) return;
         if (skipListFetch) return;
         didListFetchRef.current = true;
-        refresh();
-    }, [refresh, skipListFetch]);
+        // Initial mount reuses a fresh cached list (unlike explicit refresh()).
+        loadList(false);
+    }, [loadList, skipListFetch]);
 
-    const fetchChildren = useCallback((parentId, { silent = false } = {}) => {
+    const fetchChildren = useCallback((parentId, { silent = false, force = false } = {}) => {
         if (!childEntity || !parentId) {
             setChildren([]);
             if (!silent) setChildrenLoading(false);
@@ -1131,21 +1245,23 @@ export function useEntity(entity, childEntity, {
         // return-to-vendor-shipment.mocked.spec.js.
         if (!silent) setChildrenLoading(true);
         // NEO Headless uses ?parentId= to filter child entity records
+        const key = cacheScope
+            ? createQueryKey({ ...cacheScope, apiBase: apiBaseUrl, spec: specName, entity: childEntity, parentId, filters: { childSortBy } })
+            : null;
         const sortParam = childSortBy ? `&_sortBy=${childSortBy}` : '';
-        apiFetch(`/${childEntity}?parentId=${parentId}${sortParam}`)
+        const fetcher = (signal) => apiFetch(`/${childEntity}?parentId=${parentId}${sortParam}`, { signal })
             .then(res => {
                 if (!res.ok) throw new Error(`${res.status}`);
                 return res.json();
             })
-            .then(data => {
-                const rows = normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), childEntity);
-                setChildren(rows);
-            })
+            .then(data => normalizeRows(data?.response?.data ?? (Array.isArray(data) ? data : []), childEntity));
+        runQuery(key, fetcher, { force })
+            .then(rows => setChildren(rows))
             // Silent refreshes must not blank a table the user is already looking
-            // at just because one background request failed transiently.
+            // at just because one background request failed transiently (ETP-4512).
             .catch(() => { if (!silent) setChildren([]); })
             .finally(() => { if (!silent) setChildrenLoading(false); });
-    }, [childEntity, childSortBy, apiFetch]);
+    }, [apiBaseUrl, childEntity, apiFetch, childSortBy, cacheScope, specName, runQuery]);
 
     // HandleDefaults: fetch backend-resolved defaults for a NEW child line under the
     // given parent and normalize them (dates, booleans, enum ints) exactly as
@@ -1192,24 +1308,81 @@ export function useEntity(entity, childEntity, {
         controller.abort();
     }, []);
 
-    const fetchById = useCallback((id) => {
+    const fetchById = useCallback((id, { force = false } = {}) => {
         if (!id) return;
         neutralizePendingDefaults();
+        // ETP-5034 — request sequencing. Navigating A → B faster than A resolves used to be
+        // harmless: the late A only turned the spinner off. Now a late A would call
+        // setRecordError('notFound') while B is still in flight, and since
+        // isLoadingRecordForRoute() is already false by then, DetailView's unavailable guard
+        // would render "record not available" over a record that is loading perfectly well.
+        // Every write below is therefore gated on this call still being the newest one.
+        // A counter rather than an AbortController: the stale response must be ignored, and an
+        // aborted fetch would additionally have to be told apart from a real transport failure
+        // in the catch — which is precisely the distinction the 'error' variant depends on.
+        const seq = fetchByIdSeqRef.current + 1;
+        fetchByIdSeqRef.current = seq;
+        const isCurrent = () => fetchByIdSeqRef.current === seq;
+        setRecordError(null);
         setLoading(true);
-        apiFetch(`/${entity}/${id}`)
+        const seqAtStart = opSeqRef.current;
+        const key = cacheScope
+            ? createQueryKey({ ...cacheScope, apiBase: apiBaseUrl, spec: specName, entity, recordId: id })
+            : null;
+        const fetcher = (signal) => apiFetch(`/${entity}/${id}`, { signal })
             .then(res => {
-                if (!res.ok) throw new Error(`${res.status}`);
+                if (!res.ok) {
+                    const err = new Error(`${res.status}`);
+                    err.status = res.status;
+                    throw err;
+                }
                 return res.json();
             })
             .then(data => {
-                const row = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
+                // ETP-5034: `extractSingleRow` is the canonical unwrap (it returns null for an
+                // empty envelope); keep it inside the fetcher so the cache stores the same
+                // normalized row every reader expects — never a raw envelope.
+                const raw = extractSingleRow(data);
+                return raw ? normalizeRecord(raw, entity) : null;
+            });
+        runQuery(key, fetcher, { force })
+            .then(row => {
+                if (!isCurrent()) return;
+                // ETP-4563: a mutation superseded this read while it was in flight: drop the
+                // (now stale) result and evict the cache entry it just populated.
+                if (opSeqRef.current !== seqAtStart) {
+                    if (key) dataCache?.cache?.remove(key);
+                    setLoading(false);
+                    return;
+                }
+                // ETP-5034: an id-less row is the same non-answer as an empty envelope — a
+                // get-by-id that resolves to a record without a primary key is never a record.
+                // Evict the key too: a non-answer must not be served from cache for the whole
+                // staleTime, so the next navigation re-asks (matches pre-cache behavior).
+                if (!row || row.id == null) {
+                    if (key) dataCache?.cache?.remove(key);
+                    setRecordError('notFound');
+                    setSelected(null);
+                    setEditing(null);
+                    setLoading(false);
+                    return;
+                }
                 setSelected(row);
                 setEditing({ ...row });
-                fetchChildren(row?.id);
+                fetchChildren(row.id);
                 setLoading(false);
             })
-            .catch(() => setLoading(false));
-    }, [entity, fetchChildren, neutralizePendingDefaults, apiFetch]);
+            .catch(err => {
+                if (!isCurrent()) return;
+                // A 404 would mean the same thing as the empty envelope; NEO does not currently
+                // emit one for this route, but treating it as 'notFound' keeps the UI correct if
+                // the backend ever starts to.
+                setRecordError(err?.status === 404 ? 'notFound' : 'error');
+                setSelected(null);
+                setEditing(null);
+                setLoading(false);
+            });
+    }, [apiBaseUrl, entity, apiFetch, fetchChildren, cacheScope, specName, runQuery, dataCache, neutralizePendingDefaults]);
 
     // Lightweight header refresh used after line add/update/delete operations.
     // Unlike fetchById, this preserves fields the user has explicitly edited (tracked in
@@ -1223,7 +1396,14 @@ export function useEntity(entity, childEntity, {
                 return res.json();
             })
             .then(data => {
-                const row = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
+                // ETP-5034: the same GET that fetchById guards. An empty envelope here means the
+                // header stopped being visible mid-session (deleted by someone else, role/org
+                // switched) — merging it in would reinject the envelope as the record, which is
+                // the ETP-5034 bug through a second door and with no recordError to expose it.
+                // Nothing to refresh, so leave the form exactly as the user left it.
+                const raw = extractSingleRow(data);
+                if (!raw) return;
+                const row = normalizeRecord(raw, entity);
                 // ETP-4751 — carry forward the transient exemption-cause signals: the header GET
                 // does not echo them (they are not entity fields), so a naive setSelected(row)
                 // would wipe the flag a line-save just set before the SIF toast effect runs.
@@ -1309,6 +1489,11 @@ export function useEntity(entity, childEntity, {
         // buildCreatePayload (new records), not the existing-record PATCH diff.
         neutralizePendingDefaults();
         userChangedKeysRef.current = new Set();
+        // ETP-5034: a record is being handed to us directly (list row click) — any
+        // not-found state from a previous route is stale, and an in-flight fetchById for the
+        // PREVIOUS record must not land on top of the one we are selecting now.
+        fetchByIdSeqRef.current += 1;
+        setRecordError(null);
         // ETP-5024: a Complete-time blocking condition belongs to the record that raised
         // it — switching to a different one (or reselecting the same row after a refresh)
         // must not leak a stale banner forward.
@@ -1322,6 +1507,10 @@ export function useEntity(entity, childEntity, {
         backendDefaultKeysRef.current = new Set();
         userChangedKeysRef.current = new Set();
         setFieldErrors({});
+        // ETP-5034: the creation route must never inherit a previous route's not-found state,
+        // nor let an in-flight fetchById resolve into the empty creation form.
+        fetchByIdSeqRef.current += 1;
+        setRecordError(null);
         // ETP-5024: same as handleSelect — a fresh/new record starts with no blocking banner.
         setBlockingCondition(null);
         setSelected(null);
@@ -1452,7 +1641,10 @@ export function useEntity(entity, childEntity, {
             const data = await res.json();
             // normalizeRecord also refreshes the remembered `updated`, so the next save carries
             // the token this read just produced instead of the one the conflict rejected.
-            const fresh = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
+            // ETP-5034: an empty envelope is not a record — reloading it would blank the form.
+            const freshRaw = extractSingleRow(data);
+            if (!freshRaw) throw new Error('notFound');
+            const fresh = normalizeRecord(freshRaw, entity);
             setSelected(fresh);
             setEditing({ ...fresh });
             // Both sides now hold the same values, so isDirtyHeader is false and every unsaved-
@@ -1595,6 +1787,8 @@ export function useEntity(entity, childEntity, {
                 setEditing(prev => ({ ...prev, ...resolvedSaved }));
                 setSaveError(null);
                 setFieldErrors({});
+                // Cached record is now stale; invalidate lists/records for this entity.
+                invalidateEntityCache();
                 // Refresh children after every save, not just create: a header field
                 // can drive a backend NeoHandler side effect on a child/join entity
                 // (e.g. syncing AD_User_Roles from a role field, ETP-4512) that the
@@ -1620,7 +1814,7 @@ export function useEntity(entity, childEntity, {
         } finally {
             setIsSaving(false);
         }
-    }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, ui, fetchChildren, apiFetch, discardChangesAndReload]);
+    }, [editing, selected, apiBaseUrl, entity, specName, refetchAfterSave, ui, fetchChildren, apiFetch, discardChangesAndReload, invalidateEntityCache]);
 
     /**
      * ETP-5081: one create in flight at a time.
@@ -1680,7 +1874,6 @@ export function useEntity(entity, childEntity, {
         return next;
     }, [performSave, editing?.id]);
 
-
     // Returns true on success, false on failure — callers (e.g. DetailView's
     // confirmHeaderDelete) MUST check this before navigating away, otherwise a
     // failed delete (e.g. FK constraint) silently navigates as if it succeeded.
@@ -1696,6 +1889,11 @@ export function useEntity(entity, childEntity, {
                 setSelected(null);
                 setEditing(null);
                 setChildren([]);
+                // Evict the deleted record from cache and invalidate this entity's lists.
+                invalidateEntityCache();
+                if (cacheScope) {
+                    dataCache?.cache?.remove(createQueryKey({ ...cacheScope, apiBase: apiBaseUrl, spec: specName, entity, recordId: selected.id }));
+                }
                 toast.success(ui('recordDeleted'));
                 refresh();
                 return true;
@@ -1708,7 +1906,7 @@ export function useEntity(entity, childEntity, {
             toast.error(err?.message || 'Network error');
             return false;
         }
-    }, [selected, entity, refresh, ui, apiFetch]);
+    }, [selected, apiBaseUrl, entity, apiFetch, refresh, ui, invalidateEntityCache, cacheScope, specName, dataCache]);
 
     const handleAddChild = useCallback(async (childData) => {
         if (!childEntity || !apiBaseUrl || !token || !selected?.id) return;
@@ -1741,11 +1939,42 @@ export function useEntity(entity, childEntity, {
                 return null;
             }
             const data = await res.json().catch(() => null);
-            // Refresh children and header totals. refreshHeaderTotals preserves any
-            // pending header edits in editing while updating server-computed fields (totals).
-            fetchChildren(selected.id);
-            refreshHeaderTotals(selected.id);
+            // ETP-4563: drop the cached children for this parent BEFORE the silent
+            // refetch below, so the reconciliation does not serve the stale entry.
+            // The refresh itself stays where ETP-5005 put it (after the optimistic
+            // append, with `silent: true`) — do not re-add an eager fetch here.
+            invalidateChildrenCache(selected.id);
             const savedLine = normalizeRecord(data?.response?.data?.[0] ?? data, childEntity);
+            // ETP-5005 — show the persisted line IMMEDIATELY, then reconcile in the background.
+            //
+            // This is not an optimistic write: `savedLine` is the record the backend just
+            // returned from the POST, so it is as authoritative as anything the refetch will
+            // bring back. Displaying it closes the window in which the line is visible NOWHERE:
+            // DataTable's add-row unmounts as soon as the POST resolves, and before this the
+            // grid stayed without the row until a full refetch round-trip completed. Adding the
+            // FIRST line was worse still — `fetchChildren` without `silent` raises
+            // `childrenLoading` while `children.length` is still 0, which is exactly
+            // DetailView's `isInitialChildrenLoading` gate, so the whole table was replaced by a
+            // spinner and the line appeared to be lost and then recovered.
+            //
+            // Appended at the end because nothing in this repo passes `childSortBy` (no
+            // `_sortBy`, so the backend's own line order applies) and the add-row mints
+            // `lineNo = max + 10`, i.e. the new line does belong last. The silent refetch below
+            // is what makes that an optimisation rather than an assumption: it replaces the
+            // array with the server's own ordering a moment later, without blanking anything.
+            // An `id` is required, not just an object: the grid keys rows by it and every row
+            // action addresses the line through it, so a row without one would be a ghost the
+            // user can see but not act on. When it is missing, fall through to the refetch —
+            // late, but never wrong.
+            if (savedLine && typeof savedLine === 'object' && savedLine.id != null) {
+                setChildren(prev => [...prev, savedLine]);
+            }
+            // `silent: true` — see the flicker reasoning above; a refresh that merely reconciles
+            // an already-visible grid must never toggle childrenLoading.
+            fetchChildren(selected.id, { silent: true });
+            // refreshHeaderTotals preserves any pending header edits in editing while updating
+            // server-computed fields (totals).
+            refreshHeaderTotals(selected.id);
             // ETP-4751 — the exemption-cause signals live at the RESPONSE ROOT
             // (InvoiceLineHandler#augmentResponseWithSignal does body.put(signalKey, true) on the
             // full NEO response, i.e. {response:{data:[line]}, exemptionCauseWarning:true}), NOT on
@@ -1762,7 +1991,7 @@ export function useEntity(entity, childEntity, {
             toast.error(msg);
             return null;
         }
-    }, [childEntity, apiBaseUrl, token, selected, fetchChildren, ui, refreshHeaderTotals, applyExemptionCauseSignals, apiFetch]);
+    }, [childEntity, apiBaseUrl, token, selected, fetchChildren, ui, invalidateChildrenCache, refreshHeaderTotals, applyExemptionCauseSignals, apiFetch]);
 
     const handleUpdateChild = useCallback((childId, fieldOrObject, value, signalSource) => {
         setChildren(prev => prev.map(c => {
@@ -1780,8 +2009,8 @@ export function useEntity(entity, childEntity, {
         // object-only behaviour so unrelated single-field (string) updates don't reset the flag.
         if (signalSource) applyExemptionCauseSignals(signalSource);
         else if (typeof fieldOrObject === 'object') applyExemptionCauseSignals(fieldOrObject);
-        if (selected?.id) refreshHeaderTotals(selected.id);
-    }, [selected, refreshHeaderTotals, applyExemptionCauseSignals]);
+        if (selected?.id) { invalidateChildrenCache(selected.id); refreshHeaderTotals(selected.id); }
+    }, [selected, refreshHeaderTotals, applyExemptionCauseSignals, invalidateChildrenCache]);
 
     const handleDeleteChild = useCallback((childId) => {
         setChildren(prev => prev.filter(c => String(c.id) !== String(childId)));
@@ -1798,8 +2027,8 @@ export function useEntity(entity, childEntity, {
         // when the header GET returns), not overwritten by it.
         applyExemptionCauseSignals({});
         // Refresh header to update totals after line deletion
-        if (selected?.id) refreshHeaderTotals(selected.id);
-    }, [selected, refreshHeaderTotals, applyExemptionCauseSignals]);
+        if (selected?.id) { invalidateChildrenCache(selected.id); refreshHeaderTotals(selected.id); }
+    }, [selected, refreshHeaderTotals, applyExemptionCauseSignals, invalidateChildrenCache]);
 
     /**
      * ETP-5073 follow-up: refresh ONLY the remembered `updated` token of a record, without
@@ -1819,7 +2048,9 @@ export function useEntity(entity, childEntity, {
             const res = await apiFetch(`/${entity}/${id}`, { method: 'GET' });
             if (!res.ok) return;
             const data = await res.json();
-            const row = data?.response?.data?.[0] ?? data;
+            // ETP-5034: remembering the envelope's (non-existent) version is worse than
+            // remembering nothing — the next write would replay a token that is not the row's.
+            const row = extractSingleRow(data);
             if (row) normalizeRecord(row, entity);
         } catch {
             // Best-effort: without it the next write still fails loudly rather than silently.
@@ -1918,9 +2149,13 @@ export function useEntity(entity, childEntity, {
             setBlockingCondition(null);
             setCompletionSignal(c => c + 1);
         }
+        // ETP-4563: a completed process changes the record/list on the server, so
+        // invalidate the shared cache before refetching — otherwise fetchById (which
+        // reads through the cache) could serve the pre-process record.
+        invalidateEntityCache();
         fetchById(selected?.id);
         refresh();
-    }, [entity, specName, selected, fetchById, refresh, ui]);
+    }, [entity, specName, selected, fetchById, refresh, ui, invalidateEntityCache]);
 
     // Extracted alongside handleProcessSuccess above, same rationale — the verbatim
     // `else` body of handleProcess's `if (res.ok)`.
@@ -2029,9 +2264,10 @@ export function useEntity(entity, childEntity, {
 
     return {
         items, meta, selected, editing, children, childDefaults, childrenLoading, loading, defaultsLoading, defaultsPending, loadingMore, hasMore, saveError, isSaving,
+        recordError,
         runningProcess,
         blockingCondition, completionSignal,
-        isDirtyHeader,
+        isDirtyHeader, dirtyHeaderFieldKeys,
         isValid, missingRequired, missingRequiredFields,
         fieldErrors, registerFields,
         handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,

@@ -123,7 +123,6 @@ export default function DocumentTotalsPanel({
     return typeof formatAmount === 'function' ? formatAmount(val, currency) : String(val);
   };
 
-  const hasPerProductDiscount = discountAmt != null && discountAmt > 0;
   const canShowTotalDiscount = !readOnly && !!lineConfig?.discountField && (lines.length > 0 || pendingLine != null);
 
   const divider = <div className="border-t border-border" />;
@@ -144,7 +143,7 @@ export default function DocumentTotalsPanel({
               carries a discount; updates live as user edits. */}
           <div className="flex justify-between py-2 px-2">
             <span className="text-muted-foreground">{ui('discountPerProduct')}</span>
-            <span className="tabular-nums text-muted-foreground">{discountAmt > 0 ? `-${fmt(discountAmt)}` : fmt(0)}</span>
+            <span className="tabular-nums text-muted-foreground">{fmt(-discountAmt)}</span>
           </div>
 
           {/* "+ Añadir descuento total" button — sits BELOW the per-product
@@ -171,7 +170,7 @@ export default function DocumentTotalsPanel({
                   {ui('totalDiscount')} ({inputPct}%)
                 </span>
                 <span className="tabular-nums text-muted-foreground">
-                  {totalDiscountAmt > 0 ? `-${fmt(totalDiscountAmt)}` : fmt(0)}
+                  {fmt(-totalDiscountAmt)}
                 </span>
               </div>
             ) : (
@@ -207,7 +206,7 @@ export default function DocumentTotalsPanel({
                 />
                 <span className="text-xs text-muted-foreground">%</span>
                 <span className="tabular-nums text-muted-foreground ml-auto whitespace-nowrap">
-                  {totalDiscountAmt > 0 ? `-${fmt(totalDiscountAmt)}` : fmt(0)}
+                  {fmt(-totalDiscountAmt)}
                 </span>
               </div>)
             )
