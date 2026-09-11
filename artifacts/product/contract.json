@@ -44,7 +44,9 @@
         }
       },
       "detailEntity": null,
-      "headerExtra": {},
+      "headerExtra": {
+        "customForm": "ProductStockDefaultsWatcher"
+      },
       "labelOverrides": {
         "en_US": {
           "M_Product_Category_ID": "Category",
@@ -2437,7 +2439,9 @@
         }
       },
       "detailEntity": null,
-      "headerExtra": {},
+      "headerExtra": {
+        "customForm": "ProductStockDefaultsWatcher"
+      },
       "labelOverrides": {
         "en_US": {
           "M_Product_Category_ID": "Category",

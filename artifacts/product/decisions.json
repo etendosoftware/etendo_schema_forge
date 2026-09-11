@@ -49,7 +49,7 @@
         "DateTo": "Fecha de expiración"
       }
     },
-    "headerExtra": {},
+    "headerExtra": { "customForm": "ProductStockDefaultsWatcher" },
     "customComponents": {
       "subHeader": "ProductCostBanner"
     },
