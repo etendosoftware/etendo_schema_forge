@@ -962,9 +962,12 @@ describe('InlineLinesPanel', () => {
     const actions = within(row).getByTestId('line-actions');
     const editBtn = within(actions).getAllByRole('button')[0];
     await act(async () => { await userEvent.click(editBtn); });
-    // Amount field should display "23.00" (formatForEdit)
+    // ETP-5107 — the amount-typed edit cell now renders MaskedAmountInput,
+    // whose idle display routes through the canonical formatCurrency() (no
+    // currency code here, so no symbol) instead of the old formatForEdit's
+    // period-decimal n.toFixed(2). Spanish comma-decimal, two fixed decimals.
     const priceInput = within(row).getByTestId('field-unitPrice');
-    expect(priceInput).toHaveValue('23.00');
+    expect(priceInput).toHaveValue('23,00');
   });
 
   it('renders readonly LookupTrigger for lookup fields in edit mode', async () => {

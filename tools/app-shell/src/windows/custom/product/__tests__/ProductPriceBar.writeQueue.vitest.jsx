@@ -114,9 +114,15 @@ describe('ProductPriceBar — single-flight write queue per price row (ETP-5255)
     // The tariff name renders as a read-only input value, not a text node.
     await waitFor(() => expect(screen.getByDisplayValue('Tariff A')).toBeInTheDocument());
 
-    const numberInputs = screen.getAllByRole('spinbutton');
-    expect(numberInputs).toHaveLength(2); // standardPrice, then listPrice
-    const [standardPriceInput, listPriceInput] = numberInputs;
+    // ETP-5283 (merge block): ETP-5107 replaced the stepper's native
+    // `<input type="number">` with a bare MaskedAmountInput (type="text", role
+    // textbox), so the `spinbutton` role this test was written against no
+    // longer exists. Queried by the same stable data-testid the ETP-5107 suite
+    // uses. What is under test here is unchanged — the per-ROW write queue, not
+    // the input widget.
+    const priceInputs = screen.getAllByTestId('PriceStepperInput__d76b90');
+    expect(priceInputs).toHaveLength(2); // standardPrice, then listPrice
+    const [standardPriceInput, listPriceInput] = priceInputs;
 
     // Commit standardPrice via blur — synchronous, no debounce involved.
     fireEvent.change(standardPriceInput, { target: { value: '150' } });

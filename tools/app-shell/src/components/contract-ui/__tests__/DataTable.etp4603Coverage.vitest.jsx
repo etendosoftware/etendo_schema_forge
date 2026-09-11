@@ -431,6 +431,16 @@ describe('DataTable — ETP-4603 coverage top-up', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(onAdd).not.toHaveBeenCalled();
 
+    // ETP-5107 — the numeric cell now renders MaskedAmountInput, which (like
+    // its AmountInput/MoneyInput siblings, see fields.vitest.jsx) only syncs
+    // its display from an external `value` prop change while NOT focused —
+    // while focused it keeps whatever the user is mid-typing, by design, so a
+    // live keystroke is never clobbered by a stale re-render. The row's first
+    // field auto-focuses on mount (DataTable.jsx), so blur it first to exercise
+    // the same "external state write, then re-render" path setFieldValues is
+    // meant to cover, rather than the deliberately-buffered focused case.
+    fireEvent.blur(screen.getByTestId('inline-add-field-qty'));
+
     // setFieldValues() writes directly into row state without an onChange event.
     ref.current.setFieldValues({ qty: '7' });
     await waitFor(() => expect(screen.getByTestId('inline-add-field-qty')).toHaveValue('7'));

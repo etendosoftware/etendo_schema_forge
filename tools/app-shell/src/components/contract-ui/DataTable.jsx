@@ -15,12 +15,8 @@ import { resolveRowCurrency } from '@/lib/rowCurrency.js';
 import { useCurrency } from '@/hooks/useCurrency.jsx';
 import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
 import { columnMinWidthPx, columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
-<<<<<<< HEAD
 import { CHEVRON_COLUMN_WIDTH, renderBalanceFooterRow, buildLineCellStyle } from './InlineLinesPanel.jsx';
-=======
-import { CHEVRON_COLUMN_WIDTH } from './InlineLinesPanel.jsx';
 import { ACTION_SLOT_WIDTH_PX, reservesActionSlot } from '@/lib/linesActionSlot.js';
->>>>>>> feature/ETP-5245
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DateField } from '@/components/ui/date-field';
 import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
@@ -30,6 +26,9 @@ import { getContactsTextFieldError, filterContactsInputValue } from './contactsF
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { parseBackendErrorMessage, translateBackendError } from '@/lib/backendErrors.js';
+import { MaskedAmountInput } from '@/components/forms/fields.jsx';
+import { NUMERIC_FIELD_TYPES, TWO_DECIMAL_FIELD_TYPES } from '@/lib/numericFieldTypes.js';
+import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 
 // Extracts grow flag and basis (px) from a columnFlex() shorthand string.
 function flexSpec(col, idx) {
@@ -293,8 +292,6 @@ function EmptyState({ hasFilter, totalCount }) {
   );
 }
 
-const NUMERIC_FIELD_TYPES = new Set(['number', 'integer', 'decimal', 'quantity', 'amount']);
-
 function isMissingRequired(f, valuesRef, fields = []) {
   if (!f.required) return false;
   // A boolean/checkbox always carries a valid value (false = deliberately
@@ -362,12 +359,6 @@ function resolveNumericInputMode(field, isNumeric) {
     numericInputMode = field.type === 'integer' ? 'numeric' : 'decimal';
   }
   return numericInputMode;
-}
-
-function formatNumericInputValue(isTwoDecimal, rawValue, formatTwoDecimals) {
-  return isTwoDecimal && rawValue !== '' && rawValue != null
-    ? formatTwoDecimals(rawValue)
-    : (rawValue ?? '');
 }
 
 function isLookupSearchField(field) {
@@ -444,12 +435,60 @@ function renderSelectorCell({
   );
 }
 
-// Two-decimal display formatter for amount/price inputs. Pure (only reads `raw`),
-// kept at module scope so it doesn't count against renderInputCell's complexity.
-function formatTwoDecimals(raw) {
-  if (raw == null || raw === '') return '';
-  const n = typeof raw === 'string' ? Number.parseFloat(raw) : raw;
-  return Number.isFinite(n) ? n.toFixed(2) : raw;
+// ETP-5107 — the numeric branch of the inline-add-row cell now renders
+// MaskedAmountInput (digit + single configured-decimal-separator keystroke
+// filtering, live thousands-grouping for amount/price fields); this stays
+// the plain, contacts-aware text branch for everything else. Split out of
+// the old single `renderInputCell` so the numeric/non-numeric paths don't
+// share one over-branched function — see plan §6.3.4 for why the gate must
+// be the field's declared TYPE, never the string's shape.
+function renderNumericInputCell({
+  field, col, values, invalidFields, isFirst, firstInputRef,
+  handleFieldChange, handleKeyDown, fieldLabel,
+}) {
+  // ETP-5107 QA follow-up — `field.type` comes from `addLineFields.entry`
+  // (add-new-line metadata), which for price-like fields is often declared
+  // as generic 'number' rather than 'amount'/'price'. `col` (the matching
+  // entry from the `columns` list, used by the existing-line editor) is
+  // already available here and carries the more specific type — mirror
+  // `renderDerivedAddCell`'s `col.type` check below so a new line's price
+  // input groups live the same way an existing line's does.
+  const isTwoDecimal = TWO_DECIMAL_FIELD_TYPES.has(field.type) || TWO_DECIMAL_FIELD_TYPES.has(col?.type);
+  const numericInputMode = resolveNumericInputMode(field, true);
+  const onBlur = () => {
+    const raw = values[field.key];
+    if (raw === '' || raw == null) {
+      // Empty numeric → restore defaultValue (or min) so the POST body never
+      // omits the field and lets the backend apply a wrong implicit default.
+      if (field.defaultValue !== undefined) handleFieldChange(field.key, String(field.defaultValue));
+      else if (field.min !== undefined) handleFieldChange(field.key, String(field.min));
+      return;
+    }
+    // `raw` here is always the CLEAN value MaskedAmountInput's onChange
+    // reported (digits + at most one '.' + optional leading '-'), never a
+    // grouped display string — plain Number() keeps working unchanged.
+    const num = Number(raw);
+    if (isNaN(num)) return;
+    if (field.max !== undefined && num > field.max) handleFieldChange(field.key, String(field.max));
+    if (field.min !== undefined && num < field.min) handleFieldChange(field.key, String(field.min));
+  };
+  return (
+    <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
+      <MaskedAmountInput
+        bare
+        grouping={isTwoDecimal}
+        inputMode={numericInputMode}
+        inputRef={isFirst ? firstInputRef : undefined}
+        value={values[field.key]}
+        onChange={(raw) => handleFieldChange(field.key, raw)}
+        onBlur={onBlur}
+        onKeyDown={handleKeyDown}
+        placeholder={fieldLabel}
+        required={field.required}
+        className={`w-full h-8 text-sm rounded-md border bg-card px-2 focus:ring-2 focus:outline-none${invalidFields.has(field.key) ? ' border-destructive focus:ring-destructive' : ' border-input focus:ring-primary'}`}
+        data-testid={`inline-add-field-${field.key}`} />
+    </TableCell>
+  );
 }
 
 function renderInputCell({
@@ -457,58 +496,31 @@ function renderInputCell({
   handleFieldChange, handleKeyDown, fieldLabel, specName,
 }) {
   const isNumeric = NUMERIC_FIELD_TYPES.has(field.type);
-  const isTwoDecimal = field.type === 'amount' || field.type === 'price';
-  // Numeric `inputMode` only for numeric fields — integers get the digits-only
-  // on-screen keyboard, the rest the decimal pad (Sonar S3358: flat conditional).
-  const numericInputMode = resolveNumericInputMode(field, isNumeric);
-  const displayValue = formatNumericInputValue(isTwoDecimal, values[field.key], formatTwoDecimals);
-  // Unambiguous partial-number patterns: no two adjacent unbounded `\d*`, so no
-  // super-linear backtracking (ReDoS-safe). Integer -> digits; decimal -> digits
-  // then an optional `.digits` group. Raw strings are kept while typing so
-  // in-progress decimals ("1.") survive; numeric coercion happens at commit.
-  const partialPattern = field.type === 'integer' ? /^-?\d*$/ : /^-?\d*(?:\.\d*)?$/;
+  if (isNumeric) {
+    return renderNumericInputCell({
+      field, col, values, invalidFields, isFirst, firstInputRef, handleFieldChange, handleKeyDown, fieldLabel,
+    });
+  }
   const onChange = (e) => {
     // ETP-5031 — Contacts phone-like fields never even display a disallowed
-    // character (filtered at keystroke time), so this happens before the
-    // partial-number-pattern gate below. No-op for every window/field this
-    // doesn't apply to — filterContactsInputValue returns the raw value unchanged.
+    // character (filtered at keystroke time). No-op for every window/field
+    // this doesn't apply to — filterContactsInputValue returns the raw value
+    // unchanged.
     const raw = filterContactsInputValue(specName, field, e.target.value);
-    if (!isNumeric || raw === '' || partialPattern.test(raw)) {
-      handleFieldChange(field.key, raw);
-    }
+    handleFieldChange(field.key, raw);
   };
-  const onBlur = isNumeric
-    ? () => {
-        const raw = values[field.key];
-        if (raw === '' || raw == null) {
-          // Empty numeric → restore defaultValue (or min) so the POST body never
-          // omits the field and lets the backend apply a wrong implicit default.
-          if (field.defaultValue !== undefined) handleFieldChange(field.key, String(field.defaultValue));
-          else if (field.min !== undefined) handleFieldChange(field.key, String(field.min));
-          return;
-        }
-        const num = Number(raw);
-        if (isNaN(num)) return;
-        if (field.max !== undefined && num > field.max) handleFieldChange(field.key, String(field.max));
-        if (field.min !== undefined && num < field.min) handleFieldChange(field.key, String(field.min));
-      }
-    : undefined;
-  // Always type="text" — numeric type renders spinner buttons; the numeric
-  // on-screen keyboard is preserved via inputMode.
   return (
     <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className="py-1 px-2">
       <input
         data-testid={`inline-add-field-${field.key}`}
         ref={isFirst ? firstInputRef : undefined}
         type="text"
-        inputMode={numericInputMode}
-        value={displayValue}
+        value={values[field.key] ?? ''}
         onChange={onChange}
-        onBlur={onBlur}
         onKeyDown={handleKeyDown}
         placeholder={fieldLabel}
         required={field.required}
-        className={`w-full h-8 text-sm rounded-md border bg-card px-2 focus:ring-2 focus:outline-none${isNumeric ? ' text-right tabular-nums' : ''}${invalidFields.has(field.key) ? ' border-destructive focus:ring-destructive' : ' border-input focus:ring-primary'}`}
+        className={`w-full h-8 text-sm rounded-md border bg-card px-2 focus:ring-2 focus:outline-none${invalidFields.has(field.key) ? ' border-destructive focus:ring-destructive' : ' border-input focus:ring-primary'}`}
       />
     </TableCell>
   );
@@ -520,7 +532,7 @@ function renderDerivedAddCell(col, values) {
   const rawVal = values[col.key];
   const identVal = values[col.key + '$_identifier'];
   const isNumericDerived = NUMERIC_FIELD_TYPES.has(col.type);
-  const isTwoDecimalDerived = col.type === 'amount' || col.type === 'price';
+  const isTwoDecimalDerived = TWO_DECIMAL_FIELD_TYPES.has(col.type);
   const displayVal = formatDerivedCellValue(identVal, rawVal, isTwoDecimalDerived);
   return (
     <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className={`text-muted-foreground text-sm${getNumericCellAlignClass(isNumericDerived)}`}>
@@ -1171,8 +1183,15 @@ function resolveNumericFieldValue(f, val) {
     return val;
   }
   const raw = String(val);
-  const parsed = f.type === 'integer' ? Number.parseInt(raw, 10) : Number.parseFloat(raw);
-  return Number.isNaN(parsed) ? val : parsed;
+  if (f.type === 'integer') {
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isNaN(parsed) ? val : parsed;
+  }
+  // ETP-5107 — comma-aware: raw may still be a user-typed string that
+  // bypassed MaskedAmountInput's own masking (e.g. a value set outside the
+  // input, or a pasted value coerced elsewhere upstream).
+  const { value, isValid } = parseLocaleNumber(raw);
+  return isValid && value != null ? value : val;
 }
 
 function coerceFieldValues(valuesRef, fields) {

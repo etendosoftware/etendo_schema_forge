@@ -28,6 +28,9 @@ import { columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
 import { ACTION_SLOT_WIDTH_PX, resolveTrailingColumn } from '@/lib/linesActionSlot.js';
 import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
 import { getContactsTextFieldError } from './contactsFieldValidation.js';
+import { MaskedAmountInput } from '@/components/forms/fields.jsx';
+import { NUMERIC_FIELD_TYPES, TWO_DECIMAL_FIELD_TYPES } from '@/lib/numericFieldTypes.js';
+import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 // ETP-4529 — shared "Dimensiones contables" expand-row UX (extracted from
 // AmortizationLinesTable.jsx). ETP-4610 moved the per-row entry point from a fixed
 // grid column (DimSummary, no longer used here) to a hover action + the existing
@@ -76,7 +79,9 @@ export function buildLineCellStyle() {
   };
 }
 
-const NUMERIC_TYPES = new Set(['number', 'amount', 'integer', 'percent', 'decimal', 'price', 'quantity', 'signedDelta']);
+// ETP-5107 — unified with DataTable.jsx / ListModalWindow.jsx via the shared
+// NUMERIC_FIELD_TYPES set (see lib/numericFieldTypes.js §6.3.4 of the plan).
+const NUMERIC_TYPES = NUMERIC_FIELD_TYPES;
 
 // Maps formatSignedDelta's tone key to the semantic theme role — mirrors TONE_CLASS
 // in components/ui/money-amount.jsx so both grids render identical colors.
@@ -646,8 +651,10 @@ function editInputClassName(isNumeric, isInvalid) {
 
 function isValueBelowMin(col, value) {
   if (col.min === undefined || value === '' || value == null) return false;
-  const num = parseFloat(value);
-  return !isNaN(num) && num < col.min;
+  // ETP-5107 — comma-aware: `value` may be a user-typed string (e.g. a locale
+  // decimal separator) rather than always a clean, period-decimal string.
+  const { value: num, isValid } = parseLocaleNumber(value);
+  return isValid && num != null && num < col.min;
 }
 
 function clampToMax(col, value) {
@@ -660,8 +667,8 @@ function clampToMax(col, value) {
     return value;
   }
   if (col.max === undefined) return value;
-  const num = parseFloat(value);
-  return !isNaN(num) && num > col.max ? String(col.max) : value;
+  const { value: num, isValid } = parseLocaleNumber(value);
+  return isValid && num != null && num > col.max ? String(col.max) : value;
 }
 
 /**
@@ -817,28 +824,36 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
   }
 
   const isNumeric = NUMERIC_TYPES.has(col.type);
-  // Numeric fields use type="text" + inputMode to avoid the browser's spinner
-  // arrows on type="number" while still surfacing the numeric keyboard on mobile.
-  const numericProps = isNumeric
-    ? { inputMode: col.type === 'integer' ? 'numeric' : 'decimal' }
-    : {};
 
-  // Currency-style columns show two decimals on edit so "23" displays as "23.00",
-  // matching the read-mode rendering. Integer/quantity/percent stay raw.
-  const TWO_DECIMAL_TYPES = new Set(['amount', 'price']);
-  const formatForEdit = (raw) => {
-    if (raw == null || raw === '') return '';
-    if (!TWO_DECIMAL_TYPES.has(col.type)) return raw;
-    const n = typeof raw === 'string' ? parseFloat(raw) : raw;
-    return Number.isFinite(n) ? n.toFixed(2) : raw;
-  };
+  if (isNumeric) {
+    // ETP-5107 — MaskedAmountInput owns keystroke filtering (digits + one
+    // configured decimal separator + optional leading '-') and the live
+    // thousands-grouping display for amount/price columns. `onCommit` always
+    // receives the CLEAN value (never the grouped display string), so
+    // `commitField` → `clampToMax` (both now parseLocaleNumber-aware) and the
+    // PATCH `onUpdateRow` round-trip keep working unchanged (plan §6.3.2).
+    const isTwoDecimal = TWO_DECIMAL_FIELD_TYPES.has(col.type);
+    return (
+      <MaskedAmountInput
+        bare
+        grouping={isTwoDecimal}
+        inputMode={col.type === 'integer' ? 'numeric' : 'decimal'}
+        inputRef={inputRef}
+        value={value}
+        onCommit={(parsed, clean) => onCommit(clean)}
+        className={editInputClassName(isNumeric, isInvalid)}
+        data-testid={`field-${col.key}`} />
+    );
+  }
+
+  const inputType = col.type === 'date' ? 'date' : 'text';
 
   return (
     <Input
       ref={inputRef}
       data-testid={`field-${col.key}`}
-      type="text"
-      defaultValue={formatForEdit(value)}
+      type={inputType}
+      defaultValue={value ?? ''}
       onBlur={(e) => onCommit(e.target.value)}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
@@ -847,7 +862,6 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
         }
       }}
       className={editInputClassName(isNumeric, isInvalid)}
-      {...numericProps}
     />
   );
 }

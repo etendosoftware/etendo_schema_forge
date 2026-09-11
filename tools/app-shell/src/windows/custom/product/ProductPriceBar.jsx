@@ -8,6 +8,7 @@ import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchS
 import { InlineCreateModal } from '@/components/contract-ui/InlineCreateModal.jsx';
 import { buildCreateUrl } from '@/components/contract-ui/InlineCreateSelector.jsx';
 import { useUI } from '@/i18n';
+import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
@@ -64,23 +65,47 @@ function getCurrencySymbol(iso) {
  * Numeric field with a currency prefix and − / + stepper buttons.
  * Edits are committed on blur or (debounced) after a step. Matches the
  * Credit limit stepper styling used in the Contact window.
+ *
+ * ETP-5107 — the inner input used to be a native `<input type="number">`:
+ * always `.`-decimal regardless of locale, no forced decimal-digit count, and
+ * bypassing the app's canonical currency formatter entirely (Bug 3 — showed
+ * "€ 79.9" instead of "79,90 €"). Now a bare `MaskedAmountInput` (comma/period
+ * decimal accepted, live thousands-grouping while typing, and the idle/
+ * blurred display routed through the canonical `formatCurrency()` — see
+ * docs/plans/2026-09-08-etp5107-price-input-locale-fix.md §6.5). The
+ * `prefix` span keeps rendering the symbol exactly as before — ProductPriceBar
+ * only has a pre-resolved `currencySymbol` STRING from `/price` (no ISO
+ * code), so `MaskedAmountInput`'s own `currency` (ISO-code-driven) symbol
+ * prop isn't used here; only the NUMBER portion changes.
  */
-function PriceStepper({ value, prefix, disabled, onCommit }) {
-  const [local, setLocal] = useState(String(value ?? ''));
-  const debounceRef = useRef(null);
-  const lastCommittedRef = useRef(String(value ?? ''));
+/** Single value representation shared by the stepper state and the ETP-5255
+ * redundant-write guard: null/'' → 0, everything else → Number. */
+function toNumber(raw) {
+  return raw == null || raw === '' ? 0 : Number(raw);
+}
 
+function PriceStepper({ value, prefix, disabled, onCommit }) {
+  const [local, setLocal] = useState(() => toNumber(value));
+  const debounceRef = useRef(null);
+  const lastCommittedRef = useRef(String(toNumber(value)));
+
+  // ETP-5107 stores `local` as a NUMBER (MaskedAmountInput is value-driven and
+  // parses/formats itself); ETP-5255's redundant-write guard is kept on top of
+  // it, normalized through the SAME toNumber so the ref and the committed value
+  // are always compared in one representation — a "23.00" from /price and a
+  // typed 23 must not read as two different commits.
   useEffect(() => {
-    const next = String(value ?? '');
+    const next = toNumber(value);
     setLocal(next);
-    lastCommittedRef.current = next;
+    lastCommittedRef.current = String(next);
   }, [value]);
   useEffect(() => () => clearTimeout(debounceRef.current), []);
 
-  const num = local === '' || local == null ? 0 : Number(local);
-
+  // ETP-5255: a commit that carries the value already on the server is not a
+  // write. Without this, blurring an untouched field queues a no-op PATCH that
+  // still consumes the row's single in-flight slot.
   function commit(next) {
-    const normalized = String(next ?? '');
+    const normalized = String(toNumber(next));
     if (normalized === lastCommittedRef.current) return;
     lastCommittedRef.current = normalized;
     onCommit(next);
@@ -88,9 +113,9 @@ function PriceStepper({ value, prefix, disabled, onCommit }) {
 
   function step(delta) {
     if (disabled) return;
-    const base = Number.isFinite(num) ? num : 0;
+    const base = Number.isFinite(local) ? local : 0;
     const next = Math.max(0, base + delta);
-    setLocal(String(next));
+    setLocal(next);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       commit(next);
@@ -98,24 +123,29 @@ function PriceStepper({ value, prefix, disabled, onCommit }) {
     }, 400);
   }
 
+  // Fires on blur/Enter with the parsed Number (never the grouped display
+  // string — see MaskedAmountInput's own doc comment, plan §6.3.2). No min-0
+  // clamp here, matching the field's PRE-existing typed-entry behavior (only
+  // the stepper buttons clamp to a floor of 0 — see step() above); a
+  // manually-typed negative still commits unclamped, unchanged from before.
+  const commitTyped = (parsed) => {
+    const next = parsed == null ? 0 : parsed;
+    if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null; }
+    setLocal(next);
+    commit(next);
+  };
+
   return (
     <div className="flex flex-row items-center h-10 border border-[hsl(var(--border-control))] rounded-lg shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] overflow-hidden bg-card focus-within:border-[hsl(var(--foreground))] focus-within:shadow-[0px_0px_0px_1px_hsl(var(--foreground))] transition-colors">
       {prefix && <span className="pl-3 text-sm text-[hsl(var(--foreground))] select-none">{prefix}</span>}
-      <input
-        type="number"
-        step="0.01"
-        value={local}
+      <MaskedAmountInput
+        bare
+        grouping
         disabled={disabled}
-        onChange={e => setLocal(e.target.value)}
-        onBlur={() => {
-          if (debounceRef.current) {
-            clearTimeout(debounceRef.current);
-            debounceRef.current = null;
-          }
-          commit(local === '' ? 0 : Number(local));
-        }}
-        className="flex-1 px-3 text-sm text-[hsl(var(--foreground))] bg-transparent outline-none min-w-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-      />
+        value={local}
+        onCommit={(parsed) => commitTyped(parsed)}
+        className="flex-1 h-full px-3 text-sm text-[hsl(var(--foreground))] bg-transparent border-0 shadow-none rounded-none outline-none ring-0 focus-visible:ring-0 focus-visible:outline-none min-w-0"
+        data-testid="PriceStepperInput__d76b90" />
       <button
         type="button"
         onClick={() => step(-1)}
