@@ -44,17 +44,32 @@ beforeAll(() => {
   Handlebars.registerHelper('fmtDate', (v) => String(v));
 });
 
-function renderRows(lines) {
+const BASE_LABELS = {
+  title: 'x', documentNo: 'x', customerSection: 'x', customer: 'x',
+  documentSection: 'x', date: 'x', notes: 'x', page: 'x',
+};
+
+/**
+ * Compiles the real DOCUMENT_TEMPLATE with a minimal valid data object.
+ * `overrides` is merged last so a test can add/replace any template input
+ * (e.g. `currencyCode`, or extra `labels`).
+ */
+function renderTemplate(overrides = {}) {
   const template = Handlebars.compile(DOCUMENT_TEMPLATE);
   return template({
     css: '',
     companyName: 'Test Co',
     documentNo: 'INV-1',
-    labels: { title: 'x', documentNo: 'x', customerSection: 'x', customer: 'x', documentSection: 'x', date: 'x', notes: 'x', page: 'x' },
+    labels: BASE_LABELS,
     customerName: 'ACME',
     invoiceDate: '2026-01-01',
-    lines,
+    lines: [],
+    ...overrides,
   });
+}
+
+function renderRows(lines) {
+  return renderTemplate({ lines });
 }
 
 describe('DOCUMENT_TEMPLATE — lines table CÓD. column (ETP-4941)', () => {
@@ -94,5 +109,73 @@ describe('DOCUMENT_TEMPLATE — lines table CÓD. column (ETP-4941)', () => {
     ]);
     expect(html).toContain('<td class="code">—</td>');
     expect(html).not.toContain('<td class="code">7</td>');
+  });
+});
+
+// ETP-5125 — the printable's header must state the document's currency
+// (EUR/USD/GBP), and the Totals rows must keep routing their wording through
+// {{labels.*}} so a locale change is the whole fix.
+describe('DOCUMENT_TEMPLATE — document currency in the header (ETP-5125)', () => {
+  const CURRENCY_LABEL = 'Moneda:';
+  const CURRENCY_ROW_CLASS = 'class="currency"';
+
+  function renderWithCurrency(currencyCode) {
+    return renderTemplate({
+      currencyCode,
+      labels: { ...BASE_LABELS, currency: CURRENCY_LABEL },
+    });
+  }
+
+  it('renders the label and the ISO code in the header meta block', () => {
+    const html = renderWithCurrency('USD');
+    expect(html).toContain(`<div ${CURRENCY_ROW_CLASS}>${CURRENCY_LABEL} USD</div>`);
+  });
+
+  it('places the currency inside .meta, after the document number', () => {
+    const html = renderWithCurrency('EUR');
+    const metaStart = html.indexOf('<div class="meta">');
+    const docNoIdx = html.indexOf('<div class="num">INV-1</div>');
+    const currencyIdx = html.indexOf(CURRENCY_ROW_CLASS);
+    const metaEnd = html.indexOf('<!-- Info cards -->');
+    expect(metaStart).toBeGreaterThan(-1);
+    expect(currencyIdx).toBeGreaterThan(docNoIdx);
+    expect(currencyIdx).toBeLessThan(metaEnd);
+  });
+
+  // No fallback to the org currency: an unresolved code must print nothing
+  // rather than state the wrong currency on a customer-facing document.
+  it.each([
+    ['null', null],
+    ['an empty string', ''],
+    ['undefined', undefined],
+  ])('omits the currency row entirely when currencyCode is %s', (_desc, currencyCode) => {
+    const html = renderWithCurrency(currencyCode);
+    expect(html).not.toContain(CURRENCY_ROW_CLASS);
+    expect(html).not.toContain(CURRENCY_LABEL);
+  });
+
+  it('does not alter the existing header meta rows', () => {
+    const html = renderWithCurrency('GBP');
+    expect(html).toContain('<div class="num">INV-1</div>');
+    expect(html).toContain('<div class="inv-company-name">Test Co</div>');
+  });
+});
+
+describe('DOCUMENT_TEMPLATE — Totals rows stay label-driven (ETP-5125)', () => {
+  it('renders labels.subtotal and labels.tax verbatim, with no hardcoded tax wording', () => {
+    const html = renderTemplate({
+      netAmount: 100,
+      taxAmount: 21,
+      grandTotal: 121,
+      labels: {
+        ...BASE_LABELS,
+        subtotal: 'Subtotal (sin impuestos)',
+        tax: 'Impuestos',
+        grandTotal: 'Total',
+      },
+    });
+    expect(html).toContain('<span>Subtotal (sin impuestos)</span>');
+    expect(html).toContain('<span>Impuestos</span>');
+    expect(html).not.toContain('IVA');
   });
 });

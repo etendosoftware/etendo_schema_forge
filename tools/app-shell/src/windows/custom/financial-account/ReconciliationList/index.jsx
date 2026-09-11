@@ -49,7 +49,12 @@ export function ReconciliationListTab({
   const columns = useMemo(() => buildReconciliationFilterColumns(ui), [ui]);
 
   const filtered = useMemo(
-    () => applyConditions(applyFilters(reconciliations, dateRange, search), advancedFilter),
+    () => applyConditions(
+      applyFilters(reconciliations, dateRange, search),
+      advancedFilter,
+      undefined,
+      RECONCILIATION_FILTER_COLUMNS,
+    ),
     [reconciliations, dateRange, search, advancedFilter],
   );
 
@@ -134,7 +139,21 @@ export function ReconciliationListTab({
  * Filterable column metadata for the advanced "by conditions" builder, mirroring
  * `buildMovementFilterColumns`. Keys are the raw row fields the generic CRUD returns, so
  * `applyConditions` can read them without a derivation step.
+ *
+ * `RECONCILIATION_FILTER_COLUMNS` is the label-free type map handed to
+ * `applyConditions`, which needs the declared type to route `transactionDate`
+ * through the calendar-day operators and the two balances through the numeric
+ * ones (ETP-4956) — same reason as MOVEMENT_FILTER_COLUMNS.
  */
+export const RECONCILIATION_FILTER_COLUMNS = {
+  documentNo: { type: 'string' },
+  transactionDate: { type: 'date' },
+  startingbalance: { type: 'number' },
+  endingBalance: { type: 'number' },
+  documentStatus: { type: 'enum' },
+  posted: { type: 'enum' },
+};
+
 export function buildReconciliationFilterColumns(ui) {
   return [
     { key: 'documentNo', label: ui('financeAccountReconciliationsColDocumentNo'), type: 'string' },
@@ -145,6 +164,12 @@ export function buildReconciliationFilterColumns(ui) {
       key: 'documentStatus',
       label: ui('financeAccountReconciliationsColStatus'),
       type: 'enum',
+      // `required` drops "Is empty" / "Is not empty" (getOperatorsForColumn):
+      // Docstatus is mandatory in AD and every reconciliation carries one of
+      // the three codes, so those operators could only match zero rows.
+      // Deliberately NOT applied to `posted` below, whose 'N'/error codes are
+      // real values and whose empty case is not provable.
+      required: true,
       enumLabels: {
         CO: ui('financeAccountReconciliationsDocStatus_CO'),
         DR: ui('financeAccountReconciliationsDocStatus_DR'),

@@ -146,10 +146,16 @@ describe('useCallout', () => {
     });
 
     await waitFor(() => {
+      // ETP-5024: calloutResult now also carries `meta` (passthrough, undefined
+      // here since executeCallout was called without one) and `blockingCondition`
+      // (null — this response's messages array is empty, so no BP-blocking
+      // condition was detected). See lib/blockingBpConditions.js.
       expect(result.current.calloutResult).toEqual({
         updates: { priceList: 150 },
         combos: {},
         triggerField: 'businessPartner',
+        meta: undefined,
+        blockingCondition: null,
       });
     });
 
@@ -380,10 +386,14 @@ describe('useCallout', () => {
     });
 
     await waitFor(() => {
+      // ETP-5024: see the analogous comment above — meta/blockingCondition are
+      // now always present on calloutResult.
       expect(result.current.calloutResult).toEqual({
         updates: {},
         combos: { paymentTerm: [{ id: 'PT1', name: '30 days' }] },
         triggerField: 'bp',
+        meta: undefined,
+        blockingCondition: null,
       });
     });
 
@@ -508,6 +518,120 @@ describe('useCallout', () => {
       });
       expect(toastMock.info).toHaveBeenCalledWith('First message');
       expect(toastMock.warning).toHaveBeenCalledWith('Second message');
+    });
+  });
+
+  // ── Blocking BP conditions (ETP-5024) ──────────────────────────────────────
+  //
+  // A callout message matching one of the two known BP-blocking conditions
+  // (credit limit exceeded / on hold — see lib/blockingBpConditions.js) must be
+  // routed into calloutResult.blockingCondition instead of being toasted, so
+  // DetailView can render it as a persistent inline banner. Every other
+  // message on the same response keeps toasting exactly as before.
+  describe('blocking BP conditions (ETP-5024)', () => {
+    let toastMock;
+
+    beforeAll(async () => {
+      const sonner = await import('sonner');
+      toastMock = sonner.toast;
+    });
+
+    beforeEach(() => {
+      vi.useRealTimers();
+      globalThis.fetch = vi.fn();
+      vi.clearAllMocks();
+    });
+
+    afterEach(() => {
+      vi.useFakeTimers();
+    });
+
+    function mockCalloutResponse(messages) {
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ updates: {}, combos: {}, messages }),
+      });
+    }
+
+    async function triggerAndWait(result, assertFn) {
+      act(() => {
+        result.current.executeCallout('businessPartner', 'BP001', { id: '1' });
+      });
+      await waitFor(assertFn, { timeout: 2000 });
+    }
+
+    it('routes a credit-limit message into calloutResult.blockingCondition instead of toasting', async () => {
+      mockCalloutResponse([{ type: 'WARNING', text: 'Business Partner credit limit exceeded' }]);
+      const { result } = renderHook(() => useCallout('header', opts));
+
+      await triggerAndWait(result, () => {
+        expect(result.current.calloutResult?.blockingCondition).toEqual({
+          kind: 'creditLimit',
+          text: 'Business Partner credit limit exceeded',
+          amount: null,
+        });
+      });
+
+      expect(toastMock.warning).not.toHaveBeenCalled();
+      expect(toastMock.error).not.toHaveBeenCalled();
+      expect(toastMock.info).not.toHaveBeenCalled();
+    });
+
+    it('routes an on-hold message into calloutResult.blockingCondition instead of toasting', async () => {
+      // Real production wording (AD_MESSAGE `SelectedBPartnerBlocked`) — the
+      // detector's ON_HOLD_PATTERN is anchored on this exact sentence shape, not a
+      // bare "on hold" keyword (ETP-5024 REVIEW: the old bare keyword false-
+      // positived on unrelated messages like `lockedProduct`).
+      mockCalloutResponse([{ type: 'ERROR', text: 'The selected Business Partner is on hold for this document, therefore it is not possible to complete it.' }]);
+      const { result } = renderHook(() => useCallout('header', opts));
+
+      await triggerAndWait(result, () => {
+        expect(result.current.calloutResult?.blockingCondition).toEqual({
+          kind: 'onHold',
+          text: 'The selected Business Partner is on hold for this document, therefore it is not possible to complete it.',
+        });
+      });
+
+      expect(toastMock.error).not.toHaveBeenCalled();
+    });
+
+    it('matches a localized Spanish blocking message the same way', async () => {
+      // Real production wording (AD_MESSAGE `SelectedBPartnerBlocked`, es_ES).
+      mockCalloutResponse([{ type: 'ERROR', text: 'El tercero seleccionado está bloqueado para este documento, no se puede completar.' }]);
+      const { result } = renderHook(() => useCallout('header', opts));
+
+      await triggerAndWait(result, () => {
+        expect(result.current.calloutResult?.blockingCondition?.kind).toBe('onHold');
+      });
+
+      expect(toastMock.error).not.toHaveBeenCalled();
+    });
+
+    it('still toasts other, non-matching messages in the same response (no regression)', async () => {
+      mockCalloutResponse([
+        { type: 'INFO', text: 'Unrelated informational message' },
+        { type: 'WARNING', text: 'Business Partner credit limit exceeded' },
+      ]);
+      const { result } = renderHook(() => useCallout('header', opts));
+
+      await triggerAndWait(result, () => {
+        expect(result.current.calloutResult?.blockingCondition).toBeTruthy();
+      });
+
+      expect(toastMock.info).toHaveBeenCalledWith('Unrelated informational message');
+      expect(toastMock.warning).not.toHaveBeenCalled();
+    });
+
+    it('sets blockingCondition to null when no message matches either condition', async () => {
+      mockCalloutResponse([{ type: 'INFO', text: 'Record updated' }]);
+      const { result } = renderHook(() => useCallout('header', opts));
+
+      await triggerAndWait(result, () => {
+        expect(result.current.calloutResult).not.toBeNull();
+      });
+
+      expect(result.current.calloutResult.blockingCondition).toBeNull();
+      expect(toastMock.info).toHaveBeenCalledWith('Record updated');
     });
   });
 });

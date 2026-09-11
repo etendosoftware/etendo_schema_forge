@@ -24,7 +24,7 @@ const FIELD = {
  * removes the selection on the next render (mirrors how DetailView/EntityForm
  * call CreatableSearchSelect in production).
  */
-function Harness({ initialValue = '', initialDisplay = '', onChangeSpy }) {
+function Harness({ initialValue = '', initialDisplay = '', onChangeSpy, placeholderOverride }) {
   const [value, setValue] = React.useState(initialValue);
   const [displayValue, setDisplayValue] = React.useState(initialDisplay);
   const onChange = (id, label) => {
@@ -43,6 +43,7 @@ function Harness({ initialValue = '', initialDisplay = '', onChangeSpy }) {
       selectorUrl="/api/addresses"
       selectorContext={{}}
       token="test-token"
+      placeholderOverride={placeholderOverride}
     />
   );
 }
@@ -74,6 +75,17 @@ describe('CreatableSearchSelect chip mode (ETP-4000)', () => {
     const input = screen.getByTestId('field-address');
     expect(input).toBeInTheDocument();
     expect(input.getAttribute('placeholder')).toMatch(/searchLabelPrefix/);
+  });
+
+  // ETP-5177: callers whose field accepts more than a lookup (e.g. the destination IBAN in
+  // the Add-payment modal, which also takes a hand-typed value) replace the composition with
+  // their own copy. The case above is the counterpart: omitting the prop keeps the generic
+  // "searchLabelPrefix {label}..." placeholder that every other selector relies on.
+  it('uses placeholderOverride verbatim instead of the generic composition', () => {
+    render(<Harness initialValue="" initialDisplay="" placeholderOverride="cpPisIbanPlaceholder" />);
+    const input = screen.getByTestId('field-address');
+    expect(input.getAttribute('placeholder')).toBe('cpPisIbanPlaceholder');
+    expect(input.getAttribute('placeholder')).not.toMatch(/searchLabelPrefix/);
   });
 
   it('clicking the chip switches to typing mode and focuses the input', async () => {

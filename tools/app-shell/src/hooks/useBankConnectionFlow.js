@@ -25,6 +25,32 @@ import { useBankConnectionActions, launchSaltEdgePopup } from './useBankConnecti
  *   cancelSelection: () => void,
  * }}
  */
+/**
+ * ETP-5179 — i18n key per empty-list reason reported by the bridge.
+ *
+ * `noAccounts` is deliberately absent: the bank returned nothing at all, which the generic label
+ * already describes. Any reason not listed here (an older or newer backend) also degrades to it.
+ */
+const NO_ACCOUNTS_REASON_KEYS = {
+  currencyMismatch: 'financeAccountsBankConnectionNoAccountsCurrency',
+  typeMismatch: 'financeAccountsBankConnectionNoAccountsType',
+  allLinked: 'financeAccountsBankConnectionNoAccountsAllLinked',
+};
+
+/** Maps the bridge's empty-list diagnosis to a user-facing i18n message. */
+function noAccountsMessage(emptyReason, accountCurrency, ui) {
+  const key = NO_ACCOUNTS_REASON_KEYS[emptyReason];
+  const generic = 'financeAccountsBankConnectionNoAccounts';
+  if (!key) return ui(generic);
+  if (emptyReason !== 'currencyMismatch') return ui(key);
+  // The bridge guards the currency with isNotBlank and omits the field when it resolves to
+  // nothing, so a currencyMismatch can in principle arrive without one. Mirror that guard here:
+  // useUI interpolates with String.replace, which would render a literal "undefined" inside the
+  // sentence. A correct generic message beats a specific one with a hole in it.
+  if (!accountCurrency) return ui(generic);
+  return ui(key, { currency: accountCurrency });
+}
+
 /** Maps a connect-flow error to a user-facing i18n message. */
 function connectErrorMessage(err, ui) {
   if (err.message === 'POPUP_BLOCKED') return ui('financeAccountsBankConnectionPopupBlocked');
@@ -78,9 +104,10 @@ export function useBankConnectionFlow({ onDone } = {}) {
     try {
       const type = ctx.mode === 'create' ? ctx.type : ctx.account.type;
       const accountId = ctx.mode === 'link' ? ctx.account.id : undefined;
-      const { accounts, providerName, providerLogoUrl } = await fetchAccounts(connectionId, type, accountId);
+      const { accounts, providerName, providerLogoUrl, emptyReason, accountCurrency } =
+        await fetchAccounts(connectionId, type, accountId);
       if (accounts.length === 0) {
-        toast.error(ui('financeAccountsBankConnectionNoAccounts'));
+        toast.error(noAccountsMessage(emptyReason, accountCurrency, ui));
         return;
       }
       // Always show the selection modal — even with a single account — so the user explicitly

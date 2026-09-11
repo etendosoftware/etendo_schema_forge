@@ -1,8 +1,8 @@
 {
-  "version": "0.11.0",
+  "version": "0.11.1",
   "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-07-21T12:35:25.028Z",
-  "checksum": "da73f53efb58144a",
+  "updatedAt": "2026-09-07T18:06:05.467Z",
+  "checksum": "55b5bcd1fb32c6a1",
   "frontendContract": {
     "window": {
       "id": "27A453FA86974745977672F1A8DCCEFF",
@@ -276,7 +276,7 @@
             "apiKey": "inVfactuSystem",
             "column": "IN_Vfactu_System",
             "type": "dateTime",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": false
           },
           {

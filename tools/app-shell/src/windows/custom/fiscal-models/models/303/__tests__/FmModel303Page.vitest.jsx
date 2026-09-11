@@ -92,6 +92,10 @@ const BASE_DECL = {
   id: '303-2026-T2', model: '303', year: 2026, period: 'T2', type: 'ord',
   status: 'draft', result: null, incidents: { blocking: 0, warning: 0 },
   _precomputed: null, boxes: null, sources: [], history: [],
+  // ETP-5187 required-field gate: tipo_declaracion must be set or "Generar fichero
+  // 303"/"Marcar como Presentado" never even open their modals — unrelated to what
+  // most tests in this file exercise.
+  identification: { tipo_declaracion: 'I' },
 };
 
 const defaultProps = {

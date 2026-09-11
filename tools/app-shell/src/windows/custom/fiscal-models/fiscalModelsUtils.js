@@ -1,4 +1,6 @@
+import { createElement } from 'react';
 import { formatCurrency } from '../../../lib/formatCurrency.js';
+import { toast } from 'sonner';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // ── Box computation ──────────────────────────────────────────────────
@@ -242,6 +244,31 @@ export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUr
 }
 
 /**
+ * Calls DELETE /fiscal303/declarations?id=... to remove a draft declaration (ETP-5187, row hover
+ * "delete" action in `FmListPage.jsx`). Despite the URL, this endpoint is generic across fiscal
+ * models — both 303 and 349 declarations live in the same backend table. The backend
+ * (`FiscalDeclCrudHandler#handleDeclDelete`) independently rejects (409) deleting anything but a
+ * draft declaration — this is defense in depth, not the only gate; the frontend must still only
+ * ever show this action for draft rows.
+ * Returns { ok: true } on success, or { ok: false, error: string } on failure.
+ */
+export async function deleteDeclaration(id, { token, apiBaseUrl } = {}) {
+  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  try {
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    const res = await apiFetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
+      baseUrl: '',
+      token,
+      method: 'DELETE',
+    });
+    if (!res.ok) return { ok: false, error: `http_${res.status}` };
+    return { ok: true };
+  } catch (_) {
+    return { ok: false, error: 'network' };
+  }
+}
+
+/**
  * Calls PUT /fiscal303/declarations?id=... to persist the manually-entered identification
  * checks + box-value overrides for a Modelo 303 declaration, so they survive a page refresh.
  * Mirrors persistDeclarationStatus's contract: { ok: true } on success, or
@@ -364,6 +391,37 @@ export function formatPercent(value) {
 
 export function fmtDecl(decl) {
   return `${decl.model} ${decl.year} ${formatPeriod(decl.period)}`;
+}
+
+/**
+ * Single source of truth for the Modelo 303 "Resultado" badge kind (ETP-5187), shared by the
+ * list page (`FmListPage.jsx`) and the detail page (`FmModel303Page.jsx`). Before this, the list
+ * page derived its own `getResultKind(r)` from the live-computed `summary.result` while the
+ * detail page read a separate, effectively never-populated `decl.result?.kind` (the backend never
+ * persists a `result.kind` on the declaration record) — the two screens could show a different
+ * "Resultado" label for the exact same declaration, and neither one distinguished a real zero
+ * result (a declaration with invoices whose boxes net to exactly 0.00) from a genuinely empty/new
+ * declaration.
+ *
+ * Business rules (fixed, not a nuance to refine further — deliberately do NOT try to disambiguate
+ * "a compensar" vs "a devolver" via `tipo_declaracion`; that's out of scope):
+ *   - `result < 0`             → `'C'`    ("A compensar/devolver" — one combined label)
+ *   - `result > 0`             → `'I'`    ("A ingresar" — unchanged)
+ *   - `result === 0`, has invoices  → `'zero'` ("Resultado cero" — a real declaration that nets to 0)
+ *   - `result === 0`, no invoices   → `'N'`    ("Sin resultado" — unchanged)
+ *
+ * @param {{result?: number}} summary — the computed summary (`computeBoxes303`'s `res.summary`,
+ *   `liveSummary`, or `liveBoxSummary`), read for its `.result` field.
+ * @param {{hasInvoices?: boolean}} [opts]
+ * @returns {'I'|'C'|'zero'|'N'|null} `null` when no finite result is available yet (nothing
+ *   computed) — callers should fall back to their own generic label in that case, same as before.
+ */
+export function deriveResultKind(summary, { hasInvoices = false } = {}) {
+  const amount = Number(summary?.result);
+  if (!Number.isFinite(amount)) return null;
+  if (amount > 0) return 'I';
+  if (amount < 0) return 'C';
+  return hasInvoices ? 'zero' : 'N';
 }
 
 function roundEur(n) {
@@ -845,4 +903,63 @@ export function isUpcomingDeadline(decl, referenceDate = new Date()) {
  */
 export function countUpcomingDeadlines(decls, referenceDate = new Date()) {
   return decls.filter(d => isUpcomingDeadline(d, referenceDate)).length;
+}
+
+// ── IAE activity reminder (ETP-5187, adjacent scope) ──────────────────
+/**
+ * Proactive, non-blocking heads-up that the organization needs a default IAE ("Impuesto de
+ * Actividades Económicas") activity configured before Modelo 303 can be filed for the last
+ * period of the year — shown at the two points where the user commits to a path that will
+ * eventually hit that requirement:
+ *   - `FmCatalogPage.jsx` — activating (not deactivating) Modelo 303 in the catalog.
+ *   - `FmOverlays.jsx`'s `NewDeclModal` — selecting period T4 (quarterly) or 12 (monthly) in
+ *     "Nueva declaración".
+ *
+ * This is deliberately NOT the same mechanism as the ETP-4975 hard guard in
+ * `FmModel303Page.jsx`/`AeatSubmitFlow.jsx` (`isMissingDefaultIaeActivity` +
+ * `missingIaeGuard`), which blocks "Generar fichero"/"Marcar como Presentado" for the actual
+ * last-period declaration when no default IAE activity is configured, backed by a real
+ * `GET /sws/neo/organization/actividadesDelIae` check. That guard is authoritative and runs
+ * right before the backend call; this reminder is purely informational, fires earlier (at
+ * activation/selection time, with no backend check of its own), and never blocks anything —
+ * it exists only so the user isn't surprised later. Reuses the same
+ * `fm.aeat.action.go_to_organization` CTA label as that guard's own "Go to Organization"
+ * button. Navigates to `/organization` plain — `OrganizationPage.jsx` has no
+ * section-anchor/deep-link support yet to land scrolled at "Actividades del IAE" directly.
+ *
+ * CTA placement (ETP-5187 follow-up): the CTA must read as the tail of the warning
+ * sentence, in bold, not as a separate control. sonner's built-in `action` option was
+ * tried first but doesn't lay out that way — per sonner's own markup
+ * (`node_modules/sonner/dist/index.mjs`), `toast.action` renders as a flex SIBLING of
+ * `[data-content]` (the title/description column), inside a `[data-sonner-toast]` that
+ * is itself `display:flex; align-items:center`. That places the action button to the
+ * right of the message, vertically centered, never inline after the text — so instead
+ * the whole toast message is built as one JSX node (sonner accepts a `ReactNode` message,
+ * which becomes `toast.title` and renders as-is) with the CTA as an inline `<button>`
+ * immediately after the sentence text. `toast.action`'s automatic click-to-dismiss is
+ * replicated manually via `toast.dismiss(id)` to keep the same UX as before.
+ */
+export function showIaeActivityReminder(t, navigate) {
+  const sentence = t('fm.aeat.reminder.iaeActivity')
+    ?? 'Recordá configurar la actividad del IAE de tu organización para poder generar el Modelo 303 correctamente.';
+  const cta = t('fm.aeat.action.go_to_organization') ?? 'Ir a Organización';
+  const id = toast.warning(
+    createElement(
+      'span',
+      null,
+      `${sentence} `,
+      createElement(
+        'button',
+        {
+          type: 'button',
+          className: 'fm-link-btn fm-link-btn--bold',
+          onClick: () => {
+            navigate('/organization');
+            toast.dismiss(id);
+          },
+        },
+        cta,
+      ),
+    ),
+  );
 }

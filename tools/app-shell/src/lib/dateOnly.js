@@ -66,6 +66,24 @@ export function tomorrowCalendarISO(reference = new Date()) {
 }
 
 /**
+ * The date `days` before `reference`, as a `yyyy-MM-dd` string in the LOCAL calendar.
+ *
+ * Built with the local-time `Date` constructor for the same reasons as `tomorrowCalendarISO`: it
+ * rolls month and year boundaries over correctly and is immune to DST shifts, unlike subtracting
+ * `days * 86400000` ms, which lands on the wrong calendar day across a clock change.
+ *
+ * Intended for "how far back may we look" bounds that are then compared against a date-only
+ * field, where both sides must be local calendar days. Compare the result with a stored
+ * `yyyy-MM-dd` value using plain string comparison — ISO date-only strings order
+ * lexicographically, so no `Date` needs to be built for the comparison itself.
+ */
+export function calendarISODaysAgo(days, reference = new Date()) {
+  return todayCalendarISO(
+    new Date(reference.getFullYear(), reference.getMonth(), reference.getDate() - days),
+  );
+}
+
+/**
  * Formats a calendar month and two-digit year without locale-specific connector words, so fiscal
  * period labels consistently read "January 27" / "Enero 27" rather than persisted "Jan-27".
  */

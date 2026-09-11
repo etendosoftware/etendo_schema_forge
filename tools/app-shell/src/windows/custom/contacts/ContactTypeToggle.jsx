@@ -95,7 +95,7 @@ export default function ContactTypeToggle({ data, onChange }) {
   }
 
   return (
-    <div className="flex flex-row items-center gap-6">
+    <div className="flex flex-row items-center gap-6" data-testid="contact-type-toggle">
       {[
         { value: 'person',  label: ui('Person') },
         { value: 'company', label: ui('company') },

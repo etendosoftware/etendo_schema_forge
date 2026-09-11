@@ -73,9 +73,16 @@ describe('SiiSection — rendering', () => {
     expect(screen.queryByText('fiscal.sii.legend.env')).not.toBeInTheDocument();
     // ETP-4783: "Envíos" section removed from SiiSection
     expect(screen.queryByText('fiscal.sii.legend.sends')).not.toBeInTheDocument();
-    // Remaining sections should still render
-    expect(screen.getByText('fiscal.sii.legend.special')).toBeInTheDocument();
+    // ETP-5122: "Régimen especial" section (REDEME toggle) removed — backend always forces 'N'
+    expect(screen.queryByText('fiscal.sii.legend.special')).not.toBeInTheDocument();
+    // Remaining section should still render
     expect(screen.getByText('fiscal.sii.legend.specialAuth')).toBeInTheDocument();
+  });
+
+  // ETP-5122: REDEME toggle removed from the custom SII UI — the backend always forces 'N'.
+  it('does not render the REDEME toggle', () => {
+    render(<SiiSection {...PROPS} />);
+    expect(screen.queryByText('fiscal.sii.field.redeme')).not.toBeInTheDocument();
   });
 
   it('renders the CertSection when hideCert is false', () => {

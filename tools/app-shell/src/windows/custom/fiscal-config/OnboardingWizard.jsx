@@ -559,7 +559,7 @@ function ConfirmScreen({ resolvedSystem, selectedTerritory, alsoNational, volume
             onClick={() => goTo(prevStep)}
             disabled={saving}
             className="flex items-center gap-1.5"
-            data-testid="Button__e9ef3f">
+            data-testid="fiscal-onboarding-confirm-back">
             <ArrowLeft size={15} data-testid="ArrowLeft__e9ef3f" /> {ui('fiscal.onboarding.back').replace('←', '').trim()}
           </Button>
           <p className="text-xs flex-1" style={{ color: 'hsl(var(--muted-foreground))' }}>{ui('fiscal.skip.hint')}</p>

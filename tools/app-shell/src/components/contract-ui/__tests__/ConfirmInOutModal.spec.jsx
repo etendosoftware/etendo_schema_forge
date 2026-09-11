@@ -26,6 +26,7 @@ vi.mock('@/components/ui/select', () => ({
 
 import ConfirmInOutModal from '../ConfirmInOutModal.jsx';
 import * as backendErrorsModule from '@/lib/backendErrors.js';
+import { inlineFontFamiliesUpToBody } from './fontInheritance.js';
 
 const BASE_PROPS = {
   base: '/sws/neo',
@@ -369,5 +370,24 @@ describe('ConfirmInOutModal', () => {
     });
     expect(spy).toHaveBeenCalledWith(priceListRequiredMsg, expect.any(Function));
     spy.mockRestore();
+  });
+
+  // ── ETP-5108: one typeface across the whole modal ───────────────────────────
+  // Same defect as ConfirmResultModal, which this modal hands off to: the shell
+  // declared a system-font stack, so the two steps of one flow disagreed.
+  describe('typography inheritance (ETP-5108)', () => {
+    it('neither the dialog nor the modal shell declares a font-family', () => {
+      render(<ConfirmInOutModal {...BASE_PROPS} />);
+      const dialog = screen.getByTestId('confirm-inout-modal');
+      expect(dialog.style.fontFamily).toBe('');
+      // The shell is the dialog's only element child; JSX comments emit no nodes.
+      expect(dialog.firstElementChild.style.fontFamily).toBe('');
+    });
+
+    it('the title and the toggle card inherit the design system typeface', () => {
+      render(<ConfirmInOutModal {...BASE_PROPS} />);
+      expect(inlineFontFamiliesUpToBody(screen.getByText(BASE_PROPS.title))).toEqual([]);
+      expect(inlineFontFamiliesUpToBody(screen.getByText(BASE_PROPS.cardTitle))).toEqual([]);
+    });
   });
 });

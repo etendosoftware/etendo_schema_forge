@@ -134,6 +134,12 @@ function makeRowKeyHandler(isEditing, onCancelEdit, onConfirmEdit) {
 // Row-body click → open detail, but not when the click originated in the checkbox or the
 // hover-action icons (they have their own handlers and stopping propagation there keeps the
 // row-click semantic clean).
+//
+// ETP-5029 — the selection checkbox is excluded by the `stopPropagation` on its own cell,
+// NOT by the `closest('input')` clause below. The shared Checkbox renders the real <input>
+// as a visually hidden SIBLING of the box the user actually clicks, so on that first click
+// `e.target` is a <div>/<svg> and `closest('input')` finds nothing; the clause only ever
+// matches the label-activation click the browser then synthesizes at the input itself.
 function makeRowClickHandler(onRowClick, row) {
   if (!onRowClick) return undefined;
   return (e) => {
@@ -425,7 +431,7 @@ function LookupTrigger({ field, displayLabel, selectorUrl, selectorContext, toke
         type="button"
         data-testid={`field-${field.key}`}
         onClick={() => setOpen(true)}
-        className="w-full flex items-center gap-2 h-7 rounded-md border border-input bg-card px-2 text-sm text-left hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors"
+        className="w-full flex items-center gap-2 h-7 rounded-md border border-input bg-card px-2 text-sm text-left hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring focus-visible:outline-none transition-colors"
       >
         <Search
           className="h-3.5 w-3.5 text-muted-foreground shrink-0"
@@ -652,7 +658,7 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
         <SelectTrigger
           ref={inputRef}
           data-testid={`field-${col.key}`}
-          className="w-full h-7 text-sm bg-card focus:ring-2 focus:ring-primary"
+          className="w-full h-7 text-sm bg-card focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring"
         >
           <SelectValue data-testid="SelectValue__3b7ec2" />
         </SelectTrigger>
@@ -792,6 +798,23 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   const [hoveredRowId, setHoveredRowId] = useState(null);
   const panelRef = useRef(null);
   const hasValidationErrorRef = useRef(false);
+  // ETP-5133 — horizontal-scroll sync between the sticky header strip and the
+  // body rows. See the two wrapper divs in the render below for why these are
+  // two independently-scrolled elements instead of one shared overflow-x-auto
+  // box: an `overflow-x` ancestor placed between the sticky header and its
+  // real scrolling ancestor (the detail-content pane several levels up)
+  // silences `position: sticky` entirely — the CSS overflow spec forces
+  // `overflow-y` to `auto` too whenever `overflow-x` isn't `visible`, and an
+  // auto-height box with a forced `overflow-y: auto` becomes the header's new
+  // (non-scrolling) sticky containing block, so `top: 0` stops tracking page
+  // scroll. Keeping the header's own scroll wrapper separate (and hidden,
+  // driven only by this handler) avoids that while still keeping columns
+  // pixel-aligned as the rows scroll.
+  const headerScrollRef = useRef(null);
+  const bodyScrollRef = useRef(null);
+  const handleBodyScroll = useCallback((e) => {
+    if (headerScrollRef.current) headerScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
+  }, []);
 
   // Close edit mode when the user clicks outside the editing row. Defers the state
   // update to the next tick so any focused input fires its onBlur first — that triggers
@@ -1154,52 +1177,70 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     <div ref={panelRef} className="w-full" data-testid="inline-lines-panel">
       {/* Header strip — sticky at the top of the scroll container so column
           labels stay visible while rows scroll. The white background and z-10
-          keep it opaque above the scrolled content. */}
+          keep it opaque above the scrolled content.
+          ETP-5133 — this OUTER div carries `sticky`/`top-0` and deliberately
+          has NO overflow of its own (see `headerScrollRef` above for why).
+          The actual row of cells lives in the INNER div below, whose
+          `overflow-x-hidden` is driven programmatically by the body rows'
+          own scroll wrapper so column widths stay aligned without breaking
+          the header's stickiness. */}
       <div
-        className="flex items-stretch border-b sticky top-0 z-10 bg-card"
+        className="border-b sticky top-0 z-10 bg-card"
         style={{ borderColor: TOKENS.separator, height: TOKENS.rowHeight, ...headerStyle }}
       >
-        {/* ETP-4529 — leading expand-chevron placeholder, only when a
-            `dimensionsPanel` column is declared (keeps header cells aligned
-            with the body rows' own chevron column below). */}
-        {hasDimensionsPanel && (
-          <div style={{ width: CHEVRON_COLUMN_WIDTH, flexShrink: 0 }} aria-hidden="true" />
-        )}
-        <div className="flex items-center justify-center px-2" style={{ width: CHECKBOX_COLUMN_WIDTH, flexShrink: 0 }}>
-          <Checkbox
-            aria-label={ui('selectAll')}
-            checked={allSelected}
-            indeterminate={someSelected}
-            onChange={() => toggleAll(!allSelected)}
-            disabled={isDocumentReadOnly}
-            data-testid="Checkbox__3b7ec2" />
-        </div>
-        {visibleColumns.map((col, idx) => (
-          <div
-            key={col.key}
-            data-testid={`column-header-${col.key}`}
-            className="flex items-center"
-            style={{
-              padding: `0 ${TOKENS.cellPaddingX}px`,
-              flex: columnFlex(col, idx),
-              justifyContent: NUMERIC_TYPES.has(col.type) ? 'flex-end' : 'flex-start',
-              textAlign: NUMERIC_TYPES.has(col.type) ? 'right' : 'left',
-              minWidth: 0,
-            }}
-          >
-            {resolveColumnLabel(col, locale, t)}
+        <div ref={headerScrollRef} className="flex items-stretch h-full overflow-x-hidden">
+          {/* ETP-4529 — leading expand-chevron placeholder, only when a
+              `dimensionsPanel` column is declared (keeps header cells aligned
+              with the body rows' own chevron column below). */}
+          {hasDimensionsPanel && (
+            <div style={{ width: CHEVRON_COLUMN_WIDTH, flexShrink: 0 }} aria-hidden="true" />
+          )}
+          <div className="flex items-center justify-center px-2" style={{ width: CHECKBOX_COLUMN_WIDTH, flexShrink: 0 }}>
+            <Checkbox
+              aria-label={ui('selectAll')}
+              checked={allSelected}
+              indeterminate={someSelected}
+              onChange={() => toggleAll(!allSelected)}
+              disabled={isDocumentReadOnly}
+              data-testid="Checkbox__3b7ec2" />
           </div>
-        ))}
-        {/* Reserve the same 160 px slot the action strip will occupy so the
-            header columns align with the body rows even when hovering. */}
-        {reserveActionSlot && (
-          <div style={{ flex: '0 0 160px' }} aria-hidden="true" />
-        )}
-        {/* Right spacer — mirrors the Figma right margin without adding padding
-            to the root (which would clip the row border-b lines). */}
-        <div style={{ width: 48, flexShrink: 0 }} aria-hidden="true" />
+          {visibleColumns.map((col, idx) => (
+            <div
+              key={col.key}
+              data-testid={`column-header-${col.key}`}
+              className="flex items-center"
+              style={{
+                padding: `0 ${TOKENS.cellPaddingX}px`,
+                flex: columnFlex(col, idx),
+                justifyContent: NUMERIC_TYPES.has(col.type) ? 'flex-end' : 'flex-start',
+                textAlign: NUMERIC_TYPES.has(col.type) ? 'right' : 'left',
+                minWidth: 0,
+              }}
+            >
+              {resolveColumnLabel(col, locale, t)}
+            </div>
+          ))}
+          {/* Reserve the same 160 px slot the action strip will occupy so the
+              header columns align with the body rows even when hovering. */}
+          {reserveActionSlot && (
+            <div style={{ flex: '0 0 160px' }} aria-hidden="true" />
+          )}
+          {/* Right spacer — mirrors the Figma right margin without adding padding
+              to the root (which would clip the row border-b lines). */}
+          <div style={{ width: 48, flexShrink: 0 }} aria-hidden="true" />
+        </div>
       </div>
-      {/* Body rows */}
+      {/* Body rows — ETP-5133: scoped horizontal scroll so a wide column set
+          scrolls within the table instead of overflowing past the detail
+          pane into the sidebar (and, on windows with a right-side panel,
+          into that panel too). Mirrors the scoped `overflow-x-auto` wrapper
+          DataTable's classic (non-inlineEditable) path already uses around
+          its own `<Table>`. Unlike that wrapper, this one never carries
+          `rowHoverStyle="elevated"`/`shadow-lg` — InlineLinesPanel has no
+          elevated hover shadow to protect from the overflow-y:auto clipping
+          DataTable's `pb-6` compensates for (ETP-5216), so no bottom padding
+          is added here. */}
+      <div ref={bodyScrollRef} className="overflow-x-auto" onScroll={handleBodyScroll}>
       {selectableRows.map((row) => {
         const isEditing = editingRowId === row.id;
         const isHovered = hoveredRowId === row.id;
@@ -1240,8 +1281,12 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                 </button>
               </div>
             )}
-            {/* Selection checkbox */}
-            <div className="flex items-center justify-center px-2" style={{ width: CHECKBOX_COLUMN_WIDTH, flexShrink: 0 }}>
+            {/* Selection checkbox — ETP-5029: the cell swallows the click so ticking
+                a row never reaches the row-body handler that opens the record's
+                detail/modal (in Contacts' "Dirección" tab that popped the
+                LocationEditorModal open on every tick). Mirrors the chevron cell
+                above and DataTable's own checkbox cell. */}
+            <div className="flex items-center justify-center px-2" style={{ width: CHECKBOX_COLUMN_WIDTH, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
               <Checkbox
                 aria-label={ui('selectRow') ?? 'Select row'}
                 checked={isSelected}
@@ -1307,6 +1352,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           </React.Fragment>
         );
       })}
+      </div>
     </div>
   );
 });

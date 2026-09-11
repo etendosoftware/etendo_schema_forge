@@ -5,12 +5,14 @@
   "window": {
     "category": "configuration",
     "name": "Tax Category",
+    "breadcrumb": "Finance / Tax Category",
     "detailEntity": null,
     "hidePrint": true,
     "hideMoreMenu": true,
     "hideCreate": true,
     "hideDelete": true,
-    "hideDeleteButton": true
+    "hideDeleteButton": true,
+    "noHeaderBorder": true
   },
   "entities": {
     "taxCategory": {
@@ -21,34 +23,33 @@
           "section": "principal",
           "seq": 1
         },
-        "description": {
+        "asbom": {
+          "visibility": "discarded"
+        },
+        "obsptiTaxtype": {
           "section": "principal",
           "seq": 2
+        },
+        "obsptiTransactiontype": {
+          "section": "principal",
+          "seq": 3
+        },
+        "obsptiRatetype": {
+          "section": "principal",
+          "seq": 4
+        },
+        "description": {
+          "section": "principal",
+          "seq": 5
         },
         "default": {
           "grid": true,
           "section": "principal",
-          "seq": 3
-        },
-        "asbom": {
-          "section": "principal",
-          "seq": 4
-        },
-        "obsptiTaxtype": {
-          "section": "principal",
-          "seq": 5
-        },
-        "obsptiTransactiontype": {
-          "section": "principal",
           "seq": 6
-        },
-        "obsptiRatetype": {
-          "section": "principal",
-          "seq": 7
         },
         "aeatsiiDeclarable": {
           "section": "principal",
-          "seq": 8
+          "seq": 7
         }
       }
     },

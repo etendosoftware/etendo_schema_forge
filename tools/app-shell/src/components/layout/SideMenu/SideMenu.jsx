@@ -76,6 +76,7 @@ import { useFeatureFlag, PROOF_OF_CONCEPT_MENU } from '@/lib/flags';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { environmentPlanLabelKey } from '@/lib/environmentPresentation.js';
 import menuConfig from '@/menu.json';
+import { useFirstStepsProgressOptional } from '@/pages/first-steps/FirstStepsContext.jsx';
 
 const ICON_MAP = {
   ClipboardCheck,
@@ -98,6 +99,9 @@ const ICON_MAP = {
   FileJson:       FileCode,
   Store:          Storefront,
 };
+
+/** `menu.json` group that carries the onboarding checklist. */
+const FIRST_STEPS_GROUP = 'First Steps';
 
 function CollapsedGroupPopover({
   group,
@@ -130,6 +134,14 @@ function CollapsedGroupPopover({
         <button
           type="button"
           aria-label={tMenu(group)}
+          // Same hook as the EXPANDED group header (line ~296). Without it
+          // `menu-group-<slug>` simply does not exist while the menu is
+          // collapsed, so anything navigating the menu by that selector -- an
+          // e2e spec, a walkthrough `navPath` hop -- silently fails to find a
+          // group that is right there on screen. The slug derivation is
+          // duplicated rather than shared because the two renderers already
+          // duplicate the `menu-item-` one; keep the three in step.
+          data-testid={`menu-group-${group.replace(/\s+/g, '-').toLowerCase()}`}
           onMouseEnter={() => { cancelClose(); setOpen(true); }}
           onMouseLeave={scheduleClose}
           className={cn(
@@ -244,6 +256,7 @@ function ExpandedDirectLink({ group, singleItem, Icon, showSectionLabel, section
           <span className={cn('flex-1 text-left truncate', !isActive && 'text-text-primary')}>
             {itemLabel}
           </span>
+          <FirstStepsCountBadge groupName={group.group} data-testid="FirstStepsCountBadge__247c75" />
         </GuardedNavLink>
       </div>
     </div>
@@ -340,6 +353,47 @@ function ExpandedGroupSection({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * ETP-5190 — `x/7` progress on the First Steps entry.
+ *
+ * Only ever an ADDITION to the label: the entry itself is never hidden and never disabled,
+ * whatever the count says, because the checklist has to stay reachable after the one-time
+ * dashboard redirect has been spent (and after every step is done, to un-tick one).
+ *
+ * Renders nothing while the state is loading, when it failed to load, or when the sidebar is
+ * rendered outside a `FirstStepsProvider` (bare component tests) — a badge that flashed `1/7`
+ * before the real count arrived would read as progress being lost.
+ */
+function FirstStepsCountBadge({ groupName, collapsed = false }) {
+  const progress = useFirstStepsProgressOptional();
+  if (groupName !== FIRST_STEPS_GROUP || !progress || progress.loading || progress.error) {
+    return null;
+  }
+  // Collapsed, the label is gone and `3/7` does not fit in the 40px tile, so only the
+  // outstanding count is shown — and nothing at all once there is none left to do.
+  if (collapsed) {
+    const remaining = progress.total - progress.completedCount;
+    if (remaining <= 0) return null;
+    return (
+      <span
+        className="absolute top-0.5 right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none ring-2 ring-background"
+        style={{ background: 'hsl(var(--primary))', color: 'hsl(var(--foreground))' }}
+        data-testid="menu-first-steps-progress-collapsed"
+      >
+        {remaining}
+      </span>
+    );
+  }
+  return (
+    <span
+      className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold leading-none text-muted-foreground"
+      data-testid="menu-first-steps-progress"
+    >
+      {progress.completedCount}/{progress.total}
+    </span>
   );
 }
 
@@ -669,10 +723,16 @@ export default function SideMenu({
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+            {/* data-testid="sidebar-collapse" / "sidebar-expand" are the stable
+                hooks for this pair (same contract as "company-switcher"
+                above). The guided walkthrough's `navPath` clicks
+                "sidebar-expand" to open the menu before clicking a section, so
+                renaming either one breaks a shipped tour, not just a test. */}
             <button
               type="button"
               onClick={onToggle}
               aria-label={ui('collapseMenu')}
+              data-testid="sidebar-collapse"
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
             >
               <PanelLeftClose className="h-4 w-4" data-testid="PanelLeftClose__247c75" />
@@ -688,6 +748,7 @@ export default function SideMenu({
                     type="button"
                     onClick={onToggle}
                     aria-label={ui('expandMenu')}
+                    data-testid="sidebar-expand"
                     className="flex h-10 w-10 items-center justify-center rounded-lg bg-page-bg text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <PanelLeftOpen className="h-5 w-5" data-testid="PanelLeftOpen__247c75" />
@@ -727,7 +788,7 @@ export default function SideMenu({
                         <GuardedNavLink
                           to={`/${itemPath}`}
                           className={cn(
-                            'flex h-10 w-10 items-center justify-center rounded-lg transition-colors',
+                            'relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors',
                             isItemActive || isGroupActive
                               ? 'bg-accent-highlight text-accent-highlight-foreground'
                               : 'bg-page-bg text-muted-foreground hover:text-foreground'
@@ -737,6 +798,10 @@ export default function SideMenu({
                             weight={isItemActive || isGroupActive ? 'fill' : 'regular'}
                             className="h-5 w-5"
                             data-testid="Icon__247c75" />
+                          <FirstStepsCountBadge
+                            groupName={g.group}
+                            collapsed
+                            data-testid="FirstStepsCountBadge__247c75" />
                         </GuardedNavLink>
                       </TooltipTrigger>
                       <TooltipContent side="right" data-testid="TooltipContent__247c75">{tMenu(singleItem.label)}</TooltipContent>

@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { TriangleAlert, ArrowUpRight } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { neutralizeSpreadsheetCell } from '../../../../../../templates/reports/helpers/report-html-helpers.js';
 
 export const ERROR_STATUSES = new Set([
   'IN', 'EE', 'AE',                            // SII
@@ -169,14 +170,20 @@ export async function fetchCsvAndDownload(apiFetch, path, params, filename, colu
 /**
  * Builds a CSV from columnDefs + rows and triggers a browser file download.
  * Adds a UTF-8 BOM so Excel opens it correctly without encoding issues.
+ *
+ * Cells and header labels go through `neutralizeSpreadsheetCell` (ETP-5032): these
+ * exports carry AEAT-returned free text (error reasons, `descripcionOperacion`, invoice
+ * descriptions), so a value starting with a formula trigger would evaluate in the
+ * recipient's spreadsheet (CWE-1236, ADR-0004). Only the POLICY is shared — the
+ * always-quote style, the LF line ending and the BOM are this path's own observable
+ * format and stay exactly as they were, because ADR-0004 D4 keeps presentation changes
+ * out of a security fix.
  */
 export function buildCsvAndDownload(filename, columnDefs, rows) {
-  const header = columnDefs.map(c => `"${c.label}"`).join(',');
+  const cell = (value) => `"${neutralizeSpreadsheetCell(value).replace(/"/g, '""')}"`;
+  const header = columnDefs.map(c => cell(c.label)).join(',');
   const body = rows.map(row =>
-    columnDefs.map(c => {
-      const val = c.get(row) ?? '';
-      return `"${String(val).replace(/"/g, '""')}"`;
-    }).join(',')
+    columnDefs.map(c => cell(c.get(row) ?? '')).join(',')
   );
   const csv = '﻿' + [header, ...body].join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });

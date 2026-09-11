@@ -187,11 +187,15 @@ export function useRemoveOperation() {
 }
 
 /**
- * "Reactivar" — the lightweight un-reconcile (POST). Same payload as `useRemoveOperation`
- * ({ financialAccountId, statementLineId, transactionIds }), but instead of deleting the
- * reconciliation it leaves it in DRAFT with its transactions still linked: the line returns to
- * "Pendiente" and, when re-selected, those same transactions come back pre-selected so confirming
- * re-processes that same reconciliation. Auto-created invoice payments are still fully removed.
+ * "Reactivar" — NO LONGER CALLED FROM THE UI. ETP-5135 removed the action from the Conciliación tab
+ * (a processed reconciliation is a final state; Desconciliar is the only way out), but the NEO
+ * endpoint is still served, so this wrapper is kept as the client for it — same as its sibling
+ * {@link useReactivateReconciliation}, which has had no call site for a while either.
+ *
+ * <p>Same payload as `useRemoveOperation` ({ financialAccountId, statementLineId, transactionIds }).
+ * It used to leave the reconciliation in DRAFT with its transactions still linked, but ETP-4502
+ * iteration 7 reimplemented it as plain detach + reprocess — it now runs the exact same mechanics as
+ * `removeOperation` and persists no draft. Auto-created invoice payments are fully removed.
  *
  * @returns {{ reactivateSelected: (payload: object) => Promise<object>, loading: boolean, error: Error|null }}
  */

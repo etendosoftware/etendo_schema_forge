@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { assertGenerateDisabledThenPdfTriggersRequired } from './reportViewerTestHelpers';
+import { assertAllActionsDisabledWhileRequiredEmpty } from './reportViewerTestHelpers';
 
 // Mutable search params — tests can override before rendering
 let mockSearchParams = new URLSearchParams();
@@ -25,12 +25,21 @@ vi.mock('@/i18n', () => ({
 }));
 
 // Mock auth context
+// ETP-5116 — ReportViewerPage now gates the finance category behind
+// useWindowAccess()/WindowAccessGuard. Mutable so the dedicated gate suite
+// below can flip it to 'none'; defaults to 'full' so every other test in
+// this file (including finance-category renders) is unaffected.
+let mockFinanceWindowAccessTier = 'full';
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({
     token: 'test-token',
     selectedRole: { orgList: [] },
     selectedOrg: { id: 'org1' },
   }),
+  useWindowAccess: vi.fn(() => mockFinanceWindowAccessTier),
+  WindowAccessGuard: (props) => (
+    <div data-testid="window-access-guard" data-window-id={props.windowId} />
+  ),
 }));
 
 // Mock PageMetaContext
@@ -73,6 +82,7 @@ import ReportViewerPage, {
   getSelectorButtonTitle,
   applyProductSelectorScopeParams,
 } from '../ReportViewerPage.jsx';
+import { useWindowAccess } from '@/auth/AuthContext.jsx';
 
 describe('getSelectorPlaceholderLabel', () => {
   it('shows count when multi and items selected', () => {
@@ -460,6 +470,146 @@ describe('ReportViewerPage', () => {
     render(<ReportViewerPage />);
     await waitFor(() => {
       expect(screen.getByText('Grouped Land')).toBeInTheDocument();
+    });
+  });
+});
+
+// -------------------------------------------------------------------
+// ReportViewerPage — finance-category window access gate (ETP-5116)
+//
+// The Financial Reports page (report-viewer?category=finance) had zero real
+// access control — any authenticated user, any role, could reach it by URL
+// regardless of the menu. ReportViewerPage is shared across every report
+// category, so the gate must apply ONLY when category=finance; other
+// categories sharing this same page must render normally regardless of tier.
+// -------------------------------------------------------------------
+
+describe('ReportViewerPage — finance window access gate (ETP-5116)', () => {
+  beforeEach(() => {
+    vi.mocked(useWindowAccess).mockClear();
+    mockSetSearchParams.mockClear();
+    mockFinanceWindowAccessTier = 'full';
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([]),
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    // Reset so state never leaks into other describe blocks in this file —
+    // mockFinanceWindowAccessTier is a plain module-scope variable, not a
+    // vi.fn(), so vi.restoreAllMocks() above does not touch it.
+    mockFinanceWindowAccessTier = 'full';
+  });
+
+  it('renders the WindowAccessGuard (windowId D647D118F5014D00AF47A636B2CD0DD3) instead of the report list when category=finance and the access tier is none', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'finance' });
+    mockFinanceWindowAccessTier = 'none';
+    render(<ReportViewerPage />);
+
+    expect(useWindowAccess).toHaveBeenCalledWith('D647D118F5014D00AF47A636B2CD0DD3');
+    expect(screen.getByTestId('window-access-guard')).toHaveAttribute(
+      'data-window-id',
+      'D647D118F5014D00AF47A636B2CD0DD3',
+    );
+  });
+
+  it('renders the WindowAccessGuard instead of the report viewer when category=finance, a report is selected, and the access tier is none', async () => {
+    mockSearchParams = new URLSearchParams({ report: 'report-aging', category: 'finance' });
+    mockFinanceWindowAccessTier = 'none';
+    render(<ReportViewerPage />);
+
+    expect(screen.getByTestId('window-access-guard')).toBeInTheDocument();
+    expect(screen.queryByTestId('action-cancel')).not.toBeInTheDocument();
+  });
+
+  it('renders the report list normally when category=finance and the access tier is full', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'finance' });
+    mockFinanceWindowAccessTier = 'full';
+    render(<ReportViewerPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('noResults')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('window-access-guard')).not.toBeInTheDocument();
+  });
+
+  it('does NOT gate other report categories when the tier is none (gate is finance-only)', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'sales' });
+    mockFinanceWindowAccessTier = 'none';
+    render(<ReportViewerPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('noResults')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('window-access-guard')).not.toBeInTheDocument();
+  });
+
+  it('does NOT gate the page when no category filter is present, even if the tier is none', async () => {
+    mockSearchParams = new URLSearchParams();
+    mockFinanceWindowAccessTier = 'none';
+    render(<ReportViewerPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('noResults')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('window-access-guard')).not.toBeInTheDocument();
+  });
+
+  // Review follow-up (ETP-5116): the gate generalizes to every category with a
+  // real permission-anchor window, not just finance — "Informes de inventario"
+  // now has a windowId in menu.json (6346B88619F948F9A42224BDB0B239FA) too, and
+  // the frontend gate must cover it the same way, or the page stays reachable
+  // by URL despite the backend enforcing it.
+  it('renders the WindowAccessGuard (windowId 6346B88619F948F9A42224BDB0B239FA) instead of the report list when category=inventory and the access tier is none', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'inventory' });
+    mockFinanceWindowAccessTier = 'none';
+    render(<ReportViewerPage />);
+
+    expect(useWindowAccess).toHaveBeenCalledWith('6346B88619F948F9A42224BDB0B239FA');
+    expect(screen.getByTestId('window-access-guard')).toHaveAttribute(
+      'data-window-id',
+      '6346B88619F948F9A42224BDB0B239FA',
+    );
+  });
+
+  it('renders the report list normally when category=inventory and the access tier is full', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'inventory' });
+    mockFinanceWindowAccessTier = 'full';
+    render(<ReportViewerPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('noResults')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('window-access-guard')).not.toBeInTheDocument();
+  });
+
+  // Review follow-up (ETP-5116): the fetch effect re-fires when access
+  // resolves (or a denied user switches category), but must reset loading to
+  // true first — otherwise a stale "no results" state (left over from the
+  // denied branch's setReports([])/setLoading(false)) briefly renders while
+  // the new request is still in flight.
+  it('shows the loading spinner, not a stale "no results" flash, while the fetch re-fires after access resolves', async () => {
+    mockSearchParams = new URLSearchParams({ category: 'finance' });
+    mockFinanceWindowAccessTier = 'none';
+    let resolveFetch;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      () => new Promise((resolve) => { resolveFetch = resolve; }),
+    );
+
+    const { rerender } = render(<ReportViewerPage />);
+    expect(screen.getByTestId('window-access-guard')).toBeInTheDocument();
+
+    mockFinanceWindowAccessTier = 'full';
+    rerender(<ReportViewerPage />);
+
+    expect(screen.getByTestId('Loader2__3c998a')).toBeInTheDocument();
+    expect(screen.queryByText('noResults')).not.toBeInTheDocument();
+
+    resolveFetch({ ok: true, json: () => Promise.resolve([]) });
+    await waitFor(() => {
+      expect(screen.getByText('noResults')).toBeInTheDocument();
     });
   });
 });
@@ -1111,22 +1261,27 @@ describe('ReportViewer (viewer sub-component)', () => {
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) });
     });
-    const user = userEvent.setup();
     render(<ReportViewerPage />);
     await waitFor(() => {
       expect(screen.getByText('runReport')).toBeInTheDocument();
     });
-    // Should show "required" error message
-    await assertGenerateDisabledThenPdfTriggersRequired(user);
+    // ETP-4900: with the required field empty, submit stays disabled — the
+    // sidebar can no longer be used to trigger validateRequired() at all.
+    assertAllActionsDisabledWhileRequiredEmpty();
+    const renderCalls = globalThis.fetch.mock.calls.filter(
+      ([url]) => typeof url === 'string' && url.includes('/render')
+    );
+    expect(renderCalls.length).toBe(0);
   });
 
-  // ETP-4899 regression: the top-bar PDF/Excel/CSV buttons used to call
-  // renderReport(format) directly, bypassing the required-field validation
-  // that the sidebar's "Generate Report" button already ran — so an empty
-  // required field would still hit the backend and surface a raw NEO 400
-  // error instead of the sidebar's usual red "Required" state. validateRequired()
-  // must now gate all three top-bar buttons too, not just the sidebar submit.
-  it('blocks the top-bar PDF button and shows the required error when a required field is empty', async () => {
+  // ETP-4899 regression, gate hardened by ETP-4900: the top-bar PDF/Excel/CSV
+  // buttons used to call renderReport(format) directly, bypassing the
+  // required-field validation that the sidebar's "Generate Report" button
+  // already ran — so an empty required field would still hit the backend and
+  // surface a raw NEO 400 error instead of a controlled empty-form state.
+  // ETP-4900 closed the gap by disabling PDF/Excel/CSV/Print outright while a
+  // required param is empty, the same way the sidebar submit already was.
+  it('blocks the top-bar PDF button when a required field is empty', async () => {
     const reqReport = {
       ...SAMPLE_REPORT,
       parameters: [
@@ -1145,12 +1300,11 @@ describe('ReportViewer (viewer sub-component)', () => {
       expect(screen.getByText('PDF')).toBeInTheDocument();
     });
 
-    await user.click(screen.getByText('PDF'));
+    const pdfButton = screen.getByText('PDF');
+    expect(pdfButton).toBeDisabled();
+    await user.click(pdfButton);
 
-    // Validation must fire and block the request BEFORE any /render fetch happens.
-    await waitFor(() => {
-      expect(screen.getByText('required')).toBeInTheDocument();
-    });
+    // Disabled buttons don't fire their click handler — no /render fetch happens.
     const renderCalls = globalThis.fetch.mock.calls.filter(
       ([url]) => typeof url === 'string' && url.includes('/render')
     );
@@ -1176,11 +1330,10 @@ describe('ReportViewer (viewer sub-component)', () => {
       expect(screen.getByText('Excel')).toBeInTheDocument();
     });
 
-    await user.click(screen.getByText('Excel'));
+    const excelButton = screen.getByText('Excel');
+    expect(excelButton).toBeDisabled();
+    await user.click(excelButton);
 
-    await waitFor(() => {
-      expect(screen.getByText('required')).toBeInTheDocument();
-    });
     const renderCalls = globalThis.fetch.mock.calls.filter(
       ([url]) => typeof url === 'string' && url.includes('/render')
     );
@@ -1236,6 +1389,43 @@ describe('ReportViewer (viewer sub-component)', () => {
     } finally {
       globalThis.URL.createObjectURL = originalCreateObjectURL;
     }
+  });
+
+  // ETP-4900: pins the change itself — all four top-bar actions (PDF, Excel,
+  // CSV, Print), not just the sidebar submit, are gated by hasAllRequiredFilled.
+  it('disables all four top-bar actions while a required field is empty, then re-enables them once filled (ETP-4900)', async () => {
+    const reqReport = {
+      ...SAMPLE_REPORT,
+      parameters: [
+        { name: 'required1', type: 'text', label: { en_US: 'Important Field' }, section: 'primary', required: true },
+      ],
+    };
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (typeof url === 'string' && url === '/api/reports') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([reqReport]) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [] }) });
+    });
+    const user = userEvent.setup();
+    render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByText('Important Field')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('PDF')).toBeDisabled();
+    expect(screen.getByText('Excel')).toBeDisabled();
+    expect(screen.getByText('CSV')).toBeDisabled();
+    expect(screen.getByText('print')).toBeDisabled();
+
+    const input = screen.getByText('Important Field').closest('div').querySelector('input');
+    await user.type(input, 'some value');
+
+    await waitFor(() => {
+      expect(screen.getByText('PDF')).not.toBeDisabled();
+      expect(screen.getByText('Excel')).not.toBeDisabled();
+      expect(screen.getByText('CSV')).not.toBeDisabled();
+      expect(screen.getByText('print')).not.toBeDisabled();
+    });
   });
 
   it('clicking reset clears parameters and increments resetKey', async () => {

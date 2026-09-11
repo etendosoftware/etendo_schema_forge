@@ -22,6 +22,13 @@
  * exempts it: it is an AD *column* on every table but not an AD *field*, so
  * `push-to-neo` cannot register it and no window could ever declare it in
  * `decisions.json`.
+ *
+ * ETP-5125 added the SECOND reason a cached rendering stops representing the record:
+ * the renderer changed. A PDF depends on the template, the CSS, the labels/locale and
+ * the Handlebars helpers as much as on the record's data, and all three of those live
+ * in the code, where a change moves no timestamp at all. `isCachedRenderingStale` is
+ * therefore the predicate production code calls — it composes both reasons — while
+ * `isAttachmentStale` remains exactly the record-vs-file comparison ETP-4787 shipped.
  */
 
 /**
@@ -98,4 +105,76 @@ export function isAttachmentStale(attachment, recordUpdated) {
   const writtenMs = attachmentWrittenAtMs(attachment);
   if (writtenMs == null) return false;
   return writtenMs < updatedMs;
+}
+
+/**
+ * ETP-5125 — the instant THIS frontend bundle was built, in epoch ms, injected by
+ * Vite's `define` (see `vite.config.js`).
+ *
+ * A rendered PDF is a function of four inputs: the record's data, the template, the
+ * labels/locale and the Handlebars helpers. `isAttachmentStale` above covers only the
+ * first one. The other three live in the code and moving them moves NO timestamp, so a
+ * completed document cached before a template change kept serving the old design
+ * forever — the ETP-5125 bug, where the printable still read "IVA%" after the labels
+ * had been fixed.
+ *
+ * Bundle identity is the signal, because a renderer change can only reach a user
+ * through a new bundle. It deliberately OVER-approximates (a deploy that leaves the
+ * template untouched also invalidates), which costs one cold render per document on
+ * its first open — the same trade this cache already accepts for `updated`
+ * (`docs/document-printables.md`: "serving a stale document is worse than
+ * re-rendering").
+ *
+ * `0` when the global is absent — plain `node --test`, and Vitest, whose
+ * `vitest.config.js` is a separate config with no `define`. The check is then inert and
+ * the cache behaves exactly as it did before, matching this module's fail-open rule.
+ */
+export const RENDERER_BUILD_EPOCH_MS =
+  typeof __RENDERER_BUILD_EPOCH_MS__ === 'number' ? __RENDERER_BUILD_EPOCH_MS__ : 0;
+
+/**
+ * True when the cached file was written before the running bundle existed, so it was
+ * produced by a different renderer.
+ *
+ * Same fail-open bias as the rest of this module: an unknown epoch (0, or a
+ * non-finite value) or an unusable attachment timestamp yields `false`.
+ *
+ * @param {{ updatedAt?: string, uploadedAt?: string, createdAt?: string, creationDate?: string }|null} attachment
+ * @param {number} [buildEpochMs]  overridable so tests need no global stubbing
+ * @returns {boolean}
+ */
+export function isRenderedByOlderBundle(attachment, buildEpochMs = RENDERER_BUILD_EPOCH_MS) {
+  if (!Number.isFinite(buildEpochMs) || buildEpochMs <= 0) return false;
+  const writtenMs = attachmentWrittenAtMs(attachment);
+  if (writtenMs == null) return false;
+  return writtenMs < buildEpochMs;
+}
+
+/**
+ * Whether the cached rendering of a record must be discarded and re-rendered — the
+ * predicate PRODUCTION CODE SHOULD CALL. It composes the two independent reasons a
+ * cached PDF stops representing the record: the record changed (ETP-4787) or the
+ * renderer changed (ETP-5125).
+ *
+ * `isAttachmentStale` stays exported for its own spec and as this function's first
+ * half; new call sites belong here, so staleness keeps being decided in exactly one
+ * place (`docs/document-printables.md`).
+ *
+ * **The `recordUpdated` guard is load-bearing, not a formality.** Not passing
+ * `recordUpdated` is ETP-4787's deliberate opt-out, and the windows that opt out —
+ * purchase-invoice, goods-receipt, return-material-receipt — do so because their marked
+ * attachment holds the COUNTERPARTY's own document (the supplier's invoice / the OCR
+ * source, the customer's signed receipt), never a cache of something we rendered. No
+ * change of ours can make those stale, and flagging one would invite overwriting a real
+ * user file. Keep this check after the guard; never hoist it above.
+ *
+ * @param {{ updatedAt?: string, uploadedAt?: string, createdAt?: string, creationDate?: string }|null} attachment
+ * @param {string|number|Date|null} recordUpdated  the record's `updated`
+ * @param {number} [buildEpochMs]  overridable so tests need no global stubbing
+ * @returns {boolean}
+ */
+export function isCachedRenderingStale(attachment, recordUpdated, buildEpochMs = RENDERER_BUILD_EPOCH_MS) {
+  if (toInstantMs(recordUpdated) == null) return false;
+  if (isAttachmentStale(attachment, recordUpdated)) return true;
+  return isRenderedByOlderBundle(attachment, buildEpochMs);
 }

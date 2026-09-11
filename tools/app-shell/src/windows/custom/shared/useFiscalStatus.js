@@ -100,7 +100,7 @@ async function fetchVerifactuStatus(apiFetch, orgId, invoiceId) {
  * `useInvoiceUpdatedListener`), so this hook re-runs the fetch on that same
  * event instead of introducing a second refresh mechanism.
  */
-export function useFiscalStatus(invoiceId, specName, profile, apiBaseUrl, orgId) {
+export function useFiscalStatus(invoiceId, specName, profile, apiBaseUrl, orgId, territory = null) {
   const [state, setState] = useState({ sii: null, tbai: null, verifactu: null, loading: true });
   const [refreshTick, setRefreshTick] = useState(0);
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
@@ -112,7 +112,7 @@ export function useFiscalStatus(invoiceId, specName, profile, apiBaseUrl, orgId)
       setState({ sii: null, tbai: null, verifactu: null, loading: false });
       return;
     }
-    const targets = getInvoiceFiscalTargets(specName, profile);
+    const targets = getInvoiceFiscalTargets(specName, profile, territory);
     if (!targets.showSii && !targets.showTbai && !targets.showVerifactu) {
       setState({ sii: null, tbai: null, verifactu: null, loading: false });
       return;
@@ -127,7 +127,7 @@ export function useFiscalStatus(invoiceId, specName, profile, apiBaseUrl, orgId)
     ])
       .then(([sii, tbai, verifactu]) => setState({ sii, tbai, verifactu, loading: false }))
       .catch(() => setState({ sii: null, tbai: null, verifactu: null, loading: false }));
-  }, [invoiceId, specName, profile, apiBaseUrl, apiFetch, orgId, refreshTick]);
+  }, [invoiceId, specName, profile, apiBaseUrl, apiFetch, orgId, territory, refreshTick]);
 
   return state;
 }

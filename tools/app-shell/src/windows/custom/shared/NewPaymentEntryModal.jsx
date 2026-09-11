@@ -884,6 +884,10 @@ function PisTransferSection({
                 displayValue={ibanOptions.find(o => o.id === iban)?.name || iban || ''}
                 onChange={onIbanChange}
                 resolvedLabel={ui('cpPisIbanLabel')}
+                // The field accepts BOTH a supplier IBAN picked from the list and a hand-typed
+                // one (see onCreateRequest below), so it opts out of the generic
+                // "Search {label}..." placeholder to say so explicitly (ETP-5177).
+                placeholderOverride={ui('cpPisIbanPlaceholder')}
                 staticOptions={ibanOptions}
                 createLabel={(q) => ui('cpPisIbanUseTyped', { iban: q })}
                 onCreateRequest={(query, onCreated) => {

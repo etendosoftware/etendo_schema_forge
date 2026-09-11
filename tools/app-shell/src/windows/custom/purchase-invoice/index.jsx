@@ -85,13 +85,19 @@ const OVERDUE_INITIAL_COLUMNS = [
 const LABEL_OVERRIDES = {
   es_ES: {
     POReference: 'Nº documento',
-    OutstandingAmt: 'Pendiente de pago',
+    OutstandingAmt: 'Saldo pendiente',
     em_etgo_delivery_status: 'Estado de recepción',
   },
   en_US: {
     POReference: 'Document No.',
-    OutstandingAmt: 'Pending Payment',
+    OutstandingAmt: 'Outstanding Amount',
     em_etgo_delivery_status: 'Reception Status',
+  },
+  // ETP-5106: es_AR carried no overrides at all, so the grid fell through to the
+  // raw AD label ("Total Pendiente"). Only OutstandingAmt is declared here — the
+  // other columns keep their current es_AR behaviour on purpose.
+  es_AR: {
+    OutstandingAmt: 'Saldo pendiente',
   },
 };
 
@@ -163,7 +169,7 @@ export default function PurchaseInvoiceWindow(props) {
   const effectiveRecord = savedRecord ?? location.state?.savedRecord ?? null;
 
   const clearSavedRecord = useClearSavedRecord(setSavedRecord, location, navigate);
-  const draftModeOverride = getInvoiceDraftMode(ui);
+  const draftModeOverride = getInvoiceDraftMode(ui, { keepSaveWhenCompletedFields: ['orderReference'] });
 
   // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
   // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.

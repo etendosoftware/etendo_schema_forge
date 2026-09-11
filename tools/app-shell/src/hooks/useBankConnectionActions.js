@@ -154,6 +154,12 @@ export function useBankConnectionActions() {
         accounts: Array.isArray(data.accounts) ? data.accounts : [],
         providerName: data.providerName || '',
         providerLogoUrl: data.providerLogoUrl || '',
+        // ETP-5179 — why the filtered list came back empty, so the flow can name the cause
+        // instead of raising one generic toast. Deliberately NOT defaulted to '': the bridge
+        // omits both fields whenever there is nothing to explain, and an empty string would read
+        // as "a reason is present but unknown", which maps to a different message.
+        emptyReason: data.emptyReason,
+        accountCurrency: data.accountCurrency,
       };
     },
     [call],

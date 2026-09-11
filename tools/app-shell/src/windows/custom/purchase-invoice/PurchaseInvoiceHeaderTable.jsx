@@ -10,11 +10,12 @@ import {
   getDueDateTextStyle,
 } from '@/lib/invoiceDueDate';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
-import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
+import { getInvoiceFiscalTargets, isSifEligibleByDate, isTbaiStatusNotApplicable } from '@/windows/custom/shared/fiscalTargets.js';
 import { FiscalStatusBadge } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
+import { isSent } from '@/windows/custom/shared/sifSending.js';
 import { getApSubtype } from '@generated/purchase-invoice/custom/purchaseInvoiceSubtype.js';
 
 /* eslint-disable react/prop-types */
@@ -57,22 +58,86 @@ export default function PurchaseInvoiceHeaderTable(props) {
 
   const { selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
-  const { profile } = useFiscalConfig(orgId, apiBaseUrl);
+  const { profile, siiRecord, tbaiRecord } = useFiscalConfig(orgId, apiBaseUrl);
+  const territory = tbaiRecord?.etsgSifTerritory ?? null;
 
-  const targets = useMemo(() => getInvoiceFiscalTargets('purchase-invoice', profile), [profile]);
+  // ETP-5087: BOTH fiscal columns resolve synchronously from the single,
+  // globally-selected org (`useFiscalConfig(orgId)` above) — no per-row, async
+  // org resolution. This is deliberate and symmetric with the SII column, which
+  // has always worked this way and never misbehaved. An earlier revision gated
+  // the Batuz column on a per-row `useOrgFiscalConfigs` batch fetch instead; the
+  // extra asynchrony produced three consecutive production regressions (invisible
+  // column, SII column broken, stale Map reference freezing the memo) without
+  // adding any capability the list actually needs.
+  //
+  // Documented trade-off: a page mixing legal entities from DIFFERENT territories
+  // shows/hides the Batuz column according to the org selected in the top-nav,
+  // not per row — exactly the same trade-off the SII column already makes. The
+  // Bizkaia-only restriction itself is NOT duplicated here: it lives entirely in
+  // `getInvoiceFiscalTargets`, which only returns `showTbai` for a purchase
+  // invoice whose territory is BIZKAIA.
+  const targets = useMemo(
+    () => getInvoiceFiscalTargets('purchase-invoice', profile, territory),
+    [profile, territory],
+  );
 
   const [paymentRow, setPaymentRow] = useState(null);
 
   const siiColLabel = gl['invoiceList.col.siiStatus'] || 'SII Status';
+  // ETP-5027: purchase-invoice TBAI is always Batuz (never generic TicketBAI) —
+  // see docs/decisions-reference.md / sifSending.js getSifBodyKey for the same rule.
+  const tbaiColLabel = gl['invoiceList.col.tbaiStatusPurchase'] || 'Batuz Status';
 
   const columns = useMemo(() => {
     const fiscalCols = [];
+    // ETP-5122: SII books by accounting date, not invoice date (mirrors
+    // Classic's AEATSII_PreSII_Invoice auxiliary input, which compares
+    // DateAcct). A row dated before the org's SII adoption date shows no
+    // status at all — the column stays as long as the profile enables SII,
+    // since other rows may still be eligible.
     if (targets.showSii) {
       fiscalCols.push({
         key: '_siiStatus', type: 'custom', label: siiColLabel,
-        render: (row) => <FiscalStatusBadge
-          status={row.aeatsiiEstado ?? null}
-          data-testid="FiscalStatusBadge__6b7cdb" />,
+        render: (row) => (
+          isSifEligibleByDate(row.accountingDate, siiRecord?.fechaAcogidaSII)
+            ? <FiscalStatusBadge
+                status={row.aeatsiiEstado ?? null}
+                data-testid="FiscalStatusBadge__6b7cdb" />
+            : <span className="text-muted-foreground">—</span>
+        ),
+      });
+    }
+    if (targets.showTbai) {
+      fiscalCols.push({
+        // ETP-5216: backed by the stored computed AD column EM_ETGO_Tbai_Status,
+        // shared by AR and AP. It used to be key '_tbaiStatus' with no `column`,
+        // fed by TbaiSyncStatusInjector — which made isFilterableColumn drop it
+        // from the advanced filter in SILENCE, and is exactly how a dead injector
+        // went unnoticed for months (ETP-4391). `type: 'custom'` still drives the
+        // badge cell; `column` + `filterMode` give the filter and sort a real
+        // backend field, the same pairing `transactionDocument` uses below.
+        key: 'eTGOTbaiStatus', column: 'em_etgo_tbai_status', type: 'custom',
+        filterMode: 'text', label: tbaiColLabel,
+        // `eTGOTbaiStatus` stays the PRIMARY source: it carries the REAL outcome
+        // of the submission to Batuz (Recibido / Rechazado / Error), and it is the
+        // only source that can say *rejected*. `tbaiIssent` (AD column
+        // `EM_Tbai_Issent`) remains a FALLBACK for a row fetched before the column
+        // was backfilled: it proves the invoice was submitted, nothing more.
+        // Reading the flag first would let a rejection render as a cheerful
+        // "Enviada". `isSent` is used rather than a plain truthy test because NEO
+        // may deliver the flag as the AD character `'N'`, truthy in JS.
+        // 'NoAplica' means the invoice predates the organization's Batuz adoption
+        // date (or the organization never joined): not pending anything, ever, so
+        // it renders as a dash. That gate used to run here as isSifEligibleByDate()
+        // against the SELECTED org's date; the stored column now decides it per
+        // invoice, against the invoice's OWN organization.
+        render: (row) => (
+          isTbaiStatusNotApplicable(row.eTGOTbaiStatus)
+            ? <span className="text-muted-foreground">—</span>
+            : <FiscalStatusBadge
+                status={row.eTGOTbaiStatus ?? (isSent(row.tbaiIssent) ? 'Enviada' : 'Pendiente')}
+                data-testid="FiscalStatusBadge__tbai_6b7cdb" />
+        ),
       });
     }
 
@@ -228,7 +293,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
       },
       { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent' },
     ];
-  }, [gl, ui, locale, targets, siiColLabel]);
+  }, [gl, ui, locale, targets, siiColLabel, tbaiColLabel, siiRecord, tbaiRecord]);
 
   return (
     <>

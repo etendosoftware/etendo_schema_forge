@@ -48,7 +48,13 @@ export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  // E2E_RETRIES overrides the default when set (pre-push sets it to 1 for the
+  // integration suite — real-backend, shared-state specs are flaky by design and CI
+  // already gets 1 free retry there; local pre-push previously got 0, so a single
+  // sequential run had no cushion CI does).
+  retries: process.env.E2E_RETRIES !== undefined
+    ? Number(process.env.E2E_RETRIES)
+    : (process.env.CI ? 1 : 0),
   workers: 4,
   reporter: [
     ['html', { open: 'never', outputFolder: '../artifacts/e2e-report' }],

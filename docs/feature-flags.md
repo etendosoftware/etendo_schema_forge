@@ -164,6 +164,44 @@ that is the floor for rendering a menu item, and it stays greppable through the
 VITE_FEATURE_FLAGS='{"proof-of-concept-menu":true}' make dev
 ```
 
+The `webmcp-agent-chat` flag is off by default. When enabled, the existing
+Copilot popup uses the AI SDK client and sends the conversation to the
+server-side AI BFF. The BFF keeps the OpenCode Go credential private, forwards
+the current browser session token to the Etendo MCP endpoint, and exposes the
+MCP tools to the model. Browser-native `document.modelContext` WebMCP
+registration is intentionally deferred until browser support is mature.
+
+The `page-help-suggestions` flag is independently off by default. It controls
+the floating suggestion button, its proactive DOM analysis, and the callout
+that appears before opening the Copilot. It can be enabled alongside
+`webmcp-agent-chat` when this experimental assistance is ready for testing.
+
+The popup also provides client-side tools for `navigate_to`, `open_form`,
+`get_current_context`, and `open_copilot`; navigation is restricted to internal
+application paths. `inspect_page_dom` returns a compact accessibility-oriented
+inventory of visible interactive elements with temporary IDs. The companion
+`interact_with_page` tool accepts only those IDs and the actions `click`, `fill`,
+`type`, or `press`; it does not execute JavaScript or accept arbitrary CSS
+selectors, and password fields are excluded. These DOM tools are intended for
+agent-guided UI workflows and do not replace Etendo authorization checks.
+The Copilot also exposes a floating page-help button and performs throttled
+DOM-based assistance after non-dashboard navigation or meaningful UI clicks.
+For this proactive path, the frontend sends the compact DOM inventory directly
+as text to the BFF and instructs the model to return only an observation; it does
+not spend an extra model step calling `inspect_page_dom`.
+The result is shown first in a floating callout without opening the conversation;
+clicking the callout opens the existing Copilot and continues with that help
+context. It does not send emails, save records, or perform other consequential
+actions without a user request.
+Assistant and user messages in the popup render the supported Markdown subset
+(headings, lists, emphasis, inline code, and HTTPS links); unsafe link protocols
+remain plain text. The flag is a presentation/integration toggle only, never an
+authorization boundary.
+
+```bash
+VITE_FEATURE_FLAGS='{"webmcp-agent-chat":true,"page-help-suggestions":true}' make dev
+```
+
 `VITE_FEATURE_FLAGS` holds every flag in one variable, so adding a flag needs no
 new environment plumbing and there is no kebab-case-to-SCREAMING_SNAKE naming
 convention to keep in sync. Non-boolean values are ignored.

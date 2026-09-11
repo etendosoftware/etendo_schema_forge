@@ -28,47 +28,45 @@ const BASE_PROPS = {
   onChange: vi.fn(),
 };
 
-// ETP-4943 — a Service product has no physical existence: the Logistics section
-// (weight, UOM for weight, "Almacenable"/Returnable) does not apply to it and must
-// be hidden, and both stock-management flags must be forced to false so a Service
-// product can never be saved as stocked/returnable. Mirrors the precedent already
-// established for the stock sidebar (`ProductSidebar.jsx`, ETP-4606:
-// `if (data?.productType === 'S') return null`).
-describe('ProductAdditionalInfoPanel — Logistics section for Service-type products (ETP-4943)', () => {
-  it('hides the Logistics section when productType is Service', () => {
-    render(<ProductAdditionalInfoPanel {...BASE_PROPS} data={{ productType: 'S' }} />);
+// ETP-4943 / ETP-5091 — Service, Expense ("Gasto") and Resource ("Recurso")
+// products have no physical existence: the Logistics section (weight, UOM for
+// weight, "Almacenable"/Returnable) does not apply to them and must be
+// hidden, and both stock-management flags must be forced to false so none of
+// them can ever be saved as stocked/returnable. Mirrors the precedent already
+// established for the stock sidebar (`ProductSidebar.jsx`, ETP-4606 /
+// ETP-5091: `['S', 'E', 'R'].includes(data?.productType)` → no stock UI at all).
+describe.each([
+  ['Service', 'S'],
+  ['Expense', 'E'],
+  ['Resource', 'R'],
+])('ProductAdditionalInfoPanel — Logistics section for %s-type products (ETP-4943 / ETP-5091)', (_label, productType) => {
+  it(`hides the Logistics section when productType is ${productType}`, () => {
+    render(<ProductAdditionalInfoPanel {...BASE_PROPS} data={{ productType }} />);
     expect(screen.queryByText('logistics')).not.toBeInTheDocument();
     expect(screen.queryByTestId('field-stocked')).not.toBeInTheDocument();
     expect(screen.queryByTestId('field-returnable')).not.toBeInTheDocument();
   });
 
-  it('keeps the Logistics section visible for a stockable type (Article)', () => {
-    render(<ProductAdditionalInfoPanel {...BASE_PROPS} data={{ productType: 'I' }} />);
-    expect(screen.getByText('logistics')).toBeInTheDocument();
-    expect(screen.getByTestId('field-stocked')).toBeInTheDocument();
-    expect(screen.getByTestId('field-returnable')).toBeInTheDocument();
-  });
-
-  it('forces stocked/returnable to false as soon as the type is Service', () => {
+  it(`forces stocked/returnable to false as soon as the type is ${productType}`, () => {
     const onChange = vi.fn();
     render(
       <ProductAdditionalInfoPanel
         {...BASE_PROPS}
         onChange={onChange}
-        data={{ productType: 'S', stocked: true, returnable: true }}
+        data={{ productType, stocked: true, returnable: true }}
       />,
     );
     expect(onChange).toHaveBeenCalledWith('stocked', false, 'IsStocked');
     expect(onChange).toHaveBeenCalledWith('returnable', false, 'Returnable');
   });
 
-  it('does not call onChange when the flags are already false for a Service product', () => {
+  it(`does not call onChange when the flags are already false for a ${productType}-type product`, () => {
     const onChange = vi.fn();
     render(
       <ProductAdditionalInfoPanel
         {...BASE_PROPS}
         onChange={onChange}
-        data={{ productType: 'S', stocked: false, returnable: false }}
+        data={{ productType, stocked: false, returnable: false }}
       />,
     );
     expect(onChange).not.toHaveBeenCalled();
@@ -81,7 +79,7 @@ describe('ProductAdditionalInfoPanel — Logistics section for Service-type prod
         {...BASE_PROPS}
         editing={false}
         onChange={onChange}
-        data={{ productType: 'S', stocked: true, returnable: true }}
+        data={{ productType, stocked: true, returnable: true }}
       />,
     );
     expect(onChange).not.toHaveBeenCalled();
@@ -89,7 +87,7 @@ describe('ProductAdditionalInfoPanel — Logistics section for Service-type prod
 
   it('shows the section again with its own values when the type switches back to Article', () => {
     const { rerender } = render(
-      <ProductAdditionalInfoPanel {...BASE_PROPS} data={{ productType: 'S' }} />,
+      <ProductAdditionalInfoPanel {...BASE_PROPS} data={{ productType }} />,
     );
     expect(screen.queryByTestId('field-stocked')).not.toBeInTheDocument();
 
@@ -102,5 +100,14 @@ describe('ProductAdditionalInfoPanel — Logistics section for Service-type prod
     expect(screen.getByTestId('field-stocked')).toBeInTheDocument();
     expect(screen.getByTestId('field-stocked')).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByTestId('field-returnable')).toHaveAttribute('aria-checked', 'false');
+  });
+});
+
+describe('ProductAdditionalInfoPanel — Logistics section stays visible for stockable types', () => {
+  it('keeps the Logistics section visible for a stockable type (Article)', () => {
+    render(<ProductAdditionalInfoPanel {...BASE_PROPS} data={{ productType: 'I' }} />);
+    expect(screen.getByText('logistics')).toBeInTheDocument();
+    expect(screen.getByTestId('field-stocked')).toBeInTheDocument();
+    expect(screen.getByTestId('field-returnable')).toBeInTheDocument();
   });
 });

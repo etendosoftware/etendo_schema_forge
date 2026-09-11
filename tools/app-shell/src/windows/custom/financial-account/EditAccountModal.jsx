@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Copy, RefreshCw, Unlink2, Archive, AlertTriangle, Plug, Settings2, Calculator, RotateCcw, ChevronDown, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -31,17 +31,28 @@ import { canConnectToSaltEdge } from '@/components/financial-accounts/saltEdgeEl
 import { normalizeIban } from '@/lib/validateIban.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { validateIbanForCountry, countryLacksIbanConfig } from '@/lib/countryIban.js';
-import { formatCalendarDate } from '@/lib/dateOnly.js';
+import { formatCalendarDate, calendarISODaysAgo } from '@/lib/dateOnly.js';
 import { useSplitButtonDropdown } from './useSplitButtonDropdown';
 import BankConnectionDeleteConfirmModal from './BankConnectionDeleteConfirmModal';
 
 const EDIT_TAB_GENERAL = 'general';
 const EDIT_TAB_ACCOUNTING = 'accounting';
 
-// ETP-4872 — the 9 accounting fields, grouped the way the "Contabilidad" tab renders them.
-// Banco renders all 3 groups (9 fields); Caja/Tarjeta render only paymentIn/paymentOut (6 fields)
+// ETP-4872 — the accounting fields, grouped the way the "Contabilidad" tab renders them.
+// Banco renders all 3 groups (7 fields); Caja/Tarjeta render only paymentIn/paymentOut (4 fields)
 // — the "General" group is OMITTED for those types, not merely hidden (see
 // AccountingConfigurationSection). No field is required (Global Constraints, ETP-4872 plan).
+//
+// ETP-5207 — `clearedPaymentAccount` (Payment IN) / `clearedPaymentAccountOUT` (Payment OUT) are
+// deliberately ABSENT from paymentIn/paymentOut below, not merely hidden behind a flag: the
+// functional default for both is always empty (core's FIN_FINANCIAL_ACCOUNT_TRG seeds them with
+// the ledger asset account on creation, and FinancialAccountAccountingDefaultsSupport explicitly
+// clears them right after — see the backend). A non-null cleared account is what makes a
+// reconciliation post, so surfacing an editable field here would let a user re-introduce the very
+// bug ETP-5207 fixes. The two DAL properties themselves are NOT removed from the entity/handler —
+// only this window's UI stops exposing them. `saveAccountingConfiguration` (useFinancialAccountAccounting.js)
+// still sends both as an explicit `null` on every save, which reinforces the empty state as a
+// side effect of this omission rather than needing separate logic.
 const ACCOUNTING_FIELD_GROUPS = {
   general: [
     { key: 'fINBankrevaluationgainAcct', id: 'edit-account-bank-revaluation-gain-acct', labelKey: 'financeAccountsAccountingBankRevaluationGain' },
@@ -51,12 +62,10 @@ const ACCOUNTING_FIELD_GROUPS = {
   paymentIn: [
     { key: 'inTransitPaymentAccountIN', id: 'edit-account-in-transit-payment-in-acct', labelKey: 'financeAccountsAccountingInTransitIn' },
     { key: 'depositAccount', id: 'edit-account-deposit-acct', labelKey: 'financeAccountsAccountingDeposit' },
-    { key: 'clearedPaymentAccount', id: 'edit-account-cleared-payment-in-acct', labelKey: 'financeAccountsAccountingClearedIn' },
   ],
   paymentOut: [
     { key: 'fINOutIntransitAcct', id: 'edit-account-in-transit-payment-out-acct', labelKey: 'financeAccountsAccountingInTransitOut' },
     { key: 'withdrawalAccount', id: 'edit-account-withdrawal-acct', labelKey: 'financeAccountsAccountingWithdrawal' },
-    { key: 'clearedPaymentAccountOUT', id: 'edit-account-cleared-payment-out-acct', labelKey: 'financeAccountsAccountingClearedOut' },
   ],
 };
 
@@ -73,9 +82,16 @@ const ACCOUNTING_FIELDS_ALL_TYPES = [
   ...ACCOUNTING_FIELD_GROUPS.paymentOut,
 ].map((fieldMeta) => fieldMeta.key);
 
+// ETP-5207 — literal lookup, not a template-interpolated class name, so Tailwind's static scanner
+// can see every class. Keyed by field count because "General" (3 fields) and paymentIn/paymentOut
+// (2 fields each, since the "Cleared payment account" field was removed from both) no longer share
+// one fixed column count.
+const ACCOUNTING_GROUP_GRID_COLS = { 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3' };
+
 /**
  * Accounting field keys that actually belong to `accountType`'s rendered layout (ETP-4872 BUG-1).
- * `accounting.values` is always keyed on all 9 fields regardless of type — the field state map
+ * `accounting.values` is always keyed on all fields this window renders, regardless of type — the
+ * field state map
  * itself is never reset when Type changes mid-edit, since a value picked while a since-hidden
  * group was still visible must not be silently thrown away if the user flips Type back before
  * Save. This helper is consulted only at save time (`persistAccountEdits`), so a value that
@@ -194,7 +210,10 @@ function notifySyncResult(res, ui) {
   if (res?.status === 'ERROR') {
     toast.error(msg || ui('financeAccountsBankConnectionSyncError'));
   } else if (res?.status === 'WARNING') {
-    toast.info(msg || ui('financeAccountsBankConnectionSyncDone'));
+    // ETP-5181: a WARNING carries something the user has to act on — most often "your import
+    // range reaches further back than this provider serves" — so it must not read as a neutral
+    // notice. The sync itself did complete; only the wording is downgraded, not the outcome.
+    toast.warning(msg || ui('financeAccountsBankConnectionSyncDone'));
   } else {
     toast.success(msg || ui('financeAccountsBankConnectionSyncDone'));
   }
@@ -235,7 +254,9 @@ async function persistAccountEdits({
   if (reconciliation?.writeoffDirty) updates.writeoffLimit = reconciliation.writeoffLimit;
   if (glItemDifference?.dirty) updates.glItemDifferenceId = glItemDifference.value?.id || '';
   if (Object.keys(updates).length > 0) {
-    await updateAccount(account.id, updates);
+    // The version this form was opened on. Added alongside the changed fields, never instead of
+    // the emptiness gate above, so an untouched form still issues no PUT at all.
+    await updateAccount(account.id, { ...updates, updated: account.updated });
   }
   if (settings.dirty) {
     await saveImportSettings({ financialAccountId: account.id, ...settings.form });
@@ -257,14 +278,32 @@ async function persistAccountEdits({
   }
 }
 
-async function runSync({ account, sync, refresh, onSaved, ui, setBusy }) {
+/**
+ * Runs a "Sincronizar ahora", persisting the pending edits first (ETP-5104).
+ *
+ * Saving before syncing is not a convenience — it is the fix for two symptoms of the same bug. The
+ * bridge reads the import date range from the DB, so an unsaved range was silently ignored and the
+ * import ran with the previously stored dates; and `refresh()` below rewrites both `form` and
+ * `initial` from the server, so whatever the user had typed was then overwritten in place ("los
+ * campos se restablecen"). Persisting first makes the sync use the values on screen AND makes the
+ * refresh a no-op for them.
+ *
+ * `beforeSync` is a REF, not a plain callback: it is filled in by the modal body, which is where
+ * the other form hooks (fields / reconciliation / accounting) are declared — long after this hook
+ * runs. It throws to abort, which is exactly what the `catch` below already handles.
+ */
+async function runSync({ account, sync, refresh, onSaved, ui, setBusy, beforeSync }) {
   setBusy(true);
   try {
+    await beforeSync?.current?.();
     const res = await sync(account.id);
     await refresh();
     onSaved?.();
     notifySyncResult(res, ui);
   } catch (err) {
+    // `handled` marks a failure beforeSync already reported with the save path's own wording —
+    // toasting `err.message` on top of it would show the same problem twice, the second time raw.
+    if (err?.handled) return;
     toast.error(err.message === 'BANK_CONNECTION_TIMEOUT' ? ui('financeAccountsBankConnectionTimeout') : err.message);
   } finally {
     setBusy(false);
@@ -500,13 +539,64 @@ function useAccountFields(open, account, hasBankLink, hasTransactions) {
 }
 
 /**
+ * True when both import dates are set and "Importar desde" is later than "Importar hasta".
+ *
+ * Compares the ISO strings exactly as `DateInput` emits them (`yyyy-mm-dd`, see
+ * components/forms/fields.jsx) — in that format lexicographic order IS chronological order, so the
+ * check is exact and completely timezone-free. Deliberately NOT `parseCalendarDate`: no `Date` is
+ * ever constructed here, so the date-only shift this repo guards against (ETP-4850) cannot occur,
+ * and pulling in a parser would only add a way to get it wrong.
+ *
+ * An empty box means "no bound" and never invalidates: a range with only one end is legal, and
+ * blocking Save on a half-typed form would be worse than the bug this guards.
+ */
+function isImportRangeInvalid({ importFromDate, importToDate } = {}) {
+  if (!importFromDate || !importToDate) return false;
+  return importFromDate > importToDate;
+}
+
+/**
+ * ETP-5181. Whether "Importar desde" reaches further back than the bank will serve, and from
+ * which date it actually will.
+ *
+ * PSD2 providers publish a `max_fetch_interval` (90 days under the regulation's baseline, more
+ * for some banks) and the account's provider record carries it; the bridge exposes it on
+ * `GET status` as `maxFetchInterval`. A missing or non-positive limit means the provider never
+ * published one, and we advise nothing rather than guess.
+ *
+ * Advisory only, deliberately: it does not block Save. The date stays exactly as typed, because
+ * the range is applied as a LOCAL filter over whatever the provider returns (Salt Edge ignores
+ * from_date/to_date — see BankIntegrationUtils.buildSaltEdgeTransactionsEndpoint), so an
+ * over-long range loses nothing inside the window that IS available. The point is only to stop
+ * the user expecting history the bank will never hand over.
+ *
+ * The comparison is plain string `<` on two `yyyy-MM-dd` values: ISO date-only strings order
+ * lexicographically, so no `Date` is built here and there is no timezone to get wrong. The bound
+ * itself comes from `calendarISODaysAgo`, which does the local-calendar arithmetic.
+ */
+function importFromBeyondFetchInterval(importFromDate, maxFetchInterval) {
+  if (!importFromDate) return null;
+  // Finiteness FIRST, then a positive comparison. Do not collapse this into `maxFetchInterval <= 0`
+  // (what Sonar's S1940 proposes for the equivalent `!(maxFetchInterval > 0)`): the bridge OMITS
+  // the key when the provider declares no limit, and `undefined <= 0` is false, so that rewrite
+  // would fall through on the commonest case and build the bound from NaN. `NaN <= 0` is false
+  // too. Stating finiteness explicitly says what the guard is actually for and keeps the
+  // comparison uninverted.
+  if (!Number.isFinite(maxFetchInterval) || maxFetchInterval <= 0) return null;
+  const earliest = calendarISODaysAgo(maxFetchInterval);
+  return importFromDate < earliest ? { days: maxFetchInterval, earliest } : null;
+}
+
+/**
  * Bank connection panel state + actions.
  *
  * Covers both live connections and soft-disconnected ones: a deactivated connection still needs
  * its status fetched so the panel can offer "Reconectar" instead of pretending the account never
  * had a bank link (ETP-4764).
  */
-function useBankConnection(open, account, bankConnected, onSaved, onClose, bankReconnectable) {
+function useBankConnection(
+  open, account, bankConnected, onSaved, onClose, bankReconnectable, beforeSync,
+) {
   const ui = useUI();
   const { fetchStatus, sync, disconnect, reconnect, finishReconnect } = useBankConnectionActions();
   const [status, setStatus] = useState(null);
@@ -550,9 +640,19 @@ function useBankConnection(open, account, bankConnected, onSaved, onClose, bankR
     }
   }, [open, hasBankLink, refresh]);
 
+  // ETP-5104 CP-4: an inverted range never reaches the bridge. Without this the sync fails deep
+  // inside the PSD2 module (SaltEdgeConnectionHelper.validateDateRange), whose OBException is
+  // caught and re-wrapped into PSD2_ErrorRetrievingRransactionsForTheAccount — an untranslated
+  // toast carrying the Salt Edge connection id and raw Java timestamps.
   const handleSync = useCallback(
-    () => runSync({ account, sync, refresh, onSaved, ui, setBusy }),
-    [account, sync, refresh, onSaved, ui],
+    () => {
+      if (isImportRangeInvalid(form)) {
+        toast.error(ui('financeAccountsBankConnectionImportRangeInvalid'));
+        return Promise.resolve();
+      }
+      return runSync({ account, sync, refresh, onSaved, ui, setBusy, beforeSync });
+    },
+    [account, sync, refresh, onSaved, ui, form, beforeSync],
   );
   const handleReconnect = useCallback(
     () => runReconnect({ account, reconnect, finishReconnect, refresh, onSaved, ui, setBusy }),
@@ -587,7 +687,14 @@ function useBankConnection(open, account, bankConnected, onSaved, onClose, bankR
 
   return {
     status, loading, busy, form, setForm, refresh, connected, reconnectable,
-    hasBankLink: liveHasBankLink, settingsDirty,
+    hasBankLink: liveHasBankLink, settingsDirty, rangeInvalid: isImportRangeInvalid(form),
+    // Derived from `form`, not from `initial`, so it covers both halves of the requirement with
+    // no extra wiring: `form` is hydrated from GET status when the modal opens (so an account
+    // already saved with an out-of-range date advises immediately, untouched) and rewritten on
+    // every keystroke of the date box (so it tracks edits).
+    fetchIntervalWarning: importFromBeyondFetchInterval(
+      form.importFromDate, status?.maxFetchInterval,
+    ),
     handleSync, handleReconnect, handleDisconnect, handleDeleteConnection,
   };
 }
@@ -838,7 +945,7 @@ function GlItemDifferenceSection({ ui, glItemDifference, first = false }) {
 // Accounting configuration hook + section (ETP-4530 — Accounting tab)
 // ---------------------------------------------------------------------------
 
-/** Builds an empty { [field]: { value: '', label: '' } } map for all 9 accounting fields. */
+/** Builds an empty { [field]: { value: '', label: '' } } map for every accounting field this window renders. */
 function emptyAccountingValues() {
   return ACCOUNTING_FIELDS.reduce((acc, field) => {
     acc[field] = { value: '', label: '' };
@@ -847,13 +954,18 @@ function emptyAccountingValues() {
 }
 
 /**
- * Loads and saves the account's accounting configuration (ETP-4872 — 9 account-type-dependent
+ * Loads and saves the account's accounting configuration (ETP-4872 — account-type-dependent
  * fields, replacing the old 2-field `fINAssetAcct`/`fINTransitoryAcct` set) used when generating
  * transaction journal entries. Backed by the `accountingConfiguration` entity, fully owned by
  * `FinancialAccountAccountingHandler`: GET resolves the account's ledger and finds-or-defaults
  * the row; save finds-or-creates it. The GET response also carries `catalogs.accounts` (active
  * accounting combinations for that ledger), used to populate every search select client-side
  * with no extra round-trip. No field is required (ETP-4872 plan, Global Constraints).
+ *
+ * ETP-5207 — the response's `clearedPaymentAccount`/`clearedPaymentAccountOUT` are read from the
+ * server but intentionally NOT included in `ACCOUNTING_FIELDS`, so they never enter `values`: this
+ * window no longer lets a user view or edit them (see `ACCOUNTING_FIELD_GROUPS`). The DAL
+ * properties and the handler both keep them — only this UI stops surfacing them.
  */
 function useAccountingConfiguration(open, account) {
   const { fetchAccountingConfiguration } = useFinancialAccountAccounting();
@@ -936,7 +1048,7 @@ function AccountingConfigurationSection({ ui, accounting, accountType }) {
     );
   }
 
-  // Banco gets all 3 groups (9 fields); Caja/Tarjeta omit the "General" group entirely (not just
+  // Banco gets all 3 groups (7 fields); Caja/Tarjeta omit the "General" group entirely (not just
   // hide it) — it has no bank connection, so bank revaluation/fee accounts don't apply.
   const groups = accountType === ACCOUNT_TYPE.BANK
     ? [
@@ -954,11 +1066,14 @@ function AccountingConfigurationSection({ ui, accounting, accountType }) {
       {groups.map((group) => (
         <div key={group.titleKey} className="flex flex-col gap-3">
           <h4 className="text-sm font-medium text-foreground">{ui(group.titleKey)}</h4>
-          {/* ETP-4872 — every group is fixed at exactly 3 fields (see ACCOUNTING_FIELD_GROUPS),
-              so sm:grid-cols-3 fills the row instead of orphaning the 3rd field alone on a
-              half-empty row under sm:grid-cols-2. Same 3-column convention BankConnectionPanel
-              already uses above for its own fixed-3-item row. */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {/* ETP-4872 — each group's column count matches its own field count (see
+              ACCOUNTING_FIELD_GROUPS), so the row fills exactly instead of leaving an orphaned gap
+              under a fixed sm:grid-cols-3. "General" still has 3 fields; paymentIn/paymentOut
+              dropped to 2 when ETP-5207 removed their "Cleared payment account" field. Literal
+              lookup, not a template-interpolated class name, so Tailwind's static scanner can see
+              every possible class. Same fixed-column convention BankConnectionPanel already uses
+              above for its own 3-item row. */}
+          <div className={`grid grid-cols-1 gap-4 ${ACCOUNTING_GROUP_GRID_COLS[group.fields.length]}`}>
             {group.fields.map((fieldMeta) => (
               <Field
                 key={fieldMeta.key}
@@ -1045,8 +1160,12 @@ export function EditAccountModal({
   // reconnect flow.
   const bankReconnectable = account?.bankReconnectable === true;
   const hasTransactions = account?.hasTransactions === true;
+  // Filled in below, once every form hook exists. "Sincronizar ahora" persists the whole form
+  // before syncing (ETP-5104), and the connection hook is declared before the hooks holding the
+  // rest of the form — a ref is the only way to hand it something it cannot see yet.
+  const beforeSyncRef = useRef(null);
   const bankConnection = useBankConnection(
-    open, account, bankConnected, onSaved, onClose, bankReconnectable,
+    open, account, bankConnected, onSaved, onClose, bankReconnectable, beforeSyncRef,
   );
   // Anything that must not diverge from the linked bank account keys off this, not off
   // `bankConnected`: a deactivated account is still bound to one Salt Edge account (ETP-4764).
@@ -1106,11 +1225,17 @@ export function EditAccountModal({
     || fields.countryDirty || fields.swiftDirty
     || bankConnection.settingsDirty || (!isCash && recon.dirty) || glItemDifference.dirty
     || accounting.dirty;
-  const canSave = dirty && !saving && fields.name.trim() !== '' && !fields.ibanInvalid
-    && !recon.amountToleranceInvalid;
+  // What makes the form unsavable, independently of whether anything changed. Split out of
+  // `canSave` because "Sincronizar ahora" needs the same verdict without the `dirty`/`saving`
+  // terms: it must refuse to sync a form it cannot persist rather than sync stale dates.
+  const saveBlocked = fields.name.trim() === '' || fields.ibanInvalid
+    || recon.amountToleranceInvalid || bankConnection.rangeInvalid;
+  const canSave = dirty && !saving && !saveBlocked;
   const busy = saving || bankConnection.busy;
 
-  const handleSave = async () => {
+  // Persists everything the modal holds and nothing else — no toast, no close. Shared by
+  // "Guardar cambios" and by the save-before-sync step (ETP-5104), which must not close the modal.
+  const persistAll = async () => {
     setSaving(true);
     setError(null);
     try {
@@ -1125,23 +1250,57 @@ export function EditAccountModal({
         saveImportSettings,
         saveAccountingConfiguration,
       });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const reportSaveError = (err) => {
+    // 409 stopped meaning one single thing when ETP-5073 added optimistic locking: a concurrent
+    // edit answers 409 too, with `error: "stale_record"`. Branching on the status alone told a user
+    // whose only problem was a stale record that the account NAME was taken — a message about a
+    // field they had not touched, and no hint that reloading is the way out. The code is the
+    // discriminator; the status is not.
+    if (err.code === 'stale_record' || err.body?.error === 'stale_record') {
+      setError(ui('financeAccountsEditStaleRecord'));
+    } else if (err.status === 409) {
+      setError(ui('financeAccountsNewNameExists'));
+    } else {
+      // The shared mechanism (`@/lib/backendErrors.js`), not a local table: it already covers
+      // this window's whole 400 family — including the String.format-interpolated country/IBAN
+      // messages that an exact-match table structurally cannot reach (ETP-4896 QA follow-up).
+      // useAccountFields' own pre-check is meant to catch these BEFORE the request fires; this
+      // stays the safety net for what slips past (a stale/empty countryIbanRules, a race with
+      // another tab, an API/MCP-shaped body).
+      toast.error(translateBackendError(err.message, ui) || ui('financeAccountsEditError'));
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      await persistAll();
       toast.success(ui('financeAccountsEditSuccess'));
       onSaved?.();
       onClose?.();
     } catch (err) {
-      if (err.status === 409) {
-        setError(ui('financeAccountsNewNameExists'));
-      } else {
-        // The shared mechanism (`@/lib/backendErrors.js`), not a local table: it already covers
-        // this window's whole 400 family — including the String.format-interpolated country/IBAN
-        // messages that an exact-match table structurally cannot reach (ETP-4896 QA follow-up).
-        // useAccountFields' own pre-check is meant to catch these BEFORE the request fires; this
-        // stays the safety net for what slips past (a stale/empty countryIbanRules, a race with
-        // another tab, an API/MCP-shaped body).
-        toast.error(translateBackendError(err.message, ui) || ui('financeAccountsEditError'));
-      }
-    } finally {
-      setSaving(false);
+      reportSaveError(err);
+    }
+  };
+
+  // ETP-5104: "Sincronizar ahora" saves first. Anything it reports is reported HERE, with the
+  // save-path wording, and re-thrown carrying `handled` so runSync aborts the sync without
+  // toasting the same failure a second time in its own (raw `err.message`) wording.
+  beforeSyncRef.current = async () => {
+    if (!dirty) return;
+    if (saveBlocked) {
+      toast.error(ui('financeAccountsEditError'));
+      throw Object.assign(new Error('EDIT_ACCOUNT_FORM_INVALID'), { handled: true });
+    }
+    try {
+      await persistAll();
+    } catch (err) {
+      reportSaveError(err);
+      throw Object.assign(err, { handled: true });
     }
   };
 
@@ -1169,7 +1328,15 @@ export function EditAccountModal({
         // on DialogContent clipping nothing so its dropdown can render past the box edge (see that
         // component's own doc comment below) — `max-h` alone already bounds the visible layout via
         // flexbox without clipping that popover.
-        className="flex max-h-[90vh] flex-col max-w-[1020px] bg-card p-0"
+        // max-w bumped 1020px -> 1080px: at 1020px, in the Accounting tab's 3-column grid,
+        // "Cuenta de ganancia por revalorización bancaria" (financeAccountsAccountingBankRevaluationGain)
+        // wraps to 2 lines while its row siblings stay on 1, misaligning their controls — grid
+        // cells stretch to a shared row height, but each Field's own select still sits right below
+        // its OWN label, so a taller label pushes only that one control down. Measured against the
+        // real bundled Tailwind/font (not estimated): wraps up to 1035px, fits from 1040px; 1080px
+        // keeps a safety margin for font-rendering/zoom variance without widening the modal more
+        // than needed. Re-measure this if that label's translation changes.
+        className="flex max-h-[90vh] flex-col max-w-[1080px] bg-card p-0"
         onPointerDownOutside={(e) => { if (confirmDeleteConnectionOpen) e.preventDefault(); }}
         onInteractOutside={(e) => { if (confirmDeleteConnectionOpen) e.preventDefault(); }}
         onEscapeKeyDown={(e) => {
@@ -1193,8 +1360,8 @@ export function EditAccountModal({
         </DialogHeader>
 
         {/* ETP-4872 — the only scrollable region: header and footer stay pinned outside it (same
-            shape as ImportStatementModal's body wrapper) so the 9-field Accounting tab can grow
-            without pushing Cancel/Save out of view. */}
+            shape as ImportStatementModal's body wrapper) so the Accounting tab can grow without
+            pushing Cancel/Save out of view. */}
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
           <AccountFieldsGrid
             ui={ui}
@@ -1642,6 +1809,28 @@ function BankConnectionPanel({ ui, bankConnection, busy, reauthMessage }) {
         </button>
       </div>
 
+      {/* ETP-5181. Deliberately a banner at the top of the panel, not small print under the grid:
+          as a one-line hint it sat right next to the far louder re-authorization banner and was
+          simply not read. Mirrors that banner's shape (same warning tokens, same AlertTriangle)
+          so the two register as the same class of notice — minus the action button, because
+          there is nothing to click: the fix is to edit the date right below, and the value is
+          saveable as it stands. */}
+      {bankConnection.fetchIntervalWarning ? (
+        <div
+          className="flex items-center gap-2 rounded-lg bg-[var(--status-warning-bg)] px-3 py-3"
+          data-testid="bank-connection-import-fetch-interval-warning"
+        >
+          <AlertTriangle
+            className="h-4 w-4 shrink-0 text-[var(--status-warning-fg)]"
+            data-testid="AlertTriangle__73027d" />
+          <span className="text-sm font-medium text-[var(--status-warning-fg)]">
+            {ui('financeAccountsBankConnectionImportBeyondFetchInterval', {
+              days: bankConnection.fetchIntervalWarning.days,
+            })}
+          </span>
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <DateInput
           label={ui('financeAccountsBankConnectionImportFrom')}
@@ -1675,6 +1864,15 @@ function BankConnectionPanel({ ui, bankConnection, busy, reauthMessage }) {
           </div>
         </Field>
       </div>
+
+      {/* ETP-5104. Sits under the whole grid rather than inside one Field: the error belongs to the
+          PAIR of dates, and `Field` has no error slot anyway (components/forms/fields.jsx). Same
+          shape as the amount-tolerance error in the reconciliation section. */}
+      {bankConnection.rangeInvalid ? (
+        <p className="text-xs text-destructive" data-testid="bank-connection-import-range-error">
+          {ui('financeAccountsBankConnectionImportRangeInvalid')}
+        </p>
+      ) : null}
 
       {reauthMessage ? (
         <div className="flex items-center justify-between gap-2 rounded-lg bg-[var(--status-warning-bg)] px-3 py-3" data-testid="bank-connection-edit-reauth-banner">

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { getSifTbaiSuccessKey, getSifTbaiErrorKey } from './sifSending.js';
 
 async function callProcess(apiFetch, specName, recordId, columnName) {
   const res = await apiFetch(
@@ -26,6 +27,11 @@ export default function SifSendingModal({
 }) {
   const ui = useUI();
   const apiFetch = useApiFetch(base);
+  // ETP-5087: the TBAI result copy follows the same purchase/sales split as the
+  // confirmation copy (see sifSending.js) — a purchase invoice is sent to Batuz,
+  // never to the generic TicketBAI scheme.
+  const tbaiSuccessKey = getSifTbaiSuccessKey(specName);
+  const tbaiErrorKey = getSifTbaiErrorKey(specName);
   const [phase, setPhase] = useState('confirm');
   const [results, setResults] = useState({});
   const [progress, setProgress] = useState(0);
@@ -157,7 +163,7 @@ export default function SifSendingModal({
                     {results.tbai.ok ? '✓' : '✗'}
                   </span>
                   <span>
-                    {results.tbai.ok ? ui('sendToSifSuccessTbai') : (results.tbai.error || ui('sendToSifErrorTbai'))}
+                    {results.tbai.ok ? ui(tbaiSuccessKey) : (results.tbai.error || ui(tbaiErrorKey))}
                   </span>
                 </div>
               )}

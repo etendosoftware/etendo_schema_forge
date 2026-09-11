@@ -280,7 +280,7 @@ export default function WarehousePage({ windowName, recordId, ...props }) {
       api={api}
         secondaryTabs={[
           { key: 'productTransactions', label: 'Transactions', Panel: WarehouseTransactionsTable, tabOrder: 1 },
-          { key: 'accounting', label: 'Accounting', Table: AccountingTable, Form: AccountingForm, tabOrder: 2 },
+          { key: 'accounting', label: 'Accounting', Table: AccountingTable, Form: AccountingForm, tabOrder: 2, visibleWhenCapability: 'showAccountingFields' },
         ]}
         hidePrint
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Warehouse", config: {} } }]}

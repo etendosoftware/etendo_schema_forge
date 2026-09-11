@@ -53,35 +53,66 @@ test.describe('ETP-4905 — Product import category resolution (Tomcat integrati
     await navigateTo(page, 'product');
     await expect(page.getByTestId('ListView__importButton')).toBeVisible({ timeout: 30_000 });
 
-    const categoriesPayload = await page.evaluate(async () => {
+    // Both probes below must send the SAME `Accept-Language` the app's own requests send
+    // (`authHeaders()` -> `getStoredLocale()`, localStorage key `schema-forge-locale`, default
+    // `es_ES`). Without it `NeoAuthenticator.applyRequestLanguage` is a silent no-op and the
+    // backend resolves every `*_Trl` name into the user's AD language instead (ETP-4685,
+    // ETP-5022) — which since ETP-5079 would make the category `_identifier` read here disagree
+    // with the label the product grid actually renders.
+    const readNeoJson = (path) => page.evaluate(async (url) => {
       const token = localStorage.getItem('sf_auth_token');
-      const response = await fetch('/sws/neo/product-category/productCategory?limit=1000', {
-        headers: { Authorization: `Bearer ${token}` },
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Accept-Language': localStorage.getItem('schema-forge-locale') || 'es_ES',
+        },
       });
       return { status: response.status, body: await response.json() };
-    });
+    }, path);
+
+    const categoriesPayload = await readNeoJson('/sws/neo/product-category/productCategory?limit=1000');
     expect(categoriesPayload.status).toBe(200);
     const categories = categoriesPayload.body?.response?.data ?? categoriesPayload.body?.data ?? [];
-    const defaultsPayload = await page.evaluate(async () => {
-      const token = localStorage.getItem('sf_auth_token');
-      const response = await fetch('/sws/neo/product/product/defaults', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      return { status: response.status, body: await response.json() };
-    });
+    const defaultsPayload = await readNeoJson('/sws/neo/product/product/defaults');
     expect(defaultsPayload.status).toBe(200);
     const defaultUomId = defaultsPayload.body?.defaults?.uOM;
     const defaultUomLabel = defaultsPayload.body?.defaults?.['uOM$_identifier'];
     expect(defaultUomId, 'expected the product defaults endpoint to provide a UOM').toBeTruthy();
     expect(defaultUomLabel).toBe('Unidad');
-    const existingCategory = categories.find((category) => {
-      const label = String(category.name ?? category._identifier ?? '').trim().toLowerCase();
-      return label === 'otros' || label === 'bebidas';
-    });
-    expect(existingCategory, 'expected a seeded existing category (Otros or Bebidas)').toBeTruthy();
-    const existingCategoryName = existingCategory.name ?? existingCategory._identifier;
+    // ETP-5079 renamed the seeded starter category ("Otros" -> VALUE/NAME "Generic") and gave it
+    // an es_ES `M_PRODUCT_CATEGORY_TRL` row ("Genérico"); the other seeded category, "Discounts",
+    // is flagged `EM_Etgo_IsSystemCategory='Y'` and is filtered out of every window and selector.
+    //
+    // Match on the SEARCH KEY, never on a name. The category now has three identifying strings
+    // and only one of them is locale-independent:
+    //   - `searchKey` (M_Product_Category.Value) is `AD_Column.ISTRANSLATED='N'`, so it reads
+    //     "Generic" in every locale — the translation-independent handle;
+    //   - `name` (M_Product_Category.Name) is served by `DefaultJsonDataService` with
+    //     `DataResolvingMode.FULL`, i.e. `bob.get("name")`, the raw base column: always "Generic";
+    //   - `_identifier` is `bob.getIdentifier()`, and Name is `ISTRANSLATED='Y' ISIDENTIFIER='Y'`,
+    //     so `IdentifierProvider` resolves it through the `*_Trl` row: "Genérico" in an es_ES
+    //     session. `name` and `_identifier` therefore no longer agree.
+    const SEEDED_CATEGORY_SEARCH_KEY = 'Generic';
+    const existingCategory = categories.find(
+      (category) => String(category.searchKey ?? category.value ?? category._value ?? '').trim()
+        === SEEDED_CATEGORY_SEARCH_KEY,
+    );
+    expect(
+      existingCategory,
+      `expected the seeded starter category with searchKey "${SEEDED_CATEGORY_SEARCH_KEY}"`,
+    ).toBeTruthy();
     const existingCategoryCode = existingCategory.searchKey ?? existingCategory.value ?? existingCategory._value;
     expect(existingCategoryCode, 'expected the existing category to expose a search key').toBeTruthy();
+    // The CSV cell that addresses the category BY NAME must carry the untranslated base name:
+    // `resolveOrAutoCreateDependentEntity` step 2 compares `normalizeText(record.name)` against the
+    // cell, and `record` comes from this very payload. `normalizeText` strips diacritics, so
+    // "Genérico" collapses to "generico" and would never match "generic".
+    const existingCategoryName = existingCategory.name;
+    expect(existingCategoryName, 'expected the existing category to expose a base name').toBeTruthy();
+    // The grid renders `productCategory$_identifier` (`resolveIdentifier()` -> DataTable), which IS
+    // translated — so the DOM assertions below use the identifier, not the base name. Both were the
+    // same string before ETP-5079, which is why one variable used to serve both roles.
+    const existingCategoryLabel = existingCategory._identifier ?? existingCategoryName;
 
     const categoryCreateBodies = [];
     const batchBodies = [];
@@ -172,7 +203,7 @@ test.describe('ETP-4905 — Product import category resolution (Tomcat integrati
     }
     for (const row of productRows.filter((candidate) => candidate.categoryMode !== 'new')) {
       const productTableRow = page.getByText(row.name, { exact: true }).locator('xpath=ancestor::tr');
-      await expect(productTableRow.getByText(existingCategoryName, { exact: true })).toBeVisible();
+      await expect(productTableRow.getByText(existingCategoryLabel, { exact: true })).toBeVisible();
     }
     for (const row of productRows.filter((candidate) => candidate.categoryMode === 'new')) {
       const productTableRow = page.getByText(row.name, { exact: true }).locator('xpath=ancestor::tr');

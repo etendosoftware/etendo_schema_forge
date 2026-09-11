@@ -79,6 +79,54 @@ describe('OrderCreateInvoice', () => {
     assert.match(src, /soManageInvoice/);
   });
 
+  // ETP-5024 QA rejection: confirming a Sales Order from the detail page (the
+  // draftMode "Confirm" button → 'sales-order:open-confirm-modal' event → this
+  // module's own <ConfirmModal>) showed the "business partner is on hold"
+  // documentAction refusal in English, even though the same AD_MESSAGE already
+  // has a correct Spanish AD_MESSAGE_TRL and the inline banner (useCallout.js,
+  // fixed earlier in this ticket) renders it correctly translated. Root cause:
+  // both `headers` objects in this file (OrderCreateInvoice's own useMemo, and
+  // ManageDocsLauncher's) were hand-rolled with only Authorization +
+  // Content-Type, unlike the shared buildHeaders() helper used everywhere else
+  // (useEntity.js, useConfirmWithCredit.js, useCreateContactModal.jsx, …) — so
+  // every fetch in this file, including the documentAction/CO POST that
+  // surfaces this exact message, never sent Accept-Language. The backend
+  // (NeoAuthenticator.applyRequestLanguage / NeoLanguage.applyToContext)
+  // silently falls back to AD_User.AD_Language when that header is absent.
+  describe('Confirm-modal request headers carry Accept-Language (ETP-5024)', () => {
+    it('imports the shared buildHeaders() helper instead of hand-rolling headers', () => {
+      assert.match(src, /import \{ buildHeaders \} from '@\/auth\/api\.js';/);
+    });
+
+    it('OrderCreateInvoice builds its headers via buildHeaders(token)', () => {
+      const fnBody = src.slice(
+        src.indexOf('export default function OrderCreateInvoice'),
+        src.indexOf('export function ConfirmModal'),
+      );
+      assert.match(fnBody, /const headers = useMemo\(\(\) => \(buildHeaders\(token\)\), \[token\]\);/);
+    });
+
+    it('ManageDocsLauncher builds its headers via buildHeaders(token)', () => {
+      const fnBody = src.slice(src.indexOf('export function ManageDocsLauncher'));
+      assert.match(fnBody, /const headers = useMemo\(\(\) => \(buildHeaders\(token\)\), \[token\]\);/);
+    });
+
+    it('no header object in this file is hand-rolled with only Authorization/Content-Type (would silently drop Accept-Language)', () => {
+      assert.doesNotMatch(src, /Authorization: `Bearer \$\{token\}`/);
+    });
+
+    it('the documentAction/CO POST that surfaces the on-hold refusal reuses this same headers value', () => {
+      const confirmModalSrc = src.slice(
+        src.indexOf('export function ConfirmModal'),
+        src.indexOf('export function CreateDocsModal'),
+      );
+      assert.match(
+        confirmModalSrc,
+        /fetch\(\s*`\$\{apiBaseUrl\}\/header\/\$\{orderId\}\/action\/documentAction`,\s*\{ method: 'POST', headers, body: JSON\.stringify\(\{ docAction: 'CO' \}\) \},?\s*\);/,
+      );
+    });
+  });
+
   describe('ConfirmModal total-discount preview (ETP-4006)', () => {
     it('applies the total-discount factor only while the order is still in DR', () => {
       assert.match(src, /const discountPct\s*=\s*Number\(d\.etgoTotalDiscount \?\? 0\)/);
@@ -86,15 +134,69 @@ describe('OrderCreateInvoice', () => {
       assert.match(src, /const discountFactor\s*=\s*\(isPreCompletion && discountPct > 0\) \? \(1 - discountPct \/ 100\) : 1/);
     });
 
-    it('computes grandTotal as round(net × factor) + round(tax × factor), not round(gross × factor) (ETP-4017)', () => {
-      // Anti-double-rounding rule: see DocumentTotalsPanel / documentTotals.js.
-      // The displayed total must equal sum of displayed components so it agrees
-      // with the order's right panel and with AEAT-compliant printed invoices.
+    it('computes grandTotal as grossBase directly, not totalLines + a re-derived tax delta (ETP-5132 double-discount fix, supersedes ETP-4017)', () => {
+      // ETP-5132 (confirm-modal double-discount regression — see
+      // docs/bug-reports/2026-09-09-etp5132-confirm-modal-double-discount.md):
+      // grossBase (d.grandTotalAmount) is ALREADY GET-time-compensated for a
+      // pending total discount by the backend (ETP-4029) whenever the order is
+      // still in DR. The old ETP-4017 formula re-applied discountFactor on top
+      // of that already-discounted value, double-discounting the tax portion.
+      // totalLines (the Subtotal row) still needs the client-side factor —
+      // netBase/summedLineAmount is never backend-compensated — only the
+      // grandTotal (Total row) computation itself changes.
       assert.match(src, /const round2\s*=\s*\(n\) => Math\.round\(\(n \+ Number\.EPSILON\) \* 100\) \/ 100/);
       assert.match(src, /const grossBase\s*=\s*Number\(d\.grandTotalAmount\) \|\| 0/);
       assert.match(src, /const netBase\s*=\s*Number\(d\.summedLineAmount \?\? d\.totalLines \?\? grossBase\) \|\| 0/);
       assert.match(src, /const totalLines\s*=\s*round2\(netBase \* discountFactor\)/);
-      assert.match(src, /const grandTotal\s*=\s*totalLines \+ round2\(\(grossBase - netBase\) \* discountFactor\)/);
+      assert.match(src, /const grandTotal\s*=\s*grossBase;/);
+      assert.doesNotMatch(
+        src,
+        /const grandTotal\s*=\s*totalLines \+ round2\(\(grossBase - netBase\) \* discountFactor\)/,
+        'the superseded ETP-4017 formula must not be reintroduced — it double-discounts grossBase',
+      );
+    });
+  });
+
+  // ETP-5132 — proves the double-discount fix with concrete numbers, not just
+  // the literal-formula regex above. Extracts the REAL totals computation
+  // block from the live source (not a hand-copied re-implementation) and
+  // executes it via `new Function(...)`, mirroring the extraction pattern
+  // used for the needsInvoice/needsShip computation further below in this
+  // file — so this test tracks the actual arithmetic/branching and fails if
+  // the double-discount regression is reintroduced.
+  describe('ConfirmModal grandTotal numeric proof (ETP-5132 double-discount fix)', () => {
+    function extractTotalsBlock(source) {
+      const re = /const discountPct[\s\S]*?const grandTotal\s*=\s*grossBase;/;
+      const m = source.match(re);
+      assert.ok(m, 'could not locate the totals computation block (const discountPct … const grandTotal = grossBase;)');
+      return m[0];
+    }
+
+    function evaluate(d) {
+      const block = extractTotalsBlock(src);
+      // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+      const fn = new Function('d', `${block}\nreturn { discountFactor, totalLines, grandTotal };`);
+      return fn(d);
+    }
+
+    it('does not double-discount a Draft order whose grandTotalAmount is already GET-time-compensated (ETP-5132)', () => {
+      // grossBase simulates ETP-4029's GET-time compensation: the backend
+      // already applied the pending 10% total discount to grandTotalAmount
+      // (100 -> 90). netBase (summedLineAmount) simulates the raw,
+      // never-backend-compensated line total (100).
+      const { discountFactor, totalLines, grandTotal } = evaluate({
+        documentStatus: 'DR',
+        etgoTotalDiscount: 10,
+        grandTotalAmount: 90,
+        summedLineAmount: 100,
+      });
+      assert.equal(discountFactor, 0.9);
+      assert.equal(totalLines, 90, 'Subtotal row still applies the client-side factor to the raw netBase');
+      assert.equal(grandTotal, 90, 'Total row must equal grossBase as-is — not double-discounted');
+      // Regression guard: the superseded ETP-4017 formula would have produced
+      // 81 (90 + round2((90 - 100) * 0.9) = 90 - 9 = 81), silently discounting
+      // the already-compensated grossBase a second time.
+      assert.notEqual(grandTotal, 81);
     });
   });
 

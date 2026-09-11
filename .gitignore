@@ -102,3 +102,9 @@ docs/plans/drafts/
 # report-server Docker build context — assembled on demand from this repo plus
 # a schema_forge_core checkout (make report-server-context). Derived, never committed.
 .report-server-context/
+
+# Machine-local Etendo/module paths — every dev's module.path/etendo.path differ,
+# so this file was a permanent merge-conflict/overwrite magnet. Copy
+# schema_forge.properties.example to schema_forge.properties and fill in your
+# own paths; only the .example is versioned.
+schema_forge.properties

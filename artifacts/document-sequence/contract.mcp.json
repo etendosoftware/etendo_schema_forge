@@ -1,0 +1,128 @@
+{
+  "version": "0.1.0",
+  "generatedAt": "2026-09-08T16:52:49.566Z",
+  "contractChecksum": "90f903662a5ed719",
+  "apiPrediction": {
+    "specName": "document-sequence",
+    "baseUrl": "/sws/neo/document-sequence",
+    "crud": {
+      "sequence": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/document-sequence/sequence",
+        "detailUrl": "/sws/neo/document-sequence/sequence/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "settings"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "Name": "Nombre",
+        "Prefix": "Prefijo",
+        "Suffix": "Sufijo",
+        "StartNo": "Número inicial",
+        "CurrentNext": "Próximo número",
+        "IncrementNo": "Incremento",
+        "StartNewYear": "Reiniciar cada año",
+        "IsAutoSequence": "Numeración automática",
+        "Description": "Descripción"
+      }
+    }
+  },
+  "formState": {
+    "entities": {
+      "sequence": {
+        "fields": {
+          "name": {
+            "required": true
+          },
+          "description": {},
+          "autoNumbering": {
+            "required": true
+          },
+          "incrementBy": {
+            "required": true,
+            "defaultValue": "1"
+          },
+          "nextAssignedNumber": {
+            "required": true,
+            "defaultValue": "1000000"
+          },
+          "startingNo": {
+            "required": true,
+            "defaultValue": "1000000"
+          },
+          "prefix": {},
+          "suffix": {},
+          "restartSequenceEveryYear": {},
+          "valueFormat": {},
+          "mask": {
+            "defaultValue": "#######"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage document sequence records.",
+    "whenToUse": [
+      "Use for document sequence management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "name",
+        "autoNumbering",
+        "incrementBy",
+        "nextAssignedNumber",
+        "startingNo"
+      ],
+      "recommendedOrder": [
+        "createHeader"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [],
+    "edgeCases": [],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "name",
+          "autoNumbering",
+          "incrementBy",
+          "nextAssignedNumber",
+          "startingNo"
+        ]
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "362c56f2693d2f51"
+}

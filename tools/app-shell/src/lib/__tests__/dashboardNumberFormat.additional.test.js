@@ -78,8 +78,9 @@ describe('formatDashboardCompact', () => {
   });
 
   it('scales millions with M suffix and currency', () => {
-    // Canonical es-ES + real-symbol format (ETP-4314) for the currency-labeled path.
-    assert.equal(formatDashboardCompact(2_000_000, { currencyLabel: 'USD' }), `2,00${NBSP}$M`);
+    // Canonical es-ES + real-symbol format (ETP-4314), scale suffix before the
+    // symbol (ETP-5105: "2,00M €", not "2,00 €M").
+    assert.equal(formatDashboardCompact(2_000_000, { currencyLabel: 'USD' }), `2,00M${NBSP}$`);
   });
 
   it('scales billions with B suffix', () => {
@@ -87,8 +88,9 @@ describe('formatDashboardCompact', () => {
   });
 
   it('scales billions with B suffix and currency', () => {
-    // Canonical es-ES + real-symbol format (ETP-4314) for the currency-labeled path.
-    assert.equal(formatDashboardCompact(1_000_000_000, { currencyLabel: 'EUR' }), `1,00${NBSP}€B`);
+    // Canonical es-ES + real-symbol format (ETP-4314), scale suffix before the
+    // symbol (ETP-5105: "1,00B €", not "1,00 €B").
+    assert.equal(formatDashboardCompact(1_000_000_000, { currencyLabel: 'EUR' }), `1,00B${NBSP}€`);
   });
 
   it('treats non-finite values as 0', () => {

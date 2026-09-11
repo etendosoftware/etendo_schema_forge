@@ -264,3 +264,110 @@ describe('NewMovementWizard', () => {
     });
   });
 });
+
+// ── description max length (PSD-23) ───────────────────────────────────────────
+//
+// Third free-text description of the Financial Account window with the same defect: an
+// over-long value is allowed through and the column rejects it with a 400. The limit is
+// 255, published by the window contract at
+//   artifacts/financial-account/contract.json
+//     → frontendContract.entities.transaction.fields[].validation.maxLength
+// and declared once as FINANCIAL_ACCOUNT_FIELD_LIMITS.transactionDescription in
+// windows/custom/financial-account/fieldLengthValidation.js.
+//
+// Two structural gaps the fix has to close here, both currently absent:
+//   1. the stage-1 textarea (index.jsx, inside MovementBasics) carries NO data-testid, so
+//      the field is unaddressable — the fix adds `wizard-description`, plus
+//      `wizard-description-error` and `wizard-description-counter`;
+//   2. the stage-1 "Siguiente" button (index.jsx footer) has NO gate at all — it is a bare
+//      `onClick={() => setStage(2)}` — so an invalid stage-1 form walks straight into
+//      stage 2 and on to handleCreate. The fix gives it a `disabled`.
+//
+// The Next button is located by its i18n key rather than a testid, matching every other
+// button lookup in this file, so the test holds whether or not the fix also adds one.
+describe('NewMovementWizard — description max length', () => {
+  const LIMIT = 255;
+  const AT_LIMIT = 'x'.repeat(LIMIT);
+  const OVER_LIMIT = 'x'.repeat(LIMIT + 1);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const nextButton = () => Array.from(document.querySelectorAll('button'))
+    .find((b) => b.textContent.includes('financeAccountMovementsWizardNext'));
+
+  function typeDescription(value) {
+    fireEvent.change(screen.getByTestId('wizard-description'), { target: { value } });
+  }
+
+  it('exposes the stage-1 description textarea under a stable testid', () => {
+    render(<NewMovementWizard {...defaultProps} />);
+    expect(screen.getByTestId('wizard-description')).toBeTruthy();
+  });
+
+  it('shows no error and keeps Siguiente enabled at exactly 255 characters', () => {
+    render(<NewMovementWizard {...defaultProps} />);
+    typeDescription(AT_LIMIT);
+
+    expect(screen.queryByTestId('wizard-description-error')).toBeNull();
+    expect(nextButton().disabled).toBe(false);
+  });
+
+  it('surfaces the max-length error and disables Siguiente at 256 characters', () => {
+    render(<NewMovementWizard {...defaultProps} />);
+    // Siguiente is genuinely reachable first, so the disabled state below is attributable
+    // to the description length and to nothing else.
+    expect(nextButton().disabled).toBe(false);
+
+    typeDescription(OVER_LIMIT);
+
+    // useUI is mocked as `(key, params) => key:JSON(params)`, so the shared key surfaces
+    // verbatim with its interpolation payload. The key already ships in both locale files.
+    expect(screen.getByTestId('wizard-description-error')).toHaveTextContent('fieldMaxLengthError');
+    expect(nextButton().disabled).toBe(true);
+  });
+
+  it('does not advance to stage 2 while the description is over the limit', () => {
+    render(<NewMovementWizard {...defaultProps} />);
+    typeDescription(OVER_LIMIT);
+
+    fireEvent.click(nextButton());
+
+    // Stage 2 is identified by its reconcile question; stage 1 by the textarea.
+    expect(document.body.textContent).not.toContain('financeAccountMovementsWizardReconcileQuestion');
+    expect(screen.getByTestId('wizard-description')).toBeTruthy();
+  });
+
+  it('advances again once the description is trimmed back to the limit', () => {
+    render(<NewMovementWizard {...defaultProps} />);
+    typeDescription(OVER_LIMIT);
+    fireEvent.click(nextButton());
+    expect(document.body.textContent).not.toContain('financeAccountMovementsWizardReconcileQuestion');
+
+    // The gate must be reactive, not a one-way latch.
+    typeDescription(AT_LIMIT);
+    expect(screen.queryByTestId('wizard-description-error')).toBeNull();
+    fireEvent.click(nextButton());
+
+    expect(document.body.textContent).toContain('financeAccountMovementsWizardReconcileQuestion');
+  });
+
+  it('renders a live character counter against the limit', () => {
+    render(<NewMovementWizard {...defaultProps} />);
+
+    typeDescription('abcde');
+    expect(screen.getByTestId('wizard-description-counter')).toHaveTextContent(`5/${LIMIT}`);
+
+    typeDescription(OVER_LIMIT);
+    expect(screen.getByTestId('wizard-description-counter')).toHaveTextContent(`${LIMIT + 1}/${LIMIT}`);
+  });
+
+  it('treats an emptied description as valid (length is not a required check)', () => {
+    render(<NewMovementWizard {...defaultProps} />);
+    typeDescription('');
+
+    expect(screen.queryByTestId('wizard-description-error')).toBeNull();
+    expect(nextButton().disabled).toBe(false);
+  });
+});

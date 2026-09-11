@@ -26,7 +26,13 @@ vi.mock('@/i18n', () => ({
   useMenuLabel: () => (key) => key,
 }));
 
+// Real useCurrency() (no CurrencyProvider in these tests) resolves to null — mocked here as a
+// controllable vi.fn so the currency-precedence suite below can simulate a resolved session
+// currency without wiring an AuthProvider/CurrencyProvider tree.
+vi.mock('@/hooks/useCurrency.jsx', () => ({ useCurrency: vi.fn(() => null) }));
+
 import ProductSearchDrawer from '../ProductSearchDrawer.jsx';
+import { useCurrency } from '@/hooks/useCurrency.jsx';
 
 // Mock global fetch
 const mockFetch = vi.fn();
@@ -69,6 +75,9 @@ describe('ProductSearchDrawer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setupFetchMock([]);
+    // vi.clearAllMocks() clears call history but not a mockReturnValue implementation —
+    // reset it explicitly so a previous test's override never leaks into the next one.
+    useCurrency.mockReturnValue(null);
   });
 
   it('returns null when open is false', () => {
@@ -333,5 +342,191 @@ describe('ProductSearchDrawer', () => {
     const src = readFileSync(join(__dirname, '..', 'ProductSearchDrawer.jsx'), 'utf8');
     expect(src).not.toMatch(/onDeselect/);
     expect(src).not.toMatch(/imageEntityUrl/);
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Currency precedence (ETP-5148 regression): the catalog price must render in
+  // the CATALOG/organization currency, never the document's header currency.
+  // selectorContext.priceCurrency > selectorContext.currency > session currency
+  // > 'USD'. Windows opt into the org-currency behavior via
+  // decisions.json → window.selectorPriceCurrency: "org", which DetailView.jsx
+  // resolves into selectorContext.priceCurrency (see DetailView.jsx around
+  // line 1362). Before ETP-5148, sales-invoice/purchase-invoice did not set that
+  // flag, so selectorContext.currency (the document's header currency) won by
+  // default and the drawer showed e.g. '$5,00' on a EUR-catalog product for a
+  // USD invoice — the backend price itself is never converted.
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('currency precedence in the price column', () => {
+    const items = [
+      { id: '1', label: 'Widget A', searchKey: 'W001', standardPrice: 5 },
+    ];
+
+    it('prefers selectorContext.priceCurrency over selectorContext.currency (the exact ETP-5148 bug)', async () => {
+      setupFetchMock(items);
+      render(
+        <ProductSearchDrawer
+          {...BASE_PROPS}
+          selectorContext={{ priceCurrency: 'EUR', currency: 'USD' }}
+        />
+      );
+      await waitFor(() => {
+        expect(screen.getByText('5,00 €')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('5,00 $')).not.toBeInTheDocument();
+    });
+
+    it('falls back to selectorContext.currency when priceCurrency is not set (documented pre-existing behavior for windows without the org flag)', async () => {
+      setupFetchMock(items);
+      render(
+        <ProductSearchDrawer
+          {...BASE_PROPS}
+          selectorContext={{ currency: 'USD' }}
+        />
+      );
+      await waitFor(() => {
+        expect(screen.getByText('5,00 $')).toBeInTheDocument();
+      });
+    });
+
+    it('falls back to the session currency when selectorContext has neither priceCurrency nor currency', async () => {
+      useCurrency.mockReturnValue('EUR');
+      setupFetchMock(items);
+      render(<ProductSearchDrawer {...BASE_PROPS} selectorContext={{}} />);
+      await waitFor(() => {
+        expect(screen.getByText('5,00 €')).toBeInTheDocument();
+      });
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Secondary converted price (ETP-5148 R2): when a window declares
+  // selectorPriceCurrency and the document currency differs from the catalog
+  // currency, the drawer shows a second, smaller line with the catalog price
+  // converted into the document currency via selectorContext.priceCurrencyRate.
+  // Rate semantics: org → document multiplier (1.47 = "1 EUR = 1.47 USD"),
+  // used directly, NEVER inverted — converted = catalogPrice * rate.
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('secondary converted price (ETP-5148 R2)', () => {
+    const items = [
+      { id: '1', label: 'Widget A', searchKey: 'W001', standardPrice: 5 },
+    ];
+
+    async function renderAndWaitForOption() {
+      await waitFor(() => {
+        expect(screen.getByText('Widget A')).toBeInTheDocument();
+      });
+    }
+
+    it('shows both the primary (catalog) and secondary (converted document-currency) price when priceCurrency, currency and a rate are all present and differ', async () => {
+      setupFetchMock(items);
+      render(
+        <ProductSearchDrawer
+          {...BASE_PROPS}
+          selectorContext={{ priceCurrency: 'EUR', currency: 'USD', priceCurrencyRate: 1.47 }}
+        />
+      );
+      await renderAndWaitForOption();
+      // Primary: catalog price in EUR (5.00).
+      expect(screen.getByText('5,00 €')).toBeInTheDocument();
+      // Secondary: 5.00 * 1.47 = 7.35, rendered in the document currency (USD).
+      // Rate is org→document and must be applied directly, never inverted
+      // (5 / 1.47 = 3.40 would be the wrong-direction bug).
+      expect(screen.getByText('7,35 $')).toBeInTheDocument();
+      expect(screen.queryByText('3,40 $')).not.toBeInTheDocument();
+    });
+
+    it('does NOT show a secondary price when priceCurrency and currency are the same, even with a rate present', async () => {
+      setupFetchMock(items);
+      render(
+        <ProductSearchDrawer
+          {...BASE_PROPS}
+          selectorContext={{ priceCurrency: 'EUR', currency: 'EUR', priceCurrencyRate: 1.47 }}
+        />
+      );
+      await renderAndWaitForOption();
+      expect(screen.getByText('5,00 €')).toBeInTheDocument();
+      // No conversion line — same currency on both sides means nothing to convert.
+      expect(screen.queryByText('7,35 €')).not.toBeInTheDocument();
+      expect(screen.queryByText(/^7,35/)).not.toBeInTheDocument();
+    });
+
+    it('does NOT show a secondary price when priceCurrencyRate is absent, and never renders a NaN/0,00 artifact', async () => {
+      setupFetchMock(items);
+      render(
+        <ProductSearchDrawer
+          {...BASE_PROPS}
+          selectorContext={{ priceCurrency: 'EUR', currency: 'USD' }}
+        />
+      );
+      await renderAndWaitForOption();
+      expect(screen.getByText('5,00 €')).toBeInTheDocument();
+      expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/0,00/)).not.toBeInTheDocument();
+    });
+
+    it('does NOT show a secondary price when the window has not opted into priceCurrency (current behavior stays intact)', async () => {
+      setupFetchMock(items);
+      render(
+        <ProductSearchDrawer
+          {...BASE_PROPS}
+          selectorContext={{ currency: 'USD', priceCurrencyRate: 1.47 }}
+        />
+      );
+      await renderAndWaitForOption();
+      expect(screen.getByText('5,00 $')).toBeInTheDocument();
+      expect(screen.queryByText('7,35 $')).not.toBeInTheDocument();
+    });
+
+    it('renders the secondary price for a genuine 1:1 rate (ETP-4836 guard — 1 must not be treated as "no rate")', async () => {
+      setupFetchMock(items);
+      render(
+        <ProductSearchDrawer
+          {...BASE_PROPS}
+          selectorContext={{ priceCurrency: 'EUR', currency: 'USD', priceCurrencyRate: 1 }}
+        />
+      );
+      await renderAndWaitForOption();
+      expect(screen.getByText('5,00 €')).toBeInTheDocument();
+      // Rate of exactly 1 → same number, different symbol.
+      expect(screen.getByText('5,00 $')).toBeInTheDocument();
+    });
+
+    it('falls back the primary price to the raw string and shows no secondary price for a non-numeric price', async () => {
+      const nonNumericItems = [
+        { id: '1', label: 'Widget A', searchKey: 'W001', standardPrice: 'N/A' },
+      ];
+      setupFetchMock(nonNumericItems);
+      render(
+        <ProductSearchDrawer
+          {...BASE_PROPS}
+          selectorContext={{ priceCurrency: 'EUR', currency: 'USD', priceCurrencyRate: 1.47 }}
+        />
+      );
+      await renderAndWaitForOption();
+      expect(screen.getByText('N/A')).toBeInTheDocument();
+      // No converted line for a price that never resolved to a number.
+      expect(screen.queryByText(/[€$]/)).not.toBeInTheDocument();
+    });
+
+    it('renders the primary price before the secondary converted price in the DOM', async () => {
+      setupFetchMock(items);
+      render(
+        <ProductSearchDrawer
+          {...BASE_PROPS}
+          selectorContext={{ priceCurrency: 'EUR', currency: 'USD', priceCurrencyRate: 1.47 }}
+        />
+      );
+      let wrapper;
+      await waitFor(() => {
+        wrapper = document.querySelector('[data-testid="product-search-option-1"] .items-end');
+        expect(wrapper).toBeTruthy();
+      });
+      const spans = wrapper.querySelectorAll('span');
+      expect(spans).toHaveLength(2);
+      expect(spans[0].textContent.replace(/ /g, ' ')).toBe('5,00 €');
+      expect(spans[1].textContent.replace(/ /g, ' ')).toBe('7,35 $');
+      // The primary span must precede the secondary one in document order.
+      expect(spans[0].compareDocumentPosition(spans[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
   });
 });

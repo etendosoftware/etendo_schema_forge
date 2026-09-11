@@ -375,8 +375,17 @@ test.describe('Sales Invoice — PDF preview discount desglose (mocked)', () => 
     // Subtotal sin descuento (grossSubtotal) should be > 0
     expect(Number(data.grossSubtotal)).toBeGreaterThan(0);
 
-    // totalDiscountAmt > 0
-    expect(Number(data.totalDiscountAmt)).toBeGreaterThan(0);
+    // totalDiscountAmt is sign-flipped for display (ETP-5132): computeDiscountBreakdown()
+    // (documentPdf.js) returns a raw, POSITIVE totalDiscountAmt for a positive-quantity
+    // line (productNetAmount * etgoTotalDiscount / 100 = 475 * 5 / 100 = 23.75 here), and
+    // useInvoicePdf.js then flips its sign before sending it to jsreport
+    // (`totalDiscountAmt !== 0 ? -totalDiscountAmt : null`) — the same convention as
+    // discountPerProduct, matching DocumentTotalsPanel on screen. So for THIS fixture
+    // (invoicedQuantity: 5, a normal positive-qty sale), the value handed to the PDF
+    // template is expected to be NEGATIVE, not positive. See
+    // docs/bug-reports/2026-09-08-etp5132-negative-quantity-discount.md for the full
+    // sign-flip convention (verified live across all windows).
+    expect(Number(data.totalDiscountAmt)).toBeLessThan(0);
   });
 
   test('preview grand total in jsreport data matches the adjusted total from the API', async ({ page }) => {

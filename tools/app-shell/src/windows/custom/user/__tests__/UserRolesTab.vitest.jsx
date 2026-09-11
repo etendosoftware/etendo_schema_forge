@@ -99,10 +99,10 @@ const MENU_TREE_WITH_CLASSIC_ONLY_CATEGORY = {
   ],
 };
 
-function renderTab({ isNew = false, onVisibilityChange = vi.fn(), selectedRoleIds = [] } = {}) {
+function renderTab({ isNew = false, onVisibilityChange = vi.fn(), selectedRoleIds = [], data } = {}) {
   return render(
     <RoleSelectionProvider value={{ selectedRoleIds, setSelectedRoleIds: vi.fn() }}>
-      <UserRolesTab isNew={isNew} onVisibilityChange={onVisibilityChange} />
+      <UserRolesTab isNew={isNew} onVisibilityChange={onVisibilityChange} data={data} />
     </RoleSelectionProvider>,
   );
 }
@@ -487,6 +487,82 @@ describe('UserRolesTab', () => {
       expect(pillSpanIn(cells[2]).className).not.toContain('font-bold');
       expect(pillSpanIn(cells[3]).className).toContain('font-medium'); // Purchasing — lower rank, loses, plain
       expect(pillSpanIn(cells[3]).className).not.toContain('font-bold');
+    });
+  });
+
+  // ETP-5071 — once a user is promoted to the client's Admin role, this tab's
+  // composed-roles matrix (driven by the PRE-promotion `selectedRoleIds`) is stale — the
+  // user actually has full access to everything now. Detected the same way
+  // `AssignTemplateRolesControl.jsx`/`RoleChipsCell.jsx` do: `resolveDefaultRoleId(data)`
+  // compared against `overviewRoles`'s `isClientAdmin` row id — reusing the SAME
+  // `ROLES_OVERVIEW` fixture this file already declares (`role-admin`, `isClientAdmin: true`).
+  describe('admin role holder (ETP-5071)', () => {
+    beforeEach(() => {
+      fetchMenuTree.mockResolvedValue(MENU_TREE);
+      fetchTemplateRoles.mockResolvedValue(TEMPLATE_ROLES);
+      fetchRolesOverview.mockResolvedValue(ROLES_OVERVIEW);
+    });
+
+    it('hides the composed-roles matrix and shows the full-access message when data.defaultRole matches the resolved admin role id', async () => {
+      renderTab({ selectedRoleIds: ['role-fin'], data: { defaultRole: 'role-admin' } });
+
+      expect(await screen.findByTestId('UserRolesTab__admin-full-access')).toHaveTextContent(
+        'userRolesTabAdminFullAccessMessage',
+      );
+      expect(screen.queryByTestId('UserRolesTab')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('UserRolesTab__loading')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('UserRolesTab__error')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('UserRolesTab__empty')).not.toBeInTheDocument();
+    });
+
+    it('accepts a `defaultRole` given as an {id, name} object (defensive shape, same as RoleChipsCell/AssignRoleControl)', async () => {
+      renderTab({ selectedRoleIds: ['role-fin'], data: { defaultRole: { id: 'role-admin', name: 'GOClient Admin' } } });
+
+      expect(await screen.findByTestId('UserRolesTab__admin-full-access')).toBeInTheDocument();
+    });
+
+    it('renders the composed-roles matrix normally when data.defaultRole is a non-admin template role', async () => {
+      renderTab({ selectedRoleIds: ['role-fin', 'role-sales'], data: { defaultRole: 'role-fin' } });
+
+      expect(await screen.findByTestId('UserRolesTab')).toBeInTheDocument();
+      expect(screen.queryByTestId('UserRolesTab__admin-full-access')).not.toBeInTheDocument();
+    });
+
+    it('falls through to the normal empty/matrix handling when data has no defaultRole at all (null/undefined)', async () => {
+      renderTab({ selectedRoleIds: [], data: {} });
+
+      expect(await screen.findByTestId('UserRolesTab__empty')).toBeInTheDocument();
+      expect(screen.queryByTestId('UserRolesTab__admin-full-access')).not.toBeInTheDocument();
+    });
+
+    it('falls through to the normal empty/matrix handling when no `data` prop is passed at all', async () => {
+      renderTab({ selectedRoleIds: [] });
+
+      expect(await screen.findByTestId('UserRolesTab__empty')).toBeInTheDocument();
+      expect(screen.queryByTestId('UserRolesTab__admin-full-access')).not.toBeInTheDocument();
+    });
+
+    it('does NOT prematurely show the admin message while rolesOverview (and thus adminRoleId) is still loading, even though data will resolve to admin once it lands', async () => {
+      let resolveOverview;
+      fetchRolesOverview.mockReturnValue(new Promise((resolve) => { resolveOverview = resolve; }));
+      renderTab({ selectedRoleIds: ['role-fin'], data: { defaultRole: 'role-admin' } });
+
+      // Still in-flight: adminRoleId can't be resolved yet (overviewRoles is still []),
+      // so isAdminRoleHolder is false and the loading branch is what renders.
+      expect(screen.getByTestId('UserRolesTab__loading')).toBeInTheDocument();
+      expect(screen.queryByTestId('UserRolesTab__admin-full-access')).not.toBeInTheDocument();
+
+      resolveOverview(ROLES_OVERVIEW);
+      expect(await screen.findByTestId('UserRolesTab__admin-full-access')).toBeInTheDocument();
+    });
+
+    it('never shows the admin message for a new (not-yet-persisted) user, even if `data` already carries the admin role id', () => {
+      renderTab({ isNew: true, data: { defaultRole: 'role-admin' } });
+
+      expect(screen.getByTestId('UserRolesTab__empty')).toBeInTheDocument();
+      expect(screen.queryByTestId('UserRolesTab__admin-full-access')).not.toBeInTheDocument();
+      // isNew short-circuits before any fetch — including the one the admin check relies on.
+      expect(fetchRolesOverview).not.toHaveBeenCalled();
     });
   });
 });

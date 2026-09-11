@@ -42,6 +42,23 @@ Same as documented in the root `CLAUDE.md`: `etendo_schema_forge` (functional, t
 - Preserve requested labels exactly (e.g. `plataforma`)
 - Issue type: default to `Task` unless the coordinator specifies `Bug`/`Subtask`/other
 - Never transition an issue's status beyond what's explicitly requested
+
+**Comment bodies: use the REST API, not `jira issue comment add`.** The CLI runs a
+markdown-to-Jira-wiki conversion that SILENTLY DESTROYS content. On ETP-5216 it ate every
+`<AD_Column_ID>` placeholder (leaving `ad_scd_rebuild('')`), turned a `#` numbered list into
+`h1.` headings, downgraded bold to italics, and escaped hyphens and parentheses throughout.
+The CLI's own rendering looked fine — the damage was only visible when re-reading the raw body
+over REST. Whenever a comment carries `<placeholders>`, code blocks, SQL or identifiers, write
+it in literal Jira markup and post it with:
+
+```bash
+curl -X POST .../rest/api/2/issue/ETP-XXXX/comment      # new comment
+curl -X PUT  .../rest/api/2/issue/ETP-XXXX/comment/<id> # fix an existing one, never re-add
+```
+
+Always verify by reading the raw body back over REST and confirming the identifiers survived.
+Note that Jira wiki markup does not render `*bold*` inside a list line — use double quotes for
+emphasis there rather than nesting markup.
 </jira_conventions>
 
 <branch_conventions>
@@ -97,6 +114,27 @@ printf '%s' "$TITLE" | LC_ALL=C grep -q "[\"'\\\`$]" && echo "REJECTED: prohibit
 
 Same convention as commits otherwise: `Feature ETP-1234: Description`, `Epic ETP-1234: ...`,
 `Issue #N: ...`.
+
+**The `Feature ETP-XXXX:` prefix is enforced on PR TITLES too, not only on commits.** A
+charset-clean title with no prefix is still closed on sight, with a different message:
+
+```
+Invalid pull request title. PR title must start with 'Feature etp-5184:'.
+```
+
+Observed in `etendo-go-docs` on PR #41 (2026-09-07), where a bare descriptive title was
+closed within minutes. Do not assume this is repo-specific — treat the prefix as required
+everywhere and let a repo that does not enforce it simply not care. So validate both:
+
+```bash
+TITLE="Feature ETP-1234: Some description"
+printf '%s' "$TITLE" | LC_ALL=C grep -q "[\"'\\`$]" && echo "REJECTED: prohibited char"
+printf '%s' "$TITLE" | grep -qE '^(Feature ETP-[0-9]+|Epic ETP-[0-9]+|Issue #[0-9]+): .' \
+  || echo "REJECTED: missing prefix"
+```
+
+A coordinator who dictates a PR title without the prefix is making this mistake — add it
+rather than submitting the title verbatim, and say so in the report.
 
 **Recovering a PR Git Police already closed.** Fix the title FIRST, then reopen — reopening
 with the bad title gets it closed again. Note `gh pr edit` may fail with

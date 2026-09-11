@@ -7,7 +7,14 @@
    when grouping by a dimension; the flat layout below (ETP-5013 follow-up) reuses
    the same .acct-card structure, just without the outer dimension chip. */
 .dim-group { border: 1px solid #cbd5e1; border-radius: 2mm; margin-bottom: 4mm; overflow: hidden; }
-.dim-group-head { display: flex; align-items: center; justify-content: space-between; gap: 3mm; background: var(--color-accent-highlight); color: var(--color-accent-highlight-foreground); padding: 2.5mm 4mm; border-bottom: 2px solid var(--color-primary); }
+/* ETP-5128: chip (the dimension's own TYPE — "Producto"/"Contacto"/...) now
+   comes FIRST, the picked value's name second — matches the .acct-card-head
+   code+name order every report already uses for an account card, so a
+   dimension-group header reads the same way instead of value-then-chip with
+   justify-content pushing the chip off to the far right (previously easy to
+   miss entirely, reported against report-general-ledger, applies to every
+   report that groups by a dimension, not just this one). */
+.dim-group-head { display: flex; align-items: center; gap: 3mm; background: var(--color-accent-highlight); color: var(--color-accent-highlight-foreground); padding: 2.5mm 4mm; border-bottom: 2px solid var(--color-primary); }
 .dim-group-head .chip { display: inline-block; line-height: 1; font-size: 8pt; font-weight: 600; color: var(--color-primary); background: var(--color-bg-stripe); border: 1px solid rgba(18,18,23,0.15); border-radius: 3mm; padding: 1mm 3mm; }
 .dim-group-head .value { font-weight: 700; font-size: 10.5pt; }
 .dim-group-body { padding: 3mm; display: flex; flex-direction: column; gap: 3mm; }
@@ -67,7 +74,7 @@
   <div class="dim-groups">
     {{#each meta.groups}}
     <div class="dim-group">
-      <div class="dim-group-head"><span class="value">{{this.dimensionValue}}</span><span class="chip">{{@root.meta.dimensionLabel}}</span></div>
+      <div class="dim-group-head"><span class="chip">{{@root.meta.dimensionLabel}}</span><span class="value">{{this.dimensionValue}}</span></div>
       <div class="dim-group-body">
         {{#each this.accounts}}
         <div class="acct-card">

@@ -14,12 +14,13 @@ identity of separate data series and is not a UI status or theme role.
 
 ## What this window should allow
 - Browse products from the Inventory menu and recognize them quickly by image, name, search key, and category.
+- Participate in the global semantic search through the `product` DB Extended search target. The participation is declared by this window's Schema Forge contract, not by a Vite environment variable.
 - Create or update the core product definition, including search key, name, description, product type, category, UOM, image, tax category, sale/purchase flags, stocked flag, weight, UOM for weight, attribute set, brand, lifecycle status, returnable flag, active flag, and UPC/EAN.
 - Move between a main `General` tab and a separate `Additional Info` tab so commercial and logistics settings are grouped instead of mixed into one form.
 - Review and edit pricing from a dedicated `Price` tab without leaving the product page. Pricing tables are entered via per-table pencil icons (one for Sales lists, one for Purchase lists) that open a focused dialog.
 - Click a product image to open a lightbox for full-size inspection. Upload, replace, and remove the image from within the same field in the form grid.
 - Inspect stock availability and stock movement context from the custom sidebar.
-- Maintain the product's GL accounting accounts (Fixed Asset, Product Expense, Product Revenue, Product COGS) per accounting schema from the generated **Accounting** tab, the first tab in the unified secondary tab strip (Accounting, Price, Attachments).
+- Maintain the product's GL accounting accounts (Fixed Asset, Product Expense, Product Revenue, Product COGS, Invoice Price Variance) per accounting schema from the generated **Accounting** tab, the first tab in the unified secondary tab strip (Accounting, Price, Attachments).
 - Use the contract-backed product children and actions when the generated page exposes them, while treating the exact visible tab set beyond the custom surfaces as partially evidenced.
 
 ## Interaction model
@@ -46,7 +47,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 - **Master/child dependency:** the selected product drives price, stock, and transaction loading through `parentId=<productId>`.
 - **Gallery/detail dependency:** selecting a product card in the gallery navigates into that product's detail route.
 - **Additional Info grouping:** the `Additional Info` tab is a custom panel rendered as two-column row sections. Each row section has a left column (148 px wide) containing a section title and description, and a right column (`flex-1`) holding an `EntityForm`. The `Commercial` row groups `Tax Category`, `Sale`, and `Purchase`; an HR divider separates it from the `Logistics` row, which groups `Almacenable` ("Stocked"/`IsStocked` — relabeled from "Almacenado" in ETP-4943), `Returnable`, `Weight`, and `UOM for Weight`. The outer wrapper applies `[&_input]:bg-white` so all input fields, including `Weight`, render on a white background.
-- **Logistics hidden for Service products (ETP-4943):** the entire `Logistics` row (divider included) does not render when `productType === 'S'` — a Service product has no physical existence, so weight/UOM/stock fields do not apply. Mirrors the rule `ProductSidebar.jsx` already applies to hide the stock sidebar for Service products (ETP-4606). While editing, switching the type to Service also force-sets `stocked`/`returnable` to `false` via `onChange` (only when they were not already false), so a Service product can never be saved with either flag on. Switching back to a stockable type (e.g. Article) re-shows the row with whatever values are currently on the record.
+- **Logistics hidden for Service/Expense/Resource products (ETP-4943, extended in ETP-5091):** the entire `Logistics` row (divider included) does not render when `productType` is `'S'` (Service), `'E'` (Expense/"Gasto") or `'R'` (Resource/"Recurso") — none of these have a physical existence, so weight/UOM/stock fields do not apply. Mirrors the rule `ProductSidebar.jsx` already applies to hide the stock sidebar for the same three types (ETP-4606, extended in ETP-5091). While editing, switching the type to one of these also force-sets `stocked`/`returnable` to `false` via `onChange` (only when they were not already false), so none of these product types can ever be saved with either flag on. Switching back to a stockable type (e.g. Article) re-shows the row with whatever values are currently on the record.
 - **Selector dependencies:** the current evidence shows selector-backed maintenance for category, tax category, UOM, UOM for weight, attribute set, brand, lifecycle status, warehouse, currency, characteristic, characteristic subset, storage bin, and price-list-version references where relevant.
 - **Pricing tab states:**
   - When the product has not been saved yet, the `Price` tab shows a save-first message and blocks pricing maintenance.
@@ -81,6 +82,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 
 ## Manual verification
 1. Open `/product` and confirm the list is a gallery of product cards rather than a flat table.
+1a. Open the global search, enter at least three characters, and confirm that the localized searching placeholder is shown while the request is in flight. Confirm that indexed `go.product` semantic matches appear before navigation results when the DB Extended Product Vector Source is active and the role can read Product. Each match must show the localized `Product` entity label sourced from the contract; selecting one opens that product in edit mode.
 2. Verify product cards show the product image when present and fall back to the package icon when no image exists.
 3. Open an existing product and confirm the detail surface exposes `General` and `Additional Info`.
 4. In `Additional Info`, verify the `Commercial` section contains `Tax Category`, `Sale`, and `Purchase` in a right-side `EntityForm` with a section title and description on the left. Confirm an HR divider separates it from the `Logistics` section, which contains `Almacenable` (not "Almacenado"), `Retornable`, `Peso`, and `Unidad de peso`. All input backgrounds should be white.
@@ -96,14 +98,14 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 11. In `Summary`, confirm `Available` and `Reserved` stat cards are hidden when `reserved === 0`. Open a product that has reserved stock and confirm those cards are visible.
 12. If the business depends on BOM, costing, transactions, characteristics, stock, category price rule version, alternate UOM, or variant actions, verify which of those surfaces are actually visible in the running page. Current repo evidence does not fully prove all of them.
 13. Select the **Attachments** tab (sits in the same tab strip as **Accounting** and **Price**, after the primary tab strip). Upload a file, verify it shows up in the table with name, size, and upload date, and that downloading and deleting it work correctly. When multiple files exist, confirm "Download all (ZIP)" and "Delete all" appear and that "Delete all" prompts a confirmation dialog.
-14. Open an existing product and confirm the secondary tab strip (below `General`/`Additional Info`) shows tabs in this exact order: **Accounting**, **Price**, **Attachments**. Select `Accounting` and confirm it renders as a classic grid+form (not a separate panel above the tab strip) with `Fixed Asset`, `Product Expense`, `Product Revenue`, `Product COGS` add/edit fields.
+14. Open an existing product and confirm the secondary tab strip (below `General`/`Additional Info`) shows tabs in this exact order: **Accounting**, **Price**, **Attachments**. Select `Accounting` and confirm it renders as a classic grid+form (not a separate panel above the tab strip) with `Fixed Asset`, `Product Expense`, `Product Revenue`, `Product COGS`, `Invoice Price Variance` add/edit fields.
 
 ## Automated evidence
 - Route registration and menu visibility are grounded in `tools/app-shell/src/windows/registry.js` and `tools/app-shell/src/menu.json`, which register `product` as a generated/custom window reachable from the Inventory section.
 - Shared shell/route behavior is documented in `docs/generated-custom-windows/app-shell-functional-flows.md`, especially the generated/custom window loading flow and the shared entity list/detail flow.
 - Product-specific behavior is grounded in current code under `tools/app-shell/src/windows/custom/product/`:
   - `ProductGallery.jsx` for gallery browsing
-  - `ProductAdditionalInfoPanel.jsx` for the two-column row layout with `Commercial` and `Logistics` sections and HR divider between them, and (ETP-4943) for hiding the `Logistics` row and force-clearing `stocked`/`returnable` when `productType === 'S'`
+  - `ProductAdditionalInfoPanel.jsx` for the two-column row layout with `Commercial` and `Logistics` sections and HR divider between them, and (ETP-4943, extended in ETP-5091) for hiding the `Logistics` row and force-clearing `stocked`/`returnable` when `productType` is `'S'`, `'E'` or `'R'`
   - `ProductPriceBar.jsx` for product pricing fetch/create/edit behavior, including the tariff-name labels, the bounded rows scroller, the per-open selector refetch and the "all tariffs already priced" hint. Amounts render through a local `CURRENCY_SYMBOLS` map plus the row's `currencySymbol`; migrating them to the canonical `formatCurrency()` util is pending the dedicated currency-format task.
   - `ImageField.jsx` was fully redesigned for ETP-4190 and extended in a follow-up: upload button inside the container, hover overlay with zoom icon and remove/replace actions, lightbox via `createPortal(document.body)` with ESC-to-close, `cursor-zoom-in` when an image exists. When no image exists (stretch mode), the area shows a full-height dashed dropzone with an upload icon button, "Selecciona o arrastra aquí tus archivos", and the constraint hint ("Hasta 30 MB y 7680 × 4320 píxeles (JPEG, JPG, PNG)"). The dropzone supports drag & drop (highlights on `isDragging`). Validation rejects non-JPEG/PNG types, files over 30 MB, and images exceeding 7680 × 4320 px — all errors surface as `toast.error()` (no inline message). The upload button at the bottom is hidden in the empty state (the entire zone is the upload target); it reappears once an image is loaded.
   - `ProductSidebar.jsx` for stock and transaction-driven sidebar summaries, including pill-style period tabs, bezier-curve SVG chart, dashed gridlines, expand link, smaller stat cards, conditional visibility of `Available`/`Reserved` cards, and divider between sections.
@@ -118,7 +120,8 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
   - `labelOverrides` — overrides `M_Product_Category_ID` to "Category"/"Categoría" and `ProductType` to "Type"/"Tipo" using the locale-nested format `{ "en_US": {...}, "es_ES": {...} }`
   - `sidebarClassName`, `formCardPadding`, `toolbarPaddingX`, `tabsBarPaddingX`, `listbarPaddingX`, `tablePaddingX` — layout props for 30%-width sidebar with left border, 8px horizontal padding throughout
   - `primaryTabsVariant: "pill"` — pill-style primary tab bar
-  - `secondaryTabs.accounting` — exposes the GL-accounting tab (Fixed Asset, Product Expense, Product Revenue, Product COGS) in the unified secondary tab strip (`tabOrder: 1`, so it renders first, ahead of the `customPanelTabs` entries), using the classic grid+form layout (not `inlineEditable`). `detailEntity` is explicitly `null` (not omitted — an omitted key falls back to auto-selecting the first non-primary entity, which would have picked `price` and produced an unintended extra detail section)
+  - `secondaryTabs.accounting` — exposes the GL-accounting tab (Fixed Asset, Product Expense, Product Revenue, Product COGS, Invoice Price Variance) in the unified secondary tab strip (`tabOrder: 1`, so it renders first, ahead of the `customPanelTabs` entries), using the classic grid+form layout (not `inlineEditable`). `detailEntity` is explicitly `null` (not omitted — an omitted key falls back to auto-selecting the first non-primary entity, which would have picked `price` and produced an unintended extra detail section)
+  - `vectorSearch.target: "product"` — opts Product into the global semantic search; windows without this declaration do not participate.
 - `tools/app-shell/src/windows/custom/product/__tests__/ProductSidebar.test.js` verifies that `ProductSidebar` uses the shared `formatDashboardAxisTick` utility for Y-axis labels and does not define a local formatting function. Beyond that, automated evidence in this repo is structural and contract-backed rather than end-to-end proof of the full product workflow.
 
 ## Pipeline regeneration — ETP-4402
@@ -126,9 +129,9 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 Added on 2026-07-01 as part of feature/ETP-4402. New GL-accounting detail entity — no changes to the pricing, sidebar, or image-field behavior documented above.
 
 - **New Accounting detail tab:** `window.detailEntity` changed from `null` to `"accounting"` in `decisions.json`. The `accounting` entity (backed by `M_Product_Acct`, one row per accounting schema) is no longer excluded — it is exposed as a header-level detail entity, structurally the same pattern already used by `product-category.md`'s Accounting tab.
-- **Exposed fields (editable, grid):** `Fixed Asset` (`P_Asset_Acct`), `Product Expense` (`P_Expense_Acct`, required), `Product Revenue` (`P_Revenue_Acct`, required), `Product COGS` (`P_Cogs_Acct`). All four are `ValidCombination` FK selectors, matching the four exposed on Product Category.
+- **Exposed fields (editable, grid):** `Fixed Asset` (`P_Asset_Acct`), `Product Expense` (`P_Expense_Acct`, required), `Product Revenue` (`P_Revenue_Acct`, required), `Product COGS` (`P_Cogs_Acct`). All four are `ValidCombination` FK selectors, matching the four exposed on Product Category. **`Invoice Price Variance` (`P_InvoicePriceVariance_Acct`) joined this set in ETP-5222** — see that section below.
 - **`accountingSchema` (`C_AcctSchema_ID`):** classified as `system` with `addLineFromSibling: true` — a new accounting row auto-copies the accounting schema from the most recently added sibling row, sparing the user from re-selecting it every time. `addLineHiddenFromSibling` confirmed present in the generated contract.
-- **Discarded fields (out of scope, mirrors Product Category's own accounting scope call):** `pDefExpenseAcct` (`P_Def_Expense_Acct`), `productDeferredRevenue` (`P_Def_Revenue_Acct`), `invoicePriceVariance`, `productRevenueReturn`, `productCOGSReturn`, `purchasePriceVariance`, `tradeDiscountReceived`, `tradeDiscountGranted` — all advanced accounting variance/return accounts, not used in day-to-day product maintenance.
+- **Discarded fields (out of scope, mirrors Product Category's own accounting scope call):** `pDefExpenseAcct` (`P_Def_Expense_Acct`), `productDeferredRevenue` (`P_Def_Revenue_Acct`), `productRevenueReturn`, `productCOGSReturn`, `purchasePriceVariance`, `tradeDiscountReceived`, `tradeDiscountGranted` — all advanced accounting variance/return accounts, not used in day-to-day product maintenance. `invoicePriceVariance` was originally in this list too; **promoted to editable in ETP-5222** (see below) once the ETP-5222/ETP-5075 onboarding wiring gave it a real default value to work with.
 - **Layout note — differs from Product Category:** `window.linesLayout` was **not** set to `"inlineEditable"` for this change, so the Accounting tab renders with the classic layout: a plain grid (`AccountingTable.jsx` → `DataTable`) plus a separate add/edit form (`AccountingForm.jsx`), not Product Category's pencil/trash inline-row editing. This was a deliberate scope boundary for this change, not an oversight — switching to `inlineEditable` here is an open follow-up decision for a human to make (it affects UX, not just data wiring).
 - **Backend follow-up — resolved:** `decisions.json` declares `javaQualifier: "productAccountingHandler"` on the `accounting` entity, matching the `NeoHandler` pattern already used by Product Category's `ProductCategoryAccountingHandler`. `ProductAccountingHandler.java` (`@Named("productAccountingHandler")`) now exists under `com.etendoerp.go`, auto-filling `accountingSchema` from the client's default active `AcctSchema` on POST when the field is absent — covering the first-row case where `addLineFromSibling` has no prior sibling to copy from.
 
@@ -293,6 +296,10 @@ When creating a new product, `uOM` now preselects the UOM row flagged `IsDefault
 **`entities.accounting.hideDelete: true`** added — the `accounting` secondary tab's row (Fixed Asset / Product Expense / Product Revenue / Product COGS) can no longer be deleted; `apiPrediction.crud.accounting.delete` is now `false`, which also removes the delete affordance from `SecondaryTableTab` in `DetailView.jsx` (both the row-level trash icon and the bulk-select delete bar gate on this same flag). **Resolved (follow-up pass):** the Accounting tab is capped at one record via the new `window.secondaryTabs.accounting.maxDetailLines: 1` decisions.json key — a generic capability added specifically for the `secondaryTabs` pattern (mirroring `window.maxDetailLines` for `detailEntity`), spanning `resolveSecondaryTabDefs`/`buildSecondaryTabPropEntry` in `generate-frontend.js` (`schema_forge_core`) and `resolveCanAddSecondaryLines(st, childrenCount)` in `DetailView.jsx` (this repo), which gates `secondaryAddLineBar`, the inline `addRow`, and the empty-state add trigger. See `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)" and `docs/ui-customization.md` §17. Regenerated via `make regen ONLY=product`; `sf-validate-pipeline --scope=product` reports 0 violations. Regression tests: `artifacts/__tests__/etp-4565-accounting-tab-restrictions.test.js` (decisions.json assertion) and `tools/app-shell/src/components/contract-ui/__tests__/DetailView.secondaryTabsMaxLines.vitest.jsx` (behavioral).
 
 **Also unresolved — tab order.** The ticket asks for `... → Precio → Contabilidad → ...`; today's order is `Accounting, Price, Attachments` (Accounting first). Per the "Tab position follow-up (ETP-4402 continued)" section above, inverting the relative order of `secondaryTabs` vs. `customPanelTabs` entries is explicitly **not achievable with a decisions.json-only change** — already tracked as **ETP-4415**, which touches CODEOWNERS-gated `DetailView.jsx`/`generate-frontend.js`. Not changed in this pass.
+
+## ETP-5116 — Accounting tab hidden for roles without the accounting capability
+
+`window.secondaryTabs.accounting.visibleWhenCapability: "showAccountingFields"` added in `decisions.json`. For a role where the `showAccountingFields` capability (`AD_Role.EM_ETGO_Show_Acct_Fields`) resolves `false`, the entire Accounting tab is omitted from the tab strip — not merely disabled — and the `openSecondaryTab` deep link/location-state path silently no-ops instead of activating it. Roles with the capability see no change (Accounting still renders first, as described above). Full mechanism reference (field-level and tab-level `visibleWhenCapability`, the `isCapabilityVisible()` implementation, the Panel eager-mount interaction): `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)" and `docs/ui-customization.md` §17.
 
 ## Tariffs section fixes — ETP-4605
 
@@ -557,3 +564,58 @@ repeated the status label. Fixed generically in app-shell-core (one `RowDataCell
 with the OK branch, plus the skip *reason* in the space the duplicated label used to occupy), so it
 applies to every window with an import, not just this one. Reasoning and coverage in the
 [Contacts guide](contacts.md#a-skipped-row-showed-no-data--etp-4997).
+
+## Logistics hidden for Expense/Resource products too — ETP-5091
+
+Twin bug of ETP-4943, reported separately: `productType` values `'E'` (Expense/"Gasto") and `'R'`
+(Resource/"Recurso")  — like `'S'` (Service) — have no physical existence in inventory, but the
+Logistics section and the stock sidebar only checked for `'S'`, so Gasto/Recurso products still
+showed and could still be saved with `Almacenable`/`Retornable` set. Same three surfaces as
+ETP-4943, all generalized from a single `'S'` check to a `NON_STOCKABLE_PRODUCT_TYPES` set/list of
+`'S'`/`'E'`/`'R'` — no new mechanism introduced:
+
+- **`ProductAdditionalInfoPanel.jsx`** — `isService` (`=== 'S'`) replaced by `isNonStockable`
+  (`NON_STOCKABLE_PRODUCT_TYPES.has(productType)`), gating both the `Logistics` row's
+  `{!isNonStockable && (...)}` wrapper and the force-false `useEffect`.
+- **`ProductSidebar.jsx`** — `data?.productType === 'S'` replaced by
+  `['S', 'E', 'R'].includes(data?.productType)`.
+- **`com.etendoerp.go`'s `ProductDefaultsHandler.java`** — `enforceServiceProductNotStockable`
+  renamed to `enforceNonStockableProductTypes`, `PRODUCT_TYPE_SERVICE` replaced by a
+  `NON_STOCKABLE_PRODUCT_TYPES` `Set.of("S", "E", "R")`. Same authoritative-server-side reasoning
+  as ETP-4943 applies unchanged: the frontend `useEffect` only fires while `Additional Info` is
+  mounted, so the server guard is what actually guarantees a Gasto/Recurso product can never
+  persist as stocked/returnable when saved straight from `General`.
+- **`'Online'` (`'O'`) was deliberately left out** — the ticket's own reported/expected cases only
+  named Gasto and Recurso; Online was not requested and is not touched by this change.
+
+**Reproduced live** with Playwright against a running instance before the fix: created a product,
+set `Tipo` to `Gasto` (then `Recurso`), confirmed the `Logistics` row and the stock sidebar both
+stayed visible/editable — matching the ticket's steps exactly. Post-fix live re-verification is
+tracked in the ticket.
+
+Coverage:
+- `e2e/tests/flows/product-logistics-nonstockable-types.mocked.spec.js` — end-to-end mocked repro
+  of the reported bug: Logistics section and stock sidebar hidden for Gasto/Recurso, control case
+  (Artículo) still shows both.
+- `tools/app-shell/src/windows/custom/product/__tests__/ProductAdditionalInfoPanel.vitest.jsx` —
+  the ETP-4943 Service cases parametrized (`describe.each`) across Service/Expense/Resource.
+- `tools/app-shell/src/windows/custom/product/__tests__/ProductSidebar.vitest.jsx` — new coverage
+  (none existed before ETP-5091) asserting the sidebar renders nothing for Service/Expense/Resource
+  and renders normally for Article.
+- `com.etendoerp.go`'s `ProductDefaultsHandlerTest.java` — the ETP-4943 Service POST/PATCH/absent-flags
+  cases mirrored for Expense and Resource.
+
+## ETP-5222 — Invoice Price Variance exposed in the Accounting tab
+
+**`decisions.json → entities.accounting.fields.invoicePriceVariance`** flipped from
+`"visibility": "discarded"` to `"editable"` (`grid: true, grow: true, seq: 5`), joining `Fixed
+Asset`/`Product Expense`/`Product Revenue`/`Product COGS` as a fifth `ValidCombination` FK selector
+in the Accounting tab's classic grid+form (add/edit fields, not `inlineEditable`). Label
+("Invoice Price Variance") is AD_Field-sourced, same as its siblings — no new i18n keys needed.
+
+This makes visible a field that had a real, populated value all along on the backend once
+`OnboardingAccountingWiringService#backfillInvoicePriceVarianceDefault` started resolving a
+non-null default for it (see `com.etendoerp.go/docs/onboarding-flow.md` and this repo's
+`docs/etendo-ad/onboarding-gaps.md` → §A8/§A8b for the onboarding-wiring side of this ticket — no
+change to that wiring lives in this repo). Regenerated via `make regen ONLY=product`; no changes to
+the pricing, sidebar, or image-field behavior documented above.

@@ -15,9 +15,9 @@
  *    too, i.e. no hardcoded label map and no hand-written column literal may come back;
  *  - the one hand-appended column (`_rowActions`) must keep swallowing its own clicks,
  *    otherwise the row navigation fires underneath it;
- *  - the ETP-4656 toolbar/selection-bar swap must stay wired: `selectedRows` read out of the
- *    slot props (never relayed into DataTable) and `selectionActive` gating the toolbar,
- *    since ListView renders its selection bar as a sibling and cannot do the swap itself.
+ *  - `selectedRows` must stay destructured out of the slot props so it never reaches DataTable,
+ *    even though ETP-5111 retired the toolbar/selection-bar swap that used to read it — and the
+ *    toolbar must stay ungated, so the retired swap cannot creep back in.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -177,13 +177,15 @@ describe('AccountsHeaderTable — row interaction guards', () => {
   });
 });
 
-// ETP-4656 — ListView renders its standardized selection bar as a SIBLING of this slot and
-// cannot reach inside it, so the "selection bar replaces the toolbar" swap is wired here and
-// would silently disappear on a re-run if nothing locked it. Behaviour (what the user sees at
-// each selection size) is covered in
+// ETP-4656 wired a "selection bar replaces the toolbar" swap here, because ListView renders its
+// selection bar as a SIBLING of this slot and cannot reach inside it. ETP-5111 RETIRED that swap:
+// with the bar reduced to a floating pill (ETP-4972) it replaced nothing and merely took the
+// toolbar's own actions away from a user who had ticked a checkbox. What this block locks now is
+// the retirement itself — the toolbar is unconditional — plus the one piece of the old wiring that
+// had to STAY. Behaviour is covered in
 // tools/app-shell/src/windows/custom/financial-account/__tests__/AccountsHeaderTable.vitest.jsx
-// ("toolbar / selection-bar swap"); this block only locks the two structural halves.
-describe('AccountsHeaderTable — selection-aware toolbar', () => {
+// ("toolbar stays mounted across selection changes").
+describe('AccountsHeaderTable — selection handling', () => {
   it('destructures selectedRows out of the rest element instead of relaying it to DataTable', () => {
     assert.ok(
       destructuredNames.includes('selectedRows'),
@@ -195,28 +197,49 @@ describe('AccountsHeaderTable — selection-aware toolbar', () => {
     assert.doesNotMatch(src, /selectedRows=\{/, 'selectedRows must not travel into DataTable');
   });
 
-  it('derives the toolbar gate from ListView selection rather than mirroring it locally', () => {
-    assert.match(src, /const selectionActive = \(selectedRows\?\.length \?\? 0\) > 0/);
-    // A local mirror fed by onSelectionChange goes stale: DataTable empties or prunes its
-    // internal Set from clearSelectionTrigger / deselectTrigger WITHOUT calling
-    // onSelectionChange, so after a bulk delete or a cancel the mirror still reads
-    // "selected" and the toolbar never comes back. Selection state stays ListView's, which
-    // is why neither name may appear in this slot's code. Both are named in comments here,
-    // so match on code only — same treatment as the retired-R-spec guard above.
+  /**
+   * The trap this pins. Since ETP-5111 nothing in the body READS `selectedRows` — so it now looks
+   * exactly like a leftover a tidy-up would delete, and deleting it is a silent bug: the prop falls
+   * back into `...props`, reaches DataTable, and starts reading as a controlled-selection API that
+   * DataTable does not implement. It is load-bearing precisely BECAUSE it is unused, which is what
+   * the eslint-disable directive above it records. Keep the directive and the name together.
+   */
+  it('keeps the deliberately-unused selectedRows destructuring, marked as intentional', () => {
+    assert.match(
+      src,
+      /eslint-disable-next-line no-unused-vars\s*\n\s*selectedRows,/,
+      'selectedRows must stay destructured, with the directive that says the absence of a reader is intentional',
+    );
+  });
+
+  it('keeps no local mirror of the selection', () => {
+    // Selection state is ListView's. A local mirror fed by onSelectionChange goes stale anyway:
+    // DataTable empties or prunes its internal Set from clearSelectionTrigger / deselectTrigger
+    // WITHOUT calling onSelectionChange. Both names are mentioned in comments here, so match on
+    // code only — same treatment as the retired-R-spec guard above.
     const code = src.replace(/^\s*\/\/.*$/gm, '');
     assert.doesNotMatch(code, /onSelectionChange/);
     assert.doesNotMatch(code, /setSelectedRows/);
   });
 
-  it('unmounts the toolbar inside that gate, so it leaves the DOM rather than hiding', () => {
-    // `&& (` is the unmount: `cuentas-toolbar` has to genuinely leave the DOM for
-    // ListView's bar above to read as its replacement. The nested pattern also pins the
-    // toolbar INSIDE the branch — no `)}` may close it before AccountsToolbar renders.
-    assert.match(
-      src,
-      /\{!selectionActive && \((?:(?!\)\})[\s\S])*?<AccountsToolbar/,
-      'AccountsToolbar must render inside the !selectionActive branch',
-    );
+  it('renders AccountsToolbar unconditionally, with no selection gate left', () => {
+    const code = src.replace(/^\s*\/\/.*$/gm, '');
+    // The retired gate by name, so a straight revert of the JSX fails here.
+    assert.doesNotMatch(code, /selectionActive/, 'the selection gate on the toolbar was retired');
+
+    // And structurally, for any gate spelled differently: whatever immediately precedes
+    // `<AccountsToolbar` must be a plain element open tag, never a condition. `&&` / `?` / `:`
+    // in the JSX right above it is exactly what a re-introduced gate looks like.
+    const at = code.indexOf('<AccountsToolbar');
+    assert.ok(at > 0, 'the slot must render AccountsToolbar');
+    const justBefore = code.slice(Math.max(0, at - 200), at);
+    assert.match(justBefore, /<\w[^>]*>\s*$/, 'AccountsToolbar must be a direct child of an element');
+    for (const gate of ['&&', '?', ' : ']) {
+      assert.ok(
+        !justBefore.includes(gate),
+        `no conditional (${gate}) may gate AccountsToolbar, got: ${JSON.stringify(justBefore.slice(-120))}`,
+      );
+    }
   });
 });
 
@@ -289,5 +312,117 @@ describe('AccountsHeaderTable — delete wiring (ETP-4871)', () => {
     // Both ArchiveAccountDialog and DeleteAccountDialog reuse the same `reload` (a thin
     // `onDataMutated?.()` wrapper) as their success callback.
     assert.match(src, /<DeleteAccountDialog[\s\S]*?onDeleted=\{reload\}/);
+  });
+});
+
+// ETP-5113 — the advanced ("by conditions") filter. The generic builder only emits the
+// condition tree; the evaluation is client-side and lives in this slot, next to the type
+// filter and the search box it composes with. Behavioural coverage:
+// tools/app-shell/src/windows/custom/financial-account/__tests__/AccountsHeaderTable.vitest.jsx
+describe('AccountsHeaderTable — advanced filter wiring (ETP-5113)', () => {
+  it('holds the condition tree in its own ephemeral state, like every other list', () => {
+    assert.match(src, /const \[advancedFilter, setAdvancedFilter\] = useState\(null\)/);
+  });
+
+  it('evaluates it through the shared account filter, never a local re-implementation', () => {
+    // Both names come from the shared spec module: the evaluator AND the `countryLabel`
+    // projection the value pickers need. The import is asserted per-name rather than as one
+    // literal list so re-ordering the specifiers does not fail the test.
+    assert.match(
+      src,
+      /import \{[^}]*\bapplyAccountAdvancedFilter\b[^}]*\} from '@\/components\/financial-accounts\/accountAdvancedFilter\.js'/,
+    );
+    assert.match(
+      src,
+      /import \{[^}]*\bwithDerivedFields\b[^}]*\} from '@\/components\/financial-accounts\/accountAdvancedFilter\.js'/,
+    );
+    assert.match(src, /applyAccountAdvancedFilter\(scopedAccounts, advancedFilter\)/);
+    // The operator semantics belong to the shared evaluator (advancedFilterApply.js), which
+    // is what makes Saldo compare numerically. A second copy here would drift from it.
+    const code = src.replace(/^\s*\/\/.*$/gm, '');
+    assert.doesNotMatch(code, /matchesCondition/);
+    assert.doesNotMatch(code, /applyConditions/);
+  });
+
+  it('hands the funnel its state and its change handler through the toolbar', () => {
+    assert.match(src, /<AccountsToolbar[\s\S]*?advancedFilter=\{advancedFilter\}/);
+    assert.match(src, /<AccountsToolbar[\s\S]*?onAdvancedFilterChange=\{setAdvancedFilter\}/);
+  });
+
+  // The seeding invariant. `scopedAccounts` is type + search ONLY: seeding the funnel's value
+  // pickers from the fully filtered result would collapse each picker to the value already
+  // chosen (filter Moneda = EUR and EUR becomes the only option left), making a selection
+  // impossible to widen. So the memo must not depend on `advancedFilter`, and the toolbar's
+  // `rows` must trace back to it (through `filterPickerRows`, see below) rather than to
+  // `visibleAccounts`.
+  it('seeds the funnel value pickers from the pre-conditions rows', () => {
+    assert.match(
+      src,
+      /const scopedAccounts = useMemo\(\s*\(\) => filterAccounts\(data, typeFilter, search\),\s*\[data, typeFilter, search\],\s*\)/,
+    );
+    assert.doesNotMatch(src, /rows=\{visibleAccounts\}/);
+    assert.doesNotMatch(src, /rows=\{data\}/);
+  });
+
+  // The País "zero options" bug. `IdentifierMultiPicker` reads `row[col.key]` straight off
+  // the rows it is handed, and `countryLabel` is a DERIVED key that only exists after
+  // `withDerivedFields` — so seeding the toolbar with the RAW `scopedAccounts` left every
+  // row's `countryLabel` undefined, every row was dropped by the picker's
+  // `if (id == null || id === '') continue` guard, and País opened with an empty list.
+  // Moneda was never affected: `currencyIso` is a real row property.
+  it('seeds them with the PROJECTED rows, so the derived País key is readable', () => {
+    assert.match(
+      src,
+      /const filterPickerRows = useMemo\(\s*\(\) => scopedAccounts\.map\(withDerivedFields\),\s*\[scopedAccounts\],\s*\)/,
+    );
+    assert.match(src, /<AccountsToolbar[\s\S]*?rows=\{filterPickerRows\}/);
+  });
+
+  // The negative that actually pins the bug: `scopedAccounts` still exists and is still the
+  // correct input to the APPLIER (which projects each row itself), so re-pointing the
+  // toolbar's `rows` back at it is a one-word edit that would silently empty the País picker
+  // again while every other assertion here kept passing.
+  it('never hands the picker the raw, unprojected rows', () => {
+    assert.doesNotMatch(src, /rows=\{scopedAccounts\}/);
+    assert.doesNotMatch(src, /rows=\{filterAccounts\(/);
+  });
+
+  // The projection is applied ONCE, in the memo, not inline in the JSX — an inline
+  // `.map(withDerivedFields)` in the prop would rebuild the array (and so reset the
+  // picker's option identity) on every render.
+  it('projects the picker rows in a memo keyed off scopedAccounts alone', () => {
+    assert.doesNotMatch(src, /rows=\{scopedAccounts\.map\(/);
+    // Sliced to the memo's own text (up to its first `);`) rather than matched across the
+    // whole file: a lazy `[\s\S]*?` from the declaration would happily run on into the
+    // NEXT memo's dependency array and report a false positive.
+    const memo = /const filterPickerRows = useMemo\(([\s\S]*?)\);/.exec(src)?.[1];
+    assert.ok(memo, 'filterPickerRows must be a useMemo');
+    // Must NOT depend on `advancedFilter` or read the filtered result: that is the same
+    // picker-collapsing bug the pre-conditions invariant above guards, one level down.
+    assert.doesNotMatch(memo, /\badvancedFilter\b/);
+    assert.doesNotMatch(memo, /\bvisibleAccounts\b/);
+  });
+
+  it('feeds the grid the fully filtered rows', () => {
+    assert.match(src, /data=\{visibleAccounts\}/);
+  });
+});
+
+describe('AccountsHeaderTable — Moneda column chrome (ETP-5113)', () => {
+  // Tailwind arbitrary values must be static in source, so the per-column widths stay in
+  // code rather than in decisions.json (see COLUMN_CHROME's own comment). A missing entry
+  // does not break the column — it silently loses its pinned width.
+  it('pins a width for the currency column like every other data column', () => {
+    assert.match(src, /currency: \{ headClass: 'w-\[120px\][^']*', cellClass: 'w-\[120px\][^']*' \}/);
+  });
+
+  it('keys the chrome off the contract field name, not the enriched row key', () => {
+    assert.match(src, /COLUMN_CHROME\[col\.name\]/);
+    assert.doesNotMatch(src, /currencyIso: \{ headClass/);
+  });
+
+  it('leaves the Moneda cell body to the registry rather than rendering a chip here', () => {
+    assert.doesNotMatch(src, /<Tag\b/);
+    assert.doesNotMatch(src, /CurrencyCell/);
   });
 });

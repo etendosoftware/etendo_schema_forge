@@ -5,9 +5,10 @@ import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkRowDelete } from '@/hooks/useBulkRowDelete';
+import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
-import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Download, Trash2 } from 'lucide-react';
+import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Download, Trash2, Loader2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -20,9 +21,8 @@ import { ListSortPopover } from './ListSortPopover.jsx';
 import { ListProgressBar } from './ListProgressBar.jsx';
 import SelectionToolbar from './SelectionToolbar.jsx';
 import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
-import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
 import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-pane.jsx';
-import { useBatch } from '../copilot/ocr/ingest/useBatch.js';
+import { useWindowImportDialog } from './useWindowImportDialog.js';
 import { buildAdvancedFilterCriteria } from '@/lib/gridQuery';
 import { useWindowFilterPresets } from '@/hooks/useWindowFilterPresets';
 import { trackSearchPerformed, trackWindowOpened } from '@/lib/productUsageTelemetry.js';
@@ -34,13 +34,18 @@ import {
 } from '@/components/ui/dropdown-menu.jsx';
 
 /**
- * Accent- and case-insensitive label comparison, matching how `mapColumns.normalizeHeader`
- * compares a CSV header — so two labels this calls equal are also two headers the import
- * treats as the same column.
+ * Normalizes a selected grid row into what `printDocuments()` needs to exclude Draft
+ * documents from a multi-select print batch (ETP-5124 AC#6/AC#7). Returns a bare id
+ * when the row carries no `documentStatus` — a plain id already selected, or a window
+ * whose decisions.json doesn't declare that field with `grid: true` — so
+ * `printDocuments`'s fail-open default (never treat a missing status as Draft) applies
+ * unchanged; returns `{ id, documentStatus }` only when a status is actually available
+ * to filter on.
  */
-function sameLabel(a, b) {
-  const norm = (s) => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
-  return norm(a) === norm(b);
+function toPrintableDocument(row) {
+  const id = row?.id || row;
+  const documentStatus = (row && typeof row === 'object') ? row.documentStatus : undefined;
+  return documentStatus !== undefined ? { id, documentStatus } : id;
 }
 
 function resolveQuickFilterIndicesFromPreset(quickFilters, preset, setActiveFilterIndices) {
@@ -291,6 +296,37 @@ function isDefaultSortActive(hook, defaultColumn, defaultDirection) {
   return hook.sortColumn === defaultColumn && hook.sortDirection === defaultDirection;
 }
 
+// Extracted so the guard/try-finally doesn't add to ListView's own cognitive
+// complexity (S3776) — same rationale as the other top-level helpers above.
+async function executeBulkPrint({ isPrinting, setIsPrinting, windowName, selectedRows, token, ui, apiBaseUrl }) {
+  if (isPrinting) return;
+  setIsPrinting(true);
+  try {
+    await printDocuments(windowName, selectedRows.map(toPrintableDocument), token, ui, apiBaseUrl);
+  } catch (err) {
+    // printDocuments() already surfaces failures via toast and never rejects
+    // in practice — this catch exists purely so the loading state cannot get
+    // stuck if that contract is ever violated, without turning a defensive
+    // failure into an unhandled promise rejection (ETP-5129).
+    console.error('[ListView] bulk print failed:', err);
+  } finally {
+    setIsPrinting(false);
+  }
+}
+
+// Same rationale: the ternary itself is what feeds ListView's cognitive
+// complexity, regardless of where its result is used — a plain function call
+// keeps the branch out of the caller's count (mirrors iconSizeClass above).
+function printButtonLabel(isPrinting, ui) {
+  return isPrinting ? ui('generating') : ui('print');
+}
+
+function printButtonIcon(isPrinting, selectionBarSize) {
+  return isPrinting
+    ? <Loader2 className={`${iconSizeClass(selectionBarSize)} animate-spin`} data-testid="Loader2__620cbc" />
+    : <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />;
+}
+
 /**
  * Full-width list view for an entity.
  */
@@ -307,6 +343,11 @@ export function ListView({
   hidePrint = false,
   hideMoreMenu = false,
   hideListFilters = false,
+  // ETP-5101 — hides the record-count badge next to the window title. Use this
+  // when `hook.items.length` doesn't represent a meaningful count for the
+  // window (e.g. AccountTreeView's own self-fetched tree: ListView only ever
+  // hands it one paginated batch of leaves, not the full materialized structure).
+  hideRecordCount = false,
   // Drops the whole list bar (filters + sort/refresh/link/print/New) instead of
   // just its individual controls. For windows whose headerTable renders its own
   // complete toolbar — without this, `hideCreate`/`hidePrint`/`hideListFilters`
@@ -328,12 +369,12 @@ export function ListView({
   window: windowProp = null,
   bulkActions = null,
   isRowSelectable = null,
-  // ETP-4871 — optional `(row) => boolean` gating ListView's own bulk-delete button (the
-  // selection-bar "Delete selected", not to be confused with a window's own per-row delete
-  // affordance). Absent means "every row is deletable" — unchanged default behavior for every
-  // window that does not pass it. When present, the button disables the moment the CURRENT
-  // selection includes a row that fails the predicate, with a tooltip explaining how many.
-  isRowDeletable = null,
+  // NOTE (ETP-5111): there is deliberately NO `isRowDeletable` prop here any more. ETP-4871 let a
+  // host pre-disable the bulk-delete button for an ineligible selection; the unified delete rule
+  // replaced that with "always let the user try, then explain the failure" (the reason is shown
+  // when a single record was selected — see `toastBatchDeleteOutcome`). Re-introducing a
+  // row-eligibility gate on this button would put a third delete pattern back in the codebase;
+  // `ListView.bulkDelete.vitest.jsx` asserts the button is never disabled by row eligibility.
   listViewOptions = {},
   baseFilter = null,
   quickFilters = null,
@@ -410,7 +451,6 @@ export function ListView({
   const [tableColumns, setTableColumns] = useState(initialColumns ?? []);
 
   const [showImportDialog, setShowImportDialog] = useState(false);
-  const { runBatch } = useBatch({ apiBaseUrl, token });
   const apiFetch = useApiFetch(apiBaseUrl);
   const { locale } = useLocaleSwitch();
 
@@ -533,7 +573,12 @@ export function ListView({
     resolveQuickFilterIndicesFromPreset(quickFilters, preset, setActiveFilterIndices);
   }, [filterPresets, subsetFilters, quickFilters]);
 
-  const saveCurrentAsPreset = useCallback((name) => {
+  // ETP-5007: the builder hands over the advanced filter it currently holds in
+  // its DRAFT. `advancedFilter` is only the last APPLIED value, so relying on it
+  // saved an empty preset when the user configured a filter without applying it,
+  // and a stale one when they edited an applied filter before saving. The
+  // fallback keeps callers that pass no draft (there are none today) working.
+  const saveCurrentAsPreset = useCallback((name, draftAdvancedFilter) => {
     const subsetLabel = (subsetFilters && activeSubsetIndex != null)
       ? (subsetFilters[activeSubsetIndex]?.label ?? null)
       : null;
@@ -544,7 +589,7 @@ export function ListView({
       : [];
     savePreset(name, {
       columnFilters,
-      advancedFilter,
+      advancedFilter: draftAdvancedFilter !== undefined ? draftAdvancedFilter : advancedFilter,
       subsetLabel,
       quickFilterLabels,
     });
@@ -596,6 +641,15 @@ export function ListView({
   }, [refreshTrigger]);
 
   const navigate = useNavigate();
+  // ETP-5075 — surface the bulk-action result toast after `BulkDocumentAction`'s
+  // post-run `window.location.reload()`. It used to be wired per window, inside each
+  // hand-written `windows/custom/<w>/index.jsx` (sales-invoice, goods-shipment, …), which
+  // meant a purely pipeline-generated window with a `bulkActions` slot ran the bulk fine
+  // and then reported nothing at all. Hosting it here gives every list the toast with no
+  // per-window wiring. It cannot double-fire for the windows whose wrapper also calls it:
+  // the hook deletes the sessionStorage key before showing the toast, so whichever effect
+  // runs first consumes the result and the other finds nothing.
+  useBulkActionToast();
   // ETP-3914 — when rowQuickActions is enabled but the host did not supply
   // onEdit/onDelete, wire sensible defaults: navigate to detail and reuse the
   // shared delete confirm + DELETE pipeline. Custom overrides that pass their
@@ -655,144 +709,12 @@ export function ListView({
   const t = useLabel(labelOverrides);
   const ui = useUI();
 
-  // ETP-4996 — the import dialog's two injected capabilities.
-  //
-  // `importFieldLabel` writes the downloaded CSV template's headers in the SESSION language.
-  //
-  // The base comes from the AD label dictionary (`t(column)`, which already applies the
-  // window's own `labelOverrides`) — those translations exist and are maintained, so the
-  // template should not carry a second copy of them. `labelKey` is the escape hatch for the
-  // handful of columns AD cannot serve: `EM_Etgo_Isperson` has no dictionary entry, and
-  // address/city/postal/region are C_Location columns the descriptor writes directly, so they
-  // are not entity fields and have no AD label at all.
-  //
-  // `headerScope` appends a localized qualifier naming the tab a column belongs to. A Contacts
-  // row is split across THREE records — the business partner, its contact person (AD_User) and
-  // its address (C_BPartner_Location + C_Location) — and the AD label for two of those halves is
-  // identical ("Correo electrónico" is the label of BOTH EM_Etgo_Email and Email). Without the
-  // qualifier the template writes the same header twice, which `parseDelimited` rejects
-  // outright — the file could not be uploaded at all.
-  //
-  // ETP-4997: the scope used to be a single "contact" value covering everything that is not on
-  // the header entity, so the five address columns were labelled "Dirección (Contacto)" —
-  // naming the wrong tab, and reported as confusing by a user reading an exported file. Address
-  // columns now carry their own scope. An unknown scope falls back to no qualifier rather than
-  // printing a raw key.
-  const importHeaderScopeLabels = useMemo(() => ({
-    contact: ui('importHeaderScopeContact'),
-    address: ui('importHeaderScopeAddress'),
-  }), [ui]);
-  const importFieldLabel = useCallback((field) => {
-    const base = (field.labelKey ? ui(field.labelKey) : null)
-      || (field.column ? t(field.column) : null)
-      || field.label || field.target;
-    const scope = importHeaderScopeLabels[field.headerScope];
-    // The address column's own label IS the scope word, so qualifying it would read
-    // "Dirección (Dirección)". Nothing else in the file carries that name, and
-    // `resolveTemplateHeaders` still disambiguates if a collision ever appears.
-    if (!scope || sameLabel(base, scope)) return base;
-    return `${base} (${scope})`;
-  }, [t, ui, importHeaderScopeLabels]);
-
-  // `importExistingKeys` answers "which of these rows already exist?" before the user
-  // confirms, so a re-imported file shows its rows as Saltada instead of surfacing them as
-  // post-send duplicates. Goes through the same `criteria=` list query the grid itself
-  // uses, so it inherits the window's org/client security filtering for free.
-  const importExistingKeys = useCallback(async (criteria, keyTargets) => {
-    const params = new URLSearchParams();
-    params.append('criteria', JSON.stringify(criteria));
-    params.append('_startRow', '0');
-    params.append('_endRow', '1000');
-    const res = await apiFetch(`/${importConfig.entity}?${params.toString()}`);
-    if (!res.ok) throw new Error(`existing-record lookup failed: ${res.status}`);
-    const json = await res.json().catch(() => null);
-    const data = json?.response?.data ?? json?.data ?? [];
-    // Only the key columns are read back; anything else the endpoint returns is ignored.
-    return (Array.isArray(data) ? data : []).map((record) => Object.fromEntries(
-      keyTargets.map((target) => [target, record[target]]),
-    ));
-  }, [apiFetch, importConfig?.entity]);
-
-  // ETP-4669: the import flow (ImportDialog + every child) previously rendered its hardcoded
-  // English DEFAULT_LABELS regardless of locale, because no `labels` was ever passed. Build
-  // the nested `labels` object ImportDialog forwards to each child (shape documented in
-  // app-shell-core's ImportDialog.jsx) and pass `translate={ui}` so the send pipeline
-  // localizes backend errors too. Templated strings (mappedSummary/{mapped}/{total},
-  // tooltips, bulkApply/{count}/{raw}/{value}) keep their {placeholders} — the child fills
-  // them at render time; the (n) => string labels interpolate here. `save`/`cancel`/`retry`/
-  // `close` reuse existing generic keys per the i18n guide's "reuse before adding" rule.
-  const importLabels = useMemo(() => ({
-    title: ui('importDialogTitle'),
-    revalidating: ui('importRevalidating'),
-    // `downloadTemplate` stays for back-compatibility (ImportDialog falls back to it for CSV
-    // when the per-format key is absent); the two per-format captions are what actually render
-    // now that a window can offer more than one template.
-    downloadTemplate: ui('importDownloadTemplate'),
-    downloadTemplateCsv: ui('importDownloadTemplateCsv'),
-    downloadTemplateXlsx: ui('importDownloadTemplateXlsx'),
-    importButton: (n) => ui('importButtonCount', { n }),
-    dropzone: {
-      dropHere: ui('importDropHere'),
-      // Carries a {formats} placeholder that ImportDropzone fills from the window's own
-      // `formats` declaration, so the hint can no longer name formats the input does not accept.
-      dropHint: ui('importDropHintFormats'),
-    },
-    progress: {
-      title: ui('importProgressTitle'),
-      subtitle: ui('importProgressSubtitle'),
-    },
-    mapping: {
-      notImported: ui('importNotImported'),
-      mappedSummary: ui('importMappedSummary'),
-      editMatch: ui('importEditMatch'),
-      editTitle: ui('importEditColumnTitle'),
-      save: ui('save'),
-      cancel: ui('cancel'),
-    },
-    confirm: {
-      title: ui('importConfirmTitle'),
-      willImport: (n) => ui('importWillImport', { n }),
-      willSkip: (n) => ui('importWillSkip', { n }),
-      cancel: ui('cancel'),
-      confirm: ui('importConfirmButton'),
-    },
-    fileError: {
-      title: ui('importFileErrorTitle'),
-      cancel: ui('cancel'),
-      retry: ui('retry'),
-    },
-    reviewQueue: {
-      filterAll: ui('importFilterAll'),
-      filterOk: ui('importFilterOk'),
-      filterError: ui('importFilterError'),
-      skip: ui('importSkip'),
-      skipped: ui('importSkipped'),
-      unskip: ui('importUnskip'),
-      downloadErrors: ui('importDownloadErrors'),
-      status: ui('importStatus'),
-      statusOk: ui('importStatusOk'),
-      statusError: ui('importStatusError'),
-      fieldErrorsTooltip: ui('importFieldErrorsTooltip'),
-      bulkApplyTitle: ui('importBulkApplyTitle'),
-      bulkApplyDescription: ui('importBulkApplyDescription'),
-      bulkApplyOnlyThis: ui('importBulkApplyOnlyThis'),
-      bulkApplyAll: ui('importBulkApplyAll'),
-      retry: ui('retry'),
-    },
-    systemError: {
-      title: ui('importSystemErrorTitle'),
-      subtitle: ui('importSystemErrorSubtitle'),
-      copy: ui('importSystemErrorCopy'),
-      copied: ui('importSystemErrorCopied'),
-      copyFailed: ui('importSystemErrorCopyFailed'),
-      close: ui('close'),
-      showReport: ui('importSystemErrorShowReport'),
-      hideReport: ui('importSystemErrorHideReport'),
-      rowData: ui('importSystemErrorRowData'),
-      requestSent: ui('importSystemErrorRequestSent'),
-      serverResponse: ui('importSystemErrorServerResponse'),
-    },
-  }), [ui]);
+  // ETP-5190 — the ImportDialog wiring (labels, field labels, existing-key lookup, batch
+  // poster) moved to `useWindowImportDialog` so the First Steps checklist can drive the very
+  // same import inline without a second copy of it.
+  const importDialogProps = useWindowImportDialog({
+    importConfig, apiBaseUrl, token, labelOverrides,
+  });
   const label = tMenu(entityLabel) || entityLabel || entity;
   const { toggleFavorite, isFavorite } = useFavorites();
   const favKey = windowName || entity || '';
@@ -803,10 +725,10 @@ export function ListView({
   useSetPageMeta({
     title: label,
     breadcrumb: fullBreadcrumb,
-    recordCount: hook.items.length,
+    recordCount: hideRecordCount ? undefined : hook.items.length,
     onAddToFavorites: favKey ? () => toggleFavorite(favKey, entityLabel || entity) : undefined,
     isFavorite: favActive,
-  }, [favActive, hook.items.length]);
+  }, [favActive, hook.items.length, hideRecordCount]);
   const [selectedRows, setSelectedRows] = useState([]);
   const [clearSelectionCounter, setClearSelectionCounter] = useState(0);
   // ETP-4656 — partial bulk-delete outcome: bump deselectTrigger with the ids of
@@ -816,7 +738,13 @@ export function ListView({
   const [deselectTrigger, setDeselectTrigger] = useState(0);
   const [deselectRowIds, setDeselectRowIds] = useState([]);
   const [previewRow, setPreviewRow] = useState(null);
+  const [isPrinting, setIsPrinting] = useState(false);
   const activePreviewRow = previewRow ?? externalPreviewRow ?? null;
+
+  const handleBulkPrint = useCallback(
+    () => executeBulkPrint({ isPrinting, setIsPrinting, windowName, selectedRows, token, ui, apiBaseUrl }),
+    [isPrinting, windowName, selectedRows, token, ui, apiBaseUrl]
+  );
 
   const handlePreviewClose = useCallback(() => {
     if (previewRow) {
@@ -912,6 +840,12 @@ export function ListView({
     if (hook.sortColumn !== colKey) {
       hook.setSortColumn(colKey);
       hook.setSortDirection('asc');
+    } else if (isDefaultSort) {
+      // At rest on this window's own default (which may be 'desc'). A plain
+      // 'asc' → 'desc' toggle here would be a same-value setState when the
+      // default direction is already 'desc' — no re-render, click looks dead.
+      // Move away from the resting direction instead of assuming it's 'asc'.
+      hook.setSortDirection(initialSortDirection === 'asc' ? 'desc' : 'asc');
     } else if (hook.sortDirection === 'asc') {
       hook.setSortDirection('desc');
     } else {
@@ -919,7 +853,7 @@ export function ListView({
       hook.setSortDirection(initialSortDirection);
     }
   }, [hook.sortColumn, hook.sortDirection, hook.setSortColumn, hook.setSortDirection,
-    initialSortColumn, initialSortDirection]);
+    initialSortColumn, initialSortDirection, isDefaultSort]);
 
   const handleClearSort = useCallback(() => {
     hook.setSortColumn(initialSortColumn);
@@ -946,6 +880,10 @@ export function ListView({
     data: hook.items,
     meta: hook.meta,
     onNavigate: buildRowNavigateHandler(renderPreview, setPreviewRow, navigate, windowName),
+    // ETP-5075 — lets DataTable turn an FK column in the fkNavigation registry into a
+    // click-through to the referenced document. Distinct from `onNavigate` above, which
+    // always targets THIS window's own record.
+    navigate,
     onSelectionChange: setSelectedRows,
     // ETP-4656 — the AUTHORITATIVE selection, read-only for the slot. A custom
     // headerTable that has to react to selection (e.g. financial-account swaps its own
@@ -989,13 +927,6 @@ export function ListView({
     rowQuickActions: effectiveRowQuickActions,
     hiddenColumns,
   };
-
-  // ETP-4871 — how many of the CURRENT selection fail `isRowDeletable`, if the host passed one.
-  // 0 (the default, `isRowDeletable` absent) means the bulk-delete button behaves exactly as
-  // before for every other window — this must never regress an existing window's bulk delete.
-  const blockedDeleteCount = isRowDeletable
-    ? selectedRows.filter((row) => !isRowDeletable(row)).length
-    : 0;
 
   return (
     <>
@@ -1046,11 +977,12 @@ export function ListView({
                   <Button
                     variant="ghost"
                     size="icon"
-                    title={ui('print')}
-                    aria-label={ui('print')}
-                    onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token, ui, apiBaseUrl)}
+                    title={printButtonLabel(isPrinting, ui)}
+                    aria-label={printButtonLabel(isPrinting, ui)}
+                    disabled={isPrinting}
+                    onClick={handleBulkPrint}
                     data-testid="Button__620cbc">
-                    <Printer className={iconSizeClass(selectionBarSize)} data-testid="Printer__620cbc" />
+                    {printButtonIcon(isPrinting, selectionBarSize)}
                   </Button>
                 )}
                 {onCloneRow && (
@@ -1071,9 +1003,8 @@ export function ListView({
                     explicitly — inferring it from that prop's mere presence was fragile,
                     since selectionBarRightActions can be used for things other than
                     delete).
-                    ETP-4871 — additionally disabled (with an explanatory tooltip) once the
-                    selection includes a row the host's `isRowDeletable` rejects; absent, this
-                    never differs from the pre-existing behavior. */}
+                    ETP-5111 — never disabled by row eligibility: whatever the selection holds,
+                    the delete is attempted and the outcome toast reports it. */}
                 {/* ETP-4972 — icon-only, no border, no visible "Eliminar" label:
                     zoomed straight into the applied Figma instance's canvas
                     render (not just the Dev Mode property panel) and confirmed
@@ -1084,11 +1015,9 @@ export function ListView({
                   <Button
                     variant="ghost"
                     size="icon"
-                    disabled={bulkDeleting || blockedDeleteCount > 0}
+                    disabled={bulkDeleting}
                     onClick={() => requestBulkDelete(selectedRows)}
-                    title={blockedDeleteCount > 0
-                      ? ui('bulkDeleteBlockedTooltip', { count: blockedDeleteCount })
-                      : ui('delete')}
+                    title={ui('delete')}
                     aria-label={ui('delete')}
                     data-testid="bulk-delete-selected">
                     <Trash2 className={iconSizeClass(selectionBarSize)} data-testid="Trash2__620cbc" />
@@ -1197,6 +1126,7 @@ export function ListView({
                   isDefaultSort={isDefaultSort}
                   SortIconComponent={SortIconComponent}
                   iconButtonHover={iconButtonHover}
+                  labelOverrides={labelOverrides}
                   data-testid="ListSortPopover__620cbc" />
                 <RefreshButton
                   RefreshIconComponent={RefreshIconComponent}
@@ -1224,7 +1154,7 @@ export function ListView({
                 {importConfig?.enabled && (
                   <ListExportButton
                     importConfig={importConfig}
-                    importFieldLabel={importFieldLabel}
+                    importFieldLabel={importDialogProps.fieldLabelFn}
                     apiBaseUrl={apiBaseUrl}
                     buildListQuery={hook.buildListQuery}
                     data-testid="ListExportButton__620cbc" />
@@ -1355,13 +1285,7 @@ export function ListView({
             open={showImportDialog}
             onOpenChange={setShowImportDialog}
             config={importConfig}
-            token={token}
-            postBatch={runBatch}
-            simSearchFn={simSearch}
-            labels={importLabels}
-            translate={ui}
-            fieldLabelFn={importFieldLabel}
-            existingKeyFetchFn={importExistingKeys}
+            {...importDialogProps}
             onImported={({ failedCount }) => {
               // Refresh unconditionally — some rows may have committed even when others
               // failed. Only auto-close when there is nothing left to review: closing

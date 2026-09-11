@@ -77,18 +77,19 @@ describe('ToggleRow', () => {
   // ETP-4879: the shared Switch's disabled look used to be a blanket
   // `disabled:opacity-50` over `bg-primary`/`bg-input`, deriving the
   // disabled-checked colour by opacity math and landing on the wrong shade.
-  // ToggleRow now cancels that dimming (`disabled:opacity-100`) and supplies
-  // two deliberate, theme-aware disabled-track colours via CSS custom
-  // properties. jsdom does not compute real CSS pixel colors, so these
-  // assertions target the className/data-state/disabled attribute
+  // ETP-5120 went further and pinned ALL 4 track states (not just the two
+  // disabled ones) to deliberate, theme-aware CSS custom properties, so even
+  // the enabled off/on tracks no longer come from Tailwind's default
+  // `bg-input`/`bg-primary`. jsdom does not compute real CSS pixel colors, so
+  // these assertions target the className/data-state/disabled attribute
   // combinations that drive the fix instead of computed `rgb()` output.
-  describe('4-state disabled/enabled visual distinction (ETP-4879)', () => {
+  describe('4-state disabled/enabled visual distinction (ETP-4879 / ETP-5120)', () => {
     it('off + enabled: keeps the base unchecked-track class, no disabled attribute', () => {
       render(<ToggleRow label="Off enabled" checked={false} data-testid="tr" />);
       const el = screen.getByTestId('tr-switch');
       expect(el).not.toBeDisabled();
       expect(el).toHaveAttribute('data-state', 'unchecked');
-      expect(el.className).toContain('data-[state=unchecked]:bg-input');
+      expect(el.className).toContain('data-[state=unchecked]:bg-[hsl(var(--switch-track-off-enabled))]');
     });
 
     it('on + enabled: keeps the base checked-track class, no disabled attribute', () => {
@@ -96,7 +97,7 @@ describe('ToggleRow', () => {
       const el = screen.getByTestId('tr-switch');
       expect(el).not.toBeDisabled();
       expect(el).toHaveAttribute('data-state', 'checked');
-      expect(el.className).toContain('data-[state=checked]:bg-primary');
+      expect(el.className).toContain('data-[state=checked]:bg-[hsl(var(--switch-track-on-enabled))]');
     });
 
     it('off + disabled: carries the explicit off-disabled track colour and cancels the old opacity dimming', () => {
@@ -124,14 +125,15 @@ describe('ToggleRow', () => {
       expect(el.className).not.toContain('opacity-50');
     });
 
-    it('does not regress the two already-correct enabled states with unexpected new classes', () => {
+    it('off + enabled and on + enabled carry the new ETP-5120 enabled-track overrides', () => {
       render(<ToggleRow label="Off enabled" checked={false} data-testid="off" />);
       render(<ToggleRow label="On enabled" checked data-testid="on" />);
       const offClass = screen.getByTestId('off-switch').className;
       const onClass = screen.getByTestId('on-switch').className;
-      // The base track classes for the enabled states are untouched by the fix.
-      expect(offClass).toContain('data-[state=unchecked]:bg-input');
-      expect(onClass).toContain('data-[state=checked]:bg-primary');
+      // ETP-5120: the enabled-state base classes are now explicit overrides too,
+      // not the Tailwind default bg-input/bg-primary.
+      expect(offClass).toContain('data-[state=unchecked]:bg-[hsl(var(--switch-track-off-enabled))]');
+      expect(onClass).toContain('data-[state=checked]:bg-[hsl(var(--switch-track-on-enabled))]');
       // Only the disabled-prefixed utilities were added by ETP-4879; the
       // enabled-state base classes are identical across both rows.
       expect(offClass).toContain('disabled:opacity-100');
@@ -170,7 +172,7 @@ describe('ToggleRow', () => {
       const el = screen.getByTestId('tr-switch');
       expect(el).not.toBeDisabled();
       expect(el).toHaveAttribute('data-state', 'unchecked');
-      expect(el.className).toContain('data-[state=unchecked]:bg-input');
+      expect(el.className).toContain('data-[state=unchecked]:bg-[hsl(var(--switch-track-off-enabled))]');
       expect(el.className).toContain('disabled:opacity-100');
       expect(el.className).toContain(
         'disabled:data-[state=unchecked]:bg-[hsl(var(--switch-track-off-disabled))]',
@@ -208,7 +210,7 @@ describe('ToggleRow', () => {
       expect(el).toHaveAttribute('data-state', 'unchecked');
       expect(el).not.toBeDisabled();
       expect(el.className).not.toContain('opacity-50');
-      expect(el.className).toContain('data-[state=unchecked]:bg-input');
+      expect(el.className).toContain('data-[state=unchecked]:bg-[hsl(var(--switch-track-off-enabled))]');
 
       rerender(<ToggleRow label="Transition" checked={false} disabled data-testid="tr" />);
       expect(el).toHaveAttribute('data-state', 'unchecked');

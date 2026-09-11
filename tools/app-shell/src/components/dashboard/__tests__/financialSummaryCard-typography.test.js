@@ -18,7 +18,7 @@ function getMetricValueTypography(value) {
 describe('FinancialSummaryCard — getMetricValueTypography overflow tiers', () => {
   describe('default tier (< 10 chars → 30px)', () => {
     it('short compact value returns 30px / 32px', () => {
-      const t = getMetricValueTypography('1,50 €K');
+      const t = getMetricValueTypography('1,50 K€');
       assert.equal(t.fontSize, '30px');
       assert.equal(t.lineHeight, '32px');
     });
@@ -32,7 +32,7 @@ describe('FinancialSummaryCard — getMetricValueTypography overflow tiers', () 
     });
 
     it('9-char value stays in default tier', () => {
-      assert.equal(getMetricValueTypography('125,50 €K').fontSize, '30px');
+      assert.equal(getMetricValueTypography('125,50 K€').fontSize, '30px');
     });
   });
 
@@ -44,7 +44,7 @@ describe('FinancialSummaryCard — getMetricValueTypography overflow tiers', () 
     });
 
     it('11-char value stays at 24px', () => {
-      const t = getMetricValueTypography('1.234,50 €K');
+      const t = getMetricValueTypography('1.234,50 K€');
       assert.equal(t.fontSize, '24px');
       assert.equal(t.lineHeight, '28px');
     });

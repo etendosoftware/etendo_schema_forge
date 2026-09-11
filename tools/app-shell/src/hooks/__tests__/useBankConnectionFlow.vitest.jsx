@@ -340,3 +340,102 @@ describe('useBankConnectionFlow — cancelSelection', () => {
     expect(createAndLink).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * ETP-5179 — the empty-account-list toast must name the cause.
+ *
+ * The bridge answers 200 with an empty list whichever filter emptied it, so the flow could only
+ * ever raise one generic toast: a USD account connected to a EUR-only bank looked exactly like a
+ * wrong-type or already-linked one. `fetchAccounts` now forwards the bridge's `emptyReason`
+ * (and `accountCurrency` for the currency case) and this hook maps it to a specific label,
+ * degrading to the generic one for an unknown or absent reason (an older backend).
+ */
+describe('useBankConnectionFlow — empty account list reasons', () => {
+  const CURRENCY_TEMPLATE =
+    'No se encontraron cuentas en {currency} en el banco seleccionado. '
+    + 'La conexión no puede establecerse.';
+
+  /** Mimics useUI: resolves the currency label from a dictionary and interpolates {currency}. */
+  function stubCurrencyLabel() {
+    uiMock.mockImplementation((key, params = {}) => {
+      let text = key === 'financeAccountsBankConnectionNoAccountsCurrency' ? CURRENCY_TEMPLATE : key;
+      Object.entries(params ?? {}).forEach(([name, value]) => {
+        text = text.replace(`{${name}}`, value);
+      });
+      return text;
+    });
+  }
+
+  async function runWithEmptyResult(payload) {
+    launchSaltEdgePopup.mockResolvedValue('conn-empty');
+    fetchAccounts.mockResolvedValue({
+      accounts: [],
+      providerName: '',
+      providerLogoUrl: '',
+      ...payload,
+    });
+    const { result } = renderHook(() => useBankConnectionFlow());
+    await act(async () => {
+      await result.current.startConnect({ id: 'FA-USD', type: 'B' });
+    });
+    return result;
+  }
+
+  it('names the currency and shows it in the toast on a currencyMismatch', async () => {
+    stubCurrencyLabel();
+
+    const result = await runWithEmptyResult({
+      emptyReason: 'currencyMismatch',
+      accountCurrency: 'USD',
+    });
+
+    expect(uiMock).toHaveBeenCalledWith(
+      'financeAccountsBankConnectionNoAccountsCurrency',
+      { currency: 'USD' },
+    );
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('USD'));
+    expect(toast.error).not.toHaveBeenCalledWith('financeAccountsBankConnectionNoAccounts');
+    expect(result.current.selection).toBeNull();
+  });
+
+  it('uses the type-specific label on a typeMismatch', async () => {
+    await runWithEmptyResult({ emptyReason: 'typeMismatch' });
+
+    expect(toast.error).toHaveBeenCalledWith('financeAccountsBankConnectionNoAccountsType');
+  });
+
+  it('uses the already-linked label on allLinked', async () => {
+    await runWithEmptyResult({ emptyReason: 'allLinked' });
+
+    expect(toast.error).toHaveBeenCalledWith('financeAccountsBankConnectionNoAccountsAllLinked');
+  });
+
+  it('keeps the generic label when the bank itself returned nothing', async () => {
+    await runWithEmptyResult({ emptyReason: 'noAccounts' });
+
+    expect(toast.error).toHaveBeenCalledWith('financeAccountsBankConnectionNoAccounts');
+  });
+
+  it('falls back to the generic label when the reason is absent (older backend)', async () => {
+    await runWithEmptyResult({});
+
+    expect(toast.error).toHaveBeenCalledWith('financeAccountsBankConnectionNoAccounts');
+  });
+
+  it('falls back to the generic label for an unknown reason', async () => {
+    await runWithEmptyResult({ emptyReason: 'somethingNobodyMappedYet' });
+
+    expect(toast.error).toHaveBeenCalledWith('financeAccountsBankConnectionNoAccounts');
+  });
+
+  it('falls back to the generic label when a currencyMismatch carries no currency', async () => {
+    // The bridge omits accountCurrency when the ISO code resolves to blank, so the pairing can
+    // arrive incomplete. Interpolating it anyway would print a literal "undefined" mid-sentence.
+    stubCurrencyLabel();
+
+    await runWithEmptyResult({ emptyReason: 'currencyMismatch' });
+
+    expect(toast.error).toHaveBeenCalledWith('financeAccountsBankConnectionNoAccounts');
+    expect(toast.error).not.toHaveBeenCalledWith(expect.stringContaining('undefined'));
+  });
+});

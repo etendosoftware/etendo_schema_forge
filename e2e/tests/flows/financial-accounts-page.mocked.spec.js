@@ -108,18 +108,51 @@ const SUMMARY = {
 };
 
 /**
+ * Install the DETAIL mock — the bespoke `financial-accounts-page` R spec, which is still what
+ * `useFinancialAccount` reads (it fetches the whole list and filters by id client-side; see the
+ * "T4 shortcut" note in `hooks/useFinancialAccount.js`). Same payload shape as
+ * `financial-account-detail.mocked.spec.js`: `response.data.accounts`.
+ *
+ * This is NOT optional for any test that lands on `/financial-account/{id}`. Before ETP-5034
+ * a detail whose account never loaded still rendered the tab shell, so a spec could get away
+ * with letting this request fall through to login()'s generic `/sws/**` stub — that stub answers
+ * `{ data: [], totalRows: 0 }` with no `response` envelope, which `useNeoResource` rejects as an
+ * unexpected shape, i.e. `error`, not just "no account". ETP-5034 added an early return in
+ * `windows/custom/financial-account/index.jsx` that renders `RecordUnavailable` in that case, so
+ * the whole detail (tabs, toolbar, automatch) disappears and every assertion below it fails.
+ *
+ * The R spec kept the flat `pendingCount` key; the W spec's generic CRUD derives its key from the
+ * AD column and serves the same value as `eTGOPendingCount`. The shared ACCOUNTS fixture carries
+ * the W key, so it is mapped here rather than duplicated.
+ */
+async function installAccountDetailMock(page, getRows = () => ACCOUNTS) {
+  await page.route('**/sws/neo/financial-accounts-page', async (route) => {
+    const accounts = getRows().map(({ eTGOPendingCount, ...rest }) => ({
+      ...rest, pendingCount: eTGOPendingCount,
+    }));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ response: { data: { accounts, summary: SUMMARY } } }),
+    });
+  });
+}
+
+/**
  * Install the `account` entity mock of the financial-account W spec. Must run AFTER login()
  * so this specific handler wins over the generic /sws/** stub. The list GET answers with the
- * rows plus the `summary` sibling; every other verb/shape (detail GET, DELETE) falls through,
- * so the detail view keeps using its own hooks and a mutation route registered EARLIER in the
- * same test still gets its turn (Playwright resolves `route.fallback()` towards the handler
- * registered before this one).
+ * rows plus the `summary` sibling; every other verb/shape (per-id GET, DELETE) falls through, so
+ * a mutation route registered EARLIER in the same test still gets its turn (Playwright resolves
+ * `route.fallback()` towards the handler registered before this one). The detail view reads a
+ * different endpoint entirely — see `installAccountDetailMock`, which this installs too so every
+ * test that navigates into `/financial-account/{id}` gets a loadable record.
  *
  * `getRows` is a callback, not an array, so a suite that mutates server state between
  * requests (bulk delete: the archived ids) re-reads it on every fetch and a refetch really
  * reflects the mutation.
  */
 async function installAccountsMock(page, getRows = () => ACCOUNTS) {
+  await installAccountDetailMock(page, getRows);
   await page.route('**/sws/neo/financial-account/account{/**,}**', async (route) => {
     const req = route.request();
     if (req.method() === 'GET' && !/\/account\/[^/?]+/.test(req.url())) {
@@ -356,14 +389,15 @@ test.describe('Financial Accounts list — Cuentas', () => {
  *     checkbox column renders. There is no per-row select testid — DataTable emits none — so
  *     the checkbox is reached as `Checkbox__eb5261` SCOPED INSIDE `row-{id}` (the same testid
  *     is also on the select-all header checkbox).
- *   - `hideListBar` gates only the idle filter bar, so the selection bar itself still renders;
- *     the slot unmounts its own `cuentas-toolbar` while a selection is active, which is why the
- *     swap reads as one bar replacing another.
+ *   - `hideListBar` gates only the idle filter bar, so the selection bar itself still renders.
+ *     ETP-5111: the slot KEEPS its own `cuentas-toolbar` mounted while a selection is active, so
+ *     the floating pill is an addition rather than a replacement — ticking a row no longer costs
+ *     the user the type filter, the search box and Reglas de conciliación.
  *
  * Exhaustive branch coverage lives at unit level:
  *   - ListView's bar + outcome wiring: components/contract-ui/__tests__/ListView.bulkDelete.vitest.jsx
  *   - the batch itself + confirm dialog: hooks/__tests__/useBulkRowDelete.vitest.jsx
- *   - the toolbar/selection-bar swap: windows/custom/financial-account/__tests__/AccountsHeaderTable.vitest.jsx
+ *   - the toolbar staying mounted: windows/custom/financial-account/__tests__/AccountsHeaderTable.vitest.jsx
  *
  * The mock tracks archived ids in memory so the list mock and the DELETE mock stay consistent
  * across the refetch the batch outcome triggers.
@@ -420,7 +454,10 @@ test.describe('Financial Accounts — bulk delete selection bar (ETP-4656)', () 
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
-  test('selecting rows swaps the toolbar for the selection bar with the right count', async ({ page }) => {
+  // ETP-5111 — the toolbar no longer goes away while a selection is active (CP-9). It used to be
+  // unmounted, so ticking one row cost the user the type filter, the search box and Reglas de
+  // conciliación; the floating pill is an ADDITION now, not a replacement.
+  test('selecting rows adds the selection bar and keeps the toolbar, with the right count', async ({ page }) => {
     await expect(page.getByTestId('cuentas-toolbar')).toBeVisible();
     await expect(page.getByTestId('selection-count')).toHaveCount(0);
 
@@ -429,7 +466,7 @@ test.describe('Financial Accounts — bulk delete selection bar (ETP-4656)', () 
     // The bar has no wrapper testid — its count and its delete trigger are the two markers.
     await expect(page.getByTestId('selection-count')).toBeVisible();
     await expect(page.getByTestId('bulk-delete-selected')).toBeVisible();
-    await expect(page.getByTestId('cuentas-toolbar')).toHaveCount(0);
+    await expect(page.getByTestId('cuentas-toolbar')).toBeVisible();
     await expect(page.getByTestId('selection-count')).toContainText('1');
 
     await rowCheckbox(page, 'acc-2').click();

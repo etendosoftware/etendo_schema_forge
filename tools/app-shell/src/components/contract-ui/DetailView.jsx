@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { ProcessParamDialog } from './ProcessParamDialog';
+import RecordUnavailable from './RecordUnavailable.jsx';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
@@ -71,7 +72,8 @@ import DetailSidePanel from './DetailSidePanel.jsx';
 import { evalTabReadOnly } from './evalTabReadOnly.js';
 import {
   buildCalloutFormState, extractAuxValues, normalizeCalloutQty,
-  normalizeCalloutResponse, applyQtyZeroGuard, resetDescriptionOnProductChange, roundAmounts,
+  normalizeCalloutResponse, applyQtyZeroGuard,
+  resetDescriptionOnProductChange, roundAmounts,
   resolveSnapshotIdentifiers,
 } from '@/lib/lineFieldChange.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
@@ -88,6 +90,7 @@ import { matchOcrDocType } from '@/components/copilot/ocr/ocrDocTypes';
 import { isDeleteVisibleForRecord } from '@/utils/recordActions.js';
 import { buildHeaderSelectorContext, buildLineSelectorContext } from '@/lib/selectorContext.js';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
+import { resolveStatusPill } from '@/lib/postedStatus.js';
 import { evaluateFieldCondition } from '@/lib/evaluateFieldCondition.js';
 import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import DocumentStatusPill from './DocumentStatusPill.jsx';
@@ -115,7 +118,7 @@ import { requestTransition } from '@/lib/unsavedChanges.js';
 // wherever it happens.
 import { useLineSaveConflict } from './useLineSaveConflict.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, buildHeaderFormData, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset,
+  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, applySelectedItemMappings, buildHeaderFormData, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, pruneInheritedParentKeys, runPrimaryAddLineFlow, runSecondaryAddLineFlow, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, sidePanelWrapperCls, useNewRouteEditingReset,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
@@ -532,7 +535,11 @@ function secondaryAddLineBar(props) {
       {/* alignSelf:flex-start keeps this span from being stretched by
           the flex-column parent — otherwise data-inline-add-portal would
           cover the whole bar and the outside-click save would never fire. */}
-      <span data-inline-add-portal="true" style={{ alignSelf: 'flex-start' }}>
+      {/* The shared AddLineButton hardcodes data-testid="action-add-line", which is
+          not unique in a window that renders one per secondary tab (plus the primary
+          lines bar). The wrapper carries a per-tab hook so a test -- or a walkthrough
+          step -- can name the tab it means. */}
+      <span data-inline-add-portal="true" data-testid={`secondary-add-line-${props.st.key}`} style={{ alignSelf: 'flex-start' }}>
         <AddLineButton
           onClick={props.onAddLineClick}
           label={props.addLineLabel}
@@ -717,22 +724,6 @@ export function resolveCanAddSecondaryLines(st, childrenCount) {
   return st?.maxDetailLines == null || childrenCount < st.maxDetailLines;
 }
 
-// Returns a copy of `row` without the null/empty keys the parent has set (e.g. businessPartner,
-// priceList on OrderLine). buildCalloutFormState by contract does NOT overwrite a row value with
-// the header's, so without this prune the callout would receive businessPartner=null and NEO
-// returns listPrice=0. The addRow flow doesn't hit this because it starts from an empty values
-// object, but existing rows include denormalized parent keys.
-function pruneInheritedParentKeys(row, headerSnapshot) {
-  const cleanRow = { ...row };
-  for (const k of Object.keys(headerSnapshot)) {
-    const v = cleanRow[k];
-    if (v === null || v === undefined || v === '') {
-      delete cleanRow[k];
-    }
-  }
-  return cleanRow;
-}
-
 export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, api, detailEntity, apiBaseUrl, hook, handleLineFieldChange, prepareLineForPost, token, extractErrorMessage, ui, fields, raiseRowSaveConflict }) {
   return linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
     // Inline autosave with callout chain. NEO Headless expects API keys (camelCase), an unwrapped body,
@@ -792,6 +783,9 @@ export function buildInlineRowUpdateHandler({ linesLayout, isDocumentReadOnly, a
     }
     // 3. The user-changed field always wins (last-write).
     fieldValues[fieldKey] = payloadValue;
+    // 4. Declarative onSelectMappings for the field just picked (ETP-5037) — see
+    // applySelectedItemMappings in detailViewHelpers.jsx.
+    applySelectedItemMappings(fieldKey, selectedItem, fields, fieldValues, derivedUpdates, coerce);
 
     // Derive unitPrice (PriceActual) = listPrice × (1 - discount/100).
     // Without this the backend keeps the pre-discount PriceActual and
@@ -877,6 +871,9 @@ function getDraftModeCompleted(draftMode, _headerData, isProcessed, statusField)
       )
   );
 }
+// ETP-4839 — extracted out of DetailView's body so this stays off its S3776 score.
+function shouldRenderSaveActionsRow(isDraftModeCompleted, draftMode) { return !isDraftModeCompleted || (Array.isArray(draftMode?.keepSaveWhenCompletedFields) && draftMode.keepSaveWhenCompletedFields.length > 0); }
+function onlySaveButtonForCompletedDoc(isDraftModeCompleted, draftMode) { return isDraftModeCompleted && shouldRenderSaveActionsRow(isDraftModeCompleted, draftMode); }
 
 export function getDetailContentContainerClassName({
   linesLayout,
@@ -906,15 +903,7 @@ export function computeIsDirty(hook, addingLine, addingSecondaryLine, lineEdits,
       || (additionalDirtyState === true);
 }
 
-export function hasRecordForRoute(isNew, hook, recordId) {
-  return isNew
-      || (hook.selected?.id && String(hook.selected.id) === String(recordId));
-}
-
-export function isLoadingRecordForRoute(hook, isNew, recordId) {
-  if (isNew && hook.defaultsLoading) return true;
-  return hook.loading && !hasRecordForRoute(isNew, hook, recordId);
-}
+export { hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute };
 
 export function resolveHideMoreMenu(hideMoreMenu, data) {
   return typeof hideMoreMenu === 'function' ? hideMoreMenu({ data }) : hideMoreMenu;
@@ -1031,7 +1020,7 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
       toast.success(ui('processCompletedCount', { count: ok }) !== 'processCompletedCount'
         ? ui('processCompletedCount', { count: ok })
         : `${process.label || process.name}: ${ok} record(s) processed`);
-      hook.fetchById?.(hook.selected?.id);
+      hook.fetchById?.(hook.selected?.id, { force: true });
       hook.refresh?.();
     }
     const failed = results.length - ok;
@@ -1454,14 +1443,6 @@ export function DetailView({
   // Save tooltip. Same override chain EntityForm uses for its own field labels.
   const tField = useLabel(labelOverrides ?? api?.labelOverrides);
   const ui = useUI();
-  // ETP-4933: the required-field gate every primary persist button honours. Declared
-  // HERE, among the other hooks, and NOT next to saveActionParams where it is consumed:
-  // an early `return` for the record-loading state sits between the two, so a useMemo
-  // below it runs on some renders and not others — "Rendered fewer hooks than expected".
-  const saveGate = useMemo(
-    () => buildSaveGate({ isValid: hook.isValid, missingRequiredFields: hook.missingRequiredFields, labelFor: tField, ui }),
-    [hook.isValid, hook.missingRequiredFields, tField, ui],
-  );
   // ETP-4520 — capability map for visibleWhenCapability-gated status pills (below).
   const capabilities = useCapabilitiesSafe();
   const [addingLine, setAddingLine] = useState(false);
@@ -1551,6 +1532,12 @@ export function DetailView({
   // whole detail read-only, reusing every isDocumentReadOnly gate (save, delete,
   // add-line, inline edits). Also passed to the header <Form> so its fields render RO.
   const windowReadOnly = api?.window?.readOnly === true || windowProp?.readOnly === true;
+  // ETP-5233: role-tier-only signal for the kebab menu — a window that's statically
+  // read-only by design (decisions.json `api.window.readOnly`) can still expose
+  // document actions like Post/Unpost (see matched-purchase-invoices); only an actual
+  // ETP-4520 role-tier read-only-access restriction (`windowProp.readOnly`) should hide
+  // them. Everything else above keeps using the combined `windowReadOnly`.
+  const menuActionsReadOnly = windowProp?.readOnly === true;
   const isDocumentReadOnly = getDocumentReadOnly(lockWhenProcessed, _headerData) || windowReadOnly;
   const isProcessed = _headerData?.processed === true || _headerData?.processed === 'Y';
   // When draftMode declares an explicit completedStatuses array, only those documentStatus
@@ -1558,6 +1545,11 @@ export function DetailView({
   // pair visible during intermediate processed states (UE) while still hiding it in
   // terminal states (CA, ETGO_CI, CL, VO).
   const isDraftModeCompleted = getDraftModeCompleted(draftMode, _headerData, isProcessed, statusField);
+  // ETP-4933/ETP-4839: gate for every persist button — must stay before the loading-state early return below (hook order).
+  const saveGate = useMemo(
+    () => buildSaveGate({ isValid: hook.isValid, missingRequiredFields: hook.missingRequiredFields, labelFor: tField, ui, draftMode, isDraftModeCompleted, dirtyFieldKeys: hook.dirtyHeaderFieldKeys, gateFields }),
+    [hook.isValid, hook.missingRequiredFields, tField, ui, draftMode, isDraftModeCompleted, hook.dirtyHeaderFieldKeys, gateFields],
+  );
   const sqBtnSize = getSqBtnSize(toolbarButtonSize);
   const saveBtnCls = getSaveBtnCls(toolbarButtonSize);
   const [showPrint, setShowPrint] = useState(false);
@@ -2026,21 +2018,20 @@ export function DetailView({
       });
       return;
     }
-    if (addingLine && primaryAddRowRef.current?.flush) {
-      await primaryAddRowRef.current.flush({ closeAfterSave: false });
-      // The outside-click handler (mousedown capture) fires before this click
-      // handler and may have already submitted the row with closeAfterSave:true,
-      // calling onCancel() and closing the form. Ensure the form is (re)opened
-      // for the next line regardless of which path flush took.
-      setAddingLine(true);
-      setEditingChild(null);
-      // Force the scroll-to-bottom effect to re-run — addingLine stayed true so
-      // React won't refire the effect on its own.
-      setAddLineScrollNonce(n => n + 1);
-      return;
-    }
-    setAddingLine(prev => !prev);
-    setEditingChild(null);
+    // ETP-5147: gates on a dirty header via maybeSaveBeforeAddLine before reopening;
+    // onReopen/onToggle keep the outside-click-flush vs. plain-toggle behavior unchanged.
+    await runPrimaryAddLineFlow({
+      isDirtyHeader: hook.isDirtyHeader, handleSave: hook.handleSave, addingLine, primaryAddRowRef,
+      onReopen: () => {
+        setAddingLine(true);
+        setEditingChild(null);
+        setAddLineScrollNonce(n => n + 1);
+      },
+      onToggle: () => {
+        setAddingLine(prev => !prev);
+        setEditingChild(null);
+      },
+    });
   }, [isNew, hook, navigate, windowName, addingLine]);
 
   // Save header first (if new → navigate with flag; if existing → save in place), then open import modal.
@@ -2062,37 +2053,23 @@ export function DetailView({
     return true;
   }, [isNew, hook, navigate, windowName]);
 
+  // ETP-5147: shared runSecondaryAddLineFlow saves-and-navigates for a brand-new
+  // requireSavedRecord tab, otherwise gates on a dirty header before onOpen.
   const handleSecondaryAddLineToggle = useCallback(async (tabKey) => {
-    const targetTab = secondaryTabs.find(st => st.key === tabKey);
-    if (!targetTab) return;
-    if (isNew && targetTab.requireSavedRecord) {
-      const saved = await hook.handleSave();
-      if (!saved?.id) return;
-      hook.primeSaved?.(saved);
-      navigate(`/${windowName}/${saved.id}`, {
-        replace: true,
-        state: { openSecondaryTab: tabKey, openAddSecondaryLine: true, justSaved: saved },
-      });
-      return;
-    }
-    setAddingSecondaryLine(prev => ({ ...prev, [tabKey]: !prev[tabKey] }));
-    setSelectedSecondaryLine(null);
+    await runSecondaryAddLineFlow({
+      tabKey, secondaryTabs, isNew, isDirtyHeader: hook.isDirtyHeader, hook, navigate, windowName,
+      onOpen: () => {
+        setAddingSecondaryLine(prev => ({ ...prev, [tabKey]: !prev[tabKey] }));
+        setSelectedSecondaryLine(null);
+      },
+    });
   }, [secondaryTabs, isNew, hook, navigate, windowName]);
 
   const handleCustomModalAddClick = useCallback(async (tabKey) => {
-    const targetTab = secondaryTabs.find(st => st.key === tabKey);
-    if (!targetTab) return;
-    if (isNew && targetTab.requireSavedRecord) {
-      const saved = await hook.handleSave();
-      if (!saved?.id) return;
-      hook.primeSaved?.(saved);
-      navigate(`/${windowName}/${saved.id}`, {
-        replace: true,
-        state: { openSecondaryTab: tabKey, openAddSecondaryLine: true, justSaved: saved },
-      });
-      return;
-    }
-    setCustomModalState({ key: tabKey, rowId: null });
+    await runSecondaryAddLineFlow({
+      tabKey, secondaryTabs, isNew, isDirtyHeader: hook.isDirtyHeader, hook, navigate, windowName,
+      onOpen: () => setCustomModalState({ key: tabKey, rowId: null }),
+    });
   }, [secondaryTabs, isNew, hook, navigate, windowName]);
 
   // Resolve $_identifier for default FK values.
@@ -2172,7 +2149,7 @@ export function DetailView({
       setDirectFetched(true);
       // Fetch children even on the justSaved fast-path — the header is already
       // primed but children (e.g. auto-created accounting lines) must be loaded.
-      hook.fetchChildren?.(recordId);
+      hook.fetchChildren?.(recordId, { force: true });
       // One-shot: clear the marker so a manual reload of /:id still fetches.
       navigate(location.pathname, {
         replace: true,
@@ -2227,7 +2204,7 @@ export function DetailView({
     if (!hook.selected?.id) return;
     const exchangeRatesIdx = secondaryTabs.findIndex(st => st.key === 'exchangeRates');
     if (exchangeRatesIdx < 0) return;
-    secondaryHooks[exchangeRatesIdx]?.fetchChildren(hook.selected.id);
+    secondaryHooks[exchangeRatesIdx]?.fetchChildren(hook.selected.id, { force: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.grandTotalAmount]);
 
@@ -2451,7 +2428,7 @@ export function DetailView({
     } catch {
       // Callout is best-effort
     }
-  }, [token, apiBaseUrl, detailEntity, hook.editing, hook.selected, catalogs, api, addLineFields, computeLineGrossAmount, resolveTaxFactor, apiFetch]);
+  }, [token, apiBaseUrl, detailEntity, hook.editing, hook.selected, catalogs, api, addLineFields, computeLineGrossAmount, resolveTaxFactor, apiFetch, ui]);
 
   const data = transformRecord ? transformRecord(hook.editing || currentItem || {}) : (hook.editing || currentItem || {});
   // ETP-5052: display-only `data` + `hasLines` merge for HEADER `<Form>` calls only — see buildHeaderFormData in detailViewHelpers.jsx. Never persisted.
@@ -2664,7 +2641,7 @@ export function DetailView({
   const tabs = buildInitialTabs({
     secondaryTabs, secondaryHooks, panelCounts, DetailTable, detailLabel, detailEntity,
     hook, detailTabIndex, detailTabOrder, CustomLines, customLinesLabel, customLinesCount,
-    customTabsAfterBottom, tabCustomTabs, ui, customTabCounts, customTabVisibility,
+    customTabsAfterBottom, tabCustomTabs, ui, customTabCounts, customTabVisibility, capabilities,
   });
 
   // When primaryTabs is in use, skip auto-adding Others (handled by a primary tab)
@@ -2709,26 +2686,17 @@ export function DetailView({
   const isCustomTabActive = tabCustomTabs.some(ct => tabs[activeTab]?.key === customTabKey(ct));
 
   // extraBadges rendering — split by type to keep each path simple.
-  // statusPill: a DocumentStatusPill from i18n keys. One-sided badges (only a
-  // trueKey declared) hide on the false value — the generator emits the missing
-  // side as the literal string 'undefined', which must never reach the screen.
+  // statusPill: a DocumentStatusPill whose label/tone come from resolveStatusPill,
+  // shared with the grid so both can never disagree on the same raw value (ETP-5075).
   const renderStatusPillBadge = (b) => {
     // ETP-4520 — omit the pill entirely when gated by a capability the current
     // role doesn't hold (e.g. `posted` on sales-invoice/purchase-invoice).
     if (!isCapabilityVisible(capabilities, b.visibleWhenCapability)) return null;
     const val = data[b.key];
     if (val == null) return null;
-    const isTrue = val === true || val === 'Y' || val === 'true';
-    const labelKey = isTrue ? b.trueKey : b.falseKey;
-    if (!labelKey || labelKey === 'undefined') return null;
-    return (
-      <DocumentStatusPill
-        key={b.key}
-        status={isTrue ? 'Y' : 'N'}
-        label={ui(labelKey)}
-        tone={isTrue ? 'success' : 'warning'}
-        data-testid={`DocumentStatusPill__${b.key}`} />
-    );
+    const pill = resolveStatusPill(b, val, ui);
+    if (!pill) return null;
+    return <DocumentStatusPill key={b.key} {...pill} data-testid={`DocumentStatusPill__${b.key}`} />;
   };
   const renderLegacyBadge = (b) => {
     const when = b.when !== undefined ? b.when : true;
@@ -2856,11 +2824,18 @@ export function DetailView({
     );
   }
 
+  // ETP-5034: the record for this route could not be loaded (unknown id, no access for this
+  // role/org, or a failed request). Rendering the form here produced a blank one that reads as
+  // the creation form — see RecordUnavailable for why there are only two variants.
+  if (isRecordUnavailableForRoute(hook, isNew, recordId)) {
+    return <RecordUnavailable variant={hook.recordError} onBack={() => navigate(`/${windowName}`)} data-testid="record-unavailable" />;
+  }
+
   const saveActionParams = {
     hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
     ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
-    setShowProcessingModal, saveGate, hasExternalPrimaryAction,
+    setShowProcessingModal, saveGate, hasExternalPrimaryAction, onlySaveButton: onlySaveButtonForCompletedDoc(isDraftModeCompleted, draftMode),
   };
   const balanceFooterEditingLine = mergeLineEdits(lineEdits, selectedLine);
 
@@ -2900,7 +2875,7 @@ export function DetailView({
                   api={api}
                   onChange={hook.handleChange}
                   onProcess={hook.handleProcess}
-                  onRefresh={() => hook.fetchById?.(data?.id || recordId)}
+                  onRefresh={() => hook.fetchById?.(data?.id || recordId, { force: true })}
                   data-testid="TopbarExtraComponent__fa3275" />
               );
             })()}
@@ -2968,15 +2943,15 @@ export function DetailView({
                 sqBtnSize={sqBtnSize}
                 statusField={statusField}
                 token={token}
-                ui={ui}
+                ui={ui} windowReadOnly={menuActionsReadOnly}
                 data-testid="DetailMoreActionsMenu__fa3275" />
               {/* Extra action buttons from page */}
               {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
               {/* Save action — rendered before process buttons when saveActionsFirst is set (per-window opt-in) */}
-              {saveActionsFirst && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
+              {saveActionsFirst && !windowReadOnly && !hideSaveStatuses.includes(_headerData?.documentStatus) && shouldRenderSaveActionsRow(isDraftModeCompleted, draftMode)
                 && renderSaveActions(saveActionParams)}
               {/* Process buttons — only shown for existing records, evaluated locally or by server visibility */}
-              {!isNew && processes
+              {!isNew && !windowReadOnly && processes
                 .filter(p => p.displayLogicRaw
                   ? evalDisplayLogicRaw(p.displayLogicRaw, data)
                   : displayLogic?.visibility?.[p.name] !== false)
@@ -3036,7 +3011,7 @@ export function DetailView({
                   The multi-row (selectedChildRows) case is rendered exclusively by the bulk
                   action bar above the lines table (see isDetailBulkBarVisible) to avoid
                   rendering these buttons twice. */}
-              {!isNew && detailProcesses.length > 0 && selectedChildRows.length === 0 && selectedLine && detailProcesses
+              {!isNew && !windowReadOnly && detailProcesses.length > 0 && selectedChildRows.length === 0 && selectedLine && detailProcesses
                 .map(p => {
                   const isPrimary = p.style === 'positive';
                   const btnClass = getButtonClass(salesTheme, p, isPrimary);
@@ -3059,7 +3034,7 @@ export function DetailView({
                   );
                 })}
 
-              {!saveActionsFirst && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
+              {!saveActionsFirst && !windowReadOnly && !hideSaveStatuses.includes(_headerData?.documentStatus) && shouldRenderSaveActionsRow(isDraftModeCompleted, draftMode)
                 && renderSaveActions(saveActionParams)}
               {/* ETP-4933: the topbarRight slot renders AFTER the save actions on purpose.
                  Both live in this one flex row, so source order is visual order, and the
@@ -3080,7 +3055,7 @@ export function DetailView({
                     apiBaseUrl={apiBaseUrl}
                     api={api}
                     onProcess={hook.handleProcess}
-                    onRefresh={() => hook.fetchById?.(data?.id || recordId)}
+                    onRefresh={() => hook.fetchById?.(data?.id || recordId, { force: true })}
                     onSave={() => hook.handleSave({ silent: true })} isDirty={isDirty} /* ETP-4940 follow-up: see maybeSaveBeforeConfirm */
                     // ETP-4933: a topbarRight action that PERSISTS (ConfirmWithCredit calls
                     // maybeSaveBeforeConfirm, which saves) must honour the required-field gate
@@ -3181,7 +3156,7 @@ export function DetailView({
               ) : null;
             })() : null}
             <div className={getDetailContentContainerClassName({ linesLayout, sidePanel, sidebarContent, sidebarAboveTabsOnly, compactSidebarPadding, primaryTabs, activePrimaryTab, formScrollPaddingX, contentOverflow })}>
-              {resolveHeaderContent(headerContent, data)}
+              {resolveHeaderContent(headerContent, data, { calloutResult, blockingCondition: hook.blockingCondition, completionSignal: hook.completionSignal, recordId: data?.id || recordId })}
               {(() => {
                 const slotProps = {
                   data,
@@ -3205,10 +3180,10 @@ export function DetailView({
                   onAddChild: hook.handleAddChild,
                   onRefresh: (parentId = data?.id || recordId) => {
                     if (!parentId) return;
-                    hook.fetchChildren?.(parentId);
-                    hook.fetchById?.(parentId);
+                    hook.fetchChildren?.(parentId, { force: true });
+                    hook.fetchById?.(parentId, { force: true });
                   },
-                  onRefreshChildren: () => hook.fetchChildren?.(data?.id || recordId),
+                  onRefreshChildren: () => hook.fetchChildren?.(data?.id || recordId, { force: true }),
                 };
                 const ocrDocType = matchOcrDocType(location.pathname);
                 return (
@@ -3293,7 +3268,7 @@ export function DetailView({
                               catalogs={catalogs}
                               layout="horizontal"
                               section="principal"
-                              readOnly={windowReadOnly}
+                              readOnly={windowReadOnly} navigate={navigate}
                               displayLogic={displayLogic}
                               api={api}
                               token={token}
@@ -3320,7 +3295,7 @@ export function DetailView({
                                   catalogs={catalogs}
                                   layout="horizontal"
                                   section="collapsed"
-                                  readOnly={windowReadOnly}
+                                  readOnly={windowReadOnly} navigate={navigate}
                                   excludeFields={notesField ? [notesField] : []}
                                   displayLogic={displayLogic}
                                   api={api}
@@ -3419,8 +3394,8 @@ export function DetailView({
                                 token={token}
                                 apiBaseUrl={apiBaseUrl}
                                 onRefresh={() => {
-                                  hook.fetchChildren?.(data?.id || recordId);
-                                  hook.fetchById?.(data?.id || recordId);
+                                  hook.fetchChildren?.(data?.id || recordId, { force: true });
+                                  hook.fetchById?.(data?.id || recordId, { force: true });
                                 }}
                                 onSave={handleImportClick}
                                 forceOpen={forceOpenImport}
@@ -3624,8 +3599,8 @@ export function DetailView({
                                         token={token}
                                         apiBaseUrl={apiBaseUrl}
                                         onRefresh={() => {
-                                          hook.fetchChildren?.(data?.id || recordId);
-                                          hook.fetchById?.(data?.id || recordId);
+                                          hook.fetchChildren?.(data?.id || recordId, { force: true });
+                                          hook.fetchById?.(data?.id || recordId, { force: true });
                                         }}
                                         onSave={handleImportClick}
                                         forceOpen={forceOpenImport}
@@ -3835,7 +3810,7 @@ export function DetailView({
                               catalogs={catalogs}
                               entity={detailEntity}
                               onCountChange={(n) => setCustomLinesCount(n)}
-                              onRefresh={() => { hook.fetchChildren?.(data?.id || recordId); hook.fetchById?.(data?.id || recordId); }}
+                              onRefresh={() => { hook.fetchChildren?.(data?.id || recordId, { force: true }); hook.fetchById?.(data?.id || recordId, { force: true }); }}
                               isNew={isNew}
                               onSave={async () => {
                                 const saved = await hook.handleSave(data);
@@ -3855,8 +3830,8 @@ export function DetailView({
                         {secondaryTabs.map((st, stIdx) => {
                           const isActiveTab = tabs[activeTab]?.key === st.key;
                           // Panel tabs are always mounted so their onCount fires eagerly (counts appear without clicking).
-                          // Non-Panel tabs stay lazy to avoid unnecessary data fetches.
-                          if (!isActiveTab && !st.Panel) return false;
+                          // Non-Panel tabs stay lazy to avoid unnecessary fetches; a capability-hidden tab (ETP-5116, mirrors ETP-4520) never renders at all, Panel or not — defense-in-depth alongside buildInitialTabs already excluding it from `tabs`/the nav strip and the openSecondaryTab deep-link.
+                          if (!isCapabilityVisible(capabilities, st.visibleWhenCapability) || (!isActiveTab && !st.Panel)) return false;
                           const secondaryLineHandlers = buildSecondaryLineHandlers({
                             st, stIdx, api, apiBaseUrl, token, secondaryHooks, ui,
                             extractErrorMessage, confirmDelete, secondaryInlineLinesRefs,
@@ -3967,7 +3942,7 @@ export function DetailView({
                               onChange={handleChangeWithCallout}
                               catalogs={catalogs}
                               layout="horizontal"
-                              section="other"
+                              section="other" navigate={navigate}
                               displayLogic={displayLogic}
                               api={api}
                               token={token}
@@ -4318,7 +4293,7 @@ export function DetailView({
               setCustomModalState({ key: null, rowId: null });
             }}
             onParentRefresh={() => {
-              if (parentRecordId) hook.fetchById(parentRecordId);
+              if (parentRecordId) hook.fetchById(parentRecordId, { force: true });
             }}
             rowId={customModalState.key === st.key ? customModalState.rowId : null}
             bpId={parentRecordId}

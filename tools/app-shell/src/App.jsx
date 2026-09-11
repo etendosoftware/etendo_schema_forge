@@ -5,6 +5,11 @@ import { toast } from 'sonner';
 import { AppShellRuntime } from '@etendosoftware/app-shell-core/runtime';
 import { ObservabilityProvider } from '@etendosoftware/app-shell-core/observability';
 import { trackMcpConnectTabSelected } from '@/lib/mcpConnectTelemetry.js';
+import {
+  trackWalkthroughFinished,
+  trackWalkthroughMenuOpened,
+  trackWalkthroughStarted,
+} from '@/lib/walkthrough/walkthrough-events.js';
 import AppLayout from './layout/AppLayout.jsx';
 import { buildMenuGroups, buildWindowMap } from './windows/registry.js';
 import { buildRuntimeRoutes } from './runtime-routes.jsx';
@@ -24,6 +29,7 @@ import { SurveyModal } from './components/survey/SurveyModal.jsx';
 import { useSurveyEngine } from './hooks/useSurveyEngine.js';
 import { apiFetch } from '@/auth/api.js';
 import { clearStoredDateRange } from '@/components/dashboard/DashboardDateRangeContext.jsx';
+import { clearAccountIdentity } from '@/lib/flags/bootstrap.js';
 // ETP-4300: the full locale dictionaries are no longer bundled eagerly. Only the
 // active locale's sliced "core" (the dict minus the per-window `fields` monolith)
 // is lazy-loaded below; per-window field labels ride each window's lazy chunk (see
@@ -231,7 +237,13 @@ function SurveyManager() {
 // expired session. Reacting to the session losing its token covers every path at once, and
 // `useLogout` stays as the explicit clear-then-logout choke point for the UI entry points.
 function clearSessionScopedState(session) {
-  if (!session?.token) clearStoredDateRange();
+  if (!session?.token) {
+    clearStoredDateRange();
+    // ETP-5202 — the cached account identity (`sf_account_id` / `sf_account_email`) is not part
+    // of the core's session storage, so nothing else clears it. Leaving it behind on a shared
+    // computer means the next person's browser still names the previous account.
+    clearAccountIdentity();
+  }
 }
 
 export default function App() {
@@ -294,7 +306,15 @@ export default function App() {
 
   return (
     <ObservabilityProvider
-      value={{ trackMcpConnectTabSelected }}
+      // ETP-5144 — the core's walkthrough launcher describes what happened
+      // in plain data; naming the events is this app's job. See
+      // `lib/walkthrough/walkthrough-events.js`.
+      value={{
+        trackMcpConnectTabSelected,
+        trackWalkthroughMenuOpened,
+        trackWalkthroughStarted,
+        trackWalkthroughFinished,
+      }}
       data-testid="ObservabilityProvider__ecaf3f">
       <AppShellRuntime
         basename={routerBase}

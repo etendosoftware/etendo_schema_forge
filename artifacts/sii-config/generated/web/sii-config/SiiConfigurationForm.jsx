@@ -10,7 +10,6 @@ const fields = [
   { key: 'entornoDeProduccin', column: 'Produccion', type: 'checkbox', label: 'Production environment', required: true, section: 'other', defaultValue: 'Y' },
   { key: 'adjuntarArchivosXML', column: 'Adjuntos', type: 'checkbox', label: 'Attach XML files', required: true, section: 'other' },
   { key: 'recc', column: 'Recc', type: 'checkbox', label: 'RECC affected', required: true, section: 'other' },
-  { key: 'redeme', column: 'Redeme', type: 'checkbox', label: 'Subject in REDEME', required: true, section: 'other' },
   { key: 'monitordate', column: 'Monitordate', type: 'date', label: 'From date display in "SII Monitor"', section: 'other', defaultValue: '01-01-2017' },
   { key: 'postedInvoices', column: 'Posted_Invoices', type: 'checkbox', label: 'Send to SII only Posted Purchase Invoices', required: true, section: 'other' },
   { key: 'authorizationno', column: 'Authorizationno', type: 'text', label: 'Authorization No.', section: 'other' },

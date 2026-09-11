@@ -358,6 +358,30 @@ describe('ListView — sorting', () => {
     expect(tableProps.sortDirection).toBe('desc');
   });
 
+  // ETP-4979 (QA rejection) — a window whose declared default is 'desc' (e.g.
+  // amortization's `listSortBy: "accountingDate desc"`) starts at rest already
+  // equal to { column, direction: 'desc' }. The old cycle assumed 'asc' was
+  // always the resting direction, so the first click on that column landed in
+  // the "already sorted, not asc" branch and reset the state to itself
+  // (same column, same direction) — a same-value setState that never
+  // re-renders, so the click looked completely dead.
+  it('column-header clicks on a desc-default column cycle desc -> asc -> desc, never freezing', () => {
+    render(<ListView {...defaultProps} listSortBy="name desc" />);
+    expect(tableProps.sortColumn).toBe('name');
+    expect(tableProps.sortDirection).toBe('desc');
+
+    act(() => { tableProps.onSort('name'); });
+    expect(tableProps.sortColumn).toBe('name');
+    expect(tableProps.sortDirection).toBe('asc');
+
+    act(() => { tableProps.onSort('name'); });
+    expect(tableProps.sortColumn).toBe('name');
+    expect(tableProps.sortDirection).toBe('desc');
+
+    act(() => { tableProps.onSort('name'); });
+    expect(tableProps.sortDirection).toBe('asc');
+  });
+
   it('refetches when the sort changes, but not on the initial mount', () => {
     render(<ListView {...defaultProps} />);
     expect(refreshMock).not.toHaveBeenCalled();

@@ -53,7 +53,8 @@ export default function ReturnMaterialReceiptWindow({ windowName, recordId, apiB
       bulkActions={ReturnMaterialReceiptBulkActions}
       // ETP-4912 — without `usePdf` the row-hover envelope falls back to useNoPdf, so the
       // modal had no client PDF and sent the print-* artifact instead of the document the
-      // preview shows. Mirrors return-to-vendor-shipment.
+      // preview shows. return-to-vendor-shipment has NO emailAction (removed under ETP-4717
+      // due to a backend contract-name mismatch) — this window keeps its own on purpose.
       emailAction={{
         usePdf: useReturnReceiptPdf,
         documentType: tMenu('Return Material Receipt'),

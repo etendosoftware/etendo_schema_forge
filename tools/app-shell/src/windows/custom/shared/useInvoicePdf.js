@@ -9,6 +9,7 @@ import {
   buildDocumentPdfLabels,
   computeDiscountBreakdown,
   resolveProductCode,
+  resolveDocumentCurrencyCode,
   useDocumentPdf,
 } from './documentPdf.js';
 import { computeDocumentQrDataUrl } from '../../../../../../templates/reports/helpers/report-html-helpers.js';
@@ -77,6 +78,7 @@ export async function buildInvoiceData(invoiceId, base, token) {
   return {
     ...buildCompanyFields(session, header, companyLogoDataUrl, partnerLocation, header.bpAddress),
     documentNo: header.documentNo || '',
+    currencyCode: resolveDocumentCurrencyCode(header),
     invoiceDate: header.invoiceDate || header.dateInvoiced || '',
     customerName: header.businessPartner$_identifier || header.businessPartner || '—',
     paymentMethod: header.paymentMethod$_identifier || null,
@@ -86,12 +88,17 @@ export async function buildInvoiceData(invoiceId, base, token) {
     netAmount,
     taxAmount,
     grandTotal,
-    grossAmount:        discountPerProduct > 0 ? grossAmount : null,
-    grossSubtotal:      discountPerProduct > 0 ? grossAmount : null,
-    discountPerProduct: discountPerProduct > 0 ? discountPerProduct : null,
+    // ETP-5132 — discountPerProduct/totalDiscountAmt from computeDiscountBreakdown
+    // come back signed (negative for a negative-quantity/return line), so the
+    // gate is "!== 0" (any real discount), not "> 0" (which hid the whole
+    // breakdown for that case). Printed value is the sign-flipped magnitude,
+    // same convention as DocumentTotalsPanel.jsx and buildOrderData.
+    grossAmount:        discountPerProduct !== 0 ? grossAmount : null,
+    grossSubtotal:      discountPerProduct !== 0 ? grossAmount : null,
+    discountPerProduct: discountPerProduct !== 0 ? -discountPerProduct : null,
     etgoTotalDiscount:  etgoTotalDiscount > 0 ? etgoTotalDiscount : null,
     totalDiscountPct:   etgoTotalDiscount > 0 ? etgoTotalDiscount : null,
-    totalDiscountAmt:   totalDiscountAmt > 0 ? totalDiscountAmt : null,
+    totalDiscountAmt:   totalDiscountAmt !== 0 ? -totalDiscountAmt : null,
     hasAnyDiscount,
     hasTotalDiscount,
     verifactuQrDataUrl,

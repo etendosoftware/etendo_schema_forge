@@ -271,6 +271,63 @@ describe('renderBooleanCell', () => {
       expect(screen.getByText('—')).toBeInTheDocument();
     });
   });
+
+  // ETP-5075 — the `Posted` AD column holds 17 codes, not a boolean. A code
+  // outside `'Y'`/`'N'` used to fall through the badge branch above straight to
+  // the em-dash fallback, hiding the reason a posting attempt failed. It must
+  // now resolve through the shared `postedStatus.js` registry and render a Tag.
+  describe('with col.column: "Posted" (posting-status domain)', () => {
+    const postedCol = {
+      key: 'posted',
+      column: 'Posted',
+      type: 'boolean',
+      badge: true,
+      badgeLabels: {
+        true: { en_US: 'Posted' },
+        false: { en_US: 'Not posted' },
+      },
+      badgeVariants: { true: 'green', false: 'orange' },
+    };
+
+    it("renders a red Tag with the translated label for 'i' (invalid account), not the em-dash", () => {
+      renderCell(renderBooleanCell({
+        ...baseContext,
+        col: postedCol,
+        rawValue: 'i',
+      }));
+
+      const tag = screen.getByTestId('tag');
+      expect(tag).toHaveAttribute('data-variant', 'red');
+      expect(tag).toHaveTextContent('postedStatusInvalidAccount');
+      expect(screen.queryByText('—')).not.toBeInTheDocument();
+    });
+
+    it("still renders the ordinary green/orange Tag for 'Y' (no regression)", () => {
+      renderCell(renderBooleanCell({
+        ...baseContext,
+        locale: 'en_US',
+        col: postedCol,
+        rawValue: 'Y',
+      }));
+
+      const tag = screen.getByTestId('tag');
+      expect(tag).toHaveAttribute('data-variant', 'green');
+      expect(tag).toHaveTextContent('Posted');
+    });
+
+    it("still renders the ordinary green/orange Tag for 'N' (no regression)", () => {
+      renderCell(renderBooleanCell({
+        ...baseContext,
+        locale: 'en_US',
+        col: postedCol,
+        rawValue: 'N',
+      }));
+
+      const tag = screen.getByTestId('tag');
+      expect(tag).toHaveAttribute('data-variant', 'orange');
+      expect(tag).toHaveTextContent('Not posted');
+    });
+  });
 });
 
 describe('renderDateCell', () => {

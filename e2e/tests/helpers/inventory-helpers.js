@@ -12,9 +12,9 @@
  * resulting document is later confirmed (PO -> Receipt, Order -> Shipment),
  * Etendo's core M_CHECK_STOCK validation correctly rejects the confirm if the
  * actual on-hand stock for whatever product landed at that index is too low —
- * which happened for real on 2026-08-17 ("Cerveza", then "Queso Sardo" in
- * warehouse "Almacen GO" / locator "AG-0-0-0"), because repeated suite runs
- * kept draining it. The one-off fix that day was a raw
+ * which happened for real on 2026-08-17 (for the demo products seeded at the
+ * time, in the tenant's only warehouse / locator "AG-0-0-0"), because repeated
+ * suite runs kept draining it. The one-off fix that day was a raw
  * `UPDATE m_storage_detail SET qtyonhand = ...` — unaudited, no M_Transaction,
  * bypasses Etendo's own stock-tracking, and explicitly NOT to be repeated.
  *
@@ -127,6 +127,30 @@ const HEADER_ENTITY = 'inventory';
 const LINE_ENTITY = 'inventoryLine';
 const PROCESS_FIELD = 'processNow';
 const PROCESS_VALUE = 'Y';
+
+/**
+ * The one warehouse the GOClient onboarding dataset provisions for a new
+ * tenant: `M_Warehouse.Value = 'AG'`, `Name = 'Almacen Principal'`, with the
+ * single default locator `AG-0-0-0`.
+ *
+ * Named here rather than repeated as a literal in every spec because it is a
+ * fact about the onboarding dataset, not about any one flow — and because it
+ * has already changed once: before ETP-5079 the dataset seeded `Almacen GO`
+ * plus a second `Almacén Secundario` (value AS, locator AS-0-0-0); the rename
+ * to `Almacen Principal` and the removal of the second warehouse left four
+ * hardcoded `'Almacen GO'` call sites across the integration specs silently
+ * resolving to nothing. `resolveWarehouseId()` below matches the selector label
+ * exactly (trimmed, case-insensitive), so a stale name is a hard failure with a
+ * clear message, not a silent fallback — but only if there IS a single constant
+ * to update next time.
+ *
+ * Specs that create a document and let a callout choose the warehouse should
+ * still read the resolved name back off `field-warehouse-chip` (as
+ * sales-order-return-rectificativa does) instead of assuming this constant —
+ * provisioning stock at a warehouse the document does not draw from is a
+ * silent no-op.
+ */
+export const DEFAULT_WAREHOUSE_NAME = 'Almacen Principal';
 
 function specBase() {
   return `/sws/neo/${SPEC}`;
@@ -242,7 +266,10 @@ async function deleteHeaderBestEffort(page, { headerId, headers }) {
  * @param {string} opts.productName - Exact product name/identifier to match
  *   in the product selector (read back from the caller's own line row,
  *   e.g. via a `data-cell-key="product"` cell — never guessed).
- * @param {string} opts.warehouseName - Warehouse to count at (e.g. "Almacen GO").
+ * @param {string} opts.warehouseName - Warehouse to count at. Pass
+ *   `DEFAULT_WAREHOUSE_NAME` (the tenant's only onboarding-provisioned
+ *   warehouse) unless the caller read a different one back off the document's
+ *   own `field-warehouse-chip`.
  * @param {number} opts.minQty - Minimum units that must be on hand afterward.
  * @returns {Promise<{adjusted: boolean, previousOnHand: number, newOnHand?: number}>}
  */

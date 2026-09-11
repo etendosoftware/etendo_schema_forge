@@ -39,13 +39,26 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ selectedOrg: authMock.selectedOrg, logout: vi.fn() }),
 }));
 
+// ETP-5122: default the SII adoption date to "long ago" so pre-existing tests
+// (written before the date gate) keep passing without knowing about it. Tests
+// that specifically exercise the gate override this via useFiscalConfig.mockReturnValue(...).
+const FAR_PAST_ADOPTION = '2000-01-01T00:00:00.000Z';
+
 vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
-  useFiscalConfig: vi.fn(() => ({ profile: null })),
+  useFiscalConfig: vi.fn(() => ({
+    profile: null,
+    siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION },
+    tbaiRecord: null,
+  })),
 }));
 
-vi.mock('@/windows/custom/shared/fiscalTargets.js', () => ({
-  getInvoiceFiscalTargets: vi.fn(() => ({ showSii: false, showTbai: false, showVerifactu: false })),
-}));
+vi.mock('@/windows/custom/shared/fiscalTargets.js', async () => {
+  const actual = await vi.importActual('@/windows/custom/shared/fiscalTargets.js');
+  return {
+    ...actual,
+    getInvoiceFiscalTargets: vi.fn(() => ({ showSii: false, showTbai: false, showVerifactu: false })),
+  };
+});
 
 vi.mock('@/windows/custom/shared/FiscalStatusBadge.jsx', () => ({
   FiscalStatusBadge: ({ status }) => (
@@ -62,9 +75,13 @@ vi.mock('@/windows/custom/shared/InvoicePaymentHistoryModal.jsx', () => ({
   ),
 }));
 
-vi.mock('@/lib/dateOnly', () => ({
-  formatCalendarDate: (d) => `date:${d}`,
-}));
+vi.mock('@/lib/dateOnly', async () => {
+  const actual = await vi.importActual('@/lib/dateOnly');
+  return {
+    ...actual,
+    formatCalendarDate: (d) => `date:${d}`,
+  };
+});
 
 vi.mock('@/lib/invoiceDueDate', () => ({
   getDueDateState: () => 'overdue',
@@ -96,6 +113,7 @@ const MOCK_ROWS = [
     'currency$_identifier': 'EUR',
     'transactionDocument$_identifier': 'AP Invoice',
     aeatsiiEstado: 'sent',
+    accountingDate: '2026-01-01',
   },
   // 1 — ordinary invoice, settled → green "pagada"
   {
@@ -106,6 +124,7 @@ const MOCK_ROWS = [
     'currency$_identifier': 'EUR',
     'transactionDocument$_identifier': 'AP Invoice',
     aeatsiiEstado: null,
+    accountingDate: '2026-01-01',
   },
   // 2 — ETP-4841 case A: Factura Rectificativa with a POSITIVE total (billed 3,
   // should have been 4). It is PAYABLE: amber pending badge "400:USD", never
@@ -119,6 +138,7 @@ const MOCK_ROWS = [
     'transactionDocument$_identifier': 'Factura Rectificativa',
     apInvoiceSubtype: 'RECTIFICATIVA',
     aeatsiiEstado: 'CO',
+    accountingDate: '2026-01-01',
   },
   // 3 — ETP-4841 case B: ordinary "Factura" with a NEGATIVE total. It IS a
   // credit: "Saldo a favor · 900:SEK", never "pagada". Before the fix the
@@ -132,6 +152,7 @@ const MOCK_ROWS = [
     'transactionDocument$_identifier': 'AP Invoice',
     apInvoiceSubtype: 'FAC',
     aeatsiiEstado: null,
+    accountingDate: '2026-01-01',
   },
   // 4 — case C: negative invoice fully consumed → green "cpCreditFullyApplied"
   {
@@ -142,6 +163,7 @@ const MOCK_ROWS = [
     'currency$_identifier': 'USD',
     'transactionDocument$_identifier': 'AP CreditMemo',
     aeatsiiEstado: null,
+    accountingDate: '2026-01-01',
   },
   // 5 — case D: positive invoice OVERPAID (outstanding < 0). Real dev data has
   // 7 such rows; they must read "pagada", never "Saldo a favor".
@@ -153,6 +175,7 @@ const MOCK_ROWS = [
     'currency$_identifier': 'NOK',
     'transactionDocument$_identifier': 'AP Invoice',
     aeatsiiEstado: null,
+    accountingDate: '2026-01-01',
   },
   // 6 — case E: not completed → em dash placeholder, no badge
   {
@@ -163,6 +186,7 @@ const MOCK_ROWS = [
     'currency$_identifier': 'EUR',
     'transactionDocument$_identifier': 'AP Invoice',
     aeatsiiEstado: null,
+    accountingDate: '2026-01-01',
   },
   // 7 — credit memo mostly applied (ETP-4331 repro ratio: -25.30 total, only
   // -2.30 left unused). Must show "Saldo a favor", never "Pendiente".
@@ -174,6 +198,7 @@ const MOCK_ROWS = [
     'currency$_identifier': 'GBP',
     'transactionDocument$_identifier': 'AP CreditMemo',
     aeatsiiEstado: null,
+    accountingDate: '2026-01-01',
   },
   // 8 — return, fully unapplied (nothing applied yet).
   {
@@ -184,6 +209,7 @@ const MOCK_ROWS = [
     'currency$_identifier': 'CHF',
     'transactionDocument$_identifier': 'Return Material Purchase Invoice',
     aeatsiiEstado: null,
+    accountingDate: '2026-01-01',
   },,
   // 8 — ETP-4895: a rejected bank transfer. Applied, so the outstanding is 0 and this used to
   // render "pagada" for money that never moved.
@@ -239,6 +265,15 @@ import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.
 import { resolveFilterMode } from '@/lib/gridQuery';
 import PurchaseInvoiceHeaderTable from '../PurchaseInvoiceHeaderTable.jsx';
 
+// ETP-5087: the fiscal-column tests at the bottom of this file assert the REAL
+// Bizkaia-only rule rather than restating it in a mock — a mocked rule can only
+// ever agree with itself. `getInvoiceFiscalTargets` stays module-mocked (older
+// describes drive it directly), so the genuine implementation is pulled in here
+// and installed as the mock's implementation for that block only.
+const { getInvoiceFiscalTargets: realGetInvoiceFiscalTargets } = await vi.importActual(
+  '@/windows/custom/shared/fiscalTargets.js',
+);
+
 const BASE_PROPS = {
   apiBaseUrl: '/api',
   onRefresh: vi.fn(),
@@ -255,6 +290,10 @@ const AP_INVOICE_ROW = {
   'currency$_identifier': 'EUR',
   'transactionDocument$_identifier': 'AP Invoice',
   aeatsiiEstado: 'sent',
+  accountingDate: '2026-01-01',
+  // ETP-5122: Batuz gates on invoiceDate (not accountingDate) — see the
+  // "fiscal columns (ETP-5087)" describe block below.
+  invoiceDate: '2026-01-01',
 };
 
 // Credit memo with a negative total and half its balance still unused.
@@ -407,6 +446,35 @@ describe('PurchaseInvoiceHeaderTable', () => {
     renderWithRow(AP_INVOICE_ROW);
     // Multiple rows render multiple badges — at least one should be present
     expect(screen.getAllByTestId('fiscal-status-badge').length).toBeGreaterThan(0);
+  });
+
+  // ── ETP-5122: no SII status before the org's adoption date ─────────────────
+  // SII books by accounting date, not invoice date (mirrors Classic's
+  // AEATSII_PreSII_Invoice auxiliary input, which compares DateAcct).
+  describe('ETP-5122 — SII column gated by fechaAcogidaSII (accountingDate)', () => {
+    it('shows the badge for every row when adopted long before all their accounting dates', () => {
+      getInvoiceFiscalTargets.mockReturnValue({ showSii: true, showTbai: false, showVerifactu: false });
+      useFiscalConfig.mockReturnValue({ profile: 'sii', siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION } });
+      renderWithRow(AP_INVOICE_ROW);
+      // Every MOCK_ROWS entry carries accountingDate '2026-01-01', after FAR_PAST_ADOPTION.
+      expect(screen.getByTestId('col-render-_siiStatus').querySelectorAll('[data-testid="fiscal-status-badge"]').length)
+        .toBe(9);
+    });
+
+    it('hides the badge for every row when adopted after all their accounting dates', () => {
+      getInvoiceFiscalTargets.mockReturnValue({ showSii: true, showTbai: false, showVerifactu: false });
+      useFiscalConfig.mockReturnValue({ profile: 'sii', siiRecord: { fechaAcogidaSII: '2099-01-01T00:00:00.000Z' } });
+      renderWithRow(AP_INVOICE_ROW);
+      expect(screen.getByTestId('col-render-_siiStatus').querySelectorAll('[data-testid="fiscal-status-badge"]').length)
+        .toBe(0);
+    });
+
+    it('fails safe (no badge) when there is no SII adoption record at all', () => {
+      getInvoiceFiscalTargets.mockReturnValue({ showSii: true, showTbai: false, showVerifactu: false });
+      useFiscalConfig.mockReturnValue({ profile: 'sii', siiRecord: null });
+      renderWithRow(AP_INVOICE_ROW);
+      expect(screen.queryByTestId('fiscal-status-badge')).toBeNull();
+    });
   });
 
   it('does not show payment modal initially', () => {
@@ -656,6 +724,7 @@ describe('PurchaseInvoiceHeaderTable — apInvoiceSubtype column-render coverage
     'transactionDocument$_identifier': 'Factura Rectificativa',
     apInvoiceSubtype: 'RECTIFICATIVA',
     aeatsiiEstado: null,
+    accountingDate: '2026-01-01',
   };
 
   const RECTIFICATIVA_ROW_APPLIED = {
@@ -672,6 +741,7 @@ describe('PurchaseInvoiceHeaderTable — apInvoiceSubtype column-render coverage
     'transactionDocument$_identifier': 'AP Invoice',
     apInvoiceSubtype: 'FAC',
     aeatsiiEstado: null,
+    accountingDate: '2026-01-01',
   };
 
   it('outstandingAmount — a NEGATIVE Factura Rectificativa shows the credit badge', () => {
@@ -802,6 +872,7 @@ describe('PurchaseInvoiceHeaderTable — branch/fallback coverage (ETP-4738)', (
     // Restore the shared mock holders so the rest of the file keeps its defaults.
     i18nMock.dictionary = i18nMock.defaultDictionary;
     authMock.selectedOrg = authMock.defaultSelectedOrg;
+    useFiscalConfig.mockReturnValue({ profile: null, tbaiRecord: null });
   });
 
   function getColumn(key) {
@@ -901,6 +972,20 @@ describe('PurchaseInvoiceHeaderTable — branch/fallback coverage (ETP-4738)', (
     authMock.selectedOrg = null;
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
     expect(useFiscalConfig).toHaveBeenCalledWith(null, '/api');
+  });
+
+  // ETP-5087: territory (from the active TBAI config) must be resolved and forwarded
+  // to getInvoiceFiscalTargets so the SII/TBAI column gating stays territory-aware.
+  it('forwards the TBAI config territory to getInvoiceFiscalTargets', () => {
+    useFiscalConfig.mockReturnValue({ profile: 'sii+tbai', tbaiRecord: { etsgSifTerritory: 'BIZKAIA' } });
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    expect(getInvoiceFiscalTargets).toHaveBeenCalledWith('purchase-invoice', 'sii+tbai', 'BIZKAIA');
+  });
+
+  it('forwards null territory when no TBAI config exists', () => {
+    useFiscalConfig.mockReturnValue({ profile: 'sii', tbaiRecord: null });
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    expect(getInvoiceFiscalTargets).toHaveBeenCalledWith('purchase-invoice', 'sii', null);
   });
 
   // ── row-level fallbacks in the outstandingAmount cell (lines 153/154) ──────
@@ -1055,5 +1140,254 @@ describe('PurchaseInvoiceHeaderTable — bank-transfer state on the payment colu
   it('leaves an invoice with no reported state exactly as before', () => {
     const { container } = renderPaymentCell(PAID_ROW);
     expect(container.querySelector('[data-testid^="invoice-transfer-"]')).toBeNull();
+  });
+});
+
+// ── ETP-5087: fiscal columns resolve SYNCHRONOUSLY from the globally-selected org ──
+// The Batuz column used to be gated on a per-row, async org resolution
+// (`useOrgFiscalConfigs` + `resolveRowTargets`). That machinery produced three
+// consecutive production regressions and has been removed: BOTH fiscal columns
+// now derive from `useFiscalConfig(selectedOrg.id)` in a single synchronous
+// memo, exactly like the SII column always did. These tests use the REAL
+// `getInvoiceFiscalTargets` so the Bizkaia-only rule is asserted where it
+// actually lives, not re-stated in a mock.
+describe('PurchaseInvoiceHeaderTable — fiscal columns (ETP-5087)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedColumnsHolder.value = null;
+    getInvoiceFiscalTargets.mockImplementation(realGetInvoiceFiscalTargets);
+    useFiscalConfig.mockReturnValue({ profile: null, tbaiRecord: null, siiRecord: null });
+  });
+
+  function getColumn(key) {
+    return (capturedColumnsHolder.value || []).find((c) => c.key === key);
+  }
+
+  // ETP-5122: these tests predate the SII date gate and assert against rows
+  // dated 2026-01-01, so siiRecord defaults to a "long ago" adoption date
+  // (same FAR_PAST_ADOPTION default used elsewhere in this file) unless a test
+  // explicitly overrides it to exercise the gate itself.
+  function renderWith(profile, territory, data = [AP_INVOICE_ROW]) {
+    useFiscalConfig.mockReturnValue({
+      profile,
+      // ETP-5122: default the Batuz adoption date to "long ago" (mirrors
+      // FAR_PAST_ADOPTION for SII above) so pre-existing tests written before
+      // the date gate keep passing. Tests exercising the gate itself override
+      // `tbaisystemdate` explicitly.
+      tbaiRecord: territory ? { etsgSifTerritory: territory, tbaisystemdate: FAR_PAST_ADOPTION } : null,
+      siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION },
+    });
+    return render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} data={data} />);
+  }
+
+  describe('column visibility', () => {
+    it('renders BOTH the SII and Batuz columns on the first render for a sii+tbai / BIZKAIA org', () => {
+      renderWith('sii+tbai', 'BIZKAIA');
+      // No waitFor / no act flush: the columns must exist synchronously.
+      expect(getColumn('_siiStatus')).toBeTruthy();
+      expect(getColumn('eTGOTbaiStatus')).toBeTruthy();
+      expect(getColumn('eTGOTbaiStatus').label).toBe('Batuz Status');
+    });
+
+    it('renders ONLY the SII column for a sii+tbai org outside Bizkaia (GIPUZKOA)', () => {
+      renderWith('sii+tbai', 'GIPUZKOA');
+      expect(getColumn('_siiStatus')).toBeTruthy();
+      expect(getColumn('eTGOTbaiStatus')).toBeUndefined();
+    });
+
+    it('renders ONLY the SII column for a plain sii profile (no TBAI at all)', () => {
+      renderWith('sii', null);
+      expect(getColumn('_siiStatus')).toBeTruthy();
+      expect(getColumn('eTGOTbaiStatus')).toBeUndefined();
+    });
+
+    it('renders neither column when the org has no fiscal profile', () => {
+      renderWith(null, null);
+      expect(getColumn('_siiStatus')).toBeUndefined();
+      expect(getColumn('eTGOTbaiStatus')).toBeUndefined();
+    });
+
+    it('derives visibility from the GLOBAL selected org, never from a row field', () => {
+      // Two rows carrying different `adOrgId`s must not change the outcome —
+      // the documented trade-off is that visibility follows the top-nav org
+      // (symmetric with SII), not the individual row.
+      renderWith('sii+tbai', 'BIZKAIA', [
+        { ...AP_INVOICE_ROW, adOrgId: 'org-bizkaia' },
+        { ...AP_INVOICE_ROW, adOrgId: 'org-alava' },
+      ]);
+      expect(getInvoiceFiscalTargets).toHaveBeenCalledWith('purchase-invoice', 'sii+tbai', 'BIZKAIA');
+      expect(getColumn('eTGOTbaiStatus')).toBeTruthy();
+    });
+
+    it('uses the translated Batuz label when the dictionary provides it', () => {
+      i18nMock.dictionary = {
+        genericLabels: { 'invoiceList.col.tbaiStatusPurchase': 'Estado Batuz' },
+        statuses: {},
+      };
+      renderWith('sii+tbai', 'BIZKAIA');
+      expect(getColumn('eTGOTbaiStatus').label).toBe('Estado Batuz');
+      i18nMock.dictionary = i18nMock.defaultDictionary;
+    });
+
+    // ETP-5216: the column used to be `{ key: '_tbaiStatus', type: 'custom' }`
+    // with no `column` and no `backendFilterKey` — dropped silently from the
+    // advanced filter builder's field list (isFilterableColumn), and unusable
+    // for backend sort/filter even if offered. Now it is backed by the real,
+    // stored computed AD column `em_etgo_tbai_status`.
+    it('binds the Batuz column to the real AD column em_etgo_tbai_status with a text filterMode', () => {
+      renderWith('sii+tbai', 'BIZKAIA');
+      const col = getColumn('eTGOTbaiStatus');
+      expect(col.column).toBe('em_etgo_tbai_status');
+      expect(col.type).toBe('custom');
+      expect(col.filterMode).toBe('text');
+    });
+  });
+
+  // ETP-5087 + ETP-5216: the Batuz cell reads `eTGOTbaiStatus` FIRST — the real
+  // submission outcome, now backed by the stored computed AD column
+  // `em_etgo_tbai_status` (previously the synthetic `tbaiSyncEstado` field
+  // injected server-side by the now-deleted TbaiSyncStatusInjector) — and only
+  // falls back to the invoice's own `tbaiIssent` boolean (EM_Tbai_Issent,
+  // which NEO may serialise as `true`/`false` OR as the AD flag 'Y'/'N') when
+  // no sync row exists yet. Reading the flag first would let a rejection
+  // render as a cheerful "Enviada" — the whole reason the ordering matters.
+  describe('Batuz cell — eTGOTbaiStatus primary, tbaiIssent fallback', () => {
+    function renderCell(row) {
+      renderWith('sii+tbai', 'BIZKAIA', [row]);
+      return render(<>{getColumn('eTGOTbaiStatus').render(row)}</>).container;
+    }
+
+    it('shows the real state "Recibido" even when tbaiIssent is false', () => {
+      // The database-computed state wins: the boolean is a weaker, staler signal.
+      const row = { ...AP_INVOICE_ROW, eTGOTbaiStatus: 'Recibido', tbaiIssent: false };
+      expect(renderCell(row).textContent).toBe('Recibido');
+    });
+
+    it('shows "Rechazado" for a rejected submission — a rejection is NEVER shown as "Enviada"', () => {
+      // The critical case: the invoice WAS submitted (tbaiIssent true) but Batuz
+      // rejected it. Reading the boolean first would report success.
+      const row = { ...AP_INVOICE_ROW, eTGOTbaiStatus: 'Rechazado', tbaiIssent: true };
+      expect(renderCell(row).textContent).toBe('Rechazado');
+    });
+
+    it('shows "Error" for a failed submission, not the fallback', () => {
+      const row = { ...AP_INVOICE_ROW, eTGOTbaiStatus: 'Error', tbaiIssent: 'Y' };
+      expect(renderCell(row).textContent).toBe('Error');
+    });
+
+    it('falls back to "Enviada" when there is no computed status and tbaiIssent is boolean true', () => {
+      expect(renderCell({ ...AP_INVOICE_ROW, tbaiIssent: true }).textContent).toBe('Enviada');
+    });
+
+    it('falls back to "Enviada" when there is no computed status and tbaiIssent is the AD flag "Y"', () => {
+      expect(renderCell({ ...AP_INVOICE_ROW, tbaiIssent: 'Y' }).textContent).toBe('Enviada');
+    });
+
+    it('falls back to "Pendiente" when there is no computed status and tbaiIssent is boolean false', () => {
+      expect(renderCell({ ...AP_INVOICE_ROW, tbaiIssent: false }).textContent).toBe('Pendiente');
+    });
+
+    it('falls back to "Pendiente" for the AD flag "N" (truthy string trap)', () => {
+      expect(renderCell({ ...AP_INVOICE_ROW, tbaiIssent: 'N' }).textContent).toBe('Pendiente');
+    });
+
+    it('falls back to "Pendiente" for a row carrying neither field', () => {
+      expect(renderCell({ ...AP_INVOICE_ROW }).textContent).toBe('Pendiente');
+    });
+
+    it('treats a null eTGOTbaiStatus as absent and uses the fallback', () => {
+      // `??` (not `||`) is what makes this work. In practice the database
+      // function is total and always answers a non-null string (§5.8 of the
+      // migration plan), but a row fetched before the column was backfilled
+      // is exactly this shape.
+      const row = { ...AP_INVOICE_ROW, eTGOTbaiStatus: null, tbaiIssent: true };
+      expect(renderCell(row).textContent).toBe('Enviada');
+    });
+  });
+
+  it('keeps the SII cell reading aeatsiiEstado, unchanged', () => {
+    const row = { ...AP_INVOICE_ROW, aeatsiiEstado: 'CO' };
+    renderWith('sii+tbai', 'BIZKAIA', [row]);
+    const { container } = render(<>{getColumn('_siiStatus').render(row)}</>);
+    expect(container.textContent).toBe('CO');
+  });
+
+  // ── ETP-5216: the adoption-date gate MOVED out of this cell and into the
+  // stored computed column `EM_ETGO_Tbai_Status` (DB function
+  // `ETGO_GET_TBAI_STATUS` in com.etendoerp.go). It used to run here as
+  // `isSifEligibleByDate(row.invoiceDate, tbaiRecord?.tbaisystemdate)`
+  // (ETP-5122), which had two defects: the gate was invisible to the backend,
+  // so filtering the now-filterable column by "Pendiente" returned rows the
+  // grid then drew as a dash; and it compared EVERY row against the SELECTED
+  // organization's adoption date rather than the invoice's own — wrong for any
+  // list spanning organizations. The database now answers the literal
+  // 'NoAplica' for an invoice that predates its OWN organization's adoption
+  // date (or whose organization has no active tbai_config row), and the cell
+  // does nothing but translate that value to a dash.
+  //
+  // `isSifEligibleByDate` is NOT dead — SII (both windows) and VERI*FACTU
+  // (sales) still gate in the browser; see the SII cell tests above.
+  describe('Batuz cell — "NoAplica" renders a dash (gate moved to the DB, ETP-5216)', () => {
+    function renderBatuzCell(row, tbaisystemdate = FAR_PAST_ADOPTION) {
+      useFiscalConfig.mockReturnValue({
+        profile: 'sii+tbai',
+        tbaiRecord: { etsgSifTerritory: 'BIZKAIA', tbaisystemdate },
+        siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION },
+      });
+      render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} data={[row]} />);
+      return render(<>{getColumn('eTGOTbaiStatus').render(row)}</>);
+    }
+
+    it('shows the dash, not the badge, when the stored status is "NoAplica"', () => {
+      // Previously encoded as "row dated BEFORE the org Batuz adoption date":
+      // the DB now makes that decision and reports it as this literal.
+      const row = { ...AP_INVOICE_ROW, eTGOTbaiStatus: 'NoAplica', invoiceDate: '2026-01-01' };
+      const { container } = renderBatuzCell(row);
+      expect(container.textContent).toBe('—');
+      expect(container.querySelector('[data-testid="fiscal-status-badge"]')).toBeNull();
+    });
+
+    it('shows the badge normally for a real stored status', () => {
+      const row = { ...AP_INVOICE_ROW, eTGOTbaiStatus: 'Recibido', invoiceDate: '2026-07-01' };
+      const { container } = renderBatuzCell(row);
+      expect(container.textContent).toBe('Recibido');
+      expect(container.querySelector('[data-testid="fiscal-status-badge"]')).not.toBeNull();
+    });
+
+    it('no longer gates on invoiceDate — a row dated before the SELECTED org adoption date still shows its stored status', () => {
+      // The exact regression ETP-5216 fixes: the invoice belongs to another
+      // organization that adopted Batuz earlier, so the backend computed a real
+      // status. The old cell-side gate would have hidden it behind a dash.
+      const row = {
+        ...AP_INVOICE_ROW,
+        eTGOTbaiStatus: 'Recibido',
+        accountingDate: '2026-07-01',
+        invoiceDate: '2026-01-01',
+      };
+      const { container } = renderBatuzCell(row, '2026-06-01T00:00:00.000Z');
+      expect(container.textContent).toBe('Recibido');
+    });
+
+    it('does not dash a row merely because the SELECTED org has no Batuz adoption record', () => {
+      // Previously "fails safe (dash) when there is no Batuz adoption record at
+      // all". The absence of an adoption date on the selected org says nothing
+      // about the invoice's own organization, so the stored status wins.
+      const row = { ...AP_INVOICE_ROW, eTGOTbaiStatus: 'Recibido' };
+      const { container } = renderBatuzCell(row, undefined);
+      expect(container.textContent).toBe('Recibido');
+    });
+
+    it('matches "NoAplica" exactly — a lowercase "noaplica" is treated as a real status', () => {
+      const row = { ...AP_INVOICE_ROW, eTGOTbaiStatus: 'noaplica' };
+      const { container } = renderBatuzCell(row);
+      expect(container.textContent).toBe('noaplica');
+    });
+
+    it('falls back to the tbaiIssent logic when the stored status is absent', () => {
+      const row = { ...AP_INVOICE_ROW, tbaiIssent: false };
+      const { container } = renderBatuzCell(row);
+      expect(container.textContent).toBe('Pendiente');
+      expect(container.querySelector('[data-testid="fiscal-status-badge"]')).not.toBeNull();
+    });
   });
 });

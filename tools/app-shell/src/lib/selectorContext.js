@@ -260,6 +260,16 @@ export function buildLineSelectorContext({ windowCategory, parentId, headerRecor
     if (headerRecord.partnerAddress) {
       ctx.C_BPartner_Location_ID = headerRecord.partnerAddress;
     }
+
+    // ETP-5148 — org→doc rate, paired with `priceCurrency` (window.selectorPriceCurrency:
+    // "org") so ProductSearchDrawer can show a secondary converted price. This is the same
+    // multiplier semantics as useDocumentCurrency.js's resolveDualCurrencyDisplay (1.47 = "1
+    // EUR = 1.47 USD", used directly, never inverted). Per ETP-4836, 0/null/undefined/NaN are
+    // the only "no override" sentinels — a genuine rate of exactly 1 must NOT be dropped.
+    const parsedRate = parseFloat(headerRecord.eTGOCurrencyRate);
+    if (Number.isFinite(parsedRate) && parsedRate !== 0) {
+      ctx.priceCurrencyRate = parsedRate;
+    }
   }
 
   return ctx;

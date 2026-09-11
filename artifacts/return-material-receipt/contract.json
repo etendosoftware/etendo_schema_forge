@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.5.0",
   "generatedAt": "2026-08-13T11:56:58.624Z",
-  "updatedAt": "2026-08-31T12:35:28.009Z",
-  "checksum": "285f8eb1f756329c",
+  "updatedAt": "2026-09-03T11:42:08.724Z",
+  "checksum": "7431ce23e5ea9294",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -12,7 +12,11 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrintWhen": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notEquals": "CO"
+        }
+      },
       "customComponents": {
         "bottomSection": "ReturnMaterialReceiptBottomPanel",
         "topbarRight": "ConfirmWithCreditButton"
@@ -697,7 +701,11 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
-      "hidePrintWhen": true,
+      "hidePrintWhen": {
+        "documentStatus": {
+          "notEquals": "CO"
+        }
+      },
       "customComponents": {
         "bottomSection": "ReturnMaterialReceiptBottomPanel",
         "topbarRight": "ConfirmWithCreditButton"

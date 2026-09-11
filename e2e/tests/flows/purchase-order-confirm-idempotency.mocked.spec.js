@@ -257,3 +257,107 @@ test.describe('Purchase Order — Confirm Modal idempotency (mocked)', () => {
   });
 
 });
+
+// ---------------------------------------------------------------------------
+// ETP-5063 — confirming with no related document created must show a toast,
+// never the blocking ConfirmResultModal, and must still trigger a refresh.
+// ---------------------------------------------------------------------------
+
+const NO_DOC_ORDER_ID = 'idem-mock-po-nodoc-001';
+
+const NO_DOC_HEADER = {
+  id: NO_DOC_ORDER_ID,
+  documentNo: '2001999',
+  documentStatus: 'DR',
+  'documentStatus$_identifier': 'Borrador',
+  grandTotalAmount: 150,
+  summedLineAmount: 150,
+  totalLines: 150,
+  'businessPartner$_identifier': 'Test Vendor No Doc',
+  'currency$_identifier': 'EUR',
+};
+
+test.describe('Purchase Order — Confirm without related documents (ETP-5063)', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+  });
+
+  test('confirming with neither receipt nor invoice checked shows a toast (not the result modal) and refreshes the header', async ({ page }) => {
+    let headerGetCount = 0;
+    page.on('request', (req) => {
+      if (req.method() === 'GET' && req.url().includes(`/purchase-order/header/${NO_DOC_ORDER_ID}`)) {
+        headerGetCount += 1;
+      }
+    });
+
+    await installHeaderConfirmMock(page, { spec: 'purchase-order', recordId: NO_DOC_ORDER_ID, record: NO_DOC_HEADER });
+
+    await page.route('**/sws/neo/purchase-order/lines{/**,}**', async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [ONE_LINE] } }),
+      });
+    });
+
+    let documentActionCalls = 0;
+    await page.route(
+      `**/sws/neo/purchase-order/header/${NO_DOC_ORDER_ID}/action/documentAction`,
+      async (route) => {
+        documentActionCalls += 1;
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            response: { data: { id: NO_DOC_ORDER_ID, documentNo: NO_DOC_HEADER.documentNo, documentStatus: 'CO' } },
+          }),
+        });
+      },
+    );
+
+    await page.goto(`/purchase-order/${NO_DOC_ORDER_ID}`);
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 8_000 });
+
+    // Wait for the initial detail GET so the baseline count reflects only the
+    // page-load fetch, not any confirm-triggered refetch.
+    await expect.poll(() => headerGetCount, { timeout: 8_000 }).toBeGreaterThan(0);
+    const countBeforeConfirm = headerGetCount;
+
+    // Open the confirm modal WITHOUT ticking either checkbox — retry dispatch
+    // in case the listener hasn't mounted yet (useEffect runs after paint).
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await page.evaluate(() => {
+        window.dispatchEvent(new CustomEvent('purchase-order:open-confirm-modal'));
+      });
+      try {
+        await expect(page.getByTestId('action-confirm-modal')).toBeVisible({ timeout: 1000 });
+        break;
+      } catch (e) {
+        if (attempt === 4) throw e;
+      }
+    }
+
+    await page.getByTestId('action-confirm-modal').click();
+
+    // Wait for the async confirm flow to fully resolve (documentAction fetch
+    // + the ETP-5063 useEffect firing the toast) before asserting on its
+    // side effects — a synchronous check right after click() would race the
+    // in-flight fetch and read stale counters.
+    const successToast = page.locator('[data-type="success"]').first();
+    await expect(successToast).toBeVisible({ timeout: 5_000 });
+
+    // A success toast communicates the outcome, with the exact resolved
+    // poConfirmedTitle text (es_ES: "Pedido de compra confirmado").
+    await expect(successToast).toContainText('Pedido de compra confirmado');
+
+    // The old blocking ConfirmResultModal must NEVER appear — this is the bug fix.
+    await expect(page.getByTestId('confirm-result-modal')).toHaveCount(0);
+    expect(documentActionCalls).toBe(1);
+
+    // onRefresh?.() actually ran — proven by a second header GET after confirm,
+    // not just by the toast text being right.
+    await expect.poll(() => headerGetCount, { timeout: 5_000 }).toBeGreaterThan(countBeforeConfirm);
+  });
+});

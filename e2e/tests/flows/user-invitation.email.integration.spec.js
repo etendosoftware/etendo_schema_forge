@@ -189,6 +189,12 @@ async function prepareInvitedUser(request, neoToken, email) {
   const existingUsers = existingBody?.response?.data || existingBody?.data || [];
   let user = existingUsers.find((candidate) => candidate?.email?.toLowerCase() === email.toLowerCase());
   let userResponseText = existingText;
+  // Creating the user is what fires the invitation email (see this function's own
+  // doc comment), so on a re-run against a database this suite already touched the
+  // user is FOUND, the create is skipped, and no email is ever sent — waitForEmail
+  // then times out. CI never sees it (clean environment, single run); a developer's
+  // local box hits it on the second run onwards. Remembered here, resent below.
+  const userAlreadyExisted = Boolean(user);
 
   if (!user) {
     const userResponse = await request.post('/sws/neo/user/user', {
@@ -240,6 +246,44 @@ async function prepareInvitedUser(request, neoToken, email) {
   const assignBody = unwrapNeoWebhookResult(JSON.parse(assignText));
   expect(assignBody.success, assignText).toBe(true);
   expect(assignBody.personalRoleId, assignText).toEqual(expect.any(String));
+
+  // Makes this helper idempotent across runs. On a first run the create above already
+  // sent the invitation and this is skipped, so first-run behaviour is unchanged. On a
+  // re-run it re-issues through the SAME production mechanism the "resend" button next
+  // to the invitation status pill uses (CompanyInvitationService#resendInvitation),
+  // which revokes-then-reissues unconditionally — it does not dedup against the open
+  // invitation a previous run left behind. Placed AFTER the role assignment so the
+  // resend's eligibility check always sees a user with its personal role.
+  if (userAlreadyExisted) {
+    const resendResponse = await request.get(
+      `/sws/neo/resendinvitation?AdUserId=${encodeURIComponent(user.id)}`,
+      { headers: { Authorization: `Bearer ${neoToken}` } },
+    );
+    const resendText = await resendResponse.text();
+    expect(resendResponse.status(), resendText).toBe(200);
+    const resendBody = unwrapNeoWebhookResult(JSON.parse(resendText));
+    // INVITATION_NOT_RESENDABLE with status ACCEPTED is not a product bug and not a
+    // flake: this spec ACCEPTS the invitation it sends, and the product deliberately
+    // refuses to re-invite an account that already joined the client
+    // (CompanyInvitationService, "an ACCEPTED one has ..." — there is no revoke
+    // endpoint either). It means this database has already run this spec once for
+    // this invitee. Say so, instead of failing on an undefined field.
+    expect(
+      resendBody.code,
+      `${email} has already accepted an invitation into this client, so no new `
+      + 'invitation email can be produced. This spec is single-use per '
+      + '(client, invitee) pair — CI never sees it because it always starts from a '
+      + 'clean database. To re-run locally, put the invitation back into a '
+      + 'resendable state (PENDING/SENT/EXPIRED/DELIVERY_FAILED are the eligible '
+      + 'ones) — a single-column update, no deletes needed:\n'
+      + "  update etgo_invitation set status='EXPIRED' "
+      + `where lower(email)='${email.toLowerCase()}' and status='ACCEPTED';\n`
+      + `Raw response: ${resendText}`,
+    ).not.toBe('INVITATION_NOT_RESENDABLE');
+    expect(resendBody.status, resendText).toBe('success');
+    expect(resendBody.invitation?.status, resendText).toBe('SENT');
+  }
+
   return { userId: user.id, roleId: assignBody.personalRoleId };
 }
 
@@ -254,6 +298,36 @@ async function createInvitationAsAdmin(request, sessionToken, email) {
   expect(invitationBody.status).toBe('success');
   expect(invitationBody.invitation.status).toBe('SENT');
   return invitationBody;
+}
+
+/**
+ * The app-relative path for an invitation link, dropping the origin the BACKEND
+ * baked into it.
+ *
+ * The link is built server-side from `etendo.go.app.baseUrl`, which does NOT
+ * have to match the E2E `BASE_URL` -- locally it is :3100 while the run serves
+ * the app on the Playwright preview port. And `page.goto()` with an ABSOLUTE
+ * url ignores the context's `baseURL`, so navigating the raw link silently
+ * lands on an origin with no app on it and every testid then times out. That
+ * is exactly how this spec failed: `expectInvitationResolves` passed against
+ * the backend one line earlier, so the invitation was fine all along.
+ *
+ * This is the same reasoning `verificationTokenFromEmail` documents for the
+ * onboarding welcome mail (and why `onboarding-register.integration.spec.js`
+ * navigates `/onboarding?verifyToken=...` relatively), and the same one
+ * `expectInvitationResolves` already applies by keeping only the token.
+ *
+ * Kept local rather than added to `helpers/email-sink.js`: that module's job is
+ * reading the sink, and the assertions on the mail's absolute link (it must
+ * contain `/invite?token=` and appear in the body) still want
+ * `invitationLinkFromEmail` untouched.
+ */
+function invitePathFromLink(inviteLink) {
+  const token = new URL(inviteLink).searchParams.get('token');
+  if (!token) {
+    throw new Error(`invitation link carried no token: ${inviteLink}`);
+  }
+  return `/invite?token=${encodeURIComponent(token)}`;
 }
 
 async function acceptExistingInvitation(browser, inviteLink, email, password, {
@@ -272,7 +346,7 @@ async function acceptExistingInvitation(browser, inviteLink, email, password, {
     }
   });
   try {
-    await page.goto(inviteLink);
+    await page.goto(invitePathFromLink(inviteLink));
     await expect(page.getByTestId('invite-shared-login')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#login-email')).toHaveValue(email);
     await expect(page.locator('#login-email')).toBeDisabled();
@@ -288,7 +362,29 @@ async function acceptExistingInvitation(browser, inviteLink, email, password, {
     await page.getByTestId('action-go-to-app').click();
     await page.waitForURL('**/dashboard', { timeout: 60_000 });
     await expect(page).toHaveURL(/\/dashboard/);
-    await expect(page.getByText(/Estas son tus tareas pendientes|These are your pending tasks/)).toBeVisible({ timeout: 60_000 });
+
+    // ETP-5190 — an invited user is a NEW account, so the dashboard spends its one-time First
+    // Steps redirect on this very first visit, and it does so LATE: the gate only fires once the
+    // server's `firstSteps.seen` arrives, which is after the dashboard has already rendered. So
+    // `waitForURL('**/dashboard')` above wins the race, the URL assertion passes, and the page is
+    // then navigated out from underneath the next assertion.
+    //
+    // Sampling the URL does not fix it and must not be attempted: `waitForURL` resolves
+    // IMMEDIATELY when the current URL already matches, so any "is it /first-steps yet?" check
+    // reads /dashboard and skips — the exact race it was meant to close (the first attempt at this
+    // fix did precisely that, and failed the same way).
+    //
+    // Retrying the navigation is what converges, and in at most two rounds: the visit that takes
+    // the redirect also POSTs `markSeen()`, so the next one lands on the dashboard for good.
+    // Deliberately indifferent to which view it hit — this spec is about the invitation reaching
+    // the app, and it must not start failing the day the checklist stops being shown to invited
+    // members (nor the day it starts being shown to more of them).
+    await expect(async () => {
+      await page.goto('/dashboard');
+      await expect(page.getByText(/Estas son tus tareas pendientes|These are your pending tasks/))
+        .toBeVisible({ timeout: 20_000 });
+    }, 'the invited user should reach the dashboard once the one-time First Steps redirect is spent')
+      .toPass({ timeout: 90_000 });
     await captureScreenshot(page, {
       path: `../artifacts/delivery-evidence/ETP-4894/${evidenceStem}-dashboard.png`,
       fullPage: true,
@@ -304,7 +400,7 @@ async function verifyAcceptedLinkIsIdempotent(browser, inviteLink, evidencePath)
   const context = await browser.newContext({ baseURL: process.env.BASE_URL });
   const page = await context.newPage();
   try {
-    await page.goto(inviteLink);
+    await page.goto(invitePathFromLink(inviteLink));
     await expect(page.getByTestId('invite-success-state')).toBeVisible({ timeout: 30_000 });
     await captureScreenshot(page, { path: evidencePath, fullPage: true });
   } finally {
@@ -316,7 +412,7 @@ async function acceptNewInvitation(browser, inviteLink, email) {
   const context = await browser.newContext({ baseURL: process.env.BASE_URL });
   const page = await context.newPage();
   try {
-    await page.goto(inviteLink);
+    await page.goto(invitePathFromLink(inviteLink));
     await expect(page.getByTestId('invite-new-account')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#reg-email')).toHaveValue(email);
     await expect(page.locator('#reg-email')).toBeDisabled();

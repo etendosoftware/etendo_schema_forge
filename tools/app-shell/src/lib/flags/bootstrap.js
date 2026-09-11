@@ -38,6 +38,25 @@ const ACCOUNT_ID_KEY = 'sf_account_id';
 const ACCOUNT_EMAIL_KEY = 'sf_account_email';
 
 /**
+ * Forgets the cached account identity.
+ *
+ * ETP-5202 — the core's `createLocalAuthStorage().clear()` wipes the `sf_auth_*` keys and
+ * `sf_platform_token`, but it knows nothing about these two, so a logout used to leave the
+ * previous account's identity behind in storage. That is both an identity leak on a shared
+ * computer and a correctness problem: anything that reads the cache to decide "who is signed
+ * in" would answer with a person who signed out. Wired into `clearSessionScopedState`, which
+ * runs on every session change including the automatic 401 logout.
+ */
+export function clearAccountIdentity(storage = globalThis.localStorage) {
+  try {
+    storage?.removeItem(ACCOUNT_ID_KEY);
+    storage?.removeItem(ACCOUNT_EMAIL_KEY);
+  } catch {
+    // Storage may be unavailable; there is nothing to fall back to and nothing to report.
+  }
+}
+
+/**
  * Reads the identity flags are evaluated against.
  *
  * `sf_auth_user` / `sf_auth_client_id` are the same keys the observability

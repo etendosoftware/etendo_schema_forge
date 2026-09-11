@@ -4,6 +4,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 // ── mock heavy children so we exercise AssetsDetailPanel's own logic ──
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useLabel: () => (key) => key,
 }));
 
 // EntityForm stub renders the field keys it receives, so we can assert which

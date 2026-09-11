@@ -66,9 +66,17 @@ CORE_FILES=(
   "tools/report-server/package.json"
   "tools/report-server/server.js"
   "tools/report-server/Dockerfile"
-  "cli/src/report-descriptor.js"
-  "cli/src/extract-from-jasper.js"
 )
+
+# cli/src goes in WHOLE, not as a per-file list — the same call the Dockerfile
+# already makes (`COPY cli/src/ ./cli/src/`) and for the same reason its own
+# comment gives: server.js imports six modules from there at load time and the
+# hand-maintained list went stale twice in one week. It had drifted again by the
+# time ETP-5128 touched this: report-i18n, report-grouping, report-sql,
+# report-filters and report-branding were all missing here while the Dockerfile
+# already copied them, so the drift guard below failed the assembly outright —
+# meaning the deploy job could not have produced an image even once the AWS
+# variables it needs are finally set.
 
 for rel in "${CORE_FILES[@]}"; do
   if [ ! -f "$CORE_DIR/$rel" ]; then
@@ -98,6 +106,10 @@ for rel in "${CORE_FILES[@]}"; do
   mkdir -p "$OUT_DIR/$(dirname "$rel")"
   cp "$CORE_DIR/$rel" "$OUT_DIR/$rel"
 done
+
+rm -rf "$OUT_DIR/cli/src"
+mkdir -p "$OUT_DIR/cli"
+cp -R "$CORE_DIR/cli/src" "$OUT_DIR/cli/src"
 
 # 2. This repo's artifacts and templates last — see TEMPLATE PRECEDENCE above.
 rm -rf "$OUT_DIR/artifacts" "$OUT_DIR/templates"

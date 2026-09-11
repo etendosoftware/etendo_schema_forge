@@ -217,6 +217,137 @@ describe('useEntity — coverage paths', () => {
       // Should return true (fallback when json fails)
       expect(added).toBe(true);
     });
+
+    // ETP-5005 — no flicker on the first line: the POSTed record must be visible
+    // immediately, and the reconciling refetch must be silent (never toggles
+    // childrenLoading, which is DetailView's isInitialChildrenLoading gate when
+    // children.length is still 0).
+    describe('ETP-5005 — immediate append + silent reconciling refetch', () => {
+      // `handleSelect` itself fires a NON-silent `fetchChildren` (loading the freshly
+      // selected record's existing lines) — that call is unrelated to the one this suite
+      // targets (the reconciling refetch triggered BY `handleAddChild`). It is resolved
+      // to an empty list up front so it can never be confused with, or left dangling
+      // alongside, the GET this suite controls.
+      async function selectParentWithNoLines(result, parent) {
+        globalThis.fetch.mockResolvedValueOnce(mockFetchOk([]));
+        await act(async () => { result.current.handleSelect(parent); });
+        await waitFor(() => expect(result.current.childrenLoading).toBe(false));
+      }
+
+      it('appends the POSTed line to children before the follow-up refetch resolves, without ever raising childrenLoading', async () => {
+        const parent = { id: 'p1', name: 'Parent' };
+        const childRow = { id: 'c1', product: 'Widget' };
+        let resolveGet;
+
+        const { result } = renderEntity('header', 'lines', { skipListFetch: true });
+        await selectParentWithNoLines(result, parent);
+        expect(result.current.children).toEqual([]);
+
+        // `handleAddChild` also fires `refreshHeaderTotals` (a GET to `/header/:id`) alongside
+        // `fetchChildren`'s own GET (`/lines?parentId=...`) — route by URL so that unrelated
+        // request resolves on its own and never steals `resolveGet` from the lines refetch,
+        // which stays pending until the test resolves it (so the assertions below run
+        // strictly BEFORE it lands).
+        globalThis.fetch.mockImplementation(async (url, opts) => {
+          if (opts?.method === 'POST') return mockFetchOk([childRow]);
+          if (url.includes('/lines')) return new Promise((resolve) => { resolveGet = resolve; });
+          return mockFetchOk([parent]);
+        });
+
+        await act(async () => {
+          await result.current.handleAddChild({ product: 'Widget' });
+        });
+
+        // The line is already in `children` even though the refetch above is still pending.
+        expect(result.current.children).toEqual([expect.objectContaining({ id: 'c1', product: 'Widget' })]);
+        // `fetchChildren` was called with `{ silent: true }`, so it never toggled the flag —
+        // the whole grid never disappeared behind isInitialChildrenLoading's spinner.
+        expect(result.current.childrenLoading).toBe(false);
+
+        // Let the trailing silent refetch resolve so it doesn't leak into the next test.
+        await act(async () => {
+          resolveGet(mockFetchOk([childRow]));
+        });
+        expect(result.current.childrenLoading).toBe(false);
+      });
+
+      it('replaces the array with the follow-up refetch result — server ordering wins over the local append', async () => {
+        const parent = { id: 'p1', name: 'Parent' };
+        const childRow = { id: 'c1', product: 'Widget' };
+        // The server's own order for the reconciling GET — deliberately different from
+        // [existing..., new] so a pass here can only mean the refetch's result replaced,
+        // not merely appended onto, the optimistic local state.
+        const serverOrder = [{ id: 'c1', product: 'Widget', lineNo: 10 }, { id: 'c0', product: 'Earlier', lineNo: 5 }];
+        let resolveGet;
+
+        const { result } = renderEntity('header', 'lines', { skipListFetch: true });
+        await selectParentWithNoLines(result, parent);
+
+        // `handleAddChild` also fires `refreshHeaderTotals` (a GET to `/header/:id`) alongside
+        // `fetchChildren`'s own GET (`/lines?parentId=...`) — route by URL so that unrelated
+        // request resolves on its own and never steals `resolveGet` from the lines refetch.
+        globalThis.fetch.mockImplementation(async (url, opts) => {
+          if (opts?.method === 'POST') return mockFetchOk([childRow]);
+          if (url.includes('/lines')) return new Promise((resolve) => { resolveGet = resolve; });
+          return mockFetchOk([parent]);
+        });
+
+        await act(async () => {
+          await result.current.handleAddChild({ product: 'Widget' });
+        });
+        expect(result.current.children).toEqual([expect.objectContaining({ id: 'c1' })]);
+
+        await act(async () => {
+          resolveGet(mockFetchOk(serverOrder));
+        });
+
+        await waitFor(() => {
+          expect(result.current.children).toEqual(serverOrder.map(row => expect.objectContaining(row)));
+        });
+      });
+
+      it('does not append a ghost row when the POST response has no usable id, but still fires the silent refetch', async () => {
+        const parent = { id: 'p1', name: 'Parent' };
+        // A response shaped like a saved line but missing `id` — must not be trusted as
+        // addressable (the grid keys rows by id; a row without one can be seen but never
+        // acted on).
+        const idlessResponse = { product: 'Widget', quantity: 1 };
+        const serverRow = { id: 'c1', product: 'Widget', quantity: 1 };
+        let resolveGet;
+
+        const { result } = renderEntity('header', 'lines', { skipListFetch: true });
+        await selectParentWithNoLines(result, parent);
+
+        // Same routing as the previous test — `refreshHeaderTotals`'s `/header/:id` GET must
+        // not steal `resolveGet` from the `/lines?parentId=...` refetch this test controls.
+        globalThis.fetch.mockImplementation(async (url, opts) => {
+          if (opts?.method === 'POST') return mockFetchOk([idlessResponse]);
+          if (url.includes('/lines')) return new Promise((resolve) => { resolveGet = resolve; });
+          return mockFetchOk([parent]);
+        });
+
+        await act(async () => {
+          await result.current.handleAddChild({ product: 'Widget' });
+        });
+
+        // No ghost row appended while the refetch is still pending.
+        expect(result.current.children).toEqual([]);
+        expect(result.current.childrenLoading).toBe(false);
+
+        // The refetch was still fired (fall through, late but never wrong) — and stays silent.
+        const getCall = globalThis.fetch.mock.calls.find(c => !c[1]?.method || c[1].method !== 'POST');
+        expect(getCall).toBeTruthy();
+
+        await act(async () => {
+          resolveGet(mockFetchOk([serverRow]));
+        });
+
+        await waitFor(() => {
+          expect(result.current.children).toEqual([expect.objectContaining({ id: 'c1' })]);
+        });
+        expect(result.current.childrenLoading).toBe(false);
+      });
+    });
   });
 
   // ---------------------------------------------------------------------------

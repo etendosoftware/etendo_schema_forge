@@ -15,6 +15,8 @@ import { X, Check, Save, ArrowDown, ArrowUp, BarChart3 } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useUI } from '@/i18n';
 import { useCreateMovement, useUpdateMovement } from '@/hooks/useCreateMovement';
+import { FINANCIAL_ACCOUNT_FIELD_LIMITS, getMaxLengthError } from './fieldLengthValidation.js';
+import { FieldLengthCounter, FieldLengthError } from './FieldLengthHint.jsx';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { useGLItemLookup, useBPartnerLookup, useDimensionLookup } from '@/hooks/useMovementLookups';
 import { Field, DateInput, AmountInput, ChipSelect } from '@/components/forms/fields';
@@ -151,7 +153,14 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
   // G/L item, dimensions, description and dates can change. Confirmar is hidden (already processed).
   const lockAmountType = isEdit && Boolean(movement.processed);
   const amountValue = parseEur(form.amount);
-  const valid = Boolean(form.date) && Boolean(form.dir) && Boolean(form.gl?.id) && amountValue > 0;
+  // PSD-23: FIN_Finacc_Transaction.Description is 255 chars — reported here rather than
+  // by a 400 from the backend. Part of `valid`, so it gates both Guardar and Confirmar.
+  const descriptionError = getMaxLengthError(
+    form.description,
+    FINANCIAL_ACCOUNT_FIELD_LIMITS.transactionDescription,
+  );
+  const valid = Boolean(form.date) && Boolean(form.dir) && Boolean(form.gl?.id) && amountValue > 0
+    && !descriptionError;
 
   const setDim = (key, v) => set({ dims: { ...form.dims, [key]: v } });
   // Mirrors Etendo Classic: picking a G/L item fills the description with
@@ -281,6 +290,18 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
               value={form.description}
               onChange={(e) => set({ description: e.target.value })}
               data-testid="tx-description" />
+            <div className="mt-1 flex items-baseline justify-end gap-2">
+              <FieldLengthError
+                error={descriptionError}
+                testId="tx-description"
+                data-testid="FieldLengthError__9a0423" />
+              <FieldLengthCounter
+                value={(form.description || '')}
+                limit={FINANCIAL_ACCOUNT_FIELD_LIMITS.transactionDescription}
+                error={descriptionError}
+                testId="tx-description"
+                data-testid="FieldLengthCounter__9a0423" />
+            </div>
           </Field>
 
           {/* Accounting dimensions — Contacto always, the rest conditionally */}

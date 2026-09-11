@@ -81,12 +81,78 @@ function expectSaveResponse(page) {
 
 /**
  * Start listening for a DELETE API response BEFORE triggering the action.
+ *
+ * `urlIncludes` narrows the match to one entity's route (e.g. '/bankAccount/'),
+ * which is what turns this helper into a real assertion target instead of a
+ * "some DELETE happened" rubber stamp. A child-row delete that accidentally
+ * reaches the record-level delete button issues
+ * `DELETE /sws/neo/contacts/businessPartner/<id>` — an unconstrained predicate
+ * matches that happily and reports success while the parent record is being
+ * destroyed. With the entity fragment pinned, the predicate simply never
+ * matches and the caller can fail loudly.
+ *
+ * Resolves to `null` on timeout rather than rejecting, so the caller decides
+ * whether a missing DELETE is fatal.
  */
-function expectDeleteResponse(page) {
+function expectDeleteResponse(page, { urlIncludes = '' } = {}) {
   return page.waitForResponse(
-    (resp) => resp.url().includes('/sws/neo/') && resp.request().method() === 'DELETE' && resp.status() < 500,
+    (resp) => resp.url().includes('/sws/neo/')
+      && resp.url().includes(urlIncludes)
+      && resp.request().method() === 'DELETE'
+      && resp.status() < 500,
     { timeout: 15_000 },
+  ).catch(() => null);
+}
+
+/**
+ * Start listening for a list-load GET response BEFORE triggering it (e.g.
+ * scrolling to trigger `useEntity`'s `loadMore()`).
+ */
+function expectListResponse(page) {
+  return page.waitForResponse(
+    (resp) => resp.url().includes('/sws/neo/') && resp.request().method() === 'GET' && resp.status() < 500,
+    { timeout: 6_000 },
   ).catch(() => {});
+}
+
+/**
+ * Find a row in the Contacts list by its visible text, scrolling the list's
+ * `ScrollPane` to trigger incremental server-side pagination
+ * (`BATCH_SIZE = 75` in `useEntity.js`) until the row appears or the backend
+ * has no more rows to give.
+ *
+ * Needed since ETP-5182 (`decisions.json → listSortBy: "name asc"`, commit
+ * 8d74d3c0c) made the Contacts list default-sort alphabetically by
+ * commercial name instead of by recency (`creationDate desc`). A freshly
+ * created "E2E Contact ..." row used to be guaranteed a spot on the FIRST
+ * loaded batch just by being the newest record; under name-ascending sort
+ * its position depends on how many existing business partners sort before
+ * it alphabetically, so a plain `rows.filter(...).toBeVisible()` on the
+ * initially loaded page can no longer be trusted.
+ */
+async function findRowByText(page, text, { maxScrolls = 15 } = {}) {
+  const rows = page.locator('tbody tr');
+  const target = rows.filter({ hasText: text }).first();
+  const scrollPane = page.getByTestId('ScrollPane__620cbc');
+
+  for (let attempt = 0; attempt <= maxScrolls; attempt++) {
+    if (await target.isVisible({ timeout: attempt === 0 ? 3_000 : 500 }).catch(() => false)) {
+      return target;
+    }
+    const countBefore = await rows.count();
+    const listLoadP = expectListResponse(page);
+    await scrollPane.evaluate((el) => { el.scrollTop = el.scrollHeight; }).catch(() => {});
+    await listLoadP;
+    const countAfter = await rows.count();
+    // No new rows arrived — the backend has nothing more to give for the
+    // current filter/sort, so further scrolling would just spin forever.
+    if (countAfter <= countBefore) break;
+  }
+
+  // Final locator, whether or not it resolved — the caller's own assertion
+  // reports the real failure (missing row vs. something else) instead of an
+  // opaque "helper returned nothing".
+  return target;
 }
 
 /**
@@ -449,24 +515,86 @@ test.describe('Contacts Integration — Full journey', () => {
       const bankRowText = page.getByText(`E2E Bank ${ts}`);
       await expect(bankRowText).toBeVisible({ timeout: 5_000 });
 
-      // Hover the row container to reveal delete action, then click delete
-      const bankRowContainer = bankRowText.locator('xpath=ancestor::div[contains(@class,"border-b") or contains(@class,"group")]').first();
-      await bankRowContainer.hover();
-      const deleteBankBtn = bankRowContainer.getByTestId('row-quick-action-delete')
-        .or(bankRowContainer.locator('button').filter({ has: page.locator('svg.lucide-trash-2, svg[class*="trash"]') }));
-      await expect(deleteBankBtn.first()).toBeVisible({ timeout: 3_000 });
-      await deleteBankBtn.first().click();
+      // Delete the bank-account ROW — not the contact.
+      //
+      // Scoping is the whole story here. The previous version walked up with
+      // `xpath=ancestor::div[contains(@class,"border-b") or contains(@class,
+      // "group")]` + `.first()`, which resolves to the OUTERMOST matching
+      // ancestor (Playwright normalizes an XPath node-set to document order),
+      // i.e. a wrapper that also contains the detail-view header toolbar. The
+      // first trash-icon button in that subtree, in DOM order, is the RECORD
+      // delete (`action-delete`, DetailView.jsx:2926 → setShowDeleteConfirm),
+      // so the step deleted contact A and every later assertion was measuring
+      // a destroyed record.
+      //
+      // `row-quick-action-delete` can never match inside a detail view either:
+      // DetailView passes no `rowQuickActions` prop and DataTable gates
+      // RowQuickActions on it (`isQuickActionsEnabled`, DataTable.jsx:1293),
+      // so the old `.or()` fallback was in fact the only branch ever taken.
+      //
+      // The control that actually exists: BankAccountTable renders existing
+      // rows through InlineLinesPanel (DetailView's default `linesLayout` is
+      // 'inlineEditable'), which emits `line-row-{id}` per row inside
+      // `inline-lines-panel`, and within the row a `line-actions` strip whose
+      // delete button carries the `Trash2__3b7ec2` icon. Everything below is
+      // anchored inside that ONE row, so the header toolbar is structurally
+      // unreachable — no page-wide fallback.
+      const bankRow = page
+        .locator('[data-testid="inline-lines-panel"] [data-testid^="line-row-"]')
+        .filter({ hasText: `E2E Bank ${ts}` })
+        .first();
+      await expect(bankRow).toBeVisible({ timeout: 5_000 });
 
-      // Confirm delete dialog if it appears
-      const deleteDialog = page.getByTestId('confirm-delete-dialog').or(page.getByRole('dialog'));
-      if (await deleteDialog.isVisible({ timeout: 3_000 }).catch(() => false)) {
-        const deleteConfirm = page.getByTestId('confirm-delete-confirm')
-          .or(deleteDialog.getByRole('button', { name: /delete|eliminar|confirm/i }));
-        const delBankP = expectDeleteResponse(page);
-        await deleteConfirm.first().click();
-        await delBankP;
-      }
+      // The action strip's icons only render while the row is hovered
+      // (`showActions = (isHovered || isEditing) && !isDocumentReadOnly`).
+      await bankRow.hover();
+      const deleteBankBtn = bankRow
+        .getByTestId('line-actions')
+        .locator('button')
+        .filter({ has: page.locator('[data-testid="Trash2__3b7ec2"]') });
+      await expect(deleteBankBtn).toBeVisible({ timeout: 3_000 });
+      await deleteBankBtn.click();
+
+      // Confirm the CHILD delete. DetailView renders two structurally
+      // identical confirm dialogs (record-level and secondary-tab), and
+      // `confirm-delete-confirm` belongs to neither — it only exists in
+      // attachments/ConfirmDeleteDialog.jsx. Only the record-level dialog
+      // carries `action-delete-confirm` on its destructive button, so `hasNot`
+      // makes this locator provably not the record dialog: if the click ever
+      // reaches the record delete again, this resolves to zero elements and
+      // fails instead of confirming the wrong deletion. The child dialog's own
+      // destructive button has no dedicated testid (both footer buttons are
+      // `Button__fa3275`), hence the `bg-destructive` variant class.
+      const childDeleteDialog = page.getByRole('dialog')
+        .filter({ hasNot: page.getByTestId('action-delete-confirm') });
+      await expect(childDeleteDialog).toBeVisible({ timeout: 5_000 });
+      const deleteConfirm = childDeleteDialog.locator('button.bg-destructive');
+      await expect(deleteConfirm).toBeVisible({ timeout: 3_000 });
+
+      // Sharpest available guard: the DELETE must target the bankAccount child
+      // route. A record-level delete would hit /businessPartner/<id> instead,
+      // never match this predicate, and fail the assertion below.
+      const delBankP = expectDeleteResponse(page, { urlIncludes: '/bankAccount/' });
+      await deleteConfirm.click();
+      const delBankResp = await delBankP;
+      expect(
+        delBankResp,
+        'the row delete must issue DELETE /sws/neo/contacts/bankAccount/<id>, not delete the parent contact',
+      ).not.toBeNull();
+
       await expect(page.getByText(`E2E Bank ${ts}`)).toHaveCount(0, { timeout: 5_000 });
+
+      // Regression guard — the `toHaveCount(0)` above is NOT a guard on its
+      // own: it also passes when the whole contact was destroyed, because
+      // `confirmHeaderDelete` navigates to `/contacts` and the row vanishes
+      // with the entire detail view. That is exactly how the parent-deleting
+      // bug stayed green here. The parent must still be loaded on its own
+      // detail route, with its name intact.
+      await expect(page).toHaveURL(/\/contacts\/[^/?#]+/, { timeout: 5_000 });
+      await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 5_000 });
+      await expect(page.getByTestId('record-unavailable')).toHaveCount(0);
+      await expect(page.getByRole('textbox', { name: /razón social/i }))
+        .toHaveValue(CONTACT_A, { timeout: 5_000 });
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -515,8 +643,11 @@ test.describe('Contacts Integration — Full journey', () => {
       await firstInput.fill(`E2E Address ${ts}`);
     }
 
-    // Select País — button opens a search dialog with country list
-    const paisButton = page.getByText(/^pa[ií]s$/i).locator('..').locator('button[aria-haspopup="dialog"]');
+    // Select País — button opens a search dialog with country list.
+    // The trailing `\*?` is required: since ETP-5103 the label renders a mandatory
+    // asterisk inside the same element, so its textContent is "País*" and Playwright
+    // matches getByText against the full textContent. Do not "clean up" the `\*?`.
+    const paisButton = page.getByText(/^pa[ií]s\s*\*?$/i).locator('..').locator('button[aria-haspopup="dialog"]');
     await paisButton.click();
 
     // The country picker dialog has a search input "Buscar país..."
@@ -524,11 +655,17 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(countrySearch).toBeVisible({ timeout: 5_000 });
     await countrySearch.fill(COUNTRY_SEARCH_TERM);
 
-    // Wait for search results to filter — country name depends on locale (España / Spain)
-    const countryOption = page.getByRole('button', { name: /^espa[nñ]a$/i })
-      .or(page.getByRole('button', { name: /^spain$/i }))
-      .or(page.locator('button').filter({ hasText: /^España$/ }))
-      .or(page.locator('button').filter({ hasText: /^Spain$/ }));
+    // Wait for search results to filter — country name depends on locale (España / Spain).
+    // Scope to the picker overlay (inline z-index 160, see LocationEditorModal.jsx
+    // PICKER_MODAL): since ETP-5103 the País field itself displays "España" (preselected
+    // on create), so an unscoped "España" button locator resolves to the FIELD button,
+    // which sits behind the picker overlay — the click then times out on intercepted
+    // pointer events instead of selecting the option.
+    const countryPicker = page.locator('div[style*="z-index: 160"]');
+    const countryOption = countryPicker.getByRole('button', { name: /^espa[nñ]a$/i })
+      .or(countryPicker.getByRole('button', { name: /^spain$/i }))
+      .or(countryPicker.locator('button').filter({ hasText: /^España$/ }))
+      .or(countryPicker.locator('button').filter({ hasText: /^Spain$/ }));
     await expect(countryOption.first()).toBeVisible({ timeout: 5_000 });
     await countryOption.first().click();
 
@@ -629,8 +766,9 @@ test.describe('Contacts Integration — Full journey', () => {
     const rows = page.locator('tbody tr');
     await expect(rows.first()).toBeVisible({ timeout: 15_000 });
 
-    // Contact B should be visible (recently created, at top of list)
-    const rowB = rows.filter({ hasText: CONTACT_B }).first();
+    // Contact B should be somewhere in the list (position depends on the
+    // active sort/pagination — see findRowByText's docblock).
+    const rowB = await findRowByText(page, CONTACT_B);
     await expect(rowB).toBeVisible({ timeout: 15_000 });
 
     // Verify key column headers exist by name
@@ -650,15 +788,17 @@ test.describe('Contacts Integration — Full journey', () => {
 
     // Empresas filter — Contact B is Empresa, should be visible
     await empresasBtn.first().click();
-    await expect(rows.filter({ hasText: CONTACT_B }).first()).toBeVisible({ timeout: 10_000 });
+    await expect(await findRowByText(page, CONTACT_B)).toBeVisible({ timeout: 10_000 });
 
-    // Personas filter — Contact B (Empresa) should not appear
+    // Personas filter — Contact B (Empresa) should not appear. No scrolling
+    // needed here: this asserts absence under the current (possibly small)
+    // loaded batch, which is exactly what "not shown under this filter" means.
     await personasBtn.first().click();
     await expect(rows.filter({ hasText: CONTACT_B })).toHaveCount(0, { timeout: 10_000 });
 
     // Todos restores full list
     await todosBtn.first().click();
-    await expect(rows.filter({ hasText: CONTACT_B }).first()).toBeVisible({ timeout: 10_000 });
+    await expect(await findRowByText(page, CONTACT_B)).toBeVisible({ timeout: 10_000 });
 
     // ═══════════════════════════════════════════════════════════════════════
     // PART 8: Bulk delete — select both created contacts, delete, verify
@@ -669,12 +809,15 @@ test.describe('Contacts Integration — Full journey', () => {
     // input itself — the input is visually sr-only, so Playwright's click
     // lands on the underlying decorative box and the sr-only input "intercepts
     // pointer events" in reverse, causing flaky click timeouts.
-    const rowBFinal = page.locator('tbody tr').filter({ hasText: CONTACT_B }).first();
+    // Use findRowByText (not a plain filter) since Contact B's row may sit
+    // past the first loaded batch under the name-ascending sort.
+    const rowBFinal = await findRowByText(page, CONTACT_B);
+    await expect(rowBFinal).toBeVisible({ timeout: 15_000 });
     await rowBFinal.getByTestId('Checkbox__eb5261').first().click();
 
     // Select Contact A by navigating to its detail URL and deleting, or find by timestamp
     // Contact A may have a different name after toggle — find by email which has the timestamp
-    const rowAByEmail = page.locator('tbody tr').filter({ hasText: CONTACT_A_EMAIL }).first();
+    const rowAByEmail = await findRowByText(page, CONTACT_A_EMAIL);
     if (await rowAByEmail.isVisible({ timeout: 3_000 }).catch(() => false)) {
       await rowAByEmail.getByTestId('Checkbox__eb5261').first().click();
     }
@@ -683,13 +826,33 @@ test.describe('Contacts Integration — Full journey', () => {
     const selectionText = page.locator('text=/\\d+.*seleccionado|\\d+.*selected/i');
     await expect(selectionText.first()).toBeVisible({ timeout: 5_000 });
 
-    // Click bulk delete
-    const bulkTrashBtn = page.locator('button').filter({
-      has: page.locator('svg.lucide-trash-2, svg[class*="trash"]'),
-    });
-    const selectionBar = page.locator('div').filter({ hasText: /seleccionado|selected/i }).first().locator('..');
-    const trashInBar = selectionBar.locator('button').filter({ has: page.locator('svg') }).first();
-    const bulkBtn = await bulkTrashBtn.count() > 0 ? bulkTrashBtn.first() : trashInBar;
+    // Click bulk delete.
+    //
+    // The Contacts window renders its OWN bulk-delete button via
+    // `selectionBarRightActions` (tools/app-shell/src/windows/custom/contacts/index.jsx)
+    // and opts out of ListView's generic "Delete selected" toolbar action
+    // (`listViewOptions.hideBulkDelete: true`), so the generic
+    // `bulk-delete-selected` testid is never rendered for this window — the
+    // button itself carries no stable testid, only its icon does
+    // (`Trash2__ef097c`).
+    //
+    // A page-wide "any button containing a trash icon" search (the previous
+    // approach here) is unsafe regardless of sort order: Contacts also
+    // renders a per-row LEGACY delete button with its own Trash2 icon
+    // (`Trash2__eb5261`, see `ContactsTable.jsx` → `DataTable.jsx`'s
+    // `legacyDeleteEnabled`) for every visible row, and those per-row icons
+    // sit earlier in DOM order than the SelectionToolbar (rendered through a
+    // `document.body` portal, appended after the app's own render tree). A
+    // `.first()` match on a broad selector therefore resolves to whichever
+    // row's own single-row delete button happens to be first in the DOM —
+    // NOT the multi-select bulk-delete action — silently deleting an
+    // unrelated row instead of the two rows actually checked above. Under
+    // the old creationDate-desc sort this went unnoticed because the
+    // just-created Contact B always WAS that first row, so the wrong click
+    // still deleted the right record by coincidence; the name-ascending sort
+    // broke that coincidence, surfacing the pre-existing bug.
+    const bulkBtn = page.getByTestId('Trash2__ef097c').locator('..');
+    await expect(bulkBtn).toBeVisible({ timeout: 5_000 });
     await bulkBtn.click();
 
     // Confirm bulk delete dialog

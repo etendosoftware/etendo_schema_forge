@@ -4,6 +4,7 @@ import { render } from '@testing-library/react';
 // ── mock heavy children so we exercise AssetsDetailPanel's own effect logic ──
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useLabel: () => (key) => key,
 }));
 
 // EntityForm is stubbed: this test only cares about the currency-echo useEffect,

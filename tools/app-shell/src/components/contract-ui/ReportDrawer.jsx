@@ -105,9 +105,20 @@ const LISTING_TEMPLATE = `<!DOCTYPE html>
   </div>
 </div></body></html>`;
 
-// CSV template (text recipe)
-const CSV_TEMPLATE = `{{#each columns}}{{this.label}}{{#unless @last}},{{/unless}}{{/each}}
-{{#each rows}}{{#each ../columns}}{{lookup ../this this.key}}{{#unless @last}},{{/unless}}{{/each}}
+// CSV template (text recipe).
+//
+// Every label and every cell goes through `csvField` (ETP-5032), the canonical
+// helper `buildHelpersCode()` already ships — it neutralizes spreadsheet formula
+// injection (a Contact whose name is `=HYPERLINK(...)` must export as literal
+// text, CWE-1236) and applies RFC 4180 quoting, which this template previously
+// did not do at all: a value containing a comma silently split into two cells.
+//
+// TRIPLE-stash is mandatory ({{{ }}}, never {{ }}): Handlebars HTML-escapes
+// double-stash output, which turns csvField's own escaped `""` into
+// `&quot;&quot;` and corrupts the file. Same rule as the reports'
+// template-csv.hbs.
+export const CSV_TEMPLATE = `{{#each columns}}{{{csvField this.label}}}{{#unless @last}},{{/unless}}{{/each}}
+{{#each rows}}{{#each ../columns}}{{{csvField (lookup ../this this.key)}}}{{#unless @last}},{{/unless}}{{/each}}
 {{/each}}`;
 
 // ---------------------------------------------------------------------------

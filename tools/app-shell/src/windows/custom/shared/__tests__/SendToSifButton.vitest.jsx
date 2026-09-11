@@ -25,6 +25,7 @@ function renderButton(overrides = {}) {
     data: {
       aeatsiiIssent: false,
       tbaiIssent: false,
+      invoiceDate: '2026-06-15',
     },
     recordId: 'INV_1',
     apiBaseUrl: '/sws/neo/sales-invoice',
@@ -35,7 +36,13 @@ function renderButton(overrides = {}) {
 
 describe('SendToSifButton', () => {
   beforeEach(() => {
-    useFiscalConfigMock.mockReturnValue({ profile: 'sii+tbai' });
+    useFiscalConfigMock.mockReturnValue({
+      profile: 'sii+tbai',
+      // Far-past adoption date + Bizkaia territory: neither gate interferes by
+      // default, so pre-existing tests (written before either gate existed)
+      // keep passing. Tests exercising a gate override this explicitly.
+      tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z', etsgSifTerritory: 'BIZKAIA' },
+    });
     global.fetch = vi.fn(() => Promise.resolve({
       ok: true,
       json: () => Promise.resolve({}),
@@ -55,9 +62,26 @@ describe('SendToSifButton', () => {
 
   it('does not render for completed invoices when all targets were already sent', () => {
     renderButton({
-      data: { aeatsiiIssent: true, tbaiIssent: true },
+      data: { aeatsiiIssent: true, tbaiIssent: true, invoiceDate: '2026-06-15' },
     });
     expect(screen.queryByRole('button', { name: 'sendToSif' })).not.toBeInTheDocument();
+  });
+
+  // ETP-5122 — TicketBAI must not be offered on an invoice dated before the
+  // org's TBAI adoption date, even though SII may still have a pending target.
+  it('does not render at all when the invoice predates TBAI adoption and SII is already sent', () => {
+    renderButton({
+      data: { aeatsiiIssent: true, tbaiIssent: false, invoiceDate: '2019-06-15' },
+    });
+    expect(screen.queryByRole('button', { name: 'sendToSif' })).not.toBeInTheDocument();
+  });
+
+  it('shows only the SII confirmation copy when the invoice predates TBAI adoption', () => {
+    renderButton({
+      data: { aeatsiiIssent: false, tbaiIssent: false, invoiceDate: '2019-06-15' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+    expect(screen.getByText('sendToSifBodySii')).toBeInTheDocument();
   });
 
   it('shows the combined confirmation copy when both SII and TBAI are pending', () => {
@@ -74,7 +98,7 @@ describe('SendToSifButton', () => {
 
   it('supports partial retry by calling only the failed target endpoint', async () => {
     renderButton({
-      data: { aeatsiiIssent: true, tbaiIssent: false },
+      data: { aeatsiiIssent: true, tbaiIssent: false, invoiceDate: '2026-06-15' },
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
@@ -96,7 +120,7 @@ describe('SendToSifButton', () => {
     const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
 
     renderButton({
-      data: { aeatsiiIssent: true, tbaiIssent: false },
+      data: { aeatsiiIssent: true, tbaiIssent: false, invoiceDate: '2026-06-15' },
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
@@ -136,5 +160,78 @@ describe('SendToSifButton', () => {
 
     await screen.findByText('SII failed');
     expect(screen.getByText('sendToSifSuccessTbai')).toBeInTheDocument();
+  });
+
+  // ETP-5087: purchase-invoice TBAI eligibility follows the active TBAI config's territory.
+  describe('territory gating for purchase invoices (ETP-5087)', () => {
+    it('offers TBAI (via the SII+Batuz copy) for a purchase invoice when the TBAI territory is Bizkaia', async () => {
+      // ETP-5027: a purchase invoice's TBAI is always Batuz specifically, so the
+      // combined-targets copy must be the purchase-specific key, never the
+      // generic "SII + TicketBAI" wording sales invoices use.
+      useFiscalConfigMock.mockReturnValue({ profile: 'sii+tbai', tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z', etsgSifTerritory: 'BIZKAIA' } });
+      renderButton({ apiBaseUrl: '/sws/neo/purchase-invoice' });
+      fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+      expect(screen.getByText('sendToSifBodyBothPurchase')).toBeInTheDocument();
+      expect(screen.queryByText('sendToSifBodyBoth')).not.toBeInTheDocument();
+    });
+
+    it('only offers SII (never TBAI) for a purchase invoice when the TBAI territory is Alava', async () => {
+      useFiscalConfigMock.mockReturnValue({ profile: 'sii+tbai', tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z', etsgSifTerritory: 'ARABA' } });
+      renderButton({ apiBaseUrl: '/sws/neo/purchase-invoice' });
+      fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+      expect(screen.getByText('sendToSifBodySii')).toBeInTheDocument();
+      expect(screen.queryByText('sendToSifBodyTbai')).not.toBeInTheDocument();
+      expect(screen.queryByText('sendToSifBodyBoth')).not.toBeInTheDocument();
+    });
+
+    it('does not break when no TBAI config exists (tbaiRecord undefined) — territory falls back to null', async () => {
+      useFiscalConfigMock.mockReturnValue({ profile: 'sii+tbai', tbaiRecord: undefined });
+      renderButton({ apiBaseUrl: '/sws/neo/purchase-invoice' });
+      fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+      expect(screen.getByText('sendToSifBodySii')).toBeInTheDocument();
+    });
+
+    // ETP-5122 + ETP-5087 combined: territory and date are independent gates,
+    // ANDed together for TBAI.
+    it('only offers SII for a Bizkaia purchase invoice dated before the org TBAI adoption date', async () => {
+      useFiscalConfigMock.mockReturnValue({
+        profile: 'sii+tbai',
+        tbaiRecord: { tbaisystemdate: '2026-01-01T00:00:00.000Z', etsgSifTerritory: 'BIZKAIA' },
+      });
+      renderButton({
+        apiBaseUrl: '/sws/neo/purchase-invoice',
+        data: { aeatsiiIssent: false, tbaiIssent: false, invoiceDate: '2025-12-31' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+      expect(screen.getByText('sendToSifBodySii')).toBeInTheDocument();
+      expect(screen.queryByText('sendToSifBodyBothPurchase')).not.toBeInTheDocument();
+    });
+  });
+
+  // ETP-5087 follow-up: fiscal config must be keyed by the INVOICE's own org
+  // (data.adOrgId), not the top-nav org selector — a mismatch used to silently
+  // fetch the wrong TBAI/SII config (and territory).
+  describe('org resolution (ETP-5087 follow-up)', () => {
+    it('resolves fiscal config using the invoice record adOrgId, not the selected org', () => {
+      renderButton({ data: { aeatsiiIssent: false, tbaiIssent: false, adOrgId: 'ORG_INVOICE' } });
+      expect(useFiscalConfigMock).toHaveBeenCalledWith('ORG_INVOICE', '/sws/neo/sales-invoice');
+    });
+
+    it('falls back to the selected org when the invoice record has no adOrgId (legacy/unrefreshed record)', () => {
+      renderButton({ data: { aeatsiiIssent: false, tbaiIssent: false } });
+      expect(useFiscalConfigMock).toHaveBeenCalledWith('ORG_1', '/sws/neo/sales-invoice');
+    });
+
+    it('still resolves territory/targets correctly when the invoice org differs from the selected org', async () => {
+      useFiscalConfigMock.mockReturnValue({ profile: 'sii+tbai', tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z', etsgSifTerritory: 'BIZKAIA' } });
+      renderButton({
+        apiBaseUrl: '/sws/neo/purchase-invoice',
+        data: { aeatsiiIssent: false, tbaiIssent: false, adOrgId: 'ORG_INVOICE', invoiceDate: '2026-06-15' },
+      });
+      expect(useFiscalConfigMock).toHaveBeenCalledWith('ORG_INVOICE', '/sws/neo/purchase-invoice');
+      fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+      // ETP-5027: purchase-invoice always resolves to the Batuz-specific copy.
+      expect(screen.getByText('sendToSifBodyBothPurchase')).toBeInTheDocument();
+    });
   });
 });

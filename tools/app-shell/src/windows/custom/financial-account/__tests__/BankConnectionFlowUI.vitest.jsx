@@ -11,7 +11,7 @@
  * mounts the real component (real radix dialog primitives) so the behaviour — not just
  * the source shape — is asserted.
  */
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // Params are appended so a parameterised key stays distinguishable from its bare form.
@@ -83,6 +83,30 @@ describe('BankConnectionFlowUI — connecting overlay', () => {
     fireEvent.pointerDown(document.body);
 
     expect(screen.getByTestId('bank-connection-connecting-overlay')).toBeInTheDocument();
+  });
+
+  it('exposes no operable close control — the always-rendered dialog X is hidden (ETP-5102)', () => {
+    renderFlow({ connecting: true });
+
+    const overlay = screen.getByTestId('bank-connection-connecting-overlay');
+
+    // `DialogContent` always renders its own close button and offers no prop to
+    // disable it; since this overlay's `<Dialog>` has no `onOpenChange`, that X
+    // would be a visible no-op. It is suppressed with the `[&>button]:hidden`
+    // direct-child variant, so the guard has two halves:
+    //
+    //  1. the close control is still a DIRECT child of the styled element — that
+    //     is exactly what the `>` combinator selects, so if the core ever wraps it
+    //     the rule silently stops applying and this fails;
+    //  2. the element that carries the rule is the overlay itself.
+    //
+    // Scoping by accessible name keeps the test green if a legitimate button is
+    // added inside the modal later; `toBeVisible()` is deliberately NOT used
+    // because jsdom does not compile Tailwind, so an arbitrary variant produces
+    // no computed style and the button would read as visible either way.
+    const closeControl = within(overlay).getByRole('button', { name: /close/i });
+    expect(closeControl.parentElement).toBe(overlay);
+    expect(overlay).toHaveClass('[&>button]:hidden');
   });
 });
 

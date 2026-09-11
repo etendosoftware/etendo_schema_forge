@@ -607,19 +607,24 @@ export const api = {
   },
   "labelOverrides": {
     "es_ES": {
-      "OutstandingAmt": "Pendiente de pago",
+      "OutstandingAmt": "Saldo pendiente",
       "EM_Etgo_Due_Date": "Vencimiento",
       "em_etgo_delivery_status": "Estado de entrega",
       "C_DocTypeTarget_ID": "Tipo de documento",
       "PriceList": "Precio",
-      "Foreign_Amount": "Importe en Moneda Objetivo"
+      "Foreign_Amount": "Importe en Moneda Objetivo",
+      "em_etgo_tbai_status": "Estado TicketBAI"
     },
     "en_US": {
-      "OutstandingAmt": "Pending Payment",
+      "OutstandingAmt": "Outstanding Amount",
       "EM_Etgo_Due_Date": "Due Date",
       "em_etgo_delivery_status": "Delivery Status",
       "C_DocTypeTarget_ID": "Document Type",
-      "Foreign_Amount": "Target Currency Amount"
+      "Foreign_Amount": "Target Currency Amount",
+      "em_etgo_tbai_status": "TicketBAI Status"
+    },
+    "es_AR": {
+      "OutstandingAmt": "Saldo pendiente"
     }
   }
 };
@@ -678,6 +683,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         labelOverrides={labelOverrides}
         lineConfig={INVOICE_LINE_CONFIG}
         sendDocument
+        selectorPriceCurrency="org"
         {...props} window={effectiveWindow}
       />
       </>

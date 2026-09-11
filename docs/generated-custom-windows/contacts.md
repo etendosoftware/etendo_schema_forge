@@ -32,7 +32,7 @@ The Contacts window should let users maintain a shared business-partner master r
 - Implementation type: custom `contacts` window registered in the app-shell registry. The wrapper adds a contacts-specific provider, header persona toggle, filtered header form, custom list table, financial panel, location modal, and right-side sidebar around the generated window contract. A scoped stylesheet (`contacts.css`) applies Figma-aligned input styles (default white, hover `#F5F7F9`, focus double-border `#121217`, disabled `#F5F7F9`) exclusively to the `.contacts-rows` scope without affecting other windows.
 - Shape: master-child window. The master record is `businessPartner`; child work areas are `contact` (Person), `bankAccount`, `locationAddress`, `customerAccounting` (Customer Accounting), and `vendorAccounting` (Vendor Accounting), while the Financial tab also edits related customer/vendor preference fields and discount data.
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
-- Secondary tab layout: the three child work areas use `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right. For `contact` (Persona) and `bankAccount` (Cuenta Bancaria), clicking pencil flips the row into inline edit. For `locationAddress` (Dirección), clicking pencil opens the `LocationEditorModal` instead of inline editing. When one or more rows are checked, a compact selection bar (28 px buttons) appears anchored below the add-line button. When the add-row form is open, existing rows stay in `InlineLinesPanel` so column widths remain stable; the form renders in a header-hidden `DataTable` below that handles callouts, selectors, and focus. See `docs/ui-customization.md` section 13 for the full reference.
+- Secondary tab layout: the three child work areas use `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right. For `contact` (Persona) and `bankAccount` (Cuenta Bancaria), clicking pencil flips the row into inline edit. For `locationAddress` (Dirección), clicking pencil opens the `LocationEditorModal` instead of inline editing, and so does clicking the row's content; ticking the row's **selection checkbox** only selects the row and never opens the modal (ETP-5029 — the checkbox cell stops the click from reaching the row-body handler, the same way `DataTable` does). When one or more rows are checked, a compact selection bar (28 px buttons) appears anchored below the add-line button. When the add-row form is open, existing rows stay in `InlineLinesPanel` so column widths remain stable; the form renders in a header-hidden `DataTable` below that handles callouts, selectors, and focus. See `docs/ui-customization.md` section 13 for the full reference.
 
 ## Reactive behavior and dependencies
 
@@ -78,7 +78,7 @@ The Contacts window should let users maintain a shared business-partner master r
 - New master records default `customer` to true in the contract, while the list only shows customer or vendor records. Current evidence does not prove whether a user is expected to create non-customer/non-vendor contacts here or what should happen if both flags are cleared.
 - The contract exposes additional related entities such as `customer`, `vendorCreditor`, and `employee`, but the current UI evidence shows only the General tab, Financial tab, and the five child work areas (Person, Bank Account, Location, Customer Accounting, Vendor Accounting). It is ambiguous which deeper role-specific records are intentionally hidden, auto-managed, or still missing from the UI.
 - `employeeAccounting` (table `C_BP_Employee_Acct`, `tabId: 214`) exists in the contract but is explicitly **out of scope** for ETP-4402 and remains unwired — no `secondaryTabs` entry, no field classification beyond the pre-existing default. It should be treated as a separate follow-up, not a gap in this change.
-- Neither `customerAccounting` nor `vendorAccounting` restricts visibility by the corresponding `customer`/`vendor` role flag. No mechanism exists in the current generator to conditionally show/hide a whole secondary tab (`visibleWhen`/`displayLogic` only apply to fields and row actions), so both tabs are unconditionally visible regardless of whether the business partner is flagged as customer or vendor. This is a known generator limitation, not a decisions.json omission.
+- Neither `customerAccounting` nor `vendorAccounting` restricts visibility by the corresponding `customer`/`vendor` role flag. The generator does now support conditionally hiding a whole secondary tab — `window.secondaryTabs.<key>.visibleWhenCapability` (ETP-5116, see below) — but that mechanism gates on a role capability, not on the business partner's own `customer`/`vendor` data flags, so both tabs still render unconditionally with respect to those flags. Gating a tab on the record's own data (as opposed to the current role) remains unimplemented.
 - **Resolved.** `accountingSchema` on both `customerAccounting` and `vendorAccounting` is now classified `system` (hidden, `addLineFromSibling: true`) — mirroring the Product Category precedent (`ProductCategoryAccountingHandler`, `com.etendoerp.go/src/com/etendoerp/go/schemaforge/`). Dedicated `CustomerAccountingHandler` (`@Named("customerAccountingHandler")`) and `VendorAccountingHandler` (`@Named("vendorAccountingHandler")`) now exist in `com.etendoerp.go`, each defaulting `C_AcctSchema_ID` to the client's active `AcctSchema` on POST when absent from the request body. Both entities declare `javaQualifier` in `decisions.json` (`entities.customerAccounting.javaQualifier` / `entities.vendorAccounting.javaQualifier`) to route through these handlers, so record creation no longer requires the user to pick an accounting schema manually.
 - The contacts quick-create modal used outside the main `/contacts` route has explicit person/company save logic, but the inspected main window code only proves field-switching behavior. Manual verification is still needed to confirm how a new person created directly in the full Contacts detail route is persisted.
 - The contract contains richer customer fields such as invoice terms and invoice schedule, but the current custom financial panel does not visibly expose all of them. That is a real gap or deliberate simplification; current evidence is not enough to state which.
@@ -102,6 +102,7 @@ The Contacts window should let users maintain a shared business-partner master r
 13. Select a payment method in the financial section and confirm the eligible financial account selector is filtered to only accounts compatible with that payment method.
 10. Open the Location add flow and confirm it uses a modal, requires country, clears region when country changes, paginates/searches selector options, and defaults shipping/invoicing flags on a new address.
 11. Add or edit a location and confirm the saved address is reflected back in the contact detail and list enrichment.
+11. In the Dirección tab, tick a row's selection checkbox and confirm the row is marked as selected (and the selection bar appears) while the `LocationEditorModal` stays **closed**; untick it and confirm the modal stays closed. Tick the header select-all and confirm the same. Then click the row's content (outside the checkbox) and confirm the modal **does** open for that address. Repeat the checkbox check in the Persona and Cuenta Bancaria tabs to confirm pencil/inline-edit is unaffected.
 12. Add a bank account and confirm the saved row stays linked to the current contact.
 13. In both the General and Financial tabs, confirm the horizontal summary shows three KPIs — Balance Neto, Ingresos (green), and Gastos (red) — each with a trend badge. Click the period selector to the right of the tabs, switch between "Últimos 3 meses" and "Últimos 6 meses", and confirm the badge text updates ("vs últimos 3/6 meses"). Click **Ver gráfico** and confirm a chart dialog opens with a 3M/6M toggle. Confirm Balance Neto equals Ingresos − Gastos.
 14. Reopen an existing person-like contact and verify the toggle shows Person mode (persisted via `EM_Etgo_IsPerson`). Create a new contact in Person mode, save it, and confirm the toggle stays in Person mode after the record is saved.
@@ -206,7 +207,7 @@ The following issues in the **Cuenta Bancaria** inline add-row form were resolve
 - **Vendor Accounting** add-line fields: `accountingSchema` (required), `vendorLiability` (Vendor Liability, required), `vendorPrepayment` (Vendor Prepayment, optional).
 - Both tabs follow the `requireSavedRecord: true` precedent from `contact`/`bankAccount` — they only become available once the business-partner header exists.
 - `accountingSchema` is now classified `system` (hidden, `addLineFromSibling: true`) on both entities. `CustomerAccountingHandler` (`@Named("customerAccountingHandler")`) and `VendorAccountingHandler` (`@Named("vendorAccountingHandler")`) in `com.etendoerp.go` auto-fill `C_AcctSchema_ID` on record creation, closing the gap previously flagged above — no `NeoHandler` follow-up remains outstanding for this field.
-- Both tabs are unconditionally visible; no role-flag gating (customer/vendor) exists at the tab level in the current generator.
+- Both tabs are unconditionally visible with respect to the business partner's own customer/vendor data flags; the generator's tab-level gate added later (`visibleWhenCapability`, ETP-5116, see below) gates by role capability instead, and both tabs use it to gate on `showAccountingFields`.
 - `employeeAccounting` was explicitly left unwired — out of scope for this ticket.
 
 ## ETP-4447 — CSV/TXT import
@@ -259,6 +260,41 @@ The import mapping exposes aliases for Spanish compact and spaced headers: `codi
 ```
 `resolve-curated.js` forwards this to `contract.json → frontendContract.window.labelOverrides`, and the generated `BusinessPartnerPage.jsx` threads it through as the `labelOverrides` prop consumed by `useLabel()` in the form/detail components — resolution order: `labelOverrides[locale][C_BP_Group_ID]` → global AD dictionary label → raw `field.label`. The field's raw `label` in `decisions.json` was also updated from `"Business Partner Category"` to `"Contact Category"` so the (English) fallback matches if the override chain is ever bypassed. Renders as **"Categoría de contacto"** in es_ES and **"Contact Category"** in en_US; unaffected by the reorder fix above — the field now renders with this label at position 3 (right after Razón Social).
 
+## ETP-4564 — Shared cache lifecycle and invalidation (SEC T-01 3/3)
+
+**All Contacts reads now go through the shared `@etendosoftware/app-shell-core` cache.** This closes finding T-01 (no shared client-side cache): reopening a contact, returning to the list, or reopening a tab reuses previously loaded data instead of refetching. The cache is provided app-wide by `DataProvider` (composed in `AppShellRuntime`) and is memory-only — no business data is written to `localStorage`.
+
+**What is cached, and its freshness policy:**
+
+| Data | Where | Query key (isolating dimensions) | Freshness |
+| --- | --- | --- | --- |
+| List (page 0) | generic `useEntity` (ETP-4563) | scope + spec + entity + sort + filters | record (30s) |
+| Header record | `useEntity.fetchById` | scope + spec + entity + recordId | record (30s) |
+| 5 child collections | `useEntity.fetchChildren` | scope + spec + childEntity + parentId | record (30s) |
+| Finance KPIs `bp-stats` / `bp-trend` | `ContactsFinanceContext` | scope + spec `contacts` + entity `bp-stats`/`bp-trend` + recordId | record (30s) |
+| Attachments | `useAttachments` | scope + `attachments` + tableName + recordId | record (30s) |
+| Selector / catalog options | `SelectorInput` | scope + selectorUrl + normalized context + page offset | catalog (5min) |
+
+"scope" is `{ auth, client, role, org }` from the cache provider, so **cached Contacts data cannot leak across a session, role, or organization** — a role/org change produces distinct keys (and `DataProvider` also clears the cache on identity change).
+
+**Attachments are now truly lazy.** `useAttachments` no longer lists on mount; it fetches only once the Attachments tab becomes active (`isActive`), and reopening a fresh tab reuses the cache. Callers that don't pass `isActive` (e.g. `goods-receipt`) keep the previous eager behavior.
+
+**Invalidation.** Mutations that go through the generic `useEntity` (header save/delete, child add/update/delete) already invalidate their list/record/child queries. The Contacts-specific raw-fetch mutations that bypass `useEntity` invalidate explicitly via the `useContactsCacheInvalidation` helper (`windows/custom/contacts/contactsCacheInvalidation.js`):
+
+- inline table edit / row delete / bulk delete → invalidate `businessPartner` (list + record);
+- credit-limit save (`ContactsFinancialPanel`) → invalidate `businessPartner` + finance KPIs (`bp-stats`, `bp-trend`);
+- discount create/update/delete (`BillingPreferencesForm`) → invalidate finance KPIs + `businessPartner`;
+- attachment upload/remove/update-description → invalidate that record's attachment list.
+
+Explicit **Refresh** still forces a network revalidation (bypasses freshness).
+
+**Limitations.**
+
+- **Selection is not preserved across navigation** — that is T-05, tracked separately. T-01 only reduces request volume / improves reuse.
+- **No server-side / HTTP caching** — this is a client-side, in-memory cache only; a full page reload starts cold.
+- Selector option **pages beyond page 0** are cached per offset but the accumulated infinite-scroll list is not deduplicated across partial scroll positions.
+- **Before/after network trace:** the historical "~19 requests" figure has no committed source report (`docs/reports/contacts-test-report.md` is an external assessment doc, not in this repo); a reproducible current measurement is captured separately as delivery evidence rather than embedded here.
+
 ## ETP-4156 — Contact name/username derivation moved server-side
 
 **What changed.** The derivation of the two AD-mandatory `AD_User` columns that this window does not expose as editable fields moved out of the app-shell's generic `useEntity` hook into a dedicated `NeoHandler`. The hook used to branch on hardcoded entity names (`contact` / `adUser` / `user` / `businessPartner` / `bpartner`) inside `applyContactsRequiredFields`, violating the "no window-specific logic in generic services" principle — the metadata-driven runtime must stay entity-agnostic.
@@ -291,6 +327,10 @@ Both are truncated to the column length — `AD_User.Name` and `AD_User.Username
 **Regen hit the known `AD_Ref_List_Trl` translation-stripping gap** on `businessPartner.oBTIKVIESStatus` (unrelated field) — see `docs/feedback.md` ("ETP-4565 — `contacts` hit the known `AD_Ref_List_Trl` translation-stripping gap"). The 3 dropped `es_ES` labels were restored by hand; `BusinessPartnerForm.jsx` (which had no other change from the regen) was reverted to its committed version rather than hand-patched.
 
 **Auto-creation (requirement 3, DB-verified):** `customerAccounting` rows are auto-created reliably (100% of recently-created customer business partners have a `C_BP_Customer_Acct` row). `vendorAccounting` is a near-miss (9/10 recently-created vendor business partners) — one record created 2026-06-05 has no `C_BP_Vendor_Acct` row. Flagged for follow-up investigation in `com.etendoerp.go`, not fixed in this pass.
+
+## ETP-5116 — Customer/Vendor Accounting tabs hidden for roles without the accounting capability
+
+`window.secondaryTabs.customerAccounting.visibleWhenCapability` and `window.secondaryTabs.vendorAccounting.visibleWhenCapability` are both set to `"showAccountingFields"` in `decisions.json`. For a role where that capability (`AD_Role.EM_ETGO_Show_Acct_Fields`) resolves `false`, both tabs are omitted entirely from the tab strip (not merely disabled), and their `openSecondaryTab` deep links silently no-op. This is the role-capability gate referenced in the "Gap assessment" section above — it is independent of, and does not replace, the still-open customer/vendor-data-flag gating gap noted there. Full mechanism reference: `docs/decisions-reference.md` → "Secondary Tabs (`window.secondaryTabs`)" and `docs/ui-customization.md` §17.
 
 ## ETP-4644 — "Vista Previa" button removed
 
@@ -1011,6 +1051,22 @@ message naming the region and the country, where before it imported an address q
 field. That is a deliberate behaviour change: a file that used to "work" can now fail. The failure
 the user can see and fix is worth more than the one they cannot.
 
+**...unless the country has no provinces to refuse against — ETP-5184.** Refusing is only
+meaningful when the country's regions are actually loaded. Argentina carries
+`C_Country.HasRegion = 'N'` and not a single `C_Region` row (the two `CORDOBA` rows in `C_REGION`
+both belong to Spain), so *every* Argentine province was rejected: creating an address failed with
+`500 - The region "Cordoba" does not exist in Argentina.` and there was no way to store the
+province at all. `applyRegionName` now falls back to `C_Location.RegionName`, the column Etendo
+models for exactly this case (Classic hides the region selector and shows the free-text field when
+a country has `HasRegion = 'N'`, and the export at the top of this guide already reads
+`COALESCE(C_Region.name, C_Location.regionname)`). The fallback is entered **only** when the
+country is known and declares no regions — a country that does define regions still refuses an
+unknown name, and a `regionName` with no country still refuses, because the question "does this
+country have regions" cannot be answered without it. The two columns are kept mutually exclusive:
+whichever one a write fills, the other is cleared, so a record never answers the province question
+two ways (this also drops the stale Spanish FK when an address is moved to Argentina on a PUT).
+Both the create and the update path go through `applyGeoLocFields`, so both get the fallback.
+
 The browser-side `contacts-region` resolver and its `/sws/neo/contacts/region` fetch are deleted
 rather than left dead — `contactsFkResolvers.js` keeps a comment explaining why there is no region
 resolver, so the next person does not re-add one. Coverage:
@@ -1034,3 +1090,19 @@ hidden: a skipped row is inactive, not empty), and the freed space carries the *
 of repeating the status. Only a blank-target error counts as the reason — a field-level error
 belongs to a cell, and printing it there would read as if a bad email were why the row was
 skipped. A row the user skipped by hand has no reason and shows none.
+
+## ETP-5182 — List defaults to Razón Social (name) ascending
+
+The Contacts list opened sorted by `creationDate desc` — `ListView`'s hardcoded fallback for any
+window that declares no `window.listSortBy` in `decisions.json`. The PM wanted the default sort to
+be Razón Social (the `name` column, labelled "Razón Social" in es_ES) ascending instead.
+
+Fixed by adding `"listSortBy": "name asc"` to `artifacts/contacts/decisions.json`'s `window` block
+— the same declarative extension point already used by `financial-account`, `fiscal-calendar`,
+`open-close-period-control` and `amortization`. `ListView.parseListSortBy` reads it into
+`initialSortColumn: 'name'` / `initialSortDirection: 'asc'`, which seeds `useEntity`'s initial
+sort AND is what the third header click / "clear sort" now returns to (not `creationDate desc`).
+No secondary sort key was needed here, unlike `financial-account`'s two-key resting order.
+Purely declarative — no new generator or component logic — so no new test was added beyond the
+existing generic `listSortBy` coverage (`parseListSortBy.test.js`,
+`ListView.interactions.vitest.jsx`).

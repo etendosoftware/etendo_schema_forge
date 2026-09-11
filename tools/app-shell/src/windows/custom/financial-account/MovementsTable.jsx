@@ -1,6 +1,7 @@
 import { Fragment, useState, useEffect } from 'react';
 import { ArrowUpRight, ArrowLeftRight, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -22,6 +23,29 @@ import { MovementRowKebab } from './MovementRowKebab';
 import { getContractGridColumns, getContractPanelFields } from '@/components/financial-accounts/contractColumns';
 import { SortableHeaderLabel, SortableHeaderSegments } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
 import { MOVEMENT_STATUS_CONFIG, DRAFT } from './movementStatusConfig';
+import { ChipSelect } from '@/components/forms/fields';
+import { useDimensionLookup } from '@/hooks/useMovementLookups';
+import { useUpdateMovement, buildDimensionUpdatePayload } from '@/hooks/useCreateMovement';
+import { translateBackendError } from '@/lib/backendErrors.js';
+
+// ETP-5101 — the "Más información" panel's editable dimension fields. Only these three:
+// FinancialAccountTransactionsHandler#applyEditableDimensions (the backend `update` action)
+// only accepts glItemId/projectId/costcenterId/productId — organization/activity/campaign/
+// salesregion/user1/user2 have no write path at all, server-side, regardless of document
+// status, and this window's own contract never configures them in the panel anyway (checked
+// artifacts/financial-account/contract.json: only product/project/costCenter carry
+// `dimensionsPanel: true`).
+const EDITABLE_DIMENSION_KEYS = new Set(['project', 'costcenter', 'product']);
+const DIMENSION_ID_FIELD = { project: 'projectId', costcenter: 'costcenterId', product: 'productId' };
+
+// Per-dimension lookup hooks, module-scope like NewTransactionModal's own (function
+// declarations are hoisted, so each is a valid custom hook usable directly by ChipSelect) —
+// deliberately a separate copy rather than importing NewTransactionModal's, since those are
+// not exported and this is a different, narrower editing surface (see buildDimensionUpdatePayload).
+function useCostcenterLookup(query) { return useDimensionLookup(query, 'costcenter'); }
+function useProjectLookup(query) { return useDimensionLookup(query, 'project'); }
+function useProductLookup(query) { return useDimensionLookup(query, 'product'); }
+const DIMENSION_LOOKUPS = { project: useProjectLookup, costcenter: useCostcenterLookup, product: useProductLookup };
 
 /**
  * Formats a business date for display, via the canonical `formatCalendarDate`.
@@ -310,14 +334,36 @@ function PanelField({ label, children }) {
  * "More info" panel — the fields declared for this panel in the window contract,
  * in their declared order, rendered in a 4-column grid with an elevated surface.
  *
- * Accounting dimensions render as disabled form fields (same look as a read-only
- * field in the document forms) and follow the chart of accounts: an enabled one is
- * shown even when empty, like Classic. The business partner is excluded — it already
- * has its own "Contacto" column. Fields with a MOVEMENT_PANEL_RENDERERS entry (e.g.
- * the funds-transfer link) render through it and are gated by their own `isVisible`.
+ * Accounting dimensions follow the chart of accounts: an enabled one is shown even
+ * when empty, like Classic. The business partner is excluded — it already has its
+ * own "Contacto" column. Fields with a MOVEMENT_PANEL_RENDERERS entry (e.g. the
+ * funds-transfer link) render through it and are gated by their own `isVisible`.
+ *
+ * ETP-5101 — Project/Cost center/Product (EDITABLE_DIMENSION_KEYS) render as live
+ * `ChipSelect` pickers, auto-saving on change via `ctx.updateMovement`, whenever
+ * `ctx.canEditDimensions(movement)` is true (GL transaction, not posted — mirrors
+ * MovementRowKebab's own `canEdit`). Every other dimension — and these same three
+ * once posted, or on a payment-linked movement — stays the original disabled/readOnly
+ * display; there is no backend write path for the others regardless of status (see
+ * EDITABLE_DIMENSION_KEYS above).
  */
 function DimensionsPanel({ movement, ui, visible, ctx }) {
   const dims = movement.dimensions || {};
+  // `accountCurrencyId` can still be null/undefined during initial load (see its default
+  // param above) — buildDimensionUpdatePayload always sends it verbatim as `currencyId`, so
+  // editing before it resolves would guarantee an avoidable backend rejection.
+  const editable = ctx.canEditDimensions(movement) && Boolean(ctx.accountCurrencyId);
+
+  const saveDimension = async (idField, row) => {
+    try {
+      await ctx.updateMovement(buildDimensionUpdatePayload(movement, ctx.accountCurrencyId, {
+        [idField]: row?.id ?? null,
+      }));
+      ctx.onReload?.();
+    } catch (err) {
+      toast.error(translateBackendError(err.message, ui) || ui('financeAccountTxRowDimensionUpdateError'));
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 gap-5 pl-16 pr-[52px] pb-8 pt-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -333,6 +379,20 @@ function DimensionsPanel({ movement, ui, visible, ctx }) {
         }
         const key = DIMENSION_PAYLOAD_KEY_ALIASES[field.name] ?? field.name.toLowerCase();
         if (!visible.includes(key)) return null;
+        if (editable && EDITABLE_DIMENSION_KEYS.has(key)) {
+          const idField = DIMENSION_ID_FIELD[key];
+          const currentId = movement[idField];
+          return (
+            <PanelField key={field.name} label={ui(DIMENSION_LABEL_KEYS[key] ?? key)} data-testid="PanelField__ae5a16">
+              <ChipSelect
+                value={currentId ? { id: currentId, name: dims[key] } : null}
+                onChange={(row) => saveDimension(idField, row)}
+                useLookup={DIMENSION_LOOKUPS[key]}
+                testId={`movement-dimension-${key}`}
+                data-testid={`ChipSelect__${key}`} />
+            </PanelField>
+          );
+        }
         return (
           <PanelField key={field.name} label={ui(DIMENSION_LABEL_KEYS[key] ?? key)} data-testid="PanelField__ae5a16">
             <Input
@@ -470,7 +530,7 @@ function computeMovementRowClassName({ selected, highlighted, expanded, rowCanEx
 
 export function MovementsTable({
   movements, loading, enabledDimensions = [], selectedIds, onSelectionChange,
-  highlightTxnId = null, onReload, onEdit,
+  highlightTxnId = null, onReload, onEdit, accountCurrencyId = null,
   sortKey = null, sortDirection = 'asc', onSort,
 }) {
   const ui = useUI();
@@ -479,6 +539,11 @@ export function MovementsTable({
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
   const getTrxTypeLabel = useTrxTypeLabel();
   const [expandedId, setExpandedId] = useState(null);
+  const { updateMovement } = useUpdateMovement();
+  // ETP-5101 — mirrors MovementRowKebab's own `canEdit` exactly (isGlTransaction && !isPosted):
+  // the inline dimension pickers must never appear on a movement whose "Editar" action is
+  // itself hidden, or the panel would offer editing the kebab already decided not to allow.
+  const canEditDimensions = (movement) => !movement.paymentId && movement.posted !== 'Y';
 
   // The "more info" panel shows Proyecto / Centro de coste / Producto, but ONLY the ones actually
   // enabled in the chart of accounts (respects the org's accounting-dimension config).
@@ -524,7 +589,10 @@ export function MovementsTable({
   };
 
   // Helpers handed to the contract-column cell renderers.
-  const cellCtx = { ui, bcpLocale, getTrxTypeLabel, openPayment, openTransferCounterpart };
+  const cellCtx = {
+    ui, bcpLocale, getTrxTypeLabel, openPayment, openTransferCounterpart,
+    canEditDimensions, updateMovement, accountCurrencyId, onReload,
+  };
 
   const renderRow = (movement) => {
     const expanded = expandedId === movement.id;

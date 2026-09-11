@@ -443,7 +443,10 @@ export function SupportChatProvider({ children }) {
     dispatch({ type: 'REMOVE_PENDING_FILE', index });
   }, []);
 
-  // Polling: refresh messages every 5s when a conversation is open
+  // Polling: refresh messages every 60s when a conversation is open. Support conversations
+  // aren't a rapid back-and-forth — there's always some analysis time between replies (minutes
+  // to hours in practice) — so a short interval only burned requests against our own backend
+  // without a matching UX benefit.
   React.useEffect(() => {
     const id = setInterval(async () => {
       const s = stateRef.current;
@@ -471,7 +474,7 @@ export function SupportChatProvider({ children }) {
           dispatch({ type: 'SET_MESSAGES', messages: incoming });
         }
       } catch (_) { /* silent */ }
-    }, 5000);
+    }, 60000);
     return () => clearInterval(id);
   }, []);
 
@@ -488,7 +491,9 @@ export function SupportChatProvider({ children }) {
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Polling: refresh conversation list every 15s regardless of widget state
+  // Polling: refresh conversation list every 60s regardless of widget state — same
+  // reasoning as the messages poll above: support conversations don't need second-scale
+  // freshness.
   React.useEffect(() => {
     const id = setInterval(async () => {
       try {
@@ -532,7 +537,7 @@ export function SupportChatProvider({ children }) {
           dispatch({ type: 'MERGE_CONVERSATIONS', conversations: incoming });
         }
       } catch (_) { /* silent */ }
-    }, 15000);
+    }, 60000);
     return () => clearInterval(id);
   }, []);
 

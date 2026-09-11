@@ -70,6 +70,17 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
     return () => { cancelled = true; };
   }, [wizardOpen, recordId, base, headers]);
 
+  // ETP-5063 — when confirming the shipment created no related invoice, skip
+  // the result modal and communicate success via an auto-dismissing toast
+  // instead, matching the UX used everywhere else success is communicated.
+  useEffect(() => {
+    if (invoiceResult && !invoiceResult.invoice?.id) {
+      toast.success(ui('goodsShipment.confirmModal.confirmedTitle'));
+      onRefresh?.();
+      setInvoiceResult(null);
+    }
+  }, [invoiceResult, onRefresh, ui]);
+
   const handleCreateInvoice = async (priceListId) => {
     if (creatingInvoice) return;
     setCreatingInvoice(true);
@@ -195,13 +206,10 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
         />
       )}
 
-      {invoiceResult && createPortal(
+      {invoiceResult?.invoice?.id && createPortal(
         <ConfirmResultModal
-          title={ui(invoiceResult.invoice?.id ? 'soInvoiceCreated' : 'goodsShipment.confirmModal.confirmedTitle')}
-          docs={invoiceResult.invoice?.id
-            ? [{ type: 'facturaVenta', num: invoiceResult.invoice.documentNo, amount: invoiceResult.invoice.amount, route: `/sales-invoice/${invoiceResult.invoice.id}` }]
-            : []
-          }
+          title={ui('soInvoiceCreated')}
+          docs={[{ type: 'facturaVenta', num: invoiceResult.invoice.documentNo, amount: invoiceResult.invoice.amount, route: `/sales-invoice/${invoiceResult.invoice.id}` }]}
           primary={ui('soViewInvoice')}
           currency={data?.['currency$_identifier'] || ''}
           navigate={(route) => { resultNavigatedRef.current = true; navigate(route); }}

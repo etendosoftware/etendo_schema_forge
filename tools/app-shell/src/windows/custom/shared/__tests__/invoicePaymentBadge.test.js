@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { resolveInvoicePaymentBadge } from '../invoicePaymentBadge.js';
 
 // ETP-4841 — `resolveInvoicePaymentBadge` is the single source of truth for the
-// "Pendiente de pago" badge in BOTH grids (sales-invoice, purchase-invoice) and
+// "Saldo pendiente" badge in BOTH grids (sales-invoice, purchase-invoice) and
 // BOTH detail topbars, plus InvoicePreview's `isCreditNote`. It replaces the
 // previous document-type test (`getArSubtype`/`getApSubtype` === 'RECTIFICATIVA'),
 // which mislabelled two real cases:

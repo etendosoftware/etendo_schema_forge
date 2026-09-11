@@ -4,6 +4,9 @@
     "agentPrompt": "#REF#agent-prompts/contacts/spec.md",
     "category": "contact",
     "name": "Contacts",
+    "vectorSearch": {
+      "target": "business-partner"
+    },
     "entityLabel": "Contact",
     "sidebarLayout": false,
     "breadcrumb": "Contact",
@@ -69,6 +72,7 @@
       }
     },
     "listBaseFilter": "criteria=%7B%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22customer%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22vendor%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%5D%7D",
+    "listSortBy": "name asc",
     "listViewOptions": {
       "hidePrint": true,
       "hideCounter": true,
@@ -119,7 +123,8 @@
           "customerPrepayment"
         ],
         "requireSavedRecord": true,
-        "maxDetailLines": 1
+        "maxDetailLines": 1,
+        "visibleWhenCapability": "showAccountingFields"
       },
       "vendorAccounting": {
         "tabMode": "table-form",
@@ -131,7 +136,8 @@
           "vendorPrepayment"
         ],
         "requireSavedRecord": true,
-        "maxDetailLines": 1
+        "maxDetailLines": 1,
+        "visibleWhenCapability": "showAccountingFields"
       }
     },
     "import": {
@@ -396,7 +402,8 @@
           "visibility": "editable",
           "form": false,
           "reference": "FIN_Financial_Account",
-          "inputMode": "selector",
+          "inputMode": "dependent",
+          "dependsOn": { "field": "pOPaymentMethod", "filterKey": "PO_Paymentmethod_ID" },
           "section": "principal",
           "displayLogic": "record.vendor"
         },
@@ -441,7 +448,8 @@
           "visibility": "editable",
           "form": false,
           "reference": "FIN_Financial_Account",
-          "inputMode": "selector",
+          "inputMode": "dependent",
+          "dependsOn": { "field": "paymentMethod", "filterKey": "Fin_Paymentmethod_ID" },
           "section": "principal",
           "displayLogic": "record.customer"
         },

@@ -203,3 +203,54 @@ describe('extraBadges statusPill — one-sided pill', () => {
     expect(pill).toHaveAttribute('data-tone', 'warning');
   });
 });
+
+// ETP-5075 — the `posted` extraBadges entry now resolves through the shared
+// posting-status domain (`resolveStatusPill`) before falling back to its own
+// trueKey/falseKey. A code outside 'Y'/'N' (e.g. 'i', invalid account) used to
+// be read as a falsy value and render the orange "Not posted" pill — hiding
+// that the posting attempt actually FAILED.
+describe('extraBadges statusPill — posting-status domain (Posted column)', () => {
+  const POSTED_BADGE = {
+    key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus',
+  };
+  const POSTED_PILL_TESTID = 'DocumentStatusPill__posted';
+
+  it("value 'i' (invalid account) → pill with the domain label, data-status 'i', tone destructive", () => {
+    setRecordField('posted', 'i');
+    renderView({ extraBadges: [POSTED_BADGE] });
+
+    const pill = screen.getByTestId(POSTED_PILL_TESTID);
+    expect(pill).toHaveTextContent('postedStatusInvalidAccount');
+    expect(pill).toHaveAttribute('data-status', 'i');
+    expect(pill).toHaveAttribute('data-tone', 'destructive');
+  });
+
+  it("value 'Y' still renders via trueKey, data-status Y, tone success (no regression)", () => {
+    setRecordField('posted', 'Y');
+    renderView({ extraBadges: [POSTED_BADGE] });
+
+    const pill = screen.getByTestId(POSTED_PILL_TESTID);
+    expect(pill).toHaveTextContent('postedStatus');
+    expect(pill).toHaveAttribute('data-status', 'Y');
+    expect(pill).toHaveAttribute('data-tone', 'success');
+  });
+
+  it("value 'N' still renders via falseKey, data-status N, tone warning (no regression)", () => {
+    setRecordField('posted', 'N');
+    renderView({ extraBadges: [POSTED_BADGE] });
+
+    const pill = screen.getByTestId(POSTED_PILL_TESTID);
+    expect(pill).toHaveTextContent('notPostedStatus');
+    expect(pill).toHaveAttribute('data-status', 'N');
+    expect(pill).toHaveAttribute('data-tone', 'warning');
+  });
+
+  it('the visibleWhenCapability gate still hides the pill regardless of the domain code', () => {
+    setRecordField('posted', 'i');
+    renderView({
+      extraBadges: [{ ...POSTED_BADGE, visibleWhenCapability: 'someMissingCapability' }],
+    });
+
+    expect(screen.queryByTestId(POSTED_PILL_TESTID)).not.toBeInTheDocument();
+  });
+});

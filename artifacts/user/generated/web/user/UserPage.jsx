@@ -226,7 +226,7 @@ export default function UserPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
-      listViewOptions={{"hidePrint":true}}
+      listViewOptions={{"hidePrint":true,"hideLink":true}}
       hidePrint
       rowQuickActions={{}}
       {...props} window={effectiveWindow}

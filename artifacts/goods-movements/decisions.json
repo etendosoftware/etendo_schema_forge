@@ -190,6 +190,10 @@
               "from": "_aux._LOC",
               "to": "storageBin",
               "labelFrom": ["warehouse", "warehouse$_identifier", "storageBin"]
+            },
+            {
+              "value": "0",
+              "to": "movementQuantity"
             }
           ],
           "readOnlyLogic": null,

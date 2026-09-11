@@ -362,6 +362,33 @@ keys through as explicit props).
 - **Reactivar** is visible whenever the document is processed (`processed='Y'`), including records whose accounting status is posted (`posted='Y'`). For posted records, `preUnpost: true` makes the UI call the existing unpost endpoint before triggering the `Processed` action; for unposted records, only the `Processed` action runs. This matches the Etendo Go document lifecycle rule: reactivation is the single user action and accounting reversal is part of that flow.
 - Role-based access restrictions for **Reactivar** are deferred until the role permissions model exists.
 
+## ETP-4979 — List column-sort click was dead on the "Fecha contable" (desc-default) column
+
+**QA rejection fix.** The list's declared default is `window.listSortBy: "accountingDate desc"`
+(`artifacts/amortization/decisions.json`), so the list opens already sorted by "Fecha contable"
+descending. Clicking that column header to flip the order did nothing — the click looked dead.
+
+**Root cause (generic, in `ListView.handleColumnSort`,
+`tools/app-shell/src/components/contract-ui/ListView.jsx`):** the click-cycle logic assumed the
+resting/default direction for the active sort column was always `asc`, so the first click on an
+already-sorted column always tried to move to `desc` — a same-value `setState` when the column's
+own default direction is already `desc`, which React does not re-render for. This is not specific
+to amortization: any window whose `listSortBy` declares a `desc` default hits the same freeze on
+its default-sorted column (see the equivalent generic-fix note in
+`docs/generated-custom-windows/financial-account.md` for the ETP-4921 companion fix to the same
+handler's reset arm).
+
+**Fix:** when the sort is at rest on the window's own default (`isDefaultSort`), the handler now
+moves away from `initialSortDirection` explicitly instead of assuming `asc` is the resting value —
+`desc`-default columns cycle `desc -> asc -> desc`, `asc`-default columns keep cycling
+`asc -> desc -> asc` as before. Covered by a new case in
+`ListView.interactions.vitest.jsx` (`listSortBy="name desc"`, asserting the full
+desc -> asc -> desc -> asc cycle never repeats a value on a same click).
+
+**Manual verification:** open `/amortization` — the list opens sorted by Fecha contable
+descending. Click the "Fecha contable" column header once — confirm the sort flips to ascending
+(arrow indicator changes) instead of staying put. Click again — confirm it returns to descending.
+
 ## ETP-4610 — "Add dimensions" moved from a fixed grid column to a hover action
 
 **Scope addition to ETP-4610**, aligning `AmortizationLinesTable` with the 5 pipeline-generated

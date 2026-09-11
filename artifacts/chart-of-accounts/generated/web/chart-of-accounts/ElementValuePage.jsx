@@ -128,6 +128,7 @@ export default function ElementValuePage({ windowName, recordId, ...props }) {
       api={api}
       hideCreate
       hideListFilters
+      hideRecordCount
       rowQuickActions={{}}
       {...props} window={effectiveWindow}
     />

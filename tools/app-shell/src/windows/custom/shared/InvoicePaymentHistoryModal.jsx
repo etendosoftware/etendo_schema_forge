@@ -407,7 +407,7 @@ function PaymentHistoryBody({
 }
 
 /**
- * InvoicePaymentHistoryModal — intermediate popup opened from the "Pendiente de pago" badge
+ * InvoicePaymentHistoryModal — intermediate popup opened from the "Saldo pendiente" badge
  * in the invoice list (Step 1 of the two-step payment flow).
  *
  * Shows existing payment records for the invoice and offers an "Añadir cobro/pago" button

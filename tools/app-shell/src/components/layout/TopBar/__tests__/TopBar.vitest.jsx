@@ -4,14 +4,40 @@
  * underneath the absolutely-centered search box instead of eliding, because nothing capped the
  * width of the title's container — `truncate` alone never got a chance to activate.
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useMenuLabel: () => (key) => key,
 }));
 
 vi.mock('@/components/CopilotContext', () => ({
   useCopilot: () => ({ toggle: vi.fn() }),
+}));
+
+// The real hook dynamic-imports EVERY generated contract.json (`import.meta.glob`) and only then
+// resolves the scope targets. Under the full suite that resolution routinely overran waitFor's 1s
+// default, so this file failed for machine load rather than for behaviour. What the pill actually
+// consumes is the resolved target list, which the fixture supplies directly; that the generated
+// contracts really declare `vectorSearch.target`, and that /sales-invoice resolves to its own
+// window, is covered against the resolvers themselves in src/lib/__tests__/vectorSearchConfig.test.js.
+// Two targets, not one, so "the current window" and "every window" stay distinguishable — that is
+// the difference between the pill showing and the pill being cleared.
+vi.mock('@/hooks/useVectorSearchContracts.js', () => ({
+  useVectorSearchContracts: () => ([
+    {
+      specName: 'sales-invoice',
+      contract: {
+        frontendContract: { window: { name: 'Sales Invoice', vectorSearch: { target: 'salesinvoice' } } },
+      },
+    },
+    {
+      specName: 'purchase-order',
+      contract: {
+        frontendContract: { window: { name: 'Purchase Order', vectorSearch: { target: 'purchaseorder' } } },
+      },
+    },
+  ]),
 }));
 
 import TopBar from '../TopBar.jsx';
@@ -47,5 +73,65 @@ describe('TopBar title', () => {
   it('renders a short title unaffected (no visible truncation in practice)', () => {
     render(<TopBar title="Cuentas" />);
     expect(screen.getByText('Cuentas')).toBeInTheDocument();
+  });
+
+  it('shows the current contract target as a removable search scope', async () => {
+    window.history.pushState({}, '', '/sales-invoice');
+    const scopeEvents = [];
+    const recordScopeEvent = (event) => scopeEvents.push(event.detail);
+    document.addEventListener('schema-forge:vector-search-scope', recordScopeEvent);
+
+    render(<TopBar title="Sales Invoice" />);
+    await waitFor(() => {
+      expect(screen.getByTestId('topbar-vector-search-scope')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('topbar-vector-search-scope-clear'));
+    expect(screen.queryByTestId('topbar-vector-search-scope')).not.toBeInTheDocument();
+    expect(scopeEvents).toContainEqual({
+      pathname: '/sales-invoice',
+      vectorSearchTarget: null,
+    });
+    document.removeEventListener('schema-forge:vector-search-scope', recordScopeEvent);
+    window.history.pushState({}, '', '/');
+  });
+
+  it('clears the scope pill when Backspace is pressed at the start of a non-empty query', async () => {
+    window.history.pushState({}, '', '/sales-invoice');
+    render(<TopBar title="Sales Invoice" />);
+    await waitFor(() => {
+      expect(screen.getByTestId('topbar-vector-search-scope')).toBeInTheDocument();
+    });
+
+    const input = screen.getByTestId('global-search-input');
+    fireEvent.change(input, { target: { value: 'texto largo' } });
+    input.setSelectionRange(0, 0);
+    fireEvent.keyDown(input, { key: 'Backspace' });
+
+    expect(input).toHaveValue('texto largo');
+    expect(screen.queryByTestId('topbar-vector-search-scope')).not.toBeInTheDocument();
+    window.history.pushState({}, '', '/');
+  });
+
+  it('keeps vector search active after clearing the scope with Backspace', async () => {
+    window.history.pushState({}, '', '/sales-invoice');
+    const selectionEvents = [];
+    const recordSelection = (event) => selectionEvents.push(event.detail);
+    document.addEventListener('schema-forge:vector-search-selection', recordSelection);
+    render(<TopBar title="Sales Invoice" />);
+    await waitFor(() => {
+      expect(screen.getByTestId('topbar-vector-search-scope')).toBeInTheDocument();
+    });
+
+    const input = screen.getByTestId('global-search-input');
+    fireEvent.change(input, { target: { value: 'lentejas' } });
+    input.setSelectionRange(0, 0);
+    fireEvent.keyDown(input, { key: 'Backspace' });
+
+    const latestSelection = selectionEvents.at(-1);
+    expect(latestSelection.targets.length).toBeGreaterThan(0);
+    expect(input).toHaveValue('lentejas');
+    document.removeEventListener('schema-forge:vector-search-selection', recordSelection);
+    window.history.pushState({}, '', '/');
   });
 });

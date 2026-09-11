@@ -63,6 +63,7 @@ async function sendDocumentFromModal({
   ui,
   setSendFeedback,
   onClose,
+  onSent,
   recipientEdits,
   messageEdits,
   language,
@@ -87,6 +88,11 @@ async function sendDocumentFromModal({
     const successMessage = resolveEmailSendSuccessMessage(ui, data.status, documentType);
     toast.success(successMessage);
     setSendFeedback({ type: 'success', message: successMessage });
+    // ETP-5069 — a plain cancel also calls onClose(), so a caller could not tell a
+    // successful send apart from a dismissal, and the outcome the module reported
+    // (status/auditId/requestId) was dropped as the modal unmounted. `onSent` is the
+    // success-only signal; it stays optional so every existing caller is unaffected.
+    onSent?.({ status: data.status, auditId: data.auditId, requestId: data.requestId });
     onClose();
     return;
   }
@@ -329,6 +335,10 @@ function DocumentPreviewPane({ allowEmail, pdfLoading, pdfError, waitingForBlob,
  * - windowName: for report ID resolution (e.g. "sales-invoice")
  * - token: auth token
  * - onClose: callback to close modal
+ * - onSent: optional callback fired only on a successful send (SENT / DUPLICATE),
+ *   just before onClose(), with `{ status, auditId, requestId }`. Lets a caller
+ *   distinguish "the document was sent" from "the user cancelled" — both of which
+ *   reach onClose — e.g. to invalidate the email-history card (ETP-5069).
  *
  * Optional PDF preview support:
  * - pdfBlobUrl: object URL created from a pre-rendered PDF blob.
@@ -344,7 +354,7 @@ function DocumentPreviewPane({ allowEmail, pdfLoading, pdfError, waitingForBlob,
  *   `{ editableRecipients: true, cc: true, maxRecipients: 10 }`. Pass the
  *   window's `sendDocument` config verbatim (one opaque prop).
  */
-export default function SendDocumentModal({ documentType = 'Document', documentNo, bpName, bpEmail, bPartnerId, apiBaseUrl, documentId, windowName, token, onClose, pdfBlobUrl, pdfBlob, pdfBlobLoading = false, cachePreviewBeforeSend = true, isClosing = false, allowEmail = true, sendPolicy = {} }) {
+export default function SendDocumentModal({ documentType = 'Document', documentNo, bpName, bpEmail, bPartnerId, apiBaseUrl, documentId, windowName, token, onClose, onSent, pdfBlobUrl, pdfBlob, pdfBlobLoading = false, cachePreviewBeforeSend = true, isClosing = false, allowEmail = true, sendPolicy = {} }) {
   const ui = useUI();
   const apiFetch = useApiFetch(apiBaseUrl);
   const { locale } = useLocaleSwitch();
@@ -537,6 +547,7 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
         ui,
         setSendFeedback,
         onClose,
+        onSent,
         recipientEdits,
         language: locale,
         messageEdits,

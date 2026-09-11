@@ -78,14 +78,9 @@ vi.mock('../usePurchaseOrderPdf.js', () => ({
   usePurchaseOrderPdf: vi.fn(() => ({ pdfUrl: null, pdfBlob: null, loading: false, error: null })),
 }));
 
+import { SendDocumentModalMock } from './testUtils/sendDocumentModalMock.jsx';
 vi.mock('@/components/contract-ui/SendDocumentModal.jsx', () => ({
-  default: ({ onClose, documentNo }) => (
-    <div data-testid="send-modal" data-docno={documentNo}>
-      <button data-testid="send-modal-close" onClick={onClose}>
-        Close Send
-      </button>
-    </div>
-  ),
+  default: SendDocumentModalMock,
 }));
 
 vi.mock('../useDocumentCurrency.js', async (importOriginal) => {
@@ -498,5 +493,53 @@ describe('OrderPreview', () => {
 
       expect(screen.getByTestId('download-btn')).toBeDisabled();
     });
+  });
+});
+
+// ── ETP-5069: the EMAILS card now reads the document's real send history ─────
+// The card needs the document id and the API base to issue that request, plus a
+// `refreshSignal` the panel bumps once a send succeeds — otherwise the card would keep
+// showing the state it had BEFORE the email went out.
+describe('OrderPreview — email history wiring (ETP-5069)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useOrderPdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: false, error: null });
+    usePurchaseOrderPdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: false, error: null });
+  });
+
+  function lastEmailsCardProps() {
+    return vi.mocked(EmailsCard).mock.calls.at(-1)?.[0];
+  }
+
+  it('passes the order id and the API base down to EmailsCard', () => {
+    renderOrderPreview();
+    const props = lastEmailsCardProps();
+    expect(props.documentId).toBe('order-1');
+    expect(props.apiBaseUrl).toBe('/api/sales-order');
+  });
+
+  it('starts EmailsCard with a defined refreshSignal', () => {
+    renderOrderPreview();
+    expect(lastEmailsCardProps().refreshSignal).toBeDefined();
+  });
+
+  it('bumps refreshSignal on EmailsCard when the send modal reports a successful send', () => {
+    renderOrderPreview();
+    const before = lastEmailsCardProps().refreshSignal;
+
+    fireEvent.click(screen.getByTestId('email-btn'));
+    fireEvent.click(screen.getByTestId('send-modal-sent'));
+
+    expect(lastEmailsCardProps().refreshSignal).not.toBe(before);
+  });
+
+  it('leaves refreshSignal untouched when the send modal is merely closed', () => {
+    renderOrderPreview();
+    const before = lastEmailsCardProps().refreshSignal;
+
+    fireEvent.click(screen.getByTestId('email-btn'));
+    fireEvent.click(screen.getByTestId('send-modal-close'));
+
+    expect(lastEmailsCardProps().refreshSignal).toBe(before);
   });
 });

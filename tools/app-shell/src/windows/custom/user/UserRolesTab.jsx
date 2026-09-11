@@ -4,6 +4,7 @@ import { useUI, useMenuLabel } from '@/i18n';
 import { fetchRolesOverview, fetchTemplateRoles } from '@/lib/rolesApi.js';
 import { fetchMenuTree } from '@/lib/menuTree.js';
 import { resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
+import { resolveDefaultRoleId } from './RoleChipsCell.jsx';
 import { useRoleSelection } from './roleSelectionContext.js';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 
@@ -202,7 +203,7 @@ const GENERAL_ROWS = [
   { key: 'copilot', labelKey: 'userRolesTabCopilotRow' },
 ];
 
-export default function UserRolesTab({ isNew, onVisibilityChange }) {
+export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const { selectedRoleIds } = useRoleSelection();
@@ -249,12 +250,31 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
     return () => { cancelled = true; };
   }, [isNew]);
 
-  // Tenant-scoped roles (from `fetchRolesOverview()`), used ONLY for `activeWindowIds`
-  // below — see the file-level JSDoc's "Two role sources" note.
+  // Tenant-scoped roles (from `fetchRolesOverview()`), used for `activeWindowIds` below
+  // AND (ETP-5071) for the admin-holder check right below it — see the file-level
+  // JSDoc's "Two role sources" note.
   const overviewRoles = useMemo(
     () => (Array.isArray(rolesOverview?.roles) ? rolesOverview.roles : []),
     [rolesOverview],
   );
+
+  // ETP-5071 — once a user is promoted to the client's Admin role (ETP-5019,
+  // `SFPromoteUserRole`), this tab's composed-roles matrix (driven by
+  // `selectedRoleIds`, the PRE-promotion template selection) is stale/misleading: the
+  // user actually has full access to everything now. Same detection expression
+  // `AssignTemplateRolesControl.jsx` already uses (`adminRoleId` from the
+  // `isClientAdmin` row vs. `data.defaultRole`) — reused here from the SAME
+  // `overviewRoles` this component already fetches for `activeWindowIds` above, so this
+  // adds zero new network calls (no need for a second `fetchRolesOverview()` call, the
+  // "each consumer fetches it itself" tradeoff `roleSelectionContext.js` documents does
+  // not apply when the data is already sitting in this component's own state).
+  const adminRole = useMemo(
+    () => overviewRoles.find((role) => role?.isClientAdmin === true) ?? null,
+    [overviewRoles],
+  );
+  const adminRoleId = adminRole?.id != null ? String(adminRole.id) : null;
+  const currentDefaultRoleId = resolveDefaultRoleId(data);
+  const isAdminRoleHolder = !!(adminRoleId && currentDefaultRoleId && currentDefaultRoleId === adminRoleId);
 
   // The 4 system-level templates (from `fetchTemplateRoles()`) — the matrix's actual
   // column source, matching what `AssignTemplateRolesControl` offers and what
@@ -315,6 +335,28 @@ export default function UserRolesTab({ isNew, onVisibilityChange }) {
         data-testid="UserRolesTab__empty"
       >
         {ui('userRolesTabEmptyState')}
+      </div>
+    );
+  }
+
+  // ETP-5071 — checked right after `isNew` and before `loading`/`error` below: unlike
+  // `columns` (derived from `templateRoles`, gated by the fetch), `isAdminRoleHolder`
+  // only ever flips from `false` to `true` as `overviewRoles` fills in — it is `false`
+  // (falls through, unaffected) for the entire in-flight fetch AND on a failed one
+  // (`overviewRoles` stays `[]` forever after a rejected fetch, same as `templateRoles`
+  // staying `null`), so placing it here never masks the loading/error branches the way
+  // checking `columns.length === 0` first would (see that comment below). Once the user
+  // IS a confirmed admin holder, the composed-roles matrix is not just empty or
+  // unavailable — it's actively wrong (stale pre-promotion data) — so this takes
+  // priority over rendering the loading spinner too, matching the product decision to
+  // hide the matrix entirely rather than show it with the wrong roles.
+  if (isAdminRoleHolder) {
+    return (
+      <div
+        className="flex items-center justify-center py-12 text-center text-sm text-muted-foreground"
+        data-testid="UserRolesTab__admin-full-access"
+      >
+        {ui('userRolesTabAdminFullAccessMessage')}
       </div>
     );
   }

@@ -61,7 +61,7 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
           // overriding them would silently revert any change the user made in Classic. (ETP-4783)
           fechaAcogidaSII:   normalizeDateInputValue(record?.fechaAcogidaSII) || today,
           monitordate:       normalizeDateInputValue(record?.monitordate) || today,
-        }, ['acogidaAlSII', 'entornoDeProduccin', 'adjuntarArchivosXML', 'redeme'])),
+        }, ['acogidaAlSII', 'entornoDeProduccin', 'adjuntarArchivosXML'])),
       });
       if (!res.ok) throw new Error(await parseApiError(res));
       onSave();
@@ -78,20 +78,8 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
 
   return (
     <div>
-      {/* Régimen especial */}
-      <SectionRow label={ui('fiscal.sii.legend.special')} data-testid="SectionRow__fcb159">
-        <div className="flex flex-wrap gap-4 items-start">
-          <div className="flex items-center gap-2 pt-1 w-[376px]">
-            <Switch
-              checked={isEtendoTrue(form.redeme)}
-              onCheckedChange={v => set('redeme', v ? 'Y' : 'N')}
-              data-testid="Switch__fcb159" />
-            <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.sii.field.redeme')}</span>
-          </div>
-        </div>
-      </SectionRow>
       {/* Autorizaciones especiales AEAT */}
-      <SectionRow label={ui('fiscal.sii.legend.specialAuth')} data-testid="SectionRow__fcb159">
+      <SectionRow label={ui('fiscal.sii.legend.specialAuth')} noBorderTop data-testid="SectionRow__fcb159">
         <div className="flex flex-wrap gap-4 items-start">
           <div className="space-y-1 w-[376px]">
             <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.authRegNo')}</Label>

@@ -418,6 +418,17 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
   // immediately as the user picks a Tipo de Factura — `data` already reflects the
   // pending edit (shared `editing` state) as soon as onChange fires.
   const vfInvType = getVal('etvfacInvType');
+  // ETP-5117: F3 was removed from VERIFACTU_INV_TYPE_OPTIONS (GO-only — Classic
+  // still offers it), but a Draft record can still carry etvfacInvType='F3' from
+  // Classic or from before this change. Radix's SelectValue only auto-displays
+  // the matching SelectItem's text; with no F3 item mounted it would render
+  // blank instead of falling back to the placeholder. Compute the label
+  // ourselves so a legacy value still shows something meaningful (the raw code)
+  // instead of an empty trigger.
+  const vfInvTypeOption = VERIFACTU_INV_TYPE_OPTIONS.find(o => o.value === vfInvType);
+  const vfInvTypeLabel = vfInvTypeOption
+    ? `${vfInvTypeOption.value} — ${ui(vfInvTypeOption.labelKey)}`
+    : vfInvType || undefined;
 
   // Report up to DetailView whether the SIF tab has anything to show at all. ETP-4888
   // reintroduces a minimal TBAI rail (Adjuntos only — see the "tbai" panel below), so a
@@ -623,7 +634,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 disabled={dateReadOnly}
                 data-testid="Select__b99c8b">
                 <SelectTrigger id="sif-vfInvType" data-testid="SelectTrigger__b99c8b">
-                  <SelectValue placeholder="—" data-testid="SelectValue__b99c8b" />
+                  <SelectValue placeholder="—" data-testid="SelectValue__b99c8b">{vfInvTypeLabel}</SelectValue>
                 </SelectTrigger>
                 <SelectContent data-testid="SelectContent__b99c8b">
                   {VERIFACTU_INV_TYPE_OPTIONS.map(o => (

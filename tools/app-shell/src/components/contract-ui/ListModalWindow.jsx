@@ -342,6 +342,17 @@ export function ListModalWindow({
     [columns, fields, ui, tMenu, tLabel],
   );
 
+  // Declared type per filter column, so `applyConditions` routes date columns
+  // through the calendar-day operators and numeric ones through the numeric
+  // comparisons. Without it every operator fell back to the generic string
+  // table, where `equals` string-compares a timestamp against a `yyyy-MM-dd`
+  // picker value and `lessThan`/`greaterThan` run through `parseFloat` — which
+  // reduces any ISO date to its YEAR (ETP-4956).
+  const filterColumnsByKey = useMemo(
+    () => Object.fromEntries(filterColumns.map((c) => [c.key, c])),
+    [filterColumns],
+  );
+
   // --- Local search over the configured filter columns ----------------------
   const [searchQuery, setSearchQuery] = useState('');
   const priorityOrdered = useMemo(
@@ -349,10 +360,12 @@ export function ListModalWindow({
       applyConditions(
         filterRows(allRows, { toolbarFilters, filterValues, searchQuery, filters }),
         advancedFilter,
+        undefined,
+        filterColumnsByKey,
       ),
       config?.autoPriorityField,
     ),
-    [allRows, searchQuery, filters, toolbarFilters, filterValues, advancedFilter, config],
+    [allRows, searchQuery, filters, toolbarFilters, filterValues, advancedFilter, config, filterColumnsByKey],
   );
 
   // Client-side sorting (ETP-4921). `useNeoResource` fetches the whole list in one request and

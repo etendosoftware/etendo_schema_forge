@@ -31,6 +31,7 @@ const windowLoaders = {
   'purchase-order': () => import('@generated/purchase-order/generated/web/purchase-order/index.jsx'),
   'goods-receipt': () => import('@generated/goods-receipt/generated/web/goods-receipt/index.jsx'),
   'return-to-vendor-shipment': () => import('@generated/return-to-vendor-shipment/generated/web/return-to-vendor-shipment/index.jsx'),
+  'matched-purchase-invoices': () => import('@generated/matched-purchase-invoices/generated/web/matched-purchase-invoices/index.jsx'),
   'physical-inventory': () => import('@generated/physical-inventory/generated/web/physical-inventory/index.jsx'),
   'goods-movements': () => import('@generated/goods-movements/generated/web/goods-movements/index.jsx'),
   'internal-consumption': () => import('@generated/internal-consumption/generated/web/internal-consumption/index.jsx'),
@@ -47,6 +48,7 @@ const windowLoaders = {
   'project': () => import('@generated/project/generated/web/project/index.jsx'),
   'time-tracking': () => import('@generated/time-tracking/generated/web/time-tracking/index.jsx'),
   'document': () => import('@generated/document/generated/web/document/index.jsx'),
+  'document-sequence': () => import('@generated/document-sequence/generated/web/document-sequence/index.jsx'),
   'recurring-invoice': () => import('@generated/recurring-invoice/generated/web/recurring-invoice/index.jsx'),
   'payment-in': () => import('@generated/payment-in/generated/web/payment-in/index.jsx'),
   'payment-out': () => import('@generated/payment-out/generated/web/payment-out/index.jsx'),
@@ -81,22 +83,48 @@ const windowLoaders = {
  * (a missing/not-yet-loaded `capabilities` map hides it, same convention as
  * `isCapabilityVisible` in `@/lib/capabilityVisibility.js`).
  *
+ * A third, independent axis (ETP-5240) lets a menu.json item declare
+ * `"accessWindowId": "<AD_Window_ID>"` for entries whose target window has no
+ * active `AD_Menu` node to be walked by SFListMenu — e.g. `ReportViewerPage`/
+ * `SmartScanPage`, which point at a permission-anchor `AD_Window` created only
+ * so those pages can content-gate via `useWindowAccess()`/`WindowAccessGuard`.
+ * Deliberately a SEPARATE field from `windowId` (reserved for real `AD_Menu`
+ * membership, checked against `allowedIds` above) — ETP-5116 reused `windowId`
+ * for this same purpose on these 3 entries, which made them permanently
+ * invisible in the sidebar for every role (ETP-5240) since their windowId
+ * never appears in any real `AD_Menu` tree. This check fails CLOSED, same
+ * convention as the `capability` axis: an item with `accessWindowId` is hidden
+ * unless `windowAccess[item.accessWindowId]` is a defined access tier.
+ *
+ * Admin/client-admin is exempt from this axis (ETP-5240 follow-up).
+ * `SFWindowAccessMap` now includes windows with active grants alongside active
+ * spec windows, so permission anchors are included in the admin map. Keeping
+ * the `capabilities.isAdminOrClientAdmin` bypass makes sidebar visibility
+ * resilient to an absent map or missing anchor entry once admin status is
+ * known. It bypasses neither the other menu axes nor the page's content gate,
+ * which still consumes the backend access map.
+ *
  * @param {Array} groups — output of buildMenuGroups.
  * @param {Set<string>|null} allowedIds — from useRoleMenu(). `null` disables
  *   the windowId/processId/obuiappProcessId filtering axis.
  * @param {Record<string, boolean>|null} [capabilities] — from `useAuth()`/
- *   `useCapabilitiesSafe()`. `null`/omitted disables the capability filtering
- *   axis. When both `allowedIds` and `capabilities` are falsy, `groups` is
- *   returned unchanged (matches this function's pre-ETP-4513 behavior).
+ *   `useCapabilitiesSafe()`. `null`/omitted fails closed for capability-gated
+ *   items. When `allowedIds`, `capabilities` and `windowAccess` are all falsy,
+ *   `groups` is returned unchanged (matches this function's pre-ETP-4513
+ *   behavior).
+ * @param {Record<string, string>|null} [windowAccess] — from `useAuth()`/
+ *   `useWindowAccessSafe()`. `null`/omitted fails closed for accessWindowId
+ *   items unless the admin exemption or all-falsy passthrough above applies.
  */
-export function filterMenuGroupsByAccess(groups, allowedIds, capabilities = null) {
-  if (!allowedIds && !capabilities) return groups;
+export function filterMenuGroupsByAccess(groups, allowedIds, capabilities = null, windowAccess = null) {
+  if (!allowedIds && !capabilities && !windowAccess) return groups;
   const itemIds = item => [item.windowId, item.processId, item.obuiappProcessId].filter(Boolean);
   return groups
     .map(group => ({
       ...group,
       items: group.items.filter(item => {
         if (item.capability && capabilities?.[item.capability] !== true) return false;
+        if (item.accessWindowId && !capabilities?.isAdminOrClientAdmin && (!windowAccess || windowAccess[item.accessWindowId] === undefined)) return false;
         if (!allowedIds) return true;
         const ids = itemIds(item);
         return ids.length === 0 || ids.some(id => allowedIds.has(String(id)));

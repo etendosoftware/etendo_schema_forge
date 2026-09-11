@@ -5,6 +5,7 @@ vi.mock('@/i18n', () => ({
 }));
 
 const mockRenderPdf = vi.fn(() => Promise.resolve(new Blob(['%PDF'], { type: 'application/pdf' })));
+const mockRenderHtml = vi.fn(() => Promise.resolve('<html></html>'));
 const mockFetchJson = vi.fn();
 const mockFetchAll = vi.fn();
 const mockFetchOptionalJson = vi.fn();
@@ -25,6 +26,7 @@ vi.mock('../../shared/pdfUtils.js', async (importOriginal) => {
     fetchImageDataUrl: (...args) => mockFetchImageDataUrl(...args),
     buildLocationAddressLines: (...args) => mockBuildLocationAddressLines(...args),
     renderPdf: (...args) => mockRenderPdf(...args),
+    renderHtml: (...args) => mockRenderHtml(...args),
   };
 });
 
@@ -32,6 +34,8 @@ import { renderHook, waitFor } from '@testing-library/react';
 import {
   useReturnReceiptPdf,
   getReturnReceiptPdfLabels,
+  generateReturnReceiptPdf,
+  generateReturnReceiptHtml,
 } from '../useReturnReceiptPdf.js';
 
 const HEADER_STUB = {
@@ -117,5 +121,69 @@ describe('useReturnReceiptPdf', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.pdfBlob).toBeInstanceOf(Blob);
     expect(result.current.pdfUrl).toBe('blob:http://localhost/test');
+  });
+});
+
+// ── ETP-5124 regression: print-registry entry functions ────────────────────────
+//
+// `documentPdfRegistry.js` calls generateReturnReceiptPdf/Html directly — never
+// through useReturnReceiptPdf/renderHook — for the Print button, the list-view
+// multi-select print, and list-view email. A prior version of this suite only
+// exercised the hook, so a `HELPERS is not defined` ReferenceError inside these
+// two standalone functions (they referenced a bare `HELPERS` instead of the
+// imported `RETURN_DOC_HELPERS`) shipped unnoticed until it broke Print in
+// production. These tests call the functions directly to close that gap.
+describe('generateReturnReceiptPdf / generateReturnReceiptHtml (print-registry entry points)', () => {
+  const labels = getReturnReceiptPdfLabels((key) => key);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFetchJson.mockResolvedValue(HEADER_STUB);
+    mockFetchAll.mockResolvedValue([]);
+    mockFetchOptionalJson.mockResolvedValue(null);
+    mockFetchLocationAddress.mockResolvedValue(null);
+    mockFetchImageDataUrl.mockResolvedValue(null);
+    mockBuildLocationAddressLines.mockReturnValue([]);
+    mockRenderPdf.mockResolvedValue(new Blob(['%PDF'], { type: 'application/pdf' }));
+    mockRenderHtml.mockResolvedValue('<html></html>');
+  });
+
+  it('generateReturnReceiptPdf does not throw ReferenceError calling the print-registry entry function directly', async () => {
+    await expect(
+      generateReturnReceiptPdf('rmr-1', '/api/return-material-receipt', 'tok', labels),
+    ).resolves.toBeInstanceOf(Blob);
+  });
+
+  it('generateReturnReceiptPdf resolves with the PDF blob returned by renderPdf', async () => {
+    const pdf = await generateReturnReceiptPdf('rmr-1', '/api/return-material-receipt', 'tok', labels);
+    expect(pdf).toBeInstanceOf(Blob);
+    expect(pdf.type).toBe('application/pdf');
+  });
+
+  it('generateReturnReceiptPdf calls renderPdf with the shared RETURN_DOC_HELPERS (not an undefined HELPERS)', async () => {
+    await generateReturnReceiptPdf('rmr-1', '/api/return-material-receipt', 'tok', labels);
+    expect(mockRenderPdf).toHaveBeenCalledTimes(1);
+    const [, , helpers, data] = mockRenderPdf.mock.calls[0];
+    expect(helpers).toBe(''); // mocked RETURN_DOC_HELPERS value — proves the real export was passed through, not a bare `HELPERS` identifier
+    expect(data.labels).toBe(labels);
+  });
+
+  it('generateReturnReceiptHtml does not throw ReferenceError calling the print-registry entry function directly', async () => {
+    await expect(
+      generateReturnReceiptHtml('rmr-1', '/api/return-material-receipt', 'tok', labels),
+    ).resolves.toEqual(expect.any(String));
+  });
+
+  it('generateReturnReceiptHtml resolves with the HTML string returned by renderHtml', async () => {
+    const html = await generateReturnReceiptHtml('rmr-1', '/api/return-material-receipt', 'tok', labels);
+    expect(html).toBe('<html></html>');
+  });
+
+  it('generateReturnReceiptHtml calls renderHtml with the shared RETURN_DOC_HELPERS (not an undefined HELPERS)', async () => {
+    await generateReturnReceiptHtml('rmr-1', '/api/return-material-receipt', 'tok', labels);
+    expect(mockRenderHtml).toHaveBeenCalledTimes(1);
+    const [, , helpers, data] = mockRenderHtml.mock.calls[0];
+    expect(helpers).toBe('');
+    expect(data.labels).toBe(labels);
   });
 });

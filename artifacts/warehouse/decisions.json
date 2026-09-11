@@ -12,7 +12,8 @@
       },
       "accounting": {
         "tabOrder": 2,
-        "label": "Accounting"
+        "label": "Accounting",
+        "visibleWhenCapability": "showAccountingFields"
       }
     },
     "hidePrint": true,

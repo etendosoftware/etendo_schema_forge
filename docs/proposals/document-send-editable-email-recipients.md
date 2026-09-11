@@ -601,7 +601,7 @@ Update or add tests near:
 - `tools/app-shell/src/windows/custom/shared/__tests__/InvoicePreviewModal.vitest.jsx`
 - `artifacts/sales-invoice/custom/__tests__/InvoiceTopbarExtra.test.js`
 - `tools/app-shell/src/lib/__tests__/mockFetch.test.js`
-- `e2e/tests/flows/i18n-etp4003.mocked.spec.js` (plus a dedicated mocked e2e
+- `e2e/tests/flows/send-document-modal-etp4003.mocked.spec.js` (plus a dedicated mocked e2e
   flow for the chip editor, following `row-quick-actions.mocked.spec.js`)
 
 Required assertions:

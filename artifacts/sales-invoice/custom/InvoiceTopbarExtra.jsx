@@ -222,7 +222,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     );
   }
 
-  // Credit instruments — mirror the grid's "Pendiente de pago" cell: green "Aplicada"
+  // Credit instruments — mirror the grid's "Saldo pendiente" cell: green "Aplicada"
   // once fully consumed, else a "Saldo a favor · remaining" badge that opens the same
   // payment history modal the grid opens (listing the payments that consumed it).
   //

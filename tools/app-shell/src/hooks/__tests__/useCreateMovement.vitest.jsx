@@ -9,6 +9,7 @@ import {
   useProcessMovement,
   useReactivateMovement,
   useDeleteMovement,
+  buildDimensionUpdatePayload,
 } from '../useCreateMovement.js';
 
 function setPathname(pathname) {
@@ -296,5 +297,96 @@ describe('useDeleteMovement — funds-transfer leg rejection', () => {
     expect(caught.message).toBe(TRANSFER_NOT_DELETABLE);
     expect(caught.status).toBe(409);
     expect(result.current.error.message).toBe(TRANSFER_NOT_DELETABLE);
+  });
+});
+
+// ETP-5101 — the "más información" row-expand panel's inline dimension edit. Pure function,
+// no hooks/mocks needed. Fixture is trimmed from a REAL row returned by
+// GET /sws/neo/financial-account-transactions (posted/payment-linked in its raw form; the
+// individual tests override whichever fields are relevant to what they assert).
+describe('buildDimensionUpdatePayload', () => {
+  const MOVEMENT = {
+    id: 'ABD8375BE08B4E579334C94503554F03',
+    date: '2026-08-28T00:00:00Z',
+    trxType: 'BPD',
+    description: 'Factura Nº : 10000016.',
+    posted: 'Y',
+    paymentId: 'ABD8375BE08B4E579334C94503554F03',
+    glItemId: '',
+    bpartnerId: '240720F10BCD43E99C4B5EEA33CEF071',
+    projectId: '',
+    costcenterId: '',
+    productId: '',
+    depositAmount: 14.52,
+    withdrawalAmount: 0,
+    processed: true,
+  };
+
+  it('maps the movement row + account currency into a full update payload', () => {
+    const payload = buildDimensionUpdatePayload(MOVEMENT, 'cur-eur', { projectId: 'proj-1' });
+    expect(payload).toEqual({
+      id: 'ABD8375BE08B4E579334C94503554F03',
+      trxType: 'BPD',
+      transactionDate: '2026-08-28T00:00:00Z',
+      accountingDate: '2026-08-28T00:00:00Z',
+      depositAmount: 14.52,
+      paymentAmount: 0,
+      currencyId: 'cur-eur',
+      description: 'Factura Nº : 10000016.',
+      glItemId: null,
+      bpartnerId: '240720F10BCD43E99C4B5EEA33CEF071',
+      costcenterId: null,
+      projectId: 'proj-1',
+      productId: null,
+      process: false,
+    });
+  });
+
+  it('leaves the other two dimension ids from the movement row untouched when overriding just one', () => {
+    const withIds = { ...MOVEMENT, projectId: 'proj-old', costcenterId: 'cc-old', productId: 'prod-old' };
+    const payload = buildDimensionUpdatePayload(withIds, 'cur-eur', { costcenterId: 'cc-new' });
+    expect(payload.projectId).toBe('proj-old');
+    expect(payload.costcenterId).toBe('cc-new');
+    expect(payload.productId).toBe('prod-old');
+  });
+
+  it('always sends process: false, regardless of the movement own processed/posted state', () => {
+    const draftUnposted = { ...MOVEMENT, processed: false, posted: 'N' };
+    expect(buildDimensionUpdatePayload(draftUnposted, 'cur-eur', {}).process).toBe(false);
+
+    const processedPosted = { ...MOVEMENT, processed: true, posted: 'Y' };
+    expect(buildDimensionUpdatePayload(processedPosted, 'cur-eur', {}).process).toBe(false);
+  });
+
+  it('does not read process/processed/posted off the movement row at all — only overrides can change it', () => {
+    // The dimension-only override never includes `process`, so callers of this helper (the
+    // DimensionsPanel save path) always get `process: false` no matter what the row looks like.
+    const payload = buildDimensionUpdatePayload(MOVEMENT, 'cur-eur', { projectId: 'p-1' });
+    expect(payload.process).toBe(false);
+    expect(payload).not.toHaveProperty('processed');
+    expect(payload).not.toHaveProperty('posted');
+  });
+
+  it('maps empty-string dimension/glItem/bpartner ids ("") to null, not ""', () => {
+    const payload = buildDimensionUpdatePayload(MOVEMENT, 'cur-eur', {});
+    expect(payload.glItemId).toBeNull();
+    expect(payload.costcenterId).toBeNull();
+    expect(payload.projectId).toBeNull();
+    expect(payload.productId).toBeNull();
+    // bpartnerId carries a real id in the fixture — confirms the || null fallback only
+    // fires for actually-falsy values, not a general string-to-null coercion.
+    expect(payload.bpartnerId).toBe('240720F10BCD43E99C4B5EEA33CEF071');
+  });
+
+  it('defaults depositAmount/paymentAmount to 0 when the movement omits them', () => {
+    const { depositAmount, withdrawalAmount, ...rest } = MOVEMENT;
+    const payload = buildDimensionUpdatePayload(rest, 'cur-eur', {});
+    expect(payload.depositAmount).toBe(0);
+    expect(payload.paymentAmount).toBe(0);
+  });
+
+  it('defaults description to an empty string when the movement omits it', () => {
+    const { description, ...rest } = MOVEMENT;
+    expect(buildDimensionUpdatePayload(rest, 'cur-eur', {}).description).toBe('');
   });
 });

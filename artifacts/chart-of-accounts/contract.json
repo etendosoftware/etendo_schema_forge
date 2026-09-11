@@ -1,8 +1,8 @@
 {
   "version": "0.8.0",
   "generatedAt": "2026-03-09T10:00:00.000Z",
-  "updatedAt": "2026-09-01T15:34:14.825Z",
-  "checksum": "d48c3074d69352a5",
+  "updatedAt": "2026-09-02T19:12:04.395Z",
+  "checksum": "2c0ec515e76b6107",
   "frontendContract": {
     "window": {
       "id": "118",
@@ -11,6 +11,7 @@
       "category": "finance",
       "hideCreate": true,
       "hideListFilters": true,
+      "hideRecordCount": true,
       "customComponents": {
         "headerTable": "AccountTreeView"
       },
@@ -217,6 +218,7 @@
       "category": "finance",
       "hideCreate": true,
       "hideListFilters": true,
+      "hideRecordCount": true,
       "customComponents": {
         "headerTable": "AccountTreeView"
       },
