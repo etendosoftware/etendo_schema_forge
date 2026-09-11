@@ -1,4 +1,4 @@
-import { useCallback, useState, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useCallback, useEffect, useState, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { toast } from 'sonner';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { translateBackendError } from '@/lib/backendErrors.js';
@@ -95,6 +95,23 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   // deleteStatement(id) call the per-row hover quick-action already makes (see
   // StatementsTable).
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  // ETP-4972 QA finding (comment 145559) — applying/changing the search box,
+  // date range, status quick filter or the advanced filter must drop the
+  // current checkbox selection, so a bulk "Delete selected" can never fire
+  // against statements the user is no longer looking at (same generic rule
+  // applied to ListView; this tab keeps its own local filter + selection
+  // state instead of ListView's). Deliberately excludes `sortKey`/
+  // `sortDirection` (useClientSort below): reordering the same filtered rows
+  // doesn't change which ones are visible.
+  const didInitialSelectionClearRef = useRef(false);
+  useEffect(() => {
+    if (!didInitialSelectionClearRef.current) {
+      didInitialSelectionClearRef.current = true;
+      return;
+    }
+    clearSelection();
+  }, [search, dateRange, status, advancedFilter, clearSelection]);
 
   // ETP-4921 — `reload()` only refetches the statement HEADERS. The lines of an EXPANDED row come
   // from StatementLinesInline's own `useBankStatementLines(statementId)`, keyed solely on the id,
