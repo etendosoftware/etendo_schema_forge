@@ -1,52 +1,18 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
-import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
-import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
-import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
+import SendDocumentModal from '@/components/contract-ui/SendDocumentModal';
 import QuotationConfirmModal from './QuotationConfirmModal';
 import SendToEvaluationModal from './SendToEvaluationModal';
 import RejectQuotationModal from './RejectQuotationModal';
 import { useQuotationPdf } from '@/windows/custom/shared/useQuotationPdf.js';
-import { useUI, useMenuLabel } from '@/i18n';
-
-function CopyIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  );
-}
-
-const btnCloneStyle = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: '7px',
-  borderRadius: 6,
-  border: '1px solid hsl(var(--border-subtle))',
-  background: 'hsl(var(--card))',
-  color: 'hsl(var(--foreground))',
-  cursor: 'pointer',
-  boxShadow: '0px 1px 2px 0px hsl(var(--foreground) / 0.05)',
-};
+import { useMenuLabel } from '@/i18n';
 
 export default function QuotationTopbarActions({ data, recordId, token, apiBaseUrl, onSave, onRefresh }) {
-  const navigate = useNavigate();
-  const ui = useUI();
   const tMenu = useMenuLabel();
   const [showSend, setShowSend] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showSendToEval, setShowSendToEval] = useState(false);
-  const [showClone, setShowClone] = useState(false);
-  const [isCloneHovered, setIsCloneHovered] = useState(false);
   const [showReject, setShowReject] = useState(false);
-
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
 
   const status = data?.documentStatus;
 
@@ -76,37 +42,22 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
     return () => window.removeEventListener('sales-quotation:open-reject-modal', handler);
   }, []);
 
+  // ETP-5260 — the Send button now lives in the topbarSecondary slot
+  // (QuotationSecondaryActions), while this modal (with its pdf/documentType
+  // context) stays here in topbarRight; the button dispatches this event to open it.
+  useEffect(() => {
+    function handler() { setShowSend(true); }
+    window.addEventListener('sales-quotation:open-send-modal', handler);
+    return () => window.removeEventListener('sales-quotation:open-send-modal', handler);
+  }, []);
+
   if (!status) return null;
 
   return (
     <>
-      <button type="button" data-testid="action-clone" onClick={() => setShowClone(true)} style={{...btnCloneStyle, background: isCloneHovered ? 'hsl(var(--card))' : 'hsl(var(--card))'}} title={ui('cloneOrderBtn')} onMouseEnter={() => setIsCloneHovered(true)} onMouseLeave={() => setIsCloneHovered(false)}>
-        <CopyIcon />
-      </button>
-
-      {/* ETP-4717 — Send is available from "Bajo evaluación" (UE) onward, not
-          while still Draft (DR). Matches the grid row quick-action's gate. */}
-      {status !== 'DR' && <SendDocumentButton onClick={() => setShowSend(true)} />}
-
-      <CopyRecordLinkButton recordId={recordId} windowName="sales-quotation" />
-
-      {showClone && createPortal(
-        <CloneOrderModal
-          recordId={recordId}
-          data={data}
-          apiBaseUrl={apiBaseUrl}
-          headers={headers}
-          cloneActionName="cloneRecord"
-          headerEntity="quotation"
-          onClose={() => setShowClone(false)}
-          onCloned={(newId) => {
-            setShowClone(false);
-            navigate(`/sales-quotation/${newId}`);
-          }}
-        />,
-        document.body,
-      )}
-
+      {/* ETP-5260 — Clone/Copy-link/Send moved to the topbarSecondary slot
+          (QuotationSecondaryActions). This component now only renders the
+          PRIMARY flow modals below. */}
       {showSendToEval && createPortal(
         <SendToEvaluationModal
           quotationId={recordId}

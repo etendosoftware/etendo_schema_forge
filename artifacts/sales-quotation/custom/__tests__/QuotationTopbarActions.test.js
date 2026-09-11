@@ -20,8 +20,11 @@ describe('QuotationTopbarActions', () => {
     assert.match(src, /data\?\.documentStatus.*return null/s);
   });
 
-  it('renders a SendDocumentButton', () => {
-    assert.match(src, /SendDocumentButton/);
+  // ETP-5260 — SendDocumentButton itself moved to the topbarSecondary slot
+  // (QuotationSecondaryActions, `showSend={status !== 'DR'}` — see that
+  // component's own test). This component still owns the SendDocumentModal.
+  it('no longer renders a SendDocumentButton (button moved to QuotationSecondaryActions)', () => {
+    assert.doesNotMatch(src, /SendDocumentButton/);
   });
 
   it('renders SendDocumentModal via createPortal when triggered', () => {
@@ -37,25 +40,20 @@ describe('QuotationTopbarActions', () => {
     assert.match(src, /windowName="sales-quotation"/);
   });
 
-  it('imports SendDocumentModal and SendDocumentButton from contract-ui', () => {
-    assert.match(src, /from\s+['"]@\/components\/contract-ui\/SendDocumentModal['"]/);
+  it('imports SendDocumentModal from contract-ui (default export — SendDocumentButton is no longer needed here)', () => {
+    assert.match(src, /import\s+SendDocumentModal\s+from\s+['"]@\/components\/contract-ui\/SendDocumentModal['"]/);
   });
 
-  it('imports CloneOrderModal from contract-ui', () => {
-    assert.match(src, /import\s+CloneOrderModal\s+from\s+['"]@\/components\/contract-ui\/CloneOrderModal['"]/);
-  });
-
-  it('renders a Clone button wired to the clone modal', () => {
-    assert.match(src, /setShowClone\(true\)/);
-    assert.match(src, /cloneOrderBtn/);
-  });
-
-  it('delegates to the cloneRecord backend action', () => {
-    assert.match(src, /cloneActionName="cloneRecord"/);
-  });
-
-  it('navigates to the new sales-quotation record after cloning', () => {
-    assert.match(src, /navigate\(`\/sales-quotation\/\$\{newId\}`\)/);
+  // ETP-5260 — Clone (button, modal, cloneActionName="cloneRecord", and the
+  // post-clone navigate to /sales-quotation/{newId}) moved to the
+  // topbarSecondary slot (QuotationSecondaryActions), which delegates to the
+  // shared DocumentSecondaryActions clone flow — see
+  // artifacts/sales-quotation/custom/__tests__/QuotationSecondaryActions.test.js
+  // and DocumentSecondaryActions.vitest.jsx for the generic clone-modal /
+  // default-navigate coverage.
+  it('no longer imports CloneOrderModal or wires a Clone button itself', () => {
+    assert.doesNotMatch(src, /CloneOrderModal/);
+    assert.doesNotMatch(src, /setShowClone/);
   });
 
   describe('confirm flow via draftMode event (regression: button order)', () => {
@@ -125,17 +123,10 @@ describe('QuotationTopbarActions', () => {
     });
   });
 
-  // ETP-4717 (Pair 2 — P2): the Send button must NOT be available while the
-  // quotation is still Draft (DR) — it must be visible from "Bajo evaluación"
-  // (UE) onward. Today it renders unconditionally, with zero status gating.
-  describe('Send button visibility gated by document status (ETP-4717)', () => {
-    it('gates the Send button so it does not render while status is DR', () => {
-      assert.match(
-        src,
-        /status\s*!==\s*['"]DR['"]\s*&&\s*<SendDocumentButton/,
-        'SendDocumentButton must be gated behind a `status !== \'DR\'` check — today it renders ' +
-          'unconditionally regardless of documentStatus',
-      );
-    });
-  });
+  // ETP-4717 (Pair 2 — P2), relocated by ETP-5260: the Send button must NOT
+  // be available while the quotation is still Draft (DR) — it must be visible
+  // from "Bajo evaluación" (UE) onward. That gate now lives in
+  // QuotationSecondaryActions (`showSend={Boolean(status) && status !== 'DR'}`)
+  // — see
+  // artifacts/sales-quotation/custom/__tests__/QuotationSecondaryActions.test.js.
 });

@@ -13,6 +13,7 @@ import HeaderPage from '@generated/sales-invoice/generated/web/sales-invoice/Hea
 import InvoiceHeaderTable from '@generated/sales-invoice/custom/InvoiceHeaderTable.jsx';
 import InvoicePreview from '../shared/InvoicePreview.jsx';
 import SalesInvoiceTopbar from './SalesInvoiceTopbar.jsx';
+import SalesInvoiceSecondaryActions from './SalesInvoiceSecondaryActions.jsx';
 import InvoiceBottomPanel from '@generated/sales-invoice/custom/InvoiceBottomPanel.jsx';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal';
@@ -200,6 +201,7 @@ export default function SalesInvoiceWindow(props) {
              Keep both in sync; a component added on only one side is either
              invisible or rendered twice. */
           topbarRight={SalesInvoiceTopbar}
+          topbarSecondary={SalesInvoiceSecondaryActions}
           notesField="description"
           onAfterSave={true}
           refetchAfterSave={true}

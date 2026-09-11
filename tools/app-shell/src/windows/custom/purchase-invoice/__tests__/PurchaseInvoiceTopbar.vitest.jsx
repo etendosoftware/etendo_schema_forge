@@ -7,37 +7,11 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
-// Stable navigate spy so tests can assert the post-clone redirect.
-const routerMock = vi.hoisted(() => ({ navigate: vi.fn() }));
-
-vi.mock('react-router-dom', () => ({
-  useNavigate: () => routerMock.navigate,
-}));
-
 // Render createPortal children inline so portal content is testable
 vi.mock('react-dom', async (importOriginal) => {
   const actual = await importOriginal();
   return { ...actual, createPortal: (node) => node };
 });
-
-vi.mock('@/components/contract-ui/CloneOrderModal', () => ({
-  default: ({ onClose, onCloned }) => (
-    <div data-testid="clone-order-modal">
-      <button onClick={onClose}>Close clone</button>
-      <button onClick={() => onCloned('new-id-123')}>Confirm clone</button>
-    </div>
-  ),
-}));
-
-vi.mock('@/windows/custom/shared/SendToSifButton.jsx', () => ({
-  default: () => <div data-testid="send-to-sif-btn" />,
-}));
-
-vi.mock('@/windows/custom/shared/CloneButton.jsx', () => ({
-  default: ({ onClick, title }) => (
-    <button data-testid="clone-btn" onClick={onClick}>{title}</button>
-  ),
-}));
 
 vi.mock('@/windows/custom/shared/InvoicePaymentHistoryModal.jsx', () => ({
   default: ({ onClose, onPaymentAdded }) => (
@@ -125,10 +99,17 @@ describe('PurchaseInvoiceTopbar', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders clone button and send-to-sif button when recordId is provided', () => {
+  // ETP-5260 — Clone and "Enviar a SIF" used to render inline here as
+  // topbarRight siblings. Clone now lives in PurchaseInvoiceSecondaryActions
+  // (topbarSecondary, left of Save/Confirm — see
+  // artifacts/purchase-invoice/custom/__tests__/PurchaseInvoiceSecondaryActions.test.js),
+  // and SendToSifButton is rendered as that same component's `children`, after
+  // Clone. PurchaseInvoiceTopbar itself must never regrow either — that would
+  // duplicate the action alongside the topbarSecondary copy.
+  it('never renders a clone button or a send-to-sif button — both moved to PurchaseInvoiceSecondaryActions (ETP-5260)', () => {
     render(<PurchaseInvoiceTopbar {...defaultProps} />);
-    expect(screen.getByTestId('clone-btn')).toBeInTheDocument();
-    expect(screen.getByTestId('send-to-sif-btn')).toBeInTheDocument();
+    expect(screen.queryByTestId('clone-btn')).toBeNull();
+    expect(screen.queryByTestId('send-to-sif-btn')).toBeNull();
   });
 
   it('does not render action buttons when recordId is absent', () => {
@@ -294,20 +275,6 @@ describe('PurchaseInvoiceTopbar', () => {
     expect(screen.getByTestId('payment-history-modal')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Close payment modal'));
     expect(screen.queryByTestId('payment-history-modal')).toBeNull();
-  });
-
-  it('clicking clone button opens clone modal', () => {
-    render(<PurchaseInvoiceTopbar {...defaultProps} />);
-    expect(screen.queryByTestId('clone-order-modal')).toBeNull();
-    fireEvent.click(screen.getByTestId('clone-btn'));
-    expect(screen.getByTestId('clone-order-modal')).toBeInTheDocument();
-  });
-
-  it('closing clone modal hides it', () => {
-    render(<PurchaseInvoiceTopbar {...defaultProps} />);
-    fireEvent.click(screen.getByTestId('clone-btn'));
-    fireEvent.click(screen.getByText('Close clone'));
-    expect(screen.queryByTestId('clone-order-modal')).toBeNull();
   });
 
   it('uses currency from data for badge amount display', () => {
@@ -558,25 +525,12 @@ describe('PurchaseInvoiceTopbar — branch/fallback coverage (ETP-4738)', () => 
     vi.clearAllMocks();
   });
 
-  // ── onCloned redirect (uncovered lines 77-78) ──────────────────────────────
-
-  it('navigates to the cloned invoice and closes the clone modal when the clone succeeds', () => {
-    render(<PurchaseInvoiceTopbar {...props} />);
-    fireEvent.click(screen.getByTestId('clone-btn'));
-    expect(screen.getByTestId('clone-order-modal')).toBeInTheDocument();
-
-    // The mocked CloneOrderModal invokes onCloned('new-id-123').
-    fireEvent.click(screen.getByText('Confirm clone'));
-
-    expect(routerMock.navigate).toHaveBeenCalledWith('/purchase-invoice/new-id-123');
-    expect(screen.queryByTestId('clone-order-modal')).toBeNull();
-  });
-
-  it('does not navigate while the clone modal is merely open', () => {
-    render(<PurchaseInvoiceTopbar {...props} />);
-    fireEvent.click(screen.getByTestId('clone-btn'));
-    expect(routerMock.navigate).not.toHaveBeenCalled();
-  });
+  // ── onCloned redirect ───────────────────────────────────────────────────────
+  // Clone (button, modal and the post-clone navigate('/purchase-invoice/{newId}')
+  // redirect) moved to PurchaseInvoiceSecondaryActions (ETP-5260) and is no
+  // longer owned by this component. The default-navigate branch itself is
+  // covered generically by DocumentSecondaryActions.vitest.jsx ("navigates to
+  // /{windowName}/{newId} by default when clone.onCloned is not provided").
 
   // ── grandTotal fallback (uncovered branch on line 30) ──────────────────────
 

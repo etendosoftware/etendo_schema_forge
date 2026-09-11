@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import GoodsReceiptTable from '@generated/goods-receipt/generated/web/goods-receipt/GoodsReceiptTable';
 import GeneratedApp from '@generated/goods-receipt/generated/web/goods-receipt/index.jsx';
 import GoodsReceiptBottomPanel from '@generated/goods-receipt/custom/GoodsReceiptBottomPanel';
+import GoodsReceiptSecondaryActions from '@generated/goods-receipt/custom/GoodsReceiptSecondaryActions';
 import GoodsReceiptPreview from './GoodsReceiptPreview.jsx';
 import RelatedDocuments from './RelatedDocuments.jsx';
 import { AttachmentsTab } from '@/components/attachments';
@@ -137,6 +138,7 @@ export default function GoodsReceiptWindow(props) {
         // panel after every save (e.g. changing Warehouse), not just when the invoice link
         // actually changes. Mirrors sales-invoice/purchase-invoice, which hit the same gap.
         refetchAfterSave={true}
+        topbarSecondary={GoodsReceiptSecondaryActions}
         Table={CustomHeaderTable}
         labelOverrides={LABEL_OVERRIDES}
         initialColumnFilters={docStatus ? { documentStatus: { mode: 'enumLabel', value: [docStatus] } } : undefined}

@@ -390,23 +390,22 @@ describe('OrderCreateInvoice', () => {
     });
   });
 
-  // ETP-4717 (Pair 2 — P2): the Send button/modal must only be available once
-  // the order is Confirmed (CO), not while it is still Draft (DR). Grid and
-  // Form-view must agree on the same rule.
-  describe('Send button visibility gated by document status (ETP-4717)', () => {
-    it('does NOT show the Send button while the order is still Draft (DR)', () => {
-      assert.doesNotMatch(src, /\{\(isDraft \|\| isCompleted\) && <SendDocumentButton/);
+  // ETP-4717 (Pair 2 — P2), relocated by ETP-5260: the Send button itself
+  // (SendDocumentButton) moved to the topbarSecondary slot
+  // (OrderCreateInvoiceSecondaryActions, `showSend={isCompleted}` — CO only,
+  // never true while DR) — see
+  // artifacts/sales-order/custom/__tests__/OrderCreateInvoiceSecondaryActions.test.js.
+  // This component still owns the SendDocumentModal (PDF/documentType
+  // context), opened via the `sales-order:open-send-modal` window event and
+  // gated on isCompleted only, matching the button's own gate.
+  describe('SendDocumentModal integration (ETP-5260 — button moved out, modal stays)', () => {
+    it('no longer renders a SendDocumentButton at all', () => {
+      assert.doesNotMatch(src, /SendDocumentButton/);
     });
 
-    it('shows the Send button only when the order is Completed (CO)', () => {
-      assert.match(src, /\{isCompleted && <SendDocumentButton/);
-    });
-
-    it('does NOT gate the SendDocumentModal render on isDraft', () => {
-      assert.doesNotMatch(
-        src,
-        /\{\(isDraft \|\| isCompleted\) && showSend && createPortal\(\s*<SendDocumentModal/,
-      );
+    it('listens to the sales-order:open-send-modal custom event to open its own SendDocumentModal', () => {
+      assert.match(src, /window\.addEventListener\(['"]sales-order:open-send-modal['"]/);
+      assert.match(src, /window\.removeEventListener\(['"]sales-order:open-send-modal['"]/);
     });
 
     it('gates the SendDocumentModal render on isCompleted only', () => {

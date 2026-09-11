@@ -3,10 +3,8 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useUI, useMenuLabel } from '@/i18n';
-import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
+import SendDocumentModal from '@/components/contract-ui/SendDocumentModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
-import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
-import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { usePurchaseOrderPdf } from '@/windows/custom/shared/usePurchaseOrderPdf.js';
@@ -50,8 +48,6 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
   const [fetched,       setFetched]       = useState(null);
   const [confirmedDocs,  setConfirmedDocs]  = useState(null);
   const [confirmedTitle, setConfirmedTitle] = useState(null); // null = "PO confirmed", string = custom title
-  const [showClone,      setShowClone]      = useState(false);
-  const [isCloneHovered, setIsCloneHovered] = useState(false);
 
   const status      = data?.documentStatus;
   const isDraft     = status === 'DR';
@@ -83,6 +79,15 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
     };
     window.addEventListener('purchase-order:open-actions-modal', handler);
     return () => window.removeEventListener('purchase-order:open-actions-modal', handler);
+  }, []);
+
+  // ETP-5260 — the Send button now lives in the topbarSecondary slot
+  // (PurchaseOrderSecondaryActions), while this modal (with its pdf/documentType
+  // context) stays here in topbarRight; the button dispatches this event to open it.
+  useEffect(() => {
+    const handler = () => setShowSend(true);
+    window.addEventListener('purchase-order:open-send-modal', handler);
+    return () => window.removeEventListener('purchase-order:open-send-modal', handler);
   }, []);
 
   useEffect(() => {
@@ -145,30 +150,11 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
     }
   }, [confirmedDocs, hasConfirmedDoc, confirmedTitle, onRefresh, ui]);
 
-  const cloneButton = (
-    <button type="button" onClick={() => setShowClone(true)} style={{...btnCloneStyle, background: isCloneHovered ? 'hsl(var(--card))' : 'hsl(var(--card))'}} title={ui('cloneOrderBtn')} onMouseEnter={() => setIsCloneHovered(true)} onMouseLeave={() => setIsCloneHovered(false)}>
-      <CopyIcon data-testid="CopyIcon__8b5323" />
-    </button>
-  );
-
-  const clonePortal = showClone ? createPortal(
-    <CloneOrderModal
-      recordId={recordId}
-      data={data}
-      apiBaseUrl={apiBaseUrl}
-      headers={headers}
-      onClose={() => setShowClone(false)}
-      onCloned={(newId) => {
-        setShowClone(false);
-        navigate(`/purchase-order/${newId}`);
-      }}
-      data-testid="CloneOrderModal__8b5323" />,
-    document.body,
-  ) : null;
-
   // ── COMPLETED (loading) ────────────────────────────────────────────────────
+  // ETP-5260 — Copy link now renders unconditionally via the sibling
+  // topbarSecondary slot, so this loading state no longer needs to render it here.
   if (isCompleted && !fetched) {
-    return <>{confirmedPanel}<CopyRecordLinkButton recordId={recordId} windowName="purchase-order" /><span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '4px 8px' }}>…</span></>;
+    return <>{confirmedPanel}<span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '4px 8px' }}>…</span></>;
   }
 
   // ── COMPLETED — compute derived values ─────────────────────────────────────
@@ -211,18 +197,20 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
   return (
     <>
       {isCompleted && buttonLabel && (
-        <button type="button" onClick={() => setShowActions(true)} style={btnPrimaryStyle}>
+        <button
+          type="button"
+          onClick={() => setShowActions(true)}
+          style={btnPrimaryStyle}
+          // Hover to match the shared Confirm button's `hover:bg-primary/90` (90% opacity).
+          onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--primary) / 0.9)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'hsl(var(--primary))'; }}
+        >
           {buttonLabel}
         </button>
       )}
-      {cloneButton}
-      {/* ETP-4717 — Send is only available once the order is Confirmed (CO),
-          matching the grid row quick-action's status gate. */}
-      {isCompleted && <SendDocumentButton
-        onClick={() => setShowSend(true)}
-        data-testid="SendDocumentButton__8b5323" />}
-      <CopyRecordLinkButton recordId={recordId} windowName="purchase-order" />
-      {clonePortal}
+      {/* ETP-5260 — Clone/Copy-link/Send moved to the topbarSecondary slot
+          (PurchaseOrderSecondaryActions). This component now only renders the
+          PRIMARY flow button above and the modals below. */}
       {isDraft && showConfirm && createPortal(
         <ConfirmModal
           orderId={recordId}
@@ -777,17 +765,6 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
   );
 }
 
-// ── CopyIcon ───────────────────────────────────────────────────────────────────
-
-function CopyIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  );
-}
-
 // ── Shared styles ──────────────────────────────────────────────────────────────
 
 const overlayStyle = {
@@ -804,20 +781,16 @@ const cardStyle = {
 
 const btnPrimaryStyle = {
   padding: '5px 14px', borderRadius: 6, border: 'none',
-  background: 'var(--status-info-fg)', color: 'hsl(var(--card))', fontWeight: 500, fontSize: 13,
+  // Fix (not part of ETP-5260): was `var(--status-info-fg)` — a badge-text token,
+  // not a button-background token — which rendered a saturated blue instead of
+  // the dark gray used by the real `Confirmar` button. Same pattern as ETP-4781.
+  background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))', fontWeight: 500, fontSize: 13,
   cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
 };
 
 const btnSecondary = {
   fontSize: 12, padding: '7px 14px', borderRadius: 6,
   border: '1px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
-};
-
-const btnCloneStyle = {
-  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  padding: '7px', borderRadius: 6,
-  border: '1px solid hsl(var(--border-subtle))', background: 'hsl(var(--card))', color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
-  boxShadow: '0px 1px 2px 0px hsl(var(--foreground) / 0.05)',
 };
 
 const iconBtnStyle = {

@@ -16,6 +16,7 @@ import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import QuotationPreview from '../shared/QuotationPreview.jsx';
 import { useSavedPreviewRecord } from '../shared/useSavedPreviewRecord.js';
 import { SEND_VISIBLE_WHEN_NOT_DRAFT } from '../shared/sendActionVisibility.js';
+import QuotationSecondaryActions from '@generated/sales-quotation/custom/QuotationSecondaryActions';
 
 const draftModeWithModal = {
   enabled: true,
@@ -167,6 +168,7 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
           menuActions={customMenuActions}
           linesEmptyState={LinesEmptyState}
           {...rest}
+          topbarSecondary={QuotationSecondaryActions}
           data-testid="GeneratedApp__bc8637" />
         {contactPortal}
       </CreateContactContext.Provider>
