@@ -103,7 +103,9 @@ export function DetailMoreActionsMenu({
       await docAction.execute(currentId, action.documentAction);
       const msg = (action.successKey ? ui(action.successKey) : action.successMessage) || ui('actionCompleted');
       toast.success(msg);
-      hook.fetchById?.(currentId);
+      // ETP-4563 cache fix: post-action refresh must force a fresh network read
+      // so the shared cache does not serve the pre-mutation record.
+      hook.fetchById?.(currentId, { force: true });
       setDocsRefreshSignal(v => v + 1);
     } catch (err) {
       toast.error(err.message);
@@ -115,7 +117,9 @@ export function DetailMoreActionsMenu({
     const msg = (action.successKey ? ui(action.successKey) : action.successMessage) || ui('actionCompleted');
     if (result.success) {
       toast.success(msg);
-      hook.fetchById?.(currentId);
+      // ETP-4563 cache fix: post-action refresh must force a fresh network read
+      // so the shared cache does not serve the pre-mutation record.
+      hook.fetchById?.(currentId, { force: true });
       setDocsRefreshSignal(v => v + 1);
     } else {
       toast.error(translateBackendError(result.message, ui) || ui('actionFailed'));
@@ -212,7 +216,7 @@ export function DetailMoreActionsMenu({
               token={token}
               apiBaseUrl={apiBaseUrl}
               onClose={() => setShowMoreMenu(false)}
-              onRefresh={() => hook.fetchById?.(data?.id || recordId)}
+              onRefresh={() => hook.fetchById?.(data?.id || recordId, { force: true })}
               data-testid="CustomMenuContent__fa3275" />
           );
         })()}

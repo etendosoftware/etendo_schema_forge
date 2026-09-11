@@ -1,0 +1,1192 @@
+{
+  "version": "0.1.0",
+  "generatedAt": "2026-09-08T16:52:49.566Z",
+  "checksum": "90f903662a5ed719",
+  "frontendContract": {
+    "window": {
+      "id": "112",
+      "name": "Document Sequence",
+      "primaryEntity": "sequence",
+      "category": "settings",
+      "detailEntity": null,
+      "listSortBy": "name asc",
+      "labelOverrides": {
+        "es_ES": {
+          "Name": "Nombre",
+          "Prefix": "Prefijo",
+          "Suffix": "Sufijo",
+          "StartNo": "Número inicial",
+          "CurrentNext": "Próximo número",
+          "IncrementNo": "Incremento",
+          "StartNewYear": "Reiniciar cada año",
+          "IsAutoSequence": "Numeración automática",
+          "Description": "Descripción"
+        }
+      },
+      "layoutType": "default"
+    },
+    "entities": {
+      "sequence": {
+        "tableName": "AD_Sequence",
+        "tabId": "146",
+        "tabName": "Sequence",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "label": "Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "gridOrder": 1,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            }
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "label": "Description",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "autoNumbering",
+            "apiKey": "autoNumbering",
+            "column": "IsAutoSequence",
+            "label": "Auto Numbering",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "validation": {
+              "required": true,
+              "maxLength": 1
+            }
+          },
+          {
+            "name": "incrementBy",
+            "apiKey": "incrementBy",
+            "column": "IncrementNo",
+            "label": "Increment By",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "1"
+            },
+            "defaultValue": "1",
+            "integer": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
+            "displayLogic": {
+              "raw": "@IsAutoSequence@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "nextAssignedNumber",
+            "apiKey": "nextAssignedNumber",
+            "column": "CurrentNext",
+            "label": "Next Assigned Number",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "1000000"
+            },
+            "defaultValue": "1000000",
+            "gridOrder": 4,
+            "integer": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
+            "displayLogic": {
+              "raw": "@IsAutoSequence@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "startingNo",
+            "apiKey": "startingNo",
+            "column": "StartNo",
+            "label": "Starting No.",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "1000000"
+            },
+            "defaultValue": "1000000",
+            "gridOrder": 5,
+            "integer": true,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
+            "displayLogic": {
+              "raw": "@IsAutoSequence@='Y' & @IsTableID@='N' & @StartNewYear@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "prefix",
+            "apiKey": "prefix",
+            "column": "Prefix",
+            "label": "Prefix",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "gridOrder": 2,
+            "validation": {
+              "maxLength": 10
+            },
+            "displayLogic": {
+              "raw": "@IsTableID@='N'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "suffix",
+            "apiKey": "suffix",
+            "column": "Suffix",
+            "label": "Suffix",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "gridOrder": 3,
+            "validation": {
+              "maxLength": 10
+            },
+            "displayLogic": {
+              "raw": "@IsTableID@='N'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "restartSequenceEveryYear",
+            "apiKey": "restartSequenceEveryYear",
+            "column": "StartNewYear",
+            "label": "Restart sequence every Year",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "gridOrder": 6,
+            "validation": {
+              "maxLength": 1
+            },
+            "displayLogic": {
+              "raw": "@IsAutoSequence@='Y' & @IsTableID@='N'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "valueFormat",
+            "apiKey": "valueFormat",
+            "column": "VFormat",
+            "label": "Value Format",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "validation": {
+              "maxLength": 40
+            },
+            "displayLogic": {
+              "raw": "@IsAutoSequence@='N'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "mask",
+            "apiKey": "mask",
+            "column": "Mask",
+            "label": "Mask",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "derivation": {
+              "type": "computed",
+              "source": "#######"
+            },
+            "defaultValue": "#######",
+            "validation": {
+              "maxLength": 255
+            }
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": [
+          {
+            "name": "incrementBy",
+            "derivation": {
+              "type": "computed",
+              "source": "1"
+            }
+          },
+          {
+            "name": "nextAssignedNumber",
+            "derivation": {
+              "type": "computed",
+              "source": "1000000"
+            }
+          },
+          {
+            "name": "startingNo",
+            "derivation": {
+              "type": "computed",
+              "source": "1000000"
+            }
+          },
+          {
+            "name": "mask",
+            "derivation": {
+              "type": "computed",
+              "source": "#######"
+            }
+          }
+        ],
+        "javaQualifier": "document-sequence"
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "112",
+      "name": "Document Sequence",
+      "primaryEntity": "sequence",
+      "category": "settings",
+      "detailEntity": null,
+      "listSortBy": "name asc",
+      "labelOverrides": {
+        "es_ES": {
+          "Name": "Nombre",
+          "Prefix": "Prefijo",
+          "Suffix": "Sufijo",
+          "StartNo": "Número inicial",
+          "CurrentNext": "Próximo número",
+          "IncrementNo": "Incremento",
+          "StartNewYear": "Reiniciar cada año",
+          "IsAutoSequence": "Numeración automática",
+          "Description": "Descripción"
+        }
+      }
+    },
+    "entities": {
+      "sequence": {
+        "tableName": "AD_Sequence",
+        "tabId": "146",
+        "tabName": "Sequence",
+        "fields": [
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "AD_Sequence_ID",
+            "type": "id",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "autoNumbering",
+            "apiKey": "autoNumbering",
+            "column": "IsAutoSequence",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "incrementBy",
+            "apiKey": "incrementBy",
+            "column": "IncrementNo",
+            "type": "integer",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "nextAssignedNumber",
+            "apiKey": "nextAssignedNumber",
+            "column": "CurrentNext",
+            "type": "integer",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "startingNo",
+            "apiKey": "startingNo",
+            "column": "StartNo",
+            "type": "integer",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "prefix",
+            "apiKey": "prefix",
+            "column": "Prefix",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "suffix",
+            "apiKey": "suffix",
+            "column": "Suffix",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "currentNextSystem",
+            "apiKey": "currentNextSystem",
+            "column": "CurrentNextSys",
+            "type": "integer",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "restartSequenceEveryYear",
+            "apiKey": "restartSequenceEveryYear",
+            "column": "StartNewYear",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "valueFormat",
+            "apiKey": "valueFormat",
+            "column": "VFormat",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "documentType",
+            "apiKey": "documentType",
+            "column": "C_Doctype_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "mask",
+            "apiKey": "mask",
+            "column": "Mask",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "aDTableID",
+            "apiKey": "aDTableID",
+            "column": "AD_Table_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aDColumnID",
+            "apiKey": "aDColumnID",
+            "column": "AD_Column_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "etsgIsRectificative",
+            "apiKey": "etsgIsRectificative",
+            "column": "EM_Etsg_Isrectificative",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "etaskTaskTypeID",
+            "apiKey": "etaskTaskTypeID",
+            "column": "EM_Etask_Task_Type_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "usedForRecordID",
+            "apiKey": "usedForRecordID",
+            "column": "IsTableID",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          }
+        ],
+        "javaQualifier": "document-sequence"
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/sequence",
+        "entity": "sequence",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/sequence/:id",
+        "entity": "sequence",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/sequence",
+        "entity": "sequence",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/sequence/:id",
+        "entity": "sequence",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/sequence/:id",
+        "entity": "sequence",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "document-sequence",
+    "baseUrl": "/sws/neo/document-sequence",
+    "crud": {
+      "sequence": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/document-sequence/sequence",
+        "detailUrl": "/sws/neo/document-sequence/sequence/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "settings"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "Name": "Nombre",
+        "Prefix": "Prefijo",
+        "Suffix": "Sufijo",
+        "StartNo": "Número inicial",
+        "CurrentNext": "Próximo número",
+        "IncrementNo": "Incremento",
+        "StartNewYear": "Reiniciar cada año",
+        "IsAutoSequence": "Numeración automática",
+        "Description": "Descripción"
+      }
+    }
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-crud-flags-sequence",
+        "category": "crud-flags",
+        "entity": "sequence",
+        "runner": "node",
+        "description": "CRUD flags for 'sequence' should all be booleans"
+      },
+      {
+        "id": "t-default-value-type-sequence-incrementBy",
+        "category": "default-value-type",
+        "entity": "sequence",
+        "field": "incrementBy",
+        "runner": "node",
+        "description": "Default value for 'incrementBy' in sequence should be a string"
+      },
+      {
+        "id": "t-default-value-type-sequence-mask",
+        "category": "default-value-type",
+        "entity": "sequence",
+        "field": "mask",
+        "runner": "node",
+        "description": "Default value for 'mask' in sequence should be a string"
+      },
+      {
+        "id": "t-default-value-type-sequence-nextAssignedNumber",
+        "category": "default-value-type",
+        "entity": "sequence",
+        "field": "nextAssignedNumber",
+        "runner": "node",
+        "description": "Default value for 'nextAssignedNumber' in sequence should be a string"
+      },
+      {
+        "id": "t-default-value-type-sequence-startingNo",
+        "category": "default-value-type",
+        "entity": "sequence",
+        "field": "startingNo",
+        "runner": "node",
+        "description": "Default value for 'startingNo' in sequence should be a string"
+      },
+      {
+        "id": "t-displaylogic-evaluable-sequence-incrementBy",
+        "category": "displaylogic-evaluable",
+        "entity": "sequence",
+        "field": "incrementBy",
+        "runner": "node",
+        "description": "Display logic for 'incrementBy' in sequence should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-sequence-nextAssignedNumber",
+        "category": "displaylogic-evaluable",
+        "entity": "sequence",
+        "field": "nextAssignedNumber",
+        "runner": "node",
+        "description": "Display logic for 'nextAssignedNumber' in sequence should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-sequence-prefix",
+        "category": "displaylogic-evaluable",
+        "entity": "sequence",
+        "field": "prefix",
+        "runner": "node",
+        "description": "Display logic for 'prefix' in sequence should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-sequence-restartSequenceEveryYear",
+        "category": "displaylogic-evaluable",
+        "entity": "sequence",
+        "field": "restartSequenceEveryYear",
+        "runner": "node",
+        "description": "Display logic for 'restartSequenceEveryYear' in sequence should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-sequence-startingNo",
+        "category": "displaylogic-evaluable",
+        "entity": "sequence",
+        "field": "startingNo",
+        "runner": "node",
+        "description": "Display logic for 'startingNo' in sequence should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-sequence-suffix",
+        "category": "displaylogic-evaluable",
+        "entity": "sequence",
+        "field": "suffix",
+        "runner": "node",
+        "description": "Display logic for 'suffix' in sequence should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-sequence-valueFormat",
+        "category": "displaylogic-evaluable",
+        "entity": "sequence",
+        "field": "valueFormat",
+        "runner": "node",
+        "description": "Display logic for 'valueFormat' in sequence should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-valid-sequence-incrementBy",
+        "category": "displaylogic-valid",
+        "entity": "sequence",
+        "field": "incrementBy",
+        "runner": "node",
+        "description": "Display logic for 'incrementBy' in sequence should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-sequence-nextAssignedNumber",
+        "category": "displaylogic-valid",
+        "entity": "sequence",
+        "field": "nextAssignedNumber",
+        "runner": "node",
+        "description": "Display logic for 'nextAssignedNumber' in sequence should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-sequence-prefix",
+        "category": "displaylogic-valid",
+        "entity": "sequence",
+        "field": "prefix",
+        "runner": "node",
+        "description": "Display logic for 'prefix' in sequence should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-sequence-restartSequenceEveryYear",
+        "category": "displaylogic-valid",
+        "entity": "sequence",
+        "field": "restartSequenceEveryYear",
+        "runner": "node",
+        "description": "Display logic for 'restartSequenceEveryYear' in sequence should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-sequence-startingNo",
+        "category": "displaylogic-valid",
+        "entity": "sequence",
+        "field": "startingNo",
+        "runner": "node",
+        "description": "Display logic for 'startingNo' in sequence should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-sequence-suffix",
+        "category": "displaylogic-valid",
+        "entity": "sequence",
+        "field": "suffix",
+        "runner": "node",
+        "description": "Display logic for 'suffix' in sequence should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-sequence-valueFormat",
+        "category": "displaylogic-valid",
+        "entity": "sequence",
+        "field": "valueFormat",
+        "runner": "node",
+        "description": "Display logic for 'valueFormat' in sequence should be valid JS"
+      },
+      {
+        "id": "t-field-presence-sequence-autoNumbering",
+        "category": "field-presence",
+        "entity": "sequence",
+        "field": "autoNumbering",
+        "runner": "node",
+        "description": "Field 'autoNumbering' should be present in sequence"
+      },
+      {
+        "id": "t-field-presence-sequence-description",
+        "category": "field-presence",
+        "entity": "sequence",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in sequence"
+      },
+      {
+        "id": "t-field-presence-sequence-incrementBy",
+        "category": "field-presence",
+        "entity": "sequence",
+        "field": "incrementBy",
+        "runner": "node",
+        "description": "Field 'incrementBy' should be present in sequence"
+      },
+      {
+        "id": "t-field-presence-sequence-mask",
+        "category": "field-presence",
+        "entity": "sequence",
+        "field": "mask",
+        "runner": "node",
+        "description": "Field 'mask' should be present in sequence"
+      },
+      {
+        "id": "t-field-presence-sequence-name",
+        "category": "field-presence",
+        "entity": "sequence",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be present in sequence"
+      },
+      {
+        "id": "t-field-presence-sequence-nextAssignedNumber",
+        "category": "field-presence",
+        "entity": "sequence",
+        "field": "nextAssignedNumber",
+        "runner": "node",
+        "description": "Field 'nextAssignedNumber' should be present in sequence"
+      },
+      {
+        "id": "t-field-presence-sequence-prefix",
+        "category": "field-presence",
+        "entity": "sequence",
+        "field": "prefix",
+        "runner": "node",
+        "description": "Field 'prefix' should be present in sequence"
+      },
+      {
+        "id": "t-field-presence-sequence-restartSequenceEveryYear",
+        "category": "field-presence",
+        "entity": "sequence",
+        "field": "restartSequenceEveryYear",
+        "runner": "node",
+        "description": "Field 'restartSequenceEveryYear' should be present in sequence"
+      },
+      {
+        "id": "t-field-presence-sequence-startingNo",
+        "category": "field-presence",
+        "entity": "sequence",
+        "field": "startingNo",
+        "runner": "node",
+        "description": "Field 'startingNo' should be present in sequence"
+      },
+      {
+        "id": "t-field-presence-sequence-suffix",
+        "category": "field-presence",
+        "entity": "sequence",
+        "field": "suffix",
+        "runner": "node",
+        "description": "Field 'suffix' should be present in sequence"
+      },
+      {
+        "id": "t-field-presence-sequence-valueFormat",
+        "category": "field-presence",
+        "entity": "sequence",
+        "field": "valueFormat",
+        "runner": "node",
+        "description": "Field 'valueFormat' should be present in sequence"
+      },
+      {
+        "id": "t-field-type-sequence-autoNumbering",
+        "category": "field-type",
+        "entity": "sequence",
+        "field": "autoNumbering",
+        "runner": "node",
+        "description": "Field 'autoNumbering' should have type 'boolean' in sequence"
+      },
+      {
+        "id": "t-field-type-sequence-description",
+        "category": "field-type",
+        "entity": "sequence",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in sequence"
+      },
+      {
+        "id": "t-field-type-sequence-incrementBy",
+        "category": "field-type",
+        "entity": "sequence",
+        "field": "incrementBy",
+        "runner": "node",
+        "description": "Field 'incrementBy' should have type 'number' in sequence"
+      },
+      {
+        "id": "t-field-type-sequence-mask",
+        "category": "field-type",
+        "entity": "sequence",
+        "field": "mask",
+        "runner": "node",
+        "description": "Field 'mask' should have type 'string' in sequence"
+      },
+      {
+        "id": "t-field-type-sequence-name",
+        "category": "field-type",
+        "entity": "sequence",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should have type 'string' in sequence"
+      },
+      {
+        "id": "t-field-type-sequence-nextAssignedNumber",
+        "category": "field-type",
+        "entity": "sequence",
+        "field": "nextAssignedNumber",
+        "runner": "node",
+        "description": "Field 'nextAssignedNumber' should have type 'number' in sequence"
+      },
+      {
+        "id": "t-field-type-sequence-prefix",
+        "category": "field-type",
+        "entity": "sequence",
+        "field": "prefix",
+        "runner": "node",
+        "description": "Field 'prefix' should have type 'string' in sequence"
+      },
+      {
+        "id": "t-field-type-sequence-restartSequenceEveryYear",
+        "category": "field-type",
+        "entity": "sequence",
+        "field": "restartSequenceEveryYear",
+        "runner": "node",
+        "description": "Field 'restartSequenceEveryYear' should have type 'boolean' in sequence"
+      },
+      {
+        "id": "t-field-type-sequence-startingNo",
+        "category": "field-type",
+        "entity": "sequence",
+        "field": "startingNo",
+        "runner": "node",
+        "description": "Field 'startingNo' should have type 'number' in sequence"
+      },
+      {
+        "id": "t-field-type-sequence-suffix",
+        "category": "field-type",
+        "entity": "sequence",
+        "field": "suffix",
+        "runner": "node",
+        "description": "Field 'suffix' should have type 'string' in sequence"
+      },
+      {
+        "id": "t-field-type-sequence-valueFormat",
+        "category": "field-type",
+        "entity": "sequence",
+        "field": "valueFormat",
+        "runner": "node",
+        "description": "Field 'valueFormat' should have type 'string' in sequence"
+      },
+      {
+        "id": "t-rule-declared-AD-Client-Security-validation",
+        "category": "rule-declared",
+        "rule": "AD_Client Security validation",
+        "runner": "node",
+        "description": "Rule 'AD_Client Security validation' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-AD-COLUMN-filtered-by-sequence-field",
+        "category": "rule-declared",
+        "rule": "AD_COLUMN  filtered by  sequence field",
+        "runner": "node",
+        "description": "Rule 'AD_COLUMN  filtered by  sequence field' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-AD-TABLE-filtered-by-sequence-reference-column",
+        "category": "rule-declared",
+        "rule": "AD_TABLE filtered by sequence reference column ",
+        "runner": "node",
+        "description": "Rule 'AD_TABLE filtered by sequence reference column ' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-document-sequence-Sequence-CurrentNext-displayLogic",
+        "category": "rule-declared",
+        "rule": "document-sequence-Sequence-CurrentNext-displayLogic",
+        "runner": "node",
+        "description": "Rule 'document-sequence-Sequence-CurrentNext-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-document-sequence-Sequence-CurrentNextSys-displayLogic",
+        "category": "rule-declared",
+        "rule": "document-sequence-Sequence-CurrentNextSys-displayLogic",
+        "runner": "node",
+        "description": "Rule 'document-sequence-Sequence-CurrentNextSys-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-document-sequence-Sequence-IncrementNo-displayLogic",
+        "category": "rule-declared",
+        "rule": "document-sequence-Sequence-IncrementNo-displayLogic",
+        "runner": "node",
+        "description": "Rule 'document-sequence-Sequence-IncrementNo-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-document-sequence-Sequence-IsTableID-displayLogic",
+        "category": "rule-declared",
+        "rule": "document-sequence-Sequence-IsTableID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'document-sequence-Sequence-IsTableID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-document-sequence-Sequence-Prefix-displayLogic",
+        "category": "rule-declared",
+        "rule": "document-sequence-Sequence-Prefix-displayLogic",
+        "runner": "node",
+        "description": "Rule 'document-sequence-Sequence-Prefix-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-document-sequence-Sequence-StartNewYear-displayLogic",
+        "category": "rule-declared",
+        "rule": "document-sequence-Sequence-StartNewYear-displayLogic",
+        "runner": "node",
+        "description": "Rule 'document-sequence-Sequence-StartNewYear-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-document-sequence-Sequence-StartNo-displayLogic",
+        "category": "rule-declared",
+        "rule": "document-sequence-Sequence-StartNo-displayLogic",
+        "runner": "node",
+        "description": "Rule 'document-sequence-Sequence-StartNo-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-document-sequence-Sequence-Suffix-displayLogic",
+        "category": "rule-declared",
+        "rule": "document-sequence-Sequence-Suffix-displayLogic",
+        "runner": "node",
+        "description": "Rule 'document-sequence-Sequence-Suffix-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-document-sequence-Sequence-VFormat-displayLogic",
+        "category": "rule-declared",
+        "rule": "document-sequence-Sequence-VFormat-displayLogic",
+        "runner": "node",
+        "description": "Rule 'document-sequence-Sequence-VFormat-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Document-Type-filter-according-to-table",
+        "category": "rule-declared",
+        "rule": "Document Type filter according to table",
+        "runner": "node",
+        "description": "Rule 'Document Type filter according to table' (validation) should be declared"
+      },
+      {
+        "id": "t-system-field-sequence-active",
+        "category": "system-field",
+        "entity": "sequence",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for sequence"
+      },
+      {
+        "id": "t-system-field-sequence-aDColumnID",
+        "category": "system-field",
+        "entity": "sequence",
+        "field": "aDColumnID",
+        "runner": "node",
+        "description": "System field 'aDColumnID' should exist in backend but not frontend for sequence"
+      },
+      {
+        "id": "t-system-field-sequence-aDTableID",
+        "category": "system-field",
+        "entity": "sequence",
+        "field": "aDTableID",
+        "runner": "node",
+        "description": "System field 'aDTableID' should exist in backend but not frontend for sequence"
+      },
+      {
+        "id": "t-system-field-sequence-client",
+        "category": "system-field",
+        "entity": "sequence",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for sequence"
+      },
+      {
+        "id": "t-system-field-sequence-createdBy",
+        "category": "system-field",
+        "entity": "sequence",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for sequence"
+      },
+      {
+        "id": "t-system-field-sequence-creationDate",
+        "category": "system-field",
+        "entity": "sequence",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for sequence"
+      },
+      {
+        "id": "t-system-field-sequence-currentNextSystem",
+        "category": "system-field",
+        "entity": "sequence",
+        "field": "currentNextSystem",
+        "runner": "node",
+        "description": "System field 'currentNextSystem' should exist in backend but not frontend for sequence"
+      },
+      {
+        "id": "t-system-field-sequence-documentType",
+        "category": "system-field",
+        "entity": "sequence",
+        "field": "documentType",
+        "runner": "node",
+        "description": "System field 'documentType' should exist in backend but not frontend for sequence"
+      },
+      {
+        "id": "t-system-field-sequence-etaskTaskTypeID",
+        "category": "system-field",
+        "entity": "sequence",
+        "field": "etaskTaskTypeID",
+        "runner": "node",
+        "description": "System field 'etaskTaskTypeID' should exist in backend but not frontend for sequence"
+      },
+      {
+        "id": "t-system-field-sequence-etsgIsRectificative",
+        "category": "system-field",
+        "entity": "sequence",
+        "field": "etsgIsRectificative",
+        "runner": "node",
+        "description": "System field 'etsgIsRectificative' should exist in backend but not frontend for sequence"
+      },
+      {
+        "id": "t-system-field-sequence-id",
+        "category": "system-field",
+        "entity": "sequence",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for sequence"
+      },
+      {
+        "id": "t-system-field-sequence-organization",
+        "category": "system-field",
+        "entity": "sequence",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for sequence"
+      },
+      {
+        "id": "t-system-field-sequence-updated",
+        "category": "system-field",
+        "entity": "sequence",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for sequence"
+      },
+      {
+        "id": "t-system-field-sequence-updatedBy",
+        "category": "system-field",
+        "entity": "sequence",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for sequence"
+      },
+      {
+        "id": "t-system-field-sequence-usedForRecordID",
+        "category": "system-field",
+        "entity": "sequence",
+        "field": "usedForRecordID",
+        "runner": "node",
+        "description": "System field 'usedForRecordID' should exist in backend but not frontend for sequence"
+      },
+      {
+        "id": "t-visibility-sequence",
+        "category": "visibility",
+        "entity": "sequence",
+        "runner": "node",
+        "description": "Entity 'sequence' should only expose visible fields in frontend"
+      }
+    ],
+    "summary": {
+      "total": 70,
+      "byCategory": {
+        "crud-flags": 1,
+        "default-value-type": 4,
+        "displaylogic-evaluable": 7,
+        "displaylogic-valid": 7,
+        "field-presence": 11,
+        "field-type": 11,
+        "rule-declared": 13,
+        "system-field": 15,
+        "visibility": 1
+      },
+      "byRunner": {
+        "node": 70,
+        "junit": 0
+      }
+    }
+  }
+}
