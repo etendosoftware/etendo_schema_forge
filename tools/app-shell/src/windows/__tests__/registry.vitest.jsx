@@ -383,7 +383,16 @@ describe('registry', () => {
       const groups = filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess);
       const bypassedAnchors = entry.capability === 'isAdminOrClientAdmin'
         ? defaultNavigation.filter(candidate => candidate.accessWindowId) : [];
-      expectNavigation(groups, [...ungated, ...proof, entry, ...bypassedAnchors]);
+      // A capability is a NAMED BOOLEAN, not a per-entry grant: switching one on reveals every
+      // entry gated on that same name, not only the entry we asked for. Latent until ETP-5269
+      // added a second `isAdminOrClientAdmin` entry next to `roles` — with one entry per
+      // capability the distinction was invisible. Same shape as `bypassedAnchors` above: a
+      // second, indirect consequence of the one grant under test.
+      const capabilitySiblings = entry.capability
+        ? defaultNavigation.filter(candidate => candidate !== entry && candidate.capability === entry.capability)
+        : [];
+      const expected = [...new Set([...ungated, ...proof, entry, ...bypassedAnchors, ...capabilitySiblings])];
+      expectNavigation(groups, expected);
     });
 
     it.each(gated)('revoked grant: $name', entry => {
