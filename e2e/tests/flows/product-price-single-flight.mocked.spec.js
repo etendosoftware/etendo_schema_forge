@@ -224,15 +224,22 @@ const tariffRow = (page, rowId) => page
 /**
  * The `+` button of one of a row's two steppers, in DOM order: `standardPrice` (unit price) then
  * `listPrice`. `PriceStepper` emits no per-field `data-testid` (reported, not patched — this spec
- * must not touch production code), so each stepper is reached through its numeric input, which is
- * unambiguous inside a row: the tariff name input is `type="text"`.
+ * must not touch production code), so each stepper is reached through its price input.
+ *
+ * ETP-5283 (merge block): that input used to be selected as `input[type="number"]`, which was
+ * unambiguous inside a row only because the tariff name input was the `type="text"` one. ETP-5107
+ * replaced the stepper's native number input with a bare `MaskedAmountInput` — also `type="text"`
+ * — so that selector now matches nothing. Queried by the stable `data-testid` ETP-5107 added,
+ * the same one the `ProductPriceBar` Vitest suites use. The stepper's internals are otherwise
+ * unchanged: `MaskedAmountInput` gets no `currency` prop here, so it renders the bare `<input>`
+ * with no wrapper and the sibling walk below still holds.
  *
  * Inside a stepper the children are, in order, the input, the `−` button and the `+` button.
  */
 function stepperPlus(page, rowId, field) {
   const index = field === 'standardPrice' ? 0 : 1;
   return tariffRow(page, rowId)
-    .locator('input[type="number"]')
+    .locator('input[data-testid="PriceStepperInput__d76b90"]')
     .nth(index)
     .locator('xpath=following-sibling::button[2]');
 }
