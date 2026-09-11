@@ -95,6 +95,21 @@ function CreditLimitStepper({ value, readOnly, onChange, onBlur, saving }) {
   );
 }
 
+/**
+ * The wire value for one credit/tax field.
+ *
+ * An empty field means "no value", which the backend expects as an explicit `null` rather than
+ * an empty string. `creditLimit` is numeric, so it is additionally coerced — and its blank check
+ * also covers `null`/`undefined`, because the stepper clears the input to an empty string while
+ * the parent may hand the field down as absent.
+ */
+function normalizeCreditTaxValue(fieldKey, value) {
+  if (fieldKey === 'creditLimit') {
+    return value === '' || value == null ? null : Number(value);
+  }
+  return value === '' ? null : value;
+}
+
 export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalogs, api, editing, onChange }) {
   const ui = useUI();
   const apiFetch = useApiFetch(apiBaseUrl);
@@ -152,10 +167,7 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
     if (String(value ?? '') === String(originalValue ?? '')) return true;
     setSavingField(fieldKey);
     try {
-      const normalizedValue = fieldKey === 'creditLimit'
-        ? (value === '' || value == null ? null : Number(value))
-        : (value === '' ? null : value);
-      const payload = { [fieldKey]: normalizedValue };
+      const payload = { [fieldKey]: normalizeCreditTaxValue(fieldKey, value) };
       const res = await apiFetch(`/businessPartner/${recordId}`, {
         method: 'PATCH',
         body: JSON.stringify(payload),
