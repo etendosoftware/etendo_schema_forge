@@ -226,7 +226,27 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     appliedFields.set(key, entry.value);
     hook.handleChange(key, entry.value);
     handleEntryIdentifierChange(entry, hook, key, api, catalogs);
-    bumpFieldGeneration(key, fieldGenerationRef);
+    // ETP-4772 follow-up: only a write that actually LEFT A VALUE may advance the
+    // generation. A callout answering empty for a still-empty field is a no-op with
+    // nothing to protect (the empty-skip guard above deliberately lets it through so
+    // an intentional clear still reaches the form), but bumping the generation for it
+    // made every OLDER in-flight response for that same field look stale — and
+    // nothing ever retries a dropped response, so the field stayed empty for good.
+    //
+    // That is the whole failure: selecting a BP fires ~7 header callouts in ~1.6s,
+    // one of them answers empty for warehouse/partnerAddress, and the later response
+    // carrying the REAL value is discarded as stale. It poisons the combo path too —
+    // `applyOneComboEntry` reads the same generation this bumped, which is why a
+    // warehouse delivered as `combos.warehouse.selected` vanished. It surfaced two
+    // windows later as a permanently disabled Guardar
+    // (`data-missing-required="partnerAddress,warehouse"`); see the measurement in
+    // e2e/tests/helpers/purchase-helpers.js (ETP-5190).
+    //
+    // The empty write itself is still applied above — only the generation is left
+    // alone, so ETP-4772's protection of a real user edit is untouched.
+    if (entry.value !== '' && entry.value != null) {
+      bumpFieldGeneration(key, fieldGenerationRef);
+    }
   }
 }
 
@@ -1452,4 +1472,48 @@ export function useNewRouteEditingReset({ isNew, recordId, editing, handleNew })
     prevRecordIdRef.current = recordId;
     if (shouldResetEditingForNewRoute({ isNew, editing, arrivedFromAnotherRecord })) handleNew();
   }, [isNew, recordId, editing, handleNew]);
+}
+
+/**
+ * Moved out of DetailView.jsx (ETP-5034) to make room for the record-unavailable guard;
+ * DetailView re-exports all three so existing importers are unaffected.
+ *
+ * @param {boolean} isNew whether the route is the creation route
+ * @param {object} hook useEntity hook instance
+ * @param {string} recordId the id in the URL
+ * @returns {boolean} true when the loaded record matches the route
+ */
+export function hasRecordForRoute(isNew, hook, recordId) {
+  return isNew
+      || (hook.selected?.id && String(hook.selected.id) === String(recordId));
+}
+
+/**
+ * @param {object} hook useEntity hook instance
+ * @param {boolean} isNew whether the route is the creation route
+ * @param {string} recordId the id in the URL
+ * @returns {boolean} true while the record for this route is still being fetched
+ */
+export function isLoadingRecordForRoute(hook, isNew, recordId) {
+  if (isNew && hook.defaultsLoading) return true;
+  return hook.loading && !hasRecordForRoute(isNew, hook, recordId);
+}
+
+/**
+ * ETP-5034 — true when the detail route points at a record that could not be loaded.
+ *
+ * Guards on `isNew` FIRST: the creation route (`/:windowName/new`) has no record to fetch and must
+ * never be diverted into the error state. Then requires that the record for THIS route is
+ * genuinely absent, so a stale `recordError` left behind by a previous id cannot blank out a
+ * record that has since loaded.
+ *
+ * @param {object} hook useEntity hook instance (reads `recordError`, set by `fetchById`)
+ * @param {boolean} isNew whether the route is the creation route
+ * @param {string} recordId the id in the URL
+ * @returns {boolean} true when the "record unavailable" state must be rendered
+ */
+export function isRecordUnavailableForRoute(hook, isNew, recordId) {
+  if (isNew) return false;
+  if (!hook?.recordError) return false;
+  return !hasRecordForRoute(isNew, hook, recordId);
 }

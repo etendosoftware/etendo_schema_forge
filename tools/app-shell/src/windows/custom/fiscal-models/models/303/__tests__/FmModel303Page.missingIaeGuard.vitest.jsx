@@ -92,6 +92,9 @@ const LAST_PERIOD_DECL = {
   id: '303-2026-T4', model: '303', year: 2026, period: 'T4', type: 'ord',
   status: 'draft', result: null, incidents: { blocking: 0, warning: 0 },
   _precomputed: null, boxes: null, sources: [], history: [],
+  // ETP-5187 required-field gate: tipo_declaracion must be set or "Generar fichero 303"
+  // never even opens FileGenModal303 — unrelated to this file's own IAE-activity guard.
+  identification: { tipo_declaracion: 'I' },
 };
 
 const NOT_LAST_PERIOD_DECL = { ...LAST_PERIOD_DECL, id: '303-2026-T2', period: 'T2' };
