@@ -239,6 +239,98 @@ reason (`aeatsiiErrorCode`/`aeatsiiErrorMsg`) for all three of its own error sta
 (`IN` Rechazada, `EE` No enviada, `AE` Parcialmente aceptada) before this change — no
 gap found there.
 
+### Earliest-cutover-date gate on TBAI's counts/list/export (ETP-5229, item #13)
+
+**Bug:** unlike the SII section (whose 4 count entities are child tabs of an `organizations`
+parent and inherently config-scoped — see "SII parentId resolution" above), TBAI's monitor
+queries (`fetchTbaiData()`'s 5 count calls, `TbaiMonitorSection`'s paginated list, and its CSV
+export) were flat, `organization`-scoped queries with **no date/config filtering at all**.
+This under- and over-inclusion risk is the opposite shape of the SII bug: because there was no
+lower bound whatsoever, any leftover/test TBAI_SyncInvoice rows that predate the org's actual
+TBAI enrollment would count as monitor "noise" indistinguishably from real activity — and a
+naive fix that instead scoped the query to only the **currently active** TBAI config's own
+cutover date would have wrongly excluded invoices genuinely sent under an **old, since-replaced**
+config (an org that went through "Change SIF" and got a new, later-dated config row).
+
+**Investigation finding:** TBAI (and Verifactu) do not have SII's two-period ("current" vs.
+"previous") HQL split — their counts/lists are single flat filters. SII's parentId/active-config
+fix (already shipped) does not need to be replicated wholesale here; the correct fix for TBAI is
+narrower: apply a **lower bound only**, using the **earliest-ever** cutover date across ALL of the
+org's TBAI config rows (active or deactivated) — exactly the same `earliestCutoverDate()` /
+"all rows, not just active" mechanism ETP-5229 item #16 already built for the per-invoice fiscal
+status badge (see [`sales-invoice.md` — "Second correction — 'no date gate at all' was itself
+wrong (ETP-5229, item #16)"](sales-invoice.md#second-correction--no-date-gate-at-all-was-itself-wrong-etp-5229-item-16)).
+This never excludes an invoice sent under a deactivated config (its own send date is still ≥ the
+org's earliest-ever cutover), while it does exclude anything predating the org's TBAI history
+altogether.
+
+**Fix:**
+- `fetchAllRows(apiFetch, specName, entityName, orgId)` and `earliestCutoverDate(rows, system)`,
+  previously private to `fiscal-config/useFiscalConfig.js`, are now **exported** from that module
+  so `useFiscalMonitor.js` reuses them instead of building a parallel mechanism.
+- In `useFiscalMonitor.js`'s `load()`, the TBAI config fetch changed from `fetchConfigRecord()`
+  (only the active/first row, used purely for profile detection) to
+  `fetchAllConfigRowsSafe()` (all rows, active + inactive "Change SIF" trace rows — 404 still
+  resolves to `[]`). The active record is still derived the same way
+  (`rows.find(isActiveRecord) ?? rows[0]`) for profile detection; additionally,
+  `earliestTbaiCutoverDate = earliestCutoverDate(tbaiCfgRows, 'tbai')` is computed from the same
+  fetch (no extra round trip) and exposed in the hook's returned state.
+- `fetchTbaiData(apiFetch, orgId, cutoverDate)` gained a 3rd parameter. A new
+  `buildCutoverCriteria(cutoverDate)` helper (also exported, for reuse by
+  `TbaiMonitorSection.jsx`) returns `[]` when `cutoverDate` is falsy (no config history at all —
+  request shape is byte-for-byte unchanged from before this fix, so the common case has zero
+  behavioral difference) or `[{ fieldName: 'invoiceDate', operator: 'greaterOrEqual', value:
+  cutoverDate.slice(0, 10) }]` otherwise. `invoiceDate` is the same joined field
+  `TbaiMonitorSection.jsx` already reads off each row (`row.invoiceDate` — present in the API
+  response despite not being a raw AD column on `TBAI_SyncInvoice`, i.e. an already-projected,
+  therefore already-filterable, HQL alias) — no new backend field was introduced.
+- All 5 of `fetchTbaiData`'s count queries (total, Recibido, Rechazado, Error, Pendiente) now
+  merge this cutover criteria in. `TbaiMonitorSection` takes a new `earliestCutoverDate` prop
+  (threaded from `FiscalMonitorPage` ← `useFiscalMonitor`'s `earliestTbaiCutoverDate`, on both
+  the standalone-TBAI and the combined SII+TBAI render sites) and applies the same
+  `buildCutoverCriteria()` to its own paginated list fetch and CSV export, so the on-screen list,
+  its pill counts, and the exported file always agree.
+
+**Verifactu — investigated, deliberately NOT given the same query-level fix.** Verifactu's
+monitor entities (`facturasAceptadas`/`facturasParcialmenteAceptadas`/`facturasRechazadas`/
+`facturasInválidas`, all backed by the `etvfac_inv_sent_status_v` view) project **no date column
+at all** — confirmed against both `artifacts/monitor-verifactu/schema-raw.json` (no date field in
+any of the four entities' raw AD field lists) and every row `VerifactuMonitorSection.jsx` ever
+reads (`invoice$documentNo`/`invoice$_identifier`, never an `invoiceDate`-shaped property, unlike
+TBAI). There is no client-filterable field to gate on without an AD/HQL change to the classic
+Verifactu module (out of scope — that lives in a different repo). This is lower risk than it
+sounds: `etvfac_inv_sent_status_v` rows exist **only** for invoices actually sent through
+Verifactu, so the "pre-enrollment noise" failure mode that motivated this fix for TBAI is not
+structurally possible here the same way. `fetchVerifactuMonitorData()`'s `_org`-only query is
+unchanged; the reasoning is captured as a code comment at its call site in `useFiscalMonitor.js`.
+
+### Direction column — sales vs. purchase (ETP-5229, item #14)
+
+**Bug:** `sincronización` (TBAI_SyncInvoice) rows link to `C_Invoice` via the `invoice` FK with
+no `issotrx` filter, so the TBAI monitor table mixed sales and purchase invoices with **no visual
+distinction**. Sales and purchase invoices have independent `documentno` sequences, so they can
+(and did, causing real confusion) share the exact same displayed number while being two entirely
+different documents.
+
+**Fix:** a new `isSalesRow(row)` helper in `TbaiMonitorSection.jsx` reads
+`row.issotrx ?? row['invoice$issotrx']` (`true`/`'Y'`/`'y'` → sales) — the same "NEO already
+projects a companion field for the `invoice` FK beyond the curated contract" pattern already
+relied on for `row.invoiceDate`/`row['invoice$_identifier']`/`row['invoice$description']`; no
+backend/decisions.json change was needed. A new **Direction** column (`fiscalMonitor.col.direction`
+header) was inserted between Invoice number and Description, rendering an `fm-pill` badge —
+`info` variant + `fiscalMonitor.direction.sales` ("Issued"/"Emitida") for sales rows, `neutral`
+variant + `fiscalMonitor.direction.purchase` ("Received"/"Recibida") for purchase rows — reusing
+the SAME "Issued"/"Received" terminology the SII section's tabs already use
+(`fiscalMonitor.sii.tab.issued`/`.received`), rather than inventing new vocabulary. Empty-state
+`colSpan` bumped from 7 to 8 to account for the new column. `buildTbaiExportCols()` gained a
+matching "Direction" CSV column ("Sales"/"Purchase").
+
+As a related correctness fix (same root confusion), the two places `TbaiMonitorSection` opens an
+invoice preview with a hardcoded `'sales-invoice'` spec hint — the pending-status pill's click
+handler (`resolveStatusPillClick`) and the invoice-number link (`NumFactura`'s `onOpen`) — now
+pass `isSalesRow(row) ? 'sales-invoice' : 'purchase-invoice'` instead, so clicking a purchase
+invoice's row opens the correct preview spec rather than always trying `sales-invoice` first.
+
 ## Verifactu section (`VerifactuMonitorSection`)
 
 **Status tabs:** Aceptadas | Parcialmente aceptadas | Rechazadas | Inválidas
@@ -393,11 +485,11 @@ i18n keys: `invoicePreview.fiscalStatus.sii`, `invoicePreview.fiscalStatus.tbai`
 - `artifacts/fiscal-monitor/decisions.json` — `layoutType: "custom"`, window registered.
 - `tools/app-shell/src/windows/registry.js` — `fiscal-monitor` in `customLoaders` at `customLoaders['fiscal-monitor']`.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/FiscalMonitorPage.jsx` — profile-routing orchestrator; debug mode integration.
-- `tools/app-shell/src/windows/custom/fiscal-monitor/useFiscalMonitor.js` — parallel config + monitor data fetcher; exports entity/spec constants for section components; fetches `resultadoValidación` (TBAI error reasons) in parallel with the TBAI count fetches, exposed as `tbaiValidationResults`. `fetchSiiParentId()` prefers the active `organizations` row (see "SII parentId resolution" above, ETP-5229).
+- `tools/app-shell/src/windows/custom/fiscal-monitor/useFiscalMonitor.js` — parallel config + monitor data fetcher; exports entity/spec constants for section components; fetches `resultadoValidación` (TBAI error reasons) in parallel with the TBAI count fetches, exposed as `tbaiValidationResults`. `fetchSiiParentId()` prefers the active `organizations` row (see "SII parentId resolution" above, ETP-5229). **ETP-5229 item #13:** the TBAI config fetch now pulls ALL rows (`fetchAllConfigRowsSafe`, reusing `fetchAllRows`/`earliestCutoverDate` exported from `fiscal-config/useFiscalConfig.js`) to derive `earliestTbaiCutoverDate`, exposed in the hook's state and applied via `buildCutoverCriteria()` (also exported) to `fetchTbaiData()`'s 5 count queries — see "Earliest-cutover-date gate on TBAI's counts/list/export" above.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/fiscalMonitor.utils.js` — `buildMonitorFetchPlan`, `computeKpis`, `pickMostRecentMotivo` (pure functions, fully tested). `pickMostRecentMotivo` builds the invoice → most-recent-`motivo` lookup used by `SiiMonitorSection`'s "Motivo error" header-empty fallback (ETP-4784 correction #2 — see above); since correction #4, it also skips a `*SiiData` row as a motivo source when that row's own `estadoRegistro` is not an error status (see "Fallback gated by the invoice's CURRENT status" above).
 - `tools/app-shell/src/windows/custom/fiscal-monitor/FiscalKpiCards.jsx` — clickable metric cards per system variant.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/SiiMonitorSection.jsx` — emitidas/recibidas × actual/anterior; `onTabChange` callback with combined key; dedicated "Error reason" column (`aeatsiiErrorCode`/`aeatsiiErrorMsg`) between Status and CSV AEAT, same visual pattern as Verifactu's column (see "Same layout for all three monitors" above); `fetchSubtab()` also builds a `motivoMap` (invoice → most-recent `motivo`) from the already-fetched `*SiiData` response, used to fill the column when the header field is empty (see "Header-empty fallback" above). `handleExport()` re-fetches the `*SiiData` sibling entity independently and rebuilds an `exportMotivoMap` via `pickMostRecentMotivo()`, feeding `buildSiiExportCols(motivoMap)` — the CSV export's Error column applies the same fallback as the on-screen column (see "CSV export replicates the same fallback" above). Since correction #4, both the on-screen `errorMsg` and `buildSiiExportCols` gate the header/`motivoMap` fallback on `isErrorStatus(row.aeatsiiEstado)` — the invoice's CURRENT status — so a `*SiiData` history entry never resurfaces after the invoice moves out of an error state (see "Fallback gated by the invoice's CURRENT status" above).
-- `tools/app-shell/src/windows/custom/fiscal-monitor/TbaiMonitorSection.jsx` — server-side criteria filter per status; `onFilterChange` callback; `buildValidationMap`/`validationResults` prop joins `resultadoValidación` error reasons onto a dedicated "Error reason" table column (see "Error reason (ETP-4784)" above); `buildTbaiExportCols` joins the same reasons into the CSV export.
+- `tools/app-shell/src/windows/custom/fiscal-monitor/TbaiMonitorSection.jsx` — server-side criteria filter per status; `onFilterChange` callback; `buildValidationMap`/`validationResults` prop joins `resultadoValidación` error reasons onto a dedicated "Error reason" table column (see "Error reason (ETP-4784)" above); `buildTbaiExportCols` joins the same reasons into the CSV export. **ETP-5229 item #13:** new `earliestCutoverDate` prop, merged via `buildCutoverCriteria()` into the list fetch and CSV export criteria. **ETP-5229 item #14:** new `isSalesRow(row)` helper + Direction column (`fiscalMonitor.col.direction`) distinguishing sales/purchase invoices; the pending-status pill and invoice-number link now pick `'sales-invoice'`/`'purchase-invoice'` per row instead of a hardcoded spec hint — see "Direction column — sales vs. purchase" above.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/VerifactuMonitorSection.jsx` — entity-per-status tab; `onTabChange` callback.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/fmtDateUtils.js` — pure `fmtDate` helper (no React deps); converts `YYYY-MM-DD` → `DD/MM/YYYY`, passes through already-formatted dates, returns `'—'` for falsy input. Importable in Node.js tests without any alias setup.
 - `tools/app-shell/src/windows/custom/fiscal-monitor/FmPrimitives.jsx` — shared `StatusPill`, `NumFactura`, `Pager`, `RowActionBtn` primitives; `isPendingStatus`/`PENDING_STATUSES` and error-status helpers; re-exports `fmtDate` from `fmtDateUtils.js` and `PAGE_SIZE = 20`.

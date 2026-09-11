@@ -17,7 +17,10 @@ const CUTOVER_FIELD = {
   verifactu: 'inVfactuSystem',
 };
 
-async function fetchAllRows(apiFetch, specName, entityName, orgId) {
+// ETP-5229 — exported so other fiscal windows (e.g. useFiscalMonitor.js) reuse
+// the SAME "all rows" fetch + earliest-cutover computation instead of building
+// a parallel mechanism. See fetchAllRows/earliestCutoverDate below.
+export async function fetchAllRows(apiFetch, specName, entityName, orgId) {
   // NEO reads with NO_ACTIVE_FILTER=true, so an org can carry inactive
   // ("Change SIF") trace rows alongside a live one. We deliberately fetch ALL
   // rows here (not just the active one) — ETP-5229 needs the EARLIEST cutover
@@ -55,7 +58,7 @@ function pickDisplayRecord(rows) {
  * @param {'sii'|'tbai'|'verifactu'} system
  * @returns {string|null} ISO timestamp, or null if no row carries the field
  */
-function earliestCutoverDate(rows, system) {
+export function earliestCutoverDate(rows, system) {
   const field = CUTOVER_FIELD[system];
   let earliestMs = null;
   for (const row of rows) {

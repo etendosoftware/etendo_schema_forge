@@ -32,6 +32,11 @@ vi.mock('../FmPrimitives.jsx', () => ({
 vi.mock('../useFiscalMonitor.js', () => ({
   TBAI_SPEC: 'tbai-facturas-enviadas',
   TBAI_ENTITY: 'header',
+  // ETP-5229 — real implementation stubbed here rather than imported: this
+  // suite never passes earliestCutoverDate, so [] (no-op) is always correct.
+  buildCutoverCriteria: (cutoverDate) => (cutoverDate
+    ? [{ fieldName: 'invoiceDate', operator: 'greaterOrEqual', value: cutoverDate.slice(0, 10) }]
+    : []),
 }));
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
