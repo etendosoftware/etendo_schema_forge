@@ -3122,3 +3122,71 @@ implementation detail.
   = <child>.c_acctschema_id AND d.ad_client_id = <child>.ad_client_id` is already guaranteed
   at-most-one-match by the `c_acctschema_id` half alone — the `ad_client_id` half is redundant-but-
   harmless extra tenant-isolation documentation in the SQL, not load-bearing for uniqueness.
+
+---
+
+## ETP-5275 — PSD2 "Get Bank Statements" schedule removed from onboarding (R36, 2026-09-10)
+
+Onboarding step 6 (`OnboardingBankConnectionSyncService`, live since 2026-06-28) created one daily
+`AD_Process_Request` per tenant running the PSD2 `Get Bank Statements` process at a random time in
+the 03:00–06:00 window. Every tenant got it, connected bank or not. The step is deleted
+(preventive, `com.etendoerp.go`) and `R36-psd2-bank-statement-schedule-removal` deletes the rows
+already created (corrective, this repo). Four findings worth carrying forward:
+
+- **You cannot `DELETE` an `AD_Process_Request` that is still scheduled — core's trigger forbids
+  it.** `AD_PROCESS_REQUEST_TRG` ends with `IF (DELETING) THEN IF (:OLD.STATUS = 'SCH' OR
+  :OLD.STATUS = 'MIS') THEN RAISE_APPLICATION_ERROR(-20000,'@20630@')` — *"Unable to delete Process
+  Request whilst still scheduled."* Every onboarding-created row is `'SCH'`, so the obvious
+  one-statement fix aborts the whole tenant's transaction. The fix has to `UPDATE … SET
+  status='UNS'` first, **in the same transaction**, so the trigger sees the new value in `:OLD`.
+  **Apply:** before writing a data-fix that deletes from an AD table, read
+  `src-db/database/model/triggers/<TABLE>_TRG.xml` — Etendo puts referential *policy* in triggers,
+  not only in FKs, and the failure mode is a hard abort of the tenant rather than a skipped row.
+
+- **`isactive='N'` alone never stops a scheduled process; `status` is what the loader reads.**
+  `OBScheduler.initialize` re-arms everything returned by `ProcessRequestData.selectByStatus`,
+  whose SQL is literally `SELECT ... FROM AD_Process_Request WHERE Status = ?` —`isactive` is never
+  consulted (`src/org/openbravo/scheduling/ProcessRequest_data.xsql`). This matters even for the
+  delete variant, because `'UNS'` is doing double duty: it satisfies the trigger *and* it is the
+  correct state for the brief window before the row disappears.
+  **Apply:** grep the `.xsql` for the loader's real predicate before assuming which column gates a
+  core mechanism.
+
+- **A service's marker `description` is a moving target — check the DB for variants before
+  filtering on it.** The natural way to scope this fix is the description the creating service
+  stamped on each row. There turned out to be **two**: ETP-4097 shipped `PSD2 automatic bank
+  statement synchronization (Etendo GO onboarding)`, and ETP-4690 ("Rename PSD2 to bank
+  connection") changed the constant to `Automatic bank statement synchronization (Etendo GO
+  onboarding)`. Tenants onboarded before that rename still carry the old string — 9 of 127 rows on
+  the shared dev DB. Filtering on the constant as it reads in `HEAD` today would have silently left
+  every pre-rename tenant scheduled, with a green `@check` afterwards claiming success.
+  **Apply:** when a fix keys on a value some code once wrote, `GROUP BY` that column on the live DB
+  first and `git log -S` the constant. The current source is evidence of what is written *now*, not
+  of what is *stored*.
+
+- **Key a fix on the AD id when a sibling record shares the name.** A separate, still-wanted process
+  is named `Get Bank Statements (All Clients)`; `name ILIKE '%Get Bank Statements%'` would have
+  removed its schedule too. This is the case where hardcoding an AD id
+  (`F8704AB553464EFEABF8A5A82C74A308`) is *more* correct than resolving by name — the usual
+  "never hardcode UUIDs" rule assumes the name is unambiguous, and here it is not.
+  **Apply:** before writing a name-based predicate, `SELECT` the name pattern on the live DB and
+  count what it actually matches.
+
+**What the delete takes with it, and what would block it.** `AD_Process_Run` is a child through
+`ad_process_run_ad_process_requ`, which is `ON DELETE CASCADE` — the execution history goes with the
+request (~15.3k rows on the dev DB). Losing it is the explicit product decision on this ticket; an
+earlier draft only unscheduled the rows to preserve it. The other two referencing tables are `NO
+ACTION` and *would* block the delete if they held rows — `jobs_job_result`
+(`jobs_job_result_request_id`) and `etcop_schedule` (`etcop_sch_req_fk`) — both empty for this
+process. Deliberately left that way: they belong to other modules, so a tenant that somehow has such
+a row should fail loudly rather than have its rows deleted behind the owning module's back.
+Verified on the live DB inside a rolled-back transaction: `UPDATE 127` → `DELETE 127`, `@check`
+afterwards 0, `ad_process_run` 77634 → 62313, and the one unmarked manual `'COM'` row untouched.
+
+**Live-Quartz caveat for the operator — this is the one real cost of deleting over unscheduling.**
+The fix rewrites the DB; an already-armed trigger lives in the running scheduler's memory. If the
+job fires between the fix and the next Tomcat restart, `ProcessMonitor` tries to INSERT an
+`AD_Process_Run` row pointing at a request that no longer exists and hits a foreign-key violation in
+the log. With the unschedule-only approach that same stray fire was a harmless no-op run. It is
+noise rather than corruption — nothing else is written, and the trigger is not re-armed after the
+restart — but it argues for running this fix close to a restart.
