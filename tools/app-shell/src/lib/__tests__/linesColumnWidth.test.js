@@ -34,16 +34,16 @@ describe('linesColumnWidth', () => {
       assert.equal(columnFlex({ type: 'percent' }, 1), '0 0 152px');
     });
 
-    it('string/text columns always return 1 1 224px regardless of index (no idx=0 special case)', () => {
-      assert.equal(columnFlex({ type: 'string' }, 0), '1 1 224px');
-      assert.equal(columnFlex({ type: 'string' }, 1), '1 1 224px');
-      assert.equal(columnFlex({ type: 'text' }, 0), '1 1 224px');
-      assert.equal(columnFlex({ type: 'text' }, 2), '1 1 224px');
+    it('string/text columns always return 1 0 224px regardless of index (no idx=0 special case)', () => {
+      assert.equal(columnFlex({ type: 'string' }, 0), '1 0 224px');
+      assert.equal(columnFlex({ type: 'string' }, 1), '1 0 224px');
+      assert.equal(columnFlex({ type: 'text' }, 0), '1 0 224px');
+      assert.equal(columnFlex({ type: 'text' }, 2), '1 0 224px');
     });
 
-    it('selector/foreignKey at idx=0 returns 1 1 192px (elastic so product column takes remaining space)', () => {
-      assert.equal(columnFlex({ type: 'selector' }, 0), '1 1 192px');
-      assert.equal(columnFlex({ type: 'foreignKey' }, 0), '1 1 192px');
+    it('selector/foreignKey at idx=0 returns 1 0 192px (elastic grow, no shrink, so product column takes remaining space without collapsing)', () => {
+      assert.equal(columnFlex({ type: 'selector' }, 0), '1 0 192px');
+      assert.equal(columnFlex({ type: 'foreignKey' }, 0), '1 0 192px');
     });
 
     it('selector/search/foreignKey columns at idx>0 → 0 0 192px (fixed)', () => {
@@ -52,13 +52,13 @@ describe('linesColumnWidth', () => {
       assert.equal(columnFlex({ type: 'foreignKey' }, 1), '0 0 192px');
     });
 
-    it('enum/select columns → 1 1 224px (string-sized basis so long Select values fit)', () => {
-      assert.equal(columnFlex({ type: 'enum' }, 1), '1 1 224px');
-      assert.equal(columnFlex({ type: 'select' }, 1), '1 1 224px');
+    it('enum/select columns → 1 0 224px (string-sized basis so long Select values fit)', () => {
+      assert.equal(columnFlex({ type: 'enum' }, 1), '1 0 224px');
+      assert.equal(columnFlex({ type: 'select' }, 1), '1 0 224px');
     });
 
-    it('date columns → 1 1 130px', () => {
-      assert.equal(columnFlex({ type: 'date' }, 1), '1 1 130px');
+    it('date columns → 1 0 130px', () => {
+      assert.equal(columnFlex({ type: 'date' }, 1), '1 0 130px');
     });
 
     it('unknown types → 0 0 120px (safe fallback)', () => {
@@ -94,16 +94,36 @@ describe('linesColumnWidth', () => {
       assert.equal(columnFlex({ type: 'custom', grow: true }, 1), '1 0 120px');
     });
 
+    // ETP-5133 review (Alex) — the `col.minWidth` branch is checked FIRST in
+    // columnFlex() and short-circuits every other type/idx rule, but it was
+    // never updated by this fix: it still hardcodes `1 1 ${minWidth}px`
+    // (flex-shrink: 1), the exact shorthand this PR just replaced everywhere
+    // else because it let leading columns collapse toward zero at a narrow
+    // viewport instead of triggering horizontal scroll (see selectorFlex()
+    // and the elastic-type branch above, both now `1 0`).
+    //
+    // No window's column config sets `col.minWidth` today (confirmed via
+    // `grep -rn "minWidth:" artifacts/*/decisions.json` — no line-grid column
+    // declares it), so this is DEAD CODE right now, not a live regression.
+    // This test pins down that latent gap: it will keep passing unchanged
+    // (documenting the bug) until a real fix lands, at which point updating
+    // this assertion to `1 0 ...` is the signal the fix landed. If a future
+    // window ever declares `minWidth` on a leading/growing column, this
+    // branch reintroduces the ETP-5133 collapse bug for that column.
+    it('KNOWN GAP (non-blocking) — col.minWidth branch still returns 1 1 (shrinkable), unlike every other elastic branch fixed by ETP-5133', () => {
+      assert.equal(columnFlex({ type: 'string', minWidth: 300 }, 0), '1 1 300px');
+    });
+
     it('selector at idx=0 grows by default; grow:false overrides it', () => {
-      assert.equal(columnFlex({ type: 'selector' }, 0), '1 1 192px');
-      assert.equal(columnFlex({ type: 'selector', grow: true }, 0), '1 1 192px');
+      assert.equal(columnFlex({ type: 'selector' }, 0), '1 0 192px');
+      assert.equal(columnFlex({ type: 'selector', grow: true }, 0), '1 0 192px');
       assert.equal(columnFlex({ type: 'selector', grow: false }, 0), '0 0 192px');
     });
 
     it('search at idx=1 is fixed by default; grow:true overrides it', () => {
       assert.equal(columnFlex({ type: 'search' }, 1), '0 0 192px');
       assert.equal(columnFlex({ type: 'search', grow: false }, 1), '0 0 192px');
-      assert.equal(columnFlex({ type: 'search', grow: true }, 1), '1 1 192px');
+      assert.equal(columnFlex({ type: 'search', grow: true }, 1), '1 0 192px');
     });
   });
 

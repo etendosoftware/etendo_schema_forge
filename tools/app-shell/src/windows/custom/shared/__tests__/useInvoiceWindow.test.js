@@ -45,6 +45,29 @@ describe('useInvoiceWindow', () => {
         assert.equal(draftMode.processingModal, null);
       });
     });
+
+    describe('keepSaveWhenCompletedFields (ETP-4839 — purchase-invoice Save-when-completed override)', () => {
+      it('omits keepSaveWhenCompletedFields entirely when called with no options arg (sales-invoice call shape)', () => {
+        const draftMode = getInvoiceDraftMode(fakeUi);
+        assert.equal('keepSaveWhenCompletedFields' in draftMode, false);
+      });
+
+      it('omits keepSaveWhenCompletedFields entirely when passed an empty array', () => {
+        const draftMode = getInvoiceDraftMode(fakeUi, { keepSaveWhenCompletedFields: [] });
+        assert.equal('keepSaveWhenCompletedFields' in draftMode, false);
+      });
+
+      it('sets keepSaveWhenCompletedFields to the given array when requested (purchase-invoice call shape)', () => {
+        const draftMode = getInvoiceDraftMode(fakeUi, { keepSaveWhenCompletedFields: ['orderReference'] });
+        assert.deepEqual(draftMode.keepSaveWhenCompletedFields, ['orderReference']);
+      });
+
+      it('is independent from showVerifactuProcessingModal — both options can be set together', () => {
+        const draftMode = getInvoiceDraftMode(fakeUi, { keepSaveWhenCompletedFields: ['orderReference'], showVerifactuProcessingModal: true });
+        assert.deepEqual(draftMode.keepSaveWhenCompletedFields, ['orderReference']);
+        assert.deepEqual(draftMode.processingModal, { body: '__fiscal.verifactu.processing.body__' });
+      });
+    });
   });
 
   describe('buildInvoiceRowQuickActions', () => {

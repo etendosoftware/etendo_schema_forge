@@ -5,6 +5,8 @@ import {
   isTbaiEligibleByDate,
   isSifEligibleByDate,
   isVerifactuEligibleByDate,
+  isTbaiStatusNotApplicable,
+  TBAI_STATUS_NOT_APPLICABLE,
 } from '../fiscalTargets.js';
 
 // ---------------------------------------------------------------------------
@@ -388,4 +390,67 @@ describe('getInvoiceFiscalTargets — a non-BIZKAIA territory drops TBAI but nev
       });
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5216 — the TBAI adoption-date gate moved OUT of the React cell and INTO
+// the stored computed column `EM_ETGO_Tbai_Status` (DB function
+// `ETGO_GET_TBAI_STATUS`). The database answers the literal 'NoAplica' for an
+// invoice that predates its OWN organization's adoption date, or whose
+// organization has no active `tbai_config` row; the cell only translates that
+// value to a dash.
+//
+// The comparison is EXACT on purpose: the value is a DB literal, not free text,
+// so anything that is not byte-for-byte 'NoAplica' is a real status and must
+// keep rendering as a badge. Loosening this to a case-insensitive match would
+// silently hide any future status that happens to differ only in case.
+// ---------------------------------------------------------------------------
+describe('TBAI_STATUS_NOT_APPLICABLE', () => {
+  it('is the exact literal the DB function stores', () => {
+    assert.equal(TBAI_STATUS_NOT_APPLICABLE, 'NoAplica');
+  });
+});
+
+describe('isTbaiStatusNotApplicable', () => {
+  it('matches the canonical literal', () => {
+    assert.equal(isTbaiStatusNotApplicable('NoAplica'), true);
+  });
+
+  it('matches the exported constant (single source of truth)', () => {
+    assert.equal(isTbaiStatusNotApplicable(TBAI_STATUS_NOT_APPLICABLE), true);
+  });
+
+  it('does NOT match a lowercase "noaplica" — the comparison is exact', () => {
+    assert.equal(isTbaiStatusNotApplicable('noaplica'), false);
+  });
+
+  it('does NOT match other case variants', () => {
+    for (const variant of ['NOAPLICA', 'noAplica', 'Noaplica']) {
+      assert.equal(isTbaiStatusNotApplicable(variant), false);
+    }
+  });
+
+  it('does NOT match a padded or partial value', () => {
+    for (const variant of [' NoAplica', 'NoAplica ', 'NoAplic', 'NoAplicable']) {
+      assert.equal(isTbaiStatusNotApplicable(variant), false);
+    }
+  });
+
+  it('does NOT match a real status', () => {
+    for (const status of ['Pendiente', 'Enviada', 'Recibido', 'Rechazado', 'Error']) {
+      assert.equal(isTbaiStatusNotApplicable(status), false);
+    }
+  });
+
+  it('does NOT match an absent value — a row fetched before the column was backfilled falls back, it is not "does not apply"', () => {
+    for (const absent of [undefined, null, '']) {
+      assert.equal(isTbaiStatusNotApplicable(absent), false);
+    }
+  });
+
+  it('does NOT match non-string values', () => {
+    for (const value of [0, false, true, {}, []]) {
+      assert.equal(isTbaiStatusNotApplicable(value), false);
+    }
+  });
 });

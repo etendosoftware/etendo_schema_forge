@@ -62,7 +62,11 @@ const headerRecord = (updated) => ({
 
 const infoRecord = (updated) => ({
   id: ORG_ID,
-  taxID: 'B12345678',
+  // A REAL, check-digit-valid CIF, not the repo-wide 'B12345678' placeholder: ETP-5190 made the
+  // Organización window refuse to save an invalid fiscal id, and this spec is about the SAVE
+  // (two PATCHes, one token each) — an invalid seed value never gets that far, so every
+  // assertion below would fail on a screen that is behaving correctly.
+  taxID: 'B12345674',
   locationAddress: 'e2e-location-0001',
   'locationAddress$_identifier': 'Calle Falsa - 123 - 28001 - Madrid - España',
   yourCompanyDocumentImage: '',

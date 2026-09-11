@@ -53,11 +53,22 @@ function placeCompactSymbol(formatted, currencyCode, symbol) {
 }
 
 function groupWithSeparators(num, minFrac, maxFrac, thousandsSeparator, decimalSeparator) {
-  // `num < 0` is false for -0 (it's numerically equal to 0) — Intl.NumberFormat
-  // renders -0 with a minus sign regardless, so check for it explicitly too.
-  const sign = (num < 0 || Object.is(num, -0)) ? '-' : '';
   const abs = Math.abs(num);
   const fixed = abs.toFixed(maxFrac);
+  // Guard against "-0,00" (ETP-5132) — mirrors the ETP-4898 guard already
+  // applied server-side in report-html-helpers.js's formatCurrency.
+  // `num < 0` is false for -0 (it's numerically equal to 0), so a bare sign
+  // check misses it; the old `Object.is(num, -0)` branch below caught -0 but
+  // rendered it WITH a minus sign, matching raw Intl.NumberFormat semantics.
+  // That is wrong for a UI amount: any caller computing a sign-flipped
+  // display value (e.g. `-discountAmt` when discountAmt is 0 or null, as
+  // DocumentTotalsPanel.jsx does) hands this function exactly -0, and a
+  // literal "-0,00 €" reads to a user as a real negative amount. Any
+  // magnitude that rounds to zero at this precision — genuine -0, or a tiny
+  // float residual like -2.9e-11 from summing floats — must display as
+  // positive zero; only a magnitude that survives rounding keeps its sign.
+  const roundsToZero = Number(fixed) === 0;
+  const sign = (!roundsToZero && (num < 0 || Object.is(num, -0))) ? '-' : '';
   const [intRaw, decRaw = ''] = fixed.split('.');
   const intPart = groupThousands(intRaw, thousandsSeparator);
   let decPart = decRaw;

@@ -12,6 +12,16 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 // CreatableSearchSelect.jsx's SERVER_SEARCH_PAGE so all three selector styles page at the
 // same granularity (ETP-4975).
 const SERVER_SEARCH_PAGE = 50;
+// ETP-5005 — debounce for a TYPED search only. Deliberately longer than the 300ms the other
+// selectors use: a line cell's selector list is the slow one (it can take seconds), and at 300ms
+// a word like "arrendamiento" fires a request per keystroke, each one racing the next. One
+// second is long enough that a normal typing burst produces a single request.
+//
+// It applies to typing ONLY. Opening the combo (focus, chip click, chevron toggle, clear) fetches
+// IMMEDIATELY — routing that through the same debounce would delay the first page by a further
+// second and re-open the very "nothing happens when I click" hole `loadingFirstPage` exists to
+// close.
+const TYPED_SEARCH_DEBOUNCE_MS = 1000;
 
 /**
  * Compact inline combobox for search-type FK fields in rapid line entry.
@@ -31,6 +41,14 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   const [openUp, setOpenUp] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState(null);
   const [serverResults, setServerResults] = useState(null);
+  // ETP-5005 — whether the FIRST page of server results is still in flight. Distinct from
+  // `hasMore` (which drives the "load more" footer and is only meaningful once at least one
+  // page has landed): this covers the window between the user opening the combo and the first
+  // response arriving, which on a slow selector can exceed 3 seconds. Without it the dropdown
+  // panel is not rendered AT ALL during that window (the render gate below required
+  // `filtered.length > 0`, and a line cell is always constructed with an empty local `options`
+  // catalog), so the user got no feedback whatsoever and read the control as broken.
+  const [loadingFirstPage, setLoadingFirstPage] = useState(false);
   // Whether another page might exist beyond the loaded ones — drives the "loading more"
   // footer and gates scroll-triggered fetches (ETP-4975, mirrors CreatableSearchSelect.jsx's
   // serverSearch mode and SelectorInput.jsx's hasMore).
@@ -103,13 +121,18 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     setHasMore(true);
   }, []);
 
-  // Fetches one page of server-side results. `offset` 0 is the debounced typing/open/focus
-  // flow (REPLACES `serverResults` — a new query always starts from page 0); `offset > 0` is
-  // the scroll-triggered "load more" (APPENDS, no debounce — mirrors
-  // CreatableSearchSelect.jsx's triggerServerSearch scroll path, ETP-4975). Sends explicit
-  // `limit`/`offset` so the backend's own default page size never silently caps the list.
-  const fetchServerResults = useCallback((q, offset = 0) => {
-    if (!selectorUrl || !token) { setServerResults(null); return; }
+  // Fetches one page of server-side results. `offset` 0 REPLACES `serverResults` (a new query
+  // always starts from page 0); `offset > 0` is the scroll-triggered "load more" (APPENDS, never
+  // debounced — mirrors CreatableSearchSelect.jsx's triggerServerSearch scroll path, ETP-4975).
+  // Sends explicit `limit`/`offset` so the backend's own default page size never silently caps
+  // the list.
+  //
+  // ETP-5005 — `immediate` splits the two offset-0 callers apart: OPENING the combo (focus, chip
+  // click, chevron toggle, clear) fetches at once, while TYPING waits out
+  // TYPED_SEARCH_DEBOUNCE_MS. They used to share one 300ms debounce, which made both wrong at
+  // once: too slow to open, too eager while typing.
+  const fetchServerResults = useCallback((q, offset = 0, { immediate = false } = {}) => {
+    if (!selectorUrl || !token) { setServerResults(null); setLoadingFirstPage(false); return; }
     if (offset > 0 && (!hasMoreRef.current || fetchInFlightRef.current)) return;
     clearTimeout(fetchTimer.current);
     // ETP-4975 BUG-2 fix: offset===0 always starts a NEW search generation (typed, or via
@@ -121,6 +144,10 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     // (serverResults/offsetRef/hasMoreRef).
     if (offset === 0) searchGenerationRef.current += 1;
     const requestGeneration = searchGenerationRef.current;
+    // ETP-5005 — raise the loading flag HERE, not inside runFetch: offset===0 is debounced by
+    // 300ms and the spinner has to appear on the click, not 300ms after it. A superseded search
+    // never lowers it (see the generation guard in the finally below) — the newer one owns it.
+    if (offset === 0) setLoadingFirstPage(true);
     const trimmed = (q || '').trim();
     const queryParams = trimmed ? { ...selectorContext, q: trimmed } : { ...selectorContext };
     queryParams.limit = SERVER_SEARCH_PAGE;
@@ -140,12 +167,22 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           setHasMore(more);
         })
         .catch(() => {})
-        .finally(() => { fetchInFlightRef.current = false; });
+        .finally(() => {
+          fetchInFlightRef.current = false;
+          // Only the CURRENT generation's first page may lower the flag. A stale request
+          // resolving after a newer search started would otherwise hide the spinner while
+          // that newer search is still in flight — the same reasoning as the result guard
+          // above, applied to the loading state.
+          if (offset === 0 && searchGenerationRef.current === requestGeneration) {
+            setLoadingFirstPage(false);
+          }
+        });
     };
-    if (offset === 0) {
-      // Debounced — typing/open/focus can all fire this in quick succession; only the last
-      // call within 300ms actually hits the server (unchanged from the pre-ETP-4975 behavior).
-      fetchTimer.current = setTimeout(runFetch, 300);
+    // A "load more" (offset > 0) and an opening fetch both run now; only typing waits. The
+    // clearTimeout above still applies to an immediate call, so opening the combo cancels any
+    // typed search left pending from the previous session rather than letting it land late.
+    if (offset === 0 && !immediate) {
+      fetchTimer.current = setTimeout(runFetch, TYPED_SEARCH_DEBOUNCE_MS);
     } else {
       runFetch();
     }
@@ -180,6 +217,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     setOpen(false);
     setQuery('');
     setServerResults(null);
+    setLoadingFirstPage(false);
   };
 
   // Chip body click → re-enter edit mode, mirroring CreatableSearchSelect's handleChipClick:
@@ -190,7 +228,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     setQuery('');
     setServerResults(null);
     resetPagination();
-    fetchServerResults('');
+    fetchServerResults('', 0, { immediate: true });
     requestAnimationFrame(() => {
       localInputRef.current?.focus();
       localInputRef.current?.select();
@@ -209,7 +247,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
     setServerResults(null);
     resetPagination();
     setOpen(true);
-    fetchServerResults('');
+    fetchServerResults('', 0, { immediate: true });
     requestAnimationFrame(() => {
       localInputRef.current?.focus();
     });
@@ -354,6 +392,13 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
         }}
         onFocus={() => {
           updateDropdownDirection();
+          // ETP-5005 — an ALREADY-OPEN combo must not restart its search. `handleChipClick` and
+          // `handleClear` both open, fetch, and THEN move focus here (via requestAnimationFrame),
+          // so without this guard every chip click issues two identical requests and throws the
+          // first one's results away. It was masked while both paths were debounced — the second
+          // call's clearTimeout cancelled the first before it ever left the browser — and became
+          // visible the moment opening started fetching immediately.
+          if (open) return;
           setOpen(true);
           // ETP-4600: opening on a cell that already has a committed value must show an EMPTY
           // search box + the full option list (matching CreatableSearchSelect's header behavior),
@@ -361,7 +406,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           setQuery('');
           setServerResults(null);
           resetPagination();
-          fetchServerResults('');
+          fetchServerResults('', 0, { immediate: true });
         }}
         onBlur={() => setTimeout(() => {
           setOpen(false);
@@ -415,10 +460,16 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
           }
           onKeyDown?.(e);
         }}
-        placeholder={placeholder}
-        className="w-full h-8 text-sm rounded-md border border-input bg-card px-2 pr-6 focus:ring-2 focus:ring-primary focus:outline-none"
+        // ETP-5005 — while the combo is open the search box is deliberately EMPTY (ETP-4600:
+        // the full option list must show, not the committed label pre-filtering it down to one
+        // match). That left the cell looking BLANK the instant the user clicked it, which reads
+        // as "my value was cleared" even though `value` is untouched and nothing is PATCHed.
+        // Showing the committed label as the placeholder keeps the current selection legible
+        // during the search without reintroducing the filtering ETP-4600 removed.
+        placeholder={open && resolvedLabel ? resolvedLabel : placeholder}
+        className="w-full h-8 text-sm rounded-md border border-input bg-card px-2 pr-6 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring focus-visible:outline-none"
         role="combobox"
-        aria-expanded={open && filtered.length > 0}
+        aria-expanded={open && (filtered.length > 0 || loadingFirstPage)}
         aria-controls={`inline-options-${field.key}`}
         aria-activedescendant={
           activeIndex >= 0 && filtered[activeIndex]
@@ -439,7 +490,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
             setQuery('');
             setServerResults(null);
             resetPagination();
-            fetchServerResults('');
+            fetchServerResults('', 0, { immediate: true });
           } else {
             setQuery('');
           }
@@ -449,7 +500,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
       >
         <ChevronDown className="h-4 w-4" data-testid={"ChevronDown__" + field.id} />
       </button>
-      {open && filtered.length > 0 && dropdownStyle && createPortal(
+      {open && (filtered.length > 0 || loadingFirstPage) && dropdownStyle && createPortal(
         <div
           ref={dropdownRef}
           id={`inline-options-${field.key}`}
@@ -493,6 +544,29 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
               shrink-to-fit sizing inflates the panel to ~2x its content width in Chrome — see
               CreatableSearchSelect's identical comment for the full root cause. */}
           <div className="min-w-full w-max">
+            {/* ETP-5005 — first-page skeleton. Shown only while nothing is displayable yet, so
+                it never replaces options the user can already act on: once the first page lands
+                (or the local catalog has entries) the list below takes over. Three rows rather
+                than a bare spinner so the panel keeps the height it is about to have and the
+                options do not jump into place under the cursor. */}
+            {filtered.length === 0 && loadingFirstPage && (
+              <div
+                className="px-2 py-1.5"
+                role="status"
+                aria-live="polite"
+                data-testid={`inline-add-options-${field.key}-loading`}
+              >
+                <span className="sr-only">{ui('loading')}</span>
+                {[0, 1, 2].map((i) => (
+                  <div
+                    key={i}
+                    aria-hidden="true"
+                    className="h-4 my-1 rounded bg-muted animate-pulse"
+                    style={{ width: `${140 - i * 24}px` }}
+                  />
+                ))}
+              </div>
+            )}
             {filtered.map((opt, index) => (
               <button
                 key={opt.id}

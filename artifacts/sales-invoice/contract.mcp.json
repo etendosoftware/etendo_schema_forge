@@ -1,8 +1,8 @@
 {
-  "version": "0.86.0",
+  "version": "0.87.0",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-09-02T16:41:28.327Z",
-  "contractChecksum": "1080513c5c7d8b89",
+  "updatedAt": "2026-09-08T16:31:10.515Z",
+  "contractChecksum": "07a7d437b563521d",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -987,14 +987,16 @@
         "em_etgo_delivery_status": "Estado de entrega",
         "C_DocTypeTarget_ID": "Tipo de documento",
         "PriceList": "Precio",
-        "Foreign_Amount": "Importe en Moneda Objetivo"
+        "Foreign_Amount": "Importe en Moneda Objetivo",
+        "em_etgo_tbai_status": "Estado TicketBAI"
       },
       "en_US": {
         "OutstandingAmt": "Outstanding Amount",
         "EM_Etgo_Due_Date": "Due Date",
         "em_etgo_delivery_status": "Delivery Status",
         "C_DocTypeTarget_ID": "Document Type",
-        "Foreign_Amount": "Target Currency Amount"
+        "Foreign_Amount": "Target Currency Amount",
+        "em_etgo_tbai_status": "TicketBAI Status"
       },
       "es_AR": {
         "OutstandingAmt": "Saldo pendiente"
@@ -1175,6 +1177,9 @@
             "readOnly": true
           },
           "eTGODueDate": {
+            "readOnly": true
+          },
+          "eTGOTbaiStatus": {
             "readOnly": true
           }
         }
@@ -1515,5 +1520,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "605d0c5d7b34f83e"
+  "checksum": "fe07fb03573b35b5"
 }
