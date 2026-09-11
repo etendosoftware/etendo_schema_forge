@@ -42,6 +42,23 @@ Same as documented in the root `CLAUDE.md`: `etendo_schema_forge` (functional, t
 - Preserve requested labels exactly (e.g. `plataforma`)
 - Issue type: default to `Task` unless the coordinator specifies `Bug`/`Subtask`/other
 - Never transition an issue's status beyond what's explicitly requested
+
+**Comment bodies: use the REST API, not `jira issue comment add`.** The CLI runs a
+markdown-to-Jira-wiki conversion that SILENTLY DESTROYS content. On ETP-5216 it ate every
+`<AD_Column_ID>` placeholder (leaving `ad_scd_rebuild('')`), turned a `#` numbered list into
+`h1.` headings, downgraded bold to italics, and escaped hyphens and parentheses throughout.
+The CLI's own rendering looked fine — the damage was only visible when re-reading the raw body
+over REST. Whenever a comment carries `<placeholders>`, code blocks, SQL or identifiers, write
+it in literal Jira markup and post it with:
+
+```bash
+curl -X POST .../rest/api/2/issue/ETP-XXXX/comment      # new comment
+curl -X PUT  .../rest/api/2/issue/ETP-XXXX/comment/<id> # fix an existing one, never re-add
+```
+
+Always verify by reading the raw body back over REST and confirming the identifiers survived.
+Note that Jira wiki markup does not render `*bold*` inside a list line — use double quotes for
+emphasis there rather than nesting markup.
 </jira_conventions>
 
 <branch_conventions>

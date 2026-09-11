@@ -243,8 +243,9 @@ registerImportRowValidator('contacts', (row, { translate } = {}) => [
 //
 // The ten child-scoped fields (the contact person on AD_User, the address on
 // C_BPartner_Location + C_Location) are NOT on a C_BPartner row at all — its only
-// address-shaped property is `eTGOLocation`, one concatenated display string that cannot be
-// split back into columns. `BusinessPartnerHandler.attachChildData` therefore attaches each
+// address-shaped property is `eTGOLocation`, a single FK to C_Location whose label is one
+// concatenated identifier that cannot be split back into columns (ETP-5060 turned it from a
+// pre-rendered string into the id + its `$_identifier`; either way it is not column-shaped). `BusinessPartnerHandler.attachChildData` therefore attaches each
 // partner's primary contact and primary address under `etgoChildData` when the list GET carries
 // `includeChildData=1` (which ListView's export sends), and these dotted paths read them —
 // `NeoCsvExportService` resolves a dotted column key into nested values. Nested rather than

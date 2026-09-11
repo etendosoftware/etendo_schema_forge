@@ -229,12 +229,18 @@ export const DOCUMENT_TEMPLATE = `<!DOCTYPE html>
   <!-- Totals -->
   <div class="inv-totals">
     <div class="inv-totals-inner">
+      {{!-- discountPerProduct/totalDiscountAmt already carry the correct printed
+           sign (positive amounts, computed as -discountAmt) from the data
+           builder — the sign is NOT re-derived here, so a negative-quantity
+           line (a same-invoice return) still prints a positive discount
+           magnitude, matching DocumentTotalsPanel on screen (ETP-5132). Do
+           NOT reintroduce a hardcoded "−" prefix in front of these two rows. --}}
       {{#if grossAmount}}
       <div class="row"><span>{{labels.subtotalWithoutDiscount}}</span><span>{{formatCurrency grossAmount}}</span></div>
-      <div class="row discount"><span>{{labels.discountPerProduct}}</span><span>−{{formatCurrency discountPerProduct}}</span></div>
+      <div class="row discount"><span>{{labels.discountPerProduct}}</span><span>{{formatCurrency discountPerProduct}}</span></div>
       {{/if}}
       {{#if totalDiscountAmt}}
-      <div class="row discount"><span>{{labels.totalDiscount}} ({{etgoTotalDiscount}}%)</span><span>−{{formatCurrency totalDiscountAmt}}</span></div>
+      <div class="row discount"><span>{{labels.totalDiscount}} ({{etgoTotalDiscount}}%)</span><span>{{formatCurrency totalDiscountAmt}}</span></div>
       {{/if}}
       <div class="row"><span>{{labels.subtotal}}</span><span>{{formatCurrency netAmount}}</span></div>
       <div class="row"><span>{{labels.tax}}</span><span>{{formatCurrency taxAmount}}</span></div>
@@ -388,10 +394,17 @@ export async function buildOrderData(spec, orderId, base, token, currencyData = 
     netAmount,
     taxAmount,
     grandTotal,
-    grossAmount:        discountAmt > 0 ? grossSubtotal : null,
-    discountPerProduct: discountAmt > 0 ? discountAmt : null,
+    // ETP-5132 — a negative-quantity line (a return folded into the same
+    // document) makes discountAmt/totalDiscountAmt come back NEGATIVE from
+    // computeDocumentTotals (the discount shrinks a negative net further
+    // toward zero). The gate is therefore "!== 0" (any real discount, either
+    // sign), never "> 0" (which silently hid the whole breakdown on those
+    // lines). The printed amount is the sign-flipped magnitude (-discountAmt),
+    // same convention as DocumentTotalsPanel.jsx — see its ETP-5132 comment.
+    grossAmount:        discountAmt !== 0 ? grossSubtotal : null,
+    discountPerProduct: discountAmt !== 0 ? -discountAmt : null,
     etgoTotalDiscount:  etgoTotalDiscount > 0 ? etgoTotalDiscount : null,
-    totalDiscountAmt:   totalDiscountAmt > 0 ? totalDiscountAmt : null,
+    totalDiscountAmt:   totalDiscountAmt !== 0 ? -totalDiscountAmt : null,
     exchangeRate: currencyData?.exchangeRate ?? null,
     orgCurrencyCode: currencyData?.orgCurrencyCode ?? null,
     // exchangeRate = org→doc multiplyRate (e.g. 1.20 = "1 EUR = 1.20 USD").
@@ -472,7 +485,14 @@ export function buildDocumentPdfLabels(ui, overrides) {
 export function computeDiscountBreakdown(linesRaw, etgoTotalDiscount, getGrossLine) {
   const grossAmount = linesRaw.reduce((sum, l) => sum + getGrossLine(l), 0);
   const productNetAmount = linesRaw.reduce((sum, l) => sum + Number(l.lineNetAmount ?? 0), 0);
-  const discountPerProduct = Math.max(0, grossAmount - productNetAmount);
+  // ETP-5132 — no Math.max(0, ...) clamp: a negative-quantity line (a return
+  // folded into the same invoice/quotation) makes productNetAmount LESS
+  // negative than grossAmount once the per-line discount is applied, so this
+  // difference comes back negative. Clamping it to 0 silently dropped the
+  // real discount for that case. Same signed convention as
+  // documentTotals.js's discountAmt (grossSubtotal - netSubtotal) — callers
+  // sign-flip it for display, matching DocumentTotalsPanel.jsx.
+  const discountPerProduct = grossAmount - productNetAmount;
   const totalDiscountAmt = etgoTotalDiscount > 0 ? productNetAmount * etgoTotalDiscount / 100 : 0;
   return { grossAmount, productNetAmount, discountPerProduct, totalDiscountAmt };
 }

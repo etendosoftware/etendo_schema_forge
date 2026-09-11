@@ -24,31 +24,42 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
   const { isAuthenticated, csrfToken, clientId } = useAuth();
   const [environments, setEnvironments] = useState([]);
   const [switching, setSwitching] = useState(null);
+  // ETP-5190 — additive. `environments` alone cannot tell "still fetching" from "cannot know"
+  // (both are the empty array), and a caller that derives the tenant plan from this list needs
+  // that difference: rendering a plan-dependent view against a list that has not arrived yet
+  // shows the wrong one and then swaps it under the user. Ends up false in EVERY exit path,
+  // including no token and a thrown request.
+  const [loading, setLoading] = useState(enabled);
 
   useEffect(() => {
     if (!enabled || !isAuthenticated) {
       setEnvironments([]);
+      setLoading(false);
       return;
     }
     // ETP-4576 — environment discovery is account-scoped, and the account session
     // is the `__Host-` cookie: there is no client-held token to read or to gate on.
-    // The epic's version read sf_platform_token/sf_auth_token from localStorage,
-    // keys the cookie migration stopped writing, so that gate would never pass.
-    // `sortEnvironments` is the epic's own presentation change and is kept.
+    // develop's version reads sf_platform_token/sf_auth_token from localStorage, keys
+    // the cookie migration stopped writing, so that gate would never pass and the
+    // environment list would come back empty for every authenticated user.
+    // `isAuthenticated` above is the gate; `sortEnvironments` is kept.
     let cancelled = false;
+    setLoading(true);
     (async () => {
       try {
         const envs = await fetchEnvironments(fetch, getApiBase());
         if (!cancelled) setEnvironments(sortEnvironments(envs));
       } catch {
         // A switcher that cannot list stays closed; the current company still shows.
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
   }, [enabled, isAuthenticated]);
 
   const switchTo = useCallback(async (env) => {
-    if (!isAuthenticated || !env?.adminUserId) return;
+    if (!isAuthenticated || !env?.adminUserId) return false;
     setSwitching(env.clientId);
     try {
       // The backend rotates the session cookie for the target environment and
@@ -56,7 +67,20 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
       const data = await loginEnvironment(fetch, getApiBase(), csrfToken, env);
       if (data?.status !== 'success') {
         setSwitching(null);
-        return;
+        return false;
+      }
+      // ETP-5202 — refuse to enter an environment the user has no role in. `GET /sws/go/login`
+      // does NOT fail in that case: it calls generateToken(user, null) and answers 200 with an
+      // empty roleList, so entering would write a session with no role and drop the user into an
+      // empty app. The invited-user path makes this reachable — an admin-created user has zero
+      // roles until somebody assigns one (ETP-4830).
+      //
+      // Only an explicitly EMPTY array blocks: a missing roleList is left to the existing
+      // behaviour, since `buildEnvironmentSessionStorage` already treats it as optional and an
+      // older backend must not be locked out.
+      if (Array.isArray(data.roleList) && data.roleList.length === 0) {
+        setSwitching(null);
+        return false;
       }
       // Remembering the environment is a UX preference, deliberately outside the
       // session: logging out must not forget the last tenant entered.
@@ -64,8 +88,10 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
       // The flag targeting identity belongs to the account, not the tenant, so it
       // survives — but anything cached per tenant must not, hence the full load.
       window.location.href = '/';
+      return true;
     } catch {
       setSwitching(null);
+      return false;
     }
   }, [isAuthenticated, csrfToken]);
 
@@ -90,8 +116,7 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
         setSwitching(null);
         return false;
       }
-      await switchTo(match);
-      return true;
+      return await switchTo(match);
     } catch {
       setSwitching(null);
       return false;
@@ -100,9 +125,12 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
 
   return {
     environments,
+    loading,
     switchTo,
     enterByClientName,
     switching,
+    // ETP-4576 — from the session, not from sf_auth_client_id: the cookie migration
+    // stopped writing that key.
     currentClientId: clientId || undefined,
   };
 }

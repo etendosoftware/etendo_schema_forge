@@ -886,6 +886,12 @@ describe('OnboardingPage', () => {
     });
   });
 
+  // The fiscal id below is a REAL, check-digit-valid CIF, not a placeholder: ETP-5190 put a
+  // NIF guard on "Empezar" (see onboardingSteps.jsx), so an invalid value no longer reaches
+  // the run at all — the click is refused and nothing is tracked. The repo-wide 'B12345678'
+  // fixture fails that check digit (B + 1234567 needs a 4), which is why this test carries its
+  // own value instead of the shared one. What it asserts is unchanged: neither the company name
+  // nor the fiscal id may appear in any analytics payload.
   it('tracks onboarding run success without company or fiscal values', async () => {
     localStorage.setItem('sf_platform_token', 'platform-token');
     // ETP-4576 — the key above no longer marks an authenticated session: the flow asks the
@@ -904,7 +910,7 @@ describe('OnboardingPage', () => {
       target: { value: 'Secret Company' },
     });
     fireEvent.change(screen.getByLabelText(/onboardingFiscalIdLabel/), {
-      target: { value: 'B12345678' },
+      target: { value: 'B12345674' },
     });
     fireEvent.click(await screen.findByText('onboardingStartAction'));
 
@@ -927,7 +933,7 @@ describe('OnboardingPage', () => {
 
     const serializedCalls = JSON.stringify(track.mock.calls);
     expect(serializedCalls).not.toContain('Secret Company');
-    expect(serializedCalls).not.toContain('B12345678');
+    expect(serializedCalls).not.toContain('B12345674');
   });
 
   it('renders onboarding progress messages while tracking run start', async () => {

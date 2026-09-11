@@ -89,8 +89,9 @@ vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() },
 }));
 
+import { render, screen } from '@testing-library/react';
 import { toast } from 'sonner';
-import { handlePostSaveNavigation, reportUnnavigableSave } from '../saveActions.jsx';
+import { handlePostSaveNavigation, reportUnnavigableSave, renderSaveActions } from '../saveActions.jsx';
 
 describe('handlePostSaveNavigation', () => {
   it('returns early without side effects when saved is null', async () => {
@@ -314,5 +315,90 @@ describe('ETP-4683 — save with no derivable record id', () => {
       );
       expect(toast.error).not.toHaveBeenCalled();
     });
+  });
+});
+
+// ETP-4839 — `onlySaveButton` on renderDraftModeSaveActions (reached only via the
+// exported renderSaveActions dispatcher, since the renderer itself is module-private).
+// Unit-level: renders just the returned JSX fragment, no full DetailView mount.
+describe('renderSaveActions — draftMode onlySaveButton (ETP-4839)', () => {
+  const ui = (key) => key;
+
+  function baseParams(overrides = {}) {
+    return {
+      hook: {
+        isSaving: false,
+        handleSave: vi.fn(() => Promise.resolve({ id: '1' })),
+        handleSaveAndProcess: vi.fn(() => Promise.resolve({ id: '1' })),
+        primeSaved: vi.fn(),
+        fetchById: vi.fn(),
+        children: [],
+        childrenLoading: false,
+      },
+      isDirty: true,
+      flushPendingLines: vi.fn(() => Promise.resolve(true)),
+      data: {},
+      isNew: false,
+      navigate: vi.fn(),
+      windowName: 'purchase-invoice',
+      ui,
+      onAfterCreate: null,
+      onAfterSave: null,
+      token: 'tok',
+      apiBaseUrl: '/api',
+      saveBtnCls: '',
+      draftMode: { enabled: true, draftField: 'documentStatus', draftValue: 'DR', label: 'process' },
+      blockSaveForBalance: false,
+      blockCompleteForBalance: false,
+      setShowProcessingModal: vi.fn(),
+      saveGate: {},
+      ...overrides,
+    };
+  }
+
+  it('onlySaveButton absent (default false): renders BOTH Save Draft and Confirm — byte-identical to pre-ETP-4839 output', () => {
+    render(<>{renderSaveActions(baseParams())}</>);
+    expect(screen.getByTestId('action-save-draft')).toBeInTheDocument();
+    expect(screen.getByTestId('action-save')).toBeInTheDocument();
+    expect(screen.getByText('process')).toBeInTheDocument();
+  });
+
+  it('onlySaveButton=false explicitly: same as absent — both buttons present', () => {
+    render(<>{renderSaveActions(baseParams({ onlySaveButton: false }))}</>);
+    expect(screen.getByTestId('action-save-draft')).toBeInTheDocument();
+    expect(screen.getByTestId('action-save')).toBeInTheDocument();
+  });
+
+  it('onlySaveButton=true: renders ONLY action-save-draft — Confirm button and its GateTooltip wrapper are absent from the DOM', () => {
+    render(<>{renderSaveActions(baseParams({ onlySaveButton: true }))}</>);
+    expect(screen.getByTestId('action-save-draft')).toBeInTheDocument();
+    expect(screen.queryByTestId('action-save')).toBeNull();
+    // The Confirm label text must not leak in either (rules out "hidden but present").
+    expect(screen.queryByText('process')).toBeNull();
+  });
+
+  it('onlySaveButton=true still applies the balance gate to the remaining Save Draft button', () => {
+    // Confirm this new param does not accidentally bypass the existing
+    // blockSaveForBalance gate on the one button that survives.
+    render(<>{renderSaveActions(baseParams({
+      onlySaveButton: true,
+      blockSaveForBalance: true,
+    }))}</>);
+    expect(screen.getByTestId('action-save-draft')).toBeDisabled();
+  });
+
+  it('dispatches to renderNewRecordSaveActions (not draftMode) when draftMode.enabled is false — onlySaveButton is irrelevant there', () => {
+    // Guards the "no draftMode at all" case from a different angle than the
+    // DetailView-level test: renderSaveActions must not honour onlySaveButton
+    // outside the draftMode branch, so a stray true here has zero effect.
+    render(<>{renderSaveActions(baseParams({
+      isNew: true,
+      draftMode: { enabled: false, label: 'process' },
+      onlySaveButton: true,
+      isDocumentReadOnly: false,
+      isProcessed: false,
+    }))}</>);
+    expect(screen.getByTestId('action-save')).toBeInTheDocument();
+    expect(screen.queryByTestId('action-save-draft')).toBeNull();
   });
 });

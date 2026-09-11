@@ -2110,6 +2110,38 @@
         }
       ]
     },
+    "d861dd664adc2a7f0d8b8d9364724120621ce74e3b8db5af805bc32c77f9fc9b": {
+      "checksum": "739def03bd662f57937b381135b1716995af43326503deda6bf801c104edc94c",
+      "params": [
+        "112"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "5E0837860E864162B5E6435CF5A3F974",
+          "code": "C_Doctype.AD_Table_ID = @AD_Table_ID@ AND  ( AD_ISORGINCLUDED(@AD_Org_ID@, td0.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR AD_ISORGINCLUDED( td0.AD_Org_ID, @AD_Org_ID@, @#AD_Client_ID@) <> '-1'  )\n",
+          "columnname": "C_Doctype_ID",
+          "name": "Document Type filter according to table"
+        },
+        {
+          "ad_val_rule_id": "930F1354DE1042DB9ECC6AB71497296E",
+          "code": "AD_COLUMN_ID in (SELECT AD_COLUMN_ID FROM AD_COLUMN WHERE ad_reference_id in('4148378344A04A50AC7AED3B05F34B4D','B82E1C56F57749AD97DD9924624F08D3') and ad_column.ad_table_id = @AD_Table_ID@)",
+          "columnname": "AD_Column_ID",
+          "name": "AD_COLUMN  filtered by  sequence field"
+        },
+        {
+          "ad_val_rule_id": "C0561A6190CB4D63BA60DCADC4F53BAD",
+          "code": "AD_TABLE_ID in (SELECT adtable.AD_TABLE_ID  FROM AD_TABLE adtable WHERE EXISTS (SELECT 1 FROM AD_COLUMN adcolumn WHERE adcolumn.ad_table_id =adtable.ad_table_id and  adcolumn.ad_reference_id in('4148378344A04A50AC7AED3B05F34B4D','B82E1C56F57749AD97DD9924624F08D3')))\n ",
+          "columnname": "AD_Table_ID",
+          "name": "AD_TABLE filtered by sequence reference column "
+        }
+      ]
+    },
     "d8b3062e19579428542c960b281edd38c8b4c4bae753749e7360902192d4cec1": {
       "checksum": "2792b1dd21370d7ea6613bd2cb0456c0b53a7419fad957bf16cb183cf9fc9e1b",
       "params": [

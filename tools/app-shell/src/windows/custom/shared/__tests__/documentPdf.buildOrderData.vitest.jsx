@@ -44,6 +44,7 @@ vi.mock('../pdfUtils.js', () => ({
 }));
 
 import { buildOrderData } from '../documentPdf.js';
+import { computeDocumentTotals } from '@/lib/documentTotals';
 
 // Header carries the backend-persisted total (Grid's "Imp. Total" — the value
 // the ticket says the Form/Preview panel disagreed with, e.g. 89.21 vs 89.19).
@@ -124,5 +125,45 @@ describe('buildOrderData — ETP-4941 (CÓD. column shows product SKU, not line 
     ]);
     const result = await buildOrderData('purchase-order', 'REC456', 'https://api.example', 'tok');
     expect(result.lines[0].productCode).toBe('PO-SKU-9');
+  });
+});
+
+// ETP-5132 — a negative-quantity line (a return folded into the same
+// document) makes computeDocumentTotals()'s discountAmt/totalDiscountAmt
+// come back negative even though a real discount was applied. buildOrderData
+// must gate on "!== 0" (not "> 0") and pass the sign-flipped, positive
+// display value — never hide the breakdown or show 0.00€ for this case.
+describe('buildOrderData — ETP-5132 (negative-quantity discount sign)', () => {
+  it('sign-flips a negative discountAmt/totalDiscountAmt into a positive discountPerProduct/totalDiscountAmt', async () => {
+    // Mirrors the ticket's worked example: qty=-1, price=5.00€, 10%
+    // per-product discount + 10% total discount (see documentTotals.test.js
+    // CP-1/CP-2 for the full derivation).
+    vi.mocked(computeDocumentTotals).mockReturnValueOnce({
+      grossSubtotal: -5,
+      netSubtotal: -4.5,
+      grandTotal: -4.05,
+      discountAmt: -0.5,
+      taxAmt: 0,
+      totalDiscountAmt: -0.45,
+    });
+    const result = await buildOrderData('sales-order', 'REC789', 'https://api.example', 'tok');
+    expect(result.grossAmount).toBe(-5);
+    expect(result.discountPerProduct).toBeCloseTo(0.5, 5);
+    expect(result.totalDiscountAmt).toBeCloseTo(0.45, 5);
+  });
+
+  it('still hides the breakdown when discountAmt/totalDiscountAmt are exactly 0 (no real discount, no false positive)', async () => {
+    vi.mocked(computeDocumentTotals).mockReturnValueOnce({
+      grossSubtotal: 100,
+      netSubtotal: 100,
+      grandTotal: 100,
+      discountAmt: 0,
+      taxAmt: 0,
+      totalDiscountAmt: 0,
+    });
+    const result = await buildOrderData('sales-order', 'REC790', 'https://api.example', 'tok');
+    expect(result.grossAmount).toBeNull();
+    expect(result.discountPerProduct).toBeNull();
+    expect(result.totalDiscountAmt).toBeNull();
   });
 });

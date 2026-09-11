@@ -172,7 +172,7 @@ describe('ContactsFinanceProvider', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('does not fetch when token is missing — inverted: the cookie carries the session', async () => {
+  it('still fetches KPIs when the bearer token is empty (ETP-4576 cookie mode)', async () => {
     globalThis.fetch.mockResolvedValue({
       ok: true,
       json: async () => ({ response: { data: [] } }),
@@ -185,10 +185,10 @@ describe('ContactsFinanceProvider', () => {
     await act(async () => {
       screen.getByText('setRecordId').click();
     });
-    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
-    // so the request MUST still go out. The old expectation encoded the guard that made
-    // this call silently disappear for every authenticated user.
-    expect(globalThis.fetch).toHaveBeenCalled();
+    // Under the cookie credential mode the bearer is empty by design; apiFetch
+    // still carries auth via the session cookie, so the KPI load must NOT be
+    // gated on the token. bp-stats + bp-trend = 2 requests.
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
   });
 });
 

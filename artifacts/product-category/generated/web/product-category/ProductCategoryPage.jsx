@@ -48,6 +48,7 @@ const addLineFields = {
     { key: 'productExpense', column: 'P_Expense_Acct', type: 'selector', required: true, label: 'Product Expense', reference: 'ValidCombination', inputMode: 'selector' },
     { key: 'productRevenue', column: 'P_Revenue_Acct', type: 'selector', required: true, label: 'Product Revenue', reference: 'ValidCombination', inputMode: 'selector' },
     { key: 'productCOGS', column: 'P_Cogs_Acct', type: 'selector', required: true, label: 'Product COGS', reference: 'ValidCombination', inputMode: 'selector' },
+    { key: 'invoicePriceVariance', column: 'P_InvoicePriceVariance_Acct', type: 'selector', label: 'Invoice Price Variance', reference: 'ValidCombination', inputMode: 'selector' },
   ],
   derived: [
 
@@ -120,6 +121,14 @@ export const api = {
       "reference": "ValidCombination",
       "inputMode": "selector",
       "url": "/sws/neo/product-category/accounting/selectors/productCOGS"
+    },
+    {
+      "entity": "accounting",
+      "field": "invoicePriceVariance",
+      "column": "P_InvoicePriceVariance_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/product-category/accounting/selectors/invoicePriceVariance"
     }
   ],
   "actions": [

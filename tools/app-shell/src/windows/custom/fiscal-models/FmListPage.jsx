@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import {
   LayoutGrid, ArrowUpDown,
@@ -8,7 +9,9 @@ import { EmptyState, KpiWidget, MoreOptionsMenu } from './FmCommon.jsx';
 import { Checkbox } from '@/components/ui/checkbox';
 import { NewDeclModal } from './FmOverlays.jsx';
 import FmCatalogPage from './FmCatalogPage.jsx';
-import { formatAmount, countUpcomingDeadlines, isUpcomingDeadline, checkModified303, checkModified349, compute349Operators, fetchDeclarationIncidents } from './fiscalModelsUtils.js';
+import FmRowActions from './FmRowActions.jsx';
+import DeleteConfirmDialog from '@/components/contract-ui/DeleteConfirmDialog.jsx';
+import { formatAmount, countUpcomingDeadlines, isUpcomingDeadline, checkModified303, checkModified349, compute349Operators, fetchDeclarationIncidents, deriveResultKind, deleteDeclaration } from './fiscalModelsUtils.js';
 import useFiscalAutoCompute from './useFiscalAutoCompute.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -224,6 +227,7 @@ function ResultText({ isComputing, error, result, t }) {
   if (error) return <span style={RESULT_BADGE_STYLE}>{t('fm.status.error') ?? 'Error de cálculo'}</span>;
   if (!result?.kind) return <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>;
   if (result.kind === 'N') return <span style={RESULT_BADGE_STYLE}>{t('fm.result.N') ?? 'Sin resultado'}</span>;
+  if (result.kind === 'zero') return <span style={RESULT_BADGE_STYLE}>{t('fm.result.zero') ?? 'Resultado cero'}</span>;
   if (result.kind === 'info') {
     return result.amount > 0
       ? <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: 'hsl(var(--foreground))' }}>{formatAmount(result.amount)}</span>
@@ -364,6 +368,7 @@ function ResultCell({ isComputing, error, result, t }) {
   }
   if (!result?.kind) return <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>;
   if (result.kind === 'N') return resultBadge(t('fm.result.N') ?? 'Sin resultado');
+  if (result.kind === 'zero') return resultBadge(t('fm.result.zero') ?? 'Resultado cero');
   if (result.kind === 'info') {
     return result.amount > 0
       ? <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: 'hsl(var(--foreground))' }}>{formatAmount(result.amount)}</span>
@@ -380,12 +385,6 @@ function ResultCell({ isComputing, error, result, t }) {
       )}
     </div>
   );
-}
-
-function getResultKind(r) {
-  if (r > 0) return 'I';
-  if (r < 0) return 'C';
-  return 'N';
 }
 
 // Resolves the auto-computed boxes/operators entry for a declaration row —
@@ -570,6 +569,11 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
   const [showCatalog,  setShowCatalog]  = useState(false);
   const [showNewDecl,  setShowNewDecl]  = useState(false);
   const [selected,     setSelected]     = useState(new Set());
+  // Row hover actions (ETP-5187) — Edit/Delete, draft rows only. `deleteTarget` holds the
+  // declaration pending confirmation (or null); `deletingId` tracks the in-flight DELETE call
+  // so the confirm dialog can disable its buttons while it's outstanding.
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deletingId,   setDeletingId]   = useState(null);
   // Sort state — field-selector popover (mirrors ListView.jsx's sortColumn/sortDirection
   // pattern used by the generated/Factura windows, not a generic single-toggle button).
   // `null` sortColumn = default order (year+period, most recent first).
@@ -597,6 +601,24 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
         .catch(() => {});
     }
   }, [token, apiBaseUrl, apiFetch]);
+
+  // Row hover "delete" action (ETP-5187) — draft declarations only, gated the same
+  // way both here (caller only ever passes a draft decl into setDeleteTarget) and
+  // server-side (FiscalDeclCrudHandler#handleDeclDelete rejects anything but draft).
+  const handleConfirmDelete = useCallback(() => {
+    if (!deleteTarget) return;
+    setDeletingId(deleteTarget.id);
+    deleteDeclaration(deleteTarget.id, { token, apiBaseUrl })
+      .then((result) => {
+        if (result.ok) {
+          setDecls(ds => ds.filter(d => d.id !== deleteTarget.id));
+          setDeleteTarget(null);
+        } else {
+          toast.error(t('fm.list.delete_failed') ?? 'No se pudo eliminar la declaración.');
+        }
+      })
+      .finally(() => setDeletingId(null));
+  }, [deleteTarget, token, apiBaseUrl, t]);
 
   const yearOptions = useMemo(
     () => Array.from(new Set(decls.map(d => String(d.year)))).sort((a, b) => b - a)
@@ -699,6 +721,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             <th style={{ textAlign: 'right' }}>{t('fm.col.result')}</th>
             <th>{t('fm.col.incidents')}</th>
             <th>{t('fm.col.updated_at') ?? 'Última actualización'}</th>
+            <th style={{ width: 72 }} aria-hidden="true" />
           </tr>
         </thead>
         <tbody>
@@ -724,16 +747,25 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                 displayResult = { kind: 'info', amount: total };
               } else {
                 const r = computed.summary.result;
-                const kind = getResultKind(r);
+                const hasInvoices = (computed.sources?.length ?? 0) > 0;
+                const kind = deriveResultKind(computed.summary, { hasInvoices });
                 displayResult = { kind, amount: Math.abs(r) };
               }
             }
+
+            // ETP-5187 — flags this declaration as a 2nd/Nth one for the same
+            // (model, year, period): the detail page (FmModel303Page.jsx) uses this
+            // to warn + gate on "Autoliquidación rectificativa". Computed off the
+            // full `decls` list (not the filtered/sorted view) so it's correct
+            // regardless of the active filters.
+            const hasDuplicatePeriod = decls.some(d => d.id !== decl.id
+              && d.model === decl.model && d.year === decl.year && d.period === decl.period);
 
             return (
               <tr
                 key={decl.id}
                 className={fmListRowClassName({ selected: selected.has(decl.id), current: decl.current })}
-                onClick={() => onSelect?.({ ...decl, _precomputed: computed })}
+                onClick={() => onSelect?.({ ...decl, _precomputed: computed, _hasDuplicatePeriod: hasDuplicatePeriod })}
               >
                 <td onClick={e => e.stopPropagation()}>
                   <Checkbox
@@ -767,6 +799,15 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                     data-testid="IncidentsCell__cb728e" />
                 </td>
                 <td><span className="fm-date">{decl.updatedAt ?? '—'}</span></td>
+                <td style={{ position: 'relative' }}>
+                  {isDraft && (
+                    <FmRowActions
+                      onEdit={() => onSelect?.({ ...decl, _precomputed: computed, _hasDuplicatePeriod: hasDuplicatePeriod })}
+                      onDelete={() => setDeleteTarget(decl)}
+                      deleting={deletingId === decl.id}
+                      data-testid="FmRowActions__cb728e" />
+                  )}
+                </td>
               </tr>
             );
           })}
@@ -912,6 +953,20 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
         {tableSection}
       </div>
       {/* ── Overlays ─────────────────────────────────────────────── */}
+      {/* Mounted only while a delete is pending confirmation (matches the
+          showNewDecl/showCatalog convention below) — Dialog/DialogContent pulls
+          in lucide-react's X icon at render time even when `open` is false, so
+          keeping this unconditionally mounted needlessly drags that dependency
+          into every render of this page. */}
+      {deleteTarget && (
+        <DeleteConfirmDialog
+          open
+          count={1}
+          deleting={deletingId != null}
+          onConfirm={handleConfirmDelete}
+          onClose={() => setDeleteTarget(null)}
+          data-testid="DeleteConfirmDialog__cb728e" />
+      )}
       {showNewDecl && <NewDeclModal
         onConfirm={handleNewDecl}
         onClose={() => setShowNewDecl(false)}

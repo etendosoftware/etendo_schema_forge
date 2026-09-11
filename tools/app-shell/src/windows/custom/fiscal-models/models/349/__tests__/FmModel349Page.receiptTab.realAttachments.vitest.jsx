@@ -101,8 +101,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('FmModel349Page — real useAttachments: eager-fetch-on-mount gap (BUG)', () => {
-  it('fires a GET to the attachments endpoint on mount even though the default tab is "operators", not "receipt"', async () => {
+describe('FmModel349Page — real useAttachments: lazy-load honours isActive (ETP-4564)', () => {
+  it('does NOT fetch attachments on mount while the receipt tab is inactive', async () => {
     render(<FmModel349Page decl={makeDecl({ id: 'decl-eager-1' })} {...defaultProps} />);
 
     // Sanity: the receipt tab is NOT selected by default.
@@ -110,30 +110,35 @@ describe('FmModel349Page — real useAttachments: eager-fetch-on-mount gap (BUG)
     const receiptTab = tabs.find(t => t.textContent.includes('fm.tab.receipt'));
     expect(receiptTab.getAttribute('aria-selected')).toBe('false');
 
-    // The top-level `useAttachments({ isActive: false })` call (only meant to
-    // expose `upload`) still runs its eager list() effect, which depends only
-    // on [tableName, recordId] and never reads `isActive` — so it fetches
-    // regardless of tab. This contradicts the comment in FmModel349Page.jsx
-    // ("isActive: false keeps it from eagerly listing/fetching attachments on
-    // mount").
-    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    // ETP-4564: the top-level `useAttachments({ isActive: false })` call (only
+    // meant to expose `upload`) now honours `isActive` and skips its eager
+    // list() effect while the receipt tab is inactive — matching the comment in
+    // FmModel349Page.jsx ("isActive: false keeps it from eagerly
+    // listing/fetching attachments on mount"). Previously this fired a redundant
+    // GET regardless of tab; the shared-cache lazy-load (`&& active` gate on the
+    // list effect) closed that gap. Give effects a tick to prove no fetch fires.
+    await new Promise(resolve => setTimeout(resolve, 50));
     const calledUrls = globalThis.fetch.mock.calls.map(c => c[0]);
-    expect(calledUrls.some(u => u.includes('/sws/neo/attachments/ETGO_Fiscal_Decl/decl-eager-1'))).toBe(true);
+    expect(calledUrls.some(u => u.includes('/sws/neo/attachments/ETGO_Fiscal_Decl/decl-eager-1'))).toBe(false);
   });
 
-  it('fetches TWICE (once from the top-level hook, once from the tab\'s own AttachmentsTab) when the receipt tab is opened, for the same table/record', async () => {
+  it('fetches ONCE — only once the receipt tab is opened — for the same table/record', async () => {
     render(<FmModel349Page decl={makeDecl({ id: 'decl-eager-2' })} {...defaultProps} />);
-    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
+
+    // No eager fetch while the receipt tab is inactive (ETP-4564).
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(globalThis.fetch).not.toHaveBeenCalled();
 
     const tabs = screen.getAllByRole('tab');
     fireEvent.click(tabs.find(t => t.textContent.includes('fm.tab.receipt')));
 
-    // AttachmentsTab's own internal useAttachments({ isActive: true }) mounts
-    // and fires its own list() — a second, redundant GET against the exact
-    // same endpoint the top-level hook already hit on mount.
-    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
+    // AttachmentsTab's own useAttachments({ isActive: true }) mounts and fires
+    // the single list() for this record. The previously-redundant second GET
+    // from the top-level hook is gone: that hook stays inactive and never
+    // fetches, so the receipt tab hits the endpoint exactly once.
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
     const urls = globalThis.fetch.mock.calls.map(c => c[0]);
-    expect(urls[0]).toBe(urls[1]);
+    expect(urls[0]).toContain('/sws/neo/attachments/ETGO_Fiscal_Decl/decl-eager-2');
   });
 });
 

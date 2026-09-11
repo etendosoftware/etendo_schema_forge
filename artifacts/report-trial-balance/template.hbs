@@ -134,6 +134,7 @@
         <td class="cell-amount">{{formatCurrency (lookup this 'closing_balance')}}</td>
       </tr>
       {{/each}}
+      {{#ifCond meta.params.accountLevel '!==' 'E'}}
       <tr class="acct-total">
         <td colspan="2">{{meta.ui.total}}</td>
         <td class="cell-amount">{{formatCurrency (sumField rows 'opening_balance')}}</td>
@@ -141,6 +142,7 @@
         <td class="cell-amount">{{formatCurrency (sumField rows 'activity_credit')}}</td>
         <td class="cell-amount">{{formatCurrency (sumField rows 'closing_balance')}}</td>
       </tr>
+      {{/ifCond}}
     </tbody>
   </table>
   {{/ifCond}}
