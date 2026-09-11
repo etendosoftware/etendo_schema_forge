@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'FmOverlays.jsx'), 'utf8');
+const css = readFileSync(join(__dirname, '..', 'fiscal-models.css'), 'utf8');
 
 describe('FmOverlays — exports', () => {
   it('exports PresentModal', () => assert.match(src, /export function PresentModal/));
@@ -43,5 +44,28 @@ describe('PresentModal — 2 manual paths + 1 opt-in AEAT path', () => {
   });
   it('canConfirm allows the aeat_telematic path without requiring acuseFile', () => {
     assert.match(src, /path === 'aeat_telematic'/);
+  });
+});
+
+// ETP-5229 item #10 — widened modal + scoped footer-divider removal. Regression
+// guards for the polish pass: a silent revert of the width values or the
+// `fm-present-modal` class would ship the pre-redesign narrow modal again, and
+// a silent revert of the CSS rule would bring back the footer divider that was
+// deliberately dropped for this modal only (FileGenModal/NewDeclModal keep it).
+describe('PresentModal — ETP-5229 item #10 width + footer-divider polish', () => {
+  it('sizes the two-column (AEAT) layout at 760 and the single-column layout at 500', () => {
+    assert.match(src, /maxWidth:\s*showAeatPath\s*\?\s*760\s*:\s*500/);
+  });
+  it('does not regress to the pre-redesign width values (640 / 420)', () => {
+    assert.doesNotMatch(src, /maxWidth:\s*showAeatPath\s*\?\s*640\s*:\s*420/);
+  });
+  it('applies the fm-present-modal class alongside fm-config-modal on the outer modal div', () => {
+    assert.match(src, /className="fm-config-modal fm-present-modal"/);
+  });
+  it('scopes the footer-divider removal to fm-present-modal in the stylesheet', () => {
+    assert.match(css, /\.fm-present-modal \.fm-config-modal__footer\s*\{\s*border-top:\s*none;\s*\}/);
+  });
+  it('keeps the base footer divider for sibling modals (FileGenModal/NewDeclModal)', () => {
+    assert.match(css, /\.fm-config-modal__footer\s*\{[^}]*border-top:\s*1px solid var\(--fm-border-1\)/);
   });
 });

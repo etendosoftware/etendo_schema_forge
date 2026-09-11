@@ -1,4 +1,4 @@
-// Vitest tests for the ETP-4456 wiring between PresentModal's 4th
+// Vitest tests for the ETP-4456 wiring between PresentModal's 3rd
 // ("aeat_telematic") path and AeatSubmitFlow inside FmModel303Page.jsx.
 // Kept in its own file (rather than editing FmModel303Page.vitest.jsx) so
 // its PresentModal/AeatSubmitFlow mocks — which need to actually invoke
@@ -48,18 +48,19 @@ vi.mock('../FmBoxes303.jsx', () => ({ default: () => null }));
 // enumeration step) doesn't tolerate a trap that unconditionally returns a function for any
 // key. AeatSubmitFlow.jsx is mocked wholesale below, so its own lucide-react imports (Loader2,
 // TriangleAlert, OctagonAlert, CircleCheck, Download, Landmark) never execute in this file —
-// only FmModel303Page.jsx's own icon imports need stubbing here.
+// only FmModel303Page.jsx's own icon imports need stubbing here (Landmark included since
+// FmModel303Page.jsx also uses it for the "Go to Organization" button).
 vi.mock('lucide-react', () => ({
   Settings: () => null, Download: () => null, OctagonAlert: () => null,
   TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
   TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,
   ClipboardCheck: () => null, ReceiptText: () => null, Folder: () => null,
-  FileCheck: () => null,
+  FileCheck: () => null, Landmark: () => null,
 }));
 
 // PresentModal mock: renders a button that, when clicked, reports the
-// 'aeat_telematic' sentinel status — exactly like selecting the 4th path
+// 'aeat_telematic' sentinel status — exactly like selecting the 3rd path
 // and confirming in the real component.
 vi.mock('../../../FmOverlays.jsx', () => ({
   PresentModal: ({ onConfirm }) => React.createElement(
@@ -73,7 +74,7 @@ vi.mock('../../../FmOverlays.jsx', () => ({
 }));
 
 // AeatSubmitFlow mock: exposes a button that triggers onSuccess, so we can
-// verify the page reacts to it the same way it reacts to the 3 manual paths.
+// verify the page reacts to it the same way it reacts to the 2 manual paths.
 vi.mock('../AeatSubmitFlow.jsx', () => ({
   default: ({ onSuccess }) => React.createElement(
     'button',
@@ -97,7 +98,7 @@ describe('FmModel303Page — AEAT flow wiring (ETP-4456)', () => {
     const onStatusChange = vi.fn();
     render(<FmModel303Page decl={BASE_DECL} onBack={vi.fn()} onStatusChange={onStatusChange} />);
 
-    // Open the present modal via the toolbar action.
+    // Open the present modal via the toolbar action (now labelled "Registrar/Presentar").
     const btns = Array.from(document.querySelectorAll('button'));
     const presentBtn = btns.find(b => b.textContent.includes('fm.action.submit'));
     fireEvent.click(presentBtn);

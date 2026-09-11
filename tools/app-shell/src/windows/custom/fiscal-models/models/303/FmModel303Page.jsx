@@ -327,7 +327,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     setGenerating(true);
     // ETP-4975 pre-flight guard — mirrors the one in AeatSubmitFlow.jsx's handleSubmit
     // (see that file for the full rationale). "Generar fichero 303" hits the exact same
-    // backend AEAT303Report code path as "Marcar como Presentado" for the last period of
+    // backend AEAT303Report code path as "Registrar/Presentar" for the last period of
     // the fiscal year, so without this it round-trips to an untranslated
     // `IndexOutOfBoundsException` 500 instead of failing fast with a translated message.
     // Only runs for the last period, only when an org id is resolvable, and fails OPEN on
@@ -376,9 +376,9 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   }
 
   function handlePresent({ status: newStatus, acuseFile }) {
-    // 'aeat_telematic' is a sentinel from PresentModal's 4th path, never a
+    // 'aeat_telematic' is a sentinel from PresentModal's 3rd path, never a
     // real declaration status — it means "open the AEAT submission flow",
-    // not "change the status directly" like the other 3 manual paths.
+    // not "change the status directly" like the other 2 manual paths.
     if (newStatus === 'aeat_telematic') {
       setShowPresent(false);
       setShowAeatFlow(true);
@@ -548,7 +548,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
             onClick={() => setShowPresent(true)}
           >
             <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__4f6c0d" />
-            {t('fm.action.submit') ?? "Marcar como 'Presentado'"}
+            {t('fm.action.submit') ?? 'Registrar/Presentar'}
           </button>
         )}
       </div>

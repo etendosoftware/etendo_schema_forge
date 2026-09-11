@@ -14,6 +14,7 @@ vi.mock('lucide-react', () => ({
   Star: () => null, Play: () => null, ArrowUpRight: () => null, Info: () => null,
   OctagonAlert: () => null, TriangleAlert: () => null, X: () => null,
   Check: () => null, ChevronDown: () => null, Search: () => null,
+  FileText: () => null, Landmark: () => null,
 }));
 vi.mock('@/components/ui/checkbox', () => ({
   Checkbox: ({ checked, onChange }) => (
@@ -128,6 +129,91 @@ describe('PresentModal', () => {
     const modalBody = container.querySelector('.fm-config-modal');
     fireEvent.click(modalBody);
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+// ── PresentModal — two-column redesign (ETP-5229 item #10) ─────────────────────
+
+describe('PresentModal — two-column layout', () => {
+  const decl = { id: '1', model: '303', year: 2026, period: 'T2' };
+
+  it('renders the "Registrar presentación" left column with both manual paths, regardless of showAeatPath', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(document.body.textContent).toContain('fm.present.register_section.title');
+    expect(document.body.textContent).toContain('fm.present.register_section.desc');
+    expect(document.body.textContent).toContain('fm.present.path.acuse');
+    expect(document.body.textContent).toContain('fm.present.path.sin_acuse');
+  });
+
+  it('renders the "Presentar a la AEAT" right column with the aeat_telematic card when showAeatPath is true', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} showAeatPath />);
+    expect(document.body.textContent).toContain('fm.present.aeat_section.title');
+    expect(document.body.textContent).toContain('fm.present.aeat_section.desc');
+    expect(document.body.textContent).toContain('fm.present.path.aeat');
+  });
+
+  it('does NOT render the "Presentar a la AEAT" column/heading when showAeatPath is falsy (349 case)', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(document.body.textContent).not.toContain('fm.present.aeat_section.title');
+    expect(document.body.textContent).not.toContain('fm.present.aeat_section.desc');
+    expect(document.body.textContent).not.toContain('fm.present.path.aeat');
+  });
+
+  it('does NOT render the AEAT column when showAeatPath is explicitly false either', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} showAeatPath={false} />);
+    expect(document.body.textContent).not.toContain('fm.present.aeat_section.title');
+  });
+
+  it('the aeat_telematic path can be selected and confirmed when the AEAT column is shown', () => {
+    const onConfirm = vi.fn();
+    const onClose = vi.fn();
+    render(<PresentModal decl={decl} onConfirm={onConfirm} onClose={onClose} showAeatPath />);
+    fireEvent.click(screen.getByText('fm.present.path.aeat'));
+    const confirmBtn = screen.getByText('fm.action.continue');
+    expect(confirmBtn.disabled).toBe(false);
+    fireEvent.click(confirmBtn);
+    expect(onConfirm).toHaveBeenCalledWith({ status: 'aeat_telematic', acuseFile: null });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('footer confirm label switches to fm.action.continue only while aeat_telematic is selected', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} showAeatPath />);
+    // Default label before any selection.
+    expect(screen.queryByText('fm.action.confirm_presentation')).toBeTruthy();
+    fireEvent.click(screen.getByText('fm.present.path.aeat'));
+    expect(screen.queryByText('fm.action.continue')).toBeTruthy();
+    expect(screen.queryByText('fm.action.confirm_presentation')).toBeNull();
+    // Switching back to a manual path restores the generic label.
+    fireEvent.click(screen.getByText('fm.present.path.sin_acuse'));
+    expect(screen.queryByText('fm.action.confirm_presentation')).toBeTruthy();
+  });
+
+  it('renders a vertical divider between columns only when the AEAT column is present', () => {
+    const { container: withAeat } = render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} showAeatPath />);
+    expect(withAeat.querySelector('[aria-hidden="true"]')).toBeTruthy();
+
+    const { container: withoutAeat } = render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(withoutAeat.querySelector('[aria-hidden="true"]')).toBeNull();
+  });
+
+  it('shows the dynamic "Modelo X · period year" subtitle when decl carries model/year/period', () => {
+    render(<PresentModal decl={{ id: '1', model: '303', year: 2026, period: 'T3' }} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    // Mocked i18n returns "key" for calls with no params and "key" is still
+    // returned for calls WITH params too (see mock at top of file) — but the
+    // real translation key used must be the preview one, not the generic subtitle.
+    expect(document.body.textContent).toContain('fm.new_decl.preview');
+    expect(document.body.textContent).not.toContain('fm.present.subtitle');
+  });
+
+  it('falls back to the old generic subtitle when decl has no model/year/period', () => {
+    render(<PresentModal decl={{ id: 'd1' }} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(document.body.textContent).toContain('fm.present.subtitle');
+    expect(document.body.textContent).not.toContain('fm.new_decl.preview');
+  });
+
+  it('falls back to the generic subtitle when decl is entirely missing', () => {
+    render(<PresentModal onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(document.body.textContent).toContain('fm.present.subtitle');
   });
 });
 
