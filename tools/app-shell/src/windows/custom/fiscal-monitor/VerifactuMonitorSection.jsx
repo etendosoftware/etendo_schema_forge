@@ -18,6 +18,8 @@ import {
   VF_PARCIAL_ENTITY,
   VF_RECHAZADAS_ENTITY,
   VF_INVALIDAS_ENTITY,
+  VF_DATE_FIELD,
+  buildCutoverCriteria,
 } from './useFiscalMonitor.js';
 
 const FILTER_CORRECT  = 'correct';
@@ -50,20 +52,30 @@ function parseTypeLabel(row) {
   return row['typeOperation$_identifier'] ?? row.typeOperation ?? '—';
 }
 
-async function fetchCorrect(apiFetch, orgId, page) {
+/**
+ * @param {string|null} earliestCutoverDate lower-bound applied the same way as
+ * the KPI counts in useFiscalMonitor.js's fetchVerifactuMonitorData() — see
+ * buildCutoverCriteria (ETP-5229 #17). Keeps the list in sync with the pill
+ * counts above it.
+ */
+async function fetchCorrect(apiFetch, orgId, page, earliestCutoverDate) {
   const params = new URLSearchParams({
     _org:      orgId,
     _startRow: String((page - 1) * PAGE_SIZE),
     _endRow:   String(page * PAGE_SIZE),
   });
+  const criteria = buildCutoverCriteria(earliestCutoverDate, VF_DATE_FIELD);
+  if (criteria.length) params.set('criteria', JSON.stringify(criteria));
   const res = await apiFetch(`/${VF_SPEC}/${encodeURIComponent(VF_ACEPTADAS_ENTITY)}?${params}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const json = await res.json();
   return { data: json?.response?.data ?? [], totalRows: json?.response?.totalRows ?? 0 };
 }
 
-async function fetchProblems(apiFetch, orgId) {
+async function fetchProblems(apiFetch, orgId, earliestCutoverDate) {
+  const criteria = buildCutoverCriteria(earliestCutoverDate, VF_DATE_FIELD);
   const base = { _org: orgId };
+  if (criteria.length) base.criteria = JSON.stringify(criteria);
   const [partial, rejected, invalid] = await Promise.all([
     apiFetch(`/${VF_SPEC}/${encodeURIComponent(VF_PARCIAL_ENTITY)}?${new URLSearchParams(base)}`).then(r => r.json()),
     apiFetch(`/${VF_SPEC}/${encodeURIComponent(VF_RECHAZADAS_ENTITY)}?${new URLSearchParams(base)}`).then(r => r.json()),
@@ -85,6 +97,7 @@ export default function VerifactuMonitorSection({
   orgId, apiBaseUrl, initialTab = 'correct', mockRows, onTabChange,
   refreshKey = 0, onInvoiceOpen, onBpClick, onVfErrorClick, onVfResolveClick,
   kpis,
+  earliestCutoverDate = null,
   noWrap,
 }) {
   const ui = useUI();
@@ -118,8 +131,8 @@ export default function VerifactuMonitorSection({
     setLoading(true);
     setError(null);
     const fetcher = activeTab === FILTER_PROBLEMS
-      ? fetchProblems(apiFetch, orgId)
-      : fetchCorrect(apiFetch, orgId, page);
+      ? fetchProblems(apiFetch, orgId, earliestCutoverDate)
+      : fetchCorrect(apiFetch, orgId, page, earliestCutoverDate);
     fetcher
       .then(({ data, totalRows }) => {
         // Problems tab loads all at once; correct tab accumulates on scroll
@@ -128,7 +141,7 @@ export default function VerifactuMonitorSection({
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [orgId, activeTab, page, apiFetch, mockRows, refreshKey]);
+  }, [orgId, activeTab, page, apiFetch, mockRows, refreshKey, earliestCutoverDate]);
 
   // Reset to first page, rows and selection when tab changes
   useEffect(() => { setPage(1); setRows([]); setSelectedIds(new Set()); }, [activeTab, setSelectedIds]);
@@ -138,10 +151,13 @@ export default function VerifactuMonitorSection({
     setExporting(true);
     try {
       if (activeTab === FILTER_CORRECT) {
+        const criteria = buildCutoverCriteria(earliestCutoverDate, VF_DATE_FIELD);
+        const params = { _org: orgId };
+        if (criteria.length) params.criteria = JSON.stringify(criteria);
         await fetchCsvAndDownload(
           apiFetch,
           `/${VF_SPEC}/${encodeURIComponent(VF_ACEPTADAS_ENTITY)}`,
-          { _org: orgId },
+          params,
           'verifactu_correct',
           VF_CORRECT_EXPORT_COLS,
         );

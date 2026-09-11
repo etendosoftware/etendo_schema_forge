@@ -37,6 +37,13 @@ vi.mock('../useFiscalMonitor.js', () => ({
   VF_PARCIAL_ENTITY: 'facturasParcialmenteAceptadas',
   VF_RECHAZADAS_ENTITY: 'facturasRechazadas',
   VF_INVALIDAS_ENTITY: 'facturasInvalidas',
+  VF_DATE_FIELD: 'invoiceDate',
+  // ETP-5229 #17 — real implementation stubbed here rather than imported:
+  // this suite never passes earliestCutoverDate, so [] (no-op) is always
+  // correct. Mirrors the TBAI stub in TbaiMonitorSection.vitest.jsx.
+  buildCutoverCriteria: (cutoverDate, fieldName = 'invoiceDate') => (cutoverDate
+    ? [{ fieldName, operator: 'greaterOrEqual', value: cutoverDate.slice(0, 10) }]
+    : []),
 }));
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
