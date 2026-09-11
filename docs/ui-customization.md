@@ -136,6 +136,91 @@ assignment — multi-role composition" for the full mechanism.
 
 ---
 
+### 3b. `window.customComponents.topbarSecondary` — secondary/utility actions, left of Save (ETP-5260)
+
+Injects a component into the detail topbar, rendered **before** Save/Confirm — i.e. to their
+**left**. This is a second, narrower slot alongside `topbarRight` (§4): both share the exact
+same prop contract (`data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess`, `onRefresh`,
+`onSave`, `isDirty`, `saveGate`), rendered by `DetailView`'s shared `renderSlotAction` helper —
+the only difference between the two slots is **where** in the flex row each one is called.
+
+```json
+"window": {
+  "customComponents": {
+    "topbarSecondary": "PurchaseOrderSecondaryActions"
+  }
+}
+```
+
+**Read this before you add a button to either `topbarRight` or `topbarSecondary`.** The bug
+that created this slot (ETP-5260) was exactly this: Copy link / Clone / Send lived *inside*
+`topbarRight`, and no amount of reordering them within that slot could put them to the left of
+Save — **the position of a button inside a slot's JSX never determines its position relative to
+Save; only which slot it is in does.** `topbarRight` is one `{topbarRight && …}` block rendered
+as a whole, after Save; `topbarSecondary` is a different block, rendered as a whole, before Save.
+Moving a button from the front to the back of one slot's internal JSX changes nothing about
+which side of Save it lands on.
+
+**The classification rule — decide by what the button IS, not by habit or by copying the
+nearest window:**
+
+| Slot | Carries | Renders | Examples |
+|---|---|---|---|
+| `topbarSecondary` | **Secondary/utility actions** — actions that operate on the record but are not part of advancing its document flow | Left of Save/Confirm | Copy link, Clone, Send by email |
+| `topbarRight` | **Primary document-flow actions** and status indicators — the actions that move the document forward, plus badges | Right of Save/Confirm (unchanged since ETP-4933) | Confirm-with-credit, "Gestionar recepción y factura", "Crear factura", payment-status/SII badges |
+
+A quick test: if the action's own label reads as a step in completing or advancing the
+document (Confirm, Create Invoice, Manage Receipt), it is primary → `topbarRight`. If it reads
+as "do something *with* this record that doesn't change its status" (copy its link, duplicate
+it, send a copy by mail), it is secondary → `topbarSecondary`.
+
+**Use `DocumentSecondaryActions`, don't write your own.** For the three common secondary
+actions, do not hand-roll buttons — reach for the shared
+`tools/app-shell/src/windows/custom/shared/DocumentSecondaryActions.jsx`, which renders them in
+the DF-mandated order **Copy link → Clone → Send** and already carries the Clone modal. Before
+this component existed there were **three divergent copies** of the Clone button
+(`purchase-order`, `sales-order`, and a mostly-unused shared `CloneButton.jsx`) — that
+divergence is exactly how ETP-4781's clone-button styling bug happened. A new window wanting
+this group wraps `DocumentSecondaryActions` in a small per-window adapter (own gating, own
+Clone/Send wiring) rather than duplicating its buttons; see
+`artifacts/purchase-order/custom/PurchaseOrderSecondaryActions.jsx` for the reference adapter to
+copy. Key props: `windowName`, `clone` (`false` | `true` | an overrides object — see the
+component's own JSDoc for the full shape), `showSend` + `onSendClick`, `showCopyLink` (default
+`true`), and `children` for a window-specific secondary action that isn't Copy link/Clone/Send
+(e.g. a fiscal "send to SII/TBAI" button) but still belongs in the DF's "Enviar" position.
+
+**A `SendDocumentModal` needs client-rendered PDF context `DocumentSecondaryActions` does not
+have.** Nine migrated windows (see the table below) keep their existing `SendDocumentModal`
+inside their `topbarRight` component instead of duplicating it, and bridge the Send *button* in
+`topbarSecondary` to the existing modal via a `window` `CustomEvent`
+(`'<window>:open-send-modal'`, e.g. `'purchase-order:open-send-modal'`) — see
+`docs/document-printables.md` → "Where the printables are used", entry 3, for the full pattern
+and why the modal did not move.
+
+**Do not move `topbarRight` to the left of Save.** `DetailView.jsx` carries an explicit ETP-4933
+comment on this: two windows (`return-material-receipt`, `return-to-vendor-shipment`) render a
+PRIMARY `ConfirmWithCreditButtonBase` inside `topbarRight`, visible while the document is still
+in Draft. Moving `topbarRight` — or reintroducing its old pre-`topbarSecondary` behavior — puts
+that Confirm action to the left of Save again, which is the regression ETP-4933 fixed. The
+`topbarSecondary` slot exists specifically so this never has to be revisited: it is additive,
+`topbarRight` is untouched, and the two return windows migrated only their Copy-link button (no
+Clone/Send) into `topbarSecondary`, leaving `ConfirmWithCreditButtonBase` exactly where it was.
+
+**Windows migrated to `topbarSecondary` (ETP-5260):** `purchase-order`, `sales-order`,
+`sales-quotation`, `goods-receipt`, `goods-shipment`, `purchase-invoice`, `sales-invoice`,
+`return-material-receipt`, `return-to-vendor-shipment`. See each window's guide under
+`docs/generated-custom-windows/` for its exact button set and gating.
+
+**The kebab ("more actions") menu also moved (ETP-5260, global change).** `DetailMoreActionsMenu`
+now renders right after `topbarSecondary` and before Save — reasoning: the kebab is itself a
+container of secondary actions (`window.menuActions`, §5 below), so it belongs in the same visual
+group. This is a `DetailView.jsx`-level change, so it affects **every** window that declares
+`menuActions`, not only the 9 migrated above — including `amortization`, `chart-of-accounts`,
+`fiscal-calendar`, `goods-movements`, `matched-purchase-invoices`, `physical-inventory`, and
+`simple-g-l-journal`.
+
+---
+
 ### 4. `window.customComponents` — replace or inject structural components
 
 Injects custom components into specific structural slots of `DetailView`. Each key maps to a component name (file must exist at `windows/custom/{window}/{value}.jsx`).
@@ -156,13 +241,15 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 
 | Key | Prop emitted | Renders where | Props received |
 |-----|-------------|---------------|----------------|
-| `topbarRight` | `topbarRight={X}` | Right side of detail topbar (replaces status badge) | `data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess`, `onRefresh`, `onSave`, `isDirty` |
+| `topbarSecondary` | `topbarSecondary={X}` | Left side of detail topbar, before Save/Confirm — see §3b | `data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess`, `onRefresh`, `onSave`, `isDirty`, `saveGate` |
+| `topbarRight` | `topbarRight={X}` | Right side of detail topbar (replaces status badge), after Save/Confirm | `data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess`, `onRefresh`, `onSave`, `isDirty`, `saveGate` |
 | `bottomSection` | `bottomSection={X}` | Bottom of detail view (replaces totals + footer) | `recordId`, `data`, `token`, `apiBaseUrl`, `api`, `summary`, `notesField`, `onFieldChange`, `notesFocused`, `setNotesFocused` |
 | `sidePanel` | `sidePanel={X}` | Right-side panel alongside the detail form | `recordId`, `data`, `token`, `apiBaseUrl` |
 | `sidePanelStyle` | `sidePanelStyle={…}` | CSS style for the side panel container | — (style object, not a component) |
 | `headerTable` | replaces `{Entity}Table` import | List table in the master list view | Standard table props |
 
 **Real examples:**
+- `topbarSecondary`: see §3b — 9 windows, all wrapping the shared `DocumentSecondaryActions`
 - `topbarRight`: `goods-shipment` (`GoodsShipmentActions`), `sales-invoice` (`InvoiceTopbarExtra`)
 - `bottomSection`: `payment-in` (`PaymentBottomPanel`), `sales-invoice` (`InvoiceBottomPanel`)
 - `sidePanel`: `payment-in` (`PaymentActivityPanel`)

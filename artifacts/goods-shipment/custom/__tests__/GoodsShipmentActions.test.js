@@ -94,13 +94,21 @@ describe('GoodsShipmentActions', () => {
     });
   });
 
+  // ETP-5260 — the Send button itself (SendDocumentButton) moved to the
+  // topbarSecondary slot (GoodsShipmentSecondaryActions, which gates it on
+  // `isCompleted` — see that component's own test). This component now only
+  // owns the SendDocumentModal (with its PDF/documentType context), opened via
+  // the `goods-shipment:open-send-modal` window event — see the "listens to
+  // goods-shipment:open-confirm-modal"-style wiring assertions below.
   describe('SendDocumentModal integration', () => {
-    it('imports SendDocumentModal and SendDocumentButton', () => {
-      assert.match(src, /import\s+SendDocumentModal\s*,\s*\{[^}]*SendDocumentButton[^}]*\}\s*from/);
+    it('imports SendDocumentModal (but no longer SendDocumentButton — that moved out)', () => {
+      assert.match(src, /import\s+SendDocumentModal\s+from/);
+      assert.doesNotMatch(src, /SendDocumentButton/);
     });
 
-    it('renders SendDocumentButton when completed', () => {
-      assert.match(src, /SendDocumentButton/);
+    it('listens to the goods-shipment:open-send-modal custom event to open its own SendDocumentModal', () => {
+      assert.match(src, /window\.addEventListener\(['"]goods-shipment:open-send-modal['"]/);
+      assert.match(src, /window\.removeEventListener\(['"]goods-shipment:open-send-modal['"]/);
     });
   });
 
@@ -185,20 +193,14 @@ describe('GoodsShipmentActions', () => {
     });
   });
 
-  // ETP-4717 (Pair 2 — P2) — regression lock-in. Unlike sales-order,
-  // purchase-order, sales-invoice, and sales-quotation, this window already
-  // gates the Send button correctly (Completed/CO only). This test locks that
-  // in so a future shared-logic refactor across the 5 windows cannot silently
-  // regress the one window that already does it right.
-  describe('Send button visibility gated by document status (ETP-4717 — already correct)', () => {
-    it('gates the Send button on isCompleted only (not isDraft || isCompleted)', () => {
-      assert.match(src, /\{isCompleted && <SendDocumentButton/);
-    });
-
-    it('does not also show the Send button while in Draft (DR)', () => {
-      assert.doesNotMatch(src, /\{\(isDraft \|\| isCompleted\) && <SendDocumentButton/);
-    });
-  });
+  // ETP-4717 (Pair 2 — P2) — regression lock-in, relocated by ETP-5260. Unlike
+  // sales-order, purchase-order, sales-invoice, and sales-quotation (fixed
+  // separately), this window already gated the Send button correctly
+  // (Completed/CO only). That gate now lives in GoodsShipmentSecondaryActions
+  // (`showSend={isCompleted}`) — see
+  // artifacts/goods-shipment/custom/__tests__/GoodsShipmentSecondaryActions.test.js,
+  // which is what now locks in "not isDraft || isCompleted" so a future
+  // shared-logic refactor cannot silently regress it.
 
   // ETP-4702 — regression guard. This component used to render its own private
   // kebab popover (menuOpen/menuRef state, previously ~lines 207-237) as a SECOND,

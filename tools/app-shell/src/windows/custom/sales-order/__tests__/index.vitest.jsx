@@ -103,6 +103,15 @@ vi.mock('@generated/sales-order/custom/OrderCreateInvoice', () => ({
   ManageDocsLauncher: () => <div data-testid="manage-docs-launcher" />,
 }));
 
+// ETP-5260 — the topbarSecondary slot (Clone/Copy-link/Send). Stubbed like every
+// other heavy custom child above; without this mock, DocumentSecondaryActions
+// pulls in SendDocumentModal -> documentPdfRegistry.js -> useOrderPdf.js, which
+// trips the partial `usePurchaseOrderPdf`/`useOrderPdf` mock's strict export
+// validation (a missing `buildSalesOrderPdfLabels` export).
+vi.mock('@generated/sales-order/custom/OrderCreateInvoiceSecondaryActions', () => ({
+  default: () => <div data-testid="secondary-actions" />,
+}));
+
 vi.mock('@generated/sales-order/generated/web/sales-order/HeaderTable', () => ({
   default: (props) => <div {...props} data-testid="header-table" />,
 }));

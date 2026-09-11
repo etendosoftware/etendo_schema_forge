@@ -26,7 +26,7 @@ vi.mock('@/components/contract-ui/CreateInvoiceConfirmModal', () => ({
 }));
 
 import ConfirmWithCreditButton from '../ConfirmWithCreditButton.jsx';
-import { itRendersOnlyCopyLinkOutsideDrOrCo } from '../../shared/__tests__/confirmWithCreditButtonCopyLinkTest.jsx';
+import { itRendersNothingOutsideDrOrCo } from '../../shared/__tests__/confirmWithCreditButtonCopyLinkTest.jsx';
 
 const BASE_PROPS = {
   recordId: 'REC-001',
@@ -47,7 +47,7 @@ describe('ConfirmWithCreditButton', () => {
     vi.unstubAllGlobals();
   });
 
-  itRendersOnlyCopyLinkOutsideDrOrCo(ConfirmWithCreditButton, BASE_PROPS);
+  itRendersNothingOutsideDrOrCo(ConfirmWithCreditButton, BASE_PROPS);
 
   it('renders process receipt button in DR status', () => {
     render(<ConfirmWithCreditButton {...BASE_PROPS} data={{ documentStatus: 'DR', linesCount: 2 }} />);

@@ -1,6 +1,7 @@
 import ReturnMaterialReceiptPage from '@generated/return-material-receipt/generated/web/return-material-receipt/ReturnMaterialReceiptPage';
 import ReturnMaterialReceiptPreview from './ReturnMaterialReceiptPreview';
 import { useReturnReceiptPdf } from './useReturnReceiptPdf.js';
+import ReturnMaterialReceiptSecondaryActions from './ReturnMaterialReceiptSecondaryActions.jsx';
 import ReturnWindowShell from '../shared/ReturnWindowShell';
 import { useMenuLabel } from '@/i18n';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
@@ -48,6 +49,12 @@ export default function ReturnMaterialReceiptWindow({ windowName, recordId, apiB
       entity="returnMaterialReceipt"
       headerEntity="returnMaterialReceipt"
       routePrefix="/return-material-receipt/"
+      // ETP-5260 defect fix — forwarded through ReturnWindowShell's `...pageProps`
+      // and the generated ReturnMaterialReceiptPage's own `{...props}` spread
+      // straight to DetailView; renders Copy link to the LEFT of Save/Confirm.
+      // ConfirmWithCreditButton (topbarRight, hardcoded in the generated Page)
+      // is untouched — see ReturnMaterialReceiptSecondaryActions' doc comment.
+      topbarSecondary={ReturnMaterialReceiptSecondaryActions}
       duplicateAction={{ show: true, visibleWhen: "@documentStatus@='CO'" }}
       hideLink
       bulkActions={ReturnMaterialReceiptBulkActions}

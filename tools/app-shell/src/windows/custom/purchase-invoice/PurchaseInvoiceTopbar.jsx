@@ -1,26 +1,19 @@
-import { useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
-import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
-import SendToSifButton from '../shared/SendToSifButton.jsx';
+import { useState } from 'react';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
-import CloneButton from '../shared/CloneButton.jsx';
-import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency';
 import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.js';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
 
-import { buildHeaders } from '@/auth/api.js';
-export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUrl, onProcess, onRefresh }) {
-  const navigate = useNavigate();
+// ETP-5260 — Clone/SendToSif/Copy-link moved to the topbarSecondary slot
+// (PurchaseInvoiceSecondaryActions). This component now only renders the
+// payment-status badge (a primary/status indicator that belongs at the
+// extreme right, after Save/Confirm) and its modal.
+export default function PurchaseInvoiceTopbar({ data, recordId, apiBaseUrl, onRefresh }) {
   const ui = useUI();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [showClone, setShowClone] = useState(false);
 
   useInvoiceUpdatedListener('purchase-invoice', recordId, onRefresh);
-
-  const headers = useMemo(() => (buildHeaders(token)), [token]);
 
   if (!data) return null;
 
@@ -50,44 +43,6 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
 
   return (
     <>
-      {recordId && (
-        <>
-          <CloneButton
-            onClick={() => setShowClone(true)}
-            title={ui('cloneOrderBtn')}
-            data-testid="CloneButton__8addd1" />
-          <SendToSifButton
-            data={data}
-            recordId={recordId}
-            apiBaseUrl={apiBaseUrl}
-            status={data?.documentStatus}
-            data-testid="SendToSifButton__8addd1" />
-          <CopyRecordLinkButton
-            recordId={recordId}
-            windowName="purchase-invoice"
-            data-testid="CopyRecordLinkButton__8addd1" />
-          {showClone && createPortal(
-            <CloneOrderModal
-              recordId={recordId}
-              data={data}
-              apiBaseUrl={apiBaseUrl}
-              headers={headers}
-              cloneActionName="cloneRecord"
-              titleKey="cloneInvoiceConfirmTitle"
-              bodyKey="cloneInvoiceConfirmBody"
-              actionLabelKey="cloneInvoiceAction"
-              errorKey="cloneInvoiceError"
-              processingKey="invoiceProcessing"
-              onClose={() => setShowClone(false)}
-              onCloned={(newId) => {
-                setShowClone(false);
-                navigate(`/purchase-invoice/${newId}`);
-              }}
-              data-testid="CloneOrderModal__8addd1" />,
-            document.body,
-          )}
-        </>
-      )}
       {isCompleted && (() => {
         if (badge.isCredit) {
           // Mirror the grid's "Saldo pendiente" cell for credit instruments: green

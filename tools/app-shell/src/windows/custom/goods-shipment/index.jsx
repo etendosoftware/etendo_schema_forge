@@ -9,6 +9,7 @@ import { useCreateContactModal } from '@/components/contract-ui/useCreateContact
 import GoodsShipmentPage from '@generated/goods-shipment/generated/web/goods-shipment/GoodsShipmentPage';
 import GoodsShipmentTable from '@generated/goods-shipment/generated/web/goods-shipment/GoodsShipmentTable';
 import BulkInvoiceFromShipment from '@generated/goods-shipment/custom/BulkInvoiceFromShipment';
+import GoodsShipmentSecondaryActions from '@generated/goods-shipment/custom/GoodsShipmentSecondaryActions';
 import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import { useMenuLabel } from '@/i18n';
@@ -125,6 +126,7 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
           // actually changes. Mirrors sales-invoice/purchase-invoice, which hit the same gap.
           refetchAfterSave={true}
           {...rest}
+          topbarSecondary={GoodsShipmentSecondaryActions}
           data-testid="GoodsShipmentPage__9851c7" />
         {contactPortal}
       </CreateContactContext.Provider>

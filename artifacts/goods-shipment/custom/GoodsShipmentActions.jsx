@@ -4,14 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useUI, useMenuLabel } from '@/i18n';
 import ReturnWizard from './ReturnWizard';
-import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
+import SendDocumentModal from '@/components/contract-ui/SendDocumentModal';
 import GoodsShipmentConfirmModal from './GoodsShipmentConfirmModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
 import { useShipmentPdf } from '@/windows/custom/goods-shipment/useShipmentPdf';
-import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { formatCurrency } from '@/lib/formatCurrency.js';
-import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 
 export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl, api, onRefresh }) {
   const ui = useUI();
@@ -24,7 +22,6 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
   const [showSend, setShowSend] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [invoiceResult, setInvoiceResult] = useState(null);
-  const [showClone, setShowClone] = useState(false);
   const resultNavigatedRef = useRef(false);
 
   const isCompleted = data?.documentStatus === 'CO';
@@ -47,6 +44,16 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
     const handler = () => setShowConfirmModal(true);
     window.addEventListener('goods-shipment:open-confirm-modal', handler);
     return () => window.removeEventListener('goods-shipment:open-confirm-modal', handler);
+  }, []);
+
+  // ETP-5260 — the Send button now lives in the topbarSecondary slot
+  // (GoodsShipmentSecondaryActions), while this modal (with its delivery-note
+  // PDF context) stays here in topbarRight; the button dispatches this event
+  // to open it.
+  useEffect(() => {
+    const handler = () => setShowSend(true);
+    window.addEventListener('goods-shipment:open-send-modal', handler);
+    return () => window.removeEventListener('goods-shipment:open-send-modal', handler);
   }, []);
 
   useEffect(() => {
@@ -118,9 +125,13 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
           onClick={() => setShowInvoiceConfirm(true)}
           disabled={creatingInvoice}
           className="inline-flex items-center gap-1.5 text-[13px] font-medium transition-colors"
-          style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid var(--status-info-border)', background: 'var(--status-info-fg)', color: 'hsl(var(--card))', opacity: creatingInvoice ? 0.6 : 1, cursor: creatingInvoice ? 'not-allowed' : 'pointer' }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'var(--status-info-fg)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'var(--status-info-fg)'; }}
+          // Fix (not part of ETP-5260): was `var(--status-info-fg)` — a badge-text token,
+          // not a button-background token — which rendered a saturated blue instead of
+          // the dark gray used by the real `Confirmar` button. Same pattern as ETP-4781.
+          style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid var(--status-info-border)', background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))', opacity: creatingInvoice ? 0.6 : 1, cursor: creatingInvoice ? 'not-allowed' : 'pointer' }}
+          // Hover to match the shared Confirm button's `hover:bg-primary/90` (90% opacity).
+          onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--primary) / 0.9)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'hsl(var(--primary))'; }}
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
@@ -148,19 +159,9 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
         </button>
       )}
 
-      <button
-        type="button"
-        onClick={() => setShowClone(true)}
-        className="inline-flex items-center gap-1.5 text-[13px] font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
-        style={{ padding: '4px 12px', borderRadius: '6px', borderWidth: '1px' }}
-      >
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
-        {ui('cloneOrderBtn')}
-      </button>
-
-      {isCompleted && <SendDocumentButton onClick={() => setShowSend(true)} />}
-
-      <CopyRecordLinkButton recordId={recordId} windowName="goods-shipment" />
+      {/* ETP-5260 — Clone/Copy-link/Send moved to the topbarSecondary slot
+          (GoodsShipmentSecondaryActions). This component now only renders the
+          PRIMARY flow buttons above and the modals below. */}
 
       {!isCompleted && showConfirmModal && isFullyInvoiced
         ? createPortal(
@@ -225,19 +226,6 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
               resultNavigatedRef.current = false;
             }, 0);
           }}
-        />,
-        document.body,
-      )}
-
-      {showClone && createPortal(
-        <CloneOrderModal
-          recordId={recordId}
-          data={data}
-          apiBaseUrl={apiBaseUrl}
-          headers={headers}
-          headerEntity="goodsShipment"
-          routePrefix="/goods-shipment/"
-          onClose={() => setShowClone(false)}
         />,
         document.body,
       )}

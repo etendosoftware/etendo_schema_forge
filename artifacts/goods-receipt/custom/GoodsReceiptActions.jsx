@@ -9,7 +9,6 @@ import { useMainAttachment } from '@/windows/custom/shared/useMainAttachment.js'
 import PurchaseReturnWizard from './PurchaseReturnWizard';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { formatCurrency } from '@/lib/formatCurrency.js';
-import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -19,11 +18,9 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
   const navigate = useNavigate();
   const [showConfirm, setShowConfirm] = useState(false);
   const [showInvoiceConfirm, setShowInvoiceConfirm] = useState(false);
-  const [showClone, setShowClone] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [returnLines, setReturnLines] = useState([]);
   const [returnedDoc, setReturnedDoc] = useState(null);
-  const [isCloneHovered, setIsCloneHovered] = useState(false);
   const [confirmedDocs, setConfirmedDocs] = useState(null);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
   const resultNavigatedRef = useRef(false);
@@ -119,19 +116,9 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setShowClone(true)}
-        title={ui('cloneOrderBtn')}
-        style={{ ...sqBtn, background: isCloneHovered ? 'hsl(var(--card))' : 'hsl(var(--card))' }}
-        onMouseEnter={() => setIsCloneHovered(true)}
-        onMouseLeave={() => setIsCloneHovered(false)}
-      >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-        </svg>
-      </button>
+      {/* ETP-5260 — Clone/Copy-link moved to the topbarSecondary slot
+          (GoodsReceiptSecondaryActions). This component now only renders the
+          PRIMARY flow buttons below and their modals. */}
 
       {isCompleted && !isFullyReturned && (
         <button
@@ -150,15 +137,17 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
         </button>
       )}
 
-      <CopyRecordLinkButton recordId={recordId} windowName="goods-receipt" />
-
       {isCompleted && !isFullyInvoiced && (
         <button
           type="button"
           onClick={() => setShowInvoiceConfirm(true)}
-          style={{ ...textBtn, border: '1px solid var(--status-info-border)', background: 'var(--status-info-fg)', color: 'hsl(var(--card))' }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'var(--status-info-fg)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'var(--status-info-fg)'; }}
+          // Fix (not part of ETP-5260): was `var(--status-info-fg)` — a badge-text token,
+          // not a button-background token — which rendered a saturated blue instead of
+          // the dark gray used by the real `Confirmar` button. Same pattern as ETP-4781.
+          style={{ ...textBtn, border: '1px solid var(--status-info-border)', background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
+          // Hover to match the shared Confirm button's `hover:bg-primary/90` (90% opacity).
+          onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--primary) / 0.9)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'hsl(var(--primary))'; }}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
@@ -277,18 +266,6 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
         onSuccess={(result) => { setWizardOpen(false); setReturnedDoc(result); }}
         onError={(msg) => toast.error(msg)}
       />
-
-      {showClone && createPortal(
-        <CloneReceiptModal
-          receiptId={recordId}
-          data={data}
-          base={base}
-          headers={headers}
-          onClose={() => setShowClone(false)}
-          onCloned={(newId) => { setShowClone(false); navigate(`/goods-receipt/${newId}`); }}
-        />,
-        document.body,
-      )}
     </>
   );
 }
@@ -439,8 +416,14 @@ function ConfirmReceiptInvoicedModal({ data, base, headers, recordId, onConfirme
 }
 
 // ── CloneReceiptModal ─────────────────────────────────────────────────────────
+// ETP-5260 — exported: the Clone button/modal now live in the topbarSecondary
+// slot (GoodsReceiptSecondaryActions), which renders this modal via
+// `DocumentSecondaryActions`' `children` extension point (this window's clone
+// UX is bespoke — a self-contained fetch-lines-then-clone modal, not
+// CloneOrderModal — so it stays a window-owned child instead of being folded
+// into the shared component's generic `clone` config).
 
-function CloneReceiptModal({ receiptId, data, base, headers, onClose, onCloned }) {
+export function CloneReceiptModal({ receiptId, data, base, headers, onClose, onCloned }) {
   const ui = useUI();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);

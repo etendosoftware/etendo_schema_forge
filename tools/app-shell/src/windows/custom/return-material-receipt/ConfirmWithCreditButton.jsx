@@ -1,19 +1,15 @@
 import { useUI } from '@/i18n';
 import ConfirmWithCreditButtonBase from '../shared/ConfirmWithCreditButtonBase';
-import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 
+// ETP-5260 defect fix — Copy link used to render here as a topbarRight sibling
+// (ETP-4721), which landed it to the RIGHT of Save/Confirm against the DF. It
+// now lives in ReturnMaterialReceiptSecondaryActions (topbarSecondary, left of
+// Save/Confirm). ConfirmWithCreditButtonBase is a PRIMARY action available in
+// Borrador (ETP-4933) and stays here in topbarRight — do not move it.
 export default function ConfirmWithCreditButton({ data, recordId, token, apiBaseUrl, onSave, isDirty, saveGate }) {
   const ui = useUI();
   return (
     <>
-      {/* ETP-4721 — rendered as a sibling, not via ConfirmWithCreditButtonBase's
-          extraActions, because the base component early-returns null for any
-          status other than DR/CO. The copy-link action must stay visible for
-          every persisted record regardless of document status. */}
-      <CopyRecordLinkButton
-        recordId={recordId}
-        windowName="return-material-receipt"
-        data-testid="CopyRecordLinkButton__a61728" />
       <ConfirmWithCreditButtonBase
         data={data}
         recordId={recordId}

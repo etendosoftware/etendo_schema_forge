@@ -382,15 +382,14 @@ describe('PurchaseOrderActions', () => {
   // ETP-4717 (Pair 2 — P2): the Send button/modal must only be available once
   // the purchase order is Confirmed (CO), not while it is still Draft (DR).
   // Grid and Form-view must agree on the same rule.
-  describe('Send button visibility gated by document status (ETP-4717)', () => {
-    it('does NOT show the Send button while the order is still Draft (DR)', () => {
-      assert.doesNotMatch(src, /\{\(isDraft \|\| isCompleted\) && <SendDocumentButton/);
-    });
-
-    it('shows the Send button only when the order is Completed (CO)', () => {
-      assert.match(src, /\{isCompleted && <SendDocumentButton/);
-    });
-
+  //
+  // ETP-5260 moved the Send BUTTON out of this file into the shared
+  // topbarSecondary slot (PurchaseOrderSecondaryActions.jsx / DocumentSecondaryActions.jsx)
+  // — see that component's own test for the isCompleted-only button-visibility
+  // assertion. This file keeps ONLY the SendDocumentModal (opened via the
+  // 'purchase-order:open-send-modal' window event dispatched from the button's
+  // new home), so what's left to pin here is the modal's own CO-only gate.
+  describe('SendDocumentModal render gated by document status (ETP-4717 / ETP-5260)', () => {
     it('does NOT gate the SendDocumentModal render on isDraft', () => {
       assert.doesNotMatch(
         src,
@@ -400,6 +399,11 @@ describe('PurchaseOrderActions', () => {
 
     it('gates the SendDocumentModal render on isCompleted only', () => {
       assert.match(src, /\{isCompleted && showSend && createPortal\(\s*<SendDocumentModal/);
+    });
+
+    it('opens the modal by listening for the purchase-order:open-send-modal window event, not a local button click', () => {
+      assert.match(src, /addEventListener\('purchase-order:open-send-modal'/);
+      assert.match(src, /setShowSend\(true\)/);
     });
   });
 

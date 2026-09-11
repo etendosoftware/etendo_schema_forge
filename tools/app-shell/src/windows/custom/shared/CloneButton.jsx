@@ -22,7 +22,7 @@ const btnStyle = {
   boxShadow: '0px 1px 2px 0px hsl(var(--foreground))0D',
 };
 
-export default function CloneButton({ onClick, title }) {
+export default function CloneButton({ onClick, title, ...rest }) {
   const [hovered, setHovered] = useState(false);
   return (
     <button
@@ -32,6 +32,7 @@ export default function CloneButton({ onClick, title }) {
       title={title}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      {...rest}
     >
       <CopyIcon data-testid="CopyIcon__b4cd7a" />
     </button>
