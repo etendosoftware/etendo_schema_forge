@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { formatCurrency } from '../../../../tools/app-shell/src/lib/formatCurrency.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'GoodsShipmentActions.jsx'), 'utf8');
@@ -150,38 +149,53 @@ describe('GoodsShipmentActions', () => {
     });
   });
 
-  describe('ConfirmShipmentInvoicedModal — fmtAmount (real currency formatting)', () => {
-    // fmtAmount is not exported (internal to the modal, reachable only via a hard-to-
-    // stage UI state — a draft shipment that already has a linked invoice). Extract
-    // the real function source and eval it directly rather than skip coverage.
-    function extractFunctionSource(source, fnName) {
-      const startIdx = source.search(new RegExp(`const\\s+${fnName}\\s*=\\s*\\([^)]*\\)\\s*=>\\s*\\{`));
-      if (startIdx === -1) throw new Error(`${fnName} not found`);
-      const braceStart = source.indexOf('{', startIdx);
-      let depth = 0;
-      let i = braceStart;
-      for (; i < source.length; i++) {
-        if (source[i] === '{') depth++;
-        else if (source[i] === '}') {
-          depth--;
-          if (depth === 0) break;
-        }
-      }
-      return source.slice(startIdx, i + 1);
-    }
+  // ETP-5265 — the intermediate "already fully invoiced" confirmation popup
+  // (ConfirmShipmentInvoicedModal, now deleted entirely) was removed. Confirming
+  // a fully-invoiced shipment now calls the documentAction endpoint directly via
+  // the canonical useDocumentAction hook — no modal, a loading toast while in
+  // flight, then the same success path the popup used to trigger
+  // (setInvoiceResult({ invoice: null })), or toast.error on failure.
+  describe('fully-invoiced confirm skips the modal and calls documentAction directly (ETP-5265)', () => {
+    it('no longer imports or references the deleted ConfirmShipmentInvoicedModal', () => {
+      assert.doesNotMatch(src, /ConfirmShipmentInvoicedModal/);
+    });
 
-    function getRealFmtAmount() {
-      const fnSource = extractFunctionSource(src, 'fmtAmount');
-      // fmtAmount now delegates to the real, imported formatCurrency() — inject it
-      // into the eval'd scope so the extracted source can still call it.
-      const fn = new Function('formatCurrency', `${fnSource}; return fmtAmount;`);
-      return fn(formatCurrency);
-    }
+    it('imports and uses the canonical useDocumentAction hook', () => {
+      assert.match(src, /import\s*\{[^}]*useDocumentAction[^}]*\}\s*from\s*['"]@\/hooks\/useDocumentAction['"]/);
+      assert.match(src, /useDocumentAction\(\{[^}]*apiBaseUrl[^}]*entity:\s*['"]goodsShipment['"][^}]*token[^}]*\}\)/s);
+    });
 
-    it('groups thousands and uses the real currency symbol, never the raw ISO code', () => {
-      const fmtAmount = getRealFmtAmount();
-      assert.equal(fmtAmount(1234.56, 'EUR'), '1.234,56 €');
-      assert.doesNotMatch(fmtAmount(1234.56, 'EUR'), /EUR/);
+    it('defines handleConfirmFullyInvoiced calling confirmDocAction.execute(recordId, "CO")', () => {
+      assert.match(src, /const handleConfirmFullyInvoiced\s*=\s*useCallback\(async\s*\(\)\s*=>\s*\{/);
+      assert.match(src, /confirmDocAction\.execute\(recordId,\s*['"]CO['"]\)/);
+    });
+
+    it('the open-confirm-modal handler branches on isFullyInvoiced: direct action vs the not-fully-invoiced modal', () => {
+      assert.match(
+        src,
+        /const handler = \(\) => \{\s*if\s*\(isFullyInvoiced\)\s*\{\s*handleConfirmFullyInvoiced\(\);\s*\}\s*else\s*\{\s*setShowConfirmModal\(true\);\s*\}\s*\};/,
+      );
+    });
+
+    it('on success, sets invoiceResult to the no-invoice shape (drives the existing success-toast/refresh effect)', () => {
+      assert.match(src, /await confirmDocAction\.execute\(recordId, ['"]CO['"]\);[\s\S]*?setInvoiceResult\(\{ invoice: null \}\);/);
+    });
+
+    it('on failure, shows toast.error with the error message (or a fallback)', () => {
+      assert.match(src, /catch\s*\(err\)\s*\{\s*toast\.dismiss\(toastId\);\s*toast\.error\(err\.message \|\| ui\(['"]networkError['"]\)\);/);
+    });
+
+    it('shows a loading toast while the request is in flight and dismisses it afterward', () => {
+      assert.match(src, /const toastId = toast\.loading\(ui\(['"]processing['"]\)\);/);
+      assert.match(src, /toast\.dismiss\(toastId\);/);
+    });
+
+    it('guards against re-entrant double-confirm via a ref', () => {
+      assert.match(src, /confirmingFullyInvoicedRef\.current/);
+    });
+
+    it('GoodsShipmentConfirmModal now only renders for the NOT-fully-invoiced flow', () => {
+      assert.match(src, /\{!isCompleted && !isFullyInvoiced && showConfirmModal && \(/);
     });
   });
 

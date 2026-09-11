@@ -1,5 +1,7 @@
 // Mocks must come before imports (Vitest hoisting)
 
+const { mockExecute } = vi.hoisted(() => ({ mockExecute: vi.fn() }));
+
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useMenuLabel: () => (key) => key,
@@ -10,7 +12,21 @@ vi.mock('react-router-dom', () => ({
 }));
 
 vi.mock('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+    loading: vi.fn(() => 'toast-id'),
+    dismiss: vi.fn(),
+  },
+}));
+
+// ETP-5265 — the fully-invoiced confirm flow now calls the canonical
+// useDocumentAction hook directly (no more intermediate modal). Mock it so
+// the behavioral tests below control resolution/rejection of the POST.
+vi.mock('@/hooks/useDocumentAction', () => ({
+  useDocumentAction: () => ({ execute: mockExecute, loading: false, error: null, clearError: vi.fn() }),
 }));
 
 vi.mock('@/windows/custom/shared/useMainAttachment.js', () => ({
@@ -64,11 +80,8 @@ vi.mock('@generated/goods-receipt/custom/PurchaseReturnWizard', () => ({
 
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { toast } from 'sonner';
 import { useMainAttachment } from '@/windows/custom/shared/useMainAttachment.js';
-import { formatCurrency } from '@/lib/formatCurrency.js';
 import GoodsReceiptActions from '@generated/goods-receipt/custom/GoodsReceiptActions';
 
 const defaultProps = {
@@ -92,6 +105,7 @@ function renderActions(overrides = {}) {
 describe('GoodsReceiptActions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockExecute.mockReset();
     useMainAttachment.mockReturnValue({
       storedFile: null,
       isBusy: false,
@@ -258,41 +272,83 @@ describe('GoodsReceiptActions', () => {
   });
 });
 
-describe('ConfirmReceiptInvoicedModal — fmtAmount (real currency formatting)', () => {
-  // fmtAmount is not exported (internal to the modal, reachable only via a hard-to-
-  // stage UI state — a draft receipt that already has a linked invoice). Extract
-  // the real function source from the raw file and eval it directly rather than
-  // skip coverage.
-  const __dirname = dirname(fileURLToPath(import.meta.url));
-  const src = readFileSync(join(__dirname, '..', '..', '..', '..', '..', '..', '..', 'artifacts', 'goods-receipt', 'custom', 'GoodsReceiptActions.jsx'), 'utf8');
+describe('confirming a fully-invoiced receipt (ETP-5265 — direct documentAction, no modal)', () => {
+  const fullyInvoicedProps = {
+    data: { ...defaultProps.data, invoiceStatus: 100 },
+  };
 
-  function extractFunctionSource(source, fnName) {
-    const startIdx = source.search(new RegExp(`const\\s+${fnName}\\s*=\\s*\\([^)]*\\)\\s*=>\\s*\\{`));
-    if (startIdx === -1) throw new Error(`${fnName} not found`);
-    const braceStart = source.indexOf('{', startIdx);
-    let depth = 0;
-    let i = braceStart;
-    for (; i < source.length; i++) {
-      if (source[i] === '{') depth++;
-      else if (source[i] === '}') {
-        depth--;
-        if (depth === 0) break;
-      }
-    }
-    return source.slice(startIdx, i + 1);
-  }
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockExecute.mockReset();
+  });
 
-  function getRealFmtAmount() {
-    const fnSource = extractFunctionSource(src, 'fmtAmount');
-    // fmtAmount now delegates to the real, imported formatCurrency() — inject it
-    // into the eval'd scope so the extracted source can still call it.
-    const fn = new Function('formatCurrency', `${fnSource}; return fmtAmount;`);
-    return fn(formatCurrency);
-  }
+  it('never opens ConfirmGoodsReceiptModal and calls documentAction(recordId, "CO") directly', async () => {
+    mockExecute.mockResolvedValueOnce({ response: { status: 'Success' } });
+    const onRefresh = vi.fn();
+    renderActions({ ...fullyInvoicedProps, onRefresh });
 
-  it('groups thousands and uses the real currency symbol, never the raw ISO code', () => {
-    const fmtAmount = getRealFmtAmount();
-    expect(fmtAmount(1234.56, 'EUR')).toBe('1.234,56 €');
-    expect(fmtAmount(1234.56, 'EUR')).not.toMatch(/EUR/);
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('goods-receipt:open-confirm-modal'));
+    });
+
+    expect(mockExecute).toHaveBeenCalledWith('receipt-1', 'CO');
+    expect(screen.queryByTestId('confirm-goods-receipt-modal')).not.toBeInTheDocument();
+  });
+
+  it('shows a loading toast while the request is in flight, then dismisses it', async () => {
+    let resolveExecute;
+    mockExecute.mockReturnValueOnce(new Promise((resolve) => { resolveExecute = resolve; }));
+    renderActions({ ...fullyInvoicedProps, onRefresh: vi.fn() });
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('goods-receipt:open-confirm-modal'));
+    });
+
+    expect(toast.loading).toHaveBeenCalledWith('processing');
+    expect(toast.dismiss).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveExecute({ response: { status: 'Success' } });
+    });
+
+    expect(toast.dismiss).toHaveBeenCalledWith('toast-id');
+  });
+
+  it('on success, shows the success toast and refreshes — no result modal', async () => {
+    mockExecute.mockResolvedValueOnce({ response: { status: 'Success' } });
+    const onRefresh = vi.fn();
+    renderActions({ ...fullyInvoicedProps, onRefresh });
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('goods-receipt:open-confirm-modal'));
+    });
+
+    expect(toast.success).toHaveBeenCalledWith('goodsReceipt.confirmModal.confirmedTitle');
+    expect(onRefresh).toHaveBeenCalled();
+    expect(screen.queryByTestId('confirm-result-modal')).not.toBeInTheDocument();
+  });
+
+  it('on failure, shows toast.error with the error message and does not refresh', async () => {
+    mockExecute.mockRejectedValueOnce(new Error('Document already completed'));
+    const onRefresh = vi.fn();
+    renderActions({ ...fullyInvoicedProps, onRefresh });
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('goods-receipt:open-confirm-modal'));
+    });
+
+    expect(toast.error).toHaveBeenCalledWith('Document already completed');
+    expect(onRefresh).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the generic network-error label when the rejection has no message', async () => {
+    mockExecute.mockRejectedValueOnce(new Error());
+    renderActions({ ...fullyInvoicedProps, onRefresh: vi.fn() });
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('goods-receipt:open-confirm-modal'));
+    });
+
+    expect(toast.error).toHaveBeenCalledWith('networkError');
   });
 });
