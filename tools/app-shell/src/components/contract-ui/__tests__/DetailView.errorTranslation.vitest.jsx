@@ -263,7 +263,8 @@ describe('DetailView — more-menu documentAction with preUnpost (ETP-4706)', ()
       expect(docExecuteMock).toHaveBeenCalledWith('123', 'RA');
     });
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
-    expect(mockHook.fetchById).toHaveBeenCalledWith('123');
+    // ETP-4563 cache fix: the post-action refresh forces a fresh network read.
+    expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
     expect(toast.error).not.toHaveBeenCalled();
   });
 

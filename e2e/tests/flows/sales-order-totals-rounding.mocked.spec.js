@@ -43,6 +43,27 @@ import { login } from '../helpers/auth.js';
  * tradeoff (see the bug-report doc's "3 separate Confirm modal components"
  * finding) — not something this spec should paper over.
  *
+ * ETP-5132 update — the confirm-modal side of that divergence is now fixed
+ * -------------------------------------------------------------------------
+ * ETP-5132 (see `docs/bug-reports/2026-09-09-etp5132-confirm-modal-double-
+ * discount.md`) found that `OrderCreateInvoice.jsx`'s ConfirmModal was
+ * ALSO double-discounting its own `grandTotal` (`totalLines + round2((grossBase
+ * - netBase) * discountFactor)`) whenever `grossBase` (`grandTotalAmount`) was
+ * ALREADY GET-time-compensated by the backend (ETP-4029's
+ * `applyTotalDiscountToRecord()`) — which, in a REALISTIC (non-fixture) Draft
+ * order with a pending total discount, it always is. The fix makes the modal
+ * trust `grossBase` verbatim (`grandTotal = grossBase`). Practically, this
+ * means: for a `grandTotalAmount` that is realistically already-compensated
+ * (i.e. NOT this file's deliberately-raw `BUG_HEADER`), the panel-vs-modal
+ * divergence described above no longer happens — both now show the same
+ * persisted total verbatim. The `'confirm modal applies the same AEAT
+ * rounding...'` test below was rewritten to use a new `COMPENSATED_HEADER`
+ * fixture that models that realistic, already-compensated case. `BUG_HEADER`
+ * itself is untouched and still models the genuinely-raw GET response the two
+ * panel-only tests need — that scenario, and the divergence it produces, is
+ * still real and still valid; ETP-5132 only changed what the modal does once
+ * `grossBase` is actually compensated.
+ *
  * What this spec locks
  * --------------------
  * 1. ETP-4017 case: line(qty=1, price=44, disc=10, gross=43.56), totalDisc=6%,
@@ -102,6 +123,27 @@ const BUG_LINE = {
   tax: 'tax-1',
   'tax$_identifier': 'IVA 10%',
   'currency$_identifier': 'EUR',
+};
+
+// ETP-5132 companion fixture: a REALISTICALLY-compensated version of BUG_HEADER,
+// used ONLY by the 'confirm modal applies the same AEAT rounding...' test below.
+// BUG_HEADER's grandTotalAmount (43.56) deliberately models a raw, uncompensated
+// GET response — a state that (per the file header comment) can no longer occur
+// in production once ETP-4029's applyTotalDiscountToRecord() shipped: any DR
+// order with a pending total discount gets grandTotalAmount compensated on every
+// GET. COMPENSATED_HEADER models that real backend behavior instead:
+// 43.56 * (1 - 6/100) = 40.9464, backend-rounded to 40.94 — the same 40.94 this
+// spec already treats as the correct printed total. With this fixture, the
+// ETP-5132-fixed ConfirmModal shows grossBase (40.94) verbatim — no client-side
+// re-derivation needed — and, as a bonus, that number now also matches what
+// DocumentTotalsPanel would show for this same (realistic) document, so the
+// ETP-4777 Task 3 panel/modal divergence documented above does not apply here.
+// BUG_HEADER/BUG_LINE stay untouched: the other two tests in this file still use
+// them to demonstrate the real, still-valid verbatim-panel behavior for a
+// genuinely uncompensated GET response.
+const COMPENSATED_HEADER = {
+  ...BUG_HEADER,
+  grandTotalAmount: 40.94,
 };
 
 // Clean baseline: qty=2, price=100, no discount, gross=242 → Total=242.00.
@@ -252,18 +294,39 @@ test.describe('Sales Order — totals rounding (ETP-4017)', () => {
     await installSalesOrderMocks(page, { header: BUG_HEADER, line: BUG_LINE });
     await page.goto(`/sales-order/${ORDER_ID_BUG}`);
 
-    const total = await pollAmount(page, 'totals-row-total-value');
-    const subtotal = parseAmount(
-      (await page.getByTestId('totals-row-subtotal-value').textContent()) || '',
-    );
-    const tax = parseAmount(
-      (await page.getByTestId('totals-row-tax-value').textContent()) || '',
-    );
+    // All three amounts are read INSIDE the retry, not once after a separate wait, because the
+    // panel settles in two phases: it first renders the live recompute and then prefers the
+    // backend-persisted header totals (the ETP-4777 change described in this file's header).
+    // `pollAmount()` only waits for the first NON-ZERO render, which is phase one — so sampling
+    // the total through it and then reading subtotal/tax a few milliseconds later can mix a
+    // value from each phase, and the invariant compares two states that never coexisted.
+    //
+    // That is not hypothetical: captured here as total 43.56 (the settled figure — it matches
+    // the 37.22 + 6.34 the sibling test above asserts) against a subtotal + tax of 48.47, read
+    // while those two rows were still on their earlier values. Nothing was wrong with the panel.
+    //
+    // The non-zero guard has to live inside the block for the same reason it cannot be a
+    // separate wait: before the data lands every row reads 0, and `0 === 0 + 0` satisfies the
+    // invariant vacuously — the assertion would pass on an empty panel and stop retrying.
+    await expect(async () => {
+      const read = async (testId) => parseAmount(
+        (await page.getByTestId(testId).textContent()) || '',
+      );
+      const total = await read('totals-row-total-value');
+      const subtotal = await read('totals-row-subtotal-value');
+      const tax = await read('totals-row-tax-value');
 
-    // Tolerate at most 0.005 of float-arithmetic noise — strictly under 1 cent.
-    const sum = Math.round((subtotal + tax) * 100) / 100;
-    const rounded = Math.round(total * 100) / 100;
-    expect(rounded).toBe(sum);
+      expect(
+        Number.isFinite(total) && Number.isFinite(subtotal) && Number.isFinite(tax) && total !== 0,
+        `the totals panel should have rendered real amounts (total=${total}, `
+        + `subtotal=${subtotal}, tax=${tax})`,
+      ).toBe(true);
+
+      // Tolerate at most 0.005 of float-arithmetic noise — strictly under 1 cent.
+      const sum = Math.round((subtotal + tax) * 100) / 100;
+      const rounded = Math.round(total * 100) / 100;
+      expect(rounded).toBe(sum);
+    }).toPass({ timeout: 15_000 });
   });
 
   test('confirm modal mirrors the panel total (40.94 — server-resolved fixture)', async ({ page }) => {
@@ -321,26 +384,38 @@ test.describe('Sales Order — totals rounding (ETP-4017)', () => {
 
   test('confirm modal applies the same AEAT rounding on DR docs (client-side discount path)', async ({ page }) => {
     // Companion to the previous test: here we DO exercise the DR client-side
-    // discount path inside the ConfirmModal. The fixture is the raw BUG_HEADER
-    // (documentStatus=DR, grandTotalAmount=43.56 = pre-fix server snapshot,
-    // summedLineAmount=39.60, etgoTotalDiscount=6) — before TotalDiscountService
-    // materialises the ETGO_DTO line. The modal must recompute:
-    //   totalLines = round2(39.60 × 0.94)         = 37.22
-    //   grandTotal = 37.22 + round2(3.96 × 0.94)  = 37.22 + 3.72 = 40.94
-    // i.e. NOT round2(43.56 × 0.94) = 40.95 (the pre-fix double-rounding bug).
+    // discount path inside the ConfirmModal, using COMPENSATED_HEADER — a
+    // REALISTICALLY-compensated fixture (grandTotalAmount=40.94, the same
+    // 43.56 × 0.94 result BUG_HEADER models raw, but already backend-rounded
+    // the way ETP-4029's applyTotalDiscountToRecord() actually compensates
+    // every GET response for a DR order with a pending total discount — see
+    // the fixture's own comment and the file header comment for why BUG_HEADER
+    // itself is deliberately NOT used here).
+    //
+    // ETP-5132 fixed the ConfirmModal (`OrderCreateInvoice.jsx`) to trust
+    // grossBase (grandTotalAmount) verbatim instead of re-deriving it via
+    // totalLines + round2((grossBase - netBase) * discountFactor) — the old
+    // formula double-discounted the tax portion once grossBase was already
+    // compensated. So with COMPENSATED_HEADER the modal now shows:
+    //   grandTotal = grossBase                     = 40.94  (verbatim, Fix B)
+    //   totalLines = round2(39.60 × 0.94)           = 37.22  (still client-side —
+    //                summedLineAmount is never backend-compensated)
+    // i.e. still never round2(43.56 × 0.94) = 40.95 (the original ETP-4017
+    // double-rounding bug), but for a different, now-correct reason than
+    // before: no re-derivation happens at all, the persisted value is shown
+    // as-is.
     await login(page);
-    await installSalesOrderMocks(page, { header: BUG_HEADER, line: BUG_LINE });
+    await installSalesOrderMocks(page, { header: COMPENSATED_HEADER, line: BUG_LINE });
     await page.goto(`/sales-order/${ORDER_ID_BUG}`);
 
     // Wait for the detail page → ensures the custom window mounted and the
-    // sales-order:open-confirm-modal listener is attached. NOTE: as of
-    // ETP-4777 Task 3, the panel and the modal are NOT expected to agree
-    // during this specific not-yet-materialized-discount window — the panel
-    // now shows the raw persisted grandTotalAmount verbatim (43.56, see the
-    // file header comment), while the ConfirmModal below still independently
-    // recomputes the AEAT-decomposed 40.94. This is a documented, accepted
-    // tradeoff, not a bug — this poll is only used as a mount-readiness
-    // anchor here, not a lockstep assertion.
+    // sales-order:open-confirm-modal listener is attached. Unlike the
+    // BUG_HEADER scenario documented at the top of this file, panel and modal
+    // no longer diverge for THIS (realistically-compensated) fixture: Fix B
+    // makes the modal show grossBase verbatim, and ETP-4777 Task 3 already
+    // has the panel show the persisted grandTotalAmount verbatim too — both
+    // now land on 40.94. This poll is still only a mount-readiness anchor,
+    // not an assertion about the panel's own value.
     await pollAmount(page, 'totals-row-total-value');
 
     await page.evaluate(() => {
