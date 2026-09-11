@@ -29,6 +29,7 @@ const AppStorePage = lazy(() => import('./pages/AppStorePage.jsx'));
 const UpgradePage = lazy(() => import('./pages/UpgradePage.jsx'));
 const AccountSettingsPage = lazy(() => import('./pages/AccountSettingsPage.jsx'));
 const InviteAcceptancePage = lazy(() => import('./pages/InviteAcceptancePage.jsx'));
+const PortalPage = lazy(() => import('./pages/PortalPage.jsx'));
 
 const LOADING_FALLBACK = <div className="p-8 text-muted-foreground">Loading...</div>;
 
@@ -45,6 +46,11 @@ function lazyRoute(path, Component, extraProps = {}) {
 }
 
 export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
+  // ETP-5267 — the Business Partner portal, shared by both of its paths below.
+  const portalElement = (
+    <Suspense fallback={LOADING_FALLBACK} data-testid="Suspense__e8c60d"><PortalPage data-testid="PortalPage__e8c60d" /></Suspense>
+  );
+
   return [
     { index: true, public: false, element: <Navigate to="/dashboard" replace data-testid="Navigate__e8c60d" /> },
     { path: 'onboarding', public: true, element: (
@@ -53,6 +59,18 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
     { path: 'invite', public: true, element: (
         <Suspense fallback={LOADING_FALLBACK} data-testid="Suspense__e8c60d"><InviteAcceptancePage data-testid="InviteAcceptancePage__e8c60d" /></Suspense>
       ) },
+    // Registered UNCONDITIONALLY, and public: the Business Partner who opens this link has no
+    // Etendo account and no session — the token in the path is the whole credential, validated
+    // server-side on every request. The `bp-portal-link` flag gates whether the invoice email
+    // CARRIES a link, never whether the surface exists; it is backend-only, targeted at the
+    // sending account, and a frontend flag would be visual gating, not authorization
+    // (docs/feature-flags.md, which registers `/upgrade` the same way and for the same reason).
+    // Nothing here reads a flag.
+    { path: 'portal/:token', public: true, element: portalElement },
+    // Tokenless `/portal` lands on the same page, which renders the generic
+    // "link no longer valid" state — a truncated link deserves that message rather than the
+    // catch-all route's blank fallback, and it says nothing a probe could learn from.
+    { path: 'portal', public: true, element: portalElement },
     { path: 'login', public: true, element: <Navigate to="/onboarding" replace data-testid="Navigate__e8c60d" /> },
     { path: 'logout', public: true, element: <LogoutRoute safeDestination="/onboarding" data-testid="LogoutRoute__e8c60d" /> },
     { path: 'financial-account/bank-connection-callback', public: true, element: <BankConnectionCallbackPage data-testid="BankConnectionCallbackPage__e8c60d" /> },

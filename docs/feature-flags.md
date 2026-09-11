@@ -64,6 +64,31 @@ The `/upgrade` route is the worked example — it is registered
 **unconditionally**, and only the menu entry pointing at it is flag-gated.
 Hiding the route would imply the flag was protecting something, which it is not.
 
+`/portal/:token` (ETP-5267, the Business Partner self-service portal) is the
+same pattern taken to its conclusion. It too is registered unconditionally, but
+its flag — `bp-portal-link` — is declared and evaluated **only** in
+`com.etendoerp.go`: no key for it exists in `flag-keys.js`, nothing in the
+browser reads it, and **none must be added**. The flag gates whether the
+sales-invoice email *carries a portal link*, which is decided entirely
+server-side while the email is built; giving the browser a key would create a
+second evaluator with nothing to evaluate, and a flag whose two ends read from
+different control planes has no single truth (ETP-4966). What protects the
+portal's data is the opaque token in the URL, validated on every request.
+
+That flag is also this codebase's first **per-account targeted** one: it is
+`false` for everyone until a ConfigCat targeting rule names the sending
+account's `ETGO_ACCOUNT` email, which the backend publishes as both the
+OpenFeature targeting key and the `Email` attribute. Enablement therefore
+happens in the ConfigCat dashboard and is live within one poll interval, with no
+restart. Per-account targeting is a ConfigCat capability only — there is
+deliberately no local-properties equivalent, because with an SDK key set it
+would be inert, and a knob that silently does nothing is the ETP-4966 shape
+again. It does not reopen the `targeting-key-divergence` item below — that
+divergence needs two evaluators, and this flag has only one. See
+`docs/plans/2026-09-10-bp-self-service-portal.md` §2.5 and
+`com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` → *Per-account
+targeting*.
+
 ## Adding a flag
 
 1. Declare the key and its safe default in `lib/flags/flag-keys.js`:
@@ -221,7 +246,7 @@ environment whose key ships to a browser.
 |-------|-------------------|
 | Local dev (frontend) | `tools/app-shell/.env.development.local`, gitignored. **Development mode only** — `vite build` runs in production mode and never reads this file. |
 | Deployed frontend | GitHub Actions **variable**, injected into the build step of `.github/workflows/deploy-staging.yml`. Resolved **per target** in *Resolve deployment target*, so the pilot key reaches experimental and not staging or production. |
-| Backend | **Nowhere — the backend does not read ConfigCat.** `com.etendoerp.go` contains no ConfigCat code at all: `GoFeatureFlags.createProvider()` returns `PropertiesFeatureProvider` unconditionally, and the deployed runtime confirms it (`feature flags installed using provider 'etendo-go-properties'`). Backend flags come only from `etendo.go.flags.<key>` / `ETGO_FLAG_<KEY>`. |
+| Backend | **`etendo.go.configcat.sdkKey`, env `ETGO_CONFIGCAT_SDK_KEY`** — since ETP-5267. `GoFeatureFlags.createProvider()` returns `ConfigCatProvider` when that key resolves and `PropertiesFeatureProvider` when it does not, so backend flags are hosted (flippable without a restart) only where the key is set, and a plain per-environment boolean (`etendo.go.flags.<key>`) everywhere else. The fallback is deliberate: dev, CI and e2e stay deterministic. Per-account targeting exists on the ConfigCat arm only. **An absent, blank or wrong key resolves every flag to its `false` code default — never to "on".** |
 
 > **This row used to claim the backend resolved ConfigCat via `ETGO_CONFIGCAT_SDK_KEY`, and that was
 > never true.** The secret is provisioned in the experimental task definition, which made the claim
