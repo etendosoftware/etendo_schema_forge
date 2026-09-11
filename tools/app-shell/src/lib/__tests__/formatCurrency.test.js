@@ -153,17 +153,35 @@ describe('formatCurrency', () => {
     });
   });
 
-  describe('-0 edge case', () => {
-    // Both assertions below exercise the pre-fetch default (right-side) — -0
-    // renders with a leading minus sign there regardless of currency. The
-    // 'symbol position' describe block covers the same -0 case once a
-    // left-side currency's config has actually loaded.
-    it('EUR: negative zero renders with a minus sign', () => {
-      assert.equal(formatCurrency('EUR', -0), `-0,00${NBSP}€`);
+  describe('-0 edge case (ETP-5132 review fix — no magnitude that rounds to zero ever renders with a minus sign)', () => {
+    // Both assertions below exercise the pre-fetch default (right-side). A
+    // sign-flip pattern like `fmt(-discountAmt)` legitimately hands this
+    // function IEEE-754 negative zero whenever discountAmt is 0 or null
+    // (DocumentTotalsPanel.jsx) — `-0` must render as plain positive zero,
+    // never with a leading minus, or a "no discount applied" line reads to
+    // the user as a real negative amount. The 'symbol position' describe
+    // block covers the same -0 case once a left-side currency's config has
+    // actually loaded.
+    it('EUR: negative zero renders as plain positive zero, no minus sign', () => {
+      assert.equal(formatCurrency('EUR', -0), `0,00${NBSP}€`);
     });
 
-    it('USD: negative zero renders with a minus sign', () => {
-      assert.equal(formatCurrency('USD', -0), `-0,00${NBSP}$`);
+    it('USD: negative zero renders as plain positive zero, no minus sign', () => {
+      assert.equal(formatCurrency('USD', -0), `0,00${NBSP}$`);
+    });
+
+    it('a tiny negative float residual that rounds to zero at 2dp also renders without a minus sign', () => {
+      // Same class of bug already guarded server-side for float-summation
+      // residuals (ETP-4898, report-html-helpers.js) — here the producer is
+      // a sign-flip on a zero/null value instead of summing floats, but the
+      // formatter-level fix is the same: decide the sign AFTER rounding to
+      // display precision, not on the raw input.
+      assert.equal(formatCurrency('EUR', -2.9e-11), `0,00${NBSP}€`);
+    });
+
+    it('a magnitude that does NOT round to zero still keeps its negative sign (guard is precision-scoped, not a blanket sign strip)', () => {
+      assert.equal(formatCurrency('EUR', -0.001), `0,00${NBSP}€`); // rounds to 0.00 → no sign
+      assert.equal(formatCurrency('EUR', -0.01), `-0,01${NBSP}€`); // survives rounding → keeps sign
     });
   });
 
@@ -350,8 +368,12 @@ describe('symbol position — driven by C_CURRENCY.ISSYMBOLRIGHTSIDE (ETP-4314 f
     assert.equal(formatCurrency('USD', -99.9), '-$99,90');
   });
 
-  it('USD negative zero: sign still renders before the symbol', () => {
-    assert.equal(formatCurrency('USD', -0), '-$0,00');
+  it('USD negative zero: renders as plain positive zero, no minus sign (ETP-5132 review fix)', () => {
+    assert.equal(formatCurrency('USD', -0), '$0,00');
+  });
+
+  it('USD tiny negative float residual (rounds to zero at 2dp): no minus sign, symbol still front', () => {
+    assert.equal(formatCurrency('USD', -2.9e-11), '$0,00');
   });
 
   it('GBP also moves to the front — confirmed against the real reference data, only EUR is right-side', () => {

@@ -612,14 +612,16 @@ export const api = {
       "em_etgo_delivery_status": "Estado de entrega",
       "C_DocTypeTarget_ID": "Tipo de documento",
       "PriceList": "Precio",
-      "Foreign_Amount": "Importe en Moneda Objetivo"
+      "Foreign_Amount": "Importe en Moneda Objetivo",
+      "em_etgo_tbai_status": "Estado TicketBAI"
     },
     "en_US": {
       "OutstandingAmt": "Outstanding Amount",
       "EM_Etgo_Due_Date": "Due Date",
       "em_etgo_delivery_status": "Delivery Status",
       "C_DocTypeTarget_ID": "Document Type",
-      "Foreign_Amount": "Target Currency Amount"
+      "Foreign_Amount": "Target Currency Amount",
+      "em_etgo_tbai_status": "TicketBAI Status"
     },
     "es_AR": {
       "OutstandingAmt": "Saldo pendiente"

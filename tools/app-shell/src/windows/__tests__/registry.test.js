@@ -7,7 +7,10 @@ describe('buildMenuGroups', () => {
     const groups = buildMenuGroups();
     assert.ok(Array.isArray(groups));
     assert.ok(groups.length >= 4);
-    assert.equal(groups[0].group, 'Home');
+    // ETP-5190 moved First Steps above Home: post-signup onboarding is the first thing a new
+    // tenant should see in the menu. Pinned by name so a reorder is a deliberate edit here.
+    assert.equal(groups[0].group, 'First Steps');
+    assert.equal(groups[1].group, 'Home');
     assert.ok(Array.isArray(groups[0].items));
     assert.ok(groups[0].icon);
   });
