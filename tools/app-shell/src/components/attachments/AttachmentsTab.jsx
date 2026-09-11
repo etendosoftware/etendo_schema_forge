@@ -4,23 +4,8 @@ import { useAttachments } from './useAttachments';
 import UploadDropzone from './UploadDropzone';
 import AttachmentsTable from './AttachmentsTable';
 import ConfirmDeleteDialog from './ConfirmDeleteDialog';
-
-const DEFAULT_ALLOWED_MIME_TYPES = [
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.ms-powerpoint',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'application/zip',
-  'application/x-zip-compressed',
-  'application/rtf',
-  'application/xml',
-  'text/xml',
-  'text/plain',
-  'image/*',
-];
+import { useAttachmentPolicy } from './useAttachmentPolicy';
+import { buildTypesLabel } from './attachmentPolicy';
 
 /**
  * Generic attachments tab. Renders an upload dropzone, the list of
@@ -77,10 +62,33 @@ export default function AttachmentsTab({
   const saveBeforeAttach = !!config.saveBeforeAttach;
   const [isSavingBeforeAttach, setIsSavingBeforeAttach] = useState(false);
 
+  // ETP-5038: the accepted types and the max size come from the backend
+  // (GET /sws/neo/attachments/config), which is also what enforces them on upload — one
+  // list, not two that drift. A window may still NARROW it via `config` (the fiscal-model
+  // receipt tabs restrict their dropzone to PDF).
+  const policy = useAttachmentPolicy({ apiBaseUrl, token, enabled: isActive });
+  const overridesTypes = config.allowedMimeTypes != null || config.allowedExtensions != null;
+  // An override replaces the type rules wholesale: keeping the server's extension list
+  // alongside a narrowed MIME list would let the extension fallback wave through exactly
+  // the files the override meant to exclude.
+  const typeRules = overridesTypes
+    ? {
+      allowedMimeTypes: config.allowedMimeTypes,
+      allowedExtensions: config.allowedExtensions,
+    }
+    : {
+      allowedMimeTypes: policy.allowedMimeTypes,
+      allowedExtensions: policy.allowedExtensions,
+      typeGroups: policy.typeGroups,
+    };
+
   const effectiveConfig = {
-    maxSizeMB: 10,
-    allowedMimeTypes: DEFAULT_ALLOWED_MIME_TYPES,
-    typesLabel: ui('attachmentsDefaultTypesLabel'),
+    maxSizeMB: policy.maxSizeMB,
+    ...typeRules,
+    // Derived from the very list being enforced, so the label cannot promise a format the
+    // upload will reject — the mismatch that made this ticket ("PDF, Word, Excel,
+    // PowerPoint, Images" while .txt was silently accepted).
+    typesLabel: buildTypesLabel(typeRules, ui) ?? ui('attachmentsDefaultTypesLabel'),
     ...config,
   };
 

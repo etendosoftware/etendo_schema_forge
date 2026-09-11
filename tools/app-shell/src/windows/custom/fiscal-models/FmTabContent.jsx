@@ -70,7 +70,6 @@ export function SourcesTab({ decl, t }) {
                 <th>{t('fm.sources.col.ref')}</th>
                 <th>{t('fm.sources.col.type')}</th>
                 <th>{t('fm.sources.col.party')}</th>
-                <th>{t('fm.sources.col.regime')}</th>
                 <th className="num">{t('fm.sources.col.base')}</th>
                 <th className="num">{t('fm.sources.col.vat')}</th>
                 <th className="num">{t('fm.sources.col.total')}</th>
@@ -79,7 +78,7 @@ export function SourcesTab({ decl, t }) {
             </thead>
             <tbody>
               {visible.length === 0 && (
-                <tr><td colSpan={9} style={{ textAlign:'center', color:'hsl(var(--text-disabled))', padding:'24px 0', fontSize:13 }}>{t('fm.incidents.empty') ?? 'Sin incidencias'}</td></tr>
+                <tr><td colSpan={8} style={{ textAlign:'center', color:'hsl(var(--text-disabled))', padding:'24px 0', fontSize:13 }}>{t('fm.incidents.empty') ?? 'Sin incidencias'}</td></tr>
               )}
               {visible.map((r) => {
                 const incs = rowIncidents(r);
@@ -95,7 +94,6 @@ export function SourcesTab({ decl, t }) {
                     <td>{r.ref}</td>
                     <td>{r.type}</td>
                     <td>{r.party}</td>
-                    <td><span className="fm-regime-pill">{r.regime || '—'}</span></td>
                     <td className="num strong">{formatAmount(r.base)}</td>
                     <td className="num">{r.vat != null ? formatAmount(r.vat) : '—'}</td>
                     <td className="num strong">{formatAmount(r.total)}</td>

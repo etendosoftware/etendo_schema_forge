@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
 import { TrendingUp, TrendingDown, Pencil } from 'lucide-react';
-import { getLayout303 } from './fm303Layouts.js';
+import { getLayout303, matchesVisibility } from './fm303Layouts.js';
 import { formatAmount, formatPercent } from '../../fiscalModelsUtils.js';
 
 const SECTION_ICON = {
@@ -84,14 +84,12 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
   // Supports a single-field condition ({field, in:[...] | equals:...}) or an
   // OR-of-conditions shape ({ anyOf: [condition, ...] }) — kept minimal on
   // purpose, just enough to express "tipo X OR rectificativa checked" cleanly.
-  // Single source of truth for visibility evaluation: also backs field-level
-  // visibleWhen (identificacion/meta sections, below) — do not fork a second
-  // implementation, extend this one instead.
-  const matchesSvw = (svw) => {
-    if (Array.isArray(svw.anyOf)) return svw.anyOf.some(matchesSvw);
-    const val = identification?.[svw.field];
-    return svw.in ? svw.in.includes(val) : val === svw.equals;
-  };
+  // Single source of truth for visibility evaluation lives in fm303Layouts.js's
+  // `matchesVisibility` (ETP-5187: extracted so FmModel303Page.jsx's required-field
+  // validation gate reads the exact same rules) — this is a thin wrapper closing over
+  // `identification` so call sites below don't need to pass it explicitly. Do not fork a
+  // second implementation, extend `matchesVisibility` instead.
+  const matchesSvw = (svw) => matchesVisibility(svw, identification);
 
   // editableWhen: single condition object or array of conditions (all must match)
   const resolveEditable = (item) => {

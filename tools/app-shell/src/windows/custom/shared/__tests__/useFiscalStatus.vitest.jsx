@@ -163,108 +163,100 @@ describe('useFiscalStatus', () => {
     });
   });
 
+  // ETP-5216/ETP-5229: TBAI's eligibility gate moved OUT of this hook and into
+  // the stored computed column `EM_ETGO_Tbai_Status` (`eTGOTbaiStatus` on the
+  // invoice record). This hook no longer applies any date check for TBAI — it
+  // only translates the literal `'NoAplica'` to a dash and otherwise mirrors
+  // the list column's fallback chain (eTGOTbaiStatus ?? isSent(tbaiIssent) ? 'Enviada' : 'Pendiente').
   describe('TBAI', () => {
-    it('prefers tbaiSyncEstado over the tbaiIssent fallback when both are present', () => {
+    it('prefers eTGOTbaiStatus over the tbaiIssent fallback when both are present', () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
-      const invoice = { tbaiSyncEstado: 'Recibido', tbaiIssent: true, invoiceDate: '2026-06-15' };
+      const invoice = { eTGOTbaiStatus: 'Recibido', tbaiIssent: true, invoiceDate: '2026-06-15' };
 
-      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, FAR_PAST_CUTOVERS));
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai'));
 
       expect(result.current.tbai).toBe('Recibido');
     });
 
-    it('falls back to "Enviada" when tbaiSyncEstado is absent and tbaiIssent is boolean true', () => {
+    it('falls back to "Enviada" when eTGOTbaiStatus is absent and tbaiIssent is boolean true', () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
       const invoice = { tbaiIssent: true, invoiceDate: '2026-06-15' };
 
-      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, FAR_PAST_CUTOVERS));
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai'));
 
       expect(result.current.tbai).toBe('Enviada');
     });
 
-    it('falls back to "Enviada" when tbaiSyncEstado is absent and tbaiIssent is the AD-style "Y" string', () => {
+    it('falls back to "Enviada" when eTGOTbaiStatus is absent and tbaiIssent is the AD-style "Y" string', () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
       const invoice = { tbaiIssent: 'Y', invoiceDate: '2026-06-15' };
 
-      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, FAR_PAST_CUTOVERS));
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai'));
 
       expect(result.current.tbai).toBe('Enviada');
     });
 
-    // ETP-5229 item #17: the AD-style "N" string still isn't "sent", but the
-    // invoice IS eligible for TBAI, so it now resolves to the "Pendiente"
-    // marker instead of a dash.
-    it('does NOT treat the AD-style "N" string as sent (isSent contract) — falls back to "Pendiente" since TBAI is eligible', () => {
+    // The AD-style "N" string still isn't "sent" (isSent contract), so it
+    // falls all the way through to "Pendiente".
+    it('does NOT treat the AD-style "N" string as sent (isSent contract) — falls back to "Pendiente"', () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
       const invoice = { tbaiIssent: 'N', invoiceDate: '2026-06-15' };
 
-      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, FAR_PAST_CUTOVERS));
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai'));
 
       expect(result.current.tbai).toBe('Pendiente');
     });
 
-    // ETP-5229 item #17: eligible + never-sent (no tbaiSyncEstado, no tbaiIssent)
-    // now resolves to "Pendiente", not a dash — "not sent yet" and "not
-    // eligible" must render differently.
-    it('returns "Pendiente" (not a dash) when both tbaiSyncEstado and tbaiIssent are absent but TBAI is eligible', () => {
+    it('returns "Pendiente" (not a dash) when both eTGOTbaiStatus and tbaiIssent are absent but TBAI is shown', () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
       const invoice = { invoiceDate: '2026-06-15' };
 
-      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, FAR_PAST_CUTOVERS));
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai'));
 
       expect(result.current.tbai).toBe('Pendiente');
     });
 
-    // Regression guard (unchanged half of the ETP-5229 fix): when TBAI is NOT
-    // eligible at all, the pending fallback must never kick in — still a dash.
-    it('still returns null (not "Pendiente") when TBAI is not eligible for this invoice, even with no tbaiSyncEstado/tbaiIssent', () => {
+    // The DB function answers this literal when the invoice predates the
+    // organization's earliest-ever tbai_config cutover (or the org never
+    // joined) — the ONLY case that renders a dash for TBAI now.
+    it('returns null (dash) when eTGOTbaiStatus is the literal "NoAplica"', () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
-      const invoice = { invoiceDate: '2026-01-01' };
-
-      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, {
-        tbai: '2026-06-01T00:00:00.000Z',
-      }));
-
-      expect(result.current.tbai).toBeNull();
-    });
-
-    it('returns the real persisted status unchanged when TBAI is eligible and tbaiSyncEstado already holds a real value', () => {
-      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
-      const invoice = { tbaiSyncEstado: 'Recibido', invoiceDate: '2026-06-15' };
-
-      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, FAR_PAST_CUTOVERS));
-
-      expect(result.current.tbai).toBe('Recibido');
-    });
-
-    it('is null when showTbai is false, even if tbaiSyncEstado is set', () => {
-      getInvoiceFiscalTargets.mockReturnValue(NONE_SHOWN);
-      const invoice = { tbaiSyncEstado: 'Recibido', invoiceDate: '2026-06-15' };
-
-      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii', null, FAR_PAST_CUTOVERS));
-
-      expect(result.current.tbai).toBeNull();
-    });
-
-    // ETP-5229 (corrected design): eligibility gate on the EARLIEST-ever cutover.
-    it('is null when showTbai is true but invoiceDate predates the earliest TBAI cutover on file', () => {
-      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
-      const invoice = { tbaiSyncEstado: 'Recibido', invoiceDate: '2026-01-01' };
-
-      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, {
-        tbai: '2026-06-01T00:00:00.000Z',
-      }));
-
-      expect(result.current.tbai).toBeNull();
-    });
-
-    it('is null when showTbai is true but no cutover date is on file at all (fail-safe)', () => {
-      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
-      const invoice = { tbaiSyncEstado: 'Recibido', invoiceDate: '2026-06-15' };
+      const invoice = { eTGOTbaiStatus: 'NoAplica', invoiceDate: '2026-01-01' };
 
       const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai'));
 
       expect(result.current.tbai).toBeNull();
+    });
+
+    it('returns the real persisted status unchanged when eTGOTbaiStatus already holds a real value', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
+      const invoice = { eTGOTbaiStatus: 'Recibido', invoiceDate: '2026-06-15' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai'));
+
+      expect(result.current.tbai).toBe('Recibido');
+    });
+
+    it('is null when showTbai is false, even if eTGOTbaiStatus is set', () => {
+      getInvoiceFiscalTargets.mockReturnValue(NONE_SHOWN);
+      const invoice = { eTGOTbaiStatus: 'Recibido', invoiceDate: '2026-06-15' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii'));
+
+      expect(result.current.tbai).toBeNull();
+    });
+
+    // No client-side date gate for TBAI anymore — cutoverDates.tbai (if passed
+    // at all) is accepted but ignored, unlike SII/Verifactu below.
+    it('ignores any tbai cutover date passed in cutoverDates — the gate lives in the DB now', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
+      const invoice = { eTGOTbaiStatus: 'Recibido', invoiceDate: '2026-01-01' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, {
+        tbai: '2026-06-01T00:00:00.000Z',
+      }));
+
+      expect(result.current.tbai).toBe('Recibido');
     });
   });
 
@@ -376,7 +368,7 @@ describe('useFiscalStatus', () => {
       getInvoiceFiscalTargets.mockReturnValue(ALL_SHOWN);
       const invoiceUnderOldConfig = {
         aeatsiiEstado: 'CO',
-        tbaiSyncEstado: 'Recibido',
+        eTGOTbaiStatus: 'Recibido',
         etvfacInvoiceStatus: 'AC',
         accountingDate: '2026-03-15',
         invoiceDate: '2026-03-15',
@@ -398,7 +390,7 @@ describe('useFiscalStatus', () => {
     it('is unaffected by adding unrelated config/org-shaped fields to the invoice object', () => {
       getInvoiceFiscalTargets.mockReturnValue(ALL_SHOWN);
       const base = {
-        aeatsiiEstado: 'CO', tbaiSyncEstado: 'Recibido', etvfacInvoiceStatus: 'AC',
+        aeatsiiEstado: 'CO', eTGOTbaiStatus: 'Recibido', etvfacInvoiceStatus: 'AC',
         accountingDate: '2026-03-15', invoiceDate: '2026-03-15', created: '2026-03-15T00:00:00.000Z',
       };
       const withStaleConfigFields = {
@@ -435,22 +427,22 @@ describe('useFiscalStatus', () => {
     });
   });
 
-  // Scenario A from the corrected design (the exact live repro): TBAI and SII
-  // have independent earliest-cutover dates for the same org, and the SAME
-  // invoice must resolve each system by its own reference date/cutover pair —
-  // one dash, one real value.
-  describe('independent per-system cutovers on the SAME invoice (ETP-5229 scenario A)', () => {
-    it('shows a dash for SII (before its only-ever cutover) while showing the real TBAI status (on/after its cutover)', () => {
+  // Scenario A from the corrected design (the exact live repro): SII gates on
+  // its own earliest-cutover date for the org, independently of TBAI — which
+  // has no client-side cutover at all (its gate lives in the DB, see the TBAI
+  // describe block above). The SAME invoice resolves each system
+  // independently — one dash (SII, ineligible), one real value (TBAI, DB-decided).
+  describe('independent per-system resolution on the SAME invoice (ETP-5229 scenario A)', () => {
+    it('shows a dash for SII (before its only-ever cutover) while showing the real TBAI status (DB-decided)', () => {
       getInvoiceFiscalTargets.mockReturnValue({ showSii: true, showTbai: true, showVerifactu: false });
       const invoice = {
         invoiceDate: '2026-09-09',
         accountingDate: '2026-09-09',
         aeatsiiEstado: 'PE',
-        tbaiSyncEstado: 'Recibido',
+        eTGOTbaiStatus: 'Recibido',
       };
 
       const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii+tbai', null, {
-        tbai: '2026-09-09T00:00:00.000Z', // adopted the same day, inclusive → eligible
         sii: '2026-09-10T00:00:00.000Z',  // adopted the NEXT day → invoice ineligible
       }));
 
@@ -515,7 +507,7 @@ describe('useFiscalStatus', () => {
   describe('territory forwarding (ETP-5087)', () => {
     it('forwards the territory argument to getInvoiceFiscalTargets', () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
-      const invoice = { tbaiSyncEstado: 'Recibido', invoiceDate: '2026-06-15' };
+      const invoice = { eTGOTbaiStatus: 'Recibido', invoiceDate: '2026-06-15' };
 
       renderHook(() => useFiscalStatus(invoice, 'purchase-invoice', 'tbai', 'BIZKAIA', FAR_PAST_CUTOVERS));
 
@@ -524,7 +516,7 @@ describe('useFiscalStatus', () => {
 
     it('defaults territory to null when not provided', () => {
       getInvoiceFiscalTargets.mockReturnValue(NONE_SHOWN);
-      const invoice = { tbaiSyncEstado: 'Recibido' };
+      const invoice = { eTGOTbaiStatus: 'Recibido' };
 
       renderHook(() => useFiscalStatus(invoice, 'purchase-invoice', 'tbai'));
 
@@ -533,25 +525,27 @@ describe('useFiscalStatus', () => {
   });
 
   // ETP-5229: cutoverDates is optional and defaults to {} so pre-existing call
-  // sites (tests or components not yet updated to pass it) degrade to "not
-  // eligible" instead of throwing.
+  // sites (tests or components not yet updated to pass it) degrade SII/Verifactu
+  // to "not eligible" instead of throwing. TBAI is unaffected by cutoverDates
+  // entirely (ETP-5216/ETP-5229 moved its gate into the DB) — it still resolves
+  // from `eTGOTbaiStatus`/`tbaiIssent` regardless of what (if anything) is passed.
   describe('cutoverDates defaulting (backward compatibility)', () => {
-    it('defaults every system to ineligible (dash) when cutoverDates is omitted entirely', () => {
+    it('defaults SII/Verifactu to ineligible (dash) when cutoverDates is omitted entirely, while TBAI still resolves from the DB column', () => {
       getInvoiceFiscalTargets.mockReturnValue(ALL_SHOWN);
       const invoice = {
-        aeatsiiEstado: 'CO', tbaiSyncEstado: 'Recibido', etvfacInvoiceStatus: 'AC',
+        aeatsiiEstado: 'CO', eTGOTbaiStatus: 'Recibido', etvfacInvoiceStatus: 'AC',
         accountingDate: '2026-06-15', invoiceDate: '2026-06-15', created: '2026-06-15T00:00:00.000Z',
       };
 
       const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'sii+tbai'));
 
-      expect(result.current).toEqual({ sii: null, tbai: null, verifactu: null, loading: false });
+      expect(result.current).toEqual({ sii: null, tbai: 'Recibido', verifactu: null, loading: false });
     });
 
-    it('defaults a partially-provided cutoverDates object — only the given system is eligible', () => {
+    it('defaults a partially-provided cutoverDates object — only the given system is eligible (TBAI is unaffected either way)', () => {
       getInvoiceFiscalTargets.mockReturnValue(ALL_SHOWN);
       const invoice = {
-        aeatsiiEstado: 'CO', tbaiSyncEstado: 'Recibido', etvfacInvoiceStatus: 'AC',
+        aeatsiiEstado: 'CO', eTGOTbaiStatus: 'Recibido', etvfacInvoiceStatus: 'AC',
         accountingDate: '2026-06-15', invoiceDate: '2026-06-15', created: '2026-06-15T00:00:00.000Z',
       };
 
@@ -560,7 +554,7 @@ describe('useFiscalStatus', () => {
       }));
 
       expect(result.current.sii).toBe('CO');
-      expect(result.current.tbai).toBeNull();
+      expect(result.current.tbai).toBe('Recibido');
       expect(result.current.verifactu).toBeNull();
     });
   });

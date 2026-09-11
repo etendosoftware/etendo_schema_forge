@@ -11,7 +11,7 @@ import {
   getDueDateTextStyle,
 } from '@/lib/invoiceDueDate';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
-import { getInvoiceFiscalTargets, isSifEligibleByDate, isVerifactuEligibleByDate } from '@/windows/custom/shared/fiscalTargets.js';
+import { getInvoiceFiscalTargets, isSifEligibleByDate, isVerifactuEligibleByDate, isTbaiStatusNotApplicable } from '@/windows/custom/shared/fiscalTargets.js';
 import { FiscalStatusBadge, normalizeVerifactuStatus } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
@@ -55,7 +55,7 @@ export default function InvoiceHeaderTable(props) {
   const orgId = selectedOrg?.id ?? null;
   const {
     profile,
-    earliestSiiCutoverDate, earliestTbaiCutoverDate, earliestVerifactuCutoverDate,
+    earliestSiiCutoverDate, earliestVerifactuCutoverDate,
   } = useFiscalConfig(orgId, apiBaseUrl);
 
   const targets = useMemo(() => getInvoiceFiscalTargets('sales-invoice', profile), [profile]);
@@ -80,12 +80,15 @@ export default function InvoiceHeaderTable(props) {
     // But live user testing found that removing ALL date gating was wrong: a
     // row dated BEFORE the system's earliest-ever cutover for this org (e.g. an
     // invoice from before SII was ever configured) must show a dash, not a
-    // stray DB value. Each column is gated per-row on
+    // stray DB value. SII and Verifactu are gated per-row here, client-side, on
     // isSifEligibleByDate/isVerifactuEligibleByDate against the EARLIEST
     // cutover across ALL of the org's config rows (active or deactivated) —
     // never the currently active config's own (possibly later) cutover date,
-    // which would incorrectly blank a real historical status. The column
-    // itself still only appears when the profile enables the system
+    // which would incorrectly blank a real historical status. TBAI uses the
+    // SAME earliest-across-all-rows semantics but applies the gate INSIDE the
+    // stored function backing its column (see the `showTbai` block below) —
+    // TBAI has no equivalent client-side gate here since ETP-5216/ETP-5229. The
+    // column itself still only appears when the profile enables the system
     // (`targets.showX`) — that check is org/territory-scoped, not date-scoped.
     // ETP-5229 item #17: eligible-but-not-yet-sent is a DIFFERENT state from
     // not-eligible-at-all, and collapsing both to `null`/dash reads as "does
@@ -109,11 +112,36 @@ export default function InvoiceHeaderTable(props) {
     }
     if (targets.showTbai) {
       fiscalCols.push({
-        key: '_tbaiStatus', type: 'custom', label: tbaiColLabel,
-        render: (row) => {
-          const eligible = isSifEligibleByDate(row.invoiceDate, earliestTbaiCutoverDate);
-          return <FiscalStatusBadge status={eligible ? (row.tbaiSyncEstado ?? 'Pendiente') : null} />;
-        },
+        // ETP-5216 (fixed under ETP-5229): backed by the stored computed AD
+        // column EM_ETGO_Tbai_Status. It used to be key '_tbaiStatus' with no
+        // `column`, fed by the response injector — which made isFilterableColumn
+        // drop it from the advanced filter in SILENCE, and hid a dead injector
+        // for months (ETP-4391). `type: 'custom'` still drives the badge cell;
+        // `column` + `filterMode` give the filter and the sort a real backend
+        // field to work with, the same pairing already used by
+        // `transactionDocument` below.
+        //
+        // The adoption-date gate that used to run here client-side
+        // (isSifEligibleByDate against earliestTbaiCutoverDate) now lives
+        // INSIDE the stored function (ETGO_GET_TBAI_STATUS), gated on the
+        // EARLIEST tbai_config cutover across ALL rows for the org — active or
+        // not — matching the semantics validated for SII/Verifactu below. This
+        // is TBAI-only: SII and Verifactu have no equivalent stored column and
+        // keep their client-side isSifEligibleByDate/isVerifactuEligibleByDate
+        // gating unchanged.
+        key: 'eTGOTbaiStatus', column: 'em_etgo_tbai_status', type: 'custom',
+        filterMode: 'text', label: tbaiColLabel,
+        // The database answers 'Pendiente' for "no resolved submission", so the
+        // ?? is only a guard for a row fetched before the column was backfilled.
+        // 'NoAplica' means the invoice predates the organization's earliest-ever
+        // TBAI adoption date (or the organization never joined): it is not
+        // pending anything and never will be, so it gets a dash instead of a
+        // badge.
+        render: (row) => (
+          isTbaiStatusNotApplicable(row.eTGOTbaiStatus)
+            ? <span className="text-muted-foreground">—</span>
+            : <FiscalStatusBadge status={row.eTGOTbaiStatus ?? 'Pendiente'} />
+        ),
       });
     }
     if (targets.showVerifactu) {
@@ -253,7 +281,7 @@ export default function InvoiceHeaderTable(props) {
       },
       { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent' },
     ];
-  }, [gl, ui, locale, targets, siiColLabel, tbaiColLabel, vfColLabel, earliestSiiCutoverDate, earliestTbaiCutoverDate, earliestVerifactuCutoverDate]);
+  }, [gl, ui, locale, targets, siiColLabel, tbaiColLabel, vfColLabel, earliestSiiCutoverDate, earliestVerifactuCutoverDate]);
 
   return (
     <>

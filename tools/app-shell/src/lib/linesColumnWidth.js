@@ -62,7 +62,7 @@ export function isLineGridColumn(col) {
 
 function selectorFlex(col, idx) {
   const grow = col.grow !== undefined ? col.grow : idx === 0;
-  return grow ? '1 1 192px' : '0 0 192px';
+  return grow ? '1 0 192px' : '0 0 192px';
 }
 
 /**
@@ -73,7 +73,7 @@ export function columnFlex(col, idx) {
   if (col.minWidth) return `1 1 ${col.minWidth}px`;
   if (SELECTOR_TYPES.has(col.type)) return selectorFlex(col, idx);
   const elasticPx = ELASTIC_BASIS_PX[col.type];
-  if (elasticPx !== undefined) return `1 1 ${elasticPx}px`;
+  if (elasticPx !== undefined) return `1 0 ${elasticPx}px`;
   const g = col.grow ? '1' : '0';
   const fixedPx = FIXED_BASIS_PX[col.type];
   return `${g} 0 ${fixedPx !== undefined ? fixedPx : 120}px`;

@@ -304,13 +304,29 @@
 .fm-dtable--plain td,
 .fm-dtable--plain td.strong,
 .fm-dtable--plain td.num.strong { color: hsl(var(--foreground)); font-size: 14px; }
-.fm-regime-pill {
-  display: inline-flex; align-items: center;
-  padding: 2px 8px; border-radius: 4px;
-  background: hsl(var(--muted)); color: hsl(var(--muted-foreground));
-  font: 400 14px/20px var(--fm-font-sans, system-ui);
-  white-space: nowrap;
+/* ─── Row hover actions (Edit/Delete — ETP-5187) ────────────────────── */
+/* Mirrors the reveal-on-row-hover pattern of the generic RowQuickActions
+   (`tools/app-shell/src/components/contract-ui/RowQuickActions.jsx`), adapted
+   to this window's plain-CSS table (no Tailwind `group/row` utilities here). */
+.fm-row-actions {
+  display: inline-flex; align-items: center; gap: 2px;
+  opacity: 0;
+  transition: opacity .12s ease;
 }
+.fm-table tbody tr:hover .fm-row-actions,
+.fm-row-actions:focus-within {
+  opacity: 1;
+}
+.fm-row-action-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border: none; border-radius: 999px;
+  background: transparent; color: hsl(var(--muted-foreground));
+  cursor: pointer; transition: background .1s, color .1s;
+}
+.fm-row-action-btn:hover { background: hsl(var(--muted)); color: hsl(var(--foreground)); }
+.fm-row-action-btn:disabled { opacity: .5; cursor: wait; }
+.fm-row-action-btn--danger { color: hsl(var(--destructive)); }
+.fm-row-action-btn--danger:hover { background: var(--status-destructive-bg); color: hsl(var(--destructive)); }
 
 /* ─── Status Pills ─────────────────────────────────────────────────── */
 /* Aligned with .fm-pill from fiscal-monitor */
@@ -689,6 +705,36 @@
 .fm-btn--primary { background: var(--fm-gray-900); border-color: var(--fm-gray-900); color: hsl(var(--card)); font-weight: 600; }
 .fm-btn--primary:hover { background: var(--fm-gray-800); }
 .fm-btn--danger { background: var(--fm-danger-bg); border-color: var(--fm-danger-border); color: var(--fm-danger-fg); }
+/* Underlined text-link CTA (ETP-5187) — shared by the three "Ir a Organización" /
+   "Go to Organization" prompts: AeatSubmitFlow.jsx's connError banner,
+   FmModel303Page.jsx's inline generate-error banner, and
+   fiscalModelsUtils.js's showIaeActivityReminder toast action. `color`/`font-size`
+   deliberately inherit from whatever alert/banner text surrounds the CTA in each
+   spot, so the link always matches its container's tone. The `!important`s are
+   needed only for the toast case, where sonner ships its own more-specific
+   `[data-button]` rule — this class must win there regardless of stylesheet
+   load order; harmless everywhere else since nothing else targets a plain
+   `<button>` in the other two contexts. */
+.fm-link-btn {
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  height: auto !important;
+  color: inherit !important;
+  font-size: inherit !important;
+  font-weight: 500 !important;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.fm-link-btn:hover { opacity: .75; }
+/* Bold variant (ETP-5187) — all three "Ir a Organización" CTAs now sit inline at the
+   end of their sentence and need to stand out from the surrounding warning text.
+   Only overrides weight; underline/color/inherit behavior stays `.fm-link-btn`'s.
+   600 matches this stylesheet's existing emphasis convention (.fm-btn--primary,
+   .fm-table td.strong, .fm-tabs__tab--active, etc.) rather than the heavier 700
+   used for grand-total rows. */
+.fm-link-btn--bold { font-weight: 600 !important; }
 /* "More options" kebab trigger — list header + 303/349 detail headers (FmCommon.jsx MoreOptionsMenu) */
 .fm-more-options-trigger {
   display: flex; align-items: center; justify-content: center;
@@ -877,7 +923,6 @@
   border-color: var(--fm-purple-600);
   box-shadow: 0 0 0 2px hsl(var(--primary) / .25);
 }
-.fm-newdecl-period-btn--existing { color: var(--fm-fg-4); background: var(--fm-bg-subtle); }
 .fm-newdecl-period-btn:disabled { cursor: not-allowed; }
 .fm-newdecl-period-btn:disabled:hover { background: var(--fm-bg-subtle); }
 .fm-newdecl-period-btn__dot {

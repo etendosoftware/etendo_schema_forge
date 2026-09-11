@@ -206,19 +206,26 @@ describe('PurchaseInvoiceHeaderTable — custom column filter modes (ETP-4681)',
 // config's own (possibly later) cutover. Column *existence*
 // (targets.showSii/showTbai) remains org/territory-scoped, never date-scoped.
 describe('PurchaseInvoiceHeaderTable — fiscal status badges gated on earliest-ever cutover (ETP-5229 corrected)', () => {
-  it('imports isSifEligibleByDate', () => {
+  it('imports isSifEligibleByDate and isTbaiStatusNotApplicable', () => {
     assert.match(
       src,
-      /import\s*\{\s*getInvoiceFiscalTargets,\s*isSifEligibleByDate\s*\}\s*from '@\/windows\/custom\/shared\/fiscalTargets\.js'/,
-      'the per-row earliest-cutover gate must be imported from fiscalTargets.js',
+      /import\s*\{\s*getInvoiceFiscalTargets,\s*isSifEligibleByDate,\s*isTbaiStatusNotApplicable\s*\}\s*from '@\/windows\/custom\/shared\/fiscalTargets\.js'/,
+      'the SII earliest-cutover gate and the TBAI NoAplica helper must both come from fiscalTargets.js',
     );
   });
 
-  it('destructures earliestSiiCutoverDate/earliestTbaiCutoverDate from useFiscalConfig', () => {
+  it('destructures earliestSiiCutoverDate from useFiscalConfig (TBAI has no client-side cutover — ETP-5216/ETP-5229)', () => {
+    const destructure = src.match(/const\s*\{\s*\n?\s*profile,\s*tbaiRecord,[\s\S]*?\}\s*=\s*useFiscalConfig\(orgId,\s*apiBaseUrl\)/);
+    assert.ok(destructure, 'expected the useFiscalConfig destructure block');
     assert.match(
-      src,
-      /const\s*\{\s*\n?\s*profile,\s*tbaiRecord,\s*\n?\s*earliestSiiCutoverDate,\s*earliestTbaiCutoverDate,?\s*\n?\s*\}\s*=\s*useFiscalConfig\(orgId,\s*apiBaseUrl\)/,
-      'the earliest-ever cutover per system must be pulled from useFiscalConfig to gate each badge',
+      destructure[0],
+      /const\s*\{\s*\n?\s*profile,\s*tbaiRecord,\s*\n?\s*earliestSiiCutoverDate,?\s*\n?\s*\}/,
+      'the earliest-ever SII cutover must be pulled from useFiscalConfig to gate the SII badge',
+    );
+    assert.doesNotMatch(
+      destructure[0],
+      /earliestTbaiCutoverDate/,
+      'TBAI no longer reads a client-side cutover date — its gate moved into the stored DB column',
     );
   });
 
@@ -240,33 +247,45 @@ describe('PurchaseInvoiceHeaderTable — fiscal status badges gated on earliest-
     assert.match(cell[0], /row\.aeatsiiEstado \?\? 'PE'/);
   });
 
-  it('gates the Batuz/TBAI badge on isSifEligibleByDate(row.invoiceDate, earliestTbaiCutoverDate)', () => {
+  it('the Batuz/TBAI badge reads eTGOTbaiStatus directly, with no client-side date gate (ETP-5216/ETP-5229)', () => {
     const cell = src.match(/if \(targets\.showTbai\) \{[\s\S]*?\}\)?;\s*\}/);
     assert.ok(cell, 'expected the showTbai column-push block');
-    assert.match(cell[0], /const eligible = isSifEligibleByDate\(row\.invoiceDate, earliestTbaiCutoverDate\)/);
-    assert.match(cell[0], /row\.tbaiSyncEstado \?\? \(isSent\(row\.tbaiIssent\) \? 'Enviada' : 'Pendiente'\)/);
+    // Strip comments: the block's own prose narrates the migration (it names
+    // isSifEligibleByDate/earliestTbaiCutoverDate on purpose), so a raw-text
+    // match would fail on the documentation rather than the code it describes.
+    const code = cell[0].replace(/^\s*\/\/.*$/gm, '');
+    assert.doesNotMatch(code, /isSifEligibleByDate/,
+      'TBAI eligibility now lives inside the stored function backing eTGOTbaiStatus, not here');
+    assert.match(cell[0], /key: 'eTGOTbaiStatus', column: 'em_etgo_tbai_status', type: 'custom'/);
+    assert.match(cell[0], /isTbaiStatusNotApplicable\(row\.eTGOTbaiStatus\)/);
+    assert.match(
+      cell[0],
+      /row\.eTGOTbaiStatus \?\? \(isSent\(row\.tbaiIssent\) \? 'Enviada' : 'Pendiente'\)/,
+      'eTGOTbaiStatus stays primary; tbaiIssent remains only the fallback for a row fetched before backfill',
+    );
   });
 
-  it('renders a null status (dash) when the eligibility check fails, for both systems', () => {
-    for (const key of ['showSii', 'showTbai']) {
-      const cell = src.match(new RegExp(`if \\(targets\\.${key}\\) \\{[\\s\\S]*?\\}\\)?;\\s*\\}`));
-      assert.ok(cell, `expected the ${key} column-push block`);
-      assert.match(cell[0], /\? .*? : null/, `${key} branch must fall back to null (dash) when ineligible`);
-    }
+  it('renders a null status (dash) for SII when the eligibility check fails', () => {
+    const cell = src.match(/if \(targets\.showSii\) \{[\s\S]*?\}\)?;\s*\}/);
+    assert.ok(cell, 'expected the showSii column-push block');
+    assert.match(cell[0], /\? .*? : null/, 'SII branch must fall back to null (dash) when ineligible');
+  });
+
+  // TBAI is the ONE system with no eligibility ternary in this file — its dash
+  // comes from `isTbaiStatusNotApplicable(row.eTGOTbaiStatus)` reading the DB's
+  // 'NoAplica' literal, not a `? ... : null` client-side date check.
+  it('renders the Batuz/TBAI dash via isTbaiStatusNotApplicable, not a `? ... : null` eligibility ternary', () => {
+    const cell = src.match(/if \(targets\.showTbai\) \{[\s\S]*?\}\)?;\s*\}/);
+    assert.ok(cell, 'expected the showTbai column-push block');
+    assert.match(cell[0], /isTbaiStatusNotApplicable\(row\.eTGOTbaiStatus\)\s*\n\s*\?\s*<span className="text-muted-foreground">—<\/span>/);
   });
 
   // ETP-5229 item #17: eligible-but-empty must resolve to a distinct pending
-  // marker per system, never the same dash used for genuine ineligibility.
-  it('falls back to a pending marker (not null) for each system when eligible but the persisted status is empty', () => {
+  // marker, never the same dash used for genuine ineligibility (SII only —
+  // TBAI's fallback chain is asserted above).
+  it('falls back to the "PE" pending marker for SII when eligible but the persisted status is empty', () => {
     const siiCell = src.match(/if \(targets\.showSii\) \{[\s\S]*?\}\)?;\s*\}/);
     assert.match(siiCell[0], /row\.aeatsiiEstado \?\? 'PE'/, 'SII pending marker is the raw PE code');
-
-    const tbaiCell = src.match(/if \(targets\.showTbai\) \{[\s\S]*?\}\)?;\s*\}/);
-    assert.match(
-      tbaiCell[0],
-      /row\.tbaiSyncEstado \?\? \(isSent\(row\.tbaiIssent\) \? 'Enviada' : 'Pendiente'\)/,
-      'TBAI pending marker is "Pendiente" when never sent',
-    );
   });
 });
 

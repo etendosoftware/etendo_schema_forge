@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { getInvoiceFiscalTargets, isSifEligibleByDate, isVerifactuEligibleByDate } from './fiscalTargets.js';
+import { getInvoiceFiscalTargets, isSifEligibleByDate, isVerifactuEligibleByDate, isTbaiStatusNotApplicable } from './fiscalTargets.js';
 import { isSent } from './sifSending.js';
 
 // Maps em_etvfac_invoice_status DB codes to the StatusPill keys defined in FmPrimitives.jsx.
@@ -87,7 +87,9 @@ export const mapVfStatus = (raw) => VF_STATUS_MAP[raw] ?? raw;
  * `null` (dash), unchanged.
  *
  * No network call is needed: the invoice header GET response already carries
- * `aeatsiiEstado`, `tbaiSyncEstado` (injected server-side by `TbaiSyncStatusInjector`) and
+ * `aeatsiiEstado`, `eTGOTbaiStatus` (ETP-5216/ETP-5229: the stored computed AD column
+ * `EM_ETGO_Tbai_Status`, the same field the list column reads — `TbaiSyncStatusInjector`,
+ * which used to populate `tbaiSyncEstado` here, was DELETED by that migration) and
  * `etvfacInvoiceStatus` for both sales and purchase invoices.
  *
  * ETP-5229 follow-up (live-tested correction): the VALUE above stays config-independent
@@ -105,16 +107,26 @@ export const mapVfStatus = (raw) => VF_STATUS_MAP[raw] ?? raw;
  * "no date on file" (fail-safe: not eligible) so existing callers that have not been
  * updated yet still degrade to dashes rather than throwing.
  *
+ * ETP-5216/ETP-5229 (TBAI only): the TBAI branch below no longer applies its own
+ * eligibility date check — that gate now lives INSIDE the stored function backing
+ * `eTGOTbaiStatus` (`ETGO_GET_TBAI_STATUS`, gated on the EARLIEST `tbai_config`
+ * cutover across ALL rows for the invoice's org, active or not). The DB answers the
+ * literal `'NoAplica'` when the gate isn't open, translated to `null` (dash) here via
+ * `isTbaiStatusNotApplicable`, exactly mirroring `InvoiceHeaderTable.jsx` /
+ * `PurchaseInvoiceHeaderTable.jsx`'s list column. SII and Verifactu have no equivalent
+ * stored column and keep their own client-side `earliestCutoverDate` gating below,
+ * unchanged.
+ *
  * @param {object|null|undefined} invoice the invoice's own header record (e.g. `p.displayInvoice`)
  * @param {string} specName 'sales-invoice' | 'purchase-invoice'
  * @param {string} profile fiscal profile ('sii' | 'tbai' | 'sii+tbai' | 'verifactu' | ...)
  * @param {string|null} [territory] TBAI territory gate (Batuz/Bizkaia only for purchases)
- * @param {{sii?: string|null, tbai?: string|null, verifactu?: string|null}} [cutoverDates]
- *   `useFiscalConfig`'s `earliestSiiCutoverDate` / `earliestTbaiCutoverDate` /
- *   `earliestVerifactuCutoverDate` for the invoice's org.
+ * @param {{sii?: string|null, verifactu?: string|null}} [cutoverDates]
+ *   `useFiscalConfig`'s `earliestSiiCutoverDate` / `earliestVerifactuCutoverDate` for the
+ *   invoice's org. A `tbai` key is accepted but ignored — TBAI's gate lives in the DB now.
  */
 export function useFiscalStatus(invoice, specName, profile, territory = null, cutoverDates = {}) {
-  const { sii: siiCutover = null, tbai: tbaiCutover = null, verifactu: verifactuCutover = null } = cutoverDates;
+  const { sii: siiCutover = null, verifactu: verifactuCutover = null } = cutoverDates;
 
   return useMemo(() => {
     if (!invoice) {
@@ -124,17 +136,17 @@ export function useFiscalStatus(invoice, specName, profile, territory = null, cu
     const targets = getInvoiceFiscalTargets(specName, profile, territory);
 
     // SII books by accounting date, not invoice date (mirrors isSifEligibleByDate's
-    // doc). TBAI/VERI*FACTU use invoiceDate/created respectively — see fiscalTargets.js.
+    // doc). VERI*FACTU uses `created` — see fiscalTargets.js. TBAI has no client-side
+    // date check anymore (see the class doc above).
     const siiEligible = targets.showSii && isSifEligibleByDate(invoice.accountingDate, siiCutover);
-    const tbaiEligible = targets.showTbai && isSifEligibleByDate(invoice.invoiceDate, tbaiCutover);
     const verifactuEligible = targets.showVerifactu && isVerifactuEligibleByDate(invoice.created, verifactuCutover);
 
     const sii = siiEligible ? (invoice.aeatsiiEstado ?? 'PE') : null;
-    const tbai = tbaiEligible
-      ? (invoice.tbaiSyncEstado ?? (isSent(invoice.tbaiIssent) ? 'Enviada' : 'Pendiente'))
+    const tbai = (targets.showTbai && !isTbaiStatusNotApplicable(invoice.eTGOTbaiStatus))
+      ? (invoice.eTGOTbaiStatus ?? (isSent(invoice.tbaiIssent) ? 'Enviada' : 'Pendiente'))
       : null;
     const verifactu = verifactuEligible ? mapVfStatus(invoice.etvfacInvoiceStatus ?? 'PE') : null;
 
     return { sii, tbai, verifactu, loading: false };
-  }, [invoice, specName, profile, territory, siiCutover, tbaiCutover, verifactuCutover]);
+  }, [invoice, specName, profile, territory, siiCutover, verifactuCutover]);
 }
