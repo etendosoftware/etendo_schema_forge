@@ -142,9 +142,17 @@ export function useFiscalStatus(invoice, specName, profile, territory = null, cu
     const verifactuEligible = targets.showVerifactu && isVerifactuEligibleByDate(invoice.created, verifactuCutover);
 
     const sii = siiEligible ? (invoice.aeatsiiEstado ?? 'PE') : null;
-    const tbai = (targets.showTbai && !isTbaiStatusNotApplicable(invoice.eTGOTbaiStatus))
-      ? (invoice.eTGOTbaiStatus ?? (isSent(invoice.tbaiIssent) ? 'Enviada' : 'Pendiente'))
-      : null;
+
+    const tbaiEligible = targets.showTbai && !isTbaiStatusNotApplicable(invoice.eTGOTbaiStatus);
+    let tbai = null;
+    if (tbaiEligible) {
+      if (invoice.eTGOTbaiStatus != null) {
+        tbai = invoice.eTGOTbaiStatus;
+      } else {
+        tbai = isSent(invoice.tbaiIssent) ? 'Enviada' : 'Pendiente';
+      }
+    }
+
     const verifactu = verifactuEligible ? mapVfStatus(invoice.etvfacInvoiceStatus ?? 'PE') : null;
 
     return { sii, tbai, verifactu, loading: false };
