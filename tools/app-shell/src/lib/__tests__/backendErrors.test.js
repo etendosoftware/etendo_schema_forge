@@ -1680,3 +1680,33 @@ describe('translateBackendError — "insufficient stock (process)" parameterized
     assert.equal(translateBackendError(raw, missingT), raw);
   });
 });
+
+// UserRoleAssignmentHandler (com.etendoerp.go, ETP-5264) — rejectDuplicateEmail() proactively
+// rejects a duplicate email on user creation with this fixed English literal, instead of letting
+// the raw DB username-unique-constraint message reach the toast: the admin-facing "create user"
+// form never shows a username field, so that message would confusingly name a field the user
+// never typed. Same simple, non-interpolated shape as the other single-literal BACKEND_ERROR_MAP
+// entries (e.g. "no lines to invoice", ETP-4831 case 2) — a fixed literal, no dynamic value.
+describe('translateBackendError — duplicate email on user create exact match (ETP-5264)', () => {
+  const RAW = 'A user with this email address already exists';
+
+  it('translates the raw literal to en_US', () => {
+    const t = (k) => (k === 'backendError.duplicateUserEmail'
+      ? 'A user with the same email address already exists. Please enter a different one.'
+      : k);
+    assert.equal(
+      translateBackendError(RAW, t),
+      'A user with the same email address already exists. Please enter a different one.',
+    );
+  });
+
+  it('translates the raw literal to es_ES (symmetry with other exact-match entries)', () => {
+    const t = (k) => (k === 'backendError.duplicateUserEmail'
+      ? 'Ya existe un usuario con el mismo correo electrónico. Escriba otro distinto.'
+      : k);
+    assert.equal(
+      translateBackendError(RAW, t),
+      'Ya existe un usuario con el mismo correo electrónico. Escriba otro distinto.',
+    );
+  });
+});

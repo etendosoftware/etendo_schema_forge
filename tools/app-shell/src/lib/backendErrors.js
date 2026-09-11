@@ -191,6 +191,11 @@ const BACKEND_ERROR_MAP = {
   'You cannot deactivate your own user account': 'backendError.cannotDeactivateOwnAccount',
   'Cannot deactivate the last active administrator for this client':
     'backendError.cannotDeactivateLastAdmin',
+  // UserRoleAssignmentHandler (com.etendoerp.go, ETP-5264) — the admin-facing "create user" form
+  // never shows a username field, so a raw DB username-unique-constraint message would confusingly
+  // name a field the user never typed. rejectDuplicateEmail() proactively rejects a duplicate
+  // email with this fixed English literal instead.
+  'A user with this email address already exists': 'backendError.duplicateUserEmail',
 };
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a

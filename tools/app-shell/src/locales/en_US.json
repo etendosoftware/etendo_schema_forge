@@ -20310,6 +20310,7 @@
     "backendError.psd2NoActiveConnection": "No active bank connection was found for this account. Connect the account first.",
     "backendError.cannotDeactivateOwnAccount": "You cannot deactivate your own user account.",
     "backendError.cannotDeactivateLastAdmin": "Cannot deactivate the last active administrator for this client.",
+    "backendError.duplicateUserEmail": "A user with the same email address already exists. Please enter a different one.",
     "backendError.fieldTooLong": "This value is too long. It must not exceed {maxLength} characters.",
     "uomTypeArea": "Area",
     "uomTypeLength": "Length",
