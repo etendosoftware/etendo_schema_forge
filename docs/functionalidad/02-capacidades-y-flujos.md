@@ -55,7 +55,7 @@ Nota de arquitectura previa a todo lo demás: la UI de onboarding (`OnboardingPa
 - **Precondiciones:** Token válido; llegada fresca tras registro, o vía restauración de borrador, o vía login sin entornos.
 - **Trigger:** Ninguno explícito (auto-ruteado); usuario hace click en Continuar/Empezar.
 - **Flujo principal:**
-  1. **Profile:** nombre completo (precargado, máx 60/40 según freelancer), país fijo (España), tipo de negocio (`company`|`freelancer`|`advisory`). Continuar habilitado solo si `isProfileStepValid` (`state.js:127-133`).
+  1. **Profile:** nombre completo (precargado, máx 60/40 según freelancer), país fijo (España), tipo de negocio (`company`|`freelancer`; `advisory`/Asesoría fue retirado del producto por ETP-5190). Continuar habilitado solo si `isProfileStepValid` (`state.js:127-133`).
   2. **Company:** nombre de empresa (`clientName`, requerido salvo freelancer, que reutiliza `fullName`), NIF opcional (máx 20), dirección opcional (máx 60), sector. "Empezar" habilitado si `isCompanyStepValid` (`state.js:135-143`; en la práctica solo `clientName` es realmente obligatorio).
   3. Ambos pasos autoguardan un **borrador** vía `POST /sws/go/onboarding/draft` (debounce 1500ms) — ver CAP-ONB-05.
   4. Click en "Empezar" avanza a `setup-progress` (CAP-ONB-03).
@@ -101,7 +101,7 @@ Nota de arquitectura previa a todo lo demás: la UI de onboarding (`OnboardingPa
 - **Huecos abiertos:**
   1. [Ambigüedad] Si el stream NDJSON se corta por un idle-timeout de proxy/CDN después de que el backend ya comprometió los cambios, la UI puede reportar un falso fallo con el tenant ya creado del lado del servidor — código explícito de heartbeat + `writer.checkError()` sugiere que esto es un riesgo conocido, no confirmado qué ve el usuario en ese caso exacto.
   2. [Ambigüedad] `docs/etendo-ad/onboarding-and-datafixes-map.md` describe menos pasos de los que tiene el código actual — tratar ese doc como histórico, no autoritativo en números de línea/cantidad de pasos.
-  3. [Ambigüedad] Rama `advisory` del tipo de negocio comparte el camino de `company` pero no está separadamente asertada en los specs leídos.
+  3. [Resuelto — ETP-5190] La rama `advisory` del tipo de negocio compartía el camino de `company` y no estaba asertada por separado en ningún spec. La opción fue eliminada del producto (wizard, ventana Organización y dataset `AD_REF_LIST` del módulo), así que la rama ya no existe. El fallback del `ProfileStep` del core publicado todavía la incluye, por lo que `businessTypeValues` debe permanecer explícito en `OnboardingPage.jsx`.
 
 ## CAP-ONB-04 — Entrada automática a entorno tras login (ruteo post-login)
 

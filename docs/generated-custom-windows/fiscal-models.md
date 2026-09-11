@@ -145,6 +145,43 @@ churn. **Known maintainability tradeoff, logged as a follow-up, not fixed now:**
 value needs the same one-line edit applied in all 4 files, with nothing enforcing that they stay in
 sync.
 
+## "Resultado" label — shared `deriveResultKind` (ETP-5187)
+
+The list page (`FmListPage.jsx`) and the Modelo 303 detail page (`FmModel303Page.jsx`) used to
+derive the "Resultado" badge's kind independently: the list page had a correct, live
+`getResultKind(r)` reading the freshly-computed `summary.result`, while the detail page read
+`decl.result?.kind` — a field the backend never populates (`FiscalDeclCrudHandler#declToJson` has
+no `result` key), so the detail page's KPI card fell through to the generic "Resultado" sub-label
+every time, regardless of what the list showed for the same declaration a moment earlier.
+
+Both are now wired to one shared function, `deriveResultKind(summary, { hasInvoices })`
+(`fiscalModelsUtils.js`), which also fixes a real gap neither screen distinguished before: a
+declaration whose boxes net to exactly `0.00` looked identical whether it had invoices behind it
+or was a genuinely empty/new declaration. The rules (fixed, not open for further nuance —
+deliberately do **not** try to disambiguate "a compensar" vs "a devolver" via `tipo_declaracion`):
+
+| `summary.result` | `hasInvoices` | Kind | Label |
+|---|---|---|---|
+| `< 0` | — | `C` | "A compensar/devolver" (one combined label) |
+| `> 0` | — | `I` | "A ingresar" (unchanged) |
+| `= 0` | `true` | `zero` (new) | "Resultado cero" |
+| `= 0` | `false` | `N` | "Sin resultado" (unchanged) |
+| no finite result yet | — | `null` | caller's own generic fallback (unchanged) |
+
+`hasInvoices` is read from the same computed payload both screens already have: the `sources`
+array `computeBoxes303`/`Fiscal303BoxesHandler#buildResponse` returns alongside `boxes`/`summary`
+(`computed.sources` in `FmListPage.jsx`, `liveSources ?? decl.sources` in `FmModel303Page.jsx`).
+
+**Locale changes** (`en_US.json`/`es_ES.json`/`es_AR.json`): `fm.result.C` was repointed from "A
+compensar"/"To offset" to the combined "A compensar/devolver"/"To offset/refund" — grepped first
+for other consumers of `fm.result.C`/`fm.result.V` before touching either; both were fiscal-models
+label keys only. `fm.result.V` ("A devolver"/"To refund") is now dropped — it had no code
+reference anywhere (only ever read via the locale files themselves), since this window never
+disambiguated compensar/devolver via `tipo_declaracion` in the first place. New key
+`fm.result.zero` = "Resultado cero"/"Zero result". While touching this key group, `fm.result.N`'s
+English string was also corrected from the mismatched "Zero result" (it means "Sin resultado", not
+a zero amount) to "No result" — "Zero result" now correctly belongs to the new `zero` kind instead.
+
 ## Modelo 303 detail page (`FmModel303Page`)
 
 ### Stepper
@@ -172,6 +209,157 @@ A former 6th tab, **Historial** (`HistoryTab`), was removed together with this p
 ### Action bar
 
 Left to right: **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Calcular** (`handleCompute`, spinner while `computing`), a standalone **"Generar fichero 303"** button, and, only while the declaration is not yet submitted (`!isSubmitted`), **"Marcar como 'Presentado'"** opening `PresentModal`. "Generar fichero 303" is always visible regardless of submission status — it is not gated the way "Marcar como 'Presentado'" is. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
+
+### Sources tab — "Régimen" column removed (ETP-5187)
+
+The `SourcesTab` table (`FmTabContent.jsx`) no longer has a "Régimen" column — neither the
+`<th>{t('fm.sources.col.regime')}</th>` header cell nor the per-row `<td><span
+className="fm-regime-pill">{r.regime}</span></td>` cell. The functional owner judged the column
+not useful for this table; removal is UI-only — the backend (`Fiscal303SourcesSupport.java`) is
+untouched, and each source row can still legitimately carry a `regime` field, it's simply not
+rendered. The empty-state row's `colSpan` was updated from 9 to 8 to match the remaining column
+count, and the now-dead `.fm-regime-pill` CSS rule and the `regime:` demo fields in
+`FmDebugPanel.jsx`'s `MOCK_SOURCES` fixture were removed alongside it. The `fm.sources.col.regime`
+locale key was dropped from all 3 locale files (`en_US`/`es_ES`/`es_AR`) — grepped first and
+confirmed to have no other consumer.
+
+### Duplicate-period warning and rectificativa gate (ETP-5187)
+
+A declaration can legitimately be a 2nd (or later) one for the same `(model, year, period)` — the
+rectificativa flow: a period was filed early and more invoices arrived later. `FmListPage.jsx`
+flags this at select-time (`_hasDuplicatePeriod`, computed off its own `decls` list — true when
+another declaration shares this one's model/year/period) and passes it through to whichever detail
+page opens, alongside the existing `_precomputed` field.
+
+`FmModel303Page` derives `requiresRectificativa = decl._hasDuplicatePeriod && !identChecks.rectificativa
+&& !isSubmitted`. While true:
+
+- A warning banner (`TriangleAlert`, warning colors, positioned like the `genError` banner) tells
+  the user another declaration already exists for this period and that "Autoliquidación
+  rectificativa" must be checked — `fm.duplicate_period.warning` in all 3 locale files.
+- Clicking **"Marcar como 'Presentado'"** does not open `PresentModal` — instead it shows the same
+  message as a toast (`sonner`) and returns early. This is the only gate: the checkbox itself is
+  never auto-checked for the user, and once it's genuinely checked (or the declaration reaches a
+  submitted status), the banner disappears and the button opens `PresentModal` as normal.
+
+The `rectificativa`/`nro_justificante`/`baja_domiciliacion`/`motivo_rectificacion` fields
+themselves were **not** rebuilt for this — they already exist and are reachable via the Boxes tab's
+"Resultado final" nav section (`fm303Layouts.js`'s `rectificativa` section, `CASILLAS_SECTIONS` in
+`FmModel303Page.jsx`); this fix only adds the warning + gate around the existing checkbox.
+
+### Required-field pre-flight gate (ETP-5187)
+
+`fm303Layouts.js` marks exactly 2 fields `required: true`: `tipo_declaracion` (always visible, in
+`identificacion`) and `bank_iban` (in `datos_bancarios`, only visible while that section's
+`sectionVisibleWhen` matches — tipo `U`/`D`/`X`, or `rectificativa` checked). Before this fix
+`required` was purely decorative — it only drove the red asterisk in `FmBoxes303.jsx` (3 call
+sites: `{f.required && <span className="fm-aeat-required-mark">`) — nothing checked whether a
+required field was actually filled before "Generar fichero 303"/"Marcar como 'Presentado'" hit the
+backend. You could leave "Tipo de declaración" on the placeholder and still generate + present.
+
+**Generic gate, not a hardcoded field check:** `fm303Layouts.js` exports `matchesVisibility(svw,
+identification)` (the single source of truth for visibility matching, extracted from
+`FmBoxes303.jsx`'s own `matchesSvw` — that component now wraps it instead of forking a second
+implementation) and `getMissingRequiredFields(year, period, identification)`, which walks the
+resolved layout's `identificacion`-family sections, applies `sectionVisibleWhen`/`visibleWhen`, and
+returns every `required: true` field that is currently visible AND empty. This reads the exact same
+`field.required` flags the asterisk already uses, so a third field marked `required: true` in a
+future year's patch is automatically covered by the gate — no gate-side change needed.
+
+`FmModel303Page.jsx` computes `missingRequiredFields = getMissingRequiredFields(decl.year,
+decl.period, identChecks)` and checks it — modeled the same way as `requiresRectificativa` above,
+a computed array + inline warning + toast-and-return-early on the actions:
+
+- **Inline banner** (same warning styling as the duplicate-period one) whenever
+  `missingRequiredFields.length > 0` — `fm.validation.missing_required_banner`.
+- **"Generar fichero 303"** — checked both at the button `onClick` (so `FileGenModal303` never
+  opens) and again at the top of `handleGenerate` (so a future direct call is still covered) —
+  `fm.validation.missing_required_generate`: *"Completá {fields} antes de generar el fichero."*
+  ("Complete {fields} before generating the file." in `en_US`).
+- **"Marcar como 'Presentado'"** — same double-check pattern on the button `onClick` (before the
+  existing `requiresRectificativa` check) and at the top of `handlePresent`, which also covers the
+  `'aeat_telematic'` sentinel path (opens `AeatSubmitFlow` instead of changing status directly) —
+  `fm.validation.missing_required_present`: *"Completá {fields} antes de marcar la declaración como
+  presentada."* All 3 new keys are in `en_US.json`/`es_ES.json`/`es_AR.json` (`es_AR` mirrors
+  `es_ES` verbatim, matching this `fm.*` family's existing precedent — see
+  `fm.duplicate_period.warning`).
+
+**Backend hardening (defense-in-depth, `com.etendoerp.go`):** `Fiscal303BoxesHandler.resolveDeclType`
+used to silently default ANY null/blank/unrecognized `tipo` to `"N"` instead of rejecting it —
+and "N" ("Resultado cero"/sin actividad) **is** a real, deliberately-selectable option in
+`TIPO_DECLARACION_FIELD.options`, not an internal-only fallback value, so a missing declaration
+type was indistinguishable from an explicit "Sin actividad" selection at this layer. This meant a
+direct/malformed API call (or any future UI regression bypassing the frontend gate above) was
+never rejected — it always looked like a valid zero-result declaration downstream, corrupting the
+generated `.303` file's declaration type silently. Fixed by making `N` an explicit member of
+`resolveDeclType`'s accepted-code set (alongside the pre-existing `C, D, I, U, V, X`, plus the
+legacy `G` alias kept for backward compatibility) and having anything else — null, blank, or an
+unrecognized string — throw `IllegalArgumentException` instead of falling through to `"N"`. Both
+call paths that reach `resolveDeclType` (`Fiscal303SubmissionSupport#handleGenerate` and
+`#handleSubmit`, which both funnel through the shared `generateElectronicFile`) now catch that
+specific exception and answer with a clean `400` (`INVALID_DECL_TYPE` for `handleSubmit`'s JSON
+error body) instead of the generic 500 the exception would otherwise bubble up to. Since the
+frontend gate above already blocks this path through the UI, this is defense-in-depth only.
+
+#### Troubleshooting — `CheckException: Property declSeq does not exist for entity ETGO_Fiscal_Decl` (ETP-5187)
+
+The backend counterpart of the rectificativa flow is a dedicated `decl_seq` DECIMAL(10,0) column on
+`ETGO_Fiscal_Decl` (`FiscalDeclCrudHandler.PROPERTY_DECL_SEQ`, `resolveNextDeclSeq`) that
+disambiguates multiple declarations for the same `(client, org, model, year, period)` natural key —
+see the runtime-module writeup this section is paired with. A first pass at adding that column made
+every declaration creation fail with `CheckException: Property declSeq does not exist for entity
+ETGO_Fiscal_Decl`, thrown from `Entity.getProperty()` at `decl.set(PROPERTY_DECL_SEQ, ...)` —
+**even though the `AD_Column`/`AD_Table` rows were correct, active, and a genuine fresh runtime
+model rebuild (`ModelProvider — Building runtime model`) had already run** after a full
+`./gradlew smartbuild` + Tomcat restart.
+
+**Root cause — not a build/caching issue, a property-naming mismatch:** Openbravo's dynamic
+`Entity`/`Property` model (`org.openbravo.base.model.NamingUtil#getPropertyMappingName`) derives a
+column's runtime Java/DAL property name from **`AD_Column.Name`** (the human-readable label, camel-
+cased on both `_` and `" "`), **not** from `AD_Column.ColumnName` (the physical DB column name). The
+generated entity bean under `src-gen` (`com.etendoerp.go.schemaforge.data.FiscalDecl`) is the
+ground truth for this: it names the constant from the exact same derivation, so it always shows the
+real registered property name in its javadoc (`Property declarationSequence stored in column
+Decl_Seq in table ETGO_Fiscal_Decl`) — check that file first, don't assume the property name mirrors
+the column name.
+
+This column's `AD_Column.Name`/`AD_Element.Name` was set to the spelled-out `"Declaration
+Sequence"` (consistent with the sibling columns `declarationType`/`declarationStatus`/
+`declarationFileName`, all spelled out rather than abbreviated), so the real runtime property is
+`declarationSequence` — not the abbreviated `declSeq` that `PROPERTY_DECL_SEQ` was first given
+(which would only be correct if the property name mirrored the physical column name `Decl_Seq`
+instead of the AD_Element name). **Fix:** `PROPERTY_DECL_SEQ = "declarationSequence"` — a pure
+Java string-literal fix, no DB/XML/AD metadata change, no `update.database`, no `smartbuild`
+required. A plain recompile (`./gradlew compile.complete`) plus redeploying the compiled classes
+into the running Tomcat (`./gradlew build.deploy.class` — or a full app-server restart) is enough.
+
+**General lesson (worth re-checking any time a new `AD_Column` is added to any table across
+`etendo_schema_forge`, `schema_forge_core`, or `com.etendoerp.go`):** when writing Java that
+references a new column by a hand-rolled `PROPERTY_*` string constant, verify the exact spelling
+against the generated `src-gen/.../<Entity>.java` bean's own `PROPERTY_*` constant (or query
+`AD_Column.Name` directly) — never assume the property name is a mechanical transform of the DB
+column name. A short, spelled-out `AD_Element.Name` and a long/abbreviated physical
+`AD_Column.ColumnName` (or vice versa) are common and both valid; only `AD_Column.Name` drives the
+Java property name.
+
+#### Known gap — declarations CRUD resolves org differently than boxes/generate/submit
+
+`DECL_SEQ`'s natural key is `(client, org, model, year, period)` (see `resolveNextDeclSeq` above),
+and the `org` half of that key comes from `FiscalDeclCrudHandler`'s own org resolution — every one
+of its entry points (`handleDeclGet`, `handleDeclPost`, `handleDeclPut`, `handleDeclDelete`, and its
+shared incident lookup) reads `OBContext.getOBContext().getCurrentOrganization().getId()` directly,
+verified against the current source. This is a **different, narrower** resolution than
+`AbstractFiscalHandler#resolveEffectiveOrg()` — the method the boxes/operators/generate/submit
+family of endpoints (`Fiscal303BoxesHandler`, `Fiscal349BoxesHandler`, etc.) all call instead:
+`resolveEffectiveOrg()` additionally handles a session parked at the `*` (summary/"0") organization
+level by falling back to the client's first non-summary leaf org, whereas `FiscalDeclCrudHandler`
+has no such fallback and would create/query/delete declarations scoped to org `"0"` verbatim in that
+case. **Pre-existing, not introduced or fixed by ETP-5187** — `resolveNextDeclSeq`/`DECL_SEQ` simply
+inherited whatever org `handleDeclPost` was already resolving; nothing in this ticket changed that
+resolution. Practical impact is narrow (a session actually parked at `*` for a fiscal-models
+action), but worth knowing: in that scenario, a declaration's CRUD-side `org` and the org the same
+declaration's box/operator computation resolves to via `resolveEffectiveOrg()` need not be the same
+value. Flagged as a follow-up, not fixed here.
 
 ### Identification section (`tipo_declaracion` + bank data)
 
@@ -306,7 +494,10 @@ silently accepting it: `__tests__/fiscalModelsUtils.download.vitest.js`.
 ### i18n namespace
 
 All new strings for this flow live under the `fm.aeat.*` namespace (`en_US.json`/`es_ES.json`,
-parity verified — 36 keys each), plus 2 new `fm.present.path.aeat`/`aeat_desc` keys for the
+parity verified — 39 keys each as of ETP-5187, up from the 36 this flow originally shipped with;
+the 3 added since are `fm.aeat.action.go_to_organization`, `fm.aeat.error.missingDefaultIae` (both
+ETP-4975) and `fm.aeat.reminder.iaeActivity` (ETP-5187) — see "IAE-activity activation reminder"
+below), plus 2 new `fm.present.path.aeat`/`aeat_desc` keys for the
 `PresentModal` card and one `fm.action.continue` reused for the card's confirm-button label.
 
 ### "Justificante" tab — AEAT receipt storage (ETP-4456)
@@ -651,6 +842,7 @@ The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"
   `fileName`/`formerStatement`/`representativeTaxId` are additionally `.trim() || undefined`'d client-side in `FileGenModal`'s confirm handler before being handed to `generate349File`, so whitespace-only input is treated the same as blank. `phone`/`contact` are **not** trimmed (sent as-is if truthy) — a whitespace-only value would still reach the backend, unlike the other three text fields.
 
   The 3 checkboxes (`substitutive`, `navarra`, `guipuzcoa`) are **always** sent as `'Y'`/`'N'`, never omitted — both sides enforce this independently: `generate349File` always calls `body.set(...)` for all three regardless of value, and `Fiscal349BoxesHandler#buildGenerateInputParams` re-derives each one with `"Y".equals(request.getParameter(...)) ? "Y" : "N"` rather than trusting the request unconditionally. The reason is `AEAT3492010Report.generateLine1()`, which calls `inputParams.get("Substitutive").equals("Y")` unconditionally — a missing `Substitutive` key throws an NPE. The `Año` and org name/NIF parameters from the classic popup are auto-derived server-side (`type=O` in `OBTL_Tax_Report_Parameter`) and are intentionally never shown in this modal.
+  - **Software vendor NIF (ETP-5187 point 6):** Modelo 303's and Modelo 390's `OBTL_Tax_Report_Parameter` seed data (`org.openbravo.module.aeat303.es`'s `303_Report_Tax_Parameters.xml` and `org.openbravo.module.aeat390.es`'s `390_Report_Tax_Parameters.xml`, respectively) both hardcode an `EDDNIF`/"NIF Empresa Desarrollo" constant identifying the software vendor, seeded to Openbravo's `B31733934`. **Only Modelo 303 was fixed under ETP-5187** — every `taxReportGroup`'s `constantValue` in `303_Report_Tax_Parameters.xml` was updated via a proper dataset export to Etendo's `B75117705`. **Modelo 390 was deliberately left unfixed** — `390_Report_Tax_Parameters.xml` still carries the old `B31733934` on every `taxReportGroup` row — per an explicit user decision to defer it out of this ticket's scope, not an oversight; do not assume it was fixed alongside 303, and do not edit `aeat390.es`. The Modelo 349 tax report definition (`org.openbravo.module.aeat349.es/referencedata/standard/349_Tax_Parameters.xml`) carries **no such parameter** — verified: no `EDDNIF` searchKey, no hardcoded `constantValue` matching a NIF pattern. Nothing to fix here; both `use349Pdf.js` (PDF preview) and `Fiscal349BoxesHandler#handleGenerate` (real `.349` file, via `OBTL_TaxReport_I#generateElectronicFile`) resolve the declarant's own NIF dynamically and never touch a vendor-identity constant.
 
 ### Generate error banner (`genError`)
 
@@ -715,6 +907,43 @@ The Modelo 303 detail page's "Resultado" KPI (`FmModel303Page.jsx`) and the decl
 **Sort** is a real field-selector popover, not a bare toggle. Clicking "Ordenar" opens a list of sortable fields (`SORT_FIELDS` in `FmListPage.jsx`: Modelo, Año, Período, Estado), explicitly modeled on `components/contract-ui/ListView.jsx`'s existing `sortColumn`/`sortDirection`/`handleSortSelect`/`handleClearSort` pattern — clicking a field sorts ascending, clicking the same field again flips to descending. A **"Limpiar orden"** entry, shown only once a field is active, resets `sortColumn` to `null`, restoring the default order (year + period, most recent first).
 
 **Search** was removed entirely — the search input/icon button is gone from the toolbar. Narrowing the list is handled by the existing year/model/status `FilterDropdown` filters instead.
+
+### Row hover actions — Edit/Delete (`FmRowActions`, ETP-5187)
+
+Each **draft** declaration row (`decl.status === 'draft'`) reveals a small Edit/Delete icon pair on
+row hover, in a dedicated last column (`<th style={{ width: 72 }} aria-hidden="true" />` /
+`<td style={{ position: 'relative' }}>`). Non-draft rows render the same empty `<td>` (keeps column
+alignment) but no icons — this window has no per-row edit/delete affordance for anything past
+draft.
+
+`FmRowActions.jsx` is a new, window-local component — **not** the generic
+`components/contract-ui/RowQuickActions.jsx` used by schema-driven windows (sales-invoice, etc.):
+that component's hooks (`useDocumentAction`/`useNeoAction`) assume a `specName`/entity backend
+contract this fully-custom window (no `decisions.json`/`contract.json`) doesn't have. `FmRowActions`
+mirrors its hover-reveal visual language (`.fm-row-actions`/`.fm-row-action-btn` in
+`fiscal-models.css`, plain CSS keyed off the existing `.fm-table tbody tr:hover` rule rather than
+Tailwind's `group/row` utility) but exposes only the 2 actions this window actually needs — no
+clone, no email/send, no kebab menu.
+
+- **Edit** calls the same `onSelect` callback the row's own `onClick` already used, so it's
+  identical to clicking the row.
+- **Delete** opens the app's one delete-confirmation dialog
+  (`components/contract-ui/DeleteConfirmDialog.jsx`, `count={1}`) rather than a hand-rolled confirm
+  — it's mounted only while a delete is pending (`{deleteTarget && <DeleteConfirmDialog .../>}`),
+  matching this file's own `showNewDecl`/`showCatalog` conditional-mount convention; mounting it
+  unconditionally with `open={false}` was tried first and rejected — `DialogContent` reaches for
+  lucide-react's `X` icon at render time regardless of `open`, which needlessly drags that
+  dependency (and, in tests, an extra icon to mock) into every render of this page. Confirming
+  calls `deleteDeclaration(id, { token, apiBaseUrl })` (`fiscalModelsUtils.js`, `DELETE
+  /fiscal303/declarations?id=`); on success the row is removed from `FmListPage`'s own `decls`
+  state (no refetch), on failure a toast (`fm.list.delete_failed`) is shown and the row stays.
+
+**Backend defense in depth**: `FiscalDeclCrudHandler#handleDeclDelete` (already existed, wired to
+`DELETE /fiscal303/declarations?id=`) now also rejects (409) deleting anything but a `draft`
+declaration — previously it had no status check at all and would delete any declaration regardless
+of status, relying entirely on the frontend to only ever show the action for drafts. The frontend
+gate (only draft rows get the icons) and the backend gate are independent; either one alone would
+have been insufficient.
 
 ### "Fichero" column — removed, no download action to offer (ETP-4755)
 
@@ -849,6 +1078,48 @@ taller than its sibling.
 - **`catalogLoaded`** gates rendering while the initial `GET` is in flight. It starts `true` only when `token`/`apiBaseUrl` are missing; otherwise it starts `false` and flips to `true` in the `GET`'s `.finally()`, regardless of whether the request succeeded or failed. While `catalogLoaded` is `false`: the table region shows a "Cargando…" `EmptyState` instead of either the real table or the "no active models" empty state, and the "+ Nueva declaración" toolbar button does not render at all — its guard is `catalogLoaded && activeCount > 0`, not just `activeCount > 0` (see "No active models" below). This avoids flashing an incorrect CTA/empty-state before the real catalog value is known.
 - **Scope: per-Client, not per-org or per-user.** The backend service (`NeoFiscalModelsCatalogService`, `com.etendoerp.go`) stores the map in `AD_PREFERENCE` under key `ETGO_FiscalModelsCatalog`, scoped only to `OBContext.getOBContext().getCurrentClient()` — organization, user and role are all passed as `null` to `Preferences`. Every user of the same client, in any organization, with any role, reads and writes the same catalog state.
 
+### IAE-activity activation reminder (ETP-5187, adjacent scope)
+
+A non-blocking heads-up toast reminds the user to configure the organization's default IAE
+("Impuesto de Actividades Económicas") activity — required by AEAT303's backend report code
+(`org.openbravo.module.aeat303.es`, `AEAT303_Utility.doPreviousChecks`) for the **last period**
+of the fiscal year (4T quarterly, or December monthly) — at the two moments the user commits to
+a path that will eventually need it, before they ever reach that period:
+
+1. **Activating Modelo 303 in the catalog** (`FmCatalogPage.jsx`'s `toggleModel`) — fires only on
+   the inactive → active transition of `303` specifically, never on deactivation and never for
+   `349` (which has no such requirement).
+2. **Selecting period T4 or 12 in "Nueva declaración"** (`FmOverlays.jsx`'s `NewDeclModal`, the
+   period-grid button `onClick`) — fires only when the currently selected model is `303` and the
+   clicked period is `T4` (quarterly) or `12` (monthly); it does not fire on `349`, on any other
+   period, or on every render/period-list rebuild — only on that specific button click.
+
+Both call the same shared helper, `showIaeActivityReminder(t, navigate)` (exported from
+`fiscalModelsUtils.js`), which shows a `sonner` `toast.warning` (`fm.aeat.reminder.iaeActivity`)
+whose message is built as one JSX node so the CTA — an underlined, bold text link
+(`fm.aeat.action.go_to_organization` — the same CTA label the ETP-4975 hard guard below uses,
+rendered the same way there too via the shared `.fm-link-btn`/`.fm-link-btn--bold` CSS classes) —
+reads inline at the end of the warning sentence rather than as a separate control, and navigates to
+`/organization`, plain — `OrganizationPage.jsx` has no section-anchor/deep-link support yet to land
+pre-scrolled at "Actividades del IAE" (see `docs/generated-custom-windows/organization.md`'s own
+"Actividades del IAE" section); that would be a follow-up, not implemented here. The same inline,
+bold placement is used everywhere else this CTA appears — the `connError` banner in
+`AeatSubmitFlow.jsx` (the NRC-required guard, described above under "Confirm screen") and the
+`genError` banner in `FmModel303Page.jsx` (the ETP-4975 pre-flight guard, see immediately below).
+
+**This is deliberately a different mechanism from the ETP-4975 hard guard** — `missingIaeGuard`/
+`isMissingDefaultIaeActivity` in `AeatSubmitFlow.jsx`/`FmModel303Page.jsx` — fully documented in
+`docs/generated-custom-windows/organization.md`'s "Modelo 303 pre-flight guard — both buttons"
+section, **not** in this file: this file's only section literally titled "Generate error banner
+(`genError`)" is further below, under "Modelo 349 detail page", and covers a distinct, unrelated
+concern (`AEAT3492010Report`'s own validation exceptions on the 349 file-generation path) — do not
+confuse the two `genError` states, they belong to different pages and different guards. The ETP-4975
+guard is authoritative: it runs a real `GET /sws/neo/organization/actividadesDelIae` check right
+before "Generar fichero"/"Marcar como Presentado" for the actual last-period declaration, and blocks
+the action when nothing qualifies. This reminder never blocks anything and never checks the
+backend — it is purely an earlier, informational nudge so the user isn't surprised later by the
+hard guard.
+
 ### "Nueva declaración" respects the active catalog
 
 `NewDeclModal` (in `FmOverlays.jsx`) receives an `activeModels` prop from `FmListPage` and builds its model list from `Object.keys(activeModels).filter(id => activeModels[id])` instead of a hardcoded `303`/`349` option list. If the previously-selected default (`303`) is not active, the modal falls back to the first available active model. If **no** model is active, the model picker and the "Crear declaración" button are disabled and the modal shows `fm.new_decl.no_active_models` instead of leaving an empty, non-functional picker. Callers that don't pass `activeModels` (e.g. older tests) keep the legacy behavior of offering both `303` and `349`.
@@ -862,7 +1133,7 @@ This in-modal guard is now **defense in depth**: `FmListPage`'s "+ Nueva declara
 - **Modelo** is now a button that opens a searchable dropdown (`ModelSelectMenu`, a private helper in `FmOverlays.jsx`) — one row per active model, each showing the model-number badge, its catalog name and description (reusing the same `fm.catalog.{id}.name` / `.desc` keys `FmCatalogPage.jsx` already relies on, so the row content stays in sync with the catalog automatically), and a search input that filters by number or name. It closes on outside-click via the same ref+`mousedown`-listener idiom used elsewhere in this file.
 - **Año** is now a button-triggered dropdown (`YearSelectMenu`, another private helper in `FmOverlays.jsx`) instead of a `<select>` — mechanically a simplified sibling of the Modelo dropdown: same button + outside-click-closing panel + checkmark on the selected row, backed by `SUPPORTED_YEARS` sorted most-recent-first. It skips the parts that don't apply to a short flat list of year numbers — no search input, no chip, no subtitle — just the year label and, on the selected row, a checkmark.
 - **Frecuencia** is a new segmented pill control (Trimestral/Mensual) that drives which **Período** grid is shown: 4 quarter buttons (`T1`–`T4`) or a 6×2 grid of month buttons (`01`–`12`). Switching frequency resets the selected period to the first value of the new list.
-- **Duplicate-declaration awareness — disabled, no message (updated)**: `NewDeclModal` accepts an optional `existingDeclarations` prop — `FmListPage` passes its own `decls` state. Any period button that already has a declaration for the currently selected model+year renders grayed out with a small dot badge (`.fm-newdecl-period-btn--existing` + `.fm-newdecl-period-btn__dot`) **and is disabled** (real HTML `disabled` attribute — it cannot be clicked or selected). There is **no message of any kind** about it: the warning banner this modal used to show (`fm.new_decl.duplicate_warning`, "Si continúas, se creará una complementaria") was removed entirely, because that copy is factually wrong for many cases (AEAT renamed the concept to "rectificativa" for periods from Q3‑2024/Sept‑2024 onward, and even for older periods a correction is only valid when it favors the Treasury) and because a duplicate submission 500s server-side today (`FmListPage.jsx`'s `handleNewDecl` swallows the failure in an empty `.catch(() => {})`). Disabling the period, without explaining why, is a deliberate stopgap until the complementaria/rectificativa flow gets proper data-model and business-rule support — this UI path can no longer submit a duplicate period, so it no longer exercises that broken backend flow. A `useEffect` keeps the selection off a disabled period automatically: on mount, and on every model/year/frequency change, if the selected period became disabled it jumps to the first still-available period for the current frequency. If **every** period of the current frequency already has a declaration, the "Crear declaración" CTA itself becomes disabled (`allPeriodsTaken`) — still with no explanatory message, per the same "no message" rule. `existingDeclarations` is optional and defaults to "no existing declarations" when omitted, so every caller that predates this feature is unaffected.
+- **Duplicate-declaration awareness — informational only, no longer disabled (ETP-5187)**: `NewDeclModal` accepts an optional `existingDeclarations` prop — `FmListPage` passes its own `decls` state. Any period button that already has a declaration for the currently selected model+year still renders with a small dot badge (`.fm-newdecl-period-btn--existing` + `.fm-newdecl-period-btn__dot`, plus a `title` hint, `fm.new_decl.period_existing_hint`) but **is no longer disabled** — the user can select it and create a new declaration for that period. This is the rectificativa flow (filed early, more invoices arrived later for the same period), and blocking it outright was wrong. The previous rationale for disabling it (a duplicate submission 500'd server-side on `ETGO_FISCAL_DECL_UQ`) is fixed on the backend side, with no cap on how many declarations a period can have: `FiscalDeclCrudHandler#resolveNextDeclSeq` (`com.etendoerp.go`) assigns each new declaration the next `DECL_SEQ` ordinal (`MAX(DECL_SEQ) + 1` for the same client/org/model/year/period, or `0` for the first one) — a dedicated, unbounded sequence column, not a repurposing of the `DECL_TYPE` ordinaria/complementaria business field, so a 3rd, 4th or Nth declaration for the same period succeeds exactly like the 2nd (matching the real AEAT/legal rule that there is no limit on rectificativas per period) — see "NEO Headless endpoints" below. The real warning ("you're filing a 2nd declaration for this period, check Autoliquidación rectificativa") lives on the newly created declaration's own detail page instead — see "Duplicate-period warning and rectificativa gate" under "Modelo 303 detail page" above. The `useEffect` that used to jump the selection off a disabled period, and the `allPeriodsTaken`-driven disabling of the "Crear declaración" CTA, were both removed along with the disabling itself. `existingDeclarations` is still optional and defaults to "no existing declarations" when omitted, so every caller that predates this feature is unaffected.
 - The footer shows a live "Se creará como Modelo {N} · {período} {año}" preview (`fm.new_decl.will_create_as` / `fm.new_decl.preview`) next to Cancelar / **Crear declaración** (`fm.new_decl.create_cta` — renamed from the generic `fm.action.create` key the button used before this restyle).
 
 ### No active models — hides the CTA and shows a dedicated empty state
@@ -922,6 +1193,7 @@ the underlying data (and the read-only grid badge) stays intact.
 | `models/349/FmModel349Page.jsx` | Modelo 349 detail |
 | `FmCommon.jsx` | Shared components: `NumberedStepper`, `ResultPill`, `SummaryCard` |
 | `FmOverlays.jsx` | Modals and drawers: `PresentModal` (2 manual paths + opt-in `aeat_telematic` sentinel path), `FileGenModal`, `NewDeclModal`, `ConfigDrawer` |
+| `FmRowActions.jsx` | Row hover Edit/Delete icons for draft declarations (ETP-5187) — window-local, lighter counterpart to the generic `RowQuickActions` |
 | `FmDebugPanel.jsx` | Developer panel (keystroke-activated) for testing with fixture data |
 
 ## NEO Headless endpoints
@@ -929,7 +1201,9 @@ the underlying data (and the read-only grid badge) stays intact.
 | Method | Path | Used by |
 |--------|------|---------|
 | `GET` | `/fiscal303/declarations` | FmListPage — fetch all declarations |
+| `POST` | `/fiscal303/declarations` (body: model, year, period, status, type) | FmListPage's `handleNewDecl` — creates a declaration. `FiscalDeclCrudHandler#resolveNextDeclSeq` (ETP-5187) assigns the new row the next `DECL_SEQ` ordinal (`MAX(DECL_SEQ) + 1` for the same client/org/model/year/period, or `0` for the first one) — a dedicated, unbounded sequence column added specifically for this uniqueness disambiguation, distinct from `DECL_TYPE` (AEAT's own ordinaria/complementaria business value, still `VARCHAR(1)` CHECKed to `'O'`/`'C'` and rendered verbatim by `FmListPage.jsx`). `ETGO_FISCAL_DECL_UQ` is unique on `(client, org, model, year, period, DECL_SEQ)`, so there is no cap: a 2nd, 3rd, 4th or Nth declaration for the same period always succeeds — matching the real AEAT/legal rule that there is no limit on how many rectificativas can be filed for a period. (An earlier version of this fix repurposed `DECL_TYPE` itself as a 2-slot disambiguator, which capped the system at 2 declarations per period and conflated a real business field with an artificial counter — replaced by the dedicated column above.) |
 | `PUT` | `/fiscal303/declarations?id=` | FmListPage — persist status change |
+| `DELETE` | `/fiscal303/declarations?id=` | `FmRowActions`' delete action (ETP-5187), via `deleteDeclaration` — rejects (409) deleting anything but a `draft` declaration (defense in depth; the frontend also only ever shows the action for draft rows) |
 | `GET` | `/fiscal-models-catalog` | FmListPage — fetch the active-models catalog on mount (per-Client); also consumed cross-spec by `ReversedInvoicesPanel.jsx` (sales-invoice/purchase-invoice) to gate the "Correctiva del 349" checkbox — see "Downstream consumer" above |
 | `PUT` | `/fiscal-models-catalog` | FmListPage, via `FmCatalogPage`'s `onSave` — persist the active-models catalog (per-Client) |
 | `GET` | `/fiscal303/boxes?year=&period=` | `computeBoxes303` |
