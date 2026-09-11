@@ -26,8 +26,6 @@ import {
   Search,
   Mic,
   Sparkles,
-  Plus,
-  Bell,
   MoreVertical,
   Star,
   HelpCircle,
@@ -65,8 +63,6 @@ export default function TopBar({
   onSearchClick,
   searchPlaceholder,
   onAIClick,
-  onNewClick,
-  onBellClick,
   rightExtras,
   className,
 }) {
@@ -356,35 +352,6 @@ export default function TopBar({
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" data-testid="TooltipContent__133e64">{ui('aiAssistant')}</TooltipContent>
-          </Tooltip>
-
-          <Tooltip delayDuration={0} data-testid="Tooltip__133e64">
-            <TooltipTrigger asChild data-testid="TooltipTrigger__133e64">
-              <button
-                type="button"
-                onClick={onNewClick}
-                aria-label={ui('newRecord')}
-                className="flex h-10 w-10 items-center justify-center rounded-lg text-topbar-icon hover:text-foreground hover:bg-muted transition-colors"
-              >
-                <Plus className="h-5 w-5" data-testid="Plus__133e64" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" data-testid="TooltipContent__133e64">{ui('newRecord')}</TooltipContent>
-          </Tooltip>
-
-          <Tooltip delayDuration={0} data-testid="Tooltip__133e64">
-            <TooltipTrigger asChild data-testid="TooltipTrigger__133e64">
-              <button
-                type="button"
-                onClick={onBellClick}
-                aria-label={ui('notifications')}
-                data-testid="topbar-notifications"
-                className="flex h-10 w-10 items-center justify-center rounded-lg text-topbar-icon hover:text-foreground hover:bg-muted transition-colors"
-              >
-                <Bell className="h-5 w-5" data-testid="Bell__133e64" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" data-testid="TooltipContent__133e64">{ui('notifications')}</TooltipContent>
           </Tooltip>
 
           {rightExtras}
