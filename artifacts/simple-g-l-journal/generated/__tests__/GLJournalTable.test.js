@@ -16,6 +16,11 @@ const pageSrc = readFileSync(
   'utf8'
 );
 
+const lineTableSrc = readFileSync(
+  join(__dirname, '..', 'web', 'simple-g-l-journal', 'GLJournalLineTable.jsx'),
+  'utf8'
+);
+
 function extractPostedColumn(source) {
   return source.split('\n').find((l) => l.includes("key: 'posted'")) ?? null;
 }
@@ -57,5 +62,18 @@ describe('Simple GL Journal GLJournalPage — post and unpost menuActions', () =
 
   it('unpost action has key: "unpost"', () => {
     assert.match(pageSrc, /key:\s*'unpost'/);
+  });
+});
+
+// ETP-5210 — decisions.json declares `"columnWidth": 280` for
+// accountingCombination; the generator renames it to `minWidth: 280` on the
+// column literal. `columnFlex`/`columnMinWidthPx` in linesColumnWidth.js read
+// `col.minWidth` first, before the selector-type default (192px), so this is
+// what makes the Account column actually render wider.
+describe('Simple GL Journal GLJournalLineTable — accountingCombination width', () => {
+  it('declares the accountingCombination column with minWidth: 280', () => {
+    const line = lineTableSrc.split('\n').find((l) => l.includes("key: 'accountingCombination'"));
+    assert.ok(line !== undefined, 'Expected a column with key: "accountingCombination"');
+    assert.match(line, /minWidth:\s*280/);
   });
 });

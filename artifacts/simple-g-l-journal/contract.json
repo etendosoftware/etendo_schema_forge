@@ -1,8 +1,8 @@
 {
-  "version": "0.21.0",
+  "version": "0.24.0",
   "generatedAt": "2026-06-16T16:34:09.049Z",
-  "updatedAt": "2026-08-31T11:36:23.257Z",
-  "checksum": "86d6d6ad62398160",
+  "updatedAt": "2026-09-10T10:50:12.143Z",
+  "checksum": "0b3a0e1340266588",
   "frontendContract": {
     "window": {
       "id": "B917E8A7B0864ACEA9D941E3B7494E53",
@@ -101,6 +101,7 @@
               "es_ES": "Fecha"
             },
             "gridOrder": 2,
+            "dot": false,
             "validation": {
               "required": true,
               "maxLength": 10
@@ -615,6 +616,7 @@
             "reference": "ValidCombination",
             "inputMode": "selector",
             "lookup": true,
+            "columnWidth": 280,
             "validation": {
               "maxLength": 32
             },
@@ -626,31 +628,6 @@
               "raw": "@Processed@='Y' | @Multi_Gl@='Y'",
               "evaluable": true,
               "js": "record['processed'] === true || record['multigeneralLedger'] === true"
-            }
-          },
-          {
-            "name": "description",
-            "apiKey": "description",
-            "column": "Description",
-            "label": "Description",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": true,
-            "form": true,
-            "derivation": {
-              "type": "fromConfig",
-              "source": "context.description1"
-            },
-            "defaultValue": "@DESCRIPTION1@",
-            "validation": {
-              "maxLength": 255
-            },
-            "readOnlyLogic": {
-              "raw": "@Processed@='Y'",
-              "evaluable": true,
-              "js": "record['processed'] === true"
             }
           },
           {
@@ -887,13 +864,6 @@
             "derivation": {
               "type": "lookup",
               "source": "SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM GL_JournalLine WHERE GL_Journal_ID=@GL_Journal_ID@"
-            }
-          },
-          {
-            "name": "description",
-            "derivation": {
-              "type": "fromConfig",
-              "source": "context.description1"
             }
           },
           {
@@ -1341,7 +1311,7 @@
             "apiKey": "description",
             "column": "Description",
             "type": "string",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -2016,14 +1986,6 @@
         "description": "Default value for 'posted' in gLJournal should be a string"
       },
       {
-        "id": "t-default-value-type-gLJournalLine-description",
-        "category": "default-value-type",
-        "entity": "gLJournalLine",
-        "field": "description",
-        "runner": "node",
-        "description": "Default value for 'description' in gLJournalLine should be a string"
-      },
-      {
         "id": "t-default-value-type-gLJournalLine-lineNo",
         "category": "default-value-type",
         "entity": "gLJournalLine",
@@ -2344,14 +2306,6 @@
         "description": "Field 'costCenter' should be present in gLJournalLine"
       },
       {
-        "id": "t-field-presence-gLJournalLine-description",
-        "category": "field-presence",
-        "entity": "gLJournalLine",
-        "field": "description",
-        "runner": "node",
-        "description": "Field 'description' should be present in gLJournalLine"
-      },
-      {
         "id": "t-field-presence-gLJournalLine-foreignCurrencyCredit",
         "category": "field-presence",
         "entity": "gLJournalLine",
@@ -2528,14 +2482,6 @@
         "description": "Field 'costCenter' should have type 'string' in gLJournalLine"
       },
       {
-        "id": "t-field-type-gLJournalLine-description",
-        "category": "field-type",
-        "entity": "gLJournalLine",
-        "field": "description",
-        "runner": "node",
-        "description": "Field 'description' should have type 'string' in gLJournalLine"
-      },
-      {
         "id": "t-field-type-gLJournalLine-foreignCurrencyCredit",
         "category": "field-type",
         "entity": "gLJournalLine",
@@ -2696,14 +2642,6 @@
         "description": "Read-only logic for 'costCenter' in gLJournalLine should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-gLJournalLine-description",
-        "category": "readonlylogic-evaluable",
-        "entity": "gLJournalLine",
-        "field": "description",
-        "runner": "node",
-        "description": "Read-only logic for 'description' in gLJournalLine should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-gLJournalLine-foreignCurrencyCredit",
         "category": "readonlylogic-evaluable",
         "entity": "gLJournalLine",
@@ -2854,14 +2792,6 @@
         "field": "costCenter",
         "runner": "node",
         "description": "Read-only logic for 'costCenter' in gLJournalLine should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-gLJournalLine-description",
-        "category": "readonlylogic-valid",
-        "entity": "gLJournalLine",
-        "field": "description",
-        "runner": "node",
-        "description": "Read-only logic for 'description' in gLJournalLine should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-gLJournalLine-foreignCurrencyCredit",
@@ -4237,6 +4167,14 @@
         "description": "System field 'debit' should exist in backend but not frontend for gLJournalLine"
       },
       {
+        "id": "t-system-field-gLJournalLine-description",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "description",
+        "runner": "node",
+        "description": "System field 'description' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
         "id": "t-system-field-gLJournalLine-financialAccount",
         "category": "system-field",
         "entity": "gLJournalLine",
@@ -4428,25 +4366,25 @@
       }
     ],
     "summary": {
-      "total": 331,
+      "total": 327,
       "byCategory": {
         "action-endpoint": 4,
         "crud-flags": 2,
-        "default-value-type": 11,
+        "default-value-type": 10,
         "displaylogic-evaluable": 11,
         "displaylogic-valid": 11,
-        "field-presence": 23,
-        "field-type": 23,
-        "readonlylogic-evaluable": 20,
-        "readonlylogic-valid": 20,
+        "field-presence": 22,
+        "field-type": 22,
+        "readonlylogic-evaluable": 19,
+        "readonlylogic-valid": 19,
         "rule-declared": 123,
         "searchable-filters": 6,
         "selector-endpoint": 12,
-        "system-field": 63,
+        "system-field": 64,
         "visibility": 2
       },
       "byRunner": {
-        "node": 331,
+        "node": 327,
         "junit": 0
       }
     }

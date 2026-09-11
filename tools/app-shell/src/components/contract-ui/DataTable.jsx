@@ -13,7 +13,7 @@ import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
 import { columnMinWidthPx, columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
-import { CHEVRON_COLUMN_WIDTH } from './InlineLinesPanel.jsx';
+import { CHEVRON_COLUMN_WIDTH, renderBalanceFooterRow, buildLineCellStyle } from './InlineLinesPanel.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
 import { resolveFkNavigation } from './fkNavigation.js';
@@ -1887,6 +1887,10 @@ function renderFooterRow({
  *  - onDeleteRow: (row) => void — when provided, renders a per-row delete button (trash icon)
  *      that appears on row hover and on keyboard focus. Invoked with the row object; click
  *      propagation is stopped so it does not trigger row selection or navigation.
+ *  - balanceFooter: object | null — presence (not shape) suppresses this table's own generic
+ *      per-amount-column footer-totals row, regardless of showFooterTotals. Set when a caller
+ *      renders a specialized, grid-aligned totals row elsewhere (e.g. InlineLinesPanel's
+ *      balanceFooter row) so the two do not stack (ETP-5210).
  */
 export function DataTable({
   entity,
@@ -1917,6 +1921,16 @@ export function DataTable({
   token,
   apiBaseUrl,
   showFooterTotals = true,
+  // ETP-5210 — when a window has opted into the specialized balanceFooter
+  // totals row (InlineLinesPanel's grid-aligned debit/credit totals), this
+  // same balanceFooter object is also spread into the hidden, add-row-only
+  // DataTable instance rendered alongside it (see GLJournalLineTable). That
+  // instance must NOT also render its own generic per-amount-column footer
+  // totals — doing so produced two stacked totals rows (one €-formatted and
+  // aligned, one unformatted) whenever "Añadir línea" was active. A truthy
+  // balanceFooter always suppresses the generic footer, regardless of the
+  // showFooterTotals prop's own value.
+  balanceFooter = null,
   selectorContext,
   onDataMutated,
   labelOverrides,
@@ -2349,7 +2363,7 @@ export function DataTable({
             )}
           </TableBody>
           {renderFooterRow({
-            totals, showFooterTotals, selectable, visibleColumns, filteredData,
+            totals, showFooterTotals: showFooterTotals && !balanceFooter, selectable, visibleColumns, filteredData,
             hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled,
             hasDimensionsPanel,
           })}
@@ -2360,6 +2374,22 @@ export function DataTable({
           {ui('inlineAddHint')}
         </p>
       )}
+      {/* ETP-5210 follow-up — this DataTable instance is InlineLinesPanel's
+          hidden add-row-only companion table (hideHeader + hideDataRows, see
+          the generated *LineTable wrapper's `addRow?.active` branch). While
+          that add-row form is showing, InlineLinesPanel suppresses its own
+          balanceFooter row (its `lineFormActive` prop, set from the very same
+          addRow.active value in DetailView.jsx) so it renders here instead —
+          always AFTER the add-row form (this element sits below it), never
+          between the saved lines and it. Reuses InlineLinesPanel's exact
+          renderer + cell typography so the two never drift in alignment. */}
+      {hideDataRows && addRow?.active && balanceFooter && renderBalanceFooterRow({
+        balanceFooter,
+        visibleColumns,
+        hasDimensionsPanel,
+        reserveActionSlot: ilpHasNoAmountCol,
+        cellStyle: buildLineCellStyle(),
+      })}
     </div>
   );
 }

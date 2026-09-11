@@ -10,6 +10,7 @@ import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
 import BalanceFooterPanel from './BalanceFooterPanel.jsx';
 import SelectionToolbar from './SelectionToolbar.jsx';
 import {computeBalance} from '@/lib/balanceTotals';
+import {formatCurrency} from '@/lib/formatCurrency.js';
 import {resolveIdentifier} from '@/lib/resolveIdentifier.js';
 import {roundAmounts} from '@/lib/lineFieldChange.js';
 import {getCatalogOptions} from '@/lib/selectorCatalog.js';
@@ -1077,8 +1078,37 @@ export function computeBalanceGate({ balanceFooter, children, pendingLineValues,
   return { balanceState, blockSaveForBalance, blockCompleteForBalance };
 }
 
-export function renderTotalsBlock({ balanceFooter, children, pendingLine, editingLine, lineConfig, formatAmount, currency, summary, isDocumentReadOnly, totalDiscountPct, onTotalDiscountChange }) {
+/**
+ * ETP-5210 — pre-formats the debit/credit totals threaded into the lines grid
+ * (InlineLinesPanel's `balanceFooter` prop) so it can render them as a row
+ * aligned under its own Débito/Crédito columns instead of a separate summary
+ * block. Reuses `balanceState` from `computeBalanceGate` (the same numbers
+ * that gate Save/Complete — see DetailView.jsx) so the displayed totals can
+ * never disagree with the gate, and the canonical `formatCurrency` (never a
+ * hand-rolled formatter). Returns null when the window has no balanceFooter
+ * config, or before balanceState is available.
+ */
+export function buildBalanceFooterGridTotals(balanceFooter, balanceState, currency) {
+  if (!balanceFooter || !balanceState) return null;
+  return {
+    debitField: balanceFooter.debitField,
+    creditField: balanceFooter.creditField,
+    debitTotal: formatCurrency(currency, balanceState.totalDebit),
+    creditTotal: formatCurrency(currency, balanceState.totalCredit),
+  };
+}
+
+export function renderTotalsBlock({ balanceFooter, linesLayout, children, pendingLine, editingLine, lineConfig, formatAmount, currency, summary, isDocumentReadOnly, totalDiscountPct, onTotalDiscountChange }) {
   if (balanceFooter) {
+    // ETP-5210 — for the inlineEditable lines grid (the only current
+    // balanceFooter consumer, e.g. simple-g-l-journal), the debit/credit
+    // totals are rendered as a column-aligned row INSIDE InlineLinesPanel
+    // itself (see `balanceFooter` threaded into <DetailTable> in
+    // DetailView.jsx via `buildBalanceFooterGridTotals`) — no separate block
+    // here. BalanceFooterPanel remains the fallback for a future
+    // balanceFooter window on the classic (DataTable) lines layout, which
+    // does not yet have an equivalent column-aligned totals row.
+    if (linesLayout === 'inlineEditable') return null;
     return (
       <BalanceFooterPanel
         lines={children}

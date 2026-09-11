@@ -59,6 +59,20 @@ export const CHEVRON_COLUMN_WIDTH = 44;
 // leading `cellPaddingX`.
 const DIMENSIONS_ROW_INDENT = CHEVRON_COLUMN_WIDTH + CHECKBOX_COLUMN_WIDTH + TOKENS.cellPaddingX;
 
+// Exported alongside `renderBalanceFooterRow` — DataTable's add-row-only companion
+// table (ETP-5210 follow-up) calls that renderer directly to render the aligned
+// totals row after the add-row form, and must use the EXACT same cell typography
+// this component uses for its own rows, or the two footer renders (this panel's
+// and DataTable's) would visibly drift in font size/weight/color.
+export function buildLineCellStyle() {
+  return {
+    fontFamily: 'Inter, system-ui, sans-serif',
+    fontSize: TOKENS.cellFontSize,
+    fontWeight: TOKENS.cellFontWeight,
+    color: TOKENS.textPrimary,
+  };
+}
+
 const NUMERIC_TYPES = new Set(['number', 'amount', 'integer', 'percent', 'decimal', 'price', 'quantity', 'signedDelta']);
 
 // Maps formatSignedDelta's tone key to the semantic theme role — mirrors TONE_CLASS
@@ -315,6 +329,75 @@ function renderDimensionsSubRow({
         labelOverrides={labelOverrides}
         entityName={entity}
         data-testid="DimensionGrid__3b7ec2" />
+    </div>
+  );
+}
+
+/**
+ * ETP-5210 — renders the debit/credit totals as a row pixel-aligned with the
+ * grid's own columns, replacing the old standalone "Total debe"/"Total haber"
+ * summary block (BalanceFooterPanel) for the inlineEditable layout. Mirrors
+ * the EXACT leading/trailing chrome and per-column `flex` the header row above
+ * uses (chevron placeholder, checkbox-column placeholder, `columnFlex(col,
+ * idx)` per visible column, the reserved action-strip slot, the right
+ * spacer) so the same `columns`/width source of truth drives both — no
+ * parallel width calculation that could drift from the grid. Every column
+ * renders blank except the one matching `balanceFooter.debitField` /
+ * `creditField`, which shows the (already formatted — see
+ * `buildBalanceFooterGridTotals` in detailViewHelpers.jsx) sum, right-aligned
+ * like every other amount cell in the grid.
+ */
+export function renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimensionsPanel, reserveActionSlot, cellStyle }) {
+  if (!balanceFooter) return null;
+  return (
+    <div
+      data-testid="balance-footer-row"
+      className="flex items-stretch border-t font-semibold"
+      // ETP-5210 — cellStyle's own `fontWeight: TOKENS.cellFontWeight` (400,
+      // normal) is spread AFTER the className, so as an inline style it would
+      // otherwise silently win over the `font-semibold` class (inline style
+      // beats a class at equal specificity) and the totals row would render
+      // in normal weight despite the class intent. Re-assert 600 last so the
+      // row actually reads bold, matching every other accounting totals row.
+      style={{ borderColor: TOKENS.separator, minHeight: TOKENS.rowHeight, ...cellStyle, fontWeight: 600 }}
+    >
+      {hasDimensionsPanel && (
+        <div style={{ width: CHEVRON_COLUMN_WIDTH, flexShrink: 0 }} aria-hidden="true" />
+      )}
+      <div style={{ width: CHECKBOX_COLUMN_WIDTH, flexShrink: 0 }} aria-hidden="true" />
+      {visibleColumns.map((col, idx) => {
+        const isDebit = col.key === balanceFooter.debitField;
+        const isCredit = col.key === balanceFooter.creditField;
+        let testId;
+        let cellContent;
+        if (isDebit) {
+          testId = 'balance-footer-debit';
+          cellContent = balanceFooter.debitTotal;
+        } else if (isCredit) {
+          testId = 'balance-footer-credit';
+          cellContent = balanceFooter.creditTotal;
+        } else {
+          testId = undefined;
+          cellContent = '';
+        }
+        return (
+          <div
+            key={col.key}
+            data-testid={testId}
+            className="flex items-center tabular-nums"
+            style={{
+              padding: `0 ${TOKENS.cellPaddingX}px`,
+              flex: columnFlex(col, idx),
+              justifyContent: (isDebit || isCredit) ? 'flex-end' : 'flex-start',
+              minWidth: 0,
+            }}
+          >
+            {cellContent}
+          </div>
+        );
+      })}
+      {reserveActionSlot && <div style={{ flex: '0 0 160px' }} aria-hidden="true" />}
+      <div style={{ width: 48, flexShrink: 0 }} aria-hidden="true" />
     </div>
   );
 }
@@ -785,6 +868,32 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // this prop at all — every existing caller today) renders byte-for-byte the
   // same as before this slot existed.
   cellBadges = {},
+  // ETP-5210 — optional aligned totals row for double-entry windows
+  // (decisions.json window.balanceFooter). Shape: { debitField, creditField,
+  // debitTotal, creditTotal } — debitTotal/creditTotal are ALREADY formatted
+  // strings (DetailView.jsx's buildBalanceFooterGridTotals reuses the shared
+  // formatCurrency + the same balanceState that gates Save/Complete, so this
+  // component stays a dumb renderer with no currency-formatting logic of its
+  // own). debitField/creditField are matched against `columns[].key` so the
+  // sums land under the actual Débito/Crédito columns, wherever they are and
+  // however wide they are, instead of a separate summary block. Purely
+  // additive — every existing caller omits it and renders identically.
+  balanceFooter = null,
+  // ETP-5210 follow-up — true while the generated *LineTable wrapper's sibling
+  // DataTable is rendering the add-row form (see GLJournalLineTable.jsx:
+  // `props.addRow?.active` branch). That wrapper explicitly strips its OWN
+  // `addRow` prop before spreading the rest onto this component (`addRow=
+  // {undefined}`), so `props.addRow` can never tell this component apart from
+  // the non-add-row render — this is a SEPARATE, un-stripped prop passed
+  // straight through DetailView.jsx's <DetailTable> call (same source value as
+  // addRow.active there), specifically so it survives that spread. When true,
+  // this panel suppresses its own balanceFooter row — the sibling DataTable
+  // (which DOES still receive the real addRow) renders the aligned totals row
+  // itself, positioned after the add-row form instead of before it. Defaults
+  // to false so every caller that doesn't support add-row-vs-footer ordering
+  // (or has no balanceFooter at all) renders exactly as before this prop
+  // existed.
+  lineFormActive = false,
 }, ref) {
   const ui = useUI();
   const t = useLabel(labelOverrides);
@@ -1166,12 +1275,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     fontWeight: TOKENS.headerFontWeight,
     color: TOKENS.textPrimary,
   };
-  const cellStyle = {
-    fontFamily: 'Inter, system-ui, sans-serif',
-    fontSize: TOKENS.cellFontSize,
-    fontWeight: TOKENS.cellFontWeight,
-    color: TOKENS.textPrimary,
-  };
+  const cellStyle = buildLineCellStyle();
 
   return (
     <div ref={panelRef} className="w-full" data-testid="inline-lines-panel">
@@ -1352,6 +1456,11 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           </React.Fragment>
         );
       })}
+      {/* ETP-5210 follow-up — when an add-row form is active elsewhere (see
+          `lineFormActive` above), the sibling DataTable renders this same row
+          after the add-row form instead, so it never sits between the saved
+          lines and the form. */}
+      {!lineFormActive && renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimensionsPanel, reserveActionSlot, cellStyle })}
       </div>
     </div>
   );

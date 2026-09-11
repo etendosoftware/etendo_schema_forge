@@ -514,10 +514,12 @@ are fully generated rather than hand-written. `physical-inventory` and `goods-mo
 use `linesLayout: "inlineEditable"` but were never affected by this gap in the first place:
 neither `M_InventoryLine` nor `M_MovementLine` has a `project`/`costCenter` column at all (no
 such field exists in their `lines` entity — see each window's own doc, "N/A"/"Nunca"), so
-there was nothing to make visible. Windows using the classic `linesLayout`
-(`simple-g-l-journal`) were already fully covered by the evaluator fix above — their line
-dimension fields render through `LinesForm.jsx`'s sidebar and were already correctly
-config-gated before this ticket.
+there was nothing to make visible. No window currently uses the classic `linesLayout` —
+`simple-g-l-journal` also resolves to `inlineEditable` (`DetailView.jsx`'s default, since its
+`decisions.json` omits `window.linesLayout`); its line dimension fields render through
+`InlineLinesPanel`'s `dimensionsPanel` expand-row hover action, not `LinesForm.jsx`'s sidebar —
+see `simple-g-l-journal.md`'s "Accounting dimension visibility per section — ETP-4529" section
+for the full write-up.
 
 The generic `hiddenColumns` mechanism on `InlineLinesPanel`/`DetailView` is not
 window-specific — it applies to every window that uses the primary inline lines grid.
