@@ -1482,6 +1482,32 @@ function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, lo
 }
 
 /**
+ * Renders the label + optional computed-freshness-hint + optional sort-arrow
+ * markup shared by both the sortable (`<button>`) and non-sortable (`<span>`)
+ * variants of a single-label column header in `renderColumnHeaderCell`.
+ * Extracted to remove the ~22-line duplicated block SonarQube flagged
+ * between the two branches — pure JSX extraction, renders the exact same
+ * DOM as before in both call sites.
+ */
+function renderHeaderLabelContent(colLabel, col, isSorted, sortDirection, sortArrowClass) {
+  return (
+    <>
+      <span className="inline-flex max-w-full min-w-0 items-center gap-1 align-middle">
+        <span className="min-w-0 truncate" title={typeof colLabel === 'string' ? colLabel : undefined}>{colLabel}</span>
+        {col.computed?.mode === 'stored' && (
+          <span className="shrink-0">
+            <ComputedFreshnessHint computed={col.computed} data-testid="ComputedFreshnessHint__eb5261" />
+          </span>
+        )}
+      </span>
+      {isSorted && (
+        <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+      )}
+    </>
+  );
+}
+
+/**
  * Renders a single sortable column header cell, including the sort-direction
  * arrow. Extracted from the `visibleColumns.map(...)` callback in DataTable's
  * header row so its onSort/isSorted branching lives in its own function.
@@ -1490,6 +1516,10 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
   const colLabel = resolveColumnLabel(col, locale, t);
   const isSorted = sortColumn === col.key;
   const isSortable = col.sortable !== false;
+  // Hoisted once (was repeated inline 4x below): a plain lookup, not a branch,
+  // just avoids recomputing `NUMERIC_FIELD_TYPES.has(col.type)` at every call
+  // site and keeps the ternaries that use it readable.
+  const isNumeric = NUMERIC_FIELD_TYPES.has(col.type);
   // ETP-5281 — apply the same minWidth baseline in EVERY layout, not just
   // inlineEditable. Normal list mode has no <colgroup> (renderLinesColgroup
   // only renders when hideHeader is true), so without this the header had no
@@ -1509,7 +1539,7 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
   if (Array.isArray(col.parts) && col.parts.length > 0) {
     return renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, locale, t, headStyle });
   }
-  const sortArrowClass = NUMERIC_FIELD_TYPES.has(col.type)
+  const sortArrowClass = isNumeric
     ? 'left-0 -translate-x-full pr-0.5'
     : 'right-0 translate-x-full pl-0.5';
   return (
@@ -1518,7 +1548,7 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
       data-testid={`column-header-${col.key}`}
       className={[
         'align-middle',
-        NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : '',
+        isNumeric ? 'text-right' : '',
         // Opt-in fixed-width / per-column header styling. Needed by list windows
         // whose design pins column widths (e.g. financial-account's Figma layout,
         // where the "Cuenta" header must align with the row avatar). Absent =
@@ -1530,44 +1560,24 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
       {onSort && isSortable ? (
         <button
           type="button"
-          // ETP-5281 \u2014 `max-w-full` caps this at the header cell's (now
+          // ETP-5281 — `max-w-full` caps this at the header cell's (now
           // minWidth-floored) available width WITHOUT changing `inline-block`'s
           // shrink-to-fit sizing: a label that already fits is completely
-          // unaffected (the cap never engages, so the sort arrow \u2014 anchored to
-          // this element's own edge below \u2014 stays exactly where it always was,
+          // unaffected (the cap never engages, so the sort arrow — anchored to
+          // this element's own edge below — stays exactly where it always was,
           // right next to the label). Only a label that would otherwise overflow
           // gets capped, at which point the inner label span's own `truncate`
-          // (below) shows the "\u2026". Do NOT swap this to `block`/`w-full` \u2014 that
+          // (below) shows the "…". Do NOT swap this to `block`/`w-full` — that
           // would ALSO stretch the (common, non-overflowing) short-label case to
           // the cell's full width, dragging the arrow away from the label.
-          className={`relative inline-block max-w-full text-xs leading-4 font-semibold text-text-primary tracking-normal cursor-pointer select-none transition-colors bg-transparent border-0 p-0 ${NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : 'text-left'}`}
+          className={`relative inline-block max-w-full text-xs leading-4 font-semibold text-text-primary tracking-normal cursor-pointer select-none transition-colors bg-transparent border-0 p-0 ${isNumeric ? 'text-right' : 'text-left'}`}
           onClick={() => onSort(col.key)}
         >
-          <span className="inline-flex max-w-full min-w-0 items-center gap-1 align-middle">
-            <span className="min-w-0 truncate" title={typeof colLabel === 'string' ? colLabel : undefined}>{colLabel}</span>
-            {col.computed?.mode === 'stored' && (
-              <span className="shrink-0">
-                <ComputedFreshnessHint computed={col.computed} data-testid="ComputedFreshnessHint__eb5261" />
-              </span>
-            )}
-          </span>
-          {isSorted && (
-            <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
-          )}
+          {renderHeaderLabelContent(colLabel, col, isSorted, sortDirection, sortArrowClass)}
         </button>
       ) : (
-        <span className={`relative inline-block max-w-full text-xs leading-4 font-semibold text-text-primary tracking-normal${NUMERIC_FIELD_TYPES.has(col.type) ? ' text-right' : ''}`}>
-          <span className="inline-flex max-w-full min-w-0 items-center gap-1 align-middle">
-            <span className="min-w-0 truncate" title={typeof colLabel === 'string' ? colLabel : undefined}>{colLabel}</span>
-            {col.computed?.mode === 'stored' && (
-              <span className="shrink-0">
-                <ComputedFreshnessHint computed={col.computed} data-testid="ComputedFreshnessHint__eb5261" />
-              </span>
-            )}
-          </span>
-          {isSorted && (
-            <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
-          )}
+        <span className={`relative inline-block max-w-full text-xs leading-4 font-semibold text-text-primary tracking-normal${isNumeric ? ' text-right' : ''}`}>
+          {renderHeaderLabelContent(colLabel, col, isSorted, sortDirection, sortArrowClass)}
         </span>
       )}
     </TableHead>
