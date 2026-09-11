@@ -186,9 +186,10 @@ describe('useInvoicePdf', () => {
       assert.match(src, /lineNet \/ \(1 - disc \/ 100\)/);
     });
 
-    it('computes discountPerProduct as Math.max(0, grossAmount - productNetAmount)', () => {
+    it('ETP-5132: computes discountPerProduct as grossAmount - productNetAmount, unclamped (no Math.max(0, ...))', () => {
       assert.match(src, /computeDiscountBreakdown/, 'delegates to computeDiscountBreakdown');
-      assert.match(sharedSrc, /Math\.max\(0, grossAmount - productNetAmount\)/);
+      assert.match(sharedSrc, /const discountPerProduct = grossAmount - productNetAmount;/);
+      assert.doesNotMatch(sharedSrc, /Math\.max\(0, grossAmount - productNetAmount\)/);
     });
 
     it('reads etgoTotalDiscount from header', () => {
@@ -200,13 +201,9 @@ describe('useInvoicePdf', () => {
       assert.match(sharedSrc, /etgoTotalDiscount > 0 \? productNetAmount \* etgoTotalDiscount/);
     });
 
-    it('passes null for grossAmount when discountPerProduct is 0', () => {
-      assert.match(src, /discountPerProduct > 0 \? grossAmount : null/);
-    });
-
-    it('passes null for totalDiscountAmt when no total discount applies', () => {
-      assert.match(src, /totalDiscountAmt > 0 \? totalDiscountAmt : null/);
-    });
+    // The !== 0 gate / sign-flip contract (discountPerProduct, totalDiscountAmt)
+    // is tested once, behaviorally, against the shared computeDiscountBreakdown
+    // function in documentPdfHelpers.vitest.jsx — see its ETP-5132 test.
 
     it('uses invoicedQuantity (not orderedQuantity) inside getGrossLine', () => {
       assert.match(src, /l\.invoicedQuantity \?\? l\.qtyInvoiced/);
