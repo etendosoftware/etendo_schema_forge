@@ -275,3 +275,10 @@ a `Map<taxId, netAmt>`. `recalculate()` loops over the map and calls
 → For the example above: two lines — ETGO_DTO (IVA 21%) = −3.96, ETGO_DTO (IVA 10%) = −1.14.
 
 Single-tax documents (the common case) are unaffected — the loop runs once.
+
+**Cross-reference (2026-09-08, ETP-5132):** this same `v_Discount := -1 * netAmt * pct/100`
+sign convention (the discount's sign is the *opposite* of the base net amount's sign) is what
+`docs/bug-reports/2026-09-08-etp5132-negative-quantity-discount.md` uses to fix
+`DocumentTotalsPanel.jsx`/`documentPdf.js`'s "Discount per product"/"Total discount" display,
+which showed 0,00 € instead of the real amount on a negative-quantity (return) line. No change
+was needed in this section — it was already correct.

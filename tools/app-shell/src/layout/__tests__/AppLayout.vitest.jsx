@@ -1,8 +1,16 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+import enUS from '@/locales/en_US.json';
+
+// ETP-5202 — resolves against the REAL en_US dictionary instead of echoing the key. The
+// no-access copy is assembled with `{companyName}` substitution, and a key-echoing mock has no
+// placeholder to substitute, so every "did it name the company?" assertion would pass vacuously.
+// Falls back to the key so any label this file does not care about still renders something
+// stable and greppable.
+const LABELS = enUS.genericLabels;
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key) => LABELS[key] ?? key,
 }));
 
 // NoAccessScreen now renders a logout escape hatch (ETP-4514) via useLogout(),
@@ -37,6 +45,23 @@ vi.mock('react-router-dom', () => ({
 // below can override it for a single render via mockReturnValueOnce.
 vi.mock('@/hooks/useRoleMenu.js', () => ({
   useRoleMenu: vi.fn(() => null),
+}));
+
+// ETP-5202 — NoAccessScreen now offers to switch company, so it mounts
+// useEnvironmentSwitch(). The real hook fetches /sws/go/environments and reads the platform
+// token out of localStorage; what is under test here is the screen, not the hook (that one has
+// its own suite in src/hooks/__tests__/useEnvironmentSwitch.vitest.jsx). The default return is
+// an account with nowhere else to go, which is what every pre-existing test in this file
+// assumes, so none of them change behaviour.
+const switchToMock = vi.fn();
+const useEnvironmentSwitchMock = vi.fn(() => ({
+  environments: [],
+  switchTo: switchToMock,
+  switching: null,
+  currentClientId: 'CLIENT-CURRENT',
+}));
+vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
+  useEnvironmentSwitch: () => useEnvironmentSwitchMock(),
 }));
 
 // ETP-5240 — AppLayout now also calls useWindowAccessSafe() (alongside the
@@ -123,6 +148,27 @@ vi.mock('@/components/support/SupportChatContext.jsx', () => ({
 vi.mock('@/components/support/SupportChatWidget.jsx', () => ({
   SupportChatWidget: () => <div data-testid="support-chat-widget">SupportChatWidget</div>,
 }));
+
+// ETP-5202 — the company switcher on the blocking screen is a Radix dropdown. Radix needs
+// pointer APIs jsdom does not implement, so the primitives are replaced with the same
+// always-mounted stand-ins SideMenu's suite already uses. `DropdownMenuItem` becomes a real
+// <button> rather than a <div>: `disabled` has to be a genuine attribute for `toBeDisabled()`
+// to mean anything, and a disabled button is exactly what must not fire `onSelect`.
+vi.mock('@/components/ui/dropdown-menu.jsx', async () => {
+  const React = await import('react');
+  return {
+    DropdownMenu: ({ children }) => <>{children}</>,
+    DropdownMenuTrigger: React.forwardRef(({ children, asChild }, ref) => (
+      asChild && React.isValidElement(children)
+        ? React.cloneElement(children, { ref })
+        : <div ref={ref}>{children}</div>
+    )),
+    DropdownMenuContent: ({ children }) => <div data-testid="no-access-company-menu">{children}</div>,
+    DropdownMenuItem: ({ children, onSelect, disabled, ...props }) => (
+      <button type="button" disabled={disabled} onClick={onSelect} {...props}>{children}</button>
+    ),
+  };
+});
 
 vi.mock('@/components/webmcp/WebMcpEtendoGoTools.jsx', () => ({
   WebMcpEtendoGoTools: () => <div data-testid="webmcp-agent-tools" />,
@@ -371,8 +417,8 @@ describe('AppLayout — no-access guard (ETP-4514)', () => {
     render(<AppLayout {...defaultProps} />);
 
     expect(screen.getByTestId('NoAccessScreen__488148')).toBeInTheDocument();
-    expect(screen.getByText('noAccessTitle')).toBeInTheDocument();
-    expect(screen.getByText('noAccessMessage')).toBeInTheDocument();
+    expect(screen.getByTestId('no-access-title')).toBeInTheDocument();
+    expect(screen.getByTestId('no-access-message')).toBeInTheDocument();
 
     expect(screen.queryByTestId('side-menu')).not.toBeInTheDocument();
     expect(screen.queryByTestId('top-bar')).not.toBeInTheDocument();
@@ -422,7 +468,7 @@ describe('AppLayout — no-access guard (ETP-4514)', () => {
     render(<AppLayout {...defaultProps} />);
 
     expect(screen.getByTestId('NoAccessScreen__488148')).toBeInTheDocument();
-    expect(screen.getByText('noAccessTitle')).toBeInTheDocument();
+    expect(screen.getByTestId('no-access-title')).toBeInTheDocument();
     expect(screen.queryByTestId('outlet')).not.toBeInTheDocument();
   });
 
@@ -444,5 +490,313 @@ describe('AppLayout — no-access guard (ETP-4514)', () => {
     expect(screen.getByTestId('NoAccessScreen__488148')).toBeInTheDocument();
     expect(screen.queryByTestId('side-menu')).not.toBeInTheDocument();
     expect(screen.queryByTestId('outlet')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * ETP-5202 — the way OUT of the no-access screen.
+ *
+ * Reaching this screen used to end the session's usefulness entirely: logout was the only
+ * button, so a user whose role grants no windows in THIS tenant could not reach another company
+ * of their own account, nor their account at all. Accepting an invitation lands people here
+ * routinely — an invited user has no role until an admin assigns one (ETP-4830).
+ *
+ * This is NOT the same condition the `roleList` guard in useEnvironmentSwitch prevents, and the
+ * two are not redundant: `roleList: []` is "I hold no role at all" and is refused BEFORE
+ * entering, while this is "I hold a role that grants no window", which is only knowable AFTER
+ * entering, when useRoleMenu answers with an empty Set. Prevention cannot cover it; an exit can.
+ *
+ * ETP-4514's "no menu/windows reachable" criterion is untouched by these tests on purpose: the
+ * pre-existing cases below already assert the sidebar and Outlet stay unmounted, and switching
+ * company is a platform action authorised by the account token rather than by the role that
+ * grants nothing here.
+ */
+describe('AppLayout — no-access company switch (ETP-5202)', () => {
+  const defaultProps = {
+    menuGroups: [{ group: 'Sales', items: [{ name: 'sales-order', label: 'Sales Order', windowId: '800166' }] }],
+  };
+
+  const CURRENT = { clientId: 'CLIENT-CURRENT', clientName: 'Current Corp', orgName: 'Main Org' };
+  const OTHER = { clientId: 'CLIENT-OTHER', clientName: 'Other Corp', orgName: 'Main Org' };
+
+  /** `mockReturnValue`, not `…Once`: a click re-renders, and the screen must survive it. */
+  function blockAccess() {
+    vi.mocked(useRoleMenu).mockReturnValue(new Set());
+  }
+
+  function withEnvironments(environments, overrides = {}) {
+    useEnvironmentSwitchMock.mockReturnValue({
+      environments,
+      switchTo: switchToMock,
+      switching: null,
+      currentClientId: 'CLIENT-CURRENT',
+      ...overrides,
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useRoleMenu).mockReturnValue(null);
+    withEnvironments([]);
+  });
+
+  it('lists the account companies, with the current one shown but not selectable', () => {
+    blockAccess();
+    globalThis.localStorage.setItem('sf_auth_client_name', 'Current Corp');
+    withEnvironments([CURRENT, OTHER]);
+
+    render(<AppLayout {...defaultProps} />);
+
+    const block = screen.getByTestId('no-access-company-switch');
+    // `toHaveTextContent` rather than `getByText`: the label is rendered twice, as the block's
+    // own heading and again as the menu's label, and pinning the count here would freeze a
+    // duplication this test has no opinion about.
+    expect(block).toHaveTextContent(LABELS.switchCompany);
+    // The trigger doubles as the answer to "which company am I stuck in?", which this screen
+    // otherwise never says.
+    expect(screen.getByTestId('no-access-company-trigger')).toHaveTextContent('Current Corp');
+
+    expect(screen.getByTestId('no-access-company-CLIENT-OTHER')).toHaveTextContent('Other Corp');
+    // The current tenant stays listed so the menu also reads as "where am I?", but choosing it
+    // would be a destination that changes nothing.
+    expect(screen.getByTestId('no-access-company-CLIENT-CURRENT')).toBeDisabled();
+    expect(screen.getByTestId('no-access-company-CLIENT-OTHER')).not.toBeDisabled();
+    // The escape hatch this screen already had must not be displaced by the new one.
+    expect(screen.getByTestId('NoAccessScreenLogout__488148')).toBeInTheDocument();
+  });
+
+  it('switches to the chosen company', async () => {
+    blockAccess();
+    withEnvironments([CURRENT, OTHER]);
+    const user = userEvent.setup();
+
+    render(<AppLayout {...defaultProps} />);
+    await user.click(screen.getByTestId('no-access-company-CLIENT-OTHER'));
+
+    expect(switchToMock).toHaveBeenCalledTimes(1);
+    expect(switchToMock).toHaveBeenCalledWith(expect.objectContaining({ clientId: 'CLIENT-OTHER' }));
+  });
+
+  it('does not switch when the current company is chosen', async () => {
+    blockAccess();
+    withEnvironments([CURRENT, OTHER]);
+    const user = userEvent.setup();
+
+    render(<AppLayout {...defaultProps} />);
+    await user.click(screen.getByTestId('no-access-company-CLIENT-CURRENT'));
+
+    // A no-op switch would still be a full page reload back to the same dead end.
+    expect(switchToMock).not.toHaveBeenCalled();
+  });
+
+  // The backend returns one environment PER ORGANIZATION, so a client with several orgs arrives
+  // several times over. Listing it once per org would present the same destination repeatedly,
+  // each entry indistinguishable from the next.
+  it('shows a single multi-org company as nowhere to go, not as several destinations', () => {
+    blockAccess();
+    withEnvironments([
+      { clientId: 'CLIENT-CURRENT', clientName: 'Current Corp', orgName: 'Org A' },
+      { clientId: 'CLIENT-CURRENT', clientName: 'Current Corp', orgName: 'Org B' },
+    ]);
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.queryByTestId('no-access-company-switch')).not.toBeInTheDocument();
+  });
+
+  it('lists a multi-org company once', () => {
+    blockAccess();
+    withEnvironments([
+      CURRENT,
+      { clientId: 'CLIENT-OTHER', clientName: 'Other Corp', orgName: 'Org A' },
+      { clientId: 'CLIENT-OTHER', clientName: 'Other Corp', orgName: 'Org B' },
+    ]);
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.getAllByTestId('no-access-company-CLIENT-OTHER')).toHaveLength(1);
+    expect(screen.getAllByText('Other Corp')).toHaveLength(1);
+    // …and the deduplication must not have swallowed the other entries with it.
+    expect(screen.getByTestId('no-access-company-CLIENT-CURRENT')).toBeInTheDocument();
+  });
+
+  it('hides the whole block when the account owns nowhere else to go', () => {
+    blockAccess();
+    withEnvironments([CURRENT]);
+
+    render(<AppLayout {...defaultProps} />);
+
+    // Asserted on the block and the trigger, never on the items: the render condition moved
+    // from "are there other companies?" to `canSwitch`, and the two agree only while the
+    // deduplication holds — a single company arriving once per organization must not look like
+    // somewhere to go.
+    expect(screen.queryByTestId('no-access-company-switch')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('no-access-company-trigger')).not.toBeInTheDocument();
+    expect(screen.queryByText(LABELS.switchCompany)).not.toBeInTheDocument();
+    // The screen is otherwise exactly the one that shipped with ETP-4514.
+    expect(screen.getByTestId('no-access-title')).toBeInTheDocument();
+    expect(screen.getByTestId('no-access-message')).toBeInTheDocument();
+    expect(screen.getByTestId('NoAccessScreenLogout__488148')).toBeInTheDocument();
+  });
+
+  // An account with no platform token cannot list environments at all, so the hook answers
+  // with an empty array. Same outcome as owning a single company, reached differently.
+  it('hides the whole block when the environments cannot be listed', () => {
+    blockAccess();
+    withEnvironments([]);
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.queryByTestId('no-access-company-switch')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('no-access-company-trigger')).not.toBeInTheDocument();
+    expect(screen.getByTestId('NoAccessScreenLogout__488148')).toBeInTheDocument();
+  });
+
+  // Switching is a hard page load. Leaving the entries live would let an impatient user start a
+  // second switch over the first.
+  it('disables every company while a switch is in flight, and spins on the one being opened', () => {
+    blockAccess();
+    withEnvironments(
+      [CURRENT, OTHER, { clientId: 'CLIENT-THIRD', clientName: 'Third Corp' }],
+      { switching: 'CLIENT-OTHER' }
+    );
+
+    render(<AppLayout {...defaultProps} />);
+
+    // The trigger is the only thing visible with the menu shut, so it carries its own spinner —
+    // otherwise a switch started and then collapsed looks like a dead screen.
+    const trigger = screen.getByTestId('no-access-company-trigger');
+    expect(trigger).toBeDisabled();
+    expect(trigger.querySelector('.animate-spin')).not.toBeNull();
+
+    expect(screen.getByTestId('no-access-company-CLIENT-OTHER')).toBeDisabled();
+    expect(screen.getByTestId('no-access-company-CLIENT-THIRD')).toBeDisabled();
+    // Inside the menu the spinner marks WHICH one is opening; without it, three dimmed entries
+    // say nothing.
+    expect(
+      screen.getByTestId('no-access-company-CLIENT-OTHER').querySelector('.animate-spin')
+    ).not.toBeNull();
+    expect(
+      screen.getByTestId('no-access-company-CLIENT-THIRD').querySelector('.animate-spin')
+    ).toBeNull();
+  });
+
+  // The switch belongs to the blocking screen alone: a user with access has the sidebar's own
+  // switcher, and rendering a second one there would be a stray duplicate.
+  it('is absent when the role does grant access', () => {
+    vi.mocked(useRoleMenu).mockReturnValue(new Set(['800166']));
+    withEnvironments([CURRENT, OTHER]);
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.queryByTestId('no-access-company-switch')).not.toBeInTheDocument();
+    expect(screen.getByTestId('side-menu')).toBeInTheDocument();
+  });
+});
+
+/**
+ * ETP-5202 — what the blocking screen SAYS.
+ *
+ * "No access / contact your administrator" was true and useless: it named nothing and asked for
+ * nothing specific. Worse, an empty `allowedIds` has two causes that look identical from here
+ * and need DIFFERENT things from an administrator — no role assigned at all (the invited user:
+ * they belong to the company, nobody has given them a role yet) versus a role that grants no
+ * window. Telling the first user "your role has no permissions" sends them to ask for the wrong
+ * thing, and they have no way to tell that the screen guessed.
+ *
+ * The session's own role list is what tells the two apart, so these tests drive the branch
+ * through `sf_auth_rolelist` exactly as the screen reads it.
+ */
+describe('AppLayout — no-access explanation (ETP-5202)', () => {
+  const defaultProps = {
+    menuGroups: [{ group: 'Sales', items: [{ name: 'sales-order', label: 'Sales Order', windowId: '800166' }] }],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalThis.localStorage.clear();
+    vi.mocked(useRoleMenu).mockReturnValue(new Set());
+    useEnvironmentSwitchMock.mockReturnValue({
+      environments: [],
+      switchTo: switchToMock,
+      switching: null,
+      currentClientId: 'CLIENT-CURRENT',
+    });
+  });
+
+  it('says the role grants nothing when the session holds a role', () => {
+    globalThis.localStorage.setItem('sf_auth_client_name', 'Acme Corp');
+    globalThis.localStorage.setItem('sf_auth_rolelist', JSON.stringify([{ id: 'ROLE-1', name: 'Sales' }]));
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.getByTestId('no-access-title')).toHaveTextContent(LABELS.noAccessRoleTitle);
+    const message = screen.getByTestId('no-access-message');
+    expect(message).toHaveTextContent('Acme Corp');
+    // A placeholder that reaches the screen is worse than no company name at all.
+    expect(message.textContent).not.toContain('{companyName}');
+    // The two branches must not be confusable: this user HAS a role, and telling them otherwise
+    // sends them to ask an administrator for the wrong thing.
+    expect(screen.getByTestId('no-access-title')).not.toHaveTextContent(LABELS.noAccessNoRoleTitle);
+  });
+
+  it('says no role has been assigned when the session holds none', () => {
+    globalThis.localStorage.setItem('sf_auth_client_name', 'Acme Corp');
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.getByTestId('no-access-title')).toHaveTextContent(LABELS.noAccessNoRoleTitle);
+    const message = screen.getByTestId('no-access-message');
+    expect(message).toHaveTextContent('Acme Corp');
+    // This branch's copy names the company TWICE, so `String.replace(string, …)` — which
+    // substitutes only the FIRST occurrence — left a literal `{companyName}` on screen. Both
+    // halves are asserted: the count catches a plain `replace` sneaking back in even if the
+    // second mention were dropped from the copy, and the placeholder check catches it even if
+    // the count assertion were relaxed.
+    expect(message.textContent.split('Acme Corp')).toHaveLength(3);
+    expect(message.textContent).not.toContain('{companyName}');
+  });
+
+  it('treats an empty role list as no role', () => {
+    globalThis.localStorage.setItem('sf_auth_client_name', 'Acme Corp');
+    globalThis.localStorage.setItem('sf_auth_rolelist', '[]');
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.getByTestId('no-access-title')).toHaveTextContent(LABELS.noAccessNoRoleTitle);
+  });
+
+  // The role list is JSON that arrived from the network and has sat in storage since; a parse
+  // failure must degrade to the safer message, not take the whole screen down. This is the
+  // assertion that breaks first if somebody removes the try/catch as dead weight.
+  it('survives an unparseable role list and falls back to no role', () => {
+    globalThis.localStorage.setItem('sf_auth_client_name', 'Acme Corp');
+    globalThis.localStorage.setItem('sf_auth_rolelist', '{');
+
+    expect(() => render(<AppLayout {...defaultProps} />)).not.toThrow();
+
+    expect(screen.getByTestId('no-access-title')).toHaveTextContent(LABELS.noAccessNoRoleTitle);
+    expect(screen.getByTestId('no-access-message')).toHaveTextContent('Acme Corp');
+  });
+
+  // A role list that parses but is not an array (a bare object, `null`, a number) is just as
+  // unusable as one that does not parse.
+  it('falls back to no role when the stored role list is not an array', () => {
+    globalThis.localStorage.setItem('sf_auth_rolelist', JSON.stringify({ id: 'ROLE-1' }));
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.getByTestId('no-access-title')).toHaveTextContent(LABELS.noAccessNoRoleTitle);
+  });
+
+  // Without a stored company name the sentence still has to read as a sentence.
+  it('falls back to the generic company wording when no company name is stored', () => {
+    globalThis.localStorage.setItem('sf_auth_rolelist', JSON.stringify([{ id: 'ROLE-1' }]));
+
+    render(<AppLayout {...defaultProps} />);
+
+    const message = screen.getByTestId('no-access-message');
+    expect(message).toHaveTextContent(LABELS.yourCompany);
+    expect(message.textContent).not.toContain('{companyName}');
   });
 });

@@ -49,6 +49,7 @@ vi.mock('../../shared/PreviewActionButtons.jsx', () => ({
     mockCapturedSendModalProps.current = props;
     return <div data-testid="receipt-send-modal" data-pdf-url={props.pdfBlobUrl} />;
   },
+  PreviewPdfPanel: (props) => <div data-testid="preview-pdf-panel" data-pdf-url={props.pdfUrl} />,
 }));
 
 const mockUseReturnReceiptPdf = vi.fn(() => ({ pdfUrl: null, pdfBlob: null, loading: false, error: null }));
@@ -121,33 +122,19 @@ describe('ReturnMaterialReceiptPreview', () => {
     expect(screen.getByTestId('generic-preview-modal')).toBeInTheDocument();
   });
 
-  describe('attachmentConfig wiring (customer-supplied document upload)', () => {
-    it('passes an attachmentConfig with the correct shape to GenericPreviewModal', () => {
+  describe('leftPanel wiring (ETP-5124 — system-generated PDF, reverting ETP-4408)', () => {
+    it('passes a leftPanel prop rendering the system-generated PDF panel', () => {
       renderPreview();
-      expect(mockCapturedModalProps.current.attachmentConfig).toEqual({
-        documentId: defaultReceipt.id,
-        tableName: 'M_InOut',
-        useMainAttachment: true,
-        storeCondition: true,
-        autoFetch: false,
-        token: 'tok',
-        apiBaseUrl: '/api/return-material-receipt',
-      });
+      // ETP-4408 had replaced this with a customer-upload `attachmentConfig`; QA
+      // (Isaías) rejected that per the PM-confirmed AC that the preview must show
+      // the Etendo-generated PDF. The customer's own document is still attachable,
+      // but only via the generic Attachments tab — not this preview's left panel.
+      expect(mockCapturedModalProps.current.leftPanel).toBeDefined();
     });
 
-    it('passes through the current token and apiBaseUrl values', () => {
-      renderPreview({ token: 'other-tok', apiBaseUrl: '/api/other-base' });
-      expect(mockCapturedModalProps.current.attachmentConfig).toMatchObject({
-        token: 'other-tok',
-        apiBaseUrl: '/api/other-base',
-      });
-    });
-
-    it('does NOT pass a leftPanel prop rendering the system-generated PDF panel', () => {
+    it('does NOT pass an attachmentConfig prop to GenericPreviewModal', () => {
       renderPreview();
-      // The old behavior rendered PreviewPdfPanel via `leftPanel`. That prop must be
-      // gone now that the left panel is the optional customer-supplied attachment.
-      expect(mockCapturedModalProps.current.leftPanel).toBeUndefined();
+      expect(mockCapturedModalProps.current.attachmentConfig).toBeUndefined();
     });
   });
 
