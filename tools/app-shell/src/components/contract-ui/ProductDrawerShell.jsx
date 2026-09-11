@@ -1,10 +1,17 @@
-import { useState, useCallback } from 'react';
-import { Search, X, Loader2 } from 'lucide-react';
+import { useState, useCallback, useMemo } from 'react';
+import { Search, X, Loader2, Plus } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { useApiFetch } from '@/auth/useApiFetch.js';
+import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
+import { resolveLookupCreateTarget } from './lookupCreateTargets.js';
+import RecordCreateModal from './RecordCreateModal.jsx';
 import {
   useProductImages,
   useProductSelectorFetch,
 } from './productSelectorDrawerShared.jsx';
+
+// Stable no-op so swapping it in for `onClose` does not churn the hook's ref effect.
+const NOOP = () => {};
 
 /**
  * Shared shell for every Product selector modal.
@@ -23,6 +30,15 @@ import {
  *
  * The `onSelect(item)` contract is identical across variants: the raw selector row is forwarded
  * untouched.
+ *
+ * ── Inline record creation ──
+ * With `createEnabled`, the shell also offers a "create product" row and hosts the creation
+ * modal. This lives HERE rather than in the three trigger components (`DataTable.LookupField`,
+ * `InlineLinesPanel.LookupTrigger`, `EntityForm.LookupFormField`) because the shell already has
+ * everything the feature needs — `selectorUrl` (which encodes both the document's spec and the
+ * NEO root), `token` and `selectorContext` — so none of them had to change. The created record
+ * is funnelled back through the shell's own `select()`, so every trigger receives it through the
+ * exact same `onSelect` path a hand-picked row takes.
  */
 export default function ProductDrawerShell({
   open,
@@ -37,11 +53,19 @@ export default function ProductDrawerShell({
   fetchConfig,
   useVariant,
   maxHeight = '65vh',
+  createEnabled = false,
 }) {
   const ui = useUI();
   const [activeIdx, setActiveIdx] = useState(-1);
   const [freshToken, setFreshToken] = useState(0);
+  const [createOpen, setCreateOpen] = useState(false);
   const resolvedTitle = title ?? ui('product');
+  const apiFetch = useApiFetch();
+
+  const createTarget = useMemo(
+    () => resolveLookupCreateTarget({ selectorUrl, createEnabled }),
+    [selectorUrl, createEnabled],
+  );
 
   const fetchState = useProductSelectorFetch({
     open,
@@ -51,7 +75,11 @@ export default function ProductDrawerShell({
     autoWaterfallMin: fetchConfig.autoWaterfallMin ?? 0,
     selectorContext,
     onFreshResults: () => { setActiveIdx(-1); setFreshToken(t => t + 1); },
-    onClose,
+    // While the creation modal is up, swallow close requests. The hook's Escape handler is
+    // bound at DOCUMENT level, so a portalled sibling modal cannot stop it with
+    // stopPropagation — without this, Escape inside the modal would also tear down the
+    // drawer behind it and lose the user's search.
+    onClose: createOpen ? NOOP : onClose,
     activeIdx,
   });
 
@@ -65,6 +93,32 @@ export default function ProductDrawerShell({
       if (!keepOpenOnSelect) onClose();
     }, 120);
   }, [onSelect, onClose, keepOpenOnSelect]);
+
+  /**
+   * A freshly POSTed record is a plain CRUD row: no `label`, no `standardPrice`, no `_aux`.
+   * The line's pricing callout needs the SELECTOR shape (`_aux._PSTD/_PLIM/_UOM/_CURR`), so
+   * re-query the very selector this drawer is already bound to and hand `select()` the real
+   * row. That keeps `applyOnSelectMappings`, `mergeSelectorAuxFields` and the callout running
+   * byte-for-byte as they do for a hand-picked product.
+   *
+   * The fallback matters: the selector is called with the document's `priceList`, and a product
+   * that has no row in THAT tariff may not come back at all (products are seeded at 0 only on
+   * the tenant's default sales and purchase tariffs). Synthesizing keeps the line usable.
+   */
+  const handleCreated = useCallback(async (created) => {
+    setCreateOpen(false);
+    let row = null;
+    try {
+      const params = { ...selectorContext, limit: 20, offset: 0 };
+      if (created?.searchKey) params.q = String(created.searchKey);
+      const res = await apiFetch(buildUrlWithParams(selectorUrl, params), { baseUrl: '' });
+      const data = res.ok ? await res.json() : null;
+      row = (data?.items || []).find(item => item.id === created.id) ?? null;
+    } catch {
+      row = null;
+    }
+    select(row ?? synthesizeCreatedItem(created));
+  }, [apiFetch, selectorUrl, selectorContext, select]);
 
   const variant = useVariant({
     ...fetchState,
@@ -98,82 +152,163 @@ export default function ProductDrawerShell({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-foreground/30" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh]" onClick={onClose}>
-        <div
-          data-testid="product-search-drawer"
-          className="w-full max-w-xl bg-background rounded-xl border border-border shadow-2xl flex flex-col overflow-hidden"
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={handleKeyDown}
-          style={{ maxHeight }}
-          role="dialog"
-          aria-modal="true"
-        >
-          {/* Search bar */}
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-            <Search
-              className="h-4 w-4 text-muted-foreground shrink-0"
-              data-testid="Search__pds" />
-            <input
-              ref={inputRef}
-              data-testid="product-search-input"
-              type="text"
-              value={query}
-              onChange={(e) => { setQuery(e.target.value); doFetch(e.target.value, 0); }}
-              placeholder={`${ui('searchLabelPrefix')} ${resolvedTitle}...`}
-              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-            />
-            {(loading || loadingMore) && <Loader2
-              className="h-4 w-4 text-muted-foreground animate-spin shrink-0"
-              data-testid="Loader2__pds" />}
-            <button onClick={onClose} className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground shrink-0">
-              <X className="h-4 w-4" data-testid="X__pds" />
-            </button>
-          </div>
-
-          {/* Variant toolbar slot (e.g. warehouse-filter pills) */}
-          {toolbar}
-
-          {/* Results */}
-          <div className="flex-1 overflow-y-auto" ref={listRef} onScroll={handleScroll}>
-            {loading && results.length === 0 && (
-              <div className="flex items-center justify-center py-12">
-                <Loader2
-                  className="h-6 w-6 text-muted-foreground animate-spin"
-                  data-testid="Loader2__pds" />
+      {/*
+        While the creation modal is open the drawer is hidden but stays MOUNTED, so `query`,
+        `results` and the fetch state survive a cancel untouched — the user comes back to the
+        search they had typed. Rendering the modal as a SIBLING (never a child of the dialog
+        container below) is deliberate: React synthetic events bubble through the React tree,
+        not the DOM, so a nested modal's Escape would reach `handleKeyDown` and close both.
+      */}
+      {!createOpen && (
+        <>
+          <div className="fixed inset-0 z-50 bg-foreground/30" onClick={onClose} />
+          <div className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh]" onClick={onClose}>
+            <div
+              data-testid="product-search-drawer"
+              className="w-full max-w-xl bg-background rounded-xl border border-border shadow-2xl flex flex-col overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={handleKeyDown}
+              style={{ maxHeight }}
+              role="dialog"
+              aria-modal="true"
+            >
+              {/* Search bar */}
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+                <Search
+                  className="h-4 w-4 text-muted-foreground shrink-0"
+                  data-testid="Search__pds" />
+                <input
+                  ref={inputRef}
+                  data-testid="product-search-input"
+                  type="text"
+                  value={query}
+                  onChange={(e) => { setQuery(e.target.value); doFetch(e.target.value, 0); }}
+                  placeholder={`${ui('searchLabelPrefix')} ${resolvedTitle}...`}
+                  className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                />
+                {(loading || loadingMore) && <Loader2
+                  className="h-4 w-4 text-muted-foreground animate-spin shrink-0"
+                  data-testid="Loader2__pds" />}
+                <button onClick={onClose} className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground shrink-0">
+                  <X className="h-4 w-4" data-testid="X__pds" />
+                </button>
               </div>
-            )}
 
-            {!loading && results.length === 0 && query.trim() && (
-              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <p className="text-sm">{ui('productSearchNoResults', { query })}</p>
+              {/* Variant toolbar slot (e.g. warehouse-filter pills) */}
+              {toolbar}
+
+              {/* Results */}
+              <div className="flex-1 overflow-y-auto" ref={listRef} onScroll={handleScroll}>
+                {/*
+                  Pinned create row. Sits at the TOP of the list rather than in the footer
+                  because the footer is gated on `hasResults` — i.e. hidden in exactly the
+                  "nothing found, I need to create it" moment this affordance exists for.
+                  Mirrors CreatableSearchSelect's own CreateAction, including the
+                  onMouseDown/preventDefault so it fires before the input blurs.
+                  Deliberately OUTSIDE the arrow-key ring: each variant's onNavKeyDown indexes
+                  into `results` with its own arithmetic, and a virtual row would mean editing
+                  every variant. Reachable by Tab and by pointer.
+                */}
+                {createTarget && (
+                  <button
+                    type="button"
+                    data-testid="product-search-create"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setCreateOpen(true)}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-primary hover:bg-muted/50 border-b border-border text-left"
+                  >
+                    <Plus className="h-4 w-4 shrink-0" data-testid="Plus__pds" />
+                    <span className="truncate">{ui(createTarget.ctaKey)}</span>
+                  </button>
+                )}
+
+                {loading && results.length === 0 && (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2
+                      className="h-6 w-6 text-muted-foreground animate-spin"
+                      data-testid="Loader2__pds" />
+                  </div>
+                )}
+
+                {/*
+                  Not gated on a non-empty query: an empty search that legitimately returns
+                  nothing used to render a completely blank body, which reads as broken —
+                  doubly so now that a create row sits above it.
+                */}
+                {!loading && results.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    <p className="text-sm">
+                      {query.trim() ? ui('productSearchNoResults', { query }) : ui('noProductsFound')}
+                    </p>
+                  </div>
+                )}
+
+                {hasResults && body}
+
+                {loadingMore && (
+                  <div className="flex items-center justify-center py-3">
+                    <Loader2
+                      className="h-4 w-4 text-muted-foreground animate-spin"
+                      data-testid="Loader2__pds" />
+                  </div>
+                )}
               </div>
-            )}
 
-            {hasResults && body}
-
-            {loadingMore && (
-              <div className="flex items-center justify-center py-3">
-                <Loader2
-                  className="h-4 w-4 text-muted-foreground animate-spin"
-                  data-testid="Loader2__pds" />
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          {hasResults && (
-            <div className="px-4 py-1.5 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
-              <span>{ui('productSearchCount', { count: footerCount })}</span>
-              <span className="flex items-center gap-2">
-                <kbd className="px-1 py-0.5 rounded bg-muted border border-border text-[10px]">↑↓</kbd> {ui('productSearchNavigate')}
-                <kbd className="px-1 py-0.5 rounded bg-muted border border-border text-[10px]">↵</kbd> {ui('productSearchSelect')}
-                <kbd className="px-1 py-0.5 rounded bg-muted border border-border text-[10px]">esc</kbd> {ui('productSearchClose')}
-              </span>
+              {/* Footer */}
+              {hasResults && (
+                <div className="px-4 py-1.5 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{ui('productSearchCount', { count: footerCount })}</span>
+                  <span className="flex items-center gap-2">
+                    <kbd className="px-1 py-0.5 rounded bg-muted border border-border text-[10px]">↑↓</kbd> {ui('productSearchNavigate')}
+                    <kbd className="px-1 py-0.5 rounded bg-muted border border-border text-[10px]">↵</kbd> {ui('productSearchSelect')}
+                    <kbd className="px-1 py-0.5 rounded bg-muted border border-border text-[10px]">esc</kbd> {ui('productSearchClose')}
+                  </span>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        </>
+      )}
+
+      {createTarget && createOpen && (
+        <RecordCreateModal
+          open
+          target={createTarget}
+          initialQuery={query}
+          token={token}
+          onCancel={() => {
+            setCreateOpen(false);
+            // The drawer remounts on the next render, so the input is a fresh node —
+            // put the caret back in it so a keyboard user resumes where they left off.
+            setTimeout(() => inputRef.current?.focus(), 0);
+          }}
+          onCreated={handleCreated}
+        />
+      )}
     </>
   );
+}
+
+/**
+ * Minimal selector-shaped row for a record the selector did not return (typically because the
+ * document's price list is not one of the tariffs a new product is seeded into). Prices are 0
+ * and the UoM is carried in both shapes — `_aux._UOM` is an identifier in every fixture we have
+ * (`'EA'`, `'kg'`), but the id is kept top-level so the callout resolves either way.
+ */
+export function synthesizeCreatedItem(created) {
+  const name = created?.name || created?._identifier || created?.searchKey || '';
+  return {
+    id: created?.id,
+    name,
+    label: name,
+    _identifier: name,
+    searchKey: created?.searchKey ?? null,
+    uOM: created?.uOM ?? null,
+    standardPrice: 0,
+    _aux: {
+      _UOM: created?.['uOM$_identifier'] ?? created?.uOM ?? null,
+      _PSTD: '0',
+      _PLIM: '0',
+    },
+  };
 }

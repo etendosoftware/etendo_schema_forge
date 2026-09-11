@@ -619,3 +619,53 @@ non-null default for it (see `com.etendoerp.go/docs/onboarding-flow.md` and this
 `docs/etendo-ad/onboarding-gaps.md` → §A8/§A8b for the onboarding-wiring side of this ticket — no
 change to that wiring lives in this repo). Regenerated via `make regen ONLY=product`; no changes to
 the pricing, sidebar, or image-field behavior documented above.
+
+## ETP-5254 — This window's form, tabs, labels and panels have a second consumer
+
+**Anyone changing this window's field set, primary tabs, label overrides or custom tabs must know:**
+the Products window is no longer the only thing that renders them. The **create-product popup** inside
+the product lookup drawer of document lines (`RecordCreateModal.jsx`, reached from `sales-quotation`,
+`sales-order`, `purchase-order`, `sales-invoice`, `purchase-invoice`, `goods-shipment` and
+`goods-receipt`) reproduces this window's chrome rather than approximating it, and consumes six
+distinct pieces of it:
+
+| Consumed | How | Where it is declared |
+|---|---|---|
+| `ProductForm.jsx` | lazily imported and rendered once per tab, `excludeFields={['image']}`, `cols: 3` | the generated form, from `decisions.json` fields |
+| Primary tabs | `renderPrimaryTabButtons` with `tabsVariant: 'pill'` — the same helper and variant `ProductPage` passes to `DetailView`, captions through `useMenuLabel` | `window.primaryTabs` / `window.primaryTabsVariant`, **copied** into `lookupCreateTargets.js` |
+| Field-label slice | `labels.js` is loaded and re-provided for the popup's subtree, the way `WindowLoader` does for a routed window | generated `labels.js` |
+| Label overrides | **copied** into `lookupCreateTargets.js`, because the generator emits them only into `ProductPage.jsx`, which cannot be imported without dragging `DetailView` | `window.labelOverrides` |
+| `ProductPriceBar` + `AttachmentsTab` | mounted after the record is saved, with the same props `DetailView` hands its `customTabs` | `ProductPage.jsx`'s `customTabs` |
+| Autosave-on-blur | once the record is saved, the popup's header form stays editable and commits each edited field with a `PATCH .../{id}` on blur — because this window autosaves | `window.autoSaveOnBlur` |
+
+That is the point of the design: everything that can be imported *is* imported, so a
+`make regen ONLY=product` propagates into the popup for free and the two surfaces cannot drift. The
+three pieces that had to be **copied**, and the autosave premise the last row rests on, are guarded by
+tests that read `artifacts/product/decisions.json` and the generated `ProductPage.jsx` and compare them
+against the registry — when one of them fails, the fix belongs in `lookupCreateTargets.js`, never in
+`decisions.json`.
+
+Consequences worth keeping in mind when editing this window:
+
+- Making a header field `required`, or moving it between the `principal` and `other` sections, also
+  changes what a user must fill in before a line's product can be created. The `other` section cannot
+  be dropped from the popup for exactly this reason: `taxCategory` is required, lives there, and has
+  no static default.
+- Renaming or reordering `window.primaryTabs`, changing `primaryTabsVariant`, or editing
+  `window.labelOverrides` will fail the popup's drift guards until the registry copy is updated too.
+- Turning `window.autoSaveOnBlur` off would change the popup too: its second phase commits header edits
+  on blur *because this window does*, not by its own decision. A drift test fails with "the Products
+  window no longer autosaves on blur — RecordCreateModal phase 2 still does" if the two ever disagree.
+- Adding a `customTabs` entry to `ProductPage.jsx` does **not** add it to the popup — the popup's
+  post-create tab list is its own array. The **Accounting** tab is deliberately absent (it is a
+  `secondaryTabs` entry needing `DetailView`'s per-tab `useEntity` machinery, and is gated behind
+  `showAccountingFields`), and so is the **Cost** tab. The popup deliberately says nothing about cost:
+  ETP-5245 already owns that rule and enforces it with this window's blocking banner, and a second
+  copy of it inside the popup would only be free to drift.
+- Fields that need a saved record — the `image` upload, anything in a secondary tab — are unreachable
+  from the popup's first phase by construction; Price and Attachments are reachable only in its second
+  phase, after the POST.
+
+Full mechanism, the two phases and why they exist, the spec allowlist, the drift guards and the known
+limitations: [`docs/ui-customization.md`](../ui-customization.md) → *§19. Inline record creation from a
+lookup drawer*.
