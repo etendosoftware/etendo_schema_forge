@@ -187,8 +187,8 @@ describe('getAllowedSystemsForTerritory', () => {
   it('returns SII+VERIFACTU options for canarias', () => {
     expect(getAllowedSystemsForTerritory('canarias')).toEqual(['SII', 'VERIFACTU']);
   });
-  it('returns SII+VERIFACTU options for ceuta', () => {
-    expect(getAllowedSystemsForTerritory('ceuta')).toEqual(['SII', 'VERIFACTU']);
+  it('returns VERIFACTU-only for ceuta (SII cannot represent IPSI, ETP-5272 pt.4)', () => {
+    expect(getAllowedSystemsForTerritory('ceuta')).toEqual(['VERIFACTU']);
   });
   it('returns empty array for unknown territory', () => {
     expect(getAllowedSystemsForTerritory('madrid')).toEqual([]);
@@ -243,6 +243,37 @@ describe('resolveSystem', () => {
 
   it('returns null for unknown regime', () => {
     expect(resolveSystem({ regime: 'unknown', alsoNational: null, volume: null, lowChoice: null })).toBeNull();
+  });
+
+  // ETP-5272 point 4 — territory-based system veto (SII cannot represent IPSI)
+  describe('territory veto (ETP-5272 point 4)', () => {
+    it('ceuta: forces VERIFACTU even with high volume (which would otherwise mean SII)', () => {
+      expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: 'high', lowChoice: null, territory: 'ceuta' })).toBe('VERIFACTU');
+    });
+
+    it('ceuta: forces VERIFACTU even when lowChoice explicitly picked sii', () => {
+      expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: 'low', lowChoice: 'sii', territory: 'ceuta' })).toBe('VERIFACTU');
+    });
+
+    it('ceuta: still VERIFACTU with no volume answer at all (sub-question is skipped for this territory)', () => {
+      expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: null, lowChoice: null, territory: 'ceuta' })).toBe('VERIFACTU');
+    });
+
+    it('canarias (IGIC, SII-supported): high volume still resolves to SII — no regression', () => {
+      expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: 'high', lowChoice: null, territory: 'canarias' })).toBe('SII');
+    });
+
+    it('canarias: low volume + lowChoice=sii still resolves to SII — no regression', () => {
+      expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: 'low', lowChoice: 'sii', territory: 'canarias' })).toBe('SII');
+    });
+
+    it('baleares (IVA, SII-supported): high volume still resolves to SII — no regression', () => {
+      expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: 'high', lowChoice: null, territory: 'baleares' })).toBe('SII');
+    });
+
+    it('omitting territory preserves old regime-only behavior (backward compatible)', () => {
+      expect(resolveSystem({ regime: 'siiver', alsoNational: null, volume: 'high', lowChoice: null })).toBe('SII');
+    });
   });
 });
 
@@ -318,8 +349,8 @@ describe('buildOnboardingPayloads — SII', () => {
     expect(buildOnboardingPayloads('SII', 'canarias').sii).toEqual(expect.objectContaining({ taxtype: 'IGIC', acogidaAlSII: 'N' }));
   });
 
-  it('ceuta: IPSI with forced defaults', () => {
-    expect(buildOnboardingPayloads('SII', 'ceuta').sii).toEqual(expect.objectContaining({ taxtype: 'IPSI', acogidaAlSII: 'N' }));
+  it('ceuta: SII returns sii=null (IPSI unsupported by SII, ETP-5272 pt.4)', () => {
+    expect(buildOnboardingPayloads('SII', 'ceuta')).toEqual({ sii: null, tbai: null, verifactu: null });
   });
 
   it('unknown territory returns all null', () => {
@@ -558,12 +589,16 @@ describe('getTerritoryDefaults', () => {
     expect(getTerritoryDefaults('canarias', false).verifactu).toEqual({ tAXType: '03' });
   });
 
-  it('ceuta + inSii=true → IPSI', () => {
-    expect(getTerritoryDefaults('ceuta', true).sii).toEqual({ taxtype: 'IPSI' });
+  it('ceuta + inSii=true → still verifactu 02, sii null (IPSI unsupported by SII, ETP-5272 pt.4)', () => {
+    const d = getTerritoryDefaults('ceuta', true);
+    expect(d.sii).toBeNull();
+    expect(d.verifactu).toEqual({ tAXType: '02' });
   });
 
-  it('ceuta + inSii=false → verifactu 02', () => {
-    expect(getTerritoryDefaults('ceuta', false).verifactu).toEqual({ tAXType: '02' });
+  it('ceuta + inSii=false → verifactu 02, sii null', () => {
+    const d = getTerritoryDefaults('ceuta', false);
+    expect(d.sii).toBeNull();
+    expect(d.verifactu).toEqual({ tAXType: '02' });
   });
 
   it('navarra → navarra=Y IVA regardless of inSii', () => {

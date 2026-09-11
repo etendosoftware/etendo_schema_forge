@@ -20688,6 +20688,7 @@
     "fiscal.territory.system.sii": "SII",
     "fiscal.territory.system.tbai": "TicketBAI / SII + TicketBAI",
     "fiscal.territory.system.siiver": "SII / VERI*FACTU",
+    "fiscal.territory.system.verifactu": "VERI*FACTU",
     "fiscal.territory.group.sii.label": "SII",
     "fiscal.territory.group.sii.desc": "Navarre Tax Authority",
     "fiscal.territory.group.tbai.label": "TicketBAI / SII + TicketBAI",

@@ -58,7 +58,7 @@ vi.mock('sonner', () => ({
 import OnboardingWizard from '../OnboardingWizard.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { buildOnboardingPayloads } from '../fiscalConfig.utils.js';
+import { buildOnboardingPayloads, getAllowedSystemsForTerritory } from '../fiscalConfig.utils.js';
 
 // --- Helpers --------------------------------------------------------------
 
@@ -155,6 +155,13 @@ describe('OnboardingWizard — territory selection', () => {
   it('navigates directly to ConfirmScreen for navarra (no sub-questions)', () => {
     renderWizard();
     fireEvent.click(screen.getByText('fiscal.territory.navarra'));
+    fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
+    expect(screen.getByText('fiscal.onboarding.confirm.title')).toBeInTheDocument();
+  });
+
+  it('navigates directly to ConfirmScreen for ceuta (no sub-questions — VERIFACTU is the only applicable system, ETP-5272 point 4)', () => {
+    renderWizard();
+    fireEvent.click(screen.getByText('fiscal.territory.ceuta'));
     fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
     expect(screen.getByText('fiscal.onboarding.confirm.title')).toBeInTheDocument();
   });
@@ -436,6 +443,40 @@ describe('OnboardingWizard — ManualScreen', () => {
     fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
     fireEvent.click(screen.getByText('fiscal.onboarding.back'));
     expect(screen.getByText('fiscal.onboarding.manual.title')).toBeInTheDocument();
+  });
+});
+
+describe('OnboardingWizard — ManualScreen territory restriction (ETP-5272 point 4)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function navigateToManual() {
+    renderWizard();
+    fireEvent.click(screen.getByText('fiscal.onboarding.territory.prefer.manual.link'));
+  }
+
+  it('ceuta/melilla only offers VERI*FACTU — SII is not rendered as an option', () => {
+    vi.mocked(getAllowedSystemsForTerritory).mockImplementation((territory) => {
+      if (territory === 'ceuta') return ['VERIFACTU'];
+      return ['SII', 'TBAI', 'VERIFACTU'];
+    });
+    navigateToManual();
+    fireEvent.click(screen.getByText('fiscal.territory.ceuta'));
+    expect(screen.getByText('VERI*FACTU')).toBeInTheDocument();
+    expect(screen.queryByText('SII')).not.toBeInTheDocument();
+  });
+
+  it('canarias (SII-supported territory) still offers both SII and VERI*FACTU — no regression', () => {
+    vi.mocked(getAllowedSystemsForTerritory).mockImplementation((territory) => {
+      if (territory === 'ceuta') return ['VERIFACTU'];
+      if (territory === 'canarias') return ['SII', 'VERIFACTU'];
+      return ['SII', 'TBAI', 'VERIFACTU'];
+    });
+    navigateToManual();
+    fireEvent.click(screen.getByText('fiscal.territory.canarias'));
+    expect(screen.getByText('SII')).toBeInTheDocument();
+    expect(screen.getByText('VERI*FACTU')).toBeInTheDocument();
   });
 });
 

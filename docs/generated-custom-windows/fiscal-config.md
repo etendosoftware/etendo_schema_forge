@@ -278,6 +278,105 @@ surfaced via `console.warn` (never a silent catch). See `useFiscalTestMode.js`.
 
 See items 13–14 of "Manual verification" below for the full checklist.
 
+## Territory→system restriction — SII does not support IPSI (ETP-5272 point 4)
+
+SII (`AEATSII_CONFIG.taxtype`) only accepts an `IVA`/`IGIC` taxpayer — confirmed against
+the live `AD_Ref_List` for that column (`ad_reference_id = AC024BD7E7B64B5BAC925EB7F0B4B16F`):
+only the values `IVA` and `IGIC` exist, there is no `IPSI` entry. Ceuta/Melilla taxpayers
+use **IPSI** (Impuesto sobre la Producción, los Servicios y la Importación), the local tax
+scheme of the two Autonomous Cities, which SII has no way to represent at all. Confirming
+SII for that territory previously reached the confirm/detail step and then failed
+server-side on `createRecords()`'s POST to `sii-config`, with the error quoted in the ticket.
+
+VERI*FACTU's own tax-type reference list (`AD_Ref_List` for
+`ETVFAC_VERIFACTU_CONFIG.TAX_Type`, `ad_reference_id = 3782E9C02E674127A50DA5441DF28C90`)
+defines all three (`01` IVA, `02` IPSI, `03` IGIC), so VERI*FACTU is unaffected and is the
+only valid system for Ceuta/Melilla.
+
+**Canarias (IGIC) is not affected** — IGIC is one of SII's two valid `taxtype` values, so
+Canarias keeps offering both SII and VERI*FACTU exactly as before; only Ceuta/Melilla (IPSI)
+is restricted.
+
+**TicketBAI was checked too, and needed no change.** TBAI's own territory reference list
+(`ETSG_SIF_Territory` — `AD_Ref_List` for `ad_reference_id = 93621A4C820041CEACB5AFF87FD0AC31`)
+enumerates `ARABA`, `BIZKAIA`, `GIPUZKOA`, `NAVARRA`, `AEAT`, `IGIC` — there is no
+Ceuta/Melilla value, and TicketBAI has always been offered only for the Basque territories
+(`alava`/`bizkaia`/`gipuzkoa`) in this wizard. TBAI was therefore never reachable for
+Ceuta/Melilla in the first place, unlike SII.
+
+### Fix — data/config-level, not a one-off `if`
+
+`getAllowedSystemsForTerritory(territory)` in `fiscalConfig.utils.js` is now backed by a
+single declarative table, `TERRITORY_ALLOWED_SYSTEMS`, instead of a switch that grouped
+`baleares`/`canarias`/`ceuta` together:
+
+| Territory | Allowed systems |
+|-----------|-----------------|
+| `navarra` | `['SII']` |
+| `alava` / `bizkaia` / `gipuzkoa` | `['TBAI', 'SII+TBAI']` |
+| `baleares` / `canarias` | `['SII', 'VERIFACTU']` |
+| `ceuta` | `['VERIFACTU']` |
+
+This table is consumed in three places, so the restriction can never be bypassed through
+an alternate path:
+
+1. **Manual system selection screen** (`ManualScreen` → `getAllowedSystemsForTerritory`) —
+   picking "Ceuta / Melilla" now renders only the VERI*FACTU card, not SII.
+2. **Automatic territory→system resolution** (`resolveSystem` in `fiscalConfig.utils.js`) —
+   now takes an optional `territory` argument; for the `siiver` regime, when
+   `getAllowedSystemsForTerritory(territory)` excludes `'SII'`, it returns `'VERIFACTU'`
+   unconditionally, regardless of the billing-volume sub-question answers. Backward
+   compatible: omitting `territory` preserves the old regime-only behavior.
+3. **The billing-volume sub-question itself is skipped for Ceuta/Melilla** —
+   `TERRITORY_META.ceuta.askVolume` is now `false` (was `true`). Since SII cannot apply to
+   this territory at all, asking "¿Cuál es su volumen de facturación anual?" would be moot
+   (the answer never changes the outcome), and the previous copy for the "high volume" path
+   explicitly said *"Gran Empresa · SII obligatorio... no aplica VERI*FACTU"* — legally wrong
+   for an IPSI taxpayer. The territory screen now routes Ceuta/Melilla straight from
+   territory selection to the confirm screen, same as `navarra`.
+
+**Belt-and-suspenders guards** against the same invalid combination reaching the backend
+through a different path: `buildOnboardingPayloads('SII', 'ceuta')` and
+`getTerritoryDefaults('ceuta', true)` (used by wizard confirmation and by the
+not-yet-wired "Add SII" complementary-action default builder, respectively) both now return
+`sii: null` instead of a `{ taxtype: 'IPSI', ... }` payload — those branches should be
+unreachable given the fixes above, but are guarded so a future regression fails safe
+instead of building a payload the server rejects.
+
+**Territory card badge**: the Ceuta/Melilla card in `TerritoryScreen`/`ManualTerrCard` used
+the shared `siiver`-regime badge text ("SII / VERI*FACTU"), which was also misleading. It
+now uses a dedicated `fiscal.territory.system.verifactu` i18n key ("VERI*FACTU") instead of
+sharing `fiscal.territory.system.siiver` with `baleares`/`canarias`.
+
+**Not changed / accepted as-is:** the `siiver` territory GROUP header shared by
+`baleares`/`canarias`/`ceuta` ("SII / VERI*FACTU" / *"Se preguntará según tu volumen de
+facturación"*) still describes the group as a whole rather than per-territory — restructuring
+the group itself (splitting Ceuta/Melilla into its own group row) is a larger structural/visual
+change than this fix warrants and was left out of scope; only the per-territory badge on the
+individual card was corrected.
+
+### Error-message bug — investigated, NOT fixed here (out of scope)
+
+The `CachedSet@6c917e9a` leak in the reported server error comes from
+`org.openbravo.base.model.domaintype.BaseEnumerateDomainType.checkIsValidValue()`
+(`etendo_core/src/org/openbravo/base/model/domaintype/BaseEnumerateDomainType.java:63-69`):
+it builds the `ValidationException` message with
+`"... it should be one of the following values: " + getEnumerateValues() + ...`, and
+`getEnumerateValues()` returns a `com.etendoerp.redis.interfaces.CachedSet`
+(`etendo_core/src/com/etendoerp/redis/interfaces/CachedSet.java`) that implements `Set<E>`
+but never overrides `toString()`, so string concatenation falls back to the default
+`Object.toString()` (`ClassName@hexHash`) instead of listing the enum values.
+
+**This is out of scope for a narrow fix and was deliberately left untouched**, per the
+task's own guidance: `BaseEnumerateDomainType` is core Openbravo domain-type validation
+machinery (`etendo_core/src/org/openbravo/base/model/domaintype/`), used for **every**
+enumerate/list-typed `AD_Column` validation across the entire application — not something
+owned by, or scoped to, `com.etendoerp.go` or this window. A fix at either candidate site
+(the message-building code in `BaseEnumerateDomainType`, or adding a `toString()` override
+to `CachedSet`) changes behavior platform-wide and belongs to a separate ticket/owner, not
+this Schema Forge window fix. Flagging it here for the human to decide whether to escalate
+it as its own core-platform ticket.
+
 ## `onGoHome` prop
 
 `OnboardingWizard` accepts an optional `onGoHome` prop. If provided, "Ir al inicio" (applied screen) and "Ir al inicio" (skipped screen) will call it instead of `onComplete`. This allows the host application to navigate to a dashboard or first-steps screen rather than staying in the fiscal-config window. When omitted, both buttons fall back to `onComplete`.

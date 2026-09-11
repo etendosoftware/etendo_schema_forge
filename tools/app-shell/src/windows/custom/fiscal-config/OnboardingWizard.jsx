@@ -38,7 +38,12 @@ const TERRITORY_META = {
   gipuzkoa: { id: 'gipuzkoa', regime: 'tbai',       askNational: true,  askVolume: false, taxtype: null,   tbaiTerritory: 'GIPUZKOA', guipuzcoa: 'Y'  },
   baleares: { id: 'baleares', regime: 'siiver',     askNational: false, askVolume: true,  taxtype: 'IVA',  tbaiTerritory: null,       guipuzcoa: null },
   canarias: { id: 'canarias', regime: 'siiver',     askNational: false, askVolume: true,  taxtype: 'IGIC', tbaiTerritory: null,       guipuzcoa: null },
-  ceuta:    { id: 'ceuta',    regime: 'siiver',     askNational: false, askVolume: true,  taxtype: 'IPSI', tbaiTerritory: null,       guipuzcoa: null },
+  // askVolume: false — unlike baleares/canarias, Ceuta/Melilla's IPSI tax scheme has no
+  // SII billing-volume threshold to ask about: SII cannot represent an IPSI taxpayer at
+  // all (AEATSII_CONFIG.taxtype only defines IVA/IGIC — see getAllowedSystemsForTerritory
+  // in fiscalConfig.utils.js, ETP-5272 point 4), so VERIFACTU is the only applicable
+  // system regardless of volume and the sub-question would be moot.
+  ceuta:    { id: 'ceuta',    regime: 'siiver',     askNational: false, askVolume: false, taxtype: 'IPSI', tbaiTerritory: null,       guipuzcoa: null },
 };
 
 const TERRITORY_GROUP_META = [
@@ -1180,7 +1185,10 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
     gipuzkoa: { ...TERRITORY_META.gipuzkoa, name: ui('fiscal.territory.gipuzkoa'), system: ui('fiscal.territory.system.tbai'),   systemLong: ui('fiscal.territory.gipuzkoa.systemLong'), example: ui('fiscal.territory.gipuzkoa.example') },
     baleares: { ...TERRITORY_META.baleares, name: ui('fiscal.territory.espania'),  system: ui('fiscal.territory.system.siiver'), systemLong: ui('fiscal.territory.baleares.systemLong'), example: ui('fiscal.territory.baleares.example') },
     canarias: { ...TERRITORY_META.canarias, name: ui('fiscal.territory.canarias'), system: ui('fiscal.territory.system.siiver'), systemLong: ui('fiscal.territory.canarias.systemLong'), example: ui('fiscal.territory.canarias.example') },
-    ceuta:    { ...TERRITORY_META.ceuta,    name: ui('fiscal.territory.ceuta'),    system: ui('fiscal.territory.system.siiver'), systemLong: ui('fiscal.territory.ceuta.systemLong'),    example: ui('fiscal.territory.ceuta.example')    },
+    // ETP-5272 point 4: badge is VERI*FACTU-only (not the shared 'siiver' SII/VERI*FACTU
+    // badge) — SII cannot represent an IPSI (Ceuta/Melilla) taxpayer at all, so it is
+    // never a real option here, unlike baleares/canarias.
+    ceuta:    { ...TERRITORY_META.ceuta,    name: ui('fiscal.territory.ceuta'),    system: ui('fiscal.territory.system.verifactu'), systemLong: ui('fiscal.territory.ceuta.systemLong'),    example: ui('fiscal.territory.ceuta.example')    },
   };
 
   const TERRITORY_GROUPS = TERRITORY_GROUP_META.map(g => ({
@@ -1225,7 +1233,7 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome, for
   }
 
   const t = TERRITORIES[selectedTerritory];
-  const resolvedSystem = manualSystem ?? resolveSystem({ regime: t?.regime ?? null, alsoNational, volume, lowChoice });
+  const resolvedSystem = manualSystem ?? resolveSystem({ regime: t?.regime ?? null, alsoNational, volume, lowChoice, territory: selectedTerritory });
 
   async function createRecords() {
     // ETP-5272 follow-up: the "Confirm" button is already disabled while
