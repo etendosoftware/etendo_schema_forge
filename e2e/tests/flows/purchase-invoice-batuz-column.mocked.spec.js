@@ -173,15 +173,20 @@ async function openList(page, { profile, territory }) {
   await login(page);
   await installFiscalProfileMocks(page, profile, { territory });
   // Overrides installFiscalProfileMocks()'s shared siiRecord fixture with an
-  // explicit fechaAcogidaSII. Registered AFTER installFiscalProfileMocks —
-  // Playwright matches routes in reverse registration order, so this wins over
-  // the shared one. The SII badge itself is no longer date-gated (ETP-5229) —
-  // this override only exists so the fixture stays self-describing.
+  // explicit `monitordate` — the AD column `useFiscalConfig`'s
+  // `earliestCutoverDate('sii', ...)` actually reads (CUTOVER_FIELD.sii), NOT
+  // the legacy `fechaAcogidaSII` name. Registered AFTER
+  // installFiscalProfileMocks — Playwright matches routes in reverse
+  // registration order, so this wins over the shared one. The SII badge IS
+  // still date-gated (ETP-5229, corrected): `isSifEligibleByDate(row.
+  // accountingDate, earliestSiiCutoverDate)` in PurchaseInvoiceHeaderTable.jsx
+  // needs a real earliest-cutover date or every SII cell falls back to a dash.
+  // Dated well before every fixture row's accountingDate ('2026-05-08').
   await page.route('**/sws/neo/sii-config/siiConfiguration?**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: responseData([{ guipuzcoa: 'Y', taxtype: 'IVA', fechaAcogidaSII: '2020-01-01' }]),
+      body: responseData([{ guipuzcoa: 'Y', taxtype: 'IVA', monitordate: '2020-01-01' }]),
     });
   });
   await installListMock(page);
