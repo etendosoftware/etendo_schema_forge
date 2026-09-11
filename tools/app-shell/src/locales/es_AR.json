@@ -19688,6 +19688,8 @@
     "backendError.transactionsObtainedForAccount": "Movimientos obtenidos para la cuenta: {account}.",
     "backendError.noNewTransactionsForAccount": "No se encontraron movimientos nuevos para la cuenta: {account}.",
     "backendError.syncFetchFailed": "El banco reportó un error al sincronizar: {detail}.",
+    "backendError.noPendingLinesToDeliverOrder": "No hay líneas pendientes de entrega en este pedido.",
+    "backendError.noPendingLinesToReceiveOrder": "No hay líneas pendientes de recepción en este pedido de compra.",
     "uomTypeArea": "Área",
     "uomTypeLength": "Longitud",
     "uomTypeTime": "Tiempo",

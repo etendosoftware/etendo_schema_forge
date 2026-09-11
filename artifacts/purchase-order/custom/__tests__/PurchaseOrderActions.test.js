@@ -300,6 +300,100 @@ describe('PurchaseOrderActions', () => {
     });
   });
 
+  // ETP-5276: the createGoodsReceipt failure paths (mirroring OrderCreateInvoice.jsx's
+  // ETP-4888 pattern on the sales side) now route the raw backend message through
+  // translateBackendError(msg, ui) before it becomes the thrown Error's message. Each test
+  // below extracts the REAL throw expression from the live source (balanced-paren slicing,
+  // not a hand-copied duplicate) and executes it, so reverting the wiring at either call site
+  // fails only that test.
+  describe('createGoodsReceipt failure — real backend message survives translateBackendError (ETP-5276)', () => {
+    // Extracts the argument list of the first `callPrefix(...)` call found AFTER `marker` in
+    // `source` (balanced-paren aware, so nested `(...)` in the expression don't truncate it).
+    function extractCallExprAfter(source, marker, callPrefix) {
+      const markerIdx = source.indexOf(marker);
+      assert.ok(markerIdx !== -1, `marker not found: ${marker}`);
+      const callIdx = source.indexOf(callPrefix, markerIdx);
+      assert.ok(callIdx !== -1, `call not found after marker "${marker}": ${callPrefix}`);
+      const parenStart = callIdx + callPrefix.length;
+      let depth = 1;
+      let i = parenStart;
+      for (; i < source.length; i++) {
+        if (source[i] === '(') depth++;
+        else if (source[i] === ')') { depth--; if (depth === 0) break; }
+      }
+      assert.ok(depth === 0, `unbalanced parens extracting "${callPrefix}" after "${marker}"`);
+      return source.slice(parenStart, i);
+    }
+
+    // Same as above, but finds the call PRECEDING the marker (for call sites where the marker
+    // text — an i18n key — sits INSIDE the call's own argument list).
+    function extractCallExprAround(source, marker, callPrefix) {
+      const markerIdx = source.indexOf(marker);
+      assert.ok(markerIdx !== -1, `marker not found: ${marker}`);
+      const callIdx = source.lastIndexOf(callPrefix, markerIdx);
+      assert.ok(callIdx !== -1, `call not found before marker "${marker}": ${callPrefix}`);
+      const parenStart = callIdx + callPrefix.length;
+      let depth = 1;
+      let i = parenStart;
+      for (; i < source.length; i++) {
+        if (source[i] === '(') depth++;
+        else if (source[i] === ')') { depth--; if (depth === 0) break; }
+      }
+      assert.ok(depth === 0, `unbalanced parens extracting "${callPrefix}" around "${marker}"`);
+      return source.slice(parenStart, i);
+    }
+
+    const REAL_MESSAGE = 'No storage locator found for warehouse: Central';
+    // ConfirmModal's expression falls back through e?.error?.message || e?.response?.message
+    // || e?.message, so a flat {status,message} body resolves via the last branch.
+    const flatErrBody = (message = REAL_MESSAGE) => ({ status: 'error', message });
+    // CreateDocsModal's expression only checks e?.error?.message || e?.response?.message (no
+    // e?.message fallback at this call site), so it needs the nested shape to resolve.
+    const nestedErrBody = (message = REAL_MESSAGE) => ({ error: { message } });
+
+    describe('ConfirmModal.handleConfirm — receipt step (createGoodsReceipt)', () => {
+      function resolveMessage(e, res) {
+        const expr = extractCallExprAround(src, 'poOrderConfirmedReceiptError', 'throw new Error(');
+        // translateBackendError is stubbed as identity — this proves the RAW backend message
+        // survives end-to-end through the extra function call, not translateBackendError's own
+        // mapping table (already covered by backendErrors.test.js).
+        const fn = new Function('e', 'res', 'ui', 'translateBackendError', `return ${expr};`);
+        return fn(e, res, (k) => k, (msg) => msg);
+      }
+
+      it('appends the real backend message after the ui() prefix for a flat 400 body', () => {
+        assert.equal(
+          resolveMessage(flatErrBody(), { status: 400 }),
+          `poOrderConfirmedReceiptError ${REAL_MESSAGE}`,
+        );
+      });
+
+      it('does not fall back to the generic "Error (400)" suffix', () => {
+        assert.doesNotMatch(resolveMessage(flatErrBody(), { status: 400 }), /Error \(400\)$/);
+      });
+    });
+
+    describe('CreateDocsModal.handleCreate — receipt step (sibling to ConfirmModal, ETP-5276)', () => {
+      const createDocsModalSrc = src.slice(src.indexOf('export function CreateDocsModal'));
+
+      function resolveMessage(e, res) {
+        const expr = extractCallExprAfter(createDocsModalSrc, 'action/createGoodsReceipt', 'throw new Error(');
+        // This call site has no ui() prefix of its own, but the expression still references
+        // `ui` as translateBackendError's second argument, so it must be in scope too.
+        return new Function('e', 'res', 'ui', 'translateBackendError', `return ${expr};`)(
+          e, res, (k) => k, (msg) => msg);
+      }
+
+      it('surfaces the real backend message for a nested {error:{message}} 400 body', () => {
+        assert.equal(resolveMessage(nestedErrBody(), { status: 400 }), REAL_MESSAGE);
+      });
+
+      it('does not fall back to the generic "Error (400)" message', () => {
+        assert.notEqual(resolveMessage(nestedErrBody(), { status: 400 }), 'Error (400)');
+      });
+    });
+  });
+
   describe('PoCheckboxCard — disabled (already-done) treatment', () => {
     it('accepts a disabled prop', () => {
       assert.match(src, /function PoCheckboxCard\(\{[^}]*disabled[^}]*\}\)/);

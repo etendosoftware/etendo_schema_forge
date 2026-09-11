@@ -20514,6 +20514,7 @@
     "backendError.noLinesToInvoice": "No hay líneas a facturar en este pedido.",
     "backendError.noPendingLinesToInvoiceShipment": "No hay líneas pendientes de facturar en este albarán.",
     "backendError.noPendingLinesToDeliverOrder": "No hay líneas pendientes de entrega en este pedido.",
+    "backendError.noPendingLinesToReceiveOrder": "No hay líneas pendientes de recepción en este pedido de compra.",
     "backendError.noProductLinesInInvoice": "No hay líneas con producto en esta factura.",
     "backendError.noArInvoiceDocTypeFound": "No se encontró ningún tipo de documento de factura de venta.",
     "backendError.noShipmentsProvided": "No se proporcionaron albaranes.",

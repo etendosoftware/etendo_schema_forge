@@ -20278,6 +20278,7 @@
     "backendError.noLinesToInvoice": "There are no lines to invoice for this order.",
     "backendError.noPendingLinesToInvoiceShipment": "There are no pending lines to invoice for this shipment.",
     "backendError.noPendingLinesToDeliverOrder": "There are no pending lines to deliver for this order.",
+    "backendError.noPendingLinesToReceiveOrder": "There are no pending lines to receive for this purchase order.",
     "backendError.noProductLinesInInvoice": "There are no lines with a product in this invoice.",
     "backendError.noArInvoiceDocTypeFound": "No AR Invoice document type found.",
     "backendError.noShipmentsProvided": "No shipments were provided.",

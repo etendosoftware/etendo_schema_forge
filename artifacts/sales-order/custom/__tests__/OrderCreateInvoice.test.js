@@ -718,8 +718,12 @@ describe('OrderCreateInvoice', () => {
     describe('ConfirmModal.handleConfirm — Step 2 (createShipment)', () => {
       function resolveMessage(e, res) {
         const expr = extractCallExprAround(src, 'soOrderConfirmedShipmentError', 'throw new Error(');
-        const fn = new Function('e', 'res', 'ui', `return ${expr};`);
-        return fn(e, res, (k) => k);
+        // ETP-5276: the raw backend message now passes through translateBackendError(msg, ui)
+        // before being appended to the ui() prefix. Stub it as identity — the point of this
+        // test is that the RAW backend message survives end-to-end, not re-testing
+        // translateBackendError's own mapping table (covered by backendErrors.test.js).
+        const fn = new Function('e', 'res', 'ui', 'translateBackendError', `return ${expr};`);
+        return fn(e, res, (k) => k, (msg) => msg);
       }
 
       it('appends the real backend message after the ui() prefix for a flat 400 body', () => {
@@ -752,7 +756,11 @@ describe('OrderCreateInvoice', () => {
 
       function resolveMessage(e, res) {
         const expr = extractCallExprAfter(createDocsModalSrc, 'action/createShipment', 'throw new Error(');
-        return new Function('e', 'res', `return ${expr};`)(e, res);
+        // ETP-5276: the expression itself calls translateBackendError(msg, ui) — both must be
+        // in scope even though this call site has no ui() prefix of its own. Stub identity, same
+        // rationale as the ConfirmModal Step 2 block above.
+        return new Function('e', 'res', 'ui', 'translateBackendError', `return ${expr};`)(
+          e, res, (k) => k, (msg) => msg);
       }
 
       it('surfaces the real backend message for a flat {status,message} 400 body', () => {
