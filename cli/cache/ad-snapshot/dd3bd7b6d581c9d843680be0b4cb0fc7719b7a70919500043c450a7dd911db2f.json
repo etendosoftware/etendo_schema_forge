@@ -8350,7 +8350,7 @@
       ]
     },
     "910d24c5e04bd0653472a12dc47eccd73e36338057fe0dd184d4e20cf35a31f5": {
-      "checksum": "7dfea4db99ad49a61dd83a01c2cc37d5695850cbc14dbda5256245b82953d8d2",
+      "checksum": "0c0586698b2c63d23929822db536f2d6c659c07e5599cafb75ffaab54decc99e",
       "params": [
         [
           "CBC18A0BBD564AB5916A9D9D14D02B7A",
@@ -8524,12 +8524,6 @@
           "name": "Adjustment Period",
           "name_es": "Cambio periodo",
           "value": "A"
-        },
-        {
-          "ad_reference_id": "CBC18A0BBD564AB5916A9D9D14D02B7A",
-          "name": "Advisory",
-          "name_es": null,
-          "value": "AD"
         },
         {
           "ad_reference_id": "DC555AA9FAC54BBCB02486F7D628690B",

@@ -67,10 +67,13 @@ export async function buildQuotationData(quotationId, base, token, currencyData 
     netAmount,
     taxAmount,
     grandTotal,
-    grossAmount:        discountPerProduct > 0 ? grossAmount : null,
-    discountPerProduct: discountPerProduct > 0 ? discountPerProduct : null,
+    // ETP-5132 — same signed convention as useInvoicePdf.js / buildOrderData /
+    // DocumentTotalsPanel.jsx: "!== 0" gates on any real discount (either
+    // sign), and the printed value is the sign-flipped magnitude.
+    grossAmount:        discountPerProduct !== 0 ? grossAmount : null,
+    discountPerProduct: discountPerProduct !== 0 ? -discountPerProduct : null,
     etgoTotalDiscount:  etgoTotalDiscount > 0 ? etgoTotalDiscount : null,
-    totalDiscountAmt:   totalDiscountAmt > 0 ? totalDiscountAmt : null,
+    totalDiscountAmt:   totalDiscountAmt !== 0 ? -totalDiscountAmt : null,
     exchangeRate: currencyData?.exchangeRate ?? null,
     orgCurrencyCode: currencyData?.orgCurrencyCode ?? null,
     orgGrandTotal: (currencyData?.exchangeRate && currencyData?.exchangeRate !== 1)
