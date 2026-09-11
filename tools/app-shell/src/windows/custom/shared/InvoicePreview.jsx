@@ -73,7 +73,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
         title={addPaymentBlockedByDraft ? ui('cpAddPaymentBlockedByDraft') : undefined}
         data-testid="Button__cf88e6">
         <Wallet className="text-muted-foreground" data-testid="Wallet__cf88e6" />
-        {ui('invoicePreviewAddPayment')}
+        {ui(isSalesInvoice ? 'invoicePreviewAddCollection' : 'invoicePreviewAddPayment')}
       </Button>
       {isSalesInvoice && (
         <Button

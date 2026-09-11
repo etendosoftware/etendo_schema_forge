@@ -125,8 +125,11 @@ const CheckIcon = () => (
   </svg>
 );
 function mapInitialFilter(initialFilter) {
-  if (initialFilter === 'Recibido') return FILTER_SENT;
-  if (initialFilter === 'Rechazado' || initialFilter === 'Error') return FILTER_REJECTED;
+  // Accepts both the local filter keys (round-tripped via onFilterChange from
+  // the parent's initialFilter prop) and the raw AD `estado` values, in case
+  // some future/other caller ever feeds one of those in directly.
+  if (initialFilter === FILTER_SENT || initialFilter === 'Recibido') return FILTER_SENT;
+  if (initialFilter === FILTER_REJECTED || initialFilter === 'Rechazado' || initialFilter === 'Error') return FILTER_REJECTED;
   return FILTER_ALL;
 }
 

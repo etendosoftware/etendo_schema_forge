@@ -18,6 +18,7 @@ warning, information, neutral and destructive roles.
 - Guide new organizations through fiscal territory selection and system assignment via a 6-screen onboarding wizard.
 - Detect which fiscal records already exist and render only the applicable section(s): SII, TBAI, SII+TBAI (combined), or Verifactu.
 - Allow editing of operational fields for each system: fiscal year dates, TBAI certificate upload, and Verifactu editable fields only. (SII submission cadences — `plazoLmiteDeEnvoASII`, `cadenciaEnvoFacturasVentaASII`, `cadenciaEnvoFacturasCompraASII` — are stored in the DB but are no longer exposed in the SiiSection UI; they retain any value set outside the app.)
+- SII's "Authorization registration number" field (`authorizationno`, `SiiSection.jsx`) has `autoComplete="off"` — without it the browser autofilled the field with the logged-in user's saved email — plus a client-side `maxLength={15}` and a `validate()` guard rejecting values over 15 characters, matching the `authorizationno VARCHAR(15)` DB column; the error surfaces via the `fiscal.sii.err.authRegNoTooLong` i18n key (`en_US.json`/`es_ES.json`).
 - Prompt certificate upload (`.p12`/`.pfx`) for systems that require it (TBAI, SII+TBAI, Verifactu) at the end of onboarding.
 - Show a conflict warning when incompatible records coexist (e.g. Verifactu + SII).
 - Persist Verifactu tax type using the AD enum codes (`01` IVA, `03` IGIC, `02` IPSI), while showing the human-readable labels in the custom UI.

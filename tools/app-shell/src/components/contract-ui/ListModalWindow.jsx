@@ -23,6 +23,7 @@ import { EntityForm } from './EntityForm.jsx';
 import { InfoBanner } from '../InfoBanner.jsx';
 import { ListModalCell, cellAlignClass } from './listModalCells.jsx';
 import { ListSortPopover } from './ListSortPopover.jsx';
+import { NUMERIC_FIELD_TYPES } from '@/lib/numericFieldTypes.js';
 import { ListProgressBar } from './ListProgressBar.jsx';
 import { RefreshButton } from './RefreshButton.jsx';
 import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
@@ -193,7 +194,9 @@ function filterRows(allRows, { toolbarFilters, filterValues, searchQuery, filter
 // their labels; numeric cells become number filters; toggles/booleans are skipped (covered
 // by the dedicated toolbar Active dropdown).
 function buildFilterColumns(columns, fields, ui, tMenu, tLabel) {
-  const NUMERIC = ['number', 'amount', 'integer', 'decimal', 'price', 'quantity'];
+  // ETP-5107 — unified with DataTable.jsx / InlineLinesPanel.jsx via the
+  // shared NUMERIC_FIELD_TYPES set (see lib/numericFieldTypes.js).
+  const NUMERIC = NUMERIC_FIELD_TYPES;
   // Union by key; grid columns win on duplicates (richer cell metadata / gridLabelKey).
   const byKey = new Map();
   for (const f of (fields ?? [])) if (f && f.key) byKey.set(f.key, f);
@@ -217,7 +220,7 @@ function buildFilterColumns(columns, fields, ui, tMenu, tLabel) {
       if (col.enumLabels && (col.type === 'enum' || col.type === 'status')) {
         return { key: col.key, label, type: 'enum', enumLabels: col.enumLabels };
       }
-      if (col.cellType === 'percent' || NUMERIC.includes(col.type)) {
+      if (col.cellType === 'percent' || NUMERIC.has(col.type)) {
         return { key: col.key, label, type: 'number' };
       }
       return { key: col.key, label, type: 'string' };

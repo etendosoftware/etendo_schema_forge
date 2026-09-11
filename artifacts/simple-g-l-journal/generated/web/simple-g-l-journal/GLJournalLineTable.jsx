@@ -4,8 +4,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 // @sf-generated-start columns:gLJournalLine
 const columns = [
   { key: 'lineNo', column: 'Line', type: 'number', label: 'LineNo', required: true },
-  { key: 'accountingCombination', column: 'C_ValidCombination_ID', type: 'selector', label: 'Account', lookup: true },
-  { key: 'description', column: 'Description', type: 'string', label: 'Description' },
+  { key: 'accountingCombination', column: 'C_ValidCombination_ID', type: 'selector', label: 'Account', lookup: true, minWidth: 280 },
   { key: 'foreignCurrencyDebit', column: 'AmtSourceDr', type: 'amount', labels: {"en_US":"Debit","es_ES":"Débito"}, label: 'Debit', required: true },
   { key: 'foreignCurrencyCredit', column: 'AmtSourceCr', type: 'amount', labels: {"en_US":"Credit","es_ES":"Crédito"}, label: 'Credit', required: true },
   { key: 'dimensions', type: 'dimensionsPanel', label: 'Accounting dimensions', labels: { en_US: 'Accounting dimensions', es_ES: 'Dimensiones contables' }, dimensionFields: [

@@ -100,7 +100,7 @@ describe('ProductPriceBar — updated token (ETP-5112)', () => {
 
     await screen.findByDisplayValue('Sales List v1');
 
-    const spinbuttons = screen.getAllByRole('spinbutton');
+    const spinbuttons = screen.getAllByTestId('PriceStepperInput__d76b90');
     await user.clear(spinbuttons[0]);
     await user.type(spinbuttons[0], '99');
     await user.tab();
@@ -128,7 +128,7 @@ describe('ProductPriceBar — updated token (ETP-5112)', () => {
 
     // Rows render in list order, and each row contributes two spinbuttons (unit, list
     // price) — index 2 is the SECOND row's unit price.
-    const spinbuttons = screen.getAllByRole('spinbutton');
+    const spinbuttons = screen.getAllByTestId('PriceStepperInput__d76b90');
     await user.clear(spinbuttons[2]);
     await user.type(spinbuttons[2], '77');
     await user.tab();

@@ -439,22 +439,36 @@ describe('ImportLinesModal', () => {
       expect(qtyInput.value).toBe('-3');
     });
 
-    it('clamps a magnitude above maxQty down to maxQty', async () => {
+    it('does NOT clamp on change when typed above maxQty (free typing); reverts to the last committed value and shows qtyMaxAllowed on blur', async () => {
       defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
       const { container } = await renderExpanded({ negativeQuantity: true });
       const qtyInput = container.querySelector('input[type="number"]');
 
       fireEvent.change(qtyInput, { target: { value: '-100' } });
+      // ETP-5178: typing is never clamped mid-edit, even past maxQty.
+      expect(qtyInput.value).toBe('-100');
+
+      fireEvent.blur(qtyInput);
+      // Reverts to the last committed value (the initial maxQty default, 5, sign-flipped).
       expect(qtyInput.value).toBe('-5');
+      expect(toast.error).toHaveBeenCalledWith('qtyMaxAllowed:{"max":5}');
+      expect(toast.error).not.toHaveBeenCalledWith('qtyMustBePositive');
     });
 
-    it('defaults a non-numeric input to a magnitude of 1', async () => {
+    it('does NOT snap a non-numeric input to 1 on change (free typing); reverts to the last committed value and shows qtyMustBePositive on blur', async () => {
       defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
       const { container } = await renderExpanded({ negativeQuantity: true });
       const qtyInput = container.querySelector('input[type="number"]');
 
       fireEvent.change(qtyInput, { target: { value: 'abc' } });
-      expect(qtyInput.value).toBe('-1');
+      // ETP-5178: no snap to 1 mid-edit.
+      expect(qtyInput.value).not.toBe('-1');
+
+      fireEvent.blur(qtyInput);
+      expect(qtyInput.value).toBe('-5');
+      // Invalid-but-not-too-high path: qtyMustBePositive, NOT qtyMaxAllowed.
+      expect(toast.error).toHaveBeenCalledWith('qtyMustBePositive');
+      expect(toast.error).not.toHaveBeenCalledWith(expect.stringContaining('qtyMaxAllowed'));
     });
 
     it('computes a negative lineTotal preview when negativeQuantity is true', async () => {
@@ -502,6 +516,165 @@ describe('ImportLinesModal', () => {
       expect(qtyInput.className).toContain('[appearance:textfield]');
       expect(qtyInput.className).toContain('[&::-webkit-outer-spin-button]:appearance-none');
       expect(qtyInput.className).toContain('[&::-webkit-inner-spin-button]:appearance-none');
+    });
+  });
+
+  // ETP-5178 — quantity input: free typing, validate on blur only. Covers the
+  // shared classifyQtyDraft() decision (tooHigh vs. plain invalid) end-to-end
+  // through the visible DOM value and the toast message, not just the helper.
+  describe('quantity draft input — free typing, validated on blur (ETP-5178)', () => {
+    const QTY_LINE = { id: 'line-1', _productName: 'Widget A', _maxQty: 5, _alreadyImported: false, _unitPrice: 10, _lineNetAmount: 50 };
+
+    async function renderExpandedWithQtyLine(overrides = {}) {
+      defaultProps.fetchLines.mockResolvedValue([QTY_LINE]);
+      const result = renderModal(overrides);
+      await waitFor(() => {
+        expect(defaultProps.fetchLines).toHaveBeenCalled();
+        expect(screen.queryByText('loading')).not.toBeInTheDocument();
+        expect(screen.getByText('INV-001')).toBeInTheDocument();
+      }, { timeout: 10000 });
+      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
+      return result;
+    }
+
+    it('never clamps mid-edit across multiple keystrokes, even typing past maxQty', async () => {
+      const { container } = await renderExpandedWithQtyLine();
+      const qtyInput = container.querySelector('input[type="number"]');
+
+      fireEvent.change(qtyInput, { target: { value: '1' } });
+      expect(qtyInput.value).toBe('1');
+
+      fireEvent.change(qtyInput, { target: { value: '15' } });
+      expect(qtyInput.value).toBe('15'); // maxQty is 5 — still unclamped mid-edit
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('commits a valid value on blur and updates the line-total preview, without any toast', async () => {
+      await renderExpandedWithQtyLine();
+      const qtyInput = screen.getByText('Widget A').closest('div[style]').querySelector('input[type="number"]');
+
+      fireEvent.change(qtyInput, { target: { value: '3' } });
+      fireEvent.blur(qtyInput);
+
+      expect(qtyInput.value).toBe('3');
+      expect(toast.error).not.toHaveBeenCalled();
+      // unitPrice 10 * qty 3 = 30
+      expect(screen.getByText('30,00')).toBeInTheDocument();
+    });
+
+    it('shows the qtyMaxAllowed toast (not qtyMustBePositive) and reverts when blurred above maxQty', async () => {
+      const { container } = await renderExpandedWithQtyLine();
+      const qtyInput = container.querySelector('input[type="number"]');
+
+      fireEvent.change(qtyInput, { target: { value: '15' } });
+      fireEvent.blur(qtyInput);
+
+      expect(qtyInput.value).toBe('5'); // reverts to the last committed value (initial maxQty default)
+      expect(toast.error).toHaveBeenCalledWith('qtyMaxAllowed:{"max":5}');
+      expect(toast.error).not.toHaveBeenCalledWith('qtyMustBePositive');
+    });
+
+    it.each(['0', ''])(
+      'shows the qtyMustBePositive toast (not qtyMaxAllowed) and reverts when blurred with %j',
+      async (invalidValue) => {
+        const { container } = await renderExpandedWithQtyLine();
+        const qtyInput = container.querySelector('input[type="number"]');
+
+        fireEvent.change(qtyInput, { target: { value: invalidValue } });
+        fireEvent.blur(qtyInput);
+
+        expect(qtyInput.value).toBe('5');
+        expect(toast.error).toHaveBeenCalledWith('qtyMustBePositive');
+        expect(toast.error).not.toHaveBeenCalledWith(expect.stringContaining('qtyMaxAllowed'));
+      },
+    );
+
+    // classifyQtyDraft() always takes Math.abs() of the parsed number — sign is
+    // ignored regardless of negativeQuantity — so a typed negative value in the
+    // DEFAULT (non-negative) mode is a VALID magnitude, not an error case. This
+    // documents that intentional behavior (see the classifyQtyDraft doc comment
+    // in ImportLinesModal.jsx) rather than assuming "negative" is always invalid.
+    it('commits a typed negative draft as its positive magnitude even when negativeQuantity is false', async () => {
+      const { container } = await renderExpandedWithQtyLine();
+      const qtyInput = container.querySelector('input[type="number"]');
+
+      fireEvent.change(qtyInput, { target: { value: '-3' } });
+      fireEvent.blur(qtyInput);
+
+      expect(qtyInput.value).toBe('3');
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('shows the qtyMustBePositive toast and reverts when blurred with a non-numeric draft', async () => {
+      const { container } = await renderExpandedWithQtyLine();
+      const qtyInput = container.querySelector('input[type="number"]');
+
+      fireEvent.change(qtyInput, { target: { value: 'abc' } });
+      fireEvent.blur(qtyInput);
+
+      expect(qtyInput.value).toBe('5');
+      expect(toast.error).toHaveBeenCalledWith('qtyMustBePositive');
+      expect(toast.error).not.toHaveBeenCalledWith(expect.stringContaining('qtyMaxAllowed'));
+    });
+
+    it('round-trips a decimal quantity through draft -> commit', async () => {
+      await renderExpandedWithQtyLine();
+      const qtyInput = screen.getByText('Widget A').closest('div[style]').querySelector('input[type="number"]');
+
+      fireEvent.change(qtyInput, { target: { value: '2.5' } });
+      expect(qtyInput.value).toBe('2.5');
+
+      fireEvent.blur(qtyInput);
+
+      expect(qtyInput.value).toBe('2.5');
+      expect(toast.error).not.toHaveBeenCalled();
+      // unitPrice 10 * qty 2.5 = 25
+      expect(screen.getByText('25,00')).toBeInTheDocument();
+    });
+
+    describe('negativeQuantity end-to-end (ETP-5178)', () => {
+      const NEG_QTY_LINE = { id: 'line-1', _productName: 'Widget A', _maxQty: 5, _alreadyImported: false, _unitPrice: 10, _lineNetAmount: 50 };
+
+      it('commits a typed magnitude below maxQty on blur, displayed with the sign flipped', async () => {
+        defaultProps.fetchLines.mockResolvedValue([NEG_QTY_LINE]);
+        const result = renderModal({ negativeQuantity: true });
+        await waitFor(() => {
+          expect(defaultProps.fetchLines).toHaveBeenCalled();
+          expect(screen.queryByText('loading')).not.toBeInTheDocument();
+          expect(screen.getByText('INV-001')).toBeInTheDocument();
+        }, { timeout: 10000 });
+        fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+        await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
+
+        const qtyInput = result.container.querySelector('input[type="number"]');
+        fireEvent.change(qtyInput, { target: { value: '-3' } });
+        fireEvent.blur(qtyInput);
+
+        expect(qtyInput.value).toBe('-3');
+        expect(toast.error).not.toHaveBeenCalled();
+      });
+
+      it('reverts to the committed value and shows qtyMaxAllowed when blurred above maxQty', async () => {
+        defaultProps.fetchLines.mockResolvedValue([NEG_QTY_LINE]);
+        const result = renderModal({ negativeQuantity: true });
+        await waitFor(() => {
+          expect(defaultProps.fetchLines).toHaveBeenCalled();
+          expect(screen.queryByText('loading')).not.toBeInTheDocument();
+          expect(screen.getByText('INV-001')).toBeInTheDocument();
+        }, { timeout: 10000 });
+        fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+        await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
+
+        const qtyInput = result.container.querySelector('input[type="number"]');
+        fireEvent.change(qtyInput, { target: { value: '-100' } });
+        expect(qtyInput.value).toBe('-100'); // free typing — no clamp mid-edit
+
+        fireEvent.blur(qtyInput);
+
+        expect(qtyInput.value).toBe('-5'); // reverts to the committed maxQty default, sign-flipped
+        expect(toast.error).toHaveBeenCalledWith('qtyMaxAllowed:{"max":5}');
+      });
     });
   });
 

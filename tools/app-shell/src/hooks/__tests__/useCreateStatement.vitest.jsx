@@ -63,9 +63,13 @@ describe('useCreateStatement', () => {
       res = await result.current.createStatement(PAYLOAD);
     });
 
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-    const [url, init] = globalThis.fetch.mock.calls[0];
-    expect(url).toBe('/etendo/sws/neo/bank-statements?action=create');
+    // ETP-5195: AuthProvider fires a silent `GET /sws/neo/refreshtoken` on mount, which may add
+    // an unrelated extra call — find the hook's own call by URL instead of assuming index 0/count 1.
+    const call = globalThis.fetch.mock.calls.find(
+      ([callUrl]) => callUrl === '/etendo/sws/neo/bank-statements?action=create',
+    );
+    expect(call).toBeTruthy();
+    const [url, init] = call;
     expect(init.method).toBe('POST');
     expect(init.headers.Authorization).toBe('Bearer test-token');
     expect(init.headers['Content-Type']).toBe('application/json');

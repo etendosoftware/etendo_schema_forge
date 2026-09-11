@@ -83,6 +83,7 @@ Mirrors the existing `cli/src/migrations/` pattern (runner + ledger + scope flag
 1. **Tenant scope is `ad_client_id` — non-negotiable.** Every statement (both `@check` and `@apply`) MUST filter `ad_client_id = :client_id`. A fix must run for ONE client in isolation and never touch another tenant's rows. `:org_id` is secondary/optional.
 2. **Two-layer idempotency.** `@check` decides whether to run at all (explicit "does this apply?"); `@apply` is ALSO defensively guarded (`WHERE NOT EXISTS`) so partial/concurrent state is safe.
 3. **Applied migrations are immutable.** Never rename or edit an applied `.sql`. The stored `checksum` detects violations — a changed body under the same `fix_id` makes the runner warn, not silently re-apply.
+   Narrow exception: a fix may be edited in place for a tenant subset the original `@apply` left `FAILED` (never `APPLIED`) — `FAILED` is excluded from `PROCESSED` (see Phase 1 below), so those tenants re-read the edited file on the next run instead of being skipped by the watermark. This also depends on checksum enforcement being unimplemented (confirm against `run.js` before relying on it — the column exists but is deferred, per Phase 0 below; once `CHECKSUM_MISMATCH` ships, this exception is gone). Never applies to a file whose affected tenants are `APPLIED` — ship a new dated `.sql` instead. Worked example: `20260730T180000Z__R17-rectificativa-doctype-sequence.sql` steps 0a/0b (ETP-4799).
 
 ### Runner — `cli/src/data-fixes/run.js`
 `node cli/src/data-fixes/run.js [--dry-run] [--client <id>] [--fix <id>]`
@@ -259,7 +260,7 @@ Before doing ANYTHING:
 <what_i_never_do>
 - Ship a corrective fix without a SQL statement scoped by `ad_client_id` — a fix that can't be isolated to one tenant is invalid
 - Write a fix that isn't idempotent (`@check` gate + guarded `@apply` are mandatory)
-- Rename or edit an already-applied migration
+- Rename or edit an already-applied migration — except the narrow `FAILED`-tenant, pre-checksum-enforcement case documented in `<data_fixes_framework>` rule 3 above
 - Reach for Java/webhook before proving SQL can't do it
 - Invent or hand-type UUIDs for new AD records — always `make uuid`
 - Hardcode DB credentials or guess client/org IDs — query the DB

@@ -100,19 +100,22 @@ describe('DataTable — clearsField mutual exclusion in inline add-row', () => {
     const debitInput = screen.getByTestId('inline-add-field-debit');
     const creditInput = screen.getByTestId('inline-add-field-credit');
     fireEvent.change(debitInput, { target: { value: '100' } });
-    expect(creditInput).toHaveValue('0.00');
+    // ETP-5107 — the 'amount'-typed cell now renders MaskedAmountInput, whose
+    // idle display routes through the canonical formatCurrency() (Spanish
+    // comma-decimal), not the old period-decimal n.toFixed(2).
+    expect(creditInput).toHaveValue('0,00');
   });
 
   it('does not zero the paired field when an empty string is entered', () => {
     renderTable();
     const debitInput = screen.getByTestId('inline-add-field-debit');
     const creditInput = screen.getByTestId('inline-add-field-credit');
-    // First enter a non-zero value so credit becomes 0.00
+    // First enter a non-zero value so credit becomes 0,00
     fireEvent.change(debitInput, { target: { value: '50' } });
     // Clear the debit field — paired field must not be reset again
     fireEvent.change(debitInput, { target: { value: '' } });
-    // Credit should still hold its last value (0.00), not re-zeroed
-    expect(creditInput).toHaveValue('0.00');
+    // Credit should still hold its last value (0,00), not re-zeroed
+    expect(creditInput).toHaveValue('0,00');
   });
 
   it('does not zero the paired field when a zero is entered', () => {

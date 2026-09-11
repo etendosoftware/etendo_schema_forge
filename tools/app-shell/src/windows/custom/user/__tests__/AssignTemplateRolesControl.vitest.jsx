@@ -4,7 +4,7 @@
  * lives in `useRoleSelection()` (shared with `UserRolesTab`) instead of a plain
  * `onChange('defaultRole', ...)` field write.
  */
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -388,6 +388,112 @@ describe('AssignTemplateRolesControl', () => {
       await waitFor(() => expect(screen.getByTestId('AssignTemplateRolesControl__toggle-expand')).not.toBeDisabled());
       expect(screen.queryByTestId('AssignTemplateRolesControl__admin-locked')).not.toBeInTheDocument();
       expect(screen.getByTestId('AssignTemplateRolesControl__empty')).toBeInTheDocument();
+    });
+  });
+
+  // ETP-5193 (Fix 1) — the options panel used to be a normal-flow flex sibling, so
+  // expanding the control pushed every form section below it downward. It is now an
+  // `absolute` overlay anchored to a `relative` container, adding zero layout height.
+  // jsdom does no real layout, so this asserts the CSS-class contract (position/anchor
+  // tokens), not an actual pixel measurement.
+  describe('overlay positioning, not push (ETP-5193 Fix 1)', () => {
+    it('renders the options panel as an absolute overlay inside a relative container', async () => {
+      mockTemplatesOk();
+      const { container } = renderControl();
+
+      const toggle = await screen.findByTestId('AssignTemplateRolesControl__toggle-expand');
+      await userEvent.click(toggle);
+
+      const outerContainer = container.querySelector('[data-testid="AssignTemplateRolesControl"]');
+      const optionsPanel = screen.getByTestId('AssignTemplateRolesControl__options');
+
+      expect(outerContainer.className).toContain('relative');
+      expect(optionsPanel.className).toContain('absolute');
+      expect(optionsPanel.className).toContain('top-full');
+    });
+  });
+
+  // ETP-5193 (Fix 2) — `shrink-0` pins the chevron's intrinsic size so it is never
+  // flex-shrunk as the row's content width changes (placeholder text -> first chip).
+  // Real pixel-shift verification isn't feasible in jsdom (no layout engine) — this is
+  // a defensive/CSS-token-level regression guard that locks in the class itself.
+  describe('chevron icon shrink guard (ETP-5193 Fix 2)', () => {
+    it('keeps shrink-0 (alongside ml-auto) on the chevron after toggling a role', async () => {
+      mockTemplatesOk();
+      renderControl({ selectedRoleIds: [] });
+
+      const toggle = await screen.findByTestId('AssignTemplateRolesControl__toggle-expand');
+      await userEvent.click(toggle);
+      const financeRow = screen.getByTestId('AssignTemplateRolesControl__toggle-role-fin');
+      await userEvent.click(within(financeRow).getByRole('checkbox'));
+
+      const chevron = screen.getByTestId('ChevronDown__16443b');
+      expect(chevron.getAttribute('class')).toContain('shrink-0');
+      expect(chevron.getAttribute('class')).toContain('ml-auto');
+    });
+  });
+
+  // ETP-5193 (Fix 3) — the bare `<input type="checkbox">` was replaced with the shared
+  // `Checkbox` (real component, NOT mocked in this file), and the row wrapper changed
+  // from a native `<label>` to a `<div onClick>` (Checkbox's own `onClick` now does
+  // `e.stopPropagation()`). Mirrors the real-click semantics test pattern established by
+  // `ImportLinesModal.realCheckbox.vitest.jsx` (ETP-5067) — clicking the checkbox's own
+  // visible box (a <div> sibling of the sr-only <input>, both inside Checkbox's native
+  // <label>) is how a real user clicks it, and is the only way to exercise the native
+  // label-activation double-dispatch this fix guards against.
+  describe('real Checkbox click semantics (ETP-5193 Fix 3)', () => {
+    function clickVisibleBox(checkboxInput) {
+      fireEvent.click(checkboxInput.closest('label').querySelector('div'));
+    }
+
+    it('toggles the role EXACTLY ONCE when the click lands on the checkbox\'s own visible box', async () => {
+      mockTemplatesOk();
+      const setSelectedRoleIds = vi.fn();
+      renderControl({ selectedRoleIds: ['role-fin'], setSelectedRoleIds });
+
+      const toggle = await screen.findByTestId('AssignTemplateRolesControl__toggle-expand');
+      await userEvent.click(toggle);
+      const salesRow = screen.getByTestId('AssignTemplateRolesControl__toggle-role-sales');
+      const checkbox = within(salesRow).getByRole('checkbox');
+
+      clickVisibleBox(checkbox);
+
+      // Exactly once — not zero (never toggled), not twice (the double-dispatch failure
+      // mode would cancel itself out to a no-op, which a naive "was it called" assertion
+      // would miss).
+      expect(setSelectedRoleIds).toHaveBeenCalledTimes(1);
+      const updater = setSelectedRoleIds.mock.calls[0][0];
+      expect(updater(['role-fin'])).toEqual(['role-fin', 'role-sales']);
+    });
+
+    it('still toggles the role when the click lands on the row\'s label text, not the checkbox itself', async () => {
+      mockTemplatesOk();
+      const setSelectedRoleIds = vi.fn();
+      renderControl({ selectedRoleIds: ['role-fin'], setSelectedRoleIds });
+
+      const toggle = await screen.findByTestId('AssignTemplateRolesControl__toggle-expand');
+      await userEvent.click(toggle);
+
+      // The row wrapper is now a plain <div onClick>, not a native <label> — clicking the
+      // label text beside the checkbox must still delegate to the same toggle handler.
+      await userEvent.click(screen.getByText('roleNameSales'));
+
+      expect(setSelectedRoleIds).toHaveBeenCalledTimes(1);
+      const updater = setSelectedRoleIds.mock.calls[0][0];
+      expect(updater(['role-fin'])).toEqual(['role-fin', 'role-sales']);
+    });
+
+    it('preserves the row\'s data-testid even though the element type changed from <label> to <div>', async () => {
+      mockTemplatesOk();
+      renderControl();
+
+      const toggle = await screen.findByTestId('AssignTemplateRolesControl__toggle-expand');
+      await userEvent.click(toggle);
+
+      for (const role of TEMPLATE_ROLES) {
+        const row = screen.getByTestId(`AssignTemplateRolesControl__toggle-${role.id}`);
+        expect(row.tagName).toBe('DIV');
+      }
     });
   });
 

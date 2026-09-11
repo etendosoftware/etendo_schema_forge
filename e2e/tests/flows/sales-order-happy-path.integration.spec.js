@@ -5,6 +5,7 @@ import { login, navigateTo } from '../helpers/auth.js';
 import {
   ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
 } from '../helpers/product-helpers.js';
+import { selectCustomerWithAddress } from '../helpers/sales-helpers.js';
 
 /**
  * Sales Order + Invoice — Full happy-path integration E2E.
@@ -114,12 +115,10 @@ test.describe('Sales Order — Happy path (integration)', () => {
       }).toPass({ timeout: 15_000 });
       await slow(page);
 
-      // Pick the first real customer (skip "+ Crear contacto")
-      const bpOption = page.locator('[data-testid^="option-businessPartner-"]')
-        .filter({ hasNotText: /crear|create/i }).first();
-      await expect(bpOption).toBeVisible({ timeout: 15_000 });
-
-      await bpOption.click();
+      // Pick a real customer that HAS an address (skip "+ Crear contacto"). Not
+      // `.first()`: a customer with no C_BPartner_Location leaves partnerAddress empty,
+      // which keeps action-save-draft disabled forever — see selectCustomerWithAddress.
+      await selectCustomerWithAddress(page);
 
       // BP selection triggers multiple chained callouts (price list, payment terms,
       // currency, address, warehouse). Wait until a key derived field is populated —

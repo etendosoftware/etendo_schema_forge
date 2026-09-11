@@ -26,7 +26,9 @@ vi.mock('../FiscalDefaultsSection', () => ({ default: () => <div data-testid="fi
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import {
   neoResponse, bodyOf, writeCalls, resetRecordVersionsForTests, rememberRecordVersion,
+  createRealUseApiFetchMock,
 } from '@/test/realApiFetch.js';
+import { getRecordVersion } from '@etendosoftware/app-shell-core/lib/recordVersions.js';
 import ContactsFinancialPanel from '../ContactsFinancialPanel.jsx';
 
 const BP_ID = 'bp-1';
@@ -108,5 +110,92 @@ describe('ContactsFinancialPanel — updated token (ETP-5112)', () => {
     await waitFor(() => expect(writeCalls(globalThis.fetch)).toHaveLength(1));
 
     expect(bodyOf(writeCalls(globalThis.fetch)[0])).not.toHaveProperty('updated');
+  });
+});
+
+// Which token the SECOND consecutive write carries, established while diagnosing ETP-5255.
+// The duplicate-PATCH bug was a 409 `stale_record`, so the token the follow-up write replays
+// is the thing that decides whether a legitimate second edit is accepted. Kept because the
+// answer is not obvious from either side alone: the panel never reads, so its only source of
+// a fresh token is what `auth/api.js` harvests off the PATCH RESPONSE.
+//
+// Single-flight itself is covered by `ContactsFinancialPanel.singleFlight.vitest.jsx`; these
+// cases are about token PROVENANCE across two saves the user genuinely made.
+describe('ContactsFinancialPanel — token carried by a second consecutive save', () => {
+  const READ_TOKEN = 'TOKEN-FROM-READ';
+  const TOKEN_AFTER_FIRST_PATCH = 'TOKEN-AFTER-PATCH-1';
+
+  async function editCreditLimitTo(value, expectedWrites) {
+    fireEvent.change(creditLimitInput(), { target: { value: String(value) } });
+    fireEvent.blur(creditLimitInput());
+    await waitFor(() => expect(writeCalls(globalThis.fetch)).toHaveLength(expectedWrites));
+  }
+
+  // The healthy path: the PATCH response echoes a fresh `updated`, the helper harvests it, and
+  // the next write uses it. This is what makes two consecutive edits work at all.
+  it('uses the token harvested from the previous PATCH response', async () => {
+    rememberRecordVersion({ id: BP_ID, updated: READ_TOKEN });
+    globalThis.fetch = vi.fn(() => Promise.resolve(neoResponse([{
+      id: BP_ID, creditLimit: 7000, updated: TOKEN_AFTER_FIRST_PATCH,
+    }])));
+
+    render(<ContactsFinancialPanel {...defaultProps} />);
+    await editCreditLimitTo(7000, 1);
+    await editCreditLimitTo(8000, 2);
+
+    const calls = writeCalls(globalThis.fetch);
+    expect(bodyOf(calls[0]).updated).toBe(READ_TOKEN);
+    expect(bodyOf(calls[1]).updated).toBe(TOKEN_AFTER_FIRST_PATCH);
+  });
+
+  // Characterization, NOT a contract: when the response omits `updated` there is nothing to
+  // harvest, so the second write replays the token the first one consumed and the server
+  // answers 409. Documented here so the dependency on the server echoing `updated` is visible
+  // rather than folklore — if a response shape ever stops echoing it, this is the failure.
+  it('replays the consumed token when the PATCH response omits `updated`', async () => {
+    rememberRecordVersion({ id: BP_ID, updated: READ_TOKEN });
+    globalThis.fetch = vi.fn(() => Promise.resolve(neoResponse([{ id: BP_ID, creditLimit: 7000 }])));
+
+    render(<ContactsFinancialPanel {...defaultProps} />);
+    await editCreditLimitTo(7000, 1);
+    await editCreditLimitTo(8000, 2);
+
+    expect(bodyOf(writeCalls(globalThis.fetch)[1]).updated).toBe(READ_TOKEN);
+  });
+
+  // Characterization of a KNOWN LIMITATION, not a desired behaviour: the contacts contract
+  // maps several entity names onto the same C_BPartner row (businessPartner / customer /
+  // vendorCreditor / employee / …). A write through one alias refreshes only that alias's
+  // bucket, so every other bucket for the same id — including the one this panel writes
+  // through — is left holding the token that write consumed, and the next save 409s.
+  //
+  // Out of ETP-5255's scope (that ticket was about the panel issuing two writes of its own).
+  // If the version cache is ever taught to key by underlying table, this test SHOULD fail —
+  // that is the signal to delete it, not to restore the behaviour.
+  it('leaves this panel\'s bucket stale after a write through another alias of the same row', async () => {
+    const useApiFetch = createRealUseApiFetchMock();
+    const apiFetch = useApiFetch('/sws/neo/contacts');
+    globalThis.fetch = vi.fn(() => Promise.resolve(neoResponse([{
+      id: BP_ID, updated: TOKEN_AFTER_FIRST_PATCH,
+    }])));
+
+    // The row read through both aliases: same row, same token.
+    rememberRecordVersion({ id: BP_ID, updated: READ_TOKEN }, 'businessPartner');
+    rememberRecordVersion({ id: BP_ID, updated: READ_TOKEN }, 'customer');
+    rememberRecordVersion({ id: BP_ID, updated: READ_TOKEN });
+
+    // The user saves the Customer tab first.
+    await apiFetch(`/customer/${BP_ID}`, { method: 'PATCH', body: JSON.stringify({ creditLimit: 1 }) });
+    await waitFor(() => expect(getRecordVersion(BP_ID, 'customer')).toBe(TOKEN_AFTER_FIRST_PATCH));
+
+    // Then edits the credit limit, which goes out through /businessPartner.
+    render(<ContactsFinancialPanel {...defaultProps} />);
+    fireEvent.change(creditLimitInput(), { target: { value: '7000' } });
+    fireEvent.blur(creditLimitInput());
+    await waitFor(() => expect(writeCalls(globalThis.fetch).length).toBeGreaterThanOrEqual(2));
+
+    const bpCall = writeCalls(globalThis.fetch)
+      .find(([url]) => String(url).includes('/businessPartner/'));
+    expect(bodyOf(bpCall).updated).toBe(READ_TOKEN); // stale -> the server answers 409
   });
 });
