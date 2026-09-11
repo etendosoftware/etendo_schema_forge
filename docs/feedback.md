@@ -2084,3 +2084,34 @@ dead column the ticket set out to fix. It was right (both configured organizatio
 2026-09-08 and no invoice is later than that), but a reviewer opening a dev instance would have
 filed it as a regression. When a column's correct state in dev data is uniform, say so out loud
 before somebody else looks at it.
+
+## [2026-09-11] Pre-existing flake — `contacts-list-sort-column-width.mocked.spec.js` (ETP-5182 test), unrelated to ETP-5281
+
+**Component:** the ETP-5182 regression spec itself
+(`e2e/tests/flows/contacts-list-sort-column-width.mocked.spec.js`), not `DataTable.jsx`.
+
+**Symptom:** the spec asserts the `name` column header's `getBoundingClientRect().width` is
+identical (< 0.5px tolerance) before and after clicking the header to sort. It fails intermittently
+with diffs around 0.35–0.75px, and looks exactly like a regression from whatever DataTable change
+landed most recently (it did, for ETP-5281's header-truncation/`max-w-full` work — but is not).
+
+**Root cause — confirmed NOT the sort action.** Instrumented the header's width right after
+`page.goto()` with no sort click at all: on a cold page load the `<th>` box measures a transient
+value (observed 138.7–138.9px) that, after ~200–300ms and/or any subsequent layout pass (font
+metrics settling, most likely — `table-layout: fixed`'s "first row" width computation is sensitive
+to this), snaps to a stable value (139.25px in this repro) and stays there for the rest of the
+browser context's life. The test's "before" measurement is taken very soon after the header becomes
+visible; its "after" measurement is taken later (after waiting for the sort request + long-name
+rows to render), giving the settle time to complete. The diff the test sees is the gap between the
+cold and settled measurements — nothing to do with sorting, the arrow glyph, or column content.
+
+**Proof it predates ETP-5281.** Ran the identical spec, full mocked suite, on `develop` HEAD
+(`ebf319cfe`, zero ETP-5281 commits applied) — same test fails on the first attempt with the same
+signature, passes on retry. Also reproduced standalone on the ETP-5281 branch itself with
+`--repeat-each` across multiple runs: fails roughly 1-in-3 attempts, single-worker, no sort-content
+variation involved.
+
+**Status:** not fixed here — flagged for whoever next touches this spec. A real fix likely means
+letting the page settle (e.g. two `requestAnimationFrame`s, or a short fixed wait) before taking the
+"before" measurement, not loosening the 0.5px tolerance (which is correctly guarding against a real
+class of bug — table-layout content-driven resize — that this spec exists to catch).

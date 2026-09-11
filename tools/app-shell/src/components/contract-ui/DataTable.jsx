@@ -1432,7 +1432,16 @@ function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, lo
       className={['align-middle', col.headClass || ''].filter(Boolean).join(' ')}
       style={headStyle}
     >
-      <span className="inline-flex items-center text-xs leading-4 font-semibold text-text-primary tracking-normal">
+      {/* ETP-5281 — same cap as the single-label branch (renderColumnHeaderCell):
+          a multiField header ("Tipo & IBAN") had no width ceiling either, so it
+          could overflow into the next header cell exactly like a plain label.
+          Truncating the whole joined string as one unit (rather than shrinking
+          each part individually) is a deliberate, proportionate fix — this
+          layout is niche (today, only financial-account's headClass-pinned
+          340px "Tipo & IBAN" column uses it) and per-part truncation would need
+          restructuring every part into its own flex item, not worth it for a
+          case that isn't the reported overlap. */}
+      <span className="inline-flex max-w-full min-w-0 items-center overflow-hidden text-ellipsis whitespace-nowrap text-xs leading-4 font-semibold text-text-primary tracking-normal">
         {col.parts.map((part, partIdx) => {
           const partLabel = resolveColumnLabel(part, locale, t);
           const partSorted = sortColumn === part.key;
@@ -1473,17 +1482,56 @@ function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, lo
 }
 
 /**
+ * Renders the label + optional computed-freshness-hint + optional sort-arrow
+ * markup shared by both the sortable (`<button>`) and non-sortable (`<span>`)
+ * variants of a single-label column header in `renderColumnHeaderCell`.
+ * Extracted to remove the ~22-line duplicated block SonarQube flagged
+ * between the two branches — pure JSX extraction, renders the exact same
+ * DOM as before in both call sites.
+ */
+function renderHeaderLabelContent(colLabel, col, isSorted, sortDirection, sortArrowClass) {
+  return (
+    <>
+      <span className="inline-flex max-w-full min-w-0 items-center gap-1 align-middle">
+        <span className="min-w-0 truncate" title={typeof colLabel === 'string' ? colLabel : undefined}>{colLabel}</span>
+        {col.computed?.mode === 'stored' && (
+          <span className="shrink-0">
+            <ComputedFreshnessHint computed={col.computed} data-testid="ComputedFreshnessHint__eb5261" />
+          </span>
+        )}
+      </span>
+      {isSorted && (
+        <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+      )}
+    </>
+  );
+}
+
+/**
  * Renders a single sortable column header cell, including the sort-direction
  * arrow. Extracted from the `visibleColumns.map(...)` callback in DataTable's
  * header row so its onSort/isSorted branching lives in its own function.
  */
-function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort, linesLayout, locale, t }) {
+function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort, locale, t }) {
   const colLabel = resolveColumnLabel(col, locale, t);
   const isSorted = sortColumn === col.key;
   const isSortable = col.sortable !== false;
-  const headStyle = linesLayout === 'inlineEditable'
-    ? { minWidth: columnMinWidthPx(col, colIdx) }
-    : undefined;
+  // Hoisted once (was repeated inline 4x below): a plain lookup, not a branch,
+  // just avoids recomputing `NUMERIC_FIELD_TYPES.has(col.type)` at every call
+  // site and keeps the ternaries that use it readable.
+  const isNumeric = NUMERIC_FIELD_TYPES.has(col.type);
+  // ETP-5281 — apply the same minWidth baseline in EVERY layout, not just
+  // inlineEditable. Normal list mode has no <colgroup> (renderLinesColgroup
+  // only renders when hideHeader is true), so without this the header had no
+  // width floor at all and columns could collapse below their content,
+  // causing header/body text to overlap on narrow viewports.
+  // Skipped when `col.headClass` is set: that opt-in chrome already pins the
+  // column's own width (e.g. financial-account's Figma-pinned Cuentas grid,
+  // artifacts/financial-account/custom/AccountsHeaderTable.jsx, which narrows
+  // `currency`/`country` below this type's generic floor) — CSS always renders
+  // at least `min-width` regardless of a smaller `width`, so a competing
+  // default here would silently widen a deliberately narrower pinned column.
+  const headStyle = col.headClass ? undefined : { minWidth: columnMinWidthPx(col, colIdx) };
   // `multiField` columns expose N constituent fields as independently
   // sortable header segments (e.g. "Identifier & Name"); each part cycles the
   // sort on its own NEO field key. Non-multiField columns keep the single-label
@@ -1491,7 +1539,7 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
   if (Array.isArray(col.parts) && col.parts.length > 0) {
     return renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, locale, t, headStyle });
   }
-  const sortArrowClass = NUMERIC_FIELD_TYPES.has(col.type)
+  const sortArrowClass = isNumeric
     ? 'left-0 -translate-x-full pr-0.5'
     : 'right-0 translate-x-full pl-0.5';
   return (
@@ -1500,7 +1548,7 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
       data-testid={`column-header-${col.key}`}
       className={[
         'align-middle',
-        NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : '',
+        isNumeric ? 'text-right' : '',
         // Opt-in fixed-width / per-column header styling. Needed by list windows
         // whose design pins column widths (e.g. financial-account's Figma layout,
         // where the "Cuenta" header must align with the row avatar). Absent =
@@ -1512,26 +1560,24 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
       {onSort && isSortable ? (
         <button
           type="button"
-          className={`relative inline-block text-xs leading-4 font-semibold text-text-primary tracking-normal cursor-pointer select-none transition-colors bg-transparent border-0 p-0 ${NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : 'text-left'}`}
+          // ETP-5281 — `max-w-full` caps this at the header cell's (now
+          // minWidth-floored) available width WITHOUT changing `inline-block`'s
+          // shrink-to-fit sizing: a label that already fits is completely
+          // unaffected (the cap never engages, so the sort arrow — anchored to
+          // this element's own edge below — stays exactly where it always was,
+          // right next to the label). Only a label that would otherwise overflow
+          // gets capped, at which point the inner label span's own `truncate`
+          // (below) shows the "…". Do NOT swap this to `block`/`w-full` — that
+          // would ALSO stretch the (common, non-overflowing) short-label case to
+          // the cell's full width, dragging the arrow away from the label.
+          className={`relative inline-block max-w-full text-xs leading-4 font-semibold text-text-primary tracking-normal cursor-pointer select-none transition-colors bg-transparent border-0 p-0 ${isNumeric ? 'text-right' : 'text-left'}`}
           onClick={() => onSort(col.key)}
         >
-          <span className="inline-flex items-center gap-1 align-middle">
-            {colLabel}
-            {col.computed?.mode === 'stored' && <ComputedFreshnessHint computed={col.computed} data-testid="ComputedFreshnessHint__eb5261" />}
-          </span>
-          {isSorted && (
-            <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
-          )}
+          {renderHeaderLabelContent(colLabel, col, isSorted, sortDirection, sortArrowClass)}
         </button>
       ) : (
-        <span className={`relative inline-block text-xs leading-4 font-semibold text-text-primary tracking-normal${NUMERIC_FIELD_TYPES.has(col.type) ? ' text-right' : ''}`}>
-          <span className="inline-flex items-center gap-1 align-middle">
-            {colLabel}
-            {col.computed?.mode === 'stored' && <ComputedFreshnessHint computed={col.computed} data-testid="ComputedFreshnessHint__eb5261" />}
-          </span>
-          {isSorted && (
-            <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
-          )}
+        <span className={`relative inline-block max-w-full text-xs leading-4 font-semibold text-text-primary tracking-normal${isNumeric ? ' text-right' : ''}`}>
+          {renderHeaderLabelContent(colLabel, col, isSorted, sortDirection, sortArrowClass)}
         </span>
       )}
     </TableHead>
@@ -1630,7 +1676,7 @@ function TableDataRow({
             data-testid="Checkbox__eb5261" />
         </TableCell>
       )}
-      {visibleColumns.map(col => {
+      {visibleColumns.map((col, colIdx) => {
         const isTrailingHover = trailingHoverColumn != null && col === trailingHoverColumn;
         return (
           <TableCell
@@ -1645,6 +1691,16 @@ function TableDataRow({
               // column's width so header and cells stay aligned. Absent = unchanged.
               col.cellClass || '',
             ].filter(Boolean).join(' ')}
+            // ETP-5281 — mirrors the header's minWidth floor (renderColumnHeaderCell).
+            // Body cells previously had NO width constraint in normal list mode, so
+            // a long value in one column could push into the next column's space.
+            // Skipped when `col.cellClass` is set (same reasoning as `headClass`
+            // above): CSS always renders at least `min-width` regardless of a
+            // smaller `width` class, so this default would otherwise override a
+            // column that deliberately pins itself narrower (e.g. financial-account's
+            // `currency`/`country` columns, pinned to 120px/160px below this type's
+            // 192px selector-baseline floor).
+            style={col.cellClass ? undefined : { minWidth: columnMinWidthPx(col, colIdx) }}
           >
             {isTrailingHover ? (
               <span className="block transition-opacity group-hover/row:opacity-0 group-focus-within/row:opacity-0">
@@ -1749,8 +1805,13 @@ function TableDataRow({
             </TableCell>
           )}
           {onCloneRow && !quickActionsEnabled && (
+            // ETP-5281 — `overflow-visible` overrides the shared TableCell's new
+            // default `overflow-hidden` (see packages/app-shell-core ui/table.jsx):
+            // the tooltip below is `absolute bottom-full`, deliberately escaping
+            // this cell's own box to float above the button, and would otherwise
+            // get silently clipped.
             <TableCell
-              className="w-10 px-2"
+              className="w-10 px-2 overflow-visible"
               onClick={(e) => e.stopPropagation()}
               data-testid="TableCell__eb5261">
               <div className="relative group/clonebtn flex items-center justify-center">
@@ -1772,8 +1833,13 @@ function TableDataRow({
         </>
       )}
       {quickActionsEnabled && (
+        // ETP-5281 — same `overflow-visible` override: per RowQuickActions.jsx's
+        // own doc comment, "the wrapping <td> uses absolute positioning so the
+        // icons overlay the trailing grid columns" — an intentional overflow
+        // beyond this cell's bounds that the new shared `overflow-hidden`
+        // default would otherwise clip.
         <TableCell
-          className="w-10 px-2 relative"
+          className="w-10 px-2 relative overflow-visible"
           onClick={(e) => e.stopPropagation()}
           data-testid="TableCell__eb5261">
           <RowQuickActions
