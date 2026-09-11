@@ -44,8 +44,6 @@ const ARROW_ALLOWLIST = new Set([
   'fiscal.onboarding.skipped.hint',
   'fiscal.onboarding.confirm.subtitle',
   'fiscal.onboarding.confirm.subtitle.bold',
-  'goodsReceipt.confirmModal.viewInvoice',
-  'goodsShipment.confirmModal.viewInvoice',
 ]);
 
 describe('view-document labels carry no arrow (ETP-4312)', () => {

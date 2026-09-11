@@ -208,7 +208,12 @@ test.describe('Goods Receipt — Confirm without invoice (ETP-5063 toast fix)', 
     await expect.poll(() => headerGetCount, { timeout: 5_000 }).toBeGreaterThan(countBeforeConfirm);
   });
 
-  test('confirming an already fully-invoiced receipt shows a toast, never the result modal', async ({ page }) => {
+  // ETP-5265 — the intermediate "already fully invoiced" confirmation popup
+  // (ConfirmReceiptInvoicedModal) was removed entirely. Confirming a
+  // fully-invoiced receipt now fires the documentAction POST directly (via
+  // handleConfirmFullyInvoiced / useDocumentAction) as soon as the trigger
+  // event is dispatched — no modal ever renders, no button to click.
+  test('confirming an already fully-invoiced receipt calls documentAction directly and shows a toast, never any modal', async ({ page }) => {
     const invoicedReceipt = makeReceipt({
       id: 'gr-already-invoiced-001',
       documentNo: 'GR-ALREADYINV-001',
@@ -235,11 +240,13 @@ test.describe('Goods Receipt — Confirm without invoice (ETP-5063 toast fix)', 
     await installGoodsReceiptMock(page, [invoicedReceipt]);
 
     let documentActionCalls = 0;
+    let documentActionBody = null;
     await page.route(
       (url) =>
         url.href.includes(`/sws/neo/goods-receipt/goodsReceipt/${invoicedReceipt.id}/action/documentAction`),
       async (route) => {
         documentActionCalls += 1;
+        documentActionBody = route.request().postDataJSON();
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -255,27 +262,27 @@ test.describe('Goods Receipt — Confirm without invoice (ETP-5063 toast fix)', 
     await expect.poll(() => headerGetCount, { timeout: 8_000 }).toBeGreaterThan(0);
     const countBeforeConfirm = headerGetCount;
 
+    // No modal is mounted before the trigger fires.
+    await expect(page.getByTestId('confirm-inout-modal')).toHaveCount(0);
+
     await page.waitForTimeout(300);
     await page.evaluate(() =>
       window.dispatchEvent(new CustomEvent('goods-receipt:open-confirm-modal'))
     );
 
-    // Fully-invoiced branch renders ConfirmReceiptInvoicedModal, whose
-    // confirm button reads goodsReceipt.confirmModal.confirmBtn = "Confirmar"
-    // — the SAME text as the topbar's own "action-save" button (unrelated,
-    // pre-existing coincidence: draftMode's Save button is also labeled
-    // "Confirmar" for this window). The modal is portal-appended to the end
-    // of <body>, so it is the LAST DOM match for this exact name.
-    const confirmBtn = page.getByRole('button', { name: 'Confirmar', exact: true }).last();
-    await expect(confirmBtn).toBeVisible({ timeout: 8_000 });
-    await confirmBtn.click();
+    // The fully-invoiced branch calls documentAction directly — never opens
+    // ConfirmInOutModal (the not-fully-invoiced flow's modal, tested above)
+    // nor any other confirm popup.
+    await expect(page.getByTestId('confirm-inout-modal')).toHaveCount(0);
 
     const successToast = page.locator('[data-type="success"]').first();
     await expect(successToast).toBeVisible({ timeout: 5_000 });
     await expect(successToast).toContainText('Albarán de compra confirmado');
 
+    await expect(page.getByTestId('confirm-inout-modal')).toHaveCount(0);
     await expect(page.getByTestId('confirm-result-modal')).toHaveCount(0);
     expect(documentActionCalls).toBe(1);
+    expect(documentActionBody).toEqual({ docAction: 'CO' });
 
     await expect.poll(() => headerGetCount, { timeout: 5_000 }).toBeGreaterThan(countBeforeConfirm);
   });
