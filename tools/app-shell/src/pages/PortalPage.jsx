@@ -56,7 +56,7 @@ const VIEW = {
   loading: 'loading',
   ready: 'ready',
   invalid: 'invalid',
-  error: 'error',
+  transientFailure: 'transient-failure',
 };
 
 /** Full-page frame shared by every state, so the portal looks like one surface throughout. */
@@ -302,7 +302,9 @@ export default function PortalPage() {
       setView(VIEW.ready);
     }).catch((error) => {
       if (!active) return;
-      setView(error?.code === PORTAL_ERROR.invalidLink ? VIEW.invalid : VIEW.error);
+      setView(
+        error?.code === PORTAL_ERROR.invalidLink ? VIEW.invalid : VIEW.transientFailure,
+      );
     });
 
     return () => { active = false; };
@@ -404,7 +406,7 @@ export default function PortalPage() {
     );
   }
 
-  if (view === VIEW.error) {
+  if (view === VIEW.transientFailure) {
     return (
       <PortalFrame data-testid="PortalFrame__3db5f6">
         <PortalNotice
