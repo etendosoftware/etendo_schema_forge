@@ -7,12 +7,13 @@ import GoodsReceiptBottomPanel from '@generated/goods-receipt/custom/GoodsReceip
 import GoodsReceiptPreview from './GoodsReceiptPreview.jsx';
 import RelatedDocuments from './RelatedDocuments.jsx';
 import { AttachmentsTab } from '@/components/attachments';
-import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useUI } from '@/i18n';
+import { buildDocumentRowQuickActionsPostMenu } from '../shared/buildDocumentRowQuickActions.js';
 
 import { buildHeaders } from '@/auth/api.js';
 const HEADER_COLUMNS = [
@@ -64,6 +65,15 @@ function GoodsReceiptBulkAction(props) {
         buildActions={buildInOutActions}
         labelKey="confirmBulk"
         data-testid="BulkDocumentAction__bf4f23" />
+      {/* ETP-5209 — bulk Contabilizar (post), gated to processed & not-yet-posted rows */}
+      <BulkDocumentAction
+        {...props}
+        entity="goodsReceipt"
+        actionMode="neoAction"
+        buildActions={buildPostActions}
+        rowFilter={postRowFilter}
+        labelKey="post"
+        data-testid="BulkDocumentActionPost__bf4f23" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
@@ -123,7 +133,11 @@ export default function GoodsReceiptWindow(props) {
     onEdit: (row) => navigate(`/${windowName}/${row.id}`),
     onClone: (row) => setCloneTargets([row]),
     onDelete: requestDelete,
-  }), [navigate, windowName, requestDelete]);
+    // ETP-5209 — Post reachable from the row-hover kebab, mirroring menuActionsForForm's
+    // gate. Extracted to shared/buildDocumentRowQuickActions.js (rejection-cycle fix —
+    // this block was duplicated verbatim in goods-shipment/index.jsx).
+    ...buildDocumentRowQuickActionsPostMenu({ ui, onRefresh: () => setRefreshKey(k => k + 1) }),
+  }), [navigate, windowName, requestDelete, ui]);
 
   return (
     <>
