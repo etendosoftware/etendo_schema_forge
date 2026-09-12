@@ -87,10 +87,50 @@ function looksLikeWindowAccessPayload(value) {
 // revocation — one that never touches SFWindowAccessMap's tiers — still flip
 // `accessChanged` and bump `authRevision`, instead of silently never refreshing the
 // menu (see AuthContext.jsx's [ETP-5189] comment on `menuAccess`).
+//
+// Cached for a short TTL — `AuthContext.jsx` calls `fetchWindowAccess` (and therefore
+// this) on EVERY silent refresh (bootstrap, tab focus, tab visibility, the 5-min poll),
+// and `refresh()`'s own in-flight dedup only collapses calls that are LITERALLY
+// concurrent, not ones a few hundred ms apart from separate focus/blur events — a burst
+// of UI interaction (e.g. several dialogs/tabs in quick succession) can trigger several
+// full refresh cycles in a short window. Confirmed via a controlled A/B (2026-09-11):
+// under Playwright's 4-worker mocked E2E suite, this extra per-refresh network+parse
+// cost — even though the request is small and often just an aborted mock in tests —
+// compounded across concurrently-running tests badly enough to roughly DOUBLE both the
+// suite's wall-clock time and its (pre-existing, worker-contention-driven) failure rate
+// for interaction-heavy specs. A 60s cache is the same order of magnitude as this app's
+// own query-cache default staleness (`DEFAULT_STALE_TIME` in the core's queryCache.js)
+// and far short of the 5-minute poll this whole mechanism is already built to tolerate
+// as a worst case — so it costs negligible real-world responsiveness while absorbing
+// exactly the rapid-refresh-burst case that caused the regression. The FAILURE case is
+// cached too (as `{}`, matching the fail-open default) — an aborted/unreachable
+// SFListMenu is exactly the repeated, wasted round trip this is meant to collapse.
+const MENU_ACCESS_CACHE_TTL_MS = 60_000;
+let menuAccessCache = null; // { value, expiresAt } | null
+
 async function fetchMenuAccess() {
-  const tree = await fetchMenuTree();
-  const ids = collectAllowedIds(tree?.tree);
-  return Object.fromEntries([...ids].map((id) => [id, true]));
+  if (menuAccessCache && Date.now() < menuAccessCache.expiresAt) {
+    return menuAccessCache.value;
+  }
+  let value;
+  try {
+    const tree = await fetchMenuTree();
+    const ids = collectAllowedIds(tree?.tree);
+    value = Object.fromEntries([...ids].map((id) => [id, true]));
+  } catch {
+    value = {};
+  }
+  menuAccessCache = { value, expiresAt: Date.now() + MENU_ACCESS_CACHE_TTL_MS };
+  return value;
+}
+
+// Test-only: the module-level cache above is scoped to one real page load (a fresh
+// JS module instance per navigation), which never overlaps across test cases in
+// practice — but a test file runs many `fetchWindowAccess()` calls against the SAME
+// imported module instance, so without an explicit reset the cache leaks between
+// otherwise-independent test cases. Exported ONLY for that; not used by app code.
+export function __resetMenuAccessCacheForTest() {
+  menuAccessCache = null;
 }
 
 export async function fetchWindowAccess(session) {
