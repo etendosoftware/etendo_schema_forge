@@ -119,6 +119,49 @@ describe('useFiscalConfigForOrgs — per-org fetch (ETP-5248)', () => {
   });
 });
 
+describe('useFiscalConfigForOrgs — partial org fetch failure (ETP-5248 regression risk)', () => {
+  // The hook now fans out to N orgs instead of always exactly 1. Each org's
+  // fetch goes through the SAME outer `Promise.all(entries.map(...))`, and
+  // `fetchAllRows` THROWS on a non-OK response. `Promise.all` rejects on the
+  // FIRST rejected member, so if org-fail's request fails (transient 500,
+  // timeout, etc.) while org-ok's request already succeeded, the whole batch
+  // rejects and the catch block sets `byOrg` back to whatever it was BEFORE
+  // this effect run (empty on first load) — org-ok's correctly-fetched data
+  // never reaches state. Before this fix there was only ever one org, so a
+  // failure could only ever cost that one org; now a single bad org can wipe
+  // every other order's SII/VERI-FACTU columns on the same page.
+  //
+  // This test intentionally documents that risk. It currently FAILS, proving
+  // the regression — see BUG-1 in the ETP-5248 QA report.
+  it('keeps a successful org\'s cutover data when a DIFFERENT org\'s fetch fails', async () => {
+    mockApiFetch.mockImplementation((path) => {
+      const url = new URL(path, 'http://local');
+      const orgId = url.searchParams.get('organization');
+      if (path.startsWith('/sii-config/') && orgId === 'org-fail') {
+        return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
+      }
+      const rowsBySpecAndOrg = {
+        'sii-config': { 'org-ok': [{ id: 'a1', active: 'Y', monitordate: '2026-01-01T00:00:00.000Z' }] },
+        'verifactu-config': { 'org-ok': [], 'org-fail': [] },
+      };
+      const spec = Object.keys(rowsBySpecAndOrg).find((s) => path.startsWith(`/${s}/`));
+      const rows = rowsBySpecAndOrg[spec]?.[orgId] ?? [];
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ response: { data: rows } }),
+      });
+    });
+
+    const { result } = renderHook(() => useFiscalConfigForOrgs(['org-ok', 'org-fail'], '/api'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    // org-ok's fetch succeeded on its own and should still gate its rows
+    // correctly, even though org-fail's request errored out.
+    expect(result.current.byOrg['org-ok']?.earliestSiiCutoverDate).toBe('2026-01-01T00:00:00.000Z');
+  });
+});
+
 describe('cutoverForRowOrg — per-row lookup helper (ETP-5248)', () => {
   const fiscalByOrg = {
     byOrg: {
