@@ -58,7 +58,9 @@ export default function EmbeddedWindowFrame({ src, windowName, title, onRecordId
           style={{ height }}
           data-testid="embedded-window-loading"
         >
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <Loader2
+            className="h-6 w-6 animate-spin text-muted-foreground"
+            data-testid="Loader2__f32854" />
         </div>
       )}
       <iframe

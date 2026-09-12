@@ -322,7 +322,10 @@ export default function RecordCreateModal({
   if (!open || !target) return null;
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next) dismiss(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => { if (!next) dismiss(); }}
+      data-testid="Dialog__928459">
       <DialogContent
         data-testid="record-create-modal"
         className="max-w-5xl max-h-[85vh] overflow-y-auto gap-0 rounded-lg bg-card p-6"
@@ -333,8 +336,8 @@ export default function RecordCreateModal({
         contain the product columns.
       */}
       <LocaleProvider dictionaries={modalDictionaries} locale={locale} setLocale={setLocale}>
-        <DialogHeader>
-          <DialogTitle className="text-xl">{ui(target.titleKey)}</DialogTitle>
+        <DialogHeader data-testid="DialogHeader__928459">
+          <DialogTitle className="text-xl" data-testid="DialogTitle__928459">{ui(target.titleKey)}</DialogTitle>
         </DialogHeader>
 
         {windowMode && (
@@ -356,7 +359,7 @@ export default function RecordCreateModal({
                 windowName={target.windowName}
                 title={ui(target.titleKey)}
                 onRecordId={setWindowRecordId}
-              />
+                data-testid="EmbeddedWindowFrame__928459" />
             </div>
 
             {/*
@@ -422,7 +425,7 @@ export default function RecordCreateModal({
                     labelOverrides={target.labelOverrides}
                     registerFields={registerFields}
                     fieldErrors={fieldErrors}
-                  />
+                    data-testid="FormComponent__928459" />
                 </div>
               ))}
             </>
@@ -443,14 +446,17 @@ export default function RecordCreateModal({
 
         {createdRecord && Banner && (
           <div className="mt-6">
-            <Banner data={createdRecord} />
+            <Banner data={createdRecord} data-testid="Banner__928459" />
           </div>
         )}
 
         {createdRecord && postCreateTabs?.length > 0 && (
           <div className="mt-6 border-t border-border pt-2" data-testid="record-create-post-tabs">
-            <Tabs value={activePostTab} onValueChange={setActivePostTab}>
-              <TabsList className="border-b border-border">
+            <Tabs
+              value={activePostTab}
+              onValueChange={setActivePostTab}
+              data-testid="Tabs__928459">
+              <TabsList className="border-b border-border" data-testid="TabsList__928459">
                 {postCreateTabs.map(tab => (
                   <TabsTrigger
                     key={tab.key}
@@ -483,7 +489,7 @@ export default function RecordCreateModal({
                         prev[tab.key] === count ? prev : { ...prev, [tab.key]: count }
                       ))}
                       {...(tab.props || {})}
-                    />
+                      data-testid="TabComponent__928459" />
                   </div>
                 );
               })}

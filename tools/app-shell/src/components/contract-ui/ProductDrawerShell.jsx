@@ -269,7 +269,6 @@ export default function ProductDrawerShell({
           </div>
         </>
       )}
-
       {createTarget && createOpen && (
         <RecordCreateModal
           open
@@ -283,7 +282,7 @@ export default function ProductDrawerShell({
             setTimeout(() => inputRef.current?.focus(), 0);
           }}
           onCreated={handleCreated}
-        />
+          data-testid="RecordCreateModal__365d4d" />
       )}
     </>
   );
