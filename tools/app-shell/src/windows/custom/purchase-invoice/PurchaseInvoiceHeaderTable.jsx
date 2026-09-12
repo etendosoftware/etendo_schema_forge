@@ -77,21 +77,29 @@ export default function PurchaseInvoiceHeaderTable(props) {
   );
   const fiscalByOrg = useFiscalConfigForOrgs(rowOrgIds, apiBaseUrl);
 
-  // ETP-5087: BOTH fiscal columns resolve synchronously from the single,
-  // globally-selected org (`useFiscalConfig(orgId)` above) — no per-row, async
-  // org resolution. This is deliberate and symmetric with the SII column, which
-  // has always worked this way and never misbehaved. An earlier revision gated
-  // the Batuz column on a per-row `useOrgFiscalConfigs` batch fetch instead; the
-  // extra asynchrony produced three consecutive production regressions (invisible
-  // column, SII column broken, stale Map reference freezing the memo) without
-  // adding any capability the list actually needs.
+  // ETP-5087 (superseded by ETP-5248 for SII — see below): the Batuz column's
+  // SHOW/HIDE decision (`targets`, computed just below from `profile`/
+  // `territory`) still resolves synchronously from the single, globally-selected
+  // org (`useFiscalConfig(orgId)` above) — no per-row, async org resolution. An
+  // earlier revision gated the Batuz column on a per-row `useOrgFiscalConfigs`
+  // batch fetch instead; the extra asynchrony produced three consecutive
+  // production regressions (invisible column, SII column broken, stale Map
+  // reference freezing the memo) without adding any capability the list
+  // actually needs.
   //
   // Documented trade-off: a page mixing legal entities from DIFFERENT territories
   // shows/hides the Batuz column according to the org selected in the top-nav,
-  // not per row — exactly the same trade-off the SII column already makes. The
-  // Bizkaia-only restriction itself is NOT duplicated here: it lives entirely in
-  // `getInvoiceFiscalTargets`, which only returns `showTbai` for a purchase
-  // invoice whose territory is BIZKAIA.
+  // not per row. The Bizkaia-only restriction itself is NOT duplicated here: it
+  // lives entirely in `getInvoiceFiscalTargets`, which only returns `showTbai`
+  // for a purchase invoice whose territory is BIZKAIA.
+  //
+  // SII is NO LONGER symmetric with this: as of ETP-5248, the SII column's VALUE
+  // (not its visibility — `targets.showSii` is still selected-org-scoped, same
+  // as above) is gated per-row against that row's OWN org via the async
+  // `useFiscalConfigForOrgs`/`cutoverForRowOrg` fetch above. Given this file's
+  // history of regressions from exactly this per-row-async pattern, treat any
+  // change here with the same caution the Batuz column's synchronous design was
+  // chosen to avoid.
   const targets = useMemo(
     () => getInvoiceFiscalTargets('purchase-invoice', profile, territory),
     [profile, territory],
