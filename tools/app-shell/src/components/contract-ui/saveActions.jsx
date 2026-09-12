@@ -271,12 +271,13 @@ export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, on
 export function buildUnsavedChangesSaver({ hook, isNew, onAfterCreate, onAfterExistingSave, token, apiBaseUrl, ui }) {
   return async () => {
     const saved = await hook.handleSave({ silent: true });
-    if (!saved) return saved;
-    try {
-      await runAfterSaveHook(saved, { isNew, onAfterCreate, onAfterExistingSave, token, apiBaseUrl });
-    } catch (err) {
-      const detail = err?.message || '';
-      toast.error(ui?.('savedButFollowUpActionFailed', { detail }) || 'savedButFollowUpActionFailed');
+    if (saved) {
+      try {
+        await runAfterSaveHook(saved, { isNew, onAfterCreate, onAfterExistingSave, token, apiBaseUrl });
+      } catch (err) {
+        const detail = err?.message || '';
+        toast.error(ui?.('savedButFollowUpActionFailed', { detail }) || 'savedButFollowUpActionFailed');
+      }
     }
     return saved;
   };
