@@ -214,18 +214,26 @@ describe('PurchaseInvoiceHeaderTable — fiscal status badges gated on earliest-
     );
   });
 
-  it('destructures earliestSiiCutoverDate from useFiscalConfig (TBAI has no client-side cutover — ETP-5216/ETP-5229)', () => {
-    const destructure = src.match(/const\s*\{\s*\n?\s*profile,\s*tbaiRecord,[\s\S]*?\}\s*=\s*useFiscalConfig\(orgId,\s*apiBaseUrl\)/);
-    assert.ok(destructure, 'expected the useFiscalConfig destructure block');
+  // ETP-5248: the SINGLE-org useFiscalConfig() call now only supplies
+  // profile/tbaiRecord (column visibility + territory) — the earliest-cutover
+  // data used for the per-row SII gate moved to useFiscalConfigForOrgs, keyed
+  // by each row's OWN organization (resolveInvoiceOrgId), not the
+  // globally-selected one.
+  it('only destructures profile/tbaiRecord from useFiscalConfig (earliest-cutover data now comes from useFiscalConfigForOrgs, per-row — ETP-5248)', () => {
     assert.match(
-      destructure[0],
-      /const\s*\{\s*\n?\s*profile,\s*tbaiRecord,\s*\n?\s*earliestSiiCutoverDate,?\s*\n?\s*\}/,
-      'the earliest-ever SII cutover must be pulled from useFiscalConfig to gate the SII badge',
+      src,
+      /const\s*\{\s*profile,\s*tbaiRecord\s*\}\s*=\s*useFiscalConfig\(orgId,\s*apiBaseUrl\)/,
+      'useFiscalConfig(orgId) must still drive column visibility/territory (profile, tbaiRecord), nothing else',
     );
     assert.doesNotMatch(
-      destructure[0],
-      /earliestTbaiCutoverDate/,
-      'TBAI no longer reads a client-side cutover date — its gate moved into the stored DB column',
+      src,
+      /profile,\s*tbaiRecord,\s*\n?\s*earliestSiiCutoverDate/,
+      'earliestSiiCutoverDate must no longer come from the single-org useFiscalConfig destructure',
+    );
+    assert.match(
+      src,
+      /useFiscalConfigForOrgs\(rowOrgIds,\s*apiBaseUrl\)/,
+      'each row\'s own org fiscal config must be resolved via useFiscalConfigForOrgs',
     );
   });
 
@@ -237,10 +245,12 @@ describe('PurchaseInvoiceHeaderTable — fiscal status badges gated on earliest-
     );
   });
 
-  it('gates the SII badge on isSifEligibleByDate(row.accountingDate, earliestSiiCutoverDate)', () => {
+  it('gates the SII badge on isSifEligibleByDate(row.accountingDate, cutover) — cutover resolved per the ROW\'s own org (ETP-5248)', () => {
     const cell = src.match(/if \(targets\.showSii\) \{[\s\S]*?\}\)?;\s*\}/);
     assert.ok(cell, 'expected the showSii column-push block');
-    assert.match(cell[0], /isSifEligibleByDate\(row\.accountingDate, earliestSiiCutoverDate\)/);
+    assert.match(cell[0], /const rowOrgId = resolveInvoiceOrgId\(row, orgId\)/);
+    assert.match(cell[0], /cutoverForRowOrg\(fiscalByOrg, rowOrgId, 'sii'\)/);
+    assert.match(cell[0], /isSifEligibleByDate\(row\.accountingDate, cutover\)/);
     // ETP-5229 item #17: eligible-but-empty falls back to the 'PE' pending
     // marker, not a fabricated null — not-eligible (outside this expression)
     // still yields the dash, verified separately below.

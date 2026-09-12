@@ -52,14 +52,41 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 // still reads `tbaiRecord?.etsgSifTerritory` for territory eligibility.
 const FAR_PAST_ADOPTION = '2000-01-01T00:00:00.000Z';
 
-vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
-  useFiscalConfig: vi.fn(() => ({
+// ETP-5248 — the component no longer reads `earliestSiiCutoverDate` straight off
+// `useFiscalConfig()`; it resolves each row's OWN org via `useFiscalConfigForOrgs`
+// instead. This mock keeps every pre-ETP-5248 test (written against the single-org
+// `useFiscalConfig(...).earliestSiiCutoverDate` shape) passing unchanged by having
+// `useFiscalConfigForOrgs` mirror whatever `useFiscalConfig` is CURRENTLY mocked to
+// return, for every org id requested — correct as long as a test's fixture rows
+// all belong to one org (true for every test in this file except the ETP-5248
+// multi-org regression describe block below, which sets its own explicit
+// `useFiscalConfigForOrgs.mockReturnValue(...)`).
+vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => {
+  const useFiscalConfig = vi.fn(() => ({
     profile: null,
     siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION },
     tbaiRecord: null,
     earliestSiiCutoverDate: FAR_PAST_ADOPTION,
-  })),
-}));
+  }));
+  const useFiscalConfigForOrgs = vi.fn((orgIds) => {
+    const current = useFiscalConfig();
+    const byOrg = {};
+    (orgIds || []).forEach((id) => {
+      if (!id) return;
+      byOrg[id] = {
+        earliestSiiCutoverDate: current.earliestSiiCutoverDate ?? null,
+        earliestVerifactuCutoverDate: current.earliestVerifactuCutoverDate ?? null,
+      };
+    });
+    return { loading: false, error: null, byOrg };
+  });
+  function cutoverForRowOrg(fiscalByOrg, rowOrgId, system) {
+    if (!rowOrgId) return null;
+    const field = system === 'verifactu' ? 'earliestVerifactuCutoverDate' : 'earliestSiiCutoverDate';
+    return fiscalByOrg?.byOrg?.[rowOrgId]?.[field] ?? null;
+  }
+  return { useFiscalConfig, useFiscalConfigForOrgs, cutoverForRowOrg };
+});
 
 vi.mock('@/windows/custom/shared/fiscalTargets.js', async () => {
   const actual = await vi.importActual('@/windows/custom/shared/fiscalTargets.js');
@@ -270,7 +297,7 @@ vi.mock('@/components/contract-ui', () => ({
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
-import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
+import { useFiscalConfig, useFiscalConfigForOrgs } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import { resolveFilterMode } from '@/lib/gridQuery';
 import PurchaseInvoiceHeaderTable from '../PurchaseInvoiceHeaderTable.jsx';
 
@@ -1443,5 +1470,106 @@ describe('PurchaseInvoiceHeaderTable — fiscal columns (ETP-5087)', () => {
       expect(container.textContent).toBe('Pendiente');
       expect(container.querySelector('[data-testid="fiscal-status-badge"]')).not.toBeNull();
     });
+  });
+});
+
+// ── ETP-5248: "[SIF] Las columnas SII y VERI-FACTU comparan cada factura
+// contra la organización seleccionada, no la suya" ──────────────────────────
+// Root cause: the SII column used to gate EVERY row against the single
+// earliestSiiCutoverDate returned by `useFiscalConfig(selectedOrg.id)` — wrong
+// whenever the grid mixes invoices from multiple orgs (parked in a parent org,
+// "*", or a multi-org role). The fix resolves each row's OWN org via
+// `resolveInvoiceOrgId` and looks up ITS OWN earliest cutover through
+// `useFiscalConfigForOrgs`/`cutoverForRowOrg`. Column VISIBILITY (targets.showSii)
+// is unchanged — still derived from the single selected org (ETP-5087 trade-off).
+describe('PurchaseInvoiceHeaderTable — per-row org fiscal gating (ETP-5248)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedColumnsHolder.value = null;
+    getInvoiceFiscalTargets.mockReturnValue({ showSii: true, showTbai: false, showVerifactu: false });
+    useFiscalConfig.mockReturnValue({ profile: 'sii', tbaiRecord: null, siiRecord: null });
+  });
+
+  const ORG_A_ROW = {
+    ...AP_INVOICE_ROW,
+    adOrgId: 'org-A',
+    accountingDate: '2026-03-15',
+    aeatsiiEstado: 'sent-A',
+  };
+  const ORG_B_ROW = {
+    ...AP_INVOICE_ROW,
+    adOrgId: 'org-B',
+    accountingDate: '2026-03-15',
+    aeatsiiEstado: 'sent-B',
+  };
+
+  function siiColumn() {
+    return (capturedColumnsHolder.value || []).find((c) => c.key === '_siiStatus');
+  }
+
+  it('THE BUG REPRO: two invoices from different orgs on the same page each get gated against THEIR OWN org cutover, not the selected one', () => {
+    // Org A (currently selected, id "org-1" per the top-nav mock) adopted SII
+    // June 1st. Org B adopted January 1st. Both invoices are dated March 15th.
+    useFiscalConfigForOrgs.mockReturnValue({
+      loading: false,
+      error: null,
+      byOrg: {
+        'org-A': { earliestSiiCutoverDate: '2026-06-01T00:00:00.000Z', earliestVerifactuCutoverDate: null },
+        'org-B': { earliestSiiCutoverDate: '2026-01-01T00:00:00.000Z', earliestVerifactuCutoverDate: null },
+      },
+    });
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} data={[ORG_A_ROW, ORG_B_ROW]} />);
+
+    // Org A's invoice predates ITS OWN org's cutover (June) → dash (null status).
+    const { container: aContainer } = render(<div>{siiColumn().render(ORG_A_ROW)}</div>);
+    expect(aContainer.querySelector('[data-testid="fiscal-status-badge"]').textContent).toBe('');
+
+    // Org B's invoice postdates ITS OWN org's cutover (January) → real status
+    // shown. Before the fix this row was wrongly compared against org A's
+    // June cutover (the SELECTED org) and would ALSO have shown a dash.
+    const { container: bContainer } = render(<div>{siiColumn().render(ORG_B_ROW)}</div>);
+    expect(bContainer.querySelector('[data-testid="fiscal-status-badge"]').textContent).toBe('sent-B');
+  });
+
+  it('single-org behavior is unchanged: every row on the page shares the same (selected) org cutover', () => {
+    useFiscalConfigForOrgs.mockReturnValue({
+      loading: false,
+      error: null,
+      byOrg: { 'org-1': { earliestSiiCutoverDate: FAR_PAST_ADOPTION, earliestVerifactuCutoverDate: null } },
+    });
+    const rowNoOrgField = { ...AP_INVOICE_ROW, accountingDate: '2026-03-15', aeatsiiEstado: 'sent' };
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} data={[rowNoOrgField]} />);
+    // No adOrgId on the row (legacy/unrefreshed record) → falls back to the
+    // selected org, exactly like before ETP-5248.
+    const { container } = render(<div>{siiColumn().render(rowNoOrgField)}</div>);
+    expect(container.querySelector('[data-testid="fiscal-status-badge"]').textContent).toBe('sent');
+  });
+
+  it('an org with no fiscal config loaded yet (still fetching) renders the dash, never a stray value', () => {
+    useFiscalConfigForOrgs.mockReturnValue({ loading: true, error: null, byOrg: {} });
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} data={[ORG_A_ROW]} />);
+    const { container } = render(<div>{siiColumn().render(ORG_A_ROW)}</div>);
+    expect(container.querySelector('[data-testid="fiscal-status-badge"]').textContent).toBe('');
+  });
+
+  // ETP-5229's "change SIF" earliest-cutover scenario still holds PER ROW: the
+  // earliest-ever cutover across an org's active+inactive config rows (not the
+  // active config's own, possibly-later date) is what gates eligibility.
+  it('keeps the ETP-5229 earliest-across-all-rows semantics per-org (scenario B: old deactivated config had an earlier cutover)', () => {
+    useFiscalConfigForOrgs.mockReturnValue({
+      loading: false,
+      error: null,
+      byOrg: {
+        // The ACTIVE sii config for org A was only adopted in September, but an
+        // older, deactivated ("Change SIF") config row shows org A really
+        // joined SII back in January — earliestSiiCutoverDate must reflect
+        // that January date, not the active config's September date.
+        'org-A': { earliestSiiCutoverDate: '2026-01-01T00:00:00.000Z', earliestVerifactuCutoverDate: null },
+      },
+    });
+    const row = { ...ORG_A_ROW, accountingDate: '2026-03-15', aeatsiiEstado: 'sent-under-old-sif' };
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} data={[row]} />);
+    const { container } = render(<div>{siiColumn().render(row)}</div>);
+    expect(container.querySelector('[data-testid="fiscal-status-badge"]').textContent).toBe('sent-under-old-sif');
   });
 });

@@ -147,11 +147,12 @@ describe('Sales InvoiceHeaderTable — TBAI cell renders a dash only for "NoApli
   });
 
   it('keeps the browser-side date gates for SII and VERI*FACTU (they are NOT stored columns)', () => {
-    // ETP-5229 (corrected design): SII gates on earliestSiiCutoverDate — the
-    // EARLIEST cutover across ALL of the org's SII config rows, active or not
+    // ETP-5229 (corrected design): SII gates on the org's earliest-ever cutover
     // — not the currently active config's own record (`siiRecord?.fechaAcogidaSII`,
-    // an earlier design this file never actually shipped with).
-    assert.match(src, /isSifEligibleByDate\(row\.accountingDate, earliestSiiCutoverDate\)/);
+    // an earlier design this file never actually shipped with). ETP-5248 then
+    // resolved that cutover PER ROW (`cutover`, looked up via cutoverForRowOrg
+    // for the row's own org) instead of a single org-wide value.
+    assert.match(src, /isSifEligibleByDate\(row\.accountingDate, cutover\)/);
     assert.match(src, /isVerifactuEligibleByDate\(/);
   });
 });
@@ -400,18 +401,25 @@ describe('Sales InvoiceHeaderTable — fiscal status badges gated on earliest-ev
     );
   });
 
-  it('destructures earliestSiiCutoverDate/earliestVerifactuCutoverDate from useFiscalConfig (TBAI has no client-side cutover — ETP-5216/ETP-5229)', () => {
-    const destructure = src.match(/const\s*\{\s*\n?\s*profile,[\s\S]*?\}\s*=\s*useFiscalConfig\(orgId,\s*apiBaseUrl\)/);
-    assert.ok(destructure, 'expected the useFiscalConfig destructure block');
+  // ETP-5248: the SINGLE-org useFiscalConfig() call now only supplies `profile`
+  // (column visibility) — the earliest-cutover data used for the per-row gate
+  // moved to useFiscalConfigForOrgs, keyed by each row's OWN organization
+  // (resolveInvoiceOrgId), not the globally-selected one.
+  it('only destructures profile from useFiscalConfig (earliest-cutover data now comes from useFiscalConfigForOrgs, per-row — ETP-5248)', () => {
     assert.match(
-      destructure[0],
-      /const\s*\{\s*\n?\s*profile,\s*\n?\s*earliestSiiCutoverDate,\s*earliestVerifactuCutoverDate,?\s*\n?\s*\}/,
-      'the earliest-ever cutover for SII/Verifactu must be pulled from useFiscalConfig to gate each badge',
+      src,
+      /const\s*\{\s*profile\s*\}\s*=\s*useFiscalConfig\(orgId,\s*apiBaseUrl\)/,
+      'useFiscalConfig(orgId) must still drive column visibility (profile), nothing else',
     );
     assert.doesNotMatch(
-      destructure[0],
-      /earliestTbaiCutoverDate/,
-      'TBAI no longer reads a client-side cutover date — its gate moved into the stored DB column',
+      src,
+      /earliestSiiCutoverDate,?\s*earliestVerifactuCutoverDate/,
+      'earliestSiiCutoverDate/earliestVerifactuCutoverDate must no longer come from the single-org useFiscalConfig destructure',
+    );
+    assert.match(
+      src,
+      /useFiscalConfigForOrgs\(rowOrgIds,\s*apiBaseUrl\)/,
+      'each row\'s own org fiscal config must be resolved via useFiscalConfigForOrgs',
     );
   });
 
@@ -423,10 +431,12 @@ describe('Sales InvoiceHeaderTable — fiscal status badges gated on earliest-ev
     );
   });
 
-  it('gates the SII badge on isSifEligibleByDate(row.accountingDate, earliestSiiCutoverDate)', () => {
+  it('gates the SII badge on isSifEligibleByDate(row.accountingDate, cutover) — cutover resolved per the ROW\'s own org (ETP-5248)', () => {
     const cell = src.match(/if \(targets\.showSii\) \{[\s\S]*?\}\)?;\s*\}/);
     assert.ok(cell, 'expected the showSii column-push block');
-    assert.match(cell[0], /isSifEligibleByDate\(row\.accountingDate, earliestSiiCutoverDate\)/);
+    assert.match(cell[0], /const rowOrgId = resolveInvoiceOrgId\(row, orgId\)/);
+    assert.match(cell[0], /cutoverForRowOrg\(fiscalByOrg, rowOrgId, 'sii'\)/);
+    assert.match(cell[0], /isSifEligibleByDate\(row\.accountingDate, cutover\)/);
     // ETP-5229 item #17: eligible-but-empty falls back to the 'PE' pending
     // marker, not a fabricated null — not-eligible (outside this expression)
     // is what still yields the dash.
@@ -448,10 +458,12 @@ describe('Sales InvoiceHeaderTable — fiscal status badges gated on earliest-ev
     assert.match(cell[0], /row\.eTGOTbaiStatus \?\? 'Pendiente'/);
   });
 
-  it('gates the Verifactu badge on isVerifactuEligibleByDate(row.created, earliestVerifactuCutoverDate)', () => {
+  it('gates the Verifactu badge on isVerifactuEligibleByDate(row.created, cutover) — cutover resolved per the ROW\'s own org (ETP-5248)', () => {
     const cell = src.match(/if \(targets\.showVerifactu\) \{[\s\S]*?\}\)?;\s*\}/);
     assert.ok(cell, 'expected the showVerifactu column-push block');
-    assert.match(cell[0], /isVerifactuEligibleByDate\(row\.created, earliestVerifactuCutoverDate\)/);
+    assert.match(cell[0], /const rowOrgId = resolveInvoiceOrgId\(row, orgId\)/);
+    assert.match(cell[0], /cutoverForRowOrg\(fiscalByOrg, rowOrgId, 'verifactu'\)/);
+    assert.match(cell[0], /isVerifactuEligibleByDate\(row\.created, cutover\)/);
     // ETP-5229 item #17: eligible-but-empty falls back to the raw 'PE' code
     // (resolves through normalizeVerifactuStatus -> 'vf_pending'), not null.
     assert.match(cell[0], /normalizeVerifactuStatus\(row\.etvfacInvoiceStatus \?\? 'PE'\)/);

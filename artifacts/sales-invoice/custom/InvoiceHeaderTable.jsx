@@ -10,7 +10,8 @@ import {
   getDueDateDotStyle,
   getDueDateTextStyle,
 } from '@/lib/invoiceDueDate';
-import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
+import { useFiscalConfig, useFiscalConfigForOrgs, cutoverForRowOrg } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
+import { resolveInvoiceOrgId } from '@/windows/custom/shared/resolveInvoiceOrgId.js';
 import { getInvoiceFiscalTargets, isSifEligibleByDate, isVerifactuEligibleByDate, isTbaiStatusNotApplicable } from '@/windows/custom/shared/fiscalTargets.js';
 import { FiscalStatusBadge, normalizeVerifactuStatus } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
@@ -53,12 +54,23 @@ export default function InvoiceHeaderTable(props) {
 
   const { selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
-  const {
-    profile,
-    earliestSiiCutoverDate, earliestVerifactuCutoverDate,
-  } = useFiscalConfig(orgId, apiBaseUrl);
+  const { profile } = useFiscalConfig(orgId, apiBaseUrl);
 
   const targets = useMemo(() => getInvoiceFiscalTargets('sales-invoice', profile), [profile]);
+
+  // ETP-5248 — the grid can mix invoices from MULTIPLE organizations (parent
+  // org, "*", multi-org role). `profile`/`targets` above still come from the
+  // single SELECTED org (unchanged, org/territory-scoped column visibility),
+  // but each row's SII/Verifactu eligibility must be gated against ITS OWN
+  // org's earliest cutover date, not the selected org's. Resolve the distinct
+  // set of org ids actually present on the current page and fetch each one's
+  // config in parallel.
+  const rows = props.data ?? [];
+  const rowOrgIds = useMemo(
+    () => rows.map((row) => resolveInvoiceOrgId(row, orgId)),
+    [rows, orgId],
+  );
+  const fiscalByOrg = useFiscalConfigForOrgs(rowOrgIds, apiBaseUrl);
 
   const [paymentRow, setPaymentRow] = useState(null);
 
@@ -103,11 +115,15 @@ export default function InvoiceHeaderTable(props) {
     if (targets.showSii) {
       fiscalCols.push({
         key: '_siiStatus', type: 'custom', label: siiColLabel,
-        render: (row) => (
-          <FiscalStatusBadge
-            status={isSifEligibleByDate(row.accountingDate, earliestSiiCutoverDate) ? (row.aeatsiiEstado ?? 'PE') : null}
-          />
-        ),
+        render: (row) => {
+          const rowOrgId = resolveInvoiceOrgId(row, orgId);
+          const cutover = cutoverForRowOrg(fiscalByOrg, rowOrgId, 'sii');
+          return (
+            <FiscalStatusBadge
+              status={isSifEligibleByDate(row.accountingDate, cutover) ? (row.aeatsiiEstado ?? 'PE') : null}
+            />
+          );
+        },
       });
     }
     if (targets.showTbai) {
@@ -148,7 +164,9 @@ export default function InvoiceHeaderTable(props) {
       fiscalCols.push({
         key: '_vfStatus', type: 'custom', label: vfColLabel,
         render: (row) => {
-          const eligible = isVerifactuEligibleByDate(row.created, earliestVerifactuCutoverDate);
+          const rowOrgId = resolveInvoiceOrgId(row, orgId);
+          const cutover = cutoverForRowOrg(fiscalByOrg, rowOrgId, 'verifactu');
+          const eligible = isVerifactuEligibleByDate(row.created, cutover);
           return <FiscalStatusBadge status={eligible ? normalizeVerifactuStatus(row.etvfacInvoiceStatus ?? 'PE') : null} />;
         },
       });
@@ -281,7 +299,7 @@ export default function InvoiceHeaderTable(props) {
       },
       { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent' },
     ];
-  }, [gl, ui, locale, targets, siiColLabel, tbaiColLabel, vfColLabel, earliestSiiCutoverDate, earliestVerifactuCutoverDate]);
+  }, [gl, ui, locale, targets, siiColLabel, tbaiColLabel, vfColLabel, orgId, fiscalByOrg]);
 
   return (
     <>

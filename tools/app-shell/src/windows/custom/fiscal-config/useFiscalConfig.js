@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { detectProfile, activeOrNull, isActiveRecord } from './fiscalConfig.utils.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -170,4 +170,90 @@ export function useFiscalConfig(orgId, apiBaseUrl) {
   }
 
   return { ...state, refetch: load, createComplementary };
+}
+
+// ETP-5248 — a list grid can show invoices from MULTIPLE organizations at once
+// (user parked in a parent org, in "*", or with a multi-org role). Gating every
+// row's SII/Verifactu eligibility against `useFiscalConfig(selectedOrg)`'s
+// SINGLE cutover date compares each invoice against the WRONG org whenever the
+// row's own org differs from the one currently selected in the top-nav — org A
+// (selected) may have adopted SII June 1st while an invoice actually belonging
+// to org B (adopted January 1st) gets judged against June 1st and wrongly shows
+// a dash. This hook fetches the earliest-cutover data for the FULL SET of
+// distinct org ids present on the current page of rows, in parallel, reusing
+// the SAME fetchAllRows/earliestCutoverDate primitives ETP-5229 introduced —
+// column VISIBILITY (`targets.showSii`/`showVerifactu`) still comes from the
+// single-org `useFiscalConfig(selectedOrg)` above (unchanged, org/territory-
+// scoped call), only the per-row date GATE is resolved here, per-row.
+//
+// TBAI/Batuz is deliberately NOT included — per ETP-5216/ETP-5229 it already
+// reads `row.ad_org_id` correctly INSIDE its stored computed column
+// (ETGO_GET_TBAI_STATUS), so it needs no client-side per-org resolution here.
+export function useFiscalConfigForOrgs(orgIds, apiBaseUrl) {
+  const apiFetch = useApiFetch(neoBase(apiBaseUrl));
+
+  // Stable, order-independent, deduped key so effects don't re-fire on every
+  // render just because a new array instance with the same ids was passed in.
+  const key = useMemo(
+    () => Array.from(new Set((orgIds || []).filter(Boolean))).sort().join(','),
+    [orgIds],
+  );
+
+  const [state, setState] = useState({ loading: false, error: null, byOrg: {} });
+
+  useEffect(() => {
+    const ids = key ? key.split(',') : [];
+    if (ids.length === 0) {
+      setState({ loading: false, error: null, byOrg: {} });
+      return undefined;
+    }
+
+    let cancelled = false;
+    setState((s) => ({ ...s, loading: true, error: null }));
+
+    (async () => {
+      try {
+        const entries = await Promise.all(
+          ids.map(async (orgId) => {
+            const [siiRows, verifactuRows] = await Promise.all([
+              fetchAllRows(apiFetch, 'sii-config', SII_ENTITY, orgId),
+              fetchAllRows(apiFetch, 'verifactu-config', VERIFACTU_ENTITY, orgId),
+            ]);
+            return [
+              orgId,
+              {
+                earliestSiiCutoverDate: earliestCutoverDate(siiRows, 'sii'),
+                earliestVerifactuCutoverDate: earliestCutoverDate(verifactuRows, 'verifactu'),
+              },
+            ];
+          }),
+        );
+        if (cancelled) return;
+        setState({ loading: false, error: null, byOrg: Object.fromEntries(entries) });
+      } catch (err) {
+        if (cancelled) return;
+        setState((s) => ({ ...s, loading: false, error: err.message }));
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [key, apiFetch]);
+
+  return state;
+}
+
+/**
+ * Looks up a row's OWN earliest-cutover date for one system from a
+ * `useFiscalConfigForOrgs` result, falling back to `null` (not-eligible) while
+ * that org's config hasn't loaded yet or the row carries no resolvable org id.
+ *
+ * @param {{byOrg: Record<string, {earliestSiiCutoverDate: string|null, earliestVerifactuCutoverDate: string|null}>}} fiscalByOrg
+ * @param {string|null|undefined} rowOrgId
+ * @param {'sii'|'verifactu'} system
+ * @returns {string|null}
+ */
+export function cutoverForRowOrg(fiscalByOrg, rowOrgId, system) {
+  if (!rowOrgId) return null;
+  const field = system === 'verifactu' ? 'earliestVerifactuCutoverDate' : 'earliestSiiCutoverDate';
+  return fiscalByOrg?.byOrg?.[rowOrgId]?.[field] ?? null;
 }

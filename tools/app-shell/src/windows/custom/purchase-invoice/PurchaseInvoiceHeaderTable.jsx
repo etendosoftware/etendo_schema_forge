@@ -9,7 +9,8 @@ import {
   getDueDateDotStyle,
   getDueDateTextStyle,
 } from '@/lib/invoiceDueDate';
-import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
+import { useFiscalConfig, useFiscalConfigForOrgs, cutoverForRowOrg } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
+import { resolveInvoiceOrgId } from '@/windows/custom/shared/resolveInvoiceOrgId.js';
 import { getInvoiceFiscalTargets, isSifEligibleByDate, isTbaiStatusNotApplicable } from '@/windows/custom/shared/fiscalTargets.js';
 import { FiscalStatusBadge } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 import { formatCurrency } from '@/lib/formatCurrency.js';
@@ -58,11 +59,23 @@ export default function PurchaseInvoiceHeaderTable(props) {
 
   const { selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
-  const {
-    profile, tbaiRecord,
-    earliestSiiCutoverDate,
-  } = useFiscalConfig(orgId, apiBaseUrl);
+  const { profile, tbaiRecord } = useFiscalConfig(orgId, apiBaseUrl);
   const territory = tbaiRecord?.etsgSifTerritory ?? null;
+
+  // ETP-5248 — the grid can mix invoices from MULTIPLE organizations (parent
+  // org, "*", multi-org role). `profile`/`territory`/`targets` above still
+  // come from the single SELECTED org (unchanged, org/territory-scoped column
+  // visibility — same trade-off documented for the Batuz column above), but
+  // each row's SII eligibility must be gated against ITS OWN org's earliest
+  // cutover date, not the selected org's. Resolve the distinct set of org ids
+  // actually present on the current page and fetch each one's config in
+  // parallel.
+  const rows = props.data ?? [];
+  const rowOrgIds = useMemo(
+    () => rows.map((row) => resolveInvoiceOrgId(row, orgId)),
+    [rows, orgId],
+  );
+  const fiscalByOrg = useFiscalConfigForOrgs(rowOrgIds, apiBaseUrl);
 
   // ETP-5087: BOTH fiscal columns resolve synchronously from the single,
   // globally-selected org (`useFiscalConfig(orgId)` above) — no per-row, async
@@ -119,11 +132,15 @@ export default function PurchaseInvoiceHeaderTable(props) {
     if (targets.showSii) {
       fiscalCols.push({
         key: '_siiStatus', type: 'custom', label: siiColLabel,
-        render: (row) => (
-          <FiscalStatusBadge
-            status={isSifEligibleByDate(row.accountingDate, earliestSiiCutoverDate) ? (row.aeatsiiEstado ?? 'PE') : null}
-            data-testid="FiscalStatusBadge__6b7cdb" />
-        ),
+        render: (row) => {
+          const rowOrgId = resolveInvoiceOrgId(row, orgId);
+          const cutover = cutoverForRowOrg(fiscalByOrg, rowOrgId, 'sii');
+          return (
+            <FiscalStatusBadge
+              status={isSifEligibleByDate(row.accountingDate, cutover) ? (row.aeatsiiEstado ?? 'PE') : null}
+              data-testid="FiscalStatusBadge__6b7cdb" />
+          );
+        },
       });
     }
     if (targets.showTbai) {
@@ -318,7 +335,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
       },
       { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent' },
     ];
-  }, [gl, ui, locale, targets, siiColLabel, tbaiColLabel, earliestSiiCutoverDate]);
+  }, [gl, ui, locale, targets, siiColLabel, tbaiColLabel, orgId, fiscalByOrg]);
 
   return (
     <>
