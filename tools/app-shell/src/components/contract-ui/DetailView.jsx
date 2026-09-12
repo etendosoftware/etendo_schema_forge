@@ -1041,6 +1041,40 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
 // Form's grid via its `trailing` slot (a bare grid cell, WITHOUT the pointer-events
 // wrapper, so it is a direct grid sibling of the native fields). Non-marked footers
 // keep the detached `footerElement` block and are completely unaffected.
+/**
+ * The side panel a window renders next to its form, or nothing when the window is embedded
+ * in a host dialog.
+ *
+ * A side panel is context for the full window — a stock summary, a period selector — and
+ * noise inside a popup, where the whole point is the form. `chromeless` covers both embed
+ * modes (the read-only preview and the interactive one); everything else about the window
+ * is untouched.
+ */
+/**
+ * The toolbar's "cancel" — which navigates back to the window's LIST.
+ *
+ * Rendered as its own component so the decision lives with the reason: inside a host
+ * dialog that navigation is meaningless, it would swap the form for a product list within
+ * the popup, and the dialog's own close is the way out. Keeping the `chromeless` test here
+ * also keeps it out of DetailView's already large render.
+ */
+export function DetailCancelButton({ chromeless, label, onCancel }) {
+  if (chromeless) return null;
+  return (
+    <Button
+      className="h-10 px-3 rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] text-[hsl(var(--foreground))] text-sm font-medium hover:bg-[hsl(var(--muted))] transition-colors"
+      data-testid="action-cancel"
+      onClick={onCancel}
+    >
+      {label}
+    </Button>
+  );
+}
+
+export function resolveEmbeddedSidebarContent(chromeless, sidebarContent) {
+  return chromeless ? null : sidebarContent;
+}
+
 export function buildHeaderFooter({ formFooter, embedded, data, entity, handleChangeWithCallout, hook, catalogs, api, token, apiBaseUrl }) {
   if (!formFooter) return { footerInline: false, footerElement: null, inlineTrailing: undefined };
   const footerInline = !!formFooter.inlineInHeaderCard;
@@ -1439,12 +1473,8 @@ export function DetailView({
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const embedded = searchParams.get('embedded') === '1';
-  // `interactive` is the chrome-free but USABLE embed (AppLayout drops the sidebar, topbar
-  // and widgets for it). A window hosted inside a dialog should not also carry its own side
-  // panel — stock summaries and the like are context for the full window, noise in a popup —
-  // so it is suppressed here while everything else stays interactive.
   const chromeless = isChromelessEmbed(searchParams.get('embedded'));
-  const sidebarContent = chromeless ? null : sidebarContentProp;
+  const sidebarContent = resolveEmbeddedSidebarContent(chromeless, sidebarContentProp);
   const tMenu = useMenuLabel();
   // ETP-4933: AD-column label resolver, for naming the missing fields in the
   // Save tooltip. Same override chain EntityForm uses for its own field labels.
@@ -2854,18 +2884,11 @@ export function DetailView({
         {embedded ? renderEmbeddedStatusPill(statusField, data, statusEnumLabels) : (
         <div className={getLinesToolbarClassName(linesLayout, toolbarPaddingX, toolbarBorderBottom)}>
           <div className="flex items-center gap-3">
-            {/* Navigates to the window's LIST, which is meaningless when the window is
-                embedded in a dialog — it would replace the form with a product list inside
-                the popup. The host dialog's own close is the way out there. */}
-            {!chromeless && (
-              <Button
-                className="h-10 px-3 rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] text-[hsl(var(--foreground))] text-sm font-medium hover:bg-[hsl(var(--muted))] transition-colors"
-                data-testid="action-cancel"
-                onClick={() => navigate(`/${windowName}`)}
-              >
-                {ui('cancel')}
-              </Button>
-            )}
+            <DetailCancelButton
+              chromeless={chromeless}
+              label={ui('cancel')}
+              onCancel={() => navigate(`/${windowName}`)}
+              data-testid="DetailCancelButton__fa3275" />
             {statusField && data[statusField] != null && !WINDOW_HIDE_STATUS_PILL_FOR[windowName]?.has(data[statusField]) && (
               <DocumentStatusPill
                 status={data[statusField]}
