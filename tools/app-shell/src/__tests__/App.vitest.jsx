@@ -179,7 +179,7 @@ vi.mock('../lib/observability/RouteTracker.jsx', () => ({
 }));
 
 import { render, screen } from '@testing-library/react';
-import App, { fetchWindowAccess } from '../App.jsx';
+import App, { fetchWindowAccess, __resetMenuAccessCacheForTest } from '../App.jsx';
 
 describe('App', () => {
   it('renders without crashing', () => {
@@ -238,6 +238,16 @@ describe('fetchWindowAccess', () => {
     count: 1,
   };
   const EXPECTED_MENU_ACCESS = { W1: true, P1: true, OP1: true, W2: true };
+
+  // ETP-5189 follow-up — `fetchMenuAccess()`'s module-level cache (60s TTL) is scoped
+  // to one real page load in production, but this file calls `fetchWindowAccess()`
+  // many times against the SAME imported module instance, so a cache populated by an
+  // earlier test case would otherwise leak into later, independent assertions (the
+  // menu-fetch-failure tests below need a genuinely fresh `{}` fallback, not a stale
+  // successful `menuAccess` left over from a prior `it()`).
+  beforeEach(() => {
+    __resetMenuAccessCacheForTest();
+  });
 
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -330,5 +340,25 @@ describe('fetchWindowAccess', () => {
     )));
     const result = await fetchWindowAccess({ token: 'tok' });
     expect(result).toEqual({ ...PAYLOAD, menuAccess: {} });
+  });
+
+  // ETP-5189 follow-up — this is the behavior the whole cache exists for: a burst of
+  // silent refreshes within the 60s TTL must not re-hit SFListMenu each time. Only the
+  // menu fetch is cached (see `fetchMenuAccess()` in App.jsx), so `/windowaccessmap`
+  // is still expected to be called once per `fetchWindowAccess()` invocation.
+  it('caches the SFListMenu fetch so two calls within the TTL only hit /listmenu once', async () => {
+    stubFetch(jsonResponse(PAYLOAD));
+
+    const first = await fetchWindowAccess({ token: 'tok' });
+    const second = await fetchWindowAccess({ token: 'tok' });
+
+    expect(first).toEqual({ ...PAYLOAD, menuAccess: EXPECTED_MENU_ACCESS });
+    expect(second).toEqual({ ...PAYLOAD, menuAccess: EXPECTED_MENU_ACCESS });
+
+    const calls = globalThis.fetch.mock.calls.map(([url]) => String(url));
+    const menuCalls = calls.filter((url) => url.includes('/listmenu'));
+    const windowAccessCalls = calls.filter((url) => url.includes('/windowaccessmap'));
+    expect(menuCalls).toHaveLength(1);
+    expect(windowAccessCalls).toHaveLength(2);
   });
 });
