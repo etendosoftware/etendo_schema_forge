@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import { isChromelessEmbed } from '@/lib/embeddedWindow.js';
 import { ProcessParamDialog } from './ProcessParamDialog';
 import RecordUnavailable from './RecordUnavailable.jsx';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
@@ -1143,7 +1144,7 @@ export function DetailView({
   statusFieldLabel = null,
   statusEnumLabels = null,
   salesTheme = false,
-  sidebarContent = null,
+  sidebarContent: sidebarContentProp = null,
   othersLabel = null,
   primaryTabs = null,
   contentBg = 'bg-card',
@@ -1438,6 +1439,12 @@ export function DetailView({
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const embedded = searchParams.get('embedded') === '1';
+  // `interactive` is the chrome-free but USABLE embed (AppLayout drops the sidebar, topbar
+  // and widgets for it). A window hosted inside a dialog should not also carry its own side
+  // panel — stock summaries and the like are context for the full window, noise in a popup —
+  // so it is suppressed here while everything else stays interactive.
+  const chromeless = isChromelessEmbed(searchParams.get('embedded'));
+  const sidebarContent = chromeless ? null : sidebarContentProp;
   const tMenu = useMenuLabel();
   // ETP-4933: AD-column label resolver, for naming the missing fields in the
   // Save tooltip. Same override chain EntityForm uses for its own field labels.
@@ -2847,13 +2854,18 @@ export function DetailView({
         {embedded ? renderEmbeddedStatusPill(statusField, data, statusEnumLabels) : (
         <div className={getLinesToolbarClassName(linesLayout, toolbarPaddingX, toolbarBorderBottom)}>
           <div className="flex items-center gap-3">
-            <Button
-              className="h-10 px-3 rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] text-[hsl(var(--foreground))] text-sm font-medium hover:bg-[hsl(var(--muted))] transition-colors"
-              data-testid="action-cancel"
-              onClick={() => navigate(`/${windowName}`)}
-            >
-              {ui('cancel')}
-            </Button>
+            {/* Navigates to the window's LIST, which is meaningless when the window is
+                embedded in a dialog — it would replace the form with a product list inside
+                the popup. The host dialog's own close is the way out there. */}
+            {!chromeless && (
+              <Button
+                className="h-10 px-3 rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] text-[hsl(var(--foreground))] text-sm font-medium hover:bg-[hsl(var(--muted))] transition-colors"
+                data-testid="action-cancel"
+                onClick={() => navigate(`/${windowName}`)}
+              >
+                {ui('cancel')}
+              </Button>
+            )}
             {statusField && data[statusField] != null && !WINDOW_HIDE_STATUS_PILL_FOR[windowName]?.has(data[statusField]) && (
               <DocumentStatusPill
                 status={data[statusField]}

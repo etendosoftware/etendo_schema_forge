@@ -40,10 +40,14 @@ vi.mock('./SelectorInput.jsx', () => ({ SelectorInput: () => null }));
 vi.mock('./RowQuickActions.jsx', () => ({ default: () => null }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 const Stub = () => null;
-vi.mock('lucide-react', () => ({
-  Search: Stub, Inbox: Stub, X: Stub, ChevronDown: Stub, Trash2: Stub,
-  Copy: Stub, Loader2: Stub, Pencil: Stub, Check: Stub,
-}));
+// Every icon resolves to the same stub, with the export list taken from the real module.
+// An explicit list used to be enough, but DataTable's import graph keeps growing (ETP-5245
+// pulled in a chain reaching RotateCcw, then Clock), and each addition failed this whole
+// FILE to load — surfaced as zero failing tests plus a missing suite, which is easy to miss.
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal();
+  return Object.fromEntries(Object.keys(actual).map(name => [name, Stub]));
+});
 vi.mock('@/components/ui/table', () => ({
   Table: Stub, TableBody: Stub, TableCell: Stub, TableHead: Stub,
   TableHeader: Stub, TableRow: Stub, TableFooter: Stub,

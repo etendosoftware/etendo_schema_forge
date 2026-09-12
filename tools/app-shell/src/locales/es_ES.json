@@ -17668,6 +17668,7 @@
     "createProduct": "Crear producto",
     "createProductTitle": "Nuevo producto",
     "createProductError": "No se pudo crear el producto",
+    "createProductWindowHint": "Guarda el producto en la ventana de arriba y luego finaliza.",
     "sendModalDownloading": "Descargando...",
     "sendModalLoadingPreview": "Cargando vista previa...",
     "sendModalPdfPreview": "Vista previa PDF",

@@ -17437,6 +17437,7 @@
     "createProduct": "Create product",
     "createProductTitle": "New product",
     "createProductError": "The product could not be created",
+    "createProductWindowHint": "Save the product in the window above, then finish.",
     "sendModalDownloading": "Downloading...",
     "sendModalLoadingPreview": "Loading preview...",
     "sendModalPdfPreview": "PDF preview",

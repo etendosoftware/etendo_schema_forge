@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog.jsx';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx';
+import EmbeddedWindowFrame from './EmbeddedWindowFrame.jsx';
 import { renderPrimaryTabButtons } from './detailViewHelpers.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { mergeDefaultsPreservingUserEdits } from '@/hooks/useEntity.js';
@@ -64,6 +65,12 @@ export default function RecordCreateModal({
   const [postCreateTabs, setPostCreateTabs] = useState(null);
   const [activePostTab, setActivePostTab] = useState(null);
   const [postTabCounts, setPostTabCounts] = useState({});
+  const [Banner, setBanner] = useState(null);
+  const [WindowApp, setWindowApp] = useState(null);
+  // Set when the embedded window throws: phase 2 then falls back to the standalone panels.
+  const [windowFailed, setWindowFailed] = useState(false);
+  // Id the embedded window navigated to after saving — how we learn the record exists.
+  const [windowRecordId, setWindowRecordId] = useState(null);
   // Key currently being PATCHed in phase 2, so EntityForm can show its per-field spinner.
   const [savingField, setSavingField] = useState(null);
   const [activeTab, setActiveTab] = useState(target?.tabs?.[0]?.key ?? DEFAULT_TABS[0].key);
@@ -104,8 +111,21 @@ export default function RecordCreateModal({
     setPostCreateTabs(null);
     setActivePostTab(null);
     setPostTabCounts({});
+    setBanner(null);
+    setWindowApp(null);
+    setWindowFailed(false);
+    setWindowRecordId(null);
     setSavingField(null);
     setLoading(true);
+
+    target.loadWindow?.()
+      .then((mod) => { if (!cancelled) setWindowApp(() => mod.default); })
+      .catch((err) => {
+        // Never silent: without the window the popup falls back to its own form, and a
+        // swallowed reason here is a feature that quietly does not appear.
+        console.error('[RecordCreateModal] embedded window failed to load', err);
+        if (!cancelled) setWindowApp(null);
+      });
 
     target.loadForm()
       .then((mod) => { if (!cancelled) setFormComponent(() => mod.default); })
@@ -252,7 +272,14 @@ export default function RecordCreateModal({
       // `onCreated` fires when the user closes, which is the single completion point.
       setSaving(false);
       if (target.loadPostCreateTabs) {
-        setCreatedRecord(created);
+        // Re-read before entering phase 2. The create response is an echo; the single-record
+        // GET is what carries the backend-computed flags the window's own panels and banner
+        // read (`etgoHasCost` among them, emitted only there), plus a fresh `updated`. Falls
+        // back to the POST body so a failed re-read degrades instead of blocking.
+        setCreatedRecord(await rereadRecord(apiFetch, target.entity, created));
+        target.loadBanner?.()
+          .then((mod) => setBanner(() => mod.default))
+          .catch(() => setBanner(null));
         target.loadPostCreateTabs()
           .then((loaded) => {
             setPostCreateTabs(loaded);
@@ -270,8 +297,27 @@ export default function RecordCreateModal({
 
   // Closing during phase 2 is "done", never "cancel": the record already exists, and the
   // whole point of the popup is to hand it back to the line.
+  // The window renders the whole popup when the target ships one and it has not blown up.
+  // Otherwise the standalone form/panels below take over, so a failure degrades instead of
+  // leaving the user with nothing.
+  const windowMode = !!WindowApp && !windowFailed;
+
+  /**
+   * Hands the line the record the embedded window just saved. Re-reads it first for the
+   * same reason phase 2 does: the window's own state is not ours to reach into, and the
+   * single-record GET is what carries the identifier and backend-computed fields the line's
+   * selector row expects.
+   */
+  const finishFromWindow = async () => {
+    if (!windowRecordId) return;
+    onCreated(await rereadRecord(apiFetch, target.entity, { id: windowRecordId }));
+  };
+
   const finish = () => onCreated(createdRecord);
-  const dismiss = () => (createdRecord ? finish() : onCancel());
+  const dismiss = () => {
+    if (windowMode) return windowRecordId ? finishFromWindow() : onCancel();
+    return createdRecord ? finish() : onCancel();
+  };
 
   if (!open || !target) return null;
 
@@ -291,6 +337,50 @@ export default function RecordCreateModal({
           <DialogTitle className="text-xl">{ui(target.titleKey)}</DialogTitle>
         </DialogHeader>
 
+        {windowMode && (
+          <>
+            {/*
+              The popup IS the window: mounted at its own `new` route, so it shows the same
+              tab strip — Price, Cost, Accounting, Attachments — from the first paint, and
+              saves through the window's own button. Cost and Accounting can arrive no other
+              way; their renderer is welded to DetailView's child hooks.
+
+              It lives in a same-origin iframe because React Router forbids nesting routers
+              and a window navigates when it saves. A separate document gets its own router
+              and cannot move the host; watching its location is how we learn the record was
+              created. See EmbeddedWindowFrame.
+            */}
+            <div className="mt-4" data-testid="record-create-window">
+              <EmbeddedWindowFrame
+                src={`/${target.windowName}/new?embedded=interactive`}
+                windowName={target.windowName}
+                title={ui(target.titleKey)}
+                onRecordId={setWindowRecordId}
+              />
+            </div>
+
+            {/*
+              One button only. The embedded window brings its own Cancel/Save, and the
+              dialog's X already cancels — a third and fourth control here is what made the
+              popup read as a pile of buttons. This one exists for the single job the window
+              cannot do: hand the saved record back to the document line.
+            */}
+            <div className="mt-4 flex items-center justify-end gap-3">
+              <p className="text-xs text-muted-foreground">{ui('createProductWindowHint')}</p>
+              <button
+                type="button"
+                onClick={finishFromWindow}
+                disabled={!windowRecordId}
+                data-testid="record-create-finish"
+                className="inline-flex h-10 shrink-0 items-center justify-center rounded-full px-4 py-2 text-sm font-medium leading-6 text-primary-foreground transition-colors disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground enabled:bg-[hsl(var(--foreground))] enabled:hover:bg-[hsl(var(--accent-highlight))] enabled:hover:text-[hsl(var(--accent-highlight-foreground))]"
+              >
+                {ui('done')}
+              </button>
+            </div>
+          </>
+        )}
+
+        {!windowMode && (
         <div className="mt-4">
           {FormComponent && (
             <>
@@ -341,13 +431,22 @@ export default function RecordCreateModal({
             <p className="py-8 text-center text-sm text-muted-foreground">{ui('loading')}</p>
           )}
         </div>
+        )}
 
         {/*
-          Phase 2. These are the window's OWN panels (same components, same extra props
-          DetailView hands them), mounted against the record that was just saved. They
-          persist themselves against `/price` and the attachment endpoints, so the popup
-          has nothing to save on their behalf.
+          Phase 2 without an embedded window. These are the window's OWN panels (same
+          components, same extra props DetailView hands them), mounted against the record
+          that was just saved. They persist themselves against `/price` and the attachment
+          endpoints, so the popup has nothing to save on their behalf.
         */}
+
+
+        {createdRecord && Banner && (
+          <div className="mt-6">
+            <Banner data={createdRecord} />
+          </div>
+        )}
+
         {createdRecord && postCreateTabs?.length > 0 && (
           <div className="mt-6 border-t border-border pt-2" data-testid="record-create-post-tabs">
             <Tabs value={activePostTab} onValueChange={setActivePostTab}>
@@ -392,8 +491,10 @@ export default function RecordCreateModal({
           </div>
         )}
 
-        {error && <p className="mt-3 text-sm text-destructive" data-testid="record-create-error">{error}</p>}
+        {!windowMode && error && <p className="mt-3 text-sm text-destructive" data-testid="record-create-error">{error}</p>}
 
+        {/* Window mode renders its own footer above; this one belongs to the standalone form. */}
+        {!windowMode && (
         <div className="mt-5 flex justify-end gap-2">
           {!createdRecord && (
             <button
@@ -415,6 +516,7 @@ export default function RecordCreateModal({
             {resolveActionLabel({ ui, saving, createdRecord })}
           </button>
         </div>
+        )}
       </LocaleProvider>
       </DialogContent>
     </Dialog>
@@ -428,6 +530,22 @@ const DEFAULT_TABS = [{ key: 'general', label: 'General', section: 'principal' }
 export function resolveActionLabel({ ui, saving, createdRecord }) {
   if (saving) return ui('processing');
   return createdRecord ? ui('done') : ui('create');
+}
+
+/**
+ * Reads the record back after a create. Returns the freshly read record, or the create
+ * response untouched when the read fails or answers with nothing usable.
+ */
+async function rereadRecord(apiFetch, entity, created) {
+  if (!created?.id) return created;
+  try {
+    const res = await apiFetch(`/${entity}/${created.id}`);
+    if (!res.ok) return created;
+    const fresh = unwrapCreated(await res.json().catch(() => null));
+    return fresh?.id ? { ...created, ...fresh } : created;
+  } catch {
+    return created;
+  }
 }
 
 function isBlank(value) {

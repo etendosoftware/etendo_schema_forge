@@ -66,13 +66,21 @@ export const LOOKUP_CREATE_TARGETS = {
     // Mirrors `window.labelOverrides` in artifacts/product/decisions.json, which the
     // generator emits into ProductPage.jsx as `api.labelOverrides`. Copied here rather
     // than imported because that module pulls DetailView, ListView, the sidebar, the
-    // price bar and the gallery — a disproportionate bundle for three strings. KEEP IN
-    // SYNC with decisions.json: without it the popup says "Identificador" / "Categoría
+    // price bar and the gallery — a disproportionate bundle for a handful of strings. KEEP
+    // IN SYNC with decisions.json: without it the popup says "Identificador" / "Categoría
     // del producto" / "Tipo de producto" where the Products window says "Código" /
-    // "Categoría" / "Tipo".
+    // "Categoría" / "Tipo". A drift test compares the two and names this file when they
+    // diverge, which is how ETP-5245's DateFrom/DateTo additions were caught.
     labelOverrides: {
-      en_US: { M_Product_Category_ID: 'Category', ProductType: 'Type' },
-      es_ES: { M_Product_Category_ID: 'Categoría', ProductType: 'Tipo', Value: 'Código' },
+      en_US: {
+        M_Product_Category_ID: 'Category', ProductType: 'Type',
+        DateFrom: 'Start Date', DateTo: 'Expiry Date',
+      },
+      es_ES: {
+        M_Product_Category_ID: 'Categoría', ProductType: 'Tipo', Value: 'Código',
+        DateFrom: 'Fecha de inicio', DateTo: 'Fecha de expiración',
+      },
+      es_AR: { DateFrom: 'Fecha de inicio', DateTo: 'Fecha de expiración' },
     },
     // Mirrors `window.primaryTabs` in decisions.json (key and label verbatim, so the menu
     // dictionary translates them exactly as the window does), plus the EntityForm section
@@ -94,12 +102,41 @@ export const LOOKUP_CREATE_TARGETS = {
      * `data?.id` and reads `/price?parentId=<id>`, and attachments need a record to attach
      * to. That constraint is what makes the popup two-phase.
      *
-     * The window's third such tab, Accounting, is deliberately absent: it is a
-     * `secondaryTabs` entry rather than a custom panel, so rendering it means recreating
-     * DetailView's per-tab useEntity machinery (`SecondaryTableTab` takes `hook`,
-     * `secondaryHooks`, `addingSecondaryLine`…). It is also gated behind the
-     * `showAccountingFields` capability, so most users never see it. Tracked as debt.
+     * The window's other two tabs, Accounting and Costing, are deliberately absent: both
+     * are `secondaryTabs` entries rather than custom panels, so rendering either means
+     * recreating DetailView's per-tab useEntity machinery (`SecondaryTableTab` takes
+     * `hook`, `secondaryHooks`, `addingSecondaryLine`…). Accounting is additionally gated
+     * behind the `showAccountingFields` capability. Costing arrived with ETP-5245 and
+     * settled a question this file used to leave open: a self-contained custom panel could
+     * have joined phase 2 the way Price did — a `secondaryTabs` entry cannot. Tracked as
+     * debt.
      */
+    /**
+     * Banner shown above the phase-2 panels, reusing the window's own component rather
+     * than restating its rule: `ProductCostBanner` takes the record and decides for
+     * itself, reading the same `isProductMissingRequiredCost` predicate the window's save
+     * gate reads, so the two can never disagree.
+     *
+     * It only works because phase 2 re-reads the record after the POST: the predicate
+     * keys off `etgoHasCost`, which the backend emits on a single-record GET and not on
+     * the create response, and it deliberately treats an absent flag as "has a cost".
+     */
+    loadBanner: () => import('@/windows/custom/product/ProductCostBanner.jsx'),
+    /**
+     * Phase 2 rendered as the WINDOW ITSELF rather than a selection of its panels — the
+     * only shape that delivers Cost and Accounting, whose renderer is welded to
+     * DetailView's own child hooks and cannot be mounted standalone.
+     *
+     * Two things make it survivable: a MemoryRouter, so the window's many `navigate()`
+     * calls stay inside the dialog instead of moving the document underneath, and an
+     * error boundary, because a window is a large component never written to run in a
+     * dialog and an uncaught throw here takes the whole app down.
+     */
+    // The module `windows/registry.js` mounts for this spec — the CUSTOM overlay, not the
+    // generated index: Products ships its own wrapper (custom table, icons), and importing
+    // the generated one would render a different window from the one the user knows.
+    loadWindow: () => import('@/windows/custom/product/index.jsx'),
+    windowName: 'product',
     loadPostCreateTabs: () => Promise.all([
       import('@/windows/custom/product/ProductPriceBar.jsx'),
       import('@/components/attachments'),

@@ -6,11 +6,18 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
-vi.mock('lucide-react', () => ({
-  ChevronRight: (props) => <span data-testid="chevron-right" {...props} />,
-  ChevronDown: (props) => <span data-testid="chevron-down" {...props} />,
-  Lock: (props) => <span data-testid="lock-icon" {...props} />,
-}));
+// The three icons below carry testids this file asserts on, so they stay explicit. Every
+// OTHER export falls back to an inert stub taken from the real module: an icon-only list
+// fails the whole FILE to load the moment the import graph gains one (ETP-5245 added Trash2).
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...Object.fromEntries(Object.keys(actual).map(name => [name, () => null])),
+    ChevronRight: (props) => <span data-testid="chevron-right" {...props} />,
+    ChevronDown: (props) => <span data-testid="chevron-down" {...props} />,
+    Lock: (props) => <span data-testid="lock-icon" {...props} />,
+  };
+});
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
