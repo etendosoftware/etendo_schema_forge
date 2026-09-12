@@ -18267,6 +18267,7 @@
     "saveConflictRecordChanged": "Este registro cambió después de que lo abriste, por lo que tus cambios no se aplicaron. Puedes cancelar el guardado para revisar o copiar lo que habías editado, o descartar tus cambios y cargar la versión actual.",
     "saveConflictDiscardAndReload": "Descartar mis cambios y refrescar",
     "saveConflictKeepEditing": "Cancelar guardado",
+    "roleChangedBannerMessage": "Tus permisos fueron actualizados.",
     "saveConflictTitle": "No se puede guardar este registro",
     "saveConflictReloaded": "Registro refrescado con los valores almacenados actualmente.",
     "saveConflictReloadFailed": "No se pudo refrescar el registro. Comprueba tu conexión e inténtalo de nuevo.",

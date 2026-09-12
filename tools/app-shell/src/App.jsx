@@ -19,8 +19,10 @@ import { hasUnsavedChanges, suppressNextUnloadPrompt, installUnloadGuard } from 
 import { LocaleChangeConfirmDialog } from './components/LocaleChangeConfirmDialog.jsx';
 import { UnsavedChangesNavigationDialog } from './components/UnsavedChangesNavigationDialog.jsx';
 import { SaveConflictDialog } from './components/SaveConflictDialog.jsx';
+import { RoleChangedBanner } from './components/RoleChangedBanner.jsx';
 import { useLocaleDictionaries } from './i18n/useLocaleDictionaries.js';
 import { useServiceWorker } from './hooks/useServiceWorker.js';
+import { fetchMenuTree, collectAllowedIds } from './lib/menuTree.js';
 import { useInstalledApps } from './hooks/useInstalledApps.js';
 import { useAppStoreUnlock, attachKeySequenceWatcher } from './hooks/useAppStoreUnlock.js';
 import { buildOnboardingReturnTo } from './lib/oauthReturnTo.js';
@@ -78,7 +80,69 @@ function looksLikeWindowAccessPayload(value) {
     && ('windowAccess' in value || 'capabilities' in value);
 }
 
+// ETP-5189 — the role-filtered menu's allowed window/process/obuiappProcess ids
+// (SFListMenu, same source `useRoleMenu()` reads), flattened into `{id: true}` so
+// AuthContext's generic `sameFlatMap` diff (built for windowAccess/capabilities) can
+// compare it the same way. This is what lets a menu-only or process-only grant/
+// revocation — one that never touches SFWindowAccessMap's tiers — still flip
+// `accessChanged` and bump `authRevision`, instead of silently never refreshing the
+// menu (see AuthContext.jsx's [ETP-5189] comment on `menuAccess`).
+//
+// Cached for a short TTL — `AuthContext.jsx` calls `fetchWindowAccess` (and therefore
+// this) on EVERY silent refresh (bootstrap, tab focus, tab visibility, the 5-min poll),
+// and `refresh()`'s own in-flight dedup only collapses calls that are LITERALLY
+// concurrent, not ones a few hundred ms apart from separate focus/blur events — a burst
+// of UI interaction (e.g. several dialogs/tabs in quick succession) can trigger several
+// full refresh cycles in a short window. Confirmed via a controlled A/B (2026-09-11):
+// under Playwright's 4-worker mocked E2E suite, this extra per-refresh network+parse
+// cost — even though the request is small and often just an aborted mock in tests —
+// compounded across concurrently-running tests badly enough to roughly DOUBLE both the
+// suite's wall-clock time and its (pre-existing, worker-contention-driven) failure rate
+// for interaction-heavy specs. A 60s cache is the same order of magnitude as this app's
+// own query-cache default staleness (`DEFAULT_STALE_TIME` in the core's queryCache.js)
+// and far short of the 5-minute poll this whole mechanism is already built to tolerate
+// as a worst case — so it costs negligible real-world responsiveness while absorbing
+// exactly the rapid-refresh-burst case that caused the regression. The FAILURE case is
+// cached too (as `{}`, matching the fail-open default) — an aborted/unreachable
+// SFListMenu is exactly the repeated, wasted round trip this is meant to collapse.
+const MENU_ACCESS_CACHE_TTL_MS = 60_000;
+let menuAccessCache = null; // { value, expiresAt } | null
+
+async function fetchMenuAccess() {
+  if (menuAccessCache && Date.now() < menuAccessCache.expiresAt) {
+    return menuAccessCache.value;
+  }
+  let value;
+  try {
+    const tree = await fetchMenuTree();
+    const ids = collectAllowedIds(tree?.tree);
+    value = Object.fromEntries([...ids].map((id) => [id, true]));
+  } catch {
+    value = {};
+  }
+  menuAccessCache = { value, expiresAt: Date.now() + MENU_ACCESS_CACHE_TTL_MS };
+  return value;
+}
+
+// Test-only: the module-level cache above is scoped to one real page load (a fresh
+// JS module instance per navigation), which never overlaps across test cases in
+// practice — but a test file runs many `fetchWindowAccess()` calls against the SAME
+// imported module instance, so without an explicit reset the cache leaks between
+// otherwise-independent test cases. Exported ONLY for that; not used by app code.
+export function __resetMenuAccessCacheForTest() {
+  menuAccessCache = null;
+}
+
 export async function fetchWindowAccess(session) {
+  // ETP-5189 — kicked off in PARALLEL with the windowaccessmap fetch below, not
+  // sequentially after it. `AuthContext.jsx` calls this on every silent refresh
+  // (bootstrap, tab focus/visibility, the 5-min poll), so a sequential extra
+  // round-trip here compounds under high refresh frequency — confirmed live via
+  // an E2E regression: awaiting it AFTER the windowaccessmap fetch measurably
+  // slowed down interaction-heavy specs (attachments upload/delete) enough to
+  // push already-borderline waits past their timeout. Already fails open on its
+  // own (see below), so racing it in parallel is safe.
+  const menuAccessPromise = fetchMenuAccess().catch(() => ({}));
   try {
     // Reached via `/sws/neo/windowaccessmap` (NEO Headless's own JWT auth), not
     // `/webhooks/SFWindowAccessMap` — the Webhooks module additionally requires a
@@ -106,16 +170,28 @@ export async function fetchWindowAccess(session) {
     //    right, otherwise fail closed (return `null`) rather than handing
     //    AuthProvider the wrong shape (e.g. the outer `{result: ...}`
     //    wrapper itself, which would silently deny every window/field).
+    let payload;
     if (typeof data?.result === 'string') {
-      try { return JSON.parse(data.result); } catch { return null; }
+      try { payload = JSON.parse(data.result); } catch { return null; }
+    } else if (data?.result && typeof data.result === 'object' && !Array.isArray(data.result)) {
+      payload = data.result;
+    } else if (looksLikeWindowAccessPayload(data)) {
+      payload = data;
+    } else {
+      return null;
     }
-    if (data?.result && typeof data.result === 'object' && !Array.isArray(data.result)) {
-      return data.result;
-    }
-    if (looksLikeWindowAccessPayload(data)) {
-      return data;
-    }
-    return null;
+    // Deliberately NOT the same fail-closed contract as the block above — a menu-fetch
+    // failure must NOT take windowAccess/capabilities down with it. Mirrors
+    // `useRoleMenu()`'s own fail-OPEN philosophy for SFListMenu specifically (an
+    // unreachable menu webhook falls back to "don't filter", not "deny everything").
+    // Confirmed live (2026-09-11): the E2E mocked-spec harness (`e2e/tests/helpers/
+    // auth.js`) deliberately `route.abort()`s `/sws/neo/listmenu` to exercise that exact
+    // fallback — lumping this into the outer catch nulled out windowAccess/capabilities
+    // too, breaking every window's WindowAccessGuard across ~40 unrelated mocked specs.
+    // Already in flight (started above, in parallel) — `.catch()` there means this
+    // never rejects, so no separate try/catch is needed here.
+    const menuAccess = await menuAccessPromise;
+    return { ...payload, menuAccess };
   } catch {
     return null;
   }
@@ -331,6 +407,11 @@ export default function App() {
         <ServiceWorkerManager data-testid="ServiceWorkerManager__ecaf3f" />
         <AppStoreKeyWatcher data-testid="AppStoreKeyWatcher__ecaf3f" />
         <SurveyManager data-testid="SurveyManager__ecaf3f" />
+        {/* ETP-5189 — notifies the active user their role/permissions changed elsewhere.
+            Mounted here (not inside AppLayout) so it is visible regardless of which
+            window is open when the change lands; see RoleChangedBanner.jsx's own
+            doc comment for why it's a fixed overlay rather than a layout-flow element. */}
+        <RoleChangedBanner data-testid="RoleChangedBanner__ecaf3f" />
         <LocaleChangeConfirmDialog
           open={pendingLocale !== null}
           onConfirm={() => applyLocaleAndReload(pendingLocale)}
