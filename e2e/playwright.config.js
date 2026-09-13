@@ -29,6 +29,21 @@ const hasAuthCredentials = existsSync(authCredentialsPath);
 const E2E_WORKERS = process.env.E2E_WORKERS ? Number(process.env.E2E_WORKERS) : undefined;
 const MOCKED_WORKERS = E2E_WORKERS ?? 4;
 const INTEGRATION_WORKERS = E2E_WORKERS ?? 1;
+
+// ETP-5307: these specs showed real, non-deterministic failures under 4-way contention (a
+// mix of a genuinely CPU-heavy uncached PDF build on every Sales Order draft navigation —
+// ETP-5308 — and other still-unattributed contention-margin sensitivity in fiscal-models'
+// own test set). Investigated extensively: no single dominant "cause" file was found (pulling
+// attachments out did not fix fiscal-models), so rather than serialize the whole 118-spec
+// mocked suite, only this small known-sensitive set runs serialized — everything else keeps
+// full 4-way parallelism. Revisit this list if a spec here gets fixed at the source (ETP-5308
+// or a future finding), or if a NEW spec turns out to need the same treatment.
+const MOCKED_SERIAL_SPECS = [
+  '**/attachments.mocked.spec.js',
+  '**/fiscal-models-303-identification.mocked.spec.js',
+  '**/sales-invoice-discount-display.mocked.spec.js',
+  '**/inline-lines-quotation.mocked.spec.js',
+];
 const CAPTURE_SCREENSHOTS = new Set(['1', 'true', 'yes']).has(
   String(process.env.E2E_CAPTURE_SCREENSHOTS || '').toLowerCase(),
 );
@@ -77,8 +92,17 @@ export default defineConfig({
     {
       name: 'mocked',
       testMatch: '**/*.mocked.spec.js',
+      testIgnore: MOCKED_SERIAL_SPECS,
       use: { ...devices['Desktop Chrome'] },
       workers: MOCKED_WORKERS,
+    },
+    {
+      // ETP-5307: known-contention-sensitive subset, run fully serialized. See
+      // MOCKED_SERIAL_SPECS above for why these specific files and not others.
+      name: 'mocked-serial',
+      testMatch: MOCKED_SERIAL_SPECS,
+      use: { ...devices['Desktop Chrome'] },
+      workers: 1,
     },
     {
       name: 'onboarding-setup',
