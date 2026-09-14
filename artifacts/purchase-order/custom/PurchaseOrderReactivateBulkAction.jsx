@@ -20,6 +20,14 @@ import { useUI } from '@/i18n';
 // action list here, so this component renders nothing (see
 // BulkDocumentAction's `actions.length === 0` early return) instead of a
 // second overlapping button.
+//
+// ETP-5315 QA fix (medium) — this component used to pass labelKey="confirmBulk",
+// the EXACT same key as the sibling CO-only BulkDocumentAction in
+// PurchaseOrderBulkActions (index.jsx). For a selection mixing a DRAFT row and a
+// COMPLETED-unlinked row, both buttons render side by side, both reading
+// "Confirmar"/"Confirm" — indistinguishable even though one books and the other
+// reactivates. Fixed by giving this button its own `reactivateBulk` label
+// (see en_US.json/es_ES.json) instead of reusing `confirmBulk`.
 const buildReactivateActions = (rows) => {
   const statusOf = (row) => row.documentStatus || row.docStatus;
   const hasReactivatableRow = rows.some(
@@ -43,7 +51,7 @@ export default function PurchaseOrderReactivateBulkAction(props) {
       {...props}
       buildActions={buildReactivateActions}
       rowFilter={rowFilter}
-      labelKey="confirmBulk"
+      labelKey="reactivateBulk"
     />
   );
 }

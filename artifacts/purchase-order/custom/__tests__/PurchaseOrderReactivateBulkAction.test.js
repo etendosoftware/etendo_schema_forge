@@ -38,11 +38,25 @@ describe('PurchaseOrderReactivateBulkAction source (ETP-5315)', () => {
     assert.match(src, /return true;/);
   });
 
-  it('renders BulkDocumentAction with a custom buildActions, its own rowFilter, and the confirmBulk labelKey', () => {
+  it('renders BulkDocumentAction with a custom buildActions, its own rowFilter, and the reactivateBulk labelKey', () => {
     assert.match(src, /<BulkDocumentAction\b/);
     assert.match(src, /buildActions=\{buildReactivateActions\}/);
     assert.match(src, /rowFilter=\{rowFilter\}/);
-    assert.match(src, /labelKey="confirmBulk"/);
+    assert.match(src, /labelKey="reactivateBulk"/);
+  });
+
+  // ETP-5315 QA fix (medium) — this component used to share the same labelKey
+  // as the sibling CO-only BulkDocumentAction (buildInOutActions) rendered right
+  // next to it in PurchaseOrderBulkActions (index.jsx). For a mixed DR+CO-unlinked
+  // selection both buttons rendered simultaneously with the identical "Confirmar"/
+  // "Confirm" label — indistinguishable even though one books and the other
+  // reactivates. Guard against ever reusing the collided key again — matched only
+  // against the rendered JSX block (not the file's prose comments, which legitimately
+  // reference the sibling's own untouched labelKey by name).
+  it('never reuses the collided labelKey on the rendered <BulkDocumentAction> (would collide with the sibling CO-only one)', () => {
+    const jsxBlock = src.match(/return\s*\(\s*<BulkDocumentAction[\s\S]*?\/>\s*\);/);
+    assert.ok(jsxBlock, 'could not locate the rendered <BulkDocumentAction /> block');
+    assert.doesNotMatch(jsxBlock[0], /labelKey="confirmBulk"/);
   });
 
   // ETP-5315 review fix (blocker) — purchase-order renders BOTH the
