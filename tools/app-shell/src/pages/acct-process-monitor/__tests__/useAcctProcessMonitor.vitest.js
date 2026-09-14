@@ -50,8 +50,8 @@ describe('statusMeta', () => {
     expect(statusMeta('COM').tone).toBe('success');
     expect(statusMeta('PRC').tone).toBe('info');
     expect(statusMeta('SCH').tone).toBe('info');
-    expect(statusMeta('ERR').tone).toBe('error');
-    expect(statusMeta('KIL').tone).toBe('error');
+    expect(statusMeta('ERR').tone).toBe('danger');
+    expect(statusMeta('KIL').tone).toBe('danger');
     expect(statusMeta('MIS').tone).toBe('warning');
   });
 

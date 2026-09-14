@@ -4,6 +4,19 @@ import { useUI } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
+// A draft is valid when it parses to a finite magnitude in (0, maxQty]. Sign is
+// intentionally ignored — matches the existing Math.abs behavior for negativeQuantity mode.
+// `tooHigh` distinguishes "numeric but over the max" from every other invalid case
+// (empty/non-numeric/zero/negative) so callers can pick the right error message.
+function classifyQtyDraft(raw, maxQty) {
+  if (raw === undefined || raw.trim() === '') return { valid: false, tooHigh: false };
+  const parsed = Number(raw);
+  const isNumeric = Number.isFinite(parsed);
+  const magnitude = Math.abs(parsed);
+  if (isNumeric && magnitude > 0 && magnitude <= maxQty) return { valid: true, tooHigh: false };
+  return { valid: false, tooHigh: isNumeric && magnitude > maxQty };
+}
+
 export default function ImportLinesModal({
   invoiceId,
   bpId,
@@ -40,6 +53,7 @@ export default function ImportLinesModal({
   const [importing, setImporting] = useState(false);
   const [search, setSearch] = useState('');
   const [lineQuantities, setLineQuantities] = useState({});
+  const [qtyDrafts, setQtyDrafts] = useState({});
   const [eagerLoadingLines, setEagerLoadingLines] = useState(false);
   const [excludedByCurrency, setExcludedByCurrency] = useState(false);
 
@@ -321,24 +335,55 @@ export default function ImportLinesModal({
                                     {line._productName}{imported && <span style={{ fontSize: 11, marginLeft: 6, color: 'hsl(var(--text-disabled))' }}>{line._inDraftShipments?.length ? `${ui('inDraftShipment')}: ${line._inDraftShipments.join(', ')}` : ui('alreadyImported')}</span>}
                                   </span>
                                   <span style={{ width: 70, flexShrink: 0, textAlign: 'right' }}>
-                                    <input
-                                      type="number"
-                                      min={negativeQuantity ? -maxQty : 1}
-                                      max={negativeQuantity ? -1 : maxQty}
-                                      value={displayQty}
-                                      onClick={e => e.stopPropagation()}
-                                      onChange={e => {
-                                        const magnitude = Math.abs(Number(e.target.value) || 1);
-                                        const v = Math.max(1, Math.min(maxQty, magnitude));
-                                        setLineQuantities(prev => ({ ...prev, [line.id]: v }));
-                                      }}
-                                      className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                      style={{
-                                        width: 60, fontSize: 12, padding: '3px 4px', borderRadius: 4, textAlign: 'center', fontVariantNumeric: 'tabular-nums', outline: 'none',
-                                        border: qtyEdited ? '1px solid var(--color-border-warning, var(--status-warning-fg))' : '0.5px solid var(--color-border-secondary, hsl(var(--text-disabled)))',
-                                        background: qtyEdited ? 'var(--color-background-warning, var(--status-warning-bg))' : 'hsl(var(--card))',
-                                      }}
-                                    />
+                                    {(() => {
+                                      const draft = qtyDrafts[line.id];
+                                      const draftInvalid = draft !== undefined && !classifyQtyDraft(draft, maxQty).valid;
+                                      let borderColor;
+                                      let backgroundColor;
+                                      if (draftInvalid) {
+                                        borderColor = '1px solid hsl(var(--destructive))';
+                                        backgroundColor = 'hsl(var(--destructive) / 0.08)';
+                                      } else if (qtyEdited) {
+                                        borderColor = '1px solid var(--color-border-warning, var(--status-warning-fg))';
+                                        backgroundColor = 'var(--color-background-warning, var(--status-warning-bg))';
+                                      } else {
+                                        borderColor = '0.5px solid var(--color-border-secondary, hsl(var(--text-disabled)))';
+                                        backgroundColor = 'hsl(var(--card))';
+                                      }
+                                      return (
+                                        <input
+                                          type="number"
+                                          min={negativeQuantity ? -maxQty : 1}
+                                          max={negativeQuantity ? -1 : maxQty}
+                                          value={draft ?? displayQty}
+                                          onClick={e => e.stopPropagation()}
+                                          onChange={e => {
+                                            const raw = e.target.value;
+                                            setQtyDrafts(prev => ({ ...prev, [line.id]: raw }));
+                                          }}
+                                          onBlur={() => {
+                                            const raw = qtyDrafts[line.id];
+                                            if (raw !== undefined) {
+                                              const check = classifyQtyDraft(raw, maxQty);
+                                              if (check.valid) {
+                                                setLineQuantities(prev => ({ ...prev, [line.id]: Math.abs(Number(raw)) }));
+                                              } else if (check.tooHigh) {
+                                                toast.error(ui('qtyMaxAllowed', { max: maxQty }));
+                                              } else {
+                                                toast.error(ui('qtyMustBePositive'));
+                                              }
+                                              setQtyDrafts(prev => { const n = { ...prev }; delete n[line.id]; return n; });
+                                            }
+                                          }}
+                                          className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                          style={{
+                                            width: 60, fontSize: 12, padding: '3px 4px', borderRadius: 4, textAlign: 'center', fontVariantNumeric: 'tabular-nums', outline: 'none',
+                                            border: borderColor,
+                                            background: backgroundColor,
+                                          }}
+                                        />
+                                      );
+                                    })()}
                                   </span>
                                   {showPriceColumns && (
                                     <span style={{ width: 80, fontSize: 12, color: 'hsl(var(--muted-foreground))', fontVariantNumeric: 'tabular-nums', textAlign: 'right', flexShrink: 0 }}>

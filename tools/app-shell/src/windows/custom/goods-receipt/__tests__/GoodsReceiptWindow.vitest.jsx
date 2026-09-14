@@ -1,3 +1,5 @@
+let lastRowQuickActions = null;
+let lastBulkActionsFn = null;
 vi.mock('@generated/goods-receipt/generated/web/goods-receipt/index.jsx', () => ({
   default: ({
     rowQuickActions,
@@ -11,7 +13,10 @@ vi.mock('@generated/goods-receipt/generated/web/goods-receipt/index.jsx', () => 
     renderPreview,
     refreshTrigger,
     refetchAfterSave,
-  }) => (
+  }) => {
+    lastRowQuickActions = rowQuickActions;
+    lastBulkActionsFn = BulkActions;
+    return (
     <div
       data-testid="generated-app"
       data-initial-filters={initialColumnFilters ? JSON.stringify(initialColumnFilters) : ''}
@@ -125,7 +130,8 @@ vi.mock('@generated/goods-receipt/generated/web/goods-receipt/index.jsx', () => 
       </button>
       <span id="menu-dr-count" data-testid="menu-dr-count" />
     </div>
-  ),
+    );
+  },
 }));
 
 vi.mock('@generated/goods-receipt/generated/web/goods-receipt/GoodsReceiptTable', () => ({
@@ -140,9 +146,15 @@ vi.mock('@/components/attachments', () => ({
   AttachmentsTab: () => null,
 }));
 
+let bulkDocumentActionCalls = [];
 vi.mock('@/components/contract-ui/BulkDocumentAction', () => ({
-  default: () => null,
+  default: (props) => {
+    bulkDocumentActionCalls.push(props);
+    return null;
+  },
   buildInOutActions: vi.fn(),
+  buildPostActions: vi.fn(() => []),
+  postRowFilter: vi.fn(),
 }));
 
 vi.mock('@/components/contract-ui/CloneOrderModal', () => ({
@@ -203,6 +215,7 @@ vi.mock('react-router-dom', () => ({
 
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import GoodsReceiptWindow from '../index.jsx';
 
 const DEFAULT_PROPS = {
@@ -216,6 +229,9 @@ describe('GoodsReceiptWindow', () => {
     vi.clearAllMocks();
     mockSearchParams = new URLSearchParams();
     capturedOnSuccess = null;
+    lastRowQuickActions = null;
+    lastBulkActionsFn = null;
+    bulkDocumentActionCalls = [];
   });
 
   it('renders the generated app', () => {
@@ -392,5 +408,86 @@ describe('GoodsReceiptWindow', () => {
     expect(screen.queryByTestId('clone-modal')).not.toBeInTheDocument();
     const after = screen.getByTestId('generated-app').getAttribute('data-refresh-trigger');
     expect(Number(after)).toBe(Number(before) + 1);
+  });
+
+  // ── ETP-5209 — Post row-kebab entry and bulk button ────────────────────────
+  // The gate itself (processed + not posted) is covered exhaustively in
+  // BulkDocumentAction.vitest.jsx (buildPostActions/postRowFilter) — these
+  // tests only verify this window wires the shared helper through correctly.
+
+  it('offers the post row-kebab menu action for a processed, unposted row', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    const actions = lastRowQuickActions.menuActions({ row: { processed: 'Y', posted: 'N' } });
+    expect(actions).toEqual([{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }]);
+  });
+
+  it('does not offer the post row-kebab menu action for an already-posted row', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    const actions = lastRowQuickActions.menuActions({ row: { processed: 'Y', posted: 'Y' } });
+    expect(actions).toEqual([]);
+  });
+
+  it('does not offer the post row-kebab menu action for a not-yet-processed row', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    const actions = lastRowQuickActions.menuActions({ row: { processed: 'N', posted: 'N' } });
+    expect(actions).toEqual([]);
+  });
+
+  it('bumps refreshKey when a neoAction row-kebab menu action (post) completes', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    const before = screen.getByTestId('generated-app').getAttribute('data-refresh-trigger');
+
+    act(() => {
+      lastRowQuickActions.onMenuActionExecuted({ neoAction: 'post' });
+    });
+
+    const after = screen.getByTestId('generated-app').getAttribute('data-refresh-trigger');
+    expect(Number(after)).toBe(Number(before) + 1);
+  });
+
+  it('does not bump refreshKey for a menu action without a neoAction', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    const before = screen.getByTestId('generated-app').getAttribute('data-refresh-trigger');
+
+    act(() => {
+      lastRowQuickActions.onMenuActionExecuted({ key: 'someOtherAction' });
+    });
+
+    const after = screen.getByTestId('generated-app').getAttribute('data-refresh-trigger');
+    expect(after).toBe(before);
+  });
+
+  it('wires the bulk Post BulkDocumentAction with the shared postRowFilter reference', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    // GoodsReceiptBulkAction (rendered inside bulk-actions-slot) passes the
+    // imported postRowFilter reference straight through as rowFilter — no
+    // caller-side factory/hook call needed (ETP-5209).
+    const postCall = bulkDocumentActionCalls.find((p) => p.labelKey === 'post');
+    expect(postCall).toBeDefined();
+    expect(postCall.rowFilter).toBe(postRowFilter);
+  });
+
+  // ETP-5209 regression: production crash root cause. The real
+  // generated/goods-receipt index.jsx invokes `bulkActions` as a PLAIN
+  // FUNCTION CALL inside ListView's own render body, never as JSX. The mock
+  // above renders BulkActions via JSX (`<BulkActions />`), which is exactly
+  // why the old suite never caught this: JSX invocation gives a function
+  // component its own hook dispatcher, so a stray `useUI()` inside the
+  // wrapper would have passed silently there. Calling the captured
+  // `lastBulkActionsFn` reference directly here, OUTSIDE of any React render
+  // pass, reproduces the same hook-dispatcher-less context production hits —
+  // any hook call inside the wrapper throws React's "Invalid hook call" error
+  // here, exactly as it would crash with "Rendered more hooks than during the
+  // previous render" in production the moment a row got selected.
+  it('ETP-5209 regression: bulkActions wrapper is callable as a plain function (not JSX) without an Invalid Hook Call error', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+
+    expect(() => lastBulkActionsFn({
+      selectedRows: [{ id: 'row-1', processed: 'Y', posted: 'N' }],
+      clearSelection: vi.fn(),
+      token: 'tok',
+      apiBaseUrl: '/api',
+      windowName: 'goods-receipt',
+    })).not.toThrow();
   });
 });

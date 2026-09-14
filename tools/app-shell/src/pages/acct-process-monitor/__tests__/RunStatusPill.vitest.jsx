@@ -32,7 +32,7 @@ describe('RunStatusPill', () => {
     render(<RunStatusPill status="ERR" />);
     const pill = screen.getByTestId('RunStatusPill__ERR');
     expect(pill).toHaveAttribute('data-status', 'ERR');
-    expect(pill).toHaveAttribute('data-tone', 'error');
+    expect(pill).toHaveAttribute('data-tone', 'danger');
   });
 
   it('applies the semantic status utilities, never a raw colour', () => {

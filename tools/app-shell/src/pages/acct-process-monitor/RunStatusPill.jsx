@@ -17,7 +17,7 @@ const TONE_CLASSES = Object.freeze({
   warning: 'border-status-warning-border bg-status-warning text-status-warning-foreground',
   info: 'border-status-info-border bg-status-info text-status-info-foreground',
   neutral: 'border-status-neutral-border bg-status-neutral text-status-neutral-foreground',
-  error: 'border-destructive/40 bg-destructive/10 text-destructive',
+  danger: 'border-destructive/40 bg-destructive/10 text-destructive',
 });
 
 export default function RunStatusPill({ status, 'data-testid': dataTestId }) {

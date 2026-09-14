@@ -10,8 +10,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Loader2, Play, RefreshCw, ShieldAlert, TriangleAlert } from 'lucide-react';
-import { useUI, useMenuLabel } from '@/i18n';
-import { useLocaleSwitch } from '@/i18n';
+import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import StatusCard from '@/components/StatusCard.jsx';
 import {

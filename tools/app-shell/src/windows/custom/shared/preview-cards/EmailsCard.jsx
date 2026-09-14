@@ -21,22 +21,17 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  * The send link is unchanged on purpose: `onSend` is fail-closed (ETP-4717/ETP-4372) —
  * when the caller withholds it, because the document is not in a sendable status, the
  * card must expose NO clickable send trigger at all.
+ *
+ * ETP-5069 (scope narrowed per Jira comments, 2026-09-10): the row no longer expands —
+ * `EmailRowDetails` (CC, sender, body, error, download link) is gone — and the 8-way
+ * status model collapses to exactly 2 visual states ("enviado"/success, "fallido"/failure).
+ * `parseEmailHistory` and the raw per-row `status` field are untouched; only what
+ * `EmailRow` renders from that status changed.
  */
 
 // A send is only "successful" for these two. Everything else is a failure and must never
 // be presented as sent. Mirrors the module's status enum — there is no DELIVERY_FAILED.
 const SUCCESS_STATUSES = new Set(['SENT', 'DUPLICATE']);
-
-const STATUS_LABEL_KEYS = {
-  SENT: 'emailHistoryStatusSent',
-  DUPLICATE: 'emailHistoryStatusDuplicate',
-  PROVIDER_FAILED: 'emailHistoryStatusProviderFailed',
-  THROTTLED: 'emailHistoryStatusThrottled',
-  SUPPRESSED: 'emailHistoryStatusSuppressed',
-  NO_RECIPIENT: 'emailHistoryStatusNoRecipient',
-  UNAUTHORIZED: 'emailHistoryStatusUnauthorized',
-  VALIDATION_FAILED: 'emailHistoryStatusValidationFailed',
-};
 
 function SectionCard({ title, titleRight, children }) {
   return (
@@ -104,9 +99,7 @@ function statusTone(row) {
 }
 
 function statusText(row, ui) {
-  const status = String(row?.status ?? '');
-  const key = STATUS_LABEL_KEYS[status];
-  return key ? ui(key) : status;
+  return isSuccess(row) ? ui('emailHistoryStatusSuccess') : ui('emailHistoryStatusFailed');
 }
 
 /** Recipients arrive either as an array or as a single comma/semicolon-separated string. */
@@ -114,14 +107,6 @@ function recipientList(value) {
   if (Array.isArray(value)) return value.map(v => String(v).trim()).filter(Boolean);
   if (typeof value === 'string') return value.split(/[,;]/).map(v => v.trim()).filter(Boolean);
   return [];
-}
-
-/**
- * The sender's display name. The endpoint's field name for it is not pinned down by the
- * contract, so every plausible spelling is accepted and the first non-empty one wins.
- */
-function senderName(row) {
-  return row?.sentBy ?? row?.sender ?? row?.senderName ?? row?.createdByName ?? row?.userName ?? null;
 }
 
 function formatSentAt(raw, localeTag, ui) {
@@ -133,78 +118,26 @@ function formatSentAt(raw, localeTag, ui) {
   });
 }
 
-function DetailLine({ label, children }) {
-  return (
-    <div className="flex gap-2 text-xs leading-5">
-      <span className="text-muted-foreground shrink-0">{label}</span>
-      <span className="text-foreground break-words min-w-0">{children}</span>
-    </div>
-  );
-}
-
-function EmailRowDetails({ row, ui }) {
-  const cc = recipientList(row.recipientsCc);
-  const sender = senderName(row);
-  return (
-    <div className="pb-2 pl-1 pr-1 flex flex-col gap-1">
-      {cc.length > 0 && <DetailLine label={ui('emailHistoryCc')} data-testid="DetailLine__cc">{cc.join(', ')}</DetailLine>}
-      {sender && <DetailLine label={ui('emailHistorySentBy')} data-testid="DetailLine__sender">{String(sender)}</DetailLine>}
-      {row.messageBody && (
-        <DetailLine label={ui('emailHistoryMessage')} data-testid="DetailLine__body">
-          <span className="whitespace-pre-wrap">{String(row.messageBody)}</span>
-        </DetailLine>
-      )}
-      {!isSuccess(row) && row.errorMessage && (
-        <DetailLine label={ui('emailHistoryError')} data-testid="DetailLine__error">
-          <span className="text-[hsl(var(--destructive))]">{String(row.errorMessage)}</span>
-        </DetailLine>
-      )}
-      {row.downloadLink && (
-        <a
-          href={String(row.downloadLink)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs font-medium text-foreground underline decoration-gray-600 hover:decoration-gray-900 transition-colors self-start mt-1"
-        >
-          {ui('emailHistoryDownload')}
-        </a>
-      )}
-    </div>
-  );
-}
-
-function EmailRow({ row, ui, localeTag, expanded, onToggle }) {
+function EmailRow({ row, ui, localeTag }) {
   const to = recipientList(row.recipientsTo);
   return (
-    <div className="border-b border-border-subtle last:border-b-0">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={expanded}
-        aria-label={ui('emailHistoryToggleDetails')}
-        className="w-full text-left py-2 hover:bg-muted rounded -mx-1 px-1 transition-colors"
-      >
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-muted-foreground tabular-nums shrink-0">
-            {formatSentAt(row.sentAt, localeTag, ui)}
-          </span>
-          <StatusTag
-            status={String(row.status ?? '')}
-            tone={statusTone(row)}
-            label={statusText(row, ui)}
-            data-testid="StatusTag__emails" />
-        </div>
-        <div className="flex items-baseline gap-2 min-w-0 mt-0.5">
-          <span className="text-xs text-muted-foreground shrink-0">{ui('emailHistoryTo')}</span>
-          <span className="text-sm font-medium text-foreground truncate">
-            {to.length > 0 ? to.join(', ') : ui('emailHistoryNoRecipients')}
-          </span>
-        </div>
-        {row.subject && (
-          <div className="text-xs text-muted-foreground truncate mt-0.5">{String(row.subject)}</div>
-        )}
-      </button>
-      {expanded && <EmailRowDetails row={row} ui={ui} data-testid="EmailRowDetails__emails" />}
+    <div className="border-b border-border-subtle last:border-b-0 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+          {formatSentAt(row.sentAt, localeTag, ui)}
+        </span>
+        <StatusTag
+          status={String(row.status ?? '')}
+          tone={statusTone(row)}
+          label={statusText(row, ui)}
+          data-testid="StatusTag__emails" />
+      </div>
+      <div className="flex items-baseline gap-2 min-w-0 mt-0.5">
+        <span className="text-xs text-muted-foreground shrink-0">{ui('emailHistoryTo')}</span>
+        <span className="text-sm font-medium text-foreground truncate">
+          {to.length > 0 ? to.join(', ') : ui('emailHistoryNoRecipients')}
+        </span>
+      </div>
     </div>
   );
 }
@@ -216,7 +149,6 @@ export default function EmailsCard({ onSend, documentId, apiBaseUrl, refreshSign
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [expandedId, setExpandedId] = useState(null);
 
   const localeTag = useMemo(() => (locale || 'es_ES').replace('_', '-'), [locale]);
 
@@ -287,8 +219,6 @@ export default function EmailsCard({ onSend, documentId, apiBaseUrl, refreshSign
             row={row}
             ui={ui}
             localeTag={localeTag}
-            expanded={expandedId === rowKey}
-            onToggle={() => setExpandedId(current => (current === rowKey ? null : rowKey))}
             data-testid="EmailRow__d50c04" />
         );
       })}
