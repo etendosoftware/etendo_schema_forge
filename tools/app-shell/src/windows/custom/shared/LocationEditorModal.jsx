@@ -5,7 +5,11 @@ import {useUI, useLabel} from '@/i18n';
 import {toast} from 'sonner';
 import {SquareCheckbox} from './SquareCheckbox';
 import RequiredMark from '@/components/ui/required-mark.jsx';
-import {matchOptionByLabel} from '@/lib/matchOptionLabel.js';
+import {
+    DEFAULT_COUNTRY_LIMIT,
+    DEFAULT_COUNTRY_QUERY,
+    findDefaultCountryOption,
+} from '@/lib/defaultCountry.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 const EMPTY_FORM = {
@@ -22,15 +26,11 @@ const EMPTY_FORM = {
 };
 const SELECTOR_PAGE_SIZE = 120;
 
-// ETP-5103 — Spain is the default country for a NEW address. The NEO selector returns
-// only { id, label } (no ISO code) and pages 120 rows at a time ordered by the BASE
-// name, so Spain sits ~200th and never lands in the first page: it has to be asked for
-// explicitly. `q` filters on C_Country.NAME (core seed data, always "Spain") OR the
-// request-language translation, so this query hits in any locale; the aliases below then
-// match the returned label, which IS translated.
-const DEFAULT_COUNTRY_QUERY = 'Spain';
-const DEFAULT_COUNTRY_LABEL_ALIASES = ['España', 'Spain'];
-const DEFAULT_COUNTRY_LIMIT = 5;
+// ETP-5103 — Spain is the default country for a NEW address. This modal's selector pages
+// 120 rows at a time ordered by the BASE name, so Spain sits ~200th and never lands in
+// the first page: it has to be asked for explicitly with `q`, unlike the "Nuevo contacto"
+// popup, which holds the whole catalog and matches the aliases straight away. The term
+// and the aliases are shared by both popups — see @/lib/defaultCountry.js.
 
 /**
  * Shallow form comparison for the unsaved-changes baseline (ETP-5022). Compares by sorted
@@ -109,12 +109,7 @@ function toSelectorOption(item) {
  */
 async function fetchDefaultCountryOption(apiFetch, url) {
     const {items} = await fetchSelectorPage(apiFetch, url);
-    const options = items.map(toSelectorOption);
-    for (const alias of DEFAULT_COUNTRY_LABEL_ALIASES) {
-        const matchedId = matchOptionByLabel(options, alias);
-        if (matchedId) return options.find(option => option.id === matchedId);
-    }
-    return null;
+    return findDefaultCountryOption(items.map(toSelectorOption));
 }
 
 /**

@@ -92,10 +92,24 @@
  * ## Idempotency
  * Safe to call repeatedly in the same tenant, and in any order relative to the
  * other `ensure*` helpers. Lookup is by `searchKey` (`M_Product.Value`, unique
- * per client), never positional. A run that finds the fixture already created
- * and already priced performs zero writes. A run that finds it half-provisioned
- * (created but missing a price, e.g. a previous run that died between the two
- * POSTs) repairs only the missing part.
+ * per client), never positional, so a second run reuses the same product instead
+ * of creating another one.
+ *
+ * Idempotent does NOT mean "performs zero writes when the rows are already
+ * there". `ensurePrices()` re-posts the fixture price to EVERY price list
+ * version on EVERY run, deliberately. Since ETP-5245 the backend itself seeds an
+ * `M_ProductPrice` row **at price 0** on each default tariff the moment a product
+ * is created (`ProductDefaultsHandler#seedDefaultPrices`), so "this version
+ * already has a price row" and "this version carries the fixture's price" are
+ * different statements and only the second one is what the specs need. While the
+ * helper skipped the POST on the first, a freshly created fixture stayed at 0 and
+ * the failure surfaced three steps later as `Subtotal should be > 0` on a
+ * document, with nothing pointing back here.
+ *
+ * Re-posting is safe and cheap: `ProductPriceHandler#updateInsteadOfDuplicating`
+ * upserts on the `(M_PriceList_Version_ID, M_Product_ID)` unique pair, so a POST
+ * for a tariff the product already has UPDATES that row instead of violating the
+ * constraint.
  */
 
 const SPEC_BASE = '/sws/neo/product';
@@ -327,8 +341,51 @@ async function createProductFixture(page, { fixture, categoryId, headers }) {
   return record;
 }
 
-/** Currently attached price rows, keyed by the price list version they belong to. */
-async function fetchPricedVersionIds(page, { productId, headers }) {
+/** Amounts come back as `12.00`, never as `12`, so they are compared numerically. */
+const PRICE_EPSILON = 0.005;
+
+/**
+ * Parses an amount out of a NEO payload, or `NaN` when there is nothing usable
+ * there. `NaN` is the "absent/unknown" marker on purpose: every comparison
+ * against it is false, so a missing price can never be mistaken for a match.
+ */
+function toAmount(raw) {
+  if (raw === null || raw === undefined || raw === '') {
+    return Number.NaN;
+  }
+  return Number(raw);
+}
+
+function amountsMatch(actual, expected) {
+  return Number.isFinite(actual) && Math.abs(actual - expected) <= PRICE_EPSILON;
+}
+
+/**
+ * Human-readable name of a price list version, for error messages only. Same
+ * precedence `ProductPriceBar.jsx` uses to label these very selector items:
+ * `ProductPriceHandler#enrichSelectorItem` adds `priceList$_identifier`, and the
+ * rest are the fallbacks for an unenriched response.
+ */
+function versionLabel(version) {
+  return version?.['priceList$_identifier']
+    ?? version?._identifier
+    ?? version?.name
+    ?? version?.label
+    ?? 'unnamed';
+}
+
+/**
+ * The prices currently attached to the product: a Map of price list version id
+ * to its `standardPrice`.
+ *
+ * INFORMATIONAL ONLY — it must never decide whether a price gets posted. It used
+ * to return a Set of "versions that already have a row" and `ensurePrices()` used
+ * that to skip work, which is exactly the bug described in this file's header
+ * (the backend seeds rows at 0). Carrying the amount instead lets the return
+ * value tell "was already correct" apart from "was at another price and has been
+ * repaired", without ever gating the write.
+ */
+async function fetchExistingPrices(page, { productId, headers }) {
   const res = await page.request.get(`${SPEC_BASE}/${PRICE_ENTITY}`, {
     params: { parentId: productId, _startRow: '0', _endRow: '200' },
     headers,
@@ -336,27 +393,56 @@ async function fetchPricedVersionIds(page, { productId, headers }) {
   if (!res.ok()) {
     throw new Error(`ensureProductSetup: price lookup failed (${res.status()}): ${await res.text()}`);
   }
-  return new Set(extractRows(await res.json()).map((row) => String(row?.priceListVersion)));
+  const byVersion = new Map();
+  for (const row of extractRows(await res.json())) {
+    if (row?.priceListVersion === null || row?.priceListVersion === undefined) {
+      continue;
+    }
+    byVersion.set(String(row.priceListVersion), toAmount(row.standardPrice));
+  }
+  return byVersion;
 }
 
 /**
- * Attaches the fixture's price to EVERY price list version the tenant has that
- * does not already carry one. See this file's header for why "every version"
- * and not "the right one": the drawer's own selector filter keys off the
- * document's price list, which is resolved by the business partner / org and is
- * not knowable from here.
+ * Writes the fixture's price onto EVERY price list version the tenant has —
+ * all of them, on every run, unconditionally.
+ *
+ * "Every version" rather than "the right one": the product search drawer's own
+ * selector filter keys off the document's price list, which is resolved by the
+ * business partner / org and is not knowable from here (see this file's header).
+ *
+ * "Unconditionally" rather than "only the versions with no row yet": the
+ * existence of an `M_ProductPrice` row does NOT imply it carries the fixture's
+ * price. `ProductDefaultsHandler#seedDefaultPrices` (ETP-5245) gives a brand-new
+ * product a row at price 0 on each default tariff, so a run that skipped the POST
+ * because a row was already there left the fixture at 0 € and broke every
+ * downstream amount assertion. The POST is an upsert
+ * (`ProductPriceHandler#updateInsteadOfDuplicating`), so re-posting a tariff the
+ * product already has updates that row instead of hitting the
+ * `(M_PriceList_Version_ID, M_Product_ID)` unique constraint.
+ *
+ * Each POST is verified against the fixture price, not merely for a 2xx: the
+ * upsert echoes the stored row back through the same SQL a GET uses, so a write
+ * that silently landed on another amount is caught here, at the helper, instead
+ * of surfacing as an unexplained `0,00 €` in a document total several steps and
+ * several files later.
  *
  * `priceLimit` is sent explicitly as 0 rather than left out. `ProductPriceHandler
  * #handlePost` defaults an omitted `priceLimit` to `listPrice`, which would make
  * the fixture's list price its own floor — harmless on the GOClient tariffs
  * (both `ENFORCEPRICELIMIT='N'`) but a latent "price under limit" rejection on
  * any tenant whose tariff does enforce it.
+ *
+ * @returns {Promise<{total: number, repaired: number, alreadyCorrect: number}>}
+ *   `total` versions were written; `repaired` of them were missing the row or
+ *   carried a different price beforehand, the rest were already correct.
  */
 async function ensurePrices(page, { productId, fixture, headers }) {
   const versions = await fetchSelectorItems(page, {
     entity: PRICE_ENTITY, column: PRICE_LIST_VERSION_COLUMN, headers,
   });
-  if (versions.length === 0) {
+  const targets = versions.filter((version) => version?.id);
+  if (targets.length === 0) {
     throw new Error(
       'ensureProductSetup: the tenant has no price list version via '
       + `/${PRICE_ENTITY}/selectors/${PRICE_LIST_VERSION_COLUMN}. Without one, no product can ever appear `
@@ -365,13 +451,17 @@ async function ensurePrices(page, { productId, fixture, headers }) {
     );
   }
 
-  const alreadyPriced = await fetchPricedVersionIds(page, { productId, headers });
-  const missing = versions.filter((version) => version?.id && !alreadyPriced.has(String(version.id)));
+  // Read BEFORE writing, and only to report on what was found — never to decide
+  // whether to write. See this function's docstring.
+  const existingPrices = await fetchExistingPrices(page, { productId, headers });
+  const expectedPrice = Number(fixture.standardPrice);
+  let repaired = 0;
 
-  for (const version of missing) {
-    // eslint-disable-next-line no-await-in-loop -- sequential on purpose: each POST hits the
-    // (M_PriceList_Version_ID, M_Product_ID) unique constraint, and a serial loop keeps a
-    // failure attributable to one specific version instead of an unordered Promise.all reject.
+  for (const version of targets) {
+    const versionId = String(version.id);
+    // eslint-disable-next-line no-await-in-loop -- sequential on purpose: each POST upserts the
+    // (M_PriceList_Version_ID, M_Product_ID) pair, and a serial loop keeps a failure attributable
+    // to one specific version instead of an unordered Promise.all reject.
     const res = await page.request.post(`${SPEC_BASE}/${PRICE_ENTITY}`, {
       headers,
       data: {
@@ -386,12 +476,28 @@ async function ensurePrices(page, { productId, fixture, headers }) {
     if (!res.ok()) {
       throw new Error(
         `ensureProductSetup: attaching a price for "${fixture.name}" to price list version `
-        + `${version.id} failed (${res.status()}): ${await res.text()}`,
+        + `${versionId} ("${versionLabel(version)}") failed (${res.status()}): ${await res.text()}`,
       );
+    }
+
+    // eslint-disable-next-line no-await-in-loop -- same reason as the POST above.
+    const echoed = extractRows(await res.json())[0]?.standardPrice;
+    if (!amountsMatch(toAmount(echoed), expectedPrice)) {
+      throw new Error(
+        `ensureProductSetup: the price POST for "${fixture.name}" on price list version `
+        + `${versionId} ("${versionLabel(version)}") answered ${res.status()}, but the row it echoed `
+        + `back carries standardPrice ${JSON.stringify(echoed ?? null)} instead of the fixture's `
+        + `${expectedPrice}. The fixture would reach the specs unpriced, and the first visible `
+        + 'symptom would be a document total of 0 several steps later.',
+      );
+    }
+
+    if (!amountsMatch(existingPrices.get(versionId), expectedPrice)) {
+      repaired += 1;
     }
   }
 
-  return { total: versions.length, added: missing.length };
+  return { total: targets.length, repaired, alreadyCorrect: targets.length - repaired };
 }
 
 /**
@@ -412,7 +518,11 @@ async function ensurePrices(page, { productId, fixture, headers }) {
  * @param {object} [fixture=PRODUCT_FIXTURE_ALPHA] - One of the exported
  *   `PRODUCT_FIXTURE_*` descriptors: `{ searchKey, name, standardPrice, listPrice }`.
  * @returns {Promise<{id: string, name: string, searchKey: string, created: boolean,
- *   pricedVersions: number, pricesAdded: number}>}
+ *   pricedVersions: number, pricesRepaired: number, pricesAlreadyCorrect: number}>}
+ *   `pricedVersions` is how many price list versions now carry the fixture price
+ *   — all of them, since every one is written on every run. `pricesRepaired`
+ *   counts those that were missing or sat at a different price beforehand, which
+ *   on a just-created product is all of them: the backend seeds them at 0.
  */
 export async function ensureProductSetup(page, fixture = PRODUCT_FIXTURE_ALPHA) {
   if (!fixture?.searchKey || !fixture?.name) {
@@ -428,7 +538,9 @@ export async function ensureProductSetup(page, fixture = PRODUCT_FIXTURE_ALPHA) 
     record = await createProductFixture(page, { fixture, categoryId, headers });
   }
 
-  const { total, added } = await ensurePrices(page, { productId: record.id, fixture, headers });
+  const { total, repaired, alreadyCorrect } = await ensurePrices(
+    page, { productId: record.id, fixture, headers },
+  );
 
   return {
     id: record.id,
@@ -440,7 +552,8 @@ export async function ensureProductSetup(page, fixture = PRODUCT_FIXTURE_ALPHA) 
     searchKey: record.searchKey ?? fixture.searchKey,
     created,
     pricedVersions: total,
-    pricesAdded: added,
+    pricesRepaired: repaired,
+    pricesAlreadyCorrect: alreadyCorrect,
   };
 }
 

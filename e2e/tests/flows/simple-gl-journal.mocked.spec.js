@@ -4,9 +4,20 @@ import { login } from '../helpers/auth.js';
 /**
  * Simple G/L Journal — balance footer (mocked).
  *
- * Exercises the window's defining feature: the generic debit/credit balance
- * footer (BalanceFooterPanel) plus the save-gate that blocks saving while the
- * journal is unbalanced (blockSaveForBalance in DetailView).
+ * Exercises the window's defining feature: the aligned debit/credit balance
+ * row rendered inline inside the lines grid, plus the save-gate that blocks
+ * saving while the journal is unbalanced (blockSaveForBalance in DetailView).
+ *
+ * `simple-g-l-journal` uses `linesLayout: 'inlineEditable'`, so as of ETP-5210
+ * ("Align balance totals under their grid columns") `renderTotalsBlock()`
+ * (tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx) early-
+ * returns null for this window and the old standalone `BalanceFooterPanel`
+ * never mounts. The totals now render as a dedicated row inside the lines
+ * grid itself, via `renderBalanceFooterRow()` in
+ * tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
+ * (`data-testid="balance-footer-row"`, with the debit/credit cells tagged
+ * `balance-footer-debit` / `balance-footer-credit` so each total lines up
+ * under its own grid column instead of sitting in a separate panel below).
  *
  * Mock mode only. The spec opens an EXISTING draft journal in detail view and
  * feeds its `gLJournalLine` children through a window-specific route installed
@@ -26,9 +37,6 @@ const SPEC = 'simple-g-l-journal';
 const ENTITY = 'gLJournal';
 const LINE_ENTITY = 'gLJournalLine';
 const RECORD_ID = 'glj-001';
-// Mocked line /defaults response value — the parent journal's description that
-// the backend resolves @DESCRIPTION1@ to. The add-row must pre-fill it.
-const LINE_DEFAULT_DESC = 'Mocked header desc';
 
 // Draft header (processed: 'N' so the form stays editable and the document is
 // not locked — otherwise the save button would be disabled regardless of balance).
@@ -112,18 +120,6 @@ async function installJournalMock(page, lines) {
     });
   });
 
-  // HandleDefaults: GET /gLJournalLine/defaults?parentId=<id> → backend-resolved
-  // line defaults. Registered AFTER the generic line route so it wins (Playwright
-  // matches routes in reverse registration order). The line description default
-  // (@DESCRIPTION1@) resolves to the parent journal's description on the backend.
-  await page.route(`**/sws/neo/${SPEC}/${LINE_ENTITY}/defaults{/**,}**`, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ defaults: { description: LINE_DEFAULT_DESC } }),
-    });
-  });
-
   return { wasSaveRequested: () => saveRequested };
 }
 
@@ -132,8 +128,8 @@ async function openJournal(page, lines) {
   const ctx = await installJournalMock(page, lines);
   await page.goto(`/${SPEC}/${RECORD_ID}`);
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-  // The balance footer renders once the children resolve.
-  await expect(page.getByTestId('balance-footer')).toBeVisible();
+  // The balance footer row renders once the children resolve.
+  await expect(page.getByTestId('balance-footer-row')).toBeVisible();
   return ctx;
 }
 
@@ -141,13 +137,14 @@ test.describe('Simple G/L Journal — balance footer', () => {
   test('balanced journal: status is balanced and save is enabled, save succeeds', async ({ page }) => {
     const ctx = await openJournal(page, BALANCED_LINES);
 
-    // Footer reflects the balanced totals (debit 100 / credit 100). The
+    // Footer row reflects the balanced totals (debit 100 / credit 100). The
     // difference amount and the balanced/unbalanced badge were removed from
-    // BalanceFooterPanel (ETP-4917, DF Contabilidad §2.1 point 3) — only the
-    // two debit/credit totals render now; balance status is asserted through
-    // the save-gate behavior below instead.
-    await expect(page.getByTestId('balance-total-debit')).toContainText('100');
-    await expect(page.getByTestId('balance-total-credit')).toContainText('100');
+    // BalanceFooterPanel (ETP-4917, DF Contabilidad §2.1 point 3), and the
+    // footer itself moved inline under the grid columns (ETP-5210) — only the
+    // two debit/credit totals render now, with no "Total debe"/"Total haber"
+    // labels; balance status is asserted through the save-gate behavior below.
+    await expect(page.getByTestId('balance-footer-debit')).toContainText('100');
+    await expect(page.getByTestId('balance-footer-credit')).toContainText('100');
 
     // Make the form dirty without unbalancing it (edit a header text field) so
     // the existing-record save gate (!isDirty) clears and we isolate the
@@ -167,11 +164,11 @@ test.describe('Simple G/L Journal — balance footer', () => {
   test('unbalanced journal: status is unbalanced, save is disabled', async ({ page }) => {
     await openJournal(page, UNBALANCED_LINES);
 
-    // debit 100 / credit 60 → not balanced. The footer no longer renders a
+    // debit 100 / credit 60 → not balanced. The footer row no longer renders a
     // difference amount or a balanced/unbalanced badge (ETP-4917) — the
     // unbalanced status is proven by the save-gate staying disabled below.
-    await expect(page.getByTestId('balance-total-debit')).toContainText('100');
-    await expect(page.getByTestId('balance-total-credit')).toContainText('60');
+    await expect(page.getByTestId('balance-footer-debit')).toContainText('100');
+    await expect(page.getByTestId('balance-footer-credit')).toContainText('60');
 
     // Even after making the form dirty, the balance gate keeps save DISABLED.
     const descInput = page.getByTestId('field-description');
@@ -181,18 +178,11 @@ test.describe('Simple G/L Journal — balance footer', () => {
     await expect(page.getByTestId('action-save')).toBeDisabled();
   });
 
-  test('new line add-row pre-fills the description from the line /defaults (HandleDefaults)', async ({ page }) => {
-    await openJournal(page, BALANCED_LINES);
-
-    // Open the inline add-row for a new line. The add-line button lives in the
-    // primary lines' inline-add portal span (classic layout).
-    await page.locator('[data-inline-add-portal="true"] button').first().click();
-    await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
-
-    // The empty description field is seeded from the mocked line /defaults response
-    // (backend resolves @DESCRIPTION1@ → parent journal description).
-    const addDesc = page.getByTestId('inline-add-field-description');
-    await expect(addDesc).toBeVisible();
-    await expect(addDesc).toHaveValue(LINE_DEFAULT_DESC);
-  });
+  // A third test used to live here: 'new line add-row pre-fills the description
+  // from the line /defaults (HandleDefaults)'. Removed — ETP-5210 discarded the
+  // gLJournalLine `description` field entirely (decisions.json: visibility
+  // "discarded"), so it no longer appears in addLineFields.entry and the inline
+  // add-row has no description input to pre-fill. The HandleDefaults prefill
+  // behavior the test exercised no longer applies to this window; the feature
+  // itself is gone, not just the testid.
 });

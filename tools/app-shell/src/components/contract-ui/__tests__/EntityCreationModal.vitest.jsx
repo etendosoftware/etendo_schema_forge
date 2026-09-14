@@ -92,6 +92,45 @@ describe('EntityCreationModal', () => {
     expect(saveBtn).toBeDisabled();
   });
 
+  /**
+   * ETP-5103 — whitespace is not content.
+   *
+   * A lone space in a mandatory field used to satisfy the gate, so the asterisk
+   * promised something the button did not enforce and a blank address could be
+   * saved. Only strings are trimmed: a required field holding 0 or false carries
+   * a legitimate value and must still pass.
+   */
+  describe('save gating treats whitespace as empty', () => {
+    /** Render with a single required field preloaded with `value`. */
+    const renderWithName = (value) =>
+      render(<EntityCreationModal {...BASE_PROPS} initialValues={{ name: value }} />);
+
+    it('keeps save disabled for a whitespace-only value', () => {
+      renderWithName('   ');
+      expect(screen.getByText('save')).toBeDisabled();
+    });
+
+    it('enables save as soon as there is a real character', () => {
+      renderWithName(' J ');
+      expect(screen.getByText('save')).toBeEnabled();
+    });
+
+    it('still accepts a numeric zero', () => {
+      renderWithName(0);
+      expect(screen.getByText('save')).toBeEnabled();
+    });
+
+    it('still accepts a false', () => {
+      renderWithName(false);
+      expect(screen.getByText('save')).toBeEnabled();
+    });
+
+    it('keeps save disabled for a missing value', () => {
+      render(<EntityCreationModal {...BASE_PROPS} initialValues={{}} />);
+      expect(screen.getByText('save')).toBeDisabled();
+    });
+  });
+
   it('calls onSave when save button is clicked with required fields filled', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn(() => Promise.resolve());

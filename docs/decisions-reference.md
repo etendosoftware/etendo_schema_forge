@@ -111,8 +111,9 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `quickFilters` | array | `null` | See below | Independent toggle pills above the list. Each can be on/off; multiple can be active simultaneously. Combined with the active subset and column filters using AND. Ideal for "refinements" (e.g., only overdue, only pending delivery). |
 | `rowQuickActions` | object | _absent_ (feature ON with canonical defaults) | See below | Hover-revealed action overlay on each grid row. The feature is ON by default for every window with canonical actions (Edit / Duplicate / Email / Delete) plus a kebab containing everything from `menuActions` — **no contract block is emitted in that case**. Declare the section only to disable the feature (`enabled: false`), override an action's visibility (`actions.<key>.show: false` / `visibleWhen`), or promote a process to a fixed button (`show: "fixed"`). |
 | `sendDocument` | object | _absent_ (auto-enabled on documental windows) | See below | Send/Download envelope config forwarded to the generic `SendDocumentModal`. Auto-enabled when the header exposes `documentNo`; declare it only to disable (`enabled: false`), drop the email panel (`allowEmail: false`), or tune the recipient-edit policy (see the Send Document subsection below). |
-| `balanceFooter` | object | `null` | `{ debitField, creditField }` | Renders a debit/credit balance footer (Σ debit, Σ credit, difference, balanced ✓/✗ badge) for double-entry windows (e.g. manual journals). Both fields must be amount-typed fields on the lines entity. When set, the generator emits `BalanceFooterPanel` instead of `DocumentTotalsPanel` and disables the Save button (with a tooltip) only when the entry is unbalanced (Σ debit ≠ Σ credit). An empty/zero entry is treated as balanced and is savable as a draft; the ✓/✗ badge is hidden until the lines carry amounts. Validator F17 enforces field existence. Example: `"balanceFooter": { "debitField": "amtSourceDr", "creditField": "amtSourceCr" }`. |
+| `balanceFooter` | object | `null` | `{ debitField, creditField }` | Renders debit/credit totals (Σ debit, Σ credit) for double-entry windows (e.g. manual journals), and disables the Save button (with a tooltip) only when the entry is unbalanced (Σ debit ≠ Σ credit). Both fields must be amount-typed fields on the lines entity. An empty/zero entry is treated as balanced and is savable as a draft. Validator F17 enforces field existence. Example: `"balanceFooter": { "debitField": "amtSourceDr", "creditField": "amtSourceCr" }`. **Rendering depends on `linesLayout` (ETP-5210):** for `linesLayout: "inlineEditable"` (the common case — e.g. `simple-g-l-journal`), `InlineLinesPanel` renders the totals as a row **inside the lines grid**, pixel-aligned under the actual `debitField`/`creditField` columns via the same `columnFlex()` the grid's own header uses — no separate summary block, no Difference amount, no balanced ✓/✗ badge (`detailViewHelpers.jsx`'s `buildBalanceFooterGridTotals()` feeds it from the same `balanceState` that gates Save/Complete). For the classic (`DataTable`) lines layout — no window uses this combination yet — `renderTotalsBlock()` still falls back to the older standalone `BalanceFooterPanel` below the grid, which has no column-aligned equivalent. See `docs/generated-custom-windows/simple-g-l-journal.md`'s "Balance rule" section for the full narrative. |
 | `linesLayout` | string | `"classic"` | `"classic"`, `"inlineEditable"` | Lines tab rendering mode. `"classic"` keeps the side-panel edit flow (current behavior). `"inlineEditable"` switches the table to `InlineLinesPanel`: pencil + trash hover-action icons on the right, single-row inline edit triggered by the pencil, autosave on blur. All column types (string, number, amount, percent, date, selector, search) are inline-editable; selector/search columns use `InlineSearchCombo` (text input with server-side search) so FK fields with many options are filterable by typing. The add-line button, related-documents panel, notes panel and totals panel are unchanged. Validator F12 enforces the enum. |
+| `showDetailFooterTotals` | boolean | _absent_ (auto) | `true` / `false` | **Whole-table** override for the lines-grid footer totals row in the detail view. Forwarded to `DetailView` as the `showDetailFooterTotals` prop and from there to `DataTable`'s `showFooterTotals`. When absent, `DetailView` decides for itself: totals are shown unless the header already renders an `amount` summary field, so the same number is not printed twice (`DetailView.jsx`: `showDetailFooterTotals ?? !summary.some(f => f.type === 'amount')`). `false` suppresses the row outright (shipped on `price-list`), `true` forces it. It is a TABLE-level switch and cannot exclude a single column — for one `amount` column that must keep its money formatting but not be added up, use the field-level `summable: false` (see Grid cell flags). Note it only reaches the PRIMARY lines table; secondary tabs always use `DataTable`'s own default. |
 | `lineTaxSifTrigger` | boolean \| object | `false` | `{ enabled, _note }` | ETP-4888 point 5 (`sales-invoice`, `purchase-invoice`), extended to `sales-order`/`purchase-order` in a follow-up round after a real-world sales-order confirmation failed with an uncommunicated missing "Clave Régimen Especial IVA" — the same error class this feature exists to surface earlier. Shows an inline warning-color badge next to the lines grid's `tax` cell value when the selected tax is missing its TBAI/Verifactu SIF (Sistemas de Información de Facturación) key, opening a quick-fix modal (`TaxSifModal.jsx`) instead of sending the user to the standalone Impuestos (Taxes) window. Accepts either a plain boolean or the `{ enabled, _note }` object shape (same "boolean-or-object" convention as `attachments`/`sendDocument` above) — all four windows use the object form purely to carry the inline `_note` below, no other sub-key is read. **Not yet wired through `generate-frontend.js`** — this flag documents the decision, but today each of the four windows' own hand-written `index.jsx` mirrors it by hand via a local `LINE_TAX_SIF_TRIGGER_ENABLED` constant, calling `useTaxSifLineRowActions()` and passing its `cellBadges` result to the generated `HeaderPage`'s (invoices) or `GeneratedApp`'s (orders — which forwards `...rest` into `HeaderPage`, itself forwarding `{...props}` into `DetailView`, so the prop reaches the line grid unchanged either way) `lineCellBadges` prop — the same "hand-mirror a decision the generator doesn't carry" convention this file already uses for `SUBSET_FILTERS`/`LABEL_OVERRIDES` on the invoice windows. See `docs/ui-customization.md` §14e for the full mechanism (also covers the backend `InvoiceLineTaxSifSelectorPolicy` enrichment in `com.etendoerp.go`, whose `IN_SCOPE_WINDOW_IDS` now covers all four windows' AD_Window_Id — `167`/`183`/`143`/`181` — required for the enrichment the badge's completeness check depends on; omitting a window there produces FALSE POSITIVES, not just a missing badge, since the frontend treats an absent enrichment column the same as a genuinely blank one). SII is out of scope: it has nothing to configure at tax level (its header-level `aeatsiiCauseExemption` equivalent is unaffected, still owned by `SifTab.jsx`). `goods-shipment` (albarán) is explicitly OUT OF SCOPE — its `lines` entity carries no fields at all, so there is no `tax` field to attach a badge to. A follow-up ticket to wire this through `generate-frontend.js` (in `schema_forge_core`) is recommended once convenient, per Alex's review. **Compound/summary-tax follow-up (ETP-4888):** when the line's own `tax` is a compound/summary tax (`c_tax.issummary='Y'`, e.g. "Entregas IVA+RE 21+5.2% ISP"), both the trigger's completeness check and the modal it opens now resolve down to the actual rate-component child that carries the régimen key (`em_obspti_isequivalentcharge='N'`), instead of reading/writing the summary tax's own always-blank columns — see `docs/ui-customization.md` §14e's "Compound/summary-tax resolution" note for the full mechanism, including the `artifacts/tax/decisions.json` visibility promotions (`summaryLevel`/`parentTaxRate`/`oBSPTIEquivalentCharge`, `discarded` → `system`) this relies on. |
 
 ### Print Visibility (`window.hidePrintWhen`) — ETP-4714
@@ -626,6 +627,7 @@ Override generated components with custom implementations from `artifacts/{windo
 | `headerTable` | string | Custom table component name. Replaces the generated `{Entity}Table` import. File must exist at `artifacts/{window}/custom/{value}.jsx`. |
 | `bottomSection` | string | Custom bottom panel component. Replaces the default totals + footer layout. Receives `recordId`, `data`, `token`, `apiBaseUrl`, `api`, `summary`, `notesField`, `onFieldChange`, `notesFocused`, `setNotesFocused`. |
 | `topbarRight` | string | Custom component rendered on the right side of the detail topbar (before icon buttons). Receives `data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess`. When present, the default status badge is hidden. |
+| `subHeader` | string | **(ETP-5245)** Custom component rendered as a full-width strip between the toolbar and the form — emitted as `DetailView`'s `headerContent={(data) => <X data={data} />}` prop, i.e. the first child of the detail content container, above the form and above any primary-tab panel. Receives only `data` (the current record); return `null` to render nothing, since the slot has no visibility gate of its own. Intended for a record-wide notice (blocking warning, locked-state explanation) built on the shared `InfoBanner` primitive — the same position the built-in credit-limit / BP-on-hold banner occupies. First user: `product` (`ProductCostBanner`). Full guidance, including tone choice and how to pair it with a save gate: `docs/ui-customization.md` §4. |
 
 ### Menu Actions (`window.menuActions`)
 
@@ -908,6 +910,52 @@ Field keys use **camelCase from raw schema** (e.g., `"businessPartner"`, `"order
 | `system` | false | false | false |
 | `discarded` | false | false | false |
 
+### Derivation (`derivation`) — ETP-5245
+
+Declares (or suppresses) **where a field's value comes from when the user does not supply it**.
+The raw schema extracts a derivation from the AD column; `decisions.json` owns the final word and
+is applied **after** the raw copy, so a declaration always wins.
+
+| Value in `decisions.json` | Resolved `field.derivation` | Use it when |
+|---|---|---|
+| _absent_ | the raw AD-derived value, unchanged | default — no opinion |
+| `"fromConfig"` (any string) | `{ "type": "fromConfig" }` | the raw schema carries **no** derivation but the value really is filled server-side |
+| `{ "type": "fromField", "source": "email" }` | copied verbatim | the derivation needs more than a type (a `source`, a literal `value`, …) |
+| `null` | key removed | the raw schema derives a value the user must now provide — a field moving from `system`/`readOnly` to `editable`, so NEO does not overwrite the user's input on save |
+
+Recognized types: `fromConfig`, `fromParent`, `fromField`, `lookup`, `computed`, `sequence`.
+
+**The string shorthand is expanded to `{ type: … }` on purpose.** Every consumer reads
+`derivation.type` — the quality gate's `hasServerDefault` (`quality-gate/checks/invariants.js`),
+`validate-schema.js` (`SYSTEM_NO_DERIVATION`, `INVALID_FROM_PARENT`, `COMPUTED_NO_RULE`) and the
+contract's `computedFields` array — so a bare string would be carried through and match nothing.
+A value that is neither a non-empty string, a plain object, nor `null` (e.g. `false`, `""`) is not
+a declaration and leaves the raw derivation untouched.
+
+**Where it surfaces.** For a **visible** field the derivation is emitted into `contract.json`
+(both on the field and in the entity's `computedFields`); a `system` field never reaches the
+frontend contract, so declaring a derivation on one only affects schema validation. It is **not**
+pushed to NEO — `push-to-neo.js` does not read `derivation`, so `ETGO_SF_FIELD` and the exported
+`ETGO_SF_*.xml` are unaffected either way.
+
+**Quality gate.** `validateNotNullRequirements` fails a field that is `required: false` while its
+source column is `NOT NULL`, *unless* the field has a callout or a server-default derivation
+(`fromConfig`, `fromParent`, `sequence`). Declaring the derivation is how a field backed by a real
+server-side default is made legitimately optional in the UI.
+
+**Shipped example — `product` → `costing.endingDate`:** the column is `NOT NULL`, but
+`ProductCostingHandler.injectDefaultEndingDate()` fills it with `CostingUtils.getLastDate()`
+(31-12-9999) before the row reaches the CRUD, so the field is optional for the user.
+
+```json
+"endingDate": {
+  "visibility": "editable",
+  "required": false,
+  "derivation": "fromConfig",
+  "reason": "Server-side default injected by ProductCostingHandler; never written NULL."
+}
+```
+
 ### Grid cell flags
 
 Applied to fields with `grid: true` to control how the list cell renders.
@@ -920,10 +968,13 @@ Applied to fields with `grid: true` to control how the list cell renders.
 | `inlineEdit` | boolean | `false` | Mark a column as inline-editable (carried into the contract as `inlineEdit: true`). Consumed by `list-modal`; editing is also available via the modal. |
 | `gridReadOnly` | boolean | `false` | Make an otherwise-editable column read-only in the grid. |
 | `grow` | boolean | `false` | Let the column grow to fill available width. |
+| `columnWidth` | integer | `null` | Pixel width override for this lines-grid column. Carried through `contract.json` and renamed to `minWidth` in the generated column literal — that `minWidth` is what `columnFlex`/`columnMinWidthPx` (`tools/app-shell/src/lib/linesColumnWidth.js`) actually read at render time, overriding the type-based default (e.g. `foreignKey`/selector defaults to 192px, `string` to 224px). Also flips `columnFlex()`'s CSS flex shorthand from rigid to elastic: `if (col.minWidth) return '1 1 ${minWidth}px'` fires before the type-based lookup, so a `selector`/`foreignKey`/`search` column — which otherwise defaults to non-growing `flex: 0 0 192px` unless it's the grid's first column or sets `grow: true` — becomes `flex-grow: 1` merely by setting `columnWidth`, no separate `grow: true` needed. Shipped on `physical-inventory`'s `etgoQtydiff` (paired with `grow: true` anyway) and `simple-g-l-journal`'s `accountingCombination` (ETP-5210, widened past `description`'s 224px default). |
 | `cellType` | string | `null` | Names the cell renderer for this column. Carried decisions → contract for **any** window, but **who honours it depends on the layout** — it is not generic to every grid. See the `cellType` section below for the three paths. |
 | `multiField` | object | `null` | Compose this "host" grid field with sibling fields into **one** composite column: bold title + optional subtitle chip + optional authenticated media image. See below. |
 | `dimensionsPanel` | boolean | `false` | Collect this field into the ONE synthetic `type: 'dimensionsPanel'` grid column instead of its own column — see below. Read regardless of the field's own `grid` value (typically `grid: false`, since the field renders inside the expand-row panel, not as a standalone column). |
 | `visibleWhenCapability` | string | `null` | Names a capability key (e.g. `"showAccountingFields"`) from the `capabilities` map returned by the `GET /sws/neo/windowaccessmap` webhook (NEO pseudo-spec bridge — see `com.etendoerp.go/docs/neo-headless.md` §4.10). Opt-in — absent means always visible. Gates both the grid column and any `window.statusPills` entry referencing this field; the field is omitted entirely (not disabled) when the capability resolves `false`. Full mechanics (generator wiring, fail-closed behavior): `schema_forge_core`'s `docs/decisions-reference.md`. Shipped example: `posted` on `sales-invoice`/`purchase-invoice` — see those windows' `docs/generated-custom-windows/*.md` guides. |
+| `summable` | boolean | _absent_ | **Tri-state, not a flag.** Controls whether an `amount` column feeds the grid's footer TOTAL row. `false` opts the column out while keeping every bit of its money formatting; `true` is the explicit opt-in; **absent means "sums"** — the historical default ~99 existing amount columns rely on. See below. |
+| `currencyField` | string | _absent_ | Names the sibling field carrying THIS column's currency, for grids whose rows are not all in the same currency. Value is the contract field name (`"cCurrencyID"`), not the AD column (`C_Currency_ID`) — the renderer appends `$_identifier` to it. See below. |
 
 #### Boolean badge rendering (`badge`, `badgeLabels`, `badgeVariants`)
 
@@ -1005,6 +1056,79 @@ appear as standalone columns, but sorting/filtering by name or search key still 
 the two header segments. Part order drives the composite header — here it reads
 *"Identifier & Name"* (*"Identificador & Nombre"*), with each segment relabeled via its
 own `labels` rather than the contract field's default (`Search Key` / `Name`).
+
+#### Amount columns: formatting vs. totals (`summable`, `currencyField`) — ETP-5245
+
+`columnType: "amount"` means **"this value is money"**: decimals, thousands/decimal
+separators, currency symbol, right alignment, numeric filter. Until ETP-5245 it *also*
+silently meant "add this column up", because `DataTable` keyed its footer total on nothing
+but `col.type === 'amount'` and offered no per-column opt-out. For a lot of real columns only
+the first claim is true — a unit cost, a list price, a rate, a credit limit. Their sum is not
+a wrong number, it is a meaningless one.
+
+`summable` splits the two:
+
+```json
+"cost": {
+  "visibility": "editable",
+  "grid": true,
+  "columnType": "amount",
+  "summable": false,
+  "currencyField": "cCurrencyID"
+}
+```
+
+**`summable` is tri-state and the three states are not interchangeable:**
+
+| Declared | Generated column | Footer total |
+|---|---|---|
+| `true` | `summable: true` | shown (explicit opt-in) |
+| `false` | `summable: false` | **not shown** for this column |
+| absent | key omitted | shown (historical default) |
+
+The absent case is load-bearing: every pre-existing `amount` column carries no `summable` key,
+so "absent ⇒ sums" is what keeps 28 windows working. `DataTable` therefore tests
+`col.summable !== false`, never `col.summable === true` — do not "tidy" that into a truthy
+check. When every `amount` column of a table opts out, no footer row is rendered at all; when
+only some do, their footer cells are left blank and the remaining columns still total.
+
+> **History:** `summable` existed end-to-end (resolve → contract → generated column) long
+> before this ticket but was **dead**: every layer copied it only when truthy — so the only
+> value a window could express was the one that was already the default — and nothing under
+> `tools/app-shell/src/` read it at all. ETP-5245 made the three core layers pass `false`
+> through and gave the key a consumer in `DataTable`.
+
+**Why not the table-level switches:** `window.showDetailFooterTotals` (decisions.json) and
+`showFooterTotals` (the `DataTable` prop) turn the footer off for the WHOLE table. Eight
+tables in this app mix summable and non-summable amount columns, so those switches would
+trade one meaningless total for a set of missing meaningful ones. Reach for `summable` per
+column first.
+
+**`currencyField`** fixes an independent bug in the same cell. `renderAmountCell` used to read
+one hardcoded property, `row['currency$_identifier']` — the DAL name of an association
+literally called `currency`. An entity whose currency column is `C_Currency_ID` gets the field
+name `cCurrencyID`, so NEO emits `cCurrencyID$_identifier`, the lookup missed, and the amount
+rendered with **no symbol at all**. Three entities are in that situation: `product/costing`,
+`product/transactionAdjustments` and `warehouse/productTransactions`.
+
+The resolver is `resolveRowCurrency()` in `tools/app-shell/src/lib/rowCurrency.js` — a pure
+function, shared by `renderAmountCell` (`DataTable.cellRenderers.jsx`) and the footer total
+(`DataTable.jsx`), so a total is always labelled with the code its rows actually carry:
+
+1. ``row[`${col.currencyField}$_identifier`]`` — when the column declares it
+2. `row['currency$_identifier']` — the historical lookup
+3. `row['cCurrencyID$_identifier']` — the AD-derived name, covered with no declaration at all
+4. the session currency (`useCurrency()`), as a last resort
+5. otherwise `undefined` — the amount renders grouped with 2 decimals and **no symbol**, which
+   is the pre-ETP-5245 behavior and what symbol-less mock data produces
+
+Step 4 is deliberately last. `M_Costing` legitimately mixes currencies row by row (real tenant
+data: 1663 rows in USD next to 1545 in EUR), so stamping the session currency over a row that
+has its own would print a confident lie. This is also why the secondary-tab grids do NOT get
+`DetailView`'s session-currency backfill, which only ever applied to the primary lines tab.
+
+Shipped on **Product → Costing** (`artifacts/product/decisions.json`, `costing.cost`): the
+column reads `98,47 €` / `100,00 $` per row, with no totals row.
 
 #### Accounting dimensions panel (`dimensionsPanel`)
 
