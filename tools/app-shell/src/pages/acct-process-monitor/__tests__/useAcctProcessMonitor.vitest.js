@@ -200,6 +200,31 @@ describe('useAcctProcessMonitor', () => {
       expect(getResult().error).toBeNull();
       expect(getResult().data).toEqual(OK_PAYLOAD);
     });
+
+    it('keeps the newest response when an older reload resolves last', async () => {
+      fetchAcctProcessStatus.mockResolvedValueOnce(OK_PAYLOAD);
+      const { getResult, waitFor, act } = await renderHook();
+      await waitFor(() => expect(getResult().loading).toBe(false));
+
+      let resolveStale;
+      let resolveFresh;
+      fetchAcctProcessStatus
+        .mockImplementationOnce(() => new Promise(resolve => { resolveStale = resolve; }))
+        .mockImplementationOnce(() => new Promise(resolve => { resolveFresh = resolve; }));
+
+      let staleRequest;
+      let freshRequest;
+      await act(async () => {
+        staleRequest = getResult().reload();
+        freshRequest = getResult().reload();
+        resolveFresh({ ...OK_PAYLOAD, processName: 'fresh response' });
+        await freshRequest;
+        resolveStale({ ...OK_PAYLOAD, processName: 'stale response' });
+        await staleRequest;
+      });
+
+      expect(getResult().data.processName).toBe('fresh response');
+    });
   });
 
   describe('trigger', () => {
@@ -340,6 +365,21 @@ describe('useAcctProcessMonitor', () => {
 
       await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
 
+      expect(getResult().loading).toBe(false);
+    });
+
+    it('keeps the last good data when a silent poll fails', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      fetchAcctProcessStatus.mockResolvedValueOnce({ ...OK_PAYLOAD, running: true });
+      const { getResult, waitFor, act } = await renderHook();
+      await waitFor(() => expect(getResult().running).toBe(true));
+
+      fetchAcctProcessStatus.mockRejectedValueOnce(new Error('temporary poll failure'));
+      await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+
+      expect(getResult().data).toEqual({ ...OK_PAYLOAD, running: true });
+      expect(getResult().error).toBeNull();
+      expect(getResult().pollError).toBe('temporary poll failure');
       expect(getResult().loading).toBe(false);
     });
 

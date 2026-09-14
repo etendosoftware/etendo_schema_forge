@@ -34,7 +34,9 @@ const noFallback = () => null;
  *     duration: string|null, manual: boolean}>}>}
  */
 export async function fetchAcctProcessStatus(limit) {
-  const query = limit ? `?Limit=${encodeURIComponent(limit)}` : '';
+  // `!= null` (not a truthy check) so an explicit `0` is still sent — only an omitted limit
+  // (undefined/null) drops the query param.
+  const query = limit != null ? `?Limit=${encodeURIComponent(limit)}` : '';
   return fetchNeoWebhookJson(
     `${NEO_BASE}/acctprocessmonitor${query}`,
     'SFAcctProcessMonitor',
@@ -67,7 +69,9 @@ export async function fetchAcctProcessStatus(limit) {
  *   `triggered: {started: boolean, reason: string}` field.
  */
 export async function triggerAcctProcessRun(limit) {
-  const limitQuery = limit ? `&Limit=${encodeURIComponent(limit)}` : '';
+  // Same `!= null` distinction as fetchAcctProcessStatus above — an explicit `0` must still reach
+  // the query string.
+  const limitQuery = limit != null ? `&Limit=${encodeURIComponent(limit)}` : '';
   return fetchNeoWebhookJson(
     `${NEO_BASE}/acctprocessmonitor?Action=trigger${limitQuery}`,
     'SFAcctProcessMonitor',

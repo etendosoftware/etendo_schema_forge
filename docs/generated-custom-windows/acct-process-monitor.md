@@ -209,6 +209,7 @@ The page must converge without the admin pressing Refresh, and the triggering re
 - **Polls while:** the backend reports `running: true`, **or** `awaitingRun` is true — the window between a successful trigger and the run becoming observable.
 - **`awaitingRun` deadline:** **60 s** (`AWAIT_RUN_MS`) from the successful trigger. Generous on purpose: the run itself finishes in well under a second, but the gap being covered is scheduler latency plus one poll interval.
 - **`awaitingRun` ends early** as soon as the run becomes observable — a newest-run id different from the one captured at trigger time, or the backend reporting `running`. After that `running` alone governs, so the poll stops when the run finishes. The deadline is only the backstop for the outcomes that produce *neither* signal: a run that starts and finishes between two polls, or a job the scheduler silently dropped.
+- A failed background poll is soft: it keeps the last-known-good status/history on screen and records the poll error without replacing the page with the initial-load error shell. The next successful payload clears that transient error.
 - Only a run that actually **started** is awaited. A refusal sets no deadline — there is nothing coming.
 
 `running` alone was not enough, and that was a shipped bug: the trigger refuses outright when a run is already in progress, so `running` is `false` in every *successful* trigger response. Keyed on `running` alone the poll never started, and the page kept promising "it will appear in the history shortly" while nothing arrived without a manual reload.
@@ -261,13 +262,13 @@ Soonest — **not** "prefer the caller's own client". The only thing this row fe
 
 The backend emits `yyyy-MM-ddTHH:mm:ss` with **no zone**, because the underlying columns are `timestamp without time zone` — server wall clock, as the rest of Etendo treats them. `parseRunTimestamp` uses `new Date(raw)`, which parses a zoneless date-time as *local* time per the language spec, so the wall clock round-trips unchanged.
 
-This is a full instant, not a calendar date, so the repo-wide `parseCalendarDate` rule (`tools/app-shell/src/lib/dateOnly.js`) deliberately does **not** apply — that helper exists for date-only values, where a UTC-midnight parse rolls the day back under a negative offset. There is no day to roll here. A null timestamp renders as an em dash.
+This is a full instant, not a calendar date, so the repo-wide `parseCalendarDate` rule (`tools/app-shell/src/lib/dateOnly.js`) deliberately does **not** apply — that helper exists for date-only values, where a UTC-midnight parse rolls the day back under a negative offset. There is no day to roll here. Display formatting uses the selected UI locale (`en_US`/`es_ES` are normalized to `en-US`/`es-ES`); a null timestamp renders as an em dash.
 
 ### Menu gating is item-level, and it covers Favorites
 
-`SideMenu` previously flag-gated only whole **groups** (`Proof of Concept`). ETP-5269 adds per-**item** gating via a `flagGatedItems` map keyed by `menu.json` item name; an item absent from the map is never flag-gated, so the common case costs one lookup.
+`SideMenu` previously flag-gated only whole **groups** (`Proof of Concept`). ETP-5269 adds per-**item** gating via the item's declarative `featureFlag` metadata in `menu.json`; known metadata is indexed once, and an explicitly declared but unknown flag fails closed rather than accidentally exposing the entry.
 
-The filter is applied to the **Favorites** group as well. Favorites are rebuilt from the user's own saved list rather than from `menuGroups`, so the previous early-return for that group let a favourited flag-gated item stay visible with the flag off — the one hole through which a gated entry could still be reached.
+The memoized filter is applied to the **Favorites** group as well. Favorites are rebuilt from the user's own saved list rather than from `menuGroups`, so the previous early-return for that group let a favourited flag-gated item stay visible with the flag off — the one hole through which a gated entry could still be reached.
 
 ---
 

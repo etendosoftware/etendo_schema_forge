@@ -11,7 +11,9 @@ import {
 } from '@/components/ui/table';
 import { Loader2, Play, RefreshCw, ShieldAlert, TriangleAlert } from 'lucide-react';
 import { useUI, useMenuLabel } from '@/i18n';
+import { useLocaleSwitch } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
+import StatusCard from '@/components/StatusCard.jsx';
 import {
   useAcctProcessMonitor,
   parseRunTimestamp,
@@ -42,39 +44,14 @@ import RunStatusPill from './acct-process-monitor/RunStatusPill.jsx';
  * feature flag and `capability` key are visual gating only.
  */
 
-/*
- * The three local components below take `data-testid` rather than a custom `testId` prop, and
- * every call site passes one explicitly.
- *
- * That is deliberate and load-bearing, not styling. `scripts/add-data-testid.cjs` appends a
- * `data-testid="<Component>__<hash-of-file-path>"` to any JSX element that lacks one — the hash is
- * per FILE, so every element in this file would get the SAME value — and it skips an element that
- * already carries one. A local component whose props were `{ testId }` therefore ended up with two
- * attributes: the meaningful `testId` it used, and a codemod-generated `data-testid` it silently
- * dropped on the floor. Naming the prop `data-testid` and forwarding it collapses those into one
- * attribute the codemod leaves alone.
- */
-
-/** Renders the loading / error / no-access shells, extracted to keep the three shapes identical. */
-function StatusCard({ 'data-testid': dataTestId, className, children }) {
-  return (
-    <Card data-testid={dataTestId}>
-      <CardContent
-        className={`flex flex-col items-center justify-center text-center ${className}`}
-        data-testid="AcctProcessMonitorPage__statusShellBody">
-        {children}
-      </CardContent>
-    </Card>
-  );
-}
-
 /** A server wall-clock instant, or an em dash when the run has not reached that point yet. */
-function Timestamp({ value, 'data-testid': dataTestId }) {
+function Timestamp({ value, locale, 'data-testid': dataTestId }) {
   const parsed = parseRunTimestamp(value);
   if (!parsed) {
     return <span className="text-muted-foreground" data-testid={dataTestId}>{'—'}</span>;
   }
-  return <span data-testid={dataTestId}>{parsed.toLocaleString()}</span>;
+  const localeTag = locale?.replace(/_/g, '-') || undefined;
+  return <span data-testid={dataTestId}>{parsed.toLocaleString(localeTag)}</span>;
 }
 
 function SummaryTile({ label, children, 'data-testid': dataTestId }) {
@@ -89,6 +66,7 @@ function SummaryTile({ label, children, 'data-testid': dataTestId }) {
 export default function AcctProcessMonitorPage() {
   const ui = useUI();
   const tMenu = useMenuLabel();
+  const { locale } = useLocaleSwitch();
   const {
     loading,
     error,
@@ -123,8 +101,9 @@ export default function AcctProcessMonitorPage() {
         if (error) {
           return (
             <StatusCard
-              data-testid="AcctProcessMonitorPage__error"
-              className="gap-3 py-12">
+              testId="AcctProcessMonitorPage__error"
+              className="gap-3 py-12"
+              data-testid="StatusCard__17e70d">
               <p className="text-sm text-muted-foreground">{ui('acctProcessLoadError')}</p>
               <Button
                 variant="outline"
@@ -140,8 +119,9 @@ export default function AcctProcessMonitorPage() {
         if (denied) {
           return (
             <StatusCard
-              data-testid="AcctProcessMonitorPage__noAccess"
-              className="gap-2 py-16">
+              testId="AcctProcessMonitorPage__noAccess"
+              className="gap-2 py-16"
+              data-testid="StatusCard__17e70d">
               <ShieldAlert
                 className="h-10 w-10 text-muted-foreground/40 mb-2"
                 data-testid="ShieldAlert__17e70d" />
@@ -156,8 +136,9 @@ export default function AcctProcessMonitorPage() {
         if (notInstalled) {
           return (
             <StatusCard
-              data-testid="AcctProcessMonitorPage__notInstalled"
-              className="gap-2 py-16">
+              testId="AcctProcessMonitorPage__notInstalled"
+              className="gap-2 py-16"
+              data-testid="StatusCard__17e70d">
               <TriangleAlert
                 className="h-10 w-10 text-muted-foreground/40 mb-2"
                 data-testid="TriangleAlert__17e70d" />
@@ -226,13 +207,13 @@ export default function AcctProcessMonitorPage() {
                   <SummaryTile
                     label={ui('acctProcessLastRun')}
                     data-testid="AcctProcessMonitorPage__lastRun">
-                    <Timestamp value={lastRun?.startTime} data-testid="AcctProcessMonitorPage__lastRunTime" />
+                    <Timestamp value={lastRun?.startTime} locale={locale} data-testid="AcctProcessMonitorPage__lastRunTime" />
                   </SummaryTile>
                   <SummaryTile
                     label={ui('acctProcessNextRun')}
                     data-testid="AcctProcessMonitorPage__nextRun">
                     {data?.scheduled
-                      ? <Timestamp value={data?.nextRunTime} data-testid="AcctProcessMonitorPage__nextRunTime" />
+                      ? <Timestamp value={data?.nextRunTime} locale={locale} data-testid="AcctProcessMonitorPage__nextRunTime" />
                       : (
                         <span className="text-muted-foreground">
                           {ui('acctProcessNotScheduled')}
@@ -301,8 +282,8 @@ export default function AcctProcessMonitorPage() {
                             <TableCell data-testid="TableCell__17e70d">
                               <RunStatusPill status={run.status} data-testid={`AcctProcessMonitorPage__statusPill-${run.id}`} />
                             </TableCell>
-                            <TableCell data-testid="TableCell__17e70d"><Timestamp value={run.startTime} data-testid={`AcctProcessMonitorPage__start-${run.id}`} /></TableCell>
-                            <TableCell data-testid="TableCell__17e70d"><Timestamp value={run.endTime} data-testid={`AcctProcessMonitorPage__end-${run.id}`} /></TableCell>
+                            <TableCell data-testid="TableCell__17e70d"><Timestamp value={run.startTime} locale={locale} data-testid={`AcctProcessMonitorPage__start-${run.id}`} /></TableCell>
+                            <TableCell data-testid="TableCell__17e70d"><Timestamp value={run.endTime} locale={locale} data-testid={`AcctProcessMonitorPage__end-${run.id}`} /></TableCell>
                             <TableCell data-testid="TableCell__17e70d">
                               {run.duration || <span className="text-muted-foreground">{'—'}</span>}
                             </TableCell>

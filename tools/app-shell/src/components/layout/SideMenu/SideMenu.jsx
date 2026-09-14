@@ -103,6 +103,17 @@ const ICON_MAP = {
 /** `menu.json` group that carries the onboarding checklist. */
 const FIRST_STEPS_GROUP = 'First Steps';
 
+// Keep feature metadata on the menu entry itself. Favorites are persisted as a reduced `{name,
+// label}` shape, so this index lets an old favorite inherit the canonical gate without keeping a
+// second hand-maintained item-name map in the component.
+const MENU_ITEM_FEATURE_FLAGS = Object.freeze(
+  Object.fromEntries(
+    menuConfig.menu.flatMap(group => group.items || [])
+      .filter(item => item.featureFlag)
+      .map(item => [item.name, item.featureFlag])
+  )
+);
+
 function CollapsedGroupPopover({
   group,
   iconKey,
@@ -580,21 +591,27 @@ export default function SideMenu({
     return map;
   }, []);
 
-  // Menu items hidden behind a feature flag, by item name. An item absent from this map is never
-  // flag-gated, so the common case costs one lookup and nothing else.
-  const flagGatedItems = { 'acct-process-monitor': showAcctProcessMonitor };
+  const featureFlagValues = useMemo(() => ({
+    [ACCT_PROCESS_MONITOR]: showAcctProcessMonitor,
+  }), [showAcctProcessMonitor]);
 
   // Applied to Favorites TOO. Favorites are rebuilt from the user's own saved list rather than
   // from menuGroups, so returning early for that group let a favourited flag-gated item stay
   // visible with the flag off — the one hole through which a gated entry could still be reached.
-  const isFlagVisible = item => flagGatedItems[item.name] !== false;
-
-  const resolvedMenuGroups = menuGroups
+  // An explicitly declared but unknown flag fails closed; ordinary entries with no featureFlag
+  // remain visible.
+  const resolvedMenuGroups = useMemo(() => menuGroups
     .filter(g => g.group !== 'Proof of Concept' || showProofOfConceptMenu)
     .map((g) => {
       const items = g.group === 'Favorites' ? favorites : (g.items || []);
-      return { ...g, items: items.filter(isFlagVisible) };
-    });
+      return {
+        ...g,
+        items: items.filter((item) => {
+          const flag = item.featureFlag || MENU_ITEM_FEATURE_FLAGS[item.name];
+          return flag == null || featureFlagValues[flag] === true;
+        }),
+      };
+    }), [menuGroups, favorites, showProofOfConceptMenu, featureFlagValues]);
 
   const activeGroup = findActiveGroup(resolvedMenuGroups, location.pathname, location.search);
   const tMenu = useMenuLabel();

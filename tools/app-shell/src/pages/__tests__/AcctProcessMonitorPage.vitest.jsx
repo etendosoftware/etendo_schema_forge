@@ -19,9 +19,12 @@ import React from 'react';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
+const localeState = vi.hoisted(() => ({ value: 'en_US' }));
+
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useMenuLabel: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: localeState.value }),
 }));
 
 vi.mock('@/components/layout/PageMetaContext', () => ({
@@ -149,6 +152,7 @@ function hookState(overrides = {}) {
 describe('AcctProcessMonitorPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localeState.value = 'en_US';
   });
 
   // ── shells ─────────────────────────────────────────────────────────────────
@@ -228,6 +232,14 @@ describe('AcctProcessMonitorPage', () => {
       const tile = screen.getByTestId('AcctProcessMonitorPage__lastStatus');
       expect(tile.textContent).toContain('acctProcessStatusSuccess');
       expect(tile.textContent).not.toContain('SUC');
+    });
+
+    it('formats run timestamps with the selected UI locale', () => {
+      localeState.value = 'es_ES';
+      render(<AcctProcessMonitorPage />);
+
+      expect(screen.getByTestId('AcctProcessMonitorPage__lastRunTime').textContent)
+        .toBe(new Date(RUNS[0].startTime).toLocaleString('es-ES'));
     });
 
     it('says the manual run only ADDS to the automatic schedule', () => {

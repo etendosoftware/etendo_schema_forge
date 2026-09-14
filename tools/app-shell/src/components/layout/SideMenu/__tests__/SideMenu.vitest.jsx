@@ -647,6 +647,59 @@ describe('SideMenu', () => {
       expect(screen.queryByText('Proof of Concept')).not.toBeInTheDocument();
     });
 
+    it('hides the accounting-process item when its declared feature flag is off', () => {
+      mockUseFeatureFlag.mockReturnValue(false);
+      render(<SideMenu
+        {...defaultProps}
+        menuGroups={[{
+          group: 'Settings',
+          icon: 'Settings',
+          section: 'System',
+          items: [{
+            name: 'acct-process-monitor',
+            label: 'Accounting Process',
+            featureFlag: 'acct-process-monitor',
+          }],
+        }]}
+      />);
+
+      expect(screen.queryByTestId('menu-item-acct-process-monitor')).not.toBeInTheDocument();
+    });
+
+    it('renders the accounting-process item when its declared feature flag is on', () => {
+      mockUseFeatureFlag.mockReturnValue(true);
+      render(<SideMenu
+        {...defaultProps}
+        menuGroups={[{
+          group: 'Settings',
+          icon: 'Settings',
+          section: 'System',
+          items: [{
+            name: 'acct-process-monitor',
+            label: 'Accounting Process',
+            featureFlag: 'acct-process-monitor',
+          }],
+        }]}
+      />);
+
+      expect(screen.getByTestId('menu-item-acct-process-monitor')).toBeInTheDocument();
+    });
+
+    it('fails closed for an explicitly unknown feature flag', () => {
+      mockUseFeatureFlag.mockReturnValue(true);
+      render(<SideMenu
+        {...defaultProps}
+        menuGroups={[{
+          group: 'Settings',
+          icon: 'Settings',
+          section: 'System',
+          items: [{ name: 'future-window', label: 'Future Window', featureFlag: 'typoed-flag' }],
+        }]}
+      />);
+
+      expect(screen.queryByTestId('menu-item-future-window')).not.toBeInTheDocument();
+    });
+
     it('renders the Artifacts link as an icon-only tooltip trigger in collapsed mode', () => {
       import.meta.env.VITE_SHOW_ARTIFACTS = 'true';
       render(<SideMenu {...defaultProps} expanded={false} />);

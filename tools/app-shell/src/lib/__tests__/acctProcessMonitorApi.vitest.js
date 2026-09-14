@@ -50,6 +50,14 @@ describe('acctProcessMonitorApi', () => {
       expect(requestedUrl()).toContain('Limit=20');
     });
 
+    it('preserves an explicit zero history limit', async () => {
+      respondWith({ error: false, history: [] });
+
+      await fetchAcctProcessStatus(0);
+
+      expect(requestedUrl()).toContain('Limit=0');
+    });
+
     it('omits the query string entirely when no limit is given', async () => {
       respondWith({ error: false, history: [] });
 
@@ -117,6 +125,14 @@ describe('acctProcessMonitorApi', () => {
       await triggerAcctProcessRun(20);
 
       expect(requestedUrl()).toContain('Action=trigger&Limit=20');
+    });
+
+    it('preserves an explicit zero history limit alongside the action', async () => {
+      respondWith({ error: false, triggered: { started: true, reason: 'started' }, history: [] });
+
+      await triggerAcctProcessRun(0);
+
+      expect(requestedUrl()).toContain('Action=trigger&Limit=0');
     });
 
     it('still sends Action=trigger when no limit is given', async () => {

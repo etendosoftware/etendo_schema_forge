@@ -58,6 +58,7 @@ const EMPTY_STATE = Object.freeze({
   denied: false,
   notInstalled: false,
   data: null,
+  pollError: null,
 });
 
 /**
@@ -91,14 +92,22 @@ export function useAcctProcessMonitor() {
   const latestRunIdRef = useRef(null);
   // Guards against a poll or a late in-flight response overwriting state after unmount.
   const mounted = useRef(true);
+  // Monotonically increasing id for the latest request issued across the mount fetch, poll,
+  // reload and trigger. A response is applied to state only if it is still the newest one
+  // issued — guards a slow stale response (e.g. a poll tick) from landing after a faster newer
+  // one (e.g. a reload or trigger) and overwriting fresher state.
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
 
-  const applyPayload = useCallback((payload) => {
+  const applyPayload = useCallback((payload, requestId) => {
     if (!mounted.current) return;
+    // Superseded by a newer request (a reload/trigger fired after this one was issued) — its
+    // response is stale and must not overwrite whatever that newer request already applied.
+    if (requestId !== requestIdRef.current) return;
     // A refusal arrives as a 200 with `error: true` (see acctProcessMonitorApi.js) — a state to
     // render, not a failure to report. `reason` separates "you may not see this" from "this
     // instance has no accounting process"; they need very different messages, so never collapse
@@ -116,28 +125,40 @@ export function useAcctProcessMonitor() {
         denied: payload.reason === 'notAuthorized',
         notInstalled: payload.reason === 'notInstalled',
         data: null,
+        pollError: null,
       });
       return;
     }
-    setState({ loading: false, error: null, denied: false, notInstalled: false, data: payload });
+    setState({
+      loading: false, error: null, denied: false, notInstalled: false, data: payload, pollError: null,
+    });
   }, []);
 
-  const applyError = useCallback((err) => {
+  const applyError = useCallback((err, { silent = false, requestId } = {}) => {
     if (!mounted.current) return;
+    if (requestId !== requestIdRef.current) return;
+    const message = err?.message || String(err);
+    // A silent/background poll failing (a blip, a timeout) is not worth losing whatever is
+    // already on screen for, nor forcing the full error shell over a run that may still be
+    // mid-progress. Keep the last-known-good data and surface the failure as a soft flag instead
+    // — only a foreground/explicit fetch (initial load, reload) shows the hard error state.
+    if (silent) {
+      setState((s) => ({ ...s, pollError: message }));
+      return;
+    }
     setState({
-      loading: false,
-      error: err?.message || String(err),
-      denied: false,
-      notInstalled: false,
-      data: null,
+      loading: false, error: message, denied: false, notInstalled: false, data: null, pollError: null,
     });
   }, []);
 
   const load = useCallback(({ silent = false } = {}) => {
+    const requestId = ++requestIdRef.current;
     if (!silent) {
       setState((s) => ({ ...s, loading: true, error: null }));
     }
-    return fetchAcctProcessStatus(HISTORY_LIMIT).then(applyPayload).catch(applyError);
+    return fetchAcctProcessStatus(HISTORY_LIMIT)
+      .then((payload) => applyPayload(payload, requestId))
+      .catch((err) => applyError(err, { silent, requestId }));
   }, [applyPayload, applyError]);
 
   useEffect(() => { load(); }, [load]);
@@ -157,9 +178,19 @@ export function useAcctProcessMonitor() {
   const shouldPoll = running || awaitingRun;
   useEffect(() => {
     if (!shouldPoll) return undefined;
-    const id = setInterval(() => { load({ silent: true }); }, RUNNING_POLL_MS);
+    const id = setInterval(() => {
+      // The interval is also the awaiting deadline timer. Keeping one timer for both concerns
+      // avoids a poll interval and a second timeout racing to update the same state. Include the
+      // deadline in the effect dependencies so a trigger that starts while an existing run is
+      // already polling still refreshes the callback's deadline closure.
+      if (awaitingUntil !== null && Date.now() >= awaitingUntil) {
+        setAwaitingUntil(null);
+        return;
+      }
+      load({ silent: true });
+    }, RUNNING_POLL_MS);
     return () => clearInterval(id);
-  }, [shouldPoll, load]);
+  }, [shouldPoll, awaitingUntil, load]);
 
   // Stop waiting as soon as the run becomes observable — a new newest-run id, or the backend
   // reporting PRC. After that `running` alone governs, so the poll ends when the run finishes.
@@ -171,19 +202,12 @@ export function useAcctProcessMonitor() {
     if (awaitingUntil === null) return undefined;
     if (running || (latestRunId !== null && latestRunId !== awaitedAfterRunId.current)) {
       setAwaitingUntil(null);
-      return undefined;
     }
-    // Re-evaluate once the deadline passes, so a page left open stops polling on its own.
-    const remaining = awaitingUntil - Date.now();
-    if (remaining <= 0) {
-      setAwaitingUntil(null);
-      return undefined;
-    }
-    const id = setTimeout(() => { if (mounted.current) setAwaitingUntil(null); }, remaining);
-    return () => clearTimeout(id);
+    return undefined;
   }, [awaitingUntil, running, latestRunId]);
 
   const trigger = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setTriggering(true);
     setTriggerOutcome(null);
     // Remember which run was newest BEFORE the trigger, so "a new run appeared" is a comparison
@@ -191,8 +215,10 @@ export function useAcctProcessMonitor() {
     awaitedAfterRunId.current = latestRunIdRef.current;
     try {
       const payload = await triggerAcctProcessRun(HISTORY_LIMIT);
-      applyPayload(payload);
-      if (mounted.current) {
+      applyPayload(payload, requestId);
+      // Superseded by a newer request in the meantime — its outcome/awaiting state belongs to
+      // that newer request, not to this stale one.
+      if (mounted.current && requestId === requestIdRef.current) {
         // `started: false` on a 200 is a legitimate refusal (already running, scheduler in
         // standby, …). Surface the reason rather than implying the run began.
         const outcome = payload?.triggered || { started: false, reason: 'scheduleFailed' };
@@ -201,13 +227,13 @@ export function useAcctProcessMonitor() {
         setAwaitingUntil(outcome.started ? Date.now() + AWAIT_RUN_MS : null);
       }
     } catch (err) {
-      applyError(err);
-      if (mounted.current) {
+      applyError(err, { requestId });
+      if (mounted.current && requestId === requestIdRef.current) {
         setTriggerOutcome({ started: false, reason: 'scheduleFailed' });
         setAwaitingUntil(null);
       }
     } finally {
-      if (mounted.current) setTriggering(false);
+      if (mounted.current && requestId === requestIdRef.current) setTriggering(false);
     }
   }, [applyPayload, applyError]);
 
