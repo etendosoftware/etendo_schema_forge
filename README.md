@@ -492,6 +492,11 @@ Bypass when you need it:
 git commit --no-verify -m "WIP: partial extract"
 ```
 
+**Agents never bypass** — this escape hatch is for a human at their own terminal. An
+unverified commit is left unstamped by `.githooks/commit-msg` and is then rejected by
+the push gate and the CI hooks check, so for an agent the bypass only relocates the
+failure. See **Bypass** in `CLAUDE.md`.
+
 **OK to bypass:** WIP commits, partial extracts, draft branches.
 **Not OK to bypass:** final commits on a feature branch, PRs targeting the epic branch.
 

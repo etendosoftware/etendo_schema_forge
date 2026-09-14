@@ -60,14 +60,42 @@ vi.mock('../contactModalConfig.js', () => ({
 
 import CreateContactModal, { getBillingPatch } from '../CreateContactModal.jsx';
 
+// --- Shared fixtures ---
+
+const SPAIN = { id: 'ES-ID', label: 'España' };
+const FRANCE = { id: 'FR-ID', label: 'Francia' };
+
+const BASE_PROPS = {
+  bpApiBaseUrl: 'http://localhost/sws/neo/contacts',
+  headers: { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
+  onClose: vi.fn(),
+  onCreated: vi.fn(),
+};
+
+/**
+ * Serve a country catalog to the C_Country_ID selector and an empty list to
+ * every other one. Shared by the pre-fill and default-country suites, which
+ * both hinge on what that single selector returns.
+ */
+function mockFetchWithCountries(countries) {
+  globalThis.fetch = vi.fn((url) => {
+    if (typeof url === 'string' && url.includes('C_Country_ID')) {
+      return Promise.resolve({ ok: true, json: async () => ({ items: countries, hasMore: false }) });
+    }
+    return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
+  });
+}
+
+/** URLs the component has requested so far, for asserting a follow-up fetch. */
+function fetchedUrls() {
+  return globalThis.fetch.mock.calls.map(([url]) => String(url));
+}
+
 // --- Tests ---
 
 describe('CreateContactModal', () => {
   const defaultProps = {
-    bpApiBaseUrl: 'http://localhost/sws/neo/contacts',
-    headers: { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
-    onClose: vi.fn(),
-    onCreated: vi.fn(),
+    ...BASE_PROPS,
     initialQuery: '',
     documentType: null,
   };
@@ -252,12 +280,7 @@ describe('CreateContactModal', () => {
  * everything the OCR had already read off the invoice.
  */
 describe('CreateContactModal — pre-fill', () => {
-  const baseProps = {
-    bpApiBaseUrl: 'http://localhost/sws/neo/contacts',
-    headers: { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
-    onClose: vi.fn(),
-    onCreated: vi.fn(),
-  };
+  const baseProps = BASE_PROPS;
 
   const OCR_PREFILL = {
     name: 'Laura Morat',
@@ -269,15 +292,6 @@ describe('CreateContactModal — pre-fill', () => {
     etgoEmail: 'facturacion@lauramorat.es',
     etgoPhone: '+34 600 123 456',
   };
-
-  function mockFetchWithCountries(countries) {
-    globalThis.fetch = vi.fn((url) => {
-      if (typeof url === 'string' && url.includes('C_Country_ID')) {
-        return Promise.resolve({ ok: true, json: async () => ({ items: countries, hasMore: false }) });
-      }
-      return Promise.resolve({ ok: true, json: async () => ({ items: [] }) });
-    });
-  }
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -307,15 +321,15 @@ describe('CreateContactModal — pre-fill', () => {
   });
 
   it('resolves the country label to its option id once the selector loads', async () => {
-    mockFetchWithCountries([{ id: 'ES-ID', label: 'España' }, { id: 'FR-ID', label: 'Francia' }]);
+    mockFetchWithCountries([SPAIN, FRANCE]);
     render(<CreateContactModal {...baseProps} prefill={OCR_PREFILL} />);
     await waitFor(() => {
-      expect(capturedProps.patchValues?.country).toBe('ES-ID');
+      expect(capturedProps.patchValues?.country).toBe(SPAIN.id);
     });
   });
 
   it('leaves the country unset when no option matches the printed label', async () => {
-    mockFetchWithCountries([{ id: 'FR-ID', label: 'Francia' }]);
+    mockFetchWithCountries([FRANCE]);
     render(<CreateContactModal {...baseProps} prefill={OCR_PREFILL} />);
     // Wait for the options themselves to land, so this cannot pass merely
     // because the match had not been attempted yet.
@@ -346,6 +360,114 @@ describe('CreateContactModal — pre-fill', () => {
     render(<CreateContactModal {...baseProps} />);
     expect(capturedProps.initialValues.name).toBe('');
     expect(capturedProps.patchValues).toBeNull();
+  });
+});
+
+/**
+ * ETP-5103 — the address of a new contact opens with Spain preselected and
+ * cannot be saved with an empty "Primera línea".
+ *
+ * The behaviour is asserted through the props handed to EntityCreationModal,
+ * which is stubbed here: `patchValues` is what preselects the country (its merge
+ * writes only still-empty fields) and `requiredFields` is what both draws the
+ * asterisk in AddressSection and gates the Save button. Both have their own
+ * suites; this one pins what CreateContactModal decides.
+ */
+describe('CreateContactModal — ETP-5103 default country and mandatory address', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedProps = {};
+    mockFetchWithCountries([]);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Render and wait for the country catalog to land in `opts`. */
+  async function renderWithCatalog(countries, props = {}) {
+    mockFetchWithCountries(countries);
+    const view = render(<CreateContactModal {...BASE_PROPS} {...props} />);
+    await waitFor(() => {
+      expect(capturedProps.opts.countries.options).toHaveLength(countries.length);
+    });
+    return view;
+  }
+
+  // CP-1
+  it('preselects Spain once the country catalog has loaded', async () => {
+    await renderWithCatalog([FRANCE, SPAIN]);
+    expect(capturedProps.patchValues).toEqual({ country: SPAIN.id });
+  });
+
+  it('resolves the default from the English label too', async () => {
+    // The selector labels are translated, so an en_US session never sees "España".
+    const spainInEnglish = { id: SPAIN.id, label: 'Spain' };
+    await renderWithCatalog([spainInEnglish]);
+    expect(capturedProps.patchValues.country).toBe(SPAIN.id);
+  });
+
+  it('fetches the regions of the defaulted country', async () => {
+    // Regions hang off `currentCountry`, which normally only the field's own
+    // onChange feeds. A defaulted country bypasses it, so without an explicit
+    // seed the Región picker would unlock on an empty list.
+    await renderWithCatalog([SPAIN]);
+    await waitFor(() => {
+      const regionCall = fetchedUrls().find(url => url.includes('C_Region_ID'));
+      expect(regionCall).toContain(`C_Country_ID=${SPAIN.id}`);
+    });
+  });
+
+  it('leaves the country alone when the catalog has no Spain', async () => {
+    // Never guess: an instance that does not expose Spain has nothing to preselect.
+    await renderWithCatalog([FRANCE]);
+    expect(capturedProps.patchValues).toBeNull();
+  });
+
+  // CP-2 — the user may change the preselected country. `patchValues` is the
+  // mechanism that keeps that possible: EntityCreationModal writes it only into
+  // still-empty fields, so once a country is in the form the default is inert.
+  it('keeps the default patch stable so it cannot re-apply over a later choice', async () => {
+    const { rerender } = await renderWithCatalog([SPAIN]);
+    const firstPatch = capturedProps.patchValues;
+
+    rerender(<CreateContactModal {...BASE_PROPS} />);
+    expect(capturedProps.patchValues).toBe(firstPatch);
+  });
+
+  it('lets an extracted country win over the default', async () => {
+    // An explicit pre-fill is evidence about THIS contact; the default is only a
+    // convenience. Scanning a French invoice must not file the vendor in Spain.
+    await renderWithCatalog([FRANCE, SPAIN], { prefill: { country: 'Francia' } });
+    await waitFor(() => {
+      expect(capturedProps.patchValues.country).toBe(FRANCE.id);
+    });
+  });
+
+  // CP-3 / CP-4 / CP-5 / CP-6 — all four follow from this list: AddressSection
+  // draws the asterisk for the ids it contains and EntityCreationModal disables
+  // Save until each one holds a value.
+  it('marks the first address line as required in company mode', () => {
+    render(<CreateContactModal {...BASE_PROPS} />);
+    expect(capturedProps.requiredFields).toContain('address');
+  });
+
+  it('marks the first address line as required in person mode', async () => {
+    const user = userEvent.setup();
+    render(<CreateContactModal {...BASE_PROPS} />);
+
+    await user.click(screen.getByText('Person'));
+    expect(capturedProps.requiredFields).toContain('address');
+  });
+
+  it('does not make the remaining address fields required', () => {
+    // Only "Primera línea" was asked for — the rest of the Dirección tab stays
+    // optional, so a contact with a partial address can still be created.
+    render(<CreateContactModal {...BASE_PROPS} />);
+    expect(capturedProps.requiredFields).not.toContain('address2');
+    expect(capturedProps.requiredFields).not.toContain('postalCode');
+    expect(capturedProps.requiredFields).not.toContain('city');
+    expect(capturedProps.requiredFields).not.toContain('region');
   });
 });
 

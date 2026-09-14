@@ -146,6 +146,22 @@ function getInputType(field) {
   }
 }
 
+/**
+ * Does a required field hold something that counts as filled?
+ *
+ * Whitespace does not (ETP-5103): a lone space in "Primera línea" used to satisfy
+ * the check and let a blank address through, which is the opposite of what the
+ * asterisk promises. Only strings are trimmed, so a numeric 0 or a false — both
+ * legitimate values a field may be required to carry — still pass, as before.
+ *
+ * Module-level so the component body stays flat.
+ */
+function hasValue(val) {
+  if (val === undefined || val === null) return false;
+  if (typeof val === 'string') return val.trim() !== '';
+  return val !== '';
+}
+
 function RepeatableSection({ section, rows, onAdd, onUpdate, onRemove, ui }) {
   const emptyRow = useMemo(
     () => Object.fromEntries((section.fields ?? []).map(f => [f.id, ''])),
@@ -462,10 +478,7 @@ export default function EntityCreationModal({
   }, [allDeclaredFields, onFieldChange]);
 
 
-  const isSaveDisabled = loading || !requiredFields.every(id => {
-    const val = form[id];
-    return val !== undefined && val !== null && val !== '';
-  });
+  const isSaveDisabled = loading || !requiredFields.every(id => hasValue(form[id]));
 
   const handleSave = async () => {
     const validationError = validate?.(form, repeatables);

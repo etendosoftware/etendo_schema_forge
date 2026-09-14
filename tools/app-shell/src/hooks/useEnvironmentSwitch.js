@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchEnvironments, loginEnvironment } from '@etendosoftware/etendo-go-core/onboarding/api';
-import { buildEnvironmentSessionStorage } from '@etendosoftware/etendo-go-core/onboarding/state';
+import { persistEnvironmentSession } from '@etendosoftware/etendo-go-core/onboarding/state';
 import { getApiBase } from './useNeoResource.js';
 import { sortEnvironments } from '../lib/environmentPresentation.js';
 
@@ -78,9 +78,7 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
         setSwitching(null);
         return false;
       }
-      Object.entries(buildEnvironmentSessionStorage(env, data)).forEach(([key, value]) => {
-        localStorage.setItem(key, value);
-      });
+      persistEnvironmentSession(env, data);
       // The flag targeting identity belongs to the account, not the tenant, so it
       // survives — but anything cached per tenant must not, hence the full load.
       window.location.href = '/';
