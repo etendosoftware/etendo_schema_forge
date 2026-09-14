@@ -32,6 +32,49 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: (props) => <div data-testid={props['data-testid']}>{props.children}</div>,
 }));
 
+// ETP-5196 — `UserRolesTab.jsx` now imports `buildMenuWindowIndex()` (from
+// `@/pages/roles/useRolesOverviewData.js`), which in turn imports the REAL
+// `../../menu.json` at module scope. Mocked here with a small synthetic fixture —
+// SAME convention `useRolesOverviewData.vitest.js` already established for its own
+// coverage of `buildMenuWindowIndex`/`adaptMatrix` — rather than depending on real,
+// currently-live windowIds (real `menu.json` can be edited for unrelated reasons and
+// would silently break these assertions). `UserRolesTab.jsx` is at
+// `src/windows/custom/user/`, so `@/pages/roles/useRolesOverviewData.js`'s own
+// `'../../menu.json'` resolves to `src/menu.json`; from THIS test file (at
+// `src/windows/custom/user/__tests__/`), that same file is 4 levels up.
+//
+// Deliberately uses windowIds that do NOT collide with `w1`/`w2`/`w3`/`w4` (the
+// synthetic ids every pre-existing fixture/test in this file uses) — those stay
+// absent from this mocked index, so every pre-existing test keeps exercising the
+// FALLBACK (AD-tree) path completely unaffected, exactly as before this mock existed.
+vi.mock('../../../../menu.json', () => ({
+  default: {
+    menu: [
+      // groupOrder 0 — deliberately declared BEFORE 'Alpha' (reverse-alphabetical),
+      // so a test asserting groupOrder-based category order can't accidentally pass
+      // because it happens to coincide with alphabetical order.
+      { group: 'Zeta', items: [{ name: 'zeta-window', label: 'Zeta Window', windowId: 'm-zeta' }] },
+      { group: 'Alpha', items: [{ name: 'alpha-window', label: 'Alpha Window', windowId: 'm-alpha' }] }, // groupOrder 1
+      {
+        // groupOrder 2 — 'Row B' (itemOrder 0) declared BEFORE 'Row A' (itemOrder 1),
+        // likewise reverse-alphabetical at the ROW level, for the same reason.
+        group: 'RowOrderGroup',
+        items: [
+          { name: 'row-b', label: 'Row B (itemOrder 0)', windowId: 'm-row-b' },
+          { name: 'row-a', label: 'Row A (itemOrder 1)', windowId: 'm-row-a' },
+        ],
+      },
+      // groupOrder 3 — ONLY a hidden entry, no visible alternative (the real Match
+      // Rule/Periods shape) — must be excluded from the matrix entirely.
+      { group: 'HiddenOnlyGroup', items: [{ name: 'hidden-only', label: 'Hidden Only', windowId: 'm-hidden', hidden: true }] },
+      // groupOrder 4 — this id is ALSO given a (different, wrong) category/name via a
+      // per-test AD-tree fixture, to prove menu.json wins over the AD-tree fallback
+      // when a window id exists in BOTH sources.
+      { group: 'DualMappedGroup', items: [{ name: 'dual-via-menu', label: 'Dual (menu.json label)', windowId: 'm-dual' }] },
+    ],
+  },
+}));
+
 import { fetchRolesOverview, fetchTemplateRoles } from '@/lib/rolesApi.js';
 import { fetchMenuTree } from '@/lib/menuTree.js';
 import UserRolesTab from '../UserRolesTab.jsx';
@@ -633,6 +676,140 @@ describe('UserRolesTab', () => {
         const cells = within(row).getAllByRole('cell');
         expect(cells[1]).toHaveTextContent('—');
       }
+    });
+  });
+
+  // ETP-5196 — coverage for `resolveCategoryRow()`/`groupResolvedRows()`: the new
+  // `menu.json`-primary category resolution, its fallbacks (AD-tree, then the new
+  // "Other" catch-all), hidden-window exclusion, and `groupOrder`/`itemOrder`
+  // ordering. Uses the module-level `menu.json` mock declared at the top of this
+  // file (Zeta/Alpha/RowOrderGroup/HiddenOnlyGroup/DualMappedGroup, groupOrder
+  // 0..4) — none of its windowIds collide with `w1`/`w2`/`w3`/`w4`, so every test
+  // above this block is unaffected and keeps exercising the AD-tree fallback path
+  // exactly as before this mock existed (per the developer's own report: all 32
+  // pre-existing tests only ever exercised the fallback path).
+  describe('menu.json category grouping (ETP-5196)', () => {
+    beforeEach(() => {
+      fetchTemplateRoles.mockResolvedValue(TEMPLATE_ROLES);
+    });
+
+    it('resolves category/name from menu.json, overriding the AD-tree category/name, for a window id present in BOTH sources', async () => {
+      // 'm-dual' is BOTH a leaf in this AD tree (wrong category/name) AND indexed by
+      // the mocked menu.json under 'DualMappedGroup' (correct category/name) — the
+      // menu.json-resolved values must win.
+      fetchMenuTree.mockResolvedValue({
+        tree: [
+          {
+            type: 'folder',
+            name: 'WrongClassicCategory',
+            children: [{ name: 'Wrong AD Name', windowId: 'm-dual' }],
+          },
+        ],
+      });
+      fetchRolesOverview.mockResolvedValue({
+        roles: [
+          { id: 'role-fin', name: 'Finance', windows: [{ id: 'm-dual', name: 'Wrong AD Name', tier: 'full' }] },
+        ],
+      });
+      renderTab({ selectedRoleIds: ['role-fin'] });
+
+      const table = await screen.findByTestId('UserRolesTab');
+      expect(within(table).getByText('DualMappedGroup')).toBeInTheDocument();
+      expect(within(table).getByText('Dual (menu.json label)')).toBeInTheDocument();
+      expect(within(table).queryByText('WrongClassicCategory')).not.toBeInTheDocument();
+      expect(within(table).queryByText('Wrong AD Name')).not.toBeInTheDocument();
+    });
+
+    it('falls back to the AD-tree category/name for a window id present in the AD tree but absent from menu.json (old behavior preserved)', async () => {
+      // w2 (Clientes/Comercial, from the shared MENU_TREE fixture) is not indexed by
+      // the mocked menu.json at all.
+      fetchMenuTree.mockResolvedValue(MENU_TREE);
+      fetchRolesOverview.mockResolvedValue(ROLES_OVERVIEW);
+      renderTab({ selectedRoleIds: ['role-fin', 'role-sales'] });
+
+      const row = await screen.findByTestId('UserRolesTab__row-w2');
+      expect(within(row).getByText('Clientes')).toBeInTheDocument();
+      expect(screen.getByTestId('UserRolesTab__category-Comercial')).toBeInTheDocument();
+    });
+
+    it('renders a window id absent from BOTH menu.json and the AD tree under the "Other" catch-all category instead of vanishing', async () => {
+      fetchMenuTree.mockResolvedValue(MENU_TREE);
+      fetchRolesOverview.mockResolvedValue({
+        roles: [
+          { id: 'role-fin', name: 'Finance', windows: [{ id: 'x-mystery', name: 'Mystery Window', tier: 'full' }] },
+        ],
+      });
+      renderTab({ selectedRoleIds: ['role-fin'] });
+
+      const table = await screen.findByTestId('UserRolesTab');
+      // Identity `useUI()` mock returns the raw i18n key — 'Other' at runtime, per the
+      // en_US/es_ES `userRolesTabUncategorizedCategory` entries this fix added.
+      expect(within(table).getByText('userRolesTabUncategorizedCategory')).toBeInTheDocument();
+      expect(within(table).getByText('Mystery Window')).toBeInTheDocument();
+    });
+
+    it('excludes a row entirely (and its now-empty category) when its only menu.json entry is hidden, even though the window is active', async () => {
+      fetchMenuTree.mockResolvedValue(MENU_TREE);
+      fetchRolesOverview.mockResolvedValue({
+        roles: [
+          { id: 'role-fin', name: 'Finance', windows: [{ id: 'm-hidden', name: 'Hidden Window (AD name)', tier: 'full' }] },
+        ],
+      });
+      renderTab({ selectedRoleIds: ['role-fin'] });
+
+      const table = await screen.findByTestId('UserRolesTab');
+      expect(within(table).queryByText('HiddenOnlyGroup')).not.toBeInTheDocument();
+      expect(within(table).queryByText('Hidden Only')).not.toBeInTheDocument();
+      expect(within(table).queryByText('Hidden Window (AD name)')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('UserRolesTab__row-m-hidden')).not.toBeInTheDocument();
+    });
+
+    it('orders menu.json-resolved categories by groupOrder, not alphabetically (Zeta before Alpha)', async () => {
+      fetchMenuTree.mockResolvedValue({ tree: [] });
+      fetchRolesOverview.mockResolvedValue({
+        roles: [
+          {
+            id: 'role-fin',
+            name: 'Finance',
+            // Fed Alpha BEFORE Zeta — alphabetical order would put Alpha first too, so
+            // this alone wouldn't prove groupOrder is what's driving the sort; the
+            // assertion below only holds because groupOrder(Zeta)=0 < groupOrder(Alpha)=1.
+            windows: [
+              { id: 'm-alpha', name: 'raw alpha', tier: 'full' },
+              { id: 'm-zeta', name: 'raw zeta', tier: 'full' },
+            ],
+          },
+        ],
+      });
+      renderTab({ selectedRoleIds: ['role-fin'] });
+
+      const table = await screen.findByTestId('UserRolesTab');
+      const categoryHeaders = within(table).getAllByText(/^(Zeta|Alpha)$/);
+      expect(categoryHeaders.map((el) => el.textContent)).toEqual(['Zeta', 'Alpha']);
+    });
+
+    it('orders rows within a menu.json category by itemOrder, not by feed order or alphabetically', async () => {
+      fetchMenuTree.mockResolvedValue({ tree: [] });
+      fetchRolesOverview.mockResolvedValue({
+        roles: [
+          {
+            id: 'role-fin',
+            name: 'Finance',
+            // Fed 'm-row-a' (itemOrder 1) BEFORE 'm-row-b' (itemOrder 0) — the output
+            // must still put Row B first. Labels are reverse-alphabetical too ("Row A"
+            // < "Row B"), so this can't accidentally pass via alphabetical sorting.
+            windows: [
+              { id: 'm-row-a', name: 'raw row a', tier: 'full' },
+              { id: 'm-row-b', name: 'raw row b', tier: 'full' },
+            ],
+          },
+        ],
+      });
+      renderTab({ selectedRoleIds: ['role-fin'] });
+
+      const table = await screen.findByTestId('UserRolesTab');
+      const rowLabels = within(table).getAllByText(/^Row [AB] \(itemOrder \d\)$/);
+      expect(rowLabels.map((el) => el.textContent)).toEqual(['Row B (itemOrder 0)', 'Row A (itemOrder 1)']);
     });
   });
 });
