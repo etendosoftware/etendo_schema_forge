@@ -212,28 +212,44 @@ export function useFiscalConfigForOrgs(orgIds, apiBaseUrl) {
     setState((s) => ({ ...s, loading: true, error: null }));
 
     (async () => {
-      try {
-        const entries = await Promise.all(
-          ids.map(async (orgId) => {
-            const [siiRows, verifactuRows] = await Promise.all([
-              fetchAllRows(apiFetch, 'sii-config', SII_ENTITY, orgId),
-              fetchAllRows(apiFetch, 'verifactu-config', VERIFACTU_ENTITY, orgId),
-            ]);
-            return [
-              orgId,
-              {
-                earliestSiiCutoverDate: earliestCutoverDate(siiRows, 'sii'),
-                earliestVerifactuCutoverDate: earliestCutoverDate(verifactuRows, 'verifactu'),
-              },
-            ];
-          }),
-        );
-        if (cancelled) return;
-        setState({ loading: false, error: null, byOrg: Object.fromEntries(entries) });
-      } catch (err) {
-        if (cancelled) return;
-        setState((s) => ({ ...s, loading: false, error: err.message }));
-      }
+      // Each org's fetch is fault-isolated: a transient failure for one org
+      // (500, permissions edge case, whatever) must never wipe out the other
+      // orgs already resolved on the same page (ETP-5248 BUG-1). Settle each
+      // org independently and fall back to a "not eligible" (null-cutover)
+      // shape for whichever org failed, instead of letting Promise.all reject
+      // the whole batch on the first failure.
+      const settled = await Promise.allSettled(
+        ids.map(async (orgId) => {
+          const [siiRows, verifactuRows] = await Promise.all([
+            fetchAllRows(apiFetch, 'sii-config', SII_ENTITY, orgId),
+            fetchAllRows(apiFetch, 'verifactu-config', VERIFACTU_ENTITY, orgId),
+          ]);
+          return [
+            orgId,
+            {
+              earliestSiiCutoverDate: earliestCutoverDate(siiRows, 'sii'),
+              earliestVerifactuCutoverDate: earliestCutoverDate(verifactuRows, 'verifactu'),
+            },
+          ];
+        }),
+      );
+      if (cancelled) return;
+
+      let hadFailure = false;
+      const entries = settled.map((outcome, idx) => {
+        if (outcome.status === 'fulfilled') return outcome.value;
+        hadFailure = true;
+        return [
+          ids[idx],
+          { earliestSiiCutoverDate: null, earliestVerifactuCutoverDate: null, error: outcome.reason?.message ?? 'unknown error' },
+        ];
+      });
+
+      setState({
+        loading: false,
+        error: hadFailure ? 'Some organizations failed to load their fiscal configuration' : null,
+        byOrg: Object.fromEntries(entries),
+      });
     })();
 
     return () => { cancelled = true; };
