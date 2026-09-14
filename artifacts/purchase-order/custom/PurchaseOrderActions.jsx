@@ -10,6 +10,7 @@ import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { usePurchaseOrderPdf } from '@/windows/custom/shared/usePurchaseOrderPdf.js';
 import { trackTransactionPosted, trackDocumentCreated } from '@/lib/observability/health-events.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { translateBackendError } from '@/lib/backendErrors.js';
 
 export { ConfirmResultModal as PoConfirmResultModal };
 
@@ -422,7 +423,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(ui('poOrderConfirmedReceiptError') + ' ' + (e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`));
+          throw new Error(ui('poOrderConfirmedReceiptError') + ' ' + translateBackendError(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`, ui));
         }
         const doc = (await res.json())?.response?.data;
         const docObj = Array.isArray(doc) ? doc[0] : doc;
@@ -726,7 +727,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(e?.error?.message || e?.response?.message || `Error (${res.status})`);
+          throw new Error(translateBackendError(e?.error?.message || e?.response?.message || `Error (${res.status})`, ui));
         }
         const doc = (await res.json())?.response?.data;
         const docObj = Array.isArray(doc) ? doc[0] : doc;
