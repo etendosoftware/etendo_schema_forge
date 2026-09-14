@@ -503,16 +503,47 @@ describe('UserRolesTab', () => {
       fetchRolesOverview.mockResolvedValue(ROLES_OVERVIEW);
     });
 
-    it('hides the composed-roles matrix and shows the full-access message when data.defaultRole matches the resolved admin role id', async () => {
+    // ETP-5196 — revised from the ETP-5071 behavior this described (which hid the matrix
+    // entirely for a confirmed admin holder). The full-access message now renders as a
+    // SIBLING above the matrix, and the matrix itself shows a single column built from
+    // `adminRole` (id `role-admin`, `isClientAdmin: true`, `windows: [w1, w2, w3]` all
+    // 'full' per the shared `ROLES_OVERVIEW` fixture) — not the stale pre-promotion
+    // `selectedRoleIds` (here `['role-fin']`, deliberately non-empty to prove the
+    // composed selection is ignored once admin-holder is detected).
+    it('shows the full-access message alongside a single admin-only column in the matrix when data.defaultRole matches the resolved admin role id', async () => {
       renderTab({ selectedRoleIds: ['role-fin'], data: { defaultRole: 'role-admin' } });
 
       expect(await screen.findByTestId('UserRolesTab__admin-full-access')).toHaveTextContent(
         'userRolesTabAdminFullAccessMessage',
       );
-      expect(screen.queryByTestId('UserRolesTab')).not.toBeInTheDocument();
       expect(screen.queryByTestId('UserRolesTab__loading')).not.toBeInTheDocument();
       expect(screen.queryByTestId('UserRolesTab__error')).not.toBeInTheDocument();
       expect(screen.queryByTestId('UserRolesTab__empty')).not.toBeInTheDocument();
+
+      // The matrix now DOES render (flipped from the old "hides the matrix" behavior).
+      const table = await screen.findByTestId('UserRolesTab');
+
+      // Exactly one role column — the admin column — no Finance/Sales header, even
+      // though 'role-fin' is in selectedRoleIds.
+      const headerRow = table.querySelector('thead tr');
+      const headers = within(headerRow).getAllByRole('columnheader');
+      expect(headers).toHaveLength(2); // Window + Admin only
+      expect(headers[1]).toHaveTextContent('roleNameAdmin'); // ADMIN_NAME_I18N_KEY, via the identity useUI mock
+      expect(within(headerRow).queryByText('Finance')).not.toBeInTheDocument();
+      expect(within(headerRow).queryByText('Sales')).not.toBeInTheDocument();
+      // Admin column header uses the Settings icon (gated by role.isClientAdmin), not
+      // one of the ROLE_ICONS keyed by role.name.
+      expect(within(headers[1]).getByTestId('RoleIcon__role-admin')).toBeInTheDocument();
+
+      // w1/w2/w3 (Ventas/Clientes/Proveedores) all render full-tier ✓ for the admin
+      // column, per ROLES_OVERVIEW's role-admin windows fixture — same cell-assertion
+      // pattern ("resolves cell values from each role's windows[]" test above) used
+      // elsewhere in this file.
+      for (const windowId of ['w1', 'w2', 'w3']) {
+        const row = screen.getByTestId(`UserRolesTab__row-${windowId}`);
+        const cells = within(row).getAllByRole('cell');
+        expect(cells[1]).toHaveTextContent('✓');
+      }
     });
 
     it('accepts a `defaultRole` given as an {id, name} object (defensive shape, same as RoleChipsCell/AssignRoleControl)', async () => {
