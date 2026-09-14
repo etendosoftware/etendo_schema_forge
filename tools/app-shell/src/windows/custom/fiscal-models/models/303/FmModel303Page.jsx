@@ -70,14 +70,26 @@ function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, 
   if (!res) return;
   const mergedBoxes = recomputeDerivedBoxes(applyOverrides(res.boxes, manualOverrides));
   setLiveBoxes(mergedBoxes);
-  // ETP-5272 pt.6 (cont.) — `res.summary.result` is the backend's box 46 ("Resultado régimen
-  // general") under a "standard company" assumption (100% state attribution, no adjustments):
-  // it has no knowledge of manualOverrides. The real final liquidation result is box 71
-  // ("Resultado de la liquidación"), which DOES correctly reflect manual overrides through
-  // `mergedBoxes` (recomputeDerivedBoxes above chains box 71 through box 66/69). Derive it here
-  // instead of trusting the raw backend value. `accrued`/`deductible` are unaffected by the
-  // territorial split and stay sourced from the backend as before.
-  setLiveSummary({ ...res.summary, result: getBoxValue(mergedBoxes, 71) ?? res.summary?.result ?? 0 });
+  // ETP-5272 pt.6 (cont.) — two independent reasons `res.summary` can't be trusted as-is,
+  // both because the GET /fiscal303/boxes backend computes purely from invoice data (no
+  // declaration-id/manualData input at all, so it never sees manualOverrides):
+  // 1) `result` is the backend's box 46 ("Resultado régimen general") under a "standard
+  //    company" assumption (100% state attribution, no territorial split). The real final
+  //    liquidation result is box 71 ("Resultado de la liquidación"), which DOES correctly
+  //    reflect the territorial split (box 65/66) through `mergedBoxes` (recomputeDerivedBoxes
+  //    chains box 71 through box 66/69).
+  // 2) `deductible` is box 45 ("total_deducir"), computed as sum([29,31,33,35,37,39,41,42,43,44]).
+  //    Boxes 42/43/44 are pure manual entries (compensaciones régimen agricultura,
+  //    regularización bienes de inversión, prorrata definitiva) the backend never receives —
+  //    so its raw `deductible` silently assumes 42/43/44 = 0.
+  // Both are re-derived here from the override-aware `mergedBoxes` instead of the raw backend
+  // value. `accrued` (box 27, IVA devengado) needs no such treatment — it has no manual-entry
+  // inputs anywhere in its formula.
+  setLiveSummary({
+    ...res.summary,
+    deductible: getBoxValue(mergedBoxes, 45) ?? res.summary?.deductible ?? 0,
+    result: getBoxValue(mergedBoxes, 71) ?? res.summary?.result ?? 0,
+  });
   if (res.sources) setLiveSources(res.sources);
 }
 
