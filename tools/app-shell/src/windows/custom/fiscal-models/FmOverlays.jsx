@@ -641,6 +641,17 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
                 // above); its tooltip is deliberately distinct from the purely-informational
                 // existing-period hint, so the user understands WHY this one can't be picked.
                 const isDraftBlocked = draftPeriods.has(p);
+                // S3358 — de-nested from a nested ternary: draft-blocked and existing each
+                // have their own distinct tooltip (see comment above), unselected/available
+                // periods get none.
+                let periodTitle;
+                if (isDraftBlocked) {
+                  periodTitle = t('fm.new_decl.period_draft_blocked_hint') ?? undefined;
+                } else if (isExisting) {
+                  periodTitle = t('fm.new_decl.period_existing_hint') ?? undefined;
+                } else {
+                  periodTitle = undefined;
+                }
                 return (
                   <button
                     key={p}
@@ -648,9 +659,7 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
                     aria-pressed={isSelected}
                     disabled={isDraftBlocked}
                     className={`fm-newdecl-period-btn${isSelected ? ' fm-newdecl-period-btn--selected' : ''}${isExisting ? ' fm-newdecl-period-btn--existing' : ''}${isDraftBlocked ? ' fm-newdecl-period-btn--draft-blocked' : ''}`}
-                    title={isDraftBlocked
-                      ? (t('fm.new_decl.period_draft_blocked_hint') ?? undefined)
-                      : (isExisting ? (t('fm.new_decl.period_existing_hint') ?? undefined) : undefined)}
+                    title={periodTitle}
                     onClick={() => {
                       if (isDraftBlocked) return;
                       setPeriod(p);

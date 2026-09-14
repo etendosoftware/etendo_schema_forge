@@ -1,4 +1,28 @@
 /**
+ * Resolves the fiscal system for the 'siiver' regime — split out of `resolveSystem`
+ * (SonarQube S3776) so the territory veto and the volume/lowChoice branching are each
+ * a flat, independently-readable chain instead of one nested inside the other.
+ *
+ * @param {string|null} territory
+ * @param {'high'|'low'|null} volume
+ * @param {'sii'|'verifactu'|null} lowChoice
+ * @returns {'SII'|'VERIFACTU'|null}
+ */
+function resolveSiiverSystem({ territory, volume, lowChoice }) {
+  // SII only accepts IVA/IGIC taxpayers (verified against the AEATSII_CONFIG.taxtype
+  // AD_Ref_List — ETP-5272 point 4). A territory whose tax scheme SII cannot represent
+  // (Ceuta/Melilla → IPSI) has exactly one applicable system regardless of billing
+  // volume, so the volume/lowChoice answers never matter for it.
+  if (territory && !getAllowedSystemsForTerritory(territory).includes('SII')) {
+    return 'VERIFACTU';
+  }
+  if (volume === 'high') return 'SII';
+  if (volume === 'low' && lowChoice === 'sii') return 'SII';
+  if (volume === 'low' && lowChoice === 'verifactu') return 'VERIFACTU';
+  return null;
+}
+
+/**
  * Derives the active fiscal system from territory regime + user answers.
  *
  * @param {'sii_foral'|'tbai'|'siiver'} regime
@@ -14,18 +38,7 @@
 export function resolveSystem({ regime, alsoNational, volume, lowChoice, territory = null }) {
   if (regime === 'sii_foral') return 'SII';
   if (regime === 'tbai') return alsoNational ? 'SII+TBAI' : 'TBAI';
-  if (regime === 'siiver') {
-    // SII only accepts IVA/IGIC taxpayers (verified against the AEATSII_CONFIG.taxtype
-    // AD_Ref_List — ETP-5272 point 4). A territory whose tax scheme SII cannot represent
-    // (Ceuta/Melilla → IPSI) has exactly one applicable system regardless of billing
-    // volume, so the volume/lowChoice answers never matter for it.
-    if (territory && !getAllowedSystemsForTerritory(territory).includes('SII')) {
-      return 'VERIFACTU';
-    }
-    if (volume === 'high') return 'SII';
-    if (volume === 'low' && lowChoice === 'sii') return 'SII';
-    if (volume === 'low' && lowChoice === 'verifactu') return 'VERIFACTU';
-  }
+  if (regime === 'siiver') return resolveSiiverSystem({ territory, volume, lowChoice });
   return null;
 }
 

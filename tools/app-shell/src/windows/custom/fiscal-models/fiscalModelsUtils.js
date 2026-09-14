@@ -122,33 +122,48 @@ function applyRectificativaParams(params, identChecks) {
     params.set('AdministrativeDiscrepancyRectifyingReason', 'Y');
 }
 
-export function applyIdentParams(params, identChecks) {
+// 1:1 string forwarding of IDENT_PARAM_MAP — value is set only when truthy. Split out of
+// applyIdentParams (SonarQube S3776) so the loop's own nested if/ternary doesn't stack on
+// top of every other ident-check branch below.
+function applyMappedIdentParams(params, identChecks) {
   for (const [field, paramName] of IDENT_PARAM_MAP) {
     const v = identChecks[field];
     if (v) params.set(paramName, paramName === 'IBAN' ? v.replace(/\s/g, '') : v);
   }
-  if (identChecks.sin_actividad === true) params.set('Declaration_NoActivity', 'Y');
-  // Sujeto pasivo inscrito en el Registro de devolución mensual (art. 30 RIVA) — read by
-  // AEAT303Report.java's MONTHLY_REGISTER constant; box 65 defaults to "not registered"
-  // (2) unless this is explicitly "Y" (ETP-5027).
-  if (identChecks.redeme === true) params.set('MonthlyRegister', 'Y');
-  // Concurso de acreedores — AEAT303Report2014's "IsConcurso"/"ConcursoType" constants, still
-  // read unchanged through the override chain up to AEAT303Report2025 (ETP-5027). ConcursoDate
-  // (the bankruptcy statement date) must go alongside them — AEAT303Report2023+ throws
-  // @AEAT303_Bad_Bankruptcy_Statement_Date_Format@ when it's missing/blank, and 2021/2022 ship
-  // 8 blank spaces into that AEAT field slot otherwise (ETP-5272 pt.7). Only sent when there's
-  // an actual date to format — fm303Layouts.js's `fecha_concurso` required-field gate is what
-  // stops a blank date from reaching this point in the first place.
+}
+
+// Concurso de acreedores — AEAT303Report2014's "IsConcurso"/"ConcursoType" constants, still
+// read unchanged through the override chain up to AEAT303Report2025 (ETP-5027). ConcursoDate
+// (the bankruptcy statement date) must go alongside them — AEAT303Report2023+ throws
+// @AEAT303_Bad_Bankruptcy_Statement_Date_Format@ when it's missing/blank, and 2021/2022 ship
+// 8 blank spaces into that AEAT field slot otherwise (ETP-5272 pt.7). Only sent when there's
+// an actual date to format — fm303Layouts.js's `fecha_concurso` required-field gate is what
+// stops a blank date from reaching this point in the first place.
+function applyConcursoParams(params, identChecks) {
   if (identChecks.concurso === true) {
     params.set('IsConcurso', 'Y');
     const concursoDate = formatAeatConcursoDate(identChecks.fecha_concurso);
     if (concursoDate) params.set('ConcursoDate', concursoDate);
   }
   if (identChecks.postconcursal === true) params.set('ConcursoType', 'Y');
+}
+
+function applyComplementariaParams(params, identChecks) {
   if (identChecks.complementaria === true) {
     params.set('IsComplementary', 'Y');
     if (identChecks.nro_justificante) params.set('ComplementaryNo', identChecks.nro_justificante);
   }
+}
+
+export function applyIdentParams(params, identChecks) {
+  applyMappedIdentParams(params, identChecks);
+  if (identChecks.sin_actividad === true) params.set('Declaration_NoActivity', 'Y');
+  // Sujeto pasivo inscrito en el Registro de devolución mensual (art. 30 RIVA) — read by
+  // AEAT303Report.java's MONTHLY_REGISTER constant; box 65 defaults to "not registered"
+  // (2) unless this is explicitly "Y" (ETP-5027).
+  if (identChecks.redeme === true) params.set('MonthlyRegister', 'Y');
+  applyConcursoParams(params, identChecks);
+  applyComplementariaParams(params, identChecks);
   // Rectificativa (2024+): IsComplementary=Y activates rectAssessment in the AEAT module.
   if (identChecks.rectificativa) applyRectificativaParams(params, identChecks);
 }
