@@ -68,8 +68,16 @@ function parseBoxInput(rawValue) {
 
 function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources) {
   if (!res) return;
-  setLiveBoxes(recomputeDerivedBoxes(applyOverrides(res.boxes, manualOverrides)));
-  setLiveSummary(res.summary);
+  const mergedBoxes = recomputeDerivedBoxes(applyOverrides(res.boxes, manualOverrides));
+  setLiveBoxes(mergedBoxes);
+  // ETP-5272 pt.6 (cont.) — `res.summary.result` is the backend's box 46 ("Resultado régimen
+  // general") under a "standard company" assumption (100% state attribution, no adjustments):
+  // it has no knowledge of manualOverrides. The real final liquidation result is box 71
+  // ("Resultado de la liquidación"), which DOES correctly reflect manual overrides through
+  // `mergedBoxes` (recomputeDerivedBoxes above chains box 71 through box 66/69). Derive it here
+  // instead of trusting the raw backend value. `accrued`/`deductible` are unaffected by the
+  // territorial split and stay sourced from the backend as before.
+  setLiveSummary({ ...res.summary, result: getBoxValue(mergedBoxes, 71) ?? res.summary?.result ?? 0 });
   if (res.sources) setLiveSources(res.sources);
 }
 
@@ -487,9 +495,12 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   // are reflected in the accrued/deductible/result cards without a full recalculate.
   const kpi27 = getBoxValue(liveBoxes, 27);
   const kpi45 = getBoxValue(liveBoxes, 45);
-  const kpi46 = getBoxValue(liveBoxes, 46);
-  const liveBoxSummary = (kpi27 !== null || kpi45 !== null || kpi46 !== null)
-    ? { accrued: kpi27, deductible: kpi45, result: kpi46 }
+  // ETP-5272 pt.6 (cont.) — the final liquidation result is box 71 ("Resultado de la
+  // liquidación"), not box 46 ("Resultado régimen general"), which is only an intermediate
+  // figure. See applyComputeResult above for the full rationale.
+  const kpi71 = getBoxValue(liveBoxes, 71);
+  const liveBoxSummary = (kpi27 !== null || kpi45 !== null || kpi71 !== null)
+    ? { accrued: kpi27, deductible: kpi45, result: kpi71 }
     : null;
   const summary = liveSummary ?? liveBoxSummary ?? decl.summary ?? {};
   // ETP-5187 — was `decl.result?.kind`, which the backend never populates (declToJson has no
