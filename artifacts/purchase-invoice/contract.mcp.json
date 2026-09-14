@@ -1,8 +1,8 @@
 {
-  "version": "0.92.0",
+  "version": "0.93.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-09-02T16:41:27.753Z",
-  "contractChecksum": "f342c5b3cc396f3b",
+  "updatedAt": "2026-09-14T17:11:55.159Z",
+  "contractChecksum": "811b401799e99c36",
   "apiPrediction": {
     "specName": "purchase-invoice",
     "baseUrl": "/sws/neo/purchase-invoice",
@@ -1420,6 +1420,11 @@
             "required": true,
             "readOnlyLogic": "@Processed@='Y'"
           },
+          "accountingDate": {
+            "required": true,
+            "readOnlyLogic": "@Posted@='Y'",
+            "defaultValue": "@#Date@"
+          },
           "paymentTerms": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y'"
@@ -1592,9 +1597,6 @@
             "required": true,
             "readOnlyLogic": "@Processed@='Y'",
             "defaultValue": "@#AD_Org_ID@"
-          },
-          "eTGOTbaiStatus": {
-            "readOnly": true
           }
         }
       },
@@ -2009,6 +2011,7 @@
         "businessPartner",
         "partnerAddress",
         "priceList",
+        "accountingDate",
         "paymentTerms",
         "paymentMethod",
         "currency",
@@ -2211,6 +2214,7 @@
           "businessPartner",
           "partnerAddress",
           "priceList",
+          "accountingDate",
           "paymentTerms",
           "paymentMethod",
           "currency",
@@ -2249,5 +2253,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "c1db010496b00f86"
+  "checksum": "41bbfdebcfc4920f"
 }

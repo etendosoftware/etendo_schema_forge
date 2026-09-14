@@ -179,8 +179,13 @@
           "businessCritical": true
         },
         "accountingDate": {
-          "visibility": "system",
-          "_note": "ETP-4531 (redefined 2026-07-17): accounting date is now hidden and unified with the document date internally; the Java-side guard that used to block this cascade has been removed so the native document-date→accounting-date coupling flows through untouched."
+          "visibility": "editable",
+          "grid": false,
+          "form": true,
+          "section": "principal",
+          "seq": 35,
+          "readOnlyLogic": "@Posted@='Y'",
+          "_note": "ETP-5273: re-reverts ETP-4531 (2026-07-17), which unified accountingDate with invoiceDate and hid the field. accountingDate is independent and editable again, mirroring the original design. Deliberately @Posted@ rather than this window's dominant @Processed@='Y' pattern: Posted='Y' means the entry is already in the GL ledger; Processed='Y' alone would also lock the date during a failed-posting-attempt state, where the user may still need to correct it before retrying the post."
         },
         "partnerAddress": {
           "reference": "BusinessPartnerLocation",
@@ -976,9 +981,9 @@
     "DateAcct_Default": {
       "type": "callout",
       "entity": "invoice",
-      "decision": "Keep",
-      "description": "ETP-4531 (redefined 2026-07-17): C_Invoice.DateInvoiced carries AD_Column.AD_Callout_ID = com.etendoerp.sif.general.callouts.SifInvoiceOperationDateCallout, which extends org.openbravo.erpCommon.ad_callouts.SE_Invoice_AccountingDate and calls super.execute() to auto-fill dateAcct from dateInvoiced. NeoCalloutService/NeoCalloutEndpoint in com.etendoerp.go execute this same callout server-side (create-time cascade and interactive per-field callout), so it fires in the GO SPA too. accountingDate is now hidden (visibility: system) and unified with the document date — the native cascade is intentionally kept as-is (the com.etendoerp.go-side guard that used to block it, per the earlier independent-editable-field design, was removed) so this is the primary mechanism keeping accountingDate in sync. AbstractInvoiceHeaderHandler#mirrorAccountingDate is a server-side safety net for write paths that don't trigger this callout (e.g. a bare PATCH).",
-      "impactIfOmitted": "If this native callout were blocked again, accountingDate would only stay in sync via the mirrorAccountingDate safety net — any gap between the two would desynchronize the hidden accounting date from the visible document date."
+      "decision": "Replace",
+      "description": "ETP-5273: re-reverts ETP-4531 (2026-07-17) — verified LIVE: C_Invoice.DateInvoiced carries AD_Column.AD_Callout_ID = com.etendoerp.sif.general.callouts.SifInvoiceOperationDateCallout, which extends org.openbravo.erpCommon.ad_callouts.SE_Invoice_AccountingDate and calls super.execute() to auto-fill dateAcct from dateInvoiced. NeoCalloutService/NeoCalloutEndpoint in com.etendoerp.go execute this same callout server-side (create-time cascade and interactive per-field callout), so it fires in the GO SPA too. accountingDate is independent and editable again (own readOnlyLogic, locked once Posted=Y); the auto-fill side effect must be neutralized in com.etendoerp.go via a SalesInvoiceHeaderHandler#afterCallout guard that strips a callout-driven 'accountingDate' update when the trigger field is not 'accountingDate' itself (same pattern as the existing blockCalloutCurrencyUpdate/ETP-4029 guard in AbstractInvoiceHeaderHandler).",
+      "impactIfOmitted": "Without the backend guard, editing invoiceDate still silently overwrites accountingDate server-side (both at record creation and on interactive edit of an existing record), violating the independent-accounting-date requirement even though accountingDate is user-visible and editable again."
     },
     "READONLY_Posted_AccountingDate": {
       "type": "readOnlyLogic",
@@ -991,7 +996,7 @@
       "type": "callout",
       "entity": "invoice",
       "decision": "Keep",
-      "description": "ETP-4531 (redefined 2026-07-17): C_Invoice.DateAcct carries AD_Column.AD_Callout_ID = org.openbravo.erpCommon.ad_callouts.SE_Invoice_TaxDate, reachable whenever accountingDate is written (now hidden/visibility: system, unified with the document date, rather than the earlier independent-editable-field design). It only fires an update when the callout request's formState already carries a non-empty 'taxDate' that differs from the new accountingDate value (info.getStringParameter(\"inptaxdate\")). taxDate IS present in contract.json as a backend-only field (visibility: system — it exists in the backend contract but is never sent to the frontend form), so the frontend never sends a 'taxDate' key in formState; the callout's isNotEmpty(strTaxDate) guard is always false and it never produces an update. Verified harmless — kept as-is, not implemented client-side.",
+      "description": "ETP-5273: re-reachable now that accountingDate is editable again (ETP-4531 had hidden it, which made the field practically unreachable but this rule stayed classified Keep throughout). C_Invoice.DateAcct carries AD_Column.AD_Callout_ID = org.openbravo.erpCommon.ad_callouts.SE_Invoice_TaxDate. It only fires an update when the callout request's formState already carries a non-empty 'taxDate' that differs from the new accountingDate value (info.getStringParameter(\"inptaxdate\")). taxDate is not part of this window's curated schema (no decisions.json override — absent from the raw window's fields and from contract.json), so the frontend never sends a 'taxDate' key in formState; the callout's isNotEmpty(strTaxDate) guard is always false and it never produces an update. Verified harmless — kept as-is, not implemented client-side.",
       "impactIfOmitted": "None observed: the callout's only effect targets a field this window never exposes, so there is nothing to omit."
     },
     "Currency_From_PriceList": {

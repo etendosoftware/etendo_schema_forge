@@ -2218,7 +2218,7 @@ export function DetailView({
     // dispatch time (see fireCallout / the default-callouts effect above) —
     // forwarded as `dispatchSnapshot` so applyCalloutFieldUpdates/
     // applyOneComboEntry can discard stale responses.
-    const ctx = { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs, dispatchSnapshot: meta, fieldGenerationRef };
+    const ctx = { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs, dispatchSnapshot: meta, fieldGenerationRef, documentDateField };
 
     if (updates) {
       applyCalloutFieldUpdates(updates, ctx);

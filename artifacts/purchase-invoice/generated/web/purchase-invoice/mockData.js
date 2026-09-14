@@ -9,6 +9,7 @@ export const header = [
     "businessPartner": "Acme Corp",
     "partnerAddress": "Acme Corp",
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-15",
     "paymentTerms": "Sample paymentTerms",
     "paymentMethod": "Sample paymentMethod",
     "description": "Standard order for Q1 delivery",
@@ -54,8 +55,7 @@ export const header = [
     "eTGODueDate": "2026-01-15",
     "eTGODeliveryStatus": "DR",
     "eTGOCurrencyRate": "USD",
-    "adOrgId": "Sample adOrgId",
-    "eTGOTbaiStatus": "DR"
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-002",
@@ -65,6 +65,7 @@ export const header = [
     "businessPartner": "TechFlow Inc",
     "partnerAddress": "TechFlow Inc",
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-16",
     "paymentTerms": "Sample paymentTerms",
     "paymentMethod": "Sample paymentMethod",
     "description": "Rush order - priority shipping required",
@@ -110,8 +111,7 @@ export const header = [
     "eTGODueDate": "2026-01-16",
     "eTGODeliveryStatus": "CO",
     "eTGOCurrencyRate": "EUR",
-    "adOrgId": "Sample adOrgId",
-    "eTGOTbaiStatus": "CO"
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-003",
@@ -121,6 +121,7 @@ export const header = [
     "businessPartner": "Global Trade Ltd",
     "partnerAddress": "Global Trade Ltd",
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-17",
     "paymentTerms": "Sample paymentTerms",
     "paymentMethod": "Sample paymentMethod",
     "description": "Bulk purchase for warehouse restocking",
@@ -166,8 +167,7 @@ export const header = [
     "eTGODueDate": "2026-01-17",
     "eTGODeliveryStatus": "VO",
     "eTGOCurrencyRate": "GBP",
-    "adOrgId": "Sample adOrgId",
-    "eTGOTbaiStatus": "VO"
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-004",
@@ -177,6 +177,7 @@ export const header = [
     "businessPartner": "Summit Industries",
     "partnerAddress": "Summit Industries",
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-18",
     "paymentTerms": "Sample paymentTerms",
     "paymentMethod": "Sample paymentMethod",
     "description": "Sample order for client evaluation",
@@ -222,8 +223,7 @@ export const header = [
     "eTGODueDate": "2026-01-18",
     "eTGODeliveryStatus": "IP",
     "eTGOCurrencyRate": "USD",
-    "adOrgId": "Sample adOrgId",
-    "eTGOTbaiStatus": "IP"
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-005",
@@ -233,6 +233,7 @@ export const header = [
     "businessPartner": "Pacific Partners",
     "partnerAddress": "Pacific Partners",
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-19",
     "paymentTerms": "Sample paymentTerms",
     "paymentMethod": "Sample paymentMethod",
     "description": "Recurring monthly supply order",
@@ -278,8 +279,7 @@ export const header = [
     "eTGODueDate": "2026-01-19",
     "eTGODeliveryStatus": "DR",
     "eTGOCurrencyRate": "EUR",
-    "adOrgId": "Sample adOrgId",
-    "eTGOTbaiStatus": "DR"
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-006",
@@ -289,6 +289,7 @@ export const header = [
     "businessPartner": "Alpine Solutions",
     "partnerAddress": "Alpine Solutions",
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-20",
     "paymentTerms": "Sample paymentTerms",
     "paymentMethod": "Sample paymentMethod",
     "description": "Special pricing agreement applies",
@@ -334,8 +335,7 @@ export const header = [
     "eTGODueDate": "2026-01-20",
     "eTGODeliveryStatus": "CO",
     "eTGOCurrencyRate": "GBP",
-    "adOrgId": "Sample adOrgId",
-    "eTGOTbaiStatus": "CO"
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-007",
@@ -345,6 +345,7 @@ export const header = [
     "businessPartner": "Meridian Group",
     "partnerAddress": "Meridian Group",
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-21",
     "paymentTerms": "Sample paymentTerms",
     "paymentMethod": "Sample paymentMethod",
     "description": "Consolidated order from multiple requests",
@@ -390,8 +391,7 @@ export const header = [
     "eTGODueDate": "2026-01-21",
     "eTGODeliveryStatus": "VO",
     "eTGOCurrencyRate": "USD",
-    "adOrgId": "Sample adOrgId",
-    "eTGOTbaiStatus": "VO"
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-008",
@@ -401,6 +401,7 @@ export const header = [
     "businessPartner": "Vertex Systems",
     "partnerAddress": "Vertex Systems",
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-22",
     "paymentTerms": "Sample paymentTerms",
     "paymentMethod": "Sample paymentMethod",
     "description": "Trial order for new product line",
@@ -446,8 +447,7 @@ export const header = [
     "eTGODueDate": "2026-01-22",
     "eTGODeliveryStatus": "IP",
     "eTGOCurrencyRate": "EUR",
-    "adOrgId": "Sample adOrgId",
-    "eTGOTbaiStatus": "IP"
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-009",
@@ -457,6 +457,7 @@ export const header = [
     "businessPartner": "Atlas Manufacturing",
     "partnerAddress": "Atlas Manufacturing",
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-23",
     "paymentTerms": "Sample paymentTerms",
     "paymentMethod": "Sample paymentMethod",
     "description": "Replacement for damaged goods",
@@ -502,8 +503,7 @@ export const header = [
     "eTGODueDate": "2026-01-23",
     "eTGODeliveryStatus": "DR",
     "eTGOCurrencyRate": "GBP",
-    "adOrgId": "Sample adOrgId",
-    "eTGOTbaiStatus": "DR"
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-010",
@@ -513,6 +513,7 @@ export const header = [
     "businessPartner": "Nova Enterprises",
     "partnerAddress": "Nova Enterprises",
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-24",
     "paymentTerms": "Sample paymentTerms",
     "paymentMethod": "Sample paymentMethod",
     "description": "Pre-season inventory build-up",
@@ -558,8 +559,7 @@ export const header = [
     "eTGODueDate": "2026-01-24",
     "eTGODeliveryStatus": "CO",
     "eTGOCurrencyRate": "USD",
-    "adOrgId": "Sample adOrgId",
-    "eTGOTbaiStatus": "CO"
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-011",
@@ -569,6 +569,7 @@ export const header = [
     "businessPartner": "Pinnacle Services",
     "partnerAddress": "Pinnacle Services",
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-25",
     "paymentTerms": "Sample paymentTerms",
     "paymentMethod": "Sample paymentMethod",
     "description": "Customer-specific configuration",
@@ -614,8 +615,7 @@ export const header = [
     "eTGODueDate": "2026-01-25",
     "eTGODeliveryStatus": "VO",
     "eTGOCurrencyRate": "EUR",
-    "adOrgId": "Sample adOrgId",
-    "eTGOTbaiStatus": "VO"
+    "adOrgId": "Sample adOrgId"
   },
   {
     "id": "mock-header-012",
@@ -625,6 +625,7 @@ export const header = [
     "businessPartner": "Horizon Labs",
     "partnerAddress": "Horizon Labs",
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-26",
     "paymentTerms": "Sample paymentTerms",
     "paymentMethod": "Sample paymentMethod",
     "description": "Government contract fulfillment",
@@ -670,8 +671,7 @@ export const header = [
     "eTGODueDate": "2026-01-26",
     "eTGODeliveryStatus": "IP",
     "eTGOCurrencyRate": "GBP",
-    "adOrgId": "Sample adOrgId",
-    "eTGOTbaiStatus": "IP"
+    "adOrgId": "Sample adOrgId"
   }
 ];
 
