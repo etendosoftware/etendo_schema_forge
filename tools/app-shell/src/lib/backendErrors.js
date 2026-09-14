@@ -88,6 +88,15 @@ const BACKEND_ERROR_MAP = {
   // do not cover. Same principle as them: the wording must match what the browser-side
   // contactsFieldValidation.js shows for the identical rejection.
   'The passport ID is not valid. It must be up to 9 letters or digits.': 'backendError.taxIdInvalidPassport',
+  // ETP-5031 follow-up — BusinessPartnerHandler now also validates etgoEmail/etgoWeb/etgoPhone
+  // server-side (a direct API/MCP write previously bypassed the browser-only
+  // contactsFieldValidation.js / recipientEdits.js checks entirely). Same principle as the
+  // TaxID/passport entries above: the wording must match what those browser-side checks show
+  // for the identical rejection, so a value rejected in one place reads identically in the other.
+  'The email address is not valid.': 'sendModalInvalidEmail',
+  'The website is not a valid domain, e.g. domain.com.': 'websiteInsecureUrl',
+  'The phone number can only contain digits and the + ( ) - . characters, up to 15 characters.':
+    'phoneInvalidChars',
   'Name is too long': 'backendError.matchRuleNameTooLong',
   'Text condition must be Contains (C), Starts with (S) or Regex (R)': 'backendError.matchRuleTextConditionInvalid',
   'Pattern is required': 'backendError.matchRulePatternRequired',
