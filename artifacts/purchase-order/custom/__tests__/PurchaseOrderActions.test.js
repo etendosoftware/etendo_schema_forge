@@ -472,8 +472,12 @@ describe('PurchaseOrderActions', () => {
     function extractNeedsBlocks(source, needsVarName) {
       // ETP-4567: post-fix source compares against 0 with !== instead of the
       // clamp-dependent > 0 (which always failed for a floored-to-zero pending).
+      // ETP-5295 — ManageDocsLauncher's needsInvoice line now carries an extra
+      // `fetched != null && ` guard (hooks hoisted above the loading early-return, so
+      // the derivation must be null-safe); the main-component occurrence has no such
+      // guard. The optional non-capturing group matches both.
       const re = new RegExp(
-        `const ${needsVarName}[\\s\\S]*?const needsInvoice\\s*=\\s*totalPending !== 0 && !invoiceDraft;`,
+        `const ${needsVarName}[\\s\\S]*?const needsInvoice\\s*=\\s*(?:fetched != null && )?totalPending !== 0 && !invoiceDraft;`,
         'g',
       );
       return [...source.matchAll(re)].map(m => m[0]);
@@ -490,8 +494,11 @@ describe('PurchaseOrderActions', () => {
     function evaluate(siteIndex, { grandTotalAmount, invoicesComplete = [], receiptsDraft = [], invoiceDraft = null }) {
       const body = `${compBlocks[siteIndex]}\n${needsBlocks[siteIndex]}\nreturn { qtyPending, totalPending, needsReceipt, needsInvoice };`;
       // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
-      const fn = new Function('data', 'orderLines', 'invoicesComplete', 'receiptsDraft', 'invoiceDraft', body);
-      return fn({ grandTotalAmount }, [], invoicesComplete, receiptsDraft, invoiceDraft);
+      // `fetched` is a free variable inside the ManageDocsLauncher occurrence's
+      // `fetched != null && ` guard (ETP-5295); pass it as always-loaded (`true`) since
+      // this test's concern is the pending arithmetic, not the loading state.
+      const fn = new Function('data', 'orderLines', 'invoicesComplete', 'receiptsDraft', 'invoiceDraft', 'fetched', body);
+      return fn({ grandTotalAmount }, [], invoicesComplete, receiptsDraft, invoiceDraft, true);
     }
 
     const sites = [
