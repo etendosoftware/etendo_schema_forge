@@ -595,5 +595,44 @@ describe('UserRolesTab', () => {
       // isNew short-circuits before any fetch — including the one the admin check relies on.
       expect(fetchRolesOverview).not.toHaveBeenCalled();
     });
+
+    // ETP-5196 QA edge case — the design-tension REVIEW flagged: `activeWindowIds` (the
+    // rows) comes from the UNION of every role's `windows[]` (Admin included), while the
+    // admin COLUMN's own cell values come only from `adminRole.windows[]`. If the backend
+    // ever returns an admin row with an empty `windows[]` (e.g. a provisioning gap), the
+    // row set is still derived from the OTHER roles' windows (w1/w2/w3 below, via
+    // `role-fin`/`role-sales`), so the matrix is not empty — it renders a real, if fully
+    // sparse, single admin column with '—' in every cell. This must not be confused with
+    // the `columns.length === 0` empty state: `columns` is `[adminRole]`, length 1, so
+    // that branch is never reached — `adminRole` existing (even windowless) is what keeps
+    // the table rendering rather than falling back to the "select a role" placeholder.
+    it('renders a sparse but valid single admin column (all "—") when adminRole.windows is an empty array', async () => {
+      const rolesOverviewWithWindowlessAdmin = {
+        roles: [
+          ...ROLES_OVERVIEW.roles.filter((role) => !role.isClientAdmin),
+          { id: 'role-admin', name: 'GOClient Admin', isClientAdmin: true, windows: [] },
+        ],
+      };
+      fetchRolesOverview.mockResolvedValue(rolesOverviewWithWindowlessAdmin);
+
+      renderTab({ selectedRoleIds: ['role-fin'], data: { defaultRole: 'role-admin' } });
+
+      expect(await screen.findByTestId('UserRolesTab__admin-full-access')).toBeInTheDocument();
+      expect(screen.queryByTestId('UserRolesTab__empty')).not.toBeInTheDocument();
+
+      const table = await screen.findByTestId('UserRolesTab');
+      const headerRow = table.querySelector('thead tr');
+      const headers = within(headerRow).getAllByRole('columnheader');
+      expect(headers).toHaveLength(2); // Window + Admin only, same as the populated case
+
+      // Rows still come from the OTHER roles' windows (role-fin/role-sales cover
+      // w1/w2), not from the (empty) admin windows list — so the matrix body is not
+      // empty even though every admin cell is '—'.
+      for (const windowId of ['w1', 'w2']) {
+        const row = screen.getByTestId(`UserRolesTab__row-${windowId}`);
+        const cells = within(row).getAllByRole('cell');
+        expect(cells[1]).toHaveTextContent('—');
+      }
+    });
   });
 });
