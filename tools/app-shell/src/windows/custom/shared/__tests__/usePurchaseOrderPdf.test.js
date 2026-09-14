@@ -123,16 +123,19 @@ describe('usePurchaseOrderPdf', () => {
     assert.match(sharedSrc, /const taxAmount = grandTotal - netAmount/);
   });
 
-  it('passes null for grossAmount when discountAmt is 0', () => {
-    assert.match(sharedSrc, /discountAmt > 0 \? grossSubtotal : null/);
+  it('ETP-5132: passes null for grossAmount only when discountAmt is exactly 0 (gate is !== 0, not > 0)', () => {
+    assert.match(sharedSrc, /discountAmt !== 0 \? grossSubtotal : null/);
+    assert.doesNotMatch(sharedSrc, /discountAmt > 0 \? grossSubtotal : null/);
   });
 
-  it('passes null for discountPerProduct when discountAmt is 0', () => {
-    assert.match(sharedSrc, /discountAmt > 0 \? discountAmt : null/);
+  it('ETP-5132: passes the sign-flipped -discountAmt (positive display value) for discountPerProduct when a discount is applied', () => {
+    assert.match(sharedSrc, /discountPerProduct: discountAmt !== 0 \? -discountAmt : null/);
+    assert.doesNotMatch(sharedSrc, /discountAmt > 0 \? discountAmt : null/);
   });
 
-  it('passes null for totalDiscountAmt when no total discount applies', () => {
-    assert.match(sharedSrc, /totalDiscountAmt:\s+totalDiscountAmt > 0 \? totalDiscountAmt : null/);
+  it('ETP-5132: passes the sign-flipped -totalDiscountAmt (positive display value), gated on !== 0', () => {
+    assert.match(sharedSrc, /totalDiscountAmt:\s+totalDiscountAmt !== 0 \? -totalDiscountAmt : null/);
+    assert.doesNotMatch(sharedSrc, /totalDiscountAmt:\s+totalDiscountAmt > 0 \? totalDiscountAmt : null/);
   });
 
   // ── Labels (i18n) ─────────────────────────────────────────────────────────

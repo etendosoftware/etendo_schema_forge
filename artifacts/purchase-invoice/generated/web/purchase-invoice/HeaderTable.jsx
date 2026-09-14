@@ -13,6 +13,7 @@ const columns = [
   { key: 'eTGODueDate', column: 'em_etgo_due_date', type: 'date', label: 'em_etgo_due_date' },
   { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'number', label: 'em_etgo_delivery_status' },
   { key: 'aeatsiiEstado', column: 'EM_Aeatsii_Estado', type: 'enum', label: 'SII Registration Status', enumLabels: { 'AE': 'emAeatsiiEstadoAe', 'AN': 'emAeatsiiEstadoAn', 'IN': 'emAeatsiiEstadoIn', 'NR': 'emAeatsiiEstadoNr', 'PE': 'emAeatsiiEstadoPe', 'CO': 'emAeatsiiEstadoCo', 'EE': 'emAeatsiiEstadoEe', 'BA': 'emAeatsiiEstadoBa' } },
+  { key: 'eTGOTbaiStatus', column: 'EM_ETGO_Tbai_Status', type: 'status', label: 'EM_ETGO_Tbai_Status', computed: {"mode":"stored","refresh":"synchronous"} },
 ];
 // @sf-generated-end columns:header
 

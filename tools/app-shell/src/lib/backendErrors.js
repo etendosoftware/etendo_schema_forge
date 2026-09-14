@@ -58,6 +58,20 @@ const BACKEND_ERROR_MAP = {
   'Using the SWIFT Code for generating the Displayed Account requires to introduce a SWIFT Code and the Generic Account No.': 'backendError.swiftRequired',
   // Match-rule (MatchRuleHandler) validation messages
   'Name is required': 'backendError.matchRuleNameRequired',
+  // ETP-5190 — DocumentSequenceHandler. The Spanish invoice-series prefix rules, copied from
+  // com.smf.ticketbai's ProcessInvoiceTbaiHook and applied on write instead of at invoice
+  // completion. English in Java on purpose so both locales resolve here.
+  'The prefix cannot be longer than 20 characters.': 'backendError.sequencePrefixTooLong',
+  'The prefix cannot contain lowercase or accented letters.': 'backendError.sequencePrefixLowerOrAccent',
+  'The prefix cannot contain the letters I, O, Y, W or \u00d1.': 'backendError.sequencePrefixForbiddenLetters',
+  'The prefix can only contain uppercase letters, digits and hyphens.': 'backendError.sequencePrefixInvalidChars',
+  // ETP-5190 — SpanishTaxIdValidator, reached from BOTH places a tenant sets its fiscal
+  // identifier: the signup wizard (parseOnboardingRequest) and the Organización window
+  // (OrganizationInformationHandler). Mapped to the SAME keys the browser-side
+  // lib/taxIdValidation.js returns, so the wording does not change depending on which side
+  // caught it.
+  'The tax ID is not a valid NIF, CIF or NIE.': 'backendError.taxIdInvalidFormat',
+  'The tax ID check digit does not match. Review the number.': 'backendError.taxIdInvalidCheckDigit',
   'Name is too long': 'backendError.matchRuleNameTooLong',
   'Text condition must be Contains (C), Starts with (S) or Regex (R)': 'backendError.matchRuleTextConditionInvalid',
   'Pattern is required': 'backendError.matchRulePatternRequired',

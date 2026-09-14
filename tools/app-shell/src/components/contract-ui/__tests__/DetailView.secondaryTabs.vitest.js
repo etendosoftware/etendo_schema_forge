@@ -163,6 +163,51 @@ describe('getSecondaryRowUpdateHandler', () => {
     expect(ctx.extractErrorMessage).toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledWith('server-error');
   });
+
+  // ETP-4029/4563: editing the exchangeRates tab reverse-syncs the header's
+  // hidden eTGOCurrencyRate. After a successful PATCH the handler must clear the
+  // rate's user-changed flag and force a header refresh so the header's
+  // CurrencyRatePicker stops showing the stale value.
+  it('exchangeRates tab success: clears the rate user-change flag then refreshes the header', async () => {
+    const ctx = baseCtx();
+    ctx.hook = { selected: { id: 'H1' }, clearUserChangedKey: vi.fn(), refreshHeaderTotals: vi.fn() };
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => null }));
+
+    const handler = getSecondaryRowUpdateHandler({ key: 'exchangeRates' }, 'inlineEditable', ctx);
+    await handler({ id: 'r1', rate: 1 }, 'rate', 1.2, undefined);
+
+    expect(ctx.hook.clearUserChangedKey).toHaveBeenCalledWith('eTGOCurrencyRate');
+    expect(ctx.hook.refreshHeaderTotals).toHaveBeenCalledWith('H1');
+    // clear must run before the refresh, else refreshHeaderTotals refuses to
+    // overwrite a "user-changed" rate.
+    expect(ctx.hook.clearUserChangedKey.mock.invocationCallOrder[0]).toBeLessThan(
+      ctx.hook.refreshHeaderTotals.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('exchangeRates cross-sync only fires on success, never on an http-error PATCH', async () => {
+    const ctx = baseCtx();
+    ctx.hook = { selected: { id: 'H1' }, clearUserChangedKey: vi.fn(), refreshHeaderTotals: vi.fn() };
+    global.fetch = vi.fn(async () => ({ ok: false, json: async () => ({}) }));
+
+    const handler = getSecondaryRowUpdateHandler({ key: 'exchangeRates' }, 'inlineEditable', ctx);
+    await expect(handler({ id: 'r1', rate: 1 }, 'rate', 1.2, undefined)).rejects.toThrow('server-error');
+
+    expect(ctx.hook.clearUserChangedKey).not.toHaveBeenCalled();
+    expect(ctx.hook.refreshHeaderTotals).not.toHaveBeenCalled();
+  });
+
+  it('non-exchangeRates tab: never touches the header cross-sync helpers', async () => {
+    const ctx = baseCtx();
+    ctx.hook = { selected: { id: 'H1' }, clearUserChangedKey: vi.fn(), refreshHeaderTotals: vi.fn() };
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => null }));
+
+    const handler = getSecondaryRowUpdateHandler({ key: 'line' }, 'inlineEditable', ctx);
+    await handler({ id: 'r1', qty: 1 }, 'qty', 5, undefined);
+
+    expect(ctx.hook.clearUserChangedKey).not.toHaveBeenCalled();
+    expect(ctx.hook.refreshHeaderTotals).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------

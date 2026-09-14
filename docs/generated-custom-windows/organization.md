@@ -8,7 +8,7 @@ This is **not** the full Etendo Classic "Organization" window. It flattens a cur
 
 ## What this window should allow
 
-- Edit the organization's display name, trade/commercial name, and business type (Company / Freelancer / Advisory), with a logo upload (PNG/JPG/SVG, max 2 MB) that falls back to the organization's initials when no logo is set.
+- Edit the organization's display name, trade/commercial name, and business type (Company / Freelancer), with a logo upload (PNG/JPG/SVG, max 2 MB) that falls back to the organization's initials when no logo is set.
 - Edit fiscal identification: NIF, legal name (razón social), and fiscal address (via an inline address editor — create or pick an existing address, no separate navigation).
 - View (read-only) the organization's country and currency, both derived from existing AD_Org/AD_OrgInfo data — not editable from this screen.
 - Edit public contact details (email, phone, website) — always editable, optional, and unrelated to any linked Business Partner.
@@ -70,10 +70,16 @@ Contact fields (email, phone, website) live directly on `AD_OrgInfo` as three de
 
 ## Business type column (`em_etgo_business_type`)
 
-Ticket ETP-4749 needs a 3-way "Empresa / Autónomo / Asesoría" classification that did not exist anywhere in AD_Org/AD_OrgInfo/C_BPartner (the closest existing field, `AD_Org.Organization Type`, is an unrelated accounting/hierarchy classification — Legal with accounting / Generic / etc.). A new column was added specifically for this ticket, following the existing `em_etgo_*` naming convention already used on `C_BPartner`:
+Ticket ETP-4749 needed a 3-way "Empresa / Autónomo / Asesoría" classification that did not exist anywhere in AD_Org/AD_OrgInfo/C_BPartner (the closest existing field, `AD_Org.Organization Type`, is an unrelated accounting/hierarchy classification — Legal with accounting / Generic / etc.). A new column was added specifically for this ticket, following the existing `em_etgo_*` naming convention already used on `C_BPartner`:
 
 - Column: `AD_Org.EM_Etgo_Business_Type`, `VARCHAR(60)`, nullable, List reference.
-- List values: `CO` = Company (Empresa), `FL` = Freelancer (Autónomo), `AD` = Advisory (Asesoría).
+- List values: `CO` = Company (Empresa), `FL` = Freelancer (Autónomo).
+- **`AD` = Advisory (Asesoría) was retired by ETP-5190.** The option is gone from the signup
+  wizard and from this window, and its `AD_Ref_List` row was removed from the module dataset
+  (`AD_REF_LIST.xml`) and from the database. Nothing was stranded: the instance held 86
+  organizations at `CO`, 53 with no value and **0** at `AD`, and the value had no
+  `AD_Ref_List_Trl` rows. The Spanish label never came from AD — it was the frontend key
+  `orgBusinessTypeAdvisory`, also removed.
 - AD default value is `CO` — `BusinessTypeCards.jsx` does not force a client-side default; a record with no value shows no card selected.
 - Rendered as selection cards (`BusinessTypeCards.jsx`), not a `<select>`, per the ticket design. Selected-state colors reference real CSS custom properties — `--eg-yellow`, `--eg-yellow-soft`, `--eg-yellow-line`, `--eg-yellow-dot-border`, `--eg-ink` — via `bg-[var(--eg-yellow)]` etc., not inline hex (`semanticThemeUsage.test.js` forbids raw palette literals in application UI).
   **Token location (QA review round 4):** these tokens are defined in `schema_forge_core/packages/app-shell-core/src/styles.css`, next to the existing `--status-*` tokens — the canonical cross-app design-token registry, not a per-window file. They are **not yet available from the published `@etendosoftware/app-shell-core` package** — only from the local core source. Running this repo with plain `make dev` (published package) will NOT show the yellow palette until a new app-shell-core version ships and this repo's dependency is bumped; use `make dev-local-core` (`LOCAL_CORE=1`) to see it today. Re-verify with a normal `make dev` once that release lands.
@@ -152,6 +158,12 @@ The same missing-default-IAE-activity condition is guarded on **both** entry poi
 Both guards share the identical shape: when `isLastPeriodOfYear(decl?.period)` (shared export in `fm303Layouts.js`, extracted from what used to be an inline check duplicated ad hoc) and an organization id is resolvable, each calls `GET /sws/neo/organization/actividadesDelIae?parentId=<orgId>` and runs the shared `isMissingDefaultIaeActivity(rows)` helper (exported from `AeatSubmitFlow.jsx`, imported by `FmModel303Page.jsx`) — same "default=true AND epiaeCode set" condition as above. If none qualifies, the action is blocked with a translated banner (`fm.aeat.error.missingDefaultIae`) plus a "Go to Organization" CTA (`fm.aeat.action.go_to_organization`) that navigates to `/organization`, instead of round-tripping to the backend for the raw `IndexOutOfBoundsException`. Both guards fail **open** on any fetch/network error (let the action proceed) rather than blocking an action that might otherwise succeed — the same reasoning `neo-headless.md` §5 documents for `NeoExchangeRateService.hasRate`.
 
 Both files read the organization id via `useAuth().selectedOrg?.id` (AuthContext), each wrapped in its own `try/catch` so the component still renders (guard simply skipped) when no `AuthProvider` is present — `AeatSubmitFlow.jsx` was previously 100%-provider-free and unit-tested that way, and `FmModel303Page.jsx`'s own `try { selectedOrg = useAuth().selectedOrg; } catch { selectedOrg = null; }` (next to its pre-existing `useNavigate()` guard, same pattern) preserves the same safety without adding a new required prop through `FiscalModelsPage.jsx` → `FmModel303Page.jsx` / `AeatSubmitFlow.jsx`.
+
+**Earlier, non-blocking reminder (ETP-5187, adjacent scope):** before either hard guard above can
+even be reached, `FmCatalogPage.jsx` (Modelo 303 catalog activation) and `FmOverlays.jsx`'s
+`NewDeclModal` (selecting period T4/12 in "Nueva declaración") show a `toast.warning` nudging the
+user to configure this same IAE activity, reusing the `fm.aeat.action.go_to_organization` CTA —
+see "IAE-activity activation reminder" in `docs/generated-custom-windows/fiscal-models.md`.
 ## Field change: SII/TicketBAI/Verifactu config flags exposed as `system` fields (ETP-4784)
 
 Three `AD_OrgInfo` columns — `EM_Etsg_Has_Sii_Config`, `EM_Etsg_Has_Tbai_Config`,
@@ -218,6 +230,42 @@ too, via `getInvalidFormatErrorKey`, with the same fixed `https://` `inputPrefix
 `websiteInsecureUrl` toast text was corrected to describe the actual mistake (an incomplete
 domain, not a wrong scheme — the scheme chip is always `https://` already, non-editable).
 
+## ETP-5190 — NIF format validation (blocking)
+
+The NIF is now validated for format and check digit, and a wrong value **blocks the save**.
+This window is one of only two places a tenant sets its own fiscal identifier; the other is the
+signup wizard, guarded server-side in the same change.
+
+| Layer | Where | Behaviour |
+|---|---|---|
+| Browser | `getTaxIdError` from `lib/taxIdValidation.js`, chained in `handleSave` | Inline `FieldError` under the NIF plus a toast; no PATCH leaves the browser |
+| Server | `OrganizationInformationHandler` (`Java_Qualifier` `organization-information` on the `information` entity) | `400` with a message `backendErrors.js` maps to the same i18n keys |
+
+Three shapes are accepted — CIF (`[ABCDEFGHJKLMNPQRSUVW]\d{7}[0-9A-J]`), person DNI/NIF
+(`\d{8}[A-Z]`) and NIE (`[XYZ]\d{7}[A-Z]`) — each with its own check digit. Accepting all
+three is required, not generous: the wizard offers `businessType` `freelancer`, and an autónomo
+has a personal DNI rather than a company CIF.
+
+Two failure reasons are reported separately (`taxIdInvalidFormat` vs
+`taxIdInvalidCheckDigit`) because they send the user to different places. Values are normalized
+first — uppercased, with whitespace, `.` and `-` stripped — so a NIF pasted out of a document
+is accepted; a value made only of those separators is not.
+
+The validation is deliberately NOT gated on country in the browser, while the server gates on
+`C_Country`. They cannot disagree today (`OnboardingPage.jsx` hardcodes `countryCodes: ['ES']`)
+and this screen has no ISO code to gate on — only a country label derived from the address
+identifier. Shipping a second country means giving the browser module the gate too.
+
+**Why this window needed it.** Nothing in classic Etendo validates `AD_OrgInfo.TaxID` — no
+callout, no validation rule, no event handler. The only check on an organization's own
+identifier is Verifactu's `InitialValidator`, which runs while COMPLETING AN INVOICE, so a
+wrong NIF used to surface weeks later as a failure to invoice. Full reference:
+`{etendo_root}/modules/com.etendoerp.go/docs/onboarding-flow.md` § "Tax identifier validation".
+
+Regression coverage: `OrganizationPage.vitest.jsx`, "NIF format validation (ETP-5190)" block;
+`lib/__tests__/taxIdValidation.test.js`; `SpanishTaxIdValidatorTest` on the Java side (the same
+case list, deliberately).
+
 ## Known gaps
 
 - **Country is derived, not a real field**: `deriveCountryFromIdentifier()` in `OrganizationPage.jsx` takes the last `" - "`-separated segment of the fiscal address's `$_identifier` string (e.g. `"... - España"`). There is no dedicated read-only country field on this window's contract. If one is added later, prefer it over this heuristic.
@@ -234,7 +282,7 @@ domain, not a wrong scheme — the scheme chip is always `https://` already, non
 - `tools/app-shell/src/windows/custom/organization/OrganizationPage.jsx` — the hand-built page: 4 sections (Identidad, Datos fiscales, Datos de contacto, Actividades del IAE), unsaved-changes banner, field mapping.
 - `tools/app-shell/src/windows/custom/organization/useOrganizationData.js` — fetch/save hook (`organization` + `information`; `etgoEmail`/`etgoPhone`/`etgoWeb` are plain `information` fields, no Business Partner fetch).
 - `tools/app-shell/src/windows/custom/organization/OrgLogoField.jsx` — logo upload with initials fallback; PNG/JPG/SVG, 2 MB cap.
-- `tools/app-shell/src/windows/custom/organization/BusinessTypeCards.jsx` — Empresa/Autónomo/Asesoría selection cards.
+- `tools/app-shell/src/windows/custom/organization/BusinessTypeCards.jsx` — Empresa/Autónomo selection cards.
 - `tools/app-shell/src/windows/custom/organization/countryFlag.js` — country-name → flag-emoji lookup for the read-only País pill.
 - `tools/app-shell/src/windows/custom/organization/ActividadesIaeSection.jsx` — editable IAE-activities grid (ETP-4975): selectors, default checkbox, add/delete rows, missing-code hint.
 - `tools/app-shell/src/windows/custom/organization/useActividadesIae.js` — fetch/create/update/delete hook + `enforceSingleDefault()` (ETP-4975 single-default rule) + `rowsRef` concurrent-toggle fix (QA).
@@ -279,7 +327,7 @@ All of the above are now covered by automated tests — the "pending Tester" gap
 5. Edit any field and confirm the sticky unsaved-changes banner appears with the yellow dot, bold "Tienes cambios sin guardar" title, secondary hint text, and Descartar/Guardar cambios buttons. Confirm Descartar restores the last-loaded values and the banner disappears.
 6. Save changes and confirm a "Cambios guardados correctamente" toast appears and the banner disappears.
 7. Edit the email, phone, and website fields and confirm they are always enabled (no gray/disabled state, no explanatory note, regardless of whether the organization has a linked Business Partner), and that saving persists the values to `AD_OrgInfo.EM_Etgo_Email/Phone/Web`.
-8. Onboard a brand-new tenant through the wizard, filling in a Tax ID in the "Details to start invoicing" step (e.g. `1234`). Once onboarding finishes, open `/organization` for that tenant and confirm the NIF field shows the real value entered — not the literal `"?"` placeholder. Repeat with the Tax ID left blank and confirm it still shows `"?"` (unchanged legacy behavior for the optional-and-not-provided case).
+8. Onboard a brand-new tenant through the wizard, filling in a Tax ID in the "Details to start invoicing" step. **It must now be a real one** — `B1234567D` or `12345678Z`; ETP-5190 refuses a malformed value with a `400` before provisioning starts, so the old `1234` example no longer gets past the wizard. Once onboarding finishes, open `/organization` for that tenant and confirm the NIF field shows the real value entered — not the literal `"?"` placeholder. Repeat with the Tax ID left blank and confirm it still shows `"?"` (unchanged legacy behavior for the optional-and-not-provided case), and once more with `1234` to confirm the wizard now rejects it.
 9. Onboard a brand-new tenant as a Company, entering a Company Name (e.g. `Acme Corp`). Once onboarding finishes, open `/organization` for that tenant and confirm "Nombre comercial" shows `Acme Corp` (not blank). Repeat onboarding as a Freelancer (no Company Name field shown) with a Full Name (e.g. `Jane Freelancer`) in the profile step, and confirm "Nombre comercial" shows `Jane Freelancer` instead.
 10. Open `/organization` and confirm a 4th section, "Actividades del IAE", renders below Datos de contacto with an empty-state message when the organization has no rows yet.
 11. Click "Añadir actividad del IAE", pick an Epígrafe/Clave/Código from each selector, leave "Principal" unchecked, and confirm the row saves (check icon → row appears in the list) without needing the page's own Save button.

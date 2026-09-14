@@ -81,12 +81,27 @@ function expectSaveResponse(page) {
 
 /**
  * Start listening for a DELETE API response BEFORE triggering the action.
+ *
+ * `urlIncludes` narrows the match to one entity's route (e.g. '/bankAccount/'),
+ * which is what turns this helper into a real assertion target instead of a
+ * "some DELETE happened" rubber stamp. A child-row delete that accidentally
+ * reaches the record-level delete button issues
+ * `DELETE /sws/neo/contacts/businessPartner/<id>` — an unconstrained predicate
+ * matches that happily and reports success while the parent record is being
+ * destroyed. With the entity fragment pinned, the predicate simply never
+ * matches and the caller can fail loudly.
+ *
+ * Resolves to `null` on timeout rather than rejecting, so the caller decides
+ * whether a missing DELETE is fatal.
  */
-function expectDeleteResponse(page) {
+function expectDeleteResponse(page, { urlIncludes = '' } = {}) {
   return page.waitForResponse(
-    (resp) => resp.url().includes('/sws/neo/') && resp.request().method() === 'DELETE' && resp.status() < 500,
+    (resp) => resp.url().includes('/sws/neo/')
+      && resp.url().includes(urlIncludes)
+      && resp.request().method() === 'DELETE'
+      && resp.status() < 500,
     { timeout: 15_000 },
-  ).catch(() => {});
+  ).catch(() => null);
 }
 
 /**
@@ -500,24 +515,86 @@ test.describe('Contacts Integration — Full journey', () => {
       const bankRowText = page.getByText(`E2E Bank ${ts}`);
       await expect(bankRowText).toBeVisible({ timeout: 5_000 });
 
-      // Hover the row container to reveal delete action, then click delete
-      const bankRowContainer = bankRowText.locator('xpath=ancestor::div[contains(@class,"border-b") or contains(@class,"group")]').first();
-      await bankRowContainer.hover();
-      const deleteBankBtn = bankRowContainer.getByTestId('row-quick-action-delete')
-        .or(bankRowContainer.locator('button').filter({ has: page.locator('svg.lucide-trash-2, svg[class*="trash"]') }));
-      await expect(deleteBankBtn.first()).toBeVisible({ timeout: 3_000 });
-      await deleteBankBtn.first().click();
+      // Delete the bank-account ROW — not the contact.
+      //
+      // Scoping is the whole story here. The previous version walked up with
+      // `xpath=ancestor::div[contains(@class,"border-b") or contains(@class,
+      // "group")]` + `.first()`, which resolves to the OUTERMOST matching
+      // ancestor (Playwright normalizes an XPath node-set to document order),
+      // i.e. a wrapper that also contains the detail-view header toolbar. The
+      // first trash-icon button in that subtree, in DOM order, is the RECORD
+      // delete (`action-delete`, DetailView.jsx:2926 → setShowDeleteConfirm),
+      // so the step deleted contact A and every later assertion was measuring
+      // a destroyed record.
+      //
+      // `row-quick-action-delete` can never match inside a detail view either:
+      // DetailView passes no `rowQuickActions` prop and DataTable gates
+      // RowQuickActions on it (`isQuickActionsEnabled`, DataTable.jsx:1293),
+      // so the old `.or()` fallback was in fact the only branch ever taken.
+      //
+      // The control that actually exists: BankAccountTable renders existing
+      // rows through InlineLinesPanel (DetailView's default `linesLayout` is
+      // 'inlineEditable'), which emits `line-row-{id}` per row inside
+      // `inline-lines-panel`, and within the row a `line-actions` strip whose
+      // delete button carries the `Trash2__3b7ec2` icon. Everything below is
+      // anchored inside that ONE row, so the header toolbar is structurally
+      // unreachable — no page-wide fallback.
+      const bankRow = page
+        .locator('[data-testid="inline-lines-panel"] [data-testid^="line-row-"]')
+        .filter({ hasText: `E2E Bank ${ts}` })
+        .first();
+      await expect(bankRow).toBeVisible({ timeout: 5_000 });
 
-      // Confirm delete dialog if it appears
-      const deleteDialog = page.getByTestId('confirm-delete-dialog').or(page.getByRole('dialog'));
-      if (await deleteDialog.isVisible({ timeout: 3_000 }).catch(() => false)) {
-        const deleteConfirm = page.getByTestId('confirm-delete-confirm')
-          .or(deleteDialog.getByRole('button', { name: /delete|eliminar|confirm/i }));
-        const delBankP = expectDeleteResponse(page);
-        await deleteConfirm.first().click();
-        await delBankP;
-      }
+      // The action strip's icons only render while the row is hovered
+      // (`showActions = (isHovered || isEditing) && !isDocumentReadOnly`).
+      await bankRow.hover();
+      const deleteBankBtn = bankRow
+        .getByTestId('line-actions')
+        .locator('button')
+        .filter({ has: page.locator('[data-testid="Trash2__3b7ec2"]') });
+      await expect(deleteBankBtn).toBeVisible({ timeout: 3_000 });
+      await deleteBankBtn.click();
+
+      // Confirm the CHILD delete. DetailView renders two structurally
+      // identical confirm dialogs (record-level and secondary-tab), and
+      // `confirm-delete-confirm` belongs to neither — it only exists in
+      // attachments/ConfirmDeleteDialog.jsx. Only the record-level dialog
+      // carries `action-delete-confirm` on its destructive button, so `hasNot`
+      // makes this locator provably not the record dialog: if the click ever
+      // reaches the record delete again, this resolves to zero elements and
+      // fails instead of confirming the wrong deletion. The child dialog's own
+      // destructive button has no dedicated testid (both footer buttons are
+      // `Button__fa3275`), hence the `bg-destructive` variant class.
+      const childDeleteDialog = page.getByRole('dialog')
+        .filter({ hasNot: page.getByTestId('action-delete-confirm') });
+      await expect(childDeleteDialog).toBeVisible({ timeout: 5_000 });
+      const deleteConfirm = childDeleteDialog.locator('button.bg-destructive');
+      await expect(deleteConfirm).toBeVisible({ timeout: 3_000 });
+
+      // Sharpest available guard: the DELETE must target the bankAccount child
+      // route. A record-level delete would hit /businessPartner/<id> instead,
+      // never match this predicate, and fail the assertion below.
+      const delBankP = expectDeleteResponse(page, { urlIncludes: '/bankAccount/' });
+      await deleteConfirm.click();
+      const delBankResp = await delBankP;
+      expect(
+        delBankResp,
+        'the row delete must issue DELETE /sws/neo/contacts/bankAccount/<id>, not delete the parent contact',
+      ).not.toBeNull();
+
       await expect(page.getByText(`E2E Bank ${ts}`)).toHaveCount(0, { timeout: 5_000 });
+
+      // Regression guard — the `toHaveCount(0)` above is NOT a guard on its
+      // own: it also passes when the whole contact was destroyed, because
+      // `confirmHeaderDelete` navigates to `/contacts` and the row vanishes
+      // with the entire detail view. That is exactly how the parent-deleting
+      // bug stayed green here. The parent must still be loaded on its own
+      // detail route, with its name intact.
+      await expect(page).toHaveURL(/\/contacts\/[^/?#]+/, { timeout: 5_000 });
+      await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 5_000 });
+      await expect(page.getByTestId('record-unavailable')).toHaveCount(0);
+      await expect(page.getByRole('textbox', { name: /razón social/i }))
+        .toHaveValue(CONTACT_A, { timeout: 5_000 });
     }
 
     // ═══════════════════════════════════════════════════════════════════════

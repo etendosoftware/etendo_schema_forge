@@ -1,4 +1,5 @@
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
 import {
   FileText,
   ShoppingCart,
@@ -28,6 +29,7 @@ import { CollectionsPaymentsCard } from '@/components/dashboard/CollectionsPayme
 import { FinancialTrendChart } from '@/components/dashboard/FinancialTrendChart';
 import { BestProductsList } from '@/components/dashboard/BestProductsList';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
+import { useFirstStepsState } from '@/pages/first-steps/FirstStepsContext.jsx';
 
 /* ------------------------------------------------------------------
  * Icon lookup
@@ -252,7 +254,49 @@ function DashboardContent({ apiBaseUrl }) {
  * Dashboard Page — provides the date-range context before any hook reads it
  * ----------------------------------------------------------------*/
 
+/**
+ * ETP-5190 — the one-time post-signup redirect to the First Steps page.
+ *
+ * "Once ever" is guaranteed server-side by `firstSteps.seen`, not by a local flag: a new
+ * device, a cleared browser or a second session must not replay the redirect, and a user who
+ * has already been sent there must never be bounced again.
+ *
+ * Three states deliberately do NOT redirect:
+ *   - still loading — redirecting on the default `seen: false` would flash the dashboard away
+ *     from every user on every visit before the real state arrives;
+ *   - the GET failed — `seen` is then unknown, and assuming "not seen" would bounce a user who
+ *     had already dismissed the page;
+ *   - `seen` is true — the normal steady state.
+ */
+function useFirstStepsRedirect() {
+  const { seen, loading, error, markSeen } = useFirstStepsState();
+  // Latched, because `markSeen` optimistically flips `seen` to true in the very same commit
+  // that renders the <Navigate>: without the latch this hook would answer "no redirect" again
+  // one render later, and whether the user still ended up on /first-steps would come down to
+  // effect ordering. Once the decision is taken it stays taken until this page unmounts.
+  const [redirecting, setRedirecting] = useState(false);
+  const mustRedirect = !loading && !error && !seen;
+  useEffect(() => {
+    if (!mustRedirect || redirecting) return;
+    setRedirecting(true);
+    // Idempotent and self-guarded against duplicate requests, so a re-run cannot POST twice.
+    markSeen();
+  }, [mustRedirect, redirecting, markSeen]);
+  return mustRedirect || redirecting;
+}
+
 export default function DashboardPage({ apiBaseUrl = '' }) {
+  const redirectToFirstSteps = useFirstStepsRedirect();
+
+  if (redirectToFirstSteps) {
+    // No `data-testid` here on purpose: <Navigate> renders null and drops unknown props, so
+    // one would never reach the DOM. Wrapping it in a marker element would not help either —
+    // the redirect fires on mount, so the page is gone before anything could assert on it.
+    // The redirect is observed through the resulting URL (Playwright) or a stubbed <Navigate>
+    // (vitest), never through a marker in this tree.
+    return <Navigate to="/first-steps" replace />;
+  }
+
   return (
     <DashboardDateRangeProvider data-testid="DashboardDateRangeProvider__3a4535">
       <DashboardContent apiBaseUrl={apiBaseUrl} data-testid="DashboardContent__3a4535" />

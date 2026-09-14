@@ -173,7 +173,9 @@ async function completeOnboardingForm(page, emailPrefix, locale = 'es_ES') {
   await page.getByRole('button', { name: labels.continue }).click();
 
   await page.getByRole('textbox', { name: labels.companyName }).fill('QA Mock Company');
-  await page.locator('#fiscalIdValue').fill('B12345678');
+  // Check-digit-valid CIF: ETP-5190 guards "Empezar" with the NIF validator, so an invalid
+  // value stops the wizard here and no onboarding request is ever sent.
+  await page.locator('#fiscalIdValue').fill('B12345674');
   await page.getByRole('textbox', { name: labels.address }).fill('QA Street 123');
   await page.getByRole('button', { name: labels.start }).click();
 }

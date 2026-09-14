@@ -1,8 +1,8 @@
 {
-  "version": "0.87.0",
-  "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-09-10T18:30:08.386Z",
-  "checksum": "30fb78f4f8cf250a",
+  "version": "0.2.0",
+  "generatedAt": "2026-09-11T17:21:07.275Z",
+  "updatedAt": "2026-09-14T11:18:12.012Z",
+  "checksum": "6515cc0e96611a8d",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -61,14 +61,16 @@
           "em_etgo_delivery_status": "Estado de entrega",
           "C_DocTypeTarget_ID": "Tipo de documento",
           "PriceList": "Precio",
-          "Foreign_Amount": "Importe en Moneda Objetivo"
+          "Foreign_Amount": "Importe en Moneda Objetivo",
+          "em_etgo_tbai_status": "Estado TicketBAI"
         },
         "en_US": {
           "OutstandingAmt": "Outstanding Amount",
           "EM_Etgo_Due_Date": "Due Date",
           "em_etgo_delivery_status": "Delivery Status",
           "C_DocTypeTarget_ID": "Document Type",
-          "Foreign_Amount": "Target Currency Amount"
+          "Foreign_Amount": "Target Currency Amount",
+          "em_etgo_tbai_status": "TicketBAI Status"
         },
         "es_AR": {
           "OutstandingAmt": "Saldo pendiente"
@@ -1630,6 +1632,25 @@
             "validation": {
               "maxLength": 0
             }
+          },
+          {
+            "name": "eTGOTbaiStatus",
+            "apiKey": "eTGOTbaiStatus",
+            "column": "EM_ETGO_Tbai_Status",
+            "label": "EM_ETGO_Tbai_Status",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "computed": {
+              "mode": "stored",
+              "refresh": "synchronous"
+            },
+            "validation": {
+              "maxLength": 10
+            }
           }
         ],
         "searchableFields": [
@@ -2816,14 +2837,16 @@
           "em_etgo_delivery_status": "Estado de entrega",
           "C_DocTypeTarget_ID": "Tipo de documento",
           "PriceList": "Precio",
-          "Foreign_Amount": "Importe en Moneda Objetivo"
+          "Foreign_Amount": "Importe en Moneda Objetivo",
+          "em_etgo_tbai_status": "Estado TicketBAI"
         },
         "en_US": {
           "OutstandingAmt": "Outstanding Amount",
           "EM_Etgo_Due_Date": "Due Date",
           "em_etgo_delivery_status": "Delivery Status",
           "C_DocTypeTarget_ID": "Document Type",
-          "Foreign_Amount": "Target Currency Amount"
+          "Foreign_Amount": "Target Currency Amount",
+          "em_etgo_tbai_status": "TicketBAI Status"
         },
         "es_AR": {
           "OutstandingAmt": "Saldo pendiente"
@@ -4204,6 +4227,14 @@
             "apiKey": "eTGODueDate",
             "column": "em_etgo_due_date",
             "type": "date",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "eTGOTbaiStatus",
+            "apiKey": "eTGOTbaiStatus",
+            "column": "EM_ETGO_Tbai_Status",
+            "type": "string",
             "visibility": "readOnly",
             "required": false
           }
@@ -5915,14 +5946,16 @@
         "em_etgo_delivery_status": "Estado de entrega",
         "C_DocTypeTarget_ID": "Tipo de documento",
         "PriceList": "Precio",
-        "Foreign_Amount": "Importe en Moneda Objetivo"
+        "Foreign_Amount": "Importe en Moneda Objetivo",
+        "em_etgo_tbai_status": "Estado TicketBAI"
       },
       "en_US": {
         "OutstandingAmt": "Outstanding Amount",
         "EM_Etgo_Due_Date": "Due Date",
         "em_etgo_delivery_status": "Delivery Status",
         "C_DocTypeTarget_ID": "Document Type",
-        "Foreign_Amount": "Target Currency Amount"
+        "Foreign_Amount": "Target Currency Amount",
+        "em_etgo_tbai_status": "TicketBAI Status"
       },
       "es_AR": {
         "OutstandingAmt": "Saldo pendiente"
@@ -7095,6 +7128,14 @@
         "description": "Field 'eTGODueDate' should be present in header"
       },
       {
+        "id": "t-field-presence-header-eTGOTbaiStatus",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "eTGOTbaiStatus",
+        "runner": "node",
+        "description": "Field 'eTGOTbaiStatus' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-etgoTotalDiscount",
         "category": "field-presence",
         "entity": "header",
@@ -7709,6 +7750,14 @@
         "field": "eTGODueDate",
         "runner": "node",
         "description": "Field 'eTGODueDate' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-eTGOTbaiStatus",
+        "category": "field-type",
+        "entity": "header",
+        "field": "eTGOTbaiStatus",
+        "runner": "node",
+        "description": "Field 'eTGOTbaiStatus' should have type 'string' in header"
       },
       {
         "id": "t-field-type-header-etgoTotalDiscount",
@@ -10873,15 +10922,15 @@
       }
     ],
     "summary": {
-      "total": 620,
+      "total": 622,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 5,
         "default-value-type": 25,
         "displaylogic-evaluable": 32,
         "displaylogic-valid": 32,
-        "field-presence": 77,
-        "field-type": 77,
+        "field-presence": 78,
+        "field-type": 78,
         "readonlylogic-evaluable": 49,
         "readonlylogic-valid": 49,
         "rule-declared": 10,
@@ -10891,7 +10940,7 @@
         "visibility": 5
       },
       "byRunner": {
-        "node": 620,
+        "node": 622,
         "junit": 0
       }
     }

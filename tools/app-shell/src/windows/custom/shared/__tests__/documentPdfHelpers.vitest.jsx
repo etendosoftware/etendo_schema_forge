@@ -159,7 +159,7 @@ describe('computeDiscountBreakdown', () => {
     expect(result.grossAmount).toBe(250); // 2*100 + 1*50
   });
 
-  it('computes discountPerProduct as max(0, grossAmount - productNetAmount)', () => {
+  it('computes discountPerProduct as grossAmount - productNetAmount', () => {
     const lines = [
       { quantity: 2, unitPrice: 100, lineNetAmount: 180 },
       { quantity: 1, unitPrice: 50, lineNetAmount: 50 },
@@ -181,11 +181,55 @@ describe('computeDiscountBreakdown', () => {
     expect(result.totalDiscountAmt).toBe(10);
   });
 
-  it('discountPerProduct is never negative (clamped to 0)', () => {
-    // lineNetAmount > grossAmount would be unusual but guard is present
+  it('ETP-5132: discountPerProduct is signed, not clamped to 0 — a negative delta is returned as-is', () => {
+    // Pre-fix this clamped to 0 via Math.max(0, grossAmount - productNetAmount),
+    // which silently dropped the real discount on a negative-quantity line
+    // (whose productNetAmount is LESS negative than grossAmount once the
+    // per-line discount is applied — see documentPdf.js's ETP-5132 comment
+    // above this function). lineNetAmount > grossAmount reproduces that same
+    // negative-delta shape without needing negative quantities directly.
     const lines = [{ quantity: 1, unitPrice: 50, lineNetAmount: 100 }];
     const result = computeDiscountBreakdown(lines, 0, getGrossLine);
-    expect(result.discountPerProduct).toBeGreaterThanOrEqual(0);
+    expect(result.discountPerProduct).toBe(-50);
+  });
+
+  it('ETP-5132: returns a negative discountPerProduct for a negative-quantity line, matching documentTotals.js discountAmt sign convention', () => {
+    // qty=-1, price=5.00, net=-4.50 (10% discount already applied) —
+    // mirrors the ticket's worked example (see documentTotals.test.js's
+    // CP-1/CP-2 for the full derivation via computeDocumentTotals).
+    const lines = [{ quantity: -1, unitPrice: 5, lineNetAmount: -4.5 }];
+    const result = computeDiscountBreakdown(lines, 0, getGrossLine);
+    expect(result.grossAmount).toBe(-5);
+    // discountPerProduct = grossAmount - productNetAmount = -5 - (-4.5) = -0.5
+    expect(result.discountPerProduct).toBeCloseTo(-0.5, 5);
+    // Callers (useInvoicePdf.js/useQuotationPdf.js) sign-flip this for
+    // display — the flipped value must be the positive 0.5.
+    expect(-result.discountPerProduct).toBeCloseTo(0.5, 5);
+  });
+
+  it('ETP-5132: exposes discountPerProduct/totalDiscountAmt so callers gate on !== 0 (not > 0) and sign-flip for display — single source of truth for useInvoicePdf.js and useQuotationPdf.js, which both apply this exact contract to this function\'s return value', () => {
+    // No discount at all: discountPerProduct comes back exactly 0 — the
+    // "!== 0" gate a caller applies must be OFF here.
+    const noDiscountLines = [{ quantity: 1, unitPrice: 100, lineNetAmount: 100 }];
+    const none = computeDiscountBreakdown(noDiscountLines, 0, getGrossLine);
+    expect(none.discountPerProduct).toBe(0);
+    expect(none.discountPerProduct !== 0).toBe(false);
+
+    // A negative-quantity (return) line makes discountPerProduct AND
+    // totalDiscountAmt come back negative, not positive. A caller gating on
+    // "> 0" would silently hide this real discount; the gate must be "!== 0".
+    const returnLines = [{ quantity: -1, unitPrice: 5, lineNetAmount: -4.5 }];
+    const withDiscount = computeDiscountBreakdown(returnLines, 10, getGrossLine);
+    expect(withDiscount.discountPerProduct).toBeCloseTo(-0.5, 5);
+    expect(withDiscount.totalDiscountAmt).toBeCloseTo(-0.45, 5);
+    expect(withDiscount.discountPerProduct !== 0).toBe(true);
+    expect(withDiscount.discountPerProduct > 0).toBe(false); // ">0" would have missed it
+    expect(withDiscount.totalDiscountAmt !== 0).toBe(true);
+    expect(withDiscount.totalDiscountAmt > 0).toBe(false);
+
+    // Callers print the sign-flipped magnitude (positive) for both fields.
+    expect(-withDiscount.discountPerProduct).toBeCloseTo(0.5, 5);
+    expect(-withDiscount.totalDiscountAmt).toBeCloseTo(0.45, 5);
   });
 
   it('returns zero values for empty lines array', () => {

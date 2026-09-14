@@ -8,6 +8,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog.jsx';
 import { extractApiErrorMessage } from '@/lib/apiError';
+import { useContactsCacheInvalidation } from './contactsCacheInvalidation';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const filters = ['searchKey', 'name', 'etgoFirstname', 'etgoLastname'];
@@ -49,6 +50,7 @@ function EditableCell({ value, onChange, onKeyDown }) {
 }
 
 export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMutated, ...rest }) {
+  const { invalidateBusinessPartner } = useContactsCacheInvalidation();
   const dictionary = useLocale();
   const ui = useUI();
   const gl = dictionary?.genericLabels || {};
@@ -78,7 +80,8 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
     });
     if (!res.ok) throw new Error(`Error ${res.status}`);
     onDataMutated?.();
-  }, [editingRow, apiFetch, onDataMutated]);
+    invalidateBusinessPartner();
+  }, [editingRow, apiFetch, onDataMutated, invalidateBusinessPartner]);
 
   const handleEditRow = useCallback((row) => {
     const isPerson = isPersonRow(row);
@@ -137,7 +140,29 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
       },
       {
         key: 'eTGOLocation', column: 'EM_Etgo_Location', type: 'string', label: t('locationColumn'),
-        render: (row) => row.eTGOLocation ?? '—',
+        // ETP-5060: the computed column now yields the C_Location id, not a
+        // pre-rendered address. The text lives in the companion identifier key,
+        // which the DAL resolves per request and therefore translates the country
+        // (a computed column has no access to the session language, so anything it
+        // renders as text is frozen in the base language).
+        //
+        // The column is now STORED (Computation_Mode 'S'), so it is a physical FK and
+        // the AD column has ALLOWSORTING/ALLOWFILTERING on. Both props below redirect
+        // the grid from the raw column (a UUID) to its resolved identifier.
+        //
+        // `filterMode` makes the advanced filter emit
+        //   {fieldName: 'eTGOLocation$_identifier', operator: 'iContains', ...}
+        // so typing "Madrid" matches the address text. Without it the same condition
+        // would run against the column, i.e. against UUIDs, and never match.
+        filterMode: 'identifier',
+        // `sortMode` does the same for ordering: inferSortMode() maps `type: 'string'`
+        // to 'raw', which sends `_sortBy=eTGOLocation` and orders by the UUID (this
+        // shipped broken once). 'identifier' makes resolveBackendSort send
+        // `eTGOLocation$_identifier`, and `-eTGOLocation$_identifier` for desc -- the
+        // minus prefix is required, a trailing ` desc` makes Openbravo miss the
+        // identifier path and answer 500.
+        sortMode: 'identifier',
+        render: (row) => row['eTGOLocation$_identifier'] ?? '—',
       },
       {
         key: 'etgoWeb', column: 'EM_Etgo_Web', type: 'string', label: t('webColumn'),
@@ -214,13 +239,14 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
       } else {
         toast.success(ui('contactDeleteSuccess'));
         onDataMutated?.();
+        invalidateBusinessPartner();
       }
     } catch (err) {
       toast.error(err.message || 'Network error');
     } finally {
       resolve();
     }
-  }, [pendingDelete, apiFetch, onDataMutated]);
+  }, [pendingDelete, apiFetch, onDataMutated, invalidateBusinessPartner]);
 
   const cancelDelete = useCallback(() => {
     pendingDelete?.resolve();

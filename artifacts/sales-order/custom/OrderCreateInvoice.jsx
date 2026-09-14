@@ -349,7 +349,14 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
   const grossBase     = Number(d.grandTotalAmount) || 0;
   const netBase       = Number(d.summedLineAmount ?? d.totalLines ?? grossBase) || 0;
   const totalLines    = round2(netBase * discountFactor);
-  const grandTotal    = totalLines + round2((grossBase - netBase) * discountFactor);
+  // ETP-5132 (confirm-modal regression) — grandTotal must be grossBase as-is, NOT
+  // totalLines + a client-recomputed tax delta. grossBase (grandTotalAmount) is
+  // ALREADY GET-time-compensated for the pending total discount by
+  // AbstractOrderHeaderHandler.applyTotalDiscountToRecord() (ETP-4029) whenever
+  // isPreCompletion is true, so re-applying discountFactor here double-discounts
+  // it. Only netBase (summedLineAmount) is never backend-compensated, which is
+  // why totalLines above still needs the client-side discountFactor.
+  const grandTotal    = grossBase;
   const currency       = d['currency$_identifier'] || '';
 
   const handleConfirm = async () => {
