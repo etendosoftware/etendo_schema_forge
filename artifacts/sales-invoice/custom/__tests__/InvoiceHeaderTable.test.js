@@ -78,11 +78,27 @@ describe('Sales InvoiceHeaderTable — TBAI column is a real AD column (ETP-5216
     );
   });
 
-  it('declares filterMode text on the TBAI column', () => {
+  // The stored function returns a CLOSED catalogue of six codes, none of which
+  // the user ever sees (the cell renders a translated badge, or a dash for
+  // 'NoAplica'), so a free-text `iContains` filter was unusable. 'enumLabel'
+  // turns it into a multi-select picker of translated labels.
+  it('declares filterMode enumLabel on the TBAI column', () => {
     assert.match(
       src,
-      /key: 'eTGOTbaiStatus', column: 'em_etgo_tbai_status', type: 'custom',\s*\n\s*filterMode: 'text'/,
+      /key: 'eTGOTbaiStatus', column: 'em_etgo_tbai_status', type: 'custom',\s*\n\s*filterMode: 'enumLabel'/,
     );
+  });
+
+  it('declares the six TBAI codes as enumLabels i18n keys', () => {
+    const block = src.match(/enumLabels: \{[\s\S]*?\},/);
+    assert.ok(block, 'expected an enumLabels map on the TBAI column');
+    for (const code of ['Pendiente', 'Recibido', 'Enviada', 'Rechazado', 'Error', 'NoAplica']) {
+      assert.match(
+        block[0],
+        new RegExp(`${code}:\\s*'fiscalMonitor\\.tbai\\.status\\.${code}'`),
+        `missing enumLabels entry for ${code}`,
+      );
+    }
   });
 
   it('does not fall back to a client-side isSent/tbaiIssent boolean (sales side never had that fallback)', () => {

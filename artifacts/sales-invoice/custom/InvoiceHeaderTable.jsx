@@ -130,7 +130,23 @@ export default function InvoiceHeaderTable(props) {
         // keep their client-side isSifEligibleByDate/isVerifactuEligibleByDate
         // gating unchanged.
         key: 'eTGOTbaiStatus', column: 'em_etgo_tbai_status', type: 'custom',
-        filterMode: 'text', label: tbaiColLabel,
+        filterMode: 'enumLabel', label: tbaiColLabel,
+        // ETP-5216 follow-up: the stored function returns a CLOSED catalogue of
+        // six codes, so the filter is a picker, not free text. `filterMode:
+        // 'text'` sent iContains against codes the user never sees — the cell
+        // renders 'NoAplica' as a dash and every other code as a translated
+        // FiscalStatusBadge label, so there was nothing to type. 'enumLabel'
+        // also brings the isNull operator, which is the only way to reach rows
+        // whose stored value was never computed. Values are i18n keys;
+        // AdvancedFilterBuilder's labelFor() runs them through ui().
+        enumLabels: {
+          Pendiente: 'fiscalMonitor.tbai.status.Pendiente',
+          Recibido:  'fiscalMonitor.tbai.status.Recibido',
+          Enviada:   'fiscalMonitor.tbai.status.Enviada',
+          Rechazado: 'fiscalMonitor.tbai.status.Rechazado',
+          Error:     'fiscalMonitor.tbai.status.Error',
+          NoAplica:  'fiscalMonitor.tbai.status.NoAplica',
+        },
         // The database answers 'Pendiente' for "no resolved submission", so the
         // ?? is only a guard for a row fetched before the column was backfilled.
         // 'NoAplica' means the invoice predates the organization's earliest-ever

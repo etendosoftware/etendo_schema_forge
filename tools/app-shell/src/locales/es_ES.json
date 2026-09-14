@@ -20997,6 +20997,7 @@
     "fiscalMonitor.tbai.status.Rechazado": "Rechazado",
     "fiscalMonitor.tbai.status.Error": "Error",
     "fiscalMonitor.tbai.status.Enviada": "Enviada",
+    "fiscalMonitor.tbai.status.NoAplica": "No aplica",
     "fiscalMonitor.kpi.sii.issued": "Facturas emitidas",
     "fiscalMonitor.kpi.sii.received": "Facturas recibidas",
     "fiscalMonitor.kpi.tbai.total": "TicketBAI enviadas",

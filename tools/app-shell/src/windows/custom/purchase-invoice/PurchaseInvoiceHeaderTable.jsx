@@ -137,7 +137,23 @@ export default function PurchaseInvoiceHeaderTable(props) {
         // `filterMode` give the filter and sort a real backend field, the same
         // pairing `transactionDocument` uses below.
         key: 'eTGOTbaiStatus', column: 'em_etgo_tbai_status', type: 'custom',
-        filterMode: 'text', label: tbaiColLabel,
+        filterMode: 'enumLabel', label: tbaiColLabel,
+        // ETP-5216 follow-up: the stored function returns a CLOSED catalogue of
+        // six codes, so the filter is a picker, not free text. `filterMode:
+        // 'text'` sent iContains against codes the user never sees — the cell
+        // renders 'NoAplica' as a dash and every other code as a translated
+        // FiscalStatusBadge label, so there was nothing to type. 'enumLabel'
+        // also brings the isNull operator, which is the only way to reach rows
+        // whose stored value was never computed. Values are i18n keys;
+        // AdvancedFilterBuilder's labelFor() runs them through ui().
+        enumLabels: {
+          Pendiente: 'fiscalMonitor.tbai.status.Pendiente',
+          Recibido:  'fiscalMonitor.tbai.status.Recibido',
+          Enviada:   'fiscalMonitor.tbai.status.Enviada',
+          Rechazado: 'fiscalMonitor.tbai.status.Rechazado',
+          Error:     'fiscalMonitor.tbai.status.Error',
+          NoAplica:  'fiscalMonitor.tbai.status.NoAplica',
+        },
         // `eTGOTbaiStatus` stays the PRIMARY source: it carries the REAL outcome
         // of the submission to Batuz (Recibido / Rechazado / Error), and it is the
         // only source that can say *rejected*. `tbaiIssent` (AD column

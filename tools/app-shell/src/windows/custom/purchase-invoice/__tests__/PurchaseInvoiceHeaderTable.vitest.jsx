@@ -1284,12 +1284,28 @@ describe('PurchaseInvoiceHeaderTable — fiscal columns (ETP-5087)', () => {
     // advanced filter builder's field list (isFilterableColumn), and unusable
     // for backend sort/filter even if offered. Now it is backed by the real,
     // stored computed AD column `em_etgo_tbai_status`.
-    it('binds the Batuz column to the real AD column em_etgo_tbai_status with a text filterMode', () => {
+    // The filterMode is 'enumLabel', not 'text': the stored function returns a
+    // CLOSED catalogue of six codes and the user never sees any of them (the
+    // cell renders a translated badge, or a dash for 'NoAplica'), so there was
+    // nothing to type into an iContains box.
+    it('binds the Batuz column to the real AD column em_etgo_tbai_status with an enumLabel filterMode', () => {
       renderWith('sii+tbai', 'BIZKAIA');
       const col = getColumn('eTGOTbaiStatus');
       expect(col.column).toBe('em_etgo_tbai_status');
       expect(col.type).toBe('custom');
-      expect(col.filterMode).toBe('text');
+      expect(col.filterMode).toBe('enumLabel');
+    });
+
+    it('offers the six closed TBAI codes as enumLabels i18n keys', () => {
+      renderWith('sii+tbai', 'BIZKAIA');
+      expect(getColumn('eTGOTbaiStatus').enumLabels).toEqual({
+        Pendiente: 'fiscalMonitor.tbai.status.Pendiente',
+        Recibido: 'fiscalMonitor.tbai.status.Recibido',
+        Enviada: 'fiscalMonitor.tbai.status.Enviada',
+        Rechazado: 'fiscalMonitor.tbai.status.Rechazado',
+        Error: 'fiscalMonitor.tbai.status.Error',
+        NoAplica: 'fiscalMonitor.tbai.status.NoAplica',
+      });
     });
   });
 
