@@ -16,7 +16,10 @@ import AeatSubmitFlow, { isMissingDefaultIaeActivity } from './AeatSubmitFlow.js
 import { isLastPeriodOfYear, getMissingRequiredFields } from './fm303Layouts.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents, persistManualData, deriveResultKind } from '../../fiscalModelsUtils.js';
+import {
+  formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents,
+  persistManualData, deriveResultKind, toBoxArray, applyOverrides, recomputeDerivedBoxes, getBoxValue,
+} from '../../fiscalModelsUtils.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
@@ -33,21 +36,9 @@ function statusLabelKey(status) {
   return status === 'submitted_ack' ? 'submitted' : status;
 }
 
-function toBoxArray(src) {
-  if (Array.isArray(src)) return src;
-  if (src && typeof src === 'object') return Object.entries(src).map(([n, v]) => ({ num: Number(n), value: v }));
-  return [];
-}
-
-function applyOverrides(boxes, overrides) {
-  if (!Object.keys(overrides).length) return toBoxArray(boxes);
-  const arr = toBoxArray(boxes);
-  const result = arr.filter(b => !(b.num in overrides));
-  Object.entries(overrides).forEach(([num, val]) => {
-    if (val != null) result.push({ num: Number(num), value: val });
-  });
-  return result;
-}
+// toBoxArray/applyOverrides/recomputeDerivedBoxes/getBoxValue moved to
+// fiscalModelsUtils.js (ETP-5272 pt.6) — shared with FmListPage.jsx so the
+// override-merge + derived-box formula lives in exactly one place.
 
 function removeBox108FromLive(prev) {
   if (prev == null) return prev;
@@ -117,24 +108,6 @@ function applyGenerateError(result, t) {
   }
 }
 
-function recomputeDerivedBoxes(boxArr) {
-  const r2 = v => Math.round(v * 100) / 100;
-  const get = num => { const e = boxArr.find(b => b.num === num); return e != null ? (e.value ?? 0) : 0; };
-  const box65entry = boxArr.find(b => b.num === 65);
-  const box65 = box65entry != null ? (box65entry.value ?? 100) : 100;
-  const box45 = r2([29,31,33,35,37,39,41,42,43,44].reduce((s, n) => s + get(n), 0));
-  const box46 = r2(get(27) - box45);
-  const box64 = r2(box46 + get(58) + get(76));
-  const box66 = r2(box64 * box65 / 100);
-  const box69 = r2(box66 + get(77) - get(78) + get(68) + get(108));
-  const box71 = r2(box69 - get(70) + get(109) - get(112));
-  const derived = { 45: box45, 46: box46, 64: box64, 66: box66, 69: box69, 71: box71 };
-  return [
-    ...boxArr.filter(b => !(b.num in derived)),
-    ...Object.entries(derived).map(([num, value]) => ({ num: Number(num), value })),
-  ];
-}
-
 // ── Tab content components ────────────────────────────────────────
 
 // Casillas tab — left sidebar nav + content area
@@ -197,11 +170,6 @@ function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, on
       </div>
     </div>
   );
-}
-
-function getBoxValue(liveBoxes, num) {
-  const e = toBoxArray(liveBoxes).find(b => b.num === num);
-  return e ? (e.value ?? 0) : null;
 }
 
 function buildIncidentVariants(blocking, warning, t) {

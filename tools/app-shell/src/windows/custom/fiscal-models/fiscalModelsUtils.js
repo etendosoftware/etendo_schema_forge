@@ -424,6 +424,72 @@ export function deriveResultKind(summary, { hasInvoices = false } = {}) {
   return hasInvoices ? 'zero' : 'N';
 }
 
+// ── Manual-override box merging (ETP-5272 pt.6) ────────────────────
+// Single source of truth for merging a declaration's manual box overrides onto a
+// backend-computed box set and re-deriving the boxes the AEAT 303 formula computes
+// FROM other boxes. Shared by FmModel303Page.jsx (detail view) and FmListPage.jsx
+// (list's own "Resultado" column) — GET /fiscal303/boxes always computes purely
+// from invoice data, with no declaration id and no knowledge of manualOverrides, so
+// every caller that wants the TRUE final result (box 71, "Resultado de la
+// liquidación") rather than the raw backend sub-total (box 46, "Resultado régimen
+// general") must route through these three helpers instead of re-deriving the
+// formula locally — that duplication is exactly how this bug class (ETP-5272)
+// happened in the first place.
+
+// Normalizes the two shapes `boxes` can arrive in — a plain object
+// ({ [boxNum]: value }, e.g. straight off the backend) or an array of
+// { num, value } (e.g. already-merged output from these helpers) — to the array
+// form the other helpers below operate on.
+export function toBoxArray(src) {
+  if (Array.isArray(src)) return src;
+  if (src && typeof src === 'object') return Object.entries(src).map(([n, v]) => ({ num: Number(n), value: v }));
+  return [];
+}
+
+// Merges manualOverrides (decl.manualData.manualOverrides, keyed by box number)
+// onto the backend-computed boxes — an overridden box replaces the computed value,
+// everything else passes through unchanged.
+export function applyOverrides(boxes, overrides) {
+  const ov = overrides ?? {};
+  if (!Object.keys(ov).length) return toBoxArray(boxes);
+  const arr = toBoxArray(boxes);
+  const result = arr.filter(b => !(b.num in ov));
+  Object.entries(ov).forEach(([num, val]) => {
+    if (val != null) result.push({ num: Number(num), value: val });
+  });
+  return result;
+}
+
+// Re-derives every box the AEAT 303 formula computes from other boxes (45, 46, 64,
+// 66, 69, 71) so a manual override on any of their inputs (e.g. 42/43/44, or the
+// territorial-split box 65) is reflected in the final liquidation result. Always
+// call this AFTER applyOverrides.
+export function recomputeDerivedBoxes(boxArr) {
+  const r2 = v => Math.round(v * 100) / 100;
+  const get = num => { const e = boxArr.find(b => b.num === num); return e != null ? (e.value ?? 0) : 0; };
+  const box65entry = boxArr.find(b => b.num === 65);
+  const box65 = box65entry != null ? (box65entry.value ?? 100) : 100;
+  const box45 = r2([29,31,33,35,37,39,41,42,43,44].reduce((s, n) => s + get(n), 0));
+  const box46 = r2(get(27) - box45);
+  const box64 = r2(box46 + get(58) + get(76));
+  const box66 = r2(box64 * box65 / 100);
+  const box69 = r2(box66 + get(77) - get(78) + get(68) + get(108));
+  const box71 = r2(box69 - get(70) + get(109) - get(112));
+  const derived = { 45: box45, 46: box46, 64: box64, 66: box66, 69: box69, 71: box71 };
+  return [
+    ...boxArr.filter(b => !(b.num in derived)),
+    ...Object.entries(derived).map(([num, value]) => ({ num: Number(num), value })),
+  ];
+}
+
+// Reads a single box's value out of the array shape (as returned by
+// applyOverrides/recomputeDerivedBoxes) — null when the box isn't present at all
+// (distinct from a present box whose value is 0).
+export function getBoxValue(liveBoxes, num) {
+  const e = toBoxArray(liveBoxes).find(b => b.num === num);
+  return e ? (e.value ?? 0) : null;
+}
+
 function roundEur(n) {
   return Math.round(n * 100) / 100;
 }

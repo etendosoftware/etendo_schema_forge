@@ -11,7 +11,11 @@ import { NewDeclModal } from './FmOverlays.jsx';
 import FmCatalogPage from './FmCatalogPage.jsx';
 import FmRowActions from './FmRowActions.jsx';
 import DeleteConfirmDialog from '@/components/contract-ui/DeleteConfirmDialog.jsx';
-import { formatAmount, countUpcomingDeadlines, isUpcomingDeadline, checkModified303, checkModified349, compute349Operators, fetchDeclarationIncidents, deriveResultKind, deleteDeclaration } from './fiscalModelsUtils.js';
+import {
+  formatAmount, countUpcomingDeadlines, isUpcomingDeadline, checkModified303, checkModified349,
+  compute349Operators, fetchDeclarationIncidents, deriveResultKind, deleteDeclaration,
+  applyOverrides, recomputeDerivedBoxes, getBoxValue,
+} from './fiscalModelsUtils.js';
 import useFiscalAutoCompute from './useFiscalAutoCompute.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -361,6 +365,14 @@ const resultBadge = (text) => (
   }}>{text}</span>
 );
 
+// ETP-5272 pt.6 — dead code: not rendered anywhere in this file (the table cell
+// below renders `ResultText`, not `ResultCell`). Kept as-is rather than deleted —
+// `__tests__/FmListPage.test.js` still asserts on this function's source directly
+// and that test suite is out of scope for this change (deferred to the
+// consolidated tests/docs pass for ETP-5272). If this is ever reactivated, it must
+// receive the same manual-override-merge treatment as `ResultText`'s caller below
+// (merge `decl.manualData?.manualOverrides` via `applyOverrides`/`recomputeDerivedBoxes`
+// and read box 71, not a raw `summary.result`) — it currently does not.
 function ResultCell({ isComputing, error, result, t }) {
   if (isComputing) return <span style={{ color: 'hsl(var(--muted-foreground))', fontSize: 12 }}>…</span>;
   if (error) {
@@ -752,9 +764,19 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                   .reduce((s, k) => s + (parseFloat(computed.summary[k]) || 0), 0);
                 displayResult = { kind: 'info', amount: total };
               } else {
-                const r = computed.summary.result;
+                // ETP-5272 pt.6 (4th finding) — GET /fiscal303/boxes (computeBoxes303Real above)
+                // computes purely from invoice data: no declaration id, no manualData input, so
+                // `computed.summary.result` is always box 46 ("Resultado régimen general", a
+                // sub-total under a "standard company" assumption), never the true final result
+                // (box 71, "Resultado de la liquidación"). Same class of bug already fixed in
+                // FmModel303Page.jsx's `applyComputeResult` — reuse its exact helpers (merge this
+                // row's manualOverrides, re-derive box 71) instead of trusting the raw summary, so
+                // the list and the detail page can never disagree on the same declaration's result.
+                const manualOverrides = decl.manualData?.manualOverrides ?? {};
+                const mergedBoxes = recomputeDerivedBoxes(applyOverrides(computed.boxes, manualOverrides));
+                const r = getBoxValue(mergedBoxes, 71) ?? computed.summary.result;
                 const hasInvoices = (computed.sources?.length ?? 0) > 0;
-                const kind = deriveResultKind(computed.summary, { hasInvoices });
+                const kind = deriveResultKind({ ...computed.summary, result: r }, { hasInvoices });
                 displayResult = { kind, amount: Math.abs(r) };
               }
             }
