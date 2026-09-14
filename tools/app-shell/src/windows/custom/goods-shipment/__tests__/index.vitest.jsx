@@ -60,11 +60,18 @@ vi.mock('@generated/goods-shipment/custom/BulkInvoiceFromShipment', () => ({
   default: () => <div data-testid="bulk-invoice" />,
 }));
 
+let bulkDocumentActionCalls = [];
 vi.mock('@/components/contract-ui/BulkDocumentAction', () => ({
-  default: ({ entity, labelKey }) => (
-    <div data-testid="bulk-document-action" data-entity={entity} data-label-key={labelKey} />
-  ),
+  default: (props) => {
+    bulkDocumentActionCalls.push(props);
+    const { entity, labelKey } = props;
+    return (
+      <div data-testid={`bulk-document-action-${labelKey}`} data-entity={entity} data-label-key={labelKey} />
+    );
+  },
   buildInOutActions: vi.fn(() => []),
+  buildPostActions: vi.fn(() => []),
+  postRowFilter: vi.fn(),
 }));
 
 vi.mock('../GoodsShipmentPreview', () => ({
@@ -95,6 +102,7 @@ vi.mock('@generated/goods-shipment/generated/web/goods-shipment/GoodsShipmentPag
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import GoodsShipmentWindow from '../index.jsx';
 
 describe('GoodsShipmentWindow', () => {
@@ -103,6 +111,7 @@ describe('GoodsShipmentWindow', () => {
     searchParams = new URLSearchParams();
     lastPageProps = null;
     rowDeleteConfig = null;
+    bulkDocumentActionCalls = [];
   });
 
   it('passes URL DocStatus into initial column filters on the list view', () => {
@@ -123,7 +132,9 @@ describe('GoodsShipmentWindow', () => {
     render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
 
     expect(screen.getByTestId('bulk-invoice')).toBeInTheDocument();
-    expect(screen.getByTestId('bulk-document-action')).toHaveAttribute('data-entity', 'goodsShipment');
+    expect(screen.getByTestId('bulk-document-action-confirmBulk')).toHaveAttribute('data-entity', 'goodsShipment');
+    // ETP-5209 — bulk Post button, gated to processed & not-yet-posted rows.
+    expect(screen.getByTestId('bulk-document-action-post')).toHaveAttribute('data-entity', 'goodsShipment');
     expect(screen.getByTestId('shipment-preview')).toHaveAttribute('data-window-name', 'goods-shipment');
     expect(rowDeleteConfig).toMatchObject({ apiBaseUrl: '/api', entity: 'goodsShipment', token: 'tkn' });
 
@@ -177,5 +188,79 @@ describe('GoodsShipmentWindow', () => {
 
     lastPageProps.draftMode.onConfirm();
     expect(events).toEqual(['open']);
+  });
+
+  // ── ETP-5209 — Post row-kebab entry and bulk button ────────────────────────
+  // The gate itself (processed + not posted) is covered exhaustively in
+  // BulkDocumentAction.vitest.jsx (buildPostActions/postRowFilter) — these
+  // tests only verify this window wires the shared helper through correctly.
+  describe('ETP-5209 — Post row-kebab entry and bulk button', () => {
+    it('offers the post menu action for a processed, unposted row', () => {
+      render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
+
+      const actions = lastPageProps.rowQuickActions.menuActions({ row: { processed: 'Y', posted: 'N' } });
+      expect(actions).toEqual([{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }]);
+    });
+
+    it('does not offer the post menu action for an already-posted row', () => {
+      render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
+
+      const actions = lastPageProps.rowQuickActions.menuActions({ row: { processed: 'Y', posted: 'Y' } });
+      expect(actions).toEqual([]);
+    });
+
+    it('bumps refreshKey when a neoAction menu action (post) completes', () => {
+      render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
+
+      act(() => {
+        lastPageProps.rowQuickActions.onMenuActionExecuted({ neoAction: 'post' });
+      });
+      expect(lastPageProps.refreshTrigger).toBe(1);
+    });
+
+    it('does not bump refreshKey for a menu action without a neoAction', () => {
+      render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
+
+      act(() => {
+        lastPageProps.rowQuickActions.onMenuActionExecuted({ key: 'someOtherAction' });
+      });
+      expect(lastPageProps.refreshTrigger).toBe(0);
+    });
+
+    it('renders both the confirmBulk (in-out) and the post bulk BulkDocumentAction instances', () => {
+      render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
+
+      expect(screen.getByTestId('bulk-document-action-confirmBulk')).toHaveAttribute('data-entity', 'goodsShipment');
+      expect(screen.getByTestId('bulk-document-action-post')).toHaveAttribute('data-entity', 'goodsShipment');
+      // ETP-5209 — GoodsShipmentBulkActions passes the imported postRowFilter
+      // reference straight through as rowFilter — no caller-side factory/hook
+      // call needed.
+      const postCall = bulkDocumentActionCalls.find((p) => p.labelKey === 'post');
+      expect(postCall.rowFilter).toBe(postRowFilter);
+    });
+
+    // ETP-5209 regression: production crash root cause. ListView.jsx invokes
+    // `bulkActions` as a PLAIN FUNCTION CALL inside its own render body, never
+    // as JSX. GoodsShipmentPage's mock above renders it via JSX
+    // (`<props.bulkActions .../>`), which is exactly why the old suite never
+    // caught this: JSX invocation gives a function component its own hook
+    // dispatcher, so a stray `useUI()` inside the wrapper would have passed
+    // silently there. Calling the captured `bulkActions` reference directly
+    // here, OUTSIDE of any React render pass, reproduces the same
+    // hook-dispatcher-less context production hits — any hook call inside the
+    // wrapper throws React's "Invalid hook call" error here, exactly as it
+    // would crash with "Rendered more hooks than during the previous render"
+    // in production the moment a row got selected.
+    it('ETP-5209 regression: bulkActions wrapper is callable as a plain function (not JSX) without an Invalid Hook Call error', () => {
+      render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
+
+      expect(() => lastPageProps.bulkActions({
+        selectedRows: [{ id: 's1', processed: 'Y', posted: 'N' }],
+        clearSelection: vi.fn(),
+        token: 'tkn',
+        apiBaseUrl: '/api',
+        windowName: 'goods-shipment',
+      })).not.toThrow();
+    });
   });
 });

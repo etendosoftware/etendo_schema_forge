@@ -701,6 +701,26 @@ describe('useEntity helpers', () => {
       showSaveSuccessToast(false, false, (k) => k);
       expect(toast.success).toHaveBeenCalledWith('recordSaved', { id: RECORD_SAVE_TOAST_ID });
     });
+
+    // ETP-5193 — the assertions above still pass with the fix in place because Vitest's
+    // `toEqual`-style matcher treats a key with an `undefined` value as equivalent to an
+    // absent key, so `{ id: RECORD_SAVE_TOAST_ID }` matches a call that actually passed
+    // `{ id: RECORD_SAVE_TOAST_ID, action: undefined }` too — they do NOT prove `action`
+    // is being explicitly cleared. This test asserts the call's own options object
+    // explicitly carries the `action` key (not merely omits it), which is exactly what
+    // makes sonner's real `Observer.create()` merge overwrite — rather than inherit — a
+    // stale `action` a prior create-toast left behind for the same
+    // `RECORD_SAVE_TOAST_ID` (e.g. the User window's onAfterCreate "Configurar roles"
+    // button). See `useEntity.js`'s own doc comment above this call for the full sonner
+    // mechanism, and `useEntity.toastMerge.vitest.jsx` for the real-sonner (unmocked)
+    // proof that this explicit key is what actually clears the merge.
+    it('explicitly passes an action key (not merely omits it) so a prior action cannot survive the sonner merge', () => {
+      toast.success.mockClear();
+      showSaveSuccessToast(false, false, (k) => k);
+      const options = toast.success.mock.calls[0][1];
+      expect(Object.hasOwn(options, 'action')).toBe(true);
+      expect(options.action).toBeUndefined();
+    });
   });
 
   // -------------------------------------------------------------------

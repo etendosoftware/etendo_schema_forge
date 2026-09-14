@@ -37,6 +37,9 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
   }
 
   function validate() {
+    if ((form.authorizationno ?? '').length > 15) {
+      return ui('fiscal.sii.err.authRegNoTooLong');
+    }
     return null;
   }
 
@@ -91,6 +94,8 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
               onChange={e => set('authorizationno', e.target.value)}
               disabled={locked}
               className="bg-card"
+              autoComplete="off"
+              maxLength={15}
               data-testid="Input__fcb159" />
           </div>
         </div>
