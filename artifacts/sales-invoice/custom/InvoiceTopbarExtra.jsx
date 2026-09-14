@@ -44,7 +44,7 @@ const BADGE_STYLES = {
  *
  * The badge is the ONLY entry point. Clicking it opens the payments modal.
  */
-export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, api }) {
+export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, api, onSave, isDirty }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const [showPaymentsModal, setShowPaymentsModal] = useState(false);
@@ -370,6 +370,8 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         token={token}
         apiBaseUrl={apiBaseUrl}
         status={data?.documentStatus}
+        onSave={onSave}
+        isDirty={isDirty}
       />
 
       {/* View payments modal — installment breakdown */}

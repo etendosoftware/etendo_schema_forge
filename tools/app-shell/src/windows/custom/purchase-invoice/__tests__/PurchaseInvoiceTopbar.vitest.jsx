@@ -613,3 +613,9 @@ describe('PurchaseInvoiceTopbar — branch/fallback coverage (ETP-4738)', () => 
     expect(screen.queryByTestId('payment-history-modal')).toBeNull();
   });
 });
+
+// ETP-5272 follow-up ("Enviar a SIF" must flush pending header edits before sending) does NOT
+// apply to this component any more: ETP-5260 moved SendToSifButton (and Clone/Copy-link) out of
+// PurchaseInvoiceTopbar into PurchaseInvoiceSecondaryActions (topbarSecondary slot). The
+// onSave/isDirty forwarding coverage for purchase-invoice now lives in
+// artifacts/purchase-invoice/custom/__tests__/PurchaseInvoiceSecondaryActions.test.js instead.

@@ -426,13 +426,17 @@ describe('SifTab', () => {
     });
 
     it('Fecha registro contable is enabled for a draft, unprocessed invoice', () => {
-      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', processed: false } })} />);
+      // ETP-5272: the row only renders when `aeatsiiFechaRegCont` is present on `data`
+      // (i.e. the field is not `discarded` for the current window — see
+      // hasAccountingRegDateField in SifTab.jsx). Include it here so this ETP-5229
+      // lock-logic assertion still exercises the DateField itself.
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR', processed: false, aeatsiiFechaRegCont: null } })} />);
       expect(screen.getByTestId('date-sif-accountingRegDate')).not.toBeDisabled();
     });
 
     it('Fecha registro contable is disabled on a completed-but-unsent invoice — the reported bug', () => {
       render(<SifTab {...makeProps({
-        data: { documentStatus: 'CO', processed: true, aeatsiiIssent: false },
+        data: { documentStatus: 'CO', processed: true, aeatsiiIssent: false, aeatsiiFechaRegCont: null },
       })} />);
       expect(screen.getByTestId('date-sif-accountingRegDate')).toBeDisabled();
     });
@@ -1408,6 +1412,60 @@ describe('SifTab', () => {
       render(<SifTab {...makeProps({ data: { documentStatus: 'DR' } })} />);
       const exemptionInput = screen.getByTestId('input-sif-exemption');
       expect(exemptionInput).toHaveValue('—');
+    });
+  });
+
+  // ── accountingRegDate row visibility (ETP-5272) ────────────────────────────
+  // "Fecha Registro Contable" (aeatsiiFechaRegCont) is `discarded` in sales-invoice's
+  // decisions.json but stays `editable` in purchase-invoice's. The NEO backend strips a
+  // discarded field's KEY entirely out of the GET/PATCH payload (NeoFieldFilter,
+  // docs/field-visibility-types.md), so SifTab reads that same generic signal — key
+  // presence on `data` — instead of branching on window/spec name (see
+  // hasAccountingRegDateField in SifTab.jsx for the full rationale).
+
+  describe('accountingRegDate row visibility (ETP-5272)', () => {
+    beforeEach(() => {
+      mockFiscalConfig('sii');
+    });
+
+    it('hides the row when the field key is absent from data (discarded, e.g. sales-invoice)', () => {
+      render(<SifTab {...makeProps({ data: { documentStatus: 'DR' } })} />);
+      expect(screen.queryByText('sifDataTabs.field.accountingRegDate')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('date-sif-accountingRegDate')).not.toBeInTheDocument();
+    });
+
+    it('shows the row when the field key is present on data, even with a null value (kept, e.g. purchase-invoice)', () => {
+      render(<SifTab {...makeProps({
+        apiBaseUrl: '/sws/neo/purchase-invoice',
+        data: { documentStatus: 'DR', aeatsiiFechaRegCont: null },
+      })} />);
+      expect(screen.getByText('sifDataTabs.field.accountingRegDate')).toBeInTheDocument();
+      expect(screen.getByTestId('date-sif-accountingRegDate')).toBeInTheDocument();
+    });
+
+    it('shows the row with the actual value when present', () => {
+      render(<SifTab {...makeProps({
+        apiBaseUrl: '/sws/neo/purchase-invoice',
+        data: { documentStatus: 'DR', aeatsiiFechaRegCont: '2026-01-15' },
+      })} />);
+      const dateInput = screen.getByTestId('date-sif-accountingRegDate');
+      expect(dateInput).toHaveValue('2026-01-15');
+    });
+
+    it('calls onChange for aeatsiiFechaRegCont when the field is present and edited', () => {
+      const onChange = vi.fn();
+      render(<SifTab {...makeProps({
+        apiBaseUrl: '/sws/neo/purchase-invoice',
+        data: { documentStatus: 'DR', aeatsiiFechaRegCont: '2026-01-15' },
+        onChange,
+      })} />);
+      fireEvent.change(screen.getByTestId('date-sif-accountingRegDate'), { target: { value: '2026-02-20' } });
+      expect(onChange).toHaveBeenCalledWith('aeatsiiFechaRegCont', '2026-02-20');
+    });
+
+    it('does not crash and still hides the row when data is null', () => {
+      expect(() => render(<SifTab {...makeProps({ data: null })} />)).not.toThrow();
+      expect(screen.queryByTestId('date-sif-accountingRegDate')).not.toBeInTheDocument();
     });
   });
 

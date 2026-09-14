@@ -16,7 +16,14 @@ describe('InvoiceTopbarExtra', () => {
   });
 
   it('accepts data, recordId, token, apiBaseUrl, and api props', () => {
-    assert.match(src, /\{\s*data.*recordId.*token.*apiBaseUrl.*api\s*\}/);
+    assert.match(src, /\{\s*data.*recordId.*token.*apiBaseUrl.*api.*\}/);
+  });
+
+  // ETP-5272 follow-up: onSave/isDirty are plumbed straight through from
+  // DetailView (via SalesInvoiceTopbar) down to SendToSifButton/SifSendingModal,
+  // so "Enviar a SIF" can flush pending header edits before sending.
+  it('accepts onSave and isDirty props', () => {
+    assert.match(src, /\{\s*data.*onSave.*isDirty\s*\}/);
   });
 
   // ── Data fetching ──────────────────────────────────────────────────────────
@@ -194,4 +201,13 @@ describe('InvoiceTopbarExtra', () => {
   // This component (InvoiceTopbarExtra) has no SendDocumentButton to gate any
   // more, in either branch — confirmed above ("detects draft status but no
   // longer renders a SendDocumentButton itself").
+
+  // ETP-5272 follow-up: SendToSifButton must receive the SAME onSave/isDirty
+  // this component received from its own parent — no re-deriving them here.
+  it('forwards onSave and isDirty to SendToSifButton unchanged', () => {
+    const sendToSifBlockMatch = src.match(/<SendToSifButton\b[\s\S]*?\/>/);
+    assert.ok(sendToSifBlockMatch, 'expected a <SendToSifButton ... /> element in the source');
+    assert.match(sendToSifBlockMatch[0], /onSave=\{onSave\}/);
+    assert.match(sendToSifBlockMatch[0], /isDirty=\{isDirty\}/);
+  });
 });

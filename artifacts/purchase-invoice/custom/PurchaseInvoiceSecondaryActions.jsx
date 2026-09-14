@@ -26,9 +26,16 @@ import SendToSifButton from '@/windows/custom/shared/SendToSifButton.jsx';
  * The payment-status badge stays in `PurchaseInvoiceTopbar` (topbarRight),
  * unaffected by this migration — it is a primary/status indicator that
  * belongs at the extreme right, after Save/Confirm.
+ *
+ * ETP-5272 follow-up: "Enviar a SIF" must flush pending header edits before
+ * sending (see SifSendingModal.jsx's `handleSend`). `onSave`/`isDirty` are
+ * part of DetailView's shared topbarSecondary/topbarRight prop contract
+ * (`renderSlotAction`, ETP-5260) and already reach this component via
+ * `{...props}` — they just need forwarding to `SendToSifButton` unchanged,
+ * mirroring how `SalesInvoiceTopbar` forwards them to `InvoiceTopbarExtra`.
  */
 export default function PurchaseInvoiceSecondaryActions(props) {
-  const { data, recordId, apiBaseUrl } = props;
+  const { data, recordId, apiBaseUrl, onSave, isDirty } = props;
 
   return (
     <DocumentSecondaryActions
@@ -41,6 +48,8 @@ export default function PurchaseInvoiceSecondaryActions(props) {
         recordId={recordId}
         apiBaseUrl={apiBaseUrl}
         status={data?.documentStatus}
+        onSave={onSave}
+        isDirty={isDirty}
         data-testid="SendToSifButton__PurchaseInvoiceSecondaryActions" />
     </DocumentSecondaryActions>
   );

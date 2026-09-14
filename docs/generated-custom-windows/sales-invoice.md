@@ -1501,10 +1501,93 @@ which calls the same `SiiSendHandler` backend action (`POST .../action/Em_aeatsi
 No `decisions.json`/generator change was needed for this — `SalesInvoiceTopbar.jsx` is a plain
 custom React component, not generated output.
 
+**Registry-error correction resend (ETP-5272):** before this fix, once `aeatsiiIssent` became
+`true` — even from a first send that AEAT later rejected with a registry error — the `Send to SIF`
+button never reappeared, because `getPendingSifTargets()` (`../shared/sifSending.js`) only offered
+`sendSii` when `aeatsiiIssent` was falsy, and the classic backend never resets that flag after a
+registry-error correction cycle. `getPendingSifTargets()` now also offers `sendSii: true` whenever
+`invoice.aeatsiiErrorRegistral` is truthy (`true` or the AD raw flag `'Y'`, read through the same
+`isSent()` helper used for `aeatsiiIssent`/`tbaiIssent`), independently of `aeatsiiIssent` — so the
+button reappears exactly when the invoice has a pending registry-error correction. On the backend,
+`SiiSendHandler` (`com.etendoerp.go`, `src/com/etendoerp/go/schemaforge/SiiSendHandler.java`) now
+checks `Invoice.isAeatsiiErrorRegistral()` before choosing which classic AEAT process to invoke —
+a plain two-way split, with no dependency on the invoice's AEAT error code:
+- **`aeatsiiErrorRegistral` not set** — the normal send path, unchanged: routes to
+  `org.openbravo.module.sii.process.MultiEnvioFactura` (communication type `A0`, "alta" / new
+  registration) through `NeoProcessService.executeObuiappClass`.
+- **`aeatsiiErrorRegistral = true`** — always routes to
+  `org.openbravo.module.sii.process.MultiInvoiceSIIModification` through the same
+  `NeoProcessService.executeObuiappClass` bridge (it is also a `BaseActionHandler`). This is
+  classic's "Modificar" action and the actual resend for this case: it sends AEAT communication
+  type `A1`, unlike `MultiEnvioFactura`'s always-`A0` envelope — a mismatch that would otherwise
+  be a silent no-op for a corrected invoice. This branch is taken regardless of the invoice's
+  actual AEAT error code (`Invoice.getAeatsiiErrorCode()`); an earlier version of this fix also
+  special-cased error code `"3000"` to route into
+  `org.openbravo.module.sii.process.CorrectDuplicateInvoiceError` directly — that branch was
+  scope creep beyond what was asked and has been removed.
+
+**Follow-up bug fixed — "Enviar a SIF" now flushes pending header edits first (ETP-5272):**
+since ETP-4463, SIF-tab fields (e.g. `aeatsiiErrorRegistral`, the "Modificada error registral"
+checkbox) no longer persist via per-field PATCH on change — they only live in the in-memory
+pending-edits state until a full header Save/Confirm/Reactivate flushes them to the DB. But
+`SifSendingModal.jsx` (`handleSend`) used to call the SII/TBAI process actions directly, with no
+intervening save: `getPendingSifTargets` computes the button's own enablement from that SAME
+in-memory `data` (per the ETP-4463 design), so the button looked correctly enabled right after the
+user ticked the checkbox even though the backend still held the OLD persisted value — a silent
+desync between what `SiiSendHandler` actually routed on and what the user had just set. Fixed
+generically in the shared `SifSendingModal.jsx`: it now accepts `onSave`/`isDirty` props (plumbed
+from `DetailView`'s existing `hook.handleSave`/`isDirty`, through `SalesInvoiceTopbar.jsx` →
+`InvoiceTopbarExtra.jsx` → `SendToSifButton.jsx`, mirroring the save-then-act pattern
+`useEntity.js`'s `handleSaveAndProcess` already uses elsewhere) and, when there is a dirty header,
+awaits the save BEFORE calling `Em_aeatsii_send`/`Em_Tbai_Xmlgenerator`. A clean (non-dirty) header
+skips the save entirely — no redundant round-trip on the common path. A failed save blocks the send
+outright (surfaced both via the save's own toast and a dedicated `sendToSifSaveError` result line in
+the modal) rather than falling through to sending stale data. No window-name branching — see
+`purchase-invoice.md` for this window's identical wiring through `PurchaseInvoiceTopbar.jsx`.
+
+Both `sifSending.js` and `SiiSendHandler.java` are shared between sales-invoice and
+purchase-invoice — see `purchase-invoice.md` for this window's mirror of the same fix.
+
 This runs `SalesInvoiceHeaderHandler` exactly as the UI does — including the `ProcessInvoiceHook`
 routing on completion — because `neo_action` executes the entity's `NeoHandler` hooks
 (ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same
 change: it is the only thing telling the agent what is legal.
+
+**"Fecha Registro Contable" (Accounting Registration Date) field removed — ETP-5272 point 2:**
+`aeatsiiFechaRegCont` (AD column `EM_Aeatsii_Fecha_Reg_Cont` on `C_Invoice`) is now
+`"visibility": "discarded"` in `artifacts/sales-invoice/decisions.json` (was `"editable"` with
+`"form": false` — reachable via API but not shown on the generic form). Discarding it removes the
+field from the frontend contract entirely and from `isIncluded`/`isReadOnly` NEO write filtering
+(`field-visibility-types.md`: a discarded field is no longer accepted in POST/PATCH nor returned in
+GET). This column is unrelated to `DateAcct` ("Fecha Contable" / Accounting Date) — see
+`purchase-invoice.md`'s matching ETP-5272 entry for the full mapping verification that motivated
+this change.
+
+**Follow-up closed — SIF tab row hidden generically (ETP-5272, Developer fix):** the open item
+below (originally logged by the window-agent when point 2 discarded the field) is now fixed. The
+shared `SifTab.jsx` (`tools/app-shell/src/windows/custom/shared/SifTab.jsx`) previously rendered
+the "Fecha Registro Contable" input row unconditionally on **both** sales-invoice and
+purchase-invoice. It now wraps that row in `hasAccountingRegDateField(data)`, a small predicate
+that checks whether the `aeatsiiFechaRegCont` KEY is present on the `data` prop at all — the NEO
+backend (`NeoFieldFilter#filterGetResponse`, `field-visibility-types.md`) strips a `discarded`
+field's key entirely out of the GET/PATCH payload rather than sending it as `null`, so key
+presence is a generic, per-entity, contract-driven signal that needs no window/spec-name branch:
+it hides the row on sales-invoice (key absent) and keeps it unchanged on purchase-invoice (key
+present, `"editable"` per that window's decisions.json), and will do the same automatically for
+any future window that reuses `SifTab` with a different visibility for this field. A window-name
+check was considered and rejected — `SifTab` receives no `contract`/`fields` prop, but this
+key-presence check achieves the same contract-driven result without needing one (the generator
+that could add such a prop, `generate-frontend.js`, lives in the separate `schema_forge_core`
+repo, out of reach from a change scoped to this repo). Covered by
+`tools/app-shell/src/windows/custom/shared/__tests__/SifTab.vitest.jsx`'s "accountingRegDate row
+visibility (ETP-5272)" suite (row hidden when the key is absent, shown when present — including
+with a `null` value — and edits still call `onChange` when the row is shown).
+
+Previously (now resolved), this section documented the field as never on the generic header
+form and the row as rendered unconditionally on both windows, with edits on sales-invoice silently
+dropped server-side (discarded fields are rejected on PATCH). See `purchase-invoice.md`'s matching
+ETP-5272 entry for the column-mapping verification that motivated discarding the field here in the
+first place.
 
 ## Print button — added, visible only in Completado — ETP-4714
 

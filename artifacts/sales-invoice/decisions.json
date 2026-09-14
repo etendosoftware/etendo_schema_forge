@@ -497,8 +497,7 @@
           "form": false
         },
         "aeatsiiFechaRegCont": {
-          "visibility": "editable",
-          "form": false
+          "visibility": "discarded"
         },
         "aeatsiiErrorRegistral": {
           "visibility": "editable",

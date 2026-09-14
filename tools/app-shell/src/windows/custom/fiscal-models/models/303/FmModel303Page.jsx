@@ -16,7 +16,11 @@ import AeatSubmitFlow, { isMissingDefaultIaeActivity } from './AeatSubmitFlow.js
 import { isLastPeriodOfYear, getMissingRequiredFields } from './fm303Layouts.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents, persistManualData, resolveResultColors, deriveResultKind } from '../../fiscalModelsUtils.js';
+import {
+  formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents,
+  persistManualData, deriveResultKind, toBoxArray, applyOverrides, recomputeDerivedBoxes, getBoxValue,
+  resolveResultColors,
+} from '../../fiscalModelsUtils.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -34,21 +38,9 @@ function statusLabelKey(status) {
   return status === 'submitted_ack' ? 'submitted' : status;
 }
 
-function toBoxArray(src) {
-  if (Array.isArray(src)) return src;
-  if (src && typeof src === 'object') return Object.entries(src).map(([n, v]) => ({ num: Number(n), value: v }));
-  return [];
-}
-
-function applyOverrides(boxes, overrides) {
-  if (!Object.keys(overrides).length) return toBoxArray(boxes);
-  const arr = toBoxArray(boxes);
-  const result = arr.filter(b => !(b.num in overrides));
-  Object.entries(overrides).forEach(([num, val]) => {
-    if (val != null) result.push({ num: Number(num), value: val });
-  });
-  return result;
-}
+// toBoxArray/applyOverrides/recomputeDerivedBoxes/getBoxValue moved to
+// fiscalModelsUtils.js (ETP-5272 pt.6) — shared with FmListPage.jsx so the
+// override-merge + derived-box formula lives in exactly one place.
 
 function removeBox108FromLive(prev) {
   if (prev == null) return prev;
@@ -69,8 +61,28 @@ function parseBoxInput(rawValue) {
 
 function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources) {
   if (!res) return;
-  setLiveBoxes(recomputeDerivedBoxes(applyOverrides(res.boxes, manualOverrides)));
-  setLiveSummary(res.summary);
+  const mergedBoxes = recomputeDerivedBoxes(applyOverrides(res.boxes, manualOverrides));
+  setLiveBoxes(mergedBoxes);
+  // ETP-5272 pt.6 (cont.) — two independent reasons `res.summary` can't be trusted as-is,
+  // both because the GET /fiscal303/boxes backend computes purely from invoice data (no
+  // declaration-id/manualData input at all, so it never sees manualOverrides):
+  // 1) `result` is the backend's box 46 ("Resultado régimen general") under a "standard
+  //    company" assumption (100% state attribution, no territorial split). The real final
+  //    liquidation result is box 71 ("Resultado de la liquidación"), which DOES correctly
+  //    reflect the territorial split (box 65/66) through `mergedBoxes` (recomputeDerivedBoxes
+  //    chains box 71 through box 66/69).
+  // 2) `deductible` is box 45 ("total_deducir"), computed as sum([29,31,33,35,37,39,41,42,43,44]).
+  //    Boxes 42/43/44 are pure manual entries (compensaciones régimen agricultura,
+  //    regularización bienes de inversión, prorrata definitiva) the backend never receives —
+  //    so its raw `deductible` silently assumes 42/43/44 = 0.
+  // Both are re-derived here from the override-aware `mergedBoxes` instead of the raw backend
+  // value. `accrued` (box 27, IVA devengado) needs no such treatment — it has no manual-entry
+  // inputs anywhere in its formula.
+  setLiveSummary({
+    ...res.summary,
+    deductible: getBoxValue(mergedBoxes, 45) ?? res.summary?.deductible ?? 0,
+    result: getBoxValue(mergedBoxes, 71) ?? res.summary?.result ?? 0,
+  });
   if (res.sources) setLiveSources(res.sources);
 }
 
@@ -96,24 +108,6 @@ function applyGenerateError(result, t) {
     toast.error(msg);
     console.error('generate303File failed:', result.error, result.serverMessage);
   }
-}
-
-function recomputeDerivedBoxes(boxArr) {
-  const r2 = v => Math.round(v * 100) / 100;
-  const get = num => { const e = boxArr.find(b => b.num === num); return e != null ? (e.value ?? 0) : 0; };
-  const box65entry = boxArr.find(b => b.num === 65);
-  const box65 = box65entry != null ? (box65entry.value ?? 100) : 100;
-  const box45 = r2([29,31,33,35,37,39,41,42,43,44].reduce((s, n) => s + get(n), 0));
-  const box46 = r2(get(27) - box45);
-  const box64 = r2(box46 + get(58) + get(76));
-  const box66 = r2(box64 * box65 / 100);
-  const box69 = r2(box66 + get(77) - get(78) + get(68) + get(108));
-  const box71 = r2(box69 - get(70) + get(109) - get(112));
-  const derived = { 45: box45, 46: box46, 64: box64, 66: box66, 69: box69, 71: box71 };
-  return [
-    ...boxArr.filter(b => !(b.num in derived)),
-    ...Object.entries(derived).map(([num, value]) => ({ num: Number(num), value })),
-  ];
 }
 
 // ── Tab content components ────────────────────────────────────────
@@ -178,11 +172,6 @@ function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, on
       </div>
     </div>
   );
-}
-
-function getBoxValue(liveBoxes, num) {
-  const e = toBoxArray(liveBoxes).find(b => b.num === num);
-  return e ? (e.value ?? 0) : null;
 }
 
 function buildIncidentVariants(blocking, warning, t) {
@@ -390,8 +379,18 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   // `decl.id` only (not `liveBoxes`/`decl._precomputed`) so it fires exactly once
   // per opened declaration instead of looping once `handleCompute` populates state.
   useEffect(() => {
-    const hasPrecomputed = decl._precomputed?.boxes != null || liveBoxes != null;
-    if (hasPrecomputed) return;
+    // ETP-5272 pt.6 — `decl._precomputed` is the RAW, override-free auto-compute result
+    // `FmListPage`'s `useFiscalAutoCompute` already fetched for every draft declaration
+    // before this page ever mounted. Route it through `applyComputeResult` (same helper
+    // `handleCompute` and "Calcular" use) so the already-hydrated `manualOverrides` get
+    // merged in immediately — otherwise `liveBoxes` stays pinned to the raw seed from the
+    // initial state above and the user's saved manual edits are invisible until they
+    // manually re-run "Calcular". No new network call: this reuses the payload we already have.
+    if (decl._precomputed?.boxes != null) {
+      applyComputeResult(decl._precomputed, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
+      return;
+    }
+    if (liveBoxes != null) return;
     if (!token || !apiBaseUrl) return;
     handleCompute();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -570,9 +569,12 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   // are reflected in the accrued/deductible/result cards without a full recalculate.
   const kpi27 = getBoxValue(liveBoxes, 27);
   const kpi45 = getBoxValue(liveBoxes, 45);
-  const kpi46 = getBoxValue(liveBoxes, 46);
-  const liveBoxSummary = (kpi27 !== null || kpi45 !== null || kpi46 !== null)
-    ? { accrued: kpi27, deductible: kpi45, result: kpi46 }
+  // ETP-5272 pt.6 (cont.) — the final liquidation result is box 71 ("Resultado de la
+  // liquidación"), not box 46 ("Resultado régimen general"), which is only an intermediate
+  // figure. See applyComputeResult above for the full rationale.
+  const kpi71 = getBoxValue(liveBoxes, 71);
+  const liveBoxSummary = (kpi27 !== null || kpi45 !== null || kpi71 !== null)
+    ? { accrued: kpi27, deductible: kpi45, result: kpi71 }
     : null;
   const summary = liveSummary ?? liveBoxSummary ?? decl.summary ?? {};
   // ETP-5187 — was `decl.result?.kind`, which the backend never populates (declToJson has no

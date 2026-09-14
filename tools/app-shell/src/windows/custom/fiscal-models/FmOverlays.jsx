@@ -584,6 +584,24 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
     return set;
   }, [existingDeclarations, model, year]);
 
+  // Periods that already carry a DRAFT declaration for the currently selected model+year
+  // (ETP-5272). Unlike `existingPeriods` above (any status, purely informational), a period
+  // in this set is actively BLOCKED from selection below: a draft is an unfinished, in-progress
+  // declaration, and letting the user spawn a 2nd one for it just fragments their work across
+  // two half-finished rows instead of completing (or deleting) the existing one first. Any
+  // other existing status (ready/submitted/...) is the intended rectificativa case and stays
+  // exactly as informational/selectable as `existingPeriods` already makes it.
+  const draftPeriods = useMemo(() => {
+    const set = new Set();
+    (existingDeclarations ?? []).forEach(d => {
+      if (String(d.model) === String(model) && Number(d.year) === Number(year) && d.period
+          && d.status === 'draft') {
+        set.add(d.period);
+      }
+    });
+    return set;
+  }, [existingDeclarations, model, year]);
+
   function selectFrequency(next) {
     setFrequency(next);
     setPeriod(next === 'monthly' ? MONTHLY_PERIODS[0] : QUARTERLY_PERIODS[0]);
@@ -699,14 +717,31 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
               {periods.map(p => {
                 const isSelected = p === period;
                 const isExisting = existingPeriods.has(p);
+                // ETP-5272 — a draft-blocked period is disabled outright (see draftPeriods
+                // above); its tooltip is deliberately distinct from the purely-informational
+                // existing-period hint, so the user understands WHY this one can't be picked.
+                const isDraftBlocked = draftPeriods.has(p);
+                // S3358 — de-nested from a nested ternary: draft-blocked and existing each
+                // have their own distinct tooltip (see comment above), unselected/available
+                // periods get none.
+                let periodTitle;
+                if (isDraftBlocked) {
+                  periodTitle = t('fm.new_decl.period_draft_blocked_hint') ?? undefined;
+                } else if (isExisting) {
+                  periodTitle = t('fm.new_decl.period_existing_hint') ?? undefined;
+                } else {
+                  periodTitle = undefined;
+                }
                 return (
                   <button
                     key={p}
                     type="button"
                     aria-pressed={isSelected}
-                    className={`fm-newdecl-period-btn${isSelected ? ' fm-newdecl-period-btn--selected' : ''}${isExisting ? ' fm-newdecl-period-btn--existing' : ''}`}
-                    title={isExisting ? (t('fm.new_decl.period_existing_hint') ?? undefined) : undefined}
+                    disabled={isDraftBlocked}
+                    className={`fm-newdecl-period-btn${isSelected ? ' fm-newdecl-period-btn--selected' : ''}${isExisting ? ' fm-newdecl-period-btn--existing' : ''}${isDraftBlocked ? ' fm-newdecl-period-btn--draft-blocked' : ''}`}
+                    title={periodTitle}
                     onClick={() => {
+                      if (isDraftBlocked) return;
                       setPeriod(p);
                       // ETP-5187 (adjacent scope) — same IAE-activity reminder as
                       // FmCatalogPage's Modelo 303 activation toggle, fired here on

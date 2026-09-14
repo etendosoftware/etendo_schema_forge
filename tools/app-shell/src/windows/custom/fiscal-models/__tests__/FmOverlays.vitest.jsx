@@ -950,4 +950,103 @@ describe('NewDeclModal', () => {
       expect(container.textContent).not.toContain('fm.new_decl.duplicate_warning');
     });
   });
+
+  // ETP-5272 — unlike the purely-informational `existingPeriods` marker above
+  // (any status, always selectable — the rectificativa case), a period that
+  // already carries a DRAFT declaration is actively blocked from selection: a
+  // draft is an unfinished, in-progress declaration, and spawning a 2nd one for
+  // it just fragments the user's work across two half-finished rows instead of
+  // completing (or deleting) the existing one first.
+  describe('draftPeriods — a draft declaration blocks its period from re-selection', () => {
+    it('disables the period button and shows the draft-blocked tooltip when the existing declaration for it is a draft', () => {
+      const { container } = render(
+        <NewDeclModal
+          onConfirm={vi.fn()}
+          onClose={vi.fn()}
+          activeModels={{ '303': true, '349': true }}
+          existingDeclarations={[{ model: '303', year: 2026, period: 'T1', status: 'draft' }]}
+        />
+      );
+      selectYear(container, 2026);
+      const t1 = getPeriodBtn(container, 'T1');
+      expect(t1.className).toContain('fm-newdecl-period-btn--draft-blocked');
+      expect(t1.hasAttribute('disabled')).toBe(true);
+      expect(t1.disabled).toBe(true);
+      // Distinct tooltip from the purely-informational existing-period hint, so
+      // the user understands WHY this one specifically can't be picked.
+      expect(t1.getAttribute('title')).toBe('fm.new_decl.period_draft_blocked_hint');
+    });
+
+    it('clicking a draft-blocked period does not select it', () => {
+      const { container } = render(
+        <NewDeclModal
+          onConfirm={vi.fn()}
+          onClose={vi.fn()}
+          activeModels={{ '303': true, '349': true }}
+          existingDeclarations={[{ model: '303', year: 2026, period: 'T1', status: 'draft' }]}
+        />
+      );
+      selectYear(container, 2026);
+      // T1 is the modal's own default selection, so first move off it onto a
+      // non-blocked period (T2) — a real assertion on "clicking T1 does nothing"
+      // needs the selection to start elsewhere.
+      const t2 = getPeriodBtn(container, 'T2');
+      fireEvent.click(t2);
+      expect(t2.getAttribute('aria-pressed')).toBe('true');
+
+      const t1 = getPeriodBtn(container, 'T1');
+      fireEvent.click(t1);
+      expect(t1.getAttribute('aria-pressed')).toBe('false');
+      expect(t2.getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('stays informational-only (existing, not draft-blocked) when the existing declaration for the period has any other status', () => {
+      const { container } = render(
+        <NewDeclModal
+          onConfirm={vi.fn()}
+          onClose={vi.fn()}
+          activeModels={{ '303': true, '349': true }}
+          existingDeclarations={[{ model: '303', year: 2026, period: 'T1', status: 'submitted' }]}
+        />
+      );
+      selectYear(container, 2026);
+      const t1 = getPeriodBtn(container, 'T1');
+      expect(t1.className).not.toContain('fm-newdecl-period-btn--draft-blocked');
+      expect(t1.className).toContain('fm-newdecl-period-btn--existing');
+      expect(t1.hasAttribute('disabled')).toBe(false);
+      expect(t1.getAttribute('title')).toBe('fm.new_decl.period_existing_hint');
+      fireEvent.click(t1);
+      expect(t1.getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('does not block a period when the draft declaration belongs to a different model or year', () => {
+      const { container } = render(
+        <NewDeclModal
+          onConfirm={vi.fn()}
+          onClose={vi.fn()}
+          activeModels={{ '303': true, '349': true }}
+          existingDeclarations={[
+            { model: '349', year: 2026, period: 'T1', status: 'draft' },
+            { model: '303', year: 2025, period: 'T1', status: 'draft' },
+          ]}
+        />
+      );
+      selectYear(container, 2026);
+      const t1 = getPeriodBtn(container, 'T1');
+      expect(t1.className).not.toContain('fm-newdecl-period-btn--draft-blocked');
+      expect(t1.hasAttribute('disabled')).toBe(false);
+    });
+
+    it('does not block any period when existingDeclarations is omitted', () => {
+      const { container } = render(
+        <NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={{ '303': true, '349': true }} />
+      );
+      selectYear(container, 2026);
+      for (const p of ['T1', 'T2', 'T3', 'T4']) {
+        const btn = getPeriodBtn(container, p);
+        expect(btn.className).not.toContain('fm-newdecl-period-btn--draft-blocked');
+        expect(btn.hasAttribute('disabled')).toBe(false);
+      }
+    });
+  });
 });

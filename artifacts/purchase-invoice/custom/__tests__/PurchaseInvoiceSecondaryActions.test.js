@@ -45,4 +45,15 @@ describe('PurchaseInvoiceSecondaryActions', () => {
   it('gates SendToSifButton on the invoice status via the status prop', () => {
     assert.match(src, /<SendToSifButton[\s\S]*?status=\{data\?\.documentStatus\}/);
   });
+
+  // ETP-5272 follow-up: onSave/isDirty (part of DetailView's shared
+  // topbarSecondary/topbarRight prop contract since ETP-5260) must reach
+  // SendToSifButton unchanged, so "Enviar a SIF" flushes pending header edits
+  // before sending — mirrors sales-invoice's InvoiceTopbarExtra wiring.
+  it('forwards onSave and isDirty to SendToSifButton unchanged', () => {
+    const sendToSifBlockMatch = src.match(/<SendToSifButton\b[\s\S]*?\/>/);
+    assert.ok(sendToSifBlockMatch, 'expected a <SendToSifButton ... /> element in the source');
+    assert.match(sendToSifBlockMatch[0], /onSave=\{onSave\}/);
+    assert.match(sendToSifBlockMatch[0], /isDirty=\{isDirty\}/);
+  });
 });

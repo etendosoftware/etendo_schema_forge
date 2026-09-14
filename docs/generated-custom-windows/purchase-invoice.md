@@ -1424,10 +1424,70 @@ plain `aeatsiiSend` kebab-menu entry (`window.menuActions`) that called the back
 `SendToSifButton` into sales-invoice's topbar instead (see `sales-invoice.md`), so purchase-invoice
 keeps this single, fiscal-profile-aware entry point and does not gain a duplicate kebab action.
 
+**Registry-error correction resend (ETP-5272):** this window shares `SendToSifButton.jsx` and
+`../shared/sifSending.js` with sales-invoice, so it gets the same fix — see
+`sales-invoice.md` §"Registry-error correction resend (ETP-5272)" for the full explanation. In
+short: `getPendingSifTargets()` now also offers `sendSii: true` whenever
+`invoice.aeatsiiErrorRegistral` is truthy, independently of `aeatsiiIssent`, so the `Send to SIF`
+button reappears after a registry-error correction cycle instead of staying hidden forever once
+`aeatsiiIssent` is `true`. The backend routing fix in `SiiSendHandler.java` — also shared, not
+window-specific Java code — is a plain 2-way split: normal send goes to `MultiEnvioFactura`
+(communication type `A0`, "alta") as before; whenever `Invoice.isAeatsiiErrorRegistral()` is
+`true`, it routes to `MultiInvoiceSIIModification` instead (communication type `A1`, via the
+same `NeoProcessService.executeObuiappClass` bridge `MultiEnvioFactura` uses) — the real resend
+for a corrected invoice, unconditionally, with no branch on the invoice's AEAT error code. An
+earlier version of this fix also special-cased error code `"3000"` to route into
+`CorrectDuplicateInvoiceError` (a read-back/sync against AEAT, not a resend) — that 3-way split
+was scope creep beyond what was asked and has been removed.
+
+**Follow-up bug fixed — "Enviar a SIF" now flushes pending header edits first (ETP-5272):** this
+window shares the fix with sales-invoice — see `sales-invoice.md` §"Follow-up bug fixed — 'Enviar
+a SIF' now flushes pending header edits first (ETP-5272)" for the full explanation. In short:
+`SifSendingModal.jsx` used to call `Em_aeatsii_send`/`Em_Tbai_Xmlgenerator` without first saving
+any pending header edit (e.g. a just-ticked `aeatsiiErrorRegistral`), which only lives in the
+in-memory pending-edits state since ETP-4463 until a full header save flushes it — a silent
+desync between what the button showed and what the backend actually routed on. `SifSendingModal`
+now accepts generic `onSave`/`isDirty` props, plumbed here through `PurchaseInvoiceTopbar.jsx` →
+`SendToSifButton.jsx` from `DetailView`'s existing `hook.handleSave`/`isDirty` (the same values
+`SalesInvoiceTopbar.jsx` plumbs on the sales side), and awaits the save before sending whenever the
+header is dirty — skipping it entirely on a clean header. A failed save blocks the send and
+surfaces the error instead of proceeding with stale data.
+
 This runs `PurchaseInvoiceHeaderHandler` exactly as the UI does — including the total-discount
 line created before completion — because `neo_action` executes the entity's `NeoHandler` hooks
 (ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same
 change: it is the only thing telling the agent what is legal.
+
+**"Fecha Registro Contable" column mapping verified — ETP-5272 point 2 (no bug found):**
+investigated whether this window's "Fecha Registro Contable" field (`aeatsiiFechaRegCont` in
+`decisions.json`/schema-raw, still `"visibility": "editable"`, `"form": false` here — unlike
+sales-invoice, this field stays as-is on purchase-invoice) actually persists into Classic's
+accounting-registration-date column, or was silently writing into `DateAcct` ("Fecha Contable" /
+Accounting Date) instead. Verdict: **the mapping is correct, no fix needed.** Evidence:
+- `AD_Column` for the field (`F2759A840ED24FEEAB925A72B6D85717`, `columnname =
+  EM_Aeatsii_Fecha_Reg_Cont`) is a distinct column from `DateAcct` (`AD_Column_ID 3508`,
+  `columnname = DateAcct`) on `C_Invoice` — confirmed by direct DB query, not assumed from naming.
+- The pushed NEO config (`ETGO_SF_FIELD` row `355844B956484233873562F30BDAC4CA` for
+  purchase-invoice's header entity) has `ad_column_id = F2759A840ED24FEEAB925A72B6D85717` — i.e.
+  it is bound to `EM_Aeatsii_Fecha_Reg_Cont`, not `DateAcct`. `decisions.json` has no property that
+  can override a field's column binding (it always comes 1:1 from `AD_Column.columnname` at
+  extraction time), so there is no schema_forge-side mechanism that could misdirect this write in
+  the first place.
+- Classic backend: `AEATSII_C_INVOICE_POST_EP.xml` (`org.openbravo.module.sii`, the DB function
+  that runs on invoice posting) sets `em_aeatsii_fecha_reg_cont = Cur_Sii_Invoice.fecha_reg_cont`
+  (derived from `current_date`) — it never touches `dateacct`. No Java handler (classic SII module
+  or `com.etendoerp.go`) was found that writes this field's value into `DateAcct` or vice versa.
+- Empirical DB check across 1918 purchase invoices: 1772 have `em_aeatsii_fecha_reg_cont IS NULL`
+  (never triggered — expected, only posting-with-SII-active populates it) and, of the remainder,
+  only 2 rows have a `DateAcct` that differs from `em_aeatsii_fecha_reg_cont` on the date they
+  disagree — i.e. the two columns are independently maintained, not aliased; the near-identical
+  values seen on same-day-posted demo invoices are coincidental (both default to "today" around
+  posting time), not evidence of a shared column.
+
+No `decisions.json`/NEO change was made for this window as part of this investigation — this
+field's configuration is untouched. See `sales-invoice.md` §"'Fecha Registro Contable' field
+removed — ETP-5272 point 2" for that window's field-removal change (out of scope here — this
+window keeps the field per this ticket's scope).
 
 ### Write off the invoice difference (ETP-4797)
 
