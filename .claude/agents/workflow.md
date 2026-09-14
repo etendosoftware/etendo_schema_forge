@@ -68,7 +68,14 @@ as an integration tier** — `develop` is now both the default base and the defa
   default; a specific feature/task branch when the coordinator says the new work depends on it)
 - PRs target the branch the coordinator specifies (normally `develop`, or a grouping/umbrella
   feature branch when working a batched sweep)
-- Regular merge only, never squash, never `--no-verify` unless explicitly told
+- Regular merge only, never squash
+- **Never `--no-verify` — on `git commit` (or its short form `-n`) just as much as on `git push`.**
+  `pre-commit` leaves an execution proof that `commit-msg` stamps into the message; with no proof
+  there is no stamp, and the commit is then rejected by the push gate and by the CI hooks check
+  (`.githooks/commit-msg`, `.githooks/lib/hooks-proof.sh`). The bypass does not skip the
+  validation, it relocates it to a far more expensive place. If a commit hook fails, fixing what
+  it reports IS the task; if the hook itself is broken, say so and stop. A human can always run
+  the bypass in their own terminal — an agent does not.
 - Never push directly to `develop` or `main`
 
 **Upstream tracking (MANDATORY).** A new branch must NEVER inherit the base branch as its upstream.
