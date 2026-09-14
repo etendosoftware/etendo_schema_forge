@@ -146,6 +146,8 @@ vi.mock('lucide-react', () => ({
   PlusCircle: () => <svg data-testid="icon-plus-circle" />,
   MoreVertical: () => <svg data-testid="icon-more-vertical" />,
   AlertTriangle: () => <svg data-testid="icon-alert-triangle" />,
+  X: () => <svg data-testid="icon-x" />,
+  Info: () => <svg data-testid="icon-info" />,
 }));
 
 // DropdownMenu: stub out Radix primitives so the content renders only when the
