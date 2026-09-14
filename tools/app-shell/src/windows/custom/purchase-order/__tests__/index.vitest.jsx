@@ -95,6 +95,12 @@ vi.mock('@generated/purchase-order/custom/BulkPurchaseOrderMoreMenu', () => ({
   default: () => <div data-testid="bulk-more-menu" />,
 }));
 
+// ETP-5315 — grid bulk-select Reactivate, mirroring sales-order's own mock
+// of OrderReactivateBulkAction in its index.vitest.jsx.
+vi.mock('@generated/purchase-order/custom/PurchaseOrderReactivateBulkAction', () => ({
+  default: () => <div data-testid="reactivate-bulk-action" />,
+}));
+
 vi.mock('@generated/purchase-order/custom/PurchaseOrderActions', () => ({
   ConfirmModal: () => <div data-testid="confirm-modal" />,
   PoConfirmResultModal: () => <div data-testid="confirm-result-modal" />,
@@ -171,5 +177,17 @@ describe('PurchaseOrderWindow — render smoke tests (ETP-4520 window-access wir
     render(<PurchaseOrderWindow windowName="purchase-order" apiBaseUrl="/api" token="tkn" />);
 
     expect(lastUseOrderWindowArgs).toMatchObject({ specName: 'purchase-order', documentType: 'Purchase Order' });
+  });
+
+  // ETP-5315 — Reactivate must be consistent across all three surfaces (form
+  // kebab, grid bulk-select, grid row-hover kebab). This asserts the
+  // row-hover kebab wiring: showReactivate: true reaches the shared
+  // useOrderWindow hook, which is what actually adds the 'reactivate' entry
+  // to rowQuickActions.menuActions (see useOrderWindow.vitest.jsx for that
+  // shared, window-agnostic behavior).
+  it('passes showReactivate: true to useOrderWindow, enabling the row-hover kebab Reactivate item', () => {
+    render(<PurchaseOrderWindow windowName="purchase-order" apiBaseUrl="/api" token="tkn" />);
+
+    expect(lastUseOrderWindowArgs).toMatchObject({ showReactivate: true });
   });
 });
