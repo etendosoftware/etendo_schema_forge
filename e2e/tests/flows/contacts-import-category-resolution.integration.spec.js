@@ -145,7 +145,10 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     await waitForDetailReady(page);
     await expect(page.getByTestId('field-etgoEmail')).toHaveValue(`e2e-company-${unique}@example.com`);
     await expect(page.getByTestId('field-etgoPhone')).toHaveValue('+34 910 000 001');
-    await expect(page.getByTestId('field-etgoWeb')).toHaveValue(`https://e2e-${unique}.example`);
+    // ETP-5031 follow-up — etgoWeb is stored WITHOUT its scheme (the form's "https://" chip
+    // is a fixed prefix, never part of the value); contactsImportDescriptor now strips a
+    // scheme off the CSV's `web` cell the same way, so this must match the bare domain.
+    await expect(page.getByTestId('field-etgoWeb')).toHaveValue(`e2e-${unique}.example`);
     await expect(page.getByTestId('field-taxID')).toHaveValue(taxId(0));
     await page.getByTestId('tab-locationAddress').click();
     await expect(page.getByText('Madrid, Calle Mayor 1', { exact: true })).toBeVisible({ timeout: 15_000 });
