@@ -73,7 +73,7 @@ const BASE = {
         { id: 'dep_aduanero',    labelKey: 'fm.ident.dep_aduanero',    type: 'checkbox', readOnly: false },
         { id: 'redeme',          labelKey: 'fm.ident.redeme',          type: 'checkbox', readOnly: false },
         { id: 'concurso',        labelKey: 'fm.ident.concurso',        type: 'checkbox', readOnly: false },
-        { id: 'fecha_concurso',  labelKey: 'fm.ident.fecha_concurso',  type: 'date',     readOnly: false, visibleWhen: { field: 'concurso', equals: true } },
+        { id: 'fecha_concurso',  labelKey: 'fm.ident.fecha_concurso',  type: 'date',     readOnly: false, required: true, visibleWhen: { field: 'concurso', equals: true } },
         { id: 'postconcursal',   labelKey: 'fm.ident.postconcursal',   type: 'checkbox', readOnly: false, visibleWhen: { field: 'concurso', equals: true } },
         TIPO_DECLARACION_FIELD,
       ],
@@ -246,7 +246,7 @@ const _2024_IDENTIFICACION_FIELDS = [
   { id: 'dep_foral',     labelKey: 'fm.ident.dep_foral',     type: 'checkbox', readOnly: false },
   { id: 'redeme',        labelKey: 'fm.ident.redeme',        type: 'checkbox', readOnly: false },
   { id: 'concurso',      labelKey: 'fm.ident.concurso',      type: 'checkbox', readOnly: false },
-  { id: 'fecha_concurso', labelKey: 'fm.ident.fecha_concurso', type: 'date',   readOnly: false, visibleWhen: { field: 'concurso', equals: true } },
+  { id: 'fecha_concurso', labelKey: 'fm.ident.fecha_concurso', type: 'date',   readOnly: false, required: true, visibleWhen: { field: 'concurso', equals: true } },
   { id: 'postconcursal', labelKey: 'fm.ident.postconcursal', type: 'checkbox', readOnly: false, visibleWhen: { field: 'concurso', equals: true } },
   TIPO_DECLARACION_FIELD,
 ];

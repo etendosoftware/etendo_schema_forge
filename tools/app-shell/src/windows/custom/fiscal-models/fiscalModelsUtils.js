@@ -1,5 +1,6 @@
 import { createElement } from 'react';
 import { formatCurrency } from '../../../lib/formatCurrency.js';
+import { parseCalendarDate } from '../../../lib/dateOnly.js';
 import { toast } from 'sonner';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
@@ -97,6 +98,22 @@ const BOX_PARAM_MAP = {
  *   manualOverrides — editable box values keyed by box number
  *   filename      — optional download filename (defaults to 303_<period>_<year>.txt)
  */
+// Formats a date-only value (as read from the `fecha_concurso` `<input type="date">`, always a
+// plain `yyyy-MM-dd` string — see fm303Layouts.js) into AEAT's strict `ddMMyyyy` digit format
+// (no separators), which is what ConcursoDate must carry (AEAT303Report2014.java:350-372,
+// unchanged through AEAT303Report2025; strict format validated by AEAT303Report2023+, ETP-5272).
+// Reuses the canonical `parseCalendarDate` (per this project's date-only parsing policy) rather
+// than a hand-rolled `new Date(string)` parse. Returns null when there's nothing to format
+// (blank/undefined/unparsable) — callers must not send a garbage ConcursoDate in that case.
+function formatAeatConcursoDate(raw) {
+  const date = parseCalendarDate(raw);
+  if (!date) return null;
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const yyyy = String(date.getFullYear());
+  return `${dd}${mm}${yyyy}`;
+}
+
 function applyRectificativaParams(params, identChecks) {
   params.set('IsComplementary', 'Y');
   if (identChecks.nro_justificante) params.set('ComplementaryNo', identChecks.nro_justificante);
@@ -116,8 +133,17 @@ export function applyIdentParams(params, identChecks) {
   // (2) unless this is explicitly "Y" (ETP-5027).
   if (identChecks.redeme === true) params.set('MonthlyRegister', 'Y');
   // Concurso de acreedores — AEAT303Report2014's "IsConcurso"/"ConcursoType" constants, still
-  // read unchanged through the override chain up to AEAT303Report2025 (ETP-5027).
-  if (identChecks.concurso === true) params.set('IsConcurso', 'Y');
+  // read unchanged through the override chain up to AEAT303Report2025 (ETP-5027). ConcursoDate
+  // (the bankruptcy statement date) must go alongside them — AEAT303Report2023+ throws
+  // @AEAT303_Bad_Bankruptcy_Statement_Date_Format@ when it's missing/blank, and 2021/2022 ship
+  // 8 blank spaces into that AEAT field slot otherwise (ETP-5272 pt.7). Only sent when there's
+  // an actual date to format — fm303Layouts.js's `fecha_concurso` required-field gate is what
+  // stops a blank date from reaching this point in the first place.
+  if (identChecks.concurso === true) {
+    params.set('IsConcurso', 'Y');
+    const concursoDate = formatAeatConcursoDate(identChecks.fecha_concurso);
+    if (concursoDate) params.set('ConcursoDate', concursoDate);
+  }
   if (identChecks.postconcursal === true) params.set('ConcursoType', 'Y');
   if (identChecks.complementaria === true) {
     params.set('IsComplementary', 'Y');
