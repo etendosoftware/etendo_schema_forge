@@ -21,9 +21,9 @@ import { buildRowKey } from './useRolesOverviewData.js';
  * `ETGO_SF_SPEC`-backed) and they never appeared in the backend's own
  * `matrix.categories` — the overlay was misleading extra rows, not real data.
  * The i18n keys it used (`userRolesTabDashboardRow`/`userRolesTabFavoritesRow`/
- * `userRolesTabCopilotRow`) are intentionally left untouched in the locale
- * files — they're shared verbatim with `UserRolesTab.jsx`'s own separate
- * `GENERAL_ROWS` overlay, out of scope for this ticket.
+ * `userRolesTabCopilotRow`) have since been removed from the locale files too:
+ * ETP-5196 removed `UserRolesTab.jsx`'s own separate `GENERAL_ROWS` overlay
+ * (which shared those same keys), leaving them unused everywhere.
  *
  * Each row's React key AND `data-testid` use `buildRowKey(category, windowId)`
  * (`${category}::${windowId}`) — the backend's real per-window `id`, not its
