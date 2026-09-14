@@ -16,9 +16,28 @@ describe('OrderCreateInvoice', () => {
     assert.match(src, /\{\s*data.*recordId.*token.*apiBaseUrl/);
   });
 
-  it('renders confirm flow only for draft orders (status DR)', () => {
+  // ETP-5255 — this test used to also assert
+  // `assert.match(src, /\{isDraft && showConfirm && createPortal\(/)`. That half is gone
+  // rather than re-pointed at the new expression, for two reasons.
+  //
+  // It was a source-text assertion, of the kind forbidden since ETP-4958. And it was pinning
+  // the defect: `isDraft` in that gate unmounted the confirm modal the instant `onRefresh()`
+  // reloaded the just-confirmed order as CO, so a failed shipment/invoice step was reported
+  // nowhere — no error, no toast, no retry path — and the expression could not be corrected
+  // without turning this test red. Re-writing the regex would have re-pinned whatever shape
+  // came next, which is the same mistake in a new form.
+  //
+  // The two real properties (the modal does not OPEN outside draft; once open it SURVIVES the
+  // DR→CO transition with its state intact, on both render paths) are asserted behaviourally
+  // in tools/app-shell/src/windows/custom/sales-order/__tests__/
+  //   OrderCreateInvoice.confirmModalLifecycle.vitest.jsx
+  // which mounts THIS module (via `@generated/...`) and drives the real open event. Verified
+  // non-vacuous: those tests fail against the pre-fix source.
+  //
+  // The `isDraft` derivation itself stays — it is a value, not a JSX shape, and it is what the
+  // behavioural tests exercise.
+  it('derives draft status from documentStatus', () => {
     assert.match(src, /const isDraft\s*=\s*status\s*===\s*'DR'/);
-    assert.match(src, /\{isDraft && showConfirm && createPortal\(/);
   });
 
   it('uses createPortal for modal rendering', () => {

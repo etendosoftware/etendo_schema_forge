@@ -802,7 +802,11 @@ describe('InlineLinesPanel', () => {
     expect(within(row).queryByText('21% VAT')).not.toBeInTheDocument();
   });
 
-  it('renders date input type in edit mode', async () => {
+  // ETP-5245 — this used to assert the browser's native `<input type="date">`. A date cell
+  // now edits through the app's own DateField (calendar trigger + masked text input), the
+  // same control EntityForm and the add-row use. Full coverage of the swap, including the
+  // yyyy-MM-dd commit format, lives in linesDateField.vitest.jsx.
+  it('renders the app date picker in edit mode', async () => {
     const columns = [
       { key: 'orderDate', label: 'Date', type: 'date', column: 'DateOrdered' },
     ];
@@ -827,10 +831,11 @@ describe('InlineLinesPanel', () => {
     const actions = within(row).getByTestId('line-actions');
     const editBtn = within(actions).getAllByRole('button')[0];
     await act(async () => { await userEvent.click(editBtn); });
-    // Date field renders as type="date" input
+    // DateField's masked text input, not a native date control.
     const dateInput = within(row).getByTestId('field-orderDate');
     expect(dateInput).toBeInTheDocument();
-    expect(dateInput).toHaveAttribute('type', 'date');
+    expect(dateInput).toHaveAttribute('type', 'text');
+    expect(dateInput).toHaveAttribute('maxLength', '10');
   });
 
   it('renders numeric field with decimal inputMode in edit mode', async () => {
@@ -957,9 +962,12 @@ describe('InlineLinesPanel', () => {
     const actions = within(row).getByTestId('line-actions');
     const editBtn = within(actions).getAllByRole('button')[0];
     await act(async () => { await userEvent.click(editBtn); });
-    // Amount field should display "23.00" (formatForEdit)
+    // ETP-5107 — the amount-typed edit cell now renders MaskedAmountInput,
+    // whose idle display routes through the canonical formatCurrency() (no
+    // currency code here, so no symbol) instead of the old formatForEdit's
+    // period-decimal n.toFixed(2). Spanish comma-decimal, two fixed decimals.
     const priceInput = within(row).getByTestId('field-unitPrice');
-    expect(priceInput).toHaveValue('23.00');
+    expect(priceInput).toHaveValue('23,00');
   });
 
   it('renders readonly LookupTrigger for lookup fields in edit mode', async () => {

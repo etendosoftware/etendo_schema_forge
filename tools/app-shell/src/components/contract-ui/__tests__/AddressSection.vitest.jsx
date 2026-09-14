@@ -59,6 +59,33 @@ describe('AddressSection', () => {
     expect(redMarks.length).toBeGreaterThanOrEqual(2);
   });
 
+  /**
+   * ETP-5103 CP-6 — "Primera línea" must carry the mandatory marker in the
+   * "Nuevo contacto" popup. The case above only counts the markers; this one
+   * pins WHICH label gets one, which is the part a wrong `requiredFields` entry
+   * would break silently.
+   *
+   * `getByText` matches an element's own text nodes, so the plain key still
+   * finds the label; `textContent` is what shows the appended asterisk.
+   */
+  it('appends the mandatory marker to the first address line, and only there', () => {
+    render(
+      <AddressSection form={defaultForm} onChange={noop} opts={defaultOpts} requiredFields={['address', 'country']} />,
+    );
+    expect(screen.getByText('addressLine1').textContent).toBe('addressLine1*');
+    expect(screen.getByText('countryLabel').textContent).toBe('countryLabel*');
+    expect(screen.getByText('addressLine2').textContent).toBe('addressLine2');
+    expect(screen.getByText('postalCodeLabel').textContent).toBe('postalCodeLabel');
+    expect(screen.getByText('cityLabel').textContent).toBe('cityLabel');
+  });
+
+  it('leaves the first address line unmarked when it is not required', () => {
+    // The marker is driven entirely by the parent's list — AddressSection has no
+    // opinion of its own, so the other popups that reuse it are unaffected.
+    render(<AddressSection form={defaultForm} onChange={noop} opts={defaultOpts} />);
+    expect(screen.getByText('addressLine1').textContent).toBe('addressLine1');
+  });
+
   it('calls onChange when address input changes', () => {
     const onChange = vi.fn();
     render(<AddressSection form={defaultForm} onChange={onChange} opts={defaultOpts} />);
