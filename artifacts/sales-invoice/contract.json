@@ -1,8 +1,8 @@
 {
-  "version": "0.88.0",
+  "version": "0.89.0",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-09-11T16:44:00.941Z",
-  "checksum": "817993e5bf95f50d",
+  "updatedAt": "2026-09-14T18:30:38.298Z",
+  "checksum": "7d1889e746ca5e40",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -1619,31 +1619,6 @@
             }
           },
           {
-            "name": "aeatsiiFechaRegCont",
-            "apiKey": "aeatsiiFechaRegCont",
-            "column": "EM_Aeatsii_Fecha_Reg_Cont",
-            "label": "EM_Aeatsii_Fecha_Reg_Cont",
-            "type": "date",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "derivation": {
-              "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN null ELSE now() END FROM dual"
-            },
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN null ELSE now() END FROM dual",
-            "validation": {
-              "maxLength": 19
-            },
-            "readOnlyLogic": {
-              "raw": "@AEATSII_InSIIAndPostedInvoices@='Y'",
-              "evaluable": true,
-              "js": "record['aEATSII_InSIIAndPostedInvoices'] === 'Y'"
-            }
-          },
-          {
             "name": "eTGOCurrencyRate",
             "apiKey": "eTGOCurrencyRate",
             "column": "EM_ETGO_Currency_Rate",
@@ -1849,13 +1824,6 @@
             "derivation": {
               "type": "computed",
               "source": "false"
-            }
-          },
-          {
-            "name": "aeatsiiFechaRegCont",
-            "derivation": {
-              "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN null ELSE now() END FROM dual"
             }
           }
         ],
@@ -4018,7 +3986,7 @@
             "apiKey": "aeatsiiFechaRegCont",
             "column": "EM_Aeatsii_Fecha_Reg_Cont",
             "type": "date",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -6335,14 +6303,6 @@
         "description": "Default value for 'aeatsiiEstado' in header should be a string"
       },
       {
-        "id": "t-default-value-type-header-aeatsiiFechaRegCont",
-        "category": "default-value-type",
-        "entity": "header",
-        "field": "aeatsiiFechaRegCont",
-        "runner": "node",
-        "description": "Default value for 'aeatsiiFechaRegCont' in header should be a string"
-      },
-      {
         "id": "t-default-value-type-header-aeatsiiIsauthorization",
         "category": "default-value-type",
         "entity": "header",
@@ -7119,14 +7079,6 @@
         "description": "Field 'aeatsiiEstado' should be present in header"
       },
       {
-        "id": "t-field-presence-header-aeatsiiFechaRegCont",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "aeatsiiFechaRegCont",
-        "runner": "node",
-        "description": "Field 'aeatsiiFechaRegCont' should be present in header"
-      },
-      {
         "id": "t-field-presence-header-aeatsiiIsauthorization",
         "category": "field-presence",
         "entity": "header",
@@ -7759,14 +7711,6 @@
         "description": "Field 'aeatsiiEstado' should have type 'string' in header"
       },
       {
-        "id": "t-field-type-header-aeatsiiFechaRegCont",
-        "category": "field-type",
-        "entity": "header",
-        "field": "aeatsiiFechaRegCont",
-        "runner": "node",
-        "description": "Field 'aeatsiiFechaRegCont' should have type 'string' in header"
-      },
-      {
         "id": "t-field-type-header-aeatsiiIsauthorization",
         "category": "field-type",
         "entity": "header",
@@ -8391,14 +8335,6 @@
         "description": "Read-only logic for 'aeatsiiEstado' in header should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-header-aeatsiiFechaRegCont",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "aeatsiiFechaRegCont",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiFechaRegCont' in header should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-header-aeatsiiIssent",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -8797,14 +8733,6 @@
         "field": "aeatsiiEstado",
         "runner": "node",
         "description": "Read-only logic for 'aeatsiiEstado' in header should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-header-aeatsiiFechaRegCont",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "aeatsiiFechaRegCont",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiFechaRegCont' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-aeatsiiIssent",
@@ -9579,6 +9507,14 @@
         "field": "aeatsiiFechaOperacion",
         "runner": "node",
         "description": "System field 'aeatsiiFechaOperacion' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-aeatsiiFechaRegCont",
+        "category": "system-field",
+        "entity": "header",
+        "field": "aeatsiiFechaRegCont",
+        "runner": "node",
+        "description": "System field 'aeatsiiFechaRegCont' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-aeatsiiHash",
@@ -11057,25 +10993,25 @@
       }
     ],
     "summary": {
-      "total": 630,
+      "total": 626,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 5,
-        "default-value-type": 27,
+        "default-value-type": 26,
         "displaylogic-evaluable": 32,
         "displaylogic-valid": 32,
-        "field-presence": 80,
-        "field-type": 80,
-        "readonlylogic-evaluable": 51,
-        "readonlylogic-valid": 51,
+        "field-presence": 79,
+        "field-type": 79,
+        "readonlylogic-evaluable": 50,
+        "readonlylogic-valid": 50,
         "rule-declared": 10,
         "searchable-filters": 6,
         "selector-endpoint": 21,
-        "system-field": 204,
+        "system-field": 205,
         "visibility": 5
       },
       "byRunner": {
-        "node": 630,
+        "node": 626,
         "junit": 0
       }
     }

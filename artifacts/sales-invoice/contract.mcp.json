@@ -1,8 +1,8 @@
 {
-  "version": "0.88.0",
+  "version": "0.89.0",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-09-11T16:44:00.941Z",
-  "contractChecksum": "817993e5bf95f50d",
+  "updatedAt": "2026-09-14T18:30:38.298Z",
+  "contractChecksum": "7d1889e746ca5e40",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -1173,10 +1173,6 @@
             "readOnly": true,
             "readOnlyLogic": "true"
           },
-          "aeatsiiFechaRegCont": {
-            "readOnlyLogic": "@AEATSII_InSIIAndPostedInvoices@='Y'",
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN null ELSE now() END FROM dual"
-          },
           "eTGOCurrencyRate": {},
           "eTGODeliveryStatus": {
             "readOnly": true
@@ -1527,5 +1523,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "395a284794838ac6"
+  "checksum": "43dd0725bc46a98b"
 }

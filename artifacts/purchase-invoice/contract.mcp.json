@@ -1,8 +1,8 @@
 {
-  "version": "0.93.0",
+  "version": "0.94.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-09-14T17:11:55.159Z",
-  "contractChecksum": "811b401799e99c36",
+  "updatedAt": "2026-09-14T18:30:37.761Z",
+  "contractChecksum": "69549fc423c905ef",
   "apiPrediction": {
     "specName": "purchase-invoice",
     "baseUrl": "/sws/neo/purchase-invoice",
@@ -1597,6 +1597,9 @@
             "required": true,
             "readOnlyLogic": "@Processed@='Y'",
             "defaultValue": "@#AD_Org_ID@"
+          },
+          "eTGOTbaiStatus": {
+            "readOnly": true
           }
         }
       },
@@ -2253,5 +2256,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "41bbfdebcfc4920f"
+  "checksum": "5b97daab23cfcd30"
 }

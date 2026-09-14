@@ -55,7 +55,8 @@ export const header = [
     "eTGODueDate": "2026-01-15",
     "eTGODeliveryStatus": "DR",
     "eTGOCurrencyRate": "USD",
-    "adOrgId": "Sample adOrgId"
+    "adOrgId": "Sample adOrgId",
+    "eTGOTbaiStatus": "DR"
   },
   {
     "id": "mock-header-002",
@@ -111,7 +112,8 @@ export const header = [
     "eTGODueDate": "2026-01-16",
     "eTGODeliveryStatus": "CO",
     "eTGOCurrencyRate": "EUR",
-    "adOrgId": "Sample adOrgId"
+    "adOrgId": "Sample adOrgId",
+    "eTGOTbaiStatus": "CO"
   },
   {
     "id": "mock-header-003",
@@ -167,7 +169,8 @@ export const header = [
     "eTGODueDate": "2026-01-17",
     "eTGODeliveryStatus": "VO",
     "eTGOCurrencyRate": "GBP",
-    "adOrgId": "Sample adOrgId"
+    "adOrgId": "Sample adOrgId",
+    "eTGOTbaiStatus": "VO"
   },
   {
     "id": "mock-header-004",
@@ -223,7 +226,8 @@ export const header = [
     "eTGODueDate": "2026-01-18",
     "eTGODeliveryStatus": "IP",
     "eTGOCurrencyRate": "USD",
-    "adOrgId": "Sample adOrgId"
+    "adOrgId": "Sample adOrgId",
+    "eTGOTbaiStatus": "IP"
   },
   {
     "id": "mock-header-005",
@@ -279,7 +283,8 @@ export const header = [
     "eTGODueDate": "2026-01-19",
     "eTGODeliveryStatus": "DR",
     "eTGOCurrencyRate": "EUR",
-    "adOrgId": "Sample adOrgId"
+    "adOrgId": "Sample adOrgId",
+    "eTGOTbaiStatus": "DR"
   },
   {
     "id": "mock-header-006",
@@ -335,7 +340,8 @@ export const header = [
     "eTGODueDate": "2026-01-20",
     "eTGODeliveryStatus": "CO",
     "eTGOCurrencyRate": "GBP",
-    "adOrgId": "Sample adOrgId"
+    "adOrgId": "Sample adOrgId",
+    "eTGOTbaiStatus": "CO"
   },
   {
     "id": "mock-header-007",
@@ -391,7 +397,8 @@ export const header = [
     "eTGODueDate": "2026-01-21",
     "eTGODeliveryStatus": "VO",
     "eTGOCurrencyRate": "USD",
-    "adOrgId": "Sample adOrgId"
+    "adOrgId": "Sample adOrgId",
+    "eTGOTbaiStatus": "VO"
   },
   {
     "id": "mock-header-008",
@@ -447,7 +454,8 @@ export const header = [
     "eTGODueDate": "2026-01-22",
     "eTGODeliveryStatus": "IP",
     "eTGOCurrencyRate": "EUR",
-    "adOrgId": "Sample adOrgId"
+    "adOrgId": "Sample adOrgId",
+    "eTGOTbaiStatus": "IP"
   },
   {
     "id": "mock-header-009",
@@ -503,7 +511,8 @@ export const header = [
     "eTGODueDate": "2026-01-23",
     "eTGODeliveryStatus": "DR",
     "eTGOCurrencyRate": "GBP",
-    "adOrgId": "Sample adOrgId"
+    "adOrgId": "Sample adOrgId",
+    "eTGOTbaiStatus": "DR"
   },
   {
     "id": "mock-header-010",
@@ -559,7 +568,8 @@ export const header = [
     "eTGODueDate": "2026-01-24",
     "eTGODeliveryStatus": "CO",
     "eTGOCurrencyRate": "USD",
-    "adOrgId": "Sample adOrgId"
+    "adOrgId": "Sample adOrgId",
+    "eTGOTbaiStatus": "CO"
   },
   {
     "id": "mock-header-011",
@@ -615,7 +625,8 @@ export const header = [
     "eTGODueDate": "2026-01-25",
     "eTGODeliveryStatus": "VO",
     "eTGOCurrencyRate": "EUR",
-    "adOrgId": "Sample adOrgId"
+    "adOrgId": "Sample adOrgId",
+    "eTGOTbaiStatus": "VO"
   },
   {
     "id": "mock-header-012",
@@ -671,7 +682,8 @@ export const header = [
     "eTGODueDate": "2026-01-26",
     "eTGODeliveryStatus": "IP",
     "eTGOCurrencyRate": "GBP",
-    "adOrgId": "Sample adOrgId"
+    "adOrgId": "Sample adOrgId",
+    "eTGOTbaiStatus": "IP"
   }
 ];
 
