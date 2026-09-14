@@ -31,13 +31,10 @@ vi.mock('../FmPrimitives.jsx', () => ({
   useFmSelection: (...args) => mockUseFmSelection(...args),
   selectedRowClassName: (selectedIds, id) => (selectedIds.has(id) ? 'fm-row--selected' : undefined),
 }));
-vi.mock('../useFiscalMonitor.js', () => ({
-  VF_SPEC: 'monitor-verifactu',
-  VF_ACEPTADAS_ENTITY: 'facturasAceptadas',
-  VF_PARCIAL_ENTITY: 'facturasParcialmenteAceptadas',
-  VF_RECHAZADAS_ENTITY: 'facturasRechazadas',
-  VF_INVALIDAS_ENTITY: 'facturasInvalidas',
-}));
+vi.mock('../useFiscalMonitor.js', async () => {
+  const { verifactuFiscalMonitorMock } = await import('./testHelpers/verifactuCutoverStub.js');
+  return verifactuFiscalMonitorMock;
+});
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import VerifactuMonitorSection from '../VerifactuMonitorSection.jsx';

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { detectProfile, activeOrNull, isActiveRecord } from '../fiscal-config/fiscalConfig.utils.js';
+import { fetchAllRows, earliestCutoverDate } from '../fiscal-config/useFiscalConfig.js';
 import { computeKpis } from './fiscalMonitor.utils.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
@@ -57,6 +58,43 @@ async function fetchConfigRecord(apiFetch, spec, entity, orgId) {
   }
 }
 
+// ETP-5229 — safe wrapper around the shared fetchAllRows() (useFiscalConfig.js):
+// a 404 (module not installed for this org) resolves to [] instead of throwing,
+// matching fetchConfigRecord's own fallback above.
+async function fetchAllConfigRowsSafe(apiFetch, spec, entity, orgId) {
+  try {
+    return await fetchAllRows(apiFetch, spec, entity, orgId);
+  } catch {
+    return [];
+  }
+}
+
+// ETP-5229 — TBAI_SyncInvoice's tab HQL already projects a joined invoice date
+// under this alias (confirmed: TbaiMonitorSection.jsx reads row.invoiceDate,
+// a property with no matching column in the raw AD field list — i.e. NEO
+// already returns it as a filterable criteria fieldName, not just a display
+// convenience). Used to gate the monitor's counts/list/export to the org's
+// earliest-ever TBAI cutover, so pre-enrollment noise is excluded while
+// invoices sent under an old/deactivated config still count (ETP-5229 #13).
+const TBAI_DATE_FIELD = 'invoiceDate';
+
+// ETP-5229 #17 — the ETVFAC_INV_SENT_STATUS_V view (backing monitor-verifactu's
+// entities) previously projected NO date column at all. Fixed on the
+// com.etendoerp.verifactu side by adding `ci.dateinvoiced AS invoice_date` to
+// the view plus a new `Invoice_Date` AD_Column registration, whose NAME
+// ("Invoice Date") derives the same camelCase apiKey as TBAI's field —
+// confirmed against artifacts/monitor-verifactu/schema-raw.json's sibling
+// columns (e.g. `Legal_Entity_Nif` → "Issuer tax ID" → apiKey `issuerTaxID`).
+// Requires `update.database` in com.etendoerp.verifactu to take effect, plus a
+// `make regen ONLY=monitor-verifactu` re-extract before this field shows up in
+// the contract.
+const VF_DATE_FIELD = 'invoiceDate';
+
+function buildCutoverCriteria(cutoverDate, fieldName = TBAI_DATE_FIELD) {
+  if (!cutoverDate) return [];
+  return [{ fieldName, operator: 'greaterOrEqual', value: cutoverDate.slice(0, 10) }];
+}
+
 async function fetchCount(apiFetch, spec, entity, params) {
   const resp = await get(apiFetch, spec, entity, { ...params, _limit: '1' });
   return { totalCount: resp.totalRows ?? 0 };
@@ -68,9 +106,17 @@ async function fetchSiiParentId(apiFetch, orgId) {
   // a parentId (the aeatsii_config record PK) to correctly resolve the tab HQL tokens.
   // NEO does not expose `id` for this entity — extract the PK from the $ref field
   // (format: "aeatsii_config/<UUID>") or fall back to the configuracínSII field.
-  const resp = await get(apiFetch, SII_SPEC, 'organizations', { organization: orgId, _limit: '1' });
-  const row = resp.data?.[0];
-  if (!row) return null;
+  //
+  // NEO reads with NO_ACTIVE_FILTER=true, so an org can carry an inactive
+  // ("Change SIF") trace row alongside a live one. Pull a small page and prefer
+  // the active row — same pattern as fetchConfigRecord() above — instead of
+  // blindly taking index 0 (ETP-5229): resolving to a stale/deactivated config
+  // row's monitordate desynced the current/previous period buckets shown here
+  // from the org's real active config, which is what Classic's SII monitor uses.
+  const resp = await get(apiFetch, SII_SPEC, 'organizations', { organization: orgId, _limit: '10' });
+  const rows = resp.data ?? [];
+  if (rows.length === 0) return null;
+  const row = rows.find(isActiveRecord) ?? rows[0];
   if (row.id) return row.id;
   const ref = row['$ref'];
   if (ref) return ref.split('/').pop() ?? null;
@@ -95,11 +141,21 @@ async function fetchSiiMonitorData(apiFetch, orgId) {
   };
 }
 
-async function fetchVerifactuMonitorData(apiFetch, orgId) {
+/**
+ * @param {string|null} cutoverDate earliest-ever Verifactu cutover date for this org
+ * (across ALL config rows, active or not — earliestCutoverDate() in useFiscalConfig.js).
+ * Applied as a lower bound on invoiceDate (see VF_DATE_FIELD above) so the monitor keeps
+ * counting invoices sent under an old/deactivated config, while excluding anything that
+ * predates the org's Verifactu enrollment entirely — the same gate TBAI already got in
+ * ETP-5229 #13, now possible for Verifactu since the backing view projects invoiceDate.
+ */
+async function fetchVerifactuMonitorData(apiFetch, orgId, cutoverDate) {
   // The monitor-verifactu child tabs filter only by verifactuSendingStatus (HQL fixed to
   // not include @AD_Org_id@). OBDal/OBQuery applies org visibility automatically from the
   // JWT context, so passing _org is sufficient for scoping.
+  const cutoverCriteria = buildCutoverCriteria(cutoverDate, VF_DATE_FIELD);
   const vfParams = { _org: orgId };
+  if (cutoverCriteria.length) vfParams.criteria = JSON.stringify(cutoverCriteria);
   const [accepted, partial, rejected, invalid] = await Promise.all([
     fetchCount(apiFetch, VF_SPEC, VF_ACEPTADAS_ENTITY,  vfParams),
     fetchCount(apiFetch, VF_SPEC, VF_PARCIAL_ENTITY,    vfParams),
@@ -109,24 +165,33 @@ async function fetchVerifactuMonitorData(apiFetch, orgId) {
   return { accepted, partiallyAccepted: partial, rejected, invalid };
 }
 
-async function fetchCountByCriteria(apiFetch, spec, entity, orgId, field, value) {
+async function fetchCountByCriteria(apiFetch, spec, entity, orgId, field, value, extraCriteria = []) {
   const params = {
     organization: orgId,
     _limit: '1',
-    criteria: JSON.stringify([{ fieldName: field, operator: 'equals', value }]),
+    criteria: JSON.stringify([{ fieldName: field, operator: 'equals', value }, ...extraCriteria]),
   };
   const resp = await get(apiFetch, spec, entity, params);
   return resp.totalRows ?? 0;
 }
 
-async function fetchTbaiData(apiFetch, orgId) {
+/**
+ * @param {string|null} cutoverDate earliest-ever TBAI cutover date for this org
+ * (across ALL config rows, active or not — see earliestCutoverDate() in
+ * useFiscalConfig.js). Applied as a lower bound so the monitor keeps counting
+ * invoices sent under an old/deactivated config, while excluding anything
+ * that predates the org's TBAI enrollment entirely (ETP-5229 #13).
+ */
+async function fetchTbaiData(apiFetch, orgId, cutoverDate) {
+  const cutoverCriteria = buildCutoverCriteria(cutoverDate);
+  const totalParams = { organization: orgId, _limit: '1' };
+  if (cutoverCriteria.length) totalParams.criteria = JSON.stringify(cutoverCriteria);
   const [total, received, rejected, error, pending] = await Promise.all([
-    get(apiFetch, TBAI_SPEC, TBAI_ENTITY, { organization: orgId, _limit: '1' })
-      .then(r => r.totalRows ?? 0),
-    fetchCountByCriteria(apiFetch, TBAI_SPEC, TBAI_ENTITY, orgId, 'estado', 'Recibido'),
-    fetchCountByCriteria(apiFetch, TBAI_SPEC, TBAI_ENTITY, orgId, 'estado', 'Rechazado'),
-    fetchCountByCriteria(apiFetch, TBAI_SPEC, TBAI_ENTITY, orgId, 'estado', 'Error'),
-    fetchCountByCriteria(apiFetch, TBAI_SPEC, TBAI_ENTITY, orgId, 'estado', 'Pendiente'),
+    get(apiFetch, TBAI_SPEC, TBAI_ENTITY, totalParams).then(r => r.totalRows ?? 0),
+    fetchCountByCriteria(apiFetch, TBAI_SPEC, TBAI_ENTITY, orgId, 'estado', 'Recibido',  cutoverCriteria),
+    fetchCountByCriteria(apiFetch, TBAI_SPEC, TBAI_ENTITY, orgId, 'estado', 'Rechazado', cutoverCriteria),
+    fetchCountByCriteria(apiFetch, TBAI_SPEC, TBAI_ENTITY, orgId, 'estado', 'Error',     cutoverCriteria),
+    fetchCountByCriteria(apiFetch, TBAI_SPEC, TBAI_ENTITY, orgId, 'estado', 'Pendiente', cutoverCriteria),
   ]);
   return { totalCount: total, receivedCount: received, rejectedCount: rejected, errorCount: error, pendingCount: pending };
 }
@@ -161,20 +226,34 @@ export function useFiscalMonitor(orgId, apiBaseUrl) {
     kpis: {},
     siiParentId: null,
     tbaiValidationResults: [],
+    earliestTbaiCutoverDate: null,
+    earliestVerifactuCutoverDate: null,
   });
 
   const load = useCallback(async () => {
     if (!orgId) {
-      setState({ loading: false, error: null, profile: 'unconfigured', monitorData: {}, kpis: {}, siiParentId: null, tbaiValidationResults: [] });
+      setState({
+        loading: false, error: null, profile: 'unconfigured', monitorData: {}, kpis: {},
+        siiParentId: null, tbaiValidationResults: [], earliestTbaiCutoverDate: null,
+        earliestVerifactuCutoverDate: null,
+      });
       return;
     }
     setState(s => ({ ...s, loading: true, error: null }));
     try {
-      const [siiCfg, tbaiCfg, vfCfg] = await Promise.all([
-        fetchConfigRecord(apiFetch, SII_CFG_SPEC,  SII_CFG_ENTITY,  orgId),
-        fetchConfigRecord(apiFetch, TBAI_CFG_SPEC, TBAI_CFG_ENTITY, orgId),
-        fetchConfigRecord(apiFetch, VF_CFG_SPEC,   VF_CFG_ENTITY,   orgId),
+      // TBAI and Verifactu both fetch ALL config rows (not just the active one)
+      // in the same request used for profile detection — see
+      // fetchAllConfigRowsSafe above — so the earliest-ever cutover date
+      // (ETP-5229 #13/#17) is derived without a second round trip.
+      const [siiCfg, tbaiCfgRows, vfCfgRows] = await Promise.all([
+        fetchConfigRecord(apiFetch, SII_CFG_SPEC, SII_CFG_ENTITY, orgId),
+        fetchAllConfigRowsSafe(apiFetch, TBAI_CFG_SPEC, TBAI_CFG_ENTITY, orgId),
+        fetchAllConfigRowsSafe(apiFetch, VF_CFG_SPEC, VF_CFG_ENTITY, orgId),
       ]);
+      const tbaiCfg = tbaiCfgRows.find(isActiveRecord) ?? tbaiCfgRows[0] ?? null;
+      const vfCfg = vfCfgRows.find(isActiveRecord) ?? vfCfgRows[0] ?? null;
+      const earliestTbaiCutoverDate = earliestCutoverDate(tbaiCfgRows, 'tbai');
+      const earliestVerifactuCutoverDate = earliestCutoverDate(vfCfgRows, 'verifactu');
       // Gate on active before profile resolution (see useFiscalConfig): an
       // inactive trace row must never resolve the monitor to a configured state.
       const profile = detectProfile(activeOrNull(siiCfg), activeOrNull(tbaiCfg), activeOrNull(vfCfg));
@@ -189,14 +268,18 @@ export function useFiscalMonitor(orgId, apiBaseUrl) {
       }
       if (profile === 'tbai' || profile === 'sii+tbai') {
         const [tbaiCounts, tbaiValidation] = await Promise.all([
-          fetchTbaiData(apiFetch, orgId),
+          fetchTbaiData(apiFetch, orgId, earliestTbaiCutoverDate),
           fetchTbaiValidationResults(apiFetch, orgId),
         ]);
         monitorData.tbai = tbaiCounts;
         tbaiValidationResults = tbaiValidation;
       }
       if (profile === 'verifactu') {
-        monitorData.verifactu = await fetchVerifactuMonitorData(apiFetch, orgId);
+        // ETP-5229 #17 — Verifactu's monitor entities (facturasAceptadas/etc.,
+        // backed by the etvfac_inv_sent_status_v view) now project invoiceDate
+        // (see VF_DATE_FIELD above), so the same earliest-cutover lower bound
+        // TBAI already got in #13 applies here too.
+        monitorData.verifactu = await fetchVerifactuMonitorData(apiFetch, orgId, earliestVerifactuCutoverDate);
       }
 
       setState({
@@ -207,6 +290,8 @@ export function useFiscalMonitor(orgId, apiBaseUrl) {
         kpis: computeKpis(profile, monitorData),
         siiParentId,
         tbaiValidationResults,
+        earliestTbaiCutoverDate,
+        earliestVerifactuCutoverDate,
       });
     } catch (err) {
       setState(s => ({ ...s, loading: false, error: err.message }));
@@ -226,3 +311,8 @@ export {
   VF_RECHAZADAS_ENTITY, VF_INVALIDAS_ENTITY,
   TBAI_SPEC, TBAI_ENTITY, TBAI_VALIDATION_ENTITY,
 };
+// ETP-5229 — shared by TbaiMonitorSection.jsx / VerifactuMonitorSection.jsx so
+// their list/export queries apply the SAME earliest-cutover lower bound as the
+// KPI counts above (#13/#17). VF_DATE_FIELD is exported so callers don't need
+// to hardcode 'invoiceDate' a second time.
+export { buildCutoverCriteria, VF_DATE_FIELD };
