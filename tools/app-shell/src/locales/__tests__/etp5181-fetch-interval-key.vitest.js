@@ -27,44 +27,69 @@ function occurrences(text, needle) {
   return text.split(needle).length - 1;
 }
 
-describe(`ETP-5181 — genericLabels.${KEY}`, () => {
-  it.each(Object.entries(DICTIONARIES))('%s declares the key with a non-empty value', (name, dictionary) => {
-    const value = dictionary.genericLabels?.[KEY];
-    expect(typeof value, `${name}.genericLabels.${KEY} must be a string`).toBe('string');
-    expect(value.trim(), `${name}.genericLabels.${KEY} must be non-empty`).not.toBe('');
-  });
+/**
+ * The structural guard set applied to every `{days}`-carrying fetch-interval string.
+ *
+ * Factored out because the requirement has TWO surfaces with the same constraints: the panel
+ * advisory (`financeAccounts…ImportBeyondFetchInterval`) and the sync toast
+ * (`backendError.psd2ImportDateBeyondMaxInterval`, reworded in the QA re-review of #1366). Both
+ * are interpolated by the same `useUI` and both mirror the same backend AD_MESSAGE, so a guard
+ * that only covered one of them would let the other drift.
+ */
+function describeFetchIntervalKey(ticket, key) {
+  describe(`${ticket} — genericLabels.${key}`, () => {
+    it.each(Object.entries(DICTIONARIES))('%s declares the key with a non-empty value', (name, dictionary) => {
+      const value = dictionary.genericLabels?.[key];
+      expect(typeof value, `${name}.genericLabels.${key} must be a string`).toBe('string');
+      expect(value.trim(), `${name}.genericLabels.${key} must be non-empty`).not.toBe('');
+    });
 
-  it.each(Object.entries(DICTIONARIES))('%s interpolates the day count exactly once', (name, dictionary) => {
-    const value = dictionary.genericLabels[KEY];
-    expect(
-      occurrences(value, PLACEHOLDER),
-      `${name}.genericLabels.${KEY} must carry ${PLACEHOLDER} exactly once — useUI only replaces the first`,
-    ).toBe(1);
-  });
+    it.each(Object.entries(DICTIONARIES))('%s interpolates the day count exactly once', (name, dictionary) => {
+      const value = dictionary.genericLabels[key];
+      expect(
+        occurrences(value, PLACEHOLDER),
+        `${name}.genericLabels.${key} must carry ${PLACEHOLDER} exactly once — useUI only replaces the first`,
+      ).toBe(1);
+    });
 
-  it.each(Object.entries(DICTIONARIES))('%s does not hardcode a day count', (name, dictionary) => {
-    // A literal "90" would freeze the regulation's baseline into the copy, and providers do
-    // publish other intervals — the number must come from the param.
-    expect(dictionary.genericLabels[KEY], `${name}.genericLabels.${KEY} hardcodes a day count`)
-      .not.toMatch(/\d/);
-  });
+    it.each(Object.entries(DICTIONARIES))('%s does not hardcode a day count', (name, dictionary) => {
+      // A literal "90" would freeze the regulation's baseline into the copy, and providers do
+      // publish other intervals — the number must come from the param.
+      expect(dictionary.genericLabels[key], `${name}.genericLabels.${key} hardcodes a day count`)
+        .not.toMatch(/\d/);
+    });
 
-  // Deliberately structural, not a full-sentence match: pinning user-facing copy makes every
-  // wording tweak fail a test for no behavioural reason.
-  //
-  // `%s` / `%0` are the backend AD_MESSAGE template markers. useUI only interpolates `{name}`, so
-  // one of those leaking into a frontend locale string renders literally on screen — exactly what
-  // shipped as ETP-5109. The `%0` half of this is currently implied by the no-digits case above;
-  // it is asserted explicitly so the guard survives that rule ever being relaxed.
-  it.each(Object.entries(DICTIONARIES))('%s uses no backend template markers', (name, dictionary) => {
-    const value = dictionary.genericLabels[KEY];
-    expect(value, `${name}.genericLabels.${KEY} carries a %s marker useUI cannot interpolate`)
-      .not.toMatch(/%s/);
-    expect(value, `${name}.genericLabels.${KEY} carries a %0 marker useUI cannot interpolate`)
-      .not.toMatch(/%\d/);
-  });
+    // Deliberately structural, not a full-sentence match: pinning user-facing copy makes every
+    // wording tweak fail a test for no behavioural reason.
+    //
+    // `%s` / `%0` are the backend AD_MESSAGE template markers. useUI only interpolates `{name}`, so
+    // one of those leaking into a frontend locale string renders literally on screen — exactly what
+    // shipped as ETP-5109. The `%0` half of this is currently implied by the no-digits case above;
+    // it is asserted explicitly so the guard survives that rule ever being relaxed.
+    it.each(Object.entries(DICTIONARIES))('%s uses no backend template markers', (name, dictionary) => {
+      const value = dictionary.genericLabels[key];
+      expect(value, `${name}.genericLabels.${key} carries a %s marker useUI cannot interpolate`)
+        .not.toMatch(/%s/);
+      expect(value, `${name}.genericLabels.${key} carries a %0 marker useUI cannot interpolate`)
+        .not.toMatch(/%\d/);
+    });
 
-  it('is translated in es_ES rather than left in English', () => {
-    expect(esES.genericLabels[KEY]).not.toBe(enUS.genericLabels[KEY]);
+    it('is translated in es_ES rather than left in English', () => {
+      expect(esES.genericLabels[key]).not.toBe(enUS.genericLabels[key]);
+    });
   });
-});
+}
+
+describeFetchIntervalKey('ETP-5181', KEY);
+
+/**
+ * The toast half of the same requirement.
+ *
+ * `backendError.psd2ImportDateBeyondMaxInterval` is what `lib/backendErrors.js` resolves when the
+ * sync itself answers WARNING with the PSD2 module's English AD_MESSAGE (which carries no usable
+ * es_ES translation — see that file). Its wording was reworked in the QA re-review of #1366 so the
+ * toast and the panel advisory say the same thing; only the structure is pinned here, for the same
+ * reason as above. The MATCHER is keyed off the untouched English wire text and is covered by
+ * `lib/__tests__/backendErrors.test.js`, not here.
+ */
+describeFetchIntervalKey('ETP-5181 QA', 'backendError.psd2ImportDateBeyondMaxInterval');

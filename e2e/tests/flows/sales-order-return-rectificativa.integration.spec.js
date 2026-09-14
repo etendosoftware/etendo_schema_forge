@@ -6,6 +6,7 @@ import { captureScreenshot } from '../helpers/captureScreenshot.js';
 import { ensureStockOnHand } from '../helpers/inventory-helpers.js';
 import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../helpers/product-helpers.js';
 import { waitForDocumentActionResponse } from '../helpers/purchase-helpers.js';
+import { selectCustomerWithAddress } from '../helpers/sales-helpers.js';
 
 /**
  * Sales Order → Shipment → Return → Rectificative Invoice — full live-backend
@@ -119,10 +120,9 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
       }).toPass({ timeout: 15_000 });
       await slow(page);
 
-      const bpOption = page.locator('[data-testid^="option-businessPartner-"]')
-        .filter({ hasNotText: /crear|create/i }).first();
-      await expect(bpOption).toBeVisible({ timeout: 15_000 });
-      await bpOption.click();
+      // A customer with no C_BPartner_Location leaves partnerAddress empty, which keeps
+      // action-save-draft disabled forever — see selectCustomerWithAddress.
+      await selectCustomerWithAddress(page);
 
       // BP selection triggers chained callouts — wait until a derived field is populated
       await expect(async () => {

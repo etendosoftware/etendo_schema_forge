@@ -120,8 +120,10 @@ vi.mock('@/components/contract-ui/ListView.jsx', () => ({
 
 vi.mock('@/components/contract-ui/BulkDocumentAction', () => ({
   default: ({ labelKey }) => (
-    <div data-testid="bulk-document-action" data-label-key={labelKey} />
+    <div data-testid={`bulk-document-action-${labelKey}`} data-label-key={labelKey} />
   ),
+  buildPostActions: vi.fn(() => []),
+  postRowFilter: vi.fn(),
 }));
 
 vi.mock('@generated/sales-invoice/custom/InvoiceHeaderTable.jsx', () => ({
@@ -432,5 +434,66 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
       lastListViewProps.onExternalPreviewClose();
     });
     expect(navigate).toHaveBeenCalledWith('/sales-invoice', { replace: true, state: {} });
+  });
+
+  // ETP-5209 — Post reachable from the row-hover kebab menu, plus a second bulk
+  // BulkDocumentAction instance for Post. The gate itself (processed + not
+  // posted) is covered exhaustively in useInvoiceWindow.test.js — these tests
+  // only verify the window wires the shared helper through correctly.
+  describe('ETP-5209 — Post row-kebab entry and bulk button', () => {
+    it('offers the post menu action for a processed, unposted row', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      const actions = lastListViewProps.rowQuickActions.menuActions({ row: { processed: 'Y', posted: 'N' } });
+      expect(actions).toEqual([{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }]);
+    });
+
+    it('does not offer the post menu action for an already-posted row', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      const actions = lastListViewProps.rowQuickActions.menuActions({ row: { processed: 'Y', posted: 'Y' } });
+      expect(actions).toEqual([]);
+    });
+
+    it('bumps refreshKey when a neoAction menu action (post) completes', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      const beforeRefresh = lastListViewProps.refreshTrigger;
+      act(() => {
+        lastListViewProps.rowQuickActions.onMenuActionExecuted({ neoAction: 'post' });
+      });
+      expect(lastListViewProps.refreshTrigger).toBe(beforeRefresh + 1);
+    });
+
+    it('renders both the confirmBulk and the post bulk BulkDocumentAction instances', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      expect(screen.getByTestId('bulk-document-action-confirmBulk')).toBeInTheDocument();
+      expect(screen.getByTestId('bulk-document-action-post')).toBeInTheDocument();
+    });
+
+    // ETP-5209 regression: production crash root cause. ListView.jsx invokes
+    // `bulkActions` as a PLAIN FUNCTION CALL — `bulkActions({...})` — inside its
+    // own render body, never as JSX (`<bulkActions />`). The mocked ListView
+    // above renders it via JSX (`<props.bulkActions .../>`), which is exactly
+    // why the old suite never caught this: JSX invocation gives a function
+    // component its own hook dispatcher, so a stray `useUI()` inside the
+    // wrapper would have passed silently there. Calling the captured
+    // `bulkActions` reference directly here, OUTSIDE of any React render pass,
+    // reproduces the same hook-dispatcher-less context production hits — any
+    // hook call inside the wrapper throws React's "Invalid hook call" error
+    // here, exactly as it would crash with "Rendered more hooks than during
+    // the previous render" in production the moment a row got selected.
+    it('ETP-5209 regression: bulkActions wrapper is callable as a plain function (not JSX) without an Invalid Hook Call error', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      expect(() => lastListViewProps.bulkActions({
+        selectedRows: [{ id: 'inv-1', processed: 'Y', posted: 'N' }],
+        clearSelection: vi.fn(),
+        token: 'tkn',
+        apiBaseUrl: '/api',
+        windowName: 'sales-invoice',
+      })).not.toThrow();
+    });
   });
 });

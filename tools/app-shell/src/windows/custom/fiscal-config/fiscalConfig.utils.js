@@ -367,6 +367,10 @@ export async function parseApiError(res) {
   const body = await res.text().catch(() => res.statusText);
   try {
     const parsed = JSON.parse(body);
+    // NEO handlers (ServletResponseUtils.sendError) always write `error` as a
+    // plain string — never an object — so that shape must be checked first.
+    // The object/top-level fallbacks are kept for any handler that diverges.
+    if (typeof parsed?.error === 'string') return parsed.error;
     return parsed?.error?.message ?? parsed?.message ?? body;
   } catch {
     return body || res.statusText;

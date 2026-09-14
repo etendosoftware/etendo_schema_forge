@@ -4,7 +4,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 // @sf-generated-start columns:gLJournal
 const columns = [
   { key: 'description', column: 'Description', type: 'string', label: 'Description', required: true },
-  { key: 'accountingDate', column: 'DateAcct', type: 'date', labels: {"en_US":"Date","es_ES":"Fecha"}, label: 'Accounting Date', required: true },
+  { key: 'accountingDate', column: 'DateAcct', type: 'date', labels: {"en_US":"Date","es_ES":"Fecha"}, label: 'Accounting Date', required: true, dot: false },
   { key: 'period', column: 'C_Period_ID', type: 'selector', label: 'Period', required: true },
   { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: 'Currency', required: true },
   { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', enumLabels: { 'CL': 'docStatusCl', 'CO': 'docStatusCo', 'DR': 'docStatusDr', 'NA': 'docStatusNa', 'WP': 'docStatusWp', 'RE': 'docStatusRe', 'TEMP': 'docStatusTemp', 'IP': 'docStatusIp', '??': 'docStatus', 'VO': 'docStatusVo' }, required: true },

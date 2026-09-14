@@ -357,13 +357,16 @@ Field editability in the top section:
   `PSD2_NoActiveConnectionForAccount` before the interval check) and is **omitted**, never
   defaulted, when the provider declares no limit or stores 0.
 
-  The SPA renders `bank-connection-import-fetch-interval-warning` as a **banner at the top of the
-  panel, above the date grid**, mirroring the re-authorization banner's shape (same
-  `--status-warning-bg` / `--status-warning-fg` tokens, same `AlertTriangle`) minus the action
-  button — there is nothing to click, the fix is to edit the date right below. It started life as
-  one line of small print under the grid and was simply not read, sitting next to the far louder
-  reauth banner. Warning tokens rather than `text-destructive`: nothing is wrong with the value
-  and Save stays enabled. It shows whenever
+  The SPA renders `bank-connection-import-fetch-interval-warning` as a **banner at the foot of the
+  panel, stacked immediately above the re-authorization banner**, mirroring that banner's shape
+  (same `--status-warning-bg` / `--status-warning-fg` tokens, same `AlertTriangle`) minus the action
+  button — there is nothing to click, the fix is to edit the date in the grid above. It started life
+  as one line of small print under the grid and was simply not read; a first fix (ETP-5181) promoted
+  it to a banner at the TOP of the panel, and QA then read the two banners sitting at opposite ends
+  as two unrelated things, so they were grouped into one block of "what you should know about this
+  connection" at the bottom. It stays first of the two: it is the notice the date box directly above
+  it can fix, so it stays closest to its cause. Warning tokens rather than `text-destructive`:
+  nothing is wrong with the value and Save stays enabled. It shows whenever
   `importFromDate < today − N`. **Strict `<`, on ISO strings, with the bound from
   `calendarISODaysAgo` in `lib/dateOnly.js`** — the local-time `Date` constructor, so month/year
   roll over and DST cannot shift it, and never `toISOString().slice(0,10)`, which reads yesterday
@@ -384,7 +387,13 @@ Field editability in the top section:
   downgrades `SUCCESS` to `WARNING` and appends `PSD2_ImportDateBeyondMaxInterval`, which
   `lib/backendErrors.js` already translates — ETP-5181 only changed the toast **type** from
   `toast.info` to `toast.warning` in `notifySyncResult` and in `ImportedStatementsTab`, since a
-  WARNING is something the user has to act on. Known gap: the same branch in
+  WARNING is something the user has to act on. QA then rejected the *copy*: "sólo pueden estar
+  disponibles los movimientos de ese período" left it ambiguous whether the sync would still run, so
+  `backendError.psd2ImportDateBeyondMaxInterval` now states the outcome — "**sólo se sincronizarán**
+  los movimientos de ese período" (en_US: "only transactions from that period **will be
+  synchronized**"). Only the locale value moved; the matcher in `lib/backendErrors.js` keys off the
+  **English AD_MESSAGE text**, which is unchanged, and `{days}` must keep appearing exactly once
+  (`useUI` replaces only the first occurrence). Known gap: the same branch in
   `AccountsHeaderTable.jsx` is being rewritten on the ETP-5140 branch and was left untouched here
   to avoid a conflict.
 
@@ -393,6 +402,21 @@ Field editability in the top section:
   offers more. Pre-existing, and shared with `AisConnectionCallback` in the PSD2 module, so both
   connect paths agree — fixing it means making the fallback `null` on both sides, which is a
   separate change.
+- **Re-authorization banner tone** (ETP-5181 QA). `bank-connection-edit-reauth-banner` is
+  **informational blue by default and only turns amber inside the last 7 days** before the consent
+  lapses (`buildReauthTone`, `REAUTH_WARNING_DAYS`; the tone is also published on the banner as
+  `data-tone` so a test can assert it without reading Tailwind classes). A PSD2 consent lasts ~90
+  days and this banner is on screen for every one of them, so the amber treatment it used to carry
+  unconditionally was permanent — which is what makes a warning stop being read, and what left the
+  genuinely time-critical fetch-interval notice stacked next to it competing with a wall of yellow.
+  Same call product already made for the credit-limit notice in `contract-ui/BlockingBpBanner.jsx`
+  (info/blue, not warning/amber), and the icon follows the tone — `Info` on blue, `AlertTriangle` on
+  amber — so a triangle never sits on a blue background. An **expired** consent
+  (`daysUntilExpires <= 0`, the `…ReauthExpired` copy) falls under the same comparison and stays
+  amber: sync is already broken at that point. A non-numeric `daysUntilExpires` (the bridge
+  published no countdown) stays informational rather than guessing at urgency. The two banners share
+  `BANNER_TONE_CLASSES`, whose entries are whole literal class strings — Tailwind's scanner only
+  sees literals, so a `bg-[var(--status-${tone}-bg)]` template would emit no CSS at all.
 - **"Sincronizar ahora" saves first** (ETP-5104). The button persists the whole form — the same
   `persistAccountEdits` call "Guardar cambios" makes, via the shared `persistAll()` — before it
   calls the bridge `sync` action, and does NOT close the modal afterwards. Before the fix it synced
@@ -1151,6 +1175,7 @@ Display the full detail of a financial account: a summary strip with KPIs, and t
   - **Stays the original read-only label+value display** (empty when the transaction has no value) for: a **posted** movement, a **payment-linked** movement (no `paymentId` exclusion applies — Payments-module-managed rows are never editable here, matching the kebab's own Editar hide rule), and **every dimension key other than the three above** — `EDITABLE_DIMENSION_KEYS` is a hardcoded allowlist because `FinancialAccountTransactionsHandler#applyEditableDimensions` (the backend) only accepts `projectId`/`costcenterId`/`productId`; organization/activity/campaign/salesregion/user1/user2 have no write path at all regardless of document status (moot in practice for this window today — its contract never configures them as panel fields — but the allowlist is explicit rather than relying on that).
 - Locale-aware date format in the Date column (es_ES → `dd/MM/yyyy`, en_US → `M/d/yyyy`).
 - Individual row checkbox + select-all (indeterminate when partial).
+- **Selection clears on any filter change** (ETP-4972 QA fix): changing the type filter, date range, search box or the advanced "by conditions" filter drops the current checkbox selection and hides the floating `SelectionToolbar`, so a bulk "Eliminar" can never fire against movements that scrolled out of the filtered view. A sort-only change (`toggleSort`/`selectSort`) leaves the selection untouched. Same rule applies to the Imported Statements tab's own local filters (search, date range, status, advanced filter).
 - Row hover: subtle shadow elevation + kebab appears. The kebab (`MovementRowKebab.jsx`) offers **Contabilizar** (Post, when Processed & not posted) and **Descontabilizar** (Unpost, when posted) — both via the financial-account document-posting action (`.../transaction/{id}/action/post|unpost`) — and, for **manual accounting-account transactions only** (no `paymentId`): **Editar** (not-posted; reopens the movement modal, partial edit once Processed), **Procesar** (Draft → Processed), **Reactivar** (Processed → Draft, via Payment Removal), and **Eliminar** (offered on *every* row since ETP-5111, and always confirming first — see below; a Draft is then removed directly, a Processed one reactivated+removed via Payment Removal). Payment-linked movements hide **Editar / Procesar / Reactivar** (managed from the Payments module) but still expose Descontabilizar when posted. No role gating.
 
   **Eliminar is the exception since ETP-5111: it is rendered unconditionally** — for a payment-linked movement and for a funds-transfer leg alike, both of which used to hide it (the ETP-5085 `canDelete = isGlTransaction && !isTransferLeg` predicate and its early-return are gone, and so is the "nothing to offer" early return that used to hide the whole kebab on a payment-linked draft — precisely the row whose refusal now needs explaining). Because Eliminar is the only unconditional item, its leading `DropdownMenuSeparator` is gated on `hasActionsAboveDelete`, or it renders as a stray divider on exactly that row.

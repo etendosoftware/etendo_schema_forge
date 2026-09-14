@@ -14,7 +14,7 @@ const sources = [
 describe('Contacts semantic accessibility boundaries (ETP-4554)', () => {
   it('uses semantic control, structural, text, icon, and focus tokens', () => {
     const source = sources.join('\n');
-    for (const token of ['border-border-control', 'border-border-structural', 'text-text-primary', 'text-icon-secondary', 'ring-focus-ring']) {
+    for (const token of ['border-border-control', 'border-border-structural', 'text-text-primary', 'text-icon-secondary', 'ring-focus-ring', 'disabled:text-text-disabled']) {
       assert.match(source, new RegExp(token));
     }
   });
