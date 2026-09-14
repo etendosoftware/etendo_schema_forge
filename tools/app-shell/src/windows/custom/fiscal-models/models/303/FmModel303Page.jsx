@@ -314,8 +314,18 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   // `decl.id` only (not `liveBoxes`/`decl._precomputed`) so it fires exactly once
   // per opened declaration instead of looping once `handleCompute` populates state.
   useEffect(() => {
-    const hasPrecomputed = decl._precomputed?.boxes != null || liveBoxes != null;
-    if (hasPrecomputed) return;
+    // ETP-5272 pt.6 — `decl._precomputed` is the RAW, override-free auto-compute result
+    // `FmListPage`'s `useFiscalAutoCompute` already fetched for every draft declaration
+    // before this page ever mounted. Route it through `applyComputeResult` (same helper
+    // `handleCompute` and "Calcular" use) so the already-hydrated `manualOverrides` get
+    // merged in immediately — otherwise `liveBoxes` stays pinned to the raw seed from the
+    // initial state above and the user's saved manual edits are invisible until they
+    // manually re-run "Calcular". No new network call: this reuses the payload we already have.
+    if (decl._precomputed?.boxes != null) {
+      applyComputeResult(decl._precomputed, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
+      return;
+    }
+    if (liveBoxes != null) return;
     if (!token || !apiBaseUrl) return;
     handleCompute();
     // eslint-disable-next-line react-hooks/exhaustive-deps
