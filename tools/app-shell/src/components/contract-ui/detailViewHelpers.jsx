@@ -929,7 +929,11 @@ export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
     // ETP-4999 — matches `topbarExtra`'s own `onRefresh` exactly (DetailView.jsx),
     // so an `extraActions` entry can refresh the record after a side-effecting
     // action (e.g. resend-invitation) the same way a `topbarExtra` component can.
-    onRefresh: () => hook.fetchById?.(data?.id),
+    // ETP-5278 — { force: true } (added to match topbarExtra's own onRefresh, which
+    // already had it) bypasses the record cache: without it, a still-fresh cache
+    // entry from before the side effect could be served back unchanged, so the UI
+    // never sees the just-completed mutation.
+    onRefresh: () => hook.fetchById?.(data?.id, { force: true }),
   }) : extraActions).map((action, i) => (
       action.visible !== false && (
           <Button

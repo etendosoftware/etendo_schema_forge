@@ -855,7 +855,11 @@ describe('DetailView helper functions', () => {
       });
     });
 
-    it('onRefresh invokes hook.fetchById with data?.id', () => {
+    it('onRefresh invokes hook.fetchById with data?.id and forces a fresh network read (ETP-5278)', () => {
+      // ETP-5278 — without { force: true }, a side-effecting extraActions click (promote/
+      // demote, resend-invitation) could have its onRefresh served stale cached data instead
+      // of the just-mutated record. Matches the other two onRefresh wirings in DetailView.jsx
+      // (topbarExtra), which already pass { force: true }.
       const data = { id: 'rec-1' };
       const hook = { children: [], fetchById: vi.fn() };
       let capturedOnRefresh;
@@ -865,7 +869,7 @@ describe('DetailView helper functions', () => {
       };
       renderExtraActionButtons(actionsFn, data, hook, '');
       capturedOnRefresh();
-      expect(hook.fetchById).toHaveBeenCalledWith('rec-1');
+      expect(hook.fetchById).toHaveBeenCalledWith('rec-1', { force: true });
     });
 
     it('onRefresh does not throw when hook.fetchById is not provided', () => {
