@@ -342,6 +342,21 @@ describe('fetchWindowAccess', () => {
     expect(result).toEqual({ ...PAYLOAD, menuAccess: {} });
   });
 
+  it('does not block window access forever when SFListMenu never settles', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn((url) => (
+      String(url).includes('/listmenu')
+        ? new Promise(() => {})
+        : Promise.resolve(jsonResponse(PAYLOAD))
+    )));
+
+    const resultPromise = fetchWindowAccess({ token: 'tok' });
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    await expect(resultPromise).resolves.toEqual({ ...PAYLOAD, menuAccess: {} });
+    vi.useRealTimers();
+  });
+
   // ETP-5189 follow-up — this is the behavior the whole cache exists for: a burst of
   // silent refreshes within the 60s TTL must not re-hit SFListMenu each time. Only the
   // menu fetch is cached (see `fetchMenuAccess()` in App.jsx), so `/windowaccessmap`

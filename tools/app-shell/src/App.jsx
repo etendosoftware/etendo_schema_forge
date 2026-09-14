@@ -106,22 +106,48 @@ function looksLikeWindowAccessPayload(value) {
 // cached too (as `{}`, matching the fail-open default) — an aborted/unreachable
 // SFListMenu is exactly the repeated, wasted round trip this is meant to collapse.
 const MENU_ACCESS_CACHE_TTL_MS = 60_000;
+// SFListMenu is optional for the window-access decision. A hung/aborted menu
+// request must not hold AuthContext bootstrap behind the global 60s test timeout.
+const MENU_ACCESS_FETCH_TIMEOUT_MS = 1_000;
 let menuAccessCache = null; // { value, expiresAt } | null
+let menuAccessInFlight = null;
 
 async function fetchMenuAccess() {
   if (menuAccessCache && Date.now() < menuAccessCache.expiresAt) {
     return menuAccessCache.value;
   }
-  let value;
-  try {
-    const tree = await fetchMenuTree();
-    const ids = collectAllowedIds(tree?.tree);
-    value = Object.fromEntries([...ids].map((id) => [id, true]));
-  } catch {
-    value = {};
+  if (menuAccessInFlight) {
+    return menuAccessInFlight;
   }
-  menuAccessCache = { value, expiresAt: Date.now() + MENU_ACCESS_CACHE_TTL_MS };
-  return value;
+  menuAccessInFlight = (async () => {
+    let value;
+    try {
+      const tree = await fetchMenuTree();
+      const ids = collectAllowedIds(tree?.tree);
+      value = Object.fromEntries([...ids].map((id) => [id, true]));
+    } catch {
+      value = {};
+    }
+    menuAccessCache = { value, expiresAt: Date.now() + MENU_ACCESS_CACHE_TTL_MS };
+    return value;
+  })().finally(() => {
+    menuAccessInFlight = null;
+  });
+  return menuAccessInFlight;
+}
+
+async function resolveMenuAccessWithoutBlocking(menuAccessPromise) {
+  let timeoutId;
+  const timeout = new Promise((resolve) => {
+    timeoutId = setTimeout(() => {
+      resolve({});
+    }, MENU_ACCESS_FETCH_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([menuAccessPromise, timeout]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 // Test-only: the module-level cache above is scoped to one real page load (a fresh
@@ -131,6 +157,7 @@ async function fetchMenuAccess() {
 // otherwise-independent test cases. Exported ONLY for that; not used by app code.
 export function __resetMenuAccessCacheForTest() {
   menuAccessCache = null;
+  menuAccessInFlight = null;
 }
 
 export async function fetchWindowAccess(session) {
@@ -190,7 +217,7 @@ export async function fetchWindowAccess(session) {
     // too, breaking every window's WindowAccessGuard across ~40 unrelated mocked specs.
     // Already in flight (started above, in parallel) — `.catch()` there means this
     // never rejects, so no separate try/catch is needed here.
-    const menuAccess = await menuAccessPromise;
+    const menuAccess = await resolveMenuAccessWithoutBlocking(menuAccessPromise);
     return { ...payload, menuAccess };
   } catch {
     return null;
