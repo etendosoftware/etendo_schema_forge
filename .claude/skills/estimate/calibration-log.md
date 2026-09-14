@@ -102,6 +102,9 @@ number — every downward correction above was a Step-3.5 question that should h
 | Date added | Row added (section) | Provisional value | Rationale / analogy | Status |
 |------------|---------------------|-------------------|---------------------|--------|
 | 2026-06 | §1 "adapting what already exists" group + §2b discount factors | see table | reuse-cascade investigation (adaptation-task) | ⏳ awaiting first actual |
+| 2026-09-10 | §1 `new-ad-table` (Generation & backend) | 5 pts | Sizing the hot-reload feature-flag provider (ETP-5267 follow-up). The table had **no row for creating an Etendo table at all**, despite it recurring constantly (`etgo_portal_access`, `etgo_account_identity`). Valued by analogy above `webhook-config` (2, config only) and `java-handler` (3), because it drags human-run `export.database`/`generate.entities` steps plus the generated-accessor-name trap that only appears once `src-gen` exists. | ⏳ awaiting first actual |
+| 2026-09-10 | §1 `third-party-sdk-integration` (Generation & backend) | 3 pts | Same estimate. No row existed for putting a third-party Java SDK on Etendo's classpath (ConfigCat here; Stripe and jsreport are prior instances). Above `webhook-config` because the Etendo `WEB-INF/lib` classpath and shading compatibility are involved, not just configuration. | ⏳ awaiting first actual |
+| 2026-09-10 | §2 `external-service-dependency` risk | +30% | Same estimate. Deliberately kept **distinct from `new-pattern-no-precedent`**: the cost is the failure-mode design (never block/never fail, bounded timeout, cached last-known-good), per-environment credentials and container egress — all of which survive into the second and third integration, when the no-precedent factor no longer applies. | ⏳ awaiting first actual |
 
 > _Append a row each time Step 3.6 fires. Graduate confirmed rows into a dated calibration entry above._
 
