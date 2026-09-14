@@ -35,6 +35,41 @@ After accepting, `action-go-to-app` no longer means `navigate('/')`: it enters t
 through `useEnvironmentSwitch.enterByClientName`, which is a full page load. When the signed-in
 user has a tenant to return to, `action-stay-in-current` offers staying put.
 
+### `canStayInCurrent` is per-browser-context, not per-account (ETP-5327)
+
+`InviteAcceptancePage` decides whether to render `action-stay-in-current` from two `localStorage`
+keys read directly off `globalThis.localStorage`, not from anything about the invitee's account:
+
+```js
+const currentClientName = readStoredValue('sf_auth_client_name');
+const canStayInCurrent = Boolean(readStoredValue('sf_auth_token') && currentClientName);
+```
+
+`sf_auth_token`/`sf_auth_client_name` are written **only** by `persistEnvironmentSession()`
+(`@etendosoftware/etendo-go-core/src/onboarding/state.js`), which only runs from
+`useEnvironmentSwitch.switchTo()`/`enterByClientName()` — i.e. only after the user actually enters a
+tenant (clicking `action-go-to-app`, or switching companies from the side menu). Logging in
+(`LoginStep`) writes only `sf_platform_token`; accepting an invitation via the POST endpoint writes
+no storage at all.
+
+The trap for a spec: a fresh `browser.newContext()` starts with empty `localStorage`. If a test opens
+a SECOND, separate context to accept a sibling invitation for the same invitee — reasoning "the
+invitee already belongs to org1 in the database, so `canStayInCurrent` must be true" — that reasoning
+does not hold. `canStayInCurrent` asks "did THIS browser context ever enter a tenant", not "does this
+account belong to more than one tenant". A brand-new context never entered anything, so the button
+structurally cannot render, no matter what the invitee owns. This is exactly the bug ETP-5327 fixed:
+`user-invitation.email.integration.spec.js`'s cross-client test asserted `action-stay-in-current` on
+an org2 acceptance that ran in its own fresh context. The fix is to run both acceptances through the
+SAME `page`/`browser context` (`acceptExistingInvitation`'s `existingPage` option) — that context
+genuinely enters org1 via `action-go-to-app` before the org2 acceptance ever loads, so
+`sf_auth_token`/`sf_auth_client_name` are real.
+
+One side effect of reusing the context: when the org2 invite page loads with an already-active
+session for the SAME invitee, the section above ("no prompt... login step is skipped entirely")
+applies — `invite-shared-login` never renders and the page goes straight to
+`invite-authenticated-step`. A helper written to always expect the login form first will fail; it
+must accept either render.
+
 ## Invitation fixture contract
 
 The invitation flow assumes that the administrator has already created:
