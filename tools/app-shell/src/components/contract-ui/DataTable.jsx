@@ -1877,7 +1877,7 @@ function TableDataRow({
             // the tooltip below is `absolute bottom-full`, deliberately escaping
             // this cell's own box to float above the button, and would otherwise
             // get silently clipped.
-            <TableCell
+            (<TableCell
               className="w-10 px-2 overflow-visible"
               onClick={(e) => e.stopPropagation()}
               data-testid="TableCell__eb5261">
@@ -1895,7 +1895,7 @@ function TableDataRow({
                   {ui('cloneOrderBtn')}
                 </div>
               </div>
-            </TableCell>
+            </TableCell>)
           )}
         </>
       )}
@@ -1905,7 +1905,7 @@ function TableDataRow({
         // icons overlay the trailing grid columns" — an intentional overflow
         // beyond this cell's bounds that the new shared `overflow-hidden`
         // default would otherwise clip.
-        <TableCell
+        (<TableCell
           className="w-10 px-2 relative overflow-visible"
           onClick={(e) => e.stopPropagation()}
           data-testid="TableCell__eb5261">
@@ -1928,7 +1928,7 @@ function TableDataRow({
             onMenuActionExecuted={rowQuickActions.onMenuActionExecuted}
             actionsConfig={rowQuickActions.actions}
             data-testid="RowQuickActions__eb5261" />
-        </TableCell>
+        </TableCell>)
       )}
     </TableRow>
   );
