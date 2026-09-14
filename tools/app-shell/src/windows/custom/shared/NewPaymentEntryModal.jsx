@@ -768,6 +768,11 @@ function Psd2InactiveWarning({ ui, accountId }) {
     <InfoBanner
       tone="warning"
       icon={AlertTriangle}
+      // ETP-5245 — the documented exception to banners being dismissible by default: this one
+      // does not accompany the form, it REPLACES it (`{psd2Blocked && <Psd2InactiveWarning/>}`
+      // against `{!psd2Blocked && (<>…form…</>)}` below). Dismissing it would leave the modal
+      // body empty — no warning, no form, and no "reconnect" link, which is the only way out.
+      dismissible={false}
       data-testid="cp-psd2-inactive-warning"
     >
       <span>{ui('cpPsd2InactiveBody')}</span>

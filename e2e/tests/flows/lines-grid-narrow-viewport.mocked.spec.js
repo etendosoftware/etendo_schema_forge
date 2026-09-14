@@ -261,9 +261,7 @@ const WINDOWS = [
     headerId: 'mock-narrow-glj-001',
     hasSidePanel: false,
     expectOverflow: false,
-    leadingColumns: [
-      { key: 'description', minBasis: 224 },
-    ],
+    leadingColumns: [],
     header: {
       id: 'mock-narrow-glj-001',
       documentNo: 'GLJ-NARROW-001',

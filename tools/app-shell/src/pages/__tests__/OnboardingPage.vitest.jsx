@@ -120,6 +120,13 @@ vi.mock('@etendosoftware/etendo-go-core/onboarding/state', () => ({
   ],
   isCompanyStepValid: () => true,
   isProfileStepValid: () => true,
+  // ETP-5195: OnboardingFlow.jsx and SetupProgressStep.jsx both call this during
+  // auto-login/environment-entry (right after loginEnvironment resolves a token) to
+  // replace the ambient session + persist the sf_auth_* keys. Its return value is
+  // never consumed by either caller, so a bare vi.fn() is enough to let the success
+  // path proceed instead of throwing "No 'persistEnvironmentSession' export is
+  // defined on the mock" and falling into the catch/failed-tracking branch.
+  persistEnvironmentSession: vi.fn(),
   ENVIRONMENT_SESSION_KEYS: [
     'sf_auth_token',
     'sf_auth_user',
