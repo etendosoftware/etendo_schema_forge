@@ -69,10 +69,15 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
 
   // draftMode confirm button (DetailView) dispatches this event to open the confirm modal
   useEffect(() => {
-    const handler = () => setShowConfirm(true);
+    // ETP-5255 — `isDraft` gates OPENING the modal, never keeping it mounted. Confirming flips
+    // the record to CO, and the modal has to outlive that: it is where the result of the
+    // shipment/invoice steps is reported.
+    const handler = () => { if (isDraft) setShowConfirm(true); };
     window.addEventListener('sales-order:open-confirm-modal', handler);
     return () => window.removeEventListener('sales-order:open-confirm-modal', handler);
-  }, []);
+    // `isDraft` is read inside the handler, so an empty dep array would pin the value this effect
+    // first saw and the modal would stop opening after any status change.
+  }, [isDraft]);
 
   // OrderDraftChips (topbarExtra) dispatches this event when a grouped chip is clicked
   useEffect(() => {
@@ -157,11 +162,34 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
     }
   }, [confirmedDocs, hasConfirmedDoc, confirmedTitle, onRefresh, ui]);
 
+  // ETP-5255 — gated on `showConfirm` ALONE, and the loading return below YIELDS to it rather
+  // than rendering it too. Both of those unmounted the modal at the moment it had something to
+  // say: confirming moves the order DR→CO, so `isDraft` goes false and `fetched` resets to null
+  // while the CO effect reloads. Two wrong fixes were tried on the purchase-order twin and are
+  // recorded there — rendering the portal from BOTH returns REMOUNTS it, because it sits at a
+  // different child index in each fragment, so it came back blank with the checkboxes cleared and
+  // Confirm re-ran `documentAction` on an order already in CO while the shipment was never
+  // retried. Staying on ONE return path keeps the element's position, and therefore its state.
+  // `onClose` is the only thing that may close it.
+  const confirmPortal = showConfirm ? createPortal(
+    <ConfirmModal
+      orderId={recordId}
+      data={data}
+      apiBaseUrl={apiBaseUrl}
+      headers={headers}
+      onSave={onSave}
+      onRefresh={onRefresh}
+      onClose={() => setShowConfirm(false)}
+      onConfirmed={(docs) => { setShowConfirm(false); setConfirmedDocs(docs); }}
+      data-testid="ConfirmModal__18d1f0" />,
+    document.body,
+  ) : null;
+
   // ── COMPLETED (loading) ────────────────────────────────────────────────────
-  // ETP-5260 — Copy link now renders unconditionally via the sibling
-  // topbarSecondary slot, so this loading state no longer needs to render it here.
-  if (isCompleted && !fetched) {
-    return <>{confirmedPanel}<span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '4px 8px' }}>…</span></>;
+  // ETP-5260 — Copy link now renders unconditionally via the sibling topbarSecondary slot, so this
+  // loading state no longer needs to render it here.
+  if (isCompleted && !fetched && !showConfirm) {
+    return <>{confirmedPanel}{confirmPortal}<span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '4px 8px' }}>…</span></>;
   }
 
   // ── COMPLETED — compute derived values ─────────────────────────────────────
@@ -173,7 +201,8 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
   let buttonLabel = null;
   let derived = null;
   let currency = '';
-  if (isCompleted) {
+  // `fetched` can be null here now that the loading return above yields to an open modal.
+  if (isCompleted && fetched) {
     const { shipments, invoices, orderLines } = fetched;
 
     const shipmentsDraft    = shipments.filter(s => s.documentStatus === 'DR');
@@ -227,19 +256,10 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
       )}
       {/* ETP-5260 — Clone/Copy-link/Send moved to the topbarSecondary slot
           (OrderCreateInvoiceSecondaryActions). This component now only renders the
-          PRIMARY flow button above and the modals below. */}
-      {isDraft && showConfirm && createPortal(
-        <ConfirmModal
-          orderId={recordId}
-          data={data}
-          apiBaseUrl={apiBaseUrl}
-          headers={headers}
-          onSave={onSave}
-          onClose={() => setShowConfirm(false)}
-          onConfirmed={(docs) => { setShowConfirm(false); setConfirmedDocs(docs); }}
-          data-testid="ConfirmModal__18d1f0" />,
-        document.body,
-      )}
+          PRIMARY flow button above and the modals below. `confirmPortal` is
+          hoisted above (ETP-5255) so the same portal instance is reused across
+          this return and the loading-state early return — see the comment there. */}
+      {confirmPortal}
       {isCompleted && showActions && createPortal(
         <CreateDocsModal
           orderId={recordId}
@@ -276,7 +296,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
 
 // ── ConfirmModal ───────────────────────────────────────────────────────────────
 
-export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onConfirmed, onSave }) {
+export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onConfirmed, onSave, onRefresh }) {
   const ui       = useUI();
   const [createShipment,  setCreateShipment]  = useState(false);
   const [createInvoice,   setCreateInvoice]   = useState(false);
@@ -442,8 +462,28 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     // user can retry. The successful steps are already locked via state, so
     // the next attempt will skip them.
     if (errors.length > 0) {
+      // ETP-5255 — reload the record before letting the user retry. Reaching here means the order
+      // was confirmed and only a document step failed, so the row on the server is no longer what
+      // this window shows: `documentAction=CO` moved it out of draft and recalculated its totals.
+      //
+      // Two things were broken by not doing this, and the second is why the retry could never
+      // work. The window kept displaying the pre-confirmation order. And the `updated` token
+      // cached for the record was the pre-action one, so `onSave()` at the top of the retry wrote
+      // with a superseded token and the server refused it 409 `stale_record`, shown to the user as
+      // "somebody else edited this record" — about a change they had just made themselves, on a
+      // retry that would fail identically forever. `onSave` has no dirty check, so no prior edit
+      // was needed to get stuck.
+      //
+      // Errors are set FIRST: the reload is best-effort and must not leave the user on a spinner,
+      // nor swallow the message if it throws. Awaited because the retry's first act is `onSave()`.
       setError(errors.join('\n'));
       setLoading(false);
+      try {
+        await onRefresh?.();
+      } catch {
+        // A failed reload must not replace the process errors with its own. The user still needs
+        // to read which document step failed; a stale screen is the lesser problem.
+      }
       return;
     }
 

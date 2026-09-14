@@ -72,6 +72,19 @@ physical-inventory correction first).
    the file's live bytes), which makes the runner skip it entirely on every future run. See
    `../../../.claude/agents/tenant-fixer.md` § Retirement for the mechanism.
 
+   **Narrow exception — editing a FAILED-only file in place.** A fix may be edited in place,
+   for a tenant subset the original `@apply` left in `FAILED` (never `APPLIED`), because the
+   runner's watermark only advances on `PROCESSED` statuses (`APPLIED`, `MANUALLY_FIXED`,
+   `SKIPPED_NOT_NEEDED`) — `FAILED` is excluded, so those tenants re-read the file fresh on the
+   next run and pick up the fix. This also requires general checksum enforcement to still be
+   unimplemented (true as of this writing — see "Apply-time placeholders" below and `../run.js`;
+   checksum verification today only applies to *retired* fixes via `retired.json` above, not to
+   ordinary applied ones — once a general `CHECKSUM_MISMATCH` check ships, this exception no
+   longer applies). It does NOT license editing a file whose affected tenants are `APPLIED` —
+   ship a new dated `.sql` for those. See
+   `20260730T180000Z__R17-rectificativa-doctype-sequence.sql` (steps 0a/0b, ETP-4799) for a
+   worked example.
+
 ## Fixes that target the System pseudo-tenant (`--client 0`)
 
 The default tenant universe excludes `ad_client_id = '0'` (see `../run.js`), so a
