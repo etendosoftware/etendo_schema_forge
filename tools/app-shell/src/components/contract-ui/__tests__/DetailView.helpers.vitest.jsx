@@ -872,7 +872,27 @@ describe('DetailView helper functions', () => {
       expect(hook.fetchById).toHaveBeenCalledWith('rec-1', { force: true });
     });
 
-    it('onRefresh does not throw when hook.fetchById is not provided', () => {
+    it('onRefresh also invalidates the entity cache (ETP-5278 — list-row staleness)', () => {
+      // ETP-5278 (follow-up) — a promote/demote action mutates row.defaultRole, which the
+      // LIST's own row data reflects, not just the single record. useEntity.js's list-mount
+      // effect explicitly "reuses a fresh cached list" (loadList(false)) — without
+      // invalidating that cache here too, returning to the grid soon after the action (inside
+      // the cache's staleTime window) serves the pre-mutation row, and RoleChipsCell's
+      // admin-first check (reading row.defaultRole, not the always-fresh bulk assignments map)
+      // renders the stale "Administrador" badge even though the assignments fetch is correct.
+      const data = { id: 'rec-1' };
+      const hook = { children: [], fetchById: vi.fn(), invalidateEntityCache: vi.fn() };
+      let capturedOnRefresh;
+      const actionsFn = ({ onRefresh }) => {
+        capturedOnRefresh = onRefresh;
+        return [{ key: 'x', label: 'X', onClick: vi.fn() }];
+      };
+      renderExtraActionButtons(actionsFn, data, hook, '');
+      capturedOnRefresh();
+      expect(hook.invalidateEntityCache).toHaveBeenCalledTimes(1);
+    });
+
+    it('onRefresh does not throw when hook.fetchById/invalidateEntityCache are not provided', () => {
       const data = { id: 'rec-1' };
       const hook = { children: [] };
       let capturedOnRefresh;

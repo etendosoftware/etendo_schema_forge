@@ -933,7 +933,18 @@ export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
     // already had it) bypasses the record cache: without it, a still-fresh cache
     // entry from before the side effect could be served back unchanged, so the UI
     // never sees the just-completed mutation.
-    onRefresh: () => hook.fetchById?.(data?.id, { force: true }),
+    // ETP-5278 (follow-up) — invalidateEntityCache() additionally clears the LIST
+    // query's own cache entry, not just this one record. useEntity.js's list-mount
+    // effect explicitly reuses a fresh cached list (loadList(false)) rather than
+    // always hitting the network, so without this a side effect here (e.g. admin
+    // promote/demote, which changes row.defaultRole) can leave the grid showing the
+    // pre-mutation row for as long as that cache entry stays within its staleTime —
+    // reproducible by acting fast enough to return to the list before it expires,
+    // which is exactly what made this easy to miss in slower manual testing.
+    onRefresh: () => {
+      hook.invalidateEntityCache?.();
+      hook.fetchById?.(data?.id, { force: true });
+    },
   }) : extraActions).map((action, i) => (
       action.visible !== false && (
           <Button
