@@ -83,6 +83,11 @@ const BACKEND_ERROR_MAP = {
   // caught it.
   'The tax ID is not a valid NIF, CIF or NIE.': 'backendError.taxIdInvalidFormat',
   'The tax ID check digit does not match. Review the number.': 'backendError.taxIdInvalidCheckDigit',
+  // ETP-5031 — BusinessPartnerHandler validates the Contacts `TaxID` server-side too, and there
+  // the document type can be a passport (EM_OBTIK_Tax_ID_Key = '3'), which the two rules above
+  // do not cover. Same principle as them: the wording must match what the browser-side
+  // contactsFieldValidation.js shows for the identical rejection.
+  'The passport ID is not valid. It must be up to 9 letters or digits.': 'backendError.taxIdInvalidPassport',
   'Name is too long': 'backendError.matchRuleNameTooLong',
   'Text condition must be Contains (C), Starts with (S) or Regex (R)': 'backendError.matchRuleTextConditionInvalid',
   'Pattern is required': 'backendError.matchRulePatternRequired',

@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login, navigateTo } from '../helpers/auth.js';
 import { captureScreenshot } from '../helpers/captureScreenshot.js';
+import { uniqueValidCif } from '../helpers/tax-id.js';
 
 function loadCredentials() {
   try {
@@ -39,7 +40,9 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     // leaving the dialog on "Importar 0" with the button disabled. Derive the tax IDs from
     // `unique` like every other identifying value here, keeping the last digit distinct per row
     // so they are not in-file duplicates either.
-    const taxId = (index) => `B${String(unique).slice(-7)}${index}`;
+    // ETP-5031: each value must also be a syntactically valid CIF (check digit and all) — the
+    // backend now validates it via SpanishTaxIdValidator when "Clave NIF país residencia" is NIF.
+    const taxId = (index) => uniqueValidCif(unique, index);
     const newCategoryName = `E2E Contact Category ${unique}`;
     const rows = [
       { name: `E2E Contact Code ${unique}`, first: `Lucia${unique}`, last: 'Code', categoryMode: 'code' },
