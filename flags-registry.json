@@ -305,6 +305,94 @@
           }
         ]
       }
+    },
+    {
+      "id": "acct-process-monitor",
+      "description": "Admin-only page to monitor the scheduled accounting server process and launch a run manually, without waiting for its next automatic execution.",
+      "owner": "sebastianbarrozo",
+      "jira": "ETP-5269",
+      "created": "2026-09-10",
+      "flag": {
+        "key": "acct-process-monitor",
+        "defaultValue": false,
+        "ttl": "2026-12-31",
+        "ttlNote": "Removal target once the manual trigger has been exercised against a real accounting backlog and the page is accepted as permanent.",
+        "symbols": [
+          "acct-process-monitor",
+          "ACCT_PROCESS_MONITOR",
+          "AcctProcessMonitorPage",
+          "acctProcessMonitorApi",
+          "useAcctProcessMonitor",
+          "SFAcctProcessMonitor",
+          "acctprocessmonitor",
+          "acctProcess"
+        ],
+        "$symbolsComment": "The page/hook/api/handler names are listed alongside the key because the shared toggle points reference the feature by those identifiers rather than by the flag key: runtime-routes.jsx registers AcctProcessMonitorPage, menu.json carries the acct-process-monitor item name, and NeoPseudoSpecDispatcher routes the lowercase acctprocessmonitor pseudo-spec to SFAcctProcessMonitor. A grep for the key alone would miss every one of them. `acctProcess` is the i18n prefix: all 43 genericLabels keys this feature adds to en_US, es_ES and es_AR start with it, and none of them contains the flag key, so without this symbol retiring the flag would leave every one of them orphaned in three locale files."
+      },
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/pages/AcctProcessMonitorPage.jsx",
+          "tools/app-shell/src/pages/acct-process-monitor/",
+          "tools/app-shell/src/lib/acctProcessMonitorApi.js"
+        ],
+        "backend": [
+          "src/com/etendoerp/go/schemaforge/webhooks/SFAcctProcessMonitor.java"
+        ]
+      },
+      "$pathsComment": "Owned code only. menu.json, runtime-routes.jsx, SideMenu.jsx, flag-keys.js, lib/flags/index.js and NeoPseudoSpecDispatcher.java are shared toggle points, not owned paths: each holds a single registration/gating line naming one of the symbols above, and no feature logic. Retiring the flag is deleting the owned paths plus removing what a grep for those symbols finds.",
+      "deferredItems": [
+        {
+          "id": "manual-trigger-runtime-verification",
+          "kind": "open",
+          "note": "The trigger mechanism is verified from core source and from existing DB evidence (OBScheduler.schedule(ProcessBundle) inserts a fresh request with null timing, TriggerProvider maps that to IMMEDIATE, ProcessMonitor writes the AD_PROCESS_RUN row for any Quartz job regardless of channel, and AcctServerProcess.doExecute processes a single client when the bundle context's client is not '0'), but no manual run has been executed against a deployed build yet — the Java was compile-checked only. QA must press the button on a real instance and confirm: a new AD_PROCESS_RUN row appears tagged with the CALLER's ad_client_id; only that client's documents were posted; AD_PROCESS_REQUEST 9B2B32C0BAF146F783A50C6F69251BC4 is unchanged apart from its scheduler-owned next_fire_time; and the run did NOT take the pinstance-dependent isDirect path (strOrg must stay '0').",
+          "refs": [
+            "org.openbravo.scheduling.OBScheduler#schedule(ProcessBundle)",
+            "org.openbravo.scheduling.trigger.TriggerProvider#getTimingOption",
+            "org.openbravo.scheduling.ProcessMonitor#jobToBeExecuted",
+            "org.openbravo.erpCommon.ad_process.AcctServerProcess#doExecute — the client-scope branch"
+          ]
+        }
+      ],
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/__tests__/AcctProcessMonitorPage.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/acct-process-monitor/__tests__/useAcctProcessMonitor.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/acct-process-monitor/__tests__/RunStatusPill.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/layout/SideMenu/__tests__/SideMenu.vitest.jsx",
+            "note": "Shared spec; carries the item-level flag-gate cases for this feature."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/webhooks/SFAcctProcessMonitorTest.java",
+            "note": "EXISTS on feature/ETP-5269 in the com.etendoerp.go worktree. The scorer resolves roots.backend to etendo_core/modules/com.etendoerp.go, which is the MAIN checkout and currently sits on a different branch, so it reports this file missing. Left scoring as-is on purpose: marking it expected:true would suppress a real 5 pts on every future run to paper over a local path artifact that disappears once the branches are co-located."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/NeoPseudoSpecDispatcherTest.java",
+            "note": "Shared dispatcher spec; carries the acctprocessmonitor routing case."
+          }
+        ],
+        "e2e": [
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/acct-process-monitor.mocked.spec.js"
+          }
+        ]
+      },
+      "$scopeChangeComment": "2026-09-10, human decision: a manual run must post ONLY the triggering client's accounting, not the instance-wide System scope the automatic cadence uses. Implemented by building the one-shot bundle from the CALLING session's client instead of the recurring row's stored ob_context; AcctServerProcess.doExecute already branches to a single-client path when the context client is not '0', so no change to core was needed. This closed the system-scope-of-a-tenant-triggered-run item, which is why it no longer appears above.",
+      "$defectFoundComment": "Reading AcctServerProcess for the scope change surfaced a defect in the first implementation: it used Channel.DIRECT, and AcctServerProcess sets isDirect from the channel and then loads its table/org/date parameters from AD_PINSTANCE_PARA. A scheduled one-shot has no pinstance, and those generated finders return \"\" rather than null, so strOrg would have been silently overwritten from \"0\" to \"\" and the run would have reported success while posting nothing. Now Channel.BACKGROUND, which keeps isDirect false and takes the same path as the automatic run. Trade-off accepted: a BACKGROUND one-shot interrupted between INSERT and firing is re-fired once after a restart (DIRECT rows are marked SYR and skipped) — harmless, since AcctServer only posts still-unposted documents.",
+      "$coverageComment": "The unit-and-e2e-coverage deferred item was CLOSED on 2026-09-10: it was written while DEV had shipped implementation only, and the branch now carries the frontend vitest specs and the two JUnit suites listed in testSpecs below. It was charging 3 pts of debt that no longer existed."
     }
   ]
 }

@@ -22,6 +22,7 @@ const OnboardingPage = lazy(() => import('./pages/OnboardingPage.jsx'));
 const SmartScanPage = lazy(() => import('./pages/SmartScanPage.jsx'));
 const OAuth2ClientsPage = lazy(() => import('./pages/OAuth2ClientsPage.jsx'));
 const RolesOverviewPage = lazy(() => import('./pages/RolesOverviewPage.jsx'));
+const AcctProcessMonitorPage = lazy(() => import('./pages/AcctProcessMonitorPage.jsx'));
 const AuthorizePage = lazy(() => import('./pages/AuthorizePage.jsx'));
 const QuickSalesOrderPage = lazy(() => import('./pages/QuickSalesOrderPage.jsx'));
 const QuickPurchaseOrderPage = lazy(() => import('./pages/QuickPurchaseOrderPage.jsx'));
@@ -77,6 +78,9 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
     lazyRoute('smart-scan', SmartScanPage),
     lazyRoute('oauth2-clients', OAuth2ClientsPage),
     lazyRoute('roles', RolesOverviewPage),
+    // ETP-5269. Registered unconditionally, like 'upgrade' below: the `acct-process-monitor` flag
+    // gates the menu entry, not the route, and SFAcctProcessMonitor enforces admin access itself.
+    lazyRoute('acct-process-monitor', AcctProcessMonitorPage),
     lazyRoute('authorize', AuthorizePage),
     lazyRoute('quick-sales-order', QuickSalesOrderPage, { apiBaseUrl }),
     lazyRoute('quick-purchase-order', QuickPurchaseOrderPage, { apiBaseUrl }),
