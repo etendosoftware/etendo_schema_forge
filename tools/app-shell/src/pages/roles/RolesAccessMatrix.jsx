@@ -73,6 +73,7 @@ export default function RolesAccessMatrix({ cards, matrix, iconFor }) {
               <tr className="bg-muted/30" data-testid={`RolesAccessMatrix__category-${group.category}`}>
                 <th
                   colSpan={cards.length + 1}
+                  scope="row"
                   className="py-1.5 pr-4 text-left text-xs font-medium text-muted-foreground"
                 >
                   {tMenu(group.category)}

@@ -593,6 +593,7 @@ export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
                 <tr className="bg-muted/30" data-testid={`UserRolesTab__category-${group.category}`}>
                   <th
                     colSpan={columns.length + 1}
+                    scope="row"
                     className="text-left text-xs font-medium text-muted-foreground py-1.5 pr-4"
                   >
                     {tMenu(group.category)}
