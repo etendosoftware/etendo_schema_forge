@@ -198,4 +198,32 @@ describe('ManageDocsLauncher — Rules-of-Hooks regression (ETP-5295)', () => {
     expect(onClose).not.toHaveBeenCalled();
     assertNoHooksOrderViolation();
   });
+
+  // ETP-5295 QA gap — sales-order twin of the purchase-order network-error test. The
+  // loading→resolved transition guarded by the Rules-of-Hooks fix is exercised above only for
+  // the happy (fetch resolves) path; the component's own `catch` block (falling back to empty
+  // shipments/invoices/orderLines) is the OTHER way `fetched` transitions from null to
+  // non-null, through the exact same hook-ordering path the fix targeted. A rejected
+  // `Promise.all` (network error / one of the 3 endpoints down) must resolve to the same
+  // "nothing pending" outcome as an empty-but-successful fetch, without resurrecting the
+  // "Rendered more hooks" crash this whole file guards against.
+  it('falls back to empty state and closes silently when the fetch rejects (network error)', async () => {
+    globalThis.fetch = vi.fn(() => Promise.reject(new Error('network down')));
+    const onClose = vi.fn();
+
+    await act(async () => {
+      render(
+        <ManageDocsLauncher
+          {...baseProps}
+          data={ORDER({ grandTotalAmount: 0 })}
+          onClose={onClose}
+          onCreated={vi.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId('sales-order-manage-docs-modal')).not.toBeInTheDocument();
+    assertNoHooksOrderViolation();
+  });
 });
