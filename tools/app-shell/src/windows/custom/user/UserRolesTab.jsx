@@ -72,9 +72,7 @@ function tierRank(tier) {
  * Given one row's per-column `{ tier }` values, decides whether the row's roles
  * disagree on the access level for this window (ETP-4999 item 5 — the ticket's
  * "permission comparison view" ask: a user with multiple roles that grant
- * different access levels for the same window). `GENERAL_ROWS` below always
- * passes every column the same `tier: 'full'`, so `disagree` is always `false`
- * for those rows by construction — they render exactly as before, unaffected.
+ * different access levels for the same window).
  *
  * When several columns tie at the highest rank, only the LEFT-MOST one is the
  * "winner" (`winnerIndex`, via `Array.indexOf`'s first-match semantics) — a
@@ -289,22 +287,6 @@ function groupResolvedRows(rows) {
     return { category, rows: sortedRows };
   });
 }
-
-/**
- * The 3 hardcoded General rows (ETP-4906 human decision, session 2026-08-14, made from a
- * static Figma screenshot — flagged for Alex/REVIEW to re-verify against the live Figma file
- * before merge, see the plan's Global Constraints). None of the three has an `AD_Window_ID`
- * at all, so none can ever be derived from `SFListMenu`'s tree — they are always rendered as
- * full access ('✓') for every role column, unconditionally. The other 9 windowless rows
- * documented in com.etendoerp.go's `TemplateRoleWindowAccess` javadoc (Monitor fiscal,
- * Informes financieros, both Informe Antigüedad reports, etc.) are intentionally omitted —
- * they must never appear, not even as a '—' row.
- */
-const GENERAL_ROWS = [
-  { key: 'dashboard', labelKey: 'userRolesTabDashboardRow' },
-  { key: 'favorites', labelKey: 'userRolesTabFavoritesRow' },
-  { key: 'copilot', labelKey: 'userRolesTabCopilotRow' },
-];
 
 export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
   const ui = useUI();
@@ -606,44 +588,6 @@ export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-border/50">
-            <Fragment key="general">
-              <tr className="bg-muted/30" data-testid="UserRolesTab__category-general">
-                <th
-                  colSpan={columns.length + 1}
-                  className="text-left text-xs font-medium text-muted-foreground py-1.5 pr-4"
-                >
-                  {ui('userRolesTabGeneralCategory')}
-                </th>
-              </tr>
-              {GENERAL_ROWS.map((row) => {
-                // Always 'full' for every column by construction — `resolveRowWinner`
-                // always returns `disagree: false` here, so this row renders exactly
-                // as it did before item 5 (no tooltip marker).
-                const cellsForRow = columns.map(() => ({ tier: 'full', text: '✓' }));
-                const { winnerIndex } = resolveRowWinner(cellsForRow);
-                return (
-                  <tr key={row.key} data-testid={`UserRolesTab__row-${row.key}`}>
-                    <td className="py-2.5 pr-4 text-foreground">{ui(row.labelKey)}</td>
-                    {columns.map((role, i) => {
-                      const { tier, text } = cellsForRow[i];
-                      const isWinner = i === winnerIndex;
-                      return (
-                        <MatrixRoleCell
-                          key={role.id}
-                          role={role}
-                          tier={tier}
-                          text={text}
-                          isWinner={isWinner}
-                          testIdKey={row.key}
-                          winnerTooltipTitle={winnerTooltipTitle}
-                          winnerTooltipDescription={winnerTooltipDescription}
-                          data-testid="MatrixRoleCell__71bdc9" />
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </Fragment>
             {categoryGroups.map((group) => (
               <Fragment key={group.category}>
                 <tr className="bg-muted/30" data-testid={`UserRolesTab__category-${group.category}`}>
