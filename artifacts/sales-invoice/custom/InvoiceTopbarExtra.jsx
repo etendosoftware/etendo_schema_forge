@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useUI, useMenuLabel } from '@/i18n';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
-import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
+import SendDocumentModal from '@/components/contract-ui/SendDocumentModal';
 import SendToSifButton from './SendToSifButton';
 import { useInvoicePdf } from '@/windows/custom/shared/useInvoicePdf.js';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
@@ -118,6 +118,18 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     };
     window.addEventListener('neo:processSuccess', handler);
     return () => window.removeEventListener('neo:processSuccess', handler);
+  }, []);
+
+  // ETP-5260 defect fix — the Send button used to render inline here (topbarRight),
+  // landing to the RIGHT of Save/Confirm against the DF. It now lives in
+  // SalesInvoiceSecondaryActions (topbarSecondary, left of Save/Confirm) and
+  // reaches this component's existing SendDocumentModal/PDF context via this
+  // event bridge, the same pattern purchase-order uses for
+  // 'purchase-order:open-send-modal'.
+  useEffect(() => {
+    const openSendModal = () => setShowSendModal(true);
+    window.addEventListener('sales-invoice:open-send-modal', openSendModal);
+    return () => window.removeEventListener('sales-invoice:open-send-modal', openSendModal);
   }, []);
 
   // After the record re-fetches as CO, open queued modals in order.
@@ -359,13 +371,6 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         apiBaseUrl={apiBaseUrl}
         status={data?.documentStatus}
       />
-
-      {/* ETP-4717 — explicit Completed gate, matching the grid row
-          quick-action's status rule (this branch is only reached once
-          installments exist, which in practice already implies CO). */}
-      {isCompleted && <SendDocumentButton onClick={() => setShowSendModal(true)} />}
-
-
 
       {/* View payments modal — installment breakdown */}
       {showPaymentsModal && (

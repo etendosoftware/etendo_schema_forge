@@ -1136,6 +1136,7 @@ export function DetailView({
   linesEmptyState = null,
   topbarExtra = null,
   topbarRight = null,
+  topbarSecondary = null, // ETP-5260: secondary actions slot — see render comment near topbarRight
   // ETP-4933: opt-in for windows that render their own primary action next to Save
   // (the return windows put a Confirm button in the topbarRight slot). Save then takes
   // the secondary/outline look instead of competing as a second primary button.
@@ -2839,6 +2840,25 @@ export function DetailView({
   };
   const balanceFooterEditingLine = mergeLineEdits(lineEdits, selectedLine);
 
+  // ETP-5260 — shared prop contract for topbarSecondary/topbarRight (onRefresh forces past the freshness cache; see comments below).
+  const renderSlotAction = (Component, testId) => Component && (() => {
+    const SlotComponent = Component;
+    return (
+      <SlotComponent
+        data={data}
+        recordId={data?.id || recordId}
+        token={token}
+        apiBaseUrl={apiBaseUrl}
+        api={api}
+        onProcess={hook.handleProcess}
+        onRefresh={() => hook.fetchById?.(data?.id || recordId, { force: true })}
+        onSave={() => hook.handleSave({ silent: true })}
+        isDirty={isDirty}
+        saveGate={saveGate}
+        data-testid={testId} />
+    );
+  })();
+
   return (
     <div className="flex-1 min-h-0 flex flex-col" data-testid="detail-view" data-doc-status={_headerData?.documentStatus}>
       {/* Content card with rounded top-left corner */}
@@ -2928,7 +2948,11 @@ export function DetailView({
                   <Trash2 className="h-4 w-4" data-testid="Trash2__fa3275" />
                 </button>
               )}
-              {/* More actions — only render the button when there is something to show */}
+              {/* Extra action buttons from page */}
+              {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
+              {/* ETP-5260 secondary/utility actions — left of Save/Confirm; see topbarRight's comment below for the primary/secondary split. Kebab (below) is grouped right after it, since it is itself a container for secondary actions. */}
+              {topbarSecondary && renderSlotAction(topbarSecondary, 'TopbarSecondaryComponent__fa3275')}
+              {/* More actions (kebab) — placed after the secondary action group and right before Save/process buttons (ETP-5260); only renders when there is something to show */}
               <DetailMoreActionsMenu
                 apiBaseUrl={apiBaseUrl}
                 customMenuContent={customMenuContent}
@@ -2945,8 +2969,6 @@ export function DetailView({
                 token={token}
                 ui={ui} windowReadOnly={menuActionsReadOnly}
                 data-testid="DetailMoreActionsMenu__fa3275" />
-              {/* Extra action buttons from page */}
-              {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
               {/* Save action — rendered before process buttons when saveActionsFirst is set (per-window opt-in) */}
               {saveActionsFirst && !windowReadOnly && !hideSaveStatuses.includes(_headerData?.documentStatus) && shouldRenderSaveActionsRow(isDraftModeCompleted, draftMode)
                 && renderSaveActions(saveActionParams)}
@@ -3036,38 +3058,15 @@ export function DetailView({
 
               {!saveActionsFirst && !windowReadOnly && !hideSaveStatuses.includes(_headerData?.documentStatus) && shouldRenderSaveActionsRow(isDraftModeCompleted, draftMode)
                 && renderSaveActions(saveActionParams)}
-              {/* ETP-4933: the topbarRight slot renders AFTER the save actions on purpose.
-                 Both live in this one flex row, so source order is visual order, and the
-                 slot used to come first — which put a window's Confirm button to the LEFT
-                 of Save (the return-shipment windows). Orders never showed it because their
-                 slot content is all gated on isCompleted, so in draft only Save/Confirm from
-                 renderSaveActions were visible, already in the right order. Verified before
-                 moving: of the 8 windows using this slot, none renders inline content while
-                 in draft except the two return windows, and none sets saveBeforeProcesses
-                 (which would render Save at the earlier call site instead). */}
-              {topbarRight && (() => {
-                const TopbarRightComponent = topbarRight;
-                return (
-                  <TopbarRightComponent
-                    data={data}
-                    recordId={data?.id || recordId}
-                    token={token}
-                    apiBaseUrl={apiBaseUrl}
-                    api={api}
-                    onProcess={hook.handleProcess}
-                    onRefresh={() => hook.fetchById?.(data?.id || recordId, { force: true })}
-                    onSave={() => hook.handleSave({ silent: true })} isDirty={isDirty} /* ETP-4940 follow-up: see maybeSaveBeforeConfirm */
-                    // ETP-4933: a topbarRight action that PERSISTS (ConfirmWithCredit calls
-                    // maybeSaveBeforeConfirm, which saves) must honour the required-field gate
-                    // too, or it is a hole straight through it — Save blocked, Confirm saves
-                    // the incomplete record anyway. Only `blocked`/`title` are meant to be
-                    // consumed: the slot inherits the required-field rule, NOT the rest of
-                    // Save's disabled condition (notably `!isDirty` — confirming an already
-                    // saved, unmodified document is the normal path).
-                    saveGate={saveGate}
-                    data-testid="TopbarRightComponent__fa3275" />
-                );
-              })()}
+              {/* ETP-5260 slot classification (see topbarSecondary above): topbarRight carries
+                  PRIMARY document-flow actions (Confirm, receive/invoice, status badges) and
+                  renders AFTER Save/Confirm on purpose — ETP-4933 moved it here because the
+                  return-shipment windows' Confirm button used to sit LEFT of Save. Secondary/
+                  utility actions (copy link, clone, send) belong in topbarSecondary instead.
+                  renderSlotAction's onSave/isDirty/saveGate let a persisting slot action (e.g.
+                  ConfirmWithCredit) save first and honour the required-field gate — ETP-4940/
+                  ETP-4933 — without inheriting Save's full disabled condition (notably !isDirty). */}
+              {topbarRight && renderSlotAction(topbarRight, 'TopbarRightComponent__fa3275')}
             </div>
           </div>
         )}
