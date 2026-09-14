@@ -195,7 +195,10 @@ export function useFiscalConfigForOrgs(orgIds, apiBaseUrl) {
   // Stable, order-independent, deduped key so effects don't re-fire on every
   // render just because a new array instance with the same ids was passed in.
   const key = useMemo(
-    () => Array.from(new Set((orgIds || []).filter(Boolean))).sort().join(','),
+    () =>
+      Array.from(new Set((orgIds || []).filter(Boolean)))
+        .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+        .join(','),
     [orgIds],
   );
 
