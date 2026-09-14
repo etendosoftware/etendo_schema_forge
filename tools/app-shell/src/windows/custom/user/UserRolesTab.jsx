@@ -593,6 +593,19 @@ export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
                 <tr className="bg-muted/30" data-testid={`UserRolesTab__category-${group.category}`}>
                   <th
                     colSpan={columns.length + 1}
+                    /* scope="row", not the spec-textbook "rowgroup": "rowgroup" only labels
+                       correctly when paired with one <tbody> per group, per the WHATWG HTML
+                       spec's own worked example. Here ALL categories share a single <tbody>
+                       (see the `<Fragment key={group.category}>` wrapping below, not a
+                       per-category <tbody>), so under the spec's rule ("applies to all the
+                       remaining cells in the row group") a "rowgroup" scope would associate
+                       this header with every row of every LATER category too, not just its
+                       own — worse than the ARIA-role bug it would fix. "row" is safe: this
+                       <th> is alone in its own <tr> (colSpan spans the whole row), so it
+                       creates no cell association at all, but it still flips the implicit
+                       ARIA role from columnheader to rowheader (both "row" and "rowgroup" map
+                       to rowheader per HTML-AAM), which is what resolves the Playwright
+                       role-collision this was added for. */
                     scope="row"
                     className="text-left text-xs font-medium text-muted-foreground py-1.5 pr-4"
                   >

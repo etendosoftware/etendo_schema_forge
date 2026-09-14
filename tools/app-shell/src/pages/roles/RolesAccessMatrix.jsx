@@ -73,6 +73,10 @@ export default function RolesAccessMatrix({ cards, matrix, iconFor }) {
               <tr className="bg-muted/30" data-testid={`RolesAccessMatrix__category-${group.category}`}>
                 <th
                   colSpan={cards.length + 1}
+                  // scope="row" not "rowgroup": this <tbody> is shared across all categories
+                  // (no per-group <tbody>), so "rowgroup" would wrongly associate this header
+                  // with every later category's rows too — "row" is inert here (own <tr>) but
+                  // still resolves the ARIA role to rowheader.
                   scope="row"
                   className="py-1.5 pr-4 text-left text-xs font-medium text-muted-foreground"
                 >
