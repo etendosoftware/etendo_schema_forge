@@ -21674,8 +21674,6 @@
     "fm.ident.concurso": "Taxpayer declared insolvent during the current settlement period",
     "fm.ident.sii": "Taxpayer voluntarily registered in the SII system",
     "fm.ident.vol_operac": "Taxpayer with an annual transaction volume other than zero (Art. 121 LIVA)",
-    "fm.ident.dep_aduanero": "Taxable person entitled to deduct advance payments on fuel deliveries after customs non-duty suspension regime",
-    "fm.ident.dep_foral": "Taxpayer subject exclusively to a Regional Tax Authority — VAT on imports settled by Customs pending payment",
     "fm.ident.reg_general": "Taxpayer subject exclusively to the general VAT regime",
     "fm.ident.exonerado_390": "Taxpayer exempt from the annual VAT summary return, form 390",
     "fm.ident.fecha_concurso": "Date of the insolvency declaration order",

@@ -21912,8 +21912,6 @@
     "fm.ident.concurso": "Sujeto pasivo declarado en concurso de acreedores en el presente período de liquidación",
     "fm.ident.sii": "Sujeto pasivo acogido voluntariamente al SII",
     "fm.ident.vol_operac": "Sujeto pasivo con volumen anual de operaciones distinto de cero (art. 121 LIVA)",
-    "fm.ident.dep_aduanero": "Sujeto pasivo con derecho a deducir pago a cuenta de entregas de gasolinas, gasóleos y biocarburantes posteriores a la ultimación del régimen de depósito distinto del aduanero",
-    "fm.ident.dep_foral": "Sujeto pasivo que tributa exclusivamente a una Administración tributaria Foral con IVA a la importación liquidado por la Aduana pendiente de ingreso",
     "fm.ident.reg_general": "Sujeto pasivo que tributa exclusivamente en régimen general",
     "fm.ident.exonerado_390": "Sujeto pasivo exonerado de la Declaración-resumen anual del IVA, modelo 390",
     "fm.ident.fecha_concurso": "Fecha en que se dictó el auto de declaración de concurso",
