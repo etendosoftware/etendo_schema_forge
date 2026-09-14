@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, Fragment } from 'react';
-import { TrendingUp, Package, Landmark, FileText, Info } from 'lucide-react';
+import { TrendingUp, Package, Landmark, FileText, Info, Settings } from 'lucide-react';
 import { useUI, useMenuLabel } from '@/i18n';
 import { fetchRolesOverview, fetchTemplateRoles } from '@/lib/rolesApi.js';
 import { fetchMenuTree } from '@/lib/menuTree.js';
-import { resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
+import { resolveRoleDisplayName, ADMIN_NAME_I18N_KEY } from '@/lib/roleNameI18n.js';
 import { resolveDefaultRoleId } from './RoleChipsCell.jsx';
 import { useRoleSelection } from './roleSelectionContext.js';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -15,7 +15,10 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/comp
  * `ROLE_NAME_I18N_KEYS` map uses, deliberately not a new naming scheme, so a role name
  * that resolves a display-name translation also resolves an icon here. Any role name not
  * in this map (there shouldn't be one among `columns`, since `AssignTemplateRolesControl`
- * only ever offers these 4) renders with no icon rather than guessing one.
+ * only ever offers these 4) renders with no icon rather than guessing one. The admin
+ * column (ETP-5196) is NOT keyed into this map — a tenant's Admin role name varies per
+ * tenant, so it is instead gated on `role.isClientAdmin` at the call site, which always
+ * resolves to the `Settings` icon regardless of the role's actual name.
  */
 const ROLE_ICONS = {
   Sales: TrendingUp,
@@ -312,13 +315,20 @@ export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
     return groupRowsByCategory(treeRows).filter((group) => group.rows.length > 0);
   }, [menuTreeData, activeWindowIds]);
 
+  // ETP-5196 — for a confirmed admin holder, the matrix's sole column is the admin role
+  // itself (`adminRole` already has the exact shape a column needs: `{ id, name,
+  // isClientAdmin: true, windows }`), not the composed template-role selection — that
+  // selection reflects the PRE-promotion state and is not what the admin actually has
+  // access to. See `isAdminRoleHolder` above for why this is `false` (falls through,
+  // unaffected) for the entire loading window and after a failed fetch.
   const columns = useMemo(() => {
+    if (isAdminRoleHolder) return adminRole ? [adminRole] : [];
     const selected = new Set((selectedRoleIds ?? []).map(String));
     // SFSystemRoleTemplates never returns a client-admin row (there is none at system
     // level), so no `!role.isClientAdmin` guard is needed here anymore — every entry in
     // `allTemplateRoles` is already a composable template by construction.
     return allTemplateRoles.filter((role) => selected.has(String(role.id)));
-  }, [allTemplateRoles, selectedRoleIds]);
+  }, [isAdminRoleHolder, adminRole, allTemplateRoles, selectedRoleIds]);
 
   // ETP-4999 — a brand-new, not-yet-saved user can never have any roles selected yet
   // (`AssignTemplateRolesControl` only renders its interactive chip editor once
@@ -339,27 +349,27 @@ export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
     );
   }
 
-  // ETP-5071 — checked right after `isNew` and before `loading`/`error` below: unlike
-  // `columns` (derived from `templateRoles`, gated by the fetch), `isAdminRoleHolder`
-  // only ever flips from `false` to `true` as `overviewRoles` fills in — it is `false`
-  // (falls through, unaffected) for the entire in-flight fetch AND on a failed one
-  // (`overviewRoles` stays `[]` forever after a rejected fetch, same as `templateRoles`
-  // staying `null`), so placing it here never masks the loading/error branches the way
-  // checking `columns.length === 0` first would (see that comment below). Once the user
-  // IS a confirmed admin holder, the composed-roles matrix is not just empty or
-  // unavailable — it's actively wrong (stale pre-promotion data) — so this takes
-  // priority over rendering the loading spinner too, matching the product decision to
-  // hide the matrix entirely rather than show it with the wrong roles.
-  if (isAdminRoleHolder) {
-    return (
-      <div
-        className="flex items-center justify-center py-12 text-center text-sm text-muted-foreground"
-        data-testid="UserRolesTab__admin-full-access"
-      >
-        {ui('userRolesTabAdminFullAccessMessage')}
-      </div>
-    );
-  }
+  // ETP-5071 (revised ETP-5196) — computed right after `isNew` and before `loading`/`error`
+  // below: unlike `columns` (derived from `templateRoles`, gated by the fetch),
+  // `isAdminRoleHolder` only ever flips from `false` to `true` as `overviewRoles` fills in —
+  // it is `false` (falls through, unaffected) for the entire in-flight fetch AND on a failed
+  // one (`overviewRoles` stays `[]` forever after a rejected fetch, same as `templateRoles`
+  // staying `null`), so computing it here never masks the loading/error branches the way
+  // checking `columns.length === 0` first would (see that comment below). ETP-5196: once the
+  // user IS a confirmed admin holder, this no longer short-circuits the render — the matrix
+  // itself now shows a single admin column (via `columns` above) built from `adminRole`
+  // rather than the stale pre-promotion `selectedRoleIds`, so it is safe to show alongside
+  // this informative message rather than hiding it. `adminFullAccessMessage` is rendered as
+  // a sibling above the table further down, after falling through the loading/error/empty
+  // checks below exactly like a standard user's render path.
+  const adminFullAccessMessage = isAdminRoleHolder ? (
+    <div
+      className="flex items-center justify-center py-12 text-center text-sm text-muted-foreground"
+      data-testid="UserRolesTab__admin-full-access"
+    >
+      {ui('userRolesTabAdminFullAccessMessage')}
+    </div>
+  ) : null;
 
   // loading/error MUST be checked before the "no roles selected" empty state below:
   // `columns` is derived from `templateRoles`, which stays `null` for the entire in-flight
@@ -409,90 +419,59 @@ export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
   const winnerTooltipDescription = ui('userRolesTabWinnerTooltipDescription');
 
   return (
-    // ETP-4999 item 5 — NO local `overflow-auto`/`max-h-[...]` wrapper here (an earlier
-    // pass added one, on the assumption `sticky` needed a locally-owned scroll context —
-    // live-verified false: the enclosing `DetailView.jsx` custom-tab panel's own outer
-    // column (`overflow-y-auto`, the single scroll context for the whole detail form) IS
-    // a valid sticky ancestor, and `sticky top-0` below pins correctly against it). A
-    // local wrapper here instead created a SECOND, artificially short scroll region
-    // inside the (always full-viewport-height) outer panel — the empty space between
-    // where this region's content ended and the panel's own bottom edge is exactly what
-    // a human caught live: comparing against a pre-item-5 build showed no such gap.
-    <div data-testid="UserRolesTab">
-      <table className="w-full text-sm">
-        <thead className="sticky top-0 z-10 bg-card">
-          <tr className="border-b border-border/50">
-            <th className="text-left text-sm font-semibold text-foreground py-2.5 pr-4">
-              {ui('userRolesTabWindowColumn')}
-            </th>
-            {columns.map((role) => {
-              const RoleIcon = ROLE_ICONS[role.name];
-              return (
-                <th key={role.id} className="text-center text-sm font-semibold text-foreground py-2.5 px-3">
-                  <span className="inline-flex items-center justify-center gap-1">
-                    {RoleIcon && <RoleIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid={`RoleIcon__${role.id}`} />}
-                    {resolveRoleDisplayName(ui, role.name)}
-                  </span>
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border/50">
-          <Fragment key="general">
-            <tr className="bg-muted/30" data-testid="UserRolesTab__category-general">
-              <th
-                colSpan={columns.length + 1}
-                className="text-left text-xs font-medium text-muted-foreground py-1.5 pr-4"
-              >
-                {ui('userRolesTabGeneralCategory')}
+    // ETP-5196 — `adminFullAccessMessage` (non-null only for a confirmed admin holder)
+    // renders as a sibling ABOVE the table, not instead of it: the fragment wrapper
+    // below is the only change from the pre-ETP-5196 single-`<div>` return.
+    <>
+      {adminFullAccessMessage}
+      {/* ETP-4999 item 5 — NO local `overflow-auto`/`max-h-[...]` wrapper here (an earlier
+          pass added one, on the assumption `sticky` needed a locally-owned scroll context —
+          live-verified false: the enclosing `DetailView.jsx` custom-tab panel's own outer
+          column (`overflow-y-auto`, the single scroll context for the whole detail form) IS
+          a valid sticky ancestor, and `sticky top-0` below pins correctly against it). A
+          local wrapper here instead created a SECOND, artificially short scroll region
+          inside the (always full-viewport-height) outer panel — the empty space between
+          where this region's content ended and the panel's own bottom edge is exactly what
+          a human caught live: comparing against a pre-item-5 build showed no such gap. */}
+      <div data-testid="UserRolesTab">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 z-10 bg-card">
+            <tr className="border-b border-border/50">
+              <th className="text-left text-sm font-semibold text-foreground py-2.5 pr-4">
+                {ui('userRolesTabWindowColumn')}
               </th>
+              {columns.map((role) => {
+                const RoleIcon = role.isClientAdmin ? Settings : ROLE_ICONS[role.name];
+                return (
+                  <th key={role.id} className="text-center text-sm font-semibold text-foreground py-2.5 px-3">
+                    <span className="inline-flex items-center justify-center gap-1">
+                      {RoleIcon && <RoleIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid={`RoleIcon__${role.id}`} />}
+                      {role.isClientAdmin ? ui(ADMIN_NAME_I18N_KEY) : resolveRoleDisplayName(ui, role.name)}
+                    </span>
+                  </th>
+                );
+              })}
             </tr>
-            {GENERAL_ROWS.map((row) => {
-              // Always 'full' for every column by construction — `resolveRowWinner`
-              // always returns `disagree: false` here, so this row renders exactly
-              // as it did before item 5 (no tooltip marker).
-              const cellsForRow = columns.map(() => ({ tier: 'full', text: '✓' }));
-              const { winnerIndex } = resolveRowWinner(cellsForRow);
-              return (
-                <tr key={row.key} data-testid={`UserRolesTab__row-${row.key}`}>
-                  <td className="py-2.5 pr-4 text-foreground">{ui(row.labelKey)}</td>
-                  {columns.map((role, i) => {
-                    const { tier, text } = cellsForRow[i];
-                    const isWinner = i === winnerIndex;
-                    return (
-                      <MatrixRoleCell
-                        key={role.id}
-                        role={role}
-                        tier={tier}
-                        text={text}
-                        isWinner={isWinner}
-                        testIdKey={row.key}
-                        winnerTooltipTitle={winnerTooltipTitle}
-                        winnerTooltipDescription={winnerTooltipDescription}
-                        data-testid="MatrixRoleCell__71bdc9" />
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </Fragment>
-          {categoryGroups.map((group) => (
-            <Fragment key={group.category}>
-              <tr className="bg-muted/30" data-testid={`UserRolesTab__category-${group.category}`}>
+          </thead>
+          <tbody className="divide-y divide-border/50">
+            <Fragment key="general">
+              <tr className="bg-muted/30" data-testid="UserRolesTab__category-general">
                 <th
                   colSpan={columns.length + 1}
                   className="text-left text-xs font-medium text-muted-foreground py-1.5 pr-4"
                 >
-                  {tMenu(group.category)}
+                  {ui('userRolesTabGeneralCategory')}
                 </th>
               </tr>
-              {group.rows.map((row) => {
-                const cellsForRow = columns.map((role) => cellValue(row, role));
+              {GENERAL_ROWS.map((row) => {
+                // Always 'full' for every column by construction — `resolveRowWinner`
+                // always returns `disagree: false` here, so this row renders exactly
+                // as it did before item 5 (no tooltip marker).
+                const cellsForRow = columns.map(() => ({ tier: 'full', text: '✓' }));
                 const { winnerIndex } = resolveRowWinner(cellsForRow);
                 return (
-                  <tr key={row.windowId} data-testid={`UserRolesTab__row-${row.windowId}`}>
-                    <td className="py-2.5 pr-4 text-foreground">{tMenu(row.name)}</td>
+                  <tr key={row.key} data-testid={`UserRolesTab__row-${row.key}`}>
+                    <td className="py-2.5 pr-4 text-foreground">{ui(row.labelKey)}</td>
                     {columns.map((role, i) => {
                       const { tier, text } = cellsForRow[i];
                       const isWinner = i === winnerIndex;
@@ -503,7 +482,7 @@ export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
                           tier={tier}
                           text={text}
                           isWinner={isWinner}
-                          testIdKey={row.windowId}
+                          testIdKey={row.key}
                           winnerTooltipTitle={winnerTooltipTitle}
                           winnerTooltipDescription={winnerTooltipDescription}
                           data-testid="MatrixRoleCell__71bdc9" />
@@ -513,9 +492,46 @@ export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
                 );
               })}
             </Fragment>
-          ))}
-        </tbody>
-      </table>
-    </div>
+            {categoryGroups.map((group) => (
+              <Fragment key={group.category}>
+                <tr className="bg-muted/30" data-testid={`UserRolesTab__category-${group.category}`}>
+                  <th
+                    colSpan={columns.length + 1}
+                    className="text-left text-xs font-medium text-muted-foreground py-1.5 pr-4"
+                  >
+                    {tMenu(group.category)}
+                  </th>
+                </tr>
+                {group.rows.map((row) => {
+                  const cellsForRow = columns.map((role) => cellValue(row, role));
+                  const { winnerIndex } = resolveRowWinner(cellsForRow);
+                  return (
+                    <tr key={row.windowId} data-testid={`UserRolesTab__row-${row.windowId}`}>
+                      <td className="py-2.5 pr-4 text-foreground">{tMenu(row.name)}</td>
+                      {columns.map((role, i) => {
+                        const { tier, text } = cellsForRow[i];
+                        const isWinner = i === winnerIndex;
+                        return (
+                          <MatrixRoleCell
+                            key={role.id}
+                            role={role}
+                            tier={tier}
+                            text={text}
+                            isWinner={isWinner}
+                            testIdKey={row.windowId}
+                            winnerTooltipTitle={winnerTooltipTitle}
+                            winnerTooltipDescription={winnerTooltipDescription}
+                            data-testid="MatrixRoleCell__71bdc9" />
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
