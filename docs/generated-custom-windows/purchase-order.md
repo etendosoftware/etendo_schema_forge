@@ -332,9 +332,11 @@ sufficient):
    documents listed, but the "Documentos" row behind it stayed on "Sin documentos relacionados"
    forever (not merely delayed) — matching the original bug reports exactly. `CreateDocsModal`
    (used for the already-`CO` "Gestionar factura"/"Gestionar recepción" flow, a separate modal in
-   the same file) did **not** have this bug — it already dispatched once, after its POST(s)
-   resolved, which is why that flow worked correctly and briefly made the earlier fix look
-   sufficient.
+   the same file) did **not** have this bug — it already dispatched the event once, after its
+   POST(s) resolved, correctly notifying `RelatedDocuments.jsx`, and briefly made the earlier fix
+   look sufficient. That dispatch was always correct; what ETP-5315 later found was a separate,
+   still-open gap in the same file — the "Gestionar" button's own displayed label/visibility was
+   never wired to listen for that event (see item 3 below).
 
    Fixed by moving the dispatch in `handleConfirm` to fire once, after Steps 2/3 both settle,
    right before `onConfirmed(result)` — mirroring `CreateDocsModal.handleCreate`'s already-correct
@@ -343,6 +345,22 @@ sufficient):
    partial-failure path (e.g. the receipt POST succeeds but the invoice POST then fails and the
    user closes instead of retrying), which previously could leave a successfully-created receipt
    with no event at all.
+
+3. **Topbar button's own state not wired to the event (ETP-5315).** `PurchaseOrderActions.jsx`
+   (this window's `topbarRight` component, the same file that owns `ConfirmModal`/`CreateDocsModal`
+   above) renders its "Gestionar recepción y factura" button's label and visibility from its own
+   `fetched` state (receipts/invoices/orderLines), loaded once on mount by a `useEffect` keyed on
+   `[isCompleted, recordId, base, headers, apiBaseUrl]`. Unlike `RelatedDocuments.jsx`, this
+   component never listened for `purchase-order:document-created` itself — so after creating a
+   receipt/invoice through its own "Gestionar" modal (`CreateDocsModal`, which *does* dispatch the
+   event correctly, per item 2 above), the button kept showing its pre-creation label/visibility
+   until the user switched Grilla→Formulario and back, remounting the component and re-running the
+   fetch. In the meantime the user could reopen the same modal and create a duplicate document.
+   Fixed the same way as items 1/2: added a `refreshKey` counter — mirroring the pattern already
+   used by the sibling `topbarExtra` component `PurchaseOrderDraftChips.jsx` for the same event —
+   bumped by a new listener effect, and included it in the fetch effect's dependency array, forcing
+   a refetch without touching the effect's existing cancellation/early-return guards. Regression
+   test: `tools/app-shell/src/windows/custom/purchase-order/__tests__/GeneratedPurchaseOrderActions.manageButtonRefresh.vitest.jsx`.
 
 Verified live end-to-end on `localhost:3100` after the fix: confirming a Draft order with both
 checkboxes shows both the new Recibo and Factura chips in the "Documentos" row immediately,

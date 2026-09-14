@@ -48,6 +48,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
   const [showActions,   setShowActions]   = useState(false);
   const [actionsScroll, setActionsScroll] = useState(null); // 'receipt'|'invoice'|null
   const [fetched,       setFetched]       = useState(null);
+  const [refreshKey,    setRefreshKey]    = useState(0);
   const [confirmedDocs,  setConfirmedDocs]  = useState(null);
   const [confirmedTitle, setConfirmedTitle] = useState(null); // null = "PO confirmed", string = custom title
   const [showClone,      setShowClone]      = useState(false);
@@ -90,6 +91,21 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
     return () => window.removeEventListener('purchase-order:open-actions-modal', handler);
   }, []);
 
+  // ETP-5315 — the confirm/create-docs flows below dispatch this same event on success
+  // (ConfirmModal.handleConfirm, ConfirmModal.handleClose, CreateDocsModal.handleCreate), but
+  // this component never listened for it itself. `fetched` (receipts/invoices/orderLines) was
+  // therefore only ever loaded once on mount, so `buttonLabel` kept showing "Gestionar
+  // recepción y factura" after the user had just created the receipt/invoice through it —
+  // letting them reopen the modal and create duplicates. Mirrors the `refreshKey` pattern
+  // already used by the sibling topbarExtra component (PurchaseOrderDraftChips.jsx) for the
+  // same event: bump a counter and include it in the fetch effect's deps below to force a
+  // refetch without touching that effect's cancellation/early-return guards.
+  useEffect(() => {
+    const handler = () => setRefreshKey(k => k + 1);
+    window.addEventListener('purchase-order:document-created', handler);
+    return () => window.removeEventListener('purchase-order:document-created', handler);
+  }, []);
+
   useEffect(() => {
     if (!isCompleted || !recordId) return;
     let cancelled = false;
@@ -114,7 +130,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
     })();
 
     return () => { cancelled = true; };
-  }, [isCompleted, recordId, base, headers, apiBaseUrl]);
+  }, [isCompleted, recordId, base, headers, apiBaseUrl, refreshKey]);
 
   // ETP-5063 — a confirm that created neither a receipt nor an invoice has
   // nothing worth a blocking modal for; only render it when at least one
