@@ -1,8 +1,10 @@
 /**
  * Tests for UserRolesTab — ETP-4906 "Roles del usuario" live permission-preview
  * matrix. See the component's own doc comment for the cross-task coupling with
- * AssignTemplateRolesControl (shared `useRoleSelection()` context) and the
- * hardcoded 3-row "General" category (never derived from SFListMenu).
+ * AssignTemplateRolesControl (shared `useRoleSelection()` context). The old
+ * hardcoded 3-row "General" category (never derived from SFListMenu) was removed
+ * in ETP-5196, matching RolesAccessMatrix.jsx's own removal (ETP-5071) — see the
+ * "never renders the old hardcoded General category header or its 3 rows" test.
  */
 import { render, screen, waitFor, within } from '@testing-library/react';
 
@@ -289,17 +291,20 @@ describe('UserRolesTab', () => {
       expect(within(headerRow).getAllByRole('columnheader')).toHaveLength(2); // Window + Finance only
     });
 
-    it('renders the 3 hardcoded General rows as unconditional ✓ for every column', async () => {
+    // ETP-5196 — the old hardcoded 3-row "General" overlay (Inicio/Dashboard,
+    // Favoritos, Copilot, always ✓ for every column) was removed, matching
+    // `RolesAccessMatrix.jsx`'s own removal of the same overlay (ETP-5071) — see
+    // `RolesAccessMatrix.vitest.jsx`'s "no hardcoded General overlay" describe block
+    // for the sibling coverage. This file uses fixed `data-testid`s (not that file's
+    // `buildRowKey` helper), so the equivalent assertion here is a direct
+    // `queryByTestId` absence check for the category header and each of the 3 rows.
+    it('never renders the old hardcoded General category header or its 3 rows', async () => {
       renderTab({ selectedRoleIds: ['role-fin', 'role-sales'] });
 
       await screen.findByTestId('UserRolesTab');
+      expect(screen.queryByTestId('UserRolesTab__category-general')).not.toBeInTheDocument();
       for (const key of ['dashboard', 'favorites', 'copilot']) {
-        const row = screen.getByTestId(`UserRolesTab__row-${key}`);
-        const cells = within(row).getAllByRole('cell');
-        // cells[0] is the window-name cell; cells[1..] are the per-role value cells.
-        expect(cells).toHaveLength(3);
-        expect(cells[1]).toHaveTextContent('✓');
-        expect(cells[2]).toHaveTextContent('✓');
+        expect(screen.queryByTestId(`UserRolesTab__row-${key}`)).not.toBeInTheDocument();
       }
     });
 
@@ -466,19 +471,6 @@ describe('UserRolesTab', () => {
       expect(pillSpanIn(cells[1]).className).not.toContain('font-bold');
       expect(pillSpanIn(cells[2]).className).toContain('font-medium');
       expect(pillSpanIn(cells[2]).className).not.toContain('font-bold');
-    });
-
-    it('renders no winner badge for the hardcoded GENERAL_ROWS, which always agree by construction', async () => {
-      renderTab({ selectedRoleIds: ['role-fin', 'role-sales'] });
-
-      await screen.findByTestId('UserRolesTab');
-      for (const key of ['dashboard', 'favorites', 'copilot']) {
-        const row = screen.getByTestId(`UserRolesTab__row-${key}`);
-        expect(within(row).queryByTestId(new RegExp(`^WinnerBadge__${key}-`))).not.toBeInTheDocument();
-        const cells = within(row).getAllByRole('cell');
-        expect(pillSpanIn(cells[1]).className).toContain('font-medium');
-        expect(pillSpanIn(cells[2]).className).toContain('font-medium');
-      }
     });
 
     it('marks a role with a real full grant as winner (bold + tooltip) and a role with no access at all plainly (full vs no-access, w1)', async () => {
