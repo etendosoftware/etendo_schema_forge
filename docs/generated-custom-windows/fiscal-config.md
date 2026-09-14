@@ -238,11 +238,18 @@ When `forceTestMode` is `true` the window becomes **read-only**:
 - The page-level Save button is disabled (`disabled={saving || !orgId || forceTestMode}`).
 - The "Add SII"/"Add TBAI" complementary action (`canAddComplementary`) is hidden — creating
   a new active fiscal system record is itself a kind of activation forced-test-mode must block.
-- A warning banner (`data-testid="FiscalConfigPage__testModeBanner"`) is shown above the
-  section content, using the same bordered-card + `AlertTriangle` icon visual pattern as the
-  "Change SIF" permanence notice (`ChangeSifDialog__notice`). Message key:
-  `fiscal.testModeLock.warning` — "You can only activate a fiscal system in a production
-  environment." / "Solo podrá activar un sistema fiscal en un entorno productivo."
+- A warning banner (`data-testid="FiscalConfigPage__testModeBanner"`, same testid on
+  `OnboardingWizard__testModeBanner` for the wizard) is shown above the section content.
+  **Restyled (ETP-5272 follow-up)** from a hand-rolled bordered-card `<div>` + inline
+  `AlertTriangle` (the pattern this section originally shared with the "Change SIF" permanence
+  notice, `ChangeSifDialog__notice`) to the shared `InfoBanner` component
+  (`@/components/InfoBanner.jsx`, `tone="warning"`, `icon={AlertTriangle}`) — a left-accented,
+  tone-driven strip already used elsewhere in the app. **`ChangeSifDialog__notice` itself was
+  NOT migrated** and still renders the original hand-rolled markup — the two banners have
+  deliberately diverged in implementation (though not in visual weight/color) since this fix;
+  do not assume `ChangeSifDialog.jsx` also uses `InfoBanner` when reading its source. Message
+  key unchanged: `fiscal.testModeLock.warning` — "You can only activate a fiscal system in a
+  production environment." / "Solo podrá activar un sistema fiscal en un entorno productivo."
 - The certificate upload flow (`CertSection`/`CertModal`) and "Change SIF" (deactivation only,
   never an activation) are intentionally **not** locked — same precedent as the pre-existing
   `isReady` lock, which never blocked "Change SIF" either.
