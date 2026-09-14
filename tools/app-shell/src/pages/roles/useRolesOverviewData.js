@@ -205,6 +205,12 @@ function adaptCards(roles) {
  * candidate's own `hidden` flag is therefore `true` only when EVERY menu.json entry for
  * that id is hidden (no visible alternative exists) — `adaptMatrix` uses exactly that
  * signal to drop sidebar-hidden windows from the matrix (see ETP-5071 below).
+ *
+ * **Second consumer (ETP-5196):** `windows/custom/user/UserRolesTab.jsx` now imports this
+ * function directly (not re-implemented) to resolve its own per-window category/label/order,
+ * so the User window's "Roles del usuario" tab groups windows identically to this page's
+ * `RolesAccessMatrix` — see that file's `resolveCategoryRow` JSDoc for its own fallback
+ * chain (AD-menu-tree walk, then an "Other" bucket) for a window this index doesn't cover.
  */
 export function buildMenuWindowIndex() {
   const index = new Map();
