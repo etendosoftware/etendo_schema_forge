@@ -1072,3 +1072,12 @@ The SII column keeps the browser-side gate (`isSifEligibleByDate` against
 `siiRecord.fechaAcogidaSII`), as does VERI*FACTU. Neither is a stored computed column, so neither
 is filterable, so neither has the inconsistency this change fixes. Both carry the same
 selected-organization bug described above. Worth its own ticket; out of scope here.
+
+**Update (ETP-5248, 2026-09-14):** the "own ticket" above shipped. It fixed the
+selected-organization bug for SII and VERI-FACTU on the client side — fetching each row's own
+org's cutover date (`useFiscalConfigForOrgs`) instead of the globally selected org's — without
+turning either column into a stored computed column, so the DB-level asymmetry described in this
+section is unchanged and still accurate: SII/VERI-FACTU remain ungated at the database and
+unfilterable, exactly as designed here. See `docs/feedback.md`, entry "[2026-09-14] ETP-5248 — A
+per-org gate fetched with one org's config...", for the fix and a QA-caught regression along the
+way.

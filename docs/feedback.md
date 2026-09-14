@@ -2348,6 +2348,12 @@ alternative (no dependency) leaves those invoices permanently wrong until somebo
 same selected-organization bug. They are not stored computed columns, so they do not have the
 filter inconsistency — but the organization bug is real for them today.
 
+**Resolved 2026-09-14 by ETP-5248** (client-side only — see the dedicated entry below): the
+selected-organization bug for SII and VERI-FACTU was fixed without turning either column into a
+stored computed column, by fetching the adoption date per row's own organization instead of the
+one globally selected. The filter inconsistency this entry describes for TBAI does not apply to
+SII/VERI-FACTU either way, since neither is filterable to begin with.
+
 ## [2026-09-09] ETP-5216 — A stored computed column cannot be verified inside a transaction you roll back
 
 **Component:** the EPL-1807 stored-computed-column engine (`ad_scd_*` triggers), exercised on
@@ -2384,3 +2390,53 @@ dead column the ticket set out to fix. It was right (both configured organizatio
 2026-09-08 and no invoice is later than that), but a reviewer opening a dev instance would have
 filed it as a regression. When a column's correct state in dev data is uniform, say so out loud
 before somebody else looks at it.
+
+## [2026-09-14] ETP-5248 — A per-org gate fetched with one org's config, and its fix's own fan-out nearly broke worse
+
+**Component:** `tools/app-shell/src/windows/custom/fiscal-config/useFiscalConfig.js`,
+`artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx`,
+`tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceHeaderTable.jsx`.
+
+**Symptom:** the sales-invoice and purchase-invoice list views showed the wrong SII/VERI-FACTU
+fiscal status (a real badge vs. a dash) whenever the grid mixed invoices from more than one
+organization in a multi-org tree — a client with a parent/child legal-entity structure, or a role
+parked at a parent org or spanning several children.
+
+**Root cause.** This is the exact "organization bug" flagged as still-open in the ETP-5216 entry
+above, for the two columns ETP-5216 could not fix by turning them into stored computed columns
+(SII and VERI-FACTU belong to other modules with no `Computation_Mode`, so the DB-level fix used
+for TBAI was not available — see also
+`docs/plans/2026-09-08-tbai-status-computed-column-migration.md`). The code fetched the fiscal
+config (SII/VERI-FACTU adoption/cutover date) for only the globally SELECTED organization and
+applied that ONE date to every row's eligibility gate, regardless of which org actually owned the
+row.
+
+**The fix.** `useFiscalConfigForOrgs(orgIds, apiBaseUrl)` fetches the cutover date for the full set
+of distinct org ids present on the current grid page (reusing ETP-5229's `fetchAllRows` /
+`earliestCutoverDate` / `CUTOVER_FIELD` primitives), and `cutoverForRowOrg(fiscalByOrg, rowOrgId,
+system)` looks up one row's own date. Both header tables now resolve each row's own org via the
+pre-existing `resolveInvoiceOrgId(row, orgId)` helper (falls back to the selected org only when the
+row itself carries no `adOrgId`) and gate that row's cell against ITS OWN org's cutover date.
+Client-side only, deliberately — the ticket explicitly rejected adding new stored computed columns
+(would have duplicated ETP-5216's approach and added new `c_invoice` columns) and rejected a bare
+`column:` addition for filterability alone (would not have fixed the underlying date logic and
+would have reintroduced the incoherence ETP-5216 had just removed). Column *visibility*
+(`targets.showSii`/`showVerifactu`) stays scoped to the selected org, unchanged — only the per-row
+date *gate* was in scope.
+
+**A second bug, introduced by the fix's own design and caught by QA before merge.** The initial
+implementation fanned out the per-org fetch with a single `Promise.all`. One org's failed fetch
+(network error, timeout, anything) rejected the *entire batch*, wiping out every other org's
+already-successful fiscal status on the same page — turning a bug that degraded some rows into one
+that could blank an entire grid. Fixed by switching to `Promise.allSettled` with per-org fallback:
+a failed org now degrades only its own rows to "unknown" (dash), other orgs are unaffected, and the
+error is still surfaced (a per-org `error` field plus a batch-level `state.error`) rather than
+silently swallowed.
+
+**The lesson, and it generalizes past this fix.** *When fanning out N independent async fetches
+whose count depends on runtime data* (here: however many distinct orgs happen to be on the current
+page), *use `Promise.allSettled` or equivalent per-item isolation — never a single `Promise.all`.*
+With `Promise.all`, one failure's blast radius grows with N: a fetch keyed on a fixed, small,
+known-in-advance set might get away with an all-or-nothing failure mode, but a fetch keyed on
+whatever happens to be on screen will eventually mix a healthy org with a flaky one, and the
+healthy org's data pays for the flaky org's failure.
