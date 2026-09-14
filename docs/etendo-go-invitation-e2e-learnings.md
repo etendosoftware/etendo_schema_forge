@@ -46,7 +46,7 @@ const canStayInCurrent = Boolean(readStoredValue('sf_auth_token') && currentClie
 ```
 
 `sf_auth_token`/`sf_auth_client_name` are written **only** by `persistEnvironmentSession()`
-(`@etendosoftware/etendo-go-core/src/onboarding/state.js`), which only runs from
+(`@etendosoftware/etendo-go-core/onboarding/state`), which only runs from
 `useEnvironmentSwitch.switchTo()`/`enterByClientName()` — i.e. only after the user actually enters a
 tenant (clicking `action-go-to-app`, or switching companies from the side menu). Logging in
 (`LoginStep`) writes only `sf_platform_token`; accepting an invitation via the POST endpoint writes

@@ -651,53 +651,53 @@ test.describe('Company User Invitations — email integration E2E — ETP-4894',
           // `toContainText(org1Name)` assertion.
           landingButton: 'stay-in-current',
           afterDashboard: async (page) => {
-          // Selected by data-testid, NOT by aria-label: that label is ui('switchCompany'),
-          // i.e. the TRANSLATED string ("Cambiar empresa"/"Switch company"), so
-          // getByLabel('switchCompany') matches nothing once a locale dictionary loads.
-          const companySwitcher = page.getByTestId('company-switcher');
-          // The dashboard opens with the Etendo side menu collapsed, and the switcher only
-          // renders while it is expanded. Expanding is a click plus an explicit wait for the
-          // switcher — the click landing is not proof the menu finished opening, and the
-          // switch below re-navigates, which collapses the menu again.
-          const openSideMenu = async () => {
-            const expandMenu = page.getByLabel(/Expandir menú|Expand menu/);
-            if (await expandMenu.isVisible()) await expandMenu.click();
-            await expect(companySwitcher).toBeVisible({ timeout: 30_000 });
-          };
-          // Switching is only possible TOWARDS the other company: SideMenu renders every
-          // membership as an option but leaves the current one `disabled`, so a click on
-          // the company you are already in would hang waiting for it to become clickable.
-          const switchToCompany = async (targetName) => {
-            await openSideMenu();
-            await companySwitcher.click();
-            const options = page.locator('[data-testid^="company-option-"]');
-            await expect(options).toHaveCount(2, { timeout: 30_000 });
-            await options.filter({ hasText: targetName }).click();
-            await page.waitForURL('**/dashboard', { timeout: 60_000 });
-            await openSideMenu();
-            await expect(companySwitcher).toContainText(targetName);
-          };
+            // Selected by data-testid, NOT by aria-label: that label is ui('switchCompany'),
+            // i.e. the TRANSLATED string ("Cambiar empresa"/"Switch company"), so
+            // getByLabel('switchCompany') matches nothing once a locale dictionary loads.
+            const companySwitcher = page.getByTestId('company-switcher');
+            // The dashboard opens with the Etendo side menu collapsed, and the switcher only
+            // renders while it is expanded. Expanding is a click plus an explicit wait for the
+            // switcher — the click landing is not proof the menu finished opening, and the
+            // switch below re-navigates, which collapses the menu again.
+            const openSideMenu = async () => {
+              const expandMenu = page.getByLabel(/Expandir menú|Expand menu/);
+              if (await expandMenu.isVisible()) await expandMenu.click();
+              await expect(companySwitcher).toBeVisible({ timeout: 30_000 });
+            };
+            // Switching is only possible TOWARDS the other company: SideMenu renders every
+            // membership as an option but leaves the current one `disabled`, so a click on
+            // the company you are already in would hang waiting for it to become clickable.
+            const switchToCompany = async (targetName) => {
+              await openSideMenu();
+              await companySwitcher.click();
+              const options = page.locator('[data-testid^="company-option-"]');
+              await expect(options).toHaveCount(2, { timeout: 30_000 });
+              await options.filter({ hasText: targetName }).click();
+              await page.waitForURL('**/dashboard', { timeout: 60_000 });
+              await openSideMenu();
+              await expect(companySwitcher).toContainText(targetName);
+            };
 
-          await openSideMenu();
-          // Accepting an invitation does NOT have to move the session into the invited
-          // company. InviteAcceptancePage's success screen offers a choice once the
-          // invitee already belongs to another company: `action-go-to-app` enters the
-          // just-joined company, while `action-stay-in-current` (only rendered in that
-          // same situation) calls navigate('/') and leaves the session in whatever
-          // company it was already in. The `acceptExistingInvitation` call above for
-          // this org2 invitation explicitly clicked `action-stay-in-current`
-          // (`landingButton: 'stay-in-current'`), so the session should still be in
-          // org1 here. What this test proves is that both memberships now exist and are
-          // reachable from the switcher regardless — hence org1, then org2, then back.
-          await expect(companySwitcher).toContainText(org1Name);
-          await switchToCompany(org2Name);
-          await switchToCompany(org1Name);
-          await expect(page.getByText(/Estas son tus tareas pendientes|These are your pending tasks/)).toBeVisible({ timeout: 60_000 });
-          await captureScreenshot(page, {
-            path: '../artifacts/delivery-evidence/ETP-4894/ETP-4894-cross-client-return-org1.png',
-            fullPage: true,
-          });
-        },
+            await openSideMenu();
+            // Accepting an invitation does NOT have to move the session into the invited
+            // company. InviteAcceptancePage's success screen offers a choice once the
+            // invitee already belongs to another company: `action-go-to-app` enters the
+            // just-joined company, while `action-stay-in-current` (only rendered in that
+            // same situation) calls navigate('/') and leaves the session in whatever
+            // company it was already in. The `acceptExistingInvitation` call above for
+            // this org2 invitation explicitly clicked `action-stay-in-current`
+            // (`landingButton: 'stay-in-current'`), so the session should still be in
+            // org1 here. What this test proves is that both memberships now exist and are
+            // reachable from the switcher regardless — hence org1, then org2, then back.
+            await expect(companySwitcher).toContainText(org1Name);
+            await switchToCompany(org2Name);
+            await switchToCompany(org1Name);
+            await expect(page.getByText(/Estas son tus tareas pendientes|These are your pending tasks/)).toBeVisible({ timeout: 60_000 });
+            await captureScreenshot(page, {
+              path: '../artifacts/delivery-evidence/ETP-4894/ETP-4894-cross-client-return-org1.png',
+              fullPage: true,
+            });
+          },
         },
       );
     } finally {
