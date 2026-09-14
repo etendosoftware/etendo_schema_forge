@@ -16815,7 +16815,7 @@
     "importHeaderScopeAddress": "Dirección",
     "importHeaderType": "Tipo",
     "importErrorInvalidEmail": "El correo electrónico no es válido.",
-    "importErrorNotANumber": "El valor \"{value}\" no es un número válido.",
+    "importErrorNotANumber": "El valor \"{value}\" no es un número válido. Usa 1234,56 o 1.234,56.",
     "importErrorFkUnmatched": "El valor \"{value}\" no coincide con ningún registro existente.",
     "importSkipDuplicateInFile": "Fila duplicada: este valor ya aparece antes en el archivo.",
     "importSkipAlreadyExists": "Este registro ya existe y no se volverá a importar.",
