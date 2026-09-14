@@ -17803,6 +17803,7 @@
     "userRolesTabAdminFullAccessMessage": "Este usuario tiene acceso completo como administrador",
     "userRolesTabWindowColumn": "Ventana",
     "userRolesTabGeneralCategory": "General",
+    "userRolesTabUncategorizedCategory": "Otros",
     "userRolesTabDashboardRow": "Inicio (Dashboard)",
     "userRolesTabFavoritesRow": "Favoritos",
     "userRolesTabCopilotRow": "Copilot (Asistente IA)",

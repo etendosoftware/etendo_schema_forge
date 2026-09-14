@@ -17571,6 +17571,7 @@
     "userRolesTabAdminFullAccessMessage": "This user has full access as an administrator",
     "userRolesTabWindowColumn": "Window",
     "userRolesTabGeneralCategory": "General",
+    "userRolesTabUncategorizedCategory": "Other",
     "userRolesTabDashboardRow": "Home (Dashboard)",
     "userRolesTabFavoritesRow": "Favorites",
     "userRolesTabCopilotRow": "Copilot (AI Assistant)",

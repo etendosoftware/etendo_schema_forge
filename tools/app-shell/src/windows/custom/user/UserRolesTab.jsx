@@ -3,6 +3,7 @@ import { TrendingUp, Package, Landmark, FileText, Info, Settings } from 'lucide-
 import { useUI, useMenuLabel } from '@/i18n';
 import { fetchRolesOverview, fetchTemplateRoles } from '@/lib/rolesApi.js';
 import { fetchMenuTree } from '@/lib/menuTree.js';
+import { buildMenuWindowIndex } from '@/pages/roles/useRolesOverviewData.js';
 import { resolveRoleDisplayName, ADMIN_NAME_I18N_KEY } from '@/lib/roleNameI18n.js';
 import { resolveDefaultRoleId } from './RoleChipsCell.jsx';
 import { useRoleSelection } from './roleSelectionContext.js';
@@ -160,6 +161,16 @@ function MatrixRoleCell({ role, tier, text, isWinner, testIdKey, winnerTooltipTi
  * `fetchTemplateRoles()`'s response has no client-admin row at all, so it can't serve that
  * union on its own.
  */
+
+/**
+ * ETP-5196 fallback data source only (see `resolveCategoryRow` below for the primary
+ * source, `menu.json`'s own index). Walks the role-filtered raw `SFListMenu` AD_Menu
+ * tree and collects one row per leaf window, with the category taken from the raw
+ * classic-AD folder nesting — the SAME mechanism that caused this bug (e.g. "Product"
+ * grouped under "Master Data Management" instead of "Inventory") when it was the
+ * PRIMARY source. Kept only for windows `menu.json` doesn't index at all (e.g.
+ * "Roles"/"Usuario" — see `resolveCategoryRow`'s JSDoc).
+ */
 function flattenWindowRows(nodes, category, out) {
   for (const node of nodes ?? []) {
     if (node.type === 'folder') {
@@ -177,17 +188,106 @@ function flattenWindowRows(nodes, category, out) {
   return out;
 }
 
-function groupRowsByCategory(rows) {
+/**
+ * ETP-5196 — resolves ONE active window id's category/display-name/order, preferring
+ * `menu.json`'s own index (`menuIndex`, built by `buildMenuWindowIndex()` — imported
+ * verbatim from `pages/roles/useRolesOverviewData.js`, the SAME function ETP-5071 built
+ * for the "Configuración > Roles" overview matrix, so both matrices resolve identically
+ * rather than re-implementing the logic here) over the raw AD-menu-tree walk above.
+ * `menu.json` is this app's real source of truth for category/window display — the same
+ * file the sidebar itself renders from.
+ *
+ * Returns `null` when the row must be excluded entirely: a `menuIndex` match whose own
+ * `hidden` flag is `true` means EVERY `menu.json` entry for that window id is hidden
+ * (e.g. Match Rule/Periods under Finance) — a window nobody can navigate to from the
+ * real sidebar shouldn't appear as a row here either, matching the Roles-overview
+ * page's `resolveMatrixRow` behavior exactly.
+ *
+ * Falls back, in order, to:
+ * 1. `adTreeIndex` (this window's row from the raw `SFListMenu` AD-menu-tree walk,
+ *    keyed by windowId) — for a window `menu.json` doesn't index at all, e.g. "Roles"/
+ *    "Usuario" (`useRolesOverviewData.js`'s own `resolveMatrixRow` JSDoc calls this
+ *    exact case out: the `roles` menu.json entry has no `windowId`/`processId`/
+ *    `obuiappProcessId`, so it can never be matched by id there either).
+ * 2. A generic "uncategorized" bucket, using the window's own name from
+ *    `fallbackNameById` (sourced from `overviewRoles[].windows[].name`, the same data
+ *    `activeWindowIds` itself is built from, so every active window id is guaranteed a
+ *    name here even with zero menu data) — for a window in NEITHER `menu.json` NOR the
+ *    AD tree. Must still render rather than silently vanish from the matrix, matching
+ *    the "must never disappear" principle `useRolesOverviewData.js` documents for its
+ *    own fallback.
+ *
+ * `groupOrder`/`itemOrder` (menu.json's own declaration order, used by
+ * `groupResolvedRows` below) are only ever present for a `menuIndex` match — both
+ * fallback paths return `null` for them, sorting after every menu.json-ordered
+ * category/row while keeping their OWN relative order (see `groupResolvedRows`).
+ */
+function resolveCategoryRow(windowId, menuIndex, adTreeIndex, fallbackNameById, uncategorizedLabel) {
+  const match = menuIndex.get(windowId);
+  if (match?.hidden) return null;
+  if (match) {
+    return { windowId, name: match.label, category: match.group, groupOrder: match.groupOrder, itemOrder: match.itemOrder };
+  }
+  const treeRow = adTreeIndex.get(windowId);
+  if (treeRow) {
+    return { windowId, name: treeRow.name, category: treeRow.category, groupOrder: null, itemOrder: null };
+  }
+  return {
+    windowId,
+    name: fallbackNameById.get(windowId) ?? windowId,
+    category: uncategorizedLabel,
+    groupOrder: null,
+    itemOrder: null,
+  };
+}
+
+/**
+ * ETP-5196 — group already-resolved rows (see `resolveCategoryRow`) by category and sort
+ * both levels: a category/row carrying a `menu.json` order (`groupOrder`/`itemOrder`)
+ * always sorts before one that doesn't; two ordered entries sort numerically between
+ * themselves; two unordered entries (AD-tree-fallback or uncategorized) keep their
+ * relative INPUT order — `Array.prototype.sort` is stable in every engine this app
+ * targets, so returning `0` for that comparison preserves the caller's construction
+ * order (tree-walk order for the fallback rows, matching this tab's pre-fix behavior
+ * for exactly those windows) rather than reshuffling them.
+ */
+function groupResolvedRows(rows) {
   const categoryOrder = [];
   const rowsByCategory = new Map();
+  const groupOrderByCategory = new Map();
   for (const row of rows) {
     if (!rowsByCategory.has(row.category)) {
       rowsByCategory.set(row.category, []);
       categoryOrder.push(row.category);
     }
     rowsByCategory.get(row.category).push(row);
+    if (row.groupOrder != null) {
+      const currentBest = groupOrderByCategory.get(row.category);
+      if (currentBest == null || row.groupOrder < currentBest) {
+        groupOrderByCategory.set(row.category, row.groupOrder);
+      }
+    }
   }
-  return categoryOrder.map((category) => ({ category, rows: rowsByCategory.get(category) }));
+
+  const sortedCategories = [...categoryOrder].sort((a, b) => {
+    const orderA = groupOrderByCategory.get(a);
+    const orderB = groupOrderByCategory.get(b);
+    if (orderA != null && orderB != null) return orderA - orderB;
+    if (orderA != null) return -1;
+    if (orderB != null) return 1;
+    return 0;
+  });
+
+  return sortedCategories.map((category) => {
+    const rowsForCategory = rowsByCategory.get(category);
+    const sortedRows = [...rowsForCategory].sort((a, b) => {
+      if (a.itemOrder != null && b.itemOrder != null) return a.itemOrder - b.itemOrder;
+      if (a.itemOrder != null) return -1;
+      if (b.itemOrder != null) return 1;
+      return 0;
+    });
+    return { category, rows: sortedRows };
+  });
 }
 
 /**
@@ -307,13 +407,65 @@ export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
     return ids;
   }, [overviewRoles]);
 
+  // ETP-5196 — `menu.json`'s own windowId -> {group, label, groupOrder, itemOrder,
+  // hidden} index (see `resolveCategoryRow`'s JSDoc above), the SAME function
+  // ETP-5071 built for the Roles-overview matrix, imported rather than
+  // re-implemented. Static per mount (`menu.json` is a build-time import), so this
+  // never needs to recompute on re-render.
+  const menuIndex = useMemo(() => buildMenuWindowIndex(), []);
+
+  // ETP-5196 fallback source only — one row per leaf window from the raw
+  // `SFListMenu` AD-menu-tree walk, keyed by windowId (first-seen wins on a
+  // duplicate id, matching `flattenWindowRows`'s own pre-existing traversal order).
+  // Consulted by `resolveCategoryRow` only for a window `menuIndex` doesn't cover.
+  const adTreeIndex = useMemo(() => {
+    const rows = flattenWindowRows(menuTreeData?.tree, null, []);
+    const map = new Map();
+    for (const row of rows) {
+      if (!map.has(row.windowId)) map.set(row.windowId, row);
+    }
+    return map;
+  }, [menuTreeData]);
+
+  // ETP-5196 last-resort name fallback — every active window id is guaranteed a name
+  // here regardless of menu data, since `activeWindowIds` itself is built from this
+  // same `overviewRoles[].windows[]` data (see `activeWindowIds` above). Only reached
+  // by `resolveCategoryRow` for a window absent from BOTH `menuIndex` and the AD tree.
+  const windowNameById = useMemo(() => {
+    const map = new Map();
+    for (const role of overviewRoles) {
+      for (const w of role.windows ?? []) {
+        if (w?.id != null && w?.name != null) {
+          const id = String(w.id);
+          if (!map.has(id)) map.set(id, w.name);
+        }
+      }
+    }
+    return map;
+  }, [overviewRoles]);
+
   const categoryGroups = useMemo(() => {
-    const treeRows = flattenWindowRows(menuTreeData?.tree, null, [])
-      .filter((row) => activeWindowIds.has(row.windowId));
+    // Iterate in the AD-tree's OWN traversal order first (filtered to active window
+    // ids) so that any row falling back to the tree (no `menuIndex` match) keeps its
+    // pre-fix relative order via `groupResolvedRows`'s stable-sort tie-break — then
+    // append any active window id absent from the tree entirely (the
+    // fully-uncategorized case), in no particular guaranteed order since none existed
+    // for them before this fix either.
+    const treeOrderedIds = flattenWindowRows(menuTreeData?.tree, null, [])
+      .map((row) => row.windowId)
+      .filter((windowId) => activeWindowIds.has(windowId));
+    const coveredIds = new Set(treeOrderedIds);
+    const remainingIds = [...activeWindowIds].filter((windowId) => !coveredIds.has(windowId));
+
+    const uncategorizedLabel = ui('userRolesTabUncategorizedCategory');
+    const resolvedRows = [...treeOrderedIds, ...remainingIds]
+      .map((windowId) => resolveCategoryRow(windowId, menuIndex, adTreeIndex, windowNameById, uncategorizedLabel))
+      .filter((row) => row !== null);
+
     // Drop any category left with zero surviving rows — must not render an empty
     // category header with nothing under it.
-    return groupRowsByCategory(treeRows).filter((group) => group.rows.length > 0);
-  }, [menuTreeData, activeWindowIds]);
+    return groupResolvedRows(resolvedRows).filter((group) => group.rows.length > 0);
+  }, [menuTreeData, activeWindowIds, menuIndex, adTreeIndex, windowNameById, ui]);
 
   // ETP-5196 — for a confirmed admin holder, the matrix's sole column is the admin role
   // itself (`adminRole` already has the exact shape a column needs: `{ id, name,
