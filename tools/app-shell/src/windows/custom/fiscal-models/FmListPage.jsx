@@ -598,9 +598,15 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
       })
         .then(r => r.ok ? r.json() : Promise.reject(r.status))
         .then(created => setDecls(ds => [normDecl(created?.data ?? created), ...ds]))
-        .catch(() => {});
+        .catch(() => {
+          // ETP-5272 — this used to silently swallow the backend's error (a 409 when a draft
+          // already exists for the period, or any other failure), leaving the user staring at a
+          // closed modal with no created row and no explanation. Mirrors the exact toast pattern
+          // already used for delete failures (handleConfirmDelete above).
+          toast.error(t('fm.list.new_decl_failed') ?? 'No se pudo crear la declaración.');
+        });
     }
-  }, [token, apiBaseUrl, apiFetch]);
+  }, [token, apiBaseUrl, apiFetch, t]);
 
   // Row hover "delete" action (ETP-5187) — draft declarations only, gated the same
   // way both here (caller only ever passes a draft decl into setDeleteTarget) and
