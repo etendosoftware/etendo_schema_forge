@@ -220,7 +220,7 @@ environment whose key ships to a browser.
 | Where | How it gets there |
 |-------|-------------------|
 | Local dev (frontend) | `tools/app-shell/.env.development.local`, gitignored. **Development mode only** — `vite build` runs in production mode and never reads this file. |
-| Deployed frontend | GitHub Actions **variable**, injected into the build step of `.github/workflows/deploy-staging.yml`. Resolved **per target** in *Resolve deployment target*, so the pilot key reaches experimental and not staging or production. |
+| Deployed frontend | GitHub Actions **variable**, injected into the build step of `.github/workflows/deploy-staging.yml`. Resolved **per target** in *Resolve deployment target*: `VITE_CONFIGCAT_SDK_KEY_EXPERIMENTAL` reaches experimental and `VITE_CONFIGCAT_SDK_KEY_PRODUCTION` reaches production; staging remains empty until enabled. |
 | Backend | **Nowhere — the backend does not read ConfigCat.** `com.etendoerp.go` contains no ConfigCat code at all: `GoFeatureFlags.createProvider()` returns `PropertiesFeatureProvider` unconditionally, and the deployed runtime confirms it (`feature flags installed using provider 'etendo-go-properties'`). Backend flags come only from `etendo.go.flags.<key>` / `ETGO_FLAG_<KEY>`. |
 
 > **This row used to claim the backend resolved ConfigCat via `ETGO_CONFIGCAT_SDK_KEY`, and that was
