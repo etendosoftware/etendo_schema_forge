@@ -773,6 +773,21 @@ export async function parseBackendErrorMessage(res) {
       if (err?.message) raw = err.message;
       else if (typeof err === 'string') raw = err;
       else if (data?.message) raw = data.message;
+      // ETP-5323: JsonDataService's RPCREQUEST_STATUS_VALIDATION_ERROR shape (a per-property
+      // setter failure caught during JSON-to-entity conversion, e.g. StringPropertyValidator
+      // rejecting a "Description" value longer than its AD column) carries the message under
+      // response.errors, a MAP keyed by property name — a sibling of response.error (singular)
+      // above, not a variant of it. NeoCrudHandler now translates/sanitizes this server-side
+      // (see buildValidationErrorResponse), so this branch is a defense-in-depth fallback for
+      // any deployment where that Java fix hasn't shipped yet: without it, raw stays undefined
+      // and the caller falls back to the bare "Error <status>".
+      else {
+        const errorsMap = data?.response?.errors;
+        if (errorsMap && typeof errorsMap === 'object') {
+          const firstKey = Object.keys(errorsMap)[0];
+          if (firstKey && typeof errorsMap[firstKey] === 'string') raw = errorsMap[firstKey];
+        }
+      }
     }
   } catch {
     // Ignore non-JSON error bodies.

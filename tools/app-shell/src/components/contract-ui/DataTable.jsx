@@ -520,6 +520,10 @@ function renderInputCell({
         onKeyDown={handleKeyDown}
         placeholder={fieldLabel}
         required={field.required}
+        // ETP-5323 — same hard stop as InlineLinesPanel's edit-mode text cell, applied to the
+        // add-row's own text input so a brand-new line's Description can't be typed past its
+        // AD column length either (e.g. C_OrderLine/C_InvoiceLine.Description, 2000 chars).
+        maxLength={field.maxLength}
         className={`w-full h-8 text-sm rounded-md border bg-card px-2 focus:ring-2 focus:outline-none${invalidFields.has(field.key) ? ' border-destructive focus:ring-destructive' : ' border-input focus:ring-primary'}`}
       />
     </TableCell>
