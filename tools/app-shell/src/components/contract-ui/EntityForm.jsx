@@ -1221,7 +1221,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
       // Numeric, no blur-callout: same reason as DeferredInput above — a native number input
       // swallows the comma keystroke. Read-only numerics keep the plain <Input> below, since they
       // render `displayValue` (already formatted upstream) and accept no keystrokes at all.
-      <MaskedAmountInput
+      (<MaskedAmountInput
         name={f.key}
         data-testid={`field-${f.key}`}
         value={getFieldValue(isReadOnly, displayValue, data, f)}
@@ -1233,7 +1233,7 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
         placeholder={resolveUiKey(ui, f.placeholderKey)}
         className={inputClassName}
         required={f.required}
-        disabled={savingField === f.key} />
+        disabled={savingField === f.key} />)
     ) : (
       <Input
         id={f.key}

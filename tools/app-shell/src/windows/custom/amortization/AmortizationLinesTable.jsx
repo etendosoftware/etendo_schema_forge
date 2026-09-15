@@ -54,7 +54,7 @@ function EditAmountCell({ initial, onCommit, onEscape, grouping = true }) {
       onChange={(clean) => setDraft(clean)}
       onCommit={(_parsed, clean) => onCommit(clean)}
       onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); } else if (e.key === 'Escape') { onEscape(); } }}
-    />
+      data-testid="field-number" />
   );
 }
 
@@ -501,7 +501,7 @@ export default function AmortizationLinesTable({
                             initial={line.amortizationPercentage ?? ''}
                             onCommit={clean => saveField(line.id, line, 'amortizationPercentage', clean)}
                             onEscape={() => setEditingLineId(null)}
-                          />
+                            data-testid="EditAmountCell__fecdcf" />
                         </td>
                       ) : (
                         <td className="px-3 text-sm text-right tabular-nums text-muted-foreground align-middle">
@@ -516,7 +516,7 @@ export default function AmortizationLinesTable({
                             initial={line.amortizationAmount ?? ''}
                             onCommit={clean => saveField(line.id, line, 'amortizationAmount', clean)}
                             onEscape={() => setEditingLineId(null)}
-                          />
+                            data-testid="EditAmountCell__fecdcf" />
                         </td>
                       ) : (
                         <td className="px-3 text-sm text-right tabular-nums font-semibold text-foreground align-middle">
@@ -635,7 +635,7 @@ export default function AmortizationLinesTable({
                       value={newLine.amortizationPercentage ?? ''}
                       onChange={(clean) => setNewLine(p => ({ ...p, amortizationPercentage: clean }))}
                       onKeyDown={onDraftKeyDown}
-                    />
+                      data-testid="field-number" />
                   </td>
                   <td className="py-1 px-2 align-middle">
                     <MaskedAmountInput
@@ -645,7 +645,7 @@ export default function AmortizationLinesTable({
                       value={newLine.amortizationAmount ?? ''}
                       onChange={(clean) => setNewLine(p => ({ ...p, amortizationAmount: clean }))}
                       onKeyDown={onDraftKeyDown}
-                    />
+                      data-testid="field-number" />
                   </td>
                   <td className="px-2 text-center text-muted-foreground align-middle">
                     {saving === 'new' ? <Loader2 className="h-4 w-4 animate-spin inline" data-testid="Loader2__fecdcf" /> : '—'}
