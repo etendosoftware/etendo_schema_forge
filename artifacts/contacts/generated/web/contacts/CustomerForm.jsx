@@ -21,7 +21,7 @@ const fields = [
   { key: 'maturityDate2', column: 'FixMonthDay2', type: 'number', label: 'Maturity Date 2', section: 'other' },
   { key: 'maturityDate3', column: 'Fixmonthday3', type: 'number', label: 'Maturity Date 3', section: 'other' },
   { key: 'birthDay', column: 'Birthday', type: 'date', label: 'Birthdate', section: 'other' },
-  { key: 'birthPlace', column: 'Birthplace', type: 'text', label: 'Birthplace', section: 'other' },
+  { key: 'birthPlace', column: 'Birthplace', type: 'text', label: 'Birthplace', section: 'other', maxLength: 60 },
   { key: 'aeatsiiDefaultsiikey', column: 'EM_Aeatsii_Defaultsiikey', type: 'checkbox', label: 'Default Key', required: true, section: 'other' },
   { key: 'aeatsiiSiikeylist', column: 'EM_Aeatsii_Siikeylist', type: 'select', label: 'Invoice type key', section: 'other', options: [{ value: 'R', label: 'Corrective invoice', labels: {"es_ES":"Factura rectificativa"} }, { value: 'F1', label: 'Invoice', labels: {"es_ES":"Factura"} }, { value: 'F2', label: 'Simplified invoice', labels: {"es_ES":"Factura simplificada"} }, { value: 'F4', label: 'Simplified invoices summary', labels: {"es_ES":"Asiento resumen facturas simplificadas"} }], defaultValue: 'F1' },
 ];

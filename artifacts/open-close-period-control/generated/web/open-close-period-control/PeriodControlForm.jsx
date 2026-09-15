@@ -6,7 +6,7 @@ const fields = [
   { key: 'calendar', column: 'C_Calendar_ID', type: 'selector', label: 'Calendar', required: true, readOnly: true, section: 'other', reference: 'Calendar', inputMode: 'selector' },
   { key: 'year', column: 'C_Year_ID', type: 'selector', label: 'Year', required: true, readOnly: true, section: 'other', reference: 'Year', inputMode: 'selector' },
   { key: 'periodNo', column: 'PeriodNo', type: 'number', label: 'Period No.', required: true, readOnly: true, section: 'other', readOnlyLogic: (record) => record['c_Period_Not_Editable'] === 'Y' },
-  { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, readOnly: true, section: 'other' },
+  { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, readOnly: true, section: 'other', maxLength: 60 },
   { key: 'startingDate', column: 'StartDate', type: 'date', label: 'Starting Date', required: true, readOnly: true, section: 'other', readOnlyLogic: (record) => record['c_Period_Not_Editable'] === 'Y' },
   { key: 'endingDate', column: 'EndDate', type: 'date', label: 'Ending Date', readOnly: true, section: 'other', readOnlyLogic: (record) => record['c_Period_Not_Editable'] === 'Y' },
   { key: 'periodType', column: 'PeriodType', type: 'select', label: 'Period Type', required: true, readOnly: true, section: 'other', options: [{ value: 'A', label: 'Adjustment Period', labels: {"es_ES":"Cambio periodo"} }, { value: 'S', label: 'Standard Calendar Period', labels: {"es_ES":"Calendario Periodo estándar"} }], defaultValue: 'S', readOnlyLogic: (record) => record['c_Period_Not_Editable'] === 'Y' },

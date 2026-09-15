@@ -3,9 +3,9 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:movement
 const columns = [
-  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
+  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true, maxLength: 60 },
   { key: 'movementDate', column: 'MovementDate', type: 'date', label: 'Movement Date', required: true, dot: false },
-  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.' },
+  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.', maxLength: 30 },
   { key: 'processed', column: 'Processed', type: 'status', label: 'Status', enumLabels: { 'true': 'statusProcessed', 'false': 'statusDraft' }, required: true },
 ];
 // @sf-generated-end columns:movement
