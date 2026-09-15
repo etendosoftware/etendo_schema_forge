@@ -433,6 +433,42 @@ export function applyLocalChildRowUpdate(derivedUpdates, fieldKey, payloadValue,
 }
 
 /**
+ * ETP-5319 — a single-record PATCH response is not a reliable source for a `readOnly`
+ * grid column whose real value only exists via a GET-time backend enrichment (a join or an
+ * `afterHandle` computation keyed off the HTTP method). `M_InOutLine.orderQuantity` is the
+ * reference case: `AbstractInOutLineHandler#afterHandle` fills it in from `C_OrderLine.QtyOrdered`
+ * only when `context.getHttpMethod() === "GET"` — a PATCH's own single-entity response instead
+ * carries the plain `M_InOutLine.QuantityOrder` column, which is null for the (common) single-UOM
+ * case. Editing an unrelated field (e.g. `movementQuantity`) then PATCHes fine, but the naive
+ * `{...current, ...serverRow}` merge in `useEntity#handleUpdateChild` let that incidental
+ * `orderQuantity: null` clobber the correct value the grid was already showing — the value
+ * reappeared only after a full reload re-hit the GET path.
+ *
+ * Generic on purpose: it walks whatever `fields` descriptor list the caller has for the entity
+ * (the same `{key, readOnly}` shape the generator emits for both a Table's `columns` static and a
+ * Form component's `.fields` static — see `GoodsReceiptLineTable.jsx` / `GoodsReceiptLineForm.jsx`)
+ * and only protects the columns THAT metadata marks `readOnly`. A field the user can actually type
+ * into is never in that set, so a legitimate user-driven null (clearing an editable field) always
+ * passes through untouched — this only refuses to let an incomplete server envelope blank out a
+ * column nothing in the UI could have asked it to null.
+ */
+export function preserveGridReadOnlyValues(currentRow, serverRow, fields = []) {
+  if (!serverRow || typeof serverRow !== 'object' || !currentRow) return serverRow;
+  let patched = serverRow;
+  for (const f of fields) {
+    if (!f?.readOnly || !f.key) continue;
+    const incoming = serverRow[f.key];
+    if (incoming !== null && incoming !== undefined) continue;
+    const existing = currentRow[f.key];
+    const hadRealValue = existing !== null && existing !== undefined && existing !== '';
+    if (!hadRealValue) continue;
+    if (patched === serverRow) patched = {...serverRow};
+    patched[f.key] = existing;
+  }
+  return patched;
+}
+
+/**
  * Returns a copy of `row` without the null/empty keys the parent has set (e.g. businessPartner,
  * priceList on OrderLine). buildCalloutFormState by contract does NOT overwrite a row value with
  * the header's, so without this prune the callout would receive businessPartner=null and NEO
