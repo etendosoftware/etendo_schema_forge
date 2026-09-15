@@ -179,6 +179,18 @@ describe('UserAvatarButton', () => {
     expect(screen.queryByText(/Personal – x/)).not.toBeInTheDocument();
   });
 
+  // ETP-5329. A single composed role must render bare, with no stray leading/trailing
+  // separator from the join('-') logic, in both the visible text and the title tooltip.
+  it('renders a single effective role name with no stray separator', () => {
+    authOverrides = {
+      selectedRole: { name: 'Personal – x', effectiveRoleNames: ['Finance'] },
+    };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText('role: Finance')).toHaveAttribute('title', 'Finance');
+  });
+
   it('falls back to the personal-role name when effectiveRoleNames is an empty array', () => {
     authOverrides = {
       selectedRole: { name: 'Personal Role', effectiveRoleNames: [] },
