@@ -10,6 +10,8 @@ import { ArrowUpRight, Loader2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLabel, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
 import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackSaveBlockToast } from '@/lib/numericValidation.js';
+import { MaskedAmountInput } from '@/components/forms/fields.jsx';
+import { NUMERIC_FIELD_TYPES, TWO_DECIMAL_FIELD_TYPES } from '@/lib/numericFieldTypes.js';
 import { getContactsTextFieldError, filterContactsInputValue } from './contactsFieldValidation.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
@@ -513,6 +515,27 @@ function getInputType(f) {
   return f.type === 'number' ? 'number' : 'text';
 }
 
+/**
+ * Numeric fields render `MaskedAmountInput`, never a native `<input type="number">`.
+ *
+ * ETP-5107 (reopened): a native number input REJECTS the comma keystroke outright, so a Spanish
+ * user typing `1234,56` had the comma swallowed and the surrounding digits concatenated into
+ * `123456` — a silent 100x corruption, with no error and no way to fix it downstream, because the
+ * character never reached the DOM value in the first place. Only changing the input type fixes it.
+ *
+ * `MaskedAmountInput` keeps the outward contract identical: it reports a CLEAN, dot-decimal value
+ * through `onChange`/`onCommit`, which is exactly what every consumer here already parses
+ * (`clampNumericFieldMax`, `getNumericFieldError`, the callout payload). Only the rendered element
+ * and the displayed string change.
+ *
+ * Grouping follows the same shared rule the line grids use — thousands separators only for
+ * amount/price-shaped types, so a plain `type:'number'` (Assets' asset value, usable-life years…)
+ * keeps its ungrouped look (`DataTable.numericClamp.vitest.jsx`, ETP-4277).
+ */
+function isNumericField(f) {
+  return NUMERIC_FIELD_TYPES.has(f.type);
+}
+
 function isCurrencyRateSelectorField(entity, apiBaseUrl, f) {
   return f.column === 'C_Currency_ID'
     && (entity === 'header' || entity === 'quotation')
@@ -575,11 +598,59 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
     }
   }, [committedValue]);
 
-  const isNumber = getInputType(f) === 'number';
+  const isNumber = isNumericField(f);
   const sameAsLast = (v) => {
     const prev = lastUserValueRef.current;
     return isNumber ? Number(v) === Number(prev ?? '') : String(v) === String(prev ?? '');
   };
+
+  // Shared commit path for both renderings below. `raw` is what the user left in the field: the
+  // DOM value for a text input, or MaskedAmountInput's CLEAN (dot-decimal) value for a numeric one
+  // — the same shape the coercion, clamp and callout have always received.
+  const commitRaw = (raw) => {
+    focusedRef.current = false;
+    // For NUMBER fields, coerce a cleared/blank value to '0' on commit. Otherwise the empty
+    // string short-circuits the generic fireCallout guard (`if (!value) return`) in DetailView,
+    // so clearing the field would leave dependent amounts (e.g. the Assets Residual) stale.
+    // Committing '0' fires the callout with 0 and leaves the input showing 0. Text fields keep
+    // their raw value (no coercion). ETP-4333.
+    let v = (isNumber && String(raw).trim() === '') ? '0' : raw;
+    // Silently clamp to the field's declared `max` (e.g. Annual Depreciation % ≤ 100). This is a
+    // correction, not a validation — it never blocks the commit or shows a toast, unlike
+    // getNumericFieldError which only handles `min`/`integer`. ETP-4887.
+    v = clampNumericFieldMax(f, v);
+    // Re-sync the displayed buffer to the (possibly coerced) committed value.
+    setBuffer(v);
+    // Only COMMIT (fires the callout via onChange) when the value differs from the value the USER
+    // last committed — so a no-op blur (focus then leave untouched) does nothing, while a genuine
+    // edit (including clearing back to 0 after a collateral write) always fires. Record the new
+    // user value either way so the next blur compares against the correct baseline. ETP-4333.
+    const changed = !sameAsLast(v);
+    lastUserValueRef.current = v;
+    if (changed) onCommit?.(f.key, v, f.column);
+    // Validate the RAW value the user left (pre-'0' coercion) so a genuinely empty field is not
+    // reported as below-min. ETP-4542.
+    onValidateBlur?.(f, raw);
+    onFieldBlur?.(f.key);
+  };
+
+  if (isNumber) {
+    return (
+      <MaskedAmountInput
+        name={f.key}
+        data-testid={`field-${f.key}`}
+        value={buffer ?? ''}
+        bare
+        grouping={TWO_DECIMAL_FIELD_TYPES.has(f.type)}
+        onFocus={() => { focusedRef.current = true; }}
+        onChange={(clean) => setBuffer(clean)}
+        onCommit={(_parsed, clean) => commitRaw(clean)}
+        placeholder={placeholder}
+        className={className}
+        required={required}
+        disabled={disabled} />
+    );
+  }
 
   return (
     <Input
@@ -591,32 +662,7 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
       onFocus={() => { focusedRef.current = true; }}
       onChange={(e) => setBuffer(e.target.value)}
       onBlur={(e) => {
-        focusedRef.current = false;
-        // For NUMBER fields, coerce a cleared/blank value to '0' on commit. Otherwise the
-        // empty string short-circuits the generic fireCallout guard (`if (!value) return`)
-        // in DetailView, so clearing the field would leave dependent amounts (e.g. the
-        // Assets Residual) stale. Committing '0' fires the callout with 0 and leaves the
-        // input showing 0. Text fields keep their raw value (no coercion). ETP-4333.
-        const raw = e.target.value;
-        let v = (isNumber && raw.trim() === '') ? '0' : raw;
-        // Silently clamp to the field's declared `max` (e.g. Annual Depreciation % ≤ 100).
-        // This is a correction, not a validation — it never blocks the commit or shows a
-        // toast, unlike getNumericFieldError below which only handles `min`/`integer`. ETP-4887.
-        v = clampNumericFieldMax(f, v);
-        // Re-sync the displayed buffer to the (possibly coerced) committed value.
-        setBuffer(v);
-        // Only COMMIT (fires the callout via onChange) when the value differs from the
-        // value the USER last committed — so a no-op blur (focus then leave untouched)
-        // does nothing, while a genuine edit (including clearing back to 0 after a
-        // collateral write) always fires. Record the new user value either way so the
-        // next blur compares against the correct baseline. ETP-4333.
-        const changed = !sameAsLast(v);
-        lastUserValueRef.current = v;
-        if (changed) onCommit?.(f.key, v, f.column);
-        // Validate the RAW value the user left (pre-'0' coercion) so a genuinely
-        // empty field is not reported as below-min. ETP-4542.
-        onValidateBlur?.(f, raw);
-        onFieldBlur?.(f.key);
+        commitRaw(e.target.value);
       }}
       placeholder={placeholder}
       className={className}
@@ -1157,6 +1203,23 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
         disabled={isReadOnly || savingField === f.key}
         maxLength={f.maxLength}
         data-testid="DeferredInput__a8d626" />
+    ) : (isNumericField(f) && !isReadOnly) ? (
+      // Numeric, no blur-callout: same reason as DeferredInput above — a native number input
+      // swallows the comma keystroke. Read-only numerics keep the plain <Input> below, since they
+      // render `displayValue` (already formatted upstream) and accept no keystrokes at all.
+      <MaskedAmountInput
+        name={f.key}
+        data-testid={`field-${f.key}`}
+        value={getFieldValue(isReadOnly, displayValue, data, f)}
+        bare
+        grouping={TWO_DECIMAL_FIELD_TYPES.has(f.type)}
+        onChange={(clean) => onChange?.(f.key, clean, f.column)}
+        onCommit={(_parsed, clean) => validateNumericOnBlur(f, clean)}
+        onBlur={() => onFieldBlur?.(f.key)}
+        placeholder={resolveUiKey(ui, f.placeholderKey)}
+        className={inputClassName}
+        required={f.required}
+        disabled={savingField === f.key} />
     ) : (
       <Input
         id={f.key}

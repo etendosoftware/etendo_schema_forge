@@ -14,9 +14,29 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
   });
 
   it('drives the cuadre via the usePaymentBalance hook', () => {
-    // round2 is also imported (ETP-4504 amount-in-account conversion math).
-    assert.match(src, /import \{ usePaymentBalance, formatPlain, round2 \} from '\.\/usePaymentBalance\.js'/);
+    // round2 is also imported (ETP-4504 amount-in-account conversion math), and
+    // parsePlain since ETP-5107 (reading back the grouped amount-in-account field).
+    assert.match(src, /import \{ usePaymentBalance, formatPlain, parsePlain, round2 \} from '\.\/usePaymentBalance\.js'/);
     assert.match(src, /usePaymentBalance\(\{\s*total,\s*dir,\s*sources,\s*usedSources:/s);
+  });
+
+  // ETP-5107 (QA round 2): amounts and RATES are parsed by DIFFERENT helpers and the
+  // distinction is load-bearing. A display amount carries the configured thousands
+  // separator and must go through parsePlain (a bare parseFloat read the seeded
+  // "5.050,00" as 5.05 and derived a wildly wrong rate); a rate arrives canonical
+  // dot-decimal from the backend, so it must go through parseLocaleNumber directly —
+  // parsePlain would strip that '.' as grouping and read "0.92" as 92.
+  it('parses the amount-in-account field with parsePlain and the rate with parseLocaleNumber (ETP-5107)', () => {
+    assert.match(src, /import \{ parseLocaleNumber \} from '@\/lib\/parseLocaleNumber\.js'/);
+    // Amount-in-account field: parsePlain, never a bare parseFloat on the raw input.
+    assert.match(src, /const raw = e\.target\.value;\s*\n\s*setAmountStr\(raw\);[\s\S]{0,400}?const n = parsePlain\(raw\);/);
+    assert.doesNotMatch(src, /parseFloat\(raw/);
+    assert.doesNotMatch(src, /parseFloat\([^)]*\.replace\(/);
+    // Typed rate memo and the rate seeding: parseLocaleNumber directly.
+    assert.match(src, /const n = parseLocaleNumber\(rateStr\)\.value;/);
+    assert.match(src, /const n = parseLocaleNumber\(rawRate\)\.value;/);
+    assert.doesNotMatch(src, /parsePlain\(rateStr\)/);
+    assert.doesNotMatch(src, /parsePlain\(rawRate\)/);
   });
 
   // ETP-4314: fmtCur() (used for the read-only ExcessBand amount and the PIS

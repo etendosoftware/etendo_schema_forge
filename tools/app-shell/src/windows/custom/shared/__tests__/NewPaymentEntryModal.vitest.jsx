@@ -243,7 +243,7 @@ describe('NewPaymentEntryModal', () => {
       // payment.accountId is used directly (no default-account heuristic needed).
       expect(screen.getByTestId('field-account-chip')).toHaveTextContent('Main Account');
       // balance.onAmountChange(formatPlain(payment.amount)) prefills the cash amount.
-      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('500.00'));
+      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('500,00'));
     });
 
     it('shows the edit-payment title for dir "out"', () => {
@@ -290,9 +290,28 @@ describe('NewPaymentEntryModal', () => {
   });
 
   describe('amount field', () => {
-    it('prefills the amount input with the outstanding total (en-US)', () => {
+    it('prefills the amount input with the outstanding total (instance-configured format)', () => {
       renderModal({ outstanding: 6420 });
-      expect(screen.getByTestId('cp-amount-input')).toHaveValue('6,420.00');
+      expect(screen.getByTestId('cp-amount-input')).toHaveValue('6.420,00');
+    });
+
+    // ETP-5107 (QA round 2): the modal formatted/parsed in en-US while the rest of
+    // the app uses the configured es-ES convention, so a user typing `50,50` on a
+    // €139,15 invoice had the comma stripped as grouping and registered 5.050,00 €
+    // (~36x) — an excess the modal then offered to refund or leave as credit.
+    it('reads a typed decimal comma as the decimal separator, not as grouping (ETP-5107)', async () => {
+      renderModal({ outstanding: 139.15 });
+      const input = screen.getByTestId('cp-amount-input');
+      expect(input).toHaveValue('139,15');
+
+      fireEvent.change(input, { target: { value: '50,50' } });
+      fireEvent.blur(input);
+      await waitFor(() => expect(input).toHaveValue('50,50'));
+
+      // 50,50 < 139,15 → a PARTIAL payment. Under the old en-US parse it became
+      // 5050 and the modal showed an excess instead.
+      expect(screen.getByText('cpMissing')).toBeInTheDocument();
+      expect(screen.queryByText('cpExcess')).not.toBeInTheDocument();
     });
   });
 
@@ -368,8 +387,8 @@ describe('NewPaymentEntryModal', () => {
       // the cash amount to max(0, applied - usedByOthers - use) = 0 — exactly the
       // repro: cash "Importe" left at 0.00€, credit fully covering the invoice.
       const input = await within(row).findByTestId('cp-credit-use-s1');
-      await waitFor(() => expect(input).toHaveValue('25.30'));
-      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('0.00'));
+      await waitFor(() => expect(input).toHaveValue('25,30'));
+      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('0,00'));
 
       // Balance is exact — no missing, no excess — "Diferencia" shows 0.00 €.
       expect(screen.getByText('cpDifference')).toBeInTheDocument();
@@ -392,17 +411,17 @@ describe('NewPaymentEntryModal', () => {
       fireEvent.click(row);
       // selecting caps "use" to the invoice need (50, since avail=500 > need).
       const input = await within(row).findByTestId('cp-credit-use-s1');
-      await waitFor(() => expect(input).toHaveValue('50.00'));
+      await waitFor(() => expect(input).toHaveValue('50,00'));
 
       // typing a value within [0, avail] is reflected exactly after blur.
-      fireEvent.change(input, { target: { value: '150.00' } });
+      fireEvent.change(input, { target: { value: '150,00' } });
       fireEvent.blur(input);
-      await waitFor(() => expect(input).toHaveValue('150.00'));
+      await waitFor(() => expect(input).toHaveValue('150,00'));
 
       // typing a negative value clamps to 0.
       fireEvent.change(input, { target: { value: '-100' } });
       fireEvent.blur(input);
-      await waitFor(() => expect(input).toHaveValue('0.00'));
+      await waitFor(() => expect(input).toHaveValue('0,00'));
     });
 
     it('clamps the "use" amount at avail when the typed value exceeds the available credit', async () => {
@@ -414,12 +433,12 @@ describe('NewPaymentEntryModal', () => {
       fireEvent.click(row);
       // selecting caps "use" to avail (120), since need (1000) > avail.
       const input = await within(row).findByTestId('cp-credit-use-s1');
-      await waitFor(() => expect(input).toHaveValue('120.00'));
+      await waitFor(() => expect(input).toHaveValue('120,00'));
 
-      fireEvent.change(input, { target: { value: '220.00' } });
+      fireEvent.change(input, { target: { value: '220,00' } });
       fireEvent.blur(input);
       // 220 would exceed avail (120) — clamps down to 120 on blur.
-      await waitFor(() => expect(input).toHaveValue('120.00'));
+      await waitFor(() => expect(input).toHaveValue('120,00'));
     });
 
     it('does not toggle the row off when clicking inside the "use" amount container (stopPropagation)', async () => {
@@ -860,9 +879,10 @@ describe('NewPaymentEntryModal', () => {
       renderModal({ invoiceData: USD_INVOICE, outstanding: 100 });
 
       const readout = await screen.findByTestId('cp-amount-in-account-input');
-      // 100 × 0.92 = 92, formatted en-US plain (no symbol embedded — the field is now a
-      // free-standing editable <input>; the symbol renders in a separate sibling <span>).
-      await waitFor(() => expect(readout).toHaveValue('92.00'));
+      // 100 × 0.92 = 92, formatted plain in the instance-configured format (no symbol
+      // embedded — the field is now a free-standing editable <input>; the symbol renders
+      // in a separate sibling <span>).
+      await waitFor(() => expect(readout).toHaveValue('92,00'));
 
       // Symbol money convention (ETP-4504): the modal shows the real currency symbol via
       // Intl `narrowSymbol` (USD→$, EUR→€, GBP→£), never the raw 3-letter ISO code. The
@@ -874,26 +894,31 @@ describe('NewPaymentEntryModal', () => {
 
       // Recompute forward on amount (invoice-currency) change: 200 × 0.92 = 184, rate unchanged.
       fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '200' } });
-      await waitFor(() => expect(readout).toHaveValue('184.00'));
-      expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.92');
+      await waitFor(() => expect(readout).toHaveValue('184,00'));
+      // The RATE field is masked (ETP-5107): it DISPLAYS the localized form ("0,92") — a JS dot
+      // decimal in a comma-decimal UI is the defect this ticket closes — while the value it
+      // reports outward, and the one submitted in the payload, stays the clean "0.92". It is
+      // parsed with parseLocaleNumber, not parsePlain.
+      expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0,92');
 
       // Recompute forward on rate change: 200 × 0.5 = 100.
       fireEvent.change(screen.getByTestId('cp-conversion-rate-input'), { target: { value: '0.5' } });
-      await waitFor(() => expect(readout).toHaveValue('100.00'));
+      await waitFor(() => expect(readout).toHaveValue('100,00'));
 
       // Reverse direction: typing directly into the converted-amount field derives a new rate
       // (the inverse of amount × rate) — invoice-currency amount is still 200 here.
       fireEvent.change(readout, { target: { value: '50' } });
-      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.25'));
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0,25'));
 
       // Regression guard for `skipAmountRecomputeRef`: deriving the rate from the typed amount
       // re-renders with a new `rate`, which is a dependency of the amount-recompute effect —
       // without the skip guard that effect would immediately re-fire and reformat/clobber the
-      // field the user is still typing in (e.g. back to "46.00" = round2(200 × 0.23...)).
+      // field the user is still typing in (e.g. back to "46,00" = round2(200 × 0.23...)).
       // Asserted synchronously (no waitFor) right after the change so a removed guard, which
       // would only clobber the value on the FOLLOWING render/microtask, cannot slip past this
-      // check by coincidence.
-      expect(readout).toHaveValue('50');
+      // check by coincidence. The masked field re-renders the typed 50 from the authoritative
+      // value, so the guard holds when it reads "50,00" — and fails the moment it reads "46,00".
+      expect(readout).toHaveValue('50,00');
     });
 
     it('includes conversionRate in the register body only in the foreign-currency case', async () => {
@@ -987,7 +1012,7 @@ describe('NewPaymentEntryModal', () => {
 
       // Auto-selects the first account (EUR) → rate prefilled to 0.92.
       await screen.findByTestId('cp-conversion-fields');
-      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.92'));
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0,92'));
 
       // Switch the account to the GBP one (which has no DB rate).
       fireEvent.click(screen.getByTestId('field-account-chip'));
@@ -1072,10 +1097,10 @@ describe('NewPaymentEntryModal', () => {
       await screen.findByTestId('cp-conversion-fields');
       // Consume the credit: it caps to min(avail 40, need 100) = 40 and drops cash to 60.
       fireEvent.click(await screen.findByTestId('cp-credit-row-s1'));
-      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('60.00'));
+      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('60,00'));
 
       // Amount-in-account tracks the CASH portion only: 60 × 0.92 = 55.20 (account currency).
-      await waitFor(() => expect(screen.getByTestId('cp-amount-in-account-input')).toHaveValue('55.20'));
+      await waitFor(() => expect(screen.getByTestId('cp-amount-in-account-input')).toHaveValue('55,20'));
 
       // Exact balance (60 cash + 40 credit = 100) → no excess, confirm enabled.
       expect(screen.queryByTestId('cp-excess-credit')).not.toBeInTheDocument();
@@ -1135,7 +1160,7 @@ describe('NewPaymentEntryModal', () => {
       await screen.findByTestId('cp-conversion-fields');
       // Fully consume the credit line: cash drops to 0 (balance.amount === 0).
       fireEvent.click(await screen.findByTestId('cp-credit-row-s1'));
-      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('0.00'));
+      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('0,00'));
 
       // Typing a positive amount here would normally derive a rate (accountAmount / invoiceAmount)
       // — but balance.amount (the divisor) is 0, so the `balance.amount > 0` guard must keep this
@@ -1145,7 +1170,7 @@ describe('NewPaymentEntryModal', () => {
       }).not.toThrow();
 
       await waitFor(() => {
-        expect(screen.getByTestId('cp-amount-in-account-input')).toHaveValue('50');
+        expect(screen.getByTestId('cp-amount-in-account-input')).toHaveValue('50,00');
         expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('');
         expect(screen.getByTestId('cp-conversion-rate-error')).toHaveTextContent('cpConversionRateRequired');
         expect(screen.getByTestId('cp-amount-in-account-error')).toHaveTextContent('cpConversionRateRequired');
@@ -1161,9 +1186,10 @@ describe('NewPaymentEntryModal', () => {
       await screen.findByTestId('cp-conversion-fields');
       expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('');
 
-      // Typing 46 in the converted-amount field derives rate = 46 / 100 = 0.46.
+      // Typing 46 in the converted-amount field derives rate = 46 / 100 = 0.46, SHOWN localized
+      // as "0,46" — the payload assertion below pins that the submitted value stays "0.46".
       fireEvent.change(screen.getByTestId('cp-amount-in-account-input'), { target: { value: '46' } });
-      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.46'));
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0,46'));
 
       const confirm = screen.getByTestId('cp-confirm');
       await waitFor(() => expect(confirm).not.toBeDisabled());
@@ -1259,16 +1285,16 @@ describe('NewPaymentEntryModal', () => {
 
       await screen.findByTestId('cp-conversion-fields');
       const rateInput = screen.getByTestId('cp-conversion-rate-input');
-      await waitFor(() => expect(rateInput).toHaveValue('0.89'));
+      await waitFor(() => expect(rateInput).toHaveValue('0,89'));
       // The account-currency readout follows the persisted rate: 100 × 0.89 = 89.00 (EUR account).
       const readout = screen.getByTestId('cp-amount-in-account-input');
-      await waitFor(() => expect(readout).toHaveValue('89.00'));
+      await waitFor(() => expect(readout).toHaveValue('89,00'));
       expect(readout.parentElement).toHaveTextContent(/€/);
 
       // The system spot rate arrives AFTER the account (and therefore the persisted seed) resolved
       // — it must not win.
       act(() => resolveSystemRate(0.92));
-      expect(rateInput).toHaveValue('0.89');
+      expect(rateInput).toHaveValue('0,89');
       // And the gate is satisfied by the persisted rate alone (no error, both actions enabled).
       expect(screen.queryByTestId('cp-conversion-rate-error')).not.toBeInTheDocument();
       expect(screen.getByTestId('cp-save-draft')).not.toBeDisabled();
@@ -1288,14 +1314,14 @@ describe('NewPaymentEntryModal', () => {
       const rateInput = screen.getByTestId('cp-conversion-rate-input');
       const readout = screen.getByTestId('cp-amount-in-account-input');
       // Consistent seed from the persisted rate: 100 × 0.89 = 89.00.
-      await waitFor(() => expect(rateInput).toHaveValue('0.89'));
-      await waitFor(() => expect(readout).toHaveValue('89.00'));
+      await waitFor(() => expect(rateInput).toHaveValue('0,89'));
+      await waitFor(() => expect(readout).toHaveValue('89,00'));
 
       // Editing the reopened amount field derives a fresh rate (50 / 100 = 0.5), overriding the
       // persisted 0.89 — the persisted-rate seeding effect must not re-fight this user edit.
       fireEvent.change(readout, { target: { value: '50' } });
-      await waitFor(() => expect(rateInput).toHaveValue('0.5'));
-      expect(readout).toHaveValue('50');
+      await waitFor(() => expect(rateInput).toHaveValue('0,5'));
+      expect(readout).toHaveValue('50,00');
     });
 
     // Truth table row 2 — "payment date changed → 0.89 (no reseed)".
@@ -1307,11 +1333,11 @@ describe('NewPaymentEntryModal', () => {
 
       await screen.findByTestId('cp-conversion-fields');
       const rateInput = screen.getByTestId('cp-conversion-rate-input');
-      await waitFor(() => expect(rateInput).toHaveValue('0.89'));
+      await waitFor(() => expect(rateInput).toHaveValue('0,89'));
 
       fireEvent.change(screen.getByTestId('date-field'), { target: { value: '2026-02-05' } });
       await waitFor(() => expect(screen.getByTestId('date-field')).toHaveValue('2026-02-05'));
-      expect(rateInput).toHaveValue('0.89');
+      expect(rateInput).toHaveValue('0,89');
     });
 
     // Truth table row 3 — "switch to another EUR account (Caja → Banco) → 0.89 (same USD→EUR pair)".
@@ -1321,13 +1347,13 @@ describe('NewPaymentEntryModal', () => {
       renderModal({ invoiceData: USD_INVOICE, outstanding: 100, payment: eurDraft() });
 
       await screen.findByTestId('cp-conversion-fields');
-      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.89'));
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0,89'));
 
       await selectAccount('acc-eur-2');
       // The switch really happened (Banco EUR selected)…
       await waitFor(() => expect(screen.getByTestId('field-account-chip')).toHaveTextContent('Banco EUR'));
       // …and the rate is untouched: it belongs to the USD→EUR pair, not to the account.
-      expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.89');
+      expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0,89');
     });
 
     // Truth table row 4 — "switch to a GBP account → the DB USD→GBP rate".
@@ -1340,11 +1366,11 @@ describe('NewPaymentEntryModal', () => {
       renderModal({ invoiceData: USD_INVOICE, outstanding: 100, payment: eurDraft() });
 
       await screen.findByTestId('cp-conversion-fields');
-      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.89'));
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0,89'));
 
       await selectAccount('acc-gbp');
       // Showing the saved USD→EUR rate on a USD→GBP payment would be a silent accounting error.
-      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.75'));
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0,75'));
     });
 
     // Truth table row 4 (empty case) — "…or empty if none exists".
@@ -1356,7 +1382,7 @@ describe('NewPaymentEntryModal', () => {
       renderModal({ invoiceData: USD_INVOICE, outstanding: 100, payment: eurDraft() });
 
       await screen.findByTestId('cp-conversion-fields');
-      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.89'));
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0,89'));
 
       await selectAccount('acc-gbp');
       await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue(''));
@@ -1374,7 +1400,7 @@ describe('NewPaymentEntryModal', () => {
       renderModal({ invoiceData: USD_INVOICE, outstanding: 100, payment: eurDraft() });
 
       await screen.findByTestId('cp-conversion-fields');
-      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.89'));
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0,89'));
 
       await selectAccount('acc-usd');
       // Account currency === invoice currency → no conversion at all.
@@ -1399,7 +1425,7 @@ describe('NewPaymentEntryModal', () => {
       renderModal({ invoiceData: USD_INVOICE, outstanding: 100, payment: eurDraft() });
 
       await screen.findByTestId('cp-conversion-fields');
-      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.89'));
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0,89'));
 
       // Away to the invoice currency (no conversion), then back to the saved pair.
       await selectAccount('acc-usd');
@@ -1407,7 +1433,7 @@ describe('NewPaymentEntryModal', () => {
       await selectAccount('acc-eur');
 
       await screen.findByTestId('cp-conversion-fields');
-      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.89'));
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0,89'));
     });
 
     // Truth table (draft save) — "Guardar" must re-submit the rate the user saved, unchanged.
@@ -1418,7 +1444,7 @@ describe('NewPaymentEntryModal', () => {
       renderModal({ invoiceData: USD_INVOICE, outstanding: 100, payment: eurDraft() });
 
       await screen.findByTestId('cp-conversion-fields');
-      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.89'));
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0,89'));
 
       const saveDraft = screen.getByTestId('cp-save-draft');
       await waitFor(() => expect(saveDraft).not.toBeDisabled());
@@ -1443,18 +1469,18 @@ describe('NewPaymentEntryModal', () => {
 
       await screen.findByTestId('cp-conversion-fields');
       const rateInput = screen.getByTestId('cp-conversion-rate-input');
-      await waitFor(() => expect(rateInput).toHaveValue('0.89'));
+      await waitFor(() => expect(rateInput).toHaveValue('0,89'));
 
       // The user corrects the rate by hand…
       fireEvent.change(rateInput, { target: { value: '0.95' } });
-      expect(rateInput).toHaveValue('0.95');
+      expect(rateInput).toHaveValue('0,95');
 
       // …and neither a late exchange-rate response nor a date change may clobber it.
       act(() => resolveSystemRate(0.92));
-      expect(rateInput).toHaveValue('0.95');
+      expect(rateInput).toHaveValue('0,95');
       fireEvent.change(screen.getByTestId('date-field'), { target: { value: '2026-02-05' } });
       await waitFor(() => expect(screen.getByTestId('date-field')).toHaveValue('2026-02-05'));
-      expect(rateInput).toHaveValue('0.95');
+      expect(rateInput).toHaveValue('0,95');
 
       // The typed rate — not the persisted one — is what gets saved.
       fireEvent.click(screen.getByTestId('cp-save-draft'));
@@ -1477,7 +1503,7 @@ describe('NewPaymentEntryModal', () => {
       });
 
       await screen.findByTestId('cp-conversion-fields');
-      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.92'));
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0,92'));
     });
 
     // Guard on the "> 0" half of the gate: a legacy/absent stored rate must fall back to the
@@ -1493,7 +1519,7 @@ describe('NewPaymentEntryModal', () => {
       });
 
       await screen.findByTestId('cp-conversion-fields');
-      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.92'));
+      await waitFor(() => expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0,92'));
     });
   });
 
@@ -2230,7 +2256,7 @@ describe('NewPaymentEntryModal', () => {
         await screen.findByTestId('cp-pis-section');
         expect(screen.getByTestId('cp-conversion-fields')).toBeInTheDocument();
         await waitFor(() =>
-          expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0.92'));
+          expect(screen.getByTestId('cp-conversion-rate-input')).toHaveValue('0,92'));
       });
 
       it('defaults the template from the ACCOUNT currency, not the invoice currency', async () => {
@@ -2281,7 +2307,11 @@ describe('NewPaymentEntryModal', () => {
           // The invoice figure is still shown, but as context — not as the transferred amount.
           expect(alert).toHaveTextContent(/cpPisAlertConverted/);
           expect(alert).toHaveTextContent(/"importeFactura":"1\.000,00/);
-          expect(alert).toHaveTextContent(/"tasa":"0\.92"/);
+          // The DISPLAYED rate goes through formatPlain, so it now follows the same
+          // instance-configured convention as every other amount in the alert (ETP-5107).
+          // The rate SENT in the payload stays canonical dot-decimal — asserted as '0.92'
+          // in "still sends the invoice-currency amount plus the rate" below.
+          expect(alert).toHaveTextContent(/"tasa":"0,92"/);
           expect(alert).toHaveTextContent(/"monedaBanco":"EUR"/);
         });
       });

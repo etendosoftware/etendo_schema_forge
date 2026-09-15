@@ -151,7 +151,7 @@ async function waitForDetailView(page) {
 }
 
 test.describe('CurrencyRatePicker — A: rate display format', () => {
-  test('trigger shows "USD — 1.1500" format when rate is available', async ({ page }) => {
+  test('trigger shows "USD — 1,1500" format when rate is available', async ({ page }) => {
     await login(page);
     await installOrderMocks(page);
 
@@ -164,9 +164,12 @@ test.describe('CurrencyRatePicker — A: rate display format', () => {
     const trigger = currencyField.getByTestId('currency-rate-trigger');
     await expect(trigger).toBeVisible({ timeout: 8_000 });
 
-    // The trigger text includes the isoCode and rate separated by "—"
+    // The trigger text includes the isoCode and rate separated by "—". ETP-5107: the rate's
+    // decimal separator is localized via getCurrencyFormatConfig(), so a comma-decimal instance
+    // renders "1,15" — a period here was the reported bug ("EUR — 1.00", "GBP 0.86").
     await expect(trigger).toContainText('USD');
-    await expect(trigger).toContainText('1.15');
+    await expect(trigger).toContainText('1,15');
+    await expect(trigger).not.toContainText('1.15');
   });
 });
 

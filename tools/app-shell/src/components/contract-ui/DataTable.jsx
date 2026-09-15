@@ -10,7 +10,7 @@ import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
-import { formatCurrency } from '@/lib/formatCurrency.js';
+import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency.js';
 import { resolveRowCurrency } from '@/lib/rowCurrency.js';
 import { useCurrency } from '@/hooks/useCurrency.jsx';
 import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
@@ -533,7 +533,7 @@ function renderDerivedAddCell(col, values) {
   const identVal = values[col.key + '$_identifier'];
   const isNumericDerived = NUMERIC_FIELD_TYPES.has(col.type);
   const isTwoDecimalDerived = TWO_DECIMAL_FIELD_TYPES.has(col.type);
-  const displayVal = formatDerivedCellValue(identVal, rawVal, isTwoDecimalDerived);
+  const displayVal = formatDerivedCellValue(identVal, rawVal, isTwoDecimalDerived, isNumericDerived);
   return (
     <TableCell key={col.key} data-testid={`inline-add-cell-${col.key}`} className={`text-muted-foreground text-sm${getNumericCellAlignClass(isNumericDerived)}`}>
       {displayOrDash(displayVal)}
@@ -1124,14 +1124,27 @@ function getFieldLabel(field, t, col, locale) {
   return field ? (t(field.column) ?? field.label ?? field.key) : (t(col.column) ?? col.label ?? col.key);
 }
 
-function formatDerivedCellValue(identVal, rawVal, isTwoDecimalDerived) {
-  let displayVal = identVal || rawVal;
-  if (isTwoDecimalDerived && displayVal != null && displayVal !== '') {
+/**
+ * ETP-5107 (reopened) — two defects fixed here at once.
+ *
+ * It hardcoded `toLocaleString('es-ES', ...)`, which CLAUDE.md forbids outright: the separators
+ * are instance configuration, not a constant, so a tenant configured otherwise rendered the wrong
+ * ones. `formatCurrency` reads that config.
+ *
+ * And it localized ONLY amount/price-shaped columns; every other numeric type (number, decimal,
+ * integer, quantity) fell through raw and printed JS's own '.' — the same `10.5`-next-to-`44,00`
+ * defect as the lines grid. Those must not get grouping or forced 2 decimals, so they go through
+ * `formatPlainDecimal`, which only swaps the separator.
+ */
+function formatDerivedCellValue(identVal, rawVal, isTwoDecimalDerived, isNumericDerived = false) {
+  const displayVal = identVal || rawVal;
+  if (displayVal == null || displayVal === '') return displayVal;
+  if (isTwoDecimalDerived) {
     const n = typeof displayVal === 'string' ? Number.parseFloat(displayVal) : displayVal;
-    if (Number.isFinite(n)) {
-      displayVal = n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true });
-    }
+    return Number.isFinite(n) ? formatCurrency(undefined, n) : displayVal;
   }
+  // Only when there is no `$_identifier` — an identifier is a label, not a number.
+  if (isNumericDerived && !identVal) return formatPlainDecimal(displayVal);
   return displayVal;
 }
 

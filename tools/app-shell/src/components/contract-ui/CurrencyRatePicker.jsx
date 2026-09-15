@@ -2,6 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronDown, Loader2, Pencil, Check, X } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
+import { getCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
+import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
+import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
@@ -150,13 +153,19 @@ export function CurrencyRatePicker({
 
   const handleRateEdit = useCallback((e) => {
     e.stopPropagation();
+    // Seeded with the canonical value; MaskedAmountInput renders it in the configured convention.
     setRateInput(displayRate != null ? String(displayRate) : '');
     setEditingRate(true);
   }, [displayRate]);
 
   const handleRateConfirm = useCallback(() => {
-    const parsed = parseFloat(rateInput);
-    if (!isNaN(parsed) && parsed > 0) {
+    // `rateInput` is MaskedAmountInput's CLEAN value (digits, optional '-', at most one '.'), so a
+    // typed comma has already been normalized. parseLocaleNumber still guards against a partial
+    // entry ('', '-', '0,'). NOT the grouping-aware parseAmountInput: a rate of 1.500 legitimately
+    // means 1.5, which that parser would read as 1500 — and with grouping off the component never
+    // inserts a thousands separator to strip.
+    const parsed = parseLocaleNumber(rateInput).value;
+    if (Number.isFinite(parsed) && parsed > 0) {
       onChange('eTGOCurrencyRate', parsed, 'EM_ETGO_Currency_Rate');
     }
     setEditingRate(false);
@@ -173,7 +182,14 @@ export function CurrencyRatePicker({
     if (isNaN(n)) return '';
     // Prefer the org-level precision from /sws/neo/session; fall back to the prop or 4.
     const decimals = orgPrecision ?? (typeof precision === 'number' && precision >= 0 ? precision : 4);
-    return n.toFixed(decimals);
+    const fixed = n.toFixed(decimals);
+    // A rate is NOT a currency amount, so this deliberately does not go through formatCurrency:
+    // that would force exactly two decimals and silently truncate a 4- or 6-decimal rate. Only the
+    // decimal separator is localized — the org's own precision decides how many digits there are.
+    // Before ETP-5107's reopened round the raw toFixed output leaked a period into the currency
+    // dropdown ("GBP 0.86", "USD 1.47") in an otherwise comma-decimal UI.
+    const { decimalSeparator } = getCurrencyFormatConfig();
+    return decimalSeparator === '.' ? fixed : fixed.replace('.', decimalSeparator);
   };
 
   if (isReadOnly) {
@@ -205,14 +221,20 @@ export function CurrencyRatePicker({
       {editingRate ? (
         <div className="w-full flex items-center gap-1 rounded-md border border-input bg-card dark:bg-background px-2 py-1.5 text-sm">
           <span className="font-medium shrink-0">{displayIso} —</span>
-          <input
+          {/* The canonical masked input, not a hand-rolled one: it owns the keystroke filtering
+              (letters and a second separator never reach the value), renders the configured decimal
+              separator, and reports a clean dot-decimal value outward. A native `type="number"`
+              rejected the comma keystroke outright, so the rate could not be typed the way it was
+              displayed (ETP-5107).
+              `grouping={false}` because this is a RATE, not an amount: no thousands separator, no
+              forced two decimals — the org's precision decides, and 1.500 stays 1.5. */}
+          <MaskedAmountInput
             data-testid="currency-rate-input"
-            type="number"
-            step="0.0001"
-            min="0.000001"
-            className="flex-1 min-w-0 bg-transparent outline-none tabular-nums"
+            bare
+            grouping={false}
+            className="flex-1 min-w-0 border-0 bg-transparent p-0 outline-none focus-visible:ring-0 tabular-nums"
             value={rateInput}
-            onChange={(e) => setRateInput(e.target.value)}
+            onChange={(clean) => setRateInput(clean)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleRateConfirm();
               if (e.key === 'Escape') handleRateCancel();

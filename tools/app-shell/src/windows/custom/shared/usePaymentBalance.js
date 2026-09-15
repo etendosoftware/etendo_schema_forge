@@ -1,8 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+// Relative, NOT the '@/' alias: this module is covered by a plain `node --test` suite
+// (`__tests__/usePaymentBalance.test.js`, matched by the root package.json glob), and node does
+// not resolve Vite path aliases — the same constraint currencyFormatConfig.js documents for its
+// own imports (ETP-5022).
+import { formatCurrency } from '../../../lib/formatCurrency.js';
+import { parseAmountInput } from '../../../lib/parseAmountInput.js';
 
-// ─── en-US plain number helpers (no currency symbol) ─────────────────────────
-// The amount input shows a grouped en-US number ("6,420.00") with the currency suffix rendered
-// separately, matching the app-wide formatCurrency() format used everywhere else in the modal.
+// ─── plain amount helpers (instance-configured format, no currency symbol) ───
+// These render/read the amount fields of the "Nuevo cobro/pago" modal. They route through the
+// CANONICAL currency helpers (formatCurrency / parseLocaleNumber), so the modal reads and writes
+// amounts in the SAME convention as the rest of the app — comma as the decimal separator under the
+// shipped es-ES config.
+//
+// They used to be hardcoded en-US ("6,420.00"), which silently reinterpreted a Spanish-typed
+// amount: `50,50` had its comma stripped as if it were a thousands separator and parsed as 5050,
+// so a cobro of fifty-euros-fifty was applied as five-thousand-and-fifty — a ~100x error the UI
+// then offered to refund or leave as customer credit, with no warning (ETP-5107 QA round 2).
 
 const TOLERANCE = 0.001;
 const STEP = 100;
@@ -16,34 +29,34 @@ export function round2(n) {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
 
-/** Inserts en-US thousands separators without regex backtracking (ReDoS-safe). */
-function groupThousands(intStr) {
-  let out = '';
-  for (let i = 0; i < intStr.length; i += 1) {
-    if (i > 0 && (intStr.length - i) % 3 === 0) {
-      out += ',';
-    }
-    out += intStr[i];
-  }
-  return out;
-}
-
-/** Formats a number as a plain en-US amount: "6,420.00" (no symbol). */
+/**
+ * Formats a number as a plain amount in the instance-configured format, no symbol:
+ * "6.420,00" under the shipped es-ES separators.
+ */
 export function formatPlain(n) {
-  const value = Number.isFinite(n) ? n : 0;
-  const neg = value < 0;
-  const [intPart, decPart] = Math.abs(value).toFixed(2).split('.');
-  return `${neg ? '-' : ''}${groupThousands(intPart)}.${decPart}`;
+  // formatCurrency returns '—' for a non-finite value, so coerce first — these fields must always
+  // show a real amount (the pre-existing contract: NaN/Infinity/undefined all render as zero).
+  return formatCurrency(undefined, Number.isFinite(n) ? n : 0);
 }
 
-/** Parses an en-US amount string ("6,420.00") into a number, or null if blank/invalid. */
+/**
+ * Parses an amount string produced by `formatPlain` (or typed into one of the modal's amount
+ * fields) into a number, or null if blank/invalid.
+ *
+ * Uses the STRUCTURAL parser (`lib/parseAmountInput.js`), not the config-driven
+ * `parseLocaleNumber`: this field carries thousands separators from `formatPlain`, and it has no
+ * live masking, so a rule that always read '.' as grouping would turn a typed `75.50` into 7550.
+ *
+ * Not for exchange RATES. A rate arrives canonical dot-decimal from the backend and a value like
+ * `1.500` legitimately means one-point-five there, which the structural rule would read as 1500
+ * (three digits after a lone separator = grouping). Rates parse with `parseLocaleNumber` — see
+ * `NewPaymentEntryModal.jsx`.
+ */
 export function parsePlain(str) {
-  if (str == null) return null;
-  const trimmed = String(str).trim();
-  if (trimmed === '') return null;
-  const normalized = trimmed.replace(/,/g, '');
-  const n = parseFloat(normalized);
-  return Number.isNaN(n) ? null : n;
+  const n = parseAmountInput(str);
+  // parseAmountInput returns null for blank and NaN for unparseable; this hook's callers only
+  // distinguish "no number" from a number, so both collapse to null.
+  return Number.isFinite(n) ? n : null;
 }
 
 /** Finds the usedSources entry (if any) matching a credit/abono source by its kind + id. */

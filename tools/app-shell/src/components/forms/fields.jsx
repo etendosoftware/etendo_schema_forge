@@ -11,7 +11,7 @@ import { DateField } from '@/components/ui/date-field';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { SelectorChip } from '@/components/contract-ui/SelectorChip.jsx';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
-import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
+import { formatCurrency, getCurrencySymbol, formatPlainDecimal } from '@/lib/formatCurrency.js';
 import { getCurrencyFormatConfig, isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 import {
@@ -157,12 +157,21 @@ export function AmountInput({ label, required, value, onChange, onBlur, placehol
 }
 
 // ─── MaskedAmountInput internals (ETP-5107) ───────────────────────────────
-// A NEW sibling of AmountInput/MoneyInput above — those two are NOT modified
-// by this addition (zero diff on their function bodies). See
-// docs/plans/2026-09-08-etp5107-price-input-locale-fix.md §6.3/§6.3.1 for why
-// they stay untouched: 4 existing screens (PaymentForm, ReversedInvoicesPanel,
-// NewTransactionModal, NewMovementWizard) depend on their exact current
-// behavior, and this ticket has no reason to put those at risk.
+// The canonical masked money input, and the one every EDITABLE amount field in
+// the app must use. See
+// docs/plans/2026-09-13-etp5107-experimental-server-verification.md §7.12 for
+// the migration and the rule that goes with it: once a field renders this
+// component its value is CLEAN, so it must be read back with parseLocaleNumber,
+// never with a structural/grouping-aware parser.
+//
+// AmountInput and MoneyInput above are the deliberate exception, and NOT a
+// migration that was forgotten. Their only editable consumer is PaymentForm,
+// which is reachable solely through NewMovementWizard — dead since ETP-4500
+// (2026-07-15) replaced it with NewTransactionModal. AmountInput's one live
+// caller, ReversedInvoicesPanel, passes no `onChange` and is display-only.
+// Migrating them would have changed only unreachable code, so they were left
+// exactly as they were. If NewMovementWizard is ever revived, they are the
+// first thing to move onto this component.
 
 function countSignificantChars(str, thousandsSeparator) {
   if (!thousandsSeparator) return str.length;
@@ -276,7 +285,14 @@ function toCleanValue(filtered, decimalSeparator) {
  */
 function toIdleDisplay(value, grouping) {
   if (value == null || value === '') return '';
-  if (!grouping) return String(value);
+  if (!grouping) {
+    // Ungrouped, but STILL localized. The outward value is always clean (dot decimal), so a bare
+    // String(value) rendered the JS number literal verbatim — `10.5` — leaving a period sitting in
+    // a comma-decimal UI. That is what QA saw on the lines grid, where `% de descuento` showed
+    // `10.5` next to a `12,00` price on the same row (ETP-5107 reopened). Only the thousands
+    // grouping is skipped here; the decimal separator is never JS's.
+    return formatPlainDecimal(value);
+  }
   const formatted = formatCurrency(undefined, value);
   return formatted === '—' ? '' : formatted;
 }
@@ -321,7 +337,7 @@ function toIdleDisplay(value, grouping) {
  * @param {import('react').RefObject} [inputRef] - optional external ref to the underlying input (e.g. for a caller-managed autoFocus)
  */
 export function MaskedAmountInput({
-  label, required, value, onChange, onCommit, onBlur, onKeyDown, placeholder, disabled,
+  label, required, value, onChange, onCommit, onBlur, onFocus, onKeyDown, placeholder, disabled,
   className = '', name, currency, bare = false, grouping = true, autoFocus, inputRef,
   inputMode = 'decimal', 'data-testid': dataTestId,
 }) {
@@ -330,10 +346,17 @@ export function MaskedAmountInput({
   const [focused, setFocused] = useState(false);
   const [display, setDisplay] = useState(() => toIdleDisplay(value, grouping));
   const desiredCursorRef = useRef(null);
+  // Bumped on every blur so the sync effect below re-runs even when neither `value` nor
+  // `focused` changed. Without it a commit the parent CLAMPS BACK to the value it already
+  // held leaves the rejected text on screen: type 220 into a credit line capped at 120 and
+  // the field keeps showing "220,00" while the real value is 120. Both deps are unchanged
+  // in that case (120 -> 120), so the effect never fires. A committed field must always
+  // re-render from the authoritative value, not from what was typed at it.
+  const [commitTick, setCommitTick] = useState(0);
 
   useEffect(() => {
     if (!focused) setDisplay(toIdleDisplay(value, grouping));
-  }, [value, focused, grouping]);
+  }, [value, focused, grouping, commitTick]);
 
   useLayoutEffect(() => {
     if (desiredCursorRef.current == null || !activeRef.current) return;
@@ -372,6 +395,9 @@ export function MaskedAmountInput({
     const parsed = parseLocaleNumber(clean).value;
     onCommit?.(parsed, clean);
     onBlur?.();
+    // Batched with the parent's own commit handling above, so the sync effect re-reads an
+    // already-clamped/normalized `value` on the very next render.
+    setCommitTick((t) => t + 1);
   };
 
   let paddingClass = '';
@@ -394,7 +420,7 @@ export function MaskedAmountInput({
       inputMode={inputMode}
       value={display}
       onChange={handleChange}
-      onFocus={() => setFocused(true)}
+      onFocus={(e) => { setFocused(true); onFocus?.(e); }}
       onBlur={handleBlur}
       onKeyDown={(e) => {
         onKeyDown?.(e);

@@ -15,7 +15,7 @@ import { DateField } from '@/components/ui/date-field';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useLabel, useLocaleSwitch, useUI } from '@/i18n';
 import { resolveRowCurrency } from '@/lib/rowCurrency.js';
-import { formatCurrency } from '@/lib/formatCurrency.js';
+import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency.js';
 import { formatSignedDelta } from '@/lib/formatSigned.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
@@ -637,6 +637,14 @@ function ReadCell({ row, col, locale, t, ui }) {
     }
   }
   const display = resolveIdentifier(row, col.key);
+  // ETP-5107 (reopened) — a numeric column that is NOT amount/price-shaped (number, decimal,
+  // integer, quantity) reaches here, and rendering it bare printed JS's own '.' next to a
+  // comma-formatted Precio on the same row: the `% de descuento` = `10.5` vs `Precio` = `44,00`
+  // screenshot QA reopened this ticket with. The masked EDIT cell above was fixed first; this is
+  // the READ-ONLY cell, the one a user sees without clicking anything, and it is a separate path.
+  if (NUMERIC_TYPES.has(col.type)) {
+    return <span className="tabular-nums">{formatPlainDecimal(display)}</span>;
+  }
   if (typeof display === 'string') {
     return <span className="block truncate" title={display || undefined}>{display}</span>;
   }
