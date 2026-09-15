@@ -456,6 +456,14 @@
           "capability": "isAdminOrClientAdmin"
         },
         {
+          "name": "acct-process-monitor",
+          "label": "Accounting Process",
+          "favname": "Accounting Process",
+          "icon": "Cog",
+          "featureFlag": "acct-process-monitor",
+          "capability": "isAdminOrClientAdmin"
+        },
+        {
           "name": "smart-scan",
           "label": "Smart Scan",
           "favname": "Smart Scan",

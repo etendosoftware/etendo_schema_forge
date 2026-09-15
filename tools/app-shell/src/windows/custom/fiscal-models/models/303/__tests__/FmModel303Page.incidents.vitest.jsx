@@ -76,7 +76,7 @@ vi.mock('lucide-react', () => ({
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
   TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,
   ClipboardCheck: () => null, ReceiptText: () => null, Folder: () => null,
-  FileCheck: () => null,
+  FileCheck: () => null, Landmark: () => null,
 }));
 
 // PresentModal mock: renders a button that reports the 'aeat_telematic' sentinel status,

@@ -73,10 +73,11 @@ describe('matchesVisibility', () => {
 
 // ── getMissingRequiredFields ────────────────────────────────────────────────
 // Uses year 2026 / period 'T2' throughout — the current BASE layout (no year
-// patch applies), whose only `required: true` fields are `tipo_declaracion`
-// (always visible, identificacion section) and `bank_iban` (datos_bancarios
-// section, visible only for tipo U/D/X or rectificativa checked — see BASE's
-// own comment in fm303Layouts.js).
+// patch applies), whose `required: true` fields are `tipo_declaracion` (always
+// visible, identificacion section), `bank_iban` (datos_bancarios section,
+// visible only for tipo U/D/X or rectificativa checked), and `fecha_concurso`
+// (identificacion section, visible only when `concurso` is checked — ETP-5272
+// pt.7, see the dedicated describe block below).
 
 describe('getMissingRequiredFields', () => {
   it('reports nothing when every currently-required field is filled', () => {
@@ -125,5 +126,61 @@ describe('getMissingRequiredFields', () => {
   it('handles a completely missing identification object without throwing', () => {
     const missing = getMissingRequiredFields(2026, 'T2', undefined);
     expect(missing.map(f => f.id)).toEqual(['tipo_declaracion']);
+  });
+});
+
+// ── getMissingRequiredFields — fecha_concurso (ETP-5272 pt.7) ────────────────
+// `fecha_concurso` became `required: true` (still gated by
+// `visibleWhen: { field: 'concurso', equals: true }`) so a blank bankruptcy
+// date can never reach `applyIdentParams`'s ConcursoDate formatting — AEAT
+// throws @AEAT303_Bad_Bankruptcy_Statement_Date_Format@ server-side otherwise.
+describe('getMissingRequiredFields — fecha_concurso (ETP-5272 pt.7)', () => {
+  it('reports fecha_concurso as missing when concurso is checked and the date is blank', () => {
+    const missing = getMissingRequiredFields(2026, 'T2', { tipo_declaracion: 'I', concurso: true });
+    expect(missing.map(f => f.id)).toContain('fecha_concurso');
+  });
+
+  it('does not report fecha_concurso when concurso is unchecked, even with no date set', () => {
+    const missing = getMissingRequiredFields(2026, 'T2', { tipo_declaracion: 'I', concurso: false });
+    expect(missing.map(f => f.id)).not.toContain('fecha_concurso');
+  });
+
+  it('does not report fecha_concurso when concurso is simply absent (undefined)', () => {
+    const missing = getMissingRequiredFields(2026, 'T2', { tipo_declaracion: 'I' });
+    expect(missing.map(f => f.id)).not.toContain('fecha_concurso');
+  });
+
+  it('treats a filled fecha_concurso as satisfying the requirement', () => {
+    const missing = getMissingRequiredFields(2026, 'T2', {
+      tipo_declaracion: 'I', concurso: true, fecha_concurso: '2026-03-05',
+    });
+    expect(missing.map(f => f.id)).not.toContain('fecha_concurso');
+  });
+
+  it('does not treat an empty-string fecha_concurso as filled', () => {
+    const missing = getMissingRequiredFields(2026, 'T2', {
+      tipo_declaracion: 'I', concurso: true, fecha_concurso: '',
+    });
+    expect(missing.map(f => f.id)).toContain('fecha_concurso');
+  });
+
+  it('reports both concurso and rectificativa-gated required fields together when both branches are visible and blank', () => {
+    const missing = getMissingRequiredFields(2026, 'T2', {
+      tipo_declaracion: 'D', concurso: true,
+    });
+    expect(missing.map(f => f.id).sort()).toEqual(['bank_iban', 'fecha_concurso']);
+  });
+
+  // A pre-2025 patched year (_2024_IDENTIFICACION_FIELDS) carries the exact
+  // same `required: true` + `visibleWhen` pairing on fecha_concurso as BASE —
+  // this must hold consistently across the year-patch chain, not just 2026.
+  it('applies the same fecha_concurso requirement on a pre-2025 patched year (2022)', () => {
+    const missingBlank = getMissingRequiredFields(2022, 'T2', { tipo_declaracion: 'I', concurso: true });
+    expect(missingBlank.map(f => f.id)).toContain('fecha_concurso');
+
+    const missingFilled = getMissingRequiredFields(2022, 'T2', {
+      tipo_declaracion: 'I', concurso: true, fecha_concurso: '2022-06-01',
+    });
+    expect(missingFilled.map(f => f.id)).not.toContain('fecha_concurso');
   });
 });

@@ -273,8 +273,33 @@ export function bumpFieldGeneration(key, fieldGenerationRef) {
   fieldGenerationRef.current[key] = (fieldGenerationRef.current[key] || 0) + 1;
 }
 
+/**
+ * True when `key` is the declared destination of a one-way cascade from the window's own
+ * document date, and that document date is what just triggered the callout.
+ *
+ * ETP-5273. `accountingDate` (AD column `DateAcct`) is not an independent field that merely
+ * happens to receive a collateral update: classic Etendo registers a callout on the document
+ * date column itself whose entire job is to copy it across — `SE_Invoice_AccountingDate` on
+ * `C_Invoice.DateInvoiced` (reached through `SifInvoiceOperationDateCallout`) and
+ * `SL_InOut_AccountingDate` on `M_InOut.MovementDate`. Classic re-applies that copy on EVERY
+ * change of the document date, including after the user has edited the accounting date by hand,
+ * so one manual edit must not grant the field permanent immunity — which is exactly what the
+ * user-touched guard in {@link applyCalloutFieldUpdates} would otherwise do, since
+ * `userTouchedRef` is only ever cleared on a record change.
+ *
+ * The opposite direction needs no exemption and keeps none: the callout registered on `DateAcct`
+ * is `SE_Invoice_TaxDate`, which writes `Taxdate` and never the document date.
+ *
+ * Driven by the window's declared `documentDateField`, so this covers every document window
+ * without naming any of them — `invoiceDate` for invoices, `orderDate` for orders,
+ * `movementDate` for shipments and receipts.
+ */
+export function isDocumentDateCascadeTarget(key, triggerField, documentDateField) {
+  return key === 'accountingDate' && !!documentDateField && triggerField === documentDateField;
+}
+
 export function applyCalloutFieldUpdates(updates, ctx) {
-  const { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs, dispatchSnapshot, fieldGenerationRef } = ctx;
+  const { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs, dispatchSnapshot, fieldGenerationRef, documentDateField } = ctx;
   for (const [key, entry] of Object.entries(updates)) {
     // Discard responses that arrived after a newer edit/dispatch already
     // moved this field on — see isStaleCalloutResponse. Checked BEFORE the
@@ -294,7 +319,13 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     // coming from a callout triggered by a different field. The trigger field
     // itself always wins (it was just changed by the user) — as long as the
     // response is not stale per the check above.
-    if (key !== triggerField && userTouchedRef.current.has(key) && userHasValue) {
+    //
+    // ETP-5273: a declared document-date cascade target is exempt — see
+    // isDocumentDateCascadeTarget. It is not collateral damage from an unrelated
+    // field's callout, it is the whole purpose of the document date's own callout,
+    // and classic re-applies it on every change.
+    if (key !== triggerField && userTouchedRef.current.has(key) && userHasValue
+        && !isDocumentDateCascadeTarget(key, triggerField, documentDateField)) {
       continue;
     }
     appliedFields.set(key, entry.value);
@@ -928,22 +959,32 @@ export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
     children: hook.children,
     // ETP-4999 — matches `topbarExtra`'s own `onRefresh` exactly (DetailView.jsx),
     // so an `extraActions` entry can refresh the record after a side-effecting
-    // action (e.g. resend-invitation) the same way a `topbarExtra` component can.
-    // ETP-5278 — { force: true } (added to match topbarExtra's own onRefresh, which
-    // already had it) bypasses the record cache: without it, a still-fresh cache
-    // entry from before the side effect could be served back unchanged, so the UI
-    // never sees the just-completed mutation.
-    // ETP-5278 (follow-up) — invalidateEntityCache() additionally clears the LIST
-    // query's own cache entry, not just this one record. useEntity.js's list-mount
+    // action (e.g. resend-invitation, admin promote/demote) the same way a
+    // `topbarExtra` component can.
+    // ETP-5278 — invalidateEntityCache() clears this entity's cached lists AND
+    // records (useEntity.js's ETP-4563 invalidate). useEntity.js's list-mount
     // effect explicitly reuses a fresh cached list (loadList(false)) rather than
     // always hitting the network, so without this a side effect here (e.g. admin
     // promote/demote, which changes row.defaultRole) can leave the grid showing the
     // pre-mutation row for as long as that cache entry stays within its staleTime —
     // reproducible by acting fast enough to return to the list before it expires,
     // which is exactly what made this easy to miss in slower manual testing.
+    // ETP-5290 — `{ force: true }` on fetchById is REQUIRED, not optional, here:
+    // without it `fetchById` serves the pre-mutation record straight out of the
+    // in-memory cache for up to `staleTime` (30s) — or indefinitely, if nothing
+    // else reads this id in the meantime — so a just-completed action's toast
+    // fires but the chip/subtab/button the user is looking at never updates until
+    // a full page reload starts with an empty cache. Every sibling `onRefresh` in
+    // DetailView.jsx itself already passes `force: true`; this was the one call
+    // site that didn't. `hook.refresh?.()` additionally force-reloads the
+    // currently-mounted LIST (mirrors `handleProcessSuccess`'s
+    // `invalidateEntityCache(); fetchById(...); refresh();` pattern in
+    // useEntity.js) so the grid row reflects the change too, not just the open
+    // detail form.
     onRefresh: () => {
       hook.invalidateEntityCache?.();
       hook.fetchById?.(data?.id, { force: true });
+      hook.refresh?.();
     },
   }) : extraActions).map((action, i) => (
       action.visible !== false && (

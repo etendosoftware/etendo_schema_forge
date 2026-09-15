@@ -6,7 +6,7 @@ import { getPendingSifTargets, getSifBodyKey } from './sifSending.js';
 import { resolveInvoiceOrgId } from './resolveInvoiceOrgId.js';
 import SifSendingModal from './SifSendingModal.jsx';
 
-export default function SendToSifButton({ data, recordId, apiBaseUrl, status }) {
+export default function SendToSifButton({ data, recordId, apiBaseUrl, status, onSave, isDirty }) {
   const ui = useUI();
   const [modalOpen, setModalOpen] = useState(false);
   const [sentSuccessfully, setSentSuccessfully] = useState(false);
@@ -45,6 +45,8 @@ export default function SendToSifButton({ data, recordId, apiBaseUrl, status }) 
           base={base}
           specName={specName}
           recordId={recordId}
+          onSave={onSave}
+          isDirty={isDirty}
           onClose={() => {
             setModalOpen(false);
             if (sentSuccessfully) {
