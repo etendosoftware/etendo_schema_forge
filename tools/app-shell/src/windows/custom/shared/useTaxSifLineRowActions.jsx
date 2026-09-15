@@ -67,6 +67,15 @@ async function fetchAllTaxPages({ apiFetch, selectorContext, currency, isCancell
       offset,
       ...selectorContext,
       ...(currency ? { currency } : {}),
+      // ETP-5229 — tells InvoiceLineTaxSifSelectorPolicy (com.etendoerp.go) to also append
+      // the rate-component children of any compound/summary tax on this page. The base
+      // selector query (AD_Ref_Table 158's `Parent_Tax_ID IS NULL` SQLWhereClause,
+      // intentional so a user never picks a bare rate-component as a line's tax) permanently
+      // excludes those children — they were NEVER present in this catalog, contrary to the
+      // assumption `resolveEffectiveTaxRow()` below used to rely on. This flag is read ONLY
+      // by that policy; the user-facing InlineSearchCombo picker never sends it, so the live
+      // tax-picker dropdown is unaffected.
+      includeTaxChildren: 'true',
     });
     const taxResponse = await apiFetch(url);
     const data = taxResponse.ok ? await taxResponse.json() : null;
@@ -112,12 +121,23 @@ async function fetchAllTaxPages({ apiFetch, selectorContext, currency, isCancell
  * criterion `pickRegimeChild()` documents (verified against
  * `ETVFAC_ORDER_VFAC_VALIDATION.xml` / `InitialValidator.java` in
  * com.etendoerp.verifactu). The child lives in the SAME `taxById` catalog this hook
- * already fetches in full (see `fetchAllTaxPages` above) — `isSummary`/`parentTaxId`/
+ * fetches (see `fetchAllTaxPages` above) — `isSummary`/`parentTaxId`/
  * `isEquivalentCharge` are enrichment columns added by
- * `InvoiceLineTaxSifSelectorPolicy` (com.etendoerp.go) specifically so this resolves
- * with NO extra network round trip. Falls back to `taxRow` itself when it is not a
- * summary tax, or when the catalog does not resolve to exactly one qualifying child
- * (same "don't guess" fallback `TaxSifModal.jsx` applies).
+ * `InvoiceLineTaxSifSelectorPolicy` (com.etendoerp.go). Falls back to `taxRow` itself
+ * when it is not a summary tax, or when the catalog does not resolve to exactly one
+ * qualifying child (same "don't guess" fallback `TaxSifModal.jsx` applies).
+ *
+ * <p><b>ETP-5229 correction:</b> the child is NEVER naturally present in the base tax
+ * selector response — `AD_Ref_Table` (reference 158, the `C_Tax_ID` column's picker
+ * reference) carries `SQLWhereClause = "C_Tax.Parent_Tax_ID IS NULL"`, which the
+ * server applies to EVERY call of this selector, including this hook's own
+ * `fetchAllTaxPages` catalog fetch — there is no separate "unfiltered" request. That
+ * filter is intentional (a user must never pick a bare rate-component as a line's
+ * tax) and stays in place. `fetchAllTaxPages` now sends `includeTaxChildren=true`,
+ * which tells `InvoiceLineTaxSifSelectorPolicy` to look up and APPEND each summary
+ * tax's children as extra items on the SAME response, so they land in `taxById` here
+ * without a second request and without ever reaching the picker's own search (that
+ * request never sets the flag).
  *
  * @param {object|null|undefined} taxRow enriched tax record/selector item
  * @param {object} taxById the full id -> tax-record catalog this hook maintains
@@ -237,6 +257,12 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
   );
   const [taxById, setTaxById] = useState({});
   const [modalTaxId, setModalTaxId] = useState(null);
+  // ETP-5229 — the invoice/order line's OWN AD_Org_ID (the document's organization, not the
+  // user's current session org), read off the same header record already fetched below to
+  // build the tax selector context. Forwarded to TaxSifModal as `sifContextOrgId` so a save
+  // is keyed off the SAME legal entity InvoiceLineTaxSifSelectorPolicy resolves the badge from
+  // on the read side — see TaxSifOverrideHandler's class doc for the full bug this closes.
+  const [invoiceOrgId, setInvoiceOrgId] = useState(null);
 
   useEffect(() => {
     // Drop the previous record's catalog before (re)fetching: without this, navigating
@@ -244,6 +270,7 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
     // B's fetch resolves (ETP-4888 QA finding). The functional form keeps the already-empty
     // case referentially stable so the common mount path does not schedule a spare render.
     setTaxById((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+    setInvoiceOrgId(null);
     if (!enabled || !apiBaseUrl || !token || !recordId) return undefined;
     let cancelled = false;
 
@@ -259,6 +286,13 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
       // C_BPartner_Location_ID/currency were still missing after the first ETP-4888 fix.
       const headerRecord = headerJson?.response?.data?.[0] ?? null;
       if (cancelled) return;
+      // ETP-5229 — `organization` is the invoice/order header's own AD_Org_ID (see
+      // artifacts/sales-invoice/contract.json's `organization` field), the exact value
+      // `SelectorContextResolver.resolveContextOrganizationId()` reads off "the invoice/order
+      // line's own parent record" on the read side. Captured here (not derived again in
+      // TaxSifModal) so both the badge-completeness check and the save PATCH stay in sync with
+      // the SAME fetch.
+      setInvoiceOrgId(headerRecord?.organization ?? null);
 
       const selectorContext = buildLineSelectorContext({ windowCategory, parentId: recordId, headerRecord });
       // Not part of buildLineSelectorContext (DetailView.jsx also merges it in
@@ -314,6 +348,7 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
       apiBaseUrl={apiBaseUrl}
       token={token}
       targets={targets}
+      sifContextOrgId={invoiceOrgId}
       onClose={() => setModalTaxId(null)}
       onSaved={(updatedTax) => {
         setTaxById((prev) => ({

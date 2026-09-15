@@ -43,6 +43,9 @@ const DRAFT_INVOICE = {
   paymentTerms: 'pt-1',
   paymentMethod: 'pm-1',
   invoiceDate: '2026-05-01',
+  // ETP-5273: accountingDate is now an independent, required header field —
+  // resolveCanAddLines needs it populated too, same reason as `currency` below.
+  accountingDate: '2026-05-01',
   grandTotalAmount: 0,
   // `currency` is a required header field; resolveCanAddLines checks the field
   // value (not the $_identifier), so both must be set or canAddLine stays false
@@ -385,6 +388,9 @@ const PINV_SRC_HEADER = {
   paymentTerms: 'pt-1',
   paymentMethod: 'pm-1',
   invoiceDate: '2026-05-01',
+  // ETP-5273: accountingDate is now an independent, required header field —
+  // resolveCanAddLines needs it populated too, alongside invoiceDate.
+  accountingDate: '2026-05-01',
   grandTotalAmount: 0,
   currency: 'eur-1',
   'currency$_identifier': 'EUR',

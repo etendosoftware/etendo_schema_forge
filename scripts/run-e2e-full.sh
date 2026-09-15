@@ -174,8 +174,12 @@ fi
 
 if [ "$SUITE" != "integration" ]; then
   echo "==> Playwright E2E — mocked specs (${E2E_WORKERS:-4} workers — override with E2E_WORKERS)..."
+  # ETP-5307: --project=mocked --project=mocked-serial (not the bare default, which would
+  # also run onboarding-setup/integration) — mocked-serial is the small, known-contention-
+  # sensitive subset carved out to run at workers=1 while everything else stays parallel.
+  # See MOCKED_SERIAL_SPECS in playwright.config.js for why.
   ( cd "$REPO_DIR/e2e" && CI=true E2E_USE_MOCK=1 BASE_URL="$BASE_URL" \
-      npx playwright test --project=mocked )
+      npx playwright test --project=mocked --project=mocked-serial )
 else
   echo "==> Playwright E2E — mocked specs... SKIPPED (E2E_SUITE=integration)"
 fi

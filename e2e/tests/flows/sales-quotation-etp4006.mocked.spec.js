@@ -247,7 +247,7 @@ async function clearServiceWorkerState(page) {
 
 async function openQuotationConfirmModal(page) {
   await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 8_000 });
-  await expect(page.getByTestId('action-clone')).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByTestId('DocumentSecondaryActions__clone')).toBeVisible({ timeout: 8_000 });
 
   for (let attempt = 0; attempt < 5; attempt++) {
     await page.evaluate(() => {
@@ -275,7 +275,7 @@ test.describe('Sales Quotation — ETP-4006 regressions (mocked)', () => {
     await page.goto(`/sales-quotation/${ORIGINAL_ID}`);
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
-    await page.getByTestId('action-clone').click();
+    await page.getByTestId('DocumentSecondaryActions__clone').click();
 
     await page.getByTestId('action-clone-record').click();
     await expect.poll(() => state.cloneCalls, { timeout: 5_000 }).toBe(1);
