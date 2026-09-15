@@ -148,23 +148,24 @@ function flexSpec(col, idx) {
 // rows always keep them a fixed 32px apart. This calc() expression restores
 // that per-column basis so both layouts match pixel-for-pixel.
 //
-// ETP-5268 follow-up — wrapped in `max(basisPx, calc(...))`. Once every
-// column (not just the hideHeader add-row's) floors at a real minimum, the
-// sum of those minimums can legitimately exceed the viewport — that's the
-// whole point, it's what makes the table overflow and scroll instead of
-// squeezing unreadably thin. But the bare calc() assumes non-negative
-// leftover space: the moment `fixedTotalPx` alone exceeds the container,
-// `(100% - fixedTotalPx)` goes negative and CSS clamps a negative `width` to
-// 0 — live-verified, every grow column vanished to 0px (not "as narrow as
-// the basis", literally gone) the instant the table needed to overflow,
-// which is exactly the narrow-viewport case this whole mechanism exists to
-// handle. `max()` keeps the basis as a hard floor in that case and only
-// switches to the calc() term once there's genuine leftover space to grow
-// into — matching flexbox's own basis-is-a-minimum semantics, which this
-// function's own docstring already promises but the bare calc() didn't keep.
+// Deliberately a bare calc(), not wrapped in max(basisPx, ...): the ONE
+// caller (renderLinesColgroup, hideHeader mode — the InlineLinesPanel add-row
+// companion table) renders inside a wrapper that's forced `overflow-visible`
+// (never `overflow-x-auto` — see linesLayout === 'inlineEditable' in this
+// component's own render body), i.e. by design it's never expected to
+// genuinely run out of room, so the bare calc()'s leftover-space assumption
+// always holds here. (An earlier revision wrapped this in `max()` to guard a
+// DIFFERENT caller — the quick-actions column — against exactly that
+// scenario; that caller no longer uses this function at all, see
+// quickActionsColumnStyle, so the guard moved with it rather than staying
+// here as unneeded complexity jsdom's `cssstyle` can't even represent: it
+// doesn't implement the CSS `max()` function, silently no-oping the whole
+// `width` property when it's used — see linesAddRowColumnAlignment.vitest.jsx
+// and DataTable.etp4603Coverage.vitest.jsx for the read-back tests that rely
+// on this staying a plain calc().)
 export function growColumnWidth(basisPx, fixedTotalPx, growCount) {
   if (!growCount) return undefined;
-  return `max(${basisPx}px, calc((100% - ${fixedTotalPx}px) / ${growCount} + ${basisPx}px))`;
+  return `calc((100% - ${fixedTotalPx}px) / ${growCount} + ${basisPx}px)`;
 }
 import { SelectorInput } from './SelectorInput.jsx';
 import { InlineSearchCombo } from './InlineSearchCombo.jsx';
