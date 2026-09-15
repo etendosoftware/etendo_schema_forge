@@ -70,10 +70,9 @@ const BASE = {
       fields: [
         { id: 'nif',             labelKey: 'fm.ident.nif',             type: 'text',     readOnly: true  },
         { id: 'nombre',          labelKey: 'fm.ident.nombre',          type: 'text',     readOnly: true  },
-        { id: 'dep_aduanero',    labelKey: 'fm.ident.dep_aduanero',    type: 'checkbox', readOnly: false },
         { id: 'redeme',          labelKey: 'fm.ident.redeme',          type: 'checkbox', readOnly: false },
         { id: 'concurso',        labelKey: 'fm.ident.concurso',        type: 'checkbox', readOnly: false },
-        { id: 'fecha_concurso',  labelKey: 'fm.ident.fecha_concurso',  type: 'date',     readOnly: false, visibleWhen: { field: 'concurso', equals: true } },
+        { id: 'fecha_concurso',  labelKey: 'fm.ident.fecha_concurso',  type: 'date',     readOnly: false, required: true, visibleWhen: { field: 'concurso', equals: true } },
         { id: 'postconcursal',   labelKey: 'fm.ident.postconcursal',   type: 'checkbox', readOnly: false, visibleWhen: { field: 'concurso', equals: true } },
         TIPO_DECLARACION_FIELD,
       ],
@@ -243,10 +242,9 @@ const BASE = {
 const _2024_IDENTIFICACION_FIELDS = [
   { id: 'nif',           labelKey: 'fm.ident.nif',           type: 'text',     readOnly: true  },
   { id: 'nombre',        labelKey: 'fm.ident.nombre',        type: 'text',     readOnly: true  },
-  { id: 'dep_foral',     labelKey: 'fm.ident.dep_foral',     type: 'checkbox', readOnly: false },
   { id: 'redeme',        labelKey: 'fm.ident.redeme',        type: 'checkbox', readOnly: false },
   { id: 'concurso',      labelKey: 'fm.ident.concurso',      type: 'checkbox', readOnly: false },
-  { id: 'fecha_concurso', labelKey: 'fm.ident.fecha_concurso', type: 'date',   readOnly: false, visibleWhen: { field: 'concurso', equals: true } },
+  { id: 'fecha_concurso', labelKey: 'fm.ident.fecha_concurso', type: 'date',   readOnly: false, required: true, visibleWhen: { field: 'concurso', equals: true } },
   { id: 'postconcursal', labelKey: 'fm.ident.postconcursal', type: 'checkbox', readOnly: false, visibleWhen: { field: 'concurso', equals: true } },
   TIPO_DECLARACION_FIELD,
 ];
@@ -307,7 +305,6 @@ const _2024_COMPLEMENTARIA_OPS = [
 
 const PATCHES = {
   // 2021: rows 150/153/156 (fractional-rate sub-groups) and 165/168 not yet introduced.
-  //       identificacion: dep_foral replaces dep_aduanero (gasolinas).
   //       info_adicional: box 61 instead of 120/122/123/124 (OSS boxes introduced in later years).
   //       resultado_final bicolumn lacks boxes 108 (otros_ajustes), 109 (devoluciones_at), 111 (rectificacion_importe).
   //       Source: official AEAT Modelo 303 2021 form.
@@ -332,7 +329,6 @@ const PATCHES = {
   ],
 
   // 2022: rows 150/153/156 and 165/168 absent (same as 2021).
-  //       identificacion: dep_foral replaces dep_aduanero (gasolinas).
   //       info_adicional unchanged from BASE (120/122/123/124 present — unlike 2021 which uses box 61).
   //       resultado_final bicolumn lacks boxes 108, 109, 111 (same as 2021).
   //       Source: official AEAT Modelo 303 2022 form.
