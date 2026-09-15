@@ -485,10 +485,29 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
       assert.match(src, /const ibanInvalid = \(iban \|\| ''\)\.trim\(\) !== '' && !isValidIban\(iban\);/);
     });
 
-    it('renders the inline IBAN error (testid + i18n key) only while the IBAN is invalid', () => {
-      assert.match(src, /\{ibanInvalid && \(/);
-      assert.match(src, /data-testid="cp-pis-iban-error"/);
-      assert.match(src, /\{ui\('financeAccountsNewIbanInvalid'\)\}/);
+    // ETP-5177: the IBAN message is no longer conditionally rendered at this call site. It is
+    // handed to ControlWithError, which always reserves the line and only mounts the <p> when the
+    // `error` prop is non-null — so the modal keeps its height when the message appears or clears.
+    // What must stay pinned here is the wiring: the ternary on ibanInvalid, the testid the rest of
+    // the suite asserts on, and the i18n key (never a hardcoded string).
+    it('passes the IBAN message to ControlWithError via the ibanInvalid ternary (testid + i18n key)', () => {
+      assert.match(
+        src,
+        /<ControlWithError\s+error=\{ibanInvalid \? ui\('financeAccountsNewIbanInvalid'\) : null\}\s+testid="cp-pis-iban-error"/,
+      );
+      // The old hand-written conditional <p> must NOT come back — it is what resized the modal.
+      assert.doesNotMatch(src, /\{ibanInvalid && \(/);
+    });
+
+    // ETP-5177: ControlWithError is the single place that reserves the inline-validation line.
+    // The slot div is UNCONDITIONAL (that is the whole fix) while the <p> stays conditional, so
+    // existing "no error" assertions on the original testid keep their meaning.
+    it('ControlWithError always renders the reserved slot and only conditionally the message', () => {
+      assert.match(src, /const FIELD_ERROR_LINE_HEIGHT = 16;/);
+      assert.match(src, /function ControlWithError\(\{ error, testid, children \}\)/);
+      assert.match(src, /data-testid=\{`\$\{testid\}-slot`\}/);
+      assert.match(src, /minHeight: FIELD_ERROR_LINE_HEIGHT/);
+      assert.match(src, /\{error && <p role="alert" style=\{fieldErrorStyle\} data-testid=\{testid\}>\{error\}<\/p>\}/);
     });
   });
 });

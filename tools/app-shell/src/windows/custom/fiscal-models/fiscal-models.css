@@ -686,6 +686,11 @@
   padding: 14px 20px; border-top: 1px solid var(--fm-border-1);
   display: flex; gap: 8px; justify-content: space-between;
 }
+/* ETP-5229 item #10 polish: PresentModal's footer sits right below its two-column
+   card area, which already reads as visually distinct — drop the divider line so
+   the footer only relies on its own padding for separation. Scoped to this one
+   modal (`.fm-present-modal`) so FileGenModal/NewDeclModal keep the rule line. */
+.fm-present-modal .fm-config-modal__footer { border-top: none; }
 
 /* ─── Small action / compare buttons ───────────────────────────────── */
 .fm-btn {

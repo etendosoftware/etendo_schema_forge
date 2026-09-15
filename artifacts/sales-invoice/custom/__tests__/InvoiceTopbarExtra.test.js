@@ -16,7 +16,14 @@ describe('InvoiceTopbarExtra', () => {
   });
 
   it('accepts data, recordId, token, apiBaseUrl, and api props', () => {
-    assert.match(src, /\{\s*data.*recordId.*token.*apiBaseUrl.*api\s*\}/);
+    assert.match(src, /\{\s*data.*recordId.*token.*apiBaseUrl.*api.*\}/);
+  });
+
+  // ETP-5272 follow-up: onSave/isDirty are plumbed straight through from
+  // DetailView (via SalesInvoiceTopbar) down to SendToSifButton/SifSendingModal,
+  // so "Enviar a SIF" can flush pending header edits before sending.
+  it('accepts onSave and isDirty props', () => {
+    assert.match(src, /\{\s*data.*onSave.*isDirty\s*\}/);
   });
 
   // ── Data fetching ──────────────────────────────────────────────────────────
@@ -35,9 +42,13 @@ describe('InvoiceTopbarExtra', () => {
     assert.match(src, /documentStatus.*===.*'DR'/);
   });
 
-  it('shows only the send button for draft invoices', () => {
+  // ETP-5260 — the Send button itself (SendDocumentButton) moved out to the
+  // topbarSecondary slot (SalesInvoiceSecondaryActions, gated on isCompleted —
+  // see that component's own test). This component still detects draft status
+  // for its own early-return branch (no payment badge / no SIF button while DR).
+  it('detects draft status but no longer renders a SendDocumentButton itself', () => {
     assert.match(src, /isDraft/);
-    assert.match(src, /SendDocumentButton/);
+    assert.doesNotMatch(src, /SendDocumentButton/);
   });
 
   // ── Installment classification ─────────────────────────────────────────────
@@ -181,25 +192,22 @@ describe('InvoiceTopbarExtra', () => {
     assert.match(src, /apiBaseUrl=\{apiBaseUrl\}/);
   });
 
-  // ETP-4717 (Pair 2 — P2): the Send button must NOT be available while the
-  // invoice is still Draft (DR) — only once it is Completed (CO). The current
-  // early-return `if (isDraft) { ... }` block renders a SendDocumentButton,
-  // which is the bug.
-  describe('Send button visibility gated by document status (ETP-4717)', () => {
-    it('does NOT render the Send button in the Draft (isDraft) early-return block', () => {
-      const draftBlockMatch = src.match(/if\s*\(isDraft\)\s*\{\s*return\s*\(([\s\S]*?)\);\s*\}/);
-      assert.ok(draftBlockMatch, 'expected an `if (isDraft) { return (...); }` block in the source');
-      assert.doesNotMatch(
-        draftBlockMatch[1],
-        /<SendDocumentButton/,
-        'the Draft early-return block must not render SendDocumentButton — Send must only be ' +
-          'available once the invoice is Completed (CO)',
-      );
-    });
+  // ETP-4717 (Pair 2 — P2), relocated by ETP-5260: the Send button must NOT be
+  // available while the invoice is still Draft (DR) — only once it is
+  // Completed (CO). That gate now lives in SalesInvoiceSecondaryActions
+  // (`showSend={isCompleted}`, gated purely on documentStatus === 'CO', which
+  // is never true for a draft) — see
+  // tools/app-shell/src/windows/custom/sales-invoice/__tests__/SalesInvoiceSecondaryActions.test.js.
+  // This component (InvoiceTopbarExtra) has no SendDocumentButton to gate any
+  // more, in either branch — confirmed above ("detects draft status but no
+  // longer renders a SendDocumentButton itself").
 
-    it('still renders a SendDocumentButton once the invoice is Completed (existing behavior, must not regress)', () => {
-      const afterDraftBlock = src.slice(src.indexOf('if (isCompleted && isCreditInstrument)'));
-      assert.match(afterDraftBlock, /<SendDocumentButton/);
-    });
+  // ETP-5272 follow-up: SendToSifButton must receive the SAME onSave/isDirty
+  // this component received from its own parent — no re-deriving them here.
+  it('forwards onSave and isDirty to SendToSifButton unchanged', () => {
+    const sendToSifBlockMatch = src.match(/<SendToSifButton\b[\s\S]*?\/>/);
+    assert.ok(sendToSifBlockMatch, 'expected a <SendToSifButton ... /> element in the source');
+    assert.match(sendToSifBlockMatch[0], /onSave=\{onSave\}/);
+    assert.match(sendToSifBlockMatch[0], /isDirty=\{isDirty\}/);
   });
 });
