@@ -64,7 +64,7 @@ loses its authority.
 | `2026-09-14-schema-understates-required-fields.md` | **IMP-40** (registered 2026-09-15) · partially **IMP-34**, **IMP-36** | IMP-34 covers a required **parent FK** omitted from `view:"create"`; IMP-36 covers a field missing from `metadata.unresolvedFields`. The `orderDate`-on-lines instance stays with those two. The `invoiceAddress` instance — a required **non-FK** field omitted from `view:"create"` — is covered by neither, and is what IMP-40 tracks |
 | `2026-09-14-vector-search-targets-are-undiscoverable.md` | **IMP-41** (registered 2026-09-15) · adjacent **IMP-5**, **IMP-17**, **IMP-9** | |
 | `2026-09-14-product-lookup-has-no-partial-text-search.md` | **IMP-42** (registered 2026-09-15) · adjacent **IMP-3**, **IMP-8** | |
-| `2026-09-14-businesspartner-selector-wildcard-returns-empty.md` | **IMP-38** (registered 2026-09-15) · adjacent **IMP-8** | |
+| `2026-09-14-businesspartner-selector-wildcard-returns-empty.md` | ~~**IMP-38**~~ **withdrawn 2026-09-15** · the surviving documentation gap is **IMP-43** · adjacent **IMP-8** | **The wildcard item is retracted — see §4/B3.** Its UI test failed when finally run: `*` returns nothing in the Etendo GO UI either, so it is a broken probe, not a defect. IMP-38 stays in the registry as `🗄️ withdrawn` (numbers are never recycled). What survives is that the `query` parameter never says what it matches, registered as **IMP-43** (P3) |
 | `2026-09-14-no-discoverable-default-customer.md` | **none, and deliberately so** | **Not confirmed as a defect** — see §5. Not a candidate for anything until the check in §5 is done |
 
 Adjacency is noted so the developer reads the neighbouring investigation first (`docs/mcp-evaluation/imps/IMP-<n>.md`),
@@ -286,16 +286,20 @@ A developer must keep that framing: making the denial go away is not the fix.
 2. An **unknown** target is not reported as a permission denial. It gets the IMP-5-shaped envelope the
    rest of the surface already uses: what was wrong, what is available, what to do next.
 
-*Explicitly not known.*
-- **Whether DB Extended is installed, or has any search target configured in this tenant.** Not
-  checked. It may be entirely legitimate that no target exists here — in which case the *denial* is
-  correct and only the message and the undiscoverability are the defect. **Check this first**; it does
-  not invalidate the item (both branches lead to the same two requirements above), but it tells the
-  developer whether they can test the happy path at all.
-- Whether a correctly-named key succeeds for this role. **No valid key was ever found** — which is the
-  finding.
-- Whether the 403 is emitted by the MCP layer or propagated from DB Extended. This decides where the
-  envelope has to be applied.
+*Explicitly not known — **all three resolved 2026-09-15**, before any code was written.*
+- ~~Whether DB Extended is installed, or has any search target configured in this tenant.~~
+  **Yes to both.** `com.etendoerp.db.extended` v1.3.7 is active and `ETARC_VECTOR_SEARCH_TARGET`
+  carries active rows at `AD_Client_ID = 0`. Not the "nothing configured" branch; the happy path is
+  testable.
+- ~~Whether a correctly-named key succeeds for this role.~~ **Keys known:** `contact`, `product`,
+  `purchase-invoice`, `sales-invoice`. `contact` and `product` were added by the user on 2026-09-15,
+  after the run — so the probes' guesses were genuinely absent keys at measurement time.
+- ~~Whether the 403 is emitted by the MCP layer or propagated from DB Extended.~~ **Emitted by Go**,
+  in `NeoVectorSearchEndpoint.handle`. The envelope belongs in Go.
+
+*One claim of the finding is retracted.* It stated that *a search-target key is not a spec name*.
+Three of the four **are** spec names. They are not guaranteed to be, and nothing states the
+relationship — that is the real gap — but the wording would have misdirected the fix.
 
 ### B2 — products cannot be looked up by partial name
 
@@ -328,12 +332,18 @@ selector endpoint. Either satisfies it; this plan does not choose, because of th
   before implementing.**
 - Whether the same limitation applies to other selectors or only to product.
 
-### B3 — the `*` wildcard returns fewer results than no filter at all
+### B3 — ~~the `*` wildcard returns fewer results than no filter at all~~ · **RETRACTED 2026-09-15 — nothing to fix**
 
 **Evidence:** `mcp-tests/findings/2026-09-14-businesspartner-selector-wildcard-returns-empty.md`
-**Registry:** **IMP-38**, registered 2026-09-15. Adjacent: **IMP-8**.
+(annotated in place on 2026-09-15 with the retraction)
+**Registry:** ~~**IMP-38**~~ → **🗄️ withdrawn 2026-09-15**. The surviving documentation gap is
+**IMP-43** (P3). Adjacent: **IMP-8**.
 
-*What happens.* On `neo_selectors(businessPartner)`:
+> **Do not implement this item.** The pre-check it demanded below was run and it refuted the finding.
+> There is no defect here and no code to write. The item is kept, per this document's own convention
+> of recording a correction rather than erasing an error.
+
+*What was measured, and still holds.* On `neo_selectors(businessPartner)`:
 
 | Call | Result |
 |---|---|
@@ -341,32 +351,56 @@ selector endpoint. Either satisfies it; this plan does not choose, because of th
 | `query: ""` | real partners |
 | no `query` | real partners |
 
-`*` is Etendo's own search convention and the UI selectors accept it. Here it does not expand — it
-returns **strictly less** than the empty string.
+*What was concluded from it, and does not hold.* ~~`*` is Etendo's own search convention and the UI
+selectors accept it. Here it does not expand — it returns **strictly less** than the empty string,
+and an agent that reasons "let me list everything with the wildcard" concludes the tenant has no
+customers and abandons the task (the probe failed in 2 of 3 runs for this reason alone).~~
 
-*Why an empty answer is worse than an error.* An empty result is a *meaningful* answer: it says
-*there is nothing*. An agent that reasons "let me list everything with the wildcard" concludes the
-tenant has no customers and abandons the task — which is what happened: **the probe failed in 2 of 3
-runs for this reason alone**, while the data was there the whole time. An unsupported wildcard that
-errored would cost one retry; one that answers `[]` costs the task.
+**Refuted on three independent grounds:**
 
-*Not part of this item.* `query: "default"` also returns empty, and that is **correct** — no partner is
-named "default". An earlier reading of the run folded it into the defect; it is not part of it. (The
-*separate* question of what a "default customer" is lives in §5.)
+1. **The UI does the same thing.** Observed 2026-09-15 by the user, directly in the Etendo GO UI:
+   typing `*` in the Business Partner selector returns nothing. The MCP matches the UI, so the
+   MCP-vs-UI gap the item claimed does not exist.
+2. **A selector narrows a list; listing everything is what the entity's own list verb is for.**
+   Independent of any measurement: asking a selector to expand a wildcard asks it to do a job that is
+   not its own. `neo_list` is that job, and an omitted `query` is the selector's own way of saying
+   *no narrowing yet*. A supported `*` would have been a design error, not a feature.
+3. **The server never advertised a wildcard.** A grep of `com.etendoerp.go` finds no wildcard
+   convention in any MCP tool description, input schema or doc. The only description the parameter
+   has is `"Search query to filter selector values"` (`ToolRegistry.java:716`) — and *filter* is the
+   correct word. The convention came from the agent's general ERP knowledge, not from the contract.
 
-*UI test (D22).* **Passes.** The data exists and is visible to the same role and client — proved by the
-unfiltered call returning it, and by the OKAY run creating an order with one of those partners.
+*Not part of this item, and unchanged.* `query: "default"` also returns empty, and that is **correct**
+— no partner is named "default". (The separate question of what a "default customer" is lives in §5,
+still unresolved and still not a defect claim.)
 
-*What a fix must achieve.* `*` either expands (matching the UI convention and returning at least what
-the empty query returns) or fails loudly enough that an agent retries. What it must never do is return
-a smaller, confident, wrong answer.
+*What does survive, and it is the whole of the remaining work.* The `query` parameter says that it
+filters and nothing else: an agent cannot tell what the value is matched against, how (substring,
+prefix, exact, token), whether the match is case- or accent-sensitive, or what omitting it does. With
+no stated semantics, guessing is the only strategy — and a guess is what produced this false alarm.
+Registered as **IMP-43** at P3: nothing is broken and no task is blocked.
 
-*Explicitly not known.*
-- **The UI behaviour was not observed directly.** The claim rests on the data being reachable with the
-  same credentials and role. One minute of manual checking would harden it — do that before writing
-  code, because it is the cheapest possible confirmation.
-- Whether other selectors (`product`, `warehouse`, …) share the behaviour, or whether it is specific to
-  `businessPartner`.
+*What a fix for IMP-43 must achieve.* The parameter's real matching behaviour is stated **on the MCP
+surface itself** — the tool's input-schema description, plus the `docs` topic that covers selectors —
+so an agent can choose a query string from the contract alone instead of by experiment. **This plan
+deliberately does not state what the matching rules are**; they are being established against the
+code on the `com.etendoerp.go` side, and writing a guessed answer here would repeat the error this
+retraction exists to undo.
+
+*Pre-check status.*
+
+- ~~**The UI behaviour was not observed directly.** One minute of manual checking would harden it —
+  do that before writing code, because it is the cheapest possible confirmation.~~ **DONE
+  2026-09-15. Answer: `*` returns nothing in the UI either.** The check did not harden the finding;
+  it retired it. This is the single most valuable minute spent on the batch.
+- ~~Whether other selectors (`product`, `warehouse`, …) share the behaviour.~~ **Moot as a defect
+  question:** if `*` is not a wildcard anywhere, every selector is expected to answer the same way.
+
+*Consequence for the batch, recorded here because it is visible only when the items are read
+together:* **this batch no longer has a P1.** The registry's own note points at **IMP-42** (§4/B2) as
+the strongest candidate for re-pricing — it produced a wrong sales order — but re-prioritising is a
+`/mcp-comparison` measurement and is not done in this plan, which carries no priority at all (§0).
+
 
 ---
 
@@ -444,4 +478,8 @@ was written. Nothing is assumed about its contents.
   rather than guessing.
 - **Does not duplicate the findings.** Run ids, verbatim requests and verbatim responses stay in
   `mcp-tests/findings/`.
+- **Does not erase a retracted item.** §4/B3 was refuted on 2026-09-15 and is kept in place, struck
+  and annotated, with the check that refuted it and its answer. A work order that quietly deletes the
+  item it got wrong teaches the next reader nothing; one that records the correction teaches them the
+  cheapest check in the batch.
 
