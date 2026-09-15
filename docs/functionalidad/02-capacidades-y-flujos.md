@@ -224,18 +224,18 @@ Nota importante: `docs/feature-flags.md` (sección "tenant upgrade flow") y `doc
   1. Si falta `requestId`/token/nombre de tenant → error `upgradeCheckoutCreationFailed`, se detiene.
   2. `phase='running'`.
   3. Loop de polling: hasta **60 intentos, 1 por segundo** (~60s tope) llamando `GET /sws/go/checkout/sessions/{requestId}` hasta que `status !== 'pending'`.
-  4. Backend busca `CheckoutPaymentRegistry.find(requestId, accountEmail)` — solo devuelve `{status:"paid"}` si un **webhook previo** ya registró ese par `(requestId, email)` exacto; si no, `{status:"pending"}`.
+  4. Backend consulta `CheckoutRequestStore.isPaidFor(requestId, accountEmail, null)` — solo devuelve `{status:"paid"}` si la fila `ETGO_CHECKOUT_REQUEST` de ese par `(requestId, email)` exacto ya está en `PAID` o posterior (la avanza un **webhook previo**); si no, `{status:"pending"}`.
   5. Si el loop termina sin `status==='paid'` → error "Checkout payment is not confirmed", vuelve a `phase='form'`.
   6. Si pagado → corre el aprovisionamiento (mismo `POST /sws/go/onboarding` NDJSON de CAP-ONB-03), enviando el `requestId` de Stripe como `paymentToken`.
   7. Éxito → limpia `sessionStorage`, resetea la URL, `phase='success'`.
 - **Variantes / errores observables:**
-  - **[Ambigüedad] Ventana de polling dura (60s), sin reintento posterior.** Si el webhook de Stripe llega después de esos 60s, `CheckoutPaymentRegistry` puede marcar "paid" un instante más tarde, pero la UI ya reportó fallo y no hay forma de "volver más tarde" salvo reenviar todo el formulario de checkout de nuevo. No cubierto por ningún test.
+  - **[Ambigüedad] Ventana de polling dura (60s), sin reintento posterior.** Si el webhook de Stripe llega después de esos 60s, el backend igual marca la fila como `PAID` un instante más tarde (y ese estado ahora persiste, ETP-5045), pero la UI ya reportó fallo y no hay forma de "volver más tarde" salvo reenviar todo el formulario de checkout de nuevo. No cubierto por ningún test.
   - [Hecho] El estado de pago solo tiene dos valores posibles: `"pending"` o `"paid"` — no existe `expired`/`cancelled`/`failed` en el backend, un modelo de estados más chico que lo que describía el PRD original.
 - **Resultado esperado:** El aprovisionamiento solo arranca después de que el **backend** (no el redirect del navegador) considera el pago confirmado.
-- **Reglas / permisos implicados:** `CheckoutPaymentRegistry.find` está scopeado por `accountEmail` — otra cuenta pidiendo el mismo `requestId` recibe `null`.
-- **Datos / entidades tocadas:** Ninguna nueva en DB (solo lookup en memoria — ver hueco transversal en `03-reglas-estados-y-validaciones.md`).
-- **Evidencia:** `UpgradePage.jsx:258-315`; `lib/upgrade/api.js:42-53`; `EtendoGoJwtServlet.java:335-349`; `CheckoutPaymentRegistry.java:52-57`.
-- **Huecos abiertos:** ver arriba (ventana de 60s) y §Checkout en `03-reglas-estados-y-validaciones.md`.
+- **Reglas / permisos implicados:** `CheckoutRequestStore.find` está scopeado por `accountEmail` — otra cuenta pidiendo el mismo `requestId` recibe `null`, y el endpoint responde `pending` (nunca 404) para no revelar nada.
+- **Datos / entidades tocadas:** Lectura de `ETGO_CHECKOUT_REQUEST` (la fila la escribió CAP-CHK-02 y la avanzó a `PAID` CAP-CHK-04). Sin estado en memoria.
+- **Evidencia:** `UpgradePage.jsx:258-315`; `lib/upgrade/api.js:42-53`; `EtendoGoJwtServlet.java:424-452` (`handleCheckoutStatus`); `CheckoutRequestStore.java:180-241` (`find`, `isPaidFor`).
+- **Huecos abiertos:** ver arriba (ventana de 60s). El hueco de no-persistencia quedó cerrado en ETP-5045 — ver §Checkout en `03-reglas-estados-y-validaciones.md`.
 
 ## CAP-CHK-04 — Webhook de Stripe confirma el pago server-side
 
@@ -248,18 +248,20 @@ Nota importante: `docs/feature-flags.md` (sección "tenant upgrade flow") y `doc
   1. Lee el body crudo completo.
   2. `CheckoutWebhookVerifier.verify(...)`: parsea `t=…,v1=…` del header `Stripe-Signature`, computa HMAC-SHA256, compara, rechaza si el timestamp tiene más de 300s de diferencia.
   3. Firma inválida → **HTTP 400 `INVALID_CHECKOUT_SIGNATURE`**.
-  4. `CheckoutPaymentRegistry.claimEvent(eventId)` (dedup por id de evento de Stripe) — evento ya reclamado → responde `200` sin reprocesar.
-  5. Para los 2 tipos de evento reconocidos, extrae `metadata.request_id/account_email/client_name` y llama `recordPaid(...)`.
-  6. Siempre responde `200 {"received":true}` en evento reconocido/ignorable, o `400 INVALID_CHECKOUT_PAYLOAD` en error de parseo.
+  4. Payload sin `id` o sin `type` → **HTTP 400 `INVALID_CHECKOUT_PAYLOAD`** (`CheckoutWebhookProcessor.evaluate()`), antes de tocar la DB.
+  5. `BillingEventStore.claim(eventId, type, request_id, resumen)` inserta una fila `RECEIVED` en `ETGO_BILLING_EVENT`; el constraint único sobre `EVENT_ID` es el gate de idempotencia. Evento ya reclamado (`RECEIVED`/`APPLIED`/`IGNORED`) → `DUPLICATE_COUNT+1` y responde `200 {"received":true}` sin reprocesar — también si hubo un reinicio de Tomcat entre ambas entregas. Una fila `FAILED` se vuelve a reclamar (se procesa como nueva).
+  6. Para los 2 tipos de evento reconocidos con `metadata.request_id` + `account_email`, `applyCheckoutEvent` llama `CheckoutRequestStore.recordPaid(...)` (captura también `customer`/`subscription` de Stripe) y marca la fila del evento `APPLIED`. Otro tipo de evento → `IGNORED` ("unhandled event type"); falta metadata → `IGNORED` ("missing correlation metadata"). En ambos casos responde `200 {"received":true}`.
+  7. Si el handler lanza `RuntimeException` → la fila queda `FAILED` con el motivo y responde **HTTP 500 `CHECKOUT_WEBHOOK_FAILED`**, para que Stripe reintente y la siguiente entrega re-reclame el evento.
 - **Variantes / errores observables:**
-  - **[Hecho] `CheckoutWebhookProcessor` (la clase con tests dedicados) es código muerto en producción** — el servlet reimplementa la misma lógica de verificación+dedup inline, sin usar esa clase. Sus tests no son una guardia de regresión para el comportamiento real.
-  - **[Inferencia] Un evento con `id` vacío/ausente podría ser ACKeado en silencio como 200** (tratado como "duplicado") en vez de rechazado como `INVALID_PAYLOAD`, a diferencia de lo que el código *testeado* (pero no usado) haría. Sin test que cubra este caso exacto contra el servlet real.
+  - **[Hecho] `CheckoutWebhookProcessor` ya es el camino de producción (ETP-5045)** — el servlet dejó de inlinear verificación+dedup; `handleCheckoutWebhook` llama `evaluate()` y sus tests sí son guardia de regresión del comportamiento real. `CheckoutWebhookVerifier` no cambió.
+  - **[Hecho] Un evento con `id` vacío/ausente responde `400 INVALID_CHECKOUT_PAYLOAD`**, nunca 200 silencioso, y no escribe fila (la verificación y el parseo van antes del store).
+  - **[Hecho] Un `request_id` desconocido para esta instancia** queda como fila `APPLIED` sin `ETGO_CHECKOUT_REQUEST_ID` y con error en el log; no marca nada como pagado. `APPLIED` significa "el handler corrió", no "una solicitud cambió de estado".
   - **[Inferencia] Riesgo de fragilidad de firma con bytes no-ASCII** — el body se lee como `String` vía `Reader` (charset del contenedor) y luego se re-codifica a UTF-8 para el HMAC; si el charset del reader difiere de UTF-8 (falta `charset` en el `Content-Type` de Stripe), un `client_name` con tilde/ñ podría hacer fallar la verificación de firma. No confirmado contra un evento real de Stripe.
-- **Resultado esperado:** `CheckoutPaymentRegistry.recordPaid` es el **único** lugar que pasa un request de "pending" a "paid" — el redirect del navegador solo nunca lo hace.
-- **Reglas / permisos implicados:** Sin auth por token — la firma HMAC ES la autenticación.
-- **Datos / entidades tocadas:** Mapas en memoria de proceso `CheckoutPaymentRegistry.PAYMENTS`/`EVENTS` (no persistidos — ver hueco transversal).
-- **Evidencia:** `EtendoGoJwtServlet.java:351-385`; `CheckoutWebhookVerifier.java`; `CheckoutPaymentRegistry.java:28-44`.
-- **Huecos abiertos:** los 3 marcados [Hecho]/[Inferencia] arriba, más el hueco transversal de no-persistencia (ver `03-reglas-estados-y-validaciones.md`).
+- **Resultado esperado:** `CheckoutRequestStore.recordPaid` es el **único** lugar que pasa una solicitud a `PAID` — el redirect del navegador solo nunca lo hace. Cada evento de Stripe queda auditado exactamente una vez en `ETGO_BILLING_EVENT` con su resultado (`RECEIVED → APPLIED | IGNORED | FAILED`), `PROCESSED_AT` first-write-wins, contador de duplicados, el `REQUEST_ID` crudo y, si la solicitud existe, la FK a ella.
+- **Reglas / permisos implicados:** Sin auth por token — la firma HMAC ES la autenticación. Nunca se persiste el payload crudo ni datos de tarjeta: `PAYLOAD_SUMMARY` es una allow-list (`BillingEventStore.summarize`).
+- **Datos / entidades tocadas:** `ETGO_BILLING_EVENT` (una fila por `event_id`), `ETGO_CHECKOUT_REQUEST` (avanza a `PAID`, guarda `stripe_customer`/`stripe_subscription`). Ambas visibles en las ventanas Classic de solo lectura **Checkout Request** (pestaña hija **Billing Event**) y **Billing Event**.
+- **Evidencia:** `EtendoGoJwtServlet.java:454-491` (`handleCheckoutWebhook`), `:498-519` (`applyCheckoutEvent`); `CheckoutWebhookProcessor.java` (`evaluate`); `CheckoutWebhookVerifier.java`; `BillingEventStore.java:123-146` (`claim`), `:174-181` (`markFailed`), `:196-224` (`summarize`), `:278-296` (`reclaimFailed`); `CheckoutRequestStore.java:140-178` (`recordPaid`); `BillingEventStoreIntegrationTest.java`, `CheckoutWebhookProcessorTest.java`.
+- **Huecos abiertos:** el de charset marcado [Inferencia] arriba. No existe test de servlet para el mapeo HTTP del webhook (cubierto por la corrida manual de `docs/stripe-local-testing.md` §4/§7). El hueco de no-persistencia quedó cerrado en ETP-5045.
 
 ## CAP-CHK-05 — Paywall backend + marcar tenant como "productive"
 
@@ -273,12 +275,12 @@ Nota importante: `docs/feature-flags.md` (sección "tenant upgrade flow") y `doc
   2. Flag encendido: calcula si la cuenta ya posee un tenant, si está reanudando uno propio, si es conversión de demo.
   3. `TenantPaywallService.decide(...)`:
      - Sin tenants propios, o reanudando (no-conversión) → `ALLOWED`.
-     - Si no: primero chequea `CheckoutPaymentRegistry.isPaidFor(paymentToken, accountEmail, clientName)` (true solo si un webhook ya registró ese par) → `ALLOWED`.
+     - Si no: primero chequea `CheckoutRequestStore.isPaidFor(paymentToken, accountEmail, clientName)` (true solo si la fila `ETGO_CHECKOUT_REQUEST` de ese par está en `PAID` o posterior y el `clientName` coincide, `CheckoutRequestStore.java:211-241`) → `ALLOWED`.
      - **Si no, cae al fallback `MockPaymentService.validate(paymentToken)`** — `APPROVED` si el token matchea `^mock-paid-[0-9a-f]+$`, `MISSING_TOKEN` si vacío, si no `DECLINED`.
   4. Bloqueado → **HTTP 402** `{"error":"payment_required"}` — no arranca el aprovisionamiento.
   5. Permitido y es upgrade pago: `TenantPlanService.markProductive(...)` escribe un `AD_Preference` (`ETGO_TenantPlan="productive"`) dentro de la misma transacción de onboarding — **best-effort**: traga su propia excepción, así que un tenant pago puede terminar sin marcar y leerse luego como `"free"`.
 - **Variantes / errores observables:**
-  - **[Hecho] El backdoor de pago simulado sigue completamente vivo en el backend.** `MockPaymentService`/el regex `^mock-paid-[0-9a-f]+$` son el fallback en `TenantPaywallService.decide()` cada vez que `CheckoutPaymentRegistry.isPaidFor` da `false`. Como `paymentToken` es un string plano que el caller manda en el JSON de `POST /sws/go/onboarding`, y ese endpoint no exige haber pasado antes por `/checkout/sessions`, **cualquier cuenta autenticada puede armar a mano `{"paymentToken":"mock-paid-deadbeef", ...}` y pasar el paywall sin tocar Stripe**. Confirmado por test unitario que sigue asertando esto como comportamiento esperado.
+  - **[Superado en ETP-4966] El backdoor de pago simulado.** `MockPaymentService`/el regex `^mock-paid-[0-9a-f]+$` eran el fallback en `TenantPaywallService.decide()` cada vez que el registro de pagos daba `false`; cualquier cuenta autenticada podía armar a mano `{"paymentToken":"mock-paid-deadbeef", ...}` y pasar el paywall sin tocar Stripe. `MockPaymentService` fue eliminado: hoy `CheckoutRequestStore.isPaidFor` es la única confirmación posible; token ausente → 402 `PAYMENT_REQUIRED`, cualquier otro valor no confirmado → 402 `PAYMENT_DECLINED`. Ver `com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md`.
   - [Hecho] `markProductive` fallando se loguea, no se surface — un tenant pago puede quedar mal marcado sin que nadie se entere en el momento.
 - **Resultado esperado:** El aprovisionamiento procede (cadena NDJSON sin cambios) y, solo para un upgrade genuinamente pago, el `AD_Preference(ETGO_TenantPlan)` del tenant nuevo/convertido queda en `productive`.
 - **Reglas / permisos implicados:** El paywall es a nivel de **cuenta**, no de rol de Etendo — cualquier cuenta, sin importar su rol AD, puede intentar un upgrade; el único gate es cantidad de tenants propios + token de pago.

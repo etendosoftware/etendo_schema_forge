@@ -22,8 +22,8 @@ All of it is implemented on this branch:
 
 - `POST <base>/sws/go/checkout/sessions` creates a hosted session.
 - `GET  <base>/sws/go/checkout/sessions/{requestId}` reports `pending` or `paid`.
-- `POST <base>/sws/go/checkout/webhook` verifies the Stripe signature, de-duplicates by event id,
-  and records the payment.
+- `POST <base>/sws/go/checkout/webhook` verifies the Stripe signature, de-duplicates by event id
+  durably (`ETGO_BILLING_EVENT`, see below), and records the payment.
 - Server-side Price ID and subscription/payment mode configuration.
 - Paid onboarding resume: the `requestId` is passed back as `paymentToken` on the onboarding call.
 
@@ -63,6 +63,47 @@ Consequences to plan around:
   the expression from `AD_COLUMN.SQLLOGIC`. `SELECT derived_status` fails. It reports `DONE`,
   `IN_FLIGHT`, `ABANDONED`, `EXPIRED` or `STALLED`; **`STALLED` on a `PAID` row is the one that
   should page someone** -- charged, not provisioned.
+
+### Billing events are durable (ETP-5045)
+
+Webhook de-duplication is no longer an in-memory map. Every delivery that passes the signature
+check is claimed in `ETGO_BILLING_EVENT`, one row per Stripe event id; the unique constraint on
+`EVENT_ID` is the idempotency gate, so a retry after a Tomcat restart or on a second node arrives
+as a duplicate instead of being applied again:
+
+```sql
+select event_id, event_type, event_result, request_id, etgo_checkout_request_id,
+       duplicate_count, received_at
+  from etgo_billing_event order by received_at desc;
+```
+
+Reading a row:
+
+- `event_result` moves `RECEIVED -> APPLIED | IGNORED | FAILED`. `RECEIVED` is the claim itself;
+  `APPLIED` means the handler ran to completion (`recordPaid` was called); `IGNORED` means the
+  event was acknowledged on purpose (`failure_reason` says why: `unhandled event type` or
+  `missing correlation metadata`); `FAILED` means the handler threw and the webhook answered
+  `500 CHECKOUT_WEBHOOK_FAILED`, so Stripe retries.
+- `APPLIED` and `IGNORED` are once-only. **`FAILED` is re-claimable:** the next delivery of the
+  same event id flips the row back to `RECEIVED` and is processed as new, which is how Stripe's own
+  retry schedule repairs a transient failure without anyone touching the database.
+- A redelivery never adds a row. It increments `duplicate_count`, sets `last_duplicate_at` and
+  answers `200 {"received":true}`; `event_result`, `received_at` and `processed_at` stay as they
+  were (`processed_at` is first-write-wins).
+- `request_id` is always the raw `metadata.request_id`. `etgo_checkout_request_id` is the link to
+  `ETGO_CHECKOUT_REQUEST`, resolved at claim time and only when that request exists -- so an
+  invented `--request-id` produces an `APPLIED` row with an empty link and an error in the log,
+  and nothing marked as paid.
+- `payload_summary` is an allow-list (`data.object.{id,customer,subscription,livemode,
+  payment_status,amount_total,currency,mode}` + `metadata.request_id`, at most 2000 chars). It
+  never holds the raw body or card data; if it ever does, that is a bug to report.
+- A delivery rejected with `400` (bad signature, bad payload) writes **no row** -- verification
+  runs before the store is consulted.
+
+Both tables are readable as System Administrator without DB access: the Classic windows
+**Checkout Request** (its **Billing Event** child tab lists the events linked through
+`etgo_checkout_request_id`) and **Billing Event** (standalone, every event including those with no
+link). Both are read-only.
 
 ## 2. Base URL and ports
 
@@ -212,9 +253,12 @@ tools/stripe-webhook-simulate.sh --request-id <requestId> --status
 # SF-STRIPE-LOCAL-05 — rejected signature (expects HTTP 400)
 tools/stripe-webhook-simulate.sh --invalid-signature
 
-# SF-STRIPE-LOCAL-06 — duplicate delivery: same event id twice, no restart in between
-tools/stripe-webhook-simulate.sh --event-id evt_dup_001 --request-id req_dup_001
-tools/stripe-webhook-simulate.sh --event-id evt_dup_001 --request-id req_dup_001
+# SF-STRIPE-LOCAL-06 — duplicate delivery: same event id twice, WITH a Tomcat restart in between
+# (use the $RID from the stub flow above so the row links to a real checkout request)
+tools/stripe-webhook-simulate.sh --event-id evt_restart_001 --request-id "$RID" --status   # paid
+#   ... restart Tomcat ...
+tools/stripe-webhook-simulate.sh --event-id evt_restart_001 --request-id "$RID" --status   # 200 {"received":true}, still paid
+# Then: one etgo_billing_event row for evt_restart_001, event_result=APPLIED, duplicate_count=1 (§1)
 
 # Outside the 300s tolerance window (expects HTTP 400)
 tools/stripe-webhook-simulate.sh --skew -400
@@ -360,8 +404,11 @@ Stripe Checkout.
 The payment does not need to be repeated; replay the existing Test Mode event.
 
 1. Start `stripe listen` and configure the backend with that listener's `whsec_...` (§3), then
-   redeploy. Note that the redeploy/restart wipes the in-memory registry, so always resend *after*
-   the backend is back up.
+   redeploy and resend once the backend is back up. The restart loses nothing: a claim already
+   recorded in `etgo_billing_event` survives it, so a resend of an event that was **already
+   applied** is counted as a duplicate rather than reprocessed (§1). That also makes
+   `stripe events resend <evt_id>` the Test Mode equivalent of SF-STRIPE-LOCAL-06: resend an event
+   that was applied before the restart and check `duplicate_count` went up by one.
 2. Confirm the event carries the correlation metadata:
 
    ```bash
@@ -394,7 +441,8 @@ depends on the configured mode:
 - `payment`: checkout completion plus payment-intent/charge lifecycle events.
 
 Record: the Stripe event id, the HTTP status returned by the local webhook, whether it was accepted
-once or de-duplicated, and the resulting tenant/payment state in Etendo.
+once or de-duplicated (the `etgo_billing_event` row's `event_result` and `duplicate_count`, §1),
+and the resulting tenant/payment state in Etendo.
 
 ## 7. Functional test matrix
 
@@ -404,10 +452,11 @@ once or de-duplicated, and the resulting tenant/payment state in Etendo.
 | SF-STRIPE-LOCAL-02 | Missing secret/Price/webhook configuration | unset a property, redeploy | `503 CHECKOUT_NOT_CONFIGURED` | P0 |
 | SF-STRIPE-LOCAL-03 | Successful `4242` payment | Test Mode (§5) | Stripe accepts payment and emits webhook | P0 |
 | SF-STRIPE-LOCAL-04 | Declined `4000...0002` payment | Test Mode (§5) | Checkout declines; tenant remains unprovisioned | P0 |
-| SF-STRIPE-LOCAL-05 | Invalid webhook signature | `tools/stripe-webhook-simulate.sh --invalid-signature` | `400 INVALID_CHECKOUT_SIGNATURE`; no side effect | P0 |
-| SF-STRIPE-LOCAL-06 | Duplicate webhook event | same `--event-id` twice, no restart between | Second delivery acknowledged, not reprocessed; one tenant maximum | P0 |
+| SF-STRIPE-LOCAL-05 | Invalid webhook signature | `tools/stripe-webhook-simulate.sh --invalid-signature` | `400 INVALID_CHECKOUT_SIGNATURE`; no side effect, **no `etgo_billing_event` row** | P0 |
+| SF-STRIPE-LOCAL-06 | Duplicate webhook event across a restart | same `--event-id` twice, **with a Tomcat restart in between** (§4); Test Mode: `stripe events resend <evt_id>` | Second delivery answers `200 {"received":true}` and is not reprocessed; status still `paid`; one tenant maximum | P0 |
 | SF-STRIPE-LOCAL-07 | Account polls another account's requestId | `--status` with a mismatched `--email` | `200 {"status":"pending"}`; no information disclosure | P1 |
 | SF-STRIPE-LOCAL-08 | First free onboarding | onboarding without `paymentToken` | Existing free flow unchanged | P1 |
+| SF-STRIPE-LOCAL-09 | Billing event audit trail survives the restart | after SF-STRIPE-LOCAL-06, run the §1 query and open the Classic windows as System Administrator | Exactly one `etgo_billing_event` row for the event id: `event_result=APPLIED`, `duplicate_count=1`, `etgo_checkout_request_id` set; the row is visible in **Billing Event** and in the **Billing Event** child tab of the matching **Checkout Request**; both read-only; `payload_summary` shows no card data | P0 |
 
 ## 8. Troubleshooting
 
@@ -425,8 +474,14 @@ exported into a shell that did not start the JVM — put them in `Openbravo.prop
 ### Checkout succeeded but status stays `pending`
 
 One of: `stripe listen` was not running; its `whsec_...` differs from the configured secret; the
-event lacked `metadata.request_id`/`metadata.account_email`; the polling account email differs from
-the recorded one; or Tomcat restarted and cleared the in-memory registry. Resend the event (§5).
+event lacked `metadata.request_id`/`metadata.account_email`; or the polling account email differs
+from the recorded one. The `etgo_billing_event` row (§1) says which: **no row** means the delivery
+never passed the signature check (or never arrived); `IGNORED` with `missing correlation metadata`
+means the metadata was absent; `FAILED` means the handler threw and Stripe is retrying (check the
+log for `CHECKOUT_WEBHOOK_FAILED`); `APPLIED` with an empty `etgo_checkout_request_id` means the
+request id was unknown to this instance; `APPLIED` with the link set but `pending` means the
+polling account does not match. A Tomcat restart is no longer a cause. Resend the event (§5) only
+when there is no row or the row is `FAILED`; resending an `APPLIED` event just counts a duplicate.
 
 ### CORS error in the browser
 
@@ -454,4 +509,7 @@ Confirm the Dashboard is in Test Mode, the session was created with the `sk_test
 - Checkout Session response with `requestId` and hosted URL (redact tokens).
 - Screenshot or export of the successful/declined Test Mode payment.
 - Stripe event ids and local webhook HTTP responses.
+- The `etgo_billing_event` row state per event id (§1 query: `event_result`, `duplicate_count`,
+  `etgo_checkout_request_id`), captured after the restart replay, plus a screenshot of the row in
+  the Classic **Billing Event** window or the **Checkout Request** child tab.
 - Etendo tenant/payment state before and after each scenario.

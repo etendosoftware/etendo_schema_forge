@@ -32,7 +32,7 @@ Verified against `epic/ETP-3504` on 2026-08-27. Paths are relative to each repo 
 
 ### 2.2 Blocking gaps
 
-**Payment state is volatile.** `CheckoutPaymentRegistry.java:18-19` holds both the payment correlation and the webhook de-duplication in two static `ConcurrentHashMap` instances. Reproducible consequences:
+**Payment state is volatile.** *(Closed by ETP-5045: the correlation now lives in `ETGO_CHECKOUT_REQUEST` and the de-duplication in `ETGO_BILLING_EVENT`; `CheckoutPaymentRegistry` is deleted. The analysis below is kept as the record of why.)* `CheckoutPaymentRegistry.java:18-19` holds both the payment correlation and the webhook de-duplication in two static `ConcurrentHashMap` instances. Reproducible consequences:
 
 - A Tomcat restart between the webhook and the customer returning from Checkout erases the payment. The frontend poll at `tools/app-shell/src/pages/UpgradePage.jsx:289-293` (60 attempts, 1 second apart) never sees `paid`; the account was charged and no tenant exists.
 - With more than one application node, the webhook lands on one node while the poll and the onboarding request go to another.
@@ -47,7 +47,7 @@ This also fails the shipped PRD, which requires the request id to be an idempote
 
 **There is no reconciliation.** If the customer closes the tab or the 60-second poll expires, the payment is orphaned permanently. Nothing re-reads it.
 
-**The durable seam exists and is disconnected.** `CheckoutWebhookProcessor` defines an `EventStore` interface for exactly this purpose, but it is dead code — referenced only by its own test — because the servlet inlines verification and event claiming at `EtendoGoJwtServlet.java:412-446`.
+**The durable seam exists and is disconnected.** *(Closed by ETP-5045: `BillingEventStore` implements `EventStore` over `ETGO_BILLING_EVENT` and `handleCheckoutWebhook` runs through `CheckoutWebhookProcessor.evaluate()`.)* `CheckoutWebhookProcessor` defines an `EventStore` interface for exactly this purpose, but it is dead code — referenced only by its own test — because the servlet inlines verification and event claiming at `EtendoGoJwtServlet.java:412-446`.
 
 ### 2.3 Precedents in the module that these designs reuse
 
@@ -352,7 +352,7 @@ Every tenant carrying the `productive` preference gets a subscription row on a g
 - **Period-scoping proof:** a test whose period boundary does not coincide with a month boundary.
 - **Vitest** for UI surfaces, queried by `data-testid` per repo convention.
 - **Local webhook testing** is documented in [`stripe-local-testing.md`](../stripe-local-testing.md); `make test-stripe-local` (`Makefile:120` → `tools/stripe-local-smoke.sh`) starts forwarding and smoke-tests the endpoint. Two caveats:
-  - That guide's §7 defers the idempotency replay step until "the durable webhook route is available" and §9 notes a 404 on the webhook path is expected until then. Those notes anticipate the durable-state task; closing it unblocks them.
+  - That guide's §7 defers the idempotency replay step until "the durable webhook route is available" and §9 notes a 404 on the webhook path is expected until then. Those notes anticipate the durable-state task; closing it unblocks them. *(Closed by ETP-5045: the guide's SF-STRIPE-LOCAL-06 is now the replay across a Tomcat restart and SF-STRIPE-LOCAL-09 checks the `etgo_billing_event` row and the Classic windows.)*
   - The smoke path produces only `checkout.session.completed`. Lifecycle events must be produced deliberately with `stripe trigger customer.subscription.deleted`, `stripe trigger invoice.payment_failed` and equivalents, or from the Test Mode dashboard. Extending the guide with a lifecycle section is part of the lifecycle task.
   - The `whsec_` belongs to the specific `stripe listen` session that printed it, and a running JVM does not pick up environment variables exported after it started. These two together account for most lost debugging time.
 
