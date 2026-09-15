@@ -30,21 +30,61 @@ import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { NUMERIC_FIELD_TYPES, TWO_DECIMAL_FIELD_TYPES } from '@/lib/numericFieldTypes.js';
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 
-// ETP-5268 — reserved width for the quick-actions cell when it is NOT allowed
-// to float (overlapLastColumn === false): enough for the widest pill (Edit +
-// Clone + Email + kebab "More" + Delete = 5 × 32px buttons, gap-0.5 between,
-// px-3 container padding ≈ 192px), rounded up for breathing room. RowQuickActions
-// itself stays `position: absolute` in every case (never affects row height —
-// see its own className comment), so this cell needs an explicit width class:
-// an unconstrained cell would collapse to ~0 since absolutely positioned
-// content contributes nothing to intrinsic sizing.
-// MUST be `w-` (width), not `min-w-` — the table always renders with
-// `table-layout: fixed` (getTableContainerStyle() below), and fixed layout
-// ignores `min-width` on cells entirely; only an explicit `width` (and only
-// on the header row, which is what actually governs column width in fixed
-// layout — verified live: the header's class controls the rendered width,
-// the body cell's is irrelevant here) has any effect.
-const QUICK_ACTIONS_RESERVED_WIDTH_CLASS = 'w-[200px]';
+// ETP-5268 — pixel geometry of one canonical RowQuickActions button, mirrored
+// from its own className (`h-10 px-3` container, `gap-0.5` between `h-8 w-8`
+// buttons) — used below to size the reserved column to the buttons THIS
+// window's `rowQuickActions` will actually render, not a fixed worst-case.
+const QUICK_ACTIONS_BUTTON_PX = 32;
+const QUICK_ACTIONS_GAP_PX = 2;
+const QUICK_ACTIONS_CONTAINER_PADDING_PX = 24; // px-3 on both sides
+
+// ETP-5268 — counts the canonical buttons RowQuickActions will render for
+// ANY row of this window, from the same `rowQuickActions` config DataTable
+// already has — mirrors RowQuickActions' own gates (readOnly hides Edit/
+// Clone/Delete; Email needs documentPreview or an enabled sendDocument;
+// the kebab needs a non-empty menuActions array, or a function since we
+// can't know statically whether it'll produce items for the current row).
+// Deliberately ignores the remaining PER-ROW gates (`visibleWhen`,
+// `hideDeleteWhenComplete`/`statusField` on Delete) — those can only ever
+// HIDE a button on a given row, never add one beyond this static maximum,
+// and every row in one column must share a single width, so sizing off the
+// per-window maximum is the safe (if occasionally slightly generous) choice.
+function estimateQuickActionsButtonCount(rowQuickActions) {
+  if (!rowQuickActions) return 0;
+  const readOnly = !!rowQuickActions.readOnly;
+  const hasEmail = rowQuickActions.sendDocument
+    ? rowQuickActions.sendDocument.enabled !== false
+    : !!rowQuickActions.documentPreview;
+  const hasMenu = typeof rowQuickActions.menuActions === 'function'
+    || (Array.isArray(rowQuickActions.menuActions) && rowQuickActions.menuActions.length > 0);
+  return (readOnly ? 0 : 1) // Edit
+    + (!readOnly && rowQuickActions.onClone ? 1 : 0) // Clone
+    + (hasEmail ? 1 : 0)
+    + (hasMenu ? 1 : 0)
+    + (!readOnly && !rowQuickActions.hideDeleteButton ? 1 : 0); // Delete
+}
+
+// ETP-5268 — reserved width (px) for the quick-actions cell when it is NOT
+// allowed to float (overlapLastColumn === false): exactly enough for THIS
+// window's own button count, not a fixed worst-case guess — a window with
+// only Edit + Delete (2 buttons) no longer reserves room for 5. Returns 0
+// when nothing will render (isQuickActionsEnabled already skips the column
+// entirely in that case, via estimateQuickActionsButtonCount agreeing there
+// are 0 buttons — see its readOnly-with-no-email/menu branch there).
+// RowQuickActions itself stays `position: absolute` in every case (never
+// affects row height — see its own className comment), so this cell needs an
+// explicit CSS `width` regardless: an unconstrained cell would collapse to
+// ~0 since absolutely positioned content contributes nothing to intrinsic
+// sizing. Applied as an inline style (not a Tailwind class) because the
+// value is computed per-window, not one of a small static set Tailwind's
+// build-time scanner could pick up from a literal class string.
+function quickActionsReservedWidthPx(rowQuickActions) {
+  const count = estimateQuickActionsButtonCount(rowQuickActions);
+  if (count <= 0) return 0;
+  return count * QUICK_ACTIONS_BUTTON_PX
+    + Math.max(count - 1, 0) * QUICK_ACTIONS_GAP_PX
+    + QUICK_ACTIONS_CONTAINER_PADDING_PX;
+}
 
 // ETP-5268 — tracks whether a scroll container currently overflows
 // horizontally and, if so, whether it has been scrolled all the way to its
@@ -121,14 +161,21 @@ function isTrailingHoverEnabled(rowQuickActions, overlapLastColumn) {
 }
 
 // ETP-5268 — shared by both the quick-actions <TableCell> (TableDataRow) and
-// its matching <TableHead> (DataTable): narrow/pinned so the (always-absolute)
+// its matching <TableHead> (DataTable): narrow/pinned (`w-10`, a Tailwind
+// class — fine, it's one of a small static set) so the (always-absolute)
 // pill deliberately overflows onto the previous column when floating is
-// allowed, or given real reserved width so the pill fits inside its own cell
-// otherwise. See QUICK_ACTIONS_RESERVED_WIDTH_CLASS above for why that must
-// stay a `width` class, not `min-width`.
+// allowed; the non-floating width instead comes from the `style` prop built
+// by quickActionsColumnStyle() below, since it's a per-window computed value.
 function quickActionsColumnClassName(overlapLastColumn, extraClassName) {
-  const widthClass = overlapLastColumn ? 'w-10' : QUICK_ACTIONS_RESERVED_WIDTH_CLASS;
-  return extraClassName ? `${widthClass} ${extraClassName}` : widthClass;
+  const widthClass = overlapLastColumn ? 'w-10' : '';
+  return [widthClass, extraClassName].filter(Boolean).join(' ');
+}
+
+// ETP-5268 — see quickActionsColumnClassName just above: this is its `style`
+// counterpart, carrying the one piece of per-window-computed geometry
+// (quickActionsReservedWidthPx) that can't be a static Tailwind class.
+function quickActionsColumnStyle(overlapLastColumn, reservedWidthPx) {
+  return overlapLastColumn ? undefined : { width: `${reservedWidthPx}px` };
 }
 
 // Extracts grow flag and basis (px) from a columnFlex() shorthand string.
@@ -2030,6 +2077,7 @@ function TableDataRow({
         // otherwise clip.
         (<TableCell
           className={quickActionsColumnClassName(overlapLastColumn, 'px-2 relative overflow-visible')}
+          style={quickActionsColumnStyle(overlapLastColumn, quickActionsReservedWidthPx(rowQuickActions))}
           onClick={(e) => e.stopPropagation()}
           data-testid="TableCell__eb5261">
           <RowQuickActions
@@ -2613,6 +2661,7 @@ export function DataTable({
               {quickActionsEnabled && (
                 <TableHead
                   className={quickActionsColumnClassName(overlapLastColumn, 'px-2')}
+                  style={quickActionsColumnStyle(overlapLastColumn, quickActionsReservedWidthPx(rowQuickActions))}
                   aria-hidden="true"
                   data-testid="TableHead__eb5261" />
               )}
