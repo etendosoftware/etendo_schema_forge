@@ -720,20 +720,40 @@ unprotected — cover all three entry points for any field-independence guard of
 
 Real implementations: `AbstractInvoiceHeaderHandler#blockCalloutCurrencyUpdate` (ETP-4029, currency).
 
-**⚠️ Superseded (2026-07-17):** the `accountingDate` implementation of this pattern —
-`AbstractInvoiceHeaderHandler#afterCallout` (shared by `SalesInvoiceHeaderHandler` and
-`PurchaseInvoiceHeaderHandler`), `GoodsReceiptHeaderHandler#afterCallout`,
-`GoodsShipmentHeaderHandler#afterCallout`, and the `accountingDate` call into
-`NeoDefaultsCascadeHelper#processCalloutForField` — is being removed. ETP-4531 was redefined from
-"keep document date and accounting date independent" to "unify them: show a single visible date,
-write it to both columns internally." The native classic-AD callout cascade
-(`SE_Invoice_AccountingDate` / `SL_InOut_AccountingDate`) is now intentionally left unguarded so it
-flows through on save. See `docs/feedback.md` ("[2026-07-17] ETP-4531 — Scope redefinition...") and
-the frontend-side change (`accountingDate` → `visibility: system` in
-`sales-invoice`/`purchase-invoice`/`goods-shipment`/`goods-receipt`/`purchase-order`'s
-`decisions.json`, in `etendo_schema_forge`). The generic `blockCalloutFieldUpdate` helper and its
-three-entry-point coverage requirement above remain valid guidance for the next field-independence
-guard (e.g., currency, ETP-4029) — only the `accountingDate` application of it is obsolete.
+**⚠️ Removed entirely (2026-07-17, ETP-4531; confirmed permanent 2026-09-11, ETP-5273):**
+`NeoHandlerUtils.blockCalloutFieldUpdate` — the `accountingDate` application of this pattern —
+no longer exists in `com.etendoerp.go` (zero call sites; `AbstractInvoiceHeaderHandler#afterCallout`,
+`GoodsReceiptHeaderHandler#afterCallout`, `GoodsShipmentHeaderHandler#afterCallout`, and the
+`accountingDate` call into `NeoDefaultsCascadeHelper#processCalloutForField` were all cleaned up).
+Do not attempt to restore it for `accountingDate`.
+
+ETP-5273 (2026-09-11) re-examined the guarded design for Sales Invoice and Purchase Invoice and
+found it does **not** match Classic: with the guard in place, changing the document date does
+**not** propagate to the accounting date, whereas Classic propagates it live. ETP-5273 makes
+`accountingDate` independent and editable again on these two windows (`decisions.json →
+visibility: "editable"`, `readOnlyLogic: "@Posted@='Y'"`), but deliberately lets the native
+classic-AD callout cascade (`SifInvoiceOperationDateCallout` / `SE_Invoice_AccountingDate` on
+`C_Invoice.DateInvoiced`) run **unguarded** — invoice date → accounting date is a one-way sync,
+by design, on every write. What keeps a manually-edited `accountingDate` from being clobbered is
+not a callout guard but `NeoHandlerUtils.mirrorAccountingDateOnCreate(context, sourceField,
+targetField)`: it only defaults `accountingDate` from the document date on `POST` (create) when
+the client sent no explicit value, and is a no-op on every `PUT`/`PATCH`. See
+`docs/generated-custom-windows/{sales-invoice,purchase-invoice}.md` for the full field-level
+behavior and `docs/feedback.md` for the change history across both scope reversals.
+
+`sales-order`, `purchase-order`, `goods-shipment`, and `goods-receipt` are **unaffected** by
+ETP-5273 — their `accountingDate` stays `visibility: system` (hidden, unified with the document
+date on every write) via their own `mirrorAccountingDate(NeoContext)` wrapper around the
+unconditional `NeoHandlerUtils.mirrorFieldValue`. Do not migrate them to
+`mirrorAccountingDateOnCreate` without first making their accounting date visible — see the
+javadoc on `mirrorAccountingDateOnCreate` for the explicit warning.
+
+The generic `blockCalloutFieldUpdate` helper (used today only by
+`blockCalloutCurrencyUpdate`/ETP-4029) and its three-entry-point coverage requirement above remain
+valid guidance for a genuine field-independence guard — a field whose value must stay decoupled
+from another field's callout in **both** directions. `accountingDate` on invoices is no longer
+such a case: only one direction (document date → accounting date) exists at all, and it is meant
+to run.
 
 ### Pre-hook: Intercept Completion to Preserve Classic Hooks/Extension Points
 
