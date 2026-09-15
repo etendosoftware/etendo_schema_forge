@@ -6,7 +6,7 @@
   "scripts": {
     "start:dev": "nest start --watch",
     "build": "nest build",
-    "test": "tsx --test test/**/*.test.ts"
+    "test": "tsx --test 'test/**/*.test.ts'"
   },
   "dependencies": {
     "@etendosoftware/api-gateway-core": "^0.1.0",

@@ -89,10 +89,25 @@ legacy `experimentalDecorators` nor TC39 stage-3) — every `@Injectable()`/`@Co
 (the whole NestJS surface) fails to parse under it. This is unrelated to the app's own runtime,
 which is fine: `nest start`/`nest build` (Task 12+) compile via real `tsc` with decorators enabled,
 unaffected. It only affects how test files for `packages/api-gateway-core` and `gateway` execute —
-both package.json `test` scripts (Task 3, Task 12) now use `tsx --test test/**/*.test.ts` instead.
+both package.json `test` scripts (Task 3, Task 12) now use `tsx --test 'test/**/*.test.ts'` instead.
 Confirmed safe for this plan specifically because no test here goes through Nest's DI container
 (everything is instantiated directly via `new ClassName(...)` in tests) — so `emitDecoratorMetadata`
 correctness was never load-bearing, only decorator-syntax parsing was needed.
+
+**The glob MUST be quoted.** Found while adding a third test subdirectory to `gateway/test/`
+(Task 14 follow-up): `npm test`'s `sh -c` wrapper expands an UNQUOTED `test/**/*.test.ts` itself,
+and POSIX `sh` globbing (no `globstar`) treats `**` as matching one-or-more directory levels —
+never zero. As long as every test file happened to sit at least one directory deep (or, degenerate
+case, the pattern matched nothing and `sh` passed it through unexpanded, letting `tsx`/Node's own
+correct globstar engine take over), this was invisible. The moment a top-level file
+(`test/types.test.ts`, `test/public-api.controller.test.ts`) coexists with any nested one
+(`test/auth/*.test.ts`, `test/openapi/*.test.ts`), `sh` expands to ONLY the nested matches and the
+top-level file is silently dropped from `npm test` — no error, no warning, just a test that stops
+running. This is exactly how `packages/api-gateway-core/test/types.test.ts` went unexercised via
+`npm test` for the entire Part A pass (its own manual `node --test`/`tsx --test <file>` runs during
+Task 3 execution were the only reason it was ever actually green-checked). Fix: single-quote the
+pattern in both `test` scripts — `tsx --test 'test/**/*.test.ts'` — so `sh` never touches it and
+Node's own `--test` glob engine (correct globstar semantics) does the matching instead.
 
 ---
 
@@ -390,7 +405,7 @@ git commit -m "Feature ETP-5345: Add generate-public-api-schema resolver"
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "tsx --test test/**/*.test.ts"
+    "test": "tsx --test 'test/**/*.test.ts'"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.0",
@@ -1193,7 +1208,7 @@ git commit -m "Feature ETP-5345: Generate v1 public API allowlist artifact"
   "scripts": {
     "start:dev": "nest start --watch",
     "build": "nest build",
-    "test": "tsx --test test/**/*.test.ts"
+    "test": "tsx --test 'test/**/*.test.ts'"
   },
   "dependencies": {
     "@etendosoftware/api-gateway-core": "^0.1.0",
@@ -1227,7 +1242,7 @@ decorator syntax, and this package's controller (Task 13) uses `@Controller()` e
 
 ```
 NEO_BASE_URL=http://localhost:8080/etendo
-GATEWAY_PORT=3300
+GATEWAY_PORT=4300
 ```
 
 - [ ] **Step 4: `src/main.ts`**
@@ -1240,7 +1255,7 @@ import { AppModule } from './app.module.js';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api/v1');
-  await app.listen(process.env.GATEWAY_PORT ?? 3300);
+  await app.listen(process.env.GATEWAY_PORT ?? 4300);
 }
 bootstrap();
 ```
@@ -1260,7 +1275,7 @@ export class AppModule {}
 - [ ] **Step 6: Install and confirm it boots**
 
 Run: `cd gateway && npm install && npm run start:dev`
-Expected: NestJS boot log, "Nest application successfully started", listening on 3300. Stop it
+Expected: NestJS boot log, "Nest application successfully started", listening on 4300. Stop it
 with Ctrl-C once confirmed.
 
 - [ ] **Step 7: Commit**
@@ -1462,7 +1477,7 @@ app.getHttpAdapter().get('/docs', (_req, res) => {
 
 - [ ] **Step 3: Run and verify manually**
 
-Run: `cd gateway && npm run start:dev`, then in a browser open `http://localhost:3300/docs`.
+Run: `cd gateway && npm run start:dev`, then in a browser open `http://localhost:4300/docs`.
 Expected: Scalar renders the API reference page with the `product`/`businessPartner` routes
 listed under `/api/v1/{entityName}`.
 
@@ -1500,7 +1515,7 @@ Run: `cd gateway && NEO_BASE_URL=http://localhost:8080/etendo npm run start:dev`
 - [ ] **Step 4: Call the product list endpoint with the key**
 
 ```bash
-curl -H "Authorization: Bearer <clientId>:<clientSecret>" http://localhost:3300/api/v1/product
+curl -H "Authorization: Bearer <clientId>:<clientSecret>" http://localhost:4300/api/v1/product
 ```
 
 Expected: a JSON array of product records, each containing ONLY `searchKey`, `name`,
@@ -1510,7 +1525,7 @@ NeoServlet's real response contains many more.
 - [ ] **Step 5: Call the businessPartner list endpoint**
 
 ```bash
-curl -H "Authorization: Bearer <clientId>:<clientSecret>" http://localhost:3300/api/v1/businessPartner
+curl -H "Authorization: Bearer <clientId>:<clientSecret>" http://localhost:4300/api/v1/businessPartner
 ```
 
 Expected: records containing ONLY `name`, `searchKey`, `taxId`, `email`, `phone`, `web` — in
@@ -1520,7 +1535,7 @@ never appears anywhere in the response.
 - [ ] **Step 6: Confirm the fail-closed guarantee with an invalid key**
 
 ```bash
-curl -i -H "Authorization: Bearer wrong:wrong" http://localhost:3300/api/v1/product
+curl -i -H "Authorization: Bearer wrong:wrong" http://localhost:4300/api/v1/product
 ```
 
 Expected: `401 Unauthorized`, no product data returned.
