@@ -113,7 +113,12 @@ test.describe('Purchase Order detail — Reactivate in kebab menu follows hasLin
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
     await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 8_000 });
 
-    const moreBtn = page.locator('button').filter({ has: page.locator('svg.lucide-more-vertical, .lucide-ellipsis-vertical') }).first();
+    // The global TopBar renders its own "Más" (favorites/help) button using
+    // the same MoreVertical lucide icon, and it sits earlier in the DOM than
+    // the document-actions kebab — a generic icon-filter locator would grab
+    // the wrong button. `action-more` is the stable, unique test id for the
+    // document-actions kebab (see DetailMoreActionsMenu.jsx).
+    const moreBtn = page.getByTestId('action-more');
     await expect(moreBtn).toBeVisible({ timeout: 5_000 });
     await moreBtn.click();
 
@@ -127,7 +132,10 @@ test.describe('Purchase Order detail — Reactivate in kebab menu follows hasLin
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
     await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 8_000 });
 
-    const moreBtn = page.locator('button').filter({ has: page.locator('svg.lucide-more-vertical, .lucide-ellipsis-vertical') }).first();
+    // See comment above — use the stable document-actions kebab test id,
+    // not a generic MoreVertical icon filter that also matches the
+    // TopBar's "Más" button.
+    const moreBtn = page.getByTestId('action-more');
     const moreBtnVisible = await moreBtn.isVisible({ timeout: 3_000 }).catch(() => false);
 
     if (moreBtnVisible) {
@@ -205,14 +213,17 @@ test.describe('Purchase Order list — bulk-select Reactivate (ETP-5315)', () =>
       await row.locator('td').first().click();
     }
 
-    // Only ONE "Confirmar" button renders for this CO-only selection: the
-    // pre-existing CO-only BulkDocumentAction renders null (no draft row
-    // selected), while PurchaseOrderReactivateBulkAction renders, offering
-    // RE (its own buildReactivateActions never offers CO — see
-    // docs/generated-custom-windows/purchase-order.md "Gap assessment").
-    const confirmButtons = page.getByRole('button', { name: /confirmar|confirm/i });
-    await expect(confirmButtons.first()).toBeVisible({ timeout: 5_000 });
-    await confirmButtons.first().click();
+    // The pre-existing CO-only BulkDocumentAction renders null here (no draft
+    // row selected, nothing for it to offer), so PurchaseOrderReactivateBulkAction
+    // is the ONLY button rendered for this CO-only selection. It no longer
+    // says "Confirmar" — that label collision (two indistinguishable
+    // "Confirmar" buttons for a mixed draft+completed-unlinked selection) was
+    // fixed by giving it its own `reactivateBulk` label key, so it renders as
+    // "Reactivar" / "Reactivate" instead (see
+    // artifacts/purchase-order/custom/PurchaseOrderReactivateBulkAction.jsx).
+    const reactivateButtons = page.getByRole('button', { name: /reactivar|reactivate/i });
+    await expect(reactivateButtons.first()).toBeVisible({ timeout: 5_000 });
+    await reactivateButtons.first().click();
 
     const reOption = page.locator('[data-value="RE"], [value="RE"]');
     const reText = page.locator('text=/reactivar|reactivate/i');
