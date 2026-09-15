@@ -115,14 +115,23 @@ function quickActionsReservedWidthPx(rowQuickActions) {
 //     "sticking" and simply sits in normal flow, sharing the row's ordinary
 //     hover-to-reveal behavior — nothing has to detect or react to this
 //     transition happening.
-// `bg-card` on the cell gives it an opaque background so it visually covers
-// whatever it ends up pinned on top of, instead of superimposing both sets
-// of content — needed because RowQuickActions itself has no background of
-// its own (QUICK_ACTIONS_USE_PILL is off, see quickActionsStyle.js); the
-// narrow floating column this replaces got away without one only because it
-// was the sole thing rendered at that position.
+// The cell itself deliberately carries NO background: it's fully
+// transparent, ALWAYS, so while scrolled mid-way (CP-2) it never paints a
+// visible reserved-width block over whatever it's pinned on top of —
+// live-verified regression ("cuando no estoy al final del scroll horizontal
+// se ve el espacio para la columna final de botones"), from an earlier
+// revision that put `bg-card` here. The opaque cover — and the buttons
+// themselves — come ONLY from RowQuickActions' own pill background, which is
+// sized to just its icons rather than this cell's full reserved width, and
+// already fades in/out with the rest of the pill on row hover (`opacity-0
+// group-hover/row:opacity-100` — see RowQuickActions.jsx's own className
+// comment). So outside of a hover, this column is invisible and whatever
+// data column the sticky positioning happens to be covering shows through
+// normally; on hover, only the pill's own tight bounding box turns opaque
+// ("que se muestren los botones encima de lo que haya al final pero con
+// fondo blanco esa parte no mas").
 function quickActionsColumnClassName(extraClassName) {
-  return ['sticky right-0 z-10 bg-card', extraClassName].filter(Boolean).join(' ');
+  return ['sticky right-0 z-10', extraClassName].filter(Boolean).join(' ');
 }
 
 // ETP-5268 — see quickActionsColumnClassName just above: this is its `style`

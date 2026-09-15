@@ -5,7 +5,6 @@ import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { isDeleteVisibleForRecord, evalRowVisibleWhen } from '@/utils/recordActions.js';
-import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
 
 /**
  * RowQuickActions — hover-revealed action icons overlaid at the end of a list row.
@@ -228,14 +227,28 @@ export default function RowQuickActions({
 
   return (
     <div
-      // Always absolutely positioned — even when the enclosing <td> is given
-      // real reserved width instead of overlapping the previous column
-      // (ETP-5268, see DataTable's `overlapLastColumn`), this MUST stay out of
-      // normal flow: it's `h-10` regardless of hover state (only `opacity`
-      // toggles), so in-flow it would inflate every row's height to fit these
-      // 32-40px icon buttons even while invisible — that regression shipped
-      // and was caught by hand on /contacts before being reverted here.
-      className={`absolute right-3 top-1/2 -translate-y-1/2 flex flex-row items-center justify-center gap-0.5 h-10 px-3 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100 transition-opacity z-10 ${QUICK_ACTIONS_PILL_CLASS}`.trim()}
+      // Always absolutely positioned — this MUST stay out of normal flow:
+      // it's `h-10` regardless of hover state (only `opacity` toggles), so
+      // in-flow it would inflate every row's height to fit these 32-40px
+      // icon buttons even while invisible — that regression shipped and was
+      // caught by hand on /contacts before being reverted here.
+      //
+      // ETP-5268 follow-up — `bg-card rounded-lg shadow-sm ring-1
+      // ring-border/40` here (independent of the shared QUICK_ACTIONS_PILL_CLASS
+      // toggle, which stays off for the rest of this component's history —
+      // InlineLinesPanel's own overlay is unaffected) is load-bearing, not
+      // decorative: the enclosing <td> is fully transparent and `sticky
+      // right-0` (see DataTable's quickActionsColumnClassName) so it never
+      // paints a visible box of its own while scrolled mid-way — without a
+      // background on the pill ITSELF, hovering would show the icons
+      // superimposed directly over whatever column is currently scrolled
+      // underneath, both sets of text readable at once. The pill's own
+      // background — sized to just its icons, not the wider reserved column
+      // — is what makes it cleanly cover only that part instead ("con fondo
+      // blanco esa parte no mas"). Safe to keep unconditional (not gated
+      // behind hover) since the WHOLE pill, background included, already
+      // fades in via `opacity-0 group-hover/row:opacity-100` below.
+      className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-row items-center justify-center gap-0.5 h-10 px-3 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100 transition-opacity z-10 bg-card rounded-lg shadow-sm ring-1 ring-border/40"
       data-testid="row-quick-actions"
       onClick={stop}
     >
