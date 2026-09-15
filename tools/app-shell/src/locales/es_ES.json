@@ -16996,6 +16996,7 @@
     "discard": "Descartar",
     "optional": "opcional",
     "reactivate": "Reactivar",
+    "reactivateBulk": "Reactivar",
     "reactivateOrder": "Reactivar pedido",
     "cannotReactivateLinkedDocs": "No se puede reactivar: el pedido tiene documentos vinculados",
     "bulkRowAlreadyPosted": "Ya está contabilizado",
