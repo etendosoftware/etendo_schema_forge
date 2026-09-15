@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "generatedAt": "2026-09-09T11:18:23.940Z",
-  "updatedAt": "2026-09-09T21:57:21.690Z",
-  "checksum": "cb326c3a095037fe",
+  "updatedAt": "2026-09-15T16:29:52.375Z",
+  "checksum": "e846cd196bb090d4",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -483,6 +483,12 @@
             "validation": {
               "required": true,
               "maxLength": 40
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "searchKey",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -501,6 +507,12 @@
             "validation": {
               "required": true,
               "maxLength": 60
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "name",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -657,6 +669,12 @@
             "section": "principal",
             "validation": {
               "maxLength": 20
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "taxId",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -723,6 +741,12 @@
             "section": "principal",
             "validation": {
               "maxLength": 60
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "web",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -739,6 +763,12 @@
             "section": "principal",
             "validation": {
               "maxLength": 60
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "email",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -755,6 +785,12 @@
             "section": "principal",
             "validation": {
               "maxLength": 60
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "phone",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {

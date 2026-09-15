@@ -217,7 +217,8 @@
           "grid": true,
           "searchable": true,
           "section": "principal",
-          "order": 2
+          "order": 2,
+          "publicApi": { "exposed": true, "name": "name", "type": "passthrough", "handlerId": null }
         },
         "etgoFirstname": {
           "visibility": "editable",
@@ -258,7 +259,8 @@
           "form": false,
           "grid": false,
           "section": "principal",
-          "order": 1
+          "order": 1,
+          "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null }
         },
         "businessPartnerCategory": {
           "visibility": "editable",
@@ -280,7 +282,8 @@
         "taxID": {
           "visibility": "editable",
           "section": "principal",
-          "order": 7
+          "order": 7,
+          "publicApi": { "exposed": true, "name": "taxId", "type": "passthrough", "handlerId": null }
         },
         "oBTIKVIESStatus": {
           "visibility": "readOnly",
@@ -301,7 +304,8 @@
           "label": "Web",
           "section": "principal",
           "order": 9,
-          "inputPrefix": "https://"
+          "inputPrefix": "https://",
+          "publicApi": { "exposed": true, "name": "web", "type": "passthrough", "handlerId": null }
         },
         "etgoEmail": {
           "visibility": "editable",
@@ -309,7 +313,8 @@
           "grid": true,
           "label": "Email",
           "section": "principal",
-          "order": 10
+          "order": 10,
+          "publicApi": { "exposed": true, "name": "email", "type": "passthrough", "handlerId": null }
         },
         "etgoPhone": {
           "visibility": "editable",
@@ -317,7 +322,8 @@
           "grid": true,
           "label": "Phone",
           "section": "principal",
-          "order": 11
+          "order": 11,
+          "publicApi": { "exposed": true, "name": "phone", "type": "passthrough", "handlerId": null }
         },
         "creditLimit": {
           "visibility": "editable",
