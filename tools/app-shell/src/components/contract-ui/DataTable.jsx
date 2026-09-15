@@ -53,19 +53,36 @@ const QUICK_ACTIONS_RESERVED_WIDTH_CLASS = 'w-[200px]';
 // scrollable overflow the user hasn't fully scrolled through yet — never when
 // the table has free space to the right, and never once the user has reached
 // the actual end of the table's content.
-function useHorizontalScrollEdge(containerRef) {
+function useHorizontalScrollEdge() {
   const [state, setState] = useState({ hasOverflow: false, atEnd: false });
+  const cleanupRef = useRef(null);
 
-  useEffect(() => {
-    // `containerRef` points at THIS component's own `overflow-x-auto` wrapper,
-    // but the shared `Table` primitive (components/ui/table.jsx) wraps the
-    // <table> in its OWN `overflow-auto` div one level in — with both ancestors
-    // set to overflow, THAT inner div is the nearest one to the (potentially
-    // too-wide) <table> content, so it's the one the browser actually scrolls;
-    // this outer wrapper's own box never grows past its parent and so never
-    // reports overflow on itself. Measure/listen on the inner div instead.
-    const el = containerRef.current?.firstElementChild;
-    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+  // ETP-5268 — a CALLBACK ref, not `useRef` + `useEffect(…, [containerRef])`.
+  // DataTable early-returns a <TableSkeleton> tree while `loading` (see the
+  // `if (loading) return …` below) — a real backend fetch is virtually never
+  // done by the first render, so THIS wrapper div doesn't exist yet the one
+  // time an object-ref effect (deps: the stable ref object, which never
+  // changes identity) would run. The effect would see `containerRef.current
+  // === null`, bail, and — because its deps never change — never retry once
+  // loading flips to false and the real wrapper mounts: hasOverflow/atEnd
+  // stay stuck at their initial `false` forever, live data or not. A callback
+  // ref instead fires every time this exact DOM node is attached OR detached
+  // (loading→loaded swaps in a structurally different tree, so React mounts
+  // a brand-new node here), so setup reliably reruns against the live node.
+  const containerRef = useCallback((outerEl) => {
+    if (cleanupRef.current) {
+      cleanupRef.current();
+      cleanupRef.current = null;
+    }
+    // The shared `Table` primitive (components/ui/table.jsx) wraps the
+    // <table> in its OWN `overflow-auto` div one level in — with both
+    // ancestors set to overflow, THAT inner div is the nearest one to the
+    // (potentially too-wide) <table> content, so it's the one the browser
+    // actually scrolls; this outer wrapper's own box never grows past its
+    // parent and so never reports overflow on itself. Measure/listen on the
+    // inner div instead.
+    const el = outerEl?.firstElementChild;
+    if (!el || typeof ResizeObserver === 'undefined') return;
 
     const EPSILON = 1;
     const measure = () => {
@@ -82,13 +99,13 @@ function useHorizontalScrollEdge(containerRef) {
     resizeObserver.observe(el);
     if (el.firstElementChild) resizeObserver.observe(el.firstElementChild);
 
-    return () => {
+    cleanupRef.current = () => {
       el.removeEventListener('scroll', measure);
       resizeObserver.disconnect();
     };
-  }, [containerRef]);
+  }, []);
 
-  return state;
+  return { ...state, containerRef };
 }
 
 // ETP-5268 — extracted (rather than inlined as `hasOverflow && !atEnd` in
@@ -2230,9 +2247,6 @@ export function DataTable({
   );
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRows, setSelectedRows] = useState(new Set());
-  // ETP-5268 — the outer `overflow-x-auto` wrapper rendered below; measured by
-  // useHorizontalScrollEdge() to decide whether the row-actions pill may float.
-  const scrollContainerRef = useRef(null);
 
   useEffect(() => {
     if (!clearSelectionTrigger) return;
@@ -2351,8 +2365,8 @@ export function DataTable({
   // edge. With no overflow (e.g. Categoría de Contacto — few columns, free space
   // to the right) or once scrolled to the end, there is no dead space to reclaim,
   // so floating over the last column would only cover real, otherwise-legible data.
-  const { hasOverflow: hasHorizontalScrollOverflow, atEnd: isScrolledToTableEnd } =
-    useHorizontalScrollEdge(scrollContainerRef);
+  const { hasOverflow: hasHorizontalScrollOverflow, atEnd: isScrolledToTableEnd, containerRef: scrollContainerRef } =
+    useHorizontalScrollEdge();
   const overlapLastColumn = shouldOverlapLastColumn(hasHorizontalScrollOverflow, isScrolledToTableEnd);
 
   // ETP-3914 — Mirror InlineLinesPanel: when the quick-actions overlay is enabled
