@@ -78,18 +78,23 @@ vi.mock('../useInvoicePreview.js', () => ({
   useInvoicePreview: vi.fn(),
 }));
 
+// ETP-5229 — a vi.fn (not a plain arrow) so tests can inspect the cutoverDates
+// arg InvoiceGeneralTab forwards from useInvoicePreview's earliestXCutoverDate
+// fields, mirroring the getInvoiceFiscalTargetsMock inspection pattern below.
+const useFiscalStatusMock = vi.fn(() => ({ sii: null, tbai: null, verifactu: null, loading: false }));
 vi.mock('../useFiscalStatus.js', () => ({
-  useFiscalStatus: () => ({ sii: null, tbai: null, verifactu: null, loading: false }),
+  useFiscalStatus: (...args) => useFiscalStatusMock(...args),
 }));
 
 vi.mock('@/windows/custom/fiscal-monitor/FmPrimitives.jsx', () => ({
   StatusPill: ({ estado }) => <span data-testid="status-pill">{estado}</span>,
 }));
 
-// `importActual` keeps `isSifEligibleByDate` real — InvoicePreview.jsx uses it
-// directly for the ETP-5122 date gate — while `getInvoiceFiscalTargets` is
-// replaced with an inspectable mock so ETP-5087 territory-forwarding tests can
-// assert on the args it was called with.
+// `importActual` keeps the rest of the real module intact while
+// `getInvoiceFiscalTargets` is replaced with an inspectable mock so ETP-5087
+// territory-forwarding tests can assert on the args it was called with.
+// ETP-5229 removed InvoicePreview.jsx's own use of `isSifEligibleByDate` /
+// `isVerifactuEligibleByDate` — visibility is decided by `targets.showX` alone.
 const getInvoiceFiscalTargetsMock = vi.fn(() => ({ showSii: false, showTbai: false, showVerifactu: false }));
 vi.mock('../fiscalTargets.js', async () => {
   const actual = await vi.importActual('../fiscalTargets.js');
@@ -160,9 +165,11 @@ const defaultInvoice = {
   'currency$_identifier': 'EUR',
 };
 
-// ETP-5122: far-past adoption dates so pre-existing tests (written before the
-// date gate existed) keep passing without knowing about it. Tests that
-// specifically exercise the gate override these via an explicit hook override.
+// Config adoption-date records. ETP-5229 removed the date gate that used to
+// read these to decide InfoRow visibility (see the fiscal status describes
+// below) — they are kept in the base hook only because useInvoicePreview's
+// real return shape still carries them (other consumers, e.g. sifSending.js's
+// getPendingSifTargets, still legitimately gate NEW sends on these dates).
 const FAR_PAST_ADOPTION = '2000-01-01T00:00:00.000Z';
 
 function baseInvoicePreviewHook(overrides = {}) {
@@ -180,6 +187,11 @@ function baseInvoicePreviewHook(overrides = {}) {
     siiRecord: { fechaAcogidaSII: FAR_PAST_ADOPTION },
     tbaiRecord: { tbaisystemdate: FAR_PAST_ADOPTION },
     verifactuRecord: { inVfactuSystem: FAR_PAST_ADOPTION },
+    // ETP-5229: earliest-ever cutover per system, forwarded into
+    // InvoiceGeneralTab -> useFiscalStatus's cutoverDates arg.
+    earliestSiiCutoverDate: FAR_PAST_ADOPTION,
+    earliestTbaiCutoverDate: FAR_PAST_ADOPTION,
+    earliestVerifactuCutoverDate: FAR_PAST_ADOPTION,
     showPaymentModal: false, setShowPaymentModal: vi.fn(),
     showSendModal: false, sendModalClosing: false, openEmailModal: vi.fn(), closeEmailModal: vi.fn(),
     showSifModal: false, setShowSifModal: vi.fn(),
@@ -303,11 +315,15 @@ describe('InvoicePreview', () => {
     });
   });
 
-  // ETP-5087 + ETP-5122 combined: territory (forwarded from useInvoicePreview's
-  // `territory`) and the per-system adoption date are independent gates — the
-  // component must forward territory to getInvoiceFiscalTargets AND still
-  // apply the date gate on top of whatever targets that returns.
-  describe('fiscal status territory + date gates combined (ETP-5087 + ETP-5122)', () => {
+  // ETP-5087: territory (forwarded from useInvoicePreview's `territory`) is the
+  // ONLY eligibility gate on the TBAI InfoRow's visibility — the org/territory
+  // must offer the system at all. ETP-5229 removed the additional per-system
+  // adoption-date gate that used to sit on top of it: a Bizkaia invoice dated
+  // (or created) before the org's currently-active TBAI config's cutover date
+  // must still show its real status, since Classic never links a sent
+  // invoice's status to any particular fiscal config row (see
+  // useFiscalStatus.js for the full root-cause writeup).
+  describe('fiscal status InfoRow visibility follows targets.showX only, not any date gate (ETP-5087 + ETP-5229)', () => {
     function tbaiInfoRow() {
       const props = SummaryCard.mock.calls.at(-1)[0];
       const rows = (props.children || []).filter(Boolean);
@@ -320,36 +336,42 @@ describe('InvoicePreview', () => {
       expect(getInvoiceFiscalTargetsMock).toHaveBeenCalledWith('purchase-invoice', null, 'BIZKAIA');
     });
 
-    it('hides the TBAI InfoRow when showTbai is true but the invoice predates TBAI adoption', () => {
+    it('shows the TBAI InfoRow for an invoice dated well before any config adoption date, as long as showTbai is true (ETP-5229 regression)', () => {
       getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: false, showTbai: true, showVerifactu: false });
       const oldInvoice = { ...defaultInvoice, invoiceDate: '1999-01-01' };
       useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
         displayInvoice: oldInvoice,
         territory: 'BIZKAIA',
-        tbaiRecord: { tbaisystemdate: '2024-01-01T00:00:00.000Z' },
       }));
       renderInvoicePreview({ specName: 'purchase-invoice', invoice: oldInvoice });
-      expect(tbaiInfoRow()).toBeUndefined();
+      expect(tbaiInfoRow()).toBeTruthy();
     });
 
-    it('shows the TBAI InfoRow when territory qualifies AND the invoice is dated after adoption', () => {
+    it('shows the TBAI InfoRow when territory qualifies, regardless of invoice date', () => {
       getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: false, showTbai: true, showVerifactu: false });
       const newInvoice = { ...defaultInvoice, invoiceDate: '2026-06-15' };
       useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
         displayInvoice: newInvoice,
         territory: 'BIZKAIA',
-        tbaiRecord: { tbaisystemdate: '2024-01-01T00:00:00.000Z' },
       }));
       renderInvoicePreview({ specName: 'purchase-invoice', invoice: newInvoice });
       expect(tbaiInfoRow()).toBeTruthy();
     });
+
+    it('hides the TBAI InfoRow when showTbai is false, even for a recent invoice (target gate still applies)', () => {
+      getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: false });
+      const newInvoice = { ...defaultInvoice, invoiceDate: '2026-06-15' };
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ displayInvoice: newInvoice }));
+      renderInvoicePreview({ specName: 'purchase-invoice', invoice: newInvoice });
+      expect(tbaiInfoRow()).toBeUndefined();
+    });
   });
 
-  // ETP-5122 follow-up: VERI*FACTU gates on the invoice's CREATION timestamp
-  // (`created`), never `invoiceDate` — unlike TBAI/SII, which key off business
-  // dates. This proves the three gates are independent, not accidentally
-  // sharing one date field.
-  describe('VERI*FACTU date gate uses created, not invoiceDate (ETP-5122 follow-up)', () => {
+  // ETP-5229: VERI*FACTU's InfoRow no longer gates on the invoice's creation
+  // timestamp (`created`) vs. inVfactuSystem — only `showVerifactu` decides
+  // visibility. An invoice created/sent under a previous, since-superseded
+  // VERI*FACTU config must keep showing its real persisted status forever.
+  describe('VERI*FACTU InfoRow visibility has no date gate (ETP-5229, was ETP-5122 follow-up)', () => {
     function fiscalInfoRows() {
       const props = SummaryCard.mock.calls.at(-1)[0];
       return (props.children || []).filter((el) => el?.props?.label);
@@ -359,50 +381,141 @@ describe('InvoicePreview', () => {
       return fiscalInfoRows().find((el) => el.props.label === 'invoicePreview.fiscalStatus.verifactu');
     }
 
-    it('hides the VERI*FACTU InfoRow for an invoice created before inVfactuSystem', () => {
+    it('shows the VERI*FACTU InfoRow for an invoice created long before any config adoption date, as long as showVerifactu is true', () => {
       getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: true });
       const oldInvoice = { ...defaultInvoice, created: '1999-01-01T00:00:00.000Z' };
-      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
-        displayInvoice: oldInvoice,
-        verifactuRecord: { inVfactuSystem: '2024-01-01T00:00:00.000Z' },
-      }));
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ displayInvoice: oldInvoice }));
       renderInvoicePreview({ specName: 'sales-invoice', invoice: oldInvoice });
-      expect(vfInfoRow()).toBeUndefined();
+      expect(vfInfoRow()).toBeTruthy();
     });
 
-    it('shows the VERI*FACTU InfoRow for an invoice created after inVfactuSystem', () => {
+    it('shows the VERI*FACTU InfoRow for an invoice created after adoption too (no regression)', () => {
       getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: true });
       const newInvoice = { ...defaultInvoice, created: '2026-07-01T00:00:00.000Z' };
-      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
-        displayInvoice: newInvoice,
-        verifactuRecord: { inVfactuSystem: '2024-01-01T00:00:00.000Z' },
-      }));
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ displayInvoice: newInvoice }));
       renderInvoicePreview({ specName: 'sales-invoice', invoice: newInvoice });
       expect(vfInfoRow()).toBeTruthy();
     });
 
-    // The exact case ETP-5122 asked to demonstrate: SAME invoice, invoiceDate
-    // predates adoption for all three systems, but created postdates the
-    // VERI*FACTU adoption date — VERI*FACTU shows, SII/TBAI stay hidden.
-    it('shows VERI*FACTU but hides SII/TBAI on the same invoice when only created qualifies', () => {
+    it('hides the VERI*FACTU InfoRow when showVerifactu is false, even for a recently-created invoice (target gate still applies)', () => {
+      getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: false, showTbai: false, showVerifactu: false });
+      const newInvoice = { ...defaultInvoice, created: '2026-07-01T00:00:00.000Z' };
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ displayInvoice: newInvoice }));
+      renderInvoicePreview({ specName: 'sales-invoice', invoice: newInvoice });
+      expect(vfInfoRow()).toBeUndefined();
+    });
+
+    // ETP-5229 regression case: SAME invoice, dated/created before ALL three
+    // configs' cutover dates. Before the fix SII/TBAI/VERI*FACTU each hid
+    // their InfoRow independently based on their own date gate; now all three
+    // show whenever their respective target is enabled — org-scoped
+    // eligibility only, never date-scoped.
+    it('shows SII, TBAI, and VERI*FACTU all together on an invoice dated/created before every config cutover', () => {
       getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: true, showTbai: true, showVerifactu: true });
-      const divergentInvoice = {
+      const oldInvoice = {
         ...defaultInvoice,
-        invoiceDate: '2026-01-01', // predates SII/TBAI adoption
-        accountingDate: '2026-01-01', // predates SII adoption
-        created: '2026-07-01T00:00:00.000Z', // postdates VERI*FACTU adoption
+        invoiceDate: '2026-01-01',
+        accountingDate: '2026-01-01',
+        created: '2026-01-01T00:00:00.000Z',
       };
-      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
-        displayInvoice: divergentInvoice,
-        siiRecord: { fechaAcogidaSII: '2026-06-01T00:00:00.000Z' },
-        tbaiRecord: { tbaisystemdate: '2026-06-01T00:00:00.000Z' },
-        verifactuRecord: { inVfactuSystem: '2026-06-01T00:00:00.000Z' },
-      }));
-      renderInvoicePreview({ specName: 'sales-invoice', invoice: divergentInvoice });
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ displayInvoice: oldInvoice }));
+      renderInvoicePreview({ specName: 'sales-invoice', invoice: oldInvoice });
       const rows = fiscalInfoRows();
-      expect(rows.some((r) => r.props.label === 'invoicePreview.fiscalStatus.sii')).toBe(false);
-      expect(rows.some((r) => r.props.label === 'invoicePreview.fiscalStatus.tbai')).toBe(false);
+      expect(rows.some((r) => r.props.label === 'invoicePreview.fiscalStatus.sii')).toBe(true);
+      expect(rows.some((r) => r.props.label === 'invoicePreview.fiscalStatus.tbai')).toBe(true);
       expect(vfInfoRow()).toBeTruthy();
+    });
+  });
+
+  // ETP-5229 regression: a null status from useFiscalStatus (invoice genuinely
+  // never relevant to that fiscal system — e.g. sent under a since-deactivated
+  // config that a naive lookup could no longer resolve) must render as a dash
+  // via StatusPill, never a fabricated 'PE'/'Pendiente' default. This proves the
+  // second half of the bug fix: the call sites in InvoiceGeneralTab no longer
+  // coerce a null siiStatus/tbaiStatus/vfStatus before handing it to StatusPill.
+  describe('fiscal status badge never defaults a null status to Pendiente (ETP-5229)', () => {
+    function fiscalInfoRows() {
+      const props = SummaryCard.mock.calls.at(-1)[0];
+      return (props.children || []).filter((el) => el?.props?.label);
+    }
+
+    function statusPillFor(labelKey) {
+      const row = fiscalInfoRows().find((el) => el.props.label === labelKey);
+      return row?.props?.children;
+    }
+
+    // SII gates on `accountingDate` (not `invoiceDate`) — defaultInvoice has no
+    // accountingDate, which would hide the SII InfoRow before this test even
+    // reaches the StatusPill. Add it explicitly so all three rows render.
+    const invoiceWithAccountingDate = { ...defaultInvoice, accountingDate: defaultInvoice.invoiceDate };
+
+    beforeEach(() => {
+      // All three targets in scope AND date-eligible (FAR_PAST_ADOPTION default),
+      // so all three InfoRows render — the useFiscalStatus.js mock at the top of
+      // this file returns { sii: null, tbai: null, verifactu: null, loading: false }.
+      getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: true, showTbai: true, showVerifactu: true });
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ displayInvoice: invoiceWithAccountingDate }));
+    });
+
+    it('renders a null SII status as StatusPill with no fabricated estado (not "PE")', () => {
+      renderInvoicePreview({ specName: 'sales-invoice', invoice: invoiceWithAccountingDate });
+      const pill = statusPillFor('invoicePreview.fiscalStatus.sii');
+      expect(pill).toBeTruthy();
+      expect(pill.props.estado).toBeFalsy();
+      expect(pill.props.estado).not.toBe('PE');
+      expect(pill.props.estado).not.toBe('Pendiente');
+    });
+
+    it('renders a null TBAI status as StatusPill with no fabricated estado (not "Pendiente")', () => {
+      renderInvoicePreview({ specName: 'sales-invoice', invoice: invoiceWithAccountingDate });
+      const pill = statusPillFor('invoicePreview.fiscalStatus.tbai');
+      expect(pill).toBeTruthy();
+      expect(pill.props.estado).toBeFalsy();
+      expect(pill.props.estado).not.toBe('Pendiente');
+    });
+
+    it('renders a null VERI*FACTU status as StatusPill with no fabricated estado (not "vf_pending"/"PE")', () => {
+      renderInvoicePreview({ specName: 'sales-invoice', invoice: invoiceWithAccountingDate });
+      const pill = statusPillFor('invoicePreview.fiscalStatus.verifactu');
+      expect(pill).toBeTruthy();
+      expect(pill.props.estado).toBeFalsy();
+      expect(pill.props.estado).not.toBe('vf_pending');
+      expect(pill.props.estado).not.toBe('PE');
+    });
+  });
+
+  // ── ETP-5229: earliest-cutover-date forwarding into useFiscalStatus ────────
+  // InvoiceGeneralTab wires p.earliestSiiCutoverDate/earliestTbaiCutoverDate/
+  // earliestVerifactuCutoverDate into useFiscalStatus's 5th arg — proving the
+  // wiring end-to-end (the eligibility LOGIC itself is covered in
+  // useFiscalStatus.vitest.jsx).
+  describe('cutoverDates forwarded to useFiscalStatus (ETP-5229)', () => {
+    it('passes { sii, tbai, verifactu } built from earliestXCutoverDate straight through', () => {
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        earliestSiiCutoverDate: '2026-01-01T00:00:00.000Z',
+        earliestTbaiCutoverDate: '2026-02-01T00:00:00.000Z',
+        earliestVerifactuCutoverDate: null,
+      }));
+      renderInvoicePreview();
+
+      const lastCall = useFiscalStatusMock.mock.calls.at(-1);
+      expect(lastCall[4]).toEqual({
+        sii: '2026-01-01T00:00:00.000Z',
+        tbai: '2026-02-01T00:00:00.000Z',
+        verifactu: null,
+      });
+    });
+
+    it('forwards undefined earliestXCutoverDate fields through unchanged (useFiscalStatus applies its own null defaults)', () => {
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        earliestSiiCutoverDate: undefined,
+        earliestTbaiCutoverDate: undefined,
+        earliestVerifactuCutoverDate: undefined,
+      }));
+      renderInvoicePreview();
+
+      const lastCall = useFiscalStatusMock.mock.calls.at(-1);
+      expect(lastCall[4]).toEqual({ sii: undefined, tbai: undefined, verifactu: undefined });
     });
   });
 

@@ -4,14 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useUI, useMenuLabel } from '@/i18n';
 import { trackTransactionPosted, trackDocumentCreated } from '@/lib/observability/health-events.js';
-import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
+import SendDocumentModal from '@/components/contract-ui/SendDocumentModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
-import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
-import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { useOrderPdf } from '@/windows/custom/shared/useOrderPdf.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { translateBackendError } from '@/lib/backendErrors.js';
 // ETP-5024: headers built locally here (instead of the shared `buildHeaders()`
 // helper — see docs/request-policy.md) were missing `Accept-Language`. The backend
 // (NeoAuthenticator.applyRequestLanguage / NeoLanguage.applyToContext) silently
@@ -56,9 +55,6 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
   const [fetched,       setFetched]       = useState(null);
   const [confirmedDocs,  setConfirmedDocs]  = useState(null); // set after confirm+reload when both docs created
   const [confirmedTitle, setConfirmedTitle] = useState(null); // null = "Order confirmed", string = custom title
-  const [showClone,      setShowClone]      = useState(false);
-  const [isCloneHovered, setIsCloneHovered] = useState(false);
-
   const status      = data?.documentStatus;
   const isDraft     = status === 'DR';
   const isCompleted = status === 'CO';
@@ -92,6 +88,15 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
     };
     window.addEventListener('sales-order:open-actions-modal', handler);
     return () => window.removeEventListener('sales-order:open-actions-modal', handler);
+  }, []);
+
+  // ETP-5260 — the Send button now lives in the topbarSecondary slot
+  // (OrderCreateInvoiceSecondaryActions), while this modal (with its pdf/documentType
+  // context) stays here in topbarRight; the button dispatches this event to open it.
+  useEffect(() => {
+    const handler = () => setShowSend(true);
+    window.addEventListener('sales-order:open-send-modal', handler);
+    return () => window.removeEventListener('sales-order:open-send-modal', handler);
   }, []);
 
   useEffect(() => {
@@ -158,26 +163,6 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
     }
   }, [confirmedDocs, hasConfirmedDoc, confirmedTitle, onRefresh, ui]);
 
-  const cloneButton = (
-    <button type="button" onClick={() => setShowClone(true)} style={{...btnCloneStyle, background: isCloneHovered ? 'hsl(var(--card))' : 'hsl(var(--card))'}} title={ui('cloneOrderBtn')} onMouseEnter={() => setIsCloneHovered(true)} onMouseLeave={() => setIsCloneHovered(false)}>
-      <CopyIcon data-testid="CopyIcon__18d1f0" />
-    </button>
-  );
-  const clonePortal = showClone ? createPortal(
-    <CloneOrderModal
-      recordId={recordId}
-      data={data}
-      apiBaseUrl={apiBaseUrl}
-      headers={headers}
-      onClose={() => setShowClone(false)}
-      onCloned={(newId) => {
-        setShowClone(false);
-        navigate(`/sales-order/${newId}`);
-      }}
-      data-testid="CloneOrderModal__18d1f0" />,
-    document.body,
-  ) : null;
-
   // ETP-5255 — gated on `showConfirm` ALONE, and the loading return below YIELDS to it rather
   // than rendering it too. Both of those unmounted the modal at the moment it had something to
   // say: confirming moves the order DR→CO, so `isDraft` goes false and `fetched` resets to null
@@ -202,8 +187,10 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
   ) : null;
 
   // ── COMPLETED (loading) ────────────────────────────────────────────────────
+  // ETP-5260 — Copy link now renders unconditionally via the sibling topbarSecondary slot, so this
+  // loading state no longer needs to render it here.
   if (isCompleted && !fetched && !showConfirm) {
-    return <>{confirmedPanel}<CopyRecordLinkButton recordId={recordId} windowName="sales-order" /><span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '4px 8px' }}>…</span></>;
+    return <>{confirmedPanel}{confirmPortal}<span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '4px 8px' }}>…</span></>;
   }
 
   // ── COMPLETED — compute derived values ─────────────────────────────────────
@@ -257,20 +244,22 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
     <>
       {/* Main action button — only shown when action is still pending */}
       {isCompleted && buttonLabel && (
-        <button type="button" onClick={() => openModal(null)} style={btnPrimaryStyle}>
+        <button
+          type="button"
+          onClick={() => openModal(null)}
+          style={btnPrimaryStyle}
+          // Hover to match the shared Confirm button's `hover:bg-primary/90` (90% opacity).
+          onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--primary) / 0.9)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'hsl(var(--primary))'; }}
+        >
           {buttonLabel}
         </button>
       )}
-      {cloneButton}
-      {/* ETP-4717 — Send is only available once the order is Confirmed (CO),
-          matching the grid row quick-action's status gate. Previously also
-          shown on Draft (ETP-4372); that was inconsistent with the other
-          document windows and has been corrected. */}
-      {isCompleted && <SendDocumentButton
-        onClick={() => setShowSend(true)}
-        data-testid="SendDocumentButton__18d1f0" />}
-      <CopyRecordLinkButton recordId={recordId} windowName="sales-order" />
-      {clonePortal}
+      {/* ETP-5260 — Clone/Copy-link/Send moved to the topbarSecondary slot
+          (OrderCreateInvoiceSecondaryActions). This component now only renders the
+          PRIMARY flow button above and the modals below. `confirmPortal` is
+          hoisted above (ETP-5255) so the same portal instance is reused across
+          this return and the loading-state early return — see the comment there. */}
       {confirmPortal}
       {isCompleted && showActions && createPortal(
         <CreateDocsModal
@@ -440,7 +429,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(ui('soOrderConfirmedShipmentError') + (e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`));
+          throw new Error(ui('soOrderConfirmedShipmentError') + translateBackendError(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`, ui));
         }
         const doc = (await res.json())?.response?.data;
         currentShipment = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
@@ -728,7 +717,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`);
+          throw new Error(translateBackendError(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`, ui));
         }
         const doc = (await res.json())?.response?.data;
         result.shipment = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
@@ -829,17 +818,6 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
   );
 }
 
-// ── CopyIcon ───────────────────────────────────────────────────────────────────
-
-function CopyIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  );
-}
-
 // ── Shared styles ──────────────────────────────────────────────────────────────
 
 const overlayStyle = {
@@ -856,7 +834,10 @@ const cardStyle = {
 
 const btnPrimaryStyle = {
   padding: '5px 14px', borderRadius: 6, border: 'none',
-  background: 'var(--status-info-fg)', color: 'hsl(var(--card))', fontWeight: 500, fontSize: 13,
+  // Fix (not part of ETP-5260): was `var(--status-info-fg)` — a badge-text token,
+  // not a button-background token — which rendered a saturated blue instead of
+  // the dark gray used by the real `Confirmar` button. Same pattern as ETP-4781.
+  background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))', fontWeight: 500, fontSize: 13,
   cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
 };
 
@@ -871,13 +852,6 @@ const iconBtnStyle = {
   border: '1px solid var(--color-border, hsl(var(--foreground)))',
   background: 'transparent', color: 'var(--color-muted-foreground, hsl(var(--muted)))',
   cursor: 'pointer',
-};
-
-const btnCloneStyle = {
-  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  padding: '7px', borderRadius: 6,
-  border: '1px solid hsl(var(--border-subtle))', background: 'hsl(var(--card))', color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
-  boxShadow: '0px 1px 2px 0px hsl(var(--foreground) / 0.05)',
 };
 
 const closeBtn = {
@@ -920,6 +894,40 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
     return () => { cancelled = true; };
   }, [orderId, base, headers, apiBaseUrl]);
 
+  // ETP-5295 — every hook below (including the close-effect) must run unconditionally, in the same
+  // order, on every render. The derivation is guarded against `fetched` being null (loading state)
+  // instead of being placed after the `if (!fetched) return spinner` early return: this component
+  // used to compute `nothingToManage` and its close-effect AFTER that return, which meant the effect
+  // was skipped on the first (loading) render and only registered once `fetched` arrived — React
+  // then saw a different number of hooks between renders ("Rendered more hooks than during the
+  // previous render") and unmounted the entire app (no ErrorBoundary anywhere catches it).
+  const { shipments, invoices, orderLines } = fetched ?? { shipments: [], invoices: [], orderLines: [] };
+  const shipmentsDraft   = shipments.filter(s => s.documentStatus === 'DR');
+  const shipmentsComplete = shipments.filter(s => s.documentStatus === 'CO');
+  const invoiceDraft     = invoices.find(i => i.documentStatus === 'DR') ?? null;
+  const invoicesComplete = invoices.filter(i => i.documentStatus === 'CO');
+
+  const qtyOrdered   = orderLines.reduce((s, l) => s + (Number(l.orderedQuantity)   || 0), 0);
+  const qtyDelivered = orderLines.reduce((s, l) => s + (Number(l.deliveredQuantity) || 0), 0);
+  const qtyPending   = qtyOrdered - qtyDelivered;
+
+  const totalOrder    = Number(data?.grandTotalAmount) || 0;
+  const totalInvoiced = invoicesComplete.reduce((s, i) => s + (Number(i.grandTotalAmount) || 0), 0);
+  const totalPending  = totalOrder - totalInvoiced;
+
+  // `fetched != null` gates all three: while still loading, neither "needs" flag may read true off
+  // the placeholder empty arrays above, or the close-effect below could fire before data ever loads.
+  const needsShip    = fetched != null && qtyPending !== 0 && shipmentsDraft.length === 0;
+  const needsInvoice = fetched != null && totalPending !== 0 && !invoiceDraft;
+  const nothingToManage = fetched != null && !needsShip && !needsInvoice;
+
+  // Close asynchronously when there's nothing pending — avoids the
+  // "Cannot update a component while rendering" warning that occurs when a
+  // child triggers parent setState during its own render.
+  useEffect(() => {
+    if (nothingToManage) onClose?.();
+  }, [nothingToManage, onClose]);
+
   if (!fetched) {
     // Lightweight overlay so the user gets feedback while the row's docs load.
     return createPortal(
@@ -934,31 +942,6 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
       document.body,
     );
   }
-
-  const { shipments, invoices, orderLines } = fetched;
-  const shipmentsDraft   = shipments.filter(s => s.documentStatus === 'DR');
-  const shipmentsComplete = shipments.filter(s => s.documentStatus === 'CO');
-  const invoiceDraft     = invoices.find(i => i.documentStatus === 'DR') ?? null;
-  const invoicesComplete = invoices.filter(i => i.documentStatus === 'CO');
-
-  const qtyOrdered   = orderLines.reduce((s, l) => s + (Number(l.orderedQuantity)   || 0), 0);
-  const qtyDelivered = orderLines.reduce((s, l) => s + (Number(l.deliveredQuantity) || 0), 0);
-  const qtyPending   = qtyOrdered - qtyDelivered;
-
-  const totalOrder    = Number(data?.grandTotalAmount) || 0;
-  const totalInvoiced = invoicesComplete.reduce((s, i) => s + (Number(i.grandTotalAmount) || 0), 0);
-  const totalPending  = totalOrder - totalInvoiced;
-
-  const needsShip    = qtyPending !== 0 && shipmentsDraft.length === 0;
-  const needsInvoice = totalPending !== 0 && !invoiceDraft;
-  const nothingToManage = !needsShip && !needsInvoice;
-
-  // Close asynchronously when there's nothing pending — avoids the
-  // "Cannot update a component while rendering" warning that occurs when a
-  // child triggers parent setState during its own render.
-  useEffect(() => {
-    if (nothingToManage) onClose?.();
-  }, [nothingToManage, onClose]);
 
   if (nothingToManage) return null;
 

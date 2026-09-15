@@ -44,6 +44,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import postcss from 'postcss';
 import tailwindcss from 'tailwindcss';
 import tailwindConfig from '../../tailwind.config.js';
@@ -60,11 +61,23 @@ const appShellRoot = resolve(here, '../..');
 //
 // After the core/functional repo split, shared UI/onboarding sources are
 // installed npm dependencies rather than local workspace packages. These globs
-// must point at node_modules instead of the (now-deleted) local packages/
-// directory. Same purpose, same regression class: whatever these globs are,
-// they must still scan wherever the package sources actually live.
-const EXPECTED_CORE_PACKAGE_GLOB = ['..', '..', 'node_modules', '@etendosoftware', 'app-shell-core', 'src', '**', '*.{js,jsx}'].join('/');
-const EXPECTED_GO_PACKAGE_GLOB = ['..', '..', 'node_modules', '@etendosoftware', 'etendo-go-core', 'src', '**', '*.{js,jsx}'].join('/');
+// must scan wherever the package sources actually live — which is NOT
+// guaranteed to be the repo root's node_modules (npm workspace hoisting can
+// place a package under tools/app-shell/node_modules instead; observed live
+// with etendo-go-core after a plain `npm install`, ETP-5031 QA round). Resolve
+// each package's src/ glob the same way tailwind.config.js does — via its own
+// export map — rather than assuming a hoisted path, so this guard keeps
+// working regardless of where npm actually installed the package. Not
+// `import.meta.resolve`: this file runs through Vitest's Vite-based module
+// runner, which does not support it (same reason tailwind.config.js uses
+// `require.resolve` instead).
+const require = createRequire(import.meta.url);
+function packageSrcGlob(pkgName) {
+  const entryPath = require.resolve(pkgName);
+  return resolve(dirname(entryPath), '**/*.{js,jsx}');
+}
+const EXPECTED_CORE_PACKAGE_GLOB = packageSrcGlob('@etendosoftware/app-shell-core');
+const EXPECTED_GO_PACKAGE_GLOB = packageSrcGlob('@etendosoftware/etendo-go-core');
 
 /**
  * The semantic utilities under guard. These are the EXACT classes that broke in

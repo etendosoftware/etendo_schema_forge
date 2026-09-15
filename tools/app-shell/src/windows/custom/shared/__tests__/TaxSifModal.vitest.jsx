@@ -256,6 +256,7 @@ describe('TaxSifModal — save flow', () => {
       'tax', 'tax', 'tax-1',
       { tbaiClaveregimeniva: '05' },
       TOKEN, API_BASE_URL,
+      { sifContextOrgId: null },
     ));
   });
 
@@ -430,6 +431,7 @@ describe('TaxSifModal — compound/summary tax resolution (ETP-4888 follow-up)',
         'tax', 'tax', 'child-base',
         { tbaiClaveregimeniva: '05' },
         TOKEN, API_BASE_URL,
+        { sifContextOrgId: null },
       ));
       expect(patchByIdMock).not.toHaveBeenCalledWith('tax', 'tax', SUMMARY_ID, expect.anything(), expect.anything(), expect.anything());
     });
@@ -483,6 +485,7 @@ describe('TaxSifModal — compound/summary tax resolution (ETP-4888 follow-up)',
         'tax', 'tax', SUMMARY_ID,
         { tbaiClaveregimeniva: '05' },
         TOKEN, API_BASE_URL,
+        { sifContextOrgId: null },
       ));
     });
   });
@@ -522,6 +525,7 @@ describe('TaxSifModal — compound/summary tax resolution (ETP-4888 follow-up)',
         'tax', 'tax', 'tax-1',
         { tbaiClaveregimeniva: '05' },
         TOKEN, API_BASE_URL,
+        { sifContextOrgId: null },
       ));
     });
   });
@@ -623,5 +627,57 @@ describe('TaxSifModal — targets document-direction gate (ETP-5027)', () => {
       resolveFetch({ id: 'tax-1', name: 'IVA 21%' });
     });
     await waitFor(() => expect(screen.queryByTestId('tax-sif-modal')).not.toBeInTheDocument());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5229 — `sifContextOrgId` prop forwarded on the save PATCH's 7th
+// (queryParams) argument, so the tax-level SIF override is written (and read
+// back) under the invoice/order line's OWN organization rather than the
+// user's current session org.
+// ---------------------------------------------------------------------------
+describe('TaxSifModal — sifContextOrgId forwarding on save (ETP-5229)', () => {
+  it('forwards a non-null sifContextOrgId as the 7th patchById argument', async () => {
+    render(<TaxSifModal {...baseProps({ sifContextOrgId: 'ORG-LINE-1' })} />);
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
+
+    await pickRegimeOption('05');
+    await act(async () => { screen.getByTestId('tax-sif-modal-save').click(); });
+
+    await waitFor(() => expect(patchByIdMock).toHaveBeenCalledWith(
+      'tax', 'tax', 'tax-1',
+      { tbaiClaveregimeniva: '05' },
+      TOKEN, API_BASE_URL,
+      { sifContextOrgId: 'ORG-LINE-1' },
+    ));
+  });
+
+  it('defaults sifContextOrgId to null (still an explicit key) when the prop is omitted', async () => {
+    render(<TaxSifModal {...baseProps()} />);
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
+
+    await pickRegimeOption('05');
+    await act(async () => { screen.getByTestId('tax-sif-modal-save').click(); });
+
+    await waitFor(() => expect(patchByIdMock).toHaveBeenCalledWith(
+      'tax', 'tax', 'tax-1',
+      { tbaiClaveregimeniva: '05' },
+      TOKEN, API_BASE_URL,
+      { sifContextOrgId: null },
+    ));
+  });
+
+  it('an explicit null sifContextOrgId does not crash and still saves successfully', async () => {
+    const onSaved = vi.fn();
+    render(<TaxSifModal {...baseProps({ sifContextOrgId: null, onSaved })} />);
+    await waitFor(() => expect(screen.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeInTheDocument());
+
+    await pickRegimeOption('05');
+    await act(async () => { screen.getByTestId('tax-sif-modal-save').click(); });
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith({
+      id: 'tax-1',
+      EM_Tbai_Claveregimeniva: '05',
+    }));
   });
 });

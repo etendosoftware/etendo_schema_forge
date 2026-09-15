@@ -8,7 +8,7 @@
  * refused a save for reason X", and any banner that explains reason X can bring itself back.
  *
  * The key is the STABLE TOAST ID the save gate already passes to `reportInvalidFormatField`
- * (e.g. `'product-cost-required'`). Reusing it means there is exactly one identifier per
+ * (e.g. `'contacts-field-name'`). Reusing it means there is exactly one identifier per
  * save-blocking reason, shared by the toast, the tracker in `numericValidation.js` and this bus —
  * a new blocking rule gets the reopen behaviour for free by passing its id, and can never drift
  * out of sync with the toast that announces the same refusal.

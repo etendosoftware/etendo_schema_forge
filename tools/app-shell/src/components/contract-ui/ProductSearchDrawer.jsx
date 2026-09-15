@@ -195,6 +195,11 @@ export default function ProductSearchDrawer({
       fetchConfig={FETCH_CONFIG}
       useVariant={useDefaultVariant}
       maxHeight="65vh"
+      // Only the default variant offers inline product creation. ProductStockSearchDrawer
+      // deliberately does not forward this: creating a stockless product inside a picker
+      // that filters by stock would yield an immediately empty result. Multi-select pickers
+      // (the report viewer) opt out too — creation is a single-pick affordance.
+      createEnabled={!keepOpenOnSelect}
       data-testid="ProductDrawerShell__2e8824" />
   );
 }

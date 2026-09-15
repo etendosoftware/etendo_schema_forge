@@ -14,6 +14,7 @@ vi.mock('lucide-react', () => ({
   Star: () => null, Play: () => null, ArrowUpRight: () => null, Info: () => null,
   OctagonAlert: () => null, TriangleAlert: () => null, X: () => null,
   Check: () => null, ChevronDown: () => null, Search: () => null,
+  FileText: () => null, Landmark: () => null,
 }));
 vi.mock('@/components/ui/checkbox', () => ({
   Checkbox: ({ checked, onChange }) => (
@@ -132,6 +133,91 @@ describe('PresentModal', () => {
     const modalBody = container.querySelector('.fm-config-modal');
     fireEvent.click(modalBody);
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+// ── PresentModal — two-column redesign (ETP-5229 item #10) ─────────────────────
+
+describe('PresentModal — two-column layout', () => {
+  const decl = { id: '1', model: '303', year: 2026, period: 'T2' };
+
+  it('renders the "Registrar presentación" left column with both manual paths, regardless of showAeatPath', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(document.body.textContent).toContain('fm.present.register_section.title');
+    expect(document.body.textContent).toContain('fm.present.register_section.desc');
+    expect(document.body.textContent).toContain('fm.present.path.acuse');
+    expect(document.body.textContent).toContain('fm.present.path.sin_acuse');
+  });
+
+  it('renders the "Presentar a la AEAT" right column with the aeat_telematic card when showAeatPath is true', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} showAeatPath />);
+    expect(document.body.textContent).toContain('fm.present.aeat_section.title');
+    expect(document.body.textContent).toContain('fm.present.aeat_section.desc');
+    expect(document.body.textContent).toContain('fm.present.path.aeat');
+  });
+
+  it('does NOT render the "Presentar a la AEAT" column/heading when showAeatPath is falsy (349 case)', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(document.body.textContent).not.toContain('fm.present.aeat_section.title');
+    expect(document.body.textContent).not.toContain('fm.present.aeat_section.desc');
+    expect(document.body.textContent).not.toContain('fm.present.path.aeat');
+  });
+
+  it('does NOT render the AEAT column when showAeatPath is explicitly false either', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} showAeatPath={false} />);
+    expect(document.body.textContent).not.toContain('fm.present.aeat_section.title');
+  });
+
+  it('the aeat_telematic path can be selected and confirmed when the AEAT column is shown', () => {
+    const onConfirm = vi.fn();
+    const onClose = vi.fn();
+    render(<PresentModal decl={decl} onConfirm={onConfirm} onClose={onClose} showAeatPath />);
+    fireEvent.click(screen.getByText('fm.present.path.aeat'));
+    const confirmBtn = screen.getByText('fm.action.continue');
+    expect(confirmBtn.disabled).toBe(false);
+    fireEvent.click(confirmBtn);
+    expect(onConfirm).toHaveBeenCalledWith({ status: 'aeat_telematic', acuseFile: null });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('footer confirm label switches to fm.action.continue only while aeat_telematic is selected', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} showAeatPath />);
+    // Default label before any selection.
+    expect(screen.queryByText('fm.action.confirm_presentation')).toBeTruthy();
+    fireEvent.click(screen.getByText('fm.present.path.aeat'));
+    expect(screen.queryByText('fm.action.continue')).toBeTruthy();
+    expect(screen.queryByText('fm.action.confirm_presentation')).toBeNull();
+    // Switching back to a manual path restores the generic label.
+    fireEvent.click(screen.getByText('fm.present.path.sin_acuse'));
+    expect(screen.queryByText('fm.action.confirm_presentation')).toBeTruthy();
+  });
+
+  it('renders a vertical divider between columns only when the AEAT column is present', () => {
+    const { container: withAeat } = render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} showAeatPath />);
+    expect(withAeat.querySelector('[aria-hidden="true"]')).toBeTruthy();
+
+    const { container: withoutAeat } = render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(withoutAeat.querySelector('[aria-hidden="true"]')).toBeNull();
+  });
+
+  it('shows the dynamic "Modelo X · period year" subtitle when decl carries model/year/period', () => {
+    render(<PresentModal decl={{ id: '1', model: '303', year: 2026, period: 'T3' }} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    // Mocked i18n returns "key" for calls with no params and "key" is still
+    // returned for calls WITH params too (see mock at top of file) — but the
+    // real translation key used must be the preview one, not the generic subtitle.
+    expect(document.body.textContent).toContain('fm.new_decl.preview');
+    expect(document.body.textContent).not.toContain('fm.present.subtitle');
+  });
+
+  it('falls back to the old generic subtitle when decl has no model/year/period', () => {
+    render(<PresentModal decl={{ id: 'd1' }} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(document.body.textContent).toContain('fm.present.subtitle');
+    expect(document.body.textContent).not.toContain('fm.new_decl.preview');
+  });
+
+  it('falls back to the generic subtitle when decl is entirely missing', () => {
+    render(<PresentModal onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(document.body.textContent).toContain('fm.present.subtitle');
   });
 });
 
@@ -862,6 +948,105 @@ describe('NewDeclModal', () => {
       expect(container.querySelector('.fm-banner--rich')).toBeNull();
       expect(container.querySelector('.fm-banner--warn')).toBeNull();
       expect(container.textContent).not.toContain('fm.new_decl.duplicate_warning');
+    });
+  });
+
+  // ETP-5272 — unlike the purely-informational `existingPeriods` marker above
+  // (any status, always selectable — the rectificativa case), a period that
+  // already carries a DRAFT declaration is actively blocked from selection: a
+  // draft is an unfinished, in-progress declaration, and spawning a 2nd one for
+  // it just fragments the user's work across two half-finished rows instead of
+  // completing (or deleting) the existing one first.
+  describe('draftPeriods — a draft declaration blocks its period from re-selection', () => {
+    it('disables the period button and shows the draft-blocked tooltip when the existing declaration for it is a draft', () => {
+      const { container } = render(
+        <NewDeclModal
+          onConfirm={vi.fn()}
+          onClose={vi.fn()}
+          activeModels={{ '303': true, '349': true }}
+          existingDeclarations={[{ model: '303', year: 2026, period: 'T1', status: 'draft' }]}
+        />
+      );
+      selectYear(container, 2026);
+      const t1 = getPeriodBtn(container, 'T1');
+      expect(t1.className).toContain('fm-newdecl-period-btn--draft-blocked');
+      expect(t1.hasAttribute('disabled')).toBe(true);
+      expect(t1.disabled).toBe(true);
+      // Distinct tooltip from the purely-informational existing-period hint, so
+      // the user understands WHY this one specifically can't be picked.
+      expect(t1.getAttribute('title')).toBe('fm.new_decl.period_draft_blocked_hint');
+    });
+
+    it('clicking a draft-blocked period does not select it', () => {
+      const { container } = render(
+        <NewDeclModal
+          onConfirm={vi.fn()}
+          onClose={vi.fn()}
+          activeModels={{ '303': true, '349': true }}
+          existingDeclarations={[{ model: '303', year: 2026, period: 'T1', status: 'draft' }]}
+        />
+      );
+      selectYear(container, 2026);
+      // T1 is the modal's own default selection, so first move off it onto a
+      // non-blocked period (T2) — a real assertion on "clicking T1 does nothing"
+      // needs the selection to start elsewhere.
+      const t2 = getPeriodBtn(container, 'T2');
+      fireEvent.click(t2);
+      expect(t2.getAttribute('aria-pressed')).toBe('true');
+
+      const t1 = getPeriodBtn(container, 'T1');
+      fireEvent.click(t1);
+      expect(t1.getAttribute('aria-pressed')).toBe('false');
+      expect(t2.getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('stays informational-only (existing, not draft-blocked) when the existing declaration for the period has any other status', () => {
+      const { container } = render(
+        <NewDeclModal
+          onConfirm={vi.fn()}
+          onClose={vi.fn()}
+          activeModels={{ '303': true, '349': true }}
+          existingDeclarations={[{ model: '303', year: 2026, period: 'T1', status: 'submitted' }]}
+        />
+      );
+      selectYear(container, 2026);
+      const t1 = getPeriodBtn(container, 'T1');
+      expect(t1.className).not.toContain('fm-newdecl-period-btn--draft-blocked');
+      expect(t1.className).toContain('fm-newdecl-period-btn--existing');
+      expect(t1.hasAttribute('disabled')).toBe(false);
+      expect(t1.getAttribute('title')).toBe('fm.new_decl.period_existing_hint');
+      fireEvent.click(t1);
+      expect(t1.getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('does not block a period when the draft declaration belongs to a different model or year', () => {
+      const { container } = render(
+        <NewDeclModal
+          onConfirm={vi.fn()}
+          onClose={vi.fn()}
+          activeModels={{ '303': true, '349': true }}
+          existingDeclarations={[
+            { model: '349', year: 2026, period: 'T1', status: 'draft' },
+            { model: '303', year: 2025, period: 'T1', status: 'draft' },
+          ]}
+        />
+      );
+      selectYear(container, 2026);
+      const t1 = getPeriodBtn(container, 'T1');
+      expect(t1.className).not.toContain('fm-newdecl-period-btn--draft-blocked');
+      expect(t1.hasAttribute('disabled')).toBe(false);
+    });
+
+    it('does not block any period when existingDeclarations is omitted', () => {
+      const { container } = render(
+        <NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={{ '303': true, '349': true }} />
+      );
+      selectYear(container, 2026);
+      for (const p of ['T1', 'T2', 'T3', 'T4']) {
+        const btn = getPeriodBtn(container, p);
+        expect(btn.className).not.toContain('fm-newdecl-period-btn--draft-blocked');
+        expect(btn.hasAttribute('disabled')).toBe(false);
+      }
     });
   });
 });

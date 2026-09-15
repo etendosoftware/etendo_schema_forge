@@ -463,23 +463,22 @@ describe('OrderCreateInvoice', () => {
     });
   });
 
-  // ETP-4717 (Pair 2 — P2): the Send button/modal must only be available once
-  // the order is Confirmed (CO), not while it is still Draft (DR). Grid and
-  // Form-view must agree on the same rule.
-  describe('Send button visibility gated by document status (ETP-4717)', () => {
-    it('does NOT show the Send button while the order is still Draft (DR)', () => {
-      assert.doesNotMatch(src, /\{\(isDraft \|\| isCompleted\) && <SendDocumentButton/);
+  // ETP-4717 (Pair 2 — P2), relocated by ETP-5260: the Send button itself
+  // (SendDocumentButton) moved to the topbarSecondary slot
+  // (OrderCreateInvoiceSecondaryActions, `showSend={isCompleted}` — CO only,
+  // never true while DR) — see
+  // artifacts/sales-order/custom/__tests__/OrderCreateInvoiceSecondaryActions.test.js.
+  // This component still owns the SendDocumentModal (PDF/documentType
+  // context), opened via the `sales-order:open-send-modal` window event and
+  // gated on isCompleted only, matching the button's own gate.
+  describe('SendDocumentModal integration (ETP-5260 — button moved out, modal stays)', () => {
+    it('no longer renders a SendDocumentButton at all', () => {
+      assert.doesNotMatch(src, /SendDocumentButton/);
     });
 
-    it('shows the Send button only when the order is Completed (CO)', () => {
-      assert.match(src, /\{isCompleted && <SendDocumentButton/);
-    });
-
-    it('does NOT gate the SendDocumentModal render on isDraft', () => {
-      assert.doesNotMatch(
-        src,
-        /\{\(isDraft \|\| isCompleted\) && showSend && createPortal\(\s*<SendDocumentModal/,
-      );
+    it('listens to the sales-order:open-send-modal custom event to open its own SendDocumentModal', () => {
+      assert.match(src, /window\.addEventListener\(['"]sales-order:open-send-modal['"]/);
+      assert.match(src, /window\.removeEventListener\(['"]sales-order:open-send-modal['"]/);
     });
 
     it('gates the SendDocumentModal render on isCompleted only', () => {
@@ -540,8 +539,12 @@ describe('OrderCreateInvoice', () => {
     function extractNeedsBlocks(source, needsVarName) {
       // ETP-4567: post-fix source compares against 0 with !== instead of the
       // clamp-dependent > 0 (which always failed for a floored-to-zero pending).
+      // ETP-5295 — ManageDocsLauncher's needsInvoice line now carries an extra
+      // `fetched != null && ` guard (hooks hoisted above the loading early-return, so
+      // the derivation must be null-safe); the main-component occurrence has no such
+      // guard. The optional non-capturing group matches both.
       const re = new RegExp(
-        `const ${needsVarName}[\\s\\S]*?const needsInvoice\\s*=\\s*totalPending !== 0 && !invoiceDraft;`,
+        `const ${needsVarName}[\\s\\S]*?const needsInvoice\\s*=\\s*(?:fetched != null && )?totalPending !== 0 && !invoiceDraft;`,
         'g',
       );
       return [...source.matchAll(re)].map(m => m[0]);
@@ -558,8 +561,11 @@ describe('OrderCreateInvoice', () => {
     function evaluate(siteIndex, { grandTotalAmount, invoicesComplete = [], shipmentsDraft = [], invoiceDraft = null }) {
       const body = `${compBlocks[siteIndex]}\n${needsBlocks[siteIndex]}\nreturn { qtyPending, totalPending, needsShip, needsInvoice };`;
       // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
-      const fn = new Function('data', 'orderLines', 'invoicesComplete', 'shipmentsDraft', 'invoiceDraft', body);
-      return fn({ grandTotalAmount }, [], invoicesComplete, shipmentsDraft, invoiceDraft);
+      // `fetched` is a free variable inside the ManageDocsLauncher occurrence's
+      // `fetched != null && ` guard (ETP-5295); pass it as always-loaded (`true`) since
+      // this test's concern is the pending arithmetic, not the loading state.
+      const fn = new Function('data', 'orderLines', 'invoicesComplete', 'shipmentsDraft', 'invoiceDraft', 'fetched', body);
+      return fn({ grandTotalAmount }, [], invoicesComplete, shipmentsDraft, invoiceDraft, true);
     }
 
     const sites = [
@@ -737,8 +743,12 @@ describe('OrderCreateInvoice', () => {
     describe('ConfirmModal.handleConfirm — Step 2 (createShipment)', () => {
       function resolveMessage(e, res) {
         const expr = extractCallExprAround(src, 'soOrderConfirmedShipmentError', 'throw new Error(');
-        const fn = new Function('e', 'res', 'ui', `return ${expr};`);
-        return fn(e, res, (k) => k);
+        // ETP-5276: the raw backend message now passes through translateBackendError(msg, ui)
+        // before being appended to the ui() prefix. Stub it as identity — the point of this
+        // test is that the RAW backend message survives end-to-end, not re-testing
+        // translateBackendError's own mapping table (covered by backendErrors.test.js).
+        const fn = new Function('e', 'res', 'ui', 'translateBackendError', `return ${expr};`);
+        return fn(e, res, (k) => k, (msg) => msg);
       }
 
       it('appends the real backend message after the ui() prefix for a flat 400 body', () => {
@@ -771,7 +781,11 @@ describe('OrderCreateInvoice', () => {
 
       function resolveMessage(e, res) {
         const expr = extractCallExprAfter(createDocsModalSrc, 'action/createShipment', 'throw new Error(');
-        return new Function('e', 'res', `return ${expr};`)(e, res);
+        // ETP-5276: the expression itself calls translateBackendError(msg, ui) — both must be
+        // in scope even though this call site has no ui() prefix of its own. Stub identity, same
+        // rationale as the ConfirmModal Step 2 block above.
+        return new Function('e', 'res', 'ui', 'translateBackendError', `return ${expr};`)(
+          e, res, (k) => k, (msg) => msg);
       }
 
       it('surfaces the real backend message for a flat {status,message} 400 body', () => {

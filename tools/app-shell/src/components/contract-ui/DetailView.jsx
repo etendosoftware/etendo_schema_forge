@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import { useChromelessEmbed } from '@/lib/embeddedWindow.js';
 import { ProcessParamDialog } from './ProcessParamDialog';
 import RecordUnavailable from './RecordUnavailable.jsx';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
@@ -60,7 +61,7 @@ import { useLineGrossAmount, ORDER_LINE_CONFIG } from '@/hooks/useLineGrossAmoun
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { useLabel, useMenuLabel, useUI } from '@/i18n';
-import { renderSaveActions, reportUnnavigableSave, buildSaveGate } from './saveActions.jsx';
+import { renderSaveActions, reportUnnavigableSave, buildSaveGate, buildUnsavedChangesSaver } from './saveActions.jsx';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -1040,6 +1041,40 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
 // Form's grid via its `trailing` slot (a bare grid cell, WITHOUT the pointer-events
 // wrapper, so it is a direct grid sibling of the native fields). Non-marked footers
 // keep the detached `footerElement` block and are completely unaffected.
+/**
+ * The side panel a window renders next to its form, or nothing when the window is embedded
+ * in a host dialog.
+ *
+ * A side panel is context for the full window — a stock summary, a period selector — and
+ * noise inside a popup, where the whole point is the form. `chromeless` covers both embed
+ * modes (the read-only preview and the interactive one); everything else about the window
+ * is untouched.
+ */
+/**
+ * The toolbar's "cancel" — which navigates back to the window's LIST.
+ *
+ * Rendered as its own component so the decision lives with the reason: inside a host
+ * dialog that navigation is meaningless, it would swap the form for a product list within
+ * the popup, and the dialog's own close is the way out. Keeping the `chromeless` test here
+ * also keeps it out of DetailView's already large render.
+ */
+export function DetailCancelButton({ chromeless, label, onCancel }) {
+  if (chromeless) return null;
+  return (
+    <Button
+      className="h-10 px-3 rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] text-[hsl(var(--foreground))] text-sm font-medium hover:bg-[hsl(var(--muted))] transition-colors"
+      data-testid="action-cancel"
+      onClick={onCancel}
+    >
+      {label}
+    </Button>
+  );
+}
+
+export function resolveEmbeddedSidebarContent(chromeless, sidebarContent) {
+  return chromeless ? null : sidebarContent;
+}
+
 export function buildHeaderFooter({ formFooter, embedded, data, entity, handleChangeWithCallout, hook, catalogs, api, token, apiBaseUrl }) {
   if (!formFooter) return { footerInline: false, footerElement: null, inlineTrailing: undefined };
   const footerInline = !!formFooter.inlineInHeaderCard;
@@ -1136,6 +1171,7 @@ export function DetailView({
   linesEmptyState = null,
   topbarExtra = null,
   topbarRight = null,
+  topbarSecondary = null, // ETP-5260: secondary actions slot — see render comment near topbarRight
   // ETP-4933: opt-in for windows that render their own primary action next to Save
   // (the return windows put a Confirm button in the topbarRight slot). Save then takes
   // the secondary/outline look instead of competing as a second primary button.
@@ -1143,7 +1179,7 @@ export function DetailView({
   statusFieldLabel = null,
   statusEnumLabels = null,
   salesTheme = false,
-  sidebarContent = null,
+  sidebarContent: sidebarContentProp = null,
   othersLabel = null,
   primaryTabs = null,
   contentBg = 'bg-card',
@@ -1438,6 +1474,8 @@ export function DetailView({
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const embedded = searchParams.get('embedded') === '1';
+  const chromeless = useChromelessEmbed(searchParams.get('embedded'));
+  const sidebarContent = resolveEmbeddedSidebarContent(chromeless, sidebarContentProp);
   const tMenu = useMenuLabel();
   // ETP-4933: AD-column label resolver, for naming the missing fields in the
   // Save tooltip. Same override chain EntityForm uses for its own field labels.
@@ -1754,6 +1792,7 @@ export function DetailView({
   const [lineEdits, setLineEdits] = useState(null);
   const [lineEditColumns, setLineEditColumns] = useState({});
 
+  const isNew = recordId === 'new'; // ETP-5199: moved up from below `currentItem` so buildUnsavedChangesSaver can read it (plain value, not a hook).
   // Save button is enabled only when there are pending changes. Four sources:
   // 1. Header fields diverged from last saved state (hook.isDirtyHeader)
   // 2. Primary inline add-row is open and partially filled
@@ -1767,8 +1806,8 @@ export function DetailView({
   // ETP-5073 / DOC-08 adds the saver, so the in-app navigation prompt can offer "Save and leave"
   // rather than only "Discard". `silent: true` suppresses the per-save toast: the user is leaving,
   // and the prompt itself is the feedback. handleSave resolves null when validation refuses, which
-  // is what stops the navigation.
-  useUnsavedChangesGuard(isDirty, () => hook.handleSave({ silent: true }));
+  // is what stops the navigation. ETP-5199: buildUnsavedChangesSaver also runs onAfterExistingSave/onAfterCreate.
+  useUnsavedChangesGuard(isDirty, buildUnsavedChangesSaver({ hook, isNew, onAfterCreate, onAfterExistingSave, token, apiBaseUrl, ui }));
   const [savingLine, setSavingLine] = useState(false);
   const [isClosingLine, setIsClosingLine] = useState(false);
   const [editingChild, setEditingChild] = useState(null);
@@ -1967,7 +2006,6 @@ export function DetailView({
     }
   }, [selectedLine, lineConfig]);
 
-  const isNew = recordId === 'new';
   const currentItem = useMemo(() => {
     if (isNew) return null;
     return hook.items.find(item => String(item.id) === String(recordId)) || null;
@@ -2217,7 +2255,7 @@ export function DetailView({
     // dispatch time (see fireCallout / the default-callouts effect above) —
     // forwarded as `dispatchSnapshot` so applyCalloutFieldUpdates/
     // applyOneComboEntry can discard stale responses.
-    const ctx = { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs, dispatchSnapshot: meta, fieldGenerationRef };
+    const ctx = { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs, dispatchSnapshot: meta, fieldGenerationRef, documentDateField };
 
     if (updates) {
       applyCalloutFieldUpdates(updates, ctx);
@@ -2839,6 +2877,25 @@ export function DetailView({
   };
   const balanceFooterEditingLine = mergeLineEdits(lineEdits, selectedLine);
 
+  // ETP-5260 — shared prop contract for topbarSecondary/topbarRight (onRefresh forces past the freshness cache; see comments below).
+  const renderSlotAction = (Component, testId) => Component && (() => {
+    const SlotComponent = Component;
+    return (
+      <SlotComponent
+        data={data}
+        recordId={data?.id || recordId}
+        token={token}
+        apiBaseUrl={apiBaseUrl}
+        api={api}
+        onProcess={hook.handleProcess}
+        onRefresh={() => hook.fetchById?.(data?.id || recordId, { force: true })}
+        onSave={() => hook.handleSave({ silent: true })}
+        isDirty={isDirty}
+        saveGate={saveGate}
+        data-testid={testId} />
+    );
+  })();
+
   return (
     <div className="flex-1 min-h-0 flex flex-col" data-testid="detail-view" data-doc-status={_headerData?.documentStatus}>
       {/* Content card with rounded top-left corner */}
@@ -2847,13 +2904,11 @@ export function DetailView({
         {embedded ? renderEmbeddedStatusPill(statusField, data, statusEnumLabels) : (
         <div className={getLinesToolbarClassName(linesLayout, toolbarPaddingX, toolbarBorderBottom)}>
           <div className="flex items-center gap-3">
-            <Button
-              className="h-10 px-3 rounded-lg bg-card border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] text-[hsl(var(--foreground))] text-sm font-medium hover:bg-[hsl(var(--muted))] transition-colors"
-              data-testid="action-cancel"
-              onClick={() => navigate(`/${windowName}`)}
-            >
-              {ui('cancel')}
-            </Button>
+            <DetailCancelButton
+              chromeless={chromeless}
+              label={ui('cancel')}
+              onCancel={() => navigate(`/${windowName}`)}
+              data-testid="DetailCancelButton__fa3275" />
             {statusField && data[statusField] != null && !WINDOW_HIDE_STATUS_PILL_FOR[windowName]?.has(data[statusField]) && (
               <DocumentStatusPill
                 status={data[statusField]}
@@ -2928,7 +2983,11 @@ export function DetailView({
                   <Trash2 className="h-4 w-4" data-testid="Trash2__fa3275" />
                 </button>
               )}
-              {/* More actions — only render the button when there is something to show */}
+              {/* Extra action buttons from page */}
+              {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
+              {/* ETP-5260 secondary/utility actions — left of Save/Confirm; see topbarRight's comment below for the primary/secondary split. Kebab (below) is grouped right after it, since it is itself a container for secondary actions. */}
+              {topbarSecondary && renderSlotAction(topbarSecondary, 'TopbarSecondaryComponent__fa3275')}
+              {/* More actions (kebab) — placed after the secondary action group and right before Save/process buttons (ETP-5260); only renders when there is something to show */}
               <DetailMoreActionsMenu
                 apiBaseUrl={apiBaseUrl}
                 customMenuContent={customMenuContent}
@@ -2945,8 +3004,6 @@ export function DetailView({
                 token={token}
                 ui={ui} windowReadOnly={menuActionsReadOnly}
                 data-testid="DetailMoreActionsMenu__fa3275" />
-              {/* Extra action buttons from page */}
-              {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
               {/* Save action — rendered before process buttons when saveActionsFirst is set (per-window opt-in) */}
               {saveActionsFirst && !windowReadOnly && !hideSaveStatuses.includes(_headerData?.documentStatus) && shouldRenderSaveActionsRow(isDraftModeCompleted, draftMode)
                 && renderSaveActions(saveActionParams)}
@@ -3036,38 +3093,15 @@ export function DetailView({
 
               {!saveActionsFirst && !windowReadOnly && !hideSaveStatuses.includes(_headerData?.documentStatus) && shouldRenderSaveActionsRow(isDraftModeCompleted, draftMode)
                 && renderSaveActions(saveActionParams)}
-              {/* ETP-4933: the topbarRight slot renders AFTER the save actions on purpose.
-                 Both live in this one flex row, so source order is visual order, and the
-                 slot used to come first — which put a window's Confirm button to the LEFT
-                 of Save (the return-shipment windows). Orders never showed it because their
-                 slot content is all gated on isCompleted, so in draft only Save/Confirm from
-                 renderSaveActions were visible, already in the right order. Verified before
-                 moving: of the 8 windows using this slot, none renders inline content while
-                 in draft except the two return windows, and none sets saveBeforeProcesses
-                 (which would render Save at the earlier call site instead). */}
-              {topbarRight && (() => {
-                const TopbarRightComponent = topbarRight;
-                return (
-                  <TopbarRightComponent
-                    data={data}
-                    recordId={data?.id || recordId}
-                    token={token}
-                    apiBaseUrl={apiBaseUrl}
-                    api={api}
-                    onProcess={hook.handleProcess}
-                    onRefresh={() => hook.fetchById?.(data?.id || recordId, { force: true })}
-                    onSave={() => hook.handleSave({ silent: true })} isDirty={isDirty} /* ETP-4940 follow-up: see maybeSaveBeforeConfirm */
-                    // ETP-4933: a topbarRight action that PERSISTS (ConfirmWithCredit calls
-                    // maybeSaveBeforeConfirm, which saves) must honour the required-field gate
-                    // too, or it is a hole straight through it — Save blocked, Confirm saves
-                    // the incomplete record anyway. Only `blocked`/`title` are meant to be
-                    // consumed: the slot inherits the required-field rule, NOT the rest of
-                    // Save's disabled condition (notably `!isDirty` — confirming an already
-                    // saved, unmodified document is the normal path).
-                    saveGate={saveGate}
-                    data-testid="TopbarRightComponent__fa3275" />
-                );
-              })()}
+              {/* ETP-5260 slot classification (see topbarSecondary above): topbarRight carries
+                  PRIMARY document-flow actions (Confirm, receive/invoice, status badges) and
+                  renders AFTER Save/Confirm on purpose — ETP-4933 moved it here because the
+                  return-shipment windows' Confirm button used to sit LEFT of Save. Secondary/
+                  utility actions (copy link, clone, send) belong in topbarSecondary instead.
+                  renderSlotAction's onSave/isDirty/saveGate let a persisting slot action (e.g.
+                  ConfirmWithCredit) save first and honour the required-field gate — ETP-4940/
+                  ETP-4933 — without inheriting Save's full disabled condition (notably !isDirty). */}
+              {topbarRight && renderSlotAction(topbarRight, 'TopbarRightComponent__fa3275')}
             </div>
           </div>
         )}

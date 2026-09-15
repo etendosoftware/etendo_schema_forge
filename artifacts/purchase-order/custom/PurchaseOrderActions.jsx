@@ -3,15 +3,14 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useUI, useMenuLabel } from '@/i18n';
-import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
+import SendDocumentModal from '@/components/contract-ui/SendDocumentModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
-import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
-import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { usePurchaseOrderPdf } from '@/windows/custom/shared/usePurchaseOrderPdf.js';
 import { trackTransactionPosted, trackDocumentCreated } from '@/lib/observability/health-events.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { translateBackendError } from '@/lib/backendErrors.js';
 
 export { ConfirmResultModal as PoConfirmResultModal };
 
@@ -50,8 +49,6 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
   const [fetched,       setFetched]       = useState(null);
   const [confirmedDocs,  setConfirmedDocs]  = useState(null);
   const [confirmedTitle, setConfirmedTitle] = useState(null); // null = "PO confirmed", string = custom title
-  const [showClone,      setShowClone]      = useState(false);
-  const [isCloneHovered, setIsCloneHovered] = useState(false);
 
   const status      = data?.documentStatus;
   const isDraft     = status === 'DR';
@@ -88,6 +85,15 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
     };
     window.addEventListener('purchase-order:open-actions-modal', handler);
     return () => window.removeEventListener('purchase-order:open-actions-modal', handler);
+  }, []);
+
+  // ETP-5260 — the Send button now lives in the topbarSecondary slot
+  // (PurchaseOrderSecondaryActions), while this modal (with its pdf/documentType
+  // context) stays here in topbarRight; the button dispatches this event to open it.
+  useEffect(() => {
+    const handler = () => setShowSend(true);
+    window.addEventListener('purchase-order:open-send-modal', handler);
+    return () => window.removeEventListener('purchase-order:open-send-modal', handler);
   }, []);
 
   useEffect(() => {
@@ -150,27 +156,6 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
     }
   }, [confirmedDocs, hasConfirmedDoc, confirmedTitle, onRefresh, ui]);
 
-  const cloneButton = (
-    <button type="button" onClick={() => setShowClone(true)} style={{...btnCloneStyle, background: isCloneHovered ? 'hsl(var(--card))' : 'hsl(var(--card))'}} title={ui('cloneOrderBtn')} onMouseEnter={() => setIsCloneHovered(true)} onMouseLeave={() => setIsCloneHovered(false)}>
-      <CopyIcon data-testid="CopyIcon__8b5323" />
-    </button>
-  );
-
-  const clonePortal = showClone ? createPortal(
-    <CloneOrderModal
-      recordId={recordId}
-      data={data}
-      apiBaseUrl={apiBaseUrl}
-      headers={headers}
-      onClose={() => setShowClone(false)}
-      onCloned={(newId) => {
-        setShowClone(false);
-        navigate(`/purchase-order/${newId}`);
-      }}
-      data-testid="CloneOrderModal__8b5323" />,
-    document.body,
-  ) : null;
-
   // ETP-5255 — gated on `showConfirm` ALONE, and hoisted above the early return below, because
   // both of those unmounted it at the exact moment it had something to say. Confirming the order
   // moves it DR→CO, so `isDraft` goes false and `fetched` resets to null while the CO effect
@@ -203,8 +188,10 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
   // that actually failed — was never retried. Staying on ONE return path keeps the element's
   // position, and therefore its state, stable. Safe because everything below that needs `fetched`
   // is guarded on it.
+  // ETP-5260 — Copy link now renders unconditionally via the sibling topbarSecondary slot, so this
+  // loading state no longer needs to render it here.
   if (isCompleted && !fetched && !showConfirm) {
-    return <>{confirmedPanel}<CopyRecordLinkButton recordId={recordId} windowName="purchase-order" /><span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '4px 8px' }}>…</span></>;
+    return <>{confirmedPanel}{confirmPortal}<span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '4px 8px' }}>…</span></>;
   }
 
   // ── COMPLETED — compute derived values ─────────────────────────────────────
@@ -248,18 +235,22 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
   return (
     <>
       {isCompleted && buttonLabel && (
-        <button type="button" onClick={() => setShowActions(true)} style={btnPrimaryStyle}>
+        <button
+          type="button"
+          onClick={() => setShowActions(true)}
+          style={btnPrimaryStyle}
+          // Hover to match the shared Confirm button's `hover:bg-primary/90` (90% opacity).
+          onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--primary) / 0.9)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'hsl(var(--primary))'; }}
+        >
           {buttonLabel}
         </button>
       )}
-      {cloneButton}
-      {/* ETP-4717 — Send is only available once the order is Confirmed (CO),
-          matching the grid row quick-action's status gate. */}
-      {isCompleted && <SendDocumentButton
-        onClick={() => setShowSend(true)}
-        data-testid="SendDocumentButton__8b5323" />}
-      <CopyRecordLinkButton recordId={recordId} windowName="purchase-order" />
-      {clonePortal}
+      {/* ETP-5260 — Clone/Copy-link/Send moved to the topbarSecondary slot
+          (PurchaseOrderSecondaryActions). This component now only renders the
+          PRIMARY flow button above and the modals below. `confirmPortal` is
+          hoisted above (ETP-5255) so the same portal instance is reused across
+          this return and the loading-state early return — see the comment there. */}
       {confirmPortal}
       {isCompleted && showActions && createPortal(
         <CreateDocsModal
@@ -432,7 +423,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(ui('poOrderConfirmedReceiptError') + ' ' + (e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`));
+          throw new Error(ui('poOrderConfirmedReceiptError') + ' ' + translateBackendError(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`, ui));
         }
         const doc = (await res.json())?.response?.data;
         const docObj = Array.isArray(doc) ? doc[0] : doc;
@@ -736,7 +727,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(e?.error?.message || e?.response?.message || `Error (${res.status})`);
+          throw new Error(translateBackendError(e?.error?.message || e?.response?.message || `Error (${res.status})`, ui));
         }
         const doc = (await res.json())?.response?.data;
         const docObj = Array.isArray(doc) ? doc[0] : doc;
@@ -839,17 +830,6 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
   );
 }
 
-// ── CopyIcon ───────────────────────────────────────────────────────────────────
-
-function CopyIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  );
-}
-
 // ── Shared styles ──────────────────────────────────────────────────────────────
 
 const overlayStyle = {
@@ -866,20 +846,16 @@ const cardStyle = {
 
 const btnPrimaryStyle = {
   padding: '5px 14px', borderRadius: 6, border: 'none',
-  background: 'var(--status-info-fg)', color: 'hsl(var(--card))', fontWeight: 500, fontSize: 13,
+  // Fix (not part of ETP-5260): was `var(--status-info-fg)` — a badge-text token,
+  // not a button-background token — which rendered a saturated blue instead of
+  // the dark gray used by the real `Confirmar` button. Same pattern as ETP-4781.
+  background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))', fontWeight: 500, fontSize: 13,
   cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
 };
 
 const btnSecondary = {
   fontSize: 12, padding: '7px 14px', borderRadius: 6,
   border: '1px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
-};
-
-const btnCloneStyle = {
-  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  padding: '7px', borderRadius: 6,
-  border: '1px solid hsl(var(--border-subtle))', background: 'hsl(var(--card))', color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
-  boxShadow: '0px 1px 2px 0px hsl(var(--foreground) / 0.05)',
 };
 
 const iconBtnStyle = {
@@ -933,21 +909,14 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
     return () => { cancelled = true; };
   }, [orderId, base, headers, apiBaseUrl]);
 
-  if (!fetched) {
-    return createPortal(
-      <div style={{
-        position: 'fixed', inset: 0, background: 'hsl(var(--foreground) / 0.2)', zIndex: 9998,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <div style={{ background: 'hsl(var(--card))', padding: '16px 24px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Spinner data-testid="Spinner__8b5323" /><span style={{ fontSize: 13 }}>{ui('loading')}</span>
-        </div>
-      </div>,
-      document.body,
-    );
-  }
-
-  const { receipts, invoices, orderLines } = fetched;
+  // ETP-5295 — every hook below (including the close-effect) must run unconditionally, in the same
+  // order, on every render. The derivation is guarded against `fetched` being null (loading state)
+  // instead of being placed after the `if (!fetched) return spinner` early return: this component
+  // used to compute `nothingToManage` and its close-effect AFTER that return, which meant the effect
+  // was skipped on the first (loading) render and only registered once `fetched` arrived — React
+  // then saw a different number of hooks between renders ("Rendered more hooks than during the
+  // previous render") and unmounted the entire app (no ErrorBoundary anywhere catches it).
+  const { receipts, invoices, orderLines } = fetched ?? { receipts: [], invoices: [], orderLines: [] };
   const receiptsDraft    = receipts.filter(r => r.documentStatus === 'DR');
   const receiptsComplete = receipts.filter(r => r.documentStatus === 'CO');
   const invoiceDraft     = invoices.find(i => i.documentStatus === 'DR') ?? null;
@@ -961,9 +930,11 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
   const totalInvoiced = invoicesComplete.reduce((s, i) => s + (Number(i.grandTotalAmount) || 0), 0);
   const totalPending  = totalOrder - totalInvoiced;
 
-  const needsReceipt = qtyPending !== 0 && receiptsDraft.length === 0;
-  const needsInvoice = totalPending !== 0 && !invoiceDraft;
-  const nothingToManage = !needsReceipt && !needsInvoice;
+  // `fetched != null` gates all three: while still loading, neither "needs" flag may read true off
+  // the placeholder empty arrays above, or the close-effect below could fire before data ever loads.
+  const needsReceipt = fetched != null && qtyPending !== 0 && receiptsDraft.length === 0;
+  const needsInvoice = fetched != null && totalPending !== 0 && !invoiceDraft;
+  const nothingToManage = fetched != null && !needsReceipt && !needsInvoice;
 
   // Close asynchronously when there's nothing pending — avoids the
   // "Cannot update a component while rendering" warning that occurs when a
@@ -971,6 +942,20 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
   useEffect(() => {
     if (nothingToManage) onClose?.();
   }, [nothingToManage, onClose]);
+
+  if (!fetched) {
+    return createPortal(
+      <div style={{
+        position: 'fixed', inset: 0, background: 'hsl(var(--foreground) / 0.2)', zIndex: 9998,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <div style={{ background: 'hsl(var(--card))', padding: '16px 24px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Spinner data-testid="Spinner__8b5323" /><span style={{ fontSize: 13 }}>{ui('loading')}</span>
+        </div>
+      </div>,
+      document.body,
+    );
+  }
 
   if (nothingToManage) return null;
 

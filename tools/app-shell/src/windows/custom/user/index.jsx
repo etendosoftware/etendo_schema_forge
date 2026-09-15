@@ -142,7 +142,10 @@ function useResendInvitationExtraActions() {
         toast.success(ui('resendInvitationSuccessToast'));
         onRefresh?.();
       } catch (err) {
-        toast.error(err?.message || ui('resendInvitationErrorFallback'));
+        // ETP-5206 — never surface raw/English backend text to the user; always the
+        // cataloged Spanish/English fallback (see `promoteToAdminErrorFallback` below for
+        // the same fix).
+        toast.error(ui('resendInvitationErrorFallback'));
       } finally {
         setSending(false);
       }
@@ -225,8 +228,10 @@ function useAdminRoleId() {
  * documented gap where any viewer who could open a User's detail page saw a
  * button that would always fail for them.
  *
- * **Immediate self-refresh (ETP-5195 Bugs 1&2).** A client-admin can promote/demote
- * their OWN user record (e.g. two admins swapping roles, or an admin stepping down).
+ * **Immediate self-refresh (ETP-5195 Bugs 1&2).** A client-admin can promote their OWN
+ * user record (self-demote is blocked entirely — see the ETP-5206 note on `handleDemote`
+ * below; the backend rejects it unconditionally, "an admin stepping down" happens by
+ * having another admin demote them instead).
  * Every NEO request authenticates off the `role` claim embedded in the bearer token at
  * login time, which never re-derives from the DB on its own — so without this, the
  * caller's OWN session would keep acting under their pre-change role until a full
@@ -241,7 +246,7 @@ function useAdminRoleId() {
  * promoted/demoted, this is a no-op here: that user's own mount/tab-focus effect, in
  * their own browser tab, picks up the fresh role next time they interact (Task 3).
  */
-function useAdminPromotionExtraActions(adminRoleId, viewerRole) {
+function useAdminPromotionExtraActions(adminRoleId, viewerRole, refreshRoleAssignments) {
   const ui = useUI();
   const [working, setWorking] = useState(false);
   const { token, refreshToken } = useAuth();
@@ -264,9 +269,23 @@ function useAdminPromotionExtraActions(adminRoleId, viewerRole) {
         await promoteUserToAdmin(id);
         toast.success(ui('promoteToAdminSuccessToast'));
         onRefresh?.();
+        // ETP-5278 — resync the composed-roles selection BEFORE swapping the token: neither
+        // promote nor demote used to touch selectedRoleIds/appliedRoleIdsRef at all, so the
+        // chip list could go stale (or flash empty on a later remount) until a full page
+        // reload. Ordered before refreshToken() (self-case) on purpose: SFUserRoleAssignments
+        // is admin/client-admin gated server-side, and refreshToken() mints a token that may
+        // no longer carry that claim once the role changes. Every NEO request authenticates
+        // off the role claim baked into the bearer token at login — it never re-derives from
+        // the DB on its own (see this file's own doc comment above, ETP-5195) — so reading
+        // with the still-current (not yet swapped) token first avoids a spurious "deny
+        // silently" empty response on the very read meant to fix this ticket's bug. (Demote
+        // has no such self-case to worry about — ETP-5206 blocks self-demote entirely, see
+        // `handleDemote` below.)
+        await refreshRoleAssignments?.(id);
         if (isSelf) refreshToken?.();
       } catch (err) {
-        toast.error(err?.message || ui('promoteToAdminErrorFallback'));
+        // ETP-5206 — never surface raw/English backend text to the user.
+        toast.error(ui('promoteToAdminErrorFallback'));
       } finally {
         setWorking(false);
       }
@@ -278,15 +297,25 @@ function useAdminPromotionExtraActions(adminRoleId, viewerRole) {
         await demoteUserFromAdmin(id);
         toast.success(ui('demoteFromAdminSuccessToast'));
         onRefresh?.();
-        if (isSelf) refreshToken?.();
+        // ETP-5278 — resync the composed-roles selection so the chip list doesn't go stale
+        // (or flash empty on a later remount) after a demote. No `refreshToken()` call is
+        // needed here: ETP-5206's `if (isSelf) return [];` above already keeps this action
+        // from ever being offered for the viewer's own record, so `handleDemote` can only
+        // run for a DIFFERENT user — never the self-case the token-ordering concern was for.
+        await refreshRoleAssignments?.(id);
       } catch (err) {
-        toast.error(err?.message || ui('demoteFromAdminErrorFallback'));
+        // ETP-5206 — never surface raw/English backend text to the user.
+        toast.error(ui('demoteFromAdminErrorFallback'));
       } finally {
         setWorking(false);
       }
     };
 
     if (isAdmin) {
+      // ETP-5206 — nobody may remove their OWN Admin role (the backend rejects it
+      // unconditionally in `demoteFromAdmin`); hide the action for the viewer's own record,
+      // same pattern as the `data?.isOwner` early return above.
+      if (isSelf) return [];
       return [{
         key: 'demote-from-admin',
         disabled: working,
@@ -300,7 +329,7 @@ function useAdminPromotionExtraActions(adminRoleId, viewerRole) {
       onClick: handlePromote,
       label: <span data-testid="PromoteToAdminButton">{ui('promoteToAdminAction')}</span>,
     }];
-  }, [adminRoleId, viewerRole, working, ui, currentViewerUserId, refreshToken]);
+  }, [adminRoleId, viewerRole, working, ui, currentViewerUserId, refreshToken, refreshRoleAssignments]);
 }
 
 /**
@@ -388,7 +417,30 @@ export default function UserWindow(props) {
   const resendInvitationExtraActions = useResendInvitationExtraActions();
   const adminRoleId = useAdminRoleId();
   const viewerRole = useViewerRole();
-  const adminPromotionExtraActions = useAdminPromotionExtraActions(adminRoleId, viewerRole);
+  const [selectedRoleIds, setSelectedRoleIds] = useState([]);
+  const appliedRoleIdsRef = useRef([]);
+  const hasUnsavedRoleChange = !sameIdSet(selectedRoleIds, appliedRoleIdsRef.current);
+
+  // ETP-5278 — the resync path used by useAdminPromotionExtraActions (below) after a
+  // successful promote/demote. Declared ahead of that hook call since it's needed as an
+  // argument. Deliberately does NOT reset to [] on a rejected fetch, unlike the mount-time
+  // effect further down: a transient failure here must not clobber a selection that was
+  // correct a moment ago with an empty one — that would just reproduce this same bug,
+  // self-inflicted, on every flaky network blip.
+  const refreshRoleAssignments = useCallback((id) => {
+    if (!id) return Promise.resolve();
+    return fetchUserRoleAssignments(id)
+      .then((res) => {
+        const ids = res?.templateRoleIds ?? [];
+        appliedRoleIdsRef.current = ids;
+        setSelectedRoleIds(ids);
+      })
+      .catch((err) => {
+        console.error('Failed to resync role assignments after promote/demote:', err);
+      });
+  }, []);
+
+  const adminPromotionExtraActions = useAdminPromotionExtraActions(adminRoleId, viewerRole, refreshRoleAssignments);
   // ETP-5019 — `extraActions` accepts either a plain array or a function taking
   // `{ data, children, onRefresh }` (see `detailViewHelpers.jsx`'s
   // `renderExtraActionButtons`); merges both action-producing hooks' results into
@@ -398,9 +450,6 @@ export default function UserWindow(props) {
     (args) => [...resendInvitationExtraActions(args), ...adminPromotionExtraActions(args)],
     [resendInvitationExtraActions, adminPromotionExtraActions],
   );
-  const [selectedRoleIds, setSelectedRoleIds] = useState([]);
-  const appliedRoleIdsRef = useRef([]);
-  const hasUnsavedRoleChange = !sameIdSet(selectedRoleIds, appliedRoleIdsRef.current);
 
   useEffect(() => {
     // A genuinely new/blank record must always start with zero roles selected. Without
@@ -454,7 +503,8 @@ export default function UserWindow(props) {
       // user record itself DID save and only the role assignment failed, and the toast is
       // given a longer duration so it doesn't get lost/dismissed behind the success toast
       // that already fired first.
-      const detail = err?.message || ui('roleAssignmentSaveFailed');
+      // ETP-5206 — never surface raw/English backend text to the user.
+      const detail = ui('roleAssignmentSaveFailed');
       toast.error(ui('roleAssignmentSaveFailedAfterUserSaved', { detail }), { duration: 8000 });
     }
   }, [selectedRoleIds, ui]);

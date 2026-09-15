@@ -92,7 +92,7 @@ Modelo 349:
 them — the only component that could ever set them (`StatusPillMenu`/`StatusMenu` in
 `FmCommon.jsx`) was never wired into any real page and has been deleted.
 
-Status transitions are driven by the detail page action buttons. Clicking **"Marcar como 'Presentado'"** opens `PresentModal`, which now offers only **2 submission paths**: `submitted_ack` (upload a PDF/XML receipt) and `submitted` (mark as submitted without a receipt). The "Otra Plataforma" path — which used to set `submitted_ext` — was removed from `PresentModal`; `submitted_ext` itself is still a valid, fully-rendered status (color, label, stepper index) for any declaration that already carries it from before this change, it just can no longer be newly selected from the modal.
+Status transitions are driven by the detail page action buttons. Clicking **"Registrar/Presentar"** (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10, see the "Action bar" and "AEAT electronic submission" sections below) opens `PresentModal`, which offers **3 paths on Modelo 303** (`submitted_ack`, `submitted`, and the opt-in `aeat_telematic` sentinel card) and **2 on Modelo 349** (`submitted_ack`, `submitted` — 349 never passes `showAeatPath`). The "Otra Plataforma" path — which used to set `submitted_ext` — was removed from `PresentModal`; `submitted_ext` itself is still a valid, fully-rendered status (color, label, stepper index) for any declaration that already carries it from before this change, it just can no longer be newly selected from the modal.
 
 ### `submissionMethod` — telling apart the 3 paths that lead to "Presentado" (ETP-4755)
 
@@ -208,7 +208,7 @@ A former 6th tab, **Historial** (`HistoryTab`), was removed together with this p
 
 ### Action bar
 
-Left to right: **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Calcular** (`handleCompute`, spinner while `computing`), a standalone **"Generar fichero 303"** button, and, only while the declaration is not yet submitted (`!isSubmitted`), **"Marcar como 'Presentado'"** opening `PresentModal`. "Generar fichero 303" is always visible regardless of submission status — it is not gated the way "Marcar como 'Presentado'" is. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
+Left to right: **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Calcular** (`handleCompute`, spinner while `computing`), a standalone **"Generar fichero 303"** button, and, only while the declaration is not yet submitted (`!isSubmitted`), a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. "Generar fichero 303" is always visible regardless of submission status — it is not gated the way "Registrar/Presentar" is. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
 
 ### Sources tab — "Régimen" column removed (ETP-5187)
 
@@ -413,27 +413,149 @@ paths. Confirmed wirings, verified against the AEAT303 Java source
 | `redeme` — "Sujeto pasivo inscrito en el Registro de devolución mensual (art. 30 RIVA)" | `MonthlyRegister` = `'Y'` | `AEAT303Report.java`'s `MONTHLY_REGISTER` constant; box 65 defaults to "not registered" (`2`) unless this is explicitly `Y`. Before ETP-5027 this checkbox updated only local UI state and was never forwarded — checking it produced no effect on the filed declaration (AEAT rejection `35092`/`E010124` on a Devolución with a negative result). |
 | `concurso` — "Sujeto pasivo declarado en concurso de acreedores…" | `IsConcurso` = `'Y'` | `AEAT303Report2014`'s `"IsConcurso"` constant, read unchanged through the override chain to `AEAT303Report2025`. Was not forwarded before ETP-5027. |
 | `postconcursal` | `ConcursoType` = `'Y'` | `AEAT303Report2014`'s `"ConcursoType"` constant (`preConcursal = !"Y".equals(ConcursoType)`); only meaningful when `concurso` is also checked. Was not forwarded before ETP-5027. |
+| `fecha_concurso` (paired with `concurso`) | `ConcursoDate` = `ddMMyyyy` digits, no separators | **Fixed in ETP-5272 pt.7** — see below. Only sent when `concurso === true` and a date is actually present. |
 
-**Investigated, not wired (ETP-5027):**
+**ConcursoDate — fixed, was silently missing (ETP-5272 pt.7).** `fecha_concurso` was collected and
+displayed but never forwarded alongside `IsConcurso`/`ConcursoType` — `applyIdentParams` simply had
+no line for it. `AEAT303Report2014.java:350-372`'s `ConcursoDate` handling is unchanged through
+`AEAT303Report2025`, but `AEAT303Report2023` and later throw
+`@AEAT303_Bad_Bankruptcy_Statement_Date_Format@` when the field is missing/blank on a concurso
+declaration, and 2021/2022 silently ship 8 blank spaces into that record slot instead. Fixed with a
+new `formatAeatConcursoDate(raw)` helper (`fiscalModelsUtils.js`) that formats the date-only
+`fecha_concurso` value (always a plain `yyyy-MM-dd` string from its `<input type="date">`, per
+`fm303Layouts.js`) into AEAT's strict `ddMMyyyy` digit format — via the canonical
+`parseCalendarDate` (this project's date-only parsing policy), never a hand-rolled `new
+Date(string)` parse — and sets `ConcursoDate` in `applyIdentParams` whenever `concurso === true`
+and a date actually formats to something (returns `null`, and sends nothing, on
+blank/undefined/unparsable input). `fecha_concurso` is also now marked `required: true` in both
+`fm303Layouts.js` identification field lists (`BASE` and `_2024_IDENTIFICACION_FIELDS`), so the
+gate feeding `getMissingRequiredFields` (see "Required-field pre-flight gate" above) stops a blank
+concurso date from reaching this point in the first place — the field was previously optional
+despite being conditionally mandatory.
+
+**`dep_aduanero`/`dep_foral` checkboxes — REMOVED entirely (ETP-5272 pt.7), not just left unwired.**
+ETP-5027 originally investigated both and left them present-but-unwired (see the evidence below).
+ETP-5272 went further and removed both fields (and their `fm.ident.dep_aduanero`/`fm.ident.dep_foral` locale keys) from
+`fm303Layouts.js`'s identification sections outright — a UI control with zero effect on the filed
+declaration is misleading, not merely incomplete, and both were dead ends confirmed against the
+real Classic source (evidence retained below for the historical record):
 - **`dep_aduanero`** ("derecho a deducir pago a cuenta de entregas de gasolinas, gasóleos y
   biocarburantes…") — no reference to this concept (`gasolina`/`gasoleo`/`biocarburante`/
-  `deposito`) exists anywhere in the AEAT303 Java source across any year override. No real
-  param name could be confirmed, so this checkbox is left unwired rather than guessed.
+  `deposito`) exists anywhere in the AEAT303 Java source across any year override as a checkbox
+  input. It corresponds conceptually to the real AEAT record position **box 112**, which Classic
+  hardcodes to `0` unconditionally (see "Manual box overrides" above) — there was never a live
+  input to wire this checkbox to.
 - **`dep_foral`** ("tributa exclusivamente a una Administración tributaria Foral…") — a real
   param, `IVA_IMPORT_ADUANA_HFORAL`, existed and was read from input params in
   `AEAT303Report2018`. Starting with `AEAT303Report2019` (and unchanged through
   `AEAT303Report2021`, with no later override reintroducing it through `AEAT303Report2025`),
   `generatePage1` hardcodes this position to `"2"` (not foral) unconditionally, ignoring any
-  input param entirely. Wiring `dep_foral` in the frontend would have no effect on the current
-  filed declaration, so it was deliberately left unwired to avoid implying a fix that doesn't
-  work on the current AEAT303 version.
-- `fecha_concurso` (the date field paired with `concurso`) was out of scope for this fix — it is
-  a `date` field, not a checkbox, and this defect class was scoped to the checkbox-forwarding
-  gap.
+  input param entirely — confirmed the checkbox has had zero effect on any filed declaration since
+  2019.
+
+Both fields were left in place (present-but-unwired) through ETP-5027 and only removed in
+ETP-5272 once the functional owner confirmed a UI control with no possible effect should not stay
+on the form at all. If either concept is ever reintroduced, it needs a NEW real backend
+computation behind it first — reusing the old id/labelKey would misleadingly imply a fix to a
+Classic limitation that still exists.
 
 ### Live data
 
 When in real mode, `FmModel303Page` reads `liveBoxes` / `liveSummary` from the `_precomputed` field passed at navigation. The compute button triggers a fresh `computeBoxes303` call. File generation calls `generate303File(decl, { token, apiBaseUrl })` → `GET /fiscal303/generate?year=&period=&tipo=`.
+
+### Manual box overrides — shared derivation, mount-time hydration, and KPI/list parity (ETP-5272 pt.6)
+
+`GET /fiscal303/boxes` (`computeBoxes303`, backed by `Fiscal303BoxesHandler`) always computes
+purely from **invoice data** — no declaration id, no `manualData` input at all — so its response
+never reflects a user's manual box overrides (`decl.manualData.manualOverrides`, persisted by an
+800ms-debounced autosave effect — see the "Debounce-vs-navigation race" entry in "Known gaps and
+residual findings" near the end of this file for a caveat on that autosave). Every consumer that wants the TRUE, override-aware figures
+must merge overrides onto the raw response and re-derive the boxes AEAT computes FROM other boxes
+(45, 46, 64, 66, 69, 71) — this ticket found and fixed 3 separate places that were reading the raw,
+override-blind backend value instead, plus extracted the merge/derive logic itself so the 3rd bug
+can't recur as a 4th.
+
+**Shared helpers — `fiscalModelsUtils.js`.** `toBoxArray`, `applyOverrides`, and
+`recomputeDerivedBoxes` used to be private, near-duplicated functions living inside
+`FmModel303Page.jsx` only. They are now exported from `fiscalModelsUtils.js` — the single source
+of truth for "merge `manualOverrides` onto a box set, then re-derive every box the AEAT 303 formula
+computes from other boxes" — and `getBoxValue` (reads one box out of the array shape, `null` when
+absent, distinct from a present box valued `0`) moved alongside them. `FmModel303Page.jsx` and
+`FmListPage.jsx` (the list's own "Resultado" column, see below) both import from this one module
+now. **Do not re-implement this merge/derive logic locally in a new caller** — that duplication is
+exactly how this bug class happened in the first place; import the shared functions instead.
+`recomputeDerivedBoxes`'s formula (mirrors `AEAT303Report2026.java` exactly, see box 111/112 below):
+
+```
+box45 = Σ(29,31,33,35,37,39,41,42,43,44)      // total_deducir
+box46 = box27 - box45                          // Resultado régimen general
+box64 = box46 + box58 + box76
+box66 = box64 * (box65 / 100)                  // box65 = territorial split %, defaults to 100
+box69 = box66 + box77 - box78 + box68 + box108
+box71 = box69 - box70 + box109 - box112        // Resultado de la liquidación (final result)
+```
+
+**Bug 1 — mount-time hydration never applied saved overrides.** The mount `useEffect` that seeds
+`liveBoxes` from `decl._precomputed` (the raw, override-free payload `FmListPage`'s
+`useFiscalAutoCompute` already fetched before this page mounted — see "Auto-compute architecture"
+above) used to set `liveBoxes` directly from that raw payload, bypassing `applyOverrides`
+entirely. A user's saved manual edits were invisible until they manually clicked "Calcular" to
+re-run a fresh compute (which DID go through the merge). Fixed: the mount effect now routes
+`decl._precomputed` through the same `applyComputeResult` helper `handleCompute`/"Calcular" use, so
+the already-hydrated `manualOverrides` are merged in immediately on open, with **no extra network
+call** — this reuses the payload already in hand.
+
+**Bug 2 — the "Resultado" KPI showed box 46, not box 71.** `res.summary.result` (from the backend)
+is box 46, "Resultado régimen general" — an intermediate figure under a "standard company"
+assumption (100% state attribution via box 65, no territorial split, no manual adjustments). The
+real final liquidation result is **box 71**, "Resultado de la liquidación", which correctly
+reflects a territorial-split override (box 65) or any other manual input through
+`recomputeDerivedBoxes`. `applyComputeResult` now overwrites `summary.result` with
+`getBoxValue(mergedBoxes, 71)` (falling back to the raw backend value only if box 71 is somehow
+absent), and the KPI card's own live-recompute fallback (`liveBoxSummary`, further down the same
+file) had its backing variable renamed `kpi46` → `kpi71` and repointed from `getBoxValue(liveBoxes,
+46)` to `getBoxValue(liveBoxes, 71)` for the identical reason.
+
+**Bug 3 — the "Deducible" KPI showed a manual-entry-blind box 45.** Box 45 ("total_deducir") sums
+boxes 29,31,33,35,37,39,41,42,43,44 — and 42/43/44 (compensaciones régimen agricultura,
+regularización bienes de inversión, prorrata definitiva) are **pure manual entries** the backend
+never receives, so the raw `summary.deductible` silently assumed all three were 0. Fixed alongside
+Bug 2, in the same `applyComputeResult`: `deductible` is now also re-derived from `mergedBoxes`.
+`accrued` (box 27, IVA devengado) needed no such fix — it has no manual-entry inputs anywhere in
+its formula.
+
+**Bug 4 (list page) — the list's own "Resultado" column had the same box-46 bug as #2,
+independently.** `FmListPage.jsx`'s row-level result computation (`computed.summary.result`, fed
+by its own `useFiscalAutoCompute` calls, entirely separate from the detail page's compute) read the
+same raw, override-blind backend value. Fixed by importing the same shared
+`applyOverrides`/`recomputeDerivedBoxes`/`getBoxValue` trio: the row merges `decl.manualData
+?.manualOverrides ?? {}` onto `computed.boxes` and reads box 71, so the list and the detail page
+can no longer disagree about the same declaration's result. **`ResultCell` in the same file is dead
+code** (not rendered anywhere — the table cell renders `ResultText` instead) and was deliberately
+left un-fixed and un-deleted: an existing test (`__tests__/FmListPage.test.js`) asserts on its
+source directly and that suite was out of scope for this consolidated fix. If `ResultCell` is ever
+reactivated, it must receive the identical override-merge treatment described here — it currently
+does not.
+
+**Boxes 111 and 112 — investigated and confirmed correct, not touched.** Both were suspected of a
+similar wiring gap during this audit; neither needed a fix, but the investigation is recorded here
+so it is not silently reopened later:
+- **Box 112** ("Pago a cuenta de entregas de gasolinas… régimen de depósito distinto del
+  aduanero") IS a real position in the AEAT `.303` record — confirmed directly in
+  `AEAT303Report2026.java` (`org.openbravo.module.aeat303.es`) — but Classic hardcodes it to
+  `NumericAmount303(BigDecimal.ZERO)` unconditionally; there is no regime implementation behind it
+  in Classic at all, for any year. `recomputeDerivedBoxes` above already treats it as `get(112)`
+  (defaults to 0 when absent, exactly matching Classic's own hardcoded zero) in the box 71 formula
+  — there is nothing more to wire, because there is no real computation on the other end to wire
+  it TO. This is the same underlying AEAT concept the removed `dep_aduanero` checkbox referred to
+  (see "Identification checkboxes" above, ETP-5272 pt.7) — both trace back to the same
+  never-implemented Classic regime.
+- **Box 111** ("Rectificación de cuotas" — used on a rectificativa) is filed **independently** of
+  the ordinary box 71 chain — confirmed against `AEAT303Report2014.java`'s
+  `checkBox111MandatoryParams`/`checkIsDeclarationRMandatoryParams`, unchanged through the override
+  chain to `AEAT303Report2025` (see "Identification section" above, which already documents its
+  bank-data visibility gating) — it does not feed into `recomputeDerivedBoxes`'s formula at all,
+  by design, matching Classic's own handling. This is expected behavior, not a gap.
 
 ### Organization identity
 
@@ -441,12 +563,52 @@ A `GET /session` call on mount populates the NIF/nombre fields used in the gener
 
 ### AEAT electronic submission (`AeatSubmitFlow`) — ETP-4456
 
-`PresentModal` (`FmOverlays.jsx`) gained a 3rd, opt-in path (`showAeatPath` prop, only passed by `FmModel303Page`): **"Presentación telemática AEAT"**. It reports the sentinel status `aeat_telematic` — never a real declaration status — which `FmModel303Page.handlePresent` intercepts to open `models/303/AeatSubmitFlow.jsx` instead of changing the status directly (the other 2 manual paths still call `handleStatusChange` as before). A 4th path, "Otra Plataforma" (`submitted_ext`), existed at one point but was removed from the modal (ETP-4755) — `submitted_ext` remains a valid, fully-rendered status for declarations that already carry it, it just can no longer be newly selected here.
+`PresentModal` (`FmOverlays.jsx`) has a 3rd, opt-in path (`showAeatPath` prop, only passed by
+`FmModel303Page`): **"Presentación telemática AEAT"**. It reports the sentinel status
+`aeat_telematic` — never a real declaration status — which `FmModel303Page.handlePresent`
+intercepts to open `models/303/AeatSubmitFlow.jsx` instead of changing the status directly (the
+other 2 manual paths still call `handleStatusChange` as before). A 4th path, "Otra Plataforma"
+(`submitted_ext`), existed at one point but was removed from the modal (ETP-4755) —
+`submitted_ext` remains a valid, fully-rendered status for declarations that already carry it, it
+just can no longer be newly selected here.
+
+**ETP-5229 item #10 — trigger rename, split-and-revert:** the single trigger button/modal was
+renamed from "Marcar como 'Presentado'"/"Marcar como presentada" to **"Registrar/Presentar"**
+(`fm.action.submit` / `fm.action.present` / `fm.present.title`) — a broader label that covers
+both "recording a declaration already filed elsewhere" and "actually filing it via AEAT" in one
+picker. Mid-implementation this same item briefly split the AEAT path OUT into its own standalone
+button next to "Marcar como 'Presentado'", wired directly to `AeatSubmitFlow` with no modal in
+between — that approach was reconsidered and reverted before delivery: there is **no separate
+standalone AEAT button** in the action bar, and the 3-path-in-one-modal structure described above
+is the final shape. `PresentModal` keeps its `showAeatPath` prop and its `aeat_telematic` card.
+
+**Two-column redesign (ETP-5229 item #10, follow-up — Figma mockup):** `PresentModal`'s body was
+restyled from a single stacked-card list into a two-column layout, mirroring the mockup: a left
+column **"Registrar presentación"** (`fm.present.register_section.title`/`.desc`) always holds the
+2 manual cards (`submitted_ack`, `submitted`), and a right column **"Presentar a la AEAT"**
+(`fm.present.aeat_section.title`/`.desc`) holds the `aeat_telematic` card — rendered, with its
+vertical separator, **only when `showAeatPath` is true**. On Modelo 349 (which never passes
+`showAeatPath`) the modal shows a single full-width left column and no separator, matching the
+pre-redesign single-path-set behavior. The per-card icon avatars (`Star`/`Play`/`Landmark`) were
+removed; each column now carries one small header icon instead (`FileText` for "Registrar
+presentación", `Landmark` for "Presentar a la AEAT"). The modal header subtitle became dynamic —
+`"Modelo <model> · <period> <year>"` (reusing `fm.new_decl.preview`'s existing interpolation
+pattern and `formatPeriod` from `fiscalModelsUtils.js`) — falling back to the old generic
+`fm.present.subtitle` text when `decl` doesn't carry `model`/`year`/`period` (e.g. legacy test
+stubs). The modal's `maxWidth` grows from 500px to 760px when the AEAT column is present, 500px
+otherwise (widened from an initial 420px/640px pass after visual review found the two-column body
+too cramped). None of this touches the underlying `path` selection state, `canConfirm`, or
+`handleConfirm` — purely a visual/DOM restructuring, extracted into two new internal helper
+components in `FmOverlays.jsx`: `PresentOptionCard` (one selectable card) and `PresentModalColumn`
+(icon + heading + description + its stack of cards). The footer's separator rule line was also
+dropped for this modal only (`.fm-present-modal .fm-config-modal__footer { border-top: none; }`
+in `fiscal-models.css`) — the card area already reads as visually distinct from the footer, so the
+divider was redundant; sibling modals (`FileGenModal`, `NewDeclModal`) keep it.
 
 **Flow (single dedicated component, not folded into `PresentModal`** — the multi-step submit/result logic and the real API call make it noticeably heavier than the 2 simple manual paths, so keeping it in its own file avoids bloating `FmOverlays.jsx` further):
 
 **Trigger path (and the REVIEW-cycle bug fixed in it):** the AEAT path is a card inside
-`PresentModal`, not a separate button — the user opens "Mark submitted" (`PresentModal`), picks the
+`PresentModal`, not a separate button — the user opens "Registrar/Presentar" (`PresentModal`), picks the
 3rd card ("Presentación telemática AEAT" / `aeat_telematic`), and confirms. `handlePresent` in
 `FmModel303Page.jsx` intercepts that sentinel status and opens `AeatSubmitFlow` **instead of**
 changing the status directly, like the other 2 manual paths do. Alex's REVIEW (cycle 1) found a
@@ -498,7 +660,17 @@ parity verified — 39 keys each as of ETP-5187, up from the 36 this flow origin
 the 3 added since are `fm.aeat.action.go_to_organization`, `fm.aeat.error.missingDefaultIae` (both
 ETP-4975) and `fm.aeat.reminder.iaeActivity` (ETP-5187) — see "IAE-activity activation reminder"
 below), plus 2 new `fm.present.path.aeat`/`aeat_desc` keys for the
-`PresentModal` card and one `fm.action.continue` reused for the card's confirm-button label.
+`PresentModal` card and one `fm.action.continue` reused for the card's confirm-button label. The
+two-column redesign added 4 more keys (parity verified in both locales):
+`fm.present.register_section.title`/`.desc` and `fm.present.aeat_section.title`/`.desc` — the
+section headings/subtexts above the left and right columns. No new key was needed for the dynamic
+subtitle; it reuses `fm.new_decl.preview` verbatim.
+**ETP-5229 item #10** renamed the shared trigger keys `fm.action.submit` (303) and
+`fm.action.present` (349) plus `fm.present.title` (the modal title) from "Marcar
+presentado"/"Marcar como presentada" to **"Registrar/Presentar"** ("Register/Submit" in English)
+— no new keys were needed for this, since both flows already read those existing keys. The
+short-lived standalone-button key `fm.action.aeat_telematic` (added, then removed, in the same
+item's split-and-revert) was deleted from both locale files rather than left dangling.
 
 ### "Justificante" tab — AEAT receipt storage (ETP-4456)
 
@@ -663,6 +835,23 @@ accumulate them, and this applies to both severities together (a clean submissio
 `block` AND stale `warn` rows alike). A **successful** submission with no errors and no warnings
 (test or production) leaves the tab **empty**, not stale from a prior attempt.
 
+**Dismissible warning banner (ETP-5229 item #11).** The amber "Resuélvelas antes de generar el
+fichero" bar at the top of the tab (`fm.incidents.block_sub`, rendered whenever `blocking > 0 ||
+warning > 0`) has a close ("×") button that was never wired to anything — clicking it did
+nothing, so the banner was effectively permanent. It is now backed by local component state
+(`dismissed`, plain `useState` in `IncidentsTab`) gating the banner's render, mirroring the only
+other dismissible-banner precedent in this codebase, `CertExpiryBanner.jsx`
+(`tools/app-shell/src/windows/custom/fiscal-config/`), which also uses a session-only local
+`useState` rather than `localStorage` — no persisted-dismissal precedent was found anywhere in
+the app, so this stays per-session/per-mount, not persisted across reloads. A `useEffect` keyed
+on `[blocking, warning]` resets `dismissed` back to `false` whenever either count changes: fixing
+an incident (count drops) or a new one appearing (count rises) both re-surface the banner rather
+than leaving it silenced by a stale dismissal of a now-different problem set. Known limitation
+(accepted, not fixed): if the *set* of incidents changes while the *total count* stays exactly
+the same (one resolved, a different one appears in the same submission), the effect's dependency
+array won't fire and the banner stays dismissed — judged an acceptable simplification since
+`IncidentsTab`'s current props only expose the two counts, not the incident list, to key off of.
+
 ## Modelo 349 detail page (`FmModel349Page`)
 
 Full intra-EU recapitulative declaration view. Auto-compute runs via `useFiscalAutoCompute` (same hook as 303) using `compute349Operators` / `checkModified349`.
@@ -821,7 +1010,7 @@ pending NIF-IVAs — before ETP-5027 it was a `<button>` with no `onClick` at al
 
 ### Action bar and kebab menu
 
-The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"Vista previa PDF"**. "Generar fichero 349" is no longer in the kebab — it is a standalone, always-visible button in the action bar (`onClick={() => setShowFilegen(true)}`), positioned next to **"Marcar como 'Presentado'"** and, unlike that button, not gated on submission status (`!isSubmitted`).
+The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"Vista previa PDF"**. "Generar fichero 349" is no longer in the kebab — it is a standalone, always-visible button in the action bar (`onClick={() => setShowFilegen(true)}`), positioned next to **"Registrar/Presentar"** (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) and, unlike that button, not gated on submission status (`!isSubmitted`).
 
 ### PDF preview and file generation
 
@@ -1133,7 +1322,10 @@ This in-modal guard is now **defense in depth**: `FmListPage`'s "+ Nueva declara
 - **Modelo** is now a button that opens a searchable dropdown (`ModelSelectMenu`, a private helper in `FmOverlays.jsx`) — one row per active model, each showing the model-number badge, its catalog name and description (reusing the same `fm.catalog.{id}.name` / `.desc` keys `FmCatalogPage.jsx` already relies on, so the row content stays in sync with the catalog automatically), and a search input that filters by number or name. It closes on outside-click via the same ref+`mousedown`-listener idiom used elsewhere in this file.
 - **Año** is now a button-triggered dropdown (`YearSelectMenu`, another private helper in `FmOverlays.jsx`) instead of a `<select>` — mechanically a simplified sibling of the Modelo dropdown: same button + outside-click-closing panel + checkmark on the selected row, backed by `SUPPORTED_YEARS` sorted most-recent-first. It skips the parts that don't apply to a short flat list of year numbers — no search input, no chip, no subtitle — just the year label and, on the selected row, a checkmark.
 - **Frecuencia** is a new segmented pill control (Trimestral/Mensual) that drives which **Período** grid is shown: 4 quarter buttons (`T1`–`T4`) or a 6×2 grid of month buttons (`01`–`12`). Switching frequency resets the selected period to the first value of the new list.
-- **Duplicate-declaration awareness — informational only, no longer disabled (ETP-5187)**: `NewDeclModal` accepts an optional `existingDeclarations` prop — `FmListPage` passes its own `decls` state. Any period button that already has a declaration for the currently selected model+year still renders with a small dot badge (`.fm-newdecl-period-btn--existing` + `.fm-newdecl-period-btn__dot`, plus a `title` hint, `fm.new_decl.period_existing_hint`) but **is no longer disabled** — the user can select it and create a new declaration for that period. This is the rectificativa flow (filed early, more invoices arrived later for the same period), and blocking it outright was wrong. The previous rationale for disabling it (a duplicate submission 500'd server-side on `ETGO_FISCAL_DECL_UQ`) is fixed on the backend side, with no cap on how many declarations a period can have: `FiscalDeclCrudHandler#resolveNextDeclSeq` (`com.etendoerp.go`) assigns each new declaration the next `DECL_SEQ` ordinal (`MAX(DECL_SEQ) + 1` for the same client/org/model/year/period, or `0` for the first one) — a dedicated, unbounded sequence column, not a repurposing of the `DECL_TYPE` ordinaria/complementaria business field, so a 3rd, 4th or Nth declaration for the same period succeeds exactly like the 2nd (matching the real AEAT/legal rule that there is no limit on rectificativas per period) — see "NEO Headless endpoints" below. The real warning ("you're filing a 2nd declaration for this period, check Autoliquidación rectificativa") lives on the newly created declaration's own detail page instead — see "Duplicate-period warning and rectificativa gate" under "Modelo 303 detail page" above. The `useEffect` that used to jump the selection off a disabled period, and the `allPeriodsTaken`-driven disabling of the "Crear declaración" CTA, were both removed along with the disabling itself. `existingDeclarations` is still optional and defaults to "no existing declarations" when omitted, so every caller that predates this feature is unaffected.
+- **Duplicate-declaration awareness — informational only for any non-draft status, no longer disabled (ETP-5187)**: `NewDeclModal` accepts an optional `existingDeclarations` prop — `FmListPage` passes its own `decls` state. Any period button that already has a declaration for the currently selected model+year still renders with a small dot badge (`.fm-newdecl-period-btn--existing` + `.fm-newdecl-period-btn__dot`, plus a `title` hint, `fm.new_decl.period_existing_hint`) but **is no longer disabled** — the user can select it and create a new declaration for that period. This is the rectificativa flow (filed early, more invoices arrived later for the same period), and blocking it outright was wrong. The previous rationale for disabling it (a duplicate submission 500'd server-side on `ETGO_FISCAL_DECL_UQ`) is fixed on the backend side, with no cap on how many declarations a period can have: `FiscalDeclCrudHandler#resolveNextDeclSeq` (`com.etendoerp.go`) assigns each new declaration the next `DECL_SEQ` ordinal (`MAX(DECL_SEQ) + 1` for the same client/org/model/year/period, or `0` for the first one) — a dedicated, unbounded sequence column, not a repurposing of the `DECL_TYPE` ordinaria/complementaria business field, so a 3rd, 4th or Nth declaration for the same period succeeds exactly like the 2nd (matching the real AEAT/legal rule that there is no limit on rectificativas per period) — see "NEO Headless endpoints" below. The real warning ("you're filing a 2nd declaration for this period, check Autoliquidación rectificativa") lives on the newly created declaration's own detail page instead — see "Duplicate-period warning and rectificativa gate" under "Modelo 303 detail page" above. The `useEffect` that used to jump the selection off a disabled period, and the `allPeriodsTaken`-driven disabling of the "Crear declaración" CTA, were both removed along with the disabling itself. `existingDeclarations` is still optional and defaults to "no existing declarations" when omitted, so every caller that predates this feature is unaffected.
+- **Draft periods ARE disabled again — a narrower, status-scoped reversal (ETP-5272 pt.5).** ETP-5187 (above) removed period-disabling entirely; ETP-5272 reintroduces it, but only for a period that already carries a declaration whose `status === 'draft'` — a draft is unfinished, in-progress work, and spawning a 2nd declaration for the exact same period just fragments it instead of the user completing (or deleting) the existing draft first. `NewDeclModal` computes a separate `draftPeriods` set (distinct from the purely-informational `existingPeriods` above, scoped to the same selected `model`+`year`) and, for a period in that set: the button gets `disabled`, its `onClick` returns early, and its `title` hint switches to the distinct `fm.new_decl.period_draft_blocked_hint` ("There's already a draft declaration for this period. Finish or delete it before creating a new one.") instead of the informational `period_existing_hint` — so the user understands *why* this one specific period can't be picked, rather than seeing the same dot-badge hint as a non-draft duplicate. **Any other existing status** (ready/submitted/submitted_ext/submitted_ack) is still the intended rectificativa case from ETP-5187 above and stays exactly as selectable/informational as before — this reversal is scoped to `draft` only, it does not restore the old blanket disabling.
+  - **Backend mirror (`com.etendoerp.go`, `FiscalDeclCrudHandler#handleDeclPost`):** a new `hasDraftDeclaration(clientId, orgId, model, year, period)` pre-check runs before `resolveNextDeclSeq`, and answers `409 Conflict` ("A draft declaration already exists for this period — complete or delete it before creating a new one.") when one exists — this is real enforcement, not just a UI nicety: a direct/malformed POST bypassing the frontend gate is still rejected. Deliberately a separate query, not folded into `resolveNextDeclSeq` — that method's own `MAX(DECL_SEQ) + 1` contract is untouched by this feature. Mirrors the existing draft-only guard `handleDeclDelete` already enforces (see "Row hover actions — Edit/Delete" under "List page toolbar" above), but in the opposite direction: delete allows *only* a draft to be removed, creation blocks *only* while a draft already exists.
+  - **Frontend error surfacing:** `FmListPage.handleNewDecl`'s create-declaration `.catch()` used to silently swallow the backend's response (a `409`, or any other failure) — the modal just closed with no created row and no explanation. It now shows `toast.error(t('fm.list.new_decl_failed'))` ("The declaration could not be created." / "No se pudo crear la declaración."), mirroring the exact toast pattern already used for delete failures (`fm.list.delete_failed`, see "Row hover actions — Edit/Delete" under "List page toolbar" above).
 - The footer shows a live "Se creará como Modelo {N} · {período} {año}" preview (`fm.new_decl.will_create_as` / `fm.new_decl.preview`) next to Cancelar / **Crear declaración** (`fm.new_decl.create_cta` — renamed from the generic `fm.action.create` key the button used before this restyle).
 
 ### No active models — hides the CTA and shows a dedicated empty state
@@ -1177,6 +1369,42 @@ the interactive checkbox is affected. Full write-up of the invoice-side behavior
 `aEAT349IsCorrective` value on existing invoice lines — the checkbox simply becomes invisible while
 the underlying data (and the read-only grid badge) stays intact.
 
+## Known gaps and residual findings (ETP-5272 audit)
+
+Surfaced while investigating points 5–7 above. None of these are bugs being fixed now — they are
+recorded here so a future pass doesn't have to rediscover them from scratch.
+
+- **Box 87 ("Cuotas a compensar de períodos previos pendientes para períodos posteriores")** is
+  labeled in `fm303Layouts.js` with the formula `(110 - 78)` right in its i18n string
+  (`fm.box.row.cuotas_compensar_post`), but it is **not** one of the boxes `recomputeDerivedBoxes`
+  re-derives (that set is exactly `{45, 46, 64, 66, 69, 71}` — see "Manual box overrides" above).
+  Whether box 87 is meant to recalculate client-side when box 110 or box 78 change has not been
+  confirmed either way; it currently does not, regardless of intent. Flagged, not fixed.
+- **Box 110** has no confirmed path into the box 71 result formula anywhere in
+  `recomputeDerivedBoxes` — box 71's actual formula is `box69 - box70 + box109 - box112` (see
+  above), which does not reference box 110 at all. If box 110 is supposed to feed into the final
+  result through some other box not yet modeled here, that path is currently missing.
+- **Boxes 68 and 111 are UI-editable (`editable: true` in `fm303Layouts.js`) in any period or
+  declaration condition**, even though their real AEAT purpose is period/rectificativa-specific:
+  box 68 (`fm.box.row.reg_anual` — "Exclusivamente para sujetos pasivos que tributan conjuntamente
+  a la Administración del Estado y a las Diputaciones Forales. Resultado de la regularización
+  anual.", i.e. an annual-regularization figure meaningful only for a specific joint
+  State/Diputaciones-Forales taxpayer profile) and box 111 ("Rectificación de cuotas", a
+  rectificativa-only concept — see "Manual box overrides" above for its independent-filing
+  confirmation). Neither field carries a
+  `visibleWhen`/conditional-editable gate tying it to the periods/conditions where it is actually
+  meaningful — a user can enter a value in either box on a declaration where it has no real AEAT
+  meaning, and nothing in the UI stops them. Not enforced as a restriction today; flagged, not
+  fixed.
+- **Debounce-vs-navigation race in the 303 autosave** (`FmModel303Page.jsx`'s 800ms debounced
+  `persistManualData` effect, see "Manual box overrides" above) — **pre-existing, not introduced or
+  fixed by ETP-5272, but confirmed still real** while auditing point 6. An edit to
+  `identChecks`/`manualOverrides` made less than 800ms before the user navigates away from the
+  page never fires: the effect's cleanup (`clearTimeout`) cancels the pending `setTimeout` on
+  unmount without ever flushing it, so the debounced write is simply lost, silently — no error, no
+  toast, no retry. A fix would need a flush-on-unmount (e.g. an unmount-time synchronous save of
+  the latest `identChecks`/`manualOverrides`), which is out of scope for this ticket.
+
 ## Key files
 
 | File | Role |
@@ -1185,7 +1413,7 @@ the underlying data (and the read-only grid badge) stays intact.
 | `FmListPage.jsx` | Declaration table, toolbar, auto-compute wiring |
 | `FmCatalogPage.jsx` | Model catalog drawer — enable/disable tax forms, drives `activeModels` |
 | `useFiscalAutoCompute.js` | Background compute + polling hook |
-| `fiscalModelsUtils.js` | `computeBoxes303`, `checkModified303`, `generate303File`, `fetchDeclarationIncidents` (ETP-4456), formatters, deadline logic |
+| `fiscalModelsUtils.js` | `computeBoxes303`, `checkModified303`, `generate303File`, `fetchDeclarationIncidents` (ETP-4456), formatters, deadline logic; `toBoxArray`/`applyOverrides`/`recomputeDerivedBoxes`/`getBoxValue` (ETP-5272 pt.6, shared between `FmModel303Page.jsx` and `FmListPage.jsx` — see "Manual box overrides" above) |
 | `models/303/FmModel303Page.jsx` | Modelo 303 detail — boxes, sources, stepper, file gen |
 | `models/303/FmBoxes303.jsx` | Box grid renderer |
 | `models/303/fm303Layouts.js` | Box layout definition (sections, rows, labels) |
@@ -1201,7 +1429,7 @@ the underlying data (and the read-only grid badge) stays intact.
 | Method | Path | Used by |
 |--------|------|---------|
 | `GET` | `/fiscal303/declarations` | FmListPage — fetch all declarations |
-| `POST` | `/fiscal303/declarations` (body: model, year, period, status, type) | FmListPage's `handleNewDecl` — creates a declaration. `FiscalDeclCrudHandler#resolveNextDeclSeq` (ETP-5187) assigns the new row the next `DECL_SEQ` ordinal (`MAX(DECL_SEQ) + 1` for the same client/org/model/year/period, or `0` for the first one) — a dedicated, unbounded sequence column added specifically for this uniqueness disambiguation, distinct from `DECL_TYPE` (AEAT's own ordinaria/complementaria business value, still `VARCHAR(1)` CHECKed to `'O'`/`'C'` and rendered verbatim by `FmListPage.jsx`). `ETGO_FISCAL_DECL_UQ` is unique on `(client, org, model, year, period, DECL_SEQ)`, so there is no cap: a 2nd, 3rd, 4th or Nth declaration for the same period always succeeds — matching the real AEAT/legal rule that there is no limit on how many rectificativas can be filed for a period. (An earlier version of this fix repurposed `DECL_TYPE` itself as a 2-slot disambiguator, which capped the system at 2 declarations per period and conflated a real business field with an artificial counter — replaced by the dedicated column above.) |
+| `POST` | `/fiscal303/declarations` (body: model, year, period, status, type) | FmListPage's `handleNewDecl` — creates a declaration. `FiscalDeclCrudHandler#resolveNextDeclSeq` (ETP-5187) assigns the new row the next `DECL_SEQ` ordinal (`MAX(DECL_SEQ) + 1` for the same client/org/model/year/period, or `0` for the first one) — a dedicated, unbounded sequence column added specifically for this uniqueness disambiguation, distinct from `DECL_TYPE` (AEAT's own ordinaria/complementaria business value, still `VARCHAR(1)` CHECKed to `'O'`/`'C'` and rendered verbatim by `FmListPage.jsx`). `ETGO_FISCAL_DECL_UQ` is unique on `(client, org, model, year, period, DECL_SEQ)`, so there is no cap: a 2nd, 3rd, 4th or Nth declaration for the same period always succeeds — matching the real AEAT/legal rule that there is no limit on how many rectificativas can be filed for a period. (An earlier version of this fix repurposed `DECL_TYPE` itself as a 2-slot disambiguator, which capped the system at 2 declarations per period and conflated a real business field with an artificial counter — replaced by the dedicated column above.) **ETP-5272 pt.5:** now answers `409 Conflict` instead, BEFORE reaching `resolveNextDeclSeq`, when a `draft` declaration already exists for the exact same `(client, org, model, year, period)` key — see "Draft periods ARE disabled again" above for the full rationale; a non-draft existing declaration is unaffected and still succeeds via `resolveNextDeclSeq` exactly as described here. |
 | `PUT` | `/fiscal303/declarations?id=` | FmListPage — persist status change |
 | `DELETE` | `/fiscal303/declarations?id=` | `FmRowActions`' delete action (ETP-5187), via `deleteDeclaration` — rejects (409) deleting anything but a `draft` declaration (defense in depth; the frontend also only ever shows the action for draft rows) |
 | `GET` | `/fiscal-models-catalog` | FmListPage — fetch the active-models catalog on mount (per-Client); also consumed cross-spec by `ReversedInvoicesPanel.jsx` (sales-invoice/purchase-invoice) to gate the "Correctiva del 349" checkbox — see "Downstream consumer" above |
