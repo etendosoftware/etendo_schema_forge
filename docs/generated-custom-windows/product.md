@@ -945,3 +945,62 @@ non-null default for it (see `com.etendoerp.go/docs/onboarding-flow.md` and this
 `docs/etendo-ad/onboarding-gaps.md` → §A8/§A8b for the onboarding-wiring side of this ticket — no
 change to that wiring lives in this repo). Regenerated via `make regen ONLY=product`; no changes to
 the pricing, sidebar, or image-field behavior documented above.
+
+## ETP-5348 — Import: the file is judged before the mapping step
+
+Engine-level work shared with Contacts; the whole section applies to both windows, since both
+declare `window.import` and both go through the same `ImportDialog`.
+
+Five ways an unusable file used to reach the mapping screen — or worse, be imported in part.
+All five are now refused up front, with a translated message and the existing "Reintentar"
+button that returns to the dropzone.
+
+**A file larger than the declared limit is refused instead of truncated in silence.** This was
+the serious one. `runImport` applied `limit.maxRows` as `rows.slice(0, maxRows)` *at send time*:
+the extra rows were never attempted, never counted and never mentioned in the result summary. A
+5001-row file imported 5000 and dropped the last one with no error, no warning and nothing in
+the UI to notice it by — the only way to find out was to count the records afterwards. The check
+now runs right after parsing, before validation and review.
+
+**And the declared limit was never read at all.** `ImportDialog` read `config.maxRows` and
+`config.concurrency`, but the contract nests both under `limit` (`window.import.limit` in
+`decisions.json`). Both were therefore always `undefined` and `runImport`'s own parameter
+defaults took over. Those defaults are 5000 and 4 — exactly what every window declares today —
+which is precisely why nothing ever looked wrong. A window that declared a different limit was
+being ignored in complete silence.
+
+**A file whose format the window does not declare is refused.** The dropzone's `accept`
+attribute only filters the OS picker's default view: drag-and-drop ignores it, and every file
+chooser offers an "All files" escape. Nothing downstream refused the file either —
+`decodeCsvBuffer` falls back to Windows-1252, an encoding that maps every possible byte and so
+cannot fail — so a `.docx` parsed into one garbage column that matched no field, and the user
+landed on a mapping screen with nothing mapped and nothing said. The new check reuses
+`formatNames(config.formats)` for its message, so the error and the dropzone hint cannot name
+different formats.
+
+**Duplicate headers are compared the way `mapColumns` compares them.** The guard tested raw
+header text against a `Set` while the matcher it protects normalizes (lower-case, accents
+stripped, inner whitespace collapsed), so `nombre,Nombre` and `codigo,código` walked straight
+through. Downstream `mapColumns` gives a field to the first claimant and leaves the second
+column unmapped, so one of the user's columns was silently discarded. The reported header is
+still the text as typed, not the normalized form — the message exists to help someone find the
+column in their own file.
+
+**A blank header is refused on its own.** Previously a lone blank was invisible; only a *second*
+blank tripped the duplicate check on `""`. The single blank became a row key of `''`, which is
+what broke the "Editar correspondencia" grid. Trailing blank header columns in an `.xlsx` are
+still dropped before this check, as documented in `parseXlsx.js` — those are an artifact of the
+sheet's used range, while a gap between two named columns is real structure.
+
+**A file with headers but no data rows says so.** It is not the empty-file case (there *is* a
+line, so that guard never fired), so it carries its own key rather than reusing
+`importErrorFileEmpty`: the columns are fine, the data is missing. Note this also means the
+downloadable template, re-uploaded unedited, is now rejected with that exact message — which is
+the intended answer, and what `buildTemplateXlsx.test.js` asserts.
+
+Both parsers share one `validateHeaders` (exported from `parseDelimited.js`) so the CSV and
+Excel paths cannot drift apart on these rules again — the drift is how they came to disagree in
+the first place. New locale keys: `importErrorEmptyHeader` (`{position}`), `importErrorNoDataRows`,
+`importErrorTooManyRows` (`{count}`, `{limit}` — the first import message with two placeholders),
+`importErrorUnsupportedFormat` (`{formats}`), guarded by
+`src/locales/__tests__/etp5348-file-rejection-keys.vitest.js`.

@@ -1106,3 +1106,28 @@ No secondary sort key was needed here, unlike `financial-account`'s two-key rest
 Purely declarative — no new generator or component logic — so no new test was added beyond the
 existing generic `listSortBy` coverage (`parseListSortBy.test.js`,
 `ListView.interactions.vitest.jsx`).
+
+## ETP-5348 — Import: the file is judged before the mapping step
+
+Engine-level work shared with Product, reported against Product Import but landing entirely in
+the shared `ImportDialog` and parsers, so Contacts gets all of it. Full write-up in
+`product.md` → *ETP-5348*.
+
+Five rejections now happen before the mapping step instead of not at all: a file over the
+window's declared row limit (which used to be truncated in silence, *and* whose declared value
+was never read because the contract nests it under `limit`), a file whose format the window does
+not declare, duplicate headers differing only in case/accents/whitespace, a blank header, and a
+file carrying headers but no data rows.
+
+Two points specific to this window:
+
+- Contacts declares the same `limit: { maxRows: 5000, concurrency: 4 }` as Product, so the
+  nested-key fix changes no effective value here either — it only means the declaration now
+  governs, rather than coinciding with a default.
+- The duplicate-header fix matters more here than in Product: the Contacts template legitimately
+  carries several columns whose AD labels collide before qualification ("Correo electrónico" for
+  both `etgoEmail` and `email`), which is what `resolveTemplateHeaders`' collision fallback and
+  the `headerScope` qualifier exist for. Tightening the guard to normalized comparison does not
+  touch those — they are disambiguated *before* they are written — but it does mean a
+  hand-edited file that flattens two qualified headers back onto the same name is now caught at
+  upload instead of silently losing a column.
