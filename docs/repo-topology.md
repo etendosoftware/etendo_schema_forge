@@ -93,6 +93,26 @@ on this repo's `artifacts/` and config — **core code over local data**.
 Override the core location with `SCHEMA_FORGE_CORE=/abs/path` if it is not the
 default sibling directory.
 
+**Gateway (`gateway/`, npm-linked local package):** the `gateway/` NestJS app
+(ETP-5345) consumes `@etendosoftware/api-gateway-core`, published from
+`schema_forge_core`, as a real npm dependency — not a CLI bin (so `sf-local`
+doesn't apply) and not bundler-resolved source (so the Vite alias doesn't apply
+either). For local iteration against the unpublished core source, `npm link` is
+the mechanism:
+
+```bash
+make gateway-link-local-core   # or: npm run gateway:link-local-core
+```
+
+This builds `packages/api-gateway-core` in the sibling `schema_forge_core` (its
+`package.json` `main`/`types` point at `./dist/*`, not TypeScript source, so a
+stale `dist/` after a source change is a silent bug, not a build failure — the
+target always rebuilds first) and `npm link`s the result into `gateway/`. Same
+opt-in posture as the other two mechanisms: it is never invoked automatically,
+so the default (published) path is unaffected. Requires `schema_forge_core`
+cloned as a sibling with its own deps installed, same prerequisite as the CLI
+profile above.
+
 ## Where does my change go?
 
 | Change | Repo |

@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-stripe-local test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration test-e2e-purchase-sales test-e2e-last-failed email-stress-limits email-stress-limits-report email-stress-help ast-churn-ranking ast-churn-heatmap generate regen dev dev-local-core dev-mock ai-bff-install build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage flag-debt menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status ci-parity ci-parity-help
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-stripe-local test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration test-e2e-purchase-sales test-e2e-last-failed email-stress-limits email-stress-limits-report email-stress-help ast-churn-ranking ast-churn-heatmap generate regen dev dev-local-core dev-mock ai-bff-install build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage flag-debt menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status ci-parity ci-parity-help regen-public-api gateway-link-local-core
 
 export SF_ROOT := $(CURDIR)
 
@@ -301,6 +301,36 @@ regen-help: ## Show usage and examples for `make regen`
 	@echo "  - The AD cache is one file per query under $(SF_CACHE_PATH)/<key>.json."
 	@echo "  - A full 'make regen CACHE_DB=1' (no ONLY=) also prunes orphan cache files (SF_CACHE_SWEEP=1);"
 	@echo "    scoped 'CACHE_DB=1 ONLY=<spec>' never sweeps, so it only refreshes that window's queries."
+
+# --- Public API Gateway (ETP-5345) ---
+#
+# Resolves artifacts/*/contract.json's field-level `publicApi` curation into one flat
+# allowlist artifact per API version (artifacts/_public-api/allowlist.<version>.json),
+# consumed by the gateway/ NestJS app. Same LOCAL_CORE dispatcher as `regen` above.
+
+regen-public-api: ## Generate artifacts/_public-api/allowlist.v1.json from curated publicApi fields
+	$(SF) sf-generate-public-api-schema --artifacts-root artifacts
+
+# gateway/'s package.json declares @etendosoftware/api-gateway-core as a real npm
+# dependency (not a CLI bin, not bundler-resolved React source) — neither of the two
+# mechanisms above fits, so LOCAL_CORE consumption here uses `npm link`, gated the
+# same way: opt-in, never touches the default (published) install. Requires
+# schema_forge_core cloned as a sibling with its deps installed (npm install there) —
+# see docs/repo-topology.md.
+GATEWAY_CORE_PKG := $(CURDIR)/../schema_forge_core/packages/api-gateway-core
+
+gateway-link-local-core: ## Build api-gateway-core in the sibling core repo and npm-link it into gateway/ (LOCAL_CORE dev only)
+	@if [ ! -d "$(GATEWAY_CORE_PKG)" ]; then \
+		echo "gateway-link-local-core: schema_forge_core not found as a sibling at $(GATEWAY_CORE_PKG)" >&2; \
+		echo "  Clone schema_forge_core as a sibling of this repo first. See docs/repo-topology.md." >&2; \
+		exit 1; \
+	fi; \
+	if [ ! -d "gateway" ]; then \
+		echo "gateway-link-local-core: gateway/ does not exist in this repo yet." >&2; \
+		exit 1; \
+	fi
+	cd $(GATEWAY_CORE_PKG) && npm run build && npm link
+	cd gateway && npm link @etendosoftware/api-gateway-core
 
 # --- Push-to-NEO Delta Dump ---
 
