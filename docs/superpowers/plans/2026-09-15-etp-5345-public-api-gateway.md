@@ -62,6 +62,27 @@ points `main`/`types` at `./dist/index.js`/`./dist/index.d.ts`, `npm run build` 
 `LOCAL_CORE` wiring or Task 12's setup must include this build step; neither explicitly said so as
 originally written.
 
+**`@nestjs/*`/`rxjs` must be `peerDependencies` of `api-gateway-core`, plus `--preserve-symlinks`
+for the local `npm link` dev loop (found before Task 14).** As originally written, Task 3's
+`package.json` lists `@nestjs/common`/`@nestjs/core`/`@nestjs/swagger`/`@nestjs/throttler` as
+regular `dependencies` — wrong for a package meant to plug into a host NestJS app. Under
+`npm link`, this produces two physically separate installs of `@nestjs/common` (one hoisted in
+`schema_forge_core`, one in `gateway/node_modules`), so `instanceof HttpException` checks in
+Nest's own exception filter fail across the boundary — e.g. a guard throwing
+`UnauthorizedException` (real 401) surfaces as an unrecognized error (500) instead. Fix, two
+parts: (1) move those four `@nestjs/*` packages and `rxjs` to `peerDependencies` in
+`packages/api-gateway-core/package.json` (also keep them in `devDependencies` so the package
+still builds/tests standalone) — the standard pattern for a NestJS plug-in library. (2) This
+alone doesn't fix local `npm link` dev, because Node resolves a symlinked package's own imports
+against its REAL physical location by default, not the symlink's location — so run the
+gateway's local-core dev loop with `NODE_OPTIONS=--preserve-symlinks` (e.g.
+`NODE_OPTIONS=--preserve-symlinks npm run start:dev`), which makes Node resolve relative to the
+symlink instead, picking up `gateway/node_modules`'s own copy. Both parts together are required;
+either alone is insufficient. Not an issue post-publish (a normal registry install dedupes
+compatible peer ranges into one copy), so this is specifically a `LOCAL_CORE`/`npm link`
+development-loop concern — document it in whichever `docs/repo-topology.md` section covers the
+`gateway-link-local-core` mechanism, so it isn't rediscovered from scratch later.
+
 **Test runner: `tsx`, not raw `node --experimental-strip-types`/`--experimental-transform-types`.**
 Found during Task 7: Node's native TypeScript execution has NO decorator support at all (neither
 legacy `experimentalDecorators` nor TC39 stage-3) — every `@Injectable()`/`@Controller()` class
