@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { translateBackendError } from '../backendErrors.js';
+import { translateBackendError, parseBackendErrorMessage } from '../backendErrors.js';
 
 /**
  * Unit tests for translateBackendError.
@@ -1830,5 +1830,135 @@ describe('translateBackendError — "zero or negative quantity (process)" parame
     const raw = 'This movement cannot be processed: the line(s) of SK-003 have a zero or negative quantity.';
     const missingT = (k) => k;
     assert.equal(translateBackendError(raw, missingT), raw);
+  });
+});
+
+// ── ETP-5323: parseBackendErrorMessage's response.errors (MAP) fallback ──────────
+//
+// A line PATCH that goes through core's DefaultJsonDataService (not NeoCrudHandler's own
+// pre-check) returns a validation error under `response.errors`, a MAP keyed by property
+// name — a sibling of `response.error` (singular) above, NOT a variant of it. Before this
+// fallback existed, `raw` stayed `undefined` for this shape and the caller fell back to the
+// bare "Error 400" toast the user actually reported (this is the regression's root cause).
+//
+// NeoCrudHandler.buildValidationErrorResponse now translates/sanitizes this server-side, so
+// this branch is a defense-in-depth fallback for any deployment where that Java fix hasn't
+// shipped yet (or for a JsonDataService write that bypasses NeoCrudHandler entirely).
+describe('parseBackendErrorMessage — response.errors MAP fallback (ETP-5323)', () => {
+  function jsonResponse(body) {
+    return { json: async () => body };
+  }
+
+  it('extracts the first entry of response.errors when no response.error/data.error/message exists', async () => {
+    const res = jsonResponse({
+      response: {
+        status: -1,
+        errors: {
+          description: 'C_OrderLine.description: Value too long. Length 2150, maximum allowed 2000 '
+            + '[Some very long description text that exceeds the column...]',
+        },
+      },
+    });
+    const raw = await parseBackendErrorMessage(res);
+    assert.equal(
+      raw,
+      'C_OrderLine.description: Value too long. Length 2150, maximum allowed 2000 '
+        + '[Some very long description text that exceeds the column...]',
+    );
+  });
+
+  it('feeds a raw response.errors message all the way through translateBackendError (the actual regression)', async () => {
+    // This is the exact shape that reached the frontend as a bare "Error 400" toast before
+    // ETP-5323: parseBackendErrorMessage() couldn't find a raw string anywhere in the
+    // response, so its caller had nothing to hand to translateBackendError and fell back to
+    // the generic status-code message.
+    const res = jsonResponse({
+      response: {
+        status: -1,
+        errors: {
+          description: 'C_OrderLine.description: Value too long. Length 2150, maximum allowed 2000 '
+            + '[Lorem ipsum dolor sit amet...]',
+        },
+      },
+    });
+    const raw = await parseBackendErrorMessage(res);
+    const es = fakeUiTranslator({
+      'backendError.fieldTooLong': 'Este valor es demasiado largo. No puede superar los {maxLength} caracteres.',
+    });
+    assert.equal(
+      translateBackendError(raw, es),
+      'Este valor es demasiado largo. No puede superar los 2000 caracteres.',
+    );
+  });
+
+  it('returns undefined for an empty response.errors object (no crash, no false match)', async () => {
+    const res = jsonResponse({ response: { status: -1, errors: {} } });
+    const raw = await parseBackendErrorMessage(res);
+    assert.equal(raw, undefined);
+  });
+
+  it('returns undefined when response.errors is present but has no string-valued entries', async () => {
+    // A non-string value under errors.<key> (e.g. a nested object or array) must not crash
+    // parseBackendErrorMessage and must not be handed to the caller as if it were the raw
+    // message — Object.keys(errorsMap)[0] resolves the key, but the
+    // `typeof errorsMap[firstKey] === 'string'` guard declines to use it.
+    const res = jsonResponse({ response: { status: -1, errors: { description: { nested: 'oops' } } } });
+    const raw = await parseBackendErrorMessage(res);
+    assert.equal(raw, undefined);
+  });
+
+  it('returns undefined when response.errors is not an object (defensive guard)', async () => {
+    const res = jsonResponse({ response: { status: -1, errors: 'not-an-object' } });
+    const raw = await parseBackendErrorMessage(res);
+    assert.equal(raw, undefined);
+  });
+
+  it('still prefers the NEO top-level error.message over response.errors when both are present (regression guard)', async () => {
+    // Precedence must not change: data.error.message (NEO Headless's own pre-checked shape,
+    // e.g. NeoCrudHandler.buildValidationErrorResponse) wins over the JsonDataService
+    // response.errors fallback added by this fix.
+    const res = jsonResponse({
+      error: { message: 'neo pre-checked message', status: 400 },
+      response: { errors: { description: 'should not be used' } },
+    });
+    const raw = await parseBackendErrorMessage(res);
+    assert.equal(raw, 'neo pre-checked message');
+  });
+
+  it('still prefers response.error.message over response.errors when both are present (regression guard)', async () => {
+    const res = jsonResponse({
+      response: {
+        error: { message: 'service error message' },
+        errors: { description: 'should not be used' },
+      },
+    });
+    const raw = await parseBackendErrorMessage(res);
+    assert.equal(raw, 'service error message');
+  });
+
+  it('still prefers response.error (string) over response.errors when both are present (regression guard)', async () => {
+    const res = jsonResponse({
+      response: {
+        error: 'plain string error',
+        errors: { description: 'should not be used' },
+      },
+    });
+    const raw = await parseBackendErrorMessage(res);
+    assert.equal(raw, 'plain string error');
+  });
+
+  it('still prefers top-level data.message over response.errors when both are present (regression guard)', async () => {
+    const res = jsonResponse({
+      message: 'top-level message',
+      response: { errors: { description: 'should not be used' } },
+    });
+    const raw = await parseBackendErrorMessage(res);
+    assert.equal(raw, 'top-level message');
+  });
+
+  it('returns undefined when res.json() rejects (non-JSON body), same as before this fix', async () => {
+    const res = { json: async () => { throw new Error('not JSON'); } };
+    const raw = await parseBackendErrorMessage(res);
+    assert.equal(raw, undefined);
   });
 });

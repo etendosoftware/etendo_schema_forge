@@ -3,7 +3,7 @@ import { EntityForm } from '@/components/contract-ui';
 // @sf-generated-start fields:lines
 const fields = [
   { key: 'product', column: 'M_Product_ID', type: 'search', label: 'Product', lookup: true, section: 'principal', reference: 'Product', inputMode: 'search', readOnlyLogic: (record) => record['processed'] === true },
-  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'principal' },
+  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'principal', maxLength: 2000 },
   { key: 'invoicedQuantity', column: 'QtyInvoiced', type: 'number', label: 'Invoiced Quantity', required: true, section: 'principal', defaultValue: '1', readOnlyLogic: (record) => record['processed'] === true || (record['uomManagement'] === 'Y' && record['financialInvoiceLine'] !== true) },
   { key: 'listPrice', column: 'PriceList', type: 'number', label: 'List Price', required: true, section: 'principal', readOnlyLogic: (record) => record['processed'] === true },
   { key: 'etgoDiscount', column: 'EM_Etgo_Discount', type: 'number', label: 'Discount %', section: 'principal', defaultValue: '0', min: 0, readOnlyLogic: (record) => record['processed'] === true },

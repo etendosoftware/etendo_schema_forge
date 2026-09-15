@@ -761,6 +761,23 @@ function translateParameterized(msg, t) {
   return (translated && translated !== match.key) ? translated : null;
 }
 
+// ETP-5323: JsonDataService's RPCREQUEST_STATUS_VALIDATION_ERROR shape (a per-property setter
+// failure caught during JSON-to-entity conversion, e.g. StringPropertyValidator rejecting a
+// "Description" value longer than its AD column) carries the message under response.errors, a
+// MAP keyed by property name — a sibling of response.error (singular), not a variant of it.
+// NeoCrudHandler now translates/sanitizes this server-side (see buildValidationErrorResponse),
+// so this is a defense-in-depth fallback for any deployment where that Java fix hasn't shipped
+// yet: without it, the caller falls back to the bare "Error <status>". Extracted out of
+// parseBackendErrorMessage to keep that function under the S3776 cognitive-complexity ceiling —
+// same pattern as PARAMETERIZED_MATCHERS above.
+function extractFirstResponseErrorsMessage(data) {
+  const errorsMap = data?.response?.errors;
+  if (!errorsMap || typeof errorsMap !== 'object') return undefined;
+  const firstKey = Object.keys(errorsMap)[0];
+  if (firstKey && typeof errorsMap[firstKey] === 'string') return errorsMap[firstKey];
+  return undefined;
+}
+
 export async function parseBackendErrorMessage(res) {
   let raw;
   try {
@@ -773,6 +790,7 @@ export async function parseBackendErrorMessage(res) {
       if (err?.message) raw = err.message;
       else if (typeof err === 'string') raw = err;
       else if (data?.message) raw = data.message;
+      else raw = extractFirstResponseErrorsMessage(data);
     }
   } catch {
     // Ignore non-JSON error bodies.
