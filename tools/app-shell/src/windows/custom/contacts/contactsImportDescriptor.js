@@ -3,7 +3,11 @@ import { registerImportRowValidator } from '@etendosoftware/app-shell-core/lib/i
 import { getFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResolvers.js';
 import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendosoftware/app-shell-core/lib/import/resolveDependentEntity.js';
 import { fetchNeoList } from '@etendosoftware/app-shell-core/lib/import/fetchNeoList.js';
-import { classifyImportError } from '@etendosoftware/app-shell-core/lib/import/importEngine.js';
+import {
+  getCachedCategories,
+  categoryLookupFailedMessage,
+  categoryCreateFailedError,
+} from '@/lib/importCategoryResolution.js';
 import { resolveCodedCellOrThrow, codedCellError, codeLabels } from '@/lib/codedValue.js';
 import { registerExportHints } from '@/lib/importExportColumns.js';
 import { asDependentEntityInput } from '@/lib/dependentEntityCell.js';
@@ -38,43 +42,11 @@ function fetchBusinessPartnerCategories(token) {
 
 function getExistingBusinessPartnerCategories(token, existingCategoriesOverride) {
   if (existingCategoriesOverride) return Promise.resolve(existingCategoriesOverride);
-  const key = token || 'default';
-  if (!businessPartnerCategoriesCache.has(key)) {
-    // A failed read must not become this session's answer — see the product descriptor's twin
-    // comment. Evicting on rejection is what makes a retry an actual retry.
-    const pending = fetchBusinessPartnerCategories(token).catch((error) => {
-      if (businessPartnerCategoriesCache.get(key) === pending) businessPartnerCategoriesCache.delete(key);
-      throw error;
-    });
-    businessPartnerCategoriesCache.set(key, pending);
-  }
-  return businessPartnerCategoriesCache.get(key);
-}
-
-/** A row-level message for a category read that failed, in the session language. */
-function categoryLookupFailed(cell, config) {
-  const category = String(cell ?? '').trim();
-  return typeof config.translate === 'function'
-    ? config.translate('importErrorCategoryLookupFailed', { category })
-    : `The categories could not be read, so "${category}" could not be assigned. Try the import again.`;
-}
-
-/**
- * A row-level message for a category that could not be CREATED, in the session language — the
- * backend's own English text is classified rather than rethrown. Twin of the product one.
- */
-function categoryCreateFailed(rawMessage, cell, config) {
-  const category = String(cell ?? '').trim();
-  const translate = typeof config.translate === 'function' ? config.translate : null;
-  const { key, params } = classifyImportError(rawMessage);
-  const classified = translate ? translate(key, params) : null;
-  const message = classified && classified !== key
-    ? `${classified} (${category})`
-    : (translate?.('importErrorCategoryUnresolved', { category })
-      ?? `The category "${category}" could not be resolved or created.`);
-  const error = new Error(message);
-  error.raw = rawMessage;
-  return error;
+  return getCachedCategories(
+    businessPartnerCategoriesCache,
+    token,
+    () => fetchBusinessPartnerCategories(token),
+  );
 }
 
 function pick(row, targets) {
@@ -185,7 +157,7 @@ async function resolveCategoryId(row, config) {
   try {
     categories = await getExistingBusinessPartnerCategories(config.token, config.existingCategories);
   } catch (error) {
-    throw new Error(categoryLookupFailed(row.category, config));
+    throw new Error(categoryLookupFailedMessage(row.category, config));
   }
   const runCache = getResolutionCache(config.token || 'contacts-import');
   const createFn = config.createCategoryFn || (async ({ searchKey, name }) => {
@@ -199,7 +171,7 @@ async function resolveCategoryId(row, config) {
     });
     if (!res.ok) {
       const errJson = await res.json().catch(() => null);
-      throw categoryCreateFailed(errJson?.error?.message || errJson?.message || '', row.category, config);
+      throw categoryCreateFailedError(errJson?.error?.message || errJson?.message || '', row.category, config);
     }
     const json = await res.json().catch(() => null);
     const record = json?.response?.data?.[0] ?? json?.data?.[0] ?? json;

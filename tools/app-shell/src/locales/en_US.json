@@ -16609,7 +16609,7 @@
     "importErrorGeneric": "This row could not be imported. Open the details for the technical report or contact support.",
     "importErrorCountryUnresolved": "The country \"{country}\" could not be resolved to an existing record.",
     "importErrorCategoryUnresolved": "The category \"{category}\" could not be resolved or created.",
-    "importErrorCategoryLookupFailed": "The product categories could not be read, so \"{category}\" could not be assigned. Try the import again.",
+    "importErrorCategoryLookupFailed": "The categories could not be read, so \"{category}\" could not be assigned. Try the import again.",
     "importErrorDependentAmbiguous": "Multiple records match \"{value}\". Please specify an exact code.",
     "importErrorDependentUnresolved": "Record \"{value}\" could not be resolved.",
     "importErrorDependentInvalidName": "Cannot generate a valid identifier from \"{value}\".",
