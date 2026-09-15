@@ -164,9 +164,35 @@ function quickActionsColumnStyle(reservedWidthPx) {
 // scroll-state detection then re-measured), this only ever toggles an
 // `opacity` class. Nothing here feeds back into any measurement, so it
 // can't reopen that class of bug no matter how it's wired.
+// ETP-5268 follow-up — "el scroll horizontal no se ve, si no hasta el final
+// del scroll vertical ... deberia aparecer siempre": this list's own scroll
+// container has no bounded height (by design — it stays under ListView's
+// default ScrollPane/infinite-scroll ownership, not `tableOwnsScroll`, so
+// "load more as you near the bottom" keeps working), so with enough rows the
+// <table> itself grows taller than the viewport and its native horizontal
+// scrollbar — rendered at the table's own bottom edge — ends up scrolled
+// off-screen until the user scrolls all the way down. Horizontal scrolling
+// itself already works from anywhere via wheel/trackpad (verified live —
+// this was never actually broken), but there's no visible, always-reachable
+// scrollbar to grab with a mouse.
+//
+// Fixed with a second, thin "mirror" scrollbar — see mirrorRef below —
+// `position: sticky; bottom: 0` within DataTable's own render, so it stays
+// pinned to the bottom of whichever ancestor actually scrolls vertically
+// (ListView's bounded viewport) regardless of how tall the table grows.
+// Deliberately NOT a `tableOwnsScroll`-style bounded-height rewrite of the
+// table's own scroll container: that would require giving up (or
+// reimplementing against a different scroll boundary) the "load more on
+// reach bottom" pagination this window relies on for large datasets — this
+// approach touches nothing about how or when data loads, purely a second
+// scrollable strip kept in sync with the real one.
 function useQuickActionsAlwaysVisible() {
   const [alwaysVisible, setAlwaysVisible] = useState(true);
+  const [hasOverflow, setHasOverflow] = useState(false);
+  const [contentWidth, setContentWidth] = useState(0);
   const cleanupRef = useRef(null);
+  const elRef = useRef(null);
+  const mirrorElRef = useRef(null);
 
   // Same callback-ref reasoning as the removed useHorizontalScrollEdge had:
   // DataTable early-returns a skeleton while `loading`, so an object-ref
@@ -178,31 +204,77 @@ function useQuickActionsAlwaysVisible() {
       cleanupRef.current = null;
     }
     const el = outerEl?.firstElementChild;
+    elRef.current = el ?? null;
     if (!el || typeof ResizeObserver === 'undefined') return;
 
     const EPSILON = 1;
     const measure = () => {
-      const hasOverflow = el.scrollWidth > el.clientWidth + EPSILON;
+      const overflow = el.scrollWidth > el.clientWidth + EPSILON;
       const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - EPSILON;
       setAlwaysVisible((prev) => {
-        const next = !hasOverflow || atEnd;
+        const next = !overflow || atEnd;
         return prev === next ? prev : next;
       });
+      setHasOverflow((prev) => (prev === overflow ? prev : overflow));
+      setContentWidth((prev) => (prev === el.scrollWidth ? prev : el.scrollWidth));
+    };
+    // No re-entrancy flag needed against onMirrorScroll below triggering this
+    // right back: each handler only ever writes to the OTHER element, and
+    // only when its value actually differs. Once a write lands, the two
+    // values match, so the write it provokes on the other side is a no-op —
+    // self-terminating by simple value equality, never an unconditional
+    // "I was just told to sync, ignore the next event" flag (which, live-
+    // verified, can get stuck permanently the one time a programmatic
+    // scrollLeft assignment doesn't provoke its own 'scroll' event — jsdom
+    // and some automated-scroll paths skip it; real user-driven scrolling
+    // always fires one, but this shouldn't depend on that).
+    const onRealScroll = () => {
+      measure();
+      const mirrorEl = mirrorElRef.current;
+      if (mirrorEl && mirrorEl.scrollLeft !== el.scrollLeft) {
+        mirrorEl.scrollLeft = el.scrollLeft;
+      }
     };
 
     measure();
-    el.addEventListener('scroll', measure, { passive: true });
+    el.addEventListener('scroll', onRealScroll, { passive: true });
     const resizeObserver = new ResizeObserver(measure);
     resizeObserver.observe(el);
     if (el.firstElementChild) resizeObserver.observe(el.firstElementChild);
 
     cleanupRef.current = () => {
-      el.removeEventListener('scroll', measure);
+      el.removeEventListener('scroll', onRealScroll);
       resizeObserver.disconnect();
     };
   }, []);
 
-  return { alwaysVisible, containerRef };
+  // The mirror strip's own scroll container — a separate, independent
+  // `overflow-x-auto` div (see the JSX below) containing one width-only
+  // spacer (`contentWidth`, kept in lockstep with the real table's
+  // `scrollWidth` by the ResizeObserver above). Scrolling IT forwards to the
+  // real container; scrolling the real one forwards back here (onRealScroll
+  // above) — see its own comment for why no extra guard flag is needed.
+  const mirrorCleanupRef = useRef(null);
+  const mirrorRef = useCallback((mirrorEl) => {
+    if (mirrorCleanupRef.current) {
+      mirrorCleanupRef.current();
+      mirrorCleanupRef.current = null;
+    }
+    mirrorElRef.current = mirrorEl ?? null;
+    if (!mirrorEl) return;
+    const onMirrorScroll = () => {
+      const el = elRef.current;
+      if (el && el.scrollLeft !== mirrorEl.scrollLeft) {
+        el.scrollLeft = mirrorEl.scrollLeft;
+      }
+    };
+    mirrorEl.addEventListener('scroll', onMirrorScroll, { passive: true });
+    // React 18 callback refs don't support a returned cleanup function (that's
+    // React 19) — track it manually, same pattern as containerRef's cleanupRef.
+    mirrorCleanupRef.current = () => mirrorEl.removeEventListener('scroll', onMirrorScroll);
+  }, []);
+
+  return { alwaysVisible, hasOverflow, contentWidth, containerRef, mirrorRef };
 }
 
 // Extracts grow flag and basis (px) from a columnFlex() shorthand string.
@@ -2496,8 +2568,13 @@ export function DataTable({
     [visibleColumns, entity, addRow?.fields, addRow?.catalogs],
   );
 
-  const { alwaysVisible: quickActionsAlwaysVisible, containerRef: scrollContainerRef } =
-    useQuickActionsAlwaysVisible();
+  const {
+    alwaysVisible: quickActionsAlwaysVisible,
+    hasOverflow: hasHorizontalOverflow,
+    contentWidth: horizontalContentWidth,
+    containerRef: scrollContainerRef,
+    mirrorRef: horizontalScrollMirrorRef,
+  } = useQuickActionsAlwaysVisible();
 
   const totals = useMemo(() => {
     if (amountColumns.length === 0) return null;
@@ -2773,6 +2850,32 @@ export function DataTable({
           })}
         </Table>
       </div>
+      {/* ETP-5268 follow-up — the "mirror" horizontal scrollbar: see
+          useQuickActionsAlwaysVisible's own doc comment for the full
+          rationale (this list's own scroll container has no bounded height,
+          so its native scrollbar can end up scrolled off-screen at the
+          bottom of a long list). `position: sticky; bottom: 0` keeps THIS
+          strip pinned to the bottom of whichever ancestor actually scrolls
+          vertically, regardless of how tall the table above it grows. Its
+          own `overflow-x-auto` + a spacer matching the real table's
+          `scrollWidth` gives it an identical, genuinely native, draggable
+          scrollbar; the hook's onScroll handlers keep the two positions in
+          lockstep either direction. Rendered only when there's real
+          overflow to mirror, and skipped for the inlineEditable lines
+          layout, which uses a different overflow strategy entirely
+          (`[&>div]:!overflow-visible` above) and was never the case this
+          fixes. */}
+      {hasHorizontalOverflow && linesLayout !== 'inlineEditable' && (
+        <div
+          ref={horizontalScrollMirrorRef}
+          className="sticky bottom-0 z-20 overflow-x-auto overflow-y-hidden bg-card border-t border-border/40"
+          style={{ height: 17 }}
+          aria-hidden="true"
+          data-testid="horizontal-scroll-mirror"
+        >
+          <div style={{ width: horizontalContentWidth, height: 1 }} />
+        </div>
+      )}
       {addRow?.active && (
         <p className="text-xs text-muted-foreground mt-1 text-center">
           {ui('inlineAddHint')}
