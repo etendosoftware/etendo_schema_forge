@@ -235,26 +235,32 @@ export default function RowQuickActions({
   return (
     <div
       // Always absolutely positioned — this MUST stay out of normal flow:
-      // it's `h-10` regardless of hover state (only `opacity` toggles), so
-      // in-flow it would inflate every row's height to fit these 32-40px
-      // icon buttons even while invisible — that regression shipped and was
-      // caught by hand on /contacts before being reverted here.
+      // regardless of hover state (only `opacity` toggles), so in-flow it
+      // would inflate every row's height to fit these 32-40px icon buttons
+      // even while invisible — that regression shipped and was caught by
+      // hand on /contacts before being reverted here. `inset-y-0 h-full`
+      // (rather than a fixed `h-10` centered via `top-1/2 -translate-y-1/2`)
+      // sizes it to the enclosing <td>'s own full height instead of a
+      // shorter fixed height floating inside it.
       //
-      // ETP-5268 follow-up — `bg-card rounded-lg shadow-sm ring-1
-      // ring-border/40` here (independent of the shared QUICK_ACTIONS_PILL_CLASS
-      // toggle, which stays off for the rest of this component's history —
-      // InlineLinesPanel's own overlay is unaffected) is load-bearing, not
-      // decorative: the enclosing <td> is fully transparent and `sticky
-      // right-0` (see DataTable's quickActionsColumnClassName) so it never
-      // paints a visible box of its own while scrolled mid-way — without a
-      // background on the pill ITSELF, hovering would show the icons
-      // superimposed directly over whatever column is currently scrolled
-      // underneath, both sets of text readable at once. The pill's own
-      // background — sized to just its icons, not the wider reserved column
-      // — is what makes it cleanly cover only that part instead ("con fondo
-      // blanco esa parte no mas"). Safe to keep unconditional (not gated
-      // behind hover) since the WHOLE pill, background included, already
-      // fades in/out with the opacity classes right below.
+      // ETP-5268 follow-up — `bg-card` here (independent of the shared
+      // QUICK_ACTIONS_PILL_CLASS toggle, which stays off for the rest of
+      // this component's history — InlineLinesPanel's own overlay is
+      // unaffected) is load-bearing, not decorative: the enclosing <td> is
+      // fully transparent and `sticky right-0` (see DataTable's
+      // quickActionsColumnClassName) so it never paints a visible box of its
+      // own while scrolled mid-way — without a background on the pill
+      // ITSELF, hovering would show the icons superimposed directly over
+      // whatever column is currently scrolled underneath, both sets of text
+      // readable at once. The pill's own background — sized to just its
+      // icons, not the wider reserved column — is what makes it cleanly
+      // cover only that part instead ("con fondo blanco esa parte no mas").
+      // No border/ring on the pill itself (dropped per feedback — it read as
+      // a stray box floating over the row rather than part of it); the
+      // opaque fill alone is what needs to cover the data underneath, not a
+      // visible outline. Safe to keep the background unconditional (not
+      // gated behind hover) since the WHOLE pill, background included,
+      // already fades in/out with the opacity classes right below.
       //
       // ETP-5268 follow-up — `alwaysVisible` (see its own prop comment)
       // swaps the default hover-only opacity for a flat `opacity-100`:
@@ -265,7 +271,12 @@ export default function RowQuickActions({
       // be scrolled underneath, would look like an unexplained pill hovering
       // over random rows rather than a deliberate row action.
       className={[
-        'absolute right-3 top-1/2 -translate-y-1/2 flex flex-row items-center justify-center gap-0.5 h-10 px-3 focus-within:opacity-100 transition-opacity z-10 bg-card rounded-lg shadow-sm ring-1 ring-border/40',
+        // `right-0` (not `right-3`) — flush against the cell's own right
+        // edge, no outer margin: "que se empuje al fondo, tiene como un
+        // espacio" (a `right-3` gap here read as an unexplained sliver of
+        // the reserved column left uncovered at the true edge). `px-3`
+        // keeps the icons themselves off the very edge as inner padding.
+        'absolute right-0 inset-y-0 h-full flex flex-row items-center justify-center gap-0.5 px-3 focus-within:opacity-100 transition-opacity z-10 bg-card',
         alwaysVisible ? 'opacity-100' : 'opacity-0 group-hover/row:opacity-100',
       ].join(' ')}
       data-testid="row-quick-actions"
