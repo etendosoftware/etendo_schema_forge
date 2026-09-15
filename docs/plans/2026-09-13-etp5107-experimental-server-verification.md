@@ -893,6 +893,46 @@ Fix shape: a dedicated i18n key for the both-sides case, added to BOTH `en_US.js
 Same family as the QA report's recommendation #1 — warnings the user needs and does not get.
 Product call, deliberately not done here.
 
+### 7.19 Paste is not typing — §2 of the QA report, fixed at the component (2026-09-15)
+
+The report's §2 recorded, as an accepted-by-design consequence, that pasting an English-format price
+silently multiplied it: `12.50` saved as `1.250,00 €`. Reproduced live with the human's own example,
+`129.56` → `12.956,00` — a value that does not look absurd enough for anyone to catch.
+
+**The insight that makes it fixable.** Keystroke filtering *has* to drop a typed `.`: mid-typing,
+`12.` carries no information about what follows, so the mask cannot tell a decimal point from
+grouping. A PASTE is a different act — the whole string arrives at once, so the convention can be
+read off it. `129.56` has two digits after the separator and thousands groups are always three, so
+it cannot be grouping; it is unambiguously a decimal.
+
+**And that problem is already solved.** A pasted string is exactly what `parseAmountInput` was built
+for in ETP-4954: opaque text from an outside source whose separator convention is unknown — a CSV
+cell. Reusing it keeps paste and file import agreeing instead of inventing a second heuristic.
+
+Implemented as an `onPaste` handler on `MaskedAmountInput`, so all 11 files and 15 instances get it
+from one change. Two deliberate limits: only a paste that REPLACES the whole value is treated as an
+import (pasting into the middle of a number is editing, not importing), and the genuinely ambiguous
+shape `1.500` keeps the grouping reading, which is also what typing it produces.
+
+Verified live in 10 windows — Producto → Precio, Cobros y pagos (amount and amount-in-account),
+Nuevo movimiento, Transferir fondos, Cierre de caja, Extracto manual, líneas de documento, Activo
+and Amortización:
+
+| Pasted | Before | After |
+|---|---|---|
+| `129.56` | `12.956,00` | **`129,56`** |
+| `12.50` | `1.250,00` | **`12,50`** |
+| `1.234,56` | `1.234,56` | `1.234,56` |
+| `1,234.56` (English) | — | **`1.234,56`** |
+| `1.500` (ambiguous) | `1.500,00` | `1.500,00` (unchanged) |
+
+**Typing is byte-identical everywhere** — `483,945` → `483,95` still, in all ten. The QA-approved
+keystroke semantics are untouched; only the paste path is new.
+
+This also answers the report's recommendation #1 more completely than a warning would: the ×100 no
+longer happens, so there is nothing to warn about in the common case. The residual §7.14.2 asymmetry
+(a TYPED `.`) is unchanged and still a product call.
+
 ### 7.13 Still open beyond the 7 points
 
 - The add-line callout race condition from §4.2/§4.3 (typing a price within ~0.85s of selecting the product) — pre-existing, unrelated to ETP-5107, still awaiting a decision on whether it gets its own ticket.

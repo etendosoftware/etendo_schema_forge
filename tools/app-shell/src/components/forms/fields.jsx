@@ -14,6 +14,7 @@ import { FIELD_HEIGHT } from '@/components/ui/formDensity';
 import { formatCurrency, getCurrencySymbol, formatPlainDecimal } from '@/lib/formatCurrency.js';
 import { getCurrencyFormatConfig, isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
+import { parseAmountInput } from '@/lib/parseAmountInput.js';
 import {
   Select as RSelect, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -385,6 +386,42 @@ export function MaskedAmountInput({
     onChange?.(clean, parseLocaleNumber(clean).value);
   };
 
+  /**
+   * ETP-5107 (QA round 2, §2 of the attached report) — pasting is NOT typing.
+   *
+   * Keystroke filtering has to drop a typed thousands separator: mid-typing, `12.` carries no
+   * information about what comes next, so the mask cannot tell a decimal point from grouping and
+   * the configured decimal separator is the only safe answer. A PASTE is different: the whole
+   * string arrives at once, so the convention can be read off it. Without this, pasting a price
+   * copied from a web page or an English-locale spreadsheet silently multiplied it: `129.56`
+   * became `12.956,00` and `12.50` became `1.250,00`, with no warning and a clean save.
+   *
+   * A pasted string is exactly the problem `parseAmountInput` already solves for CSV/xlsx import
+   * (ETP-4954): opaque text from an outside source whose separator convention is unknown. Reusing
+   * it keeps paste and file import agreeing, instead of inventing a second heuristic here.
+   *
+   * Only a paste that REPLACES the whole value is treated as an import. Pasting into the middle of
+   * an existing number is editing, not importing, so it falls through to the normal keystroke path.
+   * The genuinely ambiguous shape (`1.500` — one separator, exactly 3 digits) stays with the
+   * grouping reading, which is also what typing it produces.
+   */
+  const handlePaste = (e) => {
+    const el = e.currentTarget;
+    const pasted = e.clipboardData?.getData('text') ?? '';
+    const selectsAll = el.selectionStart === 0 && el.selectionEnd === el.value.length;
+    if (!pasted.trim() || !(el.value === '' || selectsAll)) return;
+
+    const parsed = parseAmountInput(pasted);
+    if (parsed == null || !Number.isFinite(parsed)) return;
+
+    e.preventDefault();
+    const { thousandsSeparator, decimalSeparator } = getCurrencyFormatConfig();
+    const clean = String(parsed);
+    const filtered = filterMaskChars(clean.split('.').join(decimalSeparator), decimalSeparator, grouping);
+    setDisplay(grouping ? formatGrouped(filtered, thousandsSeparator, decimalSeparator) : filtered);
+    onChange?.(clean, parsed);
+  };
+
   const handleBlur = () => {
     setFocused(false);
     const { decimalSeparator } = getCurrencyFormatConfig();
@@ -420,6 +457,7 @@ export function MaskedAmountInput({
       inputMode={inputMode}
       value={display}
       onChange={handleChange}
+      onPaste={handlePaste}
       onFocus={(e) => { setFocused(true); onFocus?.(e); }}
       onBlur={handleBlur}
       onKeyDown={(e) => {
