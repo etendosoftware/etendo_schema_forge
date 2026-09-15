@@ -113,6 +113,32 @@ so the default (published) path is unaffected. Requires `schema_forge_core`
 cloned as a sibling with its own deps installed, same prerequisite as the CLI
 profile above.
 
+**Two more things a linked NestJS-flavored package needs, or you get duplicate
+framework instances:**
+
+1. `packages/api-gateway-core`'s `@nestjs/*` (and `rxjs`) deps are
+   `peerDependencies` (with matching `devDependencies` so its own standalone
+   `npm test`/`npm run build` still work) — never plain `dependencies`. A
+   library meant to plug classes (guards, interceptors, exception types) into a
+   *host* NestJS app must not carry its own copy of the framework: two separate
+   installs of `@nestjs/common` mean two separate `HttpException` classes, and
+   an `instanceof` check across that boundary silently fails — an
+   `UnauthorizedException` thrown by a linked guard came back as an unhandled
+   500, not the 401 it should have been (confirmed via `require.resolve()` from
+   each side — two different physical paths).
+2. Even as peerDependencies, `npm link`'s symlink alone doesn't fix this: Node
+   resolves a symlinked package against its REAL (target) path, so
+   `api-gateway-core` still walks up `schema_forge_core`'s own node_modules
+   tree first, not `gateway`'s. Boot the gateway with
+   `NODE_OPTIONS=--preserve-symlinks` (wired into `make gateway-dev-local-core`)
+   so Node resolves as if the linked package physically lived at the symlink's
+   location in `gateway/node_modules` instead — this is what makes it actually
+   pick up gateway's own installed `@nestjs/common`.
+
+Neither of these is needed once the package is genuinely published: a normal
+`npm install` of a real registry dependency hoists/dedupes a single shared
+`@nestjs/common` on its own. Both are `npm link`-local-dev-only concerns.
+
 ## Where does my change go?
 
 | Change | Repo |

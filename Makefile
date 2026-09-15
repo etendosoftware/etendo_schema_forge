@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-stripe-local test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration test-e2e-purchase-sales test-e2e-last-failed email-stress-limits email-stress-limits-report email-stress-help ast-churn-ranking ast-churn-heatmap generate regen dev dev-local-core dev-mock ai-bff-install build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage flag-debt menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status ci-parity ci-parity-help regen-public-api gateway-link-local-core
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-stripe-local test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration test-e2e-purchase-sales test-e2e-last-failed email-stress-limits email-stress-limits-report email-stress-help ast-churn-ranking ast-churn-heatmap generate regen dev dev-local-core dev-mock ai-bff-install build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage flag-debt menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status ci-parity ci-parity-help regen-public-api gateway-link-local-core gateway-dev-local-core
 
 export SF_ROOT := $(CURDIR)
 
@@ -331,6 +331,20 @@ gateway-link-local-core: ## Build api-gateway-core in the sibling core repo and 
 	fi
 	cd $(GATEWAY_CORE_PKG) && npm run build && npm link
 	cd gateway && npm link @etendosoftware/api-gateway-core
+
+# `npm link` resolves a linked package against its REAL (symlink-target) path, not
+# the symlink's location in gateway/node_modules — so api-gateway-core would still
+# resolve @nestjs/common etc. from schema_forge_core's own node_modules even though
+# they're peerDependencies there now (ETP-5345). NODE_OPTIONS=--preserve-symlinks
+# makes Node resolve as if the package physically lived at the symlink's location
+# instead, so it picks up gateway's own installed copies — the single shared
+# instance peerDependencies alone can't guarantee across two independently
+# npm-installed sibling repos. Scoped to this target only (not baked into
+# gateway/package.json's start:dev) since it would be a no-op for the published
+# (non-linked) consumption path anyway, and forcing it repo-wide risks changing
+# resolution for other, unrelated symlinked packages this monorepo may have.
+gateway-dev-local-core: ## Start the gateway dev server against the linked local api-gateway-core (LOCAL_CORE dev only)
+	cd gateway && NODE_OPTIONS=--preserve-symlinks npm run start:dev
 
 # --- Push-to-NEO Delta Dump ---
 
