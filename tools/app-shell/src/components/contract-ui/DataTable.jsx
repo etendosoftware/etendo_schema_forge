@@ -93,9 +93,36 @@ function quickActionsReservedWidthPx(rowQuickActions) {
 // scrollable overflow the user hasn't fully scrolled through yet — never when
 // the table has free space to the right, and never once the user has reached
 // the actual end of the table's content.
-function useHorizontalScrollEdge() {
-  const [state, setState] = useState({ hasOverflow: false, atEnd: false });
+//
+// ETP-5268 follow-up — takes `quickActionsReservedWidthPx` and computes
+// `overlapLastColumn` ITSELF now, rather than DataTable deriving it
+// separately from `hasOverflow`/`atEnd` via shouldOverlapLastColumn(). That
+// separation was the bug: overlapLastColumn feeds back into the DOM (the
+// quick-actions column shrinks to a floating 40px when true, or grows to its
+// full reserved width otherwise — see quickActionsColumnStyle), which changes
+// the very <table> width this hook measures via ResizeObserver. Live-verified
+// ("se va y viene" — the horizontal scrollbar appearing and disappearing on
+// its own): the instant a viewport width lands in the dead zone between
+// "fits once the actions column shrinks to 40px" and "fits only with the
+// full reserved width," the two states chase each other forever — floating
+// makes the table narrow enough to stop overflowing, which switches back to
+// reserved, which makes it overflow again, which switches back to floating,
+// on and on. Every render in between briefly commits and paints, so the user
+// sees the scrollbar (and the last column's width) flicker in a tight loop.
+// Fixed by normalizing every raw measurement to "as if the actions column
+// were always at its full reserved width" BEFORE deciding hasOverflow: since
+// that canonical width no longer depends on which state produced the
+// DOM this particular measurement came from, the decision it drives can't
+// oscillate — both states, once normalized, agree on the same overflow verdict.
+function useHorizontalScrollEdge(actionsReservedWidthPx) {
+  const [state, setState] = useState({ hasOverflow: false, atEnd: false, overlapLastColumn: false });
   const cleanupRef = useRef(null);
+  // Not a dep of the callback ref below (kept `[]`, see its own comment on
+  // why) — a plain ref so `measure()` always reads the latest value without
+  // tearing down and reattaching the scroll/resize listeners every time this
+  // window's button count (and so its reserved width) changes.
+  const reservedWidthRef = useRef(actionsReservedWidthPx);
+  reservedWidthRef.current = actionsReservedWidthPx;
 
   // ETP-5268 — a CALLBACK ref, not `useRef` + `useEffect(…, [containerRef])`.
   // DataTable early-returns a <TableSkeleton> tree while `loading` (see the
@@ -125,12 +152,29 @@ function useHorizontalScrollEdge() {
     if (!el || typeof ResizeObserver === 'undefined') return;
 
     const EPSILON = 1;
+    // ETP-5268 follow-up — mirrors the initial `overlapLastColumn: false` in
+    // useState above: the DOM this callback ref just attached to was rendered
+    // with that same initial (non-floating) value, so the first measure()
+    // must assume the same starting point the real markup used, or its very
+    // first normalization would be wrong.
+    let lastOverlap = false;
     const measure = () => {
-      const hasOverflow = el.scrollWidth > el.clientWidth + EPSILON;
+      const reservedWidthPx = reservedWidthRef.current || 0;
+      // The DOM currently reflects whatever `lastOverlap` was as of the
+      // previous measure() (that's what decided the actions column's actual
+      // rendered width). Undo that contribution and substitute the constant
+      // "always reserved" one, so the width fed into hasOverflow below never
+      // depends on which state is currently painted — see this hook's own
+      // comment for the oscillation this prevents.
+      const currentActionsWidthPx = lastOverlap ? 40 : reservedWidthPx;
+      const canonicalScrollWidth = el.scrollWidth - currentActionsWidthPx + reservedWidthPx;
+      const hasOverflow = canonicalScrollWidth > el.clientWidth + EPSILON;
       const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - EPSILON;
-      setState((prev) => (prev.hasOverflow === hasOverflow && prev.atEnd === atEnd
+      const overlapLastColumn = shouldOverlapLastColumn(hasOverflow, atEnd);
+      lastOverlap = overlapLastColumn;
+      setState((prev) => (prev.hasOverflow === hasOverflow && prev.atEnd === atEnd && prev.overlapLastColumn === overlapLastColumn
         ? prev
-        : { hasOverflow, atEnd }));
+        : { hasOverflow, atEnd, overlapLastColumn }));
     };
 
     measure();
@@ -2479,9 +2523,8 @@ export function DataTable({
   // edge. With no overflow (e.g. Categoría de Contacto — few columns, free space
   // to the right) or once scrolled to the end, there is no dead space to reclaim,
   // so floating over the last column would only cover real, otherwise-legible data.
-  const { hasOverflow: hasHorizontalScrollOverflow, atEnd: isScrolledToTableEnd, containerRef: scrollContainerRef } =
-    useHorizontalScrollEdge();
-  const overlapLastColumn = shouldOverlapLastColumn(hasHorizontalScrollOverflow, isScrolledToTableEnd);
+  const { overlapLastColumn, containerRef: scrollContainerRef } =
+    useHorizontalScrollEdge(quickActionsReservedWidthPx(rowQuickActions));
 
   // ETP-3914 — Mirror InlineLinesPanel: when the quick-actions overlay is enabled
   // AND allowed to float (overlapLastColumn), the last visible column's value is
