@@ -184,6 +184,20 @@ Since F3 (2026-08-26) all six render through `EmailLayout`, and their copy lives
 `email/render/messages/emails_{es_ES,en_US}.properties` (`document.subject`, `document.body`,
 `document.cta`, plus one `{contract}.documentType` key each) rather than in Java literals.
 
+**ETP-5267 — `sales-invoice-send` can carry a Business Partner portal link.** It is the only one of
+the six that overrides `resolveAdditionalParagraphHtml`, a hook added on
+`DefaultDocumentSendEmailContract` whose default is `Optional.empty()`. That default is the
+guarantee: **the other five emails are byte-identical to what they produced before the hook
+existed**, because there is nothing to append — not because each caller is careful. The extra
+paragraph renders between the body copy and the summary block, as an inline anchor rather than a
+second button, since `EmailContent` carries one call to action and it belongs to the document.
+
+Its copy is `document.portal.intro` / `document.portal.cta` in both catalogs. The paragraph appears
+only when the `bp-portal-link` flag resolves true for the **sending account** (see
+`com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` → *Per-account targeting*); when it does
+not, the send is unchanged **and no `etgo_portal_access` row is minted**, which is what keeps the
+always-deployed portal surface empty until someone is deliberately sending links.
+
 > ⚠ **The default subject and body exist in two places.** When the operator sends without editing
 > anything, the backend composes the copy from the catalog above — but the modal shows the operator
 > what will go out by composing the *same* sentences itself (`SendDocumentModal.jsx` →
