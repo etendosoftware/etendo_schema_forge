@@ -552,6 +552,58 @@ describe('DetailView render integration', () => {
     expect(screen.getByTestId('topbar-right')).toBeInTheDocument();
   });
 
+  it('renders with topbarSecondary', () => {
+    const TopSecondary = () => <div data-testid="topbar-secondary">TopSecondary</div>;
+    renderDetailView({ topbarSecondary: TopSecondary });
+    expect(screen.getByTestId('topbar-secondary')).toBeInTheDocument();
+  });
+
+  // ── topbarSecondary/topbarRight DOM order (ETP-5260) ────────────────────────
+  // The ticket's fix: secondary/utility actions (copy link, clone, send) must
+  // render to the LEFT of Save/Confirm, while topbarRight (primary document-flow
+  // actions, e.g. Confirm-with-credit) keeps rendering to the RIGHT — see the
+  // classification comment near DetailView.jsx's topbarSecondary/topbarRight render.
+  describe('topbarSecondary / topbarRight slot ordering (ETP-5260)', () => {
+    // Comparing document position, not container.innerHTML string order, so the
+    // assertion tracks actual DOM order regardless of how each slot renders internally.
+    const isBefore = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+    // Reset in afterEach, not at the tail of each test body — if an assertion
+    // above throws, a tail-of-body reset never runs and the flag leaks into
+    // later tests, producing unrelated cascading failures.
+    afterEach(() => {
+      mockHook.isDirtyHeader = false;
+    });
+
+    it('renders topbarSecondary BEFORE the Save button, which is BEFORE topbarRight', () => {
+      const TopSecondary = () => <div data-testid="topbar-secondary">Secondary</div>;
+      const TopRight = () => <div data-testid="topbar-right">Right</div>;
+      mockHook.isDirtyHeader = true;
+      renderDetailView({ topbarSecondary: TopSecondary, topbarRight: TopRight });
+
+      const secondary = screen.getByTestId('topbar-secondary');
+      const saveBtn = screen.getByTestId('action-save');
+      const right = screen.getByTestId('topbar-right');
+
+      expect(isBefore(secondary, saveBtn)).toBe(true);
+      expect(isBefore(saveBtn, right)).toBe(true);
+    });
+
+    // ETP-4933 regression guard — return-material-receipt / return-to-vendor-shipment
+    // wire ConfirmWithCreditButton as topbarRight (no topbarSecondary). Before
+    // ETP-4933, that Confirm button sat LEFT of Save; ETP-5260 must not
+    // reintroduce that regression by moving topbarRight alongside topbarSecondary.
+    it('keeps topbarRight AFTER Save when no topbarSecondary is passed (ETP-4933 regression guard)', () => {
+      const TopRight = () => <div data-testid="topbar-right">ConfirmWithCredit</div>;
+      mockHook.isDirtyHeader = true;
+      renderDetailView({ topbarRight: TopRight });
+
+      const saveBtn = screen.getByTestId('action-save');
+      const right = screen.getByTestId('topbar-right');
+      expect(isBefore(saveBtn, right)).toBe(true);
+    });
+  });
+
   it('renders with sidebarContent', () => {
     const Sidebar = () => <div data-testid="sidebar-content">Sidebar</div>;
     const { container } = renderDetailView({ sidebarContent: Sidebar });

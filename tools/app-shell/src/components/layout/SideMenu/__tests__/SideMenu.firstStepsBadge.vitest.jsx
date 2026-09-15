@@ -34,6 +34,7 @@ vi.mock('@/components/layout/FavoritesContext', () => ({
 vi.mock('@/lib/flags', () => ({
   useFeatureFlag: () => false,
   PROOF_OF_CONCEPT_MENU: 'proof-of-concept-menu',
+  ACCT_PROCESS_MONITOR: 'acct-process-monitor',
 }));
 vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
   useEnvironmentSwitch: () => ({
