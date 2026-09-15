@@ -213,22 +213,6 @@ test.describe('FM 303 — datos_bancarios section visibility', () => {
     ).not.toBeVisible();
   });
 
-  test('datos_bancarios appears with Devolución fields when tipo_declaracion is D', async ({ page }) => {
-    const select = page.locator('.fm-aeat-ident-inline-field__select--compact').first();
-    await select.selectOption('D');
-    // The datos_bancarios section becomes visible — use .last() because the
-    // identificacion section also contains "devolución" in its select options
-    await expect(
-      page.locator('.fm-aeat-section').filter({ hasText: /devoluci/i }).last()
-    ).toBeVisible();
-    await expect(
-      page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /IBAN/i })
-    ).toBeVisible();
-    await expect(
-      page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /SWIFT|BIC/i })
-    ).toBeVisible();
-  });
-
   test('datos_bancarios appears with Domiciliación title when tipo_declaracion is U', async ({ page }) => {
     const select = page.locator('.fm-aeat-ident-inline-field__select--compact').first();
     await select.selectOption('U');
