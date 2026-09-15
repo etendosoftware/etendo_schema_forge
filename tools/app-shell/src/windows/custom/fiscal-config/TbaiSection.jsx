@@ -39,7 +39,7 @@ function SectionRow({ label, children, labelExtra, boldLabel, noBorderTop }) {
   );
 }
 
-const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId, onSave, hideSave, hideCert }, ref) {
+const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId, onSave, hideSave, hideCert, locked }, ref) {
   const ui = useUI();
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
   const [form, setForm] = useState({
@@ -49,7 +49,10 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState(null);
 
-  function set(field, value) { setForm(f => ({ ...f, [field]: value })); }
+  function set(field, value) {
+    if (locked) return;
+    setForm(f => ({ ...f, [field]: value }));
+  }
 
   function validate() {
     return null;
@@ -110,6 +113,7 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
             <Switch
               checked={isEtendoTrue(form.autoSendInvoices)}
               onCheckedChange={v => set('autoSendInvoices', v ? 'Y' : 'N')}
+              disabled={locked}
               data-testid="Switch__f06d4b" />
             <span className="text-sm text-[hsl(var(--foreground))]">{ui('fiscal.tbai.field.autoSend')}</span>
           </div>
@@ -132,6 +136,7 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
       <SectionSaveButton
         error={error}
         hideSave={hideSave}
+        locked={locked}
         save={save}
         saving={saving}
         ui={ui}
