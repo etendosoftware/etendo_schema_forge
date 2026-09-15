@@ -21,7 +21,7 @@ identity of separate data series and is not a UI status or theme role.
 - Click a product image to open a lightbox for full-size inspection. Upload, replace, and remove the image from within the same field in the form grid.
 - Inspect stock availability and stock movement context from the custom sidebar.
 - Record the product's **standard cost** over time from the generated **Cost** tab (`Costing` in `decisions.json`, "Costo" in Spanish), the first tab in the unified secondary tab strip (Cost, Accounting, Price, Attachments). Engine-generated cost rows are shown but cannot be edited or deleted; only hand-entered ones can. See the ETP-5245 section below.
-- Be stopped from saving a stockable product that has no cost defined at all: a full-width warning banner appears above the form and the save is refused until a cost line exists (ETP-5245).
+- Be warned when a product has no cost defined at all: a full-width warning banner appears above the form until a cost line exists (ETP-5245). Advisory — the save-block it originally carried was removed by product decision.
 - Maintain the product's GL accounting accounts (Fixed Asset, Product Expense, Product Revenue, Product COGS, Invoice Price Variance) per accounting schema from the generated **Accounting** tab, the first tab in the unified secondary tab strip (Accounting, Price, Attachments).
 - Use the contract-backed product children and actions when the generated page exposes them, while treating the exact visible tab set beyond the custom surfaces as partially evidenced.
 
@@ -37,7 +37,7 @@ The detail screen also changes the standard generated behavior in six visible wa
 - the product's standard-cost history is surfaced through a **Cost** tab (classic grid+form, `CostingTable`/`CostingForm`), declared via `secondaryTabs` in `decisions.json` (ETP-5245)
 - the product's GL accounting accounts are surfaced through an **Accounting** tab (classic grid+form, `AccountingTable`/`AccountingForm`), declared via `secondaryTabs` in `decisions.json`
 - pricing is surfaced through a custom **Price** tab (`ProductPriceBar`), declared via `customPanelTabs` in `decisions.json`
-- a blocking cost warning is injected above the form through `window.customComponents.subHeader` (`ProductCostBanner`, ETP-5245)
+- a cost warning is injected above the form through `window.customComponents.subHeader` (`ProductCostBanner`, ETP-5245)
 - the sidebar is product-specific (`ProductSidebar`)
 - print and the generic More menu are hidden
 
@@ -68,8 +68,8 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 - **Cost tab states (ETP-5245):**
   - The tab declares `requireSavedRecord: true`, so on `/product/new` it blocks opening/adding until the header itself has been saved — the cost lines have no parent to hang from yet.
   - Rows the costing engine generated (`M_Costing.ISMANUAL = 'N'`) render read-only: every editable field carries `readOnlyLogic: (record) => record.manual === false || record.manual === 'N'` (`artifacts/product/generated/web/product/CostingForm.jsx:4-6`). The same rows are refused a `PATCH`/`PUT`/`DELETE` server-side with a `403`.
-  - The **save gate** is window-scoped and lives in the shared hook: `useEntity.js` (in `performSave`, right after the phone-format check) calls `isProductMissingRequiredCost(specName, clampedEditing)` and, when it is true, aborts the save with the `productCostRequired` message under the stable toast id `product-cost-required`. It is inert for every other window because the predicate returns `false` unless `specName === 'product'` — the same shape as `getContactsTextFieldViolation`.
-  - `ProductCostBanner` reads the same predicate, so the banner and the refusal can never disagree. Both clear on their own as soon as a cost line exists, because the backend re-emits `etgoHasCost` on the next read.
+  - There is **no save gate**. `useEntity.js`'s `performSave` used to call `isProductMissingRequiredCost(specName, clampedEditing)` right after the phone-format check and abort with `productCostRequired` under the stable toast id `product-cost-required`. That block was removed by product decision: it refused edits with nothing to do with costing (renaming a product, ticking `Active`), and a product created from a document line is born in exactly that state, so the block made the create-from-line flow unusable the moment the record existed.
+  - `ProductCostBanner` still reads the predicate and is now the only consumer of it. It clears on its own as soon as a cost line exists, because the backend re-emits `etgoHasCost` on the next read.
 - **Sidebar reactions:**
   - The inventory sidebar has two tabs: `Summary` and `Warehouses`. A shared `SidebarPeriodSelector` (3M / 6M / 12M) sits at the top of each tab and drives the inline chart's time window. The selector is disabled when no transaction history exists.
   - `Summary` shows an **On Hand** `AvailabilityWidget` card. The widget is hidden when there are no transactions — a product that sold all its stock still has transactions and will display the widget showing `0`; a product with no history at all omits it entirely.
@@ -109,7 +109,7 @@ The image preview uses `position: absolute; inset: 0` inside a `relative flex-1 
 12. If the business depends on BOM, transactions, characteristics, stock, category price rule version, alternate UOM, or variant actions, verify which of those surfaces are actually visible in the running page. Current repo evidence does not fully prove all of them. (Costing was removed from this list in ETP-5245 — it now has its own tab, verified in step 15.)
 13. Select the **Attachments** tab (sits in the same tab strip as **Cost**, **Accounting** and **Price**, after the primary tab strip). Upload a file, verify it shows up in the table with name, size, and upload date, and that downloading and deleting it work correctly. When multiple files exist, confirm "Download all (ZIP)" and "Delete all" appear and that "Delete all" prompts a confirmation dialog.
 14. Open an existing product and confirm the secondary tab strip (below `General`/`Additional Info`) shows tabs in this exact order: **Cost**, **Accounting**, **Price**, **Attachments**. Select `Accounting` and confirm it renders as a classic grid+form (not a separate panel above the tab strip) with `Fixed Asset`, `Product Expense`, `Product Revenue`, `Product COGS`, `Invoice Price Variance` add/edit fields.
-15. See "Manual verification (ETP-5245)" below for the Cost tab, the blocking banner and the seeded zero prices.
+15. See "Manual verification (ETP-5245)" below for the Cost tab, the cost warning banner and the seeded zero prices.
 
 ## Automated evidence
 - Route registration and menu visibility are grounded in `tools/app-shell/src/windows/registry.js` and `tools/app-shell/src/menu.json`, which register `product` as a generated/custom window reachable from the Inventory section.
@@ -616,7 +616,7 @@ Coverage:
 - `com.etendoerp.go`'s `ProductDefaultsHandlerTest.java` — the ETP-4943 Service POST/PATCH/absent-flags
   cases mirrored for Expense and Resource.
 
-## ETP-5245 — Cost tab, blocking cost banner, and zero-priced default tariffs
+## ETP-5245 — Cost tab, cost warning banner, and zero-priced default tariffs
 
 Three related changes, all driven by the same problem: a stockable product created in Etendo Go
 could reach the warehouse with neither a **cost** nor a **price**, and the failure only surfaced
@@ -762,7 +762,7 @@ successful save into an error.
 
 All five exist in `en_US`, `es_ES` and `es_AR`.
 
-### 3. The blocking cost banner
+### 3. The cost warning banner
 
 `ProductCostBanner.jsx` is mounted through the **`window.customComponents.subHeader`** slot, which
 `generate-frontend.js` (`schema_forge_core`, line ~1026) emits as
@@ -770,33 +770,34 @@ All five exist in `en_US`, `es_ES` and `es_AR`.
 as the first child of the detail content container, i.e. a full-width strip between the toolbar and
 the form. This is the same slot and the same `InfoBanner` primitive as the credit-limit /
 BP-on-hold notice (`BlockingBpBanner.jsx:127`); the one deliberate difference is the tone —
-`warning` (amber) rather than that banner's `info` (blue), because this one also blocks saving.
+`warning` (amber) rather than that banner's `info` (blue), because the consequence it describes
+lands later and elsewhere (the costing engine, at the first movement) rather than here and now.
 The slot is documented generically in `docs/ui-customization.md` §4.
 
-**It can be closed, and it comes back on every refused save (ETP-5245).** `InfoBanner` is
-dismissible by default, so the user can put the strip away — but closing an explanation of a hard
-block must never leave someone refused with nothing on screen saying why. `useEntity`'s save gate
-announces each refusal on the save-block bus (`lib/saveBlockSignal.js`) under the same stable toast
-id it uses for the toast, `product-cost-required`; the banner subscribes through
-`useSaveBlockSignal('product-cost-required')` and re-opens on every fresh announcement. Because the
-product window autosaves on blur, a dismissed banner reappears at the next field the user leaves —
-which is the intended outcome: the save is still being refused.
+**It is advisory, and it can be closed.** It originally accompanied a HARD SAVE-BLOCK: a product
+with no cost refused to save, and the banner re-opened itself on every refusal through the
+save-block bus (`lib/saveBlockSignal.js`, id `product-cost-required`). That block was removed by
+product decision — it was stopping edits with nothing to do with costing (renaming a product,
+ticking `Active`), and a product created from a document line is born in exactly this state, so the
+block made the new create-from-line flow unusable. The banner now only warns, its `reopenSignal`
+wiring is gone, and a dismissed banner stays dismissed until the record is re-read. The save-block
+bus itself is untouched: it is generic infrastructure other blocking rules still use.
 
 **It also clears the moment a cost line exists, with no reload (ETP-5245 follow-up).**
 `etgoHasCost` is stamped by the backend on the *product* record, but adding a cost line is a
 `POST /product/costing` — a different entity — so nothing re-read the product and the header held
-in memory kept saying `false`. The banner stayed up even with the tab showing `Costo 1`, and the
-save gate kept refusing, since both read that same record.
+in memory kept saying `false`. The banner stayed up even with the tab showing `Costo 1`, since it
+reads that same record.
 `withHeaderRefreshOnChildWrite` (`components/contract-ui/detailViewHelpers.jsx`) now wraps the
 secondary-tab hooks so a successful child add or delete also calls the MAIN hook's
 `refreshHeaderTotals`, re-reading the product. This covers both directions: adding the first line
 removes the banner, deleting the last one brings it back. It is gated on the header actually
 carrying a field listed in `HEADER_FIELDS_DERIVED_FROM_CHILD_ROWS`, so no other window pays for the
-extra GET, and the server stays the single source of truth — nothing recomputes the flag locally,
-so the banner and the save gate can never disagree.
+extra GET, and the server stays the single source of truth — nothing recomputes the flag locally.
 
 The predicate lives in `tools/app-shell/src/lib/productCostRequirement.js` and is deliberately a
-pure function with no React dependency, so the banner and the save gate can read the same rule:
+pure function with no React dependency. It had two readers, the banner and the save gate; the gate
+is gone, so the banner is the only one left:
 
 ```js
 isProductMissingRequiredCost(specName, record)
@@ -811,13 +812,13 @@ isProductMissingRequiredCost(specName, record)
 ```
 
 - **Never on creation.** The Cost tab declares `requireSavedRecord: true`, so it needs a saved
-  product to hang its lines from. Blocking the first save would make a stockable product impossible
-  to create at all. The rule therefore only applies to *editing* an existing record.
+  product to hang its lines from, so a brand-new product cannot possibly have one and warning about
+  it there would be noise. The predicate therefore only fires on a *saved* record.
 - **`etgoHasCost` is a backend-emitted, per-record flag**, not a `decisions.json` field — the same
   pattern as `pisLocked`. `ProductDefaultsHandler.annotateCostPresence` adds it in `afterHandle` on
   a **GET with a record id**, from a `Costing` existence query (`hasCostDefined`). A payload that
   does not carry the flag (a list row, an older backend) yields `false` from the predicate, so the
-  banner and the gate stay silent rather than blocking on missing information.
+  banner stays silent rather than warning on missing information.
 - **`bookUsingPurchaseOrderPrice`** was added to the `product` entity as `visibility: "system"` so
   the flag reaches the client without appearing in the form. A product valued at its purchase-order
   price needs no standard-cost anchor — which is also why the costing backfill
@@ -826,13 +827,19 @@ isProductMissingRequiredCost(specName, record)
   see ETP-4943 / ETP-5091 above) are never valued, so `productType === 'I'` is the only case that
   can be missing a cost.
 
-**The save gate** is in `tools/app-shell/src/hooks/useEntity.js`, inside `performSave`, immediately
-after the phone-format check. It is window-scoped in exactly the same shape as
-`getContactsTextFieldViolation` (`useEntity.js:629`) — a no-op for every other window because the
-predicate short-circuits on `specName`. It reports through `reportInvalidFormatField` with the
-`productCostRequired` message and the **fixed toast id `product-cost-required`**: product
-auto-saves on blur (`autoSaveOnBlur: true`), so without a stable id every field the user leaves
-would stack another copy of the same toast.
+**There is no save gate any more.** It lived in `tools/app-shell/src/hooks/useEntity.js`, inside
+`performSave`, immediately after the phone-format check, window-scoped in exactly the same shape as
+`getContactsTextFieldViolation` (`useEntity.js:629`), reporting through `reportInvalidFormatField`
+with the `productCostRequired` message under the fixed toast id `product-cost-required` (fixed
+because product auto-saves on blur, so an auto id would stack a copy per field left).
+
+It was removed by product decision. A missing cost was refusing edits that have nothing to do with
+costing, and since a product created from a document line is born without one, the block made that
+flow unusable the moment the record existed. The condition is still worth surfacing, so the
+predicate and the banner stayed; nothing refuses a save because of it.
+`src/hooks/__tests__/useEntity.productCostSave.vitest.jsx` pins the absence — including that the
+save-block bus is never notified for `product-cost-required` — so the gate cannot come back
+silently.
 
 > **Copy note (not fixed here):** the English message reads "Add a line on the **Cost** tab" while
 > the English tab label renders as "**Costing**". The Spanish strings are consistent ("la solapa
@@ -891,17 +898,16 @@ and why the invariant is per client × per direction rather than per organizatio
 
 ### Manual verification (ETP-5245)
 
-1. Open an existing stocked product (`Tipo = Artículo`, `Almacenable` checked) that has no cost.
-   Confirm an amber banner appears full-width between the toolbar and the form, reading "Este
-   producto es stockeable pero no tiene costo definido…". Change any field and blur: the auto-save
-   must be refused with the same message, and repeating it must **not** stack duplicate toasts.
+1. Open an existing product that has no cost. Confirm an amber banner appears full-width between
+   the toolbar and the form, reading "Sin costo definido no se podrán calcular los costes…".
+   Change any field and blur: the auto-save must **succeed** — the banner is advisory and no error
+   toast may appear. Reload and confirm the edit persisted and the banner is still there.
 2. Confirm the secondary tab strip reads **Costo → Contabilidad → Precio → Adjuntos** (Spanish) /
    **Costing → Accounting → Price → Attachments** (English).
 3. Open the Cost tab and confirm the grid shows exactly three columns — *Costo*, *Fecha de inicio*,
    *Fecha de expiración* — with no cost type, quantity, warehouse or currency column.
 4. Add a line: confirm the start date is pre-filled with the product's creation date, and that
-   leaving the expiry date blank is accepted. Save. The banner must disappear and the product must
-   now save normally.
+   leaving the expiry date blank is accepted. Save. The banner must disappear with no reload.
 5. Add a second line with an earlier start date and confirm the neighbouring row's expiry date is
    pulled back so the two ranges do not overlap.
 6. Try to edit a row the engine generated (one whose values you did not type): the fields must
@@ -921,7 +927,12 @@ and why the invariant is per client × per direction rather than per organizatio
 
 - `tools/app-shell/src/lib/__tests__/productCostRequirement.vitest.js` — the predicate, axis by axis.
 - `tools/app-shell/src/windows/custom/product/__tests__/ProductCostBanner.vitest.jsx` — renders /
-  does not render, and the `warning` tone tokens.
+  does not render, the `warning` tone tokens, and that a dismissed banner STAYS dismissed (the test
+  that fails if the `reopenSignal` wiring is put back).
+- `tools/app-shell/src/hooks/__tests__/useEntity.productCostSave.vitest.jsx` — a costless product
+  saves: the PATCH is issued, no `productCostRequired` toast, `saveError` stays null, and the
+  save-block bus is never notified for `product-cost-required`. This is what stops the removed gate
+  from creeping back in silently.
 - `tools/app-shell/src/windows/custom/product/__tests__/productImportDescriptor.vitest.js` —
   default-tariff preference within a direction, and the unchanged direction rules.
 - `cli/test/data-fixes-report-regression.test.js` — the R35 entry.

@@ -114,8 +114,9 @@ export const LOOKUP_CREATE_TARGETS = {
     /**
      * Banner shown above the phase-2 panels, reusing the window's own component rather
      * than restating its rule: `ProductCostBanner` takes the record and decides for
-     * itself, reading the same `isProductMissingRequiredCost` predicate the window's save
-     * gate reads, so the two can never disagree.
+     * itself, reading the `isProductMissingRequiredCost` predicate, so the popup and the
+     * window can never disagree about when to warn. Advisory only — the save-block that
+     * predicate once fed was removed, so a product with no cost saves normally.
      *
      * It only works because phase 2 re-reads the record after the POST: the predicate
      * keys off `etgoHasCost`, which the backend emits on a single-record GET and not on

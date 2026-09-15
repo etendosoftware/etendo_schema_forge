@@ -22,7 +22,6 @@ import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackS
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
 import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 import { detectBlockingBpCondition } from '@/lib/blockingBpConditions.js';
-import { isProductMissingRequiredCost } from '@/lib/productCostRequirement.js';
 import { notifySaveBlock } from '@/lib/saveBlockSignal.js';
 
 // ETP-5022: header policy has ONE home (app-shell-core/auth) — every request goes
@@ -1773,19 +1772,6 @@ export function useEntity(entity, childEntity, {
         const invalidPhones = getInvalidPhoneFields(changedFormFields, clampedEditing);
         if (invalidPhones.length > 0) {
             return reportInvalidFormatField('phoneInvalidChars', ui, setSaveError, setIsSaving);
-        }
-        // ETP-5245: Product-only hard save-block. A product with no M_Costing row fails later,
-        // at the first shipment or count, far from whoever created it. Blocking here keeps the
-        // problem where it can still be fixed — the Costing tab is one click away, and
-        // ProductCostBanner is showing the same condition at the top of the form. No-op for
-        // every other window, and never on creation: the Costing tab needs a saved record, so
-        // blocking the first save would make a product impossible to create.
-        // Applies to EVERY product type by product decision — see isProductMissingRequiredCost.
-        // Product autosaves on blur, so the toast id has to be stable or every field the user
-        // leaves stacks another copy.
-        if (isProductMissingRequiredCost(specName, clampedEditing)) {
-            return reportInvalidFormatField(
-                'productCostRequired', ui, setSaveError, setIsSaving, 'product-cost-required');
         }
         const url = getUrl(isNew, apiBaseUrl, entity, clampedEditing);
         // Use PATCH for existing records (partial update), POST for new
