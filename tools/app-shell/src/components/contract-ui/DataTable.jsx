@@ -109,11 +109,18 @@ function quickActionsReservedWidthPx(rowQuickActions) {
 // reserved, which makes it overflow again, which switches back to floating,
 // on and on. Every render in between briefly commits and paints, so the user
 // sees the scrollbar (and the last column's width) flicker in a tight loop.
-// Fixed by normalizing every raw measurement to "as if the actions column
-// were always at its full reserved width" BEFORE deciding hasOverflow: since
-// that canonical width no longer depends on which state produced the
-// DOM this particular measurement came from, the decision it drives can't
-// oscillate — both states, once normalized, agree on the same overflow verdict.
+// Fixed by normalizing every raw measurement BEFORE deciding hasOverflow and
+// atEnd, so neither depends on which state produced the DOM this particular
+// measurement came from — see measure()'s own comments below for the two
+// separate normalizations this needed (hasOverflow against the reserved
+// total, atEnd against the floating total) and the two distinct flicker bugs
+// each one fixes: a first pass here only normalized hasOverflow, which
+// stopped the scrollbar from flickering while mid-scroll, but left atEnd
+// using the raw (state-dependent) scrollWidth — live-verified, that raw
+// version made "the end" a MOVING target: reaching it grew the actions
+// column to its reserved width, which widened scrollWidth, which un-reached
+// "the end," flipping straight back to floating, over and over, at the
+// scroll-end position specifically (CP-3).
 function useHorizontalScrollEdge(actionsReservedWidthPx) {
   const [state, setState] = useState({ hasOverflow: false, atEnd: false, overlapLastColumn: false });
   const cleanupRef = useRef(null);
@@ -162,14 +169,31 @@ function useHorizontalScrollEdge(actionsReservedWidthPx) {
       const reservedWidthPx = reservedWidthRef.current || 0;
       // The DOM currently reflects whatever `lastOverlap` was as of the
       // previous measure() (that's what decided the actions column's actual
-      // rendered width). Undo that contribution and substitute the constant
-      // "always reserved" one, so the width fed into hasOverflow below never
-      // depends on which state is currently painted — see this hook's own
-      // comment for the oscillation this prevents.
+      // rendered width). Undo that contribution to recover the width of
+      // everything EXCEPT the actions column — a value that, unlike
+      // `el.scrollWidth` itself, stays constant no matter which of the two
+      // states is currently painted.
       const currentActionsWidthPx = lastOverlap ? 40 : reservedWidthPx;
-      const canonicalScrollWidth = el.scrollWidth - currentActionsWidthPx + reservedWidthPx;
-      const hasOverflow = canonicalScrollWidth > el.clientWidth + EPSILON;
-      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - EPSILON;
+      const baseContentWidthPx = el.scrollWidth - currentActionsWidthPx;
+      // hasOverflow: the worst case — would the table need to scroll at all
+      // if the actions column were always at its full reserved width? Using
+      // the reserved total (not whichever is currently rendered) keeps this
+      // independent of `lastOverlap`, fixing the oscillation where floating
+      // (narrower) briefly stopped the overflow that reserved (wider) had
+      // just caused, flipping back to reserved, which re-caused it, forever.
+      const hasOverflow = (baseContentWidthPx + reservedWidthPx) > el.clientWidth + EPSILON;
+      // atEnd: has the user scrolled as far as the FLOATING (narrow, 40px)
+      // layout ever allows? live-verified this is the second half of the
+      // same class of bug: using the CURRENT `el.scrollWidth` here meant
+      // reaching the end flipped the actions column to its full reserved
+      // width, which — because that widens `el.scrollWidth` — silently
+      // pushed "the end" further right out from under the user, flipping
+      // back to floating, which narrowed it back, moving "the end" back
+      // within reach, flipping to reserved again… "se va y viene" ("comes
+      // and goes"). `baseContentWidthPx + 40` is the floating layout's own
+      // total, a fixed target that doesn't move once reached, however the
+      // actions column ends up rendered as a result.
+      const atEnd = (el.scrollLeft + el.clientWidth) >= (baseContentWidthPx + 40) - EPSILON;
       const overlapLastColumn = shouldOverlapLastColumn(hasOverflow, atEnd);
       lastOverlap = overlapLastColumn;
       setState((prev) => (prev.hasOverflow === hasOverflow && prev.atEnd === atEnd && prev.overlapLastColumn === overlapLastColumn
