@@ -1459,7 +1459,25 @@ function renderRowActionFooterCells(hoverRowActions, onDeleteRow, legacyDeleteEn
 }
 
 function isQuickActionsEnabled(rowQuickActions) {
-  return !!rowQuickActions && rowQuickActions.enabled !== false;
+  if (!rowQuickActions || rowQuickActions.enabled === false) return false;
+  // ETP-5268 — a window that gates every mutating action behind `readOnly`
+  // (e.g. a view-only GO tenant window) and configures neither an
+  // email/send gate nor any menuActions ends up mounting a RowQuickActions
+  // pill that renders ZERO buttons for every row: Edit/Clone/Delete are
+  // unconditionally hidden by `readOnly` (see RowQuickActions.jsx), and
+  // Email/the kebab are the only actions `readOnly` doesn't touch. Reserving
+  // a whole actions column — width, header cell, the last data column's
+  // hover-fade — for a pill that will never show anything left a dead
+  // ~200px gap at the end of every genuinely read-only window (caught live
+  // on /matched-purchase-invoices). Skip the column entirely in that case.
+  if (rowQuickActions.readOnly) {
+    const hasEmailAction = !!rowQuickActions.documentPreview
+      || (!!rowQuickActions.sendDocument && rowQuickActions.sendDocument.enabled !== false);
+    const hasMenuActions = typeof rowQuickActions.menuActions === 'function'
+      || (Array.isArray(rowQuickActions.menuActions) && rowQuickActions.menuActions.length > 0);
+    if (!hasEmailAction && !hasMenuActions) return false;
+  }
+  return true;
 }
 
 /**
