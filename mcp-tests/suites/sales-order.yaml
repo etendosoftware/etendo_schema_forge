@@ -1,0 +1,78 @@
+# Sales order probes.
+#
+# Prompts are written in Spanish ON PURPOSE (see the design draft, D21): the real users of an
+# agent over this MCP are Spanish-speaking, and how the server handles colloquial Spanish —
+# partial names, the wrong word for a thing, reference data resolved in the wrong language —
+# is part of what these probes measure. The prompt is test INPUT DATA, not documentation.
+#
+# Probe ids are permanent: never rename, never recycle (D13).
+#
+# `expectEffect` on a write probe is the narrow post-condition added after a run
+# reported OKAY for an order that was never marked: the agent wrote the marker to
+# a field that does not exist, NEO accepted it silently, and neither the verdict
+# nor the transcript could see it. The check runs AFTER the agent, in its own MCP
+# session, and only answers "did the claimed effect happen?".
+#
+# The marker field is `description` (AD column `Description`) — verified with
+# neo_schema as the ONLY string field on sales-order/header that is editable and
+# not discarded, and it is accepted as a neo_list filter. `orderReference`
+# (POReference) exists but is visibility: discarded, so a person could not set it
+# in the UI either, which would make it an invalid target under D22.
+#
+# The field name stays OUT of the prompt on purpose (D21): an agent told where to
+# put the marker is no longer measuring discoverability.
+#
+# WRITE PROBES MUST TAG WITH {{marker}}, NEVER {{runId}}.
+# {{runId}} identifies the RUN, so every write probe in a run would stamp the
+# SAME value — and a probe's effect check would then happily pass on a sibling
+# probe's record. That is not hypothetical: it made a genuinely failed
+# create-for-named-customer report `effect verified` off the order that
+# create-empty-default-customer had written. A verifier that can pass on
+# somebody else's evidence verifies nothing.
+# {{marker}} is `<runId>-<probeId>`, unique per probe, and since it still starts
+# with the run id the run-wide sweep (`description LIKE '%<runId>%'`) is
+# unaffected. {{runId}} remains available for read probes and for prose.
+
+window: sales-order
+
+probes:
+  # --- seed: deliberately simple in scope, colloquial in phrasing (D4 + D21) ---
+  - id: create-empty-default-customer
+    mode: write
+    prompt: >
+      Necesito armar un pedido nuevo para el cliente por defecto.
+      Todavía no sé qué le voy a cargar, así que dejalo sin productos por ahora.
+      Ponele de referencia {{marker}} así después lo encuentro.
+    expectEffect:
+      tool: neo_list
+      args:
+        spec: sales-order
+        entity: header
+        filters: { description: "{{marker}}" }
+      expect: atLeastOne
+
+  # --- resolve a partner by name ---
+  - id: create-for-named-customer
+    mode: write
+    prompt: >
+      Hacele un pedido a Juan Pérez, tres cervezas de las ALE.
+      Ponele de referencia {{marker}}.
+    expectEffect:
+      tool: neo_list
+      args:
+        spec: sales-order
+        entity: header
+        filters: { description: "{{marker}}" }
+      expect: atLeastOne
+
+  # --- read-back: does what we just wrote come back? ---
+  - id: find-own-order
+    mode: read
+    prompt: >
+      Buscame el pedido que tiene la referencia {{runId}}-create-empty-default-customer
+      y decime a nombre de quién está y por cuánto salió.
+
+  # --- open-ended read, no field names given ---
+  - id: list-recent
+    mode: read
+    prompt: "¿Qué pedidos de venta entraron últimamente y por cuánto?"

@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -19,6 +19,15 @@ export function useOrderWindow({
   deliveryKey,
   manageLabelKeys,
   confirmLabelKey,
+  // ETP-5295 — describe the confirm-flow's default result title, and the shape of the two
+  // documents a confirm/manage flow can create, so `confirmResultPortal` below renders the
+  // correct type/route/title for whichever window instantiates this hook instead of the
+  // sales-order shape hardcoded here previously. Defaults mirror that previous hardcoding
+  // (sales-order's shipment/invoice shape) so an existing caller that omits them keeps its
+  // current behavior; both purchase-order and sales-order now pass these explicitly.
+  confirmedTitleKey = 'soConfirmedTitle',
+  primaryDoc = { key: 'shipment', type: 'salida', route: 'goods-shipment' },
+  invoiceDoc = { key: 'invoice', type: 'facturaVenta', route: 'sales-invoice' },
   headers,
   ConfirmModal,
   ConfirmResultModal,
@@ -36,6 +45,10 @@ export function useOrderWindow({
   const [refreshKey, setRefreshKey] = useState(0);
   const [confirmRow, setConfirmRow] = useState(null);
   const [confirmedDocs, setConfirmedDocs] = useState(null);
+  // ETP-5295 — null = default confirm-flow title (ui(confirmedTitleKey)); an explicit string
+  // (always ui('soDocsCreatedTitle') today) overrides it for the manage-docs-created case.
+  // Mirrors the pattern already used inside each window's own detail-page component.
+  const [confirmedTitle, setConfirmedTitle] = useState(null);
   const [manageRow, setManageRow] = useState(null);
 
   const { requestDelete, deleteDialog } = useRowDelete({
@@ -157,31 +170,57 @@ export function useOrderWindow({
     document.body,
   ) : null;
 
-  const manageLauncher = manageRow ? (
+  // ETP-5295 — gated on `manageRow && !confirmedDocs`, mirroring `confirmPortal` above: `manageRow`
+  // is deliberately NOT cleared by `onCreated` (only by `resetConfirmedState`, on the result
+  // popup's own close), because `confirmResultPortal` below reads its `currency` off
+  // `confirmRow || manageRow` — clearing it immediately would blank the popup's currency for
+  // the manage-docs-created case the instant the docs arrive.
+  const manageLauncher = manageRow && !confirmedDocs ? (
     <ManageDocsLauncher
       orderId={manageRow.id}
       data={manageRow}
       apiBaseUrl={apiBaseUrl}
       token={token}
       onClose={() => setManageRow(null)}
-      onCreated={() => { setManageRow(null); setRefreshKey(k => k + 1); }}
+      onCreated={(docs) => { setConfirmedTitle(ui('soDocsCreatedTitle')); setConfirmedDocs(docs); }}
       data-testid="ManageDocsLauncher__4b313b" />
   ) : null;
 
-  const confirmResultPortal = confirmedDocs ? createPortal(
+  // ETP-5295 — a confirm/manage flow that created neither document has nothing worth a
+  // blocking modal for; only render the result popup when at least one related document
+  // actually exists. Mirrors `hasConfirmedDoc` in PurchaseOrderActions.jsx/OrderCreateInvoice.jsx.
+  const hasConfirmedDoc = Boolean(confirmedDocs?.[primaryDoc.key]?.id || confirmedDocs?.[invoiceDoc.key]?.id);
+
+  // Closes whichever flow (confirm or manage) opened the popup and bumps refreshKey exactly
+  // once, on close — not immediately on creation, same as the pre-existing "confirm" flow.
+  const resetConfirmedState = useCallback(() => {
+    setConfirmedDocs(null);
+    setConfirmRow(null);
+    setManageRow(null);
+    setConfirmedTitle(null);
+    setRefreshKey(k => k + 1);
+  }, []);
+
+  // ETP-5295 — when a confirm/manage flow created no related document, skip the modal and
+  // communicate success via an auto-dismissing toast instead, matching the UX already used
+  // by each window's own detail-page component for this same edge case.
+  useEffect(() => {
+    if (confirmedDocs && !hasConfirmedDoc) {
+      toast.success(confirmedTitle || ui(confirmedTitleKey));
+      resetConfirmedState();
+    }
+  }, [confirmedDocs, hasConfirmedDoc, confirmedTitle, confirmedTitleKey, ui, resetConfirmedState]);
+
+  const confirmResultPortal = confirmedDocs && hasConfirmedDoc ? createPortal(
     <ConfirmResultModal
-      title={ui('soConfirmedTitle')}
+      title={confirmedTitle || ui(confirmedTitleKey)}
       docs={[
-        confirmedDocs.shipment?.id && { type: 'salida', num: confirmedDocs.shipment.documentNo, amount: confirmedDocs.shipment.amount, route: `/goods-shipment/${confirmedDocs.shipment.id}` },
-        confirmedDocs.invoice?.id  && { type: 'facturaVenta', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, route: `/sales-invoice/${confirmedDocs.invoice.id}` },
+        confirmedDocs?.[primaryDoc.key]?.id && { type: primaryDoc.type, num: confirmedDocs[primaryDoc.key].documentNo, amount: confirmedDocs[primaryDoc.key].amount, route: `/${primaryDoc.route}/${confirmedDocs[primaryDoc.key].id}` },
+        confirmedDocs?.[invoiceDoc.key]?.id && { type: invoiceDoc.type, num: confirmedDocs[invoiceDoc.key].documentNo, amount: confirmedDocs[invoiceDoc.key].amount, route: `/${invoiceDoc.route}/${confirmedDocs[invoiceDoc.key].id}` },
       ].filter(Boolean)}
-      currency={confirmRow?.['currency$_identifier'] || ''}
+      currency={(confirmRow || manageRow)?.['currency$_identifier'] || ''}
       navigate={navigate}
-      onClose={() => {
-        setConfirmedDocs(null);
-        setConfirmRow(null);
-        setRefreshKey(k => k + 1);
-      }}
+      onClose={resetConfirmedState}
       data-testid="ConfirmResultModal__4b313b" />,
     document.body,
   ) : null;

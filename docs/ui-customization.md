@@ -136,6 +136,91 @@ assignment — multi-role composition" for the full mechanism.
 
 ---
 
+### 3b. `window.customComponents.topbarSecondary` — secondary/utility actions, left of Save (ETP-5260)
+
+Injects a component into the detail topbar, rendered **before** Save/Confirm — i.e. to their
+**left**. This is a second, narrower slot alongside `topbarRight` (§4): both share the exact
+same prop contract (`data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess`, `onRefresh`,
+`onSave`, `isDirty`, `saveGate`), rendered by `DetailView`'s shared `renderSlotAction` helper —
+the only difference between the two slots is **where** in the flex row each one is called.
+
+```json
+"window": {
+  "customComponents": {
+    "topbarSecondary": "PurchaseOrderSecondaryActions"
+  }
+}
+```
+
+**Read this before you add a button to either `topbarRight` or `topbarSecondary`.** The bug
+that created this slot (ETP-5260) was exactly this: Copy link / Clone / Send lived *inside*
+`topbarRight`, and no amount of reordering them within that slot could put them to the left of
+Save — **the position of a button inside a slot's JSX never determines its position relative to
+Save; only which slot it is in does.** `topbarRight` is one `{topbarRight && …}` block rendered
+as a whole, after Save; `topbarSecondary` is a different block, rendered as a whole, before Save.
+Moving a button from the front to the back of one slot's internal JSX changes nothing about
+which side of Save it lands on.
+
+**The classification rule — decide by what the button IS, not by habit or by copying the
+nearest window:**
+
+| Slot | Carries | Renders | Examples |
+|---|---|---|---|
+| `topbarSecondary` | **Secondary/utility actions** — actions that operate on the record but are not part of advancing its document flow | Left of Save/Confirm | Copy link, Clone, Send by email |
+| `topbarRight` | **Primary document-flow actions** and status indicators — the actions that move the document forward, plus badges | Right of Save/Confirm (unchanged since ETP-4933) | Confirm-with-credit, "Gestionar recepción y factura", "Crear factura", payment-status/SII badges |
+
+A quick test: if the action's own label reads as a step in completing or advancing the
+document (Confirm, Create Invoice, Manage Receipt), it is primary → `topbarRight`. If it reads
+as "do something *with* this record that doesn't change its status" (copy its link, duplicate
+it, send a copy by mail), it is secondary → `topbarSecondary`.
+
+**Use `DocumentSecondaryActions`, don't write your own.** For the three common secondary
+actions, do not hand-roll buttons — reach for the shared
+`tools/app-shell/src/windows/custom/shared/DocumentSecondaryActions.jsx`, which renders them in
+the DF-mandated order **Copy link → Clone → Send** and already carries the Clone modal. Before
+this component existed there were **three divergent copies** of the Clone button
+(`purchase-order`, `sales-order`, and a mostly-unused shared `CloneButton.jsx`) — that
+divergence is exactly how ETP-4781's clone-button styling bug happened. A new window wanting
+this group wraps `DocumentSecondaryActions` in a small per-window adapter (own gating, own
+Clone/Send wiring) rather than duplicating its buttons; see
+`artifacts/purchase-order/custom/PurchaseOrderSecondaryActions.jsx` for the reference adapter to
+copy. Key props: `windowName`, `clone` (`false` | `true` | an overrides object — see the
+component's own JSDoc for the full shape), `showSend` + `onSendClick`, `showCopyLink` (default
+`true`), and `children` for a window-specific secondary action that isn't Copy link/Clone/Send
+(e.g. a fiscal "send to SII/TBAI" button) but still belongs in the DF's "Enviar" position.
+
+**A `SendDocumentModal` needs client-rendered PDF context `DocumentSecondaryActions` does not
+have.** Nine migrated windows (see the table below) keep their existing `SendDocumentModal`
+inside their `topbarRight` component instead of duplicating it, and bridge the Send *button* in
+`topbarSecondary` to the existing modal via a `window` `CustomEvent`
+(`'<window>:open-send-modal'`, e.g. `'purchase-order:open-send-modal'`) — see
+`docs/document-printables.md` → "Where the printables are used", entry 3, for the full pattern
+and why the modal did not move.
+
+**Do not move `topbarRight` to the left of Save.** `DetailView.jsx` carries an explicit ETP-4933
+comment on this: two windows (`return-material-receipt`, `return-to-vendor-shipment`) render a
+PRIMARY `ConfirmWithCreditButtonBase` inside `topbarRight`, visible while the document is still
+in Draft. Moving `topbarRight` — or reintroducing its old pre-`topbarSecondary` behavior — puts
+that Confirm action to the left of Save again, which is the regression ETP-4933 fixed. The
+`topbarSecondary` slot exists specifically so this never has to be revisited: it is additive,
+`topbarRight` is untouched, and the two return windows migrated only their Copy-link button (no
+Clone/Send) into `topbarSecondary`, leaving `ConfirmWithCreditButtonBase` exactly where it was.
+
+**Windows migrated to `topbarSecondary` (ETP-5260):** `purchase-order`, `sales-order`,
+`sales-quotation`, `goods-receipt`, `goods-shipment`, `purchase-invoice`, `sales-invoice`,
+`return-material-receipt`, `return-to-vendor-shipment`. See each window's guide under
+`docs/generated-custom-windows/` for its exact button set and gating.
+
+**The kebab ("more actions") menu also moved (ETP-5260, global change).** `DetailMoreActionsMenu`
+now renders right after `topbarSecondary` and before Save — reasoning: the kebab is itself a
+container of secondary actions (`window.menuActions`, §5 below), so it belongs in the same visual
+group. This is a `DetailView.jsx`-level change, so it affects **every** window that declares
+`menuActions`, not only the 9 migrated above — including `amortization`, `chart-of-accounts`,
+`fiscal-calendar`, `goods-movements`, `matched-purchase-invoices`, `physical-inventory`, and
+`simple-g-l-journal`.
+
+---
+
 ### 4. `window.customComponents` — replace or inject structural components
 
 Injects custom components into specific structural slots of `DetailView`. Each key maps to a component name (file must exist at `windows/custom/{window}/{value}.jsx`).
@@ -157,7 +242,8 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 
 | Key | Prop emitted | Renders where | Props received |
 |-----|-------------|---------------|----------------|
-| `topbarRight` | `topbarRight={X}` | Right side of detail topbar (replaces status badge) | `data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess`, `onRefresh`, `onSave`, `isDirty` |
+| `topbarSecondary` | `topbarSecondary={X}` | Left side of detail topbar, before Save/Confirm — see §3b | `data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess`, `onRefresh`, `onSave`, `isDirty`, `saveGate` |
+| `topbarRight` | `topbarRight={X}` | Right side of detail topbar (replaces status badge), after Save/Confirm | `data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess`, `onRefresh`, `onSave`, `isDirty`, `saveGate` |
 | `subHeader` | `headerContent={(data) => <X data={data} />}` | Full-width strip between the toolbar and the form — the first child of the detail content container | `data` |
 | `bottomSection` | `bottomSection={X}` | Bottom of detail view (replaces totals + footer) | `recordId`, `data`, `token`, `apiBaseUrl`, `api`, `summary`, `notesField`, `onFieldChange`, `notesFocused`, `setNotesFocused` |
 | `sidePanel` | `sidePanel={X}` | Right-side panel alongside the detail form | `recordId`, `data`, `token`, `apiBaseUrl` |
@@ -165,6 +251,7 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 | `headerTable` | replaces `{Entity}Table` import | List table in the master list view | Standard table props |
 
 **Real examples:**
+- `topbarSecondary`: see §3b — 9 windows, all wrapping the shared `DocumentSecondaryActions`
 - `topbarRight`: `goods-shipment` (`GoodsShipmentActions`), `sales-invoice` (`InvoiceTopbarExtra`)
 - `subHeader`: `product` (`ProductCostBanner`, ETP-5245 — the "this stocked product has no cost" warning, see `docs/generated-custom-windows/product.md`)
 - `bottomSection`: `payment-in` (`PaymentBottomPanel`), `sales-invoice` (`InvoiceBottomPanel`)
@@ -1670,6 +1757,347 @@ window guide [`docs/generated-custom-windows/product.md`](generated-custom-windo
 **Cross-references:**
 - [`docs/decisions-reference.md`](decisions-reference.md) — canonical decorator key table (*Composite list column (`multiField`)*).
 - [`docs/pipeline-validator-reference.md`](pipeline-validator-reference.md) — rule F18.
+
+---
+
+### 19. Inline record creation from a lookup drawer (`lookupCreateTargets.js` + `RecordCreateModal`) — ETP-5254
+
+**What it does:** pins a **`+ Create product` / `+ Crear producto`** row at the top of the product
+lookup drawer opened from a document line. Clicking it opens a **two-phase** dialog that renders the
+**Products window's own chrome** — its generated `ProductForm.jsx`, its primary-tab strip, its field
+labels — collects the header fields and POSTs them (*phase 1*), then reveals the window's **own Price
+and Attachments panels** mounted against the record that was just saved (*phase 2*). The new product
+is selected into the line the user was editing when the popup is **closed**, through exactly the same
+path a hand-picked row takes.
+
+**Before this ticket:** the drawer offered search and nothing else. A user who discovered mid-document
+that the product did not exist had to abandon the line, navigate to the Products window, create the
+product there, set its price, and re-open the document.
+
+**Where it lives — and what it deliberately did NOT touch.** None of the three lookup *trigger*
+components changed: `DataTable`'s `LookupField`, `InlineLinesPanel`'s `LookupTrigger` and
+`EntityForm`'s `LookupFormField` are all untouched. Everything is resolved inside
+`ProductDrawerShell`, from the `selectorUrl` it already receives, because that URL encodes both the
+document's spec and the NEO root:
+
+```
+{neoBaseUrl}/{spec}/{entity}/selectors/{column}
+   e.g.  /sws/neo/sales-order/lines/selectors/product
+```
+
+`parseSelectorUrl()` splits it, and the created record is funnelled back through the shell's own
+`select()`, so every trigger receives it through its existing `onSelect` contract.
+
+**The registry shape** (`tools/app-shell/src/components/contract-ui/lookupCreateTargets.js` —
+a deliberate sibling of `lookupDrawers.js`, a plain map plus a resolver, so a second creatable entity
+is a new entry rather than new branching inside the drawer):
+
+```js
+// This Set IS the scope switch — greppable in exactly one place.
+export const CREATE_PRODUCT_SPECS = new Set([
+  'sales-quotation', 'sales-order', 'purchase-order',
+  'sales-invoice', 'purchase-invoice',
+  'goods-shipment', 'goods-receipt',
+]);
+
+export const LOOKUP_CREATE_TARGETS = {
+  product: {
+    key: 'product',
+    entity: 'product',            // NEO entity under the `product` spec: POST target + FK selector base
+    ctaKey: 'createProduct',      // i18n keys, resolved through useUI()
+    titleKey: 'createProductTitle',
+    errorKey: 'createProductError',
+    allowedSpecs: CREATE_PRODUCT_SPECS,
+    prefill: (query) => (query ? { name: query } : {}),  // seeds the name with what was typed
+
+    // ── Phase 1: the window's own form, tabs and labels ──
+    // Lazy: a document window must not pay for the Products form unless the popup is opened.
+    // ProductForm.jsx ONLY — never ProductPage.jsx, which would drag DetailView/ListView along.
+    loadForm:   () => import('@generated/product/generated/web/product/ProductForm.jsx'),
+    loadLabels: () => import('@generated/product/generated/web/product/labels.js'),
+    labelOverrides: { /* mirrors window.labelOverrides in decisions.json */ },
+    tabs: [                       // mirrors window.primaryTabs + the EntityForm section each renders
+      { key: 'general',        label: 'General',         section: 'principal' },
+      { key: 'additionalInfo', label: 'Additional Info', section: 'other' },
+    ],
+    tabsVariant: 'pill',          // mirrors window.primaryTabsVariant
+    cols: 3,                      // the window's own field-grid width
+
+    // ── Phase 2: the window's own panels, available only once the record exists ──
+    loadPostCreateTabs: () => Promise.all([
+      import('@/windows/custom/product/ProductPriceBar.jsx'),
+      import('@/components/attachments'),
+    ]).then(([price, attachments]) => ([
+      { key: 'pricing',     labelKey: 'price',       Component: price.default },
+      { key: 'attachments', labelKey: 'attachments', Component: attachments.AttachmentsTab,
+        props: { tableName: 'M_Product', config: {} } },
+    ])),
+  },
+};
+
+// → { ...target, apiBaseUrl } when the spec is allowlisted AND the caller opted in, else null.
+resolveLookupCreateTarget({ selectorUrl, createEnabled });
+```
+
+**The prop:** `ProductDrawerShell` takes `createEnabled` (default `false`). `ProductSearchDrawer`
+passes `createEnabled={!keepOpenOnSelect}`; `ProductStockSearchDrawer` deliberately does not pass it
+at all.
+
+- **Why an allowlist and not "every window using the default product drawer":** ~10 other specs share
+  that drawer (requisition, physical inventory, cost adjustment, return to vendor…), and the
+  goods-movements / internal-consumption **line forms** reach it too, because
+  `EntityForm.LookupFormField` hardcodes `ProductSearchDrawer` instead of honouring the window's
+  `lookupDrawer` (the key documented in [`docs/decisions-reference.md`](decisions-reference.md) →
+  *Lookup Drawer Override*). That inconsistency is a separate ticket; the allowlist keeps this feature
+  out of its blast radius in the meantime.
+- **The `product-stock` variant never shows the row.** Creating a stockless product inside a picker
+  that filters by stock returns an immediately empty result, so the stock drawer opts out simply by
+  not forwarding the flag. Multi-select pickers (`keepOpenOnSelect`, e.g. the report viewer) opt out
+  too — creation is a single-pick affordance.
+- **The create row is NOT part of the arrow-key navigation ring.** Each drawer variant's
+  `onNavKeyDown` indexes into `results` with its own arithmetic, and a virtual row would mean editing
+  every variant. It is reachable by **Tab and by pointer** only. Deliberate limitation, not an
+  oversight.
+- **The row is pinned at the top of the results list, not in the footer** — the footer is gated on
+  `hasResults`, i.e. hidden in exactly the "nothing found, I need to create it" moment the affordance
+  exists for.
+- **While the modal is open the drawer is hidden but stays mounted**, so `query` and `results` survive
+  a cancel untouched, and the shell suppresses the fetch hook's **document-level** Escape handler
+  (bound at document level, so a portalled sibling modal cannot stop it with `stopPropagation`) —
+  without that, Escape inside the modal would also tear down the drawer behind it.
+- **Purely additive.** A caller that does not pass `createEnabled` (every caller except
+  `ProductSearchDrawer`), and any spec outside `CREATE_PRODUCT_SPECS`, gets `resolveLookupCreateTarget`
+  → `null` and renders byte-for-byte the same drawer as before this slot existed.
+
+#### The popup IS the window — mounted in the host's own React tree
+
+The dialog does not render a form that resembles the Products window: it mounts **the Products window
+itself**, at its own `new` route, inside the dialog body (`data-testid="record-create-window"`). That
+is why the tab strip shows **Price, Cost, Accounting and Attachments** from the first paint, why the
+header stays editable after saving, and why a tab added to the window tomorrow appears here with no
+change to this code. Cost and Accounting can arrive no other way — their renderers are welded to
+`DetailView`'s per-tab hooks, so reusing them means reusing `DetailView`.
+
+`EmbeddedWindowRoute.jsx` is what makes an application window mountable inside another one:
+
+```jsx
+<LocationContext.Provider value={null}>          {/* satisfies the nested-router invariant */}
+  <RouteContext.Provider value={{ outlet: null, matches: [], isDataRoute: false }}>
+    <MemoryRouter initialEntries={[`/${windowName}/new?embedded=interactive`]}>
+      <PageMetaProvider>                          {/* the window's title/breadcrumb stop here */}
+        <Routes>
+          <Route path={`/${windowName}`}            element={element} />
+          <Route path={`/${windowName}/:recordId`}  element={element} />
+        </Routes>
+      </PageMetaProvider>
+    </MemoryRouter>
+  </RouteContext.Provider>
+</LocationContext.Provider>
+```
+
+- **React Router's "you cannot render a `<Router>` inside another `<Router>`" is narrower than it
+  reads.** The invariant is `!useInRouterContext()`, and `useInRouterContext()` only asks whether
+  `LocationContext` is non-null *at that point*. Re-providing `null` — the context's own default —
+  satisfies it. `RouteContext` is reset alongside it, or the inner routes would be matched relative to
+  the host's current match (`/sales-invoice/:id`) instead of from the root. These are `UNSAFE_`
+  exports: acceptable here because the version is pinned and the failure mode is a loud invariant
+  throw at mount, not silent wrongness.
+- **A memory router cannot move the host.** The window navigates when it saves — `/<spec>/new` →
+  `/<spec>/<id>` — and `createMemoryHistory` never touches `window.history`, so that navigation stays
+  inside the dialog. Watching it is how the popup learns the record id.
+- **The window is handed `recordId` as a PROP, not left to read the route.** Windows switch
+  list-vs-detail on the prop `WindowLoader` extracts from the route, so a child mounted without it
+  renders the product **list** inside the dialog however correct the inner URL is. `EmbeddedWindowRoute`
+  injects it from `useParams()`, which also makes the window flip to the saved record by itself.
+- **`PageMetaProvider` is not optional.** `ListView` and `DetailView` publish title, breadcrumb and
+  record count through `useSetPageMeta`, which the host's TopBar reads — without a nested provider the
+  dialog rewrites the *document's* header, turning an open invoice's breadcrumb into
+  *Inventario / Producto*.
+- **The chrome is dropped through a CONTEXT, never the URL.** `EmbeddedWindowContext`
+  (`lib/embeddedWindow.js`) is provided above the memory router and read by `useChromelessEmbed`, so
+  the sidebar, topbar, palette, widgets, the **stock side panel** and the window's own "cancel back to
+  the list" all disappear while the window stays usable. The flag lived on the URL twice and was lost
+  twice the same way — the window navigates to `/<spec>/<id>` when it saves and the query string does
+  not survive it, which put the stock panel back inside the dialog at the exact moment the product was
+  created. Re-applying it from an effect is a race the user sees. A context is set by the host and
+  nothing the window does to its own location can drop it. The URL form (`?embedded=1` /
+  `=interactive`) is still honoured for a preview opened directly by link, where there is no host
+  component above it — `embedded=1` additionally disables pointer events, which is why the two stay
+  apart.
+
+**Why in-tree and not an iframe.** The first implementation hosted the window in a same-origin iframe,
+on the reading that nesting routers was impossible. It worked, but it cost a second cold boot of the
+whole application — entry chunk, session refresh, window-access map, then the window: **~460 ms against
+~180 ms** for navigating to the same window in-app, and the gap was reported in a demo. Mounted
+in-tree the providers, the session and the already-parsed chunks are the host's, and the measured open
+time is **146–345 ms** — at parity with opening the window normally.
+
+**Escape ownership is the one thing the iframe gave away for free.** In a separate document a keypress
+inside the form could not reach the host; in-tree it can, and *both* the dialog and the selector's
+fetch hook listen for `keydown` on `document` in the same native dispatch. The dialog's listener runs
+first, React flushes its state update synchronously (keydown is a discrete event), and the hook's
+listener — still the same keypress — then reads an already-closed modal and tears the drawer down with
+the user's search inside it. Reading a `createOpen` flag is therefore not enough: `ProductDrawerShell`
+holds a ref that stays set for one macrotask **after** the modal closes, so one Escape closes exactly
+one layer. `RecordCreateModal` additionally stops the synthetic Escape at its `DialogContent`, which
+keeps it out of the host's inline add-row handler.
+
+If the window module fails to load, the modal falls back to the two-phase generated form described
+next; that path is otherwise dormant.
+
+#### Fallback: the two-phase generated form
+
+Used only when the window module cannot be loaded. `RecordCreateModal.jsx` declares no field list, no tab strip of its own and no labels. Every visible
+piece is the Products window's:
+
+- **The form.** `target.loadForm()` lazily imports the generated `<Entity>Form.jsx` through the
+  `@generated` vite alias and renders it as-is, so labels, types, options, requiredness, defaults,
+  references and compiled `readOnlyLogic` stay owned by `artifacts/product/decisions.json`: a
+  `make regen ONLY=product` propagates into the popup for free. This is deliberately unlike
+  `CreateContactModal` / `EntityCreationModal`, which hand-roll their field lists and have already
+  drifted from the window they mirror.
+- **The tab strip.** `renderPrimaryTabButtons(target.tabsVariant, tabs, …)` from
+  `detailViewHelpers.jsx` — the same helper and the same `'pill'` variant `ProductPage` passes to
+  `DetailView`, so the General / Additional Info strip is literally the same control. Captions run
+  through `useMenuLabel()`, and `target.tabs` mirrors `window.primaryTabs` in `decisions.json` (key
+  and label verbatim) plus the `EntityForm` `section` each tab renders. `cols: 3` keeps the field grid
+  the same width as the window's.
+- **Both tab panels stay MOUNTED** — the inactive one is only hidden. Unmounting it would fire
+  `EntityForm`'s `registerFields` cleanup and silently drop that tab's fields from validation:
+  `taxCategory` is required, lives in the `other` section and has no static default, so submitting
+  from the General tab would sail past the check into a backend 400. For the same reason, a failed
+  validation **switches to the offending tab** — an inline error on a hidden panel is no error at all.
+  That is also why the `other` tab cannot simply be dropped from the registry.
+- **The field labels.** `target.loadLabels()` loads the target window's own label slice and the modal
+  re-provides the merged dictionary for its subtree through `LocaleProvider`, exactly the way
+  `WindowLoader` does for a routed window. **This fixes a subtle bug that will recur if the slice is
+  ever dropped:** `WindowLoader` only loads the slice of the window being routed to, so inside a sales
+  invoice the dictionary holds the invoice's columns and none of the product-only ones —
+  `ProductType`, `C_UOM_ID`, `C_TaxCategory_ID`… fell back to the raw English AD label while `Name`
+  and `Description` happened to resolve, producing a half-translated form.
+- **The label overrides.** `target.labelOverrides` is a **copy** of `window.labelOverrides` in
+  `decisions.json`, which the generator emits only into `ProductPage.jsx` — a module that cannot be
+  imported here without dragging `DetailView`, `ListView`, the sidebar, the price bar and the gallery
+  into every document bundle. Without it the popup would say *Identificador* / *Categoría del
+  producto* / *Tipo de producto* where the window says *Código* / *Categoría* / *Tipo*.
+
+#### Two phases, and why it cannot be one
+
+A POST does **not** complete the popup. On success the modal keeps the created record, loads
+`target.loadPostCreateTabs()` and reveals a second tab strip carrying the Products window's **own**
+Price (`ProductPriceBar`) and Attachments (`AttachmentsTab`) panels — same components, same extra
+props `DetailView` hands its `customTabs`, mounted against the saved record. They persist themselves
+against `/price` and the attachment endpoints; the popup saves nothing on their behalf.
+
+**The header form stays editable in phase 2, and commits on blur.** This is not a choice the popup
+made: `artifacts/product/decisions.json` declares `autoSaveOnBlur: true`, so committing each field as
+the user leaves it is precisely what *behaves like the Products window* means here — the same
+derived-from-the-window principle as the tabs and the labels above. Mechanically, phase 2 passes
+`onFieldBlur` and `savingField` to the embedded forms (phase 1 passes neither, so nothing can commit
+before the record exists); an edited field is sent as `PATCH {apiBaseUrl}/{entity}/{id}` with
+`{ <key>: <value>, updated }`, a field the user never touched fires nothing — tabbing through the form
+is silent — and `savingField` drives `EntityForm`'s per-field spinner. The PATCH response **refreshes
+the record's `updated`**, which is what lets a second edit succeed: carrying the stale version instead
+would make it a 409. A failed PATCH surfaces the backend message and leaves the record unchanged.
+A drift test guards the premise, failing with *"the Products window no longer autosaves on blur —
+RecordCreateModal phase 2 still does"* if that decision is ever flipped.
+
+**Why two phases is structural, not a UX preference:** those panels cannot exist before the record is
+saved. `ProductPriceBar` derives its `recordId` from `data?.id` and reads `/price?parentId=<id>`, and
+an attachment needs a record to attach to. Splitting at the POST is the only way the window's real
+panels — rather than an imitation of them — can appear inside the popup at all. It is also what makes
+the price of a brand-new product actionable on the spot: the user sets the tariff price before the
+product ever reaches the line.
+
+**`onCreated` fires exactly once, at the end.** `Done`, the X, the overlay and Escape all route
+through `dismiss()`, which calls `finish()` once a record exists and `onCancel()` before that. So
+there is a single completion point, and it is the one that selects the product in the line.
+
+**Accounting is absent from the FALLBACK's phase 2** (the live window mode shows it, because it shows the window). Price and Attachments are self-contained custom
+panels; Accounting is a `secondaryTabs` entry whose renderer `SecondaryTableTab` takes `DetailView`'s
+`hook`, `secondaryHooks` and `addingSecondaryLine`, so reusing it means recreating that per-tab
+`useEntity` machinery, and imitating it would mean reimplementing a panel rather than reusing one. It
+is additionally gated behind the `showAccountingFields` capability, so most users never see it in the
+window either. Registered as debt: `accounting-tab-not-in-popup` in `flags-registry.json`.
+
+**Not replicated at all:** callouts (the Products window itself wires none — its `decisions.json`
+`rules` is empty and no callout is emitted into its generated form, so the popup is no worse than the
+window it embeds), optimistic-lock `updated` (a POST has no prior version), `evaluate-display` (these
+fields carry no `displayLogic`), and processes. `image` is excluded from the form because it
+needs the `/image` upload endpoint and a saved record.
+
+The `GET {apiBaseUrl}/{entity}/defaults` call made on open is not optional polish: `productCategory`'s
+`defaultValue` in the generated form is the literal macro `@SQL=SELECT MAX(...)`, which the client
+cannot evaluate — without the call that string would be POSTed as an FK value. The response is merged
+with `mergeDefaultsPreservingUserEdits` so a slow `/defaults` cannot clobber what was already typed,
+and the synthetic `id` it returns is deleted before merging.
+
+#### Drift guards — what keeps the copied config honest
+
+Three pieces of the registry are copies of the Products window's own configuration (`labelOverrides`,
+`tabs`/`tabsVariant`, and the post-create tab list). Tests read `artifacts/product/decisions.json` and
+the generated `ProductPage.jsx` and compare them against the registry, so a divergence fails the
+build with an explicit instruction: **fix `lookupCreateTargets.js`, never `decisions.json`.** The
+Accounting omission is asserted too, so dropping it stays a decision rather than an accident. See the
+`registry copies stay in sync with artifacts/product/decisions.json` and `post-create tabs mirror
+ProductPage customTabs` describe blocks in `lookupCreateTargets.vitest.js`.
+
+#### Why the created record is re-queried through the selector
+
+A freshly POSTed record is a plain CRUD row: no `label`, no `standardPrice`, and crucially no
+`_aux._PSTD/_PLIM/_UOM/_CURR`, which the line's pricing callout needs. When the popup completes,
+`handleCreated()` re-queries the **drawer's own** selector by the new record's `searchKey` and hands
+`select()` the canonical selector row, keeping `applyOnSelectMappings`, `mergeSelectorAuxFields` and
+the callout running exactly as for a hand-picked product. When that row does not come back — the
+selector is called with the **document's** `priceList`, and a product priced in phase 2 on a different
+tariff (or left unpriced) may legitimately not match — the exported `synthesizeCreatedItem()` fallback
+builds a minimal selector-shaped row (prices `0`, UoM carried in both shapes) so the line stays usable
+instead of silently losing the product.
+
+#### Known limitations — expected behaviour, not defects
+
+| Behaviour | Why it is expected |
+|---|---|
+| The popup does **not** create a cost line. | ETP-5245 owns the rule *a product is expected to have a defined cost* and surfaces it with a warning banner in the Products window. Restating it here would be a second copy of the same rule in a second place, free to drift — and the popup mounts that window, so the banner and the **Cost** tab both appear inside it and the user can add the line before finishing. That rule used to also REFUSE the save, which made a product created from a line unsavable the moment it existed; the block was removed by product decision and the banner is advisory now. |
+| **Accounting** and **Cost** are missing from the *fallback* form. | They are `secondaryTabs` entries driven by `DetailView`'s per-tab `useEntity` machinery. The live popup mounts the window itself and therefore shows both; only the dormant fallback lacks them. Tracked as `accounting-tab-not-in-popup`. |
+| Closing the popup after the product was created **completes**; it does not undo anything. | The record already exists — the POST happened at the end of phase 1. Cancelling is only possible *before* that: in phase 1 the `Cancel` button leaves the document untouched and nothing is written. In phase 2 there is no `Cancel`, only `Done`, and the X / overlay / Escape mean the same thing. |
+| The line can still arrive at **price 0**. | Phase 2 lets the user price the product immediately, which is the normal path. If they skip it — or price it on a tariff other than the document's — the selector re-query finds nothing and the synthesized fallback row is used. The user types the price on the line, exactly as for any product with no row in that tariff. |
+| No arrow-key access to the create row. | See the navigation-ring bullet above. |
+| No callouts inside the popup. | The Products window wires none either. |
+
+**Also fixed here (latent bug):** the drawer's "no results" state was gated on a non-empty query, so
+an empty search that legitimately returned nothing rendered a completely blank body — which reads as
+broken, doubly so with a create row sitting above it. It now renders `productSearchNoResults` when a
+query is present and `noProductsFound` when it is not.
+
+**i18n:** three keys were added to all three locale files (`en_US`, `es_ES`, `es_AR`) —
+`createProduct`, `createProductTitle` and `createProductError`; see
+[`docs/i18n-guide.md`](i18n-guide.md). The tab captions are **not** among them: phase 1's come from the
+menu dictionary through `useMenuLabel()` (which is what makes them read identically to the window's),
+and phase 2 reuses the existing `price`, `attachments` and `done` keys.
+`tools/app-shell/src/locales/__tests__/lookup-create-keys.vitest.js` fails the build if a locale is
+missing one.
+
+**Real example:** the affordance is live on the seven document specs in `CREATE_PRODUCT_SPECS` —
+`sales-quotation`, `sales-order`, `purchase-order`, `sales-invoice`, `purchase-invoice`,
+`goods-shipment`, `goods-receipt` — reached from the lines grid, the inline lines panel and the line
+form alike, since all three trigger the same shell. Regression coverage:
+`tools/app-shell/src/components/contract-ui/__tests__/lookupCreateTargets.vitest.js` (the scope switch,
+URL parsing and the drift guards above), `RecordCreateModal.vitest.jsx` (phase 1: defaults merge,
+cross-tab required-field validation, payload shaping, response unwrapping — plus a
+`— post-create phase` describe block for the phase-2 tabs, the read-only header and the
+close-means-done semantics), `ProductDrawerShell.vitest.jsx` (`— create affordance`,
+`— handleCreated`, `— empty state` and `synthesizeCreatedItem`),
+`ProductStockSearchDrawer.vitest.jsx` (asserts the stock variant opts **out**) and
+`DataTable.addRowProductLookup.vitest.jsx` (the create row inside a real add-row lookup).
+
+**Cross-references:**
+- [`docs/generated-custom-windows/product.md`](generated-custom-windows/product.md) — the Products
+  window whose form, tabs, labels and Price/Attachments panels this popup embeds.
+- The seven window guides in [`docs/generated-custom-windows/`](generated-custom-windows/) — the
+  per-window note on the affordance.
+- [`docs/request-policy.md`](request-policy.md) — the `useApiFetch`/`apiFetch` helper both the modal
+  and the selector re-query go through.
 
 ---
 

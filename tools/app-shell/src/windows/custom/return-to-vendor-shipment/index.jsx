@@ -1,5 +1,6 @@
 import ReturnToVendorShipmentPage from '@generated/return-to-vendor-shipment/generated/web/return-to-vendor-shipment/ReturnToVendorShipmentPage';
 import ReturnToVendorShipmentPreview from './ReturnToVendorShipmentPreview';
+import ReturnToVendorShipmentSecondaryActions from './ReturnToVendorShipmentSecondaryActions.jsx';
 import ReturnWindowShell from '../shared/ReturnWindowShell';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
@@ -45,18 +46,30 @@ export default function ReturnToVendorShipmentWindow({ windowName, recordId, api
       entity="returnToVendorShipment"
       headerEntity="returnToVendorShipment"
       routePrefix="/return-to-vendor-shipment/"
+      // ETP-5260 defect fix — forwarded through ReturnWindowShell's `...pageProps`
+      // and the generated ReturnToVendorShipmentPage's own `{...props}` spread
+      // straight to DetailView; renders Copy link to the LEFT of Save/Confirm.
+      // ConfirmWithCreditButton (topbarRight, hardcoded in the generated Page)
+      // is untouched — see ReturnToVendorShipmentSecondaryActions' doc comment.
+      topbarSecondary={ReturnToVendorShipmentSecondaryActions}
       duplicateAction={{ show: false }}
       hideLink
       bulkActions={ReturnToVendorShipmentBulkActions}
       // ETP-4717 — no `emailAction`: the row-hover "Enviar" trigger this window had
       // (ETP-4718) called an email contract (`${windowName}-send`) the backend never
-      // registered (it only has `return-to-vendor-send`), so every send failed with
-      // "Unknown email contract". QA asked to remove the action outright rather than
-      // reconcile the name. `decisions.json → window.sendDocument.enabled: false`
-      // already suppresses the row Email icon via `sendDocument` threaded into
-      // RowQuickActions (it takes precedence over `documentPreview`); omitting
-      // `emailAction` here too keeps this window consistent with the sibling
-      // `return-material-receipt` (same shell, no `emailAction`, no live trigger).
+      // registered (it only has `return-to-vendor-send`, which — per that contract's
+      // own Javadoc — actually resolves a Purchase Order return, not this M_InOut
+      // window; see DefaultDocumentSendEmailContract#getSpecName), so every send
+      // failed with "Unknown email contract". QA asked to remove the action outright
+      // rather than reconcile the name. `decisions.json → window.sendDocument.enabled:
+      // false` already suppresses the row Email icon via `sendDocument` threaded into
+      // RowQuickActions (it takes precedence over `documentPreview`).
+      //
+      // ETP-5124 gave the sibling `return-material-receipt` its own working backend
+      // contract (`return-material-receipt-send`), so that window now HAS a live
+      // `emailAction` — this window's gap is unrelated (no contract for THIS window's
+      // name exists at all) and stays open until a `return-to-vendor-shipment-send`
+      // contract is built.
       {...rest}
       data-testid="ReturnWindowShell__a5f79c" />
   );

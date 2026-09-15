@@ -311,6 +311,9 @@ function newInvoiceDefaults() {
     transactionDocument: 'td-arc-001', 'transactionDocument$_identifier': 'AR CreditMemo',
     documentNo: 'NC-NEW-1',
     invoiceDate: '2026-07-16',
+    // ETP-5273: accountingDate is now an independent, required header field —
+    // needed to keep passing the required-field guard alongside invoiceDate.
+    accountingDate: '2026-07-16',
     businessPartner: 'bp-tab-001', 'businessPartner$_identifier': 'Cliente Rectificado S.L.',
     partnerAddress: 'addr-tab-001', 'partnerAddress$_identifier': 'Calle Tab 1',
     paymentMethod: 'pm-001', 'paymentMethod$_identifier': 'Transferencia',

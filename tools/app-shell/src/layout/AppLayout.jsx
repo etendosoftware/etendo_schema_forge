@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { isChromelessEmbed } from '@/lib/embeddedWindow.js';
 import { Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import { Building2, ChevronDown, Loader2, LogOut } from 'lucide-react';
 import SideMenu from '@/components/layout/SideMenu';
@@ -244,7 +245,10 @@ function AppLayoutInner({ menuGroups, embedded }) {
 
 export default function AppLayout({ menuGroups }) {
   const [searchParams] = useSearchParams();
-  const embedded = searchParams.get('embedded') === '1';
+  // `1` is the read-only preview embed (DetailView also drops pointer events for it).
+  // `interactive` strips the same chrome — sidebar, topbar, palette, widgets — but leaves
+  // the window usable, which is what hosting a real window inside a dialog needs.
+  const embedded = isChromelessEmbed(searchParams.get('embedded'));
   // AppLayout is rendered inside AppShellRuntime's AuthProvider (same place
   // SideMenu below already calls useAuth() today), unlike App.jsx itself — see
   // the note in App.jsx. That's why role-filtering is applied here rather than

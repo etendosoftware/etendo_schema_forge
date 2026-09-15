@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { login, navigateTo } from '../helpers/auth.js';
+import { uniqueValidCif } from '../helpers/tax-id.js';
 
 /**
  * Contacts — Full integration E2E journey against a real Etendo backend.
@@ -932,7 +933,9 @@ test.describe('Contacts Integration — Full journey', () => {
   test('ETP-4700 — create contact from Sales Order "Contacto" selector modal', async ({ page }) => {
     const ts = Date.now();
     const CONTACT_NAME = `E2E SO Contact ${ts}`;
-    const TAX_ID = `B-${ts}`;
+    // ETP-5031: must be a syntactically valid CIF (check digit and all) — the backend now
+    // validates it via SpanishTaxIdValidator when "Clave NIF país residencia" is NIF.
+    const TAX_ID = uniqueValidCif(ts);
 
     const loginOpts = onboardingCreds
       ? { user: onboardingCreds.email, password: onboardingCreds.password }
@@ -1018,7 +1021,8 @@ test.describe('Contacts Integration — Full journey', () => {
     const shortTs = String(ts).slice(-6);
     const FIRST_NAME = `E2E First ${shortTs}`;
     const LAST_NAME = `E2E Last ${shortTs}`;
-    const TAX_ID = `B-${ts}`;
+    // ETP-5031: must be a syntactically valid CIF — see the comment on the sibling test above.
+    const TAX_ID = uniqueValidCif(ts);
 
     const loginOpts = onboardingCreds
       ? { user: onboardingCreds.email, password: onboardingCreds.password }

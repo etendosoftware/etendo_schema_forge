@@ -1,0 +1,8 @@
+runs/
+.auth/
+config.toml
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env

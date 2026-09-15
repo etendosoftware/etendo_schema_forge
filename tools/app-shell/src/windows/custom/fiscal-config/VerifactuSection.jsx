@@ -30,10 +30,13 @@ function SectionRow({ children, leftContent }) {
   );
 }
 
-const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseUrl, orgId, onSave, hideSave }, ref) {
+const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseUrl, orgId, onSave, hideSave, locked }, ref) {
   const ui = useUI();
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
-  const isLocked = isEtendoTrue(record?.isReady);
+  // Locked either because the record itself is "ready" (existing ETP-4785 rule)
+  // or because the caller forces a lock (e.g. forceTestMode, ETP-5272) — same
+  // mechanism, OR'd source.
+  const isLocked = isEtendoTrue(record?.isReady) || !!locked;
 
   const [form, setForm] = useState({
     tAXType:   normalizeVerifactuTaxType(record?.tAXType) ?? '',

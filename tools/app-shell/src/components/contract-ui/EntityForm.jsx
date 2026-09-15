@@ -12,7 +12,7 @@ import { useLabel, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
 import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackSaveBlockToast } from '@/lib/numericValidation.js';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { NUMERIC_FIELD_TYPES, TWO_DECIMAL_FIELD_TYPES } from '@/lib/numericFieldTypes.js';
-import { getContactsTextFieldError, filterContactsInputValue } from './contactsFieldValidation.js';
+import { getContactsTextFieldError, getContactsTaxIdError, filterContactsInputValue } from './contactsFieldValidation.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
@@ -1164,6 +1164,20 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
     if (contactsErr) {
       const toastId = `contacts-field-${f.key}`;
       toast.error(ui(contactsErr.key, contactsErr.params), { id: toastId });
+      trackSaveBlockToast(toastId);
+      return;
+    }
+    // ETP-5031 (QA round): Contacts-only tax-identifier CONTENT echo. Same
+    // non-blocking blur surface as above, sharing the `contacts-field-<key>`
+    // toast id with the useEntity save gate so blur-then-Save shows one toast.
+    // `data` is the record currently being edited, which is what supplies the
+    // sibling `oBTIKTaxIDKey` deciding whether this is a NIF or a passport;
+    // the field's own value comes from the blur event, since `data` may not
+    // have committed the last keystroke yet on a deferred input.
+    const contactsTaxIdErr = getContactsTaxIdError(windowName, f, value, data);
+    if (contactsTaxIdErr) {
+      const toastId = `contacts-field-${f.key}`;
+      toast.error(ui(contactsTaxIdErr.key, contactsTaxIdErr.params), { id: toastId });
       trackSaveBlockToast(toastId);
     }
   };

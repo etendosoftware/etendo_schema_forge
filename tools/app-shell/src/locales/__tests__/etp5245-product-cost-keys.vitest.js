@@ -9,9 +9,10 @@ import esES from '../es_ES.json';
  * Two families, both resolved through `useUI()`, which echoes the KEY when the active locale has
  * no entry for it (there is no locale-to-locale fallback in LocaleProvider):
  *
- *  - `productCostRequired`, the blocking banner (`ProductCostBanner`) and the save-gate toast
- *    (`useEntity.performSave`). A missing entry here would show the user a bare identifier at the
- *    exact moment they are being refused a save — the worst possible time to be unhelpful.
+ *  - `productCostRequired`, the advisory banner (`ProductCostBanner`). It once also fed a hard
+ *    save-block toast in `useEntity.performSave`; that block was removed by product decision, but
+ *    the banner is the only warning left, so a missing entry would leave a bare identifier as the
+ *    sole explanation of why the product's movements will not post later.
  *  - `backendError.costing*`, the five refusals `ProductCostingHandler` returns. Those cross the
  *    wire in English and are translated client-side by `lib/backendErrors.js`; a missing entry
  *    makes `translateBackendError` fall back to the raw English sentence, silently.
@@ -67,7 +68,7 @@ describe('ETP-5245 — product cost i18n keys', () => {
   });
 
   it('points the banner text at the Cost tab, in every locale', () => {
-    // The message is only actionable if it says WHERE to fix it — the save is blocked until then.
+    // The message is only actionable if it says WHERE to fix it; nothing else prompts the user.
     expect(enUS.genericLabels[BANNER_KEY].toLowerCase()).toContain('cost');
     expect(esES.genericLabels[BANNER_KEY].toLowerCase()).toContain('costo');
     expect(esAR.genericLabels[BANNER_KEY].toLowerCase()).toContain('costo');
@@ -76,7 +77,7 @@ describe('ETP-5245 — product cost i18n keys', () => {
   /**
    * The rule was widened by product decision to cover EVERY product type, so the copy may no
    * longer scope itself to stockable/warehouse products — a user looking at a service must not be
-   * told the warning does not concern them while the save is being refused.
+   * told the warning does not concern them.
    */
   it('does not scope the banner copy to stockable products in any locale', () => {
     for (const [name, dictionary] of Object.entries(DICTIONARIES)) {

@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import GoodsReceiptTable from '@generated/goods-receipt/generated/web/goods-receipt/GoodsReceiptTable';
 import GeneratedApp from '@generated/goods-receipt/generated/web/goods-receipt/index.jsx';
 import GoodsReceiptBottomPanel from '@generated/goods-receipt/custom/GoodsReceiptBottomPanel';
+import GoodsReceiptSecondaryActions from '@generated/goods-receipt/custom/GoodsReceiptSecondaryActions';
 import GoodsReceiptPreview from './GoodsReceiptPreview.jsx';
 import RelatedDocuments from './RelatedDocuments.jsx';
 import { AttachmentsTab } from '@/components/attachments';
@@ -110,11 +111,9 @@ export default function GoodsReceiptWindow(props) {
     if (status !== 'CO') return [];
     const isPosted = data?.posted === 'Y' || data?.posted === true;
     return [
-      {
-        key: 'downloadPdf',
-        label: ui('downloadPdf'),
-        onClick: () => window.dispatchEvent(new CustomEvent('goods-receipt:download-pdf')),
-      },
+      // ETP-5291 — "Descargar PDF" removed from the kebab menu; the stored
+      // attachment remains directly downloadable via the download-icon
+      // control in GoodsReceiptActions.jsx.
       ...(!isPosted ? [{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }] : []),
       ...(isPosted ? [{ key: 'unpost', labelKey: 'unpost', neoAction: 'unpost', successKey: 'documentUnposted', destructive: true }] : []),
     ];
@@ -151,6 +150,7 @@ export default function GoodsReceiptWindow(props) {
         // panel after every save (e.g. changing Warehouse), not just when the invoice link
         // actually changes. Mirrors sales-invoice/purchase-invoice, which hit the same gap.
         refetchAfterSave={true}
+        topbarSecondary={GoodsReceiptSecondaryActions}
         Table={CustomHeaderTable}
         labelOverrides={LABEL_OVERRIDES}
         initialColumnFilters={docStatus ? { documentStatus: { mode: 'enumLabel', value: [docStatus] } } : undefined}

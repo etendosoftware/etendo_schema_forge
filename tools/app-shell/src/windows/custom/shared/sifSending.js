@@ -30,8 +30,14 @@ export function getPendingSifTargets(specName, profile, invoice, territory = nul
   const tbaiEligibleByDate = showTbai
     && isSifEligibleByDate(invoice?.invoiceDate, tbaiRecord?.tbaisystemdate);
 
+  // ETP-5272: a registry-error correction (`aeatsiiErrorRegistral = 'Y'`/`true`) needs
+  // a fresh SII send even when the invoice was already sent once (`aeatsiiIssent` stays
+  // `true` forever — the classic backend never resets it after the correction cycle).
+  // Without this OR, the "Send to SIF" button never reappears for a corrected invoice.
+  const pendingRegistralCorrection = isSent(invoice?.aeatsiiErrorRegistral);
+
   return {
-    sendSii: showSii && !isSent(invoice?.aeatsiiIssent),
+    sendSii: showSii && (!isSent(invoice?.aeatsiiIssent) || pendingRegistralCorrection),
     sendTbai: tbaiEligibleByDate && !isSent(invoice?.tbaiIssent),
   };
 }

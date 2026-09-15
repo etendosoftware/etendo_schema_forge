@@ -316,6 +316,100 @@ describe('PurchaseOrderActions', () => {
     });
   });
 
+  // ETP-5276: the createGoodsReceipt failure paths (mirroring OrderCreateInvoice.jsx's
+  // ETP-4888 pattern on the sales side) now route the raw backend message through
+  // translateBackendError(msg, ui) before it becomes the thrown Error's message. Each test
+  // below extracts the REAL throw expression from the live source (balanced-paren slicing,
+  // not a hand-copied duplicate) and executes it, so reverting the wiring at either call site
+  // fails only that test.
+  describe('createGoodsReceipt failure — real backend message survives translateBackendError (ETP-5276)', () => {
+    // Extracts the argument list of the first `callPrefix(...)` call found AFTER `marker` in
+    // `source` (balanced-paren aware, so nested `(...)` in the expression don't truncate it).
+    function extractCallExprAfter(source, marker, callPrefix) {
+      const markerIdx = source.indexOf(marker);
+      assert.ok(markerIdx !== -1, `marker not found: ${marker}`);
+      const callIdx = source.indexOf(callPrefix, markerIdx);
+      assert.ok(callIdx !== -1, `call not found after marker "${marker}": ${callPrefix}`);
+      const parenStart = callIdx + callPrefix.length;
+      let depth = 1;
+      let i = parenStart;
+      for (; i < source.length; i++) {
+        if (source[i] === '(') depth++;
+        else if (source[i] === ')') { depth--; if (depth === 0) break; }
+      }
+      assert.ok(depth === 0, `unbalanced parens extracting "${callPrefix}" after "${marker}"`);
+      return source.slice(parenStart, i);
+    }
+
+    // Same as above, but finds the call PRECEDING the marker (for call sites where the marker
+    // text — an i18n key — sits INSIDE the call's own argument list).
+    function extractCallExprAround(source, marker, callPrefix) {
+      const markerIdx = source.indexOf(marker);
+      assert.ok(markerIdx !== -1, `marker not found: ${marker}`);
+      const callIdx = source.lastIndexOf(callPrefix, markerIdx);
+      assert.ok(callIdx !== -1, `call not found before marker "${marker}": ${callPrefix}`);
+      const parenStart = callIdx + callPrefix.length;
+      let depth = 1;
+      let i = parenStart;
+      for (; i < source.length; i++) {
+        if (source[i] === '(') depth++;
+        else if (source[i] === ')') { depth--; if (depth === 0) break; }
+      }
+      assert.ok(depth === 0, `unbalanced parens extracting "${callPrefix}" around "${marker}"`);
+      return source.slice(parenStart, i);
+    }
+
+    const REAL_MESSAGE = 'No storage locator found for warehouse: Central';
+    // ConfirmModal's expression falls back through e?.error?.message || e?.response?.message
+    // || e?.message, so a flat {status,message} body resolves via the last branch.
+    const flatErrBody = (message = REAL_MESSAGE) => ({ status: 'error', message });
+    // CreateDocsModal's expression only checks e?.error?.message || e?.response?.message (no
+    // e?.message fallback at this call site), so it needs the nested shape to resolve.
+    const nestedErrBody = (message = REAL_MESSAGE) => ({ error: { message } });
+
+    describe('ConfirmModal.handleConfirm — receipt step (createGoodsReceipt)', () => {
+      function resolveMessage(e, res) {
+        const expr = extractCallExprAround(src, 'poOrderConfirmedReceiptError', 'throw new Error(');
+        // translateBackendError is stubbed as identity — this proves the RAW backend message
+        // survives end-to-end through the extra function call, not translateBackendError's own
+        // mapping table (already covered by backendErrors.test.js).
+        const fn = new Function('e', 'res', 'ui', 'translateBackendError', `return ${expr};`);
+        return fn(e, res, (k) => k, (msg) => msg);
+      }
+
+      it('appends the real backend message after the ui() prefix for a flat 400 body', () => {
+        assert.equal(
+          resolveMessage(flatErrBody(), { status: 400 }),
+          `poOrderConfirmedReceiptError ${REAL_MESSAGE}`,
+        );
+      });
+
+      it('does not fall back to the generic "Error (400)" suffix', () => {
+        assert.doesNotMatch(resolveMessage(flatErrBody(), { status: 400 }), /Error \(400\)$/);
+      });
+    });
+
+    describe('CreateDocsModal.handleCreate — receipt step (sibling to ConfirmModal, ETP-5276)', () => {
+      const createDocsModalSrc = src.slice(src.indexOf('export function CreateDocsModal'));
+
+      function resolveMessage(e, res) {
+        const expr = extractCallExprAfter(createDocsModalSrc, 'action/createGoodsReceipt', 'throw new Error(');
+        // This call site has no ui() prefix of its own, but the expression still references
+        // `ui` as translateBackendError's second argument, so it must be in scope too.
+        return new Function('e', 'res', 'ui', 'translateBackendError', `return ${expr};`)(
+          e, res, (k) => k, (msg) => msg);
+      }
+
+      it('surfaces the real backend message for a nested {error:{message}} 400 body', () => {
+        assert.equal(resolveMessage(nestedErrBody(), { status: 400 }), REAL_MESSAGE);
+      });
+
+      it('does not fall back to the generic "Error (400)" message', () => {
+        assert.notEqual(resolveMessage(nestedErrBody(), { status: 400 }), 'Error (400)');
+      });
+    });
+  });
+
   describe('PoCheckboxCard — disabled (already-done) treatment', () => {
     it('accepts a disabled prop', () => {
       assert.match(src, /function PoCheckboxCard\(\{[^}]*disabled[^}]*\}\)/);
@@ -398,15 +492,14 @@ describe('PurchaseOrderActions', () => {
   // ETP-4717 (Pair 2 — P2): the Send button/modal must only be available once
   // the purchase order is Confirmed (CO), not while it is still Draft (DR).
   // Grid and Form-view must agree on the same rule.
-  describe('Send button visibility gated by document status (ETP-4717)', () => {
-    it('does NOT show the Send button while the order is still Draft (DR)', () => {
-      assert.doesNotMatch(src, /\{\(isDraft \|\| isCompleted\) && <SendDocumentButton/);
-    });
-
-    it('shows the Send button only when the order is Completed (CO)', () => {
-      assert.match(src, /\{isCompleted && <SendDocumentButton/);
-    });
-
+  //
+  // ETP-5260 moved the Send BUTTON out of this file into the shared
+  // topbarSecondary slot (PurchaseOrderSecondaryActions.jsx / DocumentSecondaryActions.jsx)
+  // — see that component's own test for the isCompleted-only button-visibility
+  // assertion. This file keeps ONLY the SendDocumentModal (opened via the
+  // 'purchase-order:open-send-modal' window event dispatched from the button's
+  // new home), so what's left to pin here is the modal's own CO-only gate.
+  describe('SendDocumentModal render gated by document status (ETP-4717 / ETP-5260)', () => {
     it('does NOT gate the SendDocumentModal render on isDraft', () => {
       assert.doesNotMatch(
         src,
@@ -416,6 +509,11 @@ describe('PurchaseOrderActions', () => {
 
     it('gates the SendDocumentModal render on isCompleted only', () => {
       assert.match(src, /\{isCompleted && showSend && createPortal\(\s*<SendDocumentModal/);
+    });
+
+    it('opens the modal by listening for the purchase-order:open-send-modal window event, not a local button click', () => {
+      assert.match(src, /addEventListener\('purchase-order:open-send-modal'/);
+      assert.match(src, /setShowSend\(true\)/);
     });
   });
 
@@ -472,8 +570,12 @@ describe('PurchaseOrderActions', () => {
     function extractNeedsBlocks(source, needsVarName) {
       // ETP-4567: post-fix source compares against 0 with !== instead of the
       // clamp-dependent > 0 (which always failed for a floored-to-zero pending).
+      // ETP-5295 — ManageDocsLauncher's needsInvoice line now carries an extra
+      // `fetched != null && ` guard (hooks hoisted above the loading early-return, so
+      // the derivation must be null-safe); the main-component occurrence has no such
+      // guard. The optional non-capturing group matches both.
       const re = new RegExp(
-        `const ${needsVarName}[\\s\\S]*?const needsInvoice\\s*=\\s*totalPending !== 0 && !invoiceDraft;`,
+        `const ${needsVarName}[\\s\\S]*?const needsInvoice\\s*=\\s*(?:fetched != null && )?totalPending !== 0 && !invoiceDraft;`,
         'g',
       );
       return [...source.matchAll(re)].map(m => m[0]);
@@ -490,8 +592,11 @@ describe('PurchaseOrderActions', () => {
     function evaluate(siteIndex, { grandTotalAmount, invoicesComplete = [], receiptsDraft = [], invoiceDraft = null }) {
       const body = `${compBlocks[siteIndex]}\n${needsBlocks[siteIndex]}\nreturn { qtyPending, totalPending, needsReceipt, needsInvoice };`;
       // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
-      const fn = new Function('data', 'orderLines', 'invoicesComplete', 'receiptsDraft', 'invoiceDraft', body);
-      return fn({ grandTotalAmount }, [], invoicesComplete, receiptsDraft, invoiceDraft);
+      // `fetched` is a free variable inside the ManageDocsLauncher occurrence's
+      // `fetched != null && ` guard (ETP-5295); pass it as always-loaded (`true`) since
+      // this test's concern is the pending arithmetic, not the loading state.
+      const fn = new Function('data', 'orderLines', 'invoicesComplete', 'receiptsDraft', 'invoiceDraft', 'fetched', body);
+      return fn({ grandTotalAmount }, [], invoicesComplete, receiptsDraft, invoiceDraft, true);
     }
 
     const sites = [

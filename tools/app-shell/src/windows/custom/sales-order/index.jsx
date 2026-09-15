@@ -6,6 +6,7 @@ import OrderReactivateBulkAction from '@generated/sales-order/custom/OrderReacti
 import BulkOrderMoreMenu from '@generated/sales-order/custom/BulkOrderMoreMenu';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import { ConfirmModal, ManageDocsLauncher } from '@generated/sales-order/custom/OrderCreateInvoice';
+import OrderCreateInvoiceSecondaryActions from '@generated/sales-order/custom/OrderCreateInvoiceSecondaryActions';
 import { ConfirmResultModal } from '@/components/contract-ui';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
@@ -90,6 +91,9 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
     deliveryKey: 'deliveryStatus',
     manageLabelKeys: SO_MANAGE_LABELS,
     confirmLabelKey: 'soConfirmBtn',
+    confirmedTitleKey: 'soConfirmedTitle',
+    primaryDoc: { key: 'shipment', type: 'salida', route: 'goods-shipment' },
+    invoiceDoc: { key: 'invoice', type: 'facturaVenta', route: 'sales-invoice' },
     headers,
     ConfirmModal,
     ConfirmResultModal,
@@ -134,6 +138,7 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
           linesEmptyState={LinesEmptyState}
           {...rest}
           lineCellBadges={taxSifCellBadges}
+          topbarSecondary={OrderCreateInvoiceSecondaryActions}
           data-testid="GeneratedApp__6339e4" />
         {contactPortal}
         {taxSifModal}

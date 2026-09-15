@@ -100,6 +100,25 @@ describe('VerifactuSection — locked state', () => {
   });
 });
 
+// ETP-5272 — external `locked` prop (forceTestMode) ORs into the same isLocked
+// mechanism isReady already drives — not a parallel lock path.
+describe('VerifactuSection — external locked prop (ETP-5272)', () => {
+  it('disables the tax type input when locked=true, even with isReady=N', () => {
+    render(<VerifactuSection {...PROPS} record={{ ...BASE_RECORD, isReady: 'N' }} locked />);
+    expect(screen.getByTestId('Input__e30816')).toBeDisabled();
+  });
+
+  it('renders the editable select (not disabled input) when locked=false and isReady=N', () => {
+    render(<VerifactuSection {...PROPS} record={{ ...BASE_RECORD, isReady: 'N' }} locked={false} />);
+    expect(screen.queryByTestId('Input__e30816')).not.toBeInTheDocument();
+  });
+
+  it('hides the save button when locked=true, even with isReady=N', () => {
+    render(<VerifactuSection {...PROPS} record={{ ...BASE_RECORD, isReady: 'N' }} locked hideSave={false} />);
+    expect(screen.queryByText('fiscal.save')).not.toBeInTheDocument();
+  });
+});
+
 describe('VerifactuSection — validation', () => {
   it('shows error when tAXType is empty', async () => {
     const { normalizeVerifactuTaxType } = await import('../fiscalConfig.utils.js');
