@@ -118,20 +118,30 @@ async function goToDeclaration(page, { year, period }) {
 /**
  * Click the "Identificación" button in the CasillasTab left sidebar.
  * This renders the identificacion + datos_bancarios sections.
+ *
+ * `isVisible()` is a single no-wait snapshot: under full-suite concurrency
+ * the button can simply not be painted yet at the instant this runs, so the
+ * old `if (await btn.isVisible()) await btn.click()` guard silently skipped
+ * the click and left the wrong sidebar section active — every assertion
+ * after it then failed for a reason unrelated to what the test names.
+ * `waitFor` polls instead of sampling once, so the click always fires.
  */
 async function goToIdentificacion(page) {
   const btn = page.getByRole('button', { name: /^Identificaci[oó]n$/i });
-  if (await btn.isVisible()) await btn.click();
+  await btn.waitFor({ state: 'visible', timeout: 8_000 });
+  await btn.click();
 }
 
 /**
  * Click the "Resultado" button in the CasillasTab left sidebar.
  * This renders the resultado_final + sin_actividad + rectificativa sections.
  * Editable cells and rectificativa/complementaria sections live here.
+ * See goToIdentificacion() above for why this waits instead of sampling.
  */
 async function goToResultadoFinal(page) {
   const btn = page.getByRole('button', { name: /^Resultado$/i });
-  if (await btn.isVisible()) await btn.click();
+  await btn.waitFor({ state: 'visible', timeout: 8_000 });
+  await btn.click();
 }
 
 // ── Suite 1 — Numeric inputs reject letters ───────────────────────────────────

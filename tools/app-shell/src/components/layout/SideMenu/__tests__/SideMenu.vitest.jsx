@@ -57,6 +57,7 @@ vi.mock('@/components/layout/FavoritesContext', () => ({
 vi.mock('@/lib/flags', () => ({
   useFeatureFlag: (...args) => mockUseFeatureFlag(...args),
   PROOF_OF_CONCEPT_MENU: 'proof-of-concept-menu',
+  ACCT_PROCESS_MONITOR: 'acct-process-monitor',
 }));
 
 vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
@@ -183,7 +184,7 @@ vi.mock('@phosphor-icons/react', () => {
 
 import SideMenu from '../SideMenu.jsx';
 import { buildMenuGroups, filterMenuGroupsByAccess } from '@/windows/registry.js';
-import { defaultNavigation, optionalNavigation, hiddenNavigation, navigationProfiles, expectedNavigation, navigationPermissions } from '@/windows/__tests__/navigationExpectations.js';
+import { defaultNavigation, optionalNavigation, hiddenNavigation, navigationProfiles, expectedNavigation, navigationPermissions, catalogFeatureFlags } from '@/windows/__tests__/navigationExpectations.js';
 
 describe('SideMenu shipped navigation profiles (ETP-5240)', () => {
   beforeEach(() => {
@@ -198,7 +199,11 @@ describe('SideMenu shipped navigation profiles (ETP-5240)', () => {
   });
 
   it.each(navigationProfiles)('$label renders the intended real links only', async profile => {
-    mockUseFeatureFlag.mockImplementation(key => key === 'proof-of-concept-menu' && profile.proof);
+    // These profiles assert catalog MEMBERSHIP, so every flag a catalog entry declares is turned
+    // on here — otherwise a flag-gated entry would read as missing from the catalog rather than
+    // as switched off. Each flag's own on/off behaviour is asserted in its own test.
+    mockUseFeatureFlag.mockImplementation(
+      key => (key === 'proof-of-concept-menu' && profile.proof) || catalogFeatureFlags.includes(key));
     const { allowedIds, capabilities, windowAccess } = navigationPermissions();
     const menuGroups = filterMenuGroupsByAccess(
       buildMenuGroups(profile.apps, { appStoreUnlocked: profile.marketplace }), allowedIds, capabilities, windowAccess,
@@ -640,6 +645,59 @@ describe('SideMenu', () => {
       mockUseFeatureFlag.mockReturnValue(false);
       render(<SideMenu {...defaultProps} />);
       expect(screen.queryByText('Proof of Concept')).not.toBeInTheDocument();
+    });
+
+    it('hides the accounting-process item when its declared feature flag is off', () => {
+      mockUseFeatureFlag.mockReturnValue(false);
+      render(<SideMenu
+        {...defaultProps}
+        menuGroups={[{
+          group: 'Settings',
+          icon: 'Settings',
+          section: 'System',
+          items: [{
+            name: 'acct-process-monitor',
+            label: 'Accounting Process',
+            featureFlag: 'acct-process-monitor',
+          }],
+        }]}
+      />);
+
+      expect(screen.queryByTestId('menu-item-acct-process-monitor')).not.toBeInTheDocument();
+    });
+
+    it('renders the accounting-process item when its declared feature flag is on', () => {
+      mockUseFeatureFlag.mockReturnValue(true);
+      render(<SideMenu
+        {...defaultProps}
+        menuGroups={[{
+          group: 'Settings',
+          icon: 'Settings',
+          section: 'System',
+          items: [{
+            name: 'acct-process-monitor',
+            label: 'Accounting Process',
+            featureFlag: 'acct-process-monitor',
+          }],
+        }]}
+      />);
+
+      expect(screen.getByTestId('menu-item-acct-process-monitor')).toBeInTheDocument();
+    });
+
+    it('fails closed for an explicitly unknown feature flag', () => {
+      mockUseFeatureFlag.mockReturnValue(true);
+      render(<SideMenu
+        {...defaultProps}
+        menuGroups={[{
+          group: 'Settings',
+          icon: 'Settings',
+          section: 'System',
+          items: [{ name: 'future-window', label: 'Future Window', featureFlag: 'typoed-flag' }],
+        }]}
+      />);
+
+      expect(screen.queryByTestId('menu-item-future-window')).not.toBeInTheDocument();
     });
 
     it('renders the Artifacts link as an icon-only tooltip trigger in collapsed mode', () => {

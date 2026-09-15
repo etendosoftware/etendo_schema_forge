@@ -284,6 +284,9 @@ test.describe('SIF exemption cause — line-add warning sequence (sales-invoice)
   const FULL_EDITABLE_ROW = {
     ...EDITABLE_ROW,
     invoiceDate: '2026-01-15',
+    // ETP-5273: accountingDate is now an independent, required header field —
+    // resolveCanAddLines needs it populated too, alongside invoiceDate.
+    accountingDate: '2026-01-15',
     businessPartner: 'bp-1',
     'businessPartner$_identifier': 'Test BP',
     partnerAddress: 'addr-1',

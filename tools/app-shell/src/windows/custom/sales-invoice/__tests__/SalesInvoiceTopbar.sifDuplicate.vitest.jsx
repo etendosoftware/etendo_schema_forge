@@ -147,17 +147,24 @@ describe('SalesInvoiceTopbar — SIF button ownership (ETP-5027)', () => {
       expect(screen.getByTestId('payment-status-badge')).toBeInTheDocument();
     });
 
-    // The owning instance sits in InvoiceTopbarExtra's document-action group:
-    // payment-status badge -> SIF -> SendDocumentButton (envelope).
+    // The owning instance sits in InvoiceTopbarExtra's document-action group,
+    // after the payment-status badge: payment-status badge -> SIF.
+    //
+    // ETP-5260 note: the envelope "Send by email" button (SendDocumentButton)
+    // used to render right after SIF, inline in this same tree, and this test
+    // originally asserted that third position too. It has since moved to the
+    // topbarSecondary slot (SalesInvoiceSecondaryActions, left of Save/Confirm
+    // — see that component's own file header) and is no longer a descendant of
+    // SalesInvoiceTopbar at all, so it is not rendered by `renderTopbar()`
+    // above. Its own Copy link -> Clone -> Send DOM order is covered generically
+    // by DocumentSecondaryActions.vitest.jsx ("renders Copy link, Clone and
+    // Send in that DOM order").
     const badge = screen.getByTestId('payment-status-badge');
     const sif = screen.getByRole('button', { name: 'sendToSif' });
-    const envelope = screen.getByTestId('send-document-btn');
 
     expect(
       badge.compareDocumentPosition(sif) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(
-      sif.compareDocumentPosition(envelope) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(screen.queryByTestId('send-document-btn')).not.toBeInTheDocument();
   });
 });
