@@ -17,7 +17,8 @@ import { fetchMenuTree, collectAllowedIds } from '@/lib/menuTree.js';
  */
 export function useRoleMenu() {
   const {
-    isAuthenticated, isSessionReady, authRevision, captureSession, isCurrentSession,
+    isAuthenticated, isSessionReady, accessLoaded, authRevision, menuAccess,
+    captureSession, isCurrentSession,
   } = useAuth();
   const [allowedIds, setAllowedIds] = useState(undefined);
 
@@ -29,8 +30,25 @@ export function useRoleMenu() {
     // Authenticated but not yet coherent (a refresh/context change may still be in flight):
     // keep returning `undefined` rather than fetching against a session that might change
     // out from under us before the request resolves.
-    if (!isSessionReady) {
+    // Older app-shell-core releases do not publish accessLoaded. Treat an
+    // omitted value as legacy compatibility, while still waiting when a newer
+    // core explicitly says the access snapshot is not loaded.
+    if (!isSessionReady || (accessLoaded !== undefined && !accessLoaded)) {
       setAllowedIds(undefined);
+      return undefined;
+    }
+    // ETP-5189 — AuthContext already fetches the role-filtered menu as part of
+    // its access snapshot so menu-only permission changes participate in the
+    // same refresh/revision. Reuse that map instead of issuing a second
+    // /sws/neo/listmenu request from the layout. The undefined check preserves
+    // compatibility with older app-shell-core versions that do not expose
+    // menuAccess yet; those versions retain the fetch fallback below.
+    if (menuAccess !== undefined) {
+      // App.jsx uses an empty object as the cached fail-open fallback when
+      // SFListMenu is aborted/unreachable. It must not become an empty allowlist:
+      // that would hide every AD-backed menu item while leaving only ungated items
+      // such as Reports visible. A non-empty object is a successful allowlist.
+      setAllowedIds(Object.keys(menuAccess).length === 0 ? null : new Set(Object.keys(menuAccess)));
       return undefined;
     }
     // Reset to the in-flight state on every new authenticated fetch — otherwise a
@@ -49,7 +67,7 @@ export function useRoleMenu() {
         if (isCurrentSession(snapshot)) setAllowedIds(null);
       });
     return undefined;
-  }, [isAuthenticated, isSessionReady, authRevision, captureSession, isCurrentSession]);
+  }, [isAuthenticated, isSessionReady, accessLoaded, authRevision, menuAccess, captureSession, isCurrentSession]);
 
   return allowedIds;
 }

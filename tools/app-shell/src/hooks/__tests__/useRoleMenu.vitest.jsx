@@ -25,6 +25,7 @@ function authState(overrides = {}) {
   return {
     isAuthenticated: true,
     isSessionReady: true,
+    accessLoaded: true,
     authRevision: 0,
     captureSession: () => ({}),
     isCurrentSession: () => true,
@@ -53,6 +54,18 @@ describe('useRoleMenu', () => {
 
     expect(result.current).toBeUndefined();
     expect(mockFetchMenuTree).not.toHaveBeenCalled();
+  });
+
+  it('keeps the legacy fetch path when the core does not expose accessLoaded', async () => {
+    const allowedIds = new Set(['108']);
+    mockUseAuth.mockReturnValue(authState({ accessLoaded: undefined }));
+    mockFetchMenuTree.mockResolvedValue({ tree: [{ windowId: '108' }] });
+    mockCollectAllowedIds.mockReturnValue(allowedIds);
+
+    const { result } = renderHook(() => useRoleMenu());
+
+    await waitFor(() => expect(result.current).toBe(allowedIds));
+    expect(mockFetchMenuTree).toHaveBeenCalledTimes(1);
   });
 
   it('does not apply a resolved response once the session is no longer current', async () => {
@@ -98,6 +111,27 @@ describe('useRoleMenu', () => {
 
     expect(mockFetchMenuTree).toHaveBeenCalledTimes(1);
     expect(mockCollectAllowedIds).toHaveBeenCalledWith(tree);
+  });
+
+  it('reuses AuthContext menuAccess instead of fetching listmenu a second time', async () => {
+    const menuAccess = { '108': true, P1: true };
+    mockUseAuth.mockReturnValue(authState({ menuAccess }));
+
+    const { result } = renderHook(() => useRoleMenu());
+
+    await waitFor(() => expect(result.current).toEqual(new Set(['108', 'P1'])));
+    expect(mockFetchMenuTree).not.toHaveBeenCalled();
+    expect(mockCollectAllowedIds).not.toHaveBeenCalled();
+  });
+
+  it('fails open when AuthContext publishes an empty menuAccess fallback', async () => {
+    mockUseAuth.mockReturnValue(authState({ menuAccess: {} }));
+
+    const { result } = renderHook(() => useRoleMenu());
+
+    await waitFor(() => expect(result.current).toBeNull());
+    expect(mockFetchMenuTree).not.toHaveBeenCalled();
+    expect(mockCollectAllowedIds).not.toHaveBeenCalled();
   });
 
   it('returns null (does not throw) when fetchMenuTree rejects', async () => {
