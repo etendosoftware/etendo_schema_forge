@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Search, X, Loader2, Plus } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -67,6 +67,34 @@ export default function ProductDrawerShell({
     [selectorUrl, createEnabled],
   );
 
+  /**
+   * True while the creation modal owns the Escape key — and for one macrotask AFTER it
+   * closes.
+   *
+   * Reading `createOpen` directly is not enough, and the trailing tick is the whole point.
+   * Both the dialog and the selector hook listen for Escape on the DOCUMENT, in the same
+   * native dispatch. The dialog's listener runs first, React flushes `setCreateOpen(false)`
+   * synchronously (keydown is a discrete event), and the hook's listener — still part of the
+   * same keypress — then reads an already-false `createOpen` and tears down the drawer with
+   * the user's search inside it. Measured exactly that way: `modal-onCancel` followed by a
+   * live close. Clearing the flag from a `setTimeout` puts it after the dispatch, so one
+   * Escape closes one layer.
+   */
+  const suppressCloseRef = useRef(false);
+  useEffect(() => {
+    if (createOpen) {
+      suppressCloseRef.current = true;
+      return undefined;
+    }
+    const timer = setTimeout(() => { suppressCloseRef.current = false; }, 0);
+    return () => clearTimeout(timer);
+  }, [createOpen]);
+
+  const handleClose = useCallback(() => {
+    if (suppressCloseRef.current) return;
+    onClose();
+  }, [onClose]);
+
   const fetchState = useProductSelectorFetch({
     open,
     selectorUrl,
@@ -75,11 +103,7 @@ export default function ProductDrawerShell({
     autoWaterfallMin: fetchConfig.autoWaterfallMin ?? 0,
     selectorContext,
     onFreshResults: () => { setActiveIdx(-1); setFreshToken(t => t + 1); },
-    // While the creation modal is up, swallow close requests. The hook's Escape handler is
-    // bound at DOCUMENT level, so a portalled sibling modal cannot stop it with
-    // stopPropagation — without this, Escape inside the modal would also tear down the
-    // drawer behind it and lose the user's search.
-    onClose: createOpen ? NOOP : onClose,
+    onClose: handleClose,
     activeIdx,
   });
 
