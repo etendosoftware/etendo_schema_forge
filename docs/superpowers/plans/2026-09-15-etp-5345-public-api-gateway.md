@@ -42,6 +42,26 @@ existing `cli/src/*.js`), `@nestjs/swagger` + Scalar (`@scalar/api-reference`) f
   self-service creation UI page is an explicit follow-up plan, not part of this one — this plan
   proves the key works by creating one with `curl` as an admin.
 
+## Errata (found during Task 4 execution, applies to every task below it)
+
+**All relative TypeScript import specifiers use `.ts`, not `.js`.** Every code block below this
+point that writes `from './something.js'` or `from '../../src/something.js'` for a RELATIVE
+import (same package, `./` or `../`) is wrong as written — it must read `from './something.ts'` /
+`from '../../src/something.ts'` instead. Confirmed during Task 4: this repo's Node version runs
+tests via `--experimental-strip-types`, which strips types but does not resolve a `.js` specifier
+to a sibling `.ts` file (no bundler-style extension rewriting) — only an explicit `.ts` specifier
+resolves. Since these packages (`api-gateway-core`, `gateway`) have zero prior precedent in this
+repo, there is no existing convention being broken by this fix. This does NOT apply to importing
+the published package itself (`@etendosoftware/api-gateway-core` as a bare specifier in `gateway/`
+code) — that resolves via `node_modules`/`package.json` `main`/`types`, pointing at built
+`dist/*.js`/`dist/*.d.ts`, and is unaffected.
+
+**Build-before-link gap (relevant to Task 8/12):** because `packages/api-gateway-core/package.json`
+points `main`/`types` at `./dist/index.js`/`./dist/index.d.ts`, `npm run build` (tsc) must run in
+`packages/api-gateway-core` BEFORE `gateway/` can successfully consume it via `npm link` — Task 8's
+`LOCAL_CORE` wiring or Task 12's setup must include this build step; neither explicitly said so as
+originally written.
+
 ---
 
 ## Part A — `schema_forge_core` repo
@@ -964,6 +984,14 @@ git commit -m "Feature ETP-5345: Add API-key guard and field-filter interceptor"
   relative path to wherever this repo and `schema_forge_core` actually sit as siblings on disk
   — confirmed earlier in this plan's research as
   `/Users/sebastianbarrozo/Documents/work/epic/schema_forge_core`).
+
+- [ ] **Step 1b: Build the package before linking it.** `packages/api-gateway-core/package.json`
+  (Task 3) points `main`/`types` at `./dist/index.js`/`./dist/index.d.ts`, not at TypeScript
+  source — `npm link` alone is not enough. Before (and after every change to)
+  `packages/api-gateway-core`, run `cd packages/api-gateway-core && npm run build` in
+  `schema_forge_core` first, THEN `npm link` it from `gateway/`. Document this as a required
+  step in whatever `make dev-local-core`-style target ends up driving `gateway/`'s local dev
+  loop — a stale `dist/` after a source change is a silent bug, not a build failure.
 
 - [ ] **Step 2: Add a `make regen-public-api` target**
 
