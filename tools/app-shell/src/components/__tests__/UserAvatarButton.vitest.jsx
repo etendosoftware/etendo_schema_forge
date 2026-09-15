@@ -178,6 +178,27 @@ describe('UserAvatarButton', () => {
     expect(screen.getByText(`organization: ${longOrg}`)).toHaveAttribute('title', longOrg);
   });
 
+  // ETP-5329. The role line wraps long joined names instead of clipping them with an ellipsis
+  // (the org line below it still truncates on purpose) — a long composed role list previously
+  // rendered "Ventas-Finanzas-Compras" truncated inside the fixed w-56 dropdown. Assert the class
+  // itself, not just the title tooltip: the title-only assertions elsewhere in this file would
+  // still pass if `break-words` regressed back to `truncate`.
+  it('wraps the role line instead of truncating it, unlike the organization line', () => {
+    authOverrides = {
+      selectedRole: { name: 'A Very Long Role Name That Would Otherwise Overflow The Container' },
+      selectedOrg: { name: 'Some Organization' },
+    };
+
+    render(<UserAvatarButton />);
+
+    const roleLine = screen.getByText(/^role: /);
+    expect(roleLine.className).toMatch(/\bbreak-words\b/);
+    expect(roleLine.className).not.toMatch(/\btruncate\b/);
+
+    const orgLine = screen.getByText(/^organization: /);
+    expect(orgLine.className).toMatch(/\btruncate\b/);
+  });
+
   // ETP-5329. The dropdown should prefer the backend-resolved composed template role names
   // (effectiveRoleNames) over the raw auto-generated personal-role name, in both the visible
   // text and the title tooltip — a prior regression fixed only the visible text and left the
