@@ -62,6 +62,17 @@ points `main`/`types` at `./dist/index.js`/`./dist/index.d.ts`, `npm run build` 
 `LOCAL_CORE` wiring or Task 12's setup must include this build step; neither explicitly said so as
 originally written.
 
+**Test runner: `tsx`, not raw `node --experimental-strip-types`/`--experimental-transform-types`.**
+Found during Task 7: Node's native TypeScript execution has NO decorator support at all (neither
+legacy `experimentalDecorators` nor TC39 stage-3) — every `@Injectable()`/`@Controller()` class
+(the whole NestJS surface) fails to parse under it. This is unrelated to the app's own runtime,
+which is fine: `nest start`/`nest build` (Task 12+) compile via real `tsc` with decorators enabled,
+unaffected. It only affects how test files for `packages/api-gateway-core` and `gateway` execute —
+both package.json `test` scripts (Task 3, Task 12) now use `tsx --test test/**/*.test.ts` instead.
+Confirmed safe for this plan specifically because no test here goes through Nest's DI container
+(everything is instantiated directly via `new ClassName(...)` in tests) — so `emitDecoratorMetadata`
+correctness was never load-bearing, only decorator-syntax parsing was needed.
+
 ---
 
 ## Part A — `schema_forge_core` repo
@@ -358,7 +369,7 @@ git commit -m "Feature ETP-5345: Add generate-public-api-schema resolver"
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "node --test --experimental-strip-types test/**/*.test.ts"
+    "test": "tsx --test test/**/*.test.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.0",
@@ -367,7 +378,8 @@ git commit -m "Feature ETP-5345: Add generate-public-api-schema resolver"
     "@nestjs/throttler": "^6.2.0"
   },
   "devDependencies": {
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "tsx": "^4.19.0"
   }
 }
 ```
@@ -1160,7 +1172,7 @@ git commit -m "Feature ETP-5345: Generate v1 public API allowlist artifact"
   "scripts": {
     "start:dev": "nest start --watch",
     "build": "nest build",
-    "test": "node --test --experimental-strip-types test/**/*.test.ts"
+    "test": "tsx --test test/**/*.test.ts"
   },
   "dependencies": {
     "@etendosoftware/api-gateway-core": "^0.1.0",
@@ -1174,10 +1186,17 @@ git commit -m "Feature ETP-5345: Generate v1 public API allowlist artifact"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "tsx": "^4.19.0"
   }
 }
 ```
+
+**Note (added after Part A execution):** the app itself boots via `nest start`/`nest build`
+(Nest CLI's own tsc-based compilation, decorators fully supported, unaffected by anything
+below) — only the `test` script needed the `tsx` fix, for the same reason as
+`packages/api-gateway-core`'s tests (see Errata above): raw Node type-stripping cannot parse
+decorator syntax, and this package's controller (Task 13) uses `@Controller()` etc.
 
 - [ ] **Step 2: `tsconfig.json`** — same compiler options as
   `packages/api-gateway-core/tsconfig.json` (Task 3 Step 2), copied verbatim, so both packages
