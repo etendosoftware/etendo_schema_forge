@@ -117,7 +117,21 @@ mechanism as the existing F1–F10 rules) that detects a `publicApi` field being
 reshaped without an accompanying new version declaration + compatibility handler, and blocks
 the regen. Open item — see Non-Goals.
 
-### 3. The gateway service (new, NestJS/TypeScript)
+### 3. The gateway service (new, NestJS/TypeScript, inside this repo)
+
+**Location:** a new top-level folder in `schema-forge` (e.g. `gateway/`) — not a separate repo.
+Decided explicitly over a dedicated repo to keep deploy/ops overhead lower for this service.
+
+**Deployment/URL:** path-based under the existing production domain, `app.etendo.software/api/v1/...`
+— not a new `api.etendo.software` subdomain. This follows the same-origin precedent already
+established and documented in `docs/ops/cloudfront-alb-routing.md` ("No new DNS. No new ALB
+listener rules."): a new CloudFront cache behavior (`/api/*`) is added on the *existing*
+distribution/certificate, pointed at a *new* origin (this gateway's own target, isolated from
+the Etendo Core ALB) — reusing the domain/cert while still keeping the gateway's runtime
+isolated from Core/Go, consistent with the isolation goal in the Architecture Overview.
+
+**Rollout:** local development first; once verified, promote directly to production
+(`app.etendo.software`) — no intermediate staging hop for this service.
 
 - **Framework:** NestJS. Chosen because its architecture maps directly onto this design:
   built-in API versioning (URI-based, matching the `v1`/`v1.1`/`v2` scheme), providers +
