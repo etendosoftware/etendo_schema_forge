@@ -606,11 +606,18 @@ describe('SendDocumentModal — error resolver branches', () => {
     await user.click(getSendButton());
   }
 
-  it('uses the server message for VALIDATION_FAILED', async () => {
+  // ETP-5293 — the raw backend `message` is English-only and must never reach the
+  // user for VALIDATION_FAILED; the reasonCode drives translated copy instead. A
+  // response with no reasonCode (e.g. an older/undeployed backend) falls back to
+  // the generic translated key, never to the raw message. Full reasonCode → key
+  // mapping coverage lives in the 'VALIDATION_FAILED reasonCode mapping (ETP-5293)'
+  // describe block below.
+  it('never shows the raw server message for VALIDATION_FAILED, even with no reasonCode', async () => {
     await sendWith({ status: 'VALIDATION_FAILED', message: 'Bad address' });
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith('Bad address');
+      expect(toast.error).toHaveBeenCalledWith('sendModalValidationFailed');
     });
+    expect(toast.error).not.toHaveBeenCalledWith('Bad address');
   });
 
   it('shows the no-recipient message for NO_RECIPIENT', async () => {
@@ -639,6 +646,87 @@ describe('SendDocumentModal — error resolver branches', () => {
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('sendModalSendFailed:{"documentType":"Invoice"}');
     });
+  });
+});
+
+// ETP-5293 — the modal's own messageEdits form (subject/message) can be rejected by the backend
+// with a structured `reasonCode` on a VALIDATION_FAILED response. Before this fix, the raw English
+// `message` field was shown verbatim regardless of reasonCode — the regression this whole ticket
+// guards against. Each mapped reasonCode must resolve to its own translated i18n key, never to the
+// raw `message`; an unmapped/unknown reasonCode (or none at all — covered above in the 'error
+// resolver branches' describe block) must fall back to the generic 'sendModalValidationFailed' key.
+describe('SendDocumentModal — VALIDATION_FAILED reasonCode mapping (ETP-5293)', () => {
+  async function sendWithValidationFailure(data) {
+    const user = userEvent.setup();
+    global.fetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ response: { data: { status: 'VALIDATION_FAILED', ...data } } }),
+    });
+    render(
+      <SendDocumentModal
+        {...BASE}
+        bpEmail="user@domain.com"
+        apiBaseUrl="http://localhost:8080/etendo/neo/sales-invoice"
+      />,
+    );
+    await user.click(getSendButton());
+  }
+
+  it('maps MESSAGE_EDITS_MISSING_SUBJECT_OR_MESSAGE to its translated key, not the raw message', async () => {
+    const rawMessage = 'Subject and message must be provided';
+    await sendWithValidationFailure({
+      reasonCode: 'MESSAGE_EDITS_MISSING_SUBJECT_OR_MESSAGE',
+      message: rawMessage,
+    });
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('sendModalErrorMissingSubjectOrMessage:{}');
+    });
+    expect(toast.error).not.toHaveBeenCalledWith(rawMessage);
+    expect(screen.getByRole('status')).not.toHaveTextContent(rawMessage);
+  });
+
+  it('maps MESSAGE_EDITS_SUBJECT_TOO_LONG to its translated key, not the raw message', async () => {
+    const rawMessage = 'Subject exceeds maximum length of 120 characters';
+    await sendWithValidationFailure({
+      reasonCode: 'MESSAGE_EDITS_SUBJECT_TOO_LONG',
+      maxSubjectLength: 120,
+      message: rawMessage,
+    });
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('sendModalErrorSubjectTooLong:{"maxSubjectLength":120}');
+    });
+    expect(toast.error).not.toHaveBeenCalledWith(rawMessage);
+    expect(screen.getByRole('status')).not.toHaveTextContent(rawMessage);
+  });
+
+  it('maps MESSAGE_EDITS_MESSAGE_TOO_LONG to its translated key, not the raw message', async () => {
+    const rawMessage = 'Message exceeds maximum length of 5000 characters';
+    await sendWithValidationFailure({
+      reasonCode: 'MESSAGE_EDITS_MESSAGE_TOO_LONG',
+      maxMessageLength: 5000,
+      message: rawMessage,
+    });
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('sendModalErrorMessageTooLong:{"maxMessageLength":5000}');
+    });
+    expect(toast.error).not.toHaveBeenCalledWith(rawMessage);
+    expect(screen.getByRole('status')).not.toHaveTextContent(rawMessage);
+  });
+
+  it('falls back to the generic validation-failed key for an unmapped reasonCode, not the raw message', async () => {
+    // MESSAGE_EDITS_INVALID_TYPE / MESSAGE_EDITS_UNKNOWN_FIELD are not reachable from this UI
+    // (they only happen on a malformed raw API call), but the resolver must still degrade
+    // gracefully rather than leak the raw backend message.
+    const rawMessage = 'messageEdits.subject must be a string';
+    await sendWithValidationFailure({
+      reasonCode: 'MESSAGE_EDITS_INVALID_TYPE',
+      message: rawMessage,
+    });
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('sendModalValidationFailed');
+    });
+    expect(toast.error).not.toHaveBeenCalledWith(rawMessage);
+    expect(screen.getByRole('status')).not.toHaveTextContent(rawMessage);
   });
 });
 
