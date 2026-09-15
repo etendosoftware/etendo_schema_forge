@@ -159,7 +159,15 @@ export function renderStatusCell({ row, col, dictionary, ui }) {
 export function renderPercentCell({ row, col }) {
   const { color, pct, textColor } = getPercentCellPalette(row, col);
   return (
-    <div className="flex items-center gap-2">
+    // `percent` is in NUMERIC_FIELD_TYPES, so DataTable right-aligns this
+    // column's header and <td> — but `text-align` has no effect on a `flex`
+    // child (flex items are positioned by `justify-content`, not text-align),
+    // so without `justify-end` this bar-plus-label combo silently ignored
+    // that alignment and hugged the cell's LEFT edge while its header stayed
+    // right-aligned. `renderAmountCell` (plain <span>) and
+    // `renderSignedDeltaCell` (`text-right` on a block <span>) don't need
+    // this because neither uses `display: flex`.
+    <div className="flex items-center justify-end gap-2">
       <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
         <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
       </div>
