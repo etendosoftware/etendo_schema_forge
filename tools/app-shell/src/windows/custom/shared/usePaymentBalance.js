@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 // own imports (ETP-5022).
 import { formatCurrency } from '../../../lib/formatCurrency.js';
 import { parseAmountInput } from '../../../lib/parseAmountInput.js';
+import { parseLocaleNumber } from '../../../lib/parseLocaleNumber.js';
 
 // ─── plain amount helpers (instance-configured format, no currency symbol) ───
 // These render/read the amount fields of the "Nuevo cobro/pago" modal. They route through the
@@ -43,15 +44,33 @@ export function formatPlain(n) {
  * Parses an amount string produced by `formatPlain` (or typed into one of the modal's amount
  * fields) into a number, or null if blank/invalid.
  *
- * Uses the STRUCTURAL parser (`lib/parseAmountInput.js`), not the config-driven
- * `parseLocaleNumber`: this field carries thousands separators from `formatPlain`, and it has no
- * live masking, so a rule that always read '.' as grouping would turn a typed `75.50` into 7550.
+ * Uses the STRUCTURAL parser (`lib/parseAmountInput.js`) because it reads strings that carry
+ * THOUSANDS separators from `formatPlain` ("1.234,56"), which the canonical parser rejects.
+ * It is NOT the reader for anything a masked input produced — use `parseMaskedAmount` for that.
  *
  * Not for exchange RATES. A rate arrives canonical dot-decimal from the backend and a value like
  * `1.500` legitimately means one-point-five there, which the structural rule would read as 1500
  * (three digits after a lone separator = grouping). Rates parse with `parseLocaleNumber` — see
  * `NewPaymentEntryModal.jsx`.
  */
+/**
+ * Reads a value that came OUT of a `MaskedAmountInput` (ETP-5107).
+ *
+ * The mask emits a CLEAN dot-decimal value, so `483.945` means four-hundred-eighty-three point
+ * nine-four-five. `parsePlain`'s structural rule ("a lone separator with exactly 3 digits after it
+ * is thousands grouping") reads that same string as 483945 — a silent 1000x error, and exactly
+ * what QA hit typing `483,945` into the payment amount.
+ *
+ * The fallback is not a guess: a clean value can never carry TWO separators, so a string the
+ * canonical parser rejects is necessarily a `formatPlain` display string ("1.234,56") seeded by
+ * this hook itself, which is what the structural parser exists to read.
+ */
+export function parseMaskedAmount(str) {
+  const { value, isValid } = parseLocaleNumber(str);
+  if (isValid && value != null) return value;
+  return parsePlain(str);
+}
+
 export function parsePlain(str) {
   const n = parseAmountInput(str);
   // parseAmountInput returns null for blank and NaN for unparseable; this hook's callers only
@@ -145,12 +164,12 @@ export function usePaymentBalance({
   // ── amount input ──────────────────────────────────────────────────────────
   const onAmountChange = useCallback((str) => {
     setAmountStr(str);
-    const n = parsePlain(str);
+    const n = parseMaskedAmount(str);
     setAmount(n == null ? 0 : n);
   }, []);
 
   const onAmountBlur = useCallback(() => {
-    setAmountStr(prev => formatPlain(parsePlain(prev) ?? 0));
+    setAmountStr(prev => formatPlain(parseMaskedAmount(prev) ?? 0));
   }, []);
 
   // ── credit lines ──────────────────────────────────────────────────────────
@@ -199,7 +218,7 @@ export function usePaymentBalance({
   const onLineUseBlur = useCallback((id) => {
     setLines(prev => prev.map(l => {
       if (l.id !== id) return l;
-      const clamped = round2(Math.max(0, Math.min(l.avail, parsePlain(l.useStr) ?? 0)));
+      const clamped = round2(Math.max(0, Math.min(l.avail, parseMaskedAmount(l.useStr) ?? 0)));
       return { ...l, use: clamped, useStr: formatPlain(clamped) };
     }));
   }, []);

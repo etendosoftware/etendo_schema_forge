@@ -784,6 +784,115 @@ Operational note found while cleaning up: a PROCESSED bank statement cannot be d
 reactivated first. The first delete attempt failed silently in the UI and was only caught by
 checking the DB.
 
+### 7.15 The ticket's ORIGINAL acceptance cases, re-verified live (2026-09-15)
+
+The §6/§7 rounds chased the 7 defects from the reopening. This pass re-ran the ticket's own
+acceptance cases from §0, for new records, updates and a hard reload, checked against the DB.
+
+| Case | Input | Result | New | Update | Reload | DB |
+|---|---|---|---|---|---|---|
+| Bug 1 | `10,4` (comma) | no 400, shows `10,40` | — | ✅ | ✅ | `priceactual = 10.4`, `linenetamt = 52.00` |
+| Bug 2 | `20,0rrwetwrtwrt2` | `20,02` — every letter rejected | ✅ | — | — | — |
+| Bug 3 | Producto price tab vs document line | `44,00` both | — | — | ✅ | — |
+| Case 1 | `10,50` on a new line | `10,50`, gross `12,71`, totals 230,50/48,41/278,91 | ✅ | — | ✅ | `priceactual = 10.5` |
+
+**On the `10.4` (period) case in the ticket's repro steps.** Typing a period into a grouped field
+yields `104`: `filterMaskChars` drops it as a stray thousands separator. That is NOT a regression
+from this round — `git log -S` puts it in `57932dd35` (2026-09-10, the first ETP-5107 fix, already
+an ancestor of `origin/develop`), so it is exactly the build QA reviewed, and the agentic report
+attached to the reopening **explicitly classified "the period is silently ignored" as by design**
+(§6, line 184). The ticket's "Steps to reproduce" describe how to trigger the PRE-fix bug, not the
+post-fix contract. Recorded here because it is easy to misread as a broken acceptance case — it was
+misread that way once during this verification.
+
+The residual question is the asymmetry already filed as §7.14.2, not this case.
+
+### 7.16 The attached QA report (`reporte_ETP-5107_3.md`) — every case re-run (2026-09-15)
+
+The report attached to the reopening was analysed in §6 but only its ONE defect (rounding) had been
+re-verified. Its full case list has now been re-run locally.
+
+| Report section | Its finding | Now |
+|---|---|---|
+| §1.a comma `10,4` | saves `10,40` on all 5 screens | ✅ unchanged |
+| §1.b period ignored | `10.4`→`104`, by design | ✅ unchanged — same behaviour, still by design |
+| §2 **paste** `12.50` | shows `1.250`, saves `1.250,00 €` (×100) | ✅ **reproduced identically** — `1.250` |
+| §2 paste `12.5` / `10.4` | `125` / `104` | ✅ `125` / `104` |
+| §3 letters `20,0rrwetwrtwrt2` | filtered → `20,02` | ✅ `20,02` |
+| §3 symbols `1,2,3€%` | filtered → `1,23` | ✅ `1,23` |
+| §3 negative `-15,50` | accepted, propagates to totals | ✅ `-15,50` |
+| §4 `10,123456789` | `10,12` (correct) | ✅ **still `10,12` — our HALF_UP change did not regress it** |
+| §4 `10,125` | `10,13` (correct) | ✅ **still `10,13`** |
+| §4 `10,135` | `10,13` ❌ | ✅ **`10,14`** — fixed |
+| §4 `2,675` | `2,67` ❌ | ✅ **`2,68`** — fixed |
+
+**The two §4 cases that were already correct were the real regression risk of our own fix**, and they
+were not checked until this pass. Both hold.
+
+**§5's unexplained observation, now root-caused.** The report saw "Subtotal sin descuento 2,67 €"
+next to "Subtotal 2,68 €" on the same line and noted it was not investigated. It is the same
+discrepancy found in §7.14.6: the backend stores `line_gross_amount` computed from the UNROUNDED
+value and `grandtotal` from the rounded net, one cent apart, both persisted server-side. Not a
+frontend defect — worth handing back to QA as the answer to their open question.
+
+**Its recommendations.** #2 (decimal-safe rounding) is what point 7 implemented. #1 (a visual hint
+that decimals use a comma) is a product/UX call and was NOT done — it is the same territory as the
+§7.14.2 asymmetry. #3 (close as non-reproducible) applied to the original 3 bugs only; Isaías's own
+6 bullet points are what reopened the ticket.
+
+### 7.17 The migration's own trap, sprung in the window it was written for (2026-09-15)
+
+QA typed `483,945` into the payment amount on invoice 10000040 and got `483.945,00`, with an
+"Exceso: $483.461,05" error. Typing `329,225` into the amount-in-account derived a conversion rate
+of `680,28722` instead of `0,680287`.
+
+**The component was there.** All four fields are `MaskedAmountInput`. What was wrong is who READ
+their output: three of the four still went through the STRUCTURAL parser `parsePlain`, whose rule
+("a lone separator with exactly 3 digits after it is thousands grouping") turns the mask's clean
+`483.945` into 483945.
+
+This is verbatim the rule recorded in §7.12 — *"once a field renders MaskedAmountInput its value is
+CLEAN and must be read with parseLocaleNumber, never with the structural parser"* — applied in
+FundsTransferModal, CashCloseSidePanel, ManualStatementModal and NewMovementWizard, and then **not**
+applied in the one window that is point 5 of the QA report.
+
+Worse, the code said so out loud. `parsePlain`'s docstring read *"it has no live masking"* and the
+amount-in-account handler read *"this field is seeded with formatPlain() output"* — two statements
+the migration itself falsified, left in place, and then trusted on a later pass.
+
+**Fix.** `parseMaskedAmount` in `usePaymentBalance.js`: try the canonical parser, fall back to the
+structural one only when the canonical rejects the string. That fallback is not a heuristic — a
+clean value can never carry TWO separators, so a rejected string is necessarily a `formatPlain`
+display string seeded by the hook. Applied at the four sites that read masked output (amount on
+change and on blur, credit-line use, amount-in-account value + handler). The two sites that read
+pure `formatPlain` output keep `parsePlain`, which is still correct there.
+
+Verified live on the reported invoice: `483,945` → `483,95`, difference `$0,00`, no error; and on a
+USD purchase invoice (the PAYMENT direction, same modal, same hook): `6,055` → `6,06`, `4,125` →
+`4,13`, rate `0,681255`.
+
+**The failure mode worth remembering** — it produced three wrong reports in this ticket: verifying
+the change that was made rather than the path the user walks. The input was migrated and tested; the
+reader behind it was never looked at.
+
+**Two guardrail tests encoded the defect.** `NewPaymentEntryModal.test.js` asserted
+`const n = parsePlain(raw)` for the amount-in-account field, i.e. it actively protected the bug.
+There are now three categories, all load-bearing: rates → `parseLocaleNumber`; masked-field output →
+`parseMaskedAmount`; `formatPlain` display strings → `parsePlain`.
+
+### 7.18 Manual-statement validation message is misleading (found 2026-09-15, not fixed)
+
+`isLineComplete` in `ManualStatementModal.jsx` returns false for three different reasons — no date,
+a negative amount, or BOTH sides filled — and all three surface the same toast, *"Completa los
+campos obligatorios de cada línea"*. For the both-sides case that message points the user the wrong
+way: nothing is missing, something is in excess. The rule itself is correct and well-reasoned (a
+both-sides line collapses to `cramount - dramount` on read, so 233,46/33,43 becomes a −200,02 that
+no bank reported).
+
+Fix shape: a dedicated i18n key for the both-sides case, added to BOTH `en_US.json` and `es_ES.json`.
+Same family as the QA report's recommendation #1 — warnings the user needs and does not get.
+Product call, deliberately not done here.
+
 ### 7.13 Still open beyond the 7 points
 
 - The add-line callout race condition from §4.2/§4.3 (typing a price within ~0.85s of selecting the product) — pre-existing, unrelated to ETP-5107, still awaiting a decision on whether it gets its own ticket.

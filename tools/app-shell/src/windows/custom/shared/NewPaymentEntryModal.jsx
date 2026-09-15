@@ -14,7 +14,7 @@ import { useUI } from '@/i18n';
 import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { openCenteredPopup } from '@/lib/popupWindow.js';
-import { usePaymentBalance, formatPlain, parsePlain, round2 } from './usePaymentBalance.js';
+import { usePaymentBalance, formatPlain, parseMaskedAmount, round2 } from './usePaymentBalance.js';
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
@@ -587,11 +587,12 @@ function ConversionFields({
             const amountInput = (
               <MaskedAmountInput
                 bare
-                // `amountStr` here is also a formatPlain DISPLAY string and no numeric twin is
-                // held in state, so convert with parsePlain — the structural parser whose whole
-                // purpose is reading a thousands-separated string back. (`rateStr` below needs
-                // no conversion: it already holds a clean dot-decimal rate.)
-                value={parsePlain(amountStr) ?? ''}
+                // `amountStr` holds EITHER shape: a formatPlain display string while it is seeded
+                // from the rate, or the mask's own CLEAN value while the user types. parseMaskedAmount
+                // reads both — it tries the canonical parser first and only falls back to the
+                // structural one for a string carrying two separators, which a clean value never has.
+                // (`rateStr` below needs no conversion: it already holds a clean dot-decimal rate.)
+                value={parseMaskedAmount(amountStr) ?? ''}
                 onChange={(clean) => onAmountChange({ target: { value: clean } })}
                 data-testid="cp-amount-in-account-input"
                 className="w-full border-0 bg-transparent p-0 outline-none focus-visible:ring-0 tabular-nums"
@@ -1376,10 +1377,11 @@ export default function NewPaymentEntryModal({
   const onAmountChange = useCallback((e) => {
     const raw = e.target.value;
     setAmountStr(raw);
-    // This field is seeded with formatPlain() output, so it carries thousands separators — it must
-    // be read with parsePlain. The old bare parseFloat turned a seeded "5.050,00" into 5.05 and
-    // derived a wildly wrong exchange rate from it.
-    const n = parsePlain(raw);
+    // `raw` is the mask's CLEAN value (ETP-5107). Reading it with the structural parsePlain made
+    // a typed `329,225` arrive as "329.225" and be read as 329225 — which then derived an exchange
+    // rate of 680,28722 out of thin air. parseMaskedAmount still handles the formatPlain-seeded
+    // shape ("5.050,00" → 5050), which a bare parseFloat used to turn into 5.05.
+    const n = parseMaskedAmount(raw);
     if (Number.isFinite(n) && n > 0 && balance.amount > 0) {
       skipAmountRecomputeRef.current = true;
       setRateStr(deriveRateFromAmount(n, balance.amount));
