@@ -17,7 +17,7 @@ const groups = {
   Inventory: 'product product-category physical-inventory goods-movements internal-consumption warehouse report-viewer-inventory',
   Finance: 'payment-in payment-out financial-account chart-of-accounts cost-center service-project general-ledger-configuration calendar assets asset-group amortization not-posted-documents simple-g-l-journal fiscal-monitor conversion-rates fiscal-models tax tax-category report-viewer-finance',
   Connections: 'authorize',
-  Settings: 'organization document-sequence price-list payment-term business-partner-category user roles smart-scan fiscal-config',
+  Settings: 'organization document-sequence price-list payment-term business-partner-category user roles acct-process-monitor smart-scan fiscal-config',
 };
 
 // Composition aliases documented in calendar/fiscal-monitor/fiscal-config guides.
@@ -27,6 +27,13 @@ const exceptions = {
   'first-steps': {},
   authorize: {},
   roles: { capability: 'isAdminOrClientAdmin' },
+  // ETP-5269. Synthetic destination (runtime-routes.jsx), no AD window of its own.
+  // Additionally hidden behind the `acct-process-monitor` feature flag. That gate lives in
+  // SideMenu and is invisible to buildMenuGroups — the boundary this catalog measures — so here
+  // it is an ordinary capability-gated Settings entry, exactly like `roles` above. `flag` is
+  // metadata for the one spec that DOES cross the flag boundary (SideMenu.vitest.jsx enables
+  // every flag declared here); nothing else in this module reads it.
+  'acct-process-monitor': { capability: 'isAdminOrClientAdmin', flag: 'acct-process-monitor' },
   // Tax Report AD window: core-maps/ad-menu-cache.json (typed window entry),
   // app-shell-functional-flows.md, "Role-gated custom pages".
   'fiscal-models': { windowId: '3E8FEA1EA7404D979306C9EE7FD2E7E8' },
@@ -85,6 +92,12 @@ export function navigationPermissions(entries = defaultNavigation, tier = 'full'
     capabilities: Object.fromEntries(entries.filter(entry => entry.capability).map(entry => [entry.capability, true])),
   };
 }
+
+// Every feature flag a catalog entry declares. SideMenu is the only layer that reads flags, so
+// its profile specs enable exactly this set to assert catalog MEMBERSHIP; each flag's own
+// on/off behaviour belongs in a dedicated test, not in the shared profiles.
+export const catalogFeatureFlags = [...defaultNavigation, ...optionalNavigation]
+  .filter(entry => entry.flag).map(entry => entry.flag);
 
 // Exact named membership (including duplicates), groups and destinations, not
 // circular counts. Used by registry and AppLayout against real built groups.

@@ -159,6 +159,100 @@ describe('sifSending', () => {
       });
     });
 
+    // ETP-5272: a registry-error correction (`aeatsiiErrorRegistral`) must reopen
+    // the SII target even when `aeatsiiIssent` stays `true` forever (the classic
+    // backend never resets it after the correction cycle). The two flags are
+    // ORed independently — either one alone is enough to make sendSii pending.
+    describe('registry-error correction gate (ETP-5272)', () => {
+      it('reopens SII when already sent and a registral error correction is pending', () => {
+        assert.deepEqual(
+          getPendingSifTargets('sales-invoice', 'sii', {
+            aeatsiiIssent: true,
+            aeatsiiErrorRegistral: true,
+            invoiceDate: '2026-01-01',
+          }, null, TBAI_RECORD),
+          { sendSii: true, sendTbai: false },
+        );
+      });
+
+      it('reopens SII using the raw AD Y flags for both aeatsiiIssent and aeatsiiErrorRegistral', () => {
+        assert.deepEqual(
+          getPendingSifTargets('sales-invoice', 'sii', {
+            aeatsiiIssent: 'Y',
+            aeatsiiErrorRegistral: 'Y',
+            invoiceDate: '2026-01-01',
+          }, null, TBAI_RECORD),
+          { sendSii: true, sendTbai: false },
+        );
+      });
+
+      it('keeps SII hidden when already sent and there is no pending registral error (false)', () => {
+        assert.deepEqual(
+          getPendingSifTargets('sales-invoice', 'sii', {
+            aeatsiiIssent: true,
+            aeatsiiErrorRegistral: false,
+            invoiceDate: '2026-01-01',
+          }, null, TBAI_RECORD),
+          { sendSii: false, sendTbai: false },
+        );
+      });
+
+      it('keeps SII hidden when already sent and aeatsiiErrorRegistral is absent', () => {
+        assert.deepEqual(
+          getPendingSifTargets('sales-invoice', 'sii', {
+            aeatsiiIssent: true,
+            invoiceDate: '2026-01-01',
+          }, null, TBAI_RECORD),
+          { sendSii: false, sendTbai: false },
+        );
+      });
+
+      it('keeps SII pending when not yet sent and a registral error is also (independently) pending', () => {
+        assert.deepEqual(
+          getPendingSifTargets('sales-invoice', 'sii', {
+            aeatsiiIssent: false,
+            aeatsiiErrorRegistral: true,
+            invoiceDate: '2026-01-01',
+          }, null, TBAI_RECORD),
+          { sendSii: true, sendTbai: false },
+        );
+      });
+
+      it('does not let aeatsiiErrorRegistral affect the TBAI target', () => {
+        assert.deepEqual(
+          getPendingSifTargets('sales-invoice', 'sii+tbai', {
+            aeatsiiIssent: true,
+            aeatsiiErrorRegistral: true,
+            tbaiIssent: true,
+            invoiceDate: '2026-06-15',
+          }, null, TBAI_RECORD),
+          { sendSii: true, sendTbai: false },
+        );
+
+        assert.deepEqual(
+          getPendingSifTargets('sales-invoice', 'sii+tbai', {
+            aeatsiiIssent: true,
+            aeatsiiErrorRegistral: true,
+            tbaiIssent: false,
+            invoiceDate: '2026-06-15',
+          }, null, TBAI_RECORD),
+          { sendSii: true, sendTbai: true },
+        );
+      });
+
+      it('reopens SII for a purchase invoice too (this module is shared, not sales-only)', () => {
+        assert.deepEqual(
+          getPendingSifTargets('purchase-invoice', 'sii+tbai', {
+            aeatsiiIssent: true,
+            aeatsiiErrorRegistral: true,
+            tbaiIssent: false,
+            invoiceDate: '2026-01-01',
+          }, 'BIZKAIA', TBAI_RECORD),
+          { sendSii: true, sendTbai: true },
+        );
+      });
+    });
+
     // ETP-5122 + ETP-5087 combined: territory and date are independent gates,
     // ANDed together — TBAI is only pending when BOTH the territory qualifies
     // (Bizkaia, for a purchase document) AND the invoice date is on/after the

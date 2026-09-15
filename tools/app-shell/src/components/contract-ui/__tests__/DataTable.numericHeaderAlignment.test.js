@@ -8,25 +8,36 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'DataTable.jsx'), 'utf8');
 
 describe('DataTable — numeric column header alignment (ETP-4136)', () => {
+  it('derives isNumeric from NUMERIC_FIELD_TYPES.has(col.type)', () => {
+    // ETP-5281 hoisted the repeated `NUMERIC_FIELD_TYPES.has(col.type)` lookup
+    // (previously inlined 4x below) into a single `isNumeric` local, referenced
+    // at each of the 3 call sites asserted below. Pinning the declaration
+    // itself means a future refactor that quietly renames or repoints this
+    // variable (e.g. away from NUMERIC_FIELD_TYPES) still trips a guard, even
+    // though the 3 call-site assertions only check for the literal `isNumeric`
+    // identifier and would otherwise pass unchanged.
+    assert.match(src, /const isNumeric = NUMERIC_FIELD_TYPES\.has\(col\.type\);/);
+  });
+
   it('applies text-right class to TableHead for numeric column types', () => {
     // The className uses a filter-join pattern over an entry list:
-    // ['align-middle', NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : '', col.headClass || '']
+    // ['align-middle', isNumeric ? 'text-right' : '', col.headClass || '']
     //   .filter(Boolean).join(' ')
     // The entries are asserted separately from the join on purpose: ETP-4658 appended
     // `col.headClass` after the numeric ternary (per-column chrome, covered by
     // DataTable.columnChrome.vitest.jsx), and pinning them as adjacent made this guard
     // fail on a change that never touched the alignment it protects.
-    assert.match(src, /'align-middle',\s*NUMERIC_FIELD_TYPES\.has\(col\.type\) \? 'text-right' : '',/);
+    assert.match(src, /'align-middle',\s*isNumeric \? 'text-right' : '',/);
     assert.match(src, /\]\.filter\(Boolean\)\.join\(' '\)/);
   });
 
   it('applies text-right to the sort button for numeric column types', () => {
-    // The sort button className ternary: NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : 'text-left'
-    assert.match(src, /NUMERIC_FIELD_TYPES\.has\(col\.type\) \? 'text-right' : 'text-left'/);
+    // The sort button className ternary: isNumeric ? 'text-right' : 'text-left'
+    assert.match(src, /isNumeric \? 'text-right' : 'text-left'/);
   });
 
   it('applies text-right to the non-sortable span for numeric column types', () => {
     // The span className uses a leading-space variant: ' text-right'
-    assert.match(src, /NUMERIC_FIELD_TYPES\.has\(col\.type\) \? ' text-right' : ''/);
+    assert.match(src, /isNumeric \? ' text-right' : ''/);
   });
 });

@@ -23,10 +23,18 @@ export const WEBMCP_AGENT_CHAT = 'webmcp-agent-chat';
 /** Enables proactive DOM-based page-help suggestions next to the Copilot. */
 export const PAGE_HELP_SUGGESTIONS = 'page-help-suggestions';
 
+/**
+ * Reveals the admin-only accounting server process monitor in the Settings menu (ETP-5269).
+ * Visual gating only: the route is registered unconditionally and the backend
+ * (`SFAcctProcessMonitor`) enforces admin/client-admin access on both its read and its trigger.
+ */
+export const ACCT_PROCESS_MONITOR = 'acct-process-monitor';
+
 export const FLAG_DEFAULTS = Object.freeze({
   [PROOF_OF_CONCEPT_MENU]: false,
   [WEBMCP_AGENT_CHAT]: false,
   [PAGE_HELP_SUGGESTIONS]: false,
+  [ACCT_PROCESS_MONITOR]: false,
 });
 
 /**

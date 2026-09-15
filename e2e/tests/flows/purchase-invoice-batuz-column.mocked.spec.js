@@ -69,10 +69,12 @@ const BASE_ROW = {
   documentStatus: 'CO',
   'documentStatus$_identifier': 'Completado',
   invoiceDate: '2026-05-08',
-  // ETP-5122 added a date gate to the SII column (isSifEligibleByDate(row.accountingDate,
-  // siiRecord?.fechaAcogidaSII)) on top of the pre-existing territory gate this spec
-  // exercises. Needs to be later than the mocked siiRecord.fechaAcogidaSII below (see
-  // openList()) so every row is eligible and the SII cell assertions actually run.
+  // ETP-5122 briefly added a per-row date gate to the SII column
+  // (isSifEligibleByDate(row.accountingDate, siiRecord?.fechaAcogidaSII)) on top
+  // of the territory gate this spec exercises; ETP-5229 removed it (a row sent
+  // under a previous, superseded config must keep showing its real status — see
+  // useFiscalStatus.js). accountingDate is kept as ordinary fixture data — the
+  // territory gate below is the only thing that still matters here.
   accountingDate: '2026-05-08',
   businessPartner: 'BP_1',
   'businessPartner$_identifier': 'QA Supplier',
@@ -170,18 +172,21 @@ async function openList(page, { profile, territory }) {
   await seedSelectedOrg(page);
   await login(page);
   await installFiscalProfileMocks(page, profile, { territory });
-  // installFiscalProfileMocks()'s siiRecord (shared across specs, see
-  // fiscal-config-mocks.js) has no fechaAcogidaSII, so BASE_ROW.accountingDate
-  // above would never satisfy the ETP-5122 SII date gate without this override.
-  // Registered AFTER installFiscalProfileMocks — Playwright matches routes in
-  // reverse registration order, so this wins over the shared one — with a date
-  // earlier than every row's accountingDate, so this spec keeps exercising only
-  // what it was designed for (the territory gate), not the (correct, new) date gate.
+  // Overrides installFiscalProfileMocks()'s shared siiRecord fixture with an
+  // explicit `monitordate` — the AD column `useFiscalConfig`'s
+  // `earliestCutoverDate('sii', ...)` actually reads (CUTOVER_FIELD.sii), NOT
+  // the legacy `fechaAcogidaSII` name. Registered AFTER
+  // installFiscalProfileMocks — Playwright matches routes in reverse
+  // registration order, so this wins over the shared one. The SII badge IS
+  // still date-gated (ETP-5229, corrected): `isSifEligibleByDate(row.
+  // accountingDate, earliestSiiCutoverDate)` in PurchaseInvoiceHeaderTable.jsx
+  // needs a real earliest-cutover date or every SII cell falls back to a dash.
+  // Dated well before every fixture row's accountingDate ('2026-05-08').
   await page.route('**/sws/neo/sii-config/siiConfiguration?**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: responseData([{ guipuzcoa: 'Y', taxtype: 'IVA', fechaAcogidaSII: '2020-01-01' }]),
+      body: responseData([{ guipuzcoa: 'Y', taxtype: 'IVA', monitordate: '2020-01-01' }]),
     });
   });
   await installListMock(page);
