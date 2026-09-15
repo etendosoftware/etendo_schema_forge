@@ -2299,6 +2299,7 @@ export function useEntity(entity, childEntity, {
         handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,
         handleAddChild, handleUpdateChild, handleDeleteChild, primeSaved,
         refresh, fetchById, fetchChildren, fetchChildDefaults, loadMore, refreshHeaderTotals, clearUserChangedKey,
+        invalidateEntityCache,
         buildListQuery,
         sortColumn, sortDirection, setSortColumn, setSortDirection,
     };
