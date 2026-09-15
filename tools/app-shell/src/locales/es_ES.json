@@ -24942,11 +24942,13 @@
       "sequencePrefixForbiddenLetters": "El prefijo no puede contener las letras I, O, Y, W ni Ñ.",
       "sequencePrefixInvalidChars": "El prefijo solo puede contener mayúsculas, números y guiones.",
       "taxIdInvalidFormat": "Introduce un NIF, CIF o NIE válido.",
-      "taxIdInvalidCheckDigit": "El dígito de control no coincide. Revisa el número."
+      "taxIdInvalidCheckDigit": "El dígito de control no coincide. Revisa el número.",
+      "taxIdInvalidPassport": "Introduce un pasaporte válido (hasta 9 caracteres alfanuméricos)."
     },
     "firstStepsFiscalConfigDesc": "Revisá los impuestos y los datos fiscales que usarán tus documentos.",
     "taxIdInvalidFormat": "Introduce un NIF, CIF o NIE válido.",
     "taxIdInvalidCheckDigit": "El dígito de control no coincide. Revisa el número.",
+    "taxIdInvalidPassport": "Introduce un pasaporte válido (hasta 9 caracteres alfanuméricos).",
     "walkthroughShowingPath": "Mira cómo llegar aquí: el tutorial está abriendo el menú por ti.",
     "walkthroughContactStepAddressTabTitle": "Abre la pestaña Dirección",
     "walkthroughContactStepAddressTabBody": "El contacto ya existe, pero todavía no tiene dirección. Sin ella no se puede usar en un pedido: de aquí salen las direcciones de envío y de facturación.",

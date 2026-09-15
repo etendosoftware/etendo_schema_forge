@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.3.0",
   "generatedAt": "2026-09-09T11:18:23.940Z",
-  "updatedAt": "2026-09-09T21:57:21.690Z",
-  "checksum": "cb326c3a095037fe",
+  "updatedAt": "2026-09-14T11:19:33.680Z",
+  "checksum": "06c44c29645f5ad4",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -596,9 +596,9 @@
               },
               {
                 "value": "2",
-                "name": "NOI",
+                "name": "NIF Intracomunitario",
                 "labels": {
-                  "es_ES": "NOI"
+                  "es_ES": "NIF Intracomunitario"
                 }
               },
               {
@@ -754,7 +754,7 @@
             "form": true,
             "section": "principal",
             "validation": {
-              "maxLength": 60
+              "maxLength": 15
             }
           },
           {

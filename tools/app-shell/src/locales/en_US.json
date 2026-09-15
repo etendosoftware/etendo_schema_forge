@@ -24704,11 +24704,13 @@
       "sequencePrefixForbiddenLetters": "The prefix cannot contain the letters I, O, Y, W or Ñ.",
       "sequencePrefixInvalidChars": "The prefix can only contain uppercase letters, digits and hyphens.",
       "taxIdInvalidFormat": "Enter a valid NIF, CIF or NIE.",
-      "taxIdInvalidCheckDigit": "The check digit does not match. Review the number."
+      "taxIdInvalidCheckDigit": "The check digit does not match. Review the number.",
+      "taxIdInvalidPassport": "Enter a valid passport number (up to 9 alphanumeric characters)."
     },
     "firstStepsFiscalConfigDesc": "Review the taxes and the fiscal data your documents will use.",
     "taxIdInvalidFormat": "Enter a valid NIF, CIF or NIE.",
     "taxIdInvalidCheckDigit": "The check digit does not match. Review the number.",
+    "taxIdInvalidPassport": "Enter a valid passport number (up to 9 alphanumeric characters).",
     "walkthroughShowingPath": "Watch how to get here: the tutorial is opening the menu for you.",
     "walkthroughContactStepAddressTabTitle": "Open the Location tab",
     "walkthroughContactStepAddressTabBody": "The contact exists, but it still has no address. Without one it cannot be used on an order: that is where the shipping and invoicing addresses come from.",
