@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
-import { isChromelessEmbed } from '@/lib/embeddedWindow.js';
+import { useChromelessEmbed } from '@/lib/embeddedWindow.js';
 import { ProcessParamDialog } from './ProcessParamDialog';
 import RecordUnavailable from './RecordUnavailable.jsx';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
@@ -1473,7 +1473,7 @@ export function DetailView({
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const embedded = searchParams.get('embedded') === '1';
-  const chromeless = isChromelessEmbed(searchParams.get('embedded'));
+  const chromeless = useChromelessEmbed(searchParams.get('embedded'));
   const sidebarContent = resolveEmbeddedSidebarContent(chromeless, sidebarContentProp);
   const tMenu = useMenuLabel();
   // ETP-4933: AD-column label resolver, for naming the missing fields in the

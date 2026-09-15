@@ -1,35 +1,33 @@
-/**
- * Marker that says "this document is an application window hosted inside a dialog".
- *
- * It lives on `window.name` rather than in the query string for one reason that only shows
- * up once the embed is actually used: the hosted window NAVIGATES — it goes to
- * `/<spec>/<id>` when it saves — and a query parameter does not survive that. The first
- * save would silently drop the flag and the full app chrome would come back inside the
- * dialog. `window.name` is per-document, set by the host before the frame loads, and
- * survives same-document client-side navigation.
- *
- * The query parameter is still honoured for the first paint (and for opening an embedded
- * URL directly), so both signals are checked.
- */
-export const EMBEDDED_WINDOW_NAME = 'etendo-embedded-window';
+import { createContext, useContext } from 'react';
 
-/** True when the current document is a window embedded in a host dialog. */
-export function isEmbeddedWindowDocument() {
-  try {
-    return typeof window !== 'undefined' && window.name === EMBEDDED_WINDOW_NAME;
-  } catch {
-    return false;
-  }
+/**
+ * Marks a subtree as an application window rendered inside a host dialog rather than as the
+ * page itself, so its chrome — sidebar, topbar, palette, widgets, side panels and its own
+ * "cancel back to the list" — is dropped.
+ *
+ * A CONTEXT, not the URL, is the carrier, and that is the whole point. The flag was first
+ * kept on `window.name` (iframe era) and then on the embedded router's search params, and
+ * both were lost the same way: the window NAVIGATES when it saves, `/<spec>/new` →
+ * `/<spec>/<id>`, and a query string does not survive that. Re-applying it from an effect is
+ * a race the user sees — the Products window's stock side panel reappeared inside the dialog
+ * the moment the product was saved. A context is set by the host above the router and cannot
+ * be dropped by anything the window does to its own location.
+ */
+export const EmbeddedWindowContext = createContext(false);
+
+/**
+ * Whether the chrome should be dropped: either an ancestor declared this subtree embedded, or
+ * the URL asks for it.
+ *
+ * `embedded=1` is the pre-existing read-only preview and stays URL-driven — it is opened by
+ * link, with no host component above it. `interactive` is the usable embed. Both strip chrome;
+ * only the first also disables pointer events, which is why callers keep the two apart.
+ */
+export function useChromelessEmbed(embeddedParam) {
+  return useContext(EmbeddedWindowContext) || isChromelessEmbed(embeddedParam);
 }
 
-/**
- * Whether the chrome (sidebar, topbar, palette, widgets, side panels, the window's own
- * "cancel back to list") should be dropped.
- *
- * `embedded=1` is the pre-existing read-only preview; `interactive` is the usable embed.
- * Both strip chrome — only the first also disables pointer events, which is why callers
- * keep those two apart.
- */
+/** URL-only form, for callers outside React or with no host context to read. */
 export function isChromelessEmbed(embeddedParam) {
-  return embeddedParam === '1' || embeddedParam === 'interactive' || isEmbeddedWindowDocument();
+  return embeddedParam === '1' || embeddedParam === 'interactive';
 }

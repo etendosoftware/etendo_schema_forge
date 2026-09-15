@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog.jsx';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx';
-import EmbeddedWindowFrame from './EmbeddedWindowFrame.jsx';
+import EmbeddedWindowRoute from './EmbeddedWindowRoute.jsx';
 import { renderPrimaryTabButtons } from './detailViewHelpers.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { mergeDefaultsPreservingUserEdits } from '@/hooks/useEntity.js';
@@ -66,9 +67,9 @@ export default function RecordCreateModal({
   const [activePostTab, setActivePostTab] = useState(null);
   const [postTabCounts, setPostTabCounts] = useState({});
   const [Banner, setBanner] = useState(null);
-  const [WindowApp, setWindowApp] = useState(null);
   // Set when the embedded window throws: phase 2 then falls back to the standalone panels.
   const [windowFailed, setWindowFailed] = useState(false);
+  const [WindowApp, setWindowApp] = useState(null);
   // Id the embedded window navigated to after saving — how we learn the record exists.
   const [windowRecordId, setWindowRecordId] = useState(null);
   // Key currently being PATCHed in phase 2, so EntityForm can show its per-field spinner.
@@ -112,19 +113,18 @@ export default function RecordCreateModal({
     setActivePostTab(null);
     setPostTabCounts({});
     setBanner(null);
-    setWindowApp(null);
     setWindowFailed(false);
     setWindowRecordId(null);
+    setWindowApp(null);
     setSavingField(null);
     setLoading(true);
+
 
     target.loadWindow?.()
       .then((mod) => { if (!cancelled) setWindowApp(() => mod.default); })
       .catch((err) => {
-        // Never silent: without the window the popup falls back to its own form, and a
-        // swallowed reason here is a feature that quietly does not appear.
         console.error('[RecordCreateModal] embedded window failed to load', err);
-        if (!cancelled) setWindowApp(null);
+        if (!cancelled) setWindowFailed(true);
       });
 
     target.loadForm()
@@ -300,7 +300,7 @@ export default function RecordCreateModal({
   // The window renders the whole popup when the target ships one and it has not blown up.
   // Otherwise the standalone form/panels below take over, so a failure degrades instead of
   // leaving the user with nothing.
-  const windowMode = !!WindowApp && !windowFailed;
+  const windowMode = !!target?.windowName && !windowFailed;
 
   /**
    * Hands the line the record the embedded window just saved. Re-reads it first for the
@@ -328,7 +328,15 @@ export default function RecordCreateModal({
       data-testid="Dialog__928459">
       <DialogContent
         data-testid="record-create-modal"
-        className="max-w-5xl max-h-[85vh] overflow-y-auto gap-0 rounded-lg bg-card p-6"
+        // Escape must close THIS dialog and nothing else. React synthetic events bubble
+        // through the React tree, not the DOM, so an unstopped Escape travels from the
+        // in-tree window up through the drawer shell into the host's inline add row, whose
+        // cell handler cancels the row being edited. Radix closes the dialog from its own
+        // DOCUMENT-level listener, so stopping the synthetic event here costs nothing; the
+        // drawer's document-level handler is already neutralised while the modal is open
+        // (see `onClose: createOpen ? NOOP : onClose` in ProductDrawerShell).
+        onKeyDown={(e) => { if (e.key === 'Escape') e.stopPropagation(); }}
+        className="w-[95vw] max-w-7xl max-h-[92vh] overflow-y-auto gap-0 rounded-lg bg-card p-6"
       >
       {/*
         Re-provide the locale for the modal subtree with the TARGET window's field labels
@@ -348,18 +356,42 @@ export default function RecordCreateModal({
               saves through the window's own button. Cost and Accounting can arrive no other
               way; their renderer is welded to DetailView's child hooks.
 
-              It lives in a same-origin iframe because React Router forbids nesting routers
-              and a window navigates when it saves. A separate document gets its own router
-              and cannot move the host; watching its location is how we learn the record was
-              created. See EmbeddedWindowFrame.
+              It is mounted IN-TREE, on a memory router of its own, so it reuses the host's
+              already-booted providers, session and chunks; watching that router's location
+              is how we learn the record was created. See EmbeddedWindowRoute for why nesting
+              a router is legal here and what else has to be isolated.
             */}
-            <div className="mt-4" data-testid="record-create-window">
-              <EmbeddedWindowFrame
-                src={`/${target.windowName}/new?embedded=interactive`}
-                windowName={target.windowName}
-                title={ui(target.titleKey)}
-                onRecordId={setWindowRecordId}
-                data-testid="EmbeddedWindowFrame__928459" />
+            {/*
+              A FIXED height, not a max: the embedded window paints in stages — chunk
+              spinner, then the window's own skeleton, then the form — and a
+              content-sized box resizes at each one, so the dialog visibly jumps twice
+              before settling. Reserving the final height up front makes the stages
+              happen inside a box that never moves.
+            */}
+            <div
+              className="mt-4 overflow-y-auto"
+              style={{ height: '72vh' }}
+              data-testid="record-create-window"
+            >
+              {WindowApp ? (
+                <EmbeddedWindowRoute
+                  windowName={target.windowName}
+                  initialPath={`/${target.windowName}/new?embedded=interactive`}
+                  onRecordId={setWindowRecordId}
+                  data-testid="EmbeddedWindowRoute__928459">
+                  <WindowApp
+                    windowName={target.windowName}
+                    apiBaseUrl={target.apiBaseUrl}
+                    token={token}
+                    data-testid="WindowApp__928459" />
+                </EmbeddedWindowRoute>
+              ) : (
+                <div className="flex h-full items-center justify-center" data-testid="record-create-window-loading">
+                  <Loader2
+                    className="h-6 w-6 animate-spin text-muted-foreground"
+                    data-testid="Loader2__928459" />
+                </div>
+              )}
             </div>
 
             {/*
