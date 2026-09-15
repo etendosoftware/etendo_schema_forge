@@ -17,12 +17,16 @@ import { isInvoiceSpec, isOrderSpec } from '@/lib/surveys/surveys.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { isEmailField, getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
 import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
-import { getContactsTextFieldError } from '@/components/contract-ui/contactsFieldValidation.js';
+import {
+    getContactsTextFieldError,
+    getContactsTaxIdError,
+    CONTACTS_TAX_ID_FIELD,
+    CONTACTS_TAX_ID_KEY_FIELD,
+} from '@/components/contract-ui/contactsFieldValidation.js';
 import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
 import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 import { detectBlockingBpCondition } from '@/lib/blockingBpConditions.js';
-import { isProductMissingRequiredCost } from '@/lib/productCostRequirement.js';
 import { notifySaveBlock } from '@/lib/saveBlockSignal.js';
 
 // ETP-5022: header policy has ONE home (app-shell-core/auth) — every request goes
@@ -662,6 +666,41 @@ export function getContactsTextFieldViolation(windowName, fields, editing) {
     for (const f of fields) {
         if (isReadOnly(f) || !isVisible(f)) continue;
         const err = getContactsTextFieldError(windowName, f, editing?.[f.key]);
+        if (err) return { key: f.key, errorKey: err.key, errorParams: err.params };
+    }
+    return null;
+}
+
+// ETP-5031 (QA round) — Contacts-only tax-identifier CONTENT save-block,
+// mirroring getContactsTextFieldViolation's shape/contract. A no-op for every
+// window other than 'contacts' and for every field other than `taxID` —
+// getContactsTaxIdError gates on both before looking at anything else.
+//
+// Unlike the text-field check it passes the WHOLE `editing` record down, not
+// just the value: which rule applies (Spanish NIF/CIF/NIE vs passport) is
+// decided by the sibling `oBTIKTaxIDKey` field of the same record.
+//
+// The legacy-data policy is enforced here rather than by the caller's field
+// list, because this check spans TWO fields: it takes ALL form fields plus
+// `changedKeys` (the set of keys the user touched THIS session), and validates
+// only when the user actually touched the record's fiscal identity. A contact
+// that already carries an invalid tax id must stay editable — changing its
+// phone must not be blocked by a value nobody touched. On a new record every
+// entered field is a changed key, so new invalid input is still blocked.
+//
+// The `||` is deliberate: changing `oBTIKTaxIDKey` alone re-declares WHAT the
+// existing number is (passport -> NIF), so the number must now satisfy the new
+// type's rules even though its own characters did not change. Touching neither
+// the number nor the type leaves a legacy value alone, which is the whole point.
+export function getContactsTaxIdViolation(windowName, fields, editing, changedKeys) {
+    const touchedTaxIdentity = Boolean(changedKeys?.has(CONTACTS_TAX_ID_FIELD)
+        || changedKeys?.has(CONTACTS_TAX_ID_KEY_FIELD));
+    if (!touchedTaxIdentity) return null;
+    const isReadOnly = getReadOnly(editing);
+    const isVisible = getVisible(editing);
+    for (const f of fields) {
+        if (isReadOnly(f) || !isVisible(f)) continue;
+        const err = getContactsTaxIdError(windowName, f, editing?.[f.key], editing);
         if (err) return { key: f.key, errorKey: err.key, errorParams: err.params };
     }
     return null;
@@ -1762,6 +1801,25 @@ export function useEntity(entity, childEntity, {
                 contactsViolation.errorParams,
             );
         }
+        // ETP-5031 (QA round): Contacts-only tax-identifier CONTENT save-block.
+        // Unlike the checks around it this one gets ALL form fields plus the
+        // changed-key set, because its legacy-data scoping spans two fields
+        // (the number and its type) and is decided inside the helper — see
+        // getContactsTaxIdViolation. Shares the `contacts-field-<key>` toast id
+        // with the text-field gate and with EntityForm's blur toast for the same
+        // field, so a blur firing right before the Save click dedupes into one.
+        const contactsTaxIdViolation = getContactsTaxIdViolation(
+            specName, allFormFields, editing, userChangedKeysRef.current);
+        if (contactsTaxIdViolation) {
+            return reportInvalidFormatField(
+                contactsTaxIdViolation.errorKey,
+                ui,
+                setSaveError,
+                setIsSaving,
+                `contacts-field-${contactsTaxIdViolation.key}`,
+                contactsTaxIdViolation.errorParams,
+            );
+        }
         const invalidEmails = getInvalidEmailFields(changedFormFields, clampedEditing);
         if (invalidEmails.length > 0) {
             return reportInvalidFormatField('sendModalInvalidEmail', ui, setSaveError, setIsSaving);
@@ -1773,19 +1831,6 @@ export function useEntity(entity, childEntity, {
         const invalidPhones = getInvalidPhoneFields(changedFormFields, clampedEditing);
         if (invalidPhones.length > 0) {
             return reportInvalidFormatField('phoneInvalidChars', ui, setSaveError, setIsSaving);
-        }
-        // ETP-5245: Product-only hard save-block. A product with no M_Costing row fails later,
-        // at the first shipment or count, far from whoever created it. Blocking here keeps the
-        // problem where it can still be fixed — the Costing tab is one click away, and
-        // ProductCostBanner is showing the same condition at the top of the form. No-op for
-        // every other window, and never on creation: the Costing tab needs a saved record, so
-        // blocking the first save would make a product impossible to create.
-        // Applies to EVERY product type by product decision — see isProductMissingRequiredCost.
-        // Product autosaves on blur, so the toast id has to be stable or every field the user
-        // leaves stacks another copy.
-        if (isProductMissingRequiredCost(specName, clampedEditing)) {
-            return reportInvalidFormatField(
-                'productCostRequired', ui, setSaveError, setIsSaving, 'product-cost-required');
         }
         const url = getUrl(isNew, apiBaseUrl, entity, clampedEditing);
         // Use PATCH for existing records (partial update), POST for new
@@ -2313,6 +2358,7 @@ export function useEntity(entity, childEntity, {
         handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,
         handleAddChild, handleUpdateChild, handleDeleteChild, primeSaved,
         refresh, fetchById, fetchChildren, fetchChildDefaults, loadMore, refreshHeaderTotals, clearUserChangedKey,
+        invalidateEntityCache,
         buildListQuery,
         sortColumn, sortDirection, setSortColumn, setSortDirection,
     };

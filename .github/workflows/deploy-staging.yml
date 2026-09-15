@@ -42,19 +42,16 @@ jobs:
             TARGET="experimental"
           fi
 
-          # configcat_sdk_key is resolved PER TARGET on purpose. The ConfigCat
-          # control plane is a pilot (ETP-4691) running on experimental only, and
-          # one SDK key addresses exactly one ConfigCat environment — a single
-          # shared variable would make production read the environment the pilot
-          # is toggling. An empty value leaves createFlagProvider() on the
-          # declared in-memory defaults, i.e. today's behaviour.
+          # configcat_sdk_key is resolved PER TARGET on purpose. One SDK key
+          # addresses exactly one ConfigCat environment, so production must use
+          # its own key instead of sharing the experimental environment.
           case "$TARGET" in
             production)
               echo "s3_bucket=${{ vars.S3_BUCKET_PRODUCTION }}" >> $GITHUB_OUTPUT
               echo "cf_distribution=${{ vars.CF_DISTRIBUTION_PRODUCTION }}" >> $GITHUB_OUTPUT
               echo "env_label=production" >> $GITHUB_OUTPUT
               echo "public_origin=https://go.etendo.cloud" >> $GITHUB_OUTPUT
-              echo "configcat_sdk_key=" >> $GITHUB_OUTPUT
+              echo "configcat_sdk_key=${{ vars.VITE_CONFIGCAT_SDK_KEY_PRODUCTION }}" >> $GITHUB_OUTPUT
               ;;
             staging)
               echo "s3_bucket=${{ vars.S3_BUCKET_STAGING }}" >> $GITHUB_OUTPUT
@@ -111,8 +108,9 @@ jobs:
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
           # ConfigCat control plane (ETP-4691) — key as variable, not secret: Vite
           # bakes it into the JS bundle, so it is public by construction and
-          # masking it would only hide it from the build log. Empty on
-          # staging/production while the pilot runs on experimental.
+          # masking it would only hide it from the build log. Production and
+          # experimental use separate per-environment Actions variables; staging
+          # remains empty until its ConfigCat environment is enabled.
           # `.env.development.local` is NOT read here: it is development-mode only,
           # so without this the deployed bundle has no key and every flag resolves
           # to its declared default.

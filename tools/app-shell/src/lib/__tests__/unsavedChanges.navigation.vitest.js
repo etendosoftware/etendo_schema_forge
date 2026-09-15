@@ -99,6 +99,34 @@ describe('navigation gate', () => {
     expect(listener).toHaveBeenLastCalledWith(false);
   });
 
+  // QA adversarial pass (ETP-5199) — documents a gap this fix newly exposes: before ETP-5199,
+  // the saver registered here was `() => hook.handleSave({ silent: true })`, which does not
+  // throw in practice. ETP-5199 now also runs an arbitrary window-authored
+  // onAfterCreate/onAfterExistingSave inside this exact saver (via `buildUnsavedChangesSaver`),
+  // and unlike a refusal (a falsy resolve, handled just above), a THROWING saver is not caught
+  // here: `pendingNavigation = null` and `promptListener?.(false)` never run, because the throw
+  // happens on the `await` before reaching them. `UnsavedChangesNavigationDialog.handleSave`
+  // (the only caller) does not catch it either, so its `saving` state — which disables every
+  // button in the dialog — never resets: the "Guardar y salir" modal would be stuck open with
+  // no way out but a reload. NOT currently reachable in production: both wired consumers today
+  // (Users' `handleRoleAssignmentSave`, Warehouse's `handleAfterCreate`) already catch their own
+  // errors and never throw past this point — this pins the current (risky) behaviour rather
+  // than asserting it is fine.
+  it('does NOT close the prompt or clear pendingNavigation when the saver throws (unlike a falsy refusal) — a future throwing onAfterCreate/onAfterExistingSave would strand the dialog open', async () => {
+    const listener = vi.fn();
+    const perform = vi.fn();
+    subscribeNavigationPrompt(listener);
+    setUnsavedChanges('form', true, vi.fn().mockRejectedValue(new Error('boom')));
+    requestNavigation(perform);
+    listener.mockClear();
+    await expect(savePendingNavigation()).rejects.toThrow('boom');
+    expect(listener).not.toHaveBeenCalled();
+    expect(perform).not.toHaveBeenCalled();
+    // The stale pending navigation is never cleared either — a second Save click would still
+    // see it (harmless here since the dialog is stuck, but confirms nothing was reset).
+    await expect(savePendingNavigation()).rejects.toThrow('boom');
+  });
+
   it('unsubscribes cleanly, restoring the fail-open behaviour', () => {
     const listener = vi.fn();
     const unsubscribe = subscribeNavigationPrompt(listener);
