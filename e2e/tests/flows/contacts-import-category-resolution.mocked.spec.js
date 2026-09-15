@@ -148,7 +148,9 @@ test('imports contacts with existing, normalized, new, and legacy category input
     ].map((row) => row.join(',')).join('\n')),
   });
 
-  await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('14/14');
+  // ETP-4954: the mapping modal is now field-first — the count is FIELDS with a source out
+  // of all importable fields (20 for Contacts), not columns mapped out of columns present.
+  await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('14/20');
   await expect(page.getByTestId('ImportColumnMapping__chip-categoria')).toContainText('Contact Category');
   await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-category-review.png'), fullPage: true });
 
