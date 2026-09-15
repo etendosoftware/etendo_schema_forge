@@ -71,6 +71,26 @@ describe('SiiSection — certificate section', () => {
   });
 });
 
+// ETP-5272 — accepts an external `locked` prop (forceTestMode) that gates set()
+// and disables the input, mirroring VerifactuSection's isReady lock mechanism.
+describe('SiiSection — external lock prop (ETP-5272)', () => {
+  it('accepts a `locked` prop in its signature', () => {
+    assert.match(src, /forwardRef\(function SiiSection\(\{[^}]*\blocked\b[^}]*\}, ref\)/);
+  });
+
+  it('does not allow form changes when locked (set() guard)', () => {
+    assert.match(src, /function set\(field, value\) \{\s*if \(locked\) return;/);
+  });
+
+  it('disables the authorization number input when locked', () => {
+    assert.match(src, /disabled=\{locked\}/);
+  });
+
+  it('passes the locked prop through to SectionSaveButton', () => {
+    assert.match(src, /locked=\{locked\}/);
+  });
+});
+
 describe('SiiSection — save button', () => {
   it('delegates save button rendering to SectionSaveButton', () => {
     assert.match(src, /SectionSaveButton/);

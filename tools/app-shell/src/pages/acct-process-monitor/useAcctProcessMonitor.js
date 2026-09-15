@@ -1,0 +1,252 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  fetchAcctProcessStatus,
+  triggerAcctProcessRun,
+} from '@/lib/acctProcessMonitorApi.js';
+
+/**
+ * ETP-5269 — data layer for the accounting-process monitor page.
+ *
+ * Owns the fetch/trigger lifecycle, the "is a run in flight" bookkeeping and the poll that keeps a
+ * running job's outcome arriving without the admin reloading. The page component stays
+ * presentational, matching `useRolesOverviewData` / `RolesOverviewPage`.
+ */
+
+/** How many history rows to show. Well under the backend's own 100 cap. */
+export const HISTORY_LIMIT = 20;
+
+/** Poll cadence while a run is in progress or awaited. Idle pages do not poll at all. */
+const RUNNING_POLL_MS = 5000;
+
+/**
+ * How long to keep polling after a successful trigger while waiting for the run to become
+ * observable. Generous on purpose: the accounting run itself takes well under a second, but the
+ * gap being covered is scheduler latency plus one poll interval, and giving up early would put the
+ * page back in the state this deadline exists to prevent — idle, with nothing having appeared.
+ */
+const AWAIT_RUN_MS = 60000;
+
+/**
+ * The full `AD_PROCESS_RUN.STATUS` code set, from `org.openbravo.scheduling.Process`. Mapped to a
+ * visual tone and an i18n key so the UI never shows a raw three-letter code.
+ *
+ * `PCE` (Prevent Concurrent Executions) is included even though the reference instance has never
+ * produced one: the constant exists in core, so a run can carry it, and an unmapped code would
+ * otherwise fall through to the raw string.
+ */
+export const RUN_STATUS_META = Object.freeze({
+  SUC: { tone: 'success', labelKey: 'acctProcessStatusSuccess' },
+  COM: { tone: 'success', labelKey: 'acctProcessStatusComplete' },
+  PRC: { tone: 'info', labelKey: 'acctProcessStatusProcessing' },
+  SCH: { tone: 'info', labelKey: 'acctProcessStatusScheduled' },
+  ERR: { tone: 'danger', labelKey: 'acctProcessStatusError' },
+  KIL: { tone: 'danger', labelKey: 'acctProcessStatusKilled' },
+  MIS: { tone: 'warning', labelKey: 'acctProcessStatusMisfired' },
+  UNS: { tone: 'warning', labelKey: 'acctProcessStatusUnscheduled' },
+  SYR: { tone: 'warning', labelKey: 'acctProcessStatusSystemRestart' },
+  PCE: { tone: 'warning', labelKey: 'acctProcessStatusPreventConcurrent' },
+});
+
+/** Unknown code → neutral tone and no i18n key, so the caller falls back to the raw code. */
+export function statusMeta(code) {
+  return RUN_STATUS_META[code] || { tone: 'neutral', labelKey: null };
+}
+
+const EMPTY_STATE = Object.freeze({
+  loading: true,
+  error: null,
+  denied: false,
+  notInstalled: false,
+  data: null,
+  pollError: null,
+});
+
+/**
+ * Parses a server timestamp for display.
+ *
+ * The backend emits `yyyy-MM-ddTHH:mm:ss` with NO zone, because the underlying columns are
+ * `timestamp without time zone` — server wall-clock, which is how the rest of Etendo treats them.
+ * A date-time string without an offset is parsed as LOCAL time per the language spec, so this
+ * round-trips the wall clock unchanged and never shifts it.
+ *
+ * This is a full instant, not a calendar date, so `parseCalendarDate` from `lib/dateOnly.js`
+ * deliberately does NOT apply here — that helper exists for date-only values, where a UTC-midnight
+ * parse would roll the day back under a negative offset. There is no day to roll here.
+ */
+export function parseRunTimestamp(raw) {
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function useAcctProcessMonitor() {
+  const [state, setState] = useState(EMPTY_STATE);
+  const [triggering, setTriggering] = useState(false);
+  const [triggerOutcome, setTriggerOutcome] = useState(null);
+  // Timestamp after which we stop waiting for a triggered run to show up; null when not waiting.
+  const [awaitingUntil, setAwaitingUntil] = useState(null);
+  // The newest run id at the moment of the trigger — the baseline "a new run appeared" is measured
+  // against. A ref, not state: it must be readable synchronously inside `trigger`.
+  const awaitedAfterRunId = useRef(null);
+  // Mirrors the newest run id for that synchronous read, since `state` is a render-time snapshot.
+  const latestRunIdRef = useRef(null);
+  // Guards against a poll or a late in-flight response overwriting state after unmount.
+  const mounted = useRef(true);
+  // Monotonically increasing id for the latest request issued across the mount fetch, poll,
+  // reload and trigger. A response is applied to state only if it is still the newest one
+  // issued — guards a slow stale response (e.g. a poll tick) from landing after a faster newer
+  // one (e.g. a reload or trigger) and overwriting fresher state.
+  const requestIdRef = useRef(0);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  const applyPayload = useCallback((payload, requestId) => {
+    if (!mounted.current) return;
+    // Superseded by a newer request (a reload/trigger fired after this one was issued) — its
+    // response is stale and must not overwrite whatever that newer request already applied.
+    if (requestId !== requestIdRef.current) return;
+    // A refusal arrives as a 200 with `error: true` (see acctProcessMonitorApi.js) — a state to
+    // render, not a failure to report. `reason` separates "you may not see this" from "this
+    // instance has no accounting process"; they need very different messages, so never collapse
+    // them into one generic error.
+    if (payload?.error) {
+      // Matched explicitly, never by "anything that isn't X". An unrecognised reason — an older
+      // or newer backend — falls through to the generic error state carrying the server's own
+      // message, which is honest. Defaulting it to `denied` would tell an admin they lack
+      // permission for what is really a server-side problem.
+      setState({
+        loading: false,
+        error: payload.reason === 'notAuthorized' || payload.reason === 'notInstalled'
+          ? null
+          : (payload.message || 'Unknown error'),
+        denied: payload.reason === 'notAuthorized',
+        notInstalled: payload.reason === 'notInstalled',
+        data: null,
+        pollError: null,
+      });
+      return;
+    }
+    setState({
+      loading: false, error: null, denied: false, notInstalled: false, data: payload, pollError: null,
+    });
+  }, []);
+
+  const applyError = useCallback((err, { silent = false, requestId } = {}) => {
+    if (!mounted.current) return;
+    if (requestId !== requestIdRef.current) return;
+    const message = err?.message || String(err);
+    // A silent/background poll failing (a blip, a timeout) is not worth losing whatever is
+    // already on screen for, nor forcing the full error shell over a run that may still be
+    // mid-progress. Keep the last-known-good data and surface the failure as a soft flag instead
+    // — only a foreground/explicit fetch (initial load, reload) shows the hard error state.
+    if (silent) {
+      setState((s) => ({ ...s, pollError: message }));
+      return;
+    }
+    setState({
+      loading: false, error: message, denied: false, notInstalled: false, data: null, pollError: null,
+    });
+  }, []);
+
+  const load = useCallback(({ silent = false } = {}) => {
+    const requestId = ++requestIdRef.current;
+    if (!silent) {
+      setState((s) => ({ ...s, loading: true, error: null }));
+    }
+    return fetchAcctProcessStatus(HISTORY_LIMIT)
+      .then((payload) => applyPayload(payload, requestId))
+      .catch((err) => applyError(err, { silent, requestId }));
+  }, [applyPayload, applyError]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const running = Boolean(state.data?.running);
+
+  // Poll while EITHER the backend reports a run in progress, OR we have just started one and are
+  // still waiting for it to become observable.
+  //
+  // `running` alone is not enough, and this is the bug that shipped: the trigger refuses outright
+  // when a run is already in progress, so `running` is false in every SUCCESSFUL trigger response.
+  // Worse, `ProcessMonitor` writes the AD_PROCESS_RUN row on the scheduler's own thread, so the
+  // triggering response frequently predates the row entirely. Keyed on `running` alone the poll
+  // never started, and the page kept promising "it will appear in the history shortly" while
+  // nothing ever arrived without a manual refresh.
+  const awaitingRun = awaitingUntil !== null && Date.now() < awaitingUntil;
+  const shouldPoll = running || awaitingRun;
+  useEffect(() => {
+    if (!shouldPoll) return undefined;
+    const id = setInterval(() => {
+      // The interval is also the awaiting deadline timer. Keeping one timer for both concerns
+      // avoids a poll interval and a second timeout racing to update the same state. Include the
+      // deadline in the effect dependencies so a trigger that starts while an existing run is
+      // already polling still refreshes the callback's deadline closure.
+      if (awaitingUntil !== null && Date.now() >= awaitingUntil) {
+        setAwaitingUntil(null);
+        return;
+      }
+      load({ silent: true });
+    }, RUNNING_POLL_MS);
+    return () => clearInterval(id);
+  }, [shouldPoll, awaitingUntil, load]);
+
+  // Stop waiting as soon as the run becomes observable — a new newest-run id, or the backend
+  // reporting PRC. After that `running` alone governs, so the poll ends when the run finishes.
+  // The deadline is the backstop for the outcomes that never produce either signal: a run that
+  // starts AND finishes between two polls, or a job the scheduler silently dropped.
+  const latestRunId = state.data?.lastRun?.id ?? null;
+  useEffect(() => { latestRunIdRef.current = latestRunId; }, [latestRunId]);
+  useEffect(() => {
+    if (awaitingUntil === null) return undefined;
+    if (running || (latestRunId !== null && latestRunId !== awaitedAfterRunId.current)) {
+      setAwaitingUntil(null);
+    }
+    return undefined;
+  }, [awaitingUntil, running, latestRunId]);
+
+  const trigger = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+    setTriggering(true);
+    setTriggerOutcome(null);
+    // Remember which run was newest BEFORE the trigger, so "a new run appeared" is a comparison
+    // rather than a guess. Captured here, not in the effect, which would race the response.
+    awaitedAfterRunId.current = latestRunIdRef.current;
+    try {
+      const payload = await triggerAcctProcessRun(HISTORY_LIMIT);
+      applyPayload(payload, requestId);
+      // Superseded by a newer request in the meantime — its outcome/awaiting state belongs to
+      // that newer request, not to this stale one.
+      if (mounted.current && requestId === requestIdRef.current) {
+        // `started: false` on a 200 is a legitimate refusal (already running, scheduler in
+        // standby, …). Surface the reason rather than implying the run began.
+        const outcome = payload?.triggered || { started: false, reason: 'scheduleFailed' };
+        setTriggerOutcome(outcome);
+        // Only a run we actually started is worth waiting for. A refusal has nothing coming.
+        setAwaitingUntil(outcome.started ? Date.now() + AWAIT_RUN_MS : null);
+      }
+    } catch (err) {
+      applyError(err, { requestId });
+      if (mounted.current && requestId === requestIdRef.current) {
+        setTriggerOutcome({ started: false, reason: 'scheduleFailed' });
+        setAwaitingUntil(null);
+      }
+    } finally {
+      if (mounted.current && requestId === requestIdRef.current) setTriggering(false);
+    }
+  }, [applyPayload, applyError]);
+
+  return {
+    ...state,
+    running,
+    // True from a successful trigger until the run becomes observable or the deadline lapses. The
+    // page uses it to keep the button disabled and the spinner up across that gap — otherwise the
+    // UI would look idle while a run it just started was still on its way.
+    awaitingRun,
+    triggering,
+    triggerOutcome,
+    trigger,
+    reload: load,
+  };
+}
