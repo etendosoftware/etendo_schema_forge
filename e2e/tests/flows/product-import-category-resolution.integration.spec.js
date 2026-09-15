@@ -146,7 +146,18 @@ test.describe('ETP-4905 — Product import category resolution (Tomcat integrati
     });
 
     await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('5/5');
-    await expect(page.getByTestId('ImportColumnMapping__chip-categoria')).toContainText('Category');
+    // ETP-5223: the chip reads `<source column>→<target caption>`, and the target caption
+    // is now resolved through `fieldLabelFn` (the AD label dictionary for the SESSION locale)
+    // instead of the English `field.label` declared in decisions.json. The locale here is
+    // deterministically es_ES — the `integration` project reuses no storageState, `login()`
+    // never seeds `schema-forge-locale`, and core's `useLocaleState` defaults to es_ES — so
+    // "Categoría" is what a live run prints for M_Product_Category_ID. The English
+    // alternative is deliberate tolerance for a session that DID switch language, not
+    // uncertainty: this assertion is about the mapping, not about the UI language. The regex
+    // is anchored on `categoria→` so it still asserts the RESOLVED TARGET half — the
+    // `categoria` source column on its own can never satisfy it.
+    await expect(page.getByTestId('ImportColumnMapping__chip-categoria'))
+      .toContainText(/categoria\s*→\s*(Categoría|Category)/);
     await captureScreenshot(page, {
       path: resolve(evidenceDir, 'ETP-4905-product-import-tomcat-multi-review.png'),
       fullPage: true,
