@@ -164,6 +164,41 @@ describe('UserAvatarButton', () => {
     expect(screen.getByText(`organization: ${longOrg}`)).toHaveAttribute('title', longOrg);
   });
 
+  // ETP-5329. The dropdown should prefer the backend-resolved composed template role names
+  // (effectiveRoleNames) over the raw auto-generated personal-role name, in both the visible
+  // text and the title tooltip — a prior regression fixed only the visible text and left the
+  // tooltip showing the stale personal-role name.
+  it('renders the joined effective role names instead of the raw personal-role name', () => {
+    authOverrides = {
+      selectedRole: { name: 'Personal – x', effectiveRoleNames: ['Finance', 'Sales'] },
+    };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText('role: Finance-Sales')).toHaveAttribute('title', 'Finance-Sales');
+    expect(screen.queryByText(/Personal – x/)).not.toBeInTheDocument();
+  });
+
+  it('falls back to the personal-role name when effectiveRoleNames is an empty array', () => {
+    authOverrides = {
+      selectedRole: { name: 'Personal Role', effectiveRoleNames: [] },
+    };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText('role: Personal Role')).toHaveAttribute('title', 'Personal Role');
+  });
+
+  it('falls back to the personal-role name when effectiveRoleNames is absent', () => {
+    authOverrides = {
+      selectedRole: { name: 'Personal Role' },
+    };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText('role: Personal Role')).toHaveAttribute('title', 'Personal Role');
+  });
+
   it('renders the expanded sidebar-footer row with username and chevron', () => {
     render(<UserAvatarButton expanded />);
 
@@ -187,6 +222,19 @@ describe('UserAvatarButton', () => {
     render(<UserAvatarButton />);
 
     expect(screen.getByText('A')).toBeInTheDocument();
+  });
+
+  // ETP-5329. The avatar-badge initial deliberately still derives from selectedRole.name, not
+  // from the joined effectiveRoleNames — it must not flip to the first composed role's initial.
+  it('keeps the role-initial badge derived from the personal-role name, not the joined effective roles', () => {
+    authOverrides = {
+      selectedRole: { name: 'Admin', effectiveRoleNames: ['Finance', 'Sales'] },
+    };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText('A')).toBeInTheDocument();
+    expect(screen.queryByText('F')).not.toBeInTheDocument();
   });
 
   it('hides the language section when locale switching is unavailable', () => {

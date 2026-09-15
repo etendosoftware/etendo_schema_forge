@@ -35,6 +35,13 @@ export function UserAvatarButton({ expanded = false }) {
 
   const initial = username?.charAt(0).toUpperCase() || '?';
   const roleInitial = selectedRole?.name?.charAt(0).toUpperCase() || '';
+  // ETP-5329: prefer the composed effective/inherited role names (backend-resolved from the
+  // personal role's AD_Role_Inheritance) over the raw auto-generated personal-role name.
+  // Falls back to selectedRole.name when effectiveRoleNames is absent/empty — a legitimate
+  // state (rolling deploy, or a personal role with zero composed templates yet), not an error.
+  const roleDisplay = selectedRole?.effectiveRoleNames?.length
+    ? selectedRole.effectiveRoleNames.join('-')
+    : selectedRole?.name;
 
   const trigger = expanded ? (
     <button
@@ -90,7 +97,7 @@ export function UserAvatarButton({ expanded = false }) {
             {(selectedRole?.name || selectedOrg?.name) && (
               <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
                 {selectedRole?.name && (
-                  <p className="truncate" title={selectedRole.name}>{ui('role')}: {selectedRole.name}</p>
+                  <p className="truncate" title={roleDisplay}>{ui('role')}: {roleDisplay}</p>
                 )}
                 {selectedOrg?.name && (
                   <p className="truncate" title={selectedOrg.name}>{ui('organization')}: {selectedOrg.name}</p>
