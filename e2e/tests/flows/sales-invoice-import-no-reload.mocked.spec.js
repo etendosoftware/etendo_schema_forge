@@ -36,6 +36,9 @@ const INVOICE_HEADER = {
   'businessPartner$_identifier': 'Test Client',
   partnerAddress: 'addr-mock-001',
   invoiceDate: '2026-05-01',
+  // ETP-5273: accountingDate is now an independent, required header field —
+  // resolveCanAddLines needs it populated too, same reason as `currency` below.
+  accountingDate: '2026-05-01',
   paymentTerms: 'pt-mock-001',
   paymentMethod: 'pm-mock-001',
   priceList: 'pl-mock-001',
@@ -367,6 +370,9 @@ const SRC_INVOICE_HEADER = {
   'businessPartner$_identifier': 'Test Client',
   partnerAddress: 'addr-mock-001',
   invoiceDate: '2026-05-01',
+  // ETP-5273: accountingDate is now an independent, required header field —
+  // resolveCanAddLines needs it populated too, same reason as `currency` below.
+  accountingDate: '2026-05-01',
   paymentTerms: 'pt-mock-001',
   paymentMethod: 'pm-mock-001',
   priceList: 'pl-mock-001',

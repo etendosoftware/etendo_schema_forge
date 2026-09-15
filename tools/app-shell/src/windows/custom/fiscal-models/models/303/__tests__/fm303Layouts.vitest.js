@@ -609,3 +609,47 @@ describe('getLayout303 — sin_actividad section', () => {
     expect(sec.fields[0].labelKey).toBe('fm.ident.sin_actividad');
   });
 });
+
+// ── identificacion — dep_aduanero/dep_foral removal (ETP-5272 pt.7) ──────────
+// Both checkboxes were non-functional (no backend field ever read them) and
+// were removed from BASE's `identificacion` fields and from
+// `_2024_IDENTIFICACION_FIELDS` (shared by the 2021/2022/2024 patches) along
+// with their i18n keys. Regression guard: neither id may resurface in any
+// year's resolved identificacion field list.
+describe('getLayout303 — identificacion no longer carries dep_aduanero/dep_foral (ETP-5272 pt.7)', () => {
+  function identificacionFieldIds(year, period = 1) {
+    const layout = getLayout303(year, period);
+    const sec = layout.sections.find(s => s.id === 'identificacion');
+    return sec.fields.map(f => f.id);
+  }
+
+  it('BASE (2026) identificacion has neither dep_aduanero nor dep_foral', () => {
+    const ids = identificacionFieldIds(2026);
+    expect(ids).not.toContain('dep_aduanero');
+    expect(ids).not.toContain('dep_foral');
+  });
+
+  it('the 2021 patch (_2024_IDENTIFICACION_FIELDS) has neither field', () => {
+    const ids = identificacionFieldIds(2021);
+    expect(ids).not.toContain('dep_aduanero');
+    expect(ids).not.toContain('dep_foral');
+  });
+
+  it('the 2022 patch (_2024_IDENTIFICACION_FIELDS) has neither field', () => {
+    const ids = identificacionFieldIds(2022);
+    expect(ids).not.toContain('dep_aduanero');
+    expect(ids).not.toContain('dep_foral');
+  });
+
+  it('the 2024 patch (_2024_IDENTIFICACION_FIELDS) has neither field', () => {
+    const ids = identificacionFieldIds(2024);
+    expect(ids).not.toContain('dep_aduanero');
+    expect(ids).not.toContain('dep_foral');
+  });
+
+  it('nif and nombre remain present (removal did not collaterally drop sibling read-only fields)', () => {
+    const ids = identificacionFieldIds(2026);
+    expect(ids).toContain('nif');
+    expect(ids).toContain('nombre');
+  });
+});

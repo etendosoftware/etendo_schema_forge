@@ -60,6 +60,7 @@ vi.mock('../useFiscalConfig.js', () => ({
 
 vi.mock('../../fiscal-monitor/useDebugMode.js', () => ({ useDebugMode: () => false }));
 vi.mock('../useCertExpiry.js', () => ({ useCertExpiry: () => ({ daysLeft: null }) }));
+vi.mock('../useFiscalTestMode.js', () => ({ useFiscalTestMode: () => ({ forceTestMode: false }) }));
 vi.mock('../fiscalConfig.utils.js', async (importActual) => ({
   ...(await importActual()),
   detectProfile: vi.fn(() => 'sii+tbai'),
@@ -108,6 +109,7 @@ vi.mock('lucide-react', () => ({
   RefreshCw: () => <svg data-testid="icon-refresh" />,
   PlusCircle: () => <svg data-testid="icon-plus-circle" />,
   MoreVertical: () => <svg data-testid="icon-more-vertical" />,
+  AlertTriangle: () => <svg data-testid="icon-alert-triangle" />,
 }));
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }) => <div>{children}</div>,

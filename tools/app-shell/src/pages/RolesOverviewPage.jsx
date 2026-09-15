@@ -1,32 +1,12 @@
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ShieldAlert } from 'lucide-react';
 import { useUI, useMenuLabel } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
+import StatusCard from '@/components/StatusCard.jsx';
 import { useRolesOverviewData, ROLE_ICONS, resolveRoleKind } from './roles/useRolesOverviewData.js';
 import RoleSummaryCard from './roles/RoleSummaryCard.jsx';
 import RolesAccessMatrix from './roles/RolesAccessMatrix.jsx';
-
-/**
- * Shared centered "status" card wrapper for the error and no-access states below — both were
- * a near-identical `<Card><CardContent className="flex flex-col items-center justify-center
- * ... text-center">...</CardContent></Card>` shell that only differed in gap/padding and inner
- * content, which is exactly the kind of same-file duplication SonarQube's CPD flags. Callers
- * keep full control of their inner markup (icon, title, message, actions) and their own
- * `data-testid` on the outer `Card` — this only owns the repeated wrapper classes.
- */
-function StatusCard({ testId, className, children }) {
-  return (
-    <Card data-testid={testId}>
-      <CardContent
-        className={`flex flex-col items-center justify-center text-center ${className}`}
-        data-testid="CardContent__67e3bc">
-        {children}
-      </CardContent>
-    </Card>
-  );
-}
 
 /**
  * "Configuración > Roles" overview page (ETP-4513, redesigned by ETP-4907 to match

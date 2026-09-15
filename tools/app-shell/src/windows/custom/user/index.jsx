@@ -142,7 +142,10 @@ function useResendInvitationExtraActions() {
         toast.success(ui('resendInvitationSuccessToast'));
         onRefresh?.();
       } catch (err) {
-        toast.error(err?.message || ui('resendInvitationErrorFallback'));
+        // ETP-5206 — never surface raw/English backend text to the user; always the
+        // cataloged Spanish/English fallback (see `promoteToAdminErrorFallback` below for
+        // the same fix).
+        toast.error(ui('resendInvitationErrorFallback'));
       } finally {
         setSending(false);
       }
@@ -266,7 +269,8 @@ function useAdminPromotionExtraActions(adminRoleId, viewerRole) {
         onRefresh?.();
         if (isSelf) refreshToken?.();
       } catch (err) {
-        toast.error(err?.message || ui('promoteToAdminErrorFallback'));
+        // ETP-5206 — never surface raw/English backend text to the user.
+        toast.error(ui('promoteToAdminErrorFallback'));
       } finally {
         setWorking(false);
       }
@@ -280,13 +284,18 @@ function useAdminPromotionExtraActions(adminRoleId, viewerRole) {
         onRefresh?.();
         if (isSelf) refreshToken?.();
       } catch (err) {
-        toast.error(err?.message || ui('demoteFromAdminErrorFallback'));
+        // ETP-5206 — never surface raw/English backend text to the user.
+        toast.error(ui('demoteFromAdminErrorFallback'));
       } finally {
         setWorking(false);
       }
     };
 
     if (isAdmin) {
+      // ETP-5206 — nobody may remove their OWN Admin role (the backend rejects it
+      // unconditionally in `demoteFromAdmin`); hide the action for the viewer's own record,
+      // same pattern as the `data?.isOwner` early return above.
+      if (isSelf) return [];
       return [{
         key: 'demote-from-admin',
         disabled: working,
@@ -454,7 +463,8 @@ export default function UserWindow(props) {
       // user record itself DID save and only the role assignment failed, and the toast is
       // given a longer duration so it doesn't get lost/dismissed behind the success toast
       // that already fired first.
-      const detail = err?.message || ui('roleAssignmentSaveFailed');
+      // ETP-5206 — never surface raw/English backend text to the user.
+      const detail = ui('roleAssignmentSaveFailed');
       toast.error(ui('roleAssignmentSaveFailedAfterUserSaved', { detail }), { duration: 8000 });
     }
   }, [selectedRoleIds, ui]);
