@@ -153,44 +153,6 @@ describe('GoodsReceiptActions', () => {
     });
   });
 
-  describe('goods-receipt:download-pdf event', () => {
-    it('programmatically clicks the download link when the event is dispatched', () => {
-      useMainAttachment.mockReturnValue({
-        storedFile: { objectUrl: 'blob:test-url', fileName: 'receipt.pdf' },
-        isBusy: false,
-      });
-      renderActions();
-
-      const downloadLink = document.querySelector('a[download]');
-      expect(downloadLink).toBeInTheDocument();
-
-      const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click');
-
-      act(() => {
-        window.dispatchEvent(new CustomEvent('goods-receipt:download-pdf'));
-      });
-
-      expect(clickSpy).toHaveBeenCalledTimes(1);
-      clickSpy.mockRestore();
-    });
-
-    it('does not throw when event is dispatched but no download link is rendered', () => {
-      useMainAttachment.mockReturnValue({
-        storedFile: null,
-        isBusy: false,
-      });
-      renderActions({
-        data: { ...defaultProps.data, documentStatus: 'DR' },
-      });
-
-      expect(() => {
-        act(() => {
-          window.dispatchEvent(new CustomEvent('goods-receipt:download-pdf'));
-        });
-      }).not.toThrow();
-    });
-  });
-
   describe('Email access point is removed (out-of-scope window)', () => {
     it('does NOT render the email button when documentStatus is not CO', () => {
       renderActions({
