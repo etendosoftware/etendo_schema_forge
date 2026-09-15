@@ -14,7 +14,7 @@
 // `<MemoryRouter>` from the outside has no effect on which route renders — `BrowserRouter`
 // reads `window.location` directly. To exercise a given path we push it onto
 // `window.history` before rendering, same as a real browser navigation would.
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import { AppShellRuntime } from '@etendosoftware/app-shell-core/runtime';
 import { buildRuntimeRoutes } from '../runtime-routes.jsx';
@@ -39,6 +39,22 @@ vi.mock('../windows/WindowLoader.jsx', () => ({
 vi.mock('../components/CopilotContext.jsx', () => ({
   useCopilot: () => ({ open: () => {} }),
 }));
+
+// ETP-5195 — a provider seeded with a token starts `isSessionReady: false` and POSTs
+// /sws/neo/refreshtoken once on mount; until that settles the shell renders its pending
+// fallback, which is an EMPTY body. This file deliberately ran without a fetch mock, so every
+// route assertion below started failing on a blank document rather than on its own subject.
+// `{ unchanged: true }` is the backend's own no-op answer (SFRefreshToken stopped minting a JWT
+// when the role has not changed), inside the `{ result: "<json>" }` envelope the NEO webhook
+// bridge wraps every response in.
+beforeEach(() => {
+  globalThis.fetch = vi.fn(async () => ({
+    ok: true,
+    status: 200,
+    headers: { get: () => 'application/json' },
+    json: async () => ({ result: JSON.stringify({ unchanged: true }) }),
+  }));
+});
 
 afterEach(() => {
   cleanup();
@@ -78,14 +94,16 @@ function renderAt(path, {
 }
 
 describe('buildRuntimeRoutes through the real AppShellRuntime', () => {
-  it('routes a window path through WindowLoader with the given windowMap', () => {
+  // Awaited, not synchronous: ETP-5195 holds the shell on its pending fallback until the
+  // seeded session has been revalidated, so the route's own element only exists a tick later.
+  it('routes a window path through WindowLoader with the given windowMap', async () => {
     renderAt('/sales-order');
-    expect(screen.getByTestId('window-loader')).toHaveTextContent('sales-order:http://x/api');
+    expect(await screen.findByTestId('window-loader')).toHaveTextContent('sales-order:http://x/api');
   });
 
-  it('routes a window record path through WindowLoader too', () => {
+  it('routes a window record path through WindowLoader too', async () => {
     renderAt('/sales-order/123');
-    expect(screen.getByTestId('window-loader')).toBeInTheDocument();
+    expect(await screen.findByTestId('window-loader')).toBeInTheDocument();
   });
 
   it('renders a business landing page for a known path', async () => {

@@ -26,6 +26,16 @@ vi.mock('@etendosoftware/etendo-go-core/onboarding/api', () => ({
   loginEnvironment: (...args) => loginEnvironment(...args),
 }));
 
+// ETP-4576 — the hook reads the session from the auth context, not from `sf_auth_token` in
+// localStorage as it did when these cases were written. `csrfToken` is what it forwards to
+// `loginEnvironment` as the third argument, which is why the assertions below still name
+// 'platform-jwt' there: the slot survived, its meaning changed from credential to proof.
+const SESSION = { isAuthenticated: true, csrfToken: 'platform-jwt', clientId: 'CLIENT-HOME' };
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => SESSION,
+  useAuthOptional: () => SESSION,
+}));
+
 import { useEnvironmentSwitch } from '../useEnvironmentSwitch.js';
 
 const ACME = {
@@ -60,7 +70,6 @@ describe('useEnvironmentSwitch', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     globalThis.localStorage.clear();
-    globalThis.localStorage.setItem('sf_platform_token', 'platform-jwt');
     // `switchTo` navigates by assigning `location.href`; jsdom refuses a real navigation, and
     // `getApiBase()` reads `pathname`, so both live on the stub.
     fakeLocation = { pathname: '/', href: '' };
@@ -75,7 +84,7 @@ describe('useEnvironmentSwitch', () => {
     // 10 — the roleless response. Answering 200 is what makes this dangerous: nothing upstream
     // treats it as a failure, so the refusal has to happen here, BEFORE anything is written.
     it('refuses to enter when roleList is explicitly empty', async () => {
-      loginEnvironment.mockResolvedValue({ token: 'tenant-jwt', roleList: [] });
+      loginEnvironment.mockResolvedValue({ status: 'success', roleList: [] });
       const { result } = renderDisabled();
 
       let entered;
@@ -93,7 +102,7 @@ describe('useEnvironmentSwitch', () => {
     // 11 — the ordinary case still works; the guard must not cost the happy path.
     it('writes the session and navigates when a role is present', async () => {
       loginEnvironment.mockResolvedValue({
-        token: 'tenant-jwt',
+        status: 'success',
         roleList: [{ id: 'ROLE-1', name: 'Admin', organizationList: [] }],
       });
       const { result } = renderDisabled();
@@ -104,17 +113,19 @@ describe('useEnvironmentSwitch', () => {
       });
 
       expect(entered).toBe(true);
-      expect(globalThis.localStorage.getItem('sf_auth_token')).toBe('tenant-jwt');
-      expect(globalThis.localStorage.getItem('sf_auth_client_id')).toBe('CLIENT-ACME');
-      expect(globalThis.localStorage.getItem('sf_auth_client_name')).toBe('Acme Corp');
-      expect(globalThis.localStorage.getItem('sf_auth_selected_role')).toContain('ROLE-1');
+      // ETP-4576 — entering no longer writes a session tuple: POST /sws/go/session/environment
+      // rotates the `__Host-` cookie and returns no token to store. What is left on the client
+      // is the preference for which tenant to return to, and it must stay OUT of the session
+      // keys so a logout does not forget it.
+      expect(globalThis.localStorage.getItem('sf_last_environment')).toBe('CLIENT-ACME');
+      expect(writtenAuthKeys()).toEqual([]);
       expect(fakeLocation.href).toBe('/');
     });
 
     // 12 — backwards compatibility, pinned on purpose: an ABSENT roleList is not the backend
     // saying "no roles", and a deployment that never sends the field must keep working.
     it('still enters when roleList is absent', async () => {
-      loginEnvironment.mockResolvedValue({ token: 'tenant-jwt' });
+      loginEnvironment.mockResolvedValue({ status: 'success' });
       const { result } = renderDisabled();
 
       let entered;
@@ -123,12 +134,15 @@ describe('useEnvironmentSwitch', () => {
       });
 
       expect(entered).toBe(true);
-      expect(globalThis.localStorage.getItem('sf_auth_token')).toBe('tenant-jwt');
-      expect(globalThis.localStorage.getItem('sf_auth_rolelist')).toBeNull();
+      expect(globalThis.localStorage.getItem('sf_last_environment')).toBe('CLIENT-ACME');
+      expect(writtenAuthKeys()).toEqual([]);
       expect(fakeLocation.href).toBe('/');
     });
 
-    it('returns false without navigating when the login yields no token', async () => {
+    // Was "yields no token": there is no token in the response any more, so what marks a
+    // refused entry is the absence of `status: 'success'`. The property is unchanged — a
+    // backend that did not actually switch must not navigate or leave anything behind.
+    it('returns false without navigating when the login does not report success', async () => {
       loginEnvironment.mockResolvedValue({ roleList: [{ id: 'ROLE-1' }] });
       const { result } = renderDisabled();
 
@@ -165,7 +179,7 @@ describe('useEnvironmentSwitch', () => {
     it('enters the matching company, matching by name case-insensitively', async () => {
       fetchEnvironments.mockResolvedValue([ACME]);
       loginEnvironment.mockResolvedValue({
-        token: 'tenant-jwt',
+        status: 'success',
         roleList: [{ id: 'ROLE-1', name: 'Admin', organizationList: [] }],
       });
       const { result } = renderDisabled();
@@ -182,7 +196,7 @@ describe('useEnvironmentSwitch', () => {
         'platform-jwt',
         expect.objectContaining({ clientId: 'CLIENT-ACME' })
       );
-      expect(globalThis.localStorage.getItem('sf_auth_client_name')).toBe('Acme Corp');
+      expect(globalThis.localStorage.getItem('sf_last_environment')).toBe('CLIENT-ACME');
     });
 
     // The list is re-fetched rather than reused: the tenant the user just joined cannot be in
@@ -205,7 +219,7 @@ describe('useEnvironmentSwitch', () => {
     // only a direct `switchTo`.
     it('propagates the roleless refusal', async () => {
       fetchEnvironments.mockResolvedValue([ACME]);
-      loginEnvironment.mockResolvedValue({ token: 'tenant-jwt', roleList: [] });
+      loginEnvironment.mockResolvedValue({ status: 'success', roleList: [] });
       const { result } = renderDisabled();
 
       let entered;

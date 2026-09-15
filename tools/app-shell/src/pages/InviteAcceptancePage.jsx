@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AuthShell, LoginStep, RegisterStep } from '@etendosoftware/etendo-go-core/onboarding';
+import { useAuthOptional } from '@/auth/AuthContext.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useLogout } from '@/auth/useLogout.js';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
@@ -88,6 +89,12 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   // `enterByClientName`, which re-fetches the list itself (the newly joined tenant cannot be in
   // a list loaded before the invitation was accepted).
   const { enterByClientName } = useEnvironmentSwitch({ enabled: false });
+  // ETP-4576 — the shell's auth context is the only thing on the client that can answer
+  // "is anybody signed in" under the cookie scheme: the `__Host-` cookie is httpOnly, so the
+  // page cannot read it, and the context has already resolved the restore by the time this
+  // route renders. `status` is deliberately read optionally — the page is inside the provider
+  // in the app (runtime-routes.jsx), but it must not throw in a tree that has none.
+  const authStatus = useAuthOptional()?.status ?? null;
   const [entering, setEntering] = useState(false);
   const [enterError, setEnterError] = useState(false);
 
@@ -183,34 +190,65 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     // this line the guard stays CLEAR for the whole duration of the fetch, LoginStep/RegisterStep
     // render underneath it, and the invitee can start typing credentials in a tab where the other
     // person's session is still live — the precise thing this guard exists to prevent.
+    // ETP-4576 — when the context has already settled on "nobody is signed in", that IS the
+    // answer. Asking /sws/neo/session again costs a round trip and, worse, renders the checking
+    // screen in front of a fresh-browser invitee who has nothing to conflict with: develop could
+    // skip it because "no sf_auth_token in localStorage" was knowable synchronously, and the
+    // cookie migration took that shortcut away. The context gives it back. With no context above
+    // us the question is genuinely open, so the request still goes out.
+    if (authStatus === 'anonymous') {
+      setSessionGuard(SESSION_GUARD.CLEAR);
+      return undefined;
+    }
+
     setSessionGuard(SESSION_GUARD.CHECKING);
 
     let isMounted = true;
 
-    const readAccountEmail = async () => {
+    /**
+     * Three answers, not two — which is what "fail SAFE, not open" above needs.
+     *
+     * develop could separate "nobody is signed in" from "somebody is, but I cannot say who"
+     * because a token sat in localStorage: its presence proved the session existed even when
+     * the identity call failed. The cookie migration took that away, and collapsing everything
+     * unreadable into `null` quietly turned the guard fail-OPEN — a 500 from the identity
+     * endpoint waved the invitee straight onto the acceptance surface with somebody else's
+     * session still live, the one outcome ETP-5202 exists to prevent.
+     *
+     * The status line restores the distinction. A 401 is the server positively saying nobody is
+     * authenticated. Any other non-ok answer came from a server that did NOT deny us, so a
+     * session may well be open and unidentifiable. A thrown request is deliberately treated as
+     * "no session": nothing answered at all, and blocking a fresh-browser invitee on a flaky
+     * network is the worse of the two failures.
+     */
+    const readAccountIdentity = async () => {
       try {
         // No `token` override: apiFetch sends the active credential itself — the __Host-
-        // cookie under the cookie scheme, the bearer under the legacy one. A 401 means
-        // nobody is signed in, which `on401: 'ignore'` turns into a plain non-ok answer
-        // instead of logging the visitor out mid-invitation.
+        // cookie under the cookie scheme, the bearer under the legacy one. `on401: 'ignore'`
+        // keeps the 401 a plain answer instead of logging the visitor out mid-invitation.
         const res = await apiFetch('/sws/neo/session', { on401: 'ignore' });
-        if (!res.ok) return null;
+        if (res.status === 401) return { signedIn: false, email: null };
+        if (!res.ok) return { signedIn: true, email: null };
         const data = await res.json().catch(() => null);
-        return data?.accountEmail || null;
+        return { signedIn: true, email: data?.accountEmail || null };
       } catch {
-        return null;
+        return { signedIn: false, email: null };
       }
     };
 
     (async () => {
-      const email = await readAccountEmail();
+      const { signedIn, email } = await readAccountIdentity();
       if (!isMounted) return;
 
-      // No resolvable identity means no open session: nothing to warn about. Under the
-      // cookie scheme this is the ONLY signal available, and it is the honest one — the
-      // request either authenticates or it does not.
-      if (!email) {
+      // Nobody signed in: nothing to warn about.
+      if (!signedIn) {
         setSessionGuard(SESSION_GUARD.CLEAR);
+        return;
+      }
+      // Signed in, but unidentifiable — prompt with the copy that does not claim to know who.
+      if (!email) {
+        setActiveAccountEmail(null);
+        setSessionGuard(SESSION_GUARD.CONFLICT);
         return;
       }
 
@@ -240,7 +278,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     return () => {
       isMounted = false;
     };
-  }, [invitationData, apiFetch]);
+  }, [invitationData, apiFetch, authStatus]);
 
   // ETP-5202 — signing the previous user out happens BEFORE the invitee is asked for any
   // credential, never after accepting: a logout at the end would still pass through the state

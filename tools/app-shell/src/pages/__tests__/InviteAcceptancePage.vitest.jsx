@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { AuthProvider, createMemoryAuthStorage } from '@etendosoftware/app-shell-core/auth';
 import InviteAcceptancePage from '../InviteAcceptancePage.jsx';
 
 /**
@@ -48,13 +49,27 @@ describe('InviteAcceptancePage', () => {
     globalThis.localStorage.clear();
   });
 
+  /**
+   * Wrapped in a signed-out AuthProvider, which is the arrangement the app itself has: this
+   * route lives inside AppShellRuntime (runtime-routes.jsx), and every case in this file models
+   * a visitor arriving with no session.
+   *
+   * It also has to be here rather than left implicit. ETP-5202's session guard asks
+   * /sws/neo/session who is signed in, and ETP-4576 made it ask unconditionally — there is no
+   * localStorage token left to rule the question out. The mocks below are an ORDERED
+   * `mockResolvedValueOnce` queue, so that extra request silently consumed the response meant
+   * for the next step and every assertion after it slid one place. A settled 'anonymous' lets
+   * the guard answer without a request, which is both the real behaviour and a stable queue.
+   */
   function renderPage(initialEntry = '/invite?token=valid-token-123') {
     return render(
-      <MemoryRouter initialEntries={[initialEntry]}>
-        <Routes>
-          <Route path="/invite" element={<InviteAcceptancePage />} />
-        </Routes>
-      </MemoryRouter>
+      <AuthProvider restoreSession={null} storage={createMemoryAuthStorage()}>
+        <MemoryRouter initialEntries={[initialEntry]}>
+          <Routes>
+            <Route path="/invite" element={<InviteAcceptancePage />} />
+          </Routes>
+        </MemoryRouter>
+      </AuthProvider>
     );
   }
 

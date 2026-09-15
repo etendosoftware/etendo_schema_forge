@@ -25,6 +25,8 @@ function setPathname(pathname) {
   });
 }
 
+import { appFetchCalls } from '@/test/appFetchCalls.js';
+
 describe('useStatementPreview', () => {
   beforeEach(() => {
     setPathname('/etendo/web/app');
@@ -59,8 +61,8 @@ describe('useStatementPreview', () => {
       });
     });
 
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-    const [url, init] = globalThis.fetch.mock.calls[0];
+    expect(appFetchCalls()).toHaveLength(1);
+    const [url, init] = appFetchCalls()[0];
     expect(url).toBe('/etendo/sws/neo/bank-statements?action=preview');
     expect(init.method).toBe('POST');
     expect(init.headers.Authorization).toBe('Bearer test-token');

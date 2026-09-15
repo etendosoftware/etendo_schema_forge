@@ -46,6 +46,8 @@ function renderSel(cache, selectorContext) {
   );
 }
 
+import { appFetchCalls } from '@/test/appFetchCalls.js';
+
 describe('SelectorInput — option caching (ETP-4564)', () => {
   afterEach(() => { vi.restoreAllMocks(); });
 
@@ -55,12 +57,12 @@ describe('SelectorInput — option caching (ETP-4564)', () => {
     const cache = createQueryCache();
 
     const a = renderSel(cache, { AD_Org_ID: 'o1' });
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(appFetchCalls(fetchMock)).toHaveLength(1));
     a.unmount();
 
     renderSel(cache, { AD_Org_ID: 'o1' }); // identical context → reuse
     await act(async () => {});
-    expect(fetchMock).toHaveBeenCalledTimes(1); // no second request
+    expect(appFetchCalls(fetchMock)).toHaveLength(1); // no second request
   });
 
   it('a changed selector dependency uses a distinct key and fetches new options', async () => {
@@ -69,10 +71,10 @@ describe('SelectorInput — option caching (ETP-4564)', () => {
     const cache = createQueryCache();
 
     const a = renderSel(cache, { AD_Org_ID: 'o1', FIN_ISRECEIPT: 'Y' });
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(appFetchCalls(fetchMock)).toHaveLength(1));
     a.unmount();
 
     renderSel(cache, { AD_Org_ID: 'o1', FIN_ISRECEIPT: 'N' }); // different dependency
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2)); // distinct key → new fetch
+    await waitFor(() => expect(appFetchCalls(fetchMock)).toHaveLength(2)); // distinct key → new fetch
   });
 });
