@@ -193,9 +193,24 @@ function flexSpec(col, idx) {
 // vs 224px) render as EQUAL width in the table, even though the real flex
 // rows always keep them a fixed 32px apart. This calc() expression restores
 // that per-column basis so both layouts match pixel-for-pixel.
-function growColumnWidth(basisPx, fixedTotalPx, growCount) {
+//
+// ETP-5268 follow-up — wrapped in `max(basisPx, calc(...))`. Once every
+// column (not just the hideHeader add-row's) floors at a real minimum, the
+// sum of those minimums can legitimately exceed the viewport — that's the
+// whole point, it's what makes the table overflow and scroll instead of
+// squeezing unreadably thin. But the bare calc() assumes non-negative
+// leftover space: the moment `fixedTotalPx` alone exceeds the container,
+// `(100% - fixedTotalPx)` goes negative and CSS clamps a negative `width` to
+// 0 — live-verified, every grow column vanished to 0px (not "as narrow as
+// the basis", literally gone) the instant the table needed to overflow,
+// which is exactly the narrow-viewport case this whole mechanism exists to
+// handle. `max()` keeps the basis as a hard floor in that case and only
+// switches to the calc() term once there's genuine leftover space to grow
+// into — matching flexbox's own basis-is-a-minimum semantics, which this
+// function's own docstring already promises but the bare calc() didn't keep.
+export function growColumnWidth(basisPx, fixedTotalPx, growCount) {
   if (!growCount) return undefined;
-  return `calc((100% - ${fixedTotalPx}px) / ${growCount} + ${basisPx}px)`;
+  return `max(${basisPx}px, calc((100% - ${fixedTotalPx}px) / ${growCount} + ${basisPx}px))`;
 }
 import { SelectorInput } from './SelectorInput.jsx';
 import { InlineSearchCombo } from './InlineSearchCombo.jsx';
@@ -1577,6 +1592,13 @@ function getRowClassName({
 function computeActionColsWidthPx({
   selectable, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
   onCloneRow, quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel,
+  // ETP-5268 follow-up — the quick-actions slot is no longer always 40px (see
+  // quickActionsReservedWidthPx): when it isn't allowed to float over the last
+  // column, it reserves exactly this window's own button count. Defaults to 40
+  // (the floating/pinned-icon width) so callers that never pass it — none left
+  // today, but keeps this function's own contract honest — still get the old
+  // literal-pixel answer instead of NaN.
+  quickActionsColWidthPx = 40,
 }) {
   const showHoverActions = !ilpTrailing && hoverRowActions;
   const showHoverDelete = showHoverActions && onDeleteRow;
@@ -1595,7 +1617,7 @@ function computeActionColsWidthPx({
     + oneIfTrue(showHoverDelete) * 40
     + oneIfTrue(showLegacyDelete) * 40
     + oneIfTrue(showLegacyClone) * 40
-    + oneIfTrue(showQuickActions) * 40
+    + oneIfTrue(showQuickActions) * quickActionsColWidthPx
     + oneIfTrue(ilpReservesActionSlot) * ACTION_SLOT_WIDTH_PX
     + oneIfTrue(ilpTrailing) * 48;
 }
@@ -1606,9 +1628,15 @@ function computeActionColsWidthPx({
  * pixel widths for flex-grow:0 columns and calc()-based widths (via
  * growColumnWidth) for flex-grow:1 columns — see growColumnWidth() above for
  * why grow columns can't be left width-less. Returns null when the table
- * renders its own header instead (table-layout: fixed then drives widths via
- * the real <TableHead> cells). Extracted from DataTable's render body so this
- * mode's branching doesn't add nesting to the parent's complexity.
+ * renders its own header instead (renderColumnHeaderCell drives widths via
+ * the real <TableHead> cells there — see its own comment for why that path
+ * deliberately never uses a percentage/`calc()` width the way this one
+ * does: those only resolve reliably when the table is fed by a colgroup
+ * whose own container isn't itself waiting on the very widths being
+ * computed — true here, NOT true of the header path, which must also work
+ * when the table needs to grow past its container). Extracted from
+ * DataTable's render body so this mode's branching doesn't add nesting to
+ * the parent's complexity.
  *
  * ETP-4735 — when the entity has a dimensionsPanel column, InlineLinesPanel's rows
  * reserve a leading CHEVRON_COLUMN_WIDTH slot (expand-chevron) before the checkbox.
@@ -1619,6 +1647,12 @@ export function renderLinesColgroup({
   hideHeader, selectable, visibleColumns, colFlexSpecs, fixedColsTotalPx, growCount,
   ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow,
   quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel,
+  // ETP-5268 follow-up — see computeActionColsWidthPx's own doc: the
+  // quick-actions slot isn't always 40px once reserved-width mode sizes it to
+  // this window's own button count. Defaults to 40 so every existing hideHeader
+  // caller (none of which mount RowQuickActions in their companion table today)
+  // keeps its old literal-pixel answer unchanged.
+  quickActionsColWidthPx = 40,
 }) {
   if (!hideHeader) return null;
   return (
@@ -1626,6 +1660,7 @@ export function renderLinesColgroup({
       {hasDimensionsPanel && <col style={{ width: CHEVRON_COLUMN_WIDTH }} />}
       {selectable && <col style={{ width: 40 }} />}
       {visibleColumns.map((col, colIdx) => {
+        if (col.headClass) return <col key={col.key} />;
         const { grow, basis } = colFlexSpecs[colIdx];
         return grow === 0
           ? <col key={col.key} style={{ width: basis }} />
@@ -1638,7 +1673,7 @@ export function renderLinesColgroup({
       {!ilpTrailing && hoverRowActions && onDeleteRow && <col style={{ width: 40 }} />}
       {!ilpTrailing && !hoverRowActions && legacyDeleteEnabled && <col style={{ width: 40 }} />}
       {!ilpTrailing && !hoverRowActions && onCloneRow && !quickActionsEnabled && <col style={{ width: 40 }} />}
-      {!ilpTrailing && quickActionsEnabled && <col style={{ width: 40 }} />}
+      {!ilpTrailing && quickActionsEnabled && <col style={{ width: quickActionsColWidthPx }} />}
       {ilpReservesActionSlot && <col style={{ width: ACTION_SLOT_WIDTH_PX }} />}
       {ilpTrailing && <col style={{ width: 48 }} />}
     </colgroup>
@@ -1753,18 +1788,31 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
   // just avoids recomputing `NUMERIC_FIELD_TYPES.has(col.type)` at every call
   // site and keeps the ternaries that use it readable.
   const isNumeric = NUMERIC_FIELD_TYPES.has(col.type);
-  // ETP-5281 — apply the same minWidth baseline in EVERY layout, not just
-  // inlineEditable. Normal list mode has no <colgroup> (renderLinesColgroup
-  // only renders when hideHeader is true), so without this the header had no
-  // width floor at all and columns could collapse below their content,
-  // causing header/body text to overlap on narrow viewports.
+  // ETP-5281, follow-up ETP-5268 — a real `width` (not `minWidth`, which
+  // `table-layout: fixed` ignores entirely — verified live: every column
+  // rendered at an identical equal share of the container regardless of its
+  // minWidth, silently truncating labels like "Nº documento" the moment the
+  // viewport got tight). Deliberately a plain pixel value, never a
+  // percentage/`calc()`: also verified live, a `calc(100% - Npx)` width set
+  // on a <th> (or even on a <col> in this table's own <colgroup>) resolves
+  // to a flat 0px the moment the column's minimums genuinely need the table
+  // to grow past its container — the container's own width is `width: 100%`
+  // of ITS parent, so once the table's used width depends on the very
+  // column widths being resolved from a percentage OF that width, the
+  // browser hits a circular reference and gives up at 0 instead of erring
+  // toward the specified minimum. A plain px value has no such dependency,
+  // so it floors reliably in every case, including the one this whole fix
+  // exists for. The cost: on a wide viewport, columns no longer stretch to
+  // fill leftover space and just leave it blank after the last one — an
+  // acceptable, honest trade-off next to silently losing the last column's
+  // data or every column's width collapsing to 0.
   // Skipped when `col.headClass` is set: that opt-in chrome already pins the
   // column's own width (e.g. financial-account's Figma-pinned Cuentas grid,
   // artifacts/financial-account/custom/AccountsHeaderTable.jsx, which narrows
   // `currency`/`country` below this type's generic floor) — CSS always renders
   // at least `min-width` regardless of a smaller `width`, so a competing
   // default here would silently widen a deliberately narrower pinned column.
-  const headStyle = col.headClass ? undefined : { minWidth: columnMinWidthPx(col, colIdx) };
+  const headStyle = col.headClass ? undefined : { width: columnMinWidthPx(col, colIdx) };
   // `multiField` columns expose N constituent fields as independently
   // sortable header segments (e.g. "Identifier & Name"); each part cycles the
   // sort on its own NEO field key. Non-multiField columns keep the single-label
@@ -2601,9 +2649,17 @@ export function DataTable({
   const colFlexSpecs = hideHeader ? visibleColumns.map((col, colIdx) => flexSpec(col, colIdx)) : [];
   const growCount = colFlexSpecs.filter((s) => s.grow > 0).length;
   const fixedColsBasisPx = colFlexSpecs.filter((s) => s.grow === 0).reduce((sum, s) => sum + s.basis, 0);
+  // ETP-5268 follow-up — the quick-actions slot isn't always 40px (see
+  // quickActionsReservedWidthPx): reserved-width mode sizes it to this
+  // window's own button count. Feeding the real value into the grow-column
+  // denominator keeps growing columns from claiming space the actions column
+  // actually needs, which would understate the table's true content width
+  // and mask genuine overflow that should scroll instead of squeeze.
+  const quickActionsColWidthPx = overlapLastColumn ? 40 : quickActionsReservedWidthPx(rowQuickActions);
   const fixedColsTotalPx = fixedColsBasisPx + computeActionColsWidthPx({
     selectable, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
     onCloneRow, quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel,
+    quickActionsColWidthPx,
   });
 
   return (
@@ -2630,6 +2686,7 @@ export function DataTable({
             hideHeader, selectable, visibleColumns, colFlexSpecs, fixedColsTotalPx, growCount,
             ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow,
             quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel,
+            quickActionsColWidthPx,
           })}
           <TableHeader
             className={linesLayout === 'inlineEditable' ? 'sticky top-0 z-20 bg-card' : ''}
