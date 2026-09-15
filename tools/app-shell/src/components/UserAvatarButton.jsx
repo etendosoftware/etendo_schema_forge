@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu.jsx';
 import { useLogout } from '@/auth/useLogout.js';
+import { resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
 
 const LOCALES = [
   { code: 'en_US', flag: '🇺🇸', label: 'English' },
@@ -39,8 +40,12 @@ export function UserAvatarButton({ expanded = false }) {
   // personal role's AD_Role_Inheritance) over the raw auto-generated personal-role name.
   // Falls back to selectedRole.name when effectiveRoleNames is absent/empty — a legitimate
   // state (rolling deploy, or a personal role with zero composed templates yet), not an error.
+  // Each composed name is translated via the shared roleNameI18n map (same mechanism as the
+  // "Roles" chips elsewhere: RoleChipsCell, UserRolesTab, RoleSummaryCard, etc.) so e.g. "Sales"
+  // renders as "Ventas" in es_ES instead of leaking the raw AD_Role.name. The fallback raw
+  // selectedRole.name is left untranslated, matching its pre-existing behavior.
   const roleDisplay = selectedRole?.effectiveRoleNames?.length
-    ? selectedRole.effectiveRoleNames.join('-')
+    ? selectedRole.effectiveRoleNames.map((name) => resolveRoleDisplayName(ui, name)).join('-')
     : selectedRole?.name;
 
   const trigger = expanded ? (
@@ -97,7 +102,7 @@ export function UserAvatarButton({ expanded = false }) {
             {(selectedRole?.name || selectedOrg?.name) && (
               <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
                 {selectedRole?.name && (
-                  <p className="truncate" title={roleDisplay}>{ui('role')}: {roleDisplay}</p>
+                  <p className="break-words" title={roleDisplay}>{ui('role')}: {roleDisplay}</p>
                 )}
                 {selectedOrg?.name && (
                   <p className="truncate" title={selectedOrg.name}>{ui('organization')}: {selectedOrg.name}</p>
