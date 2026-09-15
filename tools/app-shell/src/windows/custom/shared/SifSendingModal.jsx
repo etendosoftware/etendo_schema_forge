@@ -22,6 +22,8 @@ export default function SifSendingModal({
   recordId,
   onClose,
   onAfterSend,
+  onSave,
+  isDirty = false,
   zIndex = 50,
   titleId = 'send-to-sif-title',
 }) {
@@ -35,6 +37,7 @@ export default function SifSendingModal({
   const [phase, setPhase] = useState('confirm');
   const [results, setResults] = useState({});
   const [progress, setProgress] = useState(0);
+  const [saveFailed, setSaveFailed] = useState(false);
   const mountedRef = useRef(true);
   useEffect(() => () => { mountedRef.current = false; }, []);
 
@@ -52,10 +55,36 @@ export default function SifSendingModal({
     setPhase('confirm');
     setResults({});
     setProgress(0);
+    setSaveFailed(false);
   }
 
   async function handleSend() {
     setPhase('sending');
+
+    // ETP-5272 follow-up: SIF-tab fields (e.g. the "Modificada error registral"
+    // checkbox) have not persisted via per-field PATCH since ETP-4463 — they only
+    // live in the pending-edits state until a full header save flushes them. The
+    // button's own enablement (getPendingSifTargets) already reads that in-memory
+    // state, so without this flush the button can look correctly enabled while the
+    // backend still has the OLD persisted value — a silent desync between what the
+    // user just ticked and what SiiSendHandler actually routes on. Mirrors the
+    // save-then-act pattern useEntity.js's handleSaveAndProcess already uses: flush
+    // only when there is something dirty to flush, then require success before
+    // proceeding — a failed save must not fall through to sending stale data.
+    if (isDirty && onSave) {
+      const saved = await onSave();
+      if (!saved) {
+        // The save's own failure path (performSave/handleSaveErrorResponse) already
+        // toasts the specific error — this just stops the send and reflects that
+        // in the modal instead of silently proceeding.
+        if (mountedRef.current) {
+          setSaveFailed(true);
+          setPhase('results');
+        }
+        return;
+      }
+    }
+
     const next = {};
 
     if (pendingTargets.sendSii) {
@@ -147,7 +176,13 @@ export default function SifSendingModal({
         {phase === 'results' && (
           <>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
-              {results.sii && (
+              {saveFailed && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+                  <span style={{ color: 'hsl(var(--destructive))', fontWeight: 600 }}>✗</span>
+                  <span>{ui('sendToSifSaveError')}</span>
+                </div>
+              )}
+              {!saveFailed && results.sii && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
                   <span style={{ color: results.sii.ok ? 'var(--status-success-fg)' : 'hsl(var(--destructive))', fontWeight: 600 }}>
                     {results.sii.ok ? '✓' : '✗'}
@@ -157,7 +192,7 @@ export default function SifSendingModal({
                   </span>
                 </div>
               )}
-              {results.tbai && (
+              {!saveFailed && results.tbai && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
                   <span style={{ color: results.tbai.ok ? 'var(--status-success-fg)' : 'hsl(var(--destructive))', fontWeight: 600 }}>
                     {results.tbai.ok ? '✓' : '✗'}

@@ -72,7 +72,7 @@ import {
 import { cn } from '@/lib/utils.js';
 import { useMenuLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { useFavorites } from '@/components/layout/FavoritesContext';
-import { useFeatureFlag, PROOF_OF_CONCEPT_MENU } from '@/lib/flags';
+import { useFeatureFlag, PROOF_OF_CONCEPT_MENU, ACCT_PROCESS_MONITOR } from '@/lib/flags';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { environmentPlanLabelKey } from '@/lib/environmentPresentation.js';
 import menuConfig from '@/menu.json';
@@ -102,6 +102,17 @@ const ICON_MAP = {
 
 /** `menu.json` group that carries the onboarding checklist. */
 const FIRST_STEPS_GROUP = 'First Steps';
+
+// Keep feature metadata on the menu entry itself. Favorites are persisted as a reduced `{name,
+// label}` shape, so this index lets an old favorite inherit the canonical gate without keeping a
+// second hand-maintained item-name map in the component.
+const MENU_ITEM_FEATURE_FLAGS = Object.freeze(
+  Object.fromEntries(
+    menuConfig.menu.flatMap(group => group.items || [])
+      .filter(item => item.featureFlag)
+      .map(item => [item.name, item.featureFlag])
+  )
+);
 
 function CollapsedGroupPopover({
   group,
@@ -559,6 +570,9 @@ export default function SideMenu({
   // This is visual gating only. The windows remain protected by normal AD role
   // filtering; the flag merely stops offering this internal menu section.
   const showProofOfConceptMenu = useFeatureFlag(PROOF_OF_CONCEPT_MENU);
+  // ETP-5269. Item-level flag gating, where Proof of Concept above gates a whole group. Visual
+  // only: the route is registered unconditionally and SFAcctProcessMonitor enforces admin access.
+  const showAcctProcessMonitor = useFeatureFlag(ACCT_PROCESS_MONITOR);
   // Unconditional since ETP-4966: owning more than one environment is a shipped
   // capability, so the switcher is always available. The hook already returns an
   // empty list for a session that cannot list environments, which is what keeps
@@ -577,12 +591,27 @@ export default function SideMenu({
     return map;
   }, []);
 
-  const resolvedMenuGroups = menuGroups
+  const featureFlagValues = useMemo(() => ({
+    [ACCT_PROCESS_MONITOR]: showAcctProcessMonitor,
+  }), [showAcctProcessMonitor]);
+
+  // Applied to Favorites TOO. Favorites are rebuilt from the user's own saved list rather than
+  // from menuGroups, so returning early for that group let a favourited flag-gated item stay
+  // visible with the flag off — the one hole through which a gated entry could still be reached.
+  // An explicitly declared but unknown flag fails closed; ordinary entries with no featureFlag
+  // remain visible.
+  const resolvedMenuGroups = useMemo(() => menuGroups
     .filter(g => g.group !== 'Proof of Concept' || showProofOfConceptMenu)
     .map((g) => {
-      if (g.group !== 'Favorites') return g;
-      return { ...g, items: favorites };
-    });
+      const items = g.group === 'Favorites' ? favorites : (g.items || []);
+      return {
+        ...g,
+        items: items.filter((item) => {
+          const flag = item.featureFlag || MENU_ITEM_FEATURE_FLAGS[item.name];
+          return flag == null || featureFlagValues[flag] === true;
+        }),
+      };
+    }), [menuGroups, favorites, showProofOfConceptMenu, featureFlagValues]);
 
   const activeGroup = findActiveGroup(resolvedMenuGroups, location.pathname, location.search);
   const tMenu = useMenuLabel();

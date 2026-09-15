@@ -7,6 +7,7 @@ import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import BulkPurchaseOrderMoreMenu from '@generated/purchase-order/custom/BulkPurchaseOrderMoreMenu';
 import PurchaseOrderReactivateBulkAction from '@generated/purchase-order/custom/PurchaseOrderReactivateBulkAction';
 import { ConfirmModal as PoConfirmModal, PoConfirmResultModal, ManageDocsLauncher as PoManageDocsLauncher } from '@generated/purchase-order/custom/PurchaseOrderActions';
+import PurchaseOrderSecondaryActions from '@generated/purchase-order/custom/PurchaseOrderSecondaryActions';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
@@ -154,6 +155,7 @@ export default function PurchaseOrderWindow(props) {
           draftMode={draftModeWithModal}
           linesEmptyState={LinesEmptyState}
           lineCellBadges={taxSifCellBadges}
+          topbarSecondary={PurchaseOrderSecondaryActions}
           data-testid="GeneratedApp__b7ace5" />
         {contactPortal}
         {taxSifModal}

@@ -69,7 +69,7 @@ vi.mock('lucide-react', () => ({
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
   TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,
   ClipboardCheck: () => null, ReceiptText: () => null, Folder: () => null,
-  FileCheck: () => null,
+  FileCheck: () => null, Landmark: () => null,
 }));
 
 // PresentModal mock: renders 4 buttons, one per path, each reporting the same

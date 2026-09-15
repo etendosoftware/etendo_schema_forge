@@ -618,6 +618,28 @@ describe('translateBackendError — ETP-4831 case 4 (9 more hardcoded messages)'
     });
   });
 
+  // A.1b) CreateGoodsReceiptHandler.createReceiptLines (com.etendoerp.go) — the
+  // purchase-side sibling of A.1 above, hardcoded in ENGLISH (ETP-5276). Was
+  // previously unmapped, so the goods-receipt path showed this raw string
+  // untranslated. Suggested key: backendError.noPendingLinesToReceiveOrder.
+  describe('"no pending lines to receive" exact match (CreateGoodsReceiptHandler)', () => {
+    const RAW = 'No pending lines to receive in this purchase order';
+
+    it('translates the raw English literal to en_US', () => {
+      const t = (k) => (k === 'backendError.noPendingLinesToReceiveOrder'
+        ? 'There are no pending lines to receive for this purchase order.'
+        : k);
+      assert.equal(translateBackendError(RAW, t), 'There are no pending lines to receive for this purchase order.');
+    });
+
+    it('translates the raw English literal to es_ES', () => {
+      const t = (k) => (k === 'backendError.noPendingLinesToReceiveOrder'
+        ? 'No hay líneas pendientes de recepción en este pedido de compra.'
+        : k);
+      assert.equal(translateBackendError(RAW, t), 'No hay líneas pendientes de recepción en este pedido de compra.');
+    });
+  });
+
   // A.2) CreateInvoiceShipmentHandler.java:200 — hardcoded Spanish literal, no
   // AD_Message involvement, thrown when an invoice has zero lines with a
   // product. Suggested key: backendError.noProductLinesInInvoice.
@@ -1752,5 +1774,61 @@ describe('translateBackendError — duplicate email on user create exact match (
       translateBackendError(RAW, t),
       'Ya existe un usuario con el mismo correo electrónico. Escriba otro distinto.',
     );
+  });
+});
+
+// GoodsMovementProcessGuard.java (com.etendoerp.go — ETP-5037), `ETGO_ZeroOrNegativeQtyProcess`.
+// Raised when "Procesar" would complete a Goods Movement with a line whose quantity is zero or
+// negative — named by product, same convention as the "insufficient stock (process)" match above.
+describe('translateBackendError — "zero or negative quantity (process)" parameterized match (ETP-5037)', () => {
+  const en = fakeUiTranslator({
+    'backendError.zeroOrNegativeQtyProcess':
+      'This movement cannot be processed: the line(s) of {products} have a zero or negative quantity.',
+  });
+  const es = fakeUiTranslator({
+    'backendError.zeroOrNegativeQtyProcess':
+      'Este movimiento no se puede procesar: la(s) línea(s) de {products} tienen una cantidad cero o negativa.',
+  });
+
+  it('translates a single-product violation into es_ES', () => {
+    const raw = 'This movement cannot be processed: the line(s) of SK-003 have a zero or negative quantity.';
+    assert.equal(
+      translateBackendError(raw, es),
+      'Este movimiento no se puede procesar: la(s) línea(s) de SK-003 tienen una cantidad cero o negativa.',
+    );
+  });
+
+  it('translates to en_US unchanged in shape (identity template)', () => {
+    const raw = 'This movement cannot be processed: the line(s) of SK-003 have a zero or negative quantity.';
+    assert.equal(translateBackendError(raw, en), raw);
+  });
+
+  it('passes a multi-product {products} segment through as one opaque, comma-joined param', () => {
+    const raw = 'This movement cannot be processed: the line(s) of SK-003, SK-004 have a zero or negative quantity.';
+    assert.equal(
+      translateBackendError(raw, es),
+      'Este movimiento no se puede procesar: la(s) línea(s) de SK-003, SK-004 tienen una cantidad cero o negativa.',
+    );
+  });
+
+  it('returns the message unchanged when the prefix matches but the suffix does not', () => {
+    const raw = 'This movement cannot be processed: the line(s) of SK-003 have a zero or negative amount.';
+    assert.equal(translateBackendError(raw, es), raw);
+  });
+
+  it('returns the message unchanged when the products segment is empty', () => {
+    const raw = 'This movement cannot be processed: the line(s) of  have a zero or negative quantity.';
+    assert.equal(translateBackendError(raw, es), raw);
+  });
+
+  it('leaves an unrelated message untouched (missing trailing period)', () => {
+    const raw = 'This movement cannot be processed: the line(s) of SK-003 have a zero or negative quantity';
+    assert.equal(translateBackendError(raw, es), raw);
+  });
+
+  it('returns the original message unchanged when the translation key is missing (guard)', () => {
+    const raw = 'This movement cannot be processed: the line(s) of SK-003 have a zero or negative quantity.';
+    const missingT = (k) => k;
+    assert.equal(translateBackendError(raw, missingT), raw);
   });
 });

@@ -855,7 +855,54 @@ describe('DetailView helper functions', () => {
       });
     });
 
-    it('onRefresh invokes hook.fetchById with data?.id', () => {
+    // ETP-5290 — `{ force: true }` is REQUIRED here: without it `fetchById`
+    // serves the pre-mutation record straight out of the in-memory cache for
+    // up to `staleTime` (30s), so a just-completed action's toast fires but
+    // the chip/subtab/button never updates until a full page reload.
+    it('onRefresh invokes hook.fetchById with data?.id and { force: true }', () => {
+      const data = { id: 'rec-1' };
+      const hook = { children: [], fetchById: vi.fn(), refresh: vi.fn() };
+      let capturedOnRefresh;
+      const actionsFn = ({ onRefresh }) => {
+        capturedOnRefresh = onRefresh;
+        return [{ key: 'x', label: 'X', onClick: vi.fn() }];
+      };
+      renderExtraActionButtons(actionsFn, data, hook, '');
+      capturedOnRefresh();
+      expect(hook.fetchById).toHaveBeenCalledWith('rec-1', { force: true });
+    });
+
+    // ETP-5290 — `hook.refresh?.()` additionally force-reloads the list/grid
+    // (mirrors `handleProcessSuccess`'s `fetchById(...); refresh();` pattern
+    // in `useEntity.js`), so a grid row does not stay stale after a
+    // side-effecting action on another record (e.g. admin promote/demote).
+    it('onRefresh also invokes hook.refresh with no arguments', () => {
+      const data = { id: 'rec-1' };
+      const hook = { children: [], fetchById: vi.fn(), refresh: vi.fn() };
+      let capturedOnRefresh;
+      const actionsFn = ({ onRefresh }) => {
+        capturedOnRefresh = onRefresh;
+        return [{ key: 'x', label: 'X', onClick: vi.fn() }];
+      };
+      renderExtraActionButtons(actionsFn, data, hook, '');
+      capturedOnRefresh();
+      expect(hook.refresh).toHaveBeenCalledTimes(1);
+      expect(hook.refresh).toHaveBeenCalledWith();
+    });
+
+    it('onRefresh does not throw when hook.fetchById is not provided', () => {
+      const data = { id: 'rec-1' };
+      const hook = { children: [], refresh: vi.fn() };
+      let capturedOnRefresh;
+      const actionsFn = ({ onRefresh }) => {
+        capturedOnRefresh = onRefresh;
+        return [{ key: 'x', label: 'X', onClick: vi.fn() }];
+      };
+      renderExtraActionButtons(actionsFn, data, hook, '');
+      expect(() => capturedOnRefresh()).not.toThrow();
+    });
+
+    it('onRefresh does not throw when hook.refresh is not provided', () => {
       const data = { id: 'rec-1' };
       const hook = { children: [], fetchById: vi.fn() };
       let capturedOnRefresh;
@@ -864,20 +911,8 @@ describe('DetailView helper functions', () => {
         return [{ key: 'x', label: 'X', onClick: vi.fn() }];
       };
       renderExtraActionButtons(actionsFn, data, hook, '');
-      capturedOnRefresh();
-      expect(hook.fetchById).toHaveBeenCalledWith('rec-1');
-    });
-
-    it('onRefresh does not throw when hook.fetchById is not provided', () => {
-      const data = { id: 'rec-1' };
-      const hook = { children: [] };
-      let capturedOnRefresh;
-      const actionsFn = ({ onRefresh }) => {
-        capturedOnRefresh = onRefresh;
-        return [{ key: 'x', label: 'X', onClick: vi.fn() }];
-      };
-      renderExtraActionButtons(actionsFn, data, hook, '');
       expect(() => capturedOnRefresh()).not.toThrow();
+      expect(hook.fetchById).toHaveBeenCalledWith('rec-1', { force: true });
     });
 
     // ETP-4999 — `renderExtraActionButtons` now also forwards `action.disabled`
