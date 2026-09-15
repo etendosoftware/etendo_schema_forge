@@ -247,6 +247,51 @@ describe('useInvoicePreview — territory resolution and forwarding (ETP-5087)',
   });
 });
 
+// ETP-5229: useInvoicePreview must forward earliestSiiCutoverDate/earliestTbaiCutoverDate/
+// earliestVerifactuCutoverDate straight through from useFiscalConfig's return value, so
+// InvoicePreview.jsx can thread them into useFiscalStatus's cutoverDates arg.
+describe('useInvoicePreview — earliest-cutover-date forwarding (ETP-5229)', () => {
+  beforeEach(() => {
+    apiFetch.mockImplementation(() => emptyResponse());
+  });
+
+  it('forwards the three earliest-cutover fields from useFiscalConfig unchanged', async () => {
+    useFiscalConfigMock.mockReturnValue({
+      profile: 'sii+tbai',
+      tbaiRecord: null,
+      earliestSiiCutoverDate: '2026-01-01T00:00:00.000Z',
+      earliestTbaiCutoverDate: '2026-02-01T00:00:00.000Z',
+      earliestVerifactuCutoverDate: null,
+    });
+    const props = { invoice: defaultInvoice, apiBaseUrl: '/api/sales-invoice', specName: 'sales-invoice' };
+    const { result } = renderHook(() => useInvoicePreview(props));
+
+    await waitFor(() => expect(result.current.loadingPayments).toBe(false));
+
+    expect(result.current.earliestSiiCutoverDate).toBe('2026-01-01T00:00:00.000Z');
+    expect(result.current.earliestTbaiCutoverDate).toBe('2026-02-01T00:00:00.000Z');
+    expect(result.current.earliestVerifactuCutoverDate).toBeNull();
+  });
+
+  it('forwards null for every system when useFiscalConfig has resolved none of them (org never configured)', async () => {
+    useFiscalConfigMock.mockReturnValue({
+      profile: 'unconfigured',
+      tbaiRecord: null,
+      earliestSiiCutoverDate: null,
+      earliestTbaiCutoverDate: null,
+      earliestVerifactuCutoverDate: null,
+    });
+    const props = { invoice: defaultInvoice, apiBaseUrl: '/api/sales-invoice', specName: 'sales-invoice' };
+    const { result } = renderHook(() => useInvoicePreview(props));
+
+    await waitFor(() => expect(result.current.loadingPayments).toBe(false));
+
+    expect(result.current.earliestSiiCutoverDate).toBeNull();
+    expect(result.current.earliestTbaiCutoverDate).toBeNull();
+    expect(result.current.earliestVerifactuCutoverDate).toBeNull();
+  });
+});
+
 // ETP-5087 follow-up: the org used to fetch fiscal config (SII/TBAI) must be the
 // INVOICE's own org (invoiceData.adOrgId), not the top-nav org selector — a
 // mismatch used to silently fetch the wrong config (or none).
