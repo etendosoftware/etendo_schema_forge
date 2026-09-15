@@ -12,6 +12,15 @@ import { PageMetaProvider } from '@/components/layout/PageMetaContext.jsx';
 import { EmbeddedWindowContext } from '@/lib/embeddedWindow.js';
 
 /**
+ * The root `RouteContext` value, i.e. "no route has matched yet".
+ *
+ * Module-level and frozen rather than an inline literal: a fresh object on every render would
+ * re-render the whole embedded window — the entire Products window — for nothing, and it is a
+ * constant by nature. (Sonar javascript:S6481.)
+ */
+const ROOT_ROUTE_CONTEXT = Object.freeze({ outlet: null, matches: [], isDataRoute: false });
+
+/**
  * Mounts a real application window inside the host's React tree, with its own routing.
  *
  * ── Why the context resets ──
@@ -58,7 +67,7 @@ export default function EmbeddedWindowRoute({ windowName, initialPath, onRecordI
   const element = <EmbeddedWindowElement data-testid="EmbeddedWindowElement__route">{children}</EmbeddedWindowElement>;
   return (
     <LocationContext.Provider value={null}>
-      <RouteContext.Provider value={{ outlet: null, matches: [], isDataRoute: false }}>
+      <RouteContext.Provider value={ROOT_ROUTE_CONTEXT}>
         <EmbeddedWindowContext.Provider value={true}>
           <MemoryRouter initialEntries={[initialPath]} data-testid="MemoryRouter__b45f45">
             <PageMetaProvider data-testid="PageMetaProvider__route">
