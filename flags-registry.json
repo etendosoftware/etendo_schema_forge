@@ -96,17 +96,9 @@
             "tools/app-shell/src/lib/upgrade/api.js — getCheckoutToken",
             "com.etendoerp.go src/com/etendoerp/go/rest/EtendoGoJwtDalHelper.java — findActiveAccountByBearerToken"
           ]
-        },
-        {
-          "id": "payment-registry-not-durable",
-          "kind": "precondition",
-          "note": "CheckoutPaymentRegistry keeps confirmed payments in a static ConcurrentHashMap, so a payment lives only in the JVM that received the Stripe webhook. On ECS a task recycle or a redeploy between the payment and POST /sws/go/onboarding loses it: the account is charged and provisioning answers PAYMENT_DECLINED, with no refund or retry-with-credit path. Its EVENTS idempotency map also grows without eviction, so webhook replay protection degrades over uptime. AND THEREFORE: the paid flow cannot be considered production-grade at volume until this is persisted, and any incident of this shape is unrecoverable from the customer's side. Proposed in ETP-4966 while fixing the plan derivation; NOT accepted debt — it needs an owner decision and its own task.",
-          "refs": [
-            "com.etendoerp.go src/com/etendoerp/go/payment/CheckoutPaymentRegistry.java — PAYMENTS and EVENTS",
-            "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md — 'Open risk — CheckoutPaymentRegistry is process-local'"
-          ]
         }
       ],
+      "$deferredItemsClosedComment": "CLOSED 2026-09-15 by ETP-5045 — `payment-registry-not-durable` (kind: precondition) is retired, not deleted quietly: the code it described no longer exists. `CheckoutPaymentRegistry` and both of its static maps were removed in commit 22342593; the confirmed-payment correlation now lives in `ETGO_CHECKOUT_REQUEST` (`CheckoutRequestStore`, commit b31ee343) and the webhook idempotency in `ETGO_BILLING_EVENT` (`BillingEventStore`, commit 22342593), whose unique constraint `ETGO_BILLEVT_EVENT_UQ` IS the gate. Each half of the original note, checked rather than assumed: a task recycle or redeploy between the payment and POST /sws/go/onboarding no longer loses the payment (the row is committed before Stripe is contacted and read back from the database, not from the JVM); replay protection no longer degrades over uptime (a database row is never evicted, so there is nothing to grow without bound in memory). PROPOSED SUCCESSOR, NOT YET ACCEPTED — an owner decision is needed before it is added as a deferredItem: the durable claim commits BEFORE the handler runs, so a JVM kill in between leaves a row stuck at EVENT_RESULT=RECEIVED that the next delivery reads as a duplicate — the payment is then never applied and never retried. This is the deliberate at-most-once trade-off (the alternative, committing after the handler, risks double-applying a payment) and closing it needs a sweeper that re-opens stale RECEIVED rows, which belongs to the reconciliation job ETP-5048. Recorded here so the gap stays traceable while it has no item of its own. Refs: com.etendoerp.go src/com/etendoerp/go/payment/BillingEventStore.java — class javadoc 'Accepted crash window'; com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md — 'Closed by ETP-5045'.",
       "$deferredItemsComment": "Open items this flag carries that are NOT test gaps. Scored per item by kind (a deferred decision is a standing decision, same reasoning as an accepted-debt spec) and rendered on the flag's card, so the TTL surfaces them before the work they block starts rather than during it. A bundled item costs its kind plus one per component beyond the first; promote a component to its own item once it gets scheduled separately.",
       "testSpecs": {
         "unit": [
