@@ -1,0 +1,107 @@
+{
+  "apiVersion": "v1",
+  "entities": {
+    "product": {
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "LIST"
+      ],
+      "fields": {
+        "searchKey": {
+          "publicApi": true,
+          "direction": "out",
+          "internalPath": "searchKey",
+          "type": "passthrough",
+          "handlerId": null
+        },
+        "name": {
+          "publicApi": true,
+          "direction": "out",
+          "internalPath": "name",
+          "type": "passthrough",
+          "handlerId": null
+        },
+        "category": {
+          "publicApi": true,
+          "direction": "out",
+          "internalPath": "productCategory",
+          "type": "passthrough",
+          "handlerId": null
+        },
+        "description": {
+          "publicApi": true,
+          "direction": "out",
+          "internalPath": "description",
+          "type": "passthrough",
+          "handlerId": null
+        },
+        "salePrice": {
+          "publicApi": true,
+          "direction": "out",
+          "internalPath": "eTGOSalePrice",
+          "type": "passthrough",
+          "handlerId": null
+        },
+        "stock": {
+          "publicApi": true,
+          "direction": "out",
+          "internalPath": "eTGOStock",
+          "type": "passthrough",
+          "handlerId": null
+        }
+      }
+    },
+    "businessPartner": {
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "LIST"
+      ],
+      "fields": {
+        "searchKey": {
+          "publicApi": true,
+          "direction": "out",
+          "internalPath": "searchKey",
+          "type": "passthrough",
+          "handlerId": null
+        },
+        "name": {
+          "publicApi": true,
+          "direction": "out",
+          "internalPath": "name",
+          "type": "passthrough",
+          "handlerId": null
+        },
+        "taxId": {
+          "publicApi": true,
+          "direction": "out",
+          "internalPath": "taxID",
+          "type": "passthrough",
+          "handlerId": null
+        },
+        "web": {
+          "publicApi": true,
+          "direction": "out",
+          "internalPath": "etgoWeb",
+          "type": "passthrough",
+          "handlerId": null
+        },
+        "email": {
+          "publicApi": true,
+          "direction": "out",
+          "internalPath": "etgoEmail",
+          "type": "passthrough",
+          "handlerId": null
+        },
+        "phone": {
+          "publicApi": true,
+          "direction": "out",
+          "internalPath": "etgoPhone",
+          "type": "passthrough",
+          "handlerId": null
+        }
+      }
+    }
+  }
+}
