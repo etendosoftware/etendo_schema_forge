@@ -61,7 +61,7 @@ import { useLineGrossAmount, ORDER_LINE_CONFIG } from '@/hooks/useLineGrossAmoun
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { useLabel, useMenuLabel, useUI } from '@/i18n';
-import { renderSaveActions, reportUnnavigableSave, buildSaveGate } from './saveActions.jsx';
+import { renderSaveActions, reportUnnavigableSave, buildSaveGate, buildUnsavedChangesSaver } from './saveActions.jsx';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -1792,6 +1792,7 @@ export function DetailView({
   const [lineEdits, setLineEdits] = useState(null);
   const [lineEditColumns, setLineEditColumns] = useState({});
 
+  const isNew = recordId === 'new'; // ETP-5199: moved up from below `currentItem` so buildUnsavedChangesSaver can read it (plain value, not a hook).
   // Save button is enabled only when there are pending changes. Four sources:
   // 1. Header fields diverged from last saved state (hook.isDirtyHeader)
   // 2. Primary inline add-row is open and partially filled
@@ -1805,8 +1806,8 @@ export function DetailView({
   // ETP-5073 / DOC-08 adds the saver, so the in-app navigation prompt can offer "Save and leave"
   // rather than only "Discard". `silent: true` suppresses the per-save toast: the user is leaving,
   // and the prompt itself is the feedback. handleSave resolves null when validation refuses, which
-  // is what stops the navigation.
-  useUnsavedChangesGuard(isDirty, () => hook.handleSave({ silent: true }));
+  // is what stops the navigation. ETP-5199: buildUnsavedChangesSaver also runs onAfterExistingSave/onAfterCreate.
+  useUnsavedChangesGuard(isDirty, buildUnsavedChangesSaver({ hook, isNew, onAfterCreate, onAfterExistingSave, token, apiBaseUrl, ui }));
   const [savingLine, setSavingLine] = useState(false);
   const [isClosingLine, setIsClosingLine] = useState(false);
   const [editingChild, setEditingChild] = useState(null);
@@ -2005,7 +2006,6 @@ export function DetailView({
     }
   }, [selectedLine, lineConfig]);
 
-  const isNew = recordId === 'new';
   const currentItem = useMemo(() => {
     if (isNew) return null;
     return hook.items.find(item => String(item.id) === String(recordId)) || null;
