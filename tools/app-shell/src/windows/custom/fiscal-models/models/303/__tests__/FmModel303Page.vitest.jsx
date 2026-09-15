@@ -82,7 +82,7 @@ vi.mock('lucide-react', () => ({
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
   TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,
   ClipboardCheck: () => null, ReceiptText: () => null, Folder: () => null,
-  FileCheck: () => null,
+  FileCheck: () => null, Landmark: () => null,
 }));
 
 import FmModel303Page from '../FmModel303Page.jsx';
@@ -461,10 +461,20 @@ describe('FmModel303Page — result kind rendering', () => {
 // ── Precomputed summary KPI values ────────────────────────────────────────────
 
 describe('FmModel303Page — precomputed summary KPI deductible and result', () => {
+  // ETP-5272 pt.6 — deductible (box45) and result (box71) are now re-derived from
+  // `_precomputed.boxes` via applyOverrides/recomputeDerivedBoxes rather than trusted
+  // straight off `summary.deductible`/`summary.result`, so `boxes` must carry real
+  // inputs that produce the same 200/-100 through that formula (box27=100 minus
+  // box29=200 gives box45=200, box46=box27-box45=-100, which flows unchanged
+  // through 64/66/69/71 with no other offsets set). `summary.accrued` is still
+  // read as-is (untouched by this fix) and is kept consistent at 100.
   it('shows deductible value from precomputed summary', () => {
     const decl = {
       ...BASE_DECL,
-      _precomputed: { boxes: {}, summary: { accrued: 100, deductible: 200, result: -100 } },
+      _precomputed: {
+        boxes: { 27: 100, 29: 200 },
+        summary: { accrued: 100, deductible: 200, result: -100 },
+      },
     };
     const { container } = render(<FmModel303Page decl={decl} {...defaultProps} />);
     const values = container.querySelectorAll('.test-kpi303-value');
@@ -474,7 +484,10 @@ describe('FmModel303Page — precomputed summary KPI deductible and result', () 
   it('shows result value from precomputed summary', () => {
     const decl = {
       ...BASE_DECL,
-      _precomputed: { boxes: {}, summary: { accrued: 100, deductible: 200, result: -100 } },
+      _precomputed: {
+        boxes: { 27: 100, 29: 200 },
+        summary: { accrued: 100, deductible: 200, result: -100 },
+      },
     };
     const { container } = render(<FmModel303Page decl={decl} {...defaultProps} />);
     const values = container.querySelectorAll('.test-kpi303-value');
@@ -518,8 +531,11 @@ describe('FmModel303Page — handleCompute async', () => {
   it('updates accrued, deductible, and result KPI values after successful compute', async () => {
     // boxes must be an array of {num, value} — applyOverrides returns boxes unchanged
     // when overrides={}, and recomputeDerivedBoxes expects an array.
+    // ETP-5272 pt.6 — deductible/result are re-derived from these boxes (box45/box71),
+    // not trusted off `summary` as-is: box27=500 minus box29=200 gives box45=200,
+    // box46=box27-box45=300, unchanged through 64/66/69/71 (no other offsets set).
     computeBoxes303.mockResolvedValue({
-      boxes: [{ num: 7, value: 100 }, { num: 9, value: 21 }],
+      boxes: [{ num: 7, value: 100 }, { num: 9, value: 21 }, { num: 27, value: 500 }, { num: 29, value: 200 }],
       summary: { accrued: 500, deductible: 200, result: 300 },
       sources: [],
     });
