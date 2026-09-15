@@ -55,6 +55,7 @@ Todos los handlers viven en `EtendoGoJwtServlet.java` salvo que se indique lo co
 | `UserRoleAssignmentHandler` (`@Named("user")`, NeoHandler `afterHandle`) | Sincroniza `AD_User_Roles` cuando se guarda la ventana `User` |
 | `TenantPaywallService` / `CheckoutRequestStore` (`ETGO_CHECKOUT_REQUEST`) | Deciden si una alta de tenant paga puede proceder; el pago confirmado es una fila persistida, no un mapa en memoria (ETP-5045) |
 | `BillingEventStore` (`ETGO_BILLING_EVENT`) / `CheckoutWebhookProcessor` | Deduplicación durable de eventos de webhook de Stripe: una fila por `event_id`, constraint único como gate de idempotencia |
+| `WebhookPayloadSummary` | Allow-list de lo único que puede persistirse de un payload del proveedor (JSON puro, sin DAL): nunca el body crudo ni datos de tarjeta |
 | Ventanas Classic **Checkout Request** (pestaña hija **Billing Event**) y **Billing Event** — solo lectura, System Administrator | Auditoría de intentos de checkout y de eventos de webhook sin acceso a DB |
 | `TenantPlanService` | Lee/escribe el `AD_Preference` `ETGO_TenantPlan` (`free`/`productive`) |
 | `NeoAccessHelper` | Enforcement real de `AD_Window_Access`/`AD_Process_Access` en cada request backend |

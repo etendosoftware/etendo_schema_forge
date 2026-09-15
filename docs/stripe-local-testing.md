@@ -49,9 +49,11 @@ Consequences to plan around:
   the status endpoint still answers `paid`. That is the acceptance criterion of ETP-5045 and is
   worth re-running whenever this path changes.
 - **A webhook only records a payment against a request row that already exists.** An invented
-  `requestId` is accepted with `200 {"received":true}` and recorded nowhere -- silently. Start
-  the flow with `POST /checkout/sessions` first (see the offline stub in section 4), or the
-  simulation looks like it worked and did nothing.
+  `requestId` is still acknowledged with `200 {"received":true}` and marks nothing as paid -- but
+  it is no longer silent: the delivery lands in `etgo_billing_event` as `IGNORED` with
+  `failure_reason = unknown checkout request` (see below). Start the flow with
+  `POST /checkout/sessions` first (see the offline stub in section 4), or the simulation looks
+  like it worked and did nothing.
 - `GET /checkout/sessions/{requestId}` answers `200 {"status":"pending"}` for *any* unknown id,
   and for a request belonging to another account. It deliberately never 404s and never reveals
   another account's payment or client name, so the "another user's status" scenario is verified
@@ -80,23 +82,38 @@ select event_id, event_type, event_result, request_id, etgo_checkout_request_id,
 Reading a row:
 
 - `event_result` moves `RECEIVED -> APPLIED | IGNORED | FAILED`. `RECEIVED` is the claim itself;
-  `APPLIED` means the handler ran to completion (`recordPaid` was called); `IGNORED` means the
-  event was acknowledged on purpose (`failure_reason` says why: `unhandled event type` or
-  `missing correlation metadata`); `FAILED` means the handler threw and the webhook answered
-  `500 CHECKOUT_WEBHOOK_FAILED`, so Stripe retries.
-- `APPLIED` and `IGNORED` are once-only. **`FAILED` is re-claimable:** the next delivery of the
-  same event id flips the row back to `RECEIVED` and is processed as new, which is how Stripe's own
-  retry schedule repairs a transient failure without anyone touching the database.
+  **`APPLIED` means a payment was actually recorded** on a known checkout request; `IGNORED` means
+  the event was acknowledged on purpose (`failure_reason` says why — one of three reasons:
+  `unhandled event type`, `missing correlation metadata`, or `unknown checkout request`);
+  `FAILED` means the handler threw and the webhook answered `500 CHECKOUT_WEBHOOK_FAILED`, so
+  Stripe retries.
+- The three end states are **not** equally locked, which matters when you read a row:
+  - `APPLIED` is terminal and enforced in code — no later write can move a row out of it, so a
+    failure on a redelivery cannot reopen an event whose payment was already recorded.
+  - `IGNORED` is terminal by intent but **not** locked: a later failure on the same id does
+    overwrite it, which makes the row re-claimable again. That is deliberate — a later delivery
+    may carry the correlation the ignored one lacked.
+  - **`FAILED` is re-claimable:** the next delivery of the same event id flips the row back to
+    `RECEIVED` and is processed as new, which is how Stripe's own retry schedule repairs a
+    transient failure without anyone touching the database.
+- **`failure_reason` is not only about failures.** The same column carries the `IGNORED` reason, so
+  most rows in a healthy instance read `unhandled event type` in a column named failure reason —
+  by design, not a bug. On the genuine failure path it holds a fixed phrase plus the **exception
+  class name only**; the provider-controlled exception message is never stored (it can quote
+  payload fragments), it stays in the log.
 - A redelivery never adds a row. It increments `duplicate_count`, sets `last_duplicate_at` and
   answers `200 {"received":true}`; `event_result`, `received_at` and `processed_at` stay as they
   were (`processed_at` is first-write-wins).
 - `request_id` is always the raw `metadata.request_id`. `etgo_checkout_request_id` is the link to
   `ETGO_CHECKOUT_REQUEST`, resolved at claim time and only when that request exists -- so an
-  invented `--request-id` produces an `APPLIED` row with an empty link and an error in the log,
-  and nothing marked as paid.
+  invented `--request-id` produces an **`IGNORED`** row (`failure_reason = unknown checkout
+  request`) with an empty link and an error in the log, and nothing marked as paid. An `APPLIED`
+  row with no link cannot occur.
 - `payload_summary` is an allow-list (`data.object.{id,customer,subscription,livemode,
   payment_status,amount_total,currency,mode}` + `metadata.request_id`, at most 2000 chars). It
-  never holds the raw body or card data; if it ever does, that is a bug to report.
+  never holds the raw body or card data; if it ever does, that is a bug to report. The policy
+  lives in `WebhookPayloadSummary` (pure JSON, no DB), so a test double and the production store
+  are summarized by exactly the same code.
 - A delivery rejected with `400` (bad signature, bad payload) writes **no row** -- verification
   runs before the store is consulted.
 
@@ -200,7 +217,8 @@ sends back as `paymentToken` to resume provisioning.
 
 Since ETP-5045 the webhook only records a payment against a request row that already exists, and
 that row is written by `POST /checkout/sessions` -- which calls the provider. So a webhook alone
-is no longer enough to reach `paid` on a fresh id: it is accepted and recorded nowhere.
+is no longer enough to reach `paid` on a fresh id: it is acknowledged and recorded as an `IGNORED`
+billing event (`unknown checkout request`), with no payment marked anywhere.
 
 `tools/stripe-session-stub.py` closes that gap. It answers the one endpoint the backend calls
 with a plausible Checkout Session, so the whole flow runs with no Stripe account, no test key
@@ -475,13 +493,19 @@ exported into a shell that did not start the JVM — put them in `Openbravo.prop
 
 One of: `stripe listen` was not running; its `whsec_...` differs from the configured secret; the
 event lacked `metadata.request_id`/`metadata.account_email`; or the polling account email differs
-from the recorded one. The `etgo_billing_event` row (§1) says which: **no row** means the delivery
-never passed the signature check (or never arrived); `IGNORED` with `missing correlation metadata`
-means the metadata was absent; `FAILED` means the handler threw and Stripe is retrying (check the
-log for `CHECKOUT_WEBHOOK_FAILED`); `APPLIED` with an empty `etgo_checkout_request_id` means the
-request id was unknown to this instance; `APPLIED` with the link set but `pending` means the
-polling account does not match. A Tomcat restart is no longer a cause. Resend the event (§5) only
-when there is no row or the row is `FAILED`; resending an `APPLIED` event just counts a duplicate.
+from the recorded one. The `etgo_billing_event` row (§1) says which:
+
+| Row state | What it means |
+| --- | --- |
+| **no row** | The delivery never passed the signature check, or never arrived at all. |
+| `IGNORED` / `missing correlation metadata` | The event carried no `metadata.request_id` / `account_email`. |
+| `IGNORED` / `unknown checkout request` | The correlation id names no `ETGO_CHECKOUT_REQUEST` on this instance — typically an invented `--request-id`, or an event from another environment sharing the Stripe test account. Nothing was marked paid. |
+| `IGNORED` / `unhandled event type` | Not one of the two payment-confirmation types; expected noise in Test Mode. |
+| `FAILED` | The handler threw; Stripe is retrying and the retry will re-claim the row. Check the log for `CHECKOUT_WEBHOOK_FAILED` (the row holds only the exception class name). |
+| `APPLIED` | The payment **was** recorded. If the poll still says `pending`, the polling account email does not match the one on the checkout request. |
+
+A Tomcat restart is no longer a cause. Resend the event (§5) only when there is no row or the row
+is `FAILED`; resending an `APPLIED` event just counts a duplicate.
 
 ### CORS error in the browser
 
