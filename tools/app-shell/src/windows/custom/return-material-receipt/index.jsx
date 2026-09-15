@@ -55,7 +55,12 @@ export default function ReturnMaterialReceiptWindow({ windowName, recordId, apiB
       // ConfirmWithCreditButton (topbarRight, hardcoded in the generated Page)
       // is untouched — see ReturnMaterialReceiptSecondaryActions' doc comment.
       topbarSecondary={ReturnMaterialReceiptSecondaryActions}
-      duplicateAction={{ show: true, visibleWhen: "@documentStatus@='CO'" }}
+      // ETP-5316 — Clone/duplicate is not a supported action for Customer Returns
+      // (grid row action was showing it for CO rows). Mirrors sibling
+      // return-to-vendor-shipment (duplicateAction={{ show: false }}), which
+      // already had this suppressed. Document view has never shown Clone
+      // (ReturnMaterialReceiptSecondaryActions already passes clone={false}).
+      duplicateAction={{ show: false }}
       hideLink
       bulkActions={ReturnMaterialReceiptBulkActions}
       // ETP-4912 — without `usePdf` the row-hover envelope falls back to useNoPdf, so the
