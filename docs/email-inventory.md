@@ -63,6 +63,7 @@ graph LR
   D4["◐ ✉️ goods-shipment-send"]
   D5["◐ ✉️ purchase-order-send"]
   D6["◐ ✉️ return-to-vendor-send"]
+  D7["◐ ✉️ return-material-receipt-send"]
   C1["⬜ ✉️ document with attachments"]
   C2["⬜ ✉️ portal: new user / cancelled"]
   C3["⬜ ✉️ [OB Alert] and error notices"]
@@ -86,15 +87,15 @@ graph LR
   OPER --> O5 --> M5
   OPER -.-> M6
   OPER --> O4
-  O4 --> D1 & D2 & D3 & D4 & D5 & D6
-  D1 & D2 & D3 & D4 & D5 & D6 --> PARTY
+  O4 --> D1 & D2 & D3 & D4 & D5 & D6 & D7
+  D1 & D2 & D3 & D4 & D5 & D6 & D7 --> PARTY
 
   ADMIN --> K1 --> C1
   ADMIN --> K2 --> C2
   K3 --> C3
 
   M1 & M2 & M3 & M4 & M5 & M6 & M7 & M8 & M9 --> LAYOUT --> PROVIDER
-  D1 & D2 & D3 & D4 & D5 & D6 --> LAYOUT
+  D1 & D2 & D3 & D4 & D5 & D6 & D7 --> LAYOUT
   C1 & C2 & C3 --> SMTP
   SMTP -. "no SMTP configured" .-> PROVIDER
 
@@ -105,14 +106,14 @@ graph LR
   classDef who fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
   classDef hub fill:#fef9c3,stroke:#ca8a04,color:#713f12
   class M1,M2,M3,M4,M7,D1 verified
-  class M5,M6,M8,M9,D2,D3,D4,D5,D6 migrated
+  class M5,M6,M8,M9,D2,D3,D4,D5,D6,D7 migrated
   class C1,C2,C3 todo
   class A1,A2,A3,A4,O1,O2,O3,O4,O5,K1,K2,K3 act
   class ADMIN,OPER,PARTY who
   class LAYOUT,PROVIDER,SMTP hub
 ```
 
-**6 verified, 15 migrated, 23 total.** The account greens were opened in a real inbox on 2026-08-25:
+**6 verified, 16 migrated, 24 total.** The account greens were opened in a real inbox on 2026-08-25:
 the invitation (including the resend path), the password reset stating its true 30-minute window,
 and — from one run of a fresh admin through sign-up and onboarding — the welcome and the
 environment-ready notice. A second run, an invited operator accepting from scratch, confirmed the
@@ -134,11 +135,12 @@ the only flow the `403 EMAIL_NOT_VERIFIED` gate protects. Its button goes to the
 
 **F3 closed the company boundary.** The split used to fall exactly along it — everything Admin and
 Operator received rendered through `EmailLayout`, everything the Customer or Supplier received did
-not. Since 2026-08-26 the six document emails go through the same layout, so an invoice reaching a
+not. Since 2026-08-26 the document emails go through the same layout, so an invoice reaching a
 customer now looks like the welcome reaching the admin. `sales-invoice-send` was opened in a real
-inbox that day, PDF download link included; the other five share one implementation
-(`DefaultDocumentSendEmailContract`) and differ only in their catalog entry, so the risk of an
-unseen one looking different is low — but they have not been observed arriving.
+inbox that day, PDF download link included; the other six (`return-material-receipt-send` added by
+ETP-5124) share one implementation (`DefaultDocumentSendEmailContract`) and differ only in their
+catalog entry, so the risk of an unseen one looking different is low — but they have not been
+observed arriving.
 
 Triggers, for the record: `handleRegister` sends the welcome, `handleOnboarding` sends
 environment-ready once the client, organization and dataset exist, `handleChangePassword` sends the
@@ -179,8 +181,9 @@ React shell (`SendDocumentModal` → `documentEmailSend.js`). Contract name conv
 | 4 | Goods shipment / delivery note | `goods-shipment-send` | Goods Shipment window | shared layout | `contracts/GoodsShipmentSendEmailContract.java`, `contracts/DalShipmentEmailDocumentResolver.java`, `contracts/ShipmentDocumentEmailContractProvider.java` |
 | 5 | Purchase order to vendor | `purchase-order-send` | Purchase Order window | shared layout | `contracts/PurchaseOrderSendEmailContract.java`, `contracts/DalPurchaseOrderEmailDocumentResolver.java`, `contracts/PurchaseDocumentEmailContractProvider.java` |
 | 6 | Return to vendor | `return-to-vendor-send` | Return to Vendor window | shared layout | `contracts/ReturnToVendorSendEmailContract.java` |
+| 7 | Sales return receipt (Devolución de Venta) | `return-material-receipt-send` | Return Material Receipt window | shared layout | `contracts/ReturnMaterialReceiptSendEmailContract.java`, `contracts/DalReturnMaterialReceiptEmailDocumentResolver.java`, `contracts/ShipmentDocumentEmailContractProvider.java` |
 
-Since F3 (2026-08-26) all six render through `EmailLayout`, and their copy lives in
+Since F3 (2026-08-26) all render through `EmailLayout` (#7 added by ETP-5124), and their copy lives in
 `email/render/messages/emails_{es_ES,en_US}.properties` (`document.subject`, `document.body`,
 `document.cta`, plus one `{contract}.documentType` key each) rather than in Java literals.
 
@@ -206,7 +209,7 @@ always-deployed portal surface empty until someone is deliberately sending links
 > agree, and they diverged once already, so `__tests__/defaultCopyInSync.vitest.js` reads the
 > module's `.properties` and fails when they drift. Fix the mismatch, never the test.
 
-Shared plumbing for 1–6:
+Shared plumbing for 1–7:
 `DefaultDocumentSendEmailContract.java`, `TransactionalEmailService.java`,
 `NeoBuiltInEndpointHandler.java` (routes `email-contracts/{name}/send`),
 `DocumentDownloadTokenService.java` (signed download link), `EmailMessageEdits.java` /
@@ -222,26 +225,26 @@ what they used *before* that work, which is what the branded-template migration 
 
 | # | Email | Contract name | Trigger (caller) | Provider template | Key files |
 |---|---|---|---|---|---|
-| 7 | New account / welcome | `new-account` | signup — `EtendoGoJwtServlet:619` → `sendNewAccount` | `custom` (subject+body built in Java, ES/EN) | `contracts/AccountLinkEmailContract.java`, `contracts/CoreEmailContractProvider.java` (`newAccountContent`), `rest/TransactionalAuthEmailSender.java` |
-| 8 | Password reset link | `reset-password` | forgot-password — `EtendoGoJwtServlet:2336` → `sendPasswordReset` | `reset-password` (branded, provider-owned copy) | same as above + `rest/EtendoGoAuthLinkBuilder.java` |
-| 9 | Password changed notice | `password-changed` | **both** password-change paths — `handleChangePassword` and `handlePasswordResetConfirm` | shared layout | `contracts/AccountNoticeEmailContract.java`, `CoreEmailContractProvider.java` |
-| 10 | Environment ready | `environment-ready` | tenant provisioning finished — `EtendoGoJwtServlet:1461` | `custom` (`environmentReadyContent`), links to `/dashboard` | `contracts/AccountLinkEmailContract.java`, `rest/EtendoGoAccountProvisioning.java` |
-| 11 | Company invitation | `company-invitation` | invite a user to a company — `CompanyInvitationService.java:200` | `custom` (subject/body in Java, ES/EN) | `contracts/CompanyInvitationEmailContract.java`, `rest/CompanyInvitationService.java`, `rest/CompanyInvitationDalHelper.java` |
-| 12 | Email verification | `verify-email` | sign-up, and `POST /verify-email/resend` — `EtendoGoJwtServlet` | shared layout | `contracts/CoreEmailContractProvider.java`, `rest/EmailVerificationDalHelper.java` |
-| 13 | Welcome for an invited user | `new-account-invitee` | invitation accepted when the account is created there — `CompanyInvitationService` | shared layout | `contracts/CoreEmailContractProvider.java`, `rest/TransactionalAuthEmailSender.java` |
-| 14 | Organization joined | `organization-joined` | invitation accepted — `CompanyInvitationService` (both the existing-account and register-and-accept paths) | shared layout | `contracts/OrganizationJoinedEmailContract.java`, `rest/TransactionalAuthEmailSender.java` |
-| 15 | Login alert (new IP/device) | `login-alert` | **deliberately not sent** (2026-08-26) — registered and reachable over the endpoint, no in-repo caller by decision | shared layout | `contracts/LoginAlertEmailContract.java` |
+| 8 | New account / welcome | `new-account` | signup — `EtendoGoJwtServlet:619` → `sendNewAccount` | `custom` (subject+body built in Java, ES/EN) | `contracts/AccountLinkEmailContract.java`, `contracts/CoreEmailContractProvider.java` (`newAccountContent`), `rest/TransactionalAuthEmailSender.java` |
+| 9 | Password reset link | `reset-password` | forgot-password — `EtendoGoJwtServlet:2336` → `sendPasswordReset` | `reset-password` (branded, provider-owned copy) | same as above + `rest/EtendoGoAuthLinkBuilder.java` |
+| 10 | Password changed notice | `password-changed` | **both** password-change paths — `handleChangePassword` and `handlePasswordResetConfirm` | shared layout | `contracts/AccountNoticeEmailContract.java`, `CoreEmailContractProvider.java` |
+| 11 | Environment ready | `environment-ready` | tenant provisioning finished — `EtendoGoJwtServlet:1461` | `custom` (`environmentReadyContent`), links to `/dashboard` | `contracts/AccountLinkEmailContract.java`, `rest/EtendoGoAccountProvisioning.java` |
+| 12 | Company invitation | `company-invitation` | invite a user to a company — `CompanyInvitationService.java:200` | `custom` (subject/body in Java, ES/EN) | `contracts/CompanyInvitationEmailContract.java`, `rest/CompanyInvitationService.java`, `rest/CompanyInvitationDalHelper.java` |
+| 13 | Email verification | `verify-email` | sign-up, and `POST /verify-email/resend` — `EtendoGoJwtServlet` | shared layout | `contracts/CoreEmailContractProvider.java`, `rest/EmailVerificationDalHelper.java` |
+| 14 | Welcome for an invited user | `new-account-invitee` | invitation accepted when the account is created there — `CompanyInvitationService` | shared layout | `contracts/CoreEmailContractProvider.java`, `rest/TransactionalAuthEmailSender.java` |
+| 15 | Organization joined | `organization-joined` | invitation accepted — `CompanyInvitationService` (both the existing-account and register-and-accept paths) | shared layout | `contracts/OrganizationJoinedEmailContract.java`, `rest/TransactionalAuthEmailSender.java` |
+| 16 | Login alert (new IP/device) | `login-alert` | **deliberately not sent** (2026-08-26) — registered and reachable over the endpoint, no in-repo caller by decision | shared layout | `contracts/LoginAlertEmailContract.java` |
 
 ### 3.C — Etendo Core (classic SMTP)
 
 | # | Email | Trigger | Template / format | Key files |
 |---|---|---|---|---|
-| 16 | Print & Send a document (invoice, order, …) from the backoffice | "Send by email" in the print flow | **AD template**: `TemplateInfo.EmailDefinition` (subject + body per document template/language) + PDF and record attachments | `src/org/openbravo/erpCommon/utility/reporting/printing/EmailUtilities.java`, `PrintController.java`, `TabAttachments.java` |
-| 17 | New portal user (credentials / access granted) | `GrantPortalAccessProcess` → `EmailEventManager` | **FreeMarker**: `src/org/openbravo/portal/templates/email-new-user.ftl`; subject from AD_Message via `OBMessageUtils` | `src/org/openbravo/portal/NewUserEmailGenerator.java`, `PortalEmailBody.java` |
-| 18 | Portal account cancelled | `AccountChangeObserver` → `EmailEventManager` | **FreeMarker**: `email-account-cancelled.ftl`; subject `Portal_AccountCancelledSubject` | `src/org/openbravo/portal/AccountCancelledEmailGenerator.java` |
-| 19 | Alert rule notification (`[OB Alert] …`) | `AlertProcess` background job | **plain text hardcoded in Java**, header from AD_Message `AlertMailHead` | `src/org/openbravo/erpCommon/ad_process/AlertProcess.java:451-470` |
+| 17 | Print & Send a document (invoice, order, …) from the backoffice | "Send by email" in the print flow | **AD template**: `TemplateInfo.EmailDefinition` (subject + body per document template/language) + PDF and record attachments | `src/org/openbravo/erpCommon/utility/reporting/printing/EmailUtilities.java`, `PrintController.java`, `TabAttachments.java` |
+| 18 | New portal user (credentials / access granted) | `GrantPortalAccessProcess` → `EmailEventManager` | **FreeMarker**: `src/org/openbravo/portal/templates/email-new-user.ftl`; subject from AD_Message via `OBMessageUtils` | `src/org/openbravo/portal/NewUserEmailGenerator.java`, `PortalEmailBody.java` |
+| 19 | Portal account cancelled | `AccountChangeObserver` → `EmailEventManager` | **FreeMarker**: `email-account-cancelled.ftl`; subject `Portal_AccountCancelledSubject` | `src/org/openbravo/portal/AccountCancelledEmailGenerator.java` |
+| 20 | Alert rule notification (`[OB Alert] …`) | `AlertProcess` background job | **plain text hardcoded in Java**, header from AD_Message `AlertMailHead` | `src/org/openbravo/erpCommon/ad_process/AlertProcess.java:451-470` |
 
-Shared plumbing for 13–16: `src/org/openbravo/email/EmailEventManager.java`,
+Shared plumbing for 17–20: `src/org/openbravo/email/EmailEventManager.java`,
 `EmailEventContentGenerator.java`, `SmtpCascadeResolver.java`,
 `src/org/openbravo/erpCommon/utility/poc/EmailManager.java` / `EmailInfo.java`,
 `src/com/etendoerp/email/spi/{EmailSender,EmailSendContext,DefaultSmtpEmailSender}.java`,
@@ -251,10 +254,10 @@ Shared plumbing for 13–16: `src/org/openbravo/email/EmailEventManager.java`,
 
 | # | Email | Trigger | Template / format | Key files |
 |---|---|---|---|---|
-| 20 | TicketBAI submission error | TicketBAI send failure | HTML string built in Java, texts from AD_Message | `modules/com.smf.ticketbai/src/com/smf/ticketbai/email/ErrorEmailSender.java`, `TbaiEmailSender.java` |
-| 21 | Currency conversion-rate sync failure | scheduled rate sync fails | HTML from two AD_Message keys (`String.format`) | `modules/com.smf.currency.conversionrate/src/com/smf/currency/conversionrate/SyncFailureEmailSender.java` |
-| 22 | SII multi-report result | `ProcesoInformeMultiple` | plain Java-built message | `modules/org.openbravo.module.sii/src/org/openbravo/module/sii/reports/ProcesoInformeMultiple.java` |
-| 23 | Scheduled/AD report delivery | report scheduled with email delivery | AD report definition + attachment | `modules_core/org.openbravo.client.application/src/org/openbravo/client/application/report/BaseReportActionHandler.java` |
+| 21 | TicketBAI submission error | TicketBAI send failure | HTML string built in Java, texts from AD_Message | `modules/com.smf.ticketbai/src/com/smf/ticketbai/email/ErrorEmailSender.java`, `TbaiEmailSender.java` |
+| 22 | Currency conversion-rate sync failure | scheduled rate sync fails | HTML from two AD_Message keys (`String.format`) | `modules/com.smf.currency.conversionrate/src/com/smf/currency/conversionrate/SyncFailureEmailSender.java` |
+| 23 | SII multi-report result | `ProcesoInformeMultiple` | plain Java-built message | `modules/org.openbravo.module.sii/src/org/openbravo/module/sii/reports/ProcesoInformeMultiple.java` |
+| 24 | Scheduled/AD report delivery | report scheduled with email delivery | AD report definition + attachment | `modules_core/org.openbravo.client.application/src/org/openbravo/client/application/report/BaseReportActionHandler.java` |
 
 **Not an Etendo email:** Stripe Checkout receipts. `HostedCheckoutService` only passes
 `customer_email` to Stripe; the receipt is sent by Stripe, not by us.
@@ -269,7 +272,7 @@ Shared plumbing for 13–16: `src/org/openbravo/email/EmailEventManager.java`,
 
 | Format source | Which emails | What it means for changing the copy |
 |---|---|---|
-| **`EmailLayout` + message catalog** (this repo) | #1–#14 — every Etendo GO email | The markup lives in exactly one Java class, `email/render/EmailLayout.java`; the words live in `email/render/messages/emails_{es_ES,en_US}.properties`. Changing wording = editing a `.properties` line. Changing the *look* = editing `EmailLayout`, once, for all fourteen. Adding a locale = adding a `.properties` file. |
+| **`EmailLayout` + message catalog** (this repo) | #1–#16 — every Etendo GO email | The markup lives in exactly one Java class, `email/render/EmailLayout.java`; the words live in `email/render/messages/emails_{es_ES,en_US}.properties`. Changing wording = editing a `.properties` line. Changing the *look* = editing `EmailLayout`, once, for all sixteen. Adding a locale = adding a `.properties` file. |
 | **FreeMarker `.ftl` in the repo** | #14, #15 | `src/org/openbravo/portal/templates/*.ftl` — the only real, editable email template files in the codebase. |
 | **AD data (Application Dictionary)** | #13 (`EmailDefinition` per document template + language), and subject strings of #14–#18 (AD_Message) | Editable by config/translation, no code change needed. |
 | **Plain string in Java** | #16, #17, #18, #19 | Hardcoded; needs a code change (or an AD_Message edit where it uses `OBMessageUtils`). |
@@ -290,7 +293,7 @@ signature); the layout decides how it looks.
   the explicit fallback — deliberately, since `ResourceBundle` would otherwise let the *server's*
   JVM locale pick the language of a customer's email (this is why `EmailMessages` uses
   `getNoFallbackControl`).
-- **Stack B is untouched.** #15–#23 — the Core SMTP emails, `.ftl` templates, AD_Message subjects —
+- **Stack B is untouched.** #17–#24 — the Core SMTP emails, `.ftl` templates, AD_Message subjects —
   still look nothing like the GO ones. F5 covers the two portal emails; the rest is out of scope.
 
 ### Fixed since the first version of this document
@@ -355,30 +358,32 @@ The privacy decision this document used to flag as "to be made explicitly" **has
 recipients, subject, the operator's message and the signed download link are stored **in clear**,
 **per tenant**, under **client-level AD security**. The justification is narrow and worth keeping
 in view — an operator must be able to prove to their own customer what was sent, to whom and when,
-and a hash cannot do that. The scope is correspondingly narrow: only the six document-send
+and a hash cannot do that. The scope is correspondingly narrow: only the seven document-send
 contracts opt in.
 
 - **Gate:** `EmailContract#logsSendHistory()` defaults to `false`.
-  `DefaultDocumentSendEmailContract` overrides it to `true`, so the six document-send contracts
-  (`sales-invoice-send` and siblings) opt in automatically. The **account/auth family**
-  (`company-invitation`, `reset-password`, `password-changed`, `verify-email`, `login-alert`,
-  `organization-joined`) inherits `false` and **never reaches the table** — those recipients are the
-  platform's own users and that copy carries single-use links.
+  `DefaultDocumentSendEmailContract` overrides it to `true`, so the seven document-send contracts
+  (`sales-invoice-send` and siblings, `return-material-receipt-send` added by ETP-5124) opt in
+  automatically. The **account/auth family** (`company-invitation`, `reset-password`,
+  `password-changed`, `verify-email`, `login-alert`, `organization-joined`) inherits `false` and
+  **never reaches the table** — those recipients are the platform's own users and that copy carries
+  single-use links.
 - **Write path:** `TransactionalEmailService#recordAudit` writes the history row immediately
   *before* the safety-store audit row, so both land in the same transaction and can never disagree.
   `DalEmailSendLogStore` writes **without** admin mode, which is what makes `AD_CLIENT_ID` /
   `AD_ORG_ID` / `CREATEDBY` the caller's real values — and incidentally closes the
-  null-`userId` gap §5.1 complains about, for these six contracts.
+  null-`userId` gap §5.1 complains about, for these seven contracts.
 - **`MESSAGE_BODY` is the operator's text, not the rendered email.** What is stored is
   `EmailMessageEdits#getMessage()`, pre-escape. A send that used the catalog's default copy stores
   `null` there and keeps its `SUBJECT`.
 - **Read path:** the AD window **Email Send History** (module `com.etendoerp.go`, read-only,
   client-scoped), or `GET /sws/neo/documentemailhistory?recordId=<id>[&specName=<spec>]`, which the
   app-shell's `EmailsCard` calls from the preview panel of Sales Order, Purchase Order, Sales
-  Quotation, Sales Invoice and Goods Shipment. Note the asymmetry: **six contracts record, five
-  windows display.** `return-to-vendor-send` opts in like its five siblings, but has no preview
-  card yet — its rows are readable only through the backoffice window and the endpoint. Adding the
-  card later needs no backend change. Reads go through `OBQuery`'s default
+  Quotation, Sales Invoice, Goods Shipment and — since ETP-5124 — Return Material Receipt. Note the
+  asymmetry: **seven contracts record, six windows display.** `return-to-vendor-send` opts in like
+  its six siblings, but has no preview card yet — its rows are readable only through the backoffice
+  window and the endpoint. Adding the card later needs no backend change. Reads go through
+  `OBQuery`'s default
   `filterOnReadableClients` / `filterOnReadableOrganizations` — **not** `OBContext.setAdminMode()` —
   so DAL's own client/org filtering *is* the access rule. Row shape and rationale:
   `modules/com.etendoerp.go/docs/neo-headless.md` §8j.
