@@ -946,52 +946,49 @@ non-null default for it (see `com.etendoerp.go/docs/onboarding-flow.md` and this
 change to that wiring lives in this repo). Regenerated via `make regen ONLY=product`; no changes to
 the pricing, sidebar, or image-field behavior documented above.
 
-## ETP-5254 — This window's form, tabs, labels and panels have a second consumer
+## ETP-5254 — This window is mounted a second time, inside a dialog
 
-**Anyone changing this window's field set, primary tabs, label overrides or custom tabs must know:**
-the Products window is no longer the only thing that renders them. The **create-product popup** inside
-the product lookup drawer of document lines (`RecordCreateModal.jsx`, reached from `sales-quotation`,
-`sales-order`, `purchase-order`, `sales-invoice`, `purchase-invoice`, `goods-shipment` and
-`goods-receipt`) reproduces this window's chrome rather than approximating it, and consumes six
-distinct pieces of it:
+**Anyone changing this window must know it has a second mounting point.** The **create-product popup**
+in the product lookup drawer of document lines (`RecordCreateModal.jsx`, reached from
+`sales-quotation`, `sales-order`, `purchase-order`, `sales-invoice`, `purchase-invoice`,
+`goods-shipment` and `goods-receipt`) does not approximate this window — it **mounts
+`windows/custom/product/index.jsx` itself**, on a private memory router at `/product/new`, inside the
+host document's own React tree (`EmbeddedWindowRoute.jsx`).
 
-| Consumed | How | Where it is declared |
-|---|---|---|
-| `ProductForm.jsx` | lazily imported and rendered once per tab, `excludeFields={['image']}`, `cols: 3` | the generated form, from `decisions.json` fields |
-| Primary tabs | `renderPrimaryTabButtons` with `tabsVariant: 'pill'` — the same helper and variant `ProductPage` passes to `DetailView`, captions through `useMenuLabel` | `window.primaryTabs` / `window.primaryTabsVariant`, **copied** into `lookupCreateTargets.js` |
-| Field-label slice | `labels.js` is loaded and re-provided for the popup's subtree, the way `WindowLoader` does for a routed window | generated `labels.js` |
-| Label overrides | **copied** into `lookupCreateTargets.js`, because the generator emits them only into `ProductPage.jsx`, which cannot be imported without dragging `DetailView` | `window.labelOverrides` |
-| `ProductPriceBar` + `AttachmentsTab` | mounted after the record is saved, with the same props `DetailView` hands its `customTabs` | `ProductPage.jsx`'s `customTabs` |
-| Autosave-on-blur | once the record is saved, the popup's header form stays editable and commits each edited field with a `PATCH .../{id}` on blur — because this window autosaves | `window.autoSaveOnBlur` |
+The practical consequence is the good one: **whatever you add here shows up there, with no second
+change.** A new primary tab, a new field, a renamed label, a new secondary tab — Price, Cost,
+Accounting and Attachments all already appear in the popup because they are this window's own tabs,
+rendered by this window's own `DetailView`. `make regen ONLY=product` propagates with nothing else to
+touch.
 
-That is the point of the design: everything that can be imported *is* imported, so a
-`make regen ONLY=product` propagates into the popup for free and the two surfaces cannot drift. The
-three pieces that had to be **copied**, and the autosave premise the last row rests on, are guarded by
-tests that read `artifacts/product/decisions.json` and the generated `ProductPage.jsx` and compare them
-against the registry — when one of them fails, the fix belongs in `lookupCreateTargets.js`, never in
-`decisions.json`.
+What the embedding changes about how this window behaves when it is the embedded one:
+
+| Aspect | Inside the popup |
+|---|---|
+| Chrome | dropped — `EmbeddedWindowContext` above the private router makes `useChromelessEmbed` true, so sidebar, topbar, palette, widgets, the **stock side panel** and the window's own "cancel back to the list" are hidden. A context, not a query param: the window drops the query string when it saves, which used to put the stock panel back the moment the product was created |
+| `recordId` | injected as a **prop** by `EmbeddedWindowRoute`, the way `WindowLoader` injects it from the route — a window that starts reading the route param directly instead would break the embed |
+| Page meta | captured by a nested `PageMetaProvider`; `useSetPageMeta` calls never reach the host's TopBar |
+| Navigation | runs against `createMemoryHistory`, so saving (`/product/new` → `/product/<id>`) cannot move the host document |
+| Completion | the host watches that inner navigation to learn the new record's id, then re-queries the document's own product selector so the line gets a full selector row |
 
 Consequences worth keeping in mind when editing this window:
 
-- Making a header field `required`, or moving it between the `principal` and `other` sections, also
-  changes what a user must fill in before a line's product can be created. The `other` section cannot
-  be dropped from the popup for exactly this reason: `taxCategory` is required, lives there, and has
-  no static default.
-- Renaming or reordering `window.primaryTabs`, changing `primaryTabsVariant`, or editing
-  `window.labelOverrides` will fail the popup's drift guards until the registry copy is updated too.
-- Turning `window.autoSaveOnBlur` off would change the popup too: its second phase commits header edits
-  on blur *because this window does*, not by its own decision. A drift test fails with "the Products
-  window no longer autosaves on blur — RecordCreateModal phase 2 still does" if the two ever disagree.
-- Adding a `customTabs` entry to `ProductPage.jsx` does **not** add it to the popup — the popup's
-  post-create tab list is its own array. The **Accounting** tab is deliberately absent (it is a
-  `secondaryTabs` entry needing `DetailView`'s per-tab `useEntity` machinery, and is gated behind
-  `showAccountingFields`), and so is the **Cost** tab. The popup deliberately says nothing about cost:
-  ETP-5245 already owns that rule and enforces it with this window's blocking banner, and a second
-  copy of it inside the popup would only be free to drift.
-- Fields that need a saved record — the `image` upload, anything in a secondary tab — are unreachable
-  from the popup's first phase by construction; Price and Attachments are reachable only in its second
-  phase, after the POST.
+- **Do not make the window depend on app chrome it cannot see.** Anything rendered only by `AppLayout`,
+  the topbar or the side panel is absent in the popup by design.
+- **Do not switch list-vs-detail on `useParams()` instead of the `recordId` prop.** The embed hands the
+  prop; a route-param read renders the product **list** inside the dialog.
+- **A new required header field also becomes required before a line's product can be created.**
+- `window.autoSaveOnBlur` keeps applying — the popup's header stays editable after saving because this
+  window autosaves, not by any decision of the popup's.
 
-Full mechanism, the two phases and why they exist, the spec allowlist, the drift guards and the known
+A dormant fallback still exists for the case where the window module fails to load: a two-phase
+generated form built from `ProductForm.jsx`, this window's primary-tab strip, its `labels.js` slice and
+a **copy** of `window.labelOverrides` in `lookupCreateTargets.js` (the generator emits those only into
+`ProductPage.jsx`, which cannot be imported without dragging `DetailView` into every document bundle).
+Drift guards read `artifacts/product/decisions.json` and the generated `ProductPage.jsx` and compare
+them against that registry copy — when one fails, the fix belongs in `lookupCreateTargets.js`, never in
+`decisions.json`.
+
+Full mechanism, why nesting a router is legal here, the spec allowlist, the drift guards and the known
 limitations: [`docs/ui-customization.md`](../ui-customization.md) → *§19. Inline record creation from a
 lookup drawer*.

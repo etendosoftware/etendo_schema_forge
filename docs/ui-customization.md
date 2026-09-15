@@ -1782,9 +1782,85 @@ at all.
   `ProductSearchDrawer`), and any spec outside `CREATE_PRODUCT_SPECS`, gets `resolveLookupCreateTarget`
   → `null` and renders byte-for-byte the same drawer as before this slot existed.
 
-#### The popup renders the window's chrome, it does not approximate it
+#### The popup IS the window — mounted in the host's own React tree
 
-`RecordCreateModal.jsx` declares no field list, no tab strip of its own and no labels. Every visible
+The dialog does not render a form that resembles the Products window: it mounts **the Products window
+itself**, at its own `new` route, inside the dialog body (`data-testid="record-create-window"`). That
+is why the tab strip shows **Price, Cost, Accounting and Attachments** from the first paint, why the
+header stays editable after saving, and why a tab added to the window tomorrow appears here with no
+change to this code. Cost and Accounting can arrive no other way — their renderers are welded to
+`DetailView`'s per-tab hooks, so reusing them means reusing `DetailView`.
+
+`EmbeddedWindowRoute.jsx` is what makes an application window mountable inside another one:
+
+```jsx
+<LocationContext.Provider value={null}>          {/* satisfies the nested-router invariant */}
+  <RouteContext.Provider value={{ outlet: null, matches: [], isDataRoute: false }}>
+    <MemoryRouter initialEntries={[`/${windowName}/new?embedded=interactive`]}>
+      <PageMetaProvider>                          {/* the window's title/breadcrumb stop here */}
+        <Routes>
+          <Route path={`/${windowName}`}            element={element} />
+          <Route path={`/${windowName}/:recordId`}  element={element} />
+        </Routes>
+      </PageMetaProvider>
+    </MemoryRouter>
+  </RouteContext.Provider>
+</LocationContext.Provider>
+```
+
+- **React Router's "you cannot render a `<Router>` inside another `<Router>`" is narrower than it
+  reads.** The invariant is `!useInRouterContext()`, and `useInRouterContext()` only asks whether
+  `LocationContext` is non-null *at that point*. Re-providing `null` — the context's own default —
+  satisfies it. `RouteContext` is reset alongside it, or the inner routes would be matched relative to
+  the host's current match (`/sales-invoice/:id`) instead of from the root. These are `UNSAFE_`
+  exports: acceptable here because the version is pinned and the failure mode is a loud invariant
+  throw at mount, not silent wrongness.
+- **A memory router cannot move the host.** The window navigates when it saves — `/<spec>/new` →
+  `/<spec>/<id>` — and `createMemoryHistory` never touches `window.history`, so that navigation stays
+  inside the dialog. Watching it is how the popup learns the record id.
+- **The window is handed `recordId` as a PROP, not left to read the route.** Windows switch
+  list-vs-detail on the prop `WindowLoader` extracts from the route, so a child mounted without it
+  renders the product **list** inside the dialog however correct the inner URL is. `EmbeddedWindowRoute`
+  injects it from `useParams()`, which also makes the window flip to the saved record by itself.
+- **`PageMetaProvider` is not optional.** `ListView` and `DetailView` publish title, breadcrumb and
+  record count through `useSetPageMeta`, which the host's TopBar reads — without a nested provider the
+  dialog rewrites the *document's* header, turning an open invoice's breadcrumb into
+  *Inventario / Producto*.
+- **The chrome is dropped through a CONTEXT, never the URL.** `EmbeddedWindowContext`
+  (`lib/embeddedWindow.js`) is provided above the memory router and read by `useChromelessEmbed`, so
+  the sidebar, topbar, palette, widgets, the **stock side panel** and the window's own "cancel back to
+  the list" all disappear while the window stays usable. The flag lived on the URL twice and was lost
+  twice the same way — the window navigates to `/<spec>/<id>` when it saves and the query string does
+  not survive it, which put the stock panel back inside the dialog at the exact moment the product was
+  created. Re-applying it from an effect is a race the user sees. A context is set by the host and
+  nothing the window does to its own location can drop it. The URL form (`?embedded=1` /
+  `=interactive`) is still honoured for a preview opened directly by link, where there is no host
+  component above it — `embedded=1` additionally disables pointer events, which is why the two stay
+  apart.
+
+**Why in-tree and not an iframe.** The first implementation hosted the window in a same-origin iframe,
+on the reading that nesting routers was impossible. It worked, but it cost a second cold boot of the
+whole application — entry chunk, session refresh, window-access map, then the window: **~460 ms against
+~180 ms** for navigating to the same window in-app, and the gap was reported in a demo. Mounted
+in-tree the providers, the session and the already-parsed chunks are the host's, and the measured open
+time is **146–345 ms** — at parity with opening the window normally.
+
+**Escape ownership is the one thing the iframe gave away for free.** In a separate document a keypress
+inside the form could not reach the host; in-tree it can, and *both* the dialog and the selector's
+fetch hook listen for `keydown` on `document` in the same native dispatch. The dialog's listener runs
+first, React flushes its state update synchronously (keydown is a discrete event), and the hook's
+listener — still the same keypress — then reads an already-closed modal and tears the drawer down with
+the user's search inside it. Reading a `createOpen` flag is therefore not enough: `ProductDrawerShell`
+holds a ref that stays set for one macrotask **after** the modal closes, so one Escape closes exactly
+one layer. `RecordCreateModal` additionally stops the synthetic Escape at its `DialogContent`, which
+keeps it out of the host's inline add-row handler.
+
+If the window module fails to load, the modal falls back to the two-phase generated form described
+next; that path is otherwise dormant.
+
+#### Fallback: the two-phase generated form
+
+Used only when the window module cannot be loaded. `RecordCreateModal.jsx` declares no field list, no tab strip of its own and no labels. Every visible
 piece is the Products window's:
 
 - **The form.** `target.loadForm()` lazily imports the generated `<Entity>Form.jsx` through the
@@ -1850,7 +1926,7 @@ product ever reaches the line.
 through `dismiss()`, which calls `finish()` once a record exists and `onCancel()` before that. So
 there is a single completion point, and it is the one that selects the product in the line.
 
-**Accounting is deliberately absent from phase 2.** Price and Attachments are self-contained custom
+**Accounting is absent from the FALLBACK's phase 2** (the live window mode shows it, because it shows the window). Price and Attachments are self-contained custom
 panels; Accounting is a `secondaryTabs` entry whose renderer `SecondaryTableTab` takes `DetailView`'s
 `hook`, `secondaryHooks` and `addingSecondaryLine`, so reusing it means recreating that per-tab
 `useEntity` machinery, and imitating it would mean reimplementing a panel rather than reusing one. It
@@ -1895,8 +1971,8 @@ instead of silently losing the product.
 
 | Behaviour | Why it is expected |
 |---|---|
-| The popup does **not** create a cost line, and says nothing about cost at all. | ETP-5245 already owns the rule *a stockable product needs a defined cost* and enforces it with a blocking banner in the Products window. Restating it here would be a second copy of the same rule in a second place, free to drift from the first — so the popup is deliberately silent and the Products window stays the single place where that rule is stated and enforced. Whether the Cost tab could itself join phase 2 the way Price did depends on how ETP-5245 shapes it — a self-contained custom panel could, a `secondaryTabs` entry could not (see Accounting below). That ticket had not merged when this shipped, so the question is open rather than settled. |
-| **Accounting** is missing from phase 2. | It is a `secondaryTabs` entry driven by `DetailView`'s per-tab `useEntity` machinery, and is capability-gated behind `showAccountingFields`. Reusing it means recreating that machinery; imitating it means reimplementing a panel. Tracked as `accounting-tab-not-in-popup`. |
+| The popup does **not** create a cost line. | ETP-5245 already owns the rule *a stockable product needs a defined cost* and enforces it with a blocking banner in the Products window. Restating it here would be a second copy of the same rule in a second place, free to drift from the first — so the popup is deliberately silent and the Products window stays the single place where that rule is stated and enforced. Whether the Cost tab could itself join phase 2 the way Price did depends on how ETP-5245 shapes it — a self-contained custom panel could, a `secondaryTabs` entry could not (see Accounting below). That ticket had not merged when this shipped, so the question is open rather than settled. |
+| **Accounting** and **Cost** are missing from the *fallback* form. | They are `secondaryTabs` entries driven by `DetailView`'s per-tab `useEntity` machinery. The live popup mounts the window itself and therefore shows both; only the dormant fallback lacks them. Tracked as `accounting-tab-not-in-popup`. |
 | Closing the popup after the product was created **completes**; it does not undo anything. | The record already exists — the POST happened at the end of phase 1. Cancelling is only possible *before* that: in phase 1 the `Cancel` button leaves the document untouched and nothing is written. In phase 2 there is no `Cancel`, only `Done`, and the X / overlay / Escape mean the same thing. |
 | The line can still arrive at **price 0**. | Phase 2 lets the user price the product immediately, which is the normal path. If they skip it — or price it on a tariff other than the document's — the selector re-query finds nothing and the synthesized fallback row is used. The user types the price on the line, exactly as for any product with no row in that tariff. |
 | No arrow-key access to the create row. | See the navigation-ring bullet above. |
