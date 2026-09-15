@@ -16840,6 +16840,7 @@
     "importErrorGeneric": "No se pudo importar esta fila. Abre los detalles para ver el informe técnico o contacta con soporte.",
     "importErrorCountryUnresolved": "No se pudo asociar el país \"{country}\" con un registro existente.",
     "importErrorCategoryUnresolved": "No se pudo asociar o crear la categoría \"{category}\".",
+    "importErrorCategoryLookupFailed": "No se pudieron consultar las categorías, así que no se pudo asignar \"{category}\". Vuelve a intentar la importación.",
     "importErrorDependentAmbiguous": "Varios registros coinciden con \"{value}\". Por favor especifica un código exacto.",
     "importErrorDependentUnresolved": "No se pudo resolver el registro \"{value}\".",
     "importErrorDependentInvalidName": "No se puede generar un identificador válido para \"{value}\".",

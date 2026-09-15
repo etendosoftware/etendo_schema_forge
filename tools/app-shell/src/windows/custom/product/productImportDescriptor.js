@@ -4,6 +4,8 @@ import { registerImportRowValidator } from '@etendosoftware/app-shell-core/lib/i
 // cannot disagree about whether a price cell is a number (ETP-4996).
 import { parseImportNumber } from '@etendosoftware/app-shell-core/lib/import/parseImportNumber.js';
 import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendosoftware/app-shell-core/lib/import/resolveDependentEntity.js';
+import { fetchNeoList } from '@etendosoftware/app-shell-core/lib/import/fetchNeoList.js';
+import { classifyImportError } from '@etendosoftware/app-shell-core/lib/import/importEngine.js';
 import { getFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResolvers.js';
 import { parseBoolean } from '@/lib/parseBoolean.js';
 import { resolveCodedCellOrThrow, codedCellError, codeLabels } from '@/lib/codedValue.js';
@@ -166,27 +168,65 @@ function resolvePlv(spec, token, wantSales) {
 // Existing product categories cache per token/run
 const productCategoriesCache = new Map();
 
-async function fetchProductCategories(token) {
+/**
+ * ETP-5227: this used to ask for `?limit=1000` — not a parameter NEO reads — and NEO's own
+ * default capped the answer at the first 100 categories, silently. A tenant with more than that
+ * got "category does not exist" for anything further down the table, which auto-created a
+ * duplicate the database then rejected. `fetchNeoList` pages properly and throws instead of
+ * returning `[]` when the read fails; its header carries the full account.
+ */
+function fetchProductCategories(token) {
   const base = detectEtendoBase();
-  const url = `${base}/sws/neo/product-category/productCategory?limit=1000`;
-  try {
-    const res = await apiFetch(url, { baseUrl: '', token });
-    if (!res.ok) return [];
-    const json = await res.json().catch(() => null);
-    const data = json?.response?.data ?? json?.data ?? [];
-    return Array.isArray(data) ? data : [];
-  } catch (e) {
-    return [];
-  }
+  return fetchNeoList(`${base}/sws/neo/product-category/productCategory`, { token });
 }
 
 function getExistingCategories(token, existingCategoriesOverride) {
   if (existingCategoriesOverride) return Promise.resolve(existingCategoriesOverride);
   const key = token || 'default';
   if (!productCategoriesCache.has(key)) {
-    productCategoriesCache.set(key, fetchProductCategories(token));
+    // A failed read must not become this session's answer. The old fetch swallowed everything
+    // into `[]` and that `[]` was cached, so ONE bad response made every later row — and every
+    // retry, for as long as the tab stayed open — resolve against an empty catalogue. That is
+    // why the reported error "persisted on retry". Evicting on rejection makes a retry a retry.
+    const pending = fetchProductCategories(token).catch((error) => {
+      if (productCategoriesCache.get(key) === pending) productCategoriesCache.delete(key);
+      throw error;
+    });
+    productCategoriesCache.set(key, pending);
   }
   return productCategoriesCache.get(key);
+}
+
+/** A row-level message for a category read that failed, in the session language. */
+function categoryLookupFailed(cell, config) {
+  const category = String(cell ?? '').trim();
+  return typeof config.translate === 'function'
+    ? config.translate('importErrorCategoryLookupFailed', { category })
+    : `The product categories could not be read, so "${category}" could not be assigned. Try the import again.`;
+}
+
+/**
+ * A row-level message for a category that could not be CREATED, in the session language.
+ *
+ * The backend's own text ("There is already a Product Category with the same (Client,
+ * Organization, Search Key)…") used to be rethrown verbatim — the English, unactionable string
+ * the ticket reports. `classifyImportError` already maps that shape to a translatable kind for
+ * the send path; routing the descriptor's own failure through it keeps one vocabulary for both.
+ * The raw text is preserved on the error for the system-error report, never shown as the row's
+ * message.
+ */
+function categoryCreateFailed(rawMessage, cell, config) {
+  const category = String(cell ?? '').trim();
+  const translate = typeof config.translate === 'function' ? config.translate : null;
+  const { key, params } = classifyImportError(rawMessage);
+  const classified = translate ? translate(key, params) : null;
+  const message = classified && classified !== key
+    ? `${classified} (${category})`
+    : (translate?.('importErrorCategoryUnresolved', { category })
+      ?? `The category "${category}" could not be resolved or created.`);
+  const error = new Error(message);
+  error.raw = rawMessage;
+  return error;
 }
 
 /**
@@ -211,7 +251,14 @@ async function resolveUom(row, config, productDefaults) {
 
 async function resolveCategory(row, config) {
   if (!row.category) return null;
-  const categories = await getExistingCategories(config.token, config.existingCategories);
+  // A read that fails must fail the ROW, with a message that says so. Falling through with an
+  // empty catalogue is what made the import try to create a category that already existed.
+  let categories;
+  try {
+    categories = await getExistingCategories(config.token, config.existingCategories);
+  } catch (error) {
+    throw new Error(categoryLookupFailed(row.category, config));
+  }
   const runCache = getResolutionCache(config.token || 'product-import');
 
   const createFn = config.createCategoryFn || (async ({ searchKey, name }) => {
@@ -225,8 +272,8 @@ async function resolveCategory(row, config) {
     });
     if (!res.ok) {
       const errJson = await res.json().catch(() => null);
-      const errDetail = errJson?.error?.message || errJson?.message || 'Category creation failed';
-      throw new Error(errDetail);
+      const errDetail = errJson?.error?.message || errJson?.message || '';
+      throw categoryCreateFailed(errDetail, row.category, config);
     }
     const json = await res.json().catch(() => null);
     const record = json?.response?.data?.[0] ?? json?.data?.[0] ?? json;
