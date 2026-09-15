@@ -64,8 +64,8 @@ function estimateQuickActionsButtonCount(rowQuickActions) {
     + (!readOnly && !rowQuickActions.hideDeleteButton ? 1 : 0); // Delete
 }
 
-// ETP-5268 — reserved width (px) for the quick-actions cell when it is NOT
-// allowed to float (overlapLastColumn === false): exactly enough for THIS
+// ETP-5268 — reserved width (px) for the quick-actions cell — always
+// applied now (see quickActionsColumnStyle), exactly enough for THIS
 // window's own button count, not a fixed worst-case guess — a window with
 // only Edit + Delete (2 buttons) no longer reserves room for 5. Returns 0
 // when nothing will render (isQuickActionsEnabled already skips the column
@@ -86,164 +86,50 @@ function quickActionsReservedWidthPx(rowQuickActions) {
     + QUICK_ACTIONS_CONTAINER_PADDING_PX;
 }
 
-// ETP-5268 — tracks whether a scroll container currently overflows
-// horizontally and, if so, whether it has been scrolled all the way to its
-// right edge. Used to decide whether the row-actions pill may float over (and
-// hide) the last visible column: it may only do so while there is real
-// scrollable overflow the user hasn't fully scrolled through yet — never when
-// the table has free space to the right, and never once the user has reached
-// the actual end of the table's content.
-//
-// ETP-5268 follow-up — takes `quickActionsReservedWidthPx` and computes
-// `overlapLastColumn` ITSELF now, rather than DataTable deriving it
-// separately from `hasOverflow`/`atEnd` via shouldOverlapLastColumn(). That
-// separation was the bug: overlapLastColumn feeds back into the DOM (the
-// quick-actions column shrinks to a floating 40px when true, or grows to its
-// full reserved width otherwise — see quickActionsColumnStyle), which changes
-// the very <table> width this hook measures via ResizeObserver. Live-verified
-// ("se va y viene" — the horizontal scrollbar appearing and disappearing on
-// its own): the instant a viewport width lands in the dead zone between
-// "fits once the actions column shrinks to 40px" and "fits only with the
-// full reserved width," the two states chase each other forever — floating
-// makes the table narrow enough to stop overflowing, which switches back to
-// reserved, which makes it overflow again, which switches back to floating,
-// on and on. Every render in between briefly commits and paints, so the user
-// sees the scrollbar (and the last column's width) flicker in a tight loop.
-// Fixed by normalizing every raw measurement BEFORE deciding hasOverflow and
-// atEnd, so neither depends on which state produced the DOM this particular
-// measurement came from — see measure()'s own comments below for the two
-// separate normalizations this needed (hasOverflow against the reserved
-// total, atEnd against the floating total) and the two distinct flicker bugs
-// each one fixes: a first pass here only normalized hasOverflow, which
-// stopped the scrollbar from flickering while mid-scroll, but left atEnd
-// using the raw (state-dependent) scrollWidth — live-verified, that raw
-// version made "the end" a MOVING target: reaching it grew the actions
-// column to its reserved width, which widened scrollWidth, which un-reached
-// "the end," flipping straight back to floating, over and over, at the
-// scroll-end position specifically (CP-3).
-function useHorizontalScrollEdge(actionsReservedWidthPx) {
-  const [state, setState] = useState({ hasOverflow: false, atEnd: false, overlapLastColumn: false });
-  const cleanupRef = useRef(null);
-  // Not a dep of the callback ref below (kept `[]`, see its own comment on
-  // why) — a plain ref so `measure()` always reads the latest value without
-  // tearing down and reattaching the scroll/resize listeners every time this
-  // window's button count (and so its reserved width) changes.
-  const reservedWidthRef = useRef(actionsReservedWidthPx);
-  reservedWidthRef.current = actionsReservedWidthPx;
-
-  // ETP-5268 — a CALLBACK ref, not `useRef` + `useEffect(…, [containerRef])`.
-  // DataTable early-returns a <TableSkeleton> tree while `loading` (see the
-  // `if (loading) return …` below) — a real backend fetch is virtually never
-  // done by the first render, so THIS wrapper div doesn't exist yet the one
-  // time an object-ref effect (deps: the stable ref object, which never
-  // changes identity) would run. The effect would see `containerRef.current
-  // === null`, bail, and — because its deps never change — never retry once
-  // loading flips to false and the real wrapper mounts: hasOverflow/atEnd
-  // stay stuck at their initial `false` forever, live data or not. A callback
-  // ref instead fires every time this exact DOM node is attached OR detached
-  // (loading→loaded swaps in a structurally different tree, so React mounts
-  // a brand-new node here), so setup reliably reruns against the live node.
-  const containerRef = useCallback((outerEl) => {
-    if (cleanupRef.current) {
-      cleanupRef.current();
-      cleanupRef.current = null;
-    }
-    // The shared `Table` primitive (components/ui/table.jsx) wraps the
-    // <table> in its OWN `overflow-auto` div one level in — with both
-    // ancestors set to overflow, THAT inner div is the nearest one to the
-    // (potentially too-wide) <table> content, so it's the one the browser
-    // actually scrolls; this outer wrapper's own box never grows past its
-    // parent and so never reports overflow on itself. Measure/listen on the
-    // inner div instead.
-    const el = outerEl?.firstElementChild;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-
-    const EPSILON = 1;
-    // ETP-5268 follow-up — mirrors the initial `overlapLastColumn: false` in
-    // useState above: the DOM this callback ref just attached to was rendered
-    // with that same initial (non-floating) value, so the first measure()
-    // must assume the same starting point the real markup used, or its very
-    // first normalization would be wrong.
-    let lastOverlap = false;
-    const measure = () => {
-      const reservedWidthPx = reservedWidthRef.current || 0;
-      // The DOM currently reflects whatever `lastOverlap` was as of the
-      // previous measure() (that's what decided the actions column's actual
-      // rendered width). Undo that contribution to recover the width of
-      // everything EXCEPT the actions column — a value that, unlike
-      // `el.scrollWidth` itself, stays constant no matter which of the two
-      // states is currently painted.
-      const currentActionsWidthPx = lastOverlap ? 40 : reservedWidthPx;
-      const baseContentWidthPx = el.scrollWidth - currentActionsWidthPx;
-      // hasOverflow: the worst case — would the table need to scroll at all
-      // if the actions column were always at its full reserved width? Using
-      // the reserved total (not whichever is currently rendered) keeps this
-      // independent of `lastOverlap`, fixing the oscillation where floating
-      // (narrower) briefly stopped the overflow that reserved (wider) had
-      // just caused, flipping back to reserved, which re-caused it, forever.
-      const hasOverflow = (baseContentWidthPx + reservedWidthPx) > el.clientWidth + EPSILON;
-      // atEnd: has the user scrolled as far as the FLOATING (narrow, 40px)
-      // layout ever allows? live-verified this is the second half of the
-      // same class of bug: using the CURRENT `el.scrollWidth` here meant
-      // reaching the end flipped the actions column to its full reserved
-      // width, which — because that widens `el.scrollWidth` — silently
-      // pushed "the end" further right out from under the user, flipping
-      // back to floating, which narrowed it back, moving "the end" back
-      // within reach, flipping to reserved again… "se va y viene" ("comes
-      // and goes"). `baseContentWidthPx + 40` is the floating layout's own
-      // total, a fixed target that doesn't move once reached, however the
-      // actions column ends up rendered as a result.
-      const atEnd = (el.scrollLeft + el.clientWidth) >= (baseContentWidthPx + 40) - EPSILON;
-      const overlapLastColumn = shouldOverlapLastColumn(hasOverflow, atEnd);
-      lastOverlap = overlapLastColumn;
-      setState((prev) => (prev.hasOverflow === hasOverflow && prev.atEnd === atEnd && prev.overlapLastColumn === overlapLastColumn
-        ? prev
-        : { hasOverflow, atEnd, overlapLastColumn }));
-    };
-
-    measure();
-    el.addEventListener('scroll', measure, { passive: true });
-    const resizeObserver = new ResizeObserver(measure);
-    resizeObserver.observe(el);
-    if (el.firstElementChild) resizeObserver.observe(el.firstElementChild);
-
-    cleanupRef.current = () => {
-      el.removeEventListener('scroll', measure);
-      resizeObserver.disconnect();
-    };
-  }, []);
-
-  return { ...state, containerRef };
-}
-
-// ETP-5268 — extracted (rather than inlined as `hasOverflow && !atEnd` in
-// DataTable's own body) purely to keep that already-large component's own
-// Sonar cognitive-complexity score from creeping past the S3776 threshold.
-function shouldOverlapLastColumn(hasOverflow, atEnd) {
-  return hasOverflow && !atEnd;
-}
-
-// ETP-5268 — same reasoning: keeps the `&&` out of DataTable's own body.
-function isTrailingHoverEnabled(rowQuickActions, overlapLastColumn) {
-  return isQuickActionsEnabled(rowQuickActions) && overlapLastColumn;
-}
-
-// ETP-5268 — shared by both the quick-actions <TableCell> (TableDataRow) and
-// its matching <TableHead> (DataTable): narrow/pinned (`w-10`, a Tailwind
-// class — fine, it's one of a small static set) so the (always-absolute)
-// pill deliberately overflows onto the previous column when floating is
-// allowed; the non-floating width instead comes from the `style` prop built
-// by quickActionsColumnStyle() below, since it's a per-window computed value.
-function quickActionsColumnClassName(overlapLastColumn, extraClassName) {
-  const widthClass = overlapLastColumn ? 'w-10' : '';
-  return [widthClass, extraClassName].filter(Boolean).join(' ');
+// ETP-5268 — the quick-actions column is ALWAYS rendered at its own full
+// reserved width (quickActionsReservedWidthPx) and ALWAYS `position: sticky;
+// right: 0` — the classic "frozen/sticky last column" table pattern. This
+// replaces an earlier design (the column stayed pinned narrow while
+// scrolling, then widened back to full width once the user reached the true
+// end) that went through three separate live-verified flicker/dead-zone
+// bugs, all variants of the same root cause: that design changed the
+// table's own rendered WIDTH in reaction to scroll state, which the very
+// scroll-state detection then re-measured — a circular dependency ("se va y
+// viene" — the horizontal scrollbar appearing and disappearing on its own)
+// that resurfaced in a new shape every time the previous shape got patched.
+// `position: sticky` sidesteps the whole class of bug: it's a pure
+// paint-time effect — the column's contribution to the table's LAYOUT width
+// is fixed and constant regardless of scroll position, so nothing here can
+// ever feed back into a measurement of that width. Sticky positioning by
+// itself already satisfies all three acceptance criteria with no
+// JavaScript scroll-tracking at all:
+//   - CP-1 (no overflow): the column has nowhere to "stick" to that differs
+//     from its natural position, so it just renders normally, in flow.
+//   - CP-2 (mid-scroll, not at the end): the column stays pinned to the
+//     visible right edge of the scroll container — floating over whatever
+//     data column is currently scrolled underneath it, like a frozen column
+//     in a spreadsheet ("los botones superpuestos ... al final a la derecha
+//     de la vista").
+//   - CP-3 (scrolled to the true end): the column's natural (in-flow)
+//     position IS the sticky boundary at that point, so it seamlessly stops
+//     "sticking" and simply sits in normal flow, sharing the row's ordinary
+//     hover-to-reveal behavior — nothing has to detect or react to this
+//     transition happening.
+// `bg-card` on the cell gives it an opaque background so it visually covers
+// whatever it ends up pinned on top of, instead of superimposing both sets
+// of content — needed because RowQuickActions itself has no background of
+// its own (QUICK_ACTIONS_USE_PILL is off, see quickActionsStyle.js); the
+// narrow floating column this replaces got away without one only because it
+// was the sole thing rendered at that position.
+function quickActionsColumnClassName(extraClassName) {
+  return ['sticky right-0 z-10 bg-card', extraClassName].filter(Boolean).join(' ');
 }
 
 // ETP-5268 — see quickActionsColumnClassName just above: this is its `style`
 // counterpart, carrying the one piece of per-window-computed geometry
 // (quickActionsReservedWidthPx) that can't be a static Tailwind class.
-function quickActionsColumnStyle(overlapLastColumn, reservedWidthPx) {
-  return overlapLastColumn ? undefined : { width: `${reservedWidthPx}px` };
+function quickActionsColumnStyle(reservedWidthPx) {
+  return { width: `${reservedWidthPx}px` };
 }
 
 // Extracts grow flag and basis (px) from a columnFlex() shorthand string.
@@ -1967,7 +1853,6 @@ function TableDataRow({
   isChecked,
   toggleRow,
   visibleColumns,
-  trailingHoverColumn,
   renderCellValue,
   onRowClick,
   onNavigate,
@@ -1993,7 +1878,6 @@ function TableDataRow({
   apiBaseUrl,
   token,
   hasDimensionsPanel = false,
-  overlapLastColumn = true,
 }) {
   const isSelectedLine = selectedRowId != null && row.id === selectedRowId;
   const rowDisabled = isRowSelectable && !isRowSelectable(row);
@@ -2027,7 +1911,6 @@ function TableDataRow({
         </TableCell>
       )}
       {visibleColumns.map((col, colIdx) => {
-        const isTrailingHover = trailingHoverColumn != null && col === trailingHoverColumn;
         return (
           <TableCell
             key={col.key}
@@ -2052,13 +1935,7 @@ function TableDataRow({
             // 192px selector-baseline floor).
             style={col.cellClass ? undefined : { minWidth: columnMinWidthPx(col, colIdx) }}
           >
-            {isTrailingHover ? (
-              <span className="block transition-opacity group-hover/row:opacity-0 group-focus-within/row:opacity-0">
-                {renderCellValue(row, col)}
-              </span>
-            ) : (
-              renderCellValue(row, col)
-            )}
+            {renderCellValue(row, col)}
           </TableCell>
         );
       })}
@@ -2183,17 +2060,14 @@ function TableDataRow({
         </>
       )}
       {quickActionsEnabled && (
-        // ETP-5281 — `overflow-visible` overrides the shared TableCell's new
-        // default `overflow-hidden` (see packages/app-shell-core ui/table.jsx):
-        // per RowQuickActions.jsx's own doc comment, "the wrapping <td> uses
-        // absolute positioning so the icons overlay the trailing grid
-        // columns" — an intentional overflow beyond this cell's bounds (in
-        // the overlapLastColumn case; harmless when the cell is wide enough
-        // to contain the pill instead — ETP-5268) that the new default would
-        // otherwise clip.
+        // ETP-5268 — no `relative`/`overflow-visible` needed: the cell is
+        // always full-width now (see quickActionsColumnClassName), so
+        // RowQuickActions' `position: absolute; right-3` pill always fits
+        // within its own bounds, and `sticky` (in the base className)
+        // already establishes the containing block `relative` used to.
         (<TableCell
-          className={quickActionsColumnClassName(overlapLastColumn, 'px-2 relative overflow-visible')}
-          style={quickActionsColumnStyle(overlapLastColumn, quickActionsReservedWidthPx(rowQuickActions))}
+          className={quickActionsColumnClassName('px-2')}
+          style={quickActionsColumnStyle(quickActionsReservedWidthPx(rowQuickActions))}
           onClick={(e) => e.stopPropagation()}
           data-testid="TableCell__eb5261">
           <RowQuickActions
@@ -2541,28 +2415,6 @@ export function DataTable({
     [visibleColumns]
   );
 
-  // ETP-5268 — the row-actions pill is only allowed to float over (and hide) the
-  // last visible column when the table's own scroll container is genuinely
-  // overflowing horizontally AND hasn't been scrolled all the way to its right
-  // edge. With no overflow (e.g. Categoría de Contacto — few columns, free space
-  // to the right) or once scrolled to the end, there is no dead space to reclaim,
-  // so floating over the last column would only cover real, otherwise-legible data.
-  const { overlapLastColumn, containerRef: scrollContainerRef } =
-    useHorizontalScrollEdge(quickActionsReservedWidthPx(rowQuickActions));
-
-  // ETP-3914 — Mirror InlineLinesPanel: when the quick-actions overlay is enabled
-  // AND allowed to float (overlapLastColumn), the last visible column's value is
-  // hidden on row hover so the floating action icons visually take its place (no
-  // layout shift). Unlike InlineLinesPanel — which looks specifically for a
-  // trailing `amount` column — headers can end in any type (status, date, etc.),
-  // so we always pick the last visible column. When the pill isn't floating
-  // (ETP-5268), it lives in its own cell and there's nothing to hide.
-  const trailingHoverColumn = useMemo(() => {
-    const enabled = isTrailingHoverEnabled(rowQuickActions, overlapLastColumn);
-    if (!enabled || visibleColumns.length === 0) return null;
-    return visibleColumns[visibleColumns.length - 1];
-  }, [visibleColumns, rowQuickActions, overlapLastColumn]);
-
   const displayCatalogMaps = useMemo(
     () => buildDisplayCatalogMaps(visibleColumns, addRow, entity),
     [visibleColumns, entity, addRow?.fields, addRow?.catalogs],
@@ -2716,13 +2568,14 @@ export function DataTable({
   const colFlexSpecs = hideHeader ? visibleColumns.map((col, colIdx) => flexSpec(col, colIdx)) : [];
   const growCount = colFlexSpecs.filter((s) => s.grow > 0).length;
   const fixedColsBasisPx = colFlexSpecs.filter((s) => s.grow === 0).reduce((sum, s) => sum + s.basis, 0);
-  // ETP-5268 follow-up — the quick-actions slot isn't always 40px (see
-  // quickActionsReservedWidthPx): reserved-width mode sizes it to this
-  // window's own button count. Feeding the real value into the grow-column
-  // denominator keeps growing columns from claiming space the actions column
-  // actually needs, which would understate the table's true content width
-  // and mask genuine overflow that should scroll instead of squeeze.
-  const quickActionsColWidthPx = overlapLastColumn ? 40 : quickActionsReservedWidthPx(rowQuickActions);
+  // ETP-5268 follow-up — the quick-actions slot's width is this window's own
+  // button count (see quickActionsReservedWidthPx), always — see
+  // quickActionsColumnStyle for why it's no longer ever narrower. Feeding
+  // the real value into the grow-column denominator keeps growing columns
+  // from claiming space the actions column actually needs, which would
+  // understate the table's true content width and mask genuine overflow
+  // that should scroll instead of squeeze.
+  const quickActionsColWidthPx = quickActionsReservedWidthPx(rowQuickActions);
   const fixedColsTotalPx = fixedColsBasisPx + computeActionColsWidthPx({
     selectable, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
     onCloneRow, quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel,
@@ -2740,7 +2593,6 @@ export function DataTable({
         so 24px of bottom padding gives the shadow room inside the visible area.
       */}
       <div
-        ref={scrollContainerRef}
         className={[
           linesLayout === 'inlineEditable' ? '[&>div]:!overflow-visible' : 'overflow-x-auto overflow-y-visible',
           rowHoverStyle === 'elevated' ? 'pb-6' : '',
@@ -2784,8 +2636,8 @@ export function DataTable({
               {renderRowActionHeaderCells(hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled)}
               {quickActionsEnabled && (
                 <TableHead
-                  className={quickActionsColumnClassName(overlapLastColumn, 'px-2')}
-                  style={quickActionsColumnStyle(overlapLastColumn, quickActionsReservedWidthPx(rowQuickActions))}
+                  className={quickActionsColumnClassName('px-2')}
+                  style={quickActionsColumnStyle(quickActionsReservedWidthPx(rowQuickActions))}
                   aria-hidden="true"
                   data-testid="TableHead__eb5261" />
               )}
@@ -2794,13 +2646,13 @@ export function DataTable({
           <TableBody data-testid="TableBody__eb5261">
             {renderTableRows({
               hideDataRows, filteredData, addRow, colSpan, hasActiveFilter, data, selectedRows,
-              selectable, isRowSelectable, toggleRow, visibleColumns, trailingHoverColumn,
+              selectable, isRowSelectable, toggleRow, visibleColumns,
               renderCellValue, onRowClick, onNavigate, selectedRowBg, selectedId, selectedRowId,
               rowHoverStyle,
               editingRowId, handleRowActivation, hoverRowActions, onSaveRow, onCancelEdit,
               onEditRow, onDeleteRow, deletingRows, setDeletingRows, ui, legacyDeleteEnabled,
               onCloneRow, quickActionsEnabled, rowQuickActions, entity, apiBaseUrl, token,
-              hasDimensionsPanel, overlapLastColumn,
+              hasDimensionsPanel,
             })}
             {addRow?.active && (
               <InlineAddRow

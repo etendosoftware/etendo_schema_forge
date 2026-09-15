@@ -27,11 +27,14 @@ import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
  * existing edit-view visibility (delete gate, `documentPreview`, `action.visible`).
  *
  * This component is always absolutely positioned (see the className comment
- * below for why) — the icons overlay the trailing grid column and reveal on
- * `group-hover/row` (set by DataTable's <TableRow>). Whether the enclosing
- * <td> is narrow (letting the pill overflow onto the previous column, when
- * there's no free space) or wide enough to contain it without overlap
- * (ETP-5268) is controlled entirely by DataTable's own cell width, not here.
+ * below for why), inside a `<td>` DataTable always renders at this window's
+ * own full reserved width and `position: sticky; right: 0` (ETP-5268 —
+ * quickActionsColumnStyle/quickActionsColumnClassName). That sticky cell —
+ * not this component — is what makes the pill appear to float over trailing
+ * columns while there's more to scroll, and settle into normal flow once the
+ * user reaches the true end: a pure CSS "frozen last column" effect, so the
+ * pill's own positioning here never has to know or care which of those two
+ * states it's currently in.
  *
  * NOTE: this component is generic — every prop is optional and gates behavior
  * gracefully. It is safe to mount on every list row regardless of window config.
