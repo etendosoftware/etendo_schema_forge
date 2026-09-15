@@ -112,9 +112,14 @@ function quickActionsReservedWidthPx(rowQuickActions) {
 //     de la vista").
 //   - CP-3 (scrolled to the true end): the column's natural (in-flow)
 //     position IS the sticky boundary at that point, so it seamlessly stops
-//     "sticking" and simply sits in normal flow, sharing the row's ordinary
-//     hover-to-reveal behavior — nothing has to detect or react to this
-//     transition happening.
+//     "sticking" and simply sits in normal flow — no JS needed to make it
+//     LAND there. Making the buttons themselves switch from hover-only to
+//     always-visible once they do (see useQuickActionsAlwaysVisible below)
+//     is the one thing sticky positioning alone can't answer — CSS has no
+//     shipped, reliable way yet to ask "is this sticky element currently
+//     stuck," so that one bit is still JS-detected. It only ever toggles an
+//     `opacity` class though, never a width, so it can't re-introduce the
+//     layout-feedback oscillation the rest of this comment describes fixing.
 // The cell itself deliberately carries NO background: it's fully
 // transparent, ALWAYS, so while scrolled mid-way (CP-2) it never paints a
 // visible reserved-width block over whatever it's pinned on top of —
@@ -139,6 +144,65 @@ function quickActionsColumnClassName(extraClassName) {
 // (quickActionsReservedWidthPx) that can't be a static Tailwind class.
 function quickActionsColumnStyle(reservedWidthPx) {
   return { width: `${reservedWidthPx}px` };
+}
+
+// ETP-5268 follow-up — "cuando esta visible la ultima columna ... debe dejar
+// de hacer este hover y estar 100% visible": once the sticky actions column
+// has settled into normal flow (no horizontal overflow at all, OR scrolled
+// all the way to the true end), the buttons should be always-on, not
+// hover-only — hover-to-reveal stays reserved for while the column is
+// actually pinned/overlapping (CP-2), where something IS being covered and
+// showing icons unprompted would be confusing.
+//
+// This is the one bit sticky positioning by itself can't answer (see the
+// comment above quickActionsColumnClassName for why everything else here is
+// plain CSS): there's no shipped, reliable CSS way yet to ask "is this
+// sticky element currently stuck." So it's JS-detected — but unlike the
+// scroll-tracking this file used to do for column WIDTH (see git history:
+// three separate "se va y viene" flicker bugs, all from the table's own
+// rendered width changing in reaction to scroll state, which the
+// scroll-state detection then re-measured), this only ever toggles an
+// `opacity` class. Nothing here feeds back into any measurement, so it
+// can't reopen that class of bug no matter how it's wired.
+function useQuickActionsAlwaysVisible() {
+  const [alwaysVisible, setAlwaysVisible] = useState(true);
+  const cleanupRef = useRef(null);
+
+  // Same callback-ref reasoning as the removed useHorizontalScrollEdge had:
+  // DataTable early-returns a skeleton while `loading`, so an object-ref
+  // effect would attach to nothing on the one render that matters and never
+  // retry. A callback ref reruns setup every time this exact node mounts.
+  const containerRef = useCallback((outerEl) => {
+    if (cleanupRef.current) {
+      cleanupRef.current();
+      cleanupRef.current = null;
+    }
+    const el = outerEl?.firstElementChild;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+
+    const EPSILON = 1;
+    const measure = () => {
+      const hasOverflow = el.scrollWidth > el.clientWidth + EPSILON;
+      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - EPSILON;
+      setAlwaysVisible((prev) => {
+        const next = !hasOverflow || atEnd;
+        return prev === next ? prev : next;
+      });
+    };
+
+    measure();
+    el.addEventListener('scroll', measure, { passive: true });
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(el);
+    if (el.firstElementChild) resizeObserver.observe(el.firstElementChild);
+
+    cleanupRef.current = () => {
+      el.removeEventListener('scroll', measure);
+      resizeObserver.disconnect();
+    };
+  }, []);
+
+  return { alwaysVisible, containerRef };
 }
 
 // Extracts grow flag and basis (px) from a columnFlex() shorthand string.
@@ -1888,6 +1952,7 @@ function TableDataRow({
   apiBaseUrl,
   token,
   hasDimensionsPanel = false,
+  quickActionsAlwaysVisible = false,
 }) {
   const isSelectedLine = selectedRowId != null && row.id === selectedRowId;
   const rowDisabled = isRowSelectable && !isRowSelectable(row);
@@ -2085,6 +2150,7 @@ function TableDataRow({
             entity={entity}
             apiBaseUrl={apiBaseUrl}
             token={token}
+            alwaysVisible={quickActionsAlwaysVisible}
             documentPreview={rowQuickActions.documentPreview}
             sendDocument={rowQuickActions.sendDocument}
             menuActions={rowQuickActions.menuActions}
@@ -2430,6 +2496,9 @@ export function DataTable({
     [visibleColumns, entity, addRow?.fields, addRow?.catalogs],
   );
 
+  const { alwaysVisible: quickActionsAlwaysVisible, containerRef: scrollContainerRef } =
+    useQuickActionsAlwaysVisible();
+
   const totals = useMemo(() => {
     if (amountColumns.length === 0) return null;
     const sums = {};
@@ -2603,6 +2672,7 @@ export function DataTable({
         so 24px of bottom padding gives the shadow room inside the visible area.
       */}
       <div
+        ref={scrollContainerRef}
         className={[
           linesLayout === 'inlineEditable' ? '[&>div]:!overflow-visible' : 'overflow-x-auto overflow-y-visible',
           rowHoverStyle === 'elevated' ? 'pb-6' : '',
@@ -2662,7 +2732,7 @@ export function DataTable({
               editingRowId, handleRowActivation, hoverRowActions, onSaveRow, onCancelEdit,
               onEditRow, onDeleteRow, deletingRows, setDeletingRows, ui, legacyDeleteEnabled,
               onCloneRow, quickActionsEnabled, rowQuickActions, entity, apiBaseUrl, token,
-              hasDimensionsPanel,
+              hasDimensionsPanel, quickActionsAlwaysVisible,
             })}
             {addRow?.active && (
               <InlineAddRow

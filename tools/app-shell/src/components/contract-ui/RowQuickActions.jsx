@@ -88,6 +88,13 @@ export default function RowQuickActions({
   // read-only detail for viewing. Non-mutating affordances (Email/Send, kebab
   // menu actions) stay gated by their own config. Defaults to false → unchanged.
   readOnly = false,
+  // ETP-5268 follow-up — true once DataTable's sticky actions column has
+  // settled into normal flow (no horizontal overflow at all, or scrolled to
+  // the true end): the pill stays visible without a hover, instead of the
+  // hover-only default used while it's still pinned/overlapping (CP-2),
+  // where something IS being covered and showing icons unprompted would be
+  // confusing. See useQuickActionsAlwaysVisible in DataTable.jsx.
+  alwaysVisible = false,
 }) {
   const ui = useUI();
   const [showMenu, setShowMenu] = useState(false);
@@ -247,8 +254,20 @@ export default function RowQuickActions({
       // — is what makes it cleanly cover only that part instead ("con fondo
       // blanco esa parte no mas"). Safe to keep unconditional (not gated
       // behind hover) since the WHOLE pill, background included, already
-      // fades in via `opacity-0 group-hover/row:opacity-100` below.
-      className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-row items-center justify-center gap-0.5 h-10 px-3 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100 transition-opacity z-10 bg-card rounded-lg shadow-sm ring-1 ring-border/40"
+      // fades in/out with the opacity classes right below.
+      //
+      // ETP-5268 follow-up — `alwaysVisible` (see its own prop comment)
+      // swaps the default hover-only opacity for a flat `opacity-100`:
+      // "cuando esta visible la ultima columna ... debe dejar de hacer este
+      // hover y estar 100% visible". Hover-reveal stays the default because
+      // it's still needed while the pill is pinned/overlapping (CP-2) —
+      // showing icons unprompted there, over whatever data column happens to
+      // be scrolled underneath, would look like an unexplained pill hovering
+      // over random rows rather than a deliberate row action.
+      className={[
+        'absolute right-3 top-1/2 -translate-y-1/2 flex flex-row items-center justify-center gap-0.5 h-10 px-3 focus-within:opacity-100 transition-opacity z-10 bg-card rounded-lg shadow-sm ring-1 ring-border/40',
+        alwaysVisible ? 'opacity-100' : 'opacity-0 group-hover/row:opacity-100',
+      ].join(' ')}
       data-testid="row-quick-actions"
       onClick={stop}
     >
