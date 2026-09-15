@@ -26,8 +26,12 @@ import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
  * `@/utils/recordActions.js` (same matcher as DetailView's `evalDisplayLogicRaw`). ANDed with the
  * existing edit-view visibility (delete gate, `documentPreview`, `action.visible`).
  *
- * The wrapping <td> uses absolute positioning so the icons overlay the trailing
- * grid columns and reveal on `group-hover/row` (set by DataTable's <TableRow>).
+ * This component is always absolutely positioned (see the className comment
+ * below for why) — the icons overlay the trailing grid column and reveal on
+ * `group-hover/row` (set by DataTable's <TableRow>). Whether the enclosing
+ * <td> is narrow (letting the pill overflow onto the previous column, when
+ * there's no free space) or wide enough to contain it without overlap
+ * (ETP-5268) is controlled entirely by DataTable's own cell width, not here.
  *
  * NOTE: this component is generic — every prop is optional and gates behavior
  * gracefully. It is safe to mount on every list row regardless of window config.
@@ -221,6 +225,13 @@ export default function RowQuickActions({
 
   return (
     <div
+      // Always absolutely positioned — even when the enclosing <td> is given
+      // real reserved width instead of overlapping the previous column
+      // (ETP-5268, see DataTable's `overlapLastColumn`), this MUST stay out of
+      // normal flow: it's `h-10` regardless of hover state (only `opacity`
+      // toggles), so in-flow it would inflate every row's height to fit these
+      // 32-40px icon buttons even while invisible — that regression shipped
+      // and was caught by hand on /contacts before being reverted here.
       className={`absolute right-3 top-1/2 -translate-y-1/2 flex flex-row items-center justify-center gap-0.5 h-10 px-3 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100 transition-opacity z-10 ${QUICK_ACTIONS_PILL_CLASS}`.trim()}
       data-testid="row-quick-actions"
       onClick={stop}
