@@ -16,6 +16,13 @@ import { fileURLToPath } from 'node:url';
 // criteria `fieldName` of `_tbaiStatus` — a name that exists nowhere in the
 // DAL (see docs/plans/2026-09-08-tbai-status-computed-column-migration.md §1).
 //
+// ETP-5216 follow-up / ETP-5229 — `filterMode` on this column was later
+// changed from `'text'` to `'enumLabel'` (both windows) on purpose: the
+// TicketBAI/Batuz status is a CLOSED catalog of 6 codes (Pendiente/Recibido/
+// Enviada/Rechazado/Error/NoAplica), so a free-text filter never made sense —
+// it must be a picker (which also enables the `isNull` operator). This test
+// asserts `'enumLabel'`, the current intentional value, not `'text'`.
+//
 // This test does two things for BOTH invoice windows (sales, purchase):
 //   1. Extracts the real TicketBAI/Batuz column object literal from the
 //      window's own HeaderTable source (no re-implementation of the column,
@@ -119,16 +126,24 @@ for (const { name, path } of WINDOWS) {
     });
 
     it('produces a criteria fieldName that is the real DAL property, not the old synthetic key', () => {
-      // filterMode 'text' never hits the identifier-suffix branch of
-      // getFilteredKey, so the resolved fieldName is the column's own key —
-      // which must be the real DAL property name, not `_tbaiStatus`.
+      // getFilteredKey() only special-cases `mode === 'identifier'` (appending
+      // the `$_identifier` suffix); every other mode — including this
+      // column's actual 'enumLabel' — falls through to `col.key` unchanged
+      // (see node_modules/@etendosoftware/app-shell-core/src/lib/gridQuery.js,
+      // getFilteredKey). So regardless of filterMode, the resolved fieldName
+      // is the column's own key — which must be the real DAL property name,
+      // not `_tbaiStatus`.
       const fieldName = getFilteredKey(col, col.filterMode, 'iContains');
       assert.equal(fieldName, 'eTGOTbaiStatus');
       assert.notEqual(fieldName, '_tbaiStatus');
     });
 
-    it('declares filterMode text (no implicit fallback to a mode this column cannot support)', () => {
-      assert.equal(col.filterMode, 'text');
+    it('declares filterMode enumLabel (closed 6-code catalog, no free-text fallback)', () => {
+      // ETP-5216 follow-up / ETP-5229: TicketBAI/Batuz status is a closed
+      // catalog (Pendiente/Recibido/Enviada/Rechazado/Error/NoAplica), so the
+      // filter must be a picker over enumLabels, not a free-text input — and
+      // enumLabel mode also enables the `isNull` operator.
+      assert.equal(col.filterMode, 'enumLabel');
     });
   });
 }

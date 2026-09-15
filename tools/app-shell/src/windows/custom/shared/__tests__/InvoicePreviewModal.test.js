@@ -8,12 +8,20 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'InvoicePreview.jsx'), 'utf8');
 
 describe('InvoicePreviewModal source', () => {
-  // ETP-5087 added a trailing `territory` argument (TBAI territory gating for purchase
-  // invoices) — the regex below tolerates that optional extra arg while still guarding
-  // against the original bug (a `token` argument sneaking back in).
-  it('calls useFiscalStatus without a token argument — signature is (id, spec, profile, apiBaseUrl, orgId[, territory])', () => {
-    assert.match(src, /useFiscalStatus\(\s*invoice\?\.id,\s*specName,\s*profile,\s*apiBaseUrl,\s*orgId,(\s*territory,?)?\s*\)/);
-    assert.doesNotMatch(src, /useFiscalStatus\([^)]*token[^)]*orgId/);
+  // ETP-5229 rewrote useFiscalStatus to derive status synchronously from the
+  // invoice's own header record — no more network params (token/apiBaseUrl/orgId).
+  // Signature is (invoice, specName, profile, territory, cutoverDates) — the
+  // corrected design (live-tested fix) added a 5th cutoverDates arg carrying the
+  // earliest-ever cutover per system, built from earliestSiiCutoverDate/
+  // earliestTbaiCutoverDate/earliestVerifactuCutoverDate.
+  it('calls useFiscalStatus with the invoice record and the earliest-cutover-dates object, not a network-fetch signature', () => {
+    assert.match(
+      src,
+      /useFiscalStatus\(\s*invoice,\s*specName,\s*profile,\s*territory,\s*\{\s*sii:\s*earliestSiiCutoverDate,\s*tbai:\s*earliestTbaiCutoverDate,\s*verifactu:\s*earliestVerifactuCutoverDate,?\s*\}\s*,?\s*\)/,
+    );
+    assert.doesNotMatch(src, /useFiscalStatus\([^)]*token[^)]*\)/);
+    assert.doesNotMatch(src, /useFiscalStatus\([^)]*apiBaseUrl[^)]*\)/);
+    assert.doesNotMatch(src, /useFiscalStatus\([^)]*orgId[^)]*\)/);
   });
 
   it('opens NewPaymentEntryModal without passing a token prop', () => {
