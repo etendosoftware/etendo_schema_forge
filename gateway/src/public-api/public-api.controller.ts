@@ -23,7 +23,7 @@ export class PublicApiController {
   async list(@Param('entityName') entityName: string, @Req() req: { neoJwt: string }) {
     const entity = this.schema.entities[entityName];
     if (!entity) throw new NotFoundException(`Unknown public entity: ${entityName}`);
-    const response = await this.fetchImpl(`${this.neoBaseUrl}/sws/neo/${entityName}`, {
+    const response = await this.fetchImpl(`${this.neoBaseUrl}/sws/neo/${entity.specName}/${entityName}`, {
       headers: { Authorization: `Bearer ${req.neoJwt}` },
     });
     const json = (await response.json()) as { response: { data: Record<string, unknown>[] } };

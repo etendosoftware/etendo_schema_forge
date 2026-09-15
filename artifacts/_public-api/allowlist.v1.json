@@ -3,6 +3,7 @@
   "entities": {
     "product": {
       "publicApi": true,
+      "specName": "product",
       "operations": [
         "GET",
         "LIST"
@@ -54,6 +55,7 @@
     },
     "businessPartner": {
       "publicApi": true,
+      "specName": "contacts",
       "operations": [
         "GET",
         "LIST"
