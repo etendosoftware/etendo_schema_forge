@@ -115,9 +115,28 @@ async function bootstrap() {
 
   const docsPage = (_req: unknown, res: { type: (contentType: string) => { send: (body: string) => void } }) => {
     res.type('html').send(`<!doctype html>
-<html><head><title>Etendo Go Public API Docs</title></head>
-<body>
-  <script id="api-reference" data-url="/api/openapi.json"></script>
+<html lang="en"><head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Etendo Go Public API · Beta</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    body { margin: 0; background: #f7f8fa; color: #20232a; }
+    .etendo-header { align-items: center; background: #fff; border-bottom: 1px solid #e5e7eb; display: flex; gap: 18px; min-height: 68px; padding: 0 32px; }
+    .etendo-header img { height: 32px; width: auto; }
+    .etendo-title { border-left: 1px solid #d9dde3; font-size: 16px; font-weight: 600; padding-left: 18px; }
+    .etendo-beta { background: #fff3cd; border: 1px solid #f0c36d; border-radius: 999px; color: #7a4b00; font-size: 11px; font-weight: 700; letter-spacing: .08em; padding: 4px 9px; }
+    .etendo-notice { background: #eef6ff; border-bottom: 1px solid #cfe3f8; color: #244767; font-size: 14px; padding: 11px 32px; }
+    @media (max-width: 640px) { .etendo-header { padding: 0 18px; } .etendo-title { font-size: 14px; } .etendo-notice { padding: 11px 18px; } }
+  </style>
+</head><body>
+  <header class="etendo-header">
+    <img src="/logo-etendo.png" alt="Etendo">
+    <span class="etendo-title">Go Public API</span>
+    <span class="etendo-beta">BETA</span>
+  </header>
+  <div class="etendo-notice">This API is in beta. The contract and limits may change while the public API is being validated.</div>
+  <script id="api-reference" data-url="/api/openapi.json" data-configuration='{"theme":"default","darkMode":false}'></script>
   <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
 </body></html>`);
   };
