@@ -3,13 +3,17 @@
 // contributes zero executed lines to coverage). Mirrors the sibling
 // return-material-receipt/__tests__/ConfirmWithCreditButton.spec.jsx convention
 // (jsdom render + @testing-library/react against the real component tree).
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
 const mockNavigate = vi.fn();
+// ETP-5333 follow-up — onRefresh is what DetailView's renderSlotAction actually
+// passes to this topbarRight component in production; tests assert against
+// this mock instead of window.location.reload, which the component no longer calls.
+const mockOnRefresh = vi.fn();
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
@@ -17,6 +21,8 @@ vi.mock('react-router-dom', () => ({
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
+
+import { toast } from 'sonner';
 
 // Mocks below expose the props needed to exercise ConfirmWithCreditButtonBase's
 // own callback wiring (onConfirmed/onClose/onConfirm/navigate) via buttons the
@@ -47,11 +53,18 @@ vi.mock('@/components/contract-ui/ConfirmResultModal', () => ({
   ),
 }));
 
+// ETP-5333 — the mock exposes `loading` (forwarded by ConfirmWithCreditButtonBase
+// as `loading={creatingInvoice}`) so tests can assert the modal shows the
+// processing label and a disabled confirm button while the request is in
+// flight, and stays mounted until it resolves — mirroring the real
+// CreateInvoiceConfirmModal's own loading contract.
 vi.mock('@/components/contract-ui/CreateInvoiceConfirmModal', () => ({
-  default: ({ onConfirm, onClose }) => (
+  default: ({ onConfirm, onClose, loading }) => (
     <div data-testid="create-invoice-confirm-modal">
-      <button data-testid="create-invoice-confirm" onClick={onConfirm} />
-      <button data-testid="create-invoice-close" onClick={onClose} />
+      <button data-testid="create-invoice-confirm" onClick={onConfirm} disabled={loading}>
+        {loading ? 'soProcessing' : 'soCreateDocsBtn'}
+      </button>
+      <button data-testid="create-invoice-close" onClick={onClose} disabled={loading} />
     </div>
   ),
 }));
@@ -70,6 +83,7 @@ const BASE_PROPS = {
   getPdfLabelsFn: () => ({}),
   specName: 'some-window',
   entityName: 'someWindow',
+  onRefresh: mockOnRefresh,
 };
 
 describe('ConfirmWithCreditButtonBase — postConfirmButtonLabel (ETP-4737)', () => {
@@ -153,6 +167,7 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
 
   beforeEach(() => {
     mockNavigate.mockClear();
+    mockOnRefresh.mockClear();
     // window.location.reload is non-configurable in jsdom — replace location,
     // matching the established pattern in useServiceWorker.vitest.jsx.
     originalLocation = window.location;
@@ -239,7 +254,7 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
     expect(window.location.reload).not.toHaveBeenCalled();
   });
 
-  it('closes ConfirmInOutModal and reloads the page (no result modal) when onConfirmed resolves an invoice without an id', async () => {
+  it('closes ConfirmInOutModal and calls onRefresh (no result modal, no reload) when onConfirmed resolves an invoice without an id (ETP-5333 follow-up)', async () => {
     render(
       <ConfirmWithCreditButtonBase
         {...BASE_PROPS}
@@ -252,7 +267,8 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
 
     expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
     expect(screen.queryByTestId('confirm-result-modal')).not.toBeInTheDocument();
-    expect(window.location.reload).toHaveBeenCalledTimes(1);
+    expect(mockOnRefresh).toHaveBeenCalledTimes(1);
+    expect(window.location.reload).not.toHaveBeenCalled();
   });
 
   it('closes CreateInvoiceConfirmModal without calling the return-invoice flow when its onClose fires', () => {
@@ -269,7 +285,7 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('closes CreateInvoiceConfirmModal and triggers the return-invoice creation flow when its onConfirm fires', async () => {
+  it('triggers the return-invoice creation flow when onConfirm fires, and closes CreateInvoiceConfirmModal only once the request resolves (ETP-5333)', async () => {
     render(
       <ConfirmWithCreditButtonBase
         {...BASE_PROPS}
@@ -279,9 +295,13 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
     fireEvent.click(screen.getByTestId('action-create-return-invoice'));
     fireEvent.click(screen.getByTestId('create-invoice-confirm'));
 
-    expect(screen.queryByTestId('create-invoice-confirm-modal')).not.toBeInTheDocument();
+    // ETP-5333 — the modal must NOT close synchronously on click anymore: it
+    // stays mounted (with loading feedback) until the request settles.
+    expect(screen.getByTestId('create-invoice-confirm-modal')).toBeInTheDocument();
+
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
     expect(globalThis.fetch.mock.calls[0][0]).toContain('/action/createReturnInvoice');
+    await waitFor(() => expect(screen.queryByTestId('create-invoice-confirm-modal')).not.toBeInTheDocument());
     await waitFor(() => expect(screen.getByTestId('confirm-result-modal')).toBeInTheDocument());
   });
 
@@ -305,9 +325,10 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
     // setTimeout(0) inside onClose checks resultNavigatedRef — give it a tick.
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(window.location.reload).not.toHaveBeenCalled();
+    expect(mockOnRefresh).not.toHaveBeenCalled();
   });
 
-  it('reloads the page after closing the result modal when the user did not navigate away first', async () => {
+  it('calls onRefresh (not a reload) after closing the result modal when the user did not navigate away first (ETP-5333 follow-up)', async () => {
     render(
       <ConfirmWithCreditButtonBase
         {...BASE_PROPS}
@@ -321,8 +342,120 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
 
     fireEvent.click(screen.getByTestId('result-close'));
     await waitFor(() => expect(screen.queryByTestId('confirm-result-modal')).not.toBeInTheDocument());
-    await waitFor(() => expect(window.location.reload).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockOnRefresh).toHaveBeenCalledTimes(1));
     expect(mockNavigate).not.toHaveBeenCalled();
+    expect(window.location.reload).not.toHaveBeenCalled();
+  });
+});
+
+// ETP-5333 — regression coverage. Before the fix, ConfirmWithCreditButtonBase's
+// inline onConfirm handler closed CreateInvoiceConfirmModal SYNCHRONOUSLY on
+// click (`() => { setShowModal(false); handleCreateReturnInvoice(); }`), before
+// the createReturnInvoice request even started — the modal vanished with no
+// loading feedback, then a second (result) modal popped up later once the
+// request resolved. The fix moved `setShowModal(false)` inside
+// `handleCreateReturnInvoice`'s SUCCESS branch (useConfirmWithCredit.js), right
+// before `setResult(...)`, and simplified onConfirm to just
+// `handleCreateReturnInvoice` — so the modal now stays mounted (showing
+// `loading={creatingInvoice}`) for the whole request, matching
+// ConfirmInOutModal's pre-existing behavior. These tests use a manually
+// resolvable/rejectable deferred fetch promise to assert the mid-flight state,
+// which the previous synchronous-close behavior made impossible to observe.
+describe('ConfirmWithCreditButtonBase — CreateInvoiceConfirmModal stays open during the async request (ETP-5333)', () => {
+  let originalLocation;
+
+  beforeEach(() => {
+    mockNavigate.mockClear();
+    mockOnRefresh.mockClear();
+    originalLocation = window.location;
+    delete window.location;
+    window.location = { ...originalLocation, reload: vi.fn() };
+  });
+
+  afterEach(() => {
+    delete window.location;
+    window.location = originalLocation;
+  });
+
+  function openCoModal() {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'CO', hasReturnInvoice: false, id: 'REC-001' }}
+      />
+    );
+    fireEvent.click(screen.getByTestId('action-create-return-invoice'));
+  }
+
+  it('regression: stays mounted and shows the loading label with a disabled confirm button before the request resolves', async () => {
+    let resolveFetch;
+    globalThis.fetch = vi.fn(() => new Promise((resolve) => { resolveFetch = resolve; }));
+    openCoModal();
+
+    fireEvent.click(screen.getByTestId('create-invoice-confirm'));
+
+    // The bug: previously the modal unmounted here, synchronously, before the
+    // request even started.
+    expect(screen.getByTestId('create-invoice-confirm-modal')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('create-invoice-confirm')).toHaveTextContent('soProcessing'));
+    expect(screen.getByTestId('create-invoice-confirm')).toBeDisabled();
+
+    // Cleanup: let the pending promise settle so it doesn't leak into other tests.
+    await act(async () => {
+      resolveFetch({ ok: true, json: () => Promise.resolve({ response: { data: {} } }) });
+    });
+  });
+
+  it('on success: the modal disappears and the result modal appears with the invoice data', async () => {
+    let resolveFetch;
+    globalThis.fetch = vi.fn(() => new Promise((resolve) => { resolveFetch = resolve; }));
+    openCoModal();
+    fireEvent.click(screen.getByTestId('create-invoice-confirm'));
+    await waitFor(() => expect(screen.getByTestId('create-invoice-confirm')).toHaveTextContent('soProcessing'));
+
+    await act(async () => {
+      resolveFetch({
+        ok: true,
+        json: () => Promise.resolve({ response: { data: { id: 'RET-1', documentNo: 'FC-002', grandTotalAmount: 50 } } }),
+      });
+    });
+
+    expect(screen.queryByTestId('create-invoice-confirm-modal')).not.toBeInTheDocument();
+    expect(screen.getByTestId('confirm-result-modal')).toBeInTheDocument();
+  });
+
+  it('on failure: the modal stays open, returns to the idle label, and toast.error is called — no result modal', async () => {
+    let rejectFetch;
+    globalThis.fetch = vi.fn(() => new Promise((_resolve, reject) => { rejectFetch = reject; }));
+    openCoModal();
+    fireEvent.click(screen.getByTestId('create-invoice-confirm'));
+    await waitFor(() => expect(screen.getByTestId('create-invoice-confirm')).toHaveTextContent('soProcessing'));
+
+    await act(async () => {
+      rejectFetch(new Error('Network error'));
+    });
+
+    expect(screen.getByTestId('create-invoice-confirm-modal')).toBeInTheDocument();
+    expect(screen.getByTestId('create-invoice-confirm')).toHaveTextContent('soCreateDocsBtn');
+    expect(screen.getByTestId('create-invoice-confirm')).not.toBeDisabled();
+    expect(toast.error).toHaveBeenCalledWith('Network error');
+    expect(screen.queryByTestId('confirm-result-modal')).not.toBeInTheDocument();
+  });
+
+  it('rapid double-click on the confirm button while a request is in flight results in exactly one POST call', async () => {
+    let resolveFetch;
+    globalThis.fetch = vi.fn(() => new Promise((resolve) => { resolveFetch = resolve; }));
+    openCoModal();
+
+    fireEvent.click(screen.getByTestId('create-invoice-confirm'));
+    fireEvent.click(screen.getByTestId('create-invoice-confirm'));
+
+    await waitFor(() => expect(screen.getByTestId('create-invoice-confirm')).toHaveTextContent('soProcessing'));
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveFetch({ ok: true, json: () => Promise.resolve({ response: { data: {} } }) });
+    });
   });
 });
 
