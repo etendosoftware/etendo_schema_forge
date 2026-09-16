@@ -477,6 +477,13 @@
           "hidden": true
         },
         {
+          "name": "api-keys",
+          "label": "Public API Keys",
+          "favname": "Public API Keys",
+          "icon": "KeyRound",
+          "capability": "publicApiKeyManagement"
+        },
+        {
           "name": "fiscal-config",
           "label": "Fiscal Configuration",
           "favname": "Fiscal Configuration",

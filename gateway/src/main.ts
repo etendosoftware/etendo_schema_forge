@@ -13,7 +13,18 @@ Etendo Go Public API provides curated access to Base-window resources through a 
 
 ### 1. Get an API key
 
-Create an API client in Etendo Go and assign it the required scope. Keep the client secret private; it is shown only once. Send the resulting credential in the Authorization header:
+Create an owned public API key in Etendo Go. The provisioning endpoint requires the user's
+session JWT and accepts only public capabilities:
+
+\`\`\`bash
+curl -X POST http://localhost:3100/oauth2/api-keys \\
+  -H "Authorization: Bearer <session-jwt>" \\
+  -H 'Content-Type: application/json' \\
+  -d '{"name":"Nest integration","capabilities":["public-api:read"]}'
+\`\`\`
+
+Store the returned \`clientId\` and \`clientSecret\` immediately. The secret is returned only by
+the create/rotate response. The gateway accepts the pair as a bearer credential:
 
 \`\`\`http
 Authorization: Bearer <client-id>:<client-secret>
@@ -21,7 +32,19 @@ Authorization: Bearer <client-id>:<client-secret>
 
 API keys are scoped to the tenant, organization, role, and operations assigned to the client. The gateway rejects resources, verbs, and fields outside the published contract.
 
-### 2. Make your first request
+### 2. Authorize Scalar
+
+Open \`/api\` or \`/docs\`, select **Authorize**, and enter the credential as:
+
+\`\`\`text
+<clientId>:<clientSecret>
+\`\`\`
+
+Scalar sends it as \`Authorization: Bearer <clientId>:<clientSecret>\`. The Nest gateway exchanges
+the pair for a short-lived NEO token and forwards the request to Etendo Go; callers do not need
+to implement the OAuth2 \`client_credentials\` exchange themselves.
+
+### 3. Make your first request
 
 \`\`\`bash
 curl https://app.etendo.software/api/v1/product \\
@@ -31,17 +54,17 @@ curl https://app.etendo.software/api/v1/product \\
 
 Use the operation list below to discover the available resources. Every response is filtered to the fields documented for that resource.
 
-### 3. Understand a resource
+### 4. Understand a resource
 
 Each resource corresponds to a business window in Etendo Go. The resource page explains what the window is used for, which operations are available, and which fields are public. The URL may use an internal entity name, but the documentation uses the functional name that users know.
 
-### 4. Create and update records
+### 5. Create and update records
 
 Use \`POST\` on a collection to create a record. Use \`PUT\` or \`PATCH\` on \`/resource/{id}\` to update one. Use \`DELETE\` on \`/resource/{id}\` to remove one. Request fields must be writable in this document; unknown or read-only fields are rejected before the request reaches Etendo Go.
 
 Updates use optimistic concurrency. Include the \`updated\` value returned by a previous read when the resource requires it; a stale value returns \`409 Conflict\`.
 
-### 5. Create lines for a document
+### 6. Create lines for a document
 
 Document lines are addressed through their master resource: \`/api/v1/{master}/{masterId}/{line-resource}\`. For example, create a sales-invoice line with \`POST /api/v1/sales-invoice/{masterId}/lines\`. The gateway derives the master foreign key from the URL and sends it to Etendo Go as \`parentId\`; clients must not override that relationship in the request body. The same nested path supports \`GET\`, \`POST\`, \`PUT\`, \`PATCH\`, and \`DELETE\` when the document contract exposes those operations.
 
