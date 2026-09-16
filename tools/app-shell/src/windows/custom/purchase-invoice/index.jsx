@@ -182,7 +182,12 @@ export default function PurchaseInvoiceWindow(props) {
   const effectiveRecord = savedRecord ?? location.state?.savedRecord ?? null;
 
   const clearSavedRecord = useClearSavedRecord(setSavedRecord, location, navigate);
-  const draftModeOverride = getInvoiceDraftMode(ui, { keepSaveWhenCompletedFields: ['orderReference'] });
+  // MUST stay in sync with artifacts/purchase-invoice/decisions.json ->
+  // window.draftMode.keepSaveWhenCompletedFields. This override is what actually reaches
+  // DetailView: the generated HeaderPage sets draftMode from the contract but expands
+  // {...props} AFTER it, so this value wins and the contract's never applies here.
+  // draft-mode-allowlist-sync.test.js fails if the two drift apart.
+  const draftModeOverride = getInvoiceDraftMode(ui, { keepSaveWhenCompletedFields: ['orderReference', 'accountingDate'] });
 
   // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
   // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.

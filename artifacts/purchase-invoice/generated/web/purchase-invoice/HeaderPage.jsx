@@ -48,7 +48,8 @@ const draftMode = {
   "processValue": "CO",
   "label": "Confirm",
   "keepSaveWhenCompletedFields": [
-    "orderReference"
+    "orderReference",
+    "accountingDate"
   ]
 };
 // @sf-generated-end draftMode:header
