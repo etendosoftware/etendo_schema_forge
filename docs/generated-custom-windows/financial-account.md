@@ -795,7 +795,7 @@ native app-shell UI; only the bank login is an external popup.
   connect then preselects that bank, so the Salt Edge widget skips the bank picker.
 - **Sandbox/fake banks are offered to Demo tenants only (ETP-5344).** Whether the Salt Edge widget
   lists test banks alongside the real ones is decided by `handleConnect` and passed down as the
-  `includeSandboxes` argument of `BankIntegrationUtils.createSaltEdgeConnection`, which is the only
+  `includeSandboxes` argument of `SaltEdgeConnectionBuilder.createSaltEdgeConnection`, which is the only
   thing that puts `include_sandboxes` in the consent body. Two conditions, both required: the PSD2
   module's own `PSD2_ShowFakeProviders` preference must be `Y` (an operator who turns it off is
   never overridden), **and** the tenant must not carry `ETGO_TenantPlan = productive`. A tenant that
