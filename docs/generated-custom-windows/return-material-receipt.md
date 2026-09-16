@@ -44,7 +44,7 @@ Receive material back into stock after a sales-side return flow. The window is o
 - Actions such as `createLinesFrom`, `receiveMaterials`, `sendMaterials`, `generateTo`, and `processGoodsJava` suggest stock-impacting or line-generation reactions, but the repo evidence here does not show their runtime behavior or sequencing. Those effects should be treated as expected but unverified.
 - The line selector for `salesOrderLine` is searchable, but there is no clear evidence that it is constrained by the header sales order or by the selected product. If that dependency matters for data integrity, it is a current gap in observable behavior.
 - The related-documents tab clearly links back to the sales order, but no evidence here shows links to downstream inventory or accounting documents created from the receipt.
-- **ETP-4408 — Confluence DF "Documento A — Albarán de Devolución" (space PYPI, page "Ventas") — left-panel choice superseded by ETP-5124, see below:** the row-preview panel the DF asks for (right panel with Editar, General/Mensajes/Historial tabs, Estado section with status badge + billing-status progress bar, Documentos Relacionados) **mostly already existed**, shipped since ETP-4034/ETP-4208 — `windows/custom/return-material-receipt/ReturnMaterialReceiptPreview.jsx` + `useReturnReceiptPdf.js`, wired via `rowQuickActions.documentPreview: true` + `renderPreview` in this window's `index.jsx`, reusing the same shared building blocks as `goods-shipment`/`return-to-vendor-shipment`.
+- **ETP-4408 — Confluence DF "Documento A — Albarán de Devolución" (space PYPI, page "Ventas") — left-panel choice superseded by ETP-5124, see below:** the row-preview panel the DF asks for (right panel with Editar, General/Mensajes/Historial tabs, Estado section with status badge + billing-status progress bar, Documentos Relacionados) **mostly already existed**, shipped since ETP-4034/ETP-4208 — `windows/custom/return-material-receipt/ReturnMaterialReceiptPreview.jsx` + `useReturnReceiptPdf.js`, wired via `rowQuickActions.documentPreview: true` + `renderPreview` in this window's `index.jsx`, reusing the same shared building blocks as `goods-shipment`/`return-to-vendor-shipment`. The DF's separate **Mensajes**/**Historial** tabs were never built and are explicitly **discarded, not a gap**: the email-history need they would have covered is served instead by `EmailsCard` inside the existing General tab (ETP-5124, see below) — the same pattern `sales-invoice`/`sales-order`/`sales-quotation`/`goods-shipment` already use. Do not re-propose separate tabs for this.
   The billing-status progress bar was the one piece that was **not** actually wired despite the note above — added under ETP-4408: `invoiceStatus` is now exposed (`readOnly`, `columnType: "percent"`) as a list column (`ReturnMaterialReceiptTable.jsx`) and as an "Invoiced:" row using the same `PercentBar` shared with orders/invoices, rendered in `ReturnDocStatsPanel.jsx` (shared by this window and `return-to-vendor-shipment`). Backend support (`ReturnMaterialReceiptHeaderHandler`/`ReturnToVendorShipmentHeaderHandler` in `com.etendoerp.go`, via `ReturnShipmentUtils.fetchInvoiceStatuses`) computes the real percentage from `C_GETINVOICESTATUSFROMSHIPMENT` — without it every record showed 0%.
   ~~The left-panel mismatch flagged earlier is now resolved: the panel no longer auto-shows the system-generated PDF. It's now the customer-supplied return receipt upload~~ — **this left-panel change was reverted by ETP-5124** (see below); the paragraph is kept struck through for history. Other change made under ETP-4408 that stands unchanged: discarded `etblkpAccountingstatus` (the sole field on this window's "Otros" form tab, also present on `goods-shipment`) — internal accounting-posting state, not part of the DF and not needed here.
   **Bug fixed under ETP-4408 (found while validating this window, pre-existing since 2026-03):** `businessPartner` (Contacto) stayed editable forever, even on completed receipts. Root cause: its AD rule (`@Processed@='Y' | @HAS_M_INOUTLINES@='Y'`) includes `@HAS_M_INOUTLINES@`, a session variable the pipeline's resolver can never turn into client-side JS (`evaluable: false` unconditionally) — no `decisions.json` setting can fix that half of the rule. Fixed by overriding `readOnlyLogic` with the simplified, client-evaluable `"@Processed@='Y'"` instead of leaving it unresolved. **Known residual gap:** the `HAS_M_INOUTLINES` half (lock the partner once the receipt already has lines, even while still in draft) is not enforced client-side; only "locked once completed" is.
@@ -71,6 +71,7 @@ Receive material back into stock after a sales-side return flow. The window is o
 12. On the list view, confirm the "Contabilizado" column shows a green "Contabilizado" or orange "Sin contabilizar" pill per record, and that the Advanced Filter (funnel icon) offers "Contabilizado"/"Sin contabilizar" as selectable values for that column. On the detail header, confirm a status pill with the same labels is visible. In the kebab menu, confirm a localized "Contabilizar" action (not "Bulk Posting") appears only while the document is processed and not yet posted, and confirm no raw "Bulk Posting" button appears anywhere.
 13. **ETP-4857:** select two or more Borrador receipts from the list and confirm the selection bar shows a `Confirmar (N)` button. Trigger it, confirm "Procesar"/`CO` is the only action offered, and click through to completion — verify all selected receipts move to completed status and a result toast appears without needing to navigate away first. Select a completed receipt together with a draft one and confirm the bulk action still only offers to confirm the draft (no reactivate option appears for the completed one).
 14. **ETP-4940 follow-up:** open a draft receipt, edit a header field (e.g. notes) WITHOUT clicking Save, then click the primary confirm button. Confirm the edit is persisted (visible after reload / on the completed record), not discarded.
+15. **ETP-5124 (Send):** on a Completado receipt, confirm the row-hover Email icon in the list AND the "Enviar" button in the row-preview panel both open the send modal (they were both silently inert before this ticket). Send a test email; confirm it succeeds (no "Unknown email contract" error) and that the "Emails" card in the preview's General tab shows the new send after the modal closes, without needing to reopen the panel. On a Borrador receipt, confirm neither trigger is offered.
 
 ## Automated evidence
 
@@ -178,6 +179,86 @@ customer-upload override; the PM has not been asked to change it and nothing her
 Test coverage: `tools/app-shell/src/windows/custom/return-material-receipt/__tests__/ReturnMaterialReceiptPreview.vitest.jsx`'s
 "leftPanel wiring (ETP-5124 — system-generated PDF, reverting ETP-4408)" block asserts
 `leftPanel` is passed and `attachmentConfig` is not.
+
+## "Enviar" (Send) wired end-to-end, including email history — ETP-5124
+
+Before this ticket, both frontend entry points for Send existed but neither worked, because the
+backend email contract for this window did not exist at all:
+
+- **Grid row envelope:** `index.jsx` already passed `emailAction={{ usePdf: useReturnReceiptPdf, ... }}`
+  to `ReturnWindowShell` (since ETP-4912), but `decisions.json → window.sendDocument.enabled: false`
+  suppressed the row Email icon regardless (see `RowQuickActions.jsx`'s `sendDocument`-gated
+  visibility, which takes precedence over the `emailAction`/`documentPreview` wiring) — the icon
+  simply never rendered.
+- **Preview panel button:** `ReturnMaterialReceiptPreview.jsx` created a `sendModal` via
+  `usePreviewSendModal()` and rendered `ReceiptSendModal`, but never passed `onEmail` into
+  `buildReturnPreviewContent`, so `PreviewActionButtons` never rendered the "Enviar" button at all
+  — `sendModal.openEmailModal` had nothing wired to call it.
+- Even if either trigger had been reachable, posting to `email-contracts/return-material-receipt-send/send`
+  would have failed with "Unknown email contract" — `com.etendoerp.go` had no contract registered
+  under that name.
+
+All three gaps are closed:
+
+1. **Backend:** new `ReturnMaterialReceiptSendEmailContract` (`com.etendoerp.go`, contract name
+   `return-material-receipt-send`, matching the `${windowName}-send` convention exactly — no naming
+   mismatch like `return-to-vendor-send`), backed by a new
+   `DalReturnMaterialReceiptEmailDocumentResolver`. Registered alongside `GoodsShipmentSendEmailContract`
+   in `ShipmentDocumentEmailContractProvider` (both are sales-side `M_InOut` contracts).
+   **The resolver's one subtlety:** Return Material Receipt and Goods Shipment share the exact same
+   table, `IsSOTrx='Y'`, and even the same `MovementType` (`C-`) — verified against a real instance,
+   see `artifacts/return-material-receipt/FINDINGS.md`. The only discriminator is
+   `C_DocType.IsReturn`, so the resolver rejects a record unless `getDocumentType().isReturn()` is
+   true, on top of the `isSalesTransaction()` check `DalShipmentEmailDocumentResolver` already uses
+   — otherwise this contract would silently resolve (and let you email) a Goods Shipment record too.
+2. **`decisions.json`:** removed `window.sendDocument.enabled: false` entirely (the platform default
+   is auto-enabled once the header exposes `documentNo`, which this window does) — `make regen
+   ONLY=return-material-receipt` regenerated `ReturnMaterialReceiptPage.jsx` with the bare
+   `sendDocument` boolean-shorthand prop, exactly like `goods-shipment`'s generated output.
+3. **Preview wiring:** `ReturnMaterialReceiptPreview.jsx` now passes
+   `onEmail: isSendable ? sendModal.openEmailModal : undefined` (gated on
+   `documentStatus === 'CO'`, matching the grid's own `emailAction.visibleWhen`) into
+   `buildReturnPreviewContent`, and passes `pdfBlobLoading={pdfLoading}` on `ReceiptSendModal` (a
+   second, independent bug: without it the send modal's PDF preview skips its loading spinner and
+   shows an unpaginated raw-HTML fallback whenever opened before jsreport finishes rendering — see
+   `docs/document-printables.md` / the `emails` skill for the pattern, already fixed elsewhere for
+   `InvoicePreview`/`OrderPreview`/`QuotationPreview`/`GoodsShipmentPreview` but missed here).
+
+**Email history (ETP-5069) added to this window's preview**, matching Sales Invoice/Order/Quotation
+and Goods Shipment: `ReturnDocStatsPanel.jsx` (shared with `return-to-vendor-shipment`) gained a new
+optional `emailsCard` prop — when passed, it renders `EmailsCard` between the status summary and
+`RelatedDocumentsCard`; when omitted (as `return-to-vendor-shipment` still does — it has no working
+send contract yet), nothing changes for that window. `ReturnMaterialReceiptPreview.jsx` passes
+`emailsCard={{ onSend, documentId, apiBaseUrl, refreshSignal }}`, and a new `emailsRefreshSignal`
+state, bumped via `onSent` on `ReceiptSendModal` (also newly threaded through
+`PreviewActionButtons.jsx`'s `PreviewSendModal`/`ReceiptSendModal`, which previously accepted no
+`onSent` prop at all), so the card refetches right after a successful send instead of waiting for
+the panel to remount.
+
+**Summary-block design decision:** the email shows one summary row, the movement/receipt date,
+reusing the existing `document.detail.movementDate` catalog key (no new key needed) — the same
+"one date row" shape `return-to-vendor-send` uses. A `sourceShipment` reference row was
+deliberately **not** added: that value (`sourceShipmentDocNo`) is produced by
+`ReturnMaterialReceiptHeaderHandler`'s `afterHandle()` GET-time enrichment
+(`ReturnShipmentUtils.fetchSourceDocuments`, package-private, in a different Java package), not a
+real Hibernate property the email resolver could read directly without widening that utility's
+visibility — out of scope for this ticket. Revisit if product wants it.
+
+`return-to-vendor-shipment` (the purchase-side sibling) is **unaffected and still has no working
+send trigger** — see the updated comments in its own `index.jsx` and
+`ReturnToVendorShipmentPreview.jsx`, which used to cite this window as being in the same
+no-live-trigger state and now explicitly say that is no longer true for `return-material-receipt`.
+
+Test coverage: `tools/app-shell/src/windows/custom/return-material-receipt/__tests__/ReturnMaterialReceiptPreview.vitest.jsx`
+(onEmail/emailsCard wiring, `pdfBlobLoading`, `onSent` refresh-signal bump),
+`tools/app-shell/src/windows/custom/shared/preview-cards/__tests__/ReturnDocStatsPanel.vitest.jsx`
+(renders `EmailsCard` when `emailsCard` is passed, omits it otherwise),
+`tools/app-shell/src/windows/custom/shared/__tests__/buildReturnPreviewContent.test.js`,
+`tools/app-shell/src/windows/custom/shared/__tests__/PreviewActionButtons.vitest.jsx` (`onSent`
+threading); on the `com.etendoerp.go` side,
+`src-test/.../email/InitialEmailContractsTest.java` and
+`src-test/.../email/contracts/DocumentSendEmailContractsTest.java` (provider registration plus the
+resolver's `IsReturn` discriminator, including the "must not resolve a Goods Shipment record" case).
 
 ## Final status reads "Completado", not "Registrado" — ETP-4913
 

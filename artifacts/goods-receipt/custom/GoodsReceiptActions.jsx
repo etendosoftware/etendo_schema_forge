@@ -82,12 +82,6 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
   }, [isFullyInvoiced, handleConfirmFullyInvoiced]);
 
   useEffect(() => {
-    const handler = () => downloadLinkRef.current?.click();
-    window.addEventListener('goods-receipt:download-pdf', handler);
-    return () => window.removeEventListener('goods-receipt:download-pdf', handler);
-  }, []);
-
-  useEffect(() => {
     if (!wizardOpen || !recordId || !base) return;
     const bpId = data?.businessPartner;
     if (!bpId) return;

@@ -470,6 +470,105 @@
         ]
       },
       "$testSpecsComment": "expected:true means agreed but not yet written (pending Tester). Paths follow each suite's existing naming convention. The two load-bearing portal assertions, both named in the plan's Testing section: cross-BP isolation (neither token can reach the other's invoices or PDF under any endpoint), and no etgo_portal_access row is minted while the gate is closed -- asserted on the row count, not the email body. A THIRD load-bearing case belongs to the platform suite (PropertiesFeatureProviderTest / GoFeatureFlags) and not here: provider selection, where a blank or wrong ConfigCat SDK key must resolve every flag to false and never to true, and a provider that fails to install must leave flags false rather than propagate into an invoice send."
+    },
+    {
+      "id": "lookup-create-product",
+      "description": "Create a new product from the product selector of a document line, without leaving the document. A pinned row in the product lookup drawer opens a popup that MOUNTS THE PRODUCTS WINDOW ITSELF — its own form, tabs (Price, Cost, Accounting, Attachments) and save button — on a private memory router inside the host's React tree, with the app chrome dropped. Finishing selects the new product in the line.",
+      "owner": "Agustin-Calderon",
+      "jira": "ETP-5254",
+      "created": "2026-09-11",
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/components/contract-ui/lookupCreateTargets.js",
+          "tools/app-shell/src/components/contract-ui/RecordCreateModal.jsx",
+          "tools/app-shell/src/components/contract-ui/EmbeddedWindowRoute.jsx"
+        ],
+        "backend": []
+      },
+      "$pathsComment": "Only the two new files are owned. ProductDrawerShell.jsx and ProductSearchDrawer.jsx are touch points, not owned code: they host the affordance but exist for every product lookup. No runtime flag is declared — CREATE_PRODUCT_SPECS in lookupCreateTargets.js is the scope switch, compile-time and greppable in one place, which is stronger here than a remotely resolved key (see the tenant-upgrade incident recorded on paid-second-tenant).",
+      "$knownGapComment": "USABLE SLICE WITH ACCEPTED DEBT: the popup does not CREATE a cost line by itself, though the Products window's own Cost tab is reachable inside it, so a user can add one before finishing. The popup states nothing about cost: ETP-5245 owns that rule and enforces it with a blocking banner in the Products window, and restating it here would be a second copy free to drift.",
+      "deferredItems": [
+        {
+          "id": "product-created-without-cost",
+          "kind": "open",
+          "note": "The popup does not POST an M_Costing line by itself. Since the popup mounts the Products window, its Cost tab IS reachable once the product is saved, so the user can add the cost without leaving the document — but nothing forces them to, and a stockable product left without one is rejected by the costing engine on the first shipment or receipt. The rule is stated and enforced in one place only: ETP-5245's blocking banner in the Products window. Closing this means seeding a cost line automatically after the product is created.",
+          "refs": [
+            "ETP-5245 - Cost tab, blocking banner for stockable products without cost"
+          ]
+        },
+        {
+          "id": "line-price-zero-on-non-default-tariff",
+          "kind": "open",
+          "note": "A new product is seeded at price 0 only on the tenant's default sales and purchase tariffs (ETP-5245). A document on any other price list may not get the product back from the selector re-query, in which case the synthesized fallback row is used and the line enters at 0 with no aux pricing data. Expected behaviour today; revisit if per-tariff seeding lands.",
+          "refs": [
+            "tools/app-shell/src/components/contract-ui/ProductDrawerShell.jsx - handleCreated, synthesizeCreatedItem",
+            "docs/priceList-injection-origin.md"
+          ]
+        },
+        {
+          "id": "accounting-tab-not-in-popup",
+          "kind": "open",
+          "note": "RESOLVED IN PRACTICE by mounting the window itself: Accounting (and Cost) now appear in the popup, because they are the window's own secondaryTabs rendered by the window's own DetailView. The item is kept open for the dormant FALLBACK path — the two-phase generated form used when the window module fails to load — which still carries only Price and Attachments. Closing this means either dropping the fallback or extracting SecondaryTableTab's data layer.",
+          "refs": [
+            "tools/app-shell/src/components/contract-ui/EmbeddedWindowRoute.jsx - the in-tree mount that makes the real tabs available",
+            "tools/app-shell/src/components/contract-ui/lookupCreateTargets.js - loadPostCreateTabs (fallback only)",
+            "tools/app-shell/src/components/contract-ui/DetailView.jsx - SecondaryTableTab"
+          ]
+        },
+        {
+          "id": "entity-form-lookup-drawer-hardcode",
+          "kind": "precondition",
+          "note": "EntityForm.LookupFormField mounts ProductSearchDrawer directly instead of honouring field.lookupDrawer, so the goods-movements and internal-consumption line FORMS reach the default drawer even though their tables use the stock variant. The 7-spec allowlist compensates for this today; fixing the hardcode is a separate ticket and would let the drawer variant alone gate the affordance.",
+          "refs": [
+            "tools/app-shell/src/components/contract-ui/EntityForm.jsx - LookupFormField",
+            "tools/app-shell/src/components/contract-ui/lookupDrawers.js"
+          ]
+        },
+        {
+          "id": "e2e-evidence",
+          "kind": "open",
+          "note": "Unit coverage is complete (resolver, modal, shell, stock-variant opt-out, locale keys, and a regression pin for the invoice add-row control). Playwright coverage for the three acceptance cases is not written yet.",
+          "refs": [
+            "docs/e2e-testing-guide.md"
+          ]
+        }
+      ],
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/lookupCreateTargets.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/RecordCreateModal.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/ProductDrawerShell.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/ProductStockSearchDrawer.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/DataTable.addRowProductLookup.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/locales/__tests__/lookup-create-keys.vitest.js"
+          }
+        ],
+        "e2e": [
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/create-product-from-line.mocked.spec.js",
+            "expected": true,
+            "note": "Pending: CP-1 the row opens the popup, CP-2 saving auto-selects the product in the line, CP-3 cancelling leaves the document untouched."
+          }
+        ]
+      }
     }
   ]
 }
