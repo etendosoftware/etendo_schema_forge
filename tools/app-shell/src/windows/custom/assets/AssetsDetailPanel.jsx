@@ -223,6 +223,12 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     { key: 'residualAssetValue', column: 'Residualassetvalueamt', type: 'number', label: ui('assetsResidualValueLabel'), section: 'principal', calloutOn: 'blur' },
     { key: 'depreciationAmt', column: 'Amortizationvalueamt', type: 'number', label: ui('assetsDepreciationAmtLabel'), section: 'principal', calloutOn: 'blur', requiredVisual: true },
     { key: 'previouslyDepreciatedAmt', column: 'Depreciatedpreviousamt', type: 'number', label: ui('assetsPrevDepreciatedLabel'), section: 'principal', defaultValue: '0' },
+    // ETP-4914 — Contacto is "Siempre" for this Cabecera, gated only by
+    // `depreciate` (see the dimensionFieldCandidates comment above for why it
+    // is not a GL-config-gated dimension). Plain `type: 'search'` with neither
+    // `lookup` nor `popup` routes through SearchSelectField → CreatableSearchSelect
+    // in EntityForm.jsx — the same path sales-order's own C_BPartner_ID field uses.
+    { key: 'businessPartner', column: 'C_BPartner_ID', type: 'search', label: t('C_BPartner_ID') || 'Business Partner', reference: 'BPartner', inputMode: 'search', section: 'principal' },
   ];
 
   const deprecFields = [
@@ -260,14 +266,21 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
   // @IsDepreciated@='Y') is already correctly wired, same pattern as Proyecto's.
   // So eTADASCostCenter is now a candidate here too — see decisions.json
   // (eTADASCostCenter is now editable) and docs/generated-custom-windows/assets.md.
-  // Contacto is also "Por config" per the corrected matrix, but is deliberately
-  // deferred from this pass: its raw AD_Field.DisplayLogic is only
-  // @IsDepreciated@='Y' (missing the @$Element_BP@ dimension term), so fixing it
-  // properly requires an AD-level metadata edit first — tracked separately. It
-  // stays discarded in decisions.json until that follow-up lands. Producto is
-  // "Siempre" (always visible, rendered unconditionally in group1Fields above) —
-  // it is not a GL-config-gated dimension, so it is deliberately excluded from
-  // this candidates list too.
+  //
+  // Contacto (businessPartner) is corrected in this same ETP-4914 pass but is
+  // deliberately NOT added as a dimensionFieldCandidate here: its raw AD
+  // DisplayLogic is exactly @IsDepreciated@='Y' — no @$Element_BP@ (or any
+  // other) GL-config term, unlike Project/Cost Center which are genuinely
+  // config-gated dimensions. Per the corrected matrix Contacto is "Siempre"
+  // for this Cabecera, so it only needs to be shown whenever `depreciate` is
+  // true — no dimension-evaluator wiring needed. It is rendered directly in
+  // group2Fields below (plain depreciate-gated field, same as the rest of
+  // that block), not routed through useAccountingDimensionFields. The earlier
+  // note that it needed an AD-level metadata edit first was wrong — no AD
+  // change was ever required. Producto is "Siempre" too (always visible,
+  // rendered unconditionally in group1Fields above) — it is not a GL-config-
+  // gated dimension either, so it is deliberately excluded from this
+  // candidates list as well.
   const dimensionFieldCandidates = [
     { key: 'project', column: 'C_Project_ID', type: 'selector', section: 'principal', reference: 'Project', inputMode: 'selector' },
     { key: 'eTADASCostCenter', column: 'EM_Etadas_Costcenter_ID', type: 'selector', section: 'principal', reference: 'Costcenter', inputMode: 'selector' },
