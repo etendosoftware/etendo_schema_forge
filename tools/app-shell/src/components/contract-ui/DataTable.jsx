@@ -87,56 +87,91 @@ function quickActionsReservedWidthPx(rowQuickActions) {
 }
 
 // ETP-5268 — the quick-actions column is ALWAYS rendered at its own full
-// reserved width (quickActionsReservedWidthPx) and ALWAYS `position: sticky;
-// right: 0` — the classic "frozen/sticky last column" table pattern. This
-// replaces an earlier design (the column stayed pinned narrow while
-// scrolling, then widened back to full width once the user reached the true
-// end) that went through three separate live-verified flicker/dead-zone
-// bugs, all variants of the same root cause: that design changed the
-// table's own rendered WIDTH in reaction to scroll state, which the very
-// scroll-state detection then re-measured — a circular dependency ("se va y
-// viene" — the horizontal scrollbar appearing and disappearing on its own)
-// that resurfaced in a new shape every time the previous shape got patched.
-// `position: sticky` sidesteps the whole class of bug: it's a pure
-// paint-time effect — the column's contribution to the table's LAYOUT width
-// is fixed and constant regardless of scroll position, so nothing here can
-// ever feed back into a measurement of that width. Sticky positioning by
-// itself already satisfies all three acceptance criteria with no
-// JavaScript scroll-tracking at all:
-//   - CP-1 (no overflow): the column has nowhere to "stick" to that differs
-//     from its natural position, so it just renders normally, in flow.
-//   - CP-2 (mid-scroll, not at the end): the column stays pinned to the
-//     visible right edge of the scroll container — floating over whatever
-//     data column is currently scrolled underneath it, like a frozen column
-//     in a spreadsheet ("los botones superpuestos ... al final a la derecha
-//     de la vista").
-//   - CP-3 (scrolled to the true end): the column's natural (in-flow)
-//     position IS the sticky boundary at that point, so it seamlessly stops
-//     "sticking" and simply sits in normal flow — no JS needed to make it
-//     LAND there. Making the buttons themselves switch from hover-only to
-//     always-visible once they do (see useQuickActionsAlwaysVisible below)
-//     is the one thing sticky positioning alone can't answer — CSS has no
-//     shipped, reliable way yet to ask "is this sticky element currently
-//     stuck," so that one bit is still JS-detected. It only ever toggles an
-//     `opacity` class though, never a width, so it can't re-introduce the
-//     layout-feedback oscillation the rest of this comment describes fixing.
-// The cell itself deliberately carries NO background: it's fully
-// transparent, ALWAYS, so while scrolled mid-way (CP-2) it never paints a
-// visible reserved-width block over whatever it's pinned on top of —
-// live-verified regression ("cuando no estoy al final del scroll horizontal
-// se ve el espacio para la columna final de botones"), from an earlier
-// revision that put `bg-card` here. The opaque cover — and the buttons
-// themselves — come ONLY from RowQuickActions' own pill background, which is
-// sized to just its icons rather than this cell's full reserved width, and
-// already fades in/out with the rest of the pill on row hover (`opacity-0
-// group-hover/row:opacity-100` — see RowQuickActions.jsx's own className
-// comment). So outside of a hover, this column is invisible and whatever
-// data column the sticky positioning happens to be covering shows through
-// normally; on hover, only the pill's own tight bounding box turns opaque
-// ("que se muestren los botones encima de lo que haya al final pero con
-// fondo blanco esa parte no mas").
-function quickActionsColumnClassName(extraClassName) {
-  return ['sticky right-0 z-10', extraClassName].filter(Boolean).join(' ');
+// reserved width (quickActionsReservedWidthPx), and sits in NORMAL TABLE
+// FLOW by default — not sticky, never floats or pins to the scroll
+// container's edge on its own. Earlier revisions tried two other approaches
+// here: (1) the column stayed pinned narrow while scrolling then widened
+// back to full width at the true end — went through three separate
+// live-verified flicker/dead-zone bugs, all variants of the same root
+// cause: that design changed the table's own rendered WIDTH in reaction to
+// scroll state, which the very scroll-state detection then re-measured — a
+// circular dependency ("se va y viene") that resurfaced in a new shape
+// every time the previous shape got patched; (2) `position: sticky; right:
+// 0` UNCONDITIONALLY, the classic "frozen last column" spreadsheet pattern,
+// kept the layout-width problem from (1) from recurring but traded it for a
+// DIFFERENT one: a sticky column has no idea how much of the real data
+// column it's currently floating over is actually still off-screen, so it
+// always painted its own full reserved width over whatever sat underneath —
+// live-verified overlapping far more of the neighboring column than was
+// ever actually hidden, and doing so on every render, not just when the
+// user asked for it ("se come la columna del costado ... no forma parte de
+// una columna ... va con la pantalla").
+//
+// `group-hover/row:sticky` is the fix for both at once: `position: sticky`
+// is a pure paint-time effect (never touches the table's LAYOUT width — see
+// (1) above), and gating it behind `group-hover` means the pinning/
+// floating-over-data effect from the original design ("los botones
+// superpuestos ... al final a la derecha de la vista") is back, but ONLY
+// while the user is actively hovering that row. Outside a hover, the column
+// is exactly the plain in-flow column described above: never paints over
+// another column's content.
+//
+// One thing sticky-on-its-own does NOT give us for free: it only becomes a
+// true no-op at the EXACT pixel where the column's natural position already
+// satisfies `right: 0` (remaining scrollable distance === 0). Short of that
+// — even 1px short — sticky still pulls the column's FULL width left into a
+// floating overlay, same as before: live-verified ("aun aparece el hover
+// cuando ya es visible la columna, es cuando apenas es visible un pixel").
+// `allowHoverSticky` is that gap's fix — computed in
+// useHorizontalScrollGeometry with a small EPSILON tolerance, false once
+// there's nothing MEANINGFUL left to scroll to (not literally nothing at
+// all). Below that threshold this function omits `group-hover/row:sticky`
+// entirely, so hovering a row whose actions column already reads as "fully
+// visible" to the eye does nothing — no floating overlay for a sliver of
+// remaining scroll nobody can perceive anyway.
+// ETP-5268 follow-up — "se nota como una diferencia en los colores": the
+// mask/background used to live on RowQuickActions' own pill (a SOLID
+// `bg-muted`, needed so it can fully hide whatever real column it floats
+// over while hover-sticky) — but the row's own hover tint is `bg-muted/50`,
+// a translucent wash over whatever's behind it, which is a visibly LIGHTER
+// gray than the same color at full strength. Since the pill is narrower
+// than this cell's own reserved width, that mismatch showed up as a seam
+// INSIDE one cell: the pill's solid gray next to the cell's own gutter,
+// showing the lighter row tint through its (until now) transparent
+// background — live-verified, two different grays side by side.
+//
+// The fix moves the background here, to the WHOLE cell, and only when
+// hover-sticky can actually happen (`allowHoverSticky`): in that case a
+// solid `bg-muted` is genuinely needed (masking real data while floating
+// beats matching the row's exact tint), applied to the full cell so
+// there's no narrower pill-shaped patch of a different shade inside it.
+// When hover-sticky can't happen (already visible enough — see
+// useHorizontalScrollGeometry), this cell has NO background of its own at
+// all, at rest or on hover: it just stays transparent and lets the row's
+// OWN `hover:bg-muted/50` (the exact same paint, not a copy) show through
+// uniformly across the whole cell, pill included (see RowQuickActions.jsx,
+// which no longer sets a background either) — pixel-identical to the rest
+// of the row because it's literally the same background, not a matched one.
+function quickActionsColumnClassName(extraClassName, allowHoverSticky) {
+  // `relative` (not `sticky`) is the resting state — gives RowQuickActions'
+  // `position: absolute` pill a containing block scoped to this cell either
+  // way. `right-0`/`z-10` are harmless no-ops while merely `relative` (no
+  // effect until `position` is non-static) and become load-bearing the
+  // moment `group-hover/row:sticky` kicks in.
+  return [
+    'relative right-0 z-10',
+    // Solid, not `bg-muted/50` — while floating this cell masks whatever row
+    // content is scrolled underneath it, so it can't be translucent or that
+    // content would show through. But a flat `bg-muted` (241/245/249) is
+    // visibly darker than the row's own `hover:bg-muted/50` OVER WHITE
+    // (≈248/250/252 — averaging bg-muted and white at 50/50), so the two
+    // states read as different shades of grey side by side. This is that same
+    // composited value, kept solid — matches the eye, still fully opaque.
+    // (Literal RGB, not a token — see DATA_COLOR_LITERALS in
+    // semanticThemeUsage.test.js for why this file is scoped-exempt.)
+    allowHoverSticky ? 'group-hover/row:sticky group-hover/row:bg-[rgb(248,250,252)] transition-colors' : '',
+    extraClassName,
+  ].filter(Boolean).join(' ');
 }
 
 // ETP-5268 — see quickActionsColumnClassName just above: this is its `style`
@@ -146,24 +181,6 @@ function quickActionsColumnStyle(reservedWidthPx) {
   return { width: `${reservedWidthPx}px` };
 }
 
-// ETP-5268 follow-up — "cuando esta visible la ultima columna ... debe dejar
-// de hacer este hover y estar 100% visible": once the sticky actions column
-// has settled into normal flow (no horizontal overflow at all, OR scrolled
-// all the way to the true end), the buttons should be always-on, not
-// hover-only — hover-to-reveal stays reserved for while the column is
-// actually pinned/overlapping (CP-2), where something IS being covered and
-// showing icons unprompted would be confusing.
-//
-// This is the one bit sticky positioning by itself can't answer (see the
-// comment above quickActionsColumnClassName for why everything else here is
-// plain CSS): there's no shipped, reliable CSS way yet to ask "is this
-// sticky element currently stuck." So it's JS-detected — but unlike the
-// scroll-tracking this file used to do for column WIDTH (see git history:
-// three separate "se va y viene" flicker bugs, all from the table's own
-// rendered width changing in reaction to scroll state, which the
-// scroll-state detection then re-measured), this only ever toggles an
-// `opacity` class. Nothing here feeds back into any measurement, so it
-// can't reopen that class of bug no matter how it's wired.
 // ETP-5268 follow-up — "el scroll horizontal no se ve, si no hasta el final
 // del scroll vertical ... deberia aparecer siempre": this list's own scroll
 // container has no bounded height (by design — it stays under ListView's
@@ -176,7 +193,8 @@ function quickActionsColumnStyle(reservedWidthPx) {
 // this was never actually broken), but there's no visible, always-reachable
 // scrollbar to grab with a mouse.
 //
-// Fixed with a second, thin "mirror" scrollbar — see mirrorRef below —
+// Fixed with a second, thin "mirror" scrollbar — a hand-built, pointer-
+// draggable thumb (see computeThumbMetrics/handleThumbPointer* below) —
 // `position: sticky; bottom: 0` within DataTable's own render, so it stays
 // pinned to the bottom of whichever ancestor actually scrolls vertically
 // (ListView's bounded viewport) regardless of how tall the table grows.
@@ -185,14 +203,102 @@ function quickActionsColumnStyle(reservedWidthPx) {
 // reimplementing against a different scroll boundary) the "load more on
 // reach bottom" pagination this window relies on for large datasets — this
 // approach touches nothing about how or when data loads, purely a second
-// scrollable strip kept in sync with the real one.
-function useQuickActionsAlwaysVisible() {
-  const [alwaysVisible, setAlwaysVisible] = useState(true);
-  const [hasOverflow, setHasOverflow] = useState(false);
-  const [contentWidth, setContentWidth] = useState(0);
+// draggable strip kept in sync with the real one.
+//
+// ETP-5268 follow-up — "en sales-invoice se ve mas fino": for a SHORT list
+// (the real scroll wrapper's own bottom edge — and its native scrollbar —
+// already sits inside the viewport, no vertical scrolling needed to reach
+// it), the mirror used to hide itself and let the real wrapper's native
+// scrollbar show through instead — reachable, but rendered by the browser's
+// own `::-webkit-scrollbar` (this app's global 8px thumb, a different,
+// lighter gray than ScrollPane's `#C1C5CF`), so short lists and long lists
+// visibly disagreed on what a horizontal scrollbar looks like. The real
+// wrapper's native scrollbar is now hidden unconditionally
+// (`[&::-webkit-scrollbar]:hidden [scrollbar-width:none]` on the ref'd div
+// below) and this hand-built thumb is the ONLY horizontal scrollbar,
+// rendered any time there's overflow regardless of scroll position — one
+// mechanism, one look, everywhere.
+// ETP-5268 follow-up — walks up from the table's scroll wrapper to find the
+// nearest ancestor that actually scrolls vertically (ListView's bounded
+// viewport, `overflow-y: auto`/`scroll`) and returns ITS OWN
+// `padding-bottom`. `position: sticky; bottom: 0` sticks a child to that
+// ancestor's PADDING edge, not its true outer edge — so with the viewport's
+// own `pb-6` (or whatever a given window's `tablePaddingBottom` sets)
+// underneath it, the mirror scrollbar was sticking correctly but leaving
+// that padding's worth of empty space visible below it: "el scroll esta en
+// el aire ... tiene que estar abajo". Feeding this back as a NEGATIVE
+// `bottom` offset on the mirror cancels exactly that gap, regardless of
+// what the padding actually is for a given caller — no hardcoded px value.
+function findScrollingAncestor(el) {
+  let node = el?.parentElement;
+  for (let i = 0; i < 12 && node; i++) {
+    const overflowY = getComputedStyle(node).overflowY;
+    if (overflowY === 'auto' || overflowY === 'scroll') return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+// ETP-5268 follow-up — "pointer-events-auto absolute right-0 cursor-grab
+// touch-none rounded-full bg-[#C1C5CF] active:cursor-grabbing ... EL SCROLL
+// HORIZONTAL SIGUE VIENDOSE IGUAL": the vertical scrollbar being compared
+// against is never a native/webkit one — it's ScrollPane's own hand-built
+// "shadow scrollbar" thumb (see schema_forge_core's scroll-pane.jsx), which
+// ignores `::-webkit-scrollbar` CSS entirely. Matching its pixel dimensions
+// on a real `overflow-x-auto` div can therefore never look the same, because
+// the two are rendered by different mechanisms. These constants and
+// `computeThumbMetrics` mirror ScrollPane's own exactly, so the mirror strip
+// below is built the same way — a plain absolutely-positioned, pointer-
+// draggable div — instead of relying on the browser to draw one.
+const SHADOW_SCROLLBAR_MIN_THUMB = 24;
+const SHADOW_SCROLLBAR_THICKNESS = 8;
+
+function computeThumbMetrics(scrollSize, clientSize, scrollOffset) {
+  if (clientSize <= 0 || scrollSize <= clientSize) return null;
+  const rawThumbSize = (clientSize / scrollSize) * clientSize;
+  const thumbSize = Math.max(SHADOW_SCROLLBAR_MIN_THUMB, Math.min(rawThumbSize, clientSize));
+  const maxScrollOffset = scrollSize - clientSize;
+  const maxThumbOffset = clientSize - thumbSize;
+  const thumbOffset = maxScrollOffset > 0 ? (scrollOffset / maxScrollOffset) * maxThumbOffset : 0;
+  return { thumbSize, thumbOffset };
+}
+
+// ETP-5268 follow-up — tracks the real horizontal scroll container's
+// geometry: `stickyBottomPx` (padding compensation for the mirror
+// scrollbar below), `elRef`/`attachSeq` (so HorizontalScrollThumb can find
+// and re-subscribe to the actual scrolling element — see its own doc
+// comment for why that state lives there instead of here), and
+// `allowHoverSticky` — see quickActionsColumnClassName's doc comment for
+// why the hover-float still needs ONE piece of scroll-position state even
+// though the column itself is plain/in-flow.
+//
+// `visibleThresholdPx` (the actions column's own reserved width) is WHEN
+// that state flips: "el hover desaparece ... es cuando apenas se vea la
+// columna" — the moment ANY part of the actions column would naturally be
+// visible in flow (`remaining <= reservedWidth`, i.e. this column's own
+// static position has started to peek past the viewport edge), hovering
+// stops floating it — no more sticky/covering at all past that point, just
+// however much of the column has genuinely scrolled into view, same as any
+// other column. This is safe in a way the very first "settle early" attempt
+// (ETP-5268: `touchTolerancePx` on icon opacity, while the column stayed
+// UNCONDITIONALLY sticky) was not: that one kept covering the neighbor at
+// full reserved width regardless of the threshold, because sticky itself
+// never turned off. Here, once `allowHoverSticky` is false, `sticky` is
+// never applied at all (see quickActionsColumnClassName) — nothing to
+// cover, by construction, not by convention.
+function useHorizontalScrollGeometry(visibleThresholdPx = 0) {
+  const [stickyBottomPx, setStickyBottomPx] = useState(0);
+  const [allowHoverSticky, setAllowHoverSticky] = useState(false);
+  // ETP-5268 follow-up — perf: bumped only when `containerRef` actually
+  // attaches to a NEW DOM node (a real structural event — e.g. DataTable
+  // leaving its `loading` skeleton — not a per-scroll one). This is the only
+  // reason `HorizontalScrollThumb` below needs to know about, so its own
+  // scroll-tracking effect can re-subscribe to the right element; everything
+  // scroll-position-related from here on is that component's own local
+  // state, never lifted into this hook (see its doc comment for why).
+  const [attachSeq, setAttachSeq] = useState(0);
   const cleanupRef = useRef(null);
   const elRef = useRef(null);
-  const mirrorElRef = useRef(null);
 
   // Same callback-ref reasoning as the removed useHorizontalScrollEdge had:
   // DataTable early-returns a skeleton while `loading`, so an object-ref
@@ -205,76 +311,140 @@ function useQuickActionsAlwaysVisible() {
     }
     const el = outerEl?.firstElementChild;
     elRef.current = el ?? null;
-    if (!el || typeof ResizeObserver === 'undefined') return;
+    setAttachSeq((prev) => prev + 1);
+    if (!el) return;
+    const scrollingAncestor = findScrollingAncestor(outerEl);
+    setStickyBottomPx(scrollingAncestor
+      ? -(parseFloat(getComputedStyle(scrollingAncestor).paddingBottom) || 0)
+      : 0);
 
-    const EPSILON = 1;
     const measure = () => {
-      const overflow = el.scrollWidth > el.clientWidth + EPSILON;
-      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - EPSILON;
-      setAlwaysVisible((prev) => {
-        const next = !overflow || atEnd;
-        return prev === next ? prev : next;
-      });
-      setHasOverflow((prev) => (prev === overflow ? prev : overflow));
-      setContentWidth((prev) => (prev === el.scrollWidth ? prev : el.scrollWidth));
+      const remaining = el.scrollWidth - el.clientWidth - el.scrollLeft;
+      const next = remaining > visibleThresholdPx;
+      setAllowHoverSticky((prev) => (prev === next ? prev : next));
     };
-    // No re-entrancy flag needed against onMirrorScroll below triggering this
-    // right back: each handler only ever writes to the OTHER element, and
-    // only when its value actually differs. Once a write lands, the two
-    // values match, so the write it provokes on the other side is a no-op —
-    // self-terminating by simple value equality, never an unconditional
-    // "I was just told to sync, ignore the next event" flag (which, live-
-    // verified, can get stuck permanently the one time a programmatic
-    // scrollLeft assignment doesn't provoke its own 'scroll' event — jsdom
-    // and some automated-scroll paths skip it; real user-driven scrolling
-    // always fires one, but this shouldn't depend on that).
-    const onRealScroll = () => {
-      measure();
-      const mirrorEl = mirrorElRef.current;
-      if (mirrorEl && mirrorEl.scrollLeft !== el.scrollLeft) {
-        mirrorEl.scrollLeft = el.scrollLeft;
-      }
-    };
-
     measure();
-    el.addEventListener('scroll', onRealScroll, { passive: true });
+    el.addEventListener('scroll', measure, { passive: true });
+    const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    resizeObserver?.observe(el);
+    if (el.firstElementChild) resizeObserver?.observe(el.firstElementChild);
+
+    cleanupRef.current = () => {
+      el.removeEventListener('scroll', measure);
+      resizeObserver?.disconnect();
+    };
+  }, [visibleThresholdPx]);
+
+  return { stickyBottomPx, allowHoverSticky, containerRef, elRef, attachSeq };
+}
+
+// ETP-5268 follow-up — perf isolation: moving the thumb on scroll needs a
+// React state update every scroll frame (its `transform: translateX` has no
+// other way to track the real container's `scrollLeft`), but DataTable
+// renders every row inline with no memoization (`filteredData.map(...)`,
+// no `React.memo` on `TableDataRow` — see scroll-pane.jsx's own comment:
+// "matches the rest of the app, which renders every loaded row", i.e. this
+// table was never virtualized to begin with). An earlier revision kept
+// `thumbMetrics` in `useHorizontalScrollGeometry` itself, which DataTable's
+// own render calls directly — every scroll tick re-rendered the entire
+// table, rows included, exactly the kind of jank a hand-rolled scrollbar
+// should never introduce on a long list. Splitting this one piece of
+// per-scroll state into its own leaf component means a scroll frame
+// re-renders only these two divs: `elRef` is a stable ref object (mutating
+// `.current` triggers nothing on its own) and `attachSeq` only changes when
+// the real scrolling element itself is replaced (see useHorizontalScrollGeometry
+// above), never on scroll — so nothing here ever forces DataTable, or any
+// row, to re-render.
+function HorizontalScrollThumb({ elRef, attachSeq, bottomOffsetPx }) {
+  const [metrics, setMetrics] = useState(null);
+  const dragStateRef = useRef(null);
+
+  useEffect(() => {
+    const el = elRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') {
+      setMetrics(null);
+      return undefined;
+    }
+    const measure = () => {
+      setMetrics(computeThumbMetrics(el.scrollWidth, el.clientWidth, el.scrollLeft));
+    };
+    measure();
+    el.addEventListener('scroll', measure, { passive: true });
     const resizeObserver = new ResizeObserver(measure);
     resizeObserver.observe(el);
     if (el.firstElementChild) resizeObserver.observe(el.firstElementChild);
-
-    cleanupRef.current = () => {
-      el.removeEventListener('scroll', onRealScroll);
+    return () => {
+      el.removeEventListener('scroll', measure);
       resizeObserver.disconnect();
     };
-  }, []);
+    // `attachSeq` is the intentional re-subscribe trigger — see its own
+    // doc comment on useHorizontalScrollGeometry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elRef, attachSeq]);
 
-  // The mirror strip's own scroll container — a separate, independent
-  // `overflow-x-auto` div (see the JSX below) containing one width-only
-  // spacer (`contentWidth`, kept in lockstep with the real table's
-  // `scrollWidth` by the ResizeObserver above). Scrolling IT forwards to the
-  // real container; scrolling the real one forwards back here (onRealScroll
-  // above) — see its own comment for why no extra guard flag is needed.
-  const mirrorCleanupRef = useRef(null);
-  const mirrorRef = useCallback((mirrorEl) => {
-    if (mirrorCleanupRef.current) {
-      mirrorCleanupRef.current();
-      mirrorCleanupRef.current = null;
-    }
-    mirrorElRef.current = mirrorEl ?? null;
-    if (!mirrorEl) return;
-    const onMirrorScroll = () => {
-      const el = elRef.current;
-      if (el && el.scrollLeft !== mirrorEl.scrollLeft) {
-        el.scrollLeft = mirrorEl.scrollLeft;
-      }
+  // Same drag mechanics as ScrollPane's own `handleThumbPointerDown/Move/Up`
+  // (schema_forge_core's scroll-pane.jsx): capture drag-start geometry once,
+  // then translate pointer movement into `el.scrollLeft` directly. That
+  // write is picked up by this component's OWN 'scroll' listener above, so
+  // there's no separate update path for drag vs. native scroll/wheel/keyboard
+  // — and, per this component's own doc comment, that update stays local.
+  const handleThumbPointerDown = useCallback((event) => {
+    const el = elRef.current;
+    if (!el || !metrics) return;
+    event.preventDefault();
+    dragStateRef.current = {
+      pointerId: event.pointerId,
+      startPointerX: event.clientX,
+      startScrollLeft: el.scrollLeft,
+      thumbSize: metrics.thumbSize,
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
     };
-    mirrorEl.addEventListener('scroll', onMirrorScroll, { passive: true });
-    // React 18 callback refs don't support a returned cleanup function (that's
-    // React 19) — track it manually, same pattern as containerRef's cleanupRef.
-    mirrorCleanupRef.current = () => mirrorEl.removeEventListener('scroll', onMirrorScroll);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, [elRef, metrics]);
+
+  const handleThumbPointerMove = useCallback((event) => {
+    const drag = dragStateRef.current;
+    const el = elRef.current;
+    if (!drag || !el || drag.pointerId !== event.pointerId) return;
+    const deltaPointer = event.clientX - drag.startPointerX;
+    const trackRange = drag.clientWidth - drag.thumbSize;
+    const scrollRange = drag.scrollWidth - drag.clientWidth;
+    if (trackRange <= 0 || scrollRange <= 0) return;
+    const deltaScroll = deltaPointer * (scrollRange / trackRange);
+    el.scrollLeft = Math.min(scrollRange, Math.max(0, drag.startScrollLeft + deltaScroll));
+  }, [elRef]);
+
+  const handleThumbPointerUp = useCallback((event) => {
+    const drag = dragStateRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    dragStateRef.current = null;
   }, []);
 
-  return { alwaysVisible, hasOverflow, contentWidth, containerRef, mirrorRef };
+  if (!metrics) return null;
+
+  return (
+    <div
+      className="sticky pointer-events-none z-20"
+      style={{ height: SHADOW_SCROLLBAR_THICKNESS, bottom: bottomOffsetPx }}
+      aria-hidden="true"
+      data-testid="horizontal-scroll-mirror"
+    >
+      <div
+        className="pointer-events-auto absolute bottom-0 cursor-grab touch-none rounded-full bg-[#C1C5CF] active:cursor-grabbing"
+        style={{
+          height: SHADOW_SCROLLBAR_THICKNESS,
+          width: metrics.thumbSize,
+          transform: `translateX(${metrics.thumbOffset}px)`,
+        }}
+        onPointerDown={handleThumbPointerDown}
+        onPointerMove={handleThumbPointerMove}
+        onPointerUp={handleThumbPointerUp}
+        data-testid="horizontal-scroll-mirror-thumb"
+      />
+    </div>
+  );
 }
 
 // Extracts grow flag and basis (px) from a columnFlex() shorthand string.
@@ -2024,7 +2194,8 @@ function TableDataRow({
   apiBaseUrl,
   token,
   hasDimensionsPanel = false,
-  quickActionsAlwaysVisible = false,
+  quickActionsAllowHoverSticky = false,
+  quickActionsColWidthPx = 0,
 }) {
   const isSelectedLine = selectedRowId != null && row.id === selectedRowId;
   const rowDisabled = isRowSelectable && !isRowSelectable(row);
@@ -2207,14 +2378,17 @@ function TableDataRow({
         </>
       )}
       {quickActionsEnabled && (
-        // ETP-5268 — no `relative`/`overflow-visible` needed: the cell is
-        // always full-width now (see quickActionsColumnClassName), so
-        // RowQuickActions' `position: absolute; right-3` pill always fits
-        // within its own bounds, and `sticky` (in the base className)
-        // already establishes the containing block `relative` used to.
+        // ETP-5268 — the cell is always full-width, in normal flow (see
+        // quickActionsColumnClassName's doc comment), which already carries
+        // `relative` as RowQuickActions' `position: absolute; right-0` pill
+        // containing block. `quickActionsColWidthPx` comes in as a prop
+        // (computed ONCE in DataTable's own render) rather than
+        // recalling `quickActionsReservedWidthPx(rowQuickActions)` here —
+        // that read the same window-level `rowQuickActions` config on
+        // every row, on every render, for an identical result each time.
         (<TableCell
-          className={quickActionsColumnClassName('px-2')}
-          style={quickActionsColumnStyle(quickActionsReservedWidthPx(rowQuickActions))}
+          className={quickActionsColumnClassName('px-2', quickActionsAllowHoverSticky)}
+          style={quickActionsColumnStyle(quickActionsColWidthPx)}
           onClick={(e) => e.stopPropagation()}
           data-testid="TableCell__eb5261">
           <RowQuickActions
@@ -2222,7 +2396,6 @@ function TableDataRow({
             entity={entity}
             apiBaseUrl={apiBaseUrl}
             token={token}
-            alwaysVisible={quickActionsAlwaysVisible}
             documentPreview={rowQuickActions.documentPreview}
             sendDocument={rowQuickActions.sendDocument}
             menuActions={rowQuickActions.menuActions}
@@ -2568,13 +2741,18 @@ export function DataTable({
     [visibleColumns, entity, addRow?.fields, addRow?.catalogs],
   );
 
+  // ETP-5268 — the quick-actions column's reserved width, used by the
+  // colgroup further down AND as useHorizontalScrollGeometry's
+  // "apenas se vea la columna" threshold (see that hook's own doc comment).
+  const quickActionsColWidthPx = quickActionsReservedWidthPx(rowQuickActions);
+
   const {
-    alwaysVisible: quickActionsAlwaysVisible,
-    hasOverflow: hasHorizontalOverflow,
-    contentWidth: horizontalContentWidth,
+    stickyBottomPx: horizontalScrollMirrorBottomPx,
+    allowHoverSticky: quickActionsAllowHoverSticky,
     containerRef: scrollContainerRef,
-    mirrorRef: horizontalScrollMirrorRef,
-  } = useQuickActionsAlwaysVisible();
+    elRef: horizontalScrollElRef,
+    attachSeq: horizontalScrollAttachSeq,
+  } = useHorizontalScrollGeometry(quickActionsColWidthPx);
 
   const totals = useMemo(() => {
     if (amountColumns.length === 0) return null;
@@ -2730,8 +2908,8 @@ export function DataTable({
   // the real value into the grow-column denominator keeps growing columns
   // from claiming space the actions column actually needs, which would
   // understate the table's true content width and mask genuine overflow
-  // that should scroll instead of squeeze.
-  const quickActionsColWidthPx = quickActionsReservedWidthPx(rowQuickActions);
+  // that should scroll instead of squeeze. (`quickActionsColWidthPx` itself
+  // is computed earlier, alongside the useHorizontalScrollGeometry() call.)
   const fixedColsTotalPx = fixedColsBasisPx + computeActionColsWidthPx({
     selectable, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
     onCloneRow, quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel,
@@ -2751,7 +2929,24 @@ export function DataTable({
       <div
         ref={scrollContainerRef}
         className={[
-          linesLayout === 'inlineEditable' ? '[&>div]:!overflow-visible' : 'overflow-x-auto overflow-y-visible',
+          linesLayout === 'inlineEditable'
+            ? '[&>div]:!overflow-visible'
+            // ETP-5268 follow-up — the hand-built thumb below is the ONLY
+            // horizontal scrollbar this wrapper ever shows (see its own doc
+            // comment for why): the browser's own is hidden so short lists
+            // (real scrollbar reachable without scrolling) and long lists
+            // (real scrollbar off-screen) render identically instead of
+            // disagreeing on what a scrollbar looks like. The scrolling
+            // element that actually needs this is `<Table>`'s own hardcoded
+            // wrapper div (schema_forge_core's table.jsx: `<div
+            // className="relative w-full overflow-auto">`), the direct
+            // child this hook's `containerRef` already reads as `el` — NOT
+            // this outer div, which never itself overflows. Targeting `&`
+            // here hid nothing (there was no scrollbar on this element to
+            // hide), leaving the child's own native one to reappear right
+            // above this thumb once scrolled into view ("al final se ven
+            // 2") — the `[&>div]` combinator reaches into that child instead.
+            : 'overflow-x-auto overflow-y-visible [&>div]:[scrollbar-width:none] [&>div::-webkit-scrollbar]:hidden',
           rowHoverStyle === 'elevated' ? 'pb-6' : '',
         ].filter(Boolean).join(' ')}
       >
@@ -2794,7 +2989,7 @@ export function DataTable({
               {quickActionsEnabled && (
                 <TableHead
                   className={quickActionsColumnClassName('px-2')}
-                  style={quickActionsColumnStyle(quickActionsReservedWidthPx(rowQuickActions))}
+                  style={quickActionsColumnStyle(quickActionsColWidthPx)}
                   aria-hidden="true"
                   data-testid="TableHead__eb5261" />
               )}
@@ -2809,7 +3004,7 @@ export function DataTable({
               editingRowId, handleRowActivation, hoverRowActions, onSaveRow, onCancelEdit,
               onEditRow, onDeleteRow, deletingRows, setDeletingRows, ui, legacyDeleteEnabled,
               onCloneRow, quickActionsEnabled, rowQuickActions, entity, apiBaseUrl, token,
-              hasDimensionsPanel, quickActionsAlwaysVisible,
+              hasDimensionsPanel, quickActionsAllowHoverSticky, quickActionsColWidthPx,
             })}
             {addRow?.active && (
               <InlineAddRow
@@ -2851,30 +3046,45 @@ export function DataTable({
         </Table>
       </div>
       {/* ETP-5268 follow-up — the "mirror" horizontal scrollbar: see
-          useQuickActionsAlwaysVisible's own doc comment for the full
+          useHorizontalScrollGeometry's own doc comment for the full
           rationale (this list's own scroll container has no bounded height,
           so its native scrollbar can end up scrolled off-screen at the
-          bottom of a long list). `position: sticky; bottom: 0` keeps THIS
-          strip pinned to the bottom of whichever ancestor actually scrolls
-          vertically, regardless of how tall the table above it grows. Its
-          own `overflow-x-auto` + a spacer matching the real table's
-          `scrollWidth` gives it an identical, genuinely native, draggable
-          scrollbar; the hook's onScroll handlers keep the two positions in
-          lockstep either direction. Rendered only when there's real
-          overflow to mirror, and skipped for the inlineEditable lines
-          layout, which uses a different overflow strategy entirely
-          (`[&>div]:!overflow-visible` above) and was never the case this
-          fixes. */}
-      {hasHorizontalOverflow && linesLayout !== 'inlineEditable' && (
-        <div
-          ref={horizontalScrollMirrorRef}
-          className="sticky bottom-0 z-20 overflow-x-auto overflow-y-hidden bg-card border-t border-border/40"
-          style={{ height: 17 }}
-          aria-hidden="true"
-          data-testid="horizontal-scroll-mirror"
-        >
-          <div style={{ width: horizontalContentWidth, height: 1 }} />
-        </div>
+          bottom of a long list). `position: sticky; bottom` keeps THIS strip
+          pinned to the bottom of whichever ancestor actually scrolls
+          vertically, regardless of how tall the table above it grows — the
+          negative `bottom` offset is what actually seats it flush against
+          that ancestor's true edge instead of floating above its own bottom
+          padding ("el scroll esta en el aire"). Built as a hand-rolled thumb
+          (`SHADOW_SCROLLBAR_THICKNESS`/`SHADOW_SCROLLBAR_MIN_THUMB`,
+          `computeThumbMetrics`, pointer-drag via `setPointerCapture`) that
+          exactly replicates ScrollPane's own shadow-scrollbar pattern
+          (schema_forge_core's scroll-pane.jsx) instead of a native
+          `overflow-x-auto` div — the vertical scrollbar it's meant to match
+          is ITSELF one of ScrollPane's hand-built thumbs, never a
+          native/webkit one, so only rendering it the same way can actually
+          look the same ("hacele el scroll horizontal igual de ancho que el
+          scroll vertical"). Rendered any time there's real overflow to
+          mirror, regardless of scroll position — the real wrapper's own
+          native scrollbar is hidden unconditionally (see the
+          `[&::-webkit-scrollbar]:hidden` on its className above), so
+          there's never a second one to be redundant with ("en sales-invoice
+          se ve mas fino" — a short list's native scrollbar, visible without
+          scrolling, used to show through instead of this thumb, in the
+          browser's own lighter gray). Extracted into its own component
+          (`HorizontalScrollThumb`, see its doc comment) purely for perf:
+          moving the thumb on scroll needs a state update every scroll
+          frame, and DataTable renders every row with no memoization —
+          keeping that state here would re-render the whole row list on
+          every scroll tick. Skipped entirely for the inlineEditable lines
+          layout, which uses a different overflow strategy
+          (`[&>div]:!overflow-visible` above) and was never the case any of
+          this fixes. */}
+      {linesLayout !== 'inlineEditable' && (
+        <HorizontalScrollThumb
+          elRef={horizontalScrollElRef}
+          attachSeq={horizontalScrollAttachSeq}
+          bottomOffsetPx={horizontalScrollMirrorBottomPx}
+        />
       )}
       {addRow?.active && (
         <p className="text-xs text-muted-foreground mt-1 text-center">

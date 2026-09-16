@@ -88,13 +88,6 @@ export default function RowQuickActions({
   // read-only detail for viewing. Non-mutating affordances (Email/Send, kebab
   // menu actions) stay gated by their own config. Defaults to false → unchanged.
   readOnly = false,
-  // ETP-5268 follow-up — true once DataTable's sticky actions column has
-  // settled into normal flow (no horizontal overflow at all, or scrolled to
-  // the true end): the pill stays visible without a hover, instead of the
-  // hover-only default used while it's still pinned/overlapping (CP-2),
-  // where something IS being covered and showing icons unprompted would be
-  // confusing. See useQuickActionsAlwaysVisible in DataTable.jsx.
-  alwaysVisible = false,
 }) {
   const ui = useUI();
   const [showMenu, setShowMenu] = useState(false);
@@ -243,41 +236,43 @@ export default function RowQuickActions({
       // sizes it to the enclosing <td>'s own full height instead of a
       // shorter fixed height floating inside it.
       //
-      // ETP-5268 follow-up — `bg-card` here (independent of the shared
-      // QUICK_ACTIONS_PILL_CLASS toggle, which stays off for the rest of
-      // this component's history — InlineLinesPanel's own overlay is
-      // unaffected) is load-bearing, not decorative: the enclosing <td> is
-      // fully transparent and `sticky right-0` (see DataTable's
-      // quickActionsColumnClassName) so it never paints a visible box of its
-      // own while scrolled mid-way — without a background on the pill
-      // ITSELF, hovering would show the icons superimposed directly over
-      // whatever column is currently scrolled underneath, both sets of text
-      // readable at once. The pill's own background — sized to just its
-      // icons, not the wider reserved column — is what makes it cleanly
-      // cover only that part instead ("con fondo blanco esa parte no mas").
-      // No border/ring on the pill itself (dropped per feedback — it read as
-      // a stray box floating over the row rather than part of it); the
-      // opaque fill alone is what needs to cover the data underneath, not a
-      // visible outline. Safe to keep the background unconditional (not
-      // gated behind hover) since the WHOLE pill, background included,
-      // already fades in/out with the opacity classes right below.
+      // ETP-5268 follow-up — "no forma parte de una columna ... va con la
+      // pantalla": DataTable's quick-actions column used to be
+      // UNCONDITIONALLY `sticky right-0`, floating over whatever real
+      // column was scrolled underneath any time there was overflow — live-
+      // verified overlapping far more of the neighboring column than was
+      // ever genuinely hidden. The column now sits in plain, normal table
+      // flow by default, and only becomes sticky WHILE the row is hovered
+      // (`group-hover/row:sticky` — see DataTable's quickActionsColumnClassName),
+      // and even then CSS sticky positioning is a no-op once the column is
+      // already fully in view — so it only ever floats/covers when there's
+      // genuinely still something to reach ("al hacer hover y no verse la
+      // ultima columna que se vea el stick de botones como estaba antes").
       //
-      // ETP-5268 follow-up — `alwaysVisible` (see its own prop comment)
-      // swaps the default hover-only opacity for a flat `opacity-100`:
-      // "cuando esta visible la ultima columna ... debe dejar de hacer este
-      // hover y estar 100% visible". Hover-reveal stays the default because
-      // it's still needed while the pill is pinned/overlapping (CP-2) —
-      // showing icons unprompted there, over whatever data column happens to
-      // be scrolled underneath, would look like an unexplained pill hovering
-      // over random rows rather than a deliberate row action.
+      // ETP-5268 follow-up — "se nota como una diferencia en los colores":
+      // this pill used to carry its OWN background (`bg-card` at rest,
+      // `group-hover/row:bg-muted` on hover) — matching the row's hover
+      // color in NAME, but not in actual pixels: the row's own hover tint
+      // is the translucent `hover:bg-muted/50` (getRowClassName's default
+      // `tint` style), a visibly LIGHTER gray than the same token at full
+      // opacity. Since this pill is narrower than the cell's own reserved
+      // width, that mismatch painted as a seam INSIDE one cell — solid gray
+      // under the icons, lighter translucent gray in the gutter beside them
+      // — live-verified. This div now sets NO background of its own at
+      // all: the masking/tinting background lives on the enclosing `<td>`
+      // instead (DataTable's quickActionsColumnClassName), applied to the
+      // WHOLE cell so gutter and icons always match — solid `bg-muted` only
+      // when hover-sticky can actually float this pill over real data
+      // (masking beats color-matching there), otherwise nothing, letting
+      // the row's own `hover:bg-muted/50` show through this div exactly as
+      // it does everywhere else in the row, at rest AND transitioning.
       className={[
         // `right-0` (not `right-3`) — flush against the cell's own right
         // edge, no outer margin: "que se empuje al fondo, tiene como un
         // espacio" (a `right-3` gap here read as an unexplained sliver of
         // the reserved column left uncovered at the true edge). `px-3`
         // keeps the icons themselves off the very edge as inner padding.
-        'absolute right-0 inset-y-0 h-full flex flex-row items-center justify-center gap-0.5 px-3 focus-within:opacity-100 transition-opacity z-10 bg-card',
-        alwaysVisible ? 'opacity-100' : 'opacity-0 group-hover/row:opacity-100',
+        'absolute right-0 inset-y-0 h-full flex flex-row items-center justify-center gap-0.5 px-3 z-10 opacity-100',
       ].join(' ')}
       data-testid="row-quick-actions"
       onClick={stop}
