@@ -614,4 +614,33 @@ describe('ProductStockSearchDrawer', () => {
       expect(selectorCall[0]).toContain('warehouseId=WH1');
     });
   });
+  // ────────────────────────────────────────────────────────────────────────────
+  // ETP-5254 — the stock variant deliberately opts OUT of inline product creation
+  // ────────────────────────────────────────────────────────────────────────────
+
+  it('never renders the create-product row, even for an allowlisted spec', async () => {
+    // The stock variant simply does not forward `createEnabled` to the shell: creating a
+    // stockless product inside a picker that filters by stock would return an immediately
+    // empty result. The selector URL below IS allowlisted, so this pins the opt-out itself
+    // rather than incidentally relying on goods-movements being outside the allowlist.
+    render(
+      <ProductStockSearchDrawer
+        {...defaultProps}
+        selectorUrl="http://localhost/sws/neo/sales-order/lines/selectors/M_Product_ID"
+      />,
+    );
+    await vi.advanceTimersByTimeAsync(50);
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    expect(screen.queryByTestId('product-search-create')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('record-create-modal')).not.toBeInTheDocument();
+  });
+
+  it('never renders the create-product row for its usual stock-aware specs either', async () => {
+    render(<ProductStockSearchDrawer {...defaultProps} />);
+    await vi.advanceTimersByTimeAsync(50);
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    expect(screen.queryByTestId('product-search-create')).not.toBeInTheDocument();
+  });
 });

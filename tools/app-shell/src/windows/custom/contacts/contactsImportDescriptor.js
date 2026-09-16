@@ -52,6 +52,21 @@ function pick(row, targets) {
   return body;
 }
 
+/**
+ * ETP-5031 follow-up — `etgoWeb` is stored WITHOUT its scheme: the Contacts form's fixed
+ * "https://" chip (decisions.json `inputPrefix`) means a manually-entered contact never has
+ * one in the stored value, and BusinessPartnerHandler's server-side domain-shape check
+ * (added alongside the email/phone checks) now rejects a value that still carries one — it
+ * cannot tell "the scheme" from "part of an invalid host". A CSV `web` column commonly
+ * contains a full URL ("https://acme.com") since that is what a human actually types/copies,
+ * so the import must normalize it the same way the form's chip does, not assume the cell is
+ * already bare. Reproduced live: an un-normalized cell 400'd the whole business partner
+ * create, which is what silently dropped rows from ETP-4905's own Tomcat integration spec.
+ */
+function stripUrlScheme(value) {
+  return String(value ?? '').replace(/^https?:\/\//i, '');
+}
+
 // Mirrors useEntity.js's derivePersonName exactly (the known-working manual create flow).
 function derivePersonName(firstName, lastName) {
   return [firstName, lastName].filter(Boolean).join(' ').trim();
@@ -291,6 +306,7 @@ registerExportHints('contacts', {
 
 registerImportDescriptor('contacts', async (row, config) => {
   const bpFields = pick(row, BP_TARGETS);
+  if (bpFields.etgoWeb !== undefined) bpFields.etgoWeb = stripUrlScheme(bpFields.etgoWeb);
   // C_BPartner.Value (DAL property `searchKey`) is `required: true` but `form: false` —
   // hidden from every BusinessPartner create form, this one included (verified against
   // artifacts/contacts/contract.json). There is no server-side default for it (confirmed:

@@ -3,6 +3,22 @@ vi.mock('../RelatedDocumentsCard.jsx', () => ({
   default: ({ documentId }) => <div data-testid="related-documents-card">{documentId}</div>,
 }));
 
+// ETP-5124 — EmailsCard is a heavier component (auth-aware fetching, i18n, StatusTag), so it is
+// mocked wholesale here, matching RelatedDocumentsCard above: this test file only needs to prove
+// ReturnDocStatsPanel forwards (or withholds) the `emailsCard` prop correctly, not EmailsCard's
+// own internal behavior — that lives in EmailsCard's own test suite.
+vi.mock('../EmailsCard.jsx', () => ({
+  default: (props) => (
+    <div
+      data-testid="emails-card"
+      data-document-id={props.documentId}
+      data-api-base-url={props.apiBaseUrl}
+      data-refresh-signal={props.refreshSignal}
+      data-has-on-send={typeof props.onSend === 'function'}
+    />
+  ),
+}));
+
 import { render, screen } from '@testing-library/react';
 import ReturnDocStatsPanel from '../ReturnDocStatsPanel.jsx';
 
@@ -93,5 +109,44 @@ describe('ReturnDocStatsPanel', () => {
   it('coerces a string invoiceStatus to a number for the PercentBar', () => {
     render(<ReturnDocStatsPanel {...baseProps} doc={{ ...baseDoc, invoiceStatus: '60' }} />);
     expect(screen.getByText('60%')).toBeInTheDocument();
+  });
+
+  // ── ETP-5124: emailsCard (opt-in EmailsCard slot) ────────────────────────────
+
+  describe('emailsCard prop', () => {
+    it('does not render EmailsCard when emailsCard is omitted', () => {
+      render(<ReturnDocStatsPanel {...baseProps} />);
+      expect(screen.queryByTestId('emails-card')).not.toBeInTheDocument();
+    });
+
+    it('does not render EmailsCard when emailsCard is undefined', () => {
+      render(<ReturnDocStatsPanel {...baseProps} emailsCard={undefined} />);
+      expect(screen.queryByTestId('emails-card')).not.toBeInTheDocument();
+    });
+
+    it('renders EmailsCard with the given props when emailsCard is passed', () => {
+      const onSend = () => {};
+      render(
+        <ReturnDocStatsPanel
+          {...baseProps}
+          emailsCard={{ documentId: 'doc-1', apiBaseUrl: 'https://api.example.com', refreshSignal: 3, onSend }}
+        />,
+      );
+      const card = screen.getByTestId('emails-card');
+      expect(card).toHaveAttribute('data-document-id', 'doc-1');
+      expect(card).toHaveAttribute('data-api-base-url', 'https://api.example.com');
+      expect(card).toHaveAttribute('data-refresh-signal', '3');
+      expect(card).toHaveAttribute('data-has-on-send', 'true');
+    });
+
+    it('renders EmailsCard without a send affordance when onSend is omitted (e.g. non-sendable document)', () => {
+      render(
+        <ReturnDocStatsPanel
+          {...baseProps}
+          emailsCard={{ documentId: 'doc-1', apiBaseUrl: 'https://api.example.com', refreshSignal: 0 }}
+        />,
+      );
+      expect(screen.getByTestId('emails-card')).toHaveAttribute('data-has-on-send', 'false');
+    });
   });
 });

@@ -111,11 +111,9 @@ export default function GoodsReceiptWindow(props) {
     if (status !== 'CO') return [];
     const isPosted = data?.posted === 'Y' || data?.posted === true;
     return [
-      {
-        key: 'downloadPdf',
-        label: ui('downloadPdf'),
-        onClick: () => window.dispatchEvent(new CustomEvent('goods-receipt:download-pdf')),
-      },
+      // ETP-5291 — "Descargar PDF" removed from the kebab menu; the stored
+      // attachment remains directly downloadable via the download-icon
+      // control in GoodsReceiptActions.jsx.
       ...(!isPosted ? [{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }] : []),
       ...(isPosted ? [{ key: 'unpost', labelKey: 'unpost', neoAction: 'unpost', successKey: 'documentUnposted', destructive: true }] : []),
     ];

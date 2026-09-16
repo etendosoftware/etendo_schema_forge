@@ -25,8 +25,22 @@ vi.mock('lucide-react', () => ({
   AlertCircle: ({ className }) => <span data-testid="icon-alert-circle" className={className} />,
 }));
 
+// ETP-5124 — PreviewSendModal renders SendDocumentModal directly, so it is mocked here just to
+// inspect whether the `onSent` prop reaches it, mirroring the prop-inspection convention used
+// elsewhere (e.g. GoodsShipmentPreviewEmails.vitest.jsx).
+vi.mock('@/components/contract-ui/SendDocumentModal.jsx', () => ({
+  default: (props) => (
+    <div data-testid="send-document-modal" data-has-on-sent={typeof props.onSent === 'function'} />
+  ),
+}));
+
 import { render, screen, fireEvent } from '@testing-library/react';
-import PreviewActionButtons, { PreviewEmptyPanel, PreviewPdfPanel } from '../PreviewActionButtons.jsx';
+import PreviewActionButtons, {
+  PreviewEmptyPanel,
+  PreviewPdfPanel,
+  PreviewSendModal,
+  ReceiptSendModal,
+} from '../PreviewActionButtons.jsx';
 
 // ── PreviewActionButtons ───────────────────────────────────────────────────────
 
@@ -197,5 +211,76 @@ describe('PreviewPdfPanel', () => {
   it('renders without crashing when all props are undefined', () => {
     const { container } = render(<PreviewPdfPanel />);
     expect(container.firstChild).not.toBeNull();
+  });
+});
+
+// ── PreviewSendModal / ReceiptSendModal — onSent forwarding (ETP-5124) ────────
+// Previously `onSent` was silently dropped by both wrappers even when a caller passed it,
+// because SendDocumentModal already supported it but neither wrapper threaded it through.
+
+describe('PreviewSendModal — onSent forwarding (ETP-5124)', () => {
+  const sendModalDefaults = {
+    show: true,
+    closing: false,
+    documentType: 'Return Material Receipt',
+    documentNo: 'RMR-001',
+    bpName: 'Acme Corp',
+    bPartnerId: 'bp-1',
+    apiBaseUrl: '/api/return-material-receipt',
+    documentId: 'doc-1',
+    windowName: 'return-material-receipt',
+    token: 'tok',
+    pdfBlobUrl: null,
+    pdfBlobLoading: false,
+    onClose: vi.fn(),
+  };
+
+  it('forwards onSent to the underlying SendDocumentModal when shown', () => {
+    render(<PreviewSendModal {...sendModalDefaults} onSent={vi.fn()} />);
+    expect(screen.getByTestId('send-document-modal')).toHaveAttribute('data-has-on-sent', 'true');
+  });
+
+  it('leaves SendDocumentModal.onSent undefined when the caller does not pass onSent (backward compatible)', () => {
+    render(<PreviewSendModal {...sendModalDefaults} />);
+    expect(screen.getByTestId('send-document-modal')).toHaveAttribute('data-has-on-sent', 'false');
+  });
+
+  it('renders nothing (never mounts SendDocumentModal) when show=false', () => {
+    const { container } = render(<PreviewSendModal {...sendModalDefaults} show={false} onSent={vi.fn()} />);
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByTestId('send-document-modal')).not.toBeInTheDocument();
+  });
+});
+
+describe('ReceiptSendModal — onSent forwarding through PreviewSendModal (ETP-5124)', () => {
+  function buildSendModal(overrides = {}) {
+    return {
+      showSendModal: true,
+      sendModalClosing: false,
+      openEmailModal: vi.fn(),
+      closeEmailModal: vi.fn(),
+      ...overrides,
+    };
+  }
+
+  const receiptSendModalDefaults = {
+    documentType: 'Return Material Receipt',
+    receipt: { id: 'doc-1', documentNo: 'RMR-001', businessPartner: 'bp-1' },
+    partnerName: 'Acme Corp',
+    apiBaseUrl: '/api/return-material-receipt',
+    token: 'tok',
+    windowName: 'return-material-receipt',
+    pdfBlobUrl: null,
+    pdfBlobLoading: false,
+  };
+
+  it('forwards onSent through PreviewSendModal down to SendDocumentModal', () => {
+    render(<ReceiptSendModal {...receiptSendModalDefaults} sendModal={buildSendModal()} onSent={vi.fn()} />);
+    expect(screen.getByTestId('send-document-modal')).toHaveAttribute('data-has-on-sent', 'true');
+  });
+
+  it('leaves SendDocumentModal.onSent undefined when the caller does not pass onSent (backward compatible)', () => {
+    render(<ReceiptSendModal {...receiptSendModalDefaults} sendModal={buildSendModal()} />);
+    expect(screen.getByTestId('send-document-modal')).toHaveAttribute('data-has-on-sent', 'false');
   });
 });
