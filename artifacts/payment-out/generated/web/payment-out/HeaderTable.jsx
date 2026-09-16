@@ -3,7 +3,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:header
 const columns = [
-  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.', required: true },
+  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.', required: true, maxLength: 30 },
   { key: 'paymentDate', column: 'Paymentdate', type: 'date', label: 'Payment Date' },
   { key: 'businessPartner', column: 'C_Bpartner_ID', type: 'selector', label: 'Paying To' },
   { key: 'amount', column: 'Amount', type: 'amount', label: 'Amount', required: true },
