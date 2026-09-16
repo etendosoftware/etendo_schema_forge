@@ -24,9 +24,16 @@ export function useConfirmWithCredit({
   const status = data?.documentStatus;
   const currency = data?.['currency$_identifier'] || '';
   const confirmDisabled = typeof data?.linesCount === 'number' && data.linesCount === 0;
-  const hasReturnInvoice = Array.isArray(data?.returnInvoices)
-    ? data.returnInvoices.some(inv => inv.documentStatus === 'CO')
-    : data?.hasReturnInvoice === true;
+  // ETP-5381: trust the backend flag. ReturnShipmentUtils computes it over every non-voided
+  // invoice of the return document, which is the same predicate the server-side duplicate guard
+  // uses — so the button and the guard can never disagree. The previous client-side override
+  // counted only 'CO' invoices, so a rectificative invoice still in draft read as "no invoice"
+  // and the create button stayed visible, allowing a second one. The array fallback is kept for
+  // responses that carry returnInvoices without the flag, but with the non-voided predicate.
+  const hasReturnInvoice = typeof data?.hasReturnInvoice === 'boolean'
+    ? data.hasReturnInvoice
+    : Array.isArray(data?.returnInvoices)
+      && data.returnInvoices.some(inv => inv.documentStatus !== 'VO');
 
   const headers = useMemo(() => (buildHeaders(token)), [token]);
   const apiFetch = useApiFetch(apiBaseUrl);
