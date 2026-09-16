@@ -4,6 +4,7 @@ import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { overlayStyle, cardStyle, btnPrimaryStyle, btnSecondaryStyle, closeBtnStyle, Spinner } from './ConfirmDocumentModal';
 import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
+import { useRectifiableInvoices, RectifiableInvoiceField } from './RectifiableInvoicePicker';
 
 import { authHeaders } from '@/auth/api.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -25,10 +26,15 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  *   loading          — external loading state (parent sets while API call is in flight)
  *   pendingQtyUrl    — optional URL to fetch { response: { data: [{ pendingQty }] } }
  *                      to display the pending units subtitle. Omit for a generic subtitle.
- *   onConfirm        — called with the selected price list ID when the user clicks Confirm
- *                      (checkbox must be checked, and — when showPriceListPicker is true —
- *                      a price list must be selected)
+ *   onConfirm        — called with (priceListId, originInvoiceIds) when the user clicks Confirm
+ *                      (checkbox must be checked; when showPriceListPicker is true a price list
+ *                      must be selected; when rectifiableInvoicesUrl is set at least one invoice
+ *                      to rectify must be selected)
  *   onClose          — called to dismiss without confirming
+ *   rectifiableInvoicesUrl — ETP-5381: when set, shows the required "invoice to rectify" picker.
+ *                      Rectificative invoices are now created AND confirmed in one step, and the
+ *                      completion is rejected outright unless the C_Invoice_Reverse link exists,
+ *                      so the choice has to be made here rather than afterwards.
  *   showPriceListPicker — ETP-4028: shipments/receipts carry no price list of their own —
  *                      when true, shows a required Tarifa selector so the user explicitly
  *                      picks the price list applied to every line of the generated invoice.
@@ -48,6 +54,7 @@ export default function CreateInvoiceConfirmModal({
   isSOTrx = true,
   apiBaseUrl,
   token,
+  rectifiableInvoicesUrl,
 }) {
   const ui = useUI();
   const apiFetch = useApiFetch();
@@ -70,6 +77,12 @@ export default function CreateInvoiceConfirmModal({
     // variant), so the generic fallback (system `default` flag / first list entry) is
     // disabled: an arbitrary tariff must never silently satisfy a required field.
     allowGenericFallback: false,
+  });
+
+  const rectify = useRectifiableInvoices({
+    enabled: !!rectifiableInvoicesUrl,
+    url: rectifiableInvoicesUrl,
+    token,
   });
 
   const documentNo  = data?.documentNo || '';
@@ -107,7 +120,7 @@ export default function CreateInvoiceConfirmModal({
     ? ui('soAmountPendingInvoice', { pending: `${fmtNum(pendingQty, 0)} ${ui('units')}` })
     : ui('soCreateInvoiceCheckDesc');
 
-  const canConfirm = checked && (!showPriceListPicker || !!priceListId);
+  const canConfirm = checked && (!showPriceListPicker || !!priceListId) && rectify.isSatisfied;
   // Sonar S3776 — the primary button below reused `loading || !canConfirm`
   // three times (disabled, opacity, cursor); computing it once removes two
   // redundant evaluations from the function's cognitive complexity.
@@ -171,6 +184,18 @@ export default function CreateInvoiceConfirmModal({
           </div>
         )}
 
+        {rectifiableInvoicesUrl && (
+          <div style={{ padding: '0 20px 14px' }}>
+            <RectifiableInvoiceField
+              invoices={rectify.invoices}
+              selectedIds={rectify.selectedIds}
+              onToggle={rectify.toggle}
+              loading={rectify.loading}
+              isEmpty={rectify.isEmpty}
+              idPrefix="invoice-confirm-rectify" />
+          </div>
+        )}
+
         <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
             {ui('soGenerateDocs')}
@@ -215,7 +240,7 @@ export default function CreateInvoiceConfirmModal({
           </button>
           <button
             type="button"
-            onClick={() => onConfirm(priceListId)}
+            onClick={() => onConfirm(priceListId, rectify.selectedIds)}
             disabled={confirmDisabled}
             style={{ ...btnPrimaryStyle, opacity: confirmDisabled ? 0.6 : 1, cursor: confirmDisabled ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >

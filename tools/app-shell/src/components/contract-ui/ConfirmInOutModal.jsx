@@ -5,6 +5,7 @@ import { formatCurrency } from '@/lib/formatCurrency.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
+import { useRectifiableInvoices, RectifiableInvoiceField } from './RectifiableInvoicePicker';
 
 /**
  * Generic confirm modal for InOut documents (goods-receipt, goods-shipment, return-receipt).
@@ -44,6 +45,8 @@ export default function ConfirmInOutModal({
   isSOTrx = true,
   hasLinkedOrder = false,
   defaultPriceListId = undefined,
+  rectifiableInvoicesUrl,
+  token,
   onConfirmed,
   onClose,
 }) {
@@ -64,7 +67,15 @@ export default function ConfirmInOutModal({
     defaultPriceListId,
     allowGenericFallback: !priceListRequired,
   });
-  const canConfirm = !priceListRequired || !!priceListId;
+  // ETP-5381: only relevant while the invoice toggle is on — confirming the return document
+  // without generating a rectificative invoice needs no rectified invoice.
+  const rectifyActive = !!rectifiableInvoicesUrl && !!invoiceAction && invoiceRequested;
+  const rectify = useRectifiableInvoices({
+    enabled: rectifyActive,
+    url: rectifiableInvoicesUrl,
+    token,
+  });
+  const canConfirm = (!priceListRequired || !!priceListId) && rectify.isSatisfied;
 
   const { documentNo, bpName, total, currency } = docInfo || {};
 
@@ -93,7 +104,13 @@ export default function ConfirmInOutModal({
 
       let invoice = null;
       if (invoiceRequested && invoiceAction) {
-        const invoiceBody = pickerActive && priceListId ? { priceListId } : {};
+        const invoiceBody = {
+          ...(pickerActive && priceListId ? { priceListId } : {}),
+          // ETP-5381: the rectificative invoice cannot be confirmed without this link.
+          ...(rectifyActive && rectify.selectedIds.length > 0
+            ? { originInvoices: rectify.selectedIds }
+            : {}),
+        };
         const invRes = await apiFetch(`${actionBase}/${invoiceAction}`, {
           method: 'POST', body: JSON.stringify(invoiceBody),
         });
@@ -237,6 +254,16 @@ export default function ConfirmInOutModal({
               loading={loadingPriceLists}
               idPrefix="confirm-modal-price-list"
               data-testid="confirm-modal-price-list-field" />
+          )}
+
+          {rectifyActive && (
+            <RectifiableInvoiceField
+              invoices={rectify.invoices}
+              selectedIds={rectify.selectedIds}
+              onToggle={rectify.toggle}
+              loading={rectify.loading}
+              isEmpty={rectify.isEmpty}
+              idPrefix="confirm-modal-rectify" />
           )}
 
           {error && (
