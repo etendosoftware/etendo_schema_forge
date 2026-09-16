@@ -1213,6 +1213,8 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
     // when it rewrote the other chains in this file.
     let inputEl;
     if (calloutOnBlur && !isReadOnly) {
+      // `!isReadOnly` is guaranteed by this branch, so `required`/`disabled` below do not
+      // repeat it: written out it read as a guard while always being a no-op (Sonar S2589).
       inputEl = (
       <DeferredInput
         f={f}
@@ -1222,8 +1224,8 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
         onValidateBlur={validateNumericOnBlur}
         placeholder={resolveUiKey(ui, f.placeholderKey)}
         className={inputClassName}
-        required={f.required && !isReadOnly}
-        disabled={isReadOnly || savingField === f.key}
+        required={f.required}
+        disabled={savingField === f.key}
         maxLength={f.maxLength}
         data-testid="DeferredInput__a8d626" />
       );
