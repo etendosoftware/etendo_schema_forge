@@ -19,6 +19,7 @@ import {
   buildStatementCreatePayload,
   buildStatementEntries,
   buildStatementMapping,
+  localizeFields,
   validateStatementRow,
 } from '../financial-account/bankStatementImportPipeline.js';
 import '../contacts/contactsImportDescriptor.js';
@@ -536,5 +537,215 @@ describe('ETP-4954 — the bank-statement template round-trips across languages'
           `${where}: the sample row must still validate`);
       }
     }
+  });
+});
+
+/**
+ * ETP-4954 (QA return) — the template's SAMPLE ROW is translated too, not just its headers.
+ *
+ * `TemplateLinks` used to hand the RAW descriptor to `buildTemplateCsv`/`buildTemplateXlsx`, so
+ * the headers came out in the session language while the example row underneath them stayed
+ * Spanish — an English session downloaded `Date, Reference No., Description, Contact name, Out,
+ * In` over `2026-08-01, REF-001, Transferencia recibida, Cliente Ejemplo S.L., 150,00, 0,00`.
+ * Each field now carries an `exampleKey` and `localizeFields` resolves it, so the whole file
+ * speaks one language.
+ *
+ * Everything below goes through `localizeFields(ui)` — the same call `TemplateLinks` makes —
+ * rather than through the raw descriptor, because the raw descriptor is precisely what the bug
+ * was. And it re-runs the ETP-4995 round trip on the localized file: the dialog must never hand
+ * out a template it cannot itself import, and that now has three locales to stay true in.
+ */
+describe('ETP-4954 — the template sample row is localized and still round-trips', () => {
+  const FIELDS = BANK_STATEMENT_IMPORT_FIELDS;
+
+  function localesDir() {
+    let dir = process.cwd();
+    for (;;) {
+      for (const candidate of ['src/locales', 'tools/app-shell/src/locales']) {
+        const path = resolve(dir, candidate, 'en_US.json');
+        if (existsSync(path)) return dirname(path);
+      }
+      const parent = dirname(dir);
+      if (parent === dir) throw new Error(`could not locate src/locales from ${process.cwd()}`);
+      dir = parent;
+    }
+  }
+
+  function shippedLocales() {
+    const dir = localesDir();
+    return readdirSync(dir)
+      .filter((file) => /^[a-z]{2}_[A-Z]{2}\.json$/.test(file))
+      .sort()
+      .map((file) => ({
+        locale: file.replace(/\.json$/, ''),
+        dict: JSON.parse(readFileSync(resolve(dir, file), 'utf8')),
+      }));
+  }
+
+  const uiFor = (dict) => (key) => dict.genericLabels?.[key] ?? key;
+  const LOCALES = shippedLocales();
+
+  /** The localized template, parsed back and keyed by target — the file the user receives. */
+  function templateRowFor(dict) {
+    const ui = uiFor(dict);
+    const fields = localizeFields(ui);
+    const { headers, rows } = parseDelimited(buildTemplateCsv(fields, { headerFor: bankStatementFieldLabel(ui) }));
+    const { mapping } = mapColumns(headers, fields);
+    return { ui, fields, headers, mapping, row: renameRowKeys(rows[0], mapping) };
+  }
+
+  it('declares an exampleKey on every field, translated in every shipped locale', () => {
+    for (const field of FIELDS) {
+      assert.ok(field.exampleKey, `${field.target}: missing exampleKey`);
+    }
+    for (const { locale, dict } of LOCALES) {
+      for (const field of FIELDS) {
+        const value = uiFor(dict)(field.exampleKey);
+        assert.notEqual(value, field.exampleKey,
+          `${locale}: no translation for "${field.exampleKey}"`);
+        assert.notEqual(value, '', `${locale}: empty example for "${field.target}"`);
+      }
+    }
+  });
+
+  it('writes the session language\'s example values into the file, not the descriptor defaults', () => {
+    for (const { locale, dict } of LOCALES) {
+      const { row } = templateRowFor(dict);
+      for (const field of FIELDS) {
+        assert.equal(row[field.target], uiFor(dict)(field.exampleKey),
+          `${locale}: example for "${field.target}" is not the locale's own value`);
+      }
+    }
+  });
+
+  it('hands an English session an English sample row', () => {
+    // The concrete regression QA reported: English headers over Spanish sample data.
+    const en = LOCALES.find((l) => l.locale === 'en_US');
+    const { row } = templateRowFor(en.dict);
+    assert.equal(row.description, 'Incoming transfer');
+    assert.equal(row.bpartnerName, 'Example Customer Ltd');
+    assert.notEqual(row.description, 'Transferencia recibida');
+  });
+
+  it('keeps the date example ISO and IDENTICAL in every locale, on purpose', () => {
+    // Deliberate divergence from the rest of the row: the parser reads every SEPARATED date
+    // day-first, so a localized `08/01/2026` would teach an English reader to fill the column
+    // in a format the importer then reads as 8 January. ISO is unambiguous everywhere and the
+    // parser accepts it — so this one value must NOT follow the session language.
+    const dates = LOCALES.map(({ locale, dict }) => [locale, templateRowFor(dict).row.date]);
+    for (const [locale, date] of dates) {
+      assert.equal(date, '2026-08-01', `${locale}: the date example must stay ISO`);
+      assert.match(date, /^\d{4}-\d{2}-\d{2}$/, `${locale}: the date example must stay ISO-shaped`);
+      assert.ok(!date.includes('/'), `${locale}: a separated date would be read day-first`);
+    }
+    assert.equal(new Set(dates.map(([, d]) => d)).size, 1,
+      'the date example must be the same string in every locale');
+  });
+
+  it('DOES localize the amount examples — es uses the decimal comma, en the decimal point', () => {
+    // The counterpart to the date: amounts are read by `parseStatementAmount`, which handles
+    // both conventions, so here the sample row must show the reader their own.
+    const byLocale = Object.fromEntries(LOCALES.map(({ locale, dict }) => [locale, templateRowFor(dict).row]));
+    assert.equal(byLocale.en_US.out, '150.00');
+    assert.equal(byLocale.en_US.in, '0.00');
+    assert.equal(byLocale.es_ES.out, '150,00');
+    assert.equal(byLocale.es_ES.in, '0,00');
+    assert.equal(byLocale.es_AR.out, '150,00');
+    assert.equal(byLocale.es_AR.in, '0,00');
+    assert.ok(new Set(LOCALES.map(({ dict }) => templateRowFor(dict).row.out)).size > 1,
+      'the amount example must differ between locales, unlike the date');
+  });
+
+  it('parses every locale\'s amount examples to the same numbers', () => {
+    for (const { locale, dict } of LOCALES) {
+      const { row } = templateRowFor(dict);
+      assert.equal(parseStatementAmount(row.out), 150, `${locale}: out example`);
+      assert.equal(parseStatementAmount(row.in), 0, `${locale}: in example`);
+    }
+  });
+
+  it('auto-maps 6/6 columns of its own localized template, in every locale', () => {
+    for (const { locale, dict } of LOCALES) {
+      const { headers } = templateRowFor(dict);
+      assert.equal(headers.length, FIELDS.length, `${locale}: template column count`);
+      const { mapping, unmappedTargets } = buildStatementMapping(headers, uiFor(dict));
+      assert.deepEqual(
+        Object.entries(mapping).filter(([, target]) => !target).map(([h]) => h),
+        [],
+        `${locale}: template headers that map to nothing`,
+      );
+      assert.deepEqual(unmappedTargets, [], `${locale}: fields with no template column`);
+      assert.deepEqual(Object.values(mapping), FIELDS.map((f) => f.target),
+        `${locale}: each header must land on its own field`);
+    }
+  });
+
+  it('ships a localized sample row that validates clean, in every locale', () => {
+    // The ETP-4995 class of bug: the dialog handing out a file it cannot itself import. A
+    // localized example row is a NEW way to reintroduce it — a translated amount the parser
+    // cannot read, or a translated date the day-first reader rejects, would fail here.
+    for (const { locale, dict } of LOCALES) {
+      const { row, ui } = templateRowFor(dict);
+      const { valid, errors } = validateStatementRow(row, ui);
+      assert.deepEqual(errors, [], `${locale}: the localized sample row must validate`);
+      assert.equal(valid, true, `${locale}: the localized sample row must be valid`);
+    }
+  });
+
+  it('turns every locale\'s sample row into the identical sendable payload line', () => {
+    // Different text in, same numbers out: the localization is presentation only and must not
+    // change a single value that reaches the backend.
+    for (const { locale, dict } of LOCALES) {
+      const ui = uiFor(dict);
+      const fields = localizeFields(ui);
+      const { headers, rows } = parseDelimited(
+        buildTemplateCsv(fields, { headerFor: bankStatementFieldLabel(ui) }),
+      );
+      const { mapping } = mapColumns(headers, fields);
+      const entries = buildStatementEntries(applyStatementMapping(rows, mapping), ui);
+      const payload = buildStatementCreatePayload({
+        accountId: 'acc-1', file: { name: 'plantilla.csv' }, entries, name: 'plantilla',
+      });
+      assert.equal(payload.lines.length, 1, `${locale}: one line`);
+      assert.equal(payload.lines[0].date, '2026-08-01T00:00:00Z', `${locale}: date`);
+      assert.equal(payload.lines[0].out, 150, `${locale}: out`);
+      assert.equal(payload.lines[0].in, 0, `${locale}: in`);
+      assert.equal(payload.lines[0].description, ui('financeAccountStatementsImportExampleDesc'),
+        `${locale}: description`);
+    }
+  });
+
+  it('round-trips a localized template across every download-locale / session-locale pair', () => {
+    // The cross-language matrix, re-run on the LOCALIZED file: a template downloaded in one
+    // language must still auto-map and validate when uploaded by a session in another.
+    let pairs = 0;
+    for (const download of LOCALES) {
+      const { headers, rows } = (() => {
+        const ui = uiFor(download.dict);
+        const fields = localizeFields(ui);
+        return parseDelimited(buildTemplateCsv(fields, { headerFor: bankStatementFieldLabel(ui) }));
+      })();
+      for (const session of LOCALES) {
+        const where = `downloaded in ${download.locale}, uploaded in ${session.locale}`;
+        const sessionUi = uiFor(session.dict);
+        const { mapping, unmappedTargets } = buildStatementMapping(headers, sessionUi);
+        assert.deepEqual(unmappedTargets, [], `${where}: fields with no template column`);
+        assert.deepEqual(Object.values(mapping), FIELDS.map((f) => f.target),
+          `${where}: each header must land on the field it was written for`);
+        const row = renameRowKeys(rows[0], mapping);
+        assert.deepEqual(validateStatementRow(row, sessionUi).errors, [],
+          `${where}: the localized sample row must still validate`);
+        pairs += 1;
+      }
+    }
+    assert.equal(pairs, LOCALES.length ** 2, 'every locale pair must be exercised');
+    assert.ok(pairs >= 9, `expected at least the 3x3 matrix, ran ${pairs} pairs`);
+  });
+
+  it('leaves the raw descriptor untouched — localizeFields must not mutate it', () => {
+    const before = FIELDS.map((f) => f.example);
+    for (const { dict } of LOCALES) templateRowFor(dict);
+    assert.deepEqual(FIELDS.map((f) => f.example), before,
+      'localizeFields must return new objects, not edit the shared descriptor');
   });
 });
