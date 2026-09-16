@@ -2014,6 +2014,52 @@ function renderMainColgroup({
  * HorizontalScrollThumb below is its own component: a state update on every
  * scroll frame would re-render the whole (unmemoized) row list.
  */
+/**
+ * Picks between the sticky-header table (plain document-list mode) and the
+ * classic in-table header (hideHeader / inlineEditable), plus each mode's
+ * matching colgroup — extracted out of DataTable's own render body purely to
+ * keep its cognitive complexity down (Sonar): the two JSX `&&` branches and
+ * the colgroup ternary this replaces all counted against DataTable itself.
+ */
+function renderHeaderSection({
+  useOwnStickyHeader, headerRowContent, horizontalScrollElRef, horizontalScrollAttachSeq,
+  hideHeader, linesLayout, hasDimensionsPanel, selectable, visibleColumns, colFlexSpecs,
+  fixedColsTotalPx, growCount, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
+  onCloneRow, quickActionsEnabled, ilpReservesActionSlot, quickActionsColWidthPx,
+}) {
+  if (useOwnStickyHeader) {
+    return {
+      stickyHeader: (
+        <StickyHeaderRow elRef={horizontalScrollElRef} attachSeq={horizontalScrollAttachSeq}>
+          <TableHeader data-testid="TableHeader__eb5261">{headerRowContent}</TableHeader>
+        </StickyHeaderRow>
+      ),
+      colgroup: renderMainColgroup({
+        hasDimensionsPanel, selectable, visibleColumns, hoverRowActions, onDeleteRow,
+        legacyDeleteEnabled, onCloneRow, quickActionsEnabled, quickActionsColWidthPx,
+      }),
+      inlineHeader: null,
+    };
+  }
+  return {
+    stickyHeader: null,
+    colgroup: renderLinesColgroup({
+      hideHeader, selectable, visibleColumns, colFlexSpecs, fixedColsTotalPx, growCount,
+      ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow,
+      quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel, quickActionsColWidthPx,
+    }),
+    inlineHeader: (
+      <TableHeader
+        className={linesLayout === 'inlineEditable' ? 'sticky top-0 z-20 bg-card' : ''}
+        aria-hidden={hideHeader || undefined}
+        style={hideHeader ? { display: 'none' } : undefined}
+        data-testid="TableHeader__eb5261">
+        {headerRowContent}
+      </TableHeader>
+    ),
+  };
+}
+
 function StickyHeaderRow({ elRef, attachSeq, children }) {
   const tableRef = useRef(null);
 
@@ -3058,13 +3104,16 @@ export function DataTable({
     </TableRow>
   );
 
+  const { stickyHeader, colgroup: tableColgroup, inlineHeader } = renderHeaderSection({
+    useOwnStickyHeader, headerRowContent, horizontalScrollElRef, horizontalScrollAttachSeq,
+    hideHeader, linesLayout, hasDimensionsPanel, selectable, visibleColumns, colFlexSpecs,
+    fixedColsTotalPx, growCount, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
+    onCloneRow, quickActionsEnabled, ilpReservesActionSlot, quickActionsColWidthPx,
+  });
+
   return (
     <div className="space-y-0">
-      {useOwnStickyHeader && (
-        <StickyHeaderRow elRef={horizontalScrollElRef} attachSeq={horizontalScrollAttachSeq}>
-          <TableHeader data-testid="TableHeader__eb5261">{headerRowContent}</TableHeader>
-        </StickyHeaderRow>
-      )}
+      {stickyHeader}
       {/*
         `overflow-y-visible` next to `overflow-x-auto` is computed as `auto` by the CSS
         spec, so this wrapper does clip vertically. With `rowHoverStyle="elevated"` the
@@ -3101,26 +3150,8 @@ export function DataTable({
           {/* When hideHeader is true (add-row-only mode), or the header just moved out to
               StickyHeaderRow above, a <colgroup> drives column widths instead of the (now
               absent-from-this-table, or hidden) header row's own cell widths. */}
-          {useOwnStickyHeader
-            ? renderMainColgroup({
-              hasDimensionsPanel, selectable, visibleColumns, hoverRowActions, onDeleteRow,
-              legacyDeleteEnabled, onCloneRow, quickActionsEnabled, quickActionsColWidthPx,
-            })
-            : renderLinesColgroup({
-              hideHeader, selectable, visibleColumns, colFlexSpecs, fixedColsTotalPx, growCount,
-              ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow,
-              quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel,
-              quickActionsColWidthPx,
-            })}
-          {!useOwnStickyHeader && (
-            <TableHeader
-              className={linesLayout === 'inlineEditable' ? 'sticky top-0 z-20 bg-card' : ''}
-              aria-hidden={hideHeader || undefined}
-              style={hideHeader ? { display: 'none' } : undefined}
-              data-testid="TableHeader__eb5261">
-              {headerRowContent}
-            </TableHeader>
-          )}
+          {tableColgroup}
+          {inlineHeader}
           <TableBody data-testid="TableBody__eb5261">
             {renderTableRows({
               hideDataRows, filteredData, addRow, colSpan, hasActiveFilter, data, selectedRows,
