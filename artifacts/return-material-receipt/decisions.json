@@ -3,9 +3,6 @@
   "window": {
     "category": "sales",
     "name": "Return Material Receipt",
-    "sendDocument": {
-      "enabled": false
-    },
     "relatedDocuments": true,
     "notesField": "description",
     "dateFilterKey": "movementDate",

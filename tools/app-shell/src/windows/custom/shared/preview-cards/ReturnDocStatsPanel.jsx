@@ -1,8 +1,12 @@
 import RelatedDocumentsCard from './RelatedDocumentsCard.jsx';
+import EmailsCard from './EmailsCard.jsx';
 import { STATUS_BADGE, STATUS_KEYS } from '@/components/related-documents/constants.jsx';
 import { MovementSummaryCard, InfoRow, PercentBar } from './SummaryCard.jsx';
 
-export default function ReturnDocStatsPanel({ doc, partnerName, movementDate, token, apiBaseUrl, ui, specs }) {
+// ETP-5124 — `emailsCard` is optional: only a caller with a working send contract
+// (return-material-receipt) passes it. `return-to-vendor-shipment` has none yet and
+// omits it, so this stays exactly what it rendered before for that window.
+export default function ReturnDocStatsPanel({ doc, partnerName, movementDate, token, apiBaseUrl, ui, specs, emailsCard }) {
   const docStatus = doc.documentStatus;
   const statusLabel = ui(STATUS_KEYS[docStatus]) || doc['documentStatus$_identifier'] || docStatus || '—';
   const statusBadgeClass = STATUS_BADGE[docStatus] || 'bg-muted text-muted-foreground border-border-subtle';
@@ -30,6 +34,7 @@ export default function ReturnDocStatsPanel({ doc, partnerName, movementDate, to
           </InfoRow>
         )}
       </MovementSummaryCard>
+      {emailsCard && <EmailsCard {...emailsCard} data-testid="EmailsCard__2cd27e" />}
       <RelatedDocumentsCard
         documentId={doc.id}
         token={token}

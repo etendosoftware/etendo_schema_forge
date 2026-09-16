@@ -267,7 +267,7 @@ environment whose key ships to a browser.
 | Where | How it gets there |
 |-------|-------------------|
 | Local dev (frontend) | `tools/app-shell/.env.development.local`, gitignored. **Development mode only** — `vite build` runs in production mode and never reads this file. |
-| Deployed frontend | GitHub Actions **variable**, injected into the build step of `.github/workflows/deploy-staging.yml`. Resolved **per target** in *Resolve deployment target*, so the pilot key reaches experimental and not staging or production. |
+| Deployed frontend | GitHub Actions **variable**, injected into the build step of `.github/workflows/deploy-staging.yml`. Resolved **per target** in *Resolve deployment target*: `VITE_CONFIGCAT_SDK_KEY_EXPERIMENTAL` reaches experimental and `VITE_CONFIGCAT_SDK_KEY_PRODUCTION` reaches production; staging remains empty until enabled. |
 | Backend | **`etendo.go.configcat.sdkKey`, env `ETGO_CONFIGCAT_SDK_KEY`** — since ETP-5267. `GoFeatureFlags.createProvider()` returns `ConfigCatProvider` when that key resolves and `PropertiesFeatureProvider` when it does not, so backend flags are hosted (flippable without a restart) only where the key is set, and a plain per-environment boolean (`etendo.go.flags.<key>`) everywhere else. The fallback is deliberate: dev, CI and e2e stay deterministic. Per-account targeting exists on the ConfigCat arm only. **An absent, blank or wrong key resolves every flag to its `false` code default — never to "on".** |
 
 > **This row used to claim the backend resolved ConfigCat via `ETGO_CONFIGCAT_SDK_KEY`, and that was

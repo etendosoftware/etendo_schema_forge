@@ -326,7 +326,7 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
         requiredHeaderFields={requiredHeaderFields}
         addLineGuard={(_, children) => children.length < 0}
         labelOverrides={labelOverrides}
-        sendDocument={{"enabled":false}}
+        sendDocument
         {...props} window={effectiveWindow}
       />
       </>
@@ -344,7 +344,7 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
       dateFilterKey="movementDate"
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      sendDocument={{"enabled":false}}
+      sendDocument
       {...props} window={effectiveWindow}
     />
   );
