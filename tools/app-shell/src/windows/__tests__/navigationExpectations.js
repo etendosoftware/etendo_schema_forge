@@ -44,7 +44,6 @@ const exceptions = {
   // Independent content gates: ReportViewerPage.jsx and SmartScanPage.jsx.
   'report-viewer-finance': { accessWindowId: 'D647D118F5014D00AF47A636B2CD0DD3', path: 'report-viewer?category=finance' },
   'report-viewer-inventory': { accessWindowId: '6346B88619F948F9A42224BDB0B239FA', path: 'report-viewer?category=inventory' },
-  'smart-scan': { accessWindowId: '33705E0F52874D91B0BB2FF8BB648B8E' },
 };
 
 export const defaultNavigation = Object.entries(groups).flatMap(([group, names]) => names.split(' ').map(name => {
@@ -67,7 +66,9 @@ export const optionalNavigation = [
 
 // Hidden/route-only entries from the functional guides and current product
 // exclusions. App Store is classified above, not permanently hidden.
-export const hiddenNavigation = 'business-partner deal activity lead hr employee absence report-viewer-purchases warehouse-storage-bins project time-tracking document match-rule fiscal-calendar open-close-period-control recurring-invoice oauth2-clients'.split(' ');
+// ETP-5196 — smart-scan moved here (hidden: true in menu.json); its runtime
+// access gate lives in SmartScanPage.jsx's own content gate, unaffected by this.
+export const hiddenNavigation = 'business-partner deal activity lead hr employee absence report-viewer-purchases warehouse-storage-bins project time-tracking document match-rule fiscal-calendar open-close-period-control recurring-invoice oauth2-clients smart-scan'.split(' ');
 
 export const navigationProfiles = [
   { label: 'default', apps: [], marketplace: false, proof: false },

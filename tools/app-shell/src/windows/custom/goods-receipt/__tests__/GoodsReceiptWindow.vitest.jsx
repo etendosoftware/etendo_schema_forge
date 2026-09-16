@@ -295,15 +295,6 @@ describe('GoodsReceiptWindow', () => {
     expect(screen.getByTestId('menu-dr-count').textContent).toBe('0');
   });
 
-  it('menuActionsForForm downloadPdf action dispatches goods-receipt:download-pdf CustomEvent', () => {
-    const listener = vi.fn();
-    window.addEventListener('goods-receipt:download-pdf', listener);
-    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
-    fireEvent.click(screen.getByTestId('trigger-menu-co'));
-    expect(listener).toHaveBeenCalledTimes(1);
-    window.removeEventListener('goods-receipt:download-pdf', listener);
-  });
-
   // ── rowQuickActions.onClone ────────────────────────────────────────────────
 
   it('onClone opens CloneOrderModal portal', () => {

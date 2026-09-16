@@ -59,10 +59,20 @@ export const contactModalConfig = {
       id: 'more',
       labelKey: 'masTab',
       plain: true,
+      // Order mirrors the Contacts window's own field order EXACTLY (Web, Email, Phone —
+      // artifacts/contacts/decisions.json: etgoWeb order 9, etgoEmail order 10, etgoPhone
+      // order 11), confirmed against the live window, not assumed from the config alone.
       fields: [
+        // `inputPrefix: 'https://'` mirrors the Contacts window's own "Página web"
+        // field (ETP-4749) — the stored value is only the part after the scheme, and
+        // getWebsiteFieldError (via withInputPrefix) reconstructs the full URL from it
+        // before checking the domain shape.
+        { id: 'etgoWeb', labelKey: 'websiteField', type: 'text', inputPrefix: 'https://' },
         { id: 'etgoEmail', labelKey: 'contactEmail', type: 'email' },
-        { id: 'etgoPhone', labelKey: 'contactPhone', type: 'tel' },
-        { id: 'etgoWeb', labelKey: 'websiteField', type: 'text' },
+        // ETP-5031 follow-up — same 15-char (E.164) cap as the Contacts window's own
+        // etgoPhone field (artifacts/contacts/decisions.json), so this quick-create
+        // popup can't type past what BusinessPartnerHandler will accept server-side.
+        { id: 'etgoPhone', labelKey: 'contactPhone', type: 'tel', maxLength: 15 },
       ],
     },
   ],

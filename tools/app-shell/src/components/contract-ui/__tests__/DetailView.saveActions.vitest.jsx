@@ -91,7 +91,10 @@ vi.mock('sonner', () => ({
 
 import { render, screen } from '@testing-library/react';
 import { toast } from 'sonner';
-import { handlePostSaveNavigation, reportUnnavigableSave, renderSaveActions } from '../saveActions.jsx';
+import {
+  handlePostSaveNavigation, reportUnnavigableSave, renderSaveActions,
+  runAfterSaveHook, buildUnsavedChangesSaver,
+} from '../saveActions.jsx';
 
 describe('handlePostSaveNavigation', () => {
   it('returns early without side effects when saved is null', async () => {
@@ -242,6 +245,185 @@ describe('handlePostSaveNavigation', () => {
       hook: {},
     });
     expect(navigate).not.toHaveBeenCalled();
+  });
+});
+
+// ETP-5199 — regression coverage for the "Guardar y salir" unsaved-changes-guard save
+// path silently dropping onAfterCreate/onAfterExistingSave. Before this fix, the guard's
+// saver was `() => hook.handleSave({ silent: true })` only — it never called
+// runAfterSaveHook at all, so a window's post-save side effect (Users' role assignment,
+// Warehouse's default storage bin) was lost whenever the user saved via the in-app
+// navigation-guard modal instead of the toolbar Save button.
+describe('runAfterSaveHook', () => {
+  it('calls onAfterCreate (not onAfterExistingSave) when isNew is true', async () => {
+    const onAfterCreate = vi.fn();
+    const onAfterExistingSave = vi.fn();
+    const saved = { id: 'rec-1' };
+    await runAfterSaveHook(saved, {
+      isNew: true, onAfterCreate, onAfterExistingSave, token: 'tok', apiBaseUrl: '/api',
+    });
+    expect(onAfterCreate).toHaveBeenCalledWith(saved, { token: 'tok', apiBaseUrl: '/api' });
+    expect(onAfterExistingSave).not.toHaveBeenCalled();
+  });
+
+  it('calls onAfterExistingSave (not onAfterCreate) when isNew is false', async () => {
+    const onAfterCreate = vi.fn();
+    const onAfterExistingSave = vi.fn();
+    const saved = { id: 'rec-1' };
+    await runAfterSaveHook(saved, {
+      isNew: false, onAfterCreate, onAfterExistingSave, token: 'tok', apiBaseUrl: '/api',
+    });
+    expect(onAfterExistingSave).toHaveBeenCalledWith(saved, { token: 'tok', apiBaseUrl: '/api' });
+    expect(onAfterCreate).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when the relevant hook is missing (optional chaining)', async () => {
+    await expect(runAfterSaveHook({ id: 'rec-1' }, {
+      isNew: true, onAfterCreate: undefined, onAfterExistingSave: undefined, token: 'tok', apiBaseUrl: '/api',
+    })).resolves.toBeUndefined();
+  });
+});
+
+describe('buildUnsavedChangesSaver (ETP-5199)', () => {
+  function baseArgs(overrides = {}) {
+    return {
+      hook: { handleSave: vi.fn(() => Promise.resolve({ id: 'rec-1' })) },
+      isNew: false,
+      onAfterCreate: vi.fn(),
+      onAfterExistingSave: vi.fn(),
+      token: 'tok',
+      apiBaseUrl: '/api',
+      ...overrides,
+    };
+  }
+
+  it('calls hook.handleSave with { silent: true } — the "Guardar y salir" prompt is the only feedback, not a per-save toast', async () => {
+    const args = baseArgs();
+    const saver = buildUnsavedChangesSaver(args);
+    await saver();
+    expect(args.hook.handleSave).toHaveBeenCalledWith({ silent: true });
+  });
+
+  it('calls onAfterExistingSave with the saved record when isNew is false — the bug this fix closes for the Users window (handleRoleAssignmentSave)', async () => {
+    const args = baseArgs({ isNew: false });
+    const saver = buildUnsavedChangesSaver(args);
+    const result = await saver();
+    expect(args.onAfterExistingSave).toHaveBeenCalledWith({ id: 'rec-1' }, { token: 'tok', apiBaseUrl: '/api' });
+    expect(args.onAfterCreate).not.toHaveBeenCalled();
+    expect(result).toEqual({ id: 'rec-1' });
+  });
+
+  it('calls onAfterCreate with the saved record when isNew is true — the bug this fix closes for the Warehouse window (createDefaultStorageBin)', async () => {
+    const args = baseArgs({ isNew: true });
+    const saver = buildUnsavedChangesSaver(args);
+    const result = await saver();
+    expect(args.onAfterCreate).toHaveBeenCalledWith({ id: 'rec-1' }, { token: 'tok', apiBaseUrl: '/api' });
+    expect(args.onAfterExistingSave).not.toHaveBeenCalled();
+    expect(result).toEqual({ id: 'rec-1' });
+  });
+
+  it('does NOT call the after-save hook and returns the falsy result as-is when handleSave refuses (validation failure)', async () => {
+    const args = baseArgs({
+      hook: { handleSave: vi.fn(() => Promise.resolve(null)) },
+    });
+    const saver = buildUnsavedChangesSaver(args);
+    const result = await saver();
+    expect(result).toBeNull();
+    expect(args.onAfterExistingSave).not.toHaveBeenCalled();
+    expect(args.onAfterCreate).not.toHaveBeenCalled();
+  });
+
+  it('does NOT call the after-save hook when handleSave resolves undefined either', async () => {
+    const args = baseArgs({
+      hook: { handleSave: vi.fn(() => Promise.resolve(undefined)) },
+    });
+    const saver = buildUnsavedChangesSaver(args);
+    const result = await saver();
+    expect(result).toBeUndefined();
+    expect(args.onAfterExistingSave).not.toHaveBeenCalled();
+  });
+
+  it('does not perform any navigation itself — the built saver has no navigate/windowName dependency and never touches window.location or history', async () => {
+    // buildUnsavedChangesSaver deliberately does not accept navigate/windowName at all,
+    // unlike handlePostSaveNavigation — this asserts the returned function's arity/behavior
+    // rather than a mocked navigate, since there is nothing to inject a navigate mock into.
+    expect(buildUnsavedChangesSaver.length).toBe(1);
+    const args = baseArgs({ isNew: true });
+    const saver = buildUnsavedChangesSaver(args);
+    expect(saver.length).toBe(0);
+    await saver();
+    // Sanity: no accidental global navigation call sneaks in via jsdom's location.
+    expect(window.location.pathname).toBe('/');
+  });
+
+  // QA adversarial pass (ETP-5199) — a THROWING onAfterCreate/onAfterExistingSave/handleSave,
+  // as opposed to one that resolves falsy.
+  //
+  // ETP-5199 follow-up (QA MEDIUM finding, closed in this same change): a throwing
+  // onAfterCreate/onAfterExistingSave used to propagate all the way up through
+  // savePendingNavigation() (unsavedChanges.js) to UnsavedChangesNavigationDialog, whose
+  // handleSave has no try/catch either — leaving the "Guardar y salir" modal stuck open
+  // forever (spinner, every button disabled, no way out but reloading and losing the very
+  // edits this guard exists to protect). buildUnsavedChangesSaver now catches ONLY the
+  // runAfterSaveHook call: the record itself already saved by that point (hook.handleSave
+  // already resolved truthy), so the fix reports a toast and still resolves with the saved
+  // record — it does not re-throw. A rejection from hook.handleSave itself is a different
+  // case (the record never saved) and is deliberately NOT caught here — see that test below.
+  // runAfterSaveHook and handlePostSaveNavigation (the toolbar-Save path) are intentionally
+  // NOT touched by this fix — see their own tests below, still asserting propagation.
+  describe('throwing hooks (not just a falsy resolution)', () => {
+    const ui = (key) => key;
+
+    it('catches a rejection from onAfterExistingSave, toasts, and still resolves with the saved record — the Users window save already succeeded', async () => {
+      const err = new Error('role assignment save failed');
+      const args = baseArgs({ isNew: false, onAfterExistingSave: vi.fn(() => Promise.reject(err)), ui });
+      const saver = buildUnsavedChangesSaver(args);
+      const result = await saver();
+      expect(result).toEqual({ id: 'rec-1' });
+      expect(toast.error).toHaveBeenCalledWith('savedButFollowUpActionFailed');
+    });
+
+    it('catches a rejection from onAfterCreate, toasts, and still resolves with the saved record — the Warehouse window save already succeeded', async () => {
+      const err = new Error('default storage bin failed');
+      const args = baseArgs({ isNew: true, onAfterCreate: vi.fn(() => Promise.reject(err)), ui });
+      const saver = buildUnsavedChangesSaver(args);
+      const result = await saver();
+      expect(result).toEqual({ id: 'rec-1' });
+      expect(toast.error).toHaveBeenCalledWith('savedButFollowUpActionFailed');
+    });
+
+    it('falls back to the raw i18n key when no ui function is supplied, but still resolves rather than rejecting', async () => {
+      const err = new Error('role assignment save failed');
+      const args = baseArgs({ isNew: false, onAfterExistingSave: vi.fn(() => Promise.reject(err)) });
+      const saver = buildUnsavedChangesSaver(args);
+      const result = await saver();
+      expect(result).toEqual({ id: 'rec-1' });
+      expect(toast.error).toHaveBeenCalledWith('savedButFollowUpActionFailed');
+    });
+
+    it('propagates a rejection from hook.handleSave itself, not only a falsy resolution — the record never saved, so this must NOT be swallowed', async () => {
+      const err = new Error('network error');
+      const args = baseArgs({ hook: { handleSave: vi.fn(() => Promise.reject(err)) } });
+      const saver = buildUnsavedChangesSaver(args);
+      await expect(saver()).rejects.toThrow('network error');
+    });
+
+    it('runAfterSaveHook itself still propagates a throwing onAfterExistingSave — buildUnsavedChangesSaver is the layer that catches it, not runAfterSaveHook', async () => {
+      const err = new Error('boom');
+      await expect(runAfterSaveHook({ id: 'rec-1' }, {
+        isNew: false, onAfterCreate: null, onAfterExistingSave: vi.fn(() => Promise.reject(err)), token: 'tok', apiBaseUrl: '/api',
+      })).rejects.toThrow('boom');
+    });
+
+    it('handlePostSaveNavigation (toolbar-Save path) still propagates the same throwing onAfterCreate — this fix is scoped to the unsaved-changes-guard saver only', async () => {
+      const err = new Error('boom');
+      const navigate = vi.fn();
+      await expect(handlePostSaveNavigation({ id: 'rec-1' }, {
+        isNew: true, onAfterCreate: vi.fn(() => Promise.reject(err)), onAfterSave: null,
+        navigate, windowName: 'orders', token: 'tok', apiBaseUrl: '/api', hook: { primeSaved: vi.fn() },
+      })).rejects.toThrow('boom');
+      expect(navigate).not.toHaveBeenCalled();
+    });
   });
 });
 

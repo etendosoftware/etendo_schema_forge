@@ -83,6 +83,20 @@ const BACKEND_ERROR_MAP = {
   // caught it.
   'The tax ID is not a valid NIF, CIF or NIE.': 'backendError.taxIdInvalidFormat',
   'The tax ID check digit does not match. Review the number.': 'backendError.taxIdInvalidCheckDigit',
+  // ETP-5031 — BusinessPartnerHandler validates the Contacts `TaxID` server-side too, and there
+  // the document type can be a passport (EM_OBTIK_Tax_ID_Key = '3'), which the two rules above
+  // do not cover. Same principle as them: the wording must match what the browser-side
+  // contactsFieldValidation.js shows for the identical rejection.
+  'The passport ID is not valid. It must be up to 9 letters or digits.': 'backendError.taxIdInvalidPassport',
+  // ETP-5031 follow-up — BusinessPartnerHandler now also validates etgoEmail/etgoWeb/etgoPhone
+  // server-side (a direct API/MCP write previously bypassed the browser-only
+  // contactsFieldValidation.js / recipientEdits.js checks entirely). Same principle as the
+  // TaxID/passport entries above: the wording must match what those browser-side checks show
+  // for the identical rejection, so a value rejected in one place reads identically in the other.
+  'The email address is not valid.': 'sendModalInvalidEmail',
+  'The website is not a valid domain, e.g. domain.com.': 'websiteInsecureUrl',
+  'The phone number can only contain digits and the + ( ) - . characters, up to 15 characters.':
+    'phoneInvalidChars',
   'Name is too long': 'backendError.matchRuleNameTooLong',
   'Text condition must be Contains (C), Starts with (S) or Regex (R)': 'backendError.matchRuleTextConditionInvalid',
   'Pattern is required': 'backendError.matchRulePatternRequired',
@@ -761,6 +775,23 @@ function translateParameterized(msg, t) {
   return (translated && translated !== match.key) ? translated : null;
 }
 
+// ETP-5323: JsonDataService's RPCREQUEST_STATUS_VALIDATION_ERROR shape (a per-property setter
+// failure caught during JSON-to-entity conversion, e.g. StringPropertyValidator rejecting a
+// "Description" value longer than its AD column) carries the message under response.errors, a
+// MAP keyed by property name — a sibling of response.error (singular), not a variant of it.
+// NeoCrudHandler now translates/sanitizes this server-side (see buildValidationErrorResponse),
+// so this is a defense-in-depth fallback for any deployment where that Java fix hasn't shipped
+// yet: without it, the caller falls back to the bare "Error <status>". Extracted out of
+// parseBackendErrorMessage to keep that function under the S3776 cognitive-complexity ceiling —
+// same pattern as PARAMETERIZED_MATCHERS above.
+function extractFirstResponseErrorsMessage(data) {
+  const errorsMap = data?.response?.errors;
+  if (!errorsMap || typeof errorsMap !== 'object') return undefined;
+  const firstKey = Object.keys(errorsMap)[0];
+  if (firstKey && typeof errorsMap[firstKey] === 'string') return errorsMap[firstKey];
+  return undefined;
+}
+
 export async function parseBackendErrorMessage(res) {
   let raw;
   try {
@@ -773,6 +804,7 @@ export async function parseBackendErrorMessage(res) {
       if (err?.message) raw = err.message;
       else if (typeof err === 'string') raw = err;
       else if (data?.message) raw = data.message;
+      else raw = extractFirstResponseErrorsMessage(data);
     }
   } catch {
     // Ignore non-JSON error bodies.

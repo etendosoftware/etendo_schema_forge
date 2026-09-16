@@ -7,8 +7,8 @@ const columns = [
   { key: 'dueDate', column: 'DueDate', type: 'date', label: 'Due Date' },
   { key: 'expected', column: 'ExpectedAmount', type: 'amount', label: 'Expected Amount' },
   { key: 'amount', column: 'Amount', type: 'amount', label: 'Paid Amount', required: true },
-  { key: 'orderNo', column: 'DocumentNo', type: 'string', label: 'Order No.', required: true },
-  { key: 'invoiceNo', column: 'DocumentNo', type: 'string', label: 'Invoice No.', required: true },
+  { key: 'orderNo', column: 'DocumentNo', type: 'string', label: 'Order No.', required: true, maxLength: 30 },
+  { key: 'invoiceNo', column: 'DocumentNo', type: 'string', label: 'Invoice No.', required: true, maxLength: 30 },
   { key: 'businessPartner', column: 'C_Bpartner_ID', type: 'selector', label: 'Business Partner' },
 ];
 // @sf-generated-end columns:lines

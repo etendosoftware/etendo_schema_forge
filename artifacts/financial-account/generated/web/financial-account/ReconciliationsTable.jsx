@@ -3,12 +3,12 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:reconciliations
 const columns = [
-  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.', required: true },
+  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.', required: true, maxLength: 30 },
   { key: 'transactionDate', column: 'Statementdate', type: 'date', label: 'Transaction Date', required: true },
   { key: 'startingbalance', column: 'Startingbalance', type: 'amount', label: 'Starting Balance', required: true },
   { key: 'endingBalance', column: 'Endingbalance', type: 'amount', label: 'Ending Balance', required: true },
   { key: 'documentStatus', column: 'Docstatus', type: 'status', label: 'Document Status', enumLabels: { 'CL': 'docstatusCl', 'CO': 'docstatusCo', 'DR': 'docstatusDr', 'NA': 'docstatusNa', 'WP': 'docstatusWp', 'RE': 'docstatusRe', 'TEMP': 'docstatusTemp', 'IP': 'docstatusIp', '??': 'docstatus', 'VO': 'docstatusVo' }, required: true },
-  { key: 'posted', column: 'Posted', type: 'string', label: 'Posted', required: true },
+  { key: 'posted', column: 'Posted', type: 'string', label: 'Posted', required: true, maxLength: 60 },
 ];
 // @sf-generated-end columns:reconciliations
 

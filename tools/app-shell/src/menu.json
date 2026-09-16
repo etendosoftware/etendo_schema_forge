@@ -467,7 +467,8 @@
           "name": "smart-scan",
           "label": "Smart Scan",
           "favname": "Smart Scan",
-          "accessWindowId": "33705E0F52874D91B0BB2FF8BB648B8E"
+          "accessWindowId": "33705E0F52874D91B0BB2FF8BB648B8E",
+          "hidden": true
         },
         {
           "name": "oauth2-clients",
