@@ -9,6 +9,7 @@ import { expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ensureFinancialAccountSetup } from './financial-account-helpers.js';
+import { apiAuthHeaders } from './auth.js';
 
 // ── Credentials ──────────────────────────────────────────────────────────────
 
@@ -164,6 +165,14 @@ export const VENDOR_FIXTURE_NAME = 'E2E Vendor Fixture';
 const VENDOR_FIXTURE_ADDRESS_LINE = 'E2E Vendor Fixture Address';
 const VENDOR_FIXTURE_CITY = 'E2E City';
 
+// ETP-4576: the credential comes from apiAuthHeaders, not from localStorage. Under the cookie
+// session there is no bearer in localStorage at all, so reading the legacy token key here threw
+// on every run. apiAuthHeaders returns whichever credential this run actually uses (the cookie
+// CSRF proof or the legacy bearer) plus the Origin the backend's CSRF gate requires.
+async function getAuthHeaders(page) {
+  return { ...(await apiAuthHeaders(page)), 'Content-Type': 'application/json' };
+}
+
 /**
  * GETs businessPartner candidates for the vendor fixture, sorted oldest-first
  * (`_sortBy=creationDate`, per `queryParams.sorting` in the Contacts window's
@@ -176,7 +185,7 @@ const VENDOR_FIXTURE_CITY = 'E2E City';
  * (bounded) page and matches by name client-side — see findVendorFixture()'s
  * doc comment for why that second mode exists.
  */
-async function queryVendorFixtureCandidates(page, token, { useCriteria }) {
+async function queryVendorFixtureCandidates(page, headers, { useCriteria }) {
   const params = { _sortBy: 'creationDate', _startRow: '0', _endRow: '500' };
   if (useCriteria) {
     params.criteria = JSON.stringify({
@@ -187,7 +196,7 @@ async function queryVendorFixtureCandidates(page, token, { useCriteria }) {
   }
   const res = await page.request.get('/sws/neo/contacts/businessPartner', {
     params,
-    headers: { Authorization: `Bearer ${token}` },
+    headers,
   });
   if (!res.ok()) {
     throw new Error(`ensureVendorSetup: fixture lookup failed (${res.status()}): ${await res.text()}`);
@@ -240,20 +249,14 @@ function pickDeterministicFixture(candidates) {
  * cheap insurance against exactly that class of bug regardless.)
  */
 async function findVendorFixture(page) {
-  const token = await page.evaluate(() => localStorage.getItem('sf_auth_token'));
-  if (!token) {
-    throw new Error(
-      'ensureVendorSetup could not find an auth token in localStorage["sf_auth_token"] — '
-      + 'call login(page) before ensureVendorSetup(page, ...).',
-    );
-  }
+  const headers = await getAuthHeaders(page);
 
-  const filtered = await queryVendorFixtureCandidates(page, token, { useCriteria: true });
+  const filtered = await queryVendorFixtureCandidates(page, headers, { useCriteria: true });
   if (filtered.length > 0) {
     return pickDeterministicFixture(filtered);
   }
 
-  const unfiltered = await queryVendorFixtureCandidates(page, token, { useCriteria: false });
+  const unfiltered = await queryVendorFixtureCandidates(page, headers, { useCriteria: false });
   if (unfiltered.length > 0) {
     // eslint-disable-next-line no-console
     console.warn(
@@ -477,16 +480,9 @@ async function ensureVendorPaymentFieldsSet(page) {
  * on almost every run instead of reusing the existing one.
  */
 export async function fetchBpLocationCount(page, bpId) {
-  const token = await page.evaluate(() => localStorage.getItem('sf_auth_token'));
-  if (!token) {
-    throw new Error(
-      'fetchBpLocationCount could not find an auth token in localStorage["sf_auth_token"] — '
-      + 'call login(page) first.',
-    );
-  }
   const res = await page.request.get('/sws/neo/contacts/locationAddress', {
     params: { parentId: bpId },
-    headers: { Authorization: `Bearer ${token}` },
+    headers: await getAuthHeaders(page),
   });
   if (!res.ok()) {
     throw new Error(`fetchBpLocationCount: location lookup failed (${res.status()}): ${await res.text()}`);
