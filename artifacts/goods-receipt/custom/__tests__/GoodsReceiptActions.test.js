@@ -43,11 +43,13 @@ describe('GoodsReceiptActions', () => {
       assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?apiBaseUrl=\{apiBaseUrl\}[\s\S]*?\/>/);
     });
 
-    it('onConfirm closes the confirm dialog and forwards the chosen priceListId to handleCreateInvoice', () => {
-      assert.match(
-        src,
-        /onConfirm=\{\(priceListId\) => \{ setShowInvoiceConfirm\(false\); handleCreateInvoice\(priceListId\); \}\}/,
-      );
+    // ETP-5333 — onConfirm used to be an inline arrow that closed the modal
+    // SYNCHRONOUSLY on click, before the request even started (no loading
+    // feedback). It is now wired directly to handleCreateInvoice, which closes
+    // the modal itself only once the request succeeds (see the assertions
+    // below and the ETP-5333 describe block further down).
+    it('onConfirm is wired directly to handleCreateInvoice (no inline synchronous close)', () => {
+      assert.match(src, /onConfirm=\{handleCreateInvoice\}/);
     });
 
     it('handleCreateInvoice accepts priceListId and threads it into the POST body', () => {
@@ -98,6 +100,50 @@ describe('GoodsReceiptActions', () => {
         src,
         /setReturnedDoc\(null\);\s*setTimeout\(\(\) => \{\s*[\s\S]*?if\s*\(!resultNavigatedRef\.current\)\s*onRefresh\?\.\(\);/,
       );
+    });
+  });
+
+  // ETP-5333 — regression guard. handleCreateInvoice used to be called from an
+  // inline onConfirm that closed the modal (setShowInvoiceConfirm(false))
+  // SYNCHRONOUSLY on click, before the request even started — no loading
+  // feedback, then a second (result) modal popped up once the request
+  // resolved. The fix moves setShowInvoiceConfirm(false) inside
+  // handleCreateInvoice's own SUCCESS branch, right before setConfirmedDocs,
+  // and passes `loading={creatingInvoice}` straight through to
+  // CreateInvoiceConfirmModal so it can show its own spinner/label while the
+  // modal stays mounted.
+  describe('handleCreateInvoice — modal closes only on success, right before setConfirmedDocs (ETP-5333)', () => {
+    it('calls setShowInvoiceConfirm(false) immediately before setConfirmedDocs inside the success path', () => {
+      const successBlock = src.match(
+        /const invData = \(await res\.json\(\)\)\?\.response\?\.data;\s*setShowInvoiceConfirm\(false\);\s*setConfirmedDocs\(\{/,
+      );
+      assert.ok(successBlock, 'expected setShowInvoiceConfirm(false) to run right before setConfirmedDocs({...}) on success');
+    });
+
+    it('does NOT close the modal inside the catch (error) branch — it must stay open on failure so the user can retry', () => {
+      const handlerBlock = src.match(/const handleCreateInvoice = async[\s\S]*?\n  \};/);
+      assert.ok(handlerBlock, 'expected the handleCreateInvoice function body');
+      const catchBlock = handlerBlock[0].match(/\} catch \(err\) \{[\s\S]*?\} finally \{/);
+      assert.ok(catchBlock, 'expected a catch block inside handleCreateInvoice');
+      assert.doesNotMatch(catchBlock[0], /setShowInvoiceConfirm\(false\)/);
+      assert.match(catchBlock[0], /toast\.error\(/);
+    });
+
+    it('guards re-entrant calls with the creatingInvoice flag before doing anything else', () => {
+      assert.match(
+        src,
+        /const handleCreateInvoice = async \(priceListId\) => \{\s*if \(creatingInvoice\) return;\s*setCreatingInvoice\(true\);/,
+      );
+    });
+
+    it('passes loading={creatingInvoice} to CreateInvoiceConfirmModal', () => {
+      assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?loading=\{creatingInvoice\}[\s\S]*?\/>/);
+    });
+
+    it('always resets creatingInvoice in a finally block, regardless of success or failure', () => {
+      const handlerBlock = src.match(/const handleCreateInvoice = async[\s\S]*?\n  \};/);
+      assert.ok(handlerBlock, 'expected the handleCreateInvoice function body');
+      assert.match(handlerBlock[0], /\} finally \{\s*setCreatingInvoice\(false\);\s*\}/);
     });
   });
 });

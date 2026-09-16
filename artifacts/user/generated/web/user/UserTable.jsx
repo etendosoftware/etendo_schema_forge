@@ -3,8 +3,8 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:user
 const columns = [
-  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
-  { key: 'email', column: 'Email', type: 'string', label: 'Email', required: true },
+  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true, maxLength: 60 },
+  { key: 'email', column: 'Email', type: 'string', label: 'Email', required: true, maxLength: 255 },
   { key: 'defaultRole', column: 'Default_Ad_Role_ID', type: 'selector', label: 'Default Role' },
   { key: 'active', column: 'IsActive', type: 'boolean', label: 'Active', toggle: true, required: true },
 ];
