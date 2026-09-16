@@ -289,7 +289,12 @@ function renderBody({ loading, movements, ui, renderRow }) {
   if (movements.length === 0) {
     return (
       <TableRow className="hover:bg-transparent" data-testid="TableRow__ae5a16">
-        <TableCell colSpan={COL_COUNT} className="py-16" data-testid="TableCell__ae5a16">
+        {/* `whitespace-normal` overrides TableCell's default `whitespace-nowrap` (ETP-5281,
+            meant for a single data value that must not overflow into the next column) — it's
+            inherited, so without it the hint paragraph below could never wrap inside its own
+            `max-w-sm` box: the text rendered as one unbroken line that overflowed the box to
+            the right instead of wrapping and being centered inside it. */}
+        <TableCell colSpan={COL_COUNT} className="whitespace-normal py-16" data-testid="TableCell__ae5a16">
           <div className="flex flex-col items-center gap-2 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[hsl(var(--muted))]">
               <ArrowLeftRight className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="ArrowLeftRight__ae5a16" />

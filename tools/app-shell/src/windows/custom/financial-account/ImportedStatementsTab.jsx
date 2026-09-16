@@ -15,6 +15,7 @@ import {
 import { ListSortPopover } from '@/components/contract-ui/ListSortPopover.jsx';
 import { ListProgressBar } from '@/components/contract-ui/ListProgressBar.jsx';
 import { useClientSort } from '@/hooks/useClientSort';
+import { sortRows } from '@/lib/clientSort.js';
 import { StatementLinesView } from './StatementLinesView';
 import { ImportStatementModal } from './ImportStatementModal';
 import { ManualStatementModal } from './ManualStatementModal';
@@ -22,6 +23,14 @@ import { StatementConfirmDialog } from './StatementConfirmDialog';
 import { applyAdvancedFilter } from './statementAdvancedFilter';
 import { getDateBounds } from '@/lib/dateRangeBounds';
 import { parseCalendarDate } from '@/lib/dateOnly';
+
+/**
+ * The list's default order: newest statement first.
+ *
+ * Shared by the pre-sort and by `useClientSort`'s indicator seed, which must agree or the header
+ * arrow would describe an order the rows are not in.
+ */
+const STATEMENTS_DEFAULT_SORT = Object.freeze({ key: 'documentNo', direction: 'desc' });
 import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
 
 /**
@@ -246,10 +255,31 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   // list arrives whole from a handler that accepts no sort parameter — see lib/clientSort.js.
   const sortAccessors = useMemo(() => buildStatementSortAccessors(bcpLocale), [bcpLocale]);
   const sortColumns = useMemo(() => buildStatementSortColumns(ui), [ui]);
+  // Newest first by default. The handler returns the statements in no particular order, so a
+  // freshly created one — manual or imported — landed wherever it happened to fall and the user
+  // had to hunt for the row they had just made. DocumentNo is the only strictly increasing key
+  // the list has (the transaction date is the bank's, not the creation order), so the newest
+  // statement is always the highest one.
+  //
+  // Pre-sorted HERE rather than through `initialSort`, which only seeds the header indicator and
+  // deliberately does not reorder — see `useClientSort`'s doc. Both are needed: this call puts
+  // the rows in order, `initialSort` makes the arrow agree with what is on screen.
+  const defaultSortedStatements = useMemo(
+    () => sortRows(filteredStatements, {
+      key: 'documentNo',
+      direction: 'desc',
+      accessors: sortAccessors,
+      locale: bcpLocale,
+    }),
+    [filteredStatements, sortAccessors, bcpLocale],
+  );
   const {
     sorted: sortedStatements, sortKey, sortDirection, toggleSort, selectSort, clearSort,
     isDefaultSort,
-  } = useClientSort(filteredStatements, { accessors: sortAccessors });
+  } = useClientSort(defaultSortedStatements, {
+    accessors: sortAccessors,
+    initialSort: STATEMENTS_DEFAULT_SORT,
+  });
 
   // Latest filtered headers + current selection reachable via ref, so the
   // parent's Export button can read them on click without subscribing here.
