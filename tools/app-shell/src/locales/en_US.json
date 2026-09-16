@@ -17474,6 +17474,7 @@
     "sendModalCc": "CC",
     "sendModalMaxRecipients": "Maximum {max} recipients across To and CC",
     "sendModalNoToRecipient": "Add at least one To recipient",
+    "sendModalNoSubject": "Enter a subject",
     "invalidAmount": "Enter a valid amount",
     "productSearchNoResults": "No results for \"{query}\"",
     "productSearchCount": "{count} products",

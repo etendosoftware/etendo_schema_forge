@@ -17705,6 +17705,7 @@
     "sendModalCc": "CC",
     "sendModalMaxRecipients": "Máximo {max} destinatarios entre Para y CC",
     "sendModalNoToRecipient": "Añade al menos un destinatario en Para",
+    "sendModalNoSubject": "Ingresá un asunto",
     "invalidAmount": "Ingresá un importe válido",
     "productSearchNoResults": "Sin resultados para \"{query}\"",
     "productSearchCount": "{count} productos",
