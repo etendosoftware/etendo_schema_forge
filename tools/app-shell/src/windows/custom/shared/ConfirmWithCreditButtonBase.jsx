@@ -11,7 +11,7 @@ export default function ConfirmWithCreditButtonBase({
   data, recordId, token, apiBaseUrl,
   entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey,
   specName, entityName,
-  onSave, isDirty, saveGate,
+  onSave, isDirty, saveGate, onRefresh,
   confirmDrLabel,
   confirmModalTitle, infoRowPre, infoRowBold, infoRowPost, confirmWithInvoiceLabel,
   postConfirmButtonLabel,
@@ -99,7 +99,10 @@ export default function ConfirmWithCreditButtonBase({
           onConfirmed={({ invoice }) => {
             setShowModal(false);
             const r = buildInvoiceResultFromConfirm(invoice);
-            if (r) setResult(r); else window.location.reload();
+            // ETP-5333 follow-up — same partial-refresh pattern as below: when
+            // confirming without creating an invoice there's no result modal to
+            // show, so refresh the header directly instead of a full reload.
+            if (r) setResult(r); else onRefresh?.();
           }}
           onClose={() => setShowModal(false)}
           data-testid="ConfirmInOutModal__f9608e" />
@@ -123,7 +126,11 @@ export default function ConfirmWithCreditButtonBase({
           onClose={() => {
             setResult(null);
             setTimeout(() => {
-              if (!resultNavigatedRef.current) window.location.reload();
+              // ETP-5333 follow-up — same partial-refresh pattern as ETP-4779
+              // (GoodsReceiptActions.jsx / GoodsShipmentActions.jsx): refetch the
+              // header via onRefresh instead of a full page reload. Skipped when
+              // the user navigated away instead of closing.
+              if (!resultNavigatedRef.current) onRefresh?.();
               resultNavigatedRef.current = false;
             }, 0);
           }}

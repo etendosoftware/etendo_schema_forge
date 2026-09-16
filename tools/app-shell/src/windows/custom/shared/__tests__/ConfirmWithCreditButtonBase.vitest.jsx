@@ -10,6 +10,10 @@ vi.mock('@/i18n', () => ({
 }));
 
 const mockNavigate = vi.fn();
+// ETP-5333 follow-up — onRefresh is what DetailView's renderSlotAction actually
+// passes to this topbarRight component in production; tests assert against
+// this mock instead of window.location.reload, which the component no longer calls.
+const mockOnRefresh = vi.fn();
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
@@ -79,6 +83,7 @@ const BASE_PROPS = {
   getPdfLabelsFn: () => ({}),
   specName: 'some-window',
   entityName: 'someWindow',
+  onRefresh: mockOnRefresh,
 };
 
 describe('ConfirmWithCreditButtonBase — postConfirmButtonLabel (ETP-4737)', () => {
@@ -162,6 +167,7 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
 
   beforeEach(() => {
     mockNavigate.mockClear();
+    mockOnRefresh.mockClear();
     // window.location.reload is non-configurable in jsdom — replace location,
     // matching the established pattern in useServiceWorker.vitest.jsx.
     originalLocation = window.location;
@@ -248,7 +254,7 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
     expect(window.location.reload).not.toHaveBeenCalled();
   });
 
-  it('closes ConfirmInOutModal and reloads the page (no result modal) when onConfirmed resolves an invoice without an id', async () => {
+  it('closes ConfirmInOutModal and calls onRefresh (no result modal, no reload) when onConfirmed resolves an invoice without an id (ETP-5333 follow-up)', async () => {
     render(
       <ConfirmWithCreditButtonBase
         {...BASE_PROPS}
@@ -261,7 +267,8 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
 
     expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
     expect(screen.queryByTestId('confirm-result-modal')).not.toBeInTheDocument();
-    expect(window.location.reload).toHaveBeenCalledTimes(1);
+    expect(mockOnRefresh).toHaveBeenCalledTimes(1);
+    expect(window.location.reload).not.toHaveBeenCalled();
   });
 
   it('closes CreateInvoiceConfirmModal without calling the return-invoice flow when its onClose fires', () => {
@@ -318,9 +325,10 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
     // setTimeout(0) inside onClose checks resultNavigatedRef — give it a tick.
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(window.location.reload).not.toHaveBeenCalled();
+    expect(mockOnRefresh).not.toHaveBeenCalled();
   });
 
-  it('reloads the page after closing the result modal when the user did not navigate away first', async () => {
+  it('calls onRefresh (not a reload) after closing the result modal when the user did not navigate away first (ETP-5333 follow-up)', async () => {
     render(
       <ConfirmWithCreditButtonBase
         {...BASE_PROPS}
@@ -334,8 +342,9 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
 
     fireEvent.click(screen.getByTestId('result-close'));
     await waitFor(() => expect(screen.queryByTestId('confirm-result-modal')).not.toBeInTheDocument());
-    await waitFor(() => expect(window.location.reload).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockOnRefresh).toHaveBeenCalledTimes(1));
     expect(mockNavigate).not.toHaveBeenCalled();
+    expect(window.location.reload).not.toHaveBeenCalled();
   });
 });
 
@@ -357,6 +366,7 @@ describe('ConfirmWithCreditButtonBase — CreateInvoiceConfirmModal stays open d
 
   beforeEach(() => {
     mockNavigate.mockClear();
+    mockOnRefresh.mockClear();
     originalLocation = window.location;
     delete window.location;
     window.location = { ...originalLocation, reload: vi.fn() };

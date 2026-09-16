@@ -204,6 +204,20 @@ button was disabled) — a stray click during "Procesando…" could reproduce th
 premature-close symptom. Both now route through a `dismiss = loading ? undefined : onClose`
 guard.
 
+**Follow-up found during manual verification of the fix above:** closing the success
+`ConfirmResultModal` (both after the CO-status "Crear Factura Rectificativa" flow above, and
+after the DR-status "Confirmar" flow) did a **full `window.location.reload()`** instead of a
+partial refresh — a pre-existing defect since 2026-06-23 (`ConfirmWithCreditButtonBase.jsx`),
+unrelated to the loading-state bug but visible in the same manual test pass. `goods-receipt` and
+`goods-shipment` already had the correct pattern from ETP-4779 (refetch the header via
+`onRefresh` instead of reloading), but `ConfirmWithCreditButtonBase.jsx` — this window's
+`topbarRight` component, shared with `return-material-receipt` — never accepted or used the
+`onRefresh` prop that `DetailView.jsx`'s `renderSlotAction` already passes to every `topbarRight`
+component. Fixed by threading `onRefresh` through this window's `ConfirmWithCreditButton.jsx`
+into `ConfirmWithCreditButtonBase.jsx`, and replacing both `window.location.reload()` call
+sites (closing the result modal without navigating away, and confirming a draft without creating
+an invoice) with `onRefresh?.()`, mirroring `GoodsReceiptActions.jsx`'s exact pattern.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.

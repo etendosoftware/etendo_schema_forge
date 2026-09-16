@@ -319,6 +319,16 @@ the "Gestionar documentos" modal closed it synchronously instead of showing the 
 result is set — so this window required no window-specific change. See
 `return-to-vendor-shipment.md` for the full root-cause writeup.
 
+**Follow-up found during manual verification of the fix above:** closing the success
+`ConfirmResultModal` did a full `window.location.reload()` instead of a partial refresh — same
+pre-existing defect (since 2026-06-23) as `return-to-vendor-shipment.md`'s equivalent note, in
+the same shared `ConfirmWithCreditButtonBase.jsx`. Fixed by threading the `onRefresh` prop (which
+`DetailView.jsx` already passes to every `topbarRight` component) through this window's own
+`ConfirmWithCreditButton.jsx` wrapper into the shared base, replacing both
+`window.location.reload()` call sites with `onRefresh?.()` — mirroring the pattern
+`goods-receipt`/`goods-shipment` already had from ETP-4779. This window required only the one-line
+prop-threading change in its wrapper; the actual fix lives in the shared base component.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.
