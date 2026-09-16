@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly';
 import GenericPreviewModal from '../shared/GenericPreviewModal.jsx';
@@ -14,6 +14,9 @@ export default function ReturnMaterialReceiptPreview({ receipt, token, apiBaseUr
   const modalRef = useRef(null);
 
   const sendModal = usePreviewSendModal();
+  // ETP-5124 — bumped on a successful send so EmailsCard refetches instead of
+  // showing its pre-send state (see InvoicePreview/OrderPreview/GoodsShipmentPreview).
+  const [emailsRefreshSignal, setEmailsRefreshSignal] = useState(0);
 
   // ETP-5124 — PM-confirmed requirement (Valeria, with Emilio Polliotti): the preview's
   // left panel must show the Etendo-generated PDF by default, the same as every other
@@ -33,6 +36,10 @@ export default function ReturnMaterialReceiptPreview({ receipt, token, apiBaseUr
   const partnerName = receipt['businessPartner$_identifier'] || '—';
   const movementDate = receipt.movementDate ? formatCalendarDate(receipt.movementDate, locale) : '—';
   const windowLabel = tMenu('Return Material Receipt');
+  // ETP-5124 — Send is only available once the receipt is Confirmed (CO), matching
+  // the grid row quick-action's `emailAction.visibleWhen` gate in index.jsx and the
+  // pattern used by every other document preview (e.g. GoodsShipmentPreview).
+  const isSendable = receipt.documentStatus === 'CO';
 
   const handleDownload = () => {
     if (!pdfBlob) return;
@@ -66,6 +73,16 @@ export default function ReturnMaterialReceiptPreview({ receipt, token, apiBaseUr
   const { actionButtons, tabs } = buildReturnPreviewContent({
     doc: receipt, pdfBlob, handleDownload, modalRef,
     specs, partnerName, movementDate, token, apiBaseUrl, ui,
+    // ETP-5124 — the backend contract (`return-material-receipt-send`) now exists,
+    // so this window gets the same "Enviar" button and email-history card as
+    // Invoice/Order/Quotation/Goods Shipment.
+    onEmail: isSendable ? sendModal.openEmailModal : undefined,
+    emailsCard: {
+      onSend: isSendable ? sendModal.openEmailModal : undefined,
+      documentId: receipt.id,
+      apiBaseUrl,
+      refreshSignal: emailsRefreshSignal,
+    },
   });
 
   return (
@@ -89,6 +106,8 @@ export default function ReturnMaterialReceiptPreview({ receipt, token, apiBaseUr
         token={token}
         windowName="return-material-receipt"
         pdfBlobUrl={pdfUrl}
+        pdfBlobLoading={pdfLoading}
+        onSent={() => setEmailsRefreshSignal(n => n + 1)}
         data-testid="ReceiptSendModal__178845" />
     </>
   );

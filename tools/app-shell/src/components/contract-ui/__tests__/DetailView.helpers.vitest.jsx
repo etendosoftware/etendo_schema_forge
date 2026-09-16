@@ -855,13 +855,16 @@ describe('DetailView helper functions', () => {
       });
     });
 
-    // ETP-5290 — `{ force: true }` is REQUIRED here: without it `fetchById`
-    // serves the pre-mutation record straight out of the in-memory cache for
-    // up to `staleTime` (30s), so a just-completed action's toast fires but
-    // the chip/subtab/button never updates until a full page reload.
-    it('onRefresh invokes hook.fetchById with data?.id and { force: true }', () => {
+    // ETP-5278 / ETP-5290 — without { force: true }, a side-effecting extraActions
+    // click (promote/demote, resend-invitation) could have its onRefresh served
+    // stale cached data instead of the just-mutated record: `fetchById` serves the
+    // pre-mutation record straight out of the in-memory cache for up to `staleTime`
+    // (30s), so a just-completed action's toast fires but the chip/subtab/button
+    // never updates. Matches the other two onRefresh wirings in DetailView.jsx
+    // (topbarExtra), which already pass { force: true }.
+    it('onRefresh invokes hook.fetchById with data?.id and forces a fresh network read (ETP-5278/ETP-5290)', () => {
       const data = { id: 'rec-1' };
-      const hook = { children: [], fetchById: vi.fn(), refresh: vi.fn() };
+      const hook = { children: [], fetchById: vi.fn(), invalidateEntityCache: vi.fn(), refresh: vi.fn() };
       let capturedOnRefresh;
       const actionsFn = ({ onRefresh }) => {
         capturedOnRefresh = onRefresh;
@@ -872,11 +875,31 @@ describe('DetailView helper functions', () => {
       expect(hook.fetchById).toHaveBeenCalledWith('rec-1', { force: true });
     });
 
+    it('onRefresh also invalidates the entity cache (ETP-5278 — list-row staleness)', () => {
+      // ETP-5278 (follow-up) — a promote/demote action mutates row.defaultRole, which the
+      // LIST's own row data reflects, not just the single record. useEntity.js's list-mount
+      // effect explicitly "reuses a fresh cached list" (loadList(false)) — without
+      // invalidating that cache here too, returning to the grid soon after the action (inside
+      // the cache's staleTime window) serves the pre-mutation row, and RoleChipsCell's
+      // admin-first check (reading row.defaultRole, not the always-fresh bulk assignments map)
+      // renders the stale "Administrador" badge even though the assignments fetch is correct.
+      const data = { id: 'rec-1' };
+      const hook = { children: [], fetchById: vi.fn(), invalidateEntityCache: vi.fn() };
+      let capturedOnRefresh;
+      const actionsFn = ({ onRefresh }) => {
+        capturedOnRefresh = onRefresh;
+        return [{ key: 'x', label: 'X', onClick: vi.fn() }];
+      };
+      renderExtraActionButtons(actionsFn, data, hook, '');
+      capturedOnRefresh();
+      expect(hook.invalidateEntityCache).toHaveBeenCalledTimes(1);
+    });
+
     // ETP-5290 — `hook.refresh?.()` additionally force-reloads the list/grid
-    // (mirrors `handleProcessSuccess`'s `fetchById(...); refresh();` pattern
-    // in `useEntity.js`), so a grid row does not stay stale after a
-    // side-effecting action on another record (e.g. admin promote/demote).
-    it('onRefresh also invokes hook.refresh with no arguments', () => {
+    // (mirrors `handleProcessSuccess`'s `invalidateEntityCache(); fetchById(...);
+    // refresh();` pattern in `useEntity.js`), so a grid row does not stay stale
+    // after a side-effecting action on another record (e.g. admin promote/demote).
+    it('onRefresh also invokes hook.refresh with no arguments (ETP-5290 — grid staleness)', () => {
       const data = { id: 'rec-1' };
       const hook = { children: [], fetchById: vi.fn(), refresh: vi.fn() };
       let capturedOnRefresh;
@@ -890,9 +913,9 @@ describe('DetailView helper functions', () => {
       expect(hook.refresh).toHaveBeenCalledWith();
     });
 
-    it('onRefresh does not throw when hook.fetchById is not provided', () => {
+    it('onRefresh does not throw when hook.fetchById/invalidateEntityCache/refresh are not provided', () => {
       const data = { id: 'rec-1' };
-      const hook = { children: [], refresh: vi.fn() };
+      const hook = { children: [] };
       let capturedOnRefresh;
       const actionsFn = ({ onRefresh }) => {
         capturedOnRefresh = onRefresh;
@@ -902,7 +925,7 @@ describe('DetailView helper functions', () => {
       expect(() => capturedOnRefresh()).not.toThrow();
     });
 
-    it('onRefresh does not throw when hook.refresh is not provided', () => {
+    it('onRefresh still forces fetchById when hook.invalidateEntityCache/refresh are not provided', () => {
       const data = { id: 'rec-1' };
       const hook = { children: [], fetchById: vi.fn() };
       let capturedOnRefresh;

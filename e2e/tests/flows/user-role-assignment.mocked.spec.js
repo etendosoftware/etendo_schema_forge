@@ -239,8 +239,9 @@ test.describe('User role assignment — detail form (existing user)', () => {
     await expect(page.getByTestId('AssignTemplateRolesControl__chip-role-finance')).toBeVisible();
 
     // Matrix updates instantly off local selection state — no empty state anymore, a
-    // "Finanzas" column appears, General rows are unconditionally ✓, and the
-    // window-backed row reflects that role's declared tier.
+    // "Finanzas" column appears, and each row reflects that role's declared
+    // `windows[]`/tier (ETP-5196 removed the hardcoded "General" rows overlay, so
+    // there is no longer a class of row that is unconditionally ✓).
     const matrix = page.getByTestId('UserRolesTab');
     await expect(matrix).toBeVisible();
     await expect(page.getByTestId('UserRolesTab__empty')).toHaveCount(0);

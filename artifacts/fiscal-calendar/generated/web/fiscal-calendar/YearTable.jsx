@@ -3,8 +3,8 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:year
 const columns = [
-  { key: 'fiscalYear', column: 'Year', type: 'string', label: 'Fiscal Year', required: true },
-  { key: 'description', column: 'Description', type: 'string', label: 'Description' },
+  { key: 'fiscalYear', column: 'Year', type: 'string', label: 'Fiscal Year', required: true, maxLength: 10 },
+  { key: 'description', column: 'Description', type: 'string', label: 'Description', maxLength: 255 },
 ];
 // @sf-generated-end columns:year
 

@@ -12,7 +12,7 @@ const fields = [
   { key: 'lastPaymentDate', column: 'LastPaymentDate', type: 'date', label: 'Last Payment Date', readOnly: true, section: 'other' },
   { key: 'daysOverdue', column: 'daysOverDue', type: 'number', label: 'Days Overdue', readOnly: true, section: 'other' },
   { key: 'numberOfPayments', column: 'NumberOfPayments', type: 'number', label: 'Number of Payments', readOnly: true, section: 'other' },
-  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'principal' },
+  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'principal', maxLength: 255 },
   { key: 'totalDebtAmount', column: 'TotalDebtAmount', type: 'number', label: 'Doubtful Debt Amount', readOnly: true, section: 'other', defaultValue: '0' },
 ];
 // @sf-generated-end fields:paymentPlan

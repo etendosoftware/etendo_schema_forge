@@ -1,0 +1,70 @@
+# Discoverability probes — can a naive agent work out what this server offers?
+#
+# Every other suite gives the agent a TASK and measures whether it completes it. This one gives it
+# an ORIENTATION QUESTION and measures whether it can answer without being told anything. It exists
+# because most of the IMP-* backlog is discoverability — unpredictable entity names, a `docs` tool
+# nobody is routed to, errors that do not say what to do next — and a task-shaped probe measures
+# that only indirectly, as wasted calls on the way to something else.
+#
+# The agent is naive by construction (D20): its system prompt carries zero Etendo knowledge, zero
+# tool names, zero data-model hints. Whatever it answers here, it worked out from the MCP surface
+# alone. That is the measurement.
+#
+# THE ACCEPTANCE CRITERION IS DIFFERENT HERE — read this before adding a probe.
+# D22 ("if a person can do it in the UI, it must be possible through the MCP") does NOT map onto
+# these: they are not tasks a person performs in a window. Do not force it. The criterion for this
+# suite is:
+#
+#     Did the agent reach a CORRECT and USEFUL answer using only what the server told it?
+#
+# A confident WRONG answer is the worst outcome and the most valuable finding: it means the surface
+# actively misleads. An honest "I could not find out" is second — it means the surface is silent.
+# Both beat a right answer the agent guessed, which is why the verdict's `frictions[]` matter more
+# than `outcome` in this suite.
+#
+# All probes are read-only: no writes, no expectEffect, nothing to clean up.
+# Probe ids are permanent (D13). Prompts stay in a non-technical user's voice (D21) — a real person
+# does not say "tool", "spec", "entity" or "MCP", and neither do these.
+
+window: discoverability
+
+probes:
+  # Can it orient at all, from a cold start?
+  - id: what-can-i-do-here
+    mode: read
+    prompt: "Hola, es la primera vez que entro. ¿Qué es esto y qué puedo hacer?"
+
+  # Does it find the catalogue of documents, or does it guess?
+  - id: what-documents-exist
+    mode: read
+    prompt: "¿Qué tipo de documentos puedo gestionar? Pedidos, facturas, ¿qué más hay?"
+
+  # The classic: can it find the path to a real job without being told where to look?
+  - id: where-do-i-start-invoicing
+    mode: read
+    prompt: >
+      Necesito facturarle a un cliente. No sé por dónde se empieza acá,
+      ¿me guiás?
+
+  # Selector discovery — the exact area where the wildcard finding came from.
+  - id: how-do-i-find-a-customer
+    mode: read
+    prompt: "¿Cómo hago para buscar un cliente? No me acuerdo del nombre completo, solo el principio."
+
+  # IMP-10 was about `docs` being excellent and hidden. Does the agent ever reach it?
+  - id: is-there-help
+    mode: read
+    prompt: "¿Hay algún manual o ayuda para aprender a usar esto?"
+
+  # Can it describe the shape of something before touching it?
+  - id: what-does-an-order-need
+    mode: read
+    prompt: >
+      Si quiero cargar un pedido, ¿qué datos me va a pedir?
+      Quiero saber qué tengo que tener a mano antes de empezar.
+
+  # Honesty check: the correct answer is "no". An agent that invents a capability here is a finding
+  # about the surface encouraging confident guessing, not about the agent.
+  - id: nonexistent-capability
+    mode: read
+    prompt: "¿Puedo sacar el balance de sueldos de los empleados del mes pasado?"

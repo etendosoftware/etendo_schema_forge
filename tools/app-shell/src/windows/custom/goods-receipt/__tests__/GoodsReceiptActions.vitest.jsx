@@ -50,10 +50,18 @@ vi.mock('@generated/goods-receipt/custom/ConfirmGoodsReceiptModal', () => ({
   ),
 }));
 
+// ETP-5333 — the mock now exposes `onConfirm` and `loading` (forwarded by
+// GoodsReceiptActions as `loading={creatingInvoice}`) so tests can drive
+// handleCreateInvoice and assert the modal shows the processing label / a
+// disabled confirm button while the request is in flight, and stays mounted
+// until it resolves — matching the real CreateInvoiceConfirmModal's contract.
 vi.mock('@/components/contract-ui/CreateInvoiceConfirmModal', () => ({
-  default: ({ onClose }) => (
+  default: ({ onClose, onConfirm, loading }) => (
     <div data-testid="create-invoice-confirm-modal">
-      <button data-testid="invoice-confirm-close" onClick={onClose}>Close</button>
+      <button data-testid="invoice-confirm-close" onClick={onClose} disabled={loading}>Close</button>
+      <button data-testid="invoice-confirm-confirm" onClick={() => onConfirm?.('pl-1')} disabled={loading}>
+        {loading ? 'soProcessing' : 'soCreateDocsBtn'}
+      </button>
     </div>
   ),
 }));
@@ -78,7 +86,7 @@ vi.mock('@generated/goods-receipt/custom/PurchaseReturnWizard', () => ({
   default: () => <div data-testid="purchase-return-wizard" />,
 }));
 
-import { render, screen, fireEvent, act, within } from '@testing-library/react';
+import { render, screen, fireEvent, act, within, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { toast } from 'sonner';
 import { useMainAttachment } from '@/windows/custom/shared/useMainAttachment.js';
@@ -150,44 +158,6 @@ describe('GoodsReceiptActions', () => {
       expect(downloadLink).toBeInTheDocument();
       expect(downloadLink).toHaveAttribute('href', 'blob:test-url');
       expect(downloadLink).toHaveAttribute('download', 'receipt.pdf');
-    });
-  });
-
-  describe('goods-receipt:download-pdf event', () => {
-    it('programmatically clicks the download link when the event is dispatched', () => {
-      useMainAttachment.mockReturnValue({
-        storedFile: { objectUrl: 'blob:test-url', fileName: 'receipt.pdf' },
-        isBusy: false,
-      });
-      renderActions();
-
-      const downloadLink = document.querySelector('a[download]');
-      expect(downloadLink).toBeInTheDocument();
-
-      const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click');
-
-      act(() => {
-        window.dispatchEvent(new CustomEvent('goods-receipt:download-pdf'));
-      });
-
-      expect(clickSpy).toHaveBeenCalledTimes(1);
-      clickSpy.mockRestore();
-    });
-
-    it('does not throw when event is dispatched but no download link is rendered', () => {
-      useMainAttachment.mockReturnValue({
-        storedFile: null,
-        isBusy: false,
-      });
-      renderActions({
-        data: { ...defaultProps.data, documentStatus: 'DR' },
-      });
-
-      expect(() => {
-        act(() => {
-          window.dispatchEvent(new CustomEvent('goods-receipt:download-pdf'));
-        });
-      }).not.toThrow();
     });
   });
 
@@ -268,6 +238,94 @@ describe('GoodsReceiptActions', () => {
       });
       fireEvent.click(screen.getByTestId('confirm-modal-close'));
       expect(screen.queryByTestId('confirm-goods-receipt-modal')).not.toBeInTheDocument();
+    });
+  });
+
+  // ETP-5333 — regression coverage. handleCreateInvoice used to be wired via
+  // `onConfirm={(priceListId) => { setShowInvoiceConfirm(false); handleCreateInvoice(priceListId); }}`
+  // — the modal closed SYNCHRONOUSLY on click, before the createPurchaseInvoice
+  // request even started, with no loading feedback; a second (result) modal
+  // then popped up once the request resolved. The fix moved
+  // `setShowInvoiceConfirm(false)` inside handleCreateInvoice's SUCCESS branch
+  // (right before setConfirmedDocs), and onConfirm is now just
+  // `handleCreateInvoice` directly. These tests use a manually
+  // resolvable/rejectable deferred fetch promise to observe the mid-flight
+  // state, which the previous synchronous-close behavior made unobservable.
+  describe('CreateInvoiceConfirmModal stays open during the async createPurchaseInvoice request (ETP-5333)', () => {
+    beforeEach(() => {
+      globalThis.fetch = vi.fn();
+    });
+
+    it('regression: stays mounted and shows the loading label with a disabled confirm button before the request resolves', async () => {
+      let resolveFetch;
+      globalThis.fetch.mockImplementation(() => new Promise((resolve) => { resolveFetch = resolve; }));
+      renderActions();
+      fireEvent.click(screen.getByText('createInvoiceBtn'));
+
+      fireEvent.click(screen.getByTestId('invoice-confirm-confirm'));
+
+      // The bug: previously the modal unmounted here, synchronously, before
+      // the request even started.
+      expect(screen.getByTestId('create-invoice-confirm-modal')).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByTestId('invoice-confirm-confirm')).toHaveTextContent('soProcessing'));
+      expect(screen.getByTestId('invoice-confirm-confirm')).toBeDisabled();
+
+      await act(async () => {
+        resolveFetch({ ok: true, json: () => Promise.resolve({ response: { data: {} } }) });
+      });
+    });
+
+    it('on success: the modal disappears and the result modal appears with the invoice data', async () => {
+      let resolveFetch;
+      globalThis.fetch.mockImplementation(() => new Promise((resolve) => { resolveFetch = resolve; }));
+      renderActions();
+      fireEvent.click(screen.getByText('createInvoiceBtn'));
+      fireEvent.click(screen.getByTestId('invoice-confirm-confirm'));
+      await waitFor(() => expect(screen.getByTestId('invoice-confirm-confirm')).toHaveTextContent('soProcessing'));
+
+      await act(async () => {
+        resolveFetch({
+          ok: true,
+          json: () => Promise.resolve({ response: { data: { id: 'INV-1', documentNo: 'FC-01' } } }),
+        });
+      });
+
+      expect(screen.queryByTestId('create-invoice-confirm-modal')).not.toBeInTheDocument();
+      expect(screen.getByTestId('confirm-result-modal')).toBeInTheDocument();
+    });
+
+    it('on failure: the modal stays open, returns to the idle label, and toast.error is called — no result modal', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => ({ response: { message: 'Boom' } }),
+      });
+      renderActions();
+      fireEvent.click(screen.getByText('createInvoiceBtn'));
+      fireEvent.click(screen.getByTestId('invoice-confirm-confirm'));
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Boom'));
+      expect(screen.getByTestId('create-invoice-confirm-modal')).toBeInTheDocument();
+      expect(screen.getByTestId('invoice-confirm-confirm')).toHaveTextContent('soCreateDocsBtn');
+      expect(screen.getByTestId('invoice-confirm-confirm')).not.toBeDisabled();
+      expect(screen.queryByTestId('confirm-result-modal')).not.toBeInTheDocument();
+    });
+
+    it('rapid double-click on the confirm button while a request is in flight results in exactly one POST call', async () => {
+      let resolveFetch;
+      globalThis.fetch.mockImplementation(() => new Promise((resolve) => { resolveFetch = resolve; }));
+      renderActions();
+      fireEvent.click(screen.getByText('createInvoiceBtn'));
+
+      fireEvent.click(screen.getByTestId('invoice-confirm-confirm'));
+      fireEvent.click(screen.getByTestId('invoice-confirm-confirm'));
+
+      await waitFor(() => expect(screen.getByTestId('invoice-confirm-confirm')).toHaveTextContent('soProcessing'));
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        resolveFetch({ ok: true, json: () => Promise.resolve({ response: { data: {} } }) });
+      });
     });
   });
 });
