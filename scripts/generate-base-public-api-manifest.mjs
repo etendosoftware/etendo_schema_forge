@@ -144,7 +144,8 @@ function buildEntity({ specName, entityName, contract, functional, parent, rawEn
   const fields = {};
   for (const field of source.fields ?? []) {
     if (field.visibility === 'system' || field.visibility === 'discarded') continue;
-    const apiName = publicFieldName(field.name);
+    if (field.publicApi?.exposed !== true) continue;
+    const apiName = publicFieldName(field.publicApi.name ?? field.name);
     if (fields[apiName]) {
       throw new Error(`Public field name collision in ${specName}/${entityName}: ${apiName}`);
     }
