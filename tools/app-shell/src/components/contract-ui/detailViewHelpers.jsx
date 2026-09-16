@@ -997,18 +997,28 @@ export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
     // so an `extraActions` entry can refresh the record after a side-effecting
     // action (e.g. resend-invitation, admin promote/demote) the same way a
     // `topbarExtra` component can.
-    // ETP-5290 — `{ force: true }` is REQUIRED, not optional, here: without it
-    // `fetchById` serves the pre-mutation record straight out of the in-memory
-    // cache for up to `staleTime` (30s) — or indefinitely, if nothing else reads
-    // this id in the meantime — so a just-completed action's toast fires but the
-    // chip/subtab/button the user is looking at never updates until a full page
-    // reload starts with an empty cache. Every sibling `onRefresh` in
+    // ETP-5278 — invalidateEntityCache() clears this entity's cached lists AND
+    // records (useEntity.js's ETP-4563 invalidate). useEntity.js's list-mount
+    // effect explicitly reuses a fresh cached list (loadList(false)) rather than
+    // always hitting the network, so without this a side effect here (e.g. admin
+    // promote/demote, which changes row.defaultRole) can leave the grid showing the
+    // pre-mutation row for as long as that cache entry stays within its staleTime —
+    // reproducible by acting fast enough to return to the list before it expires,
+    // which is exactly what made this easy to miss in slower manual testing.
+    // ETP-5290 — `{ force: true }` on fetchById is REQUIRED, not optional, here:
+    // without it `fetchById` serves the pre-mutation record straight out of the
+    // in-memory cache for up to `staleTime` (30s) — or indefinitely, if nothing
+    // else reads this id in the meantime — so a just-completed action's toast
+    // fires but the chip/subtab/button the user is looking at never updates until
+    // a full page reload starts with an empty cache. Every sibling `onRefresh` in
     // DetailView.jsx itself already passes `force: true`; this was the one call
-    // site that didn't. `hook.refresh?.()` additionally force-reloads the LIST
-    // (mirrors `handleProcessSuccess`'s `fetchById(...); refresh();` pattern in
+    // site that didn't. `hook.refresh?.()` additionally force-reloads the
+    // currently-mounted LIST (mirrors `handleProcessSuccess`'s
+    // `invalidateEntityCache(); fetchById(...); refresh();` pattern in
     // useEntity.js) so the grid row reflects the change too, not just the open
     // detail form.
     onRefresh: () => {
+      hook.invalidateEntityCache?.();
       hook.fetchById?.(data?.id, { force: true });
       hook.refresh?.();
     },
