@@ -124,7 +124,7 @@ async function bootstrap() {
   <style>
     :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
     body { margin: 0; background: #f7f8fa; color: #20232a; }
-    .etendo-shell { position: sticky; top: 0; z-index: 1000; }
+    .etendo-shell { position: static; }
     .etendo-header { align-items: center; background: #fff; border-bottom: 1px solid #e5e7eb; display: flex; gap: 18px; min-height: 68px; padding: 0 32px; }
     .etendo-header img { height: 32px; width: auto; }
     .etendo-title { border-left: 1px solid #d9dde3; font-size: 16px; font-weight: 600; padding-left: 18px; }
