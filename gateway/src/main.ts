@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { readFileSync } from 'node:fs';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { PUBLIC_API_SCHEMA, type PublicApiSchema } from '@etendosoftware/api-gateway-core';
@@ -114,6 +115,7 @@ async function bootstrap() {
   });
 
   const docsPage = (_req: unknown, res: { type: (contentType: string) => { send: (body: string) => void } }) => {
+    const logoDataUri = `data:image/png;base64,${readFileSync(new URL('../public/logo-etendo.png', import.meta.url)).toString('base64')}`;
     res.type('html').send(`<!doctype html>
 <html lang="en"><head>
   <meta charset="utf-8">
@@ -122,6 +124,7 @@ async function bootstrap() {
   <style>
     :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
     body { margin: 0; background: #f7f8fa; color: #20232a; }
+    .etendo-shell { position: sticky; top: 0; z-index: 1000; }
     .etendo-header { align-items: center; background: #fff; border-bottom: 1px solid #e5e7eb; display: flex; gap: 18px; min-height: 68px; padding: 0 32px; }
     .etendo-header img { height: 32px; width: auto; }
     .etendo-title { border-left: 1px solid #d9dde3; font-size: 16px; font-weight: 600; padding-left: 18px; }
@@ -130,12 +133,14 @@ async function bootstrap() {
     @media (max-width: 640px) { .etendo-header { padding: 0 18px; } .etendo-title { font-size: 14px; } .etendo-notice { padding: 11px 18px; } }
   </style>
 </head><body>
-  <header class="etendo-header">
-    <img src="/logo-etendo.png" alt="Etendo">
-    <span class="etendo-title">Go Public API</span>
-    <span class="etendo-beta">BETA</span>
-  </header>
-  <div class="etendo-notice">This API is in beta. The contract and limits may change while the public API is being validated.</div>
+  <div class="etendo-shell">
+    <header class="etendo-header">
+      <img src="${logoDataUri}" alt="Etendo">
+      <span class="etendo-title">Go Public API</span>
+      <span class="etendo-beta">BETA</span>
+    </header>
+    <div class="etendo-notice">This API is in beta. The contract and limits may change while the public API is being validated.</div>
+  </div>
   <script id="api-reference" data-url="/api/openapi.json" data-configuration='{"theme":"default","darkMode":false}'></script>
   <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
 </body></html>`);
