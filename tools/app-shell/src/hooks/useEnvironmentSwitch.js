@@ -20,14 +20,31 @@ import { sortEnvironments } from '../lib/environmentPresentation.js';
  * Entering an environment is an unsafe method and carries the CSRF proof;
  * listing them is a GET and carries none.
  */
-export function useEnvironmentSwitch({ enabled = true } = {}) {
+export function useEnvironmentSwitch({
+  enabled = true,
+  credential = null,
+  credentialScheme = null,
+} = {}) {
   // `useAuthOptional`, not `useAuth`: ETP-5216 mounts InviteAcceptancePage in trees that have
   // no AuthProvider above them (accepting an invitation is something you do while signed out),
   // and the strict hook throws there. Reading the session optionally lands on exactly the state
   // the block comment above describes — not authenticated, so no environments and no switcher.
   const auth = useAuthOptional();
-  const isAuthenticated = auth?.isAuthenticated ?? false;
-  const csrfToken = auth?.csrfToken ?? null;
+  // ETP-4576 — `credential` is the escape hatch for the caller the comment above names:
+  // InviteAcceptancePage has no AuthProvider to read, so gating on the context alone left
+  // `isAuthenticated` permanently false there and `enterByClientName` returned false before
+  // issuing a single request. The invitee accepted, pressed "go to app", and nothing happened.
+  // develop did not have this hole because its gate read `sf_platform_token` out of
+  // localStorage, which works with no provider above; the cookie migration removed the key
+  // AND the provider-free path in one step. The page already threads this same credential into
+  // its accept call, so it is threaded here too rather than invented.
+  //
+  // Only the cookie scheme's value is a CSRF proof. Under `bearer` the credential belongs in
+  // `Authorization`, and `buildAuthHeaders` puts whatever it is given into `X-Go-CSRF` — so a
+  // bearer forwarded here would travel in the wrong slot and be refused.
+  const threadedCsrf = credentialScheme === 'cookie' ? credential : null;
+  const isAuthenticated = (auth?.isAuthenticated ?? false) || Boolean(credential);
+  const csrfToken = auth?.csrfToken ?? threadedCsrf;
   const clientId = auth?.clientId ?? null;
   const [environments, setEnvironments] = useState([]);
   const [switching, setSwitching] = useState(null);

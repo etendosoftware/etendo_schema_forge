@@ -88,7 +88,14 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   // from listing environments on mount: this page only ever needs the one-shot
   // `enterByClientName`, which re-fetches the list itself (the newly joined tenant cannot be in
   // a list loaded before the invitation was accepted).
-  const { enterByClientName } = useEnvironmentSwitch({ enabled: false });
+  // The credential is threaded in for the same reason the accept call below threads it: this
+  // page runs outside the authenticated shell, so the hook finds no AuthProvider to read and
+  // would otherwise consider the freshly-signed-in invitee unauthenticated and refuse to enter.
+  const { enterByClientName } = useEnvironmentSwitch({
+    enabled: false,
+    credential: sessionCredential,
+    credentialScheme,
+  });
   // ETP-4576 — the shell's auth context is the only thing on the client that can answer
   // "is anybody signed in" under the cookie scheme: the `__Host-` cookie is httpOnly, so the
   // page cannot read it, and the context has already resolved the restore by the time this
