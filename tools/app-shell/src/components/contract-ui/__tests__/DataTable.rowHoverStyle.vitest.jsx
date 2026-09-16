@@ -84,8 +84,11 @@ function classTokens({ rowId = 'r1', clickable = true, ...props } = {}) {
   );
   const row = screen.getByTestId(`row-${rowId}`);
   // <Table> wraps the <table> in its own `relative w-full overflow-auto` div, so the
-  // DataTable-owned scroll wrapper is one level further up.
-  const wrapper = document.querySelector('table').parentElement.parentElement;
+  // DataTable-owned scroll wrapper is one level further up. `[data-testid="Table__eb5261"]`
+  // (not a plain `table` selector) — StickyHeaderRow (ETP-5268 follow-up) renders its own
+  // mirror <table> earlier in the DOM for the sticky document-list header, so a bare
+  // `document.querySelector('table')` now grabs that one instead of the body's.
+  const wrapper = document.querySelector('[data-testid="Table__eb5261"]').parentElement.parentElement;
   const tokens = {
     row: row.className.split(/\s+/).filter(Boolean),
     wrapper: wrapper.className.split(/\s+/).filter(Boolean),
