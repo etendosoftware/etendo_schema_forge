@@ -25,8 +25,8 @@ function MiniCheck({ checked, onChange }) {
         width: 14,
         height: 14,
         borderRadius: 3,
-        border: checked ? 'none' : '1px solid hsl(var(--card))',
-        backgroundColor: checked ? 'var(--status-warning-bg)' : 'hsl(var(--card))',
+        border: checked ? 'none' : '1px solid hsl(var(--border-control))',
+        backgroundColor: checked ? 'hsl(var(--primary))' : 'hsl(var(--card))',
         cursor: 'pointer',
         flexShrink: 0,
         transition: 'background-color 150ms, border-color 150ms',
@@ -34,7 +34,7 @@ function MiniCheck({ checked, onChange }) {
     >
       {checked && (
         <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-          <path d="M2.5 6L5 8.5L9.5 3.5" stroke="hsl(var(--card))" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M2.5 6L5 8.5L9.5 3.5" stroke="hsl(var(--primary-foreground))" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       )}
     </span>
@@ -57,7 +57,7 @@ function StepIndicator({ current, total }) {
         <span
           key={`step-${i}`}
           className="w-2 h-2 rounded-full"
-          style={{ backgroundColor: i + 1 === current ? 'var(--status-warning-bg)' : 'hsl(var(--foreground) / 0.3)' }}
+          style={{ backgroundColor: i + 1 === current ? 'hsl(var(--primary))' : 'hsl(var(--foreground) / 0.3)' }}
         />
       ))}
       <span className="ml-1">{ui('stepOf').replace('{step}', current).replace('{total}', total)}</span>
@@ -156,10 +156,10 @@ export default function PurchaseReturnWizard({
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent
-        className="sm:max-w-[640px] p-0 gap-0 shadow-none"
+        className="sm:max-w-[640px] p-0 gap-0 shadow-none bg-card"
         style={{ border: '0.5px solid hsl(var(--border))', boxShadow: 'none' }}
       >
-        <div className="px-6 pt-5 pb-4" style={{ backgroundColor: 'hsl(var(--card))', borderBottom: '1px solid hsl(var(--card))', borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
+        <div className="px-6 pt-5 pb-4" style={{ backgroundColor: 'hsl(var(--card))', borderBottom: '1px solid hsl(var(--border-subtle))', borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
           <StepIndicator current={step} total={2} />
           <DialogHeader>
             <DialogTitle className="text-base font-semibold">{ui('createReturnFromReceipt')}</DialogTitle>
@@ -181,15 +181,15 @@ export default function PurchaseReturnWizard({
                 </colgroup>
                 <thead>
                   <tr style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'hsl(var(--muted-foreground))', letterSpacing: '0.05em' }}>
-                    <th className="text-left px-1" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--foreground))' }}>
+                    <th className="text-left px-1" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>
                       <MiniCheck
                         checked={selected.size === lines.length && lines.length > 0}
                         onChange={() => { selected.size === lines.length ? deselectAll() : selectAll(); }}
                       />
                     </th>
-                    <th className="text-left px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--card))' }}>{ui('product')}</th>
-                    <th className="text-right px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--card))' }}>{ui('delivered')}</th>
-                    <th className="text-right px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--card))' }}>{ui('returnQty')}</th>
+                    <th className="text-left px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('product')}</th>
+                    <th className="text-right px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('delivered')}</th>
+                    <th className="text-right px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('returnQty')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -249,9 +249,9 @@ export default function PurchaseReturnWizard({
             <div className="flex flex-col mb-5" style={{ gap: 8 }}>
               <div
                 className="flex items-center gap-3"
-                style={{ border: '1px solid hsl(var(--card))', borderRadius: 8, padding: 12 }}
+                style={{ border: '1px solid hsl(var(--border-subtle))', borderRadius: 8, padding: 12 }}
               >
-                <span className="shrink-0 flex items-center justify-center" style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: 'hsl(var(--card))' }}>
+                <span className="shrink-0 flex items-center justify-center" style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: 'var(--status-info-bg)' }}>
                   <span className="text-status-info-foreground">{RETURN_RECEIPT_ICON}</span>
                 </span>
                 <div>
@@ -267,8 +267,8 @@ export default function PurchaseReturnWizard({
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'hsl(var(--muted-foreground))', letterSpacing: '0.05em' }}>
-                    <th className="text-left px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--foreground))' }}>{ui('product')}</th>
-                    <th className="text-right px-2 w-20" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--card))' }}>{ui('qty')}</th>
+                    <th className="text-left px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('product')}</th>
+                    <th className="text-right px-2 w-20" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('qty')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -300,7 +300,7 @@ export default function PurchaseReturnWizard({
           </div>
         )}
 
-        <DialogFooter className="px-6 pt-5 pb-4" style={{ backgroundColor: 'hsl(var(--card))', borderTop: '1px solid hsl(var(--card))' }}>
+        <DialogFooter className="px-6 pt-5 pb-4" style={{ backgroundColor: 'hsl(var(--muted))', borderTop: '1px solid hsl(var(--border-subtle))' }}>
           {step === 1 && (
             <>
               <Button variant="ghost" size="sm" onClick={onClose}>
@@ -308,7 +308,6 @@ export default function PurchaseReturnWizard({
               </Button>
               <Button
                 size="sm"
-                className="bg-status-warning text-foreground hover:bg-status-warning border-transparent font-medium"
                 disabled={!canProceed}
                 onClick={() => setStep(2)}
               >
@@ -323,7 +322,6 @@ export default function PurchaseReturnWizard({
               </Button>
               <Button
                 size="sm"
-                className="bg-status-warning text-foreground hover:bg-status-warning border-transparent font-medium"
                 onClick={handleConfirm}
                 disabled={loading}
               >

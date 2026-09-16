@@ -227,7 +227,7 @@ test.describe('Sales Invoice — list view grandTotalAmount display (mocked)', (
     await installInvoiceMocks(page);
 
     await page.goto('/sales-invoice');
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     // The DataTable should render a row with the invoice document number.
     // The row is identified by data-testid="row-<id>" (DataTable convention).
@@ -245,7 +245,7 @@ test.describe('Sales Invoice — list view grandTotalAmount display (mocked)', (
     await installInvoiceMocks(page);
 
     await page.goto('/sales-invoice');
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     const row = page.getByTestId(`row-${INVOICE_ID}`);
     await expect(row).toBeVisible({ timeout: 10_000 });
@@ -266,7 +266,7 @@ test.describe('Sales Invoice — side panel discount display (mocked)', () => {
     await installInvoiceMocks(page);
 
     await page.goto('/sales-invoice');
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     // Click the row to open the preview side panel
     const row = page.getByTestId(`row-${INVOICE_ID}`);
@@ -283,7 +283,7 @@ test.describe('Sales Invoice — side panel discount display (mocked)', () => {
     await installInvoiceMocks(page);
 
     await page.goto('/sales-invoice');
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     const row = page.getByTestId(`row-${INVOICE_ID}`);
     await expect(row).toBeVisible({ timeout: 10_000 });
@@ -301,7 +301,7 @@ test.describe('Sales Invoice — side panel discount display (mocked)', () => {
     await installInvoiceMocks(page);
 
     await page.goto('/sales-invoice');
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     const row = page.getByTestId(`row-${INVOICE_ID}`);
     await expect(row).toBeVisible({ timeout: 10_000 });
@@ -339,7 +339,7 @@ async function openPreviewAndGetJsreportData(page, { jsreportCalls, headerOverri
   await installJsreportMock(page, { jsreportCalls });
 
   await page.goto('/sales-invoice');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
   // Click the row to open the InvoicePreview side panel
   const row = page.getByTestId(`row-${INVOICE_ID}`);

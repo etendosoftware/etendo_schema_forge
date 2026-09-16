@@ -3,8 +3,8 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:elementValue
 const columns = [
-  { key: 'searchKey', column: 'Value', type: 'string', label: 'Search Key', required: true },
-  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
+  { key: 'searchKey', column: 'Value', type: 'string', label: 'Search Key', required: true, maxLength: 40 },
+  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true, maxLength: 255 },
   { key: 'accountType', column: 'AccountType', type: 'enum', label: 'Account Type', enumLabels: { 'A': 'accountTypeA', 'E': 'accountTypeE', 'L': 'accountTypeL', 'M': 'accountTypeM', 'O': 'accountTypeO', 'R': 'accountTypeR' }, required: true },
   { key: 'active', column: 'IsActive', type: 'boolean', label: 'Active', toggle: true, required: true },
 ];

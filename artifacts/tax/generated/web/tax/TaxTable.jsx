@@ -27,7 +27,7 @@ function TaxScopeCell({ row, fieldKey }) {
 
 // @sf-generated-start columns:tax
 const columns = [
-  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
+  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true, maxLength: 60 },
   { key: 'rate', column: 'Rate', type: 'number', label: 'Rate', render: renderTaxRate, required: true },
   { key: 'applicableTo', column: 'SOPOType', type: 'enum', label: 'Sales/Purchase Type', enumLabels: { 'B': 'sopotypeB', 'P': 'sopotypeP', 'S': 'sopotypeS' }, render: (row) => <TaxScopeCell row={row} fieldKey="applicableTo" />, required: true },
 ];
