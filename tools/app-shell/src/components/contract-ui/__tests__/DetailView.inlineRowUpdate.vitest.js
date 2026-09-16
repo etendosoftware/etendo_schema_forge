@@ -130,6 +130,7 @@ function build(args) {
     extractErrorMessage: args.extractErrorMessage,
     ui: args.ui,
     fields: args.fields,
+    lineFields: args.lineFields,
     raiseRowSaveConflict: args.raiseRowSaveConflict,
   });
 }
@@ -513,6 +514,94 @@ describe('buildInlineRowUpdateHandler — server-wins update from PATCH response
     const handler2 = build(args);
     await handler2({ id: 'L1', quantityCount: 10 }, 'quantityCount', '42', {});
     expect(handleUpdateChild).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('buildInlineRowUpdateHandler — readOnly grid column protection (ETP-5319)', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    delete global.fetch;
+  });
+
+  // Goods Receipt / Goods Shipment shape: `orderQuantity` is `readOnly: true` in the entity's
+  // field descriptors (Table `columns` / Form `fields` statics), and its real value only ever
+  // comes from a GET-time backend join (AbstractInOutLineHandler onto C_OrderLine) — a PATCH's
+  // own single-record response carries the plain (often null, for single-UOM products) column.
+  const lineFields = [
+    { key: 'movementQuantity', readOnly: false },
+    { key: 'orderQuantity', readOnly: true },
+  ];
+
+  it('does not let the PATCH response null out orderQuantity on the edited row', async () => {
+    const handleUpdateChild = vi.fn();
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      // Real PATCH shape for M_InOutLine: the edited field comes back updated, the
+      // join-derived readOnly column comes back null.
+      json: async () => ({ response: { data: [{ id: 'L1', movementQuantity: 7, orderQuantity: null }] } }),
+    });
+    const args = makeArgs({ hook: { editing: {}, selected: null, handleUpdateChild }, lineFields });
+    const handler = build(args);
+    // Row as it exists in the grid BEFORE this edit — still carries the real orderQuantity
+    // the earlier GET/list fetch populated.
+    await handler({ id: 'L1', movementQuantity: 5, orderQuantity: 10 }, 'movementQuantity', '7', {});
+
+    const [, serverUpdate] = handleUpdateChild.mock.calls[1];
+    expect(serverUpdate.orderQuantity).toBe(10);
+    expect(serverUpdate.movementQuantity).toBe(7);
+  });
+
+  it('lets a real (non-null) server value for the readOnly column through', async () => {
+    const handleUpdateChild = vi.fn();
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: [{ id: 'L1', movementQuantity: 7, orderQuantity: 25 }] } }),
+    });
+    const args = makeArgs({ hook: { editing: {}, selected: null, handleUpdateChild }, lineFields });
+    const handler = build(args);
+    await handler({ id: 'L1', movementQuantity: 5, orderQuantity: 10 }, 'movementQuantity', '7', {});
+
+    const [, serverUpdate] = handleUpdateChild.mock.calls[1];
+    expect(serverUpdate.orderQuantity).toBe(25);
+  });
+
+  it('does NOT block a legitimate null on a plain editable field (no overcorrection)', async () => {
+    const handleUpdateChild = vi.fn();
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      // description is not marked readOnly — the user is allowed to clear it.
+      json: async () => ({ response: { data: [{ id: 'L1', description: null, orderQuantity: 10 }] } }),
+    });
+    const fieldsWithDescription = [...lineFields, { key: 'description', readOnly: false }];
+    const args = makeArgs({
+      hook: { editing: {}, selected: null, handleUpdateChild },
+      lineFields: fieldsWithDescription,
+    });
+    const handler = build(args);
+    await handler({ id: 'L1', description: 'old note', orderQuantity: 10 }, 'description', null, {});
+
+    const [, serverUpdate] = handleUpdateChild.mock.calls[1];
+    expect(serverUpdate.description).toBeNull();
+  });
+
+  it('falls back to `fields` (add-line entry fields) when lineFields is not supplied', async () => {
+    // Regression guard for callers that predate ETP-5319 and only pass `fields` — must not
+    // throw, and (since add-line entry fields rarely carry readOnly grid columns) behaves like
+    // the pre-fix passthrough for those callers.
+    const handleUpdateChild = vi.fn();
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: [{ id: 'L1', movementQuantity: 7, orderQuantity: null }] } }),
+    });
+    const args = makeArgs({
+      hook: { editing: {}, selected: null, handleUpdateChild },
+      fields: [{ key: 'movementQuantity', readOnly: false }],
+    });
+    const handler = build(args);
+    await handler({ id: 'L1', movementQuantity: 5, orderQuantity: 10 }, 'movementQuantity', '7', {});
+
+    const [, serverUpdate] = handleUpdateChild.mock.calls[1];
+    expect(serverUpdate.orderQuantity).toBeNull();
   });
 });
 
