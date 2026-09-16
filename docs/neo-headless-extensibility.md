@@ -385,6 +385,46 @@ regardless keeps the catalog honest if the entity ever loses its tab. Full crite
 
 ---
 
+## 2.8 UsageResourceCounter: counting a billable resource (ETP-5050)
+
+A second `@Named`-resolved SPI lives in `com.etendoerp.go.usage`. It is unrelated to request
+handling — it tells the nightly usage aggregation how to count one resource — but it carries
+**exactly the same registration trap as `NeoHandler`**, so it belongs next to it.
+
+Most countable resources need no class at all. A resource that is a row count over an entity,
+by a date property, with any HQL restriction, is a row in `ETGO_BILLING_RESOURCE` with
+`COUNTING_MODE = 'D'`. Reach for a strategy only when the rule is *not* a row count — a stock
+(how many things exist on a day, rather than how many happened) or a distinct count.
+
+```java
+@Named("activeUsers")          // matches ETGO_BILLING_RESOURCE.Strategy_Qualifier
+public class ActiveUsersCounter implements UsageResourceCounter {
+  @Override
+  public List<DailyCount> count(UsageCountRequest request) {
+    // one entry per tenant per day that has a value; omitted days count as zero
+  }
+}
+```
+
+**`@Named` only — never `@ApplicationScoped` or any other normal scope.** Lookup matches on
+`Bean#getName()`, and a normal-scoped bean is served through a Weld client proxy whose subclass
+does not carry the (non-`@Inherited`) qualifier, so the counter is silently skipped. This is the
+same failure that regressed `NeoHandler` in ETP-4244 — see §2.2.
+
+Two things make the trap survivable here. The aggregation **throws** when a qualifier resolves
+to nothing, rather than recording zero: a missing counter is otherwise indistinguishable from
+genuinely zero usage, which is the kind of defect nobody notices. And the catalog row is
+validated when it is **saved**, so a qualifier that no deployed bean carries is refused at
+configuration time rather than at 02:00.
+
+Note the asymmetry with the observer SPI: an `EntityPersistenceEventObserver` is dispatched by
+CDI events and a normal scope is fine there. The `@Named`-only rule applies to the two SPIs that
+are *looked up by qualifier* — `NeoHandler` and `UsageResourceCounter`.
+
+Reference: `modules/com.etendoerp.go/docs/plans/2026-09-15-etp-5050-usage-measurement-design.md`.
+
+---
+
 ## 3. Endpoint Reference
 
 ### Window Specs (`SPEC_TYPE = 'W'`)
