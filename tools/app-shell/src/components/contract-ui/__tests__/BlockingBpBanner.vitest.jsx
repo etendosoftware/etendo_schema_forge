@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { BlockingBpBanner } from '../BlockingBpBanner.jsx';
 import { useCurrency } from '@/hooks/useCurrency';
 
@@ -301,7 +301,19 @@ describe('BlockingBpBanner (ETP-5024)', () => {
     expect(screen.getByTestId('bp-blocking-banner')).toBeInTheDocument();
   });
 
-  it('renders InfoBanner with an info tone (non-dismissible)', () => {
+  /**
+   * DELIBERATE INVERSION (ETP-5245 — do not restore the old expectation). This banner used to
+   * assert that NO dismiss button was rendered, because `InfoBanner`'s `dismissible` defaulted to
+   * false. That default is now true: every banner is closable unless its caller opts out, and by
+   * product decision this one is not an exception.
+   *
+   * What ETP-5024 actually guaranteed is untouched, and is what the two tests below pin: the
+   * notice never disappears ON ITS OWN (that was the whole point of replacing the auto-dismissing
+   * toast), and closing it does not destroy the component's condition state — a condition raised
+   * afterwards shows a fresh banner, because clearing `banner` unmounts the InfoBanner and its
+   * "closed" state with it.
+   */
+  it('renders a dismiss button (every InfoBanner is closable since ETP-5245)', () => {
     render(
       <BlockingBpBanner
         calloutResult={null}
@@ -310,8 +322,39 @@ describe('BlockingBpBanner (ETP-5024)', () => {
         recordId="doc-1"
       />,
     );
-    // No dismiss button — InfoBanner only renders one when `dismissible` is passed.
-    expect(screen.queryByTestId('info-banner-dismiss')).toBeNull();
+    expect(screen.getByTestId('info-banner-dismiss')).toBeInTheDocument();
+  });
+
+  it('closes on click and comes back when a condition is raised again', () => {
+    const { rerender } = render(
+      <BlockingBpBanner
+        calloutResult={null}
+        blockingCondition={ON_HOLD}
+        completionSignal={0}
+        recordId="doc-1"
+      />,
+    );
+    fireEvent.click(screen.getByTestId('info-banner-dismiss'));
+    expect(screen.queryByTestId('bp-blocking-banner')).toBeNull();
+
+    // A successful completion clears the condition, then a later refusal raises it again.
+    rerender(
+      <BlockingBpBanner
+        calloutResult={null}
+        blockingCondition={null}
+        completionSignal={1}
+        recordId="doc-1"
+      />,
+    );
+    rerender(
+      <BlockingBpBanner
+        calloutResult={null}
+        blockingCondition={{ ...ON_HOLD }}
+        completionSignal={1}
+        recordId="doc-1"
+      />,
+    );
+    expect(screen.getByTestId('bp-blocking-banner')).toBeInTheDocument();
   });
 
   // Bug found in manual testing (Sales Invoice, BP over its credit limit): the

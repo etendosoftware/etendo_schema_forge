@@ -4,6 +4,7 @@ import { Tag } from '@/components/ui/tag';
 import { BoxIcon } from '@/components/ui/box-icon';
 import { useNeoImage } from '@/hooks/useNeoImage';
 import { formatAmount } from '@/lib/formatAmount.js';
+import { resolveRowCurrency } from '@/lib/rowCurrency.js';
 import { formatSignedDelta } from '@/lib/formatSigned.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { getStatusDotColor, getStatusTone, statusLabel } from '@/lib/statusBadge.js';
@@ -220,8 +221,8 @@ export function renderDateCell({ row, col, dateFormatter }) {
 // Generic `amount`-type column renderer used by almost every window's DataTable.
 // This is the reference pattern for any new amount column — copy this, don't
 // reimplement Intl.NumberFormat locally (see CLAUDE.md § Currency & Amount Formatting).
-export function renderAmountCell({ row, col }) {
-  return <span className="tabular-nums">{formatAmount(row[col.key], row['currency$_identifier'])}</span>;
+export function renderAmountCell({ row, col, sessionCurrency }) {
+  return <span className="tabular-nums">{formatAmount(row[col.key], resolveRowCurrency(row, col, sessionCurrency))}</span>;
 }
 
 // Mirrors TONE_CLASS in components/ui/money-amount.jsx and the sibling
@@ -303,10 +304,23 @@ export function renderDefaultCell({ row, col, display, visibleColumns }) {
     const pill = col.pill;
     const pillLabel = getPillLabel(pill, row);
     return (
-      <span className="inline-flex items-center gap-2">
-        <span>{display}</span>
+      // ETP-5281 — capped at the same 200px the non-first-column branch below uses,
+      // so a long value here truncates instead of overflowing into the next
+      // column. `min-w-0` on the inner text span is required: a flex/inline-flex
+      // child's default `min-width: auto` sizes it to its own content (here, the
+      // full un-wrapped text width from `truncate`'s `whitespace-nowrap`), which
+      // blocks `flex-shrink` from ever letting it shrink enough to actually
+      // truncate — `min-w-0` overrides that floor. The pill badge is `shrink-0`
+      // so it always stays fully visible next to the truncated text.
+      <span className="inline-flex items-center gap-2 max-w-[200px]">
+        <span
+          className="min-w-0 truncate"
+          title={typeof display === 'string' ? display : undefined}
+        >
+          {display}
+        </span>
         {pillLabel && (
-          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${pill.className || 'bg-muted text-muted-foreground border-border-subtle'}`} style={{ borderWidth: '0.5px' }}>
+          <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${pill.className || 'bg-muted text-muted-foreground border-border-subtle'}`} style={{ borderWidth: '0.5px' }}>
             {pillLabel}
           </span>
         )}

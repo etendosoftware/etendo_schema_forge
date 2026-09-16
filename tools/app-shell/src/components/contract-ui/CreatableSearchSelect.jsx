@@ -328,6 +328,12 @@ export function CreatableSearchSelect({
   const loadedForRef = useRef(null);
   // Debounce timer for serverSearch mode's typing-triggered fetch.
   const debounceRef = useRef(null);
+  // Timer for the onBlur close/reset delay below — tracked so it can be cleared on unmount,
+  // same as debounceRef. Without this, a blur that fires just before unmount (e.g. a test
+  // finishing, or the field leaving the DOM via navigation) leaves the timeout armed; it then
+  // fires after teardown and crashes calling setOpen/setEditingIntent on an unmounted component
+  // (in Vitest specifically: `window is not defined`, since jsdom's window is gone by then).
+  const blurTimeoutRef = useRef(null);
   // serverSearch mode only: mirrors `hasMore`/next-page offset in refs so the scroll handler
   // (which fires outside React's render cycle) always reads the latest value synchronously,
   // exactly like SelectorInput.jsx's hasMoreRef/offsetRef.
@@ -561,7 +567,10 @@ export function CreatableSearchSelect({
   }, [serverSearch, selectorUrl, token, parentKey, parentValue, filterKey, apiFetch, dataCache, cacheScope]);
 
   useEffect(() => {
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+    };
   }, []);
 
   // serverSearch mode only: reset the cached page whenever the dependent parent changes (a
@@ -929,7 +938,8 @@ export function CreatableSearchSelect({
           onKeyDown={handleInputKeyDown}
           onBlur={() => {
             isEditingRef.current = false;
-            setTimeout(() => {
+            if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+            blurTimeoutRef.current = setTimeout(() => {
               setOpen(false);
               resetSearchState();
               // Revert to chip if the user blurred without picking another option

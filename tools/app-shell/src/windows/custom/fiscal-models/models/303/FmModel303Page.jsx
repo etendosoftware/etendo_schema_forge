@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
@@ -16,7 +16,12 @@ import AeatSubmitFlow, { isMissingDefaultIaeActivity } from './AeatSubmitFlow.js
 import { isLastPeriodOfYear, getMissingRequiredFields } from './fm303Layouts.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents, persistManualData, deriveResultKind } from '../../fiscalModelsUtils.js';
+import {
+  formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents,
+  persistManualData, deriveResultKind, toBoxArray, applyOverrides, recomputeDerivedBoxes, getBoxValue,
+  resolveResultColors,
+} from '../../fiscalModelsUtils.js';
+import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
@@ -33,21 +38,9 @@ function statusLabelKey(status) {
   return status === 'submitted_ack' ? 'submitted' : status;
 }
 
-function toBoxArray(src) {
-  if (Array.isArray(src)) return src;
-  if (src && typeof src === 'object') return Object.entries(src).map(([n, v]) => ({ num: Number(n), value: v }));
-  return [];
-}
-
-function applyOverrides(boxes, overrides) {
-  if (!Object.keys(overrides).length) return toBoxArray(boxes);
-  const arr = toBoxArray(boxes);
-  const result = arr.filter(b => !(b.num in overrides));
-  Object.entries(overrides).forEach(([num, val]) => {
-    if (val != null) result.push({ num: Number(num), value: val });
-  });
-  return result;
-}
+// toBoxArray/applyOverrides/recomputeDerivedBoxes/getBoxValue moved to
+// fiscalModelsUtils.js (ETP-5272 pt.6) — shared with FmListPage.jsx so the
+// override-merge + derived-box formula lives in exactly one place.
 
 function removeBox108FromLive(prev) {
   if (prev == null) return prev;
@@ -68,8 +61,28 @@ function parseBoxInput(rawValue) {
 
 function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources) {
   if (!res) return;
-  setLiveBoxes(recomputeDerivedBoxes(applyOverrides(res.boxes, manualOverrides)));
-  setLiveSummary(res.summary);
+  const mergedBoxes = recomputeDerivedBoxes(applyOverrides(res.boxes, manualOverrides));
+  setLiveBoxes(mergedBoxes);
+  // ETP-5272 pt.6 (cont.) — two independent reasons `res.summary` can't be trusted as-is,
+  // both because the GET /fiscal303/boxes backend computes purely from invoice data (no
+  // declaration-id/manualData input at all, so it never sees manualOverrides):
+  // 1) `result` is the backend's box 46 ("Resultado régimen general") under a "standard
+  //    company" assumption (100% state attribution, no territorial split). The real final
+  //    liquidation result is box 71 ("Resultado de la liquidación"), which DOES correctly
+  //    reflect the territorial split (box 65/66) through `mergedBoxes` (recomputeDerivedBoxes
+  //    chains box 71 through box 66/69).
+  // 2) `deductible` is box 45 ("total_deducir"), computed as sum([29,31,33,35,37,39,41,42,43,44]).
+  //    Boxes 42/43/44 are pure manual entries (compensaciones régimen agricultura,
+  //    regularización bienes de inversión, prorrata definitiva) the backend never receives —
+  //    so its raw `deductible` silently assumes 42/43/44 = 0.
+  // Both are re-derived here from the override-aware `mergedBoxes` instead of the raw backend
+  // value. `accrued` (box 27, IVA devengado) needs no such treatment — it has no manual-entry
+  // inputs anywhere in its formula.
+  setLiveSummary({
+    ...res.summary,
+    deductible: getBoxValue(mergedBoxes, 45) ?? res.summary?.deductible ?? 0,
+    result: getBoxValue(mergedBoxes, 71) ?? res.summary?.result ?? 0,
+  });
   if (res.sources) setLiveSources(res.sources);
 }
 
@@ -95,24 +108,6 @@ function applyGenerateError(result, t) {
     toast.error(msg);
     console.error('generate303File failed:', result.error, result.serverMessage);
   }
-}
-
-function recomputeDerivedBoxes(boxArr) {
-  const r2 = v => Math.round(v * 100) / 100;
-  const get = num => { const e = boxArr.find(b => b.num === num); return e != null ? (e.value ?? 0) : 0; };
-  const box65entry = boxArr.find(b => b.num === 65);
-  const box65 = box65entry != null ? (box65entry.value ?? 100) : 100;
-  const box45 = r2([29,31,33,35,37,39,41,42,43,44].reduce((s, n) => s + get(n), 0));
-  const box46 = r2(get(27) - box45);
-  const box64 = r2(box46 + get(58) + get(76));
-  const box66 = r2(box64 * box65 / 100);
-  const box69 = r2(box66 + get(77) - get(78) + get(68) + get(108));
-  const box71 = r2(box69 - get(70) + get(109) - get(112));
-  const derived = { 45: box45, 46: box46, 64: box64, 66: box66, 69: box69, 71: box71 };
-  return [
-    ...boxArr.filter(b => !(b.num in derived)),
-    ...Object.entries(derived).map(([num, value]) => ({ num: Number(num), value })),
-  ];
 }
 
 // ── Tab content components ────────────────────────────────────────
@@ -179,11 +174,6 @@ function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, on
   );
 }
 
-function getBoxValue(liveBoxes, num) {
-  const e = toBoxArray(liveBoxes).find(b => b.num === num);
-  return e ? (e.value ?? 0) : null;
-}
-
 function buildIncidentVariants(blocking, warning, t) {
   let tone = null;
   if (blocking > 0) tone = 'danger';
@@ -242,6 +232,81 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   // they track.
   const manualDataSaveTimer = useRef(null);
   const isFirstManualDataRender = useRef(true);
+  /**
+   * Single-flight state for that autosave (ETP-5255). `clearTimeout` only prevents overlapping
+   * TIMERS; when a PUT outlives the 800 ms debounce and the user keeps editing, a second PUT used
+   * to go out while the first was still open.
+   *
+   * A ref, not state: the timer callback has to read the guard synchronously, and state is always
+   * one render behind — exactly the mistake that made the equivalent contacts bug (ETP-5263)
+   * intermittent.
+   *
+   * The write queue records that a newer edit arrived while a PUT was open, and
+   * `manualDataLatest` holds the value it produced: the timer closure captures
+   * identChecks/manualOverrides at SCHEDULE time, so replaying that closure would resend a stale
+   * snapshot. A queued save is never dropped for being late — this endpoint has NO
+   * optimistic-locking check (`FiscalDeclCrudHandler#handleDeclPut` never compares `updated`), so a
+   * lost edit here produces no 409 and no error of any kind, just silently missing data. It IS
+   * dropped when it becomes ineligible; see `isManualDataEligible`.
+   */
+  const manualDataLatest = useRef(null);
+  /**
+   * Mirror of the effect's own preconditions (`!isSubmitted && token && apiBaseUrl`), kept in a
+   * ref for the same reason `manualDataLatest` is: a queued replay fires from a `finally` long
+   * after its closure was created, so it cannot read that state fresh.
+   *
+   * Without it this was reachable: PUT(A) in flight → user edits again (queued) → user submits the
+   * declaration → PUT(A) settles → the replay writes manualData to a declaration that is now
+   * filed. The server does not stop it — `FiscalDeclCrudHandler#handleDeclPut` has no submitted
+   * guard, it applies whatever fields it receives (its own comments only defend field-by-field
+   * against a "stray/racy PUT"), so this ref is the sole gate.
+   *
+   * Kept in sync by its own effect rather than written during render, so it always reflects the
+   * render that actually committed.
+   */
+  const isManualDataEligible = useRef(false);
+
+  /**
+   * The single write path for manualData. At most one PUT is open at a time; a save requested
+   * while one is in flight is queued and replayed when it settles, reading `manualDataLatest`
+   * again so the replay carries the newest value rather than the one current when it was queued.
+   */
+  /**
+   * Sends the manual data. Single-flight and the queued replay belong to the write queue below
+   * (ETP-5255); the eligibility gate stays here because it is this panel's own rule.
+   */
+  const writeManualData = useCallback(async ({ value }) => {
+    // Re-checked on EVERY entry, so it gates the queued replay and not just the arming of the
+    // timer. A save that has become ineligible is DROPPED — returning `false` discards anything
+    // queued behind it rather than carrying it forward: once the declaration is submitted its
+    // content is a filed record, and a late autosave silently mutating it is worse than losing an
+    // unsaved tweak made seconds before filing. This is the one place in this flow where dropping
+    // beats queueing.
+    if (!isManualDataEligible.current) return false;
+    if (!value) return false;
+    await persistManualData(value.id, value.manualData, {
+      token: value.token,
+      apiBaseUrl: value.apiBaseUrl,
+    });
+    return true;
+  }, []);
+
+  /**
+   * Serialises per DECLARATION (ETP-5255).
+   *
+   * This panel was already correct before the shared queue existed, but only because it autosaves
+   * the whole record at once — so its single in-flight flag WAS a per-record key, by accident of
+   * shape rather than by design. The other three panels that hand-rolled this guarded per field or
+   * per input and let two writes to one record overlap. Using the same queue here is what stops
+   * this file from drifting back into a fourth private copy.
+   */
+  const { persist: persistManualDataQueued } = useRecordWriteQueue({ write: writeManualData });
+
+  function flushManualData() {
+    const snapshot = manualDataLatest.current;
+    if (!snapshot) return;
+    persistManualDataQueued(snapshot.id, 'manualData', snapshot).catch(() => {});
+  }
 
   // Only used to grab `upload()` for the manual acuse-de-recibo path below —
   // isActive: false keeps it from eagerly listing/fetching attachments on
@@ -314,8 +379,18 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   // `decl.id` only (not `liveBoxes`/`decl._precomputed`) so it fires exactly once
   // per opened declaration instead of looping once `handleCompute` populates state.
   useEffect(() => {
-    const hasPrecomputed = decl._precomputed?.boxes != null || liveBoxes != null;
-    if (hasPrecomputed) return;
+    // ETP-5272 pt.6 — `decl._precomputed` is the RAW, override-free auto-compute result
+    // `FmListPage`'s `useFiscalAutoCompute` already fetched for every draft declaration
+    // before this page ever mounted. Route it through `applyComputeResult` (same helper
+    // `handleCompute` and "Calcular" use) so the already-hydrated `manualOverrides` get
+    // merged in immediately — otherwise `liveBoxes` stays pinned to the raw seed from the
+    // initial state above and the user's saved manual edits are invisible until they
+    // manually re-run "Calcular". No new network call: this reuses the payload we already have.
+    if (decl._precomputed?.boxes != null) {
+      applyComputeResult(decl._precomputed, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
+      return;
+    }
+    if (liveBoxes != null) return;
     if (!apiBaseUrl) return;
     handleCompute();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -338,7 +413,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     setGenerating(true);
     // ETP-4975 pre-flight guard — mirrors the one in AeatSubmitFlow.jsx's handleSubmit
     // (see that file for the full rationale). "Generar fichero 303" hits the exact same
-    // backend AEAT303Report code path as "Marcar como Presentado" for the last period of
+    // backend AEAT303Report code path as "Registrar/Presentar" for the last period of
     // the fiscal year, so without this it round-trips to an untranslated
     // `IndexOutOfBoundsException` 500 instead of failing fast with a translated message.
     // Only runs for the last period, only when an org id is resolvable, and fails OPEN on
@@ -387,7 +462,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   }
 
   function handlePresent({ status: newStatus, acuseFile }) {
-    // ETP-5187 — required-field pre-flight (see `missingRequiredFields` above), covering all 3
+    // ETP-5187 — required-field pre-flight (see `missingRequiredFields` above), covering all
     // paths this function can take — including 'aeat_telematic' below, which only opens the
     // AeatSubmitFlow but must not even get that far with an unset declaration type.
     if (missingRequiredFields.length > 0) {
@@ -399,7 +474,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     }
     // 'aeat_telematic' is a sentinel from PresentModal's 4th path, never a
     // real declaration status — it means "open the AEAT submission flow",
-    // not "change the status directly" like the other 3 manual paths.
+    // not "change the status directly" like the other 2 manual paths.
     if (newStatus === 'aeat_telematic') {
       setShowPresent(false);
       setShowAeatFlow(true);
@@ -454,6 +529,14 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     toast.error(t(actionKey, { fields: missingFieldNames }) ?? fallback.replace('{fields}', missingFieldNames));
   }
 
+  // Keeps `isManualDataEligible` current so a queued autosave replay can re-check the same
+  // preconditions the effect below checks before arming its timer. Runs before that effect on
+  // every commit (declaration order), so an edit and the eligibility it was made under can never
+  // disagree.
+  useEffect(() => {
+    isManualDataEligible.current = !isSubmitted && Boolean(apiBaseUrl);
+  }, [isSubmitted, token, apiBaseUrl]);
+
   // Debounced autosave of identChecks/manualOverrides via PUT /fiscal303/declarations, so
   // manual identification/box edits survive a page refresh (ETP-4755). Skipped once the
   // declaration is submitted (nothing is editable at that point) and on the very first render
@@ -464,9 +547,18 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
       return;
     }
     if (isSubmitted || !apiBaseUrl) return;
+    // Publish the edit to a ref BEFORE arming the timer: this is what both the debounced save and
+    // any queued replay read, so whichever one ends up firing sends the latest value.
+    manualDataLatest.current = {
+      id: decl.id,
+      manualData: { identification: identChecks, manualOverrides },
+      token,
+      apiBaseUrl,
+    };
     if (manualDataSaveTimer.current) clearTimeout(manualDataSaveTimer.current);
     manualDataSaveTimer.current = setTimeout(() => {
-      persistManualData(decl.id, { identification: identChecks, manualOverrides }, { token, apiBaseUrl });
+      manualDataSaveTimer.current = null;
+      flushManualData();
     }, 800);
     return () => { if (manualDataSaveTimer.current) clearTimeout(manualDataSaveTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -477,9 +569,12 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   // are reflected in the accrued/deductible/result cards without a full recalculate.
   const kpi27 = getBoxValue(liveBoxes, 27);
   const kpi45 = getBoxValue(liveBoxes, 45);
-  const kpi46 = getBoxValue(liveBoxes, 46);
-  const liveBoxSummary = (kpi27 !== null || kpi45 !== null || kpi46 !== null)
-    ? { accrued: kpi27, deductible: kpi45, result: kpi46 }
+  // ETP-5272 pt.6 (cont.) — the final liquidation result is box 71 ("Resultado de la
+  // liquidación"), not box 46 ("Resultado régimen general"), which is only an intermediate
+  // figure. See applyComputeResult above for the full rationale.
+  const kpi71 = getBoxValue(liveBoxes, 71);
+  const liveBoxSummary = (kpi27 !== null || kpi45 !== null || kpi71 !== null)
+    ? { accrued: kpi27, deductible: kpi45, result: kpi71 }
     : null;
   const summary = liveSummary ?? liveBoxSummary ?? decl.summary ?? {};
   // ETP-5187 — was `decl.result?.kind`, which the backend never populates (declToJson has no
@@ -492,6 +587,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
 
   // Derive result sublabel from kind
   const resultSubLabel = resultKind ? (t(`fm.result.${resultKind}`) ?? resultKind) : (t('fm.m303.summary.result_sub') ?? 'Resultado');
+  const resultColors = resolveResultColors(resultKind);
 
 
   const { tone: incidentBadgeTone, iconColor: incidentIconColor, badge: incidentBadge } =
@@ -631,7 +727,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
             }}
           >
             <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__4f6c0d" />
-            {t('fm.action.submit') ?? "Marcar como 'Presentado'"}
+            {t('fm.action.submit') ?? 'Registrar/Presentar'}
           </button>
         )}
       </div>
@@ -715,15 +811,17 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           badgeColor="hsl(var(--muted-foreground))"
           data-testid="KpiWidget__4f6c0d" />
 
-        {/* Resultado */}
+        {/* Resultado — color-coded by sign (ETP-5236 / M303-01): green when the org owes
+            money ('I'), blue when refundable/offsettable ('V'/'C'), neutral otherwise. */}
         <KpiWidget
           icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__4f6c0d" />}
           iconColor="hsl(var(--foreground))"
           label={t('fm.m303.summary.result') ?? 'Resultado'}
           value={formatAmount(summary.result ?? 0)}
+          valueColor={resultColors.valueColor}
           badge={resultSubLabel}
-          badgeBg="hsl(var(--muted))"
-          badgeColor="hsl(var(--muted-foreground))"
+          badgeBg={resultColors.badgeBg}
+          badgeColor={resultColors.badgeColor}
           data-testid="KpiWidget__4f6c0d" />
       </div>
       {/* ── Inline generate error ────────────────────────────────── */}

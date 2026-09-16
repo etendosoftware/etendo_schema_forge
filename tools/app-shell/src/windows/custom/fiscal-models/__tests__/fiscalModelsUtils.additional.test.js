@@ -307,6 +307,56 @@ describe('generate303File — success path with identChecks and manualOverrides'
     assert.doesNotMatch(capturedUrl, /ConcursoType/);
   });
 
+  // ETP-5272 pt.7 — AEAT303Report2023+ throws
+  // @AEAT303_Bad_Bankruptcy_Statement_Date_Format@ when ConcursoDate is
+  // missing/blank while concurso=Y; 2021/2022 ship 8 blank spaces into that
+  // field slot otherwise. formatAeatConcursoDate converts the date-only
+  // `fecha_concurso` (`yyyy-MM-dd`) into AEAT's strict `ddMMyyyy` digit format.
+  it('forwards ConcursoDate in ddMMyyyy format when concurso is checked and fecha_concurso is set', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T1' },
+      {
+        token: 'tok',
+        apiBaseUrl: '/x',
+        identChecks: { tipo_declaracion: 'N', concurso: true, fecha_concurso: '2026-03-05' },
+      }
+    );
+    assert.match(capturedUrl, /ConcursoDate=05032026/);
+  });
+
+  it('does not set ConcursoDate when fecha_concurso is empty, even though concurso is checked (no crash)', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T1' },
+      { token: 'tok', apiBaseUrl: '/x', identChecks: { tipo_declaracion: 'N', concurso: true } }
+    );
+    assert.doesNotMatch(capturedUrl, /ConcursoDate/);
+    // IsConcurso itself must still go through — only the date is conditionally omitted.
+    assert.match(capturedUrl, /IsConcurso=Y/);
+  });
+
+  it('does not set ConcursoDate when concurso is falsy, even if fecha_concurso is (stale) set', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T1' },
+      { token: 'tok', apiBaseUrl: '/x', identChecks: { tipo_declaracion: 'N', concurso: false, fecha_concurso: '2026-03-05' } }
+    );
+    assert.doesNotMatch(capturedUrl, /ConcursoDate/);
+  });
+
   it('falls back to decl.result.kind and then N when tipo_declaracion is absent', async () => {
     globalThis.fetch = async () => ({ ok: true, blob: async () => new Blob(['x']) });
     const result = await generate303File(

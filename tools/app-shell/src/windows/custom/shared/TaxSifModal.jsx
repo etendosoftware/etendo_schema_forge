@@ -78,8 +78,22 @@ const TAX_ENTITY_NAME = 'tax';
  * @param {Function} props.onSaved       (updatedTaxRecord) => void — called after a
  *                                       successful PATCH, so the caller can refresh its
  *                                       local tax-completeness cache without a full reload.
+ * @param {string|null} [props.sifContextOrgId] ETP-5229 — the invoice/order LINE's own
+ *   `AD_Org_ID` (the document's organization, NOT the user's current session org). Forwarded
+ *   as the `sifContextOrgId` query param on the save PATCH so `TaxSifOverrideHandler` keys the
+ *   write (and its immediate read-back) off the SAME legal entity
+ *   `InvoiceLineTaxSifSelectorPolicy` resolves the badge from on the read side — see that
+ *   handler's class doc for the full bug this closes. The only current caller
+ *   (`useTaxSifLineRowActions.jsx`) always opens this modal from an invoice/order line, so an
+ *   org is normally available; when it is genuinely absent (e.g. the header record fetch
+ *   failed) this is `null` and the param is simply omitted from the request —
+ *   `patchById`/`buildUrlWithParams` already treat null/undefined/'' as "not sent", matching
+ *   the backend's own "blank treated as absent" contract and the standalone-Tax-window
+ *   fallback (session org) described there.
  */
-export default function TaxSifModal({ taxId, apiBaseUrl, token, onClose, onSaved, targets = null }) {
+export default function TaxSifModal({
+  taxId, apiBaseUrl, token, onClose, onSaved, targets = null, sifContextOrgId = null,
+}) {
   const ui = useUI();
   const { selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
@@ -188,7 +202,10 @@ export default function TaxSifModal({ taxId, apiBaseUrl, token, onClose, onSaved
       // PATCHes `resolvedTaxId` — the resolved rate-component child for a compound tax,
       // or `taxId` itself otherwise (see the resolution effect above). Never the summary
       // tax id when a child was resolved: that is exactly the bug this follow-up fixes.
-      await patchById(TAX_SPEC_NAME, TAX_ENTITY_NAME, resolvedTaxId, payload, token, apiBaseUrl);
+      await patchById(
+        TAX_SPEC_NAME, TAX_ENTITY_NAME, resolvedTaxId, payload, token, apiBaseUrl,
+        { sifContextOrgId },
+      );
       toast.success(ui('taxSif.modal.saveSuccess'));
       // `patchById`'s response uses the tax entity's own camelCase field names (e.g.
       // `tbaiClaveregimeniva`), but the caller's completeness cache (built from the
@@ -210,7 +227,10 @@ export default function TaxSifModal({ taxId, apiBaseUrl, token, onClose, onSaved
     } finally {
       setSaving(false);
     }
-  }, [editing, original, selectedFields, resolvedTaxId, token, apiBaseUrl, onSaved, onClose, ui]);
+  }, [
+    editing, original, selectedFields, resolvedTaxId, token, apiBaseUrl, sifContextOrgId,
+    onSaved, onClose, ui,
+  ]);
 
   // Drives the Save button's disabled state: nothing to persist until at least one
   // selected field's value actually differs from the record as originally loaded.

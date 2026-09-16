@@ -6,7 +6,6 @@
  * line addition) so individual spec files stay focused on their flow.
  */
 import { expect } from '@playwright/test';
-import { apiAuthHeaders } from './auth.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ensureFinancialAccountSetup } from './financial-account-helpers.js';
@@ -177,7 +176,7 @@ const VENDOR_FIXTURE_CITY = 'E2E City';
  * (bounded) page and matches by name client-side — see findVendorFixture()'s
  * doc comment for why that second mode exists.
  */
-async function queryVendorFixtureCandidates(page, headers, { useCriteria }) {
+async function queryVendorFixtureCandidates(page, token, { useCriteria }) {
   const params = { _sortBy: 'creationDate', _startRow: '0', _endRow: '500' };
   if (useCriteria) {
     params.criteria = JSON.stringify({
@@ -188,7 +187,7 @@ async function queryVendorFixtureCandidates(page, headers, { useCriteria }) {
   }
   const res = await page.request.get('/sws/neo/contacts/businessPartner', {
     params,
-    headers,
+    headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok()) {
     throw new Error(`ensureVendorSetup: fixture lookup failed (${res.status()}): ${await res.text()}`);
@@ -241,16 +240,20 @@ function pickDeterministicFixture(candidates) {
  * cheap insurance against exactly that class of bug regardless.)
  */
 async function findVendorFixture(page) {
-  // ETP-4576: the session is no longer readable from localStorage — replay what
-  // the application itself authenticates with (see `apiAuthHeaders`).
-  const headers = await apiAuthHeaders(page);
+  const token = await page.evaluate(() => localStorage.getItem('sf_auth_token'));
+  if (!token) {
+    throw new Error(
+      'ensureVendorSetup could not find an auth token in localStorage["sf_auth_token"] — '
+      + 'call login(page) before ensureVendorSetup(page, ...).',
+    );
+  }
 
-  const filtered = await queryVendorFixtureCandidates(page, headers, { useCriteria: true });
+  const filtered = await queryVendorFixtureCandidates(page, token, { useCriteria: true });
   if (filtered.length > 0) {
     return pickDeterministicFixture(filtered);
   }
 
-  const unfiltered = await queryVendorFixtureCandidates(page, headers, { useCriteria: false });
+  const unfiltered = await queryVendorFixtureCandidates(page, token, { useCriteria: false });
   if (unfiltered.length > 0) {
     // eslint-disable-next-line no-console
     console.warn(
@@ -473,16 +476,80 @@ async function ensureVendorPaymentFieldsSet(page) {
  * this caused ensureVendorAddress() to create a brand-new duplicate address
  * on almost every run instead of reusing the existing one.
  */
-async function fetchVendorLocationCount(page, bpId) {
+export async function fetchBpLocationCount(page, bpId) {
+  const token = await page.evaluate(() => localStorage.getItem('sf_auth_token'));
+  if (!token) {
+    throw new Error(
+      'fetchBpLocationCount could not find an auth token in localStorage["sf_auth_token"] — '
+      + 'call login(page) first.',
+    );
+  }
   const res = await page.request.get('/sws/neo/contacts/locationAddress', {
     params: { parentId: bpId },
-    headers: await apiAuthHeaders(page),
+    headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok()) {
-    throw new Error(`ensureVendorAddress: location lookup failed (${res.status()}): ${await res.text()}`);
+    throw new Error(`fetchBpLocationCount: location lookup failed (${res.status()}): ${await res.text()}`);
   }
   const body = await res.json();
   return Array.isArray(body?.response?.data) ? body.response.data.length : 0;
+}
+
+/**
+ * Clicks a business-partner option that ACTUALLY HAS an address, instead of whichever
+ * one happens to come first in the open dropdown.
+ *
+ * ETP-5283. A document cannot be saved as draft until the BP callout derives
+ * `partnerAddress` — `action-save-draft` renders `disabled` with
+ * `data-missing-required="partnerAddress"`. That callout auto-selects the partner's
+ * `C_BPartner_Location`, so a partner with ZERO locations leaves the field empty forever
+ * and every later step fails on a 15s click timeout that says nothing about the cause.
+ * `ensureVendorAddress` above documents the same failure mode from the write side; this
+ * is the read-only half, for the callers that pick from the list rather than from a
+ * named fixture.
+ *
+ * The tenant reliably ends up holding such partners: `contacts-integration.spec.js`
+ * creates contacts with no address and only removes them in its final bulk-delete step,
+ * so any earlier failure there leaves them behind. Whether the dropdown happens to
+ * surface them first is exactly the ordering assumption this removes — the fix does not
+ * depend on knowing the selector's sort order.
+ *
+ * Each candidate's id comes from the option's own testid (`option-${field.key}-${opt.id}`
+ * — EntityForm.jsx:271) and is checked through the same `parentId` child-entity lookup
+ * `ensureVendorAddress` uses, so no shape is guessed. Read-only: it never creates or
+ * edits data, it only declines to pick an unusable partner.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {{ timeout?: number }} [options]
+ * @returns {Promise<string>} the id of the business partner that was clicked
+ */
+export async function clickBpOptionWithAddress(page, { timeout = 15_000 } = {}) {
+  const candidates = page.locator('[data-testid^="option-businessPartner-"]')
+    .filter({ hasNotText: /crear|create/i });
+  await expect(candidates.first(), 'business-partner dropdown should list at least one partner')
+    .toBeVisible({ timeout });
+
+  const ids = (await candidates.evaluateAll(
+    (nodes) => nodes.map((node) => node.getAttribute('data-testid')),
+  ))
+    .map((testId) => testId?.replace(/^option-businessPartner-/, ''))
+    .filter(Boolean);
+
+  const skipped = [];
+  for (const id of ids) {
+    if (await fetchBpLocationCount(page, id) > 0) {
+      await page.locator(`[data-testid="option-businessPartner-${id}"]`).click();
+      return id;
+    }
+    skipped.push(id);
+  }
+
+  throw new Error(
+    `clickBpOptionWithAddress: none of the ${ids.length} partners offered by the dropdown has a `
+    + 'C_BPartner_Location, so the BP callout can never derive partnerAddress and the draft could '
+    + `never be saved. Business partners checked: ${skipped.join(', ')}. Give one of them an address, `
+    + 'or clean up the address-less contacts a previous contacts-integration run left behind.',
+  );
 }
 
 /**
@@ -500,7 +567,7 @@ async function fetchVendorLocationCount(page, bpId) {
  * contact detail for `bpId` is already the currently-open page.
  */
 async function ensureVendorAddress(page, bpId) {
-  const existingCount = await fetchVendorLocationCount(page, bpId);
+  const existingCount = await fetchBpLocationCount(page, bpId);
   if (existingCount > 0) return;
 
   const addressTab = page.getByTestId('tab-locationAddress')
@@ -768,13 +835,18 @@ export async function selectVendorBP(page, { name } = {}) {
     await page.waitForTimeout(800);
   }
 
-  const bpOption = name
-    ? page.locator('[data-testid^="option-businessPartner-"]').filter({ hasText: name }).first()
-    : page.locator('[data-testid^="option-businessPartner-"]').filter({ hasNotText: /crear|create/i }).first();
-  await expect(bpOption,
-    name ? `Vendor option matching "${name}" should appear` : 'At least one vendor option should appear',
-  ).toBeVisible({ timeout: 15_000 });
-  await bpOption.click();
+  if (name) {
+    const bpOption = page.locator('[data-testid^="option-businessPartner-"]')
+      .filter({ hasText: name }).first();
+    await expect(bpOption, `Vendor option matching "${name}" should appear`)
+      .toBeVisible({ timeout: 15_000 });
+    await bpOption.click();
+  } else {
+    // ETP-5283 — no named fixture to fall back on, so pick by the property that actually
+    // matters instead of by list position: a partner with no address can never settle
+    // `partnerAddress` below, and used to surface as an unexplained 30s timeout there.
+    await clickBpOptionWithAddress(page);
+  }
 
   // BP selection triggers multiple chained callouts/fetches (price list, payment
   // terms, address). paymentTerms/priceList are filled directly by the backend

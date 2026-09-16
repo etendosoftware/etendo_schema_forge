@@ -17,11 +17,17 @@ import { isInvoiceSpec, isOrderSpec } from '@/lib/surveys/surveys.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { isEmailField, getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
 import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
-import { getContactsTextFieldError } from '@/components/contract-ui/contactsFieldValidation.js';
+import {
+    getContactsTextFieldError,
+    getContactsTaxIdError,
+    CONTACTS_TAX_ID_FIELD,
+    CONTACTS_TAX_ID_KEY_FIELD,
+} from '@/components/contract-ui/contactsFieldValidation.js';
 import { clampNumericFieldMax, getNumericFieldError, numericFieldToastId, trackSaveBlockToast, dismissSaveBlockToasts } from '@/lib/numericValidation.js';
 import { getReadOnly, getVisible, getMissingRequiredFields, mergeValidationFields } from '@/lib/requiredFields.js';
 import { useFormValidity, fieldsSignature } from '@/hooks/useFormValidity.js';
 import { detectBlockingBpCondition } from '@/lib/blockingBpConditions.js';
+import { notifySaveBlock } from '@/lib/saveBlockSignal.js';
 
 // ETP-5022: header policy has ONE home (app-shell-core/auth) — every request goes
 // through the shared apiFetch helper instead of a local buildHeaders + raw fetch.
@@ -665,6 +671,41 @@ export function getContactsTextFieldViolation(windowName, fields, editing) {
     return null;
 }
 
+// ETP-5031 (QA round) — Contacts-only tax-identifier CONTENT save-block,
+// mirroring getContactsTextFieldViolation's shape/contract. A no-op for every
+// window other than 'contacts' and for every field other than `taxID` —
+// getContactsTaxIdError gates on both before looking at anything else.
+//
+// Unlike the text-field check it passes the WHOLE `editing` record down, not
+// just the value: which rule applies (Spanish NIF/CIF/NIE vs passport) is
+// decided by the sibling `oBTIKTaxIDKey` field of the same record.
+//
+// The legacy-data policy is enforced here rather than by the caller's field
+// list, because this check spans TWO fields: it takes ALL form fields plus
+// `changedKeys` (the set of keys the user touched THIS session), and validates
+// only when the user actually touched the record's fiscal identity. A contact
+// that already carries an invalid tax id must stay editable — changing its
+// phone must not be blocked by a value nobody touched. On a new record every
+// entered field is a changed key, so new invalid input is still blocked.
+//
+// The `||` is deliberate: changing `oBTIKTaxIDKey` alone re-declares WHAT the
+// existing number is (passport -> NIF), so the number must now satisfy the new
+// type's rules even though its own characters did not change. Touching neither
+// the number nor the type leaves a legacy value alone, which is the whole point.
+export function getContactsTaxIdViolation(windowName, fields, editing, changedKeys) {
+    const touchedTaxIdentity = Boolean(changedKeys?.has(CONTACTS_TAX_ID_FIELD)
+        || changedKeys?.has(CONTACTS_TAX_ID_KEY_FIELD));
+    if (!touchedTaxIdentity) return null;
+    const isReadOnly = getReadOnly(editing);
+    const isVisible = getVisible(editing);
+    for (const f of fields) {
+        if (isReadOnly(f) || !isVisible(f)) continue;
+        const err = getContactsTaxIdError(windowName, f, editing?.[f.key], editing);
+        if (err) return { key: f.key, errorKey: err.key, errorParams: err.params };
+    }
+    return null;
+}
+
 // Block the save on a format-invalid field (email, website, …) and surface a
 // toast ONLY — unlike the required-field path, format errors deliberately do NOT
 // set an inline fieldError under the input (the toast is the single signal).
@@ -687,6 +728,11 @@ export function reportInvalidFormatField(messageKey, ui, setSaveError, setIsSavi
         // trackSaveBlockToast. Only stable-id toasts are trackable; the
         // email/website/phone gates stack auto-id toasts and are left as they were.
         trackSaveBlockToast(toastId);
+        // ETP-5245: announce the refusal on the save-block bus so a banner explaining THIS
+        // reason can re-open itself if the user had dismissed it (banners are dismissible by
+        // default now — see components/InfoBanner.jsx). Same stable id as the toast, so a new
+        // blocking rule gets the behaviour by passing a toastId and nothing else.
+        notifySaveBlock(toastId);
     } else {
         toast.error(msg);
     }
@@ -889,7 +935,27 @@ export function showSaveSuccessToast(silent, isNew, ui) {
     // Dismissing a DIFFERENT id than the one we are about to create means there is no
     // cross-timer race here — unlike ETP-4830's dismiss-then-add of the same toast.
     dismissSaveBlockToasts(toast.dismiss);
-    toast.success(getSaveSuccessMessage(isNew, ui), { id: RECORD_SAVE_TOAST_ID });
+    // ETP-5193 — explicitly clear `action` (and not just omit it). sonner's
+    // `Observer.create()` (node_modules/sonner/dist/index.mjs) shallow-merges the new
+    // call's options onto whatever it already has on record for this id when that id
+    // already exists in its internal `this.toasts` registry:
+    //   this.toasts.map(t => t.id === id ? { ...t, ...data, id, dismissible, title } : t)
+    // A key simply ABSENT from `data` (this call's options) is NOT cleared — it is
+    // inherited from the prior entry. And that registry entry is never pruned: sonner's
+    // dismiss()/auto-expiry only hides the toast from the rendered list (a separate,
+    // per-Toaster-instance React state array) — `Observer.toasts` itself keeps the full
+    // merged object forever, for any id ever used. Concretely: the User window's
+    // `onAfterCreate` (`windows/custom/user/index.jsx`) reuses this SAME id to attach a
+    // "Configurar roles" `action` to the create-success toast. Without clearing it here,
+    // that `action` silently carried forward onto EVERY later plain save of the SAME
+    // record using this generic toast (e.g. the very next Guardar after assigning a
+    // role via `onAfterExistingSave` — see user.md's "Roles selector visual fixes
+    // (ETP-5193)") — the toast looked like a fresh "saved successfully" message but
+    // still rendered a stale, no-longer-applicable action button. Passing `action:
+    // undefined` here IS a key present in `data`, so the merge above does overwrite it.
+    // This stays a single atomic id-based `toast.success()` call — it does not
+    // reintroduce the dismiss()-then-create() race documented above RECORD_SAVE_TOAST_ID.
+    toast.success(getSaveSuccessMessage(isNew, ui), { id: RECORD_SAVE_TOAST_ID, action: undefined });
 }
 
 function afterSaveNotifications(data, { silent, isNew, entity, specName, ui }) {
@@ -1735,6 +1801,25 @@ export function useEntity(entity, childEntity, {
                 contactsViolation.errorParams,
             );
         }
+        // ETP-5031 (QA round): Contacts-only tax-identifier CONTENT save-block.
+        // Unlike the checks around it this one gets ALL form fields plus the
+        // changed-key set, because its legacy-data scoping spans two fields
+        // (the number and its type) and is decided inside the helper — see
+        // getContactsTaxIdViolation. Shares the `contacts-field-<key>` toast id
+        // with the text-field gate and with EntityForm's blur toast for the same
+        // field, so a blur firing right before the Save click dedupes into one.
+        const contactsTaxIdViolation = getContactsTaxIdViolation(
+            specName, allFormFields, editing, userChangedKeysRef.current);
+        if (contactsTaxIdViolation) {
+            return reportInvalidFormatField(
+                contactsTaxIdViolation.errorKey,
+                ui,
+                setSaveError,
+                setIsSaving,
+                `contacts-field-${contactsTaxIdViolation.key}`,
+                contactsTaxIdViolation.errorParams,
+            );
+        }
         const invalidEmails = getInvalidEmailFields(changedFormFields, clampedEditing);
         if (invalidEmails.length > 0) {
             return reportInvalidFormatField('sendModalInvalidEmail', ui, setSaveError, setIsSaving);
@@ -2273,6 +2358,7 @@ export function useEntity(entity, childEntity, {
         handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,
         handleAddChild, handleUpdateChild, handleDeleteChild, primeSaved,
         refresh, fetchById, fetchChildren, fetchChildDefaults, loadMore, refreshHeaderTotals, clearUserChangedKey,
+        invalidateEntityCache,
         buildListQuery,
         sortColumn, sortDirection, setSortColumn, setSortDirection,
     };

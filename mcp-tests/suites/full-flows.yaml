@@ -1,0 +1,18 @@
+# End-to-end business-flow probes.
+#
+# Prompts are Spanish test input, reflecting the language used by the MCP's
+# intended users. Unknown placeholders are intentionally preserved by the suite
+# loader, so {{run_id}} remains literal in the prompt.
+
+window: full-invoice
+
+probes:
+  - id: full-invoice
+    mode: write
+    prompt: >
+      Tengo una factura para "customer {{marker}}".
+      - Creá ese contacto e inventale una dirección española.
+      - Creá también un producto llamado "Servicio tecnico {{marker}}", con código {{marker}} y precio 99.
+      - Crea un pedido con ese cliente y ese producto x 2 unidades. En la descripción poné {{marker}}.
+      - Luego factura ese pedido.
+      - Finalmente, verificá que la factura se haya creado correctamente.

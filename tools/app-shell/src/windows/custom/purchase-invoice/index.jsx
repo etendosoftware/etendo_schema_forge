@@ -5,7 +5,7 @@ import { todayCalendarISO, tomorrowCalendarISO } from '@/lib/dateOnly.js';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { useUI, useMenuLabel } from '@/i18n';
-import BulkDocumentAction from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
@@ -13,6 +13,7 @@ import PurchaseInvoiceHeaderTable from './PurchaseInvoiceHeaderTable.jsx';
 import HeaderPage from '@generated/purchase-invoice/generated/web/purchase-invoice/HeaderPage';
 import InvoicePreview from '../shared/InvoicePreview.jsx';
 import PurchaseInvoiceTopbar from './PurchaseInvoiceTopbar.jsx';
+import PurchaseInvoiceSecondaryActions from '@generated/purchase-invoice/custom/PurchaseInvoiceSecondaryActions';
 import OcrSidePanel from '../shared/OcrSidePanel.jsx';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
@@ -108,6 +109,14 @@ function PurchaseInvoiceBulkAction(props) {
         {...props}
         labelKey="confirmBulk"
         data-testid="BulkDocumentAction__c20e53" />
+      {/* ETP-5209 — bulk Contabilizar (post), gated to processed & not-yet-posted rows */}
+      <BulkDocumentAction
+        {...props}
+        actionMode="neoAction"
+        buildActions={buildPostActions}
+        rowFilter={postRowFilter}
+        labelKey="post"
+        data-testid="BulkDocumentActionPost__c20e53" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
@@ -154,8 +163,12 @@ export default function PurchaseInvoiceWindow(props) {
   });
 
   const rowQuickActions = useMemo(
-    () => buildInvoiceRowQuickActions(navigate, windowName, setCloneTargets, null, requestDelete, { showEmail: false }),
-    [navigate, windowName, requestDelete],
+    () => buildInvoiceRowQuickActions(navigate, windowName, setCloneTargets, null, requestDelete, {
+      showEmail: false,
+      onRefresh: () => setRefreshKey(k => k + 1),
+      ui,
+    }),
+    [navigate, windowName, requestDelete, ui],
   );
 
   const summary = [
@@ -196,6 +209,7 @@ export default function PurchaseInvoiceWindow(props) {
           summary={summary}
           extraBadges={[]}
           topbarRight={PurchaseInvoiceTopbar}
+          topbarSecondary={PurchaseInvoiceSecondaryActions}
           sidePanel={OcrSidePanel}
           sidePanelStyle={{ width: 360 }}
           notesField="description"

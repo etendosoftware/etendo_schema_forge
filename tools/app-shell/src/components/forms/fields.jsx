@@ -2,7 +2,7 @@
 // Order detail form (EntityForm), so wizard/modal inputs, selects and date
 // pickers look and behave identically across the app. Shared by the New
 // Movement wizard and the generic Payment form.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Search, ChevronDown } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { Label as UiLabel } from '@/components/ui/label';
@@ -11,8 +11,9 @@ import { DateField } from '@/components/ui/date-field';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { SelectorChip } from '@/components/contract-ui/SelectorChip.jsx';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
-import { getCurrencySymbol } from '@/lib/formatCurrency.js';
-import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
+import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
+import { getCurrencyFormatConfig, isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
+import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 import {
   Select as RSelect, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -151,6 +152,281 @@ export function AmountInput({ label, required, value, onChange, onBlur, placehol
           {getCurrencySymbol(currency) || '€'}
         </span>
       </div>
+    </Field>
+  );
+}
+
+// ─── MaskedAmountInput internals (ETP-5107) ───────────────────────────────
+// A NEW sibling of AmountInput/MoneyInput above — those two are NOT modified
+// by this addition (zero diff on their function bodies). See
+// docs/plans/2026-09-08-etp5107-price-input-locale-fix.md §6.3/§6.3.1 for why
+// they stay untouched: 4 existing screens (PaymentForm, ReversedInvoicesPanel,
+// NewTransactionModal, NewMovementWizard) depend on their exact current
+// behavior, and this ticket has no reason to put those at risk.
+
+function countSignificantChars(str, thousandsSeparator) {
+  if (!thousandsSeparator) return str.length;
+  let count = 0;
+  for (const ch of str) if (ch !== thousandsSeparator) count += 1;
+  return count;
+}
+
+function positionAfterSignificant(str, sigCount, thousandsSeparator) {
+  if (!thousandsSeparator) return Math.min(sigCount, str.length);
+  let seen = 0;
+  for (let i = 0; i < str.length; i += 1) {
+    if (seen >= sigCount) return i;
+    if (str[i] !== thousandsSeparator) seen += 1;
+  }
+  return str.length;
+}
+
+/**
+ * Filters a raw (possibly already-grouped) DOM value down to the characters
+ * the user is allowed to have typed: digits, an optional leading '-', and at
+ * MOST one decimal separator — always recomputed from scratch (never
+ * incrementally patched), so there is no "keystroke silently rejected but
+ * typing continues from stale state" failure mode (the exact silent-comma-
+ * drop bug this fix closes — plan §5.1/§6.2). The thousands separator is
+ * dropped unconditionally; it is never real user input.
+ *
+ * When `strictDecimal` is true (grouping on — Holded's rule), ONLY the one
+ * configured `decimalSeparator` is accepted as the decimal char, since '.'
+ * would otherwise be ambiguous with a live thousands separator. When false
+ * (grouping off — quantity/integer/number/decimal/percent fields), BOTH ','
+ * and '.' are accepted as equivalent, matching what `parseLocaleNumber()`
+ * itself always accepts (plan §6.1) — this also fixes Bug 1 for these types.
+ */
+function filterMaskChars(raw, decimalSeparator, strictDecimal) {
+  let acceptedDecimalChars;
+  if (strictDecimal) {
+    acceptedDecimalChars = [decimalSeparator];
+  } else if (decimalSeparator === '.') {
+    acceptedDecimalChars = ['.'];
+  } else {
+    acceptedDecimalChars = [decimalSeparator, '.'];
+  }
+  let result = '';
+  let seenDecimal = false;
+  for (const ch of raw) {
+    if (ch === '-') {
+      if (result === '') result += ch;
+      continue;
+    }
+    if (ch >= '0' && ch <= '9') { result += ch; continue; }
+    if (!seenDecimal && acceptedDecimalChars.includes(ch)) {
+      // Always record the CONFIGURED decimal separator downstream, whichever
+      // accepted char was actually typed — formatGrouped()/toCleanValue()
+      // only need to recognize one shape.
+      result += decimalSeparator;
+      seenDecimal = true;
+    }
+    // A stray thousands separator, a letter, a second decimal separator, a
+    // misplaced '-' — dropped outright, never transiently inserted.
+  }
+  return result;
+}
+
+function groupIntegerDigits(digits, separator) {
+  if (!digits) return digits;
+  let result = '';
+  for (let i = 0; i < digits.length; i += 1) {
+    if (i > 0 && (digits.length - i) % 3 === 0) result += separator;
+    result += digits[i];
+  }
+  return result;
+}
+
+/** Rebuilds the grouped display string from a filtered (mask-clean) value. */
+function formatGrouped(filtered, thousandsSeparator, decimalSeparator) {
+  const negative = filtered.startsWith('-');
+  const body = negative ? filtered.slice(1) : filtered;
+  const sepIdx = body.indexOf(decimalSeparator);
+  const intPart = sepIdx === -1 ? body : body.slice(0, sepIdx);
+  const decPart = sepIdx === -1 ? null : body.slice(sepIdx + 1);
+  const groupedInt = groupIntegerDigits(intPart, thousandsSeparator);
+  const sign = negative ? '-' : '';
+  return decPart === null ? `${sign}${groupedInt}` : `${sign}${groupedInt}${decimalSeparator}${decPart}`;
+}
+
+/**
+ * Normalizes a filtered/masked value to the CLEAN, locale-independent shape
+ * every downstream consumer expects: digits, an optional leading '-', at
+ * most one '.'. This — NEVER the grouped display string — is what
+ * MaskedAmountInput reports outward via onChange/onCommit (plan §6.3.2):
+ * `useLineGrossAmount.js`'s arithmetic and the PATCH/POST body must never see
+ * "1.234" and misread it as 1.234.
+ */
+function toCleanValue(filtered, decimalSeparator) {
+  if (!filtered) return filtered;
+  return decimalSeparator === '.' ? filtered : filtered.split(decimalSeparator).join('.');
+}
+
+/**
+ * Idle (blurred) display for the current committed `value`. Currency/amount-
+ * shaped fields (`grouping` true) route through the CANONICAL `formatCurrency()`
+ * (ETP-5107 — this is the literal fix for Bug 3: Product's Price tab showing
+ * `€ 79.9` instead of `79,90 €`) — called with no currency code so it returns
+ * just the grouped, fixed-2-decimal NUMBER (no symbol; the symbol, when
+ * `currency` is set, renders separately as its own overlay span below, so it
+ * is never baked twice into the same string). Plain numeric fields
+ * (`grouping` false) show the clean value verbatim, unformatted — matches
+ * today's behavior for quantity/integer/number/decimal/percent fields (see
+ * DataTable.numericClamp.vitest.jsx, ETP-4277).
+ */
+function toIdleDisplay(value, grouping) {
+  if (value == null || value === '') return '';
+  if (!grouping) return String(value);
+  const formatted = formatCurrency(undefined, value);
+  return formatted === '—' ? '' : formatted;
+}
+
+/**
+ * Holded-style live-masked numeric input (ETP-5107). See
+ * docs/plans/2026-09-08-etp5107-price-input-locale-fix.md §6.2/§6.3 for the
+ * full research/design; condensed here:
+ *
+ * - The thousands separator (`getCurrencyFormatConfig().thousandsSeparator`)
+ *   is NEVER a valid keystroke — it's computed/inserted automatically as the
+ *   integer part grows past 3 digits, and correctly repositions itself as
+ *   the user edits (only when `grouping` is true; e.g. cursor at the very
+ *   start of "1.234,56", typing "9" produces "91.234,56").
+ * - The decimal separator (`getCurrencyFormatConfig().decimalSeparator`) is
+ *   the one special character the user can type, once.
+ * - Letters, a second decimal separator, or a direct attempt to type the
+ *   thousands separator are all rejected outright — never transiently
+ *   inserted then removed (closes the silent-comma-drop bug, plan §5.1).
+ * - A leading '-' is allowed at the very start, once (ETP-4567 — negative
+ *   listPrice/orderedQuantity is a real, actively-tested capability for
+ *   credit/return lines on Sales/Purchase Order; this component only allows
+ *   the CHARACTER — whether a given field's result is actually accepted is
+ *   still decided by the caller's own min/max clamp, unchanged).
+ *
+ * THE single most important correctness rule (plan §6.3.2/§9.3/§9.4): what
+ * this component DISPLAYS (grouped, for the user's eyes) and what it reports
+ * outward via onChange/onCommit are NEVER the same string — outward
+ * callbacks always receive the CLEAN value (digits, optional leading '-', at
+ * most one '.', normalized regardless of which separator was typed) plus the
+ * parsed `Number` (or `null`). Every caller that does arithmetic on this
+ * value must never see the grouped display string.
+ *
+ * @param {number|string|null} [value] - current committed value (clean, unmasked)
+ * @param {(clean: string, parsed: number|null) => void} [onChange] - fires on every accepted keystroke
+ * @param {(parsed: number|null, clean: string) => void} [onCommit] - fires on blur / Enter
+ * @param {() => void} [onBlur] - caller-supplied blur handler, always still fires (e.g. DataTable's own min/max clamp)
+ * @param {(e: KeyboardEvent) => void} [onKeyDown] - caller-supplied keydown handler, always still fires first
+ * @param {string} [currency] - ISO 4217 code; omitted/null => no symbol (the default for line-grid cells)
+ * @param {boolean} [bare=false] - skip the `Field`/label wrapper, for a dense table cell
+ * @param {boolean} [grouping=true] - live thousands-grouping + 2-decimal idle format (price/amount-shaped fields); false keeps a plain, ungrouped look (quantity/integer/number/decimal/percent — matches today's behavior)
+ * @param {import('react').RefObject} [inputRef] - optional external ref to the underlying input (e.g. for a caller-managed autoFocus)
+ */
+export function MaskedAmountInput({
+  label, required, value, onChange, onCommit, onBlur, onKeyDown, placeholder, disabled,
+  className = '', name, currency, bare = false, grouping = true, autoFocus, inputRef,
+  inputMode = 'decimal', 'data-testid': dataTestId,
+}) {
+  const internalRef = useRef(null);
+  const activeRef = inputRef || internalRef;
+  const [focused, setFocused] = useState(false);
+  const [display, setDisplay] = useState(() => toIdleDisplay(value, grouping));
+  const desiredCursorRef = useRef(null);
+
+  useEffect(() => {
+    if (!focused) setDisplay(toIdleDisplay(value, grouping));
+  }, [value, focused, grouping]);
+
+  useLayoutEffect(() => {
+    if (desiredCursorRef.current == null || !activeRef.current) return;
+    const pos = desiredCursorRef.current;
+    desiredCursorRef.current = null;
+    try { activeRef.current.setSelectionRange(pos, pos); } catch { /* not focused/selectable */ }
+  }, [display, activeRef]);
+
+  const rightSide = isCurrencySymbolRightSide(currency);
+  const symbol = currency ? (getCurrencySymbol(currency) || currency) : '';
+
+  const handleChange = (e) => {
+    const { thousandsSeparator, decimalSeparator } = getCurrencyFormatConfig();
+    const rawValue = e.target.value;
+    const cursorPos = e.target.selectionStart ?? rawValue.length;
+    const groupSeparator = grouping ? thousandsSeparator : null;
+
+    const sigBeforeCursor = countSignificantChars(rawValue.slice(0, cursorPos), groupSeparator);
+    const filtered = filterMaskChars(rawValue, decimalSeparator, grouping);
+    const newDisplay = grouping ? formatGrouped(filtered, thousandsSeparator, decimalSeparator) : filtered;
+
+    desiredCursorRef.current = positionAfterSignificant(newDisplay, sigBeforeCursor, groupSeparator);
+    setDisplay(newDisplay);
+
+    const clean = toCleanValue(filtered, decimalSeparator);
+    onChange?.(clean, parseLocaleNumber(clean).value);
+  };
+
+  const handleBlur = () => {
+    setFocused(false);
+    const { decimalSeparator } = getCurrencyFormatConfig();
+    // `display` may still hold a grouped string (when grouping is on) — re-run
+    // the strict filter to strip it back down to the clean shape before commit.
+    const filtered = grouping ? filterMaskChars(display, decimalSeparator, true) : display;
+    const clean = toCleanValue(filtered, decimalSeparator);
+    const parsed = parseLocaleNumber(clean).value;
+    onCommit?.(parsed, clean);
+    onBlur?.();
+  };
+
+  let paddingClass = '';
+  if (symbol) {
+    paddingClass = rightSide ? 'pr-8' : 'pl-8';
+  }
+  // `bare` (the 3 real call sites): `className` is the caller's own full cell
+  // styling, applied directly to the input — mirrors DataTable's/InlineLinesPanel's
+  // pre-existing raw-<input>/<Input> contract. Non-bare (unused today, kept for
+  // API parity with AmountInput): `className` goes on the Field wrapper instead,
+  // the input gets a fixed internal class string — matches AmountInput exactly.
+  const inputClassName = bare
+    ? `text-right tabular-nums ${paddingClass} ${className}`.trim()
+    : `${paddingClass} text-right tabular-nums bg-card`.trim();
+
+  const inputEl = (
+    <Input
+      ref={activeRef}
+      type="text"
+      inputMode={inputMode}
+      value={display}
+      onChange={handleChange}
+      onFocus={() => setFocused(true)}
+      onBlur={handleBlur}
+      onKeyDown={(e) => {
+        onKeyDown?.(e);
+        if (!e.defaultPrevented && e.key === 'Enter') { e.currentTarget.blur(); }
+      }}
+      placeholder={placeholder}
+      disabled={disabled}
+      required={required}
+      autoFocus={autoFocus}
+      className={inputClassName}
+      data-testid={dataTestId || (name ? `field-number-${name}` : 'field-number')} />
+  );
+
+  const withSymbol = symbol ? (
+    <div className="relative">
+      {inputEl}
+      <span
+        className={`pointer-events-none absolute ${rightSide ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-[13px] font-medium text-muted-foreground`}>
+        {symbol}
+      </span>
+    </div>
+  ) : inputEl;
+
+  if (bare) return withSymbol;
+
+  return (
+    <Field
+      label={label}
+      required={required}
+      className={className}
+      data-testid="Field__masked-amount">
+      {withSymbol}
     </Field>
   );
 }

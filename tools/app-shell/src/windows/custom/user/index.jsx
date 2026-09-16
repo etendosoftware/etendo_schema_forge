@@ -12,6 +12,7 @@ import { resendInvitation } from '@/lib/resendInvitationApi.js';
 import { promoteUserToAdmin, demoteUserFromAdmin } from '@/lib/promoteUserRoleApi.js';
 import { fetchRolesOverview } from '@/lib/rolesApi.js';
 import { useViewerRole } from '@/hooks/useViewerRole.js';
+import { useAuth, decodeJwtUser } from '@/auth/AuthContext.jsx';
 import { resolveDefaultRoleId } from './RoleChipsCell.jsx';
 import { RECORD_SAVE_TOAST_ID } from '@/hooks/useEntity';
 import { runInlineToggleRequest } from '@/components/contract-ui/DataTable.jsx';
@@ -141,7 +142,10 @@ function useResendInvitationExtraActions() {
         toast.success(ui('resendInvitationSuccessToast'));
         onRefresh?.();
       } catch (err) {
-        toast.error(err?.message || ui('resendInvitationErrorFallback'));
+        // ETP-5206 — never surface raw/English backend text to the user; always the
+        // cataloged Spanish/English fallback (see `promoteToAdminErrorFallback` below for
+        // the same fix).
+        toast.error(ui('resendInvitationErrorFallback'));
       } finally {
         setSending(false);
       }
@@ -223,16 +227,38 @@ function useAdminRoleId() {
  * `callerIsOwnerOrAdmin` check); this is UX-only, closing the previously
  * documented gap where any viewer who could open a User's detail page saw a
  * button that would always fail for them.
+ *
+ * **Immediate self-refresh (ETP-5195 Bugs 1&2).** A client-admin can promote their OWN
+ * user record (self-demote is blocked entirely — see the ETP-5206 note on `handleDemote`
+ * below; the backend rejects it unconditionally, "an admin stepping down" happens by
+ * having another admin demote them instead).
+ * Every NEO request authenticates off the `role` claim embedded in the bearer token at
+ * login time, which never re-derives from the DB on its own — so without this, the
+ * caller's OWN session would keep acting under their pre-change role until a full
+ * logout/login or the next silent-refresh trigger (mount/tab-focus, see
+ * `AuthContext.jsx`'s `silentlyRefreshToken`). `currentViewerUserId` (decoded from the
+ * SAME bearer token via `decodeJwtUser` — the `user` claim
+ * `SecureWebServicesUtils#getJwtBuilder` embeds) detects that self-service case by
+ * comparing it against the target record's own `id`; when they match, `refreshToken()`
+ * (the imperative export `AuthContext.jsx` added alongside `silentlyRefreshToken`) is
+ * called right after the promote/demote succeeds, IN ADDITION to `onRefresh?.()` (the
+ * window's own data refetch) — no page reload needed. When it's some OTHER user being
+ * promoted/demoted, this is a no-op here: that user's own mount/tab-focus effect, in
+ * their own browser tab, picks up the fresh role next time they interact (Task 3).
  */
-function useAdminPromotionExtraActions(adminRoleId, viewerRole) {
+function useAdminPromotionExtraActions(adminRoleId, viewerRole, refreshRoleAssignments) {
   const ui = useUI();
   const [working, setWorking] = useState(false);
+  const { token, refreshToken } = useAuth();
+  const currentViewerUserId = decodeJwtUser(token);
 
   return useCallback(({ data, onRefresh }) => {
     const id = data?.id;
     if (!id || id === 'new' || data?.isOwner) return [];
     if (!adminRoleId) return [];
     if (viewerRole?.isClientAdmin !== true) return [];
+
+    const isSelf = !!currentViewerUserId && String(currentViewerUserId) === String(id);
 
     const currentDefaultRoleId = resolveDefaultRoleId(data);
     const isAdmin = !!(adminRoleId && currentDefaultRoleId && currentDefaultRoleId === adminRoleId);
@@ -243,8 +269,23 @@ function useAdminPromotionExtraActions(adminRoleId, viewerRole) {
         await promoteUserToAdmin(id);
         toast.success(ui('promoteToAdminSuccessToast'));
         onRefresh?.();
+        // ETP-5278 — resync the composed-roles selection BEFORE swapping the token: neither
+        // promote nor demote used to touch selectedRoleIds/appliedRoleIdsRef at all, so the
+        // chip list could go stale (or flash empty on a later remount) until a full page
+        // reload. Ordered before refreshToken() (self-case) on purpose: SFUserRoleAssignments
+        // is admin/client-admin gated server-side, and refreshToken() mints a token that may
+        // no longer carry that claim once the role changes. Every NEO request authenticates
+        // off the role claim baked into the bearer token at login — it never re-derives from
+        // the DB on its own (see this file's own doc comment above, ETP-5195) — so reading
+        // with the still-current (not yet swapped) token first avoids a spurious "deny
+        // silently" empty response on the very read meant to fix this ticket's bug. (Demote
+        // has no such self-case to worry about — ETP-5206 blocks self-demote entirely, see
+        // `handleDemote` below.)
+        await refreshRoleAssignments?.(id);
+        if (isSelf) refreshToken?.();
       } catch (err) {
-        toast.error(err?.message || ui('promoteToAdminErrorFallback'));
+        // ETP-5206 — never surface raw/English backend text to the user.
+        toast.error(ui('promoteToAdminErrorFallback'));
       } finally {
         setWorking(false);
       }
@@ -256,14 +297,25 @@ function useAdminPromotionExtraActions(adminRoleId, viewerRole) {
         await demoteUserFromAdmin(id);
         toast.success(ui('demoteFromAdminSuccessToast'));
         onRefresh?.();
+        // ETP-5278 — resync the composed-roles selection so the chip list doesn't go stale
+        // (or flash empty on a later remount) after a demote. No `refreshToken()` call is
+        // needed here: ETP-5206's `if (isSelf) return [];` above already keeps this action
+        // from ever being offered for the viewer's own record, so `handleDemote` can only
+        // run for a DIFFERENT user — never the self-case the token-ordering concern was for.
+        await refreshRoleAssignments?.(id);
       } catch (err) {
-        toast.error(err?.message || ui('demoteFromAdminErrorFallback'));
+        // ETP-5206 — never surface raw/English backend text to the user.
+        toast.error(ui('demoteFromAdminErrorFallback'));
       } finally {
         setWorking(false);
       }
     };
 
     if (isAdmin) {
+      // ETP-5206 — nobody may remove their OWN Admin role (the backend rejects it
+      // unconditionally in `demoteFromAdmin`); hide the action for the viewer's own record,
+      // same pattern as the `data?.isOwner` early return above.
+      if (isSelf) return [];
       return [{
         key: 'demote-from-admin',
         disabled: working,
@@ -277,7 +329,7 @@ function useAdminPromotionExtraActions(adminRoleId, viewerRole) {
       onClick: handlePromote,
       label: <span data-testid="PromoteToAdminButton">{ui('promoteToAdminAction')}</span>,
     }];
-  }, [adminRoleId, viewerRole, working, ui]);
+  }, [adminRoleId, viewerRole, working, ui, currentViewerUserId, refreshToken, refreshRoleAssignments]);
 }
 
 /**
@@ -365,7 +417,30 @@ export default function UserWindow(props) {
   const resendInvitationExtraActions = useResendInvitationExtraActions();
   const adminRoleId = useAdminRoleId();
   const viewerRole = useViewerRole();
-  const adminPromotionExtraActions = useAdminPromotionExtraActions(adminRoleId, viewerRole);
+  const [selectedRoleIds, setSelectedRoleIds] = useState([]);
+  const appliedRoleIdsRef = useRef([]);
+  const hasUnsavedRoleChange = !sameIdSet(selectedRoleIds, appliedRoleIdsRef.current);
+
+  // ETP-5278 — the resync path used by useAdminPromotionExtraActions (below) after a
+  // successful promote/demote. Declared ahead of that hook call since it's needed as an
+  // argument. Deliberately does NOT reset to [] on a rejected fetch, unlike the mount-time
+  // effect further down: a transient failure here must not clobber a selection that was
+  // correct a moment ago with an empty one — that would just reproduce this same bug,
+  // self-inflicted, on every flaky network blip.
+  const refreshRoleAssignments = useCallback((id) => {
+    if (!id) return Promise.resolve();
+    return fetchUserRoleAssignments(id)
+      .then((res) => {
+        const ids = res?.templateRoleIds ?? [];
+        appliedRoleIdsRef.current = ids;
+        setSelectedRoleIds(ids);
+      })
+      .catch((err) => {
+        console.error('Failed to resync role assignments after promote/demote:', err);
+      });
+  }, []);
+
+  const adminPromotionExtraActions = useAdminPromotionExtraActions(adminRoleId, viewerRole, refreshRoleAssignments);
   // ETP-5019 — `extraActions` accepts either a plain array or a function taking
   // `{ data, children, onRefresh }` (see `detailViewHelpers.jsx`'s
   // `renderExtraActionButtons`); merges both action-producing hooks' results into
@@ -375,9 +450,6 @@ export default function UserWindow(props) {
     (args) => [...resendInvitationExtraActions(args), ...adminPromotionExtraActions(args)],
     [resendInvitationExtraActions, adminPromotionExtraActions],
   );
-  const [selectedRoleIds, setSelectedRoleIds] = useState([]);
-  const appliedRoleIdsRef = useRef([]);
-  const hasUnsavedRoleChange = !sameIdSet(selectedRoleIds, appliedRoleIdsRef.current);
 
   useEffect(() => {
     // A genuinely new/blank record must always start with zero roles selected. Without
@@ -431,7 +503,8 @@ export default function UserWindow(props) {
       // user record itself DID save and only the role assignment failed, and the toast is
       // given a longer duration so it doesn't get lost/dismissed behind the success toast
       // that already fired first.
-      const detail = err?.message || ui('roleAssignmentSaveFailed');
+      // ETP-5206 — never surface raw/English backend text to the user.
+      const detail = ui('roleAssignmentSaveFailed');
       toast.error(ui('roleAssignmentSaveFailedAfterUserSaved', { detail }), { duration: 8000 });
     }
   }, [selectedRoleIds, ui]);
@@ -505,30 +578,58 @@ export default function UserWindow(props) {
    */
   const handleAfterCreate = useCallback((saved) => {
     if (!saved?.id) return;
+    // ETP-5193 (Fix 4) — the "Configurar roles" action must not be offered when the
+    // saved user already has roles assigned. Role composition (`SFAssignUserRoles`)
+    // only ever fires from `onAfterExistingSave` (see B above) — the create path here
+    // never assigns template roles, and `selectedRoleIds` is explicitly reset to `[]`
+    // whenever this window is on the `'new'` route (see the effect above) — so under
+    // the CURRENT architecture this guard's own `hasRolesAlready` branch is always
+    // false at create time (confirmed, not just theorized — this remains a defensive
+    // guard against that invariant changing later, e.g. a future "duplicate user" flow
+    // that could pre-populate roles on creation, rather than a fix for a
+    // presently-reachable state HERE).
+    //
+    // That reachability finding does NOT mean this toast's action can never leak,
+    // though — manual testing surfaced a DIFFERENT, real bug with the same visible
+    // symptom (the button showing when it shouldn't): sonner shallow-merges this
+    // toast's options when updating an existing `RECORD_SAVE_TOAST_ID`, so the
+    // `action` set below used to survive, unmodified, onto the NEXT plain "saved"
+    // toast fired by ANY later Guardar on this same record (e.g. the very next save
+    // after assigning a role via `onAfterExistingSave`) — the id-based update this
+    // toast relies on (see the doc comment above `RECORD_SAVE_TOAST_ID`,
+    // `useEntity.js`) only replaces keys the later call explicitly passes. Fixed at
+    // the source: `showSaveSuccessToast` (`useEntity.js`) now explicitly passes
+    // `action: undefined` on every generic save, so no window's one-off action can
+    // ever leak past the toast that was meant to carry it. See that function's own
+    // comment for the full sonner mechanism, and `docs/generated-custom-windows/
+    // user.md`'s "Roles selector visual fixes (ETP-5193)" for the user-facing writeup.
+    const hasRolesAlready = selectedRoleIds.length > 0;
     toast.success(ui('userCreatedInvitationSentToast'), {
       id: RECORD_SAVE_TOAST_ID,
-      action: {
-        label: ui('configureRolesAction'),
-        onClick: () => {
-          navigate(`/${windowName}/${saved.id}`, {
-            replace: true,
-            state: { openSecondaryTab: 'custom:roles' },
-          });
-          // Deferred: `openSecondaryTab` is picked up by a `DetailView.jsx` effect on
-          // the next render tick, and `AssignTemplateRolesControl` (formFooter) may
-          // not have painted its expanded toggle yet on the very first render after
-          // create. Best-effort — if neither test-id is present (e.g. slow data load)
-          // this silently no-ops rather than throwing.
-          setTimeout(() => {
-            const target = document.querySelector('[data-testid="AssignTemplateRolesControl__toggle-expand"]')
-              ?? document.querySelector('[data-testid="AssignTemplateRolesControl__save-first"]');
-            target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-            target?.focus?.();
-          }, 50);
+      ...(hasRolesAlready ? {} : {
+        action: {
+          label: ui('configureRolesAction'),
+          onClick: () => {
+            navigate(`/${windowName}/${saved.id}`, {
+              replace: true,
+              state: { openSecondaryTab: 'custom:roles' },
+            });
+            // Deferred: `openSecondaryTab` is picked up by a `DetailView.jsx` effect on
+            // the next render tick, and `AssignTemplateRolesControl` (formFooter) may
+            // not have painted its expanded toggle yet on the very first render after
+            // create. Best-effort — if neither test-id is present (e.g. slow data load)
+            // this silently no-ops rather than throwing.
+            setTimeout(() => {
+              const target = document.querySelector('[data-testid="AssignTemplateRolesControl__toggle-expand"]')
+                ?? document.querySelector('[data-testid="AssignTemplateRolesControl__save-first"]');
+              target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+              target?.focus?.();
+            }, 50);
+          },
         },
-      },
+      }),
     });
-  }, [navigate, ui, windowName]);
+  }, [navigate, ui, windowName, selectedRoleIds]);
 
   return (
     <RoleSelectionProvider

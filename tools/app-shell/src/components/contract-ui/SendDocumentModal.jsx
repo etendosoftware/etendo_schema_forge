@@ -12,6 +12,16 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 // the window's `decisions.json → window.sendDocument` override says otherwise.
 const DEFAULT_SEND_POLICY = { editableRecipients: true, cc: true, maxRecipients: 10 };
 
+// ETP-5293 — reasonCode → i18n key map for a VALIDATION_FAILED rejection of the
+// modal's own messageEdits form. Only the reachable-from-this-UI codes get
+// dedicated copy; MESSAGE_EDITS_INVALID_TYPE / MESSAGE_EDITS_UNKNOWN_FIELD only
+// happen on a malformed raw API call and fall back to sendModalValidationFailed.
+const VALIDATION_REASON_KEYS = {
+  MESSAGE_EDITS_MISSING_SUBJECT_OR_MESSAGE: 'sendModalErrorMissingSubjectOrMessage',
+  MESSAGE_EDITS_SUBJECT_TOO_LONG: 'sendModalErrorSubjectTooLong',
+  MESSAGE_EDITS_MESSAGE_TOO_LONG: 'sendModalErrorMessageTooLong',
+};
+
 function resolveEmailSendErrorMessage(ui, data, documentType) {
   if (data?.status === 'THROTTLED') {
     return ui('sendModalThrottled', { seconds: data.retryAfterSeconds ?? '' });
@@ -23,7 +33,16 @@ function resolveEmailSendErrorMessage(ui, data, documentType) {
     return ui('sendModalUnauthorized');
   }
   if (data?.status === 'VALIDATION_FAILED') {
-    return data.message || ui('sendModalValidationFailed');
+    // ETP-5293 — the raw backend `message` is English-only and must never reach
+    // the user; map the structured reasonCode to translated copy instead.
+    const key = data?.reasonCode && VALIDATION_REASON_KEYS[data.reasonCode];
+    if (key) {
+      return ui(key, {
+        maxSubjectLength: data.maxSubjectLength,
+        maxMessageLength: data.maxMessageLength,
+      });
+    }
+    return ui('sendModalValidationFailed');
   }
   if (data?.status === 'NO_RECIPIENT') {
     return ui('sendModalNoRecipient', { documentType });

@@ -14,6 +14,8 @@ vi.mock('@/i18n', () => ({
       searchLabelPrefix: 'Search',
       product: 'Product',
       productSearchNoResults: params?.query ? `No results for "${params.query}"` : 'No results',
+      noProductsFound: 'No products found',
+      createProduct: 'Create product',
       productSearchCount: params?.count != null ? `${params.count} products` : 'products',
       productSearchNavigate: 'navigate',
       productSearchSelect: 'select',
@@ -29,7 +31,28 @@ vi.mock('@/lib/buildUrlWithParams.js', () => ({
   buildUrlWithParams: (url) => url,
 }));
 
-import ProductDrawerShell from '../ProductDrawerShell.jsx';
+// ETP-5254 — RecordCreateModal has its own suite (RecordCreateModal.vitest.jsx). Here it is
+// stubbed down to the contract the shell depends on: it renders only while the shell asks it
+// to, echoes the query it was handed, and exposes the two exits (`onCancel`, `onCreated`).
+const createModal = vi.hoisted(() => ({ props: null, created: { id: 'new-1' } }));
+vi.mock('../RecordCreateModal.jsx', () => ({
+  default: (props) => {
+    createModal.props = props;
+    return (
+      <div data-testid="record-create-modal">
+        <span data-testid="record-create-initial-query">{props.initialQuery}</span>
+        <button type="button" data-testid="stub-create-cancel" onClick={() => props.onCancel()}>
+          cancel
+        </button>
+        <button type="button" data-testid="stub-create-save" onClick={() => props.onCreated(createModal.created)}>
+          save
+        </button>
+      </div>
+    );
+  },
+}));
+
+import ProductDrawerShell, { synthesizeCreatedItem } from '../ProductDrawerShell.jsx';
 
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
@@ -247,5 +270,272 @@ describe('ProductDrawerShell', () => {
     await user.click(screen.getByText('Widget A'));
     await waitFor(() => expect(onSelect).toHaveBeenCalledWith({ id: '1', label: 'Widget A' }));
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// ETP-5254 — empty-state regression
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('ProductDrawerShell — empty state', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupFetchMock([]);
+  });
+
+  it('shows the generic empty message when an EMPTY query returns nothing', async () => {
+    // Regression: the no-results block used to be gated on `query.trim()`, so an empty
+    // search that legitimately returned nothing rendered a completely blank body.
+    render(<ProductDrawerShell {...BASE_PROPS} useVariant={makeVariant()} />);
+    await waitFor(() => expect(screen.getByText('No products found')).toBeInTheDocument());
+    expect(screen.queryByText(/No results for/)).not.toBeInTheDocument();
+  });
+
+  it('still shows the query-specific message when a NON-empty query returns nothing', async () => {
+    render(<ProductDrawerShell {...BASE_PROPS} useVariant={makeVariant()} />);
+    await userEvent.type(screen.getByTestId('product-search-input'), 'zzz');
+    await waitFor(() => expect(screen.getByText(/No results for "zzz"/)).toBeInTheDocument());
+    expect(screen.queryByText('No products found')).not.toBeInTheDocument();
+  });
+
+  it('does not show an empty message once there are results', async () => {
+    setupFetchMock([{ id: '1', label: 'Widget A' }]);
+    render(<ProductDrawerShell {...BASE_PROPS} useVariant={makeVariant()} />);
+    await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
+    expect(screen.queryByText('No products found')).not.toBeInTheDocument();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// ETP-5254 — inline record creation
+// ────────────────────────────────────────────────────────────────────────────
+
+const ALLOWLISTED_URL = BASE_PROPS.selectorUrl; // .../sales-order/.../selectors/product
+const DENIED_URL = 'http://localhost:8080/etendo/neo/requisition/lines/selectors/product';
+
+describe('ProductDrawerShell — create affordance', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupFetchMock([]);
+    createModal.props = null;
+    createModal.created = { id: 'new-1' };
+  });
+
+  it('does not render the create row when createEnabled is not passed', async () => {
+    render(<ProductDrawerShell {...BASE_PROPS} useVariant={makeVariant()} />);
+    await waitFor(() => expect(screen.getByTestId('product-search-drawer')).toBeInTheDocument());
+    expect(screen.queryByTestId('product-search-create')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('record-create-modal')).not.toBeInTheDocument();
+  });
+
+  it('renders the create row for an allowlisted spec when createEnabled is true', async () => {
+    render(<ProductDrawerShell {...BASE_PROPS} createEnabled useVariant={makeVariant()} />);
+    const cta = await screen.findByTestId('product-search-create');
+    expect(cta).toHaveTextContent('Create product');
+    // Pinned at the top of the results scroll container, above the empty state.
+    expect(screen.getByTestId('product-search-create')).toBeInTheDocument();
+  });
+
+  it('does not render the create row for a non-allowlisted spec', async () => {
+    render(
+      <ProductDrawerShell
+        {...BASE_PROPS}
+        selectorUrl={DENIED_URL}
+        createEnabled
+        useVariant={makeVariant()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('product-search-drawer')).toBeInTheDocument());
+    expect(screen.queryByTestId('product-search-create')).not.toBeInTheDocument();
+  });
+
+  it('shows the create row alongside results, not only on an empty list', async () => {
+    setupFetchMock([{ id: '1', label: 'Widget A' }]);
+    render(<ProductDrawerShell {...BASE_PROPS} createEnabled useVariant={makeVariant()} />);
+    await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
+    expect(screen.getByTestId('product-search-create')).toBeInTheDocument();
+  });
+
+  it('opening the create modal hides the drawer and forwards the typed query', async () => {
+    const user = userEvent.setup();
+    render(<ProductDrawerShell {...BASE_PROPS} createEnabled useVariant={makeVariant()} />);
+    await user.type(screen.getByTestId('product-search-input'), 'Agua');
+    await user.click(await screen.findByTestId('product-search-create'));
+
+    expect(screen.getByTestId('record-create-modal')).toBeInTheDocument();
+    expect(screen.queryByTestId('product-search-drawer')).not.toBeInTheDocument();
+    expect(screen.getByTestId('record-create-initial-query')).toHaveTextContent('Agua');
+    expect(createModal.props.target.entity).toBe('product');
+    expect(createModal.props.token).toBe('test-token');
+  });
+
+  it('cancelling restores the drawer with the previously typed query intact', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(
+      <ProductDrawerShell {...BASE_PROPS} onClose={onClose} createEnabled useVariant={makeVariant()} />,
+    );
+    await user.type(screen.getByTestId('product-search-input'), 'Agua');
+    await user.click(await screen.findByTestId('product-search-create'));
+    await user.click(screen.getByTestId('stub-create-cancel'));
+
+    // The shell stays MOUNTED while hidden, so the search survives the round trip.
+    expect(await screen.findByTestId('product-search-drawer')).toBeInTheDocument();
+    expect(screen.getByTestId('product-search-input')).toHaveValue('Agua');
+    expect(screen.queryByTestId('record-create-modal')).not.toBeInTheDocument();
+    // Cancelling must not tear the drawer down either.
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('swallows the document-level Escape while the create modal is open', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(
+      <ProductDrawerShell {...BASE_PROPS} onClose={onClose} createEnabled useVariant={makeVariant()} />,
+    );
+
+    // Control: with the modal closed, the hook's document-level handler closes the drawer.
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    onClose.mockClear();
+
+    await user.click(await screen.findByTestId('product-search-create'));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    // The hook binds Escape on `document`, so a portalled sibling cannot stopPropagation it —
+    // the shell swaps in a no-op instead, keeping the user's search alive.
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByTestId('record-create-modal')).toBeInTheDocument();
+  });
+});
+
+describe('ProductDrawerShell — handleCreated', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupFetchMock([]);
+    createModal.props = null;
+    createModal.created = { id: 'new-1', name: 'Agua', searchKey: 'AGUA', uOM: 'uom-1' };
+  });
+
+  async function openCreateModal(user, props = {}) {
+    render(
+      <ProductDrawerShell {...BASE_PROPS} createEnabled useVariant={makeVariant()} {...props} />,
+    );
+    await user.click(await screen.findByTestId('product-search-create'));
+  }
+
+  it('re-queries the selector and selects the real row it returns', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    await openCreateModal(user, { onSelect });
+
+    // The re-query hits the very selector this drawer is bound to, so swap the payload now.
+    const selectorRow = {
+      id: 'new-1',
+      label: 'Agua',
+      searchKey: 'AGUA',
+      _aux: { _UOM: 'EA', _PSTD: '12.50', _PLIM: '15.00' },
+    };
+    setupFetchMock([selectorRow]);
+
+    await user.click(screen.getByTestId('stub-create-save'));
+
+    // The selector shape is what the line's pricing callout needs — forwarded byte for byte.
+    await waitFor(() => expect(onSelect).toHaveBeenCalledWith(selectorRow));
+    expect(screen.queryByTestId('record-create-modal')).not.toBeInTheDocument();
+  });
+
+  it('ignores a re-query row belonging to a different product', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    await openCreateModal(user, { onSelect });
+
+    setupFetchMock([{ id: 'someone-else', label: 'Other', _aux: { _PSTD: '99' } }]);
+    await user.click(screen.getByTestId('stub-create-save'));
+
+    await waitFor(() => expect(onSelect).toHaveBeenCalled());
+    expect(onSelect.mock.calls[0][0].id).toBe('new-1');
+    expect(onSelect.mock.calls[0][0]._aux._PSTD).toBe('0');
+  });
+
+  it('synthesizes a selector-shaped row when the re-query returns nothing', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    await openCreateModal(user, { onSelect });
+
+    setupFetchMock([]);
+    await user.click(screen.getByTestId('stub-create-save'));
+
+    // A product seeded only on the tenant's default tariffs may not come back from a
+    // selector called with THIS document's price list — the line must stay usable.
+    await waitFor(() => expect(onSelect).toHaveBeenCalled());
+    expect(onSelect.mock.calls[0][0]).toMatchObject({
+      id: 'new-1',
+      name: 'Agua',
+      standardPrice: 0,
+      _aux: { _PSTD: '0', _PLIM: '0' },
+    });
+  });
+
+  it('synthesizes a row when the re-query itself fails', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    await openCreateModal(user, { onSelect });
+
+    mockFetch.mockImplementation(() => Promise.reject(new Error('network down')));
+    await user.click(screen.getByTestId('stub-create-save'));
+
+    await waitFor(() => expect(onSelect).toHaveBeenCalled());
+    expect(onSelect.mock.calls[0][0]._aux._PSTD).toBe('0');
+  });
+
+  it('closes the drawer after the created product is selected', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    await openCreateModal(user, { onClose });
+
+    setupFetchMock([]);
+    await user.click(screen.getByTestId('stub-create-save'));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+});
+
+describe('synthesizeCreatedItem', () => {
+  it('builds a selector-shaped row with zeroed prices', () => {
+    expect(synthesizeCreatedItem({ id: 'p1', name: 'Agua', searchKey: 'AGUA', uOM: 'uom-1' })).toEqual({
+      id: 'p1',
+      name: 'Agua',
+      label: 'Agua',
+      _identifier: 'Agua',
+      searchKey: 'AGUA',
+      uOM: 'uom-1',
+      standardPrice: 0,
+      _aux: { _UOM: 'uom-1', _PSTD: '0', _PLIM: '0' },
+    });
+  });
+
+  it('prefers the uOM identifier over the raw FK id for _aux._UOM', () => {
+    const item = synthesizeCreatedItem({ id: 'p1', name: 'Agua', uOM: 'uom-1', 'uOM$_identifier': 'EA' });
+    // `_aux._UOM` is an identifier in every selector fixture we have ('EA', 'kg')…
+    expect(item._aux._UOM).toBe('EA');
+    // …while the id is kept top-level so the callout resolves either way.
+    expect(item.uOM).toBe('uom-1');
+  });
+
+  it('falls back through name, _identifier and searchKey for the display label', () => {
+    expect(synthesizeCreatedItem({ id: 'p1', _identifier: 'From identifier' }).label)
+      .toBe('From identifier');
+    expect(synthesizeCreatedItem({ id: 'p1', searchKey: 'SK-1' }).label).toBe('SK-1');
+    expect(synthesizeCreatedItem({ id: 'p1' }).label).toBe('');
+  });
+
+  it('tolerates a null record without throwing', () => {
+    expect(synthesizeCreatedItem(null)).toMatchObject({
+      id: undefined,
+      name: '',
+      standardPrice: 0,
+      _aux: { _UOM: null, _PSTD: '0', _PLIM: '0' },
+    });
   });
 });

@@ -33,20 +33,41 @@
     "labelOverrides": {
       "en_US": {
         "M_Product_Category_ID": "Category",
-        "ProductType": "Type"
+        "ProductType": "Type",
+        "DateFrom": "Start Date",
+        "DateTo": "Expiry Date"
       },
       "es_ES": {
         "M_Product_Category_ID": "Categoría",
         "ProductType": "Tipo",
-        "Value": "Código"
+        "Value": "Código",
+        "DateFrom": "Fecha de inicio",
+        "DateTo": "Fecha de expiración"
+      },
+      "es_AR": {
+        "DateFrom": "Fecha de inicio",
+        "DateTo": "Fecha de expiración"
       }
     },
-    "headerExtra": {},
+    "headerExtra": { "customForm": "ProductStockDefaultsWatcher" },
+    "customComponents": {
+      "subHeader": "ProductCostBanner"
+    },
     "primaryTabs": [
       { "key": "general", "label": "General" },
       { "key": "additionalInfo", "label": "Additional Info", "panel": "ProductAdditionalInfoPanel" }
     ],
     "secondaryTabs": {
+      "costing": {
+        "tabOrder": 500,
+        "label": "Costing",
+        "requireSavedRecord": true,
+        "addLineFields": [
+          "cost",
+          "startingDate",
+          "endingDate"
+        ]
+      },
       "accounting": {
         "tabOrder": 500,
         "label": "Accounting",
@@ -517,41 +538,48 @@
       "exclude": true
     },
     "costing": {
-      "readOnly": true,
+      "javaQualifier": "productCostingHandler",
       "fields": {
         "costType": {
-          "visibility": "readOnly",
-          "grid": true
+          "visibility": "system"
         },
         "cost": {
-          "visibility": "readOnly",
-          "grid": true
+          "visibility": "editable",
+          "grid": true,
+          "required": true,
+          "columnType": "amount",
+          "summable": false,
+          "currencyField": "cCurrencyID",
+          "readOnlyLogic": null,
+          "readOnlyLogicJs": "record.manual === false || record.manual === 'N'"
         },
         "startingDate": {
-          "visibility": "readOnly",
-          "grid": true
+          "visibility": "editable",
+          "grid": true,
+          "required": true,
+          "readOnlyLogic": null,
+          "readOnlyLogicJs": "record.manual === false || record.manual === 'N'"
         },
         "endingDate": {
-          "visibility": "readOnly",
-          "grid": true
+          "visibility": "editable",
+          "grid": true,
+          "required": false,
+          "derivation": "fromConfig",
+          "reason": "ETP-5245 - DateTo is NOT NULL in the dictionary but optional for the user: an empty expiry means 'in force indefinitely'. ProductCostingHandler.injectDefaultEndingDate() fills the blank server-side with CostingUtils.getLastDate() (31-12-9999) before the row reaches the CRUD layer, so the column is never written NULL. Declared as a fromConfig server default so the NOT NULL invariant is satisfied by the handler instead of by forcing the field required in the UI.",
+          "readOnlyLogic": null,
+          "readOnlyLogicJs": "record.manual === false || record.manual === 'N'"
         },
         "quantity": {
-          "visibility": "readOnly",
-          "grid": true
+          "visibility": "discarded"
         },
         "warehouse": {
-          "visibility": "readOnly",
-          "grid": true,
-          "reference": "Warehouse",
-          "inputMode": "selector"
+          "visibility": "discarded"
         },
         "cCurrencyID": {
-          "visibility": "readOnly",
-          "reference": "Currency",
-          "inputMode": "selector"
+          "visibility": "system"
         },
         "originalCost": {
-          "visibility": "readOnly"
+          "visibility": "discarded"
         },
         "inventoryTransaction": {
           "visibility": "discarded"
@@ -563,16 +591,16 @@
           "visibility": "discarded"
         },
         "manual": {
-          "visibility": "discarded"
+          "visibility": "system"
         },
         "permanent": {
-          "visibility": "discarded"
+          "visibility": "system"
         },
         "totalStockValuation": {
           "visibility": "discarded"
         },
         "production": {
-          "visibility": "discarded"
+          "visibility": "system"
         },
         "active": {
           "visibility": "discarded"

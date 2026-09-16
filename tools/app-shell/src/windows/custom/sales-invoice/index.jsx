@@ -5,7 +5,7 @@ import { todayCalendarISO } from '@/lib/dateOnly.js';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { useUI, useMenuLabel } from '@/i18n';
 import { useAuth, useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
-import BulkDocumentAction from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
@@ -13,6 +13,7 @@ import HeaderPage from '@generated/sales-invoice/generated/web/sales-invoice/Hea
 import InvoiceHeaderTable from '@generated/sales-invoice/custom/InvoiceHeaderTable.jsx';
 import InvoicePreview from '../shared/InvoicePreview.jsx';
 import SalesInvoiceTopbar from './SalesInvoiceTopbar.jsx';
+import SalesInvoiceSecondaryActions from './SalesInvoiceSecondaryActions.jsx';
 import InvoiceBottomPanel from '@generated/sales-invoice/custom/InvoiceBottomPanel.jsx';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal';
@@ -101,6 +102,14 @@ function SalesInvoiceBulkAction(props) {
         {...props}
         labelKey="confirmBulk"
         data-testid="BulkDocumentAction__c01c21" />
+      {/* ETP-5209 — bulk Contabilizar (post), gated to processed & not-yet-posted rows */}
+      <BulkDocumentAction
+        {...props}
+        actionMode="neoAction"
+        buildActions={buildPostActions}
+        rowFilter={postRowFilter}
+        labelKey="post"
+        data-testid="BulkDocumentActionPost__c01c21" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
@@ -159,8 +168,11 @@ export default function SalesInvoiceWindow(props) {
   });
 
   const rowQuickActions = useMemo(
-    () => buildInvoiceRowQuickActions(navigate, windowName, setCloneTargets, setEmailRow, requestDelete),
-    [navigate, windowName, requestDelete],
+    () => buildInvoiceRowQuickActions(navigate, windowName, setCloneTargets, setEmailRow, requestDelete, {
+      onRefresh: () => setRefreshKey(k => k + 1),
+      ui,
+    }),
+    [navigate, windowName, requestDelete, ui],
   );
 
   // Pick up the saved record from navigation state when arriving at the list view
@@ -200,6 +212,7 @@ export default function SalesInvoiceWindow(props) {
              Keep both in sync; a component added on only one side is either
              invisible or rendered twice. */
           topbarRight={SalesInvoiceTopbar}
+          topbarSecondary={SalesInvoiceSecondaryActions}
           notesField="description"
           onAfterSave={true}
           refetchAfterSave={true}

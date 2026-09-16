@@ -162,6 +162,7 @@ describe('useTaxSifLineRowActions + TaxSifModal (real, end-to-end) — Verifactu
       'tax', 'tax', TAX_ID,
       { etvfacVatRegime: '01' },
       TOKEN, API_BASE_URL,
+      { sifContextOrgId: null },
     ));
 
     // Modal closed as part of a successful save.
@@ -191,6 +192,7 @@ describe('useTaxSifLineRowActions + TaxSifModal (real, end-to-end) — Verifactu
         etvfacCauseNotTaxable: 'N1',
       },
       TOKEN, API_BASE_URL,
+      { sifContextOrgId: null },
     ));
 
     expect(screen.getByTestId('still-missing')).toHaveTextContent('false');
@@ -282,6 +284,7 @@ describe('useTaxSifLineRowActions + TaxSifModal (real, end-to-end) — compound/
       'tax', 'tax', CHILD_ID,
       { tbaiClaveregimeniva: '05' },
       TOKEN, API_BASE_URL,
+      { sifContextOrgId: null },
     ));
     expect(patchByIdMock).not.toHaveBeenCalledWith('tax', 'tax', SUMMARY_ID, expect.anything(), expect.anything(), expect.anything());
 
@@ -363,6 +366,7 @@ describe('useTaxSifLineRowActions + TaxSifModal (real) — document-direction ga
       'tax', 'tax', TAX_ID,
       { tbaiClaveregimeniva: '05' },
       TOKEN, '/sws/neo/purchase-invoice',
+      { sifContextOrgId: null },
     ));
     await waitFor(() => expect(screen.getByTestId('still-missing')).toHaveTextContent('false'));
   });
