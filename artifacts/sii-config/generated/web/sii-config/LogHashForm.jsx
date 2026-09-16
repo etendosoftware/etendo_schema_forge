@@ -3,7 +3,7 @@ import { EntityForm } from '@/components/contract-ui';
 // @sf-generated-start fields:logHash
 const fields = [
   { key: 'active', column: 'Isactive', type: 'checkbox', label: 'Active', required: true, readOnly: true, section: 'other', defaultValue: 'Y' },
-  { key: 'logs', column: 'Logs', type: 'text', label: 'Logs', readOnly: true, section: 'other' },
+  { key: 'logs', column: 'Logs', type: 'text', label: 'Logs', readOnly: true, section: 'other', maxLength: 1000000 },
 ];
 // @sf-generated-end fields:logHash
 

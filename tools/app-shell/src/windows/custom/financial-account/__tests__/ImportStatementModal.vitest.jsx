@@ -346,8 +346,36 @@ describe('ImportStatementModal', () => {
     expect(text).toContain('financeAccountStatementsManualColIn');
     // Only the date column carries the required marker.
     expect(text.split('\n')[0].split(',').filter((h) => h.trim().endsWith('*'))).toHaveLength(1);
-    // And the sample row travels with it, so the expected value shapes are visible.
-    expect(text).toContain('01/08/2026');
+    // And the sample row travels with it, so the expected value shapes are visible. Its values
+    // now come from i18n keys too, so under the key-returning translator they ARE the keys —
+    // which is what pins that the sample row is translated rather than hardcoded Spanish.
+    expect(text).toContain('financeAccountStatementsImportExampleDesc');
+    expect(text).toContain('financeAccountStatementsImportExampleOut');
+  });
+
+  // The XLSX half of the same guarantee. `buildTemplateXlsx` is stubbed, so the CSV test above
+  // (which reads the produced text) cannot see what the writer was handed — this asserts it
+  // directly. Both links must receive `localizeFields(ui)`: handing the RAW descriptor to only
+  // one of them is exactly how the sample row stayed Spanish under translated headers.
+  it('hands the XLSX writer fields whose example values are resolved from i18n, not the descriptor defaults', async () => {
+    render(<ImportStatementModal {...defaultProps()} />);
+    await mkUser().click(screen.getByTestId('import-statement-template-xlsx'));
+
+    await waitFor(() => expect(buildTemplateXlsx).toHaveBeenCalledTimes(1));
+    const [fields, options] = buildTemplateXlsx.mock.calls[0];
+    expect(fields).toHaveLength(6);
+    // Under the key-echoing translator a localized example IS its key; a raw descriptor would
+    // still carry the hardcoded Spanish literals.
+    expect(fields.map((f) => f.example)).toEqual([
+      'financeAccountStatementsImportExampleDate',
+      'financeAccountStatementsImportExampleReference',
+      'financeAccountStatementsImportExampleDesc',
+      'financeAccountStatementsImportExampleContact',
+      'financeAccountStatementsImportExampleOut',
+      'financeAccountStatementsImportExampleIn',
+    ]);
+    expect(fields.map((f) => f.example)).not.toContain('Transferencia recibida');
+    expect(typeof options.headerFor).toBe('function');
   });
 
   it('downloads an XLSX template through the workbook writer', async () => {

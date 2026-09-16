@@ -76,7 +76,7 @@ async function goToDeclaration(page, { year, period }) {
   });
 
   await page.goto('/fiscal-models');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
   // Open the "Nueva declaración" modal
   await page.getByText('+ Nueva declaración').click();
@@ -112,7 +112,7 @@ async function goToDeclaration(page, { year, period }) {
   const row = page.locator('tr').filter({ hasText: String(year) }).first();
   await expect(row).toBeVisible({ timeout: 5_000 });
   await row.click();
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 }
 
 /**
@@ -415,7 +415,7 @@ test.describe('FM 303 — NewDeclModal Año dropdown shows supported years only'
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
     });
     await page.goto('/fiscal-models');
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
     await page.getByText('+ Nueva declaración').click();
   });
 

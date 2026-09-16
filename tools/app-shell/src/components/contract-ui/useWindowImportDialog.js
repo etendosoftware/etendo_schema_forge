@@ -124,6 +124,7 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
     },
     mapping: {
       notImported: ui('importNotImported'),
+      alreadyAssigned: ui('importAlreadyAssigned'),
       mappedSummary: ui('importMappedSummary'),
       editMatch: ui('importEditMatch'),
       editTitle: ui('importEditColumnTitle'),
@@ -172,6 +173,14 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
       rowData: ui('importSystemErrorRowData'),
       requestSent: ui('importSystemErrorRequestSent'),
       serverResponse: ui('importSystemErrorServerResponse'),
+    },
+    // ETP-5225 — what the X does while the send is running. Not a cancel: the rows already
+    // accepted are committed, so the dialog states that instead of offering to undo it.
+    sendingClose: {
+      title: ui('importSendingCloseTitle'),
+      body: ui('importSendingCloseBody'),
+      keepWatching: ui('importSendingCloseKeepWatching'),
+      closeAnyway: ui('importSendingCloseAnyway'),
     },
   }), [ui]);
 

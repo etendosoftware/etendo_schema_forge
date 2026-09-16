@@ -3,8 +3,8 @@ import { EntityForm } from '@/components/contract-ui';
 // @sf-generated-start fields:organizations
 const fields = [
   { key: 'acogidaAlSII', column: 'Insiisystem', type: 'checkbox', label: 'In SII system', required: true, section: 'principal' },
-  { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'principal' },
-  { key: 'cIF', column: 'CIF', type: 'text', label: 'CIF', section: 'principal' },
+  { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'principal', maxLength: 60 },
+  { key: 'cIF', column: 'CIF', type: 'text', label: 'CIF', section: 'principal', maxLength: 20 },
   { key: 'conexiones', column: 'conexiones', type: 'number', label: 'Connections', section: 'principal' },
   { key: 'cashVAT', column: 'iscashvat', type: 'checkbox', label: 'Cash VAT', section: 'other' },
   { key: 'recc', column: 'Recc', type: 'checkbox', label: 'RECC affected', required: true, section: 'other' },
