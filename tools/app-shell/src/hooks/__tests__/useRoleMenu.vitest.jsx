@@ -10,9 +10,11 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 
 const mockFetchMenuTree = vi.fn();
 const mockCollectAllowedIds = vi.fn();
+const MENU_ACCESS_UNREACHABLE = '__menu_access_unreachable__';
 vi.mock('@/lib/menuTree.js', () => ({
   fetchMenuTree: (...args) => mockFetchMenuTree(...args),
   collectAllowedIds: (...args) => mockCollectAllowedIds(...args),
+  MENU_ACCESS_UNREACHABLE: '__menu_access_unreachable__',
 }));
 
 import { useRoleMenu } from '../useRoleMenu.js';
@@ -124,8 +126,25 @@ describe('useRoleMenu', () => {
     expect(mockCollectAllowedIds).not.toHaveBeenCalled();
   });
 
-  it('fails open when AuthContext publishes an empty menuAccess fallback', async () => {
+  // ETP-5375 — a PLAIN empty menuAccess is now a CONFIRMED, resolved zero-access allow
+  // set (a role — or lack of one — that legitimately grants no window/process access,
+  // per ETP-4514) and must filter to an empty Set, not fail open. The previous behavior
+  // (treating any empty menuAccess as fail-open) made AppLayout's blocking screen
+  // impossible to ever reach, since a genuinely zero-access role and an unreachable menu
+  // webhook both serialized to the same `{}` by the time they got here.
+  it('resolves to an empty Set (confirmed zero access) when AuthContext publishes a plain empty menuAccess', async () => {
     mockUseAuth.mockReturnValue(authState({ menuAccess: {} }));
+
+    const { result } = renderHook(() => useRoleMenu());
+
+    await waitFor(() => expect(result.current).toEqual(new Set()));
+    expect(result.current).toBeInstanceOf(Set);
+    expect(mockFetchMenuTree).not.toHaveBeenCalled();
+    expect(mockCollectAllowedIds).not.toHaveBeenCalled();
+  });
+
+  it('fails open (null) when AuthContext publishes the unreachable-menu sentinel', async () => {
+    mockUseAuth.mockReturnValue(authState({ menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } }));
 
     const { result } = renderHook(() => useRoleMenu());
 

@@ -22,7 +22,7 @@ import { SaveConflictDialog } from './components/SaveConflictDialog.jsx';
 import { RoleChangedBanner } from './components/RoleChangedBanner.jsx';
 import { useLocaleDictionaries } from './i18n/useLocaleDictionaries.js';
 import { useServiceWorker } from './hooks/useServiceWorker.js';
-import { fetchMenuTree, collectAllowedIds } from './lib/menuTree.js';
+import { fetchMenuTree, collectAllowedIds, MENU_ACCESS_UNREACHABLE } from './lib/menuTree.js';
 import { useInstalledApps } from './hooks/useInstalledApps.js';
 import { useAppStoreUnlock, attachKeySequenceWatcher } from './hooks/useAppStoreUnlock.js';
 import { buildOnboardingReturnTo } from './lib/oauthReturnTo.js';
@@ -103,8 +103,10 @@ function looksLikeWindowAccessPayload(value) {
 // and far short of the 5-minute poll this whole mechanism is already built to tolerate
 // as a worst case — so it costs negligible real-world responsiveness while absorbing
 // exactly the rapid-refresh-burst case that caused the regression. The FAILURE case is
-// cached too (as `{}`, matching the fail-open default) — an aborted/unreachable
-// SFListMenu is exactly the repeated, wasted round trip this is meant to collapse.
+// cached too (as `{ [MENU_ACCESS_UNREACHABLE]: true }`, matching the fail-open default —
+// see menuTree.js's own comment on that sentinel for why it is NOT just `{}`) — an
+// aborted/unreachable SFListMenu is exactly the repeated, wasted round trip this is meant
+// to collapse.
 const MENU_ACCESS_CACHE_TTL_MS = 60_000;
 // SFListMenu is optional for the window-access decision. A hung/aborted menu
 // request must not hold AuthContext bootstrap behind the global 60s test timeout.
@@ -126,7 +128,9 @@ async function fetchMenuAccess() {
       const ids = collectAllowedIds(tree?.tree);
       value = Object.fromEntries([...ids].map((id) => [id, true]));
     } catch {
-      value = {};
+      // ETP-5375 — NOT `{}`: an unresolved fetch must stay distinguishable from a
+      // resolved-but-empty allow set (see MENU_ACCESS_UNREACHABLE's own comment).
+      value = { [MENU_ACCESS_UNREACHABLE]: true };
     }
     menuAccessCache = { value, expiresAt: Date.now() + MENU_ACCESS_CACHE_TTL_MS };
     return value;
@@ -140,7 +144,9 @@ async function resolveMenuAccessWithoutBlocking(menuAccessPromise) {
   let timeoutId;
   const timeout = new Promise((resolve) => {
     timeoutId = setTimeout(() => {
-      resolve({});
+      // ETP-5375 — same reason as the catch branch above: a timed-out race must not be
+      // reported as a confirmed-empty allow set.
+      resolve({ [MENU_ACCESS_UNREACHABLE]: true });
     }, MENU_ACCESS_FETCH_TIMEOUT_MS);
   });
   try {

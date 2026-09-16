@@ -180,6 +180,7 @@ vi.mock('../lib/observability/RouteTracker.jsx', () => ({
 
 import { render, screen } from '@testing-library/react';
 import App, { fetchWindowAccess, __resetMenuAccessCacheForTest } from '../App.jsx';
+import { MENU_ACCESS_UNREACHABLE } from '../lib/menuTree.js';
 
 describe('App', () => {
   it('renders without crashing', () => {
@@ -317,29 +318,34 @@ describe('fetchWindowAccess', () => {
 
   // ETP-5189 — the menu fetch (SFListMenu) is wrapped in its OWN try/catch, decoupled
   // from the windowaccessmap parsing above — a menu-fetch failure fails OPEN for
-  // `menuAccess` alone (falls back to `{}`), leaving `windowAccess`/`capabilities` from
-  // the already-successful SFWindowAccessMap fetch untouched. This mirrors
-  // `useRoleMenu()`'s own fail-open philosophy for SFListMenu specifically (an
-  // unreachable menu webhook means "don't filter", not "deny everything"). Confirmed
-  // live: the E2E mocked-spec harness (`e2e/tests/helpers/auth.js`) deliberately
-  // `route.abort()`s `/sws/neo/listmenu` to exercise this exact fallback — an earlier
-  // version of `fetchWindowAccess` lumped the menu fetch into the outer catch, which
-  // nulled out `windowAccess`/`capabilities` too and broke every window's
-  // WindowAccessGuard across ~40 unrelated mocked specs.
-  it('keeps windowAccess/capabilities and falls back to an empty menuAccess when the menu fetch (SFListMenu) itself fails', async () => {
+  // `menuAccess` alone (falls back to the MENU_ACCESS_UNREACHABLE sentinel, see below),
+  // leaving `windowAccess`/`capabilities` from the already-successful SFWindowAccessMap
+  // fetch untouched. This mirrors `useRoleMenu()`'s own fail-open philosophy for
+  // SFListMenu specifically (an unreachable menu webhook means "don't filter", not "deny
+  // everything"). Confirmed live: the E2E mocked-spec harness (`e2e/tests/helpers/
+  // auth.js`) deliberately `route.abort()`s `/sws/neo/listmenu` to exercise this exact
+  // fallback — an earlier version of `fetchWindowAccess` lumped the menu fetch into the
+  // outer catch, which nulled out `windowAccess`/`capabilities` too and broke every
+  // window's WindowAccessGuard across ~40 unrelated mocked specs.
+  //
+  // ETP-5375 — the fallback value used to be a plain `{}`, indistinguishable from a
+  // resolved-but-legitimately-empty allow set once it reached `useRoleMenu()`, which
+  // permanently defeated the ETP-4514 "zero access" blocking screen. It must carry the
+  // MENU_ACCESS_UNREACHABLE sentinel instead — see menuTree.js's own comment on it.
+  it('keeps windowAccess/capabilities and falls back to the unreachable-menu sentinel when the menu fetch (SFListMenu) itself fails', async () => {
     stubFetch(jsonResponse(PAYLOAD), menuTextResponse('<!doctype html><html><body>App</body></html>'));
     const result = await fetchWindowAccess({ token: 'tok' });
-    expect(result).toEqual({ ...PAYLOAD, menuAccess: {} });
+    expect(result).toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
   });
 
-  it('keeps windowAccess/capabilities and falls back to an empty menuAccess when the menu fetch (SFListMenu) rejects outright', async () => {
+  it('keeps windowAccess/capabilities and falls back to the unreachable-menu sentinel when the menu fetch (SFListMenu) rejects outright', async () => {
     vi.stubGlobal('fetch', vi.fn((url) => (
       String(url).includes('/listmenu')
         ? Promise.reject(new Error('network down'))
         : Promise.resolve(jsonResponse(PAYLOAD))
     )));
     const result = await fetchWindowAccess({ token: 'tok' });
-    expect(result).toEqual({ ...PAYLOAD, menuAccess: {} });
+    expect(result).toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
   });
 
   it('does not block window access forever when SFListMenu never settles', async () => {
@@ -353,7 +359,7 @@ describe('fetchWindowAccess', () => {
     const resultPromise = fetchWindowAccess({ token: 'tok' });
     await vi.advanceTimersByTimeAsync(1_000);
 
-    await expect(resultPromise).resolves.toEqual({ ...PAYLOAD, menuAccess: {} });
+    await expect(resultPromise).resolves.toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
     vi.useRealTimers();
   });
 

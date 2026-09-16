@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { fetchMenuTree, collectAllowedIds } from '@/lib/menuTree.js';
+import { fetchMenuTree, collectAllowedIds, MENU_ACCESS_UNREACHABLE } from '@/lib/menuTree.js';
 
 /**
  * Returns the set of windowId/processId/obuiappProcessId values the current role can
@@ -44,11 +44,20 @@ export function useRoleMenu() {
     // compatibility with older app-shell-core versions that do not expose
     // menuAccess yet; those versions retain the fetch fallback below.
     if (menuAccess !== undefined) {
-      // App.jsx uses an empty object as the cached fail-open fallback when
-      // SFListMenu is aborted/unreachable. It must not become an empty allowlist:
-      // that would hide every AD-backed menu item while leaving only ungated items
-      // such as Reports visible. A non-empty object is a successful allowlist.
-      setAllowedIds(Object.keys(menuAccess).length === 0 ? null : new Set(Object.keys(menuAccess)));
+      // ETP-5375 — a PLAIN empty object is now a confirmed, resolved allow set of zero
+      // ids (the role — or lack of one — legitimately grants no window/process access,
+      // per ETP-4514) and must filter to an empty Set so AppLayout's blocking screen
+      // fires. Only the reserved MENU_ACCESS_UNREACHABLE sentinel — set by App.jsx's
+      // fetchMenuAccess() when SFListMenu is aborted/unreachable/times out — means
+      // "don't filter" (fail open). Collapsing both into "empty === fail-open" (the
+      // previous behavior) made the blocking screen impossible to ever reach: a
+      // genuinely zero-access role and an unreachable menu webhook both serialized to
+      // the same `{}` by the time they got here.
+      if (menuAccess[MENU_ACCESS_UNREACHABLE]) {
+        setAllowedIds(null);
+      } else {
+        setAllowedIds(new Set(Object.keys(menuAccess)));
+      }
       return undefined;
     }
     // Reset to the in-flight state on every new authenticated fetch — otherwise a
