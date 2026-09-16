@@ -439,3 +439,194 @@ describe('EntityCreationModal — patchValues', () => {
     expect(container.querySelector('input[type="email"]').value).toBe('');
   });
 });
+
+/**
+ * ETP-5031 follow-up — EntityCreationModal.getFormatError runs the same generic
+ * email/website/phone format checks EntityForm.jsx uses elsewhere (recipientEdits.js),
+ * against every headerField/plain-section field.
+ *
+ * getPhoneFieldError/isPhoneField and getWebsiteFieldError/isWebsiteField key off
+ * `field.key`/`field.column` by name (unlike getEmailFieldError/isEmailField, which
+ * shortcuts on `field.type === 'email'` alone) — but EntityCreationModal's field
+ * configs only ever carry `id`, never `key`/`column` (see OrganizationPage.jsx's
+ * `{ key: 'phone' }` / `{ key: 'web', inputPrefix: 'https://' }` descriptors for the
+ * shape those two actually expect). getFormatError aliases `key: f.key ?? f.id`
+ * before calling all three getters so the name-based checks resolve against `id`
+ * too — without it, phone/website format errors silently never fire here.
+ */
+describe('EntityCreationModal — ETP-5031 format validation blocks save', () => {
+  const FORMAT_PROPS = {
+    title: 'Create Contact',
+    headerFields: [
+      { id: 'name', labelKey: 'contactName', type: 'text', required: true },
+    ],
+    sections: [
+      {
+        id: 'more',
+        labelKey: 'masTab',
+        plain: true,
+        fields: [
+          { id: 'etgoEmail', labelKey: 'contactEmail', type: 'email' },
+          { id: 'etgoPhone', labelKey: 'contactPhone', type: 'tel', maxLength: 15 },
+          { id: 'etgoWeb', labelKey: 'websiteField', type: 'text', inputPrefix: 'https://' },
+        ],
+      },
+    ],
+    requiredFields: ['name'],
+    onCancel: vi.fn(),
+  };
+
+  const renderWithValues = (values, onSave = vi.fn(() => Promise.resolve())) => {
+    const utils = render(
+      <EntityCreationModal
+        {...FORMAT_PROPS}
+        onSave={onSave}
+        initialValues={{ name: 'Acme', ...values }}
+      />
+    );
+    return { ...utils, onSave };
+  };
+
+  it('blocks save on an invalid email address', async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderWithValues({ etgoEmail: 'a@' });
+    await user.click(screen.getByText('save'));
+    await waitFor(() => {
+      expect(screen.getByText('sendModalInvalidEmail')).toBeInTheDocument();
+    });
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('blocks save on a phone value with letters (id-only field descriptor)', async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderWithValues({ etgoPhone: 'not-a-phone' });
+    await user.click(screen.getByText('save'));
+    await waitFor(() => {
+      expect(screen.getByText('phoneInvalidChars')).toBeInTheDocument();
+    });
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('blocks save on a prefixed website field with a non-domain-shaped value', async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderWithValues({ etgoWeb: 'asda' });
+    await user.click(screen.getByText('save'));
+    await waitFor(() => {
+      expect(screen.getByText('websiteInsecureUrl')).toBeInTheDocument();
+    });
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('proceeds to onSave when all three format-checked fields are valid', async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderWithValues({
+      etgoEmail: 'contact@acme.com',
+      etgoPhone: '+34 600 123 456',
+      etgoWeb: 'acme.com',
+    });
+    await user.click(screen.getByText('save'));
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalled();
+    });
+  });
+
+  it('proceeds to onSave when the format-checked fields are left empty', async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderWithValues({});
+    await user.click(screen.getByText('save'));
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalled();
+    });
+  });
+});
+
+/**
+ * ETP-5031 follow-up — a field declaring `inputPrefix` renders a fixed,
+ * non-editable chip (via PrefixedInput) before its input, and `maxLength`
+ * reaches the underlying <input> unconditionally (not just for prefixed
+ * fields — contactModalConfig's plain `etgoPhone` needs it too).
+ */
+describe('EntityCreationModal — inputPrefix chip and maxLength passthrough', () => {
+  it('renders the prefix chip wrapper and text before a prefixed field', () => {
+    const props = {
+      title: 'Create Contact',
+      headerFields: [
+        { id: 'etgoWeb', labelKey: 'websiteField', type: 'text', inputPrefix: 'https://' },
+      ],
+      sections: [],
+      requiredFields: [],
+      onSave: vi.fn(),
+      onCancel: vi.fn(),
+    };
+    render(<EntityCreationModal {...props} />);
+    const wrapper = screen.getByTestId('field-etgoWeb-prefix-wrapper');
+    expect(wrapper).toBeInTheDocument();
+    expect(wrapper).toHaveTextContent('https://');
+  });
+
+  it('does not render a prefix wrapper for a field with no inputPrefix', () => {
+    const props = {
+      title: 'Create Contact',
+      headerFields: [
+        { id: 'name', labelKey: 'contactName', type: 'text' },
+      ],
+      sections: [],
+      requiredFields: [],
+      onSave: vi.fn(),
+      onCancel: vi.fn(),
+    };
+    render(<EntityCreationModal {...props} />);
+    expect(screen.queryByTestId('field-name-prefix-wrapper')).not.toBeInTheDocument();
+  });
+
+  it('passes maxLength through to the underlying input', () => {
+    const props = {
+      title: 'Create Contact',
+      headerFields: [
+        { id: 'etgoPhone', labelKey: 'phoneLabel', type: 'tel', maxLength: 15 },
+      ],
+      sections: [],
+      requiredFields: [],
+      onSave: vi.fn(),
+      onCancel: vi.fn(),
+    };
+    const { container } = render(<EntityCreationModal {...props} />);
+    const input = container.querySelector('input[type="tel"]');
+    expect(input).toBeTruthy();
+    expect(input).toHaveAttribute('maxlength', '15');
+  });
+
+  it('strips letters from a tel-typed field as the user types (same charset guard as Contacts)', async () => {
+    const user = userEvent.setup();
+    const props = {
+      title: 'Create Contact',
+      headerFields: [
+        { id: 'etgoPhone', labelKey: 'phoneLabel', type: 'tel' },
+      ],
+      sections: [],
+      requiredFields: [],
+      onSave: vi.fn(),
+      onCancel: vi.fn(),
+    };
+    const { container } = render(<EntityCreationModal {...props} />);
+    const input = container.querySelector('input[type="tel"]');
+    await user.type(input, 'ab+34 91c000d001');
+    expect(input.value).toBe('+34 91000001');
+  });
+
+  it('passes maxLength through even for a prefixed field', () => {
+    const props = {
+      title: 'Create Contact',
+      headerFields: [
+        { id: 'etgoWeb', labelKey: 'websiteField', type: 'text', inputPrefix: 'https://', maxLength: 100 },
+      ],
+      sections: [],
+      requiredFields: [],
+      onSave: vi.fn(),
+      onCancel: vi.fn(),
+    };
+    const { container } = render(<EntityCreationModal {...props} />);
+    const input = container.querySelector('input[type="text"]');
+    expect(input).toHaveAttribute('maxlength', '100');
+  });
+});

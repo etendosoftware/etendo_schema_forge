@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.3.0",
   "generatedAt": "2026-09-09T11:18:23.940Z",
   "updatedAt": "2026-09-15T19:40:50.680Z",
   "checksum": "2daf24f385e12d8c",
@@ -596,9 +596,9 @@
               },
               {
                 "value": "2",
-                "name": "NOI",
+                "name": "NIF Intracomunitario",
                 "labels": {
-                  "es_ES": "NOI"
+                  "es_ES": "NIF Intracomunitario"
                 }
               },
               {
@@ -754,7 +754,7 @@
             "form": true,
             "section": "principal",
             "validation": {
-              "maxLength": 60
+              "maxLength": 15
             }
           },
           {

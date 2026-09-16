@@ -6,19 +6,22 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import ProductCostBanner from '../ProductCostBanner.jsx';
-import { notifySaveBlock, resetSaveBlockSignals } from '@/lib/saveBlockSignal.js';
 
 /**
- * ETP-5245 — the banner is the visible half of the same rule the save gate enforces
- * (isProductMissingRequiredCost). It must appear exactly when a save would be refused, and be
- * completely absent otherwise, so the user is never warned about a save that would in fact
- * succeed (nor silently refused without a warning).
+ * ETP-5245 — the banner is ADVISORY. It renders exactly when `isProductMissingRequiredCost` is
+ * true for the record and is completely absent otherwise, so the user is warned about a real
+ * missing cost and never about anything else.
+ *
+ * It used to accompany a hard save-block in `useEntity`, and re-opened itself through the
+ * save-block bus every time that block fired. The block was removed by product decision and the
+ * `reopenSignal` wiring went with it: dismissing the banner now keeps it dismissed until the
+ * record is re-read, the normal `InfoBanner` contract. Nothing here may assert a refused save.
  */
 describe('ProductCostBanner', () => {
   /** Minimal record that shows the banner: a saved product whose cost flag is false. */
-  const blocking = {
+  const warning = {
     id: 'prod-1',
     productType: 'I',
     stocked: true,
@@ -27,14 +30,14 @@ describe('ProductCostBanner', () => {
   };
 
   it('renders the warning for a saved product with no cost', () => {
-    render(<ProductCostBanner data={blocking} />);
+    render(<ProductCostBanner data={warning} />);
     const banner = screen.getByTestId('product-cost-banner');
     expect(banner).toBeInTheDocument();
     expect(banner).toHaveTextContent('productCostRequired');
   });
 
   it('uses the warning tone', () => {
-    render(<ProductCostBanner data={blocking} />);
+    render(<ProductCostBanner data={warning} />);
     // InfoBanner maps tone -> container classes; 'warning' is the only one using these tokens.
     expect(screen.getByTestId('product-cost-banner').className)
       .toContain('bg-status-warning');
@@ -42,20 +45,27 @@ describe('ProductCostBanner', () => {
 
   it('renders nothing when the product already has a cost', () => {
     const { container } = render(
-      <ProductCostBanner data={{ ...blocking, etgoHasCost: true }} />);
+      <ProductCostBanner data={{ ...warning, etgoHasCost: true }} />);
     expect(screen.queryByTestId('product-cost-banner')).not.toBeInTheDocument();
     expect(container).toBeEmptyDOMElement();
   });
 
   it('renders nothing when the backend did not emit etgoHasCost', () => {
-    const { etgoHasCost, ...withoutFlag } = blocking;
+    const { etgoHasCost, ...withoutFlag } = warning;
     expect(etgoHasCost).toBe(false);
     render(<ProductCostBanner data={withoutFlag} />);
     expect(screen.queryByTestId('product-cost-banner')).not.toBeInTheDocument();
   });
 
   it('renders nothing on the creation form (unsaved record)', () => {
-    render(<ProductCostBanner data={{ ...blocking, id: 'new' }} />);
+    render(<ProductCostBanner data={{ ...warning, id: 'new' }} />);
+    expect(screen.queryByTestId('product-cost-banner')).not.toBeInTheDocument();
+  });
+
+  it('renders nothing for a record with no id at all', () => {
+    const { id, ...withoutId } = warning;
+    expect(id).toBeTruthy();
+    render(<ProductCostBanner data={withoutId} />);
     expect(screen.queryByTestId('product-cost-banner')).not.toBeInTheDocument();
   });
 
@@ -66,20 +76,20 @@ describe('ProductCostBanner', () => {
    * engine never values. The three assertions below are the inverse of what they once were.
    */
   it('renders the warning for a non-stocked product (was hidden before the widening)', () => {
-    render(<ProductCostBanner data={{ ...blocking, stocked: false }} />);
+    render(<ProductCostBanner data={{ ...warning, stocked: false }} />);
     expect(screen.getByTestId('product-cost-banner')).toBeInTheDocument();
   });
 
   it.each(['S', 'E', 'R'])(
     'renders the warning for product type "%s" (was hidden before the widening)',
     (productType) => {
-      render(<ProductCostBanner data={{ ...blocking, productType }} />);
+      render(<ProductCostBanner data={{ ...warning, productType }} />);
       expect(screen.getByTestId('product-cost-banner')).toBeInTheDocument();
     },
   );
 
   it('renders the warning even when the product is valued at its purchase order price', () => {
-    render(<ProductCostBanner data={{ ...blocking, bookUsingPurchaseOrderPrice: true }} />);
+    render(<ProductCostBanner data={{ ...warning, bookUsingPurchaseOrderPrice: true }} />);
     expect(screen.getByTestId('product-cost-banner')).toBeInTheDocument();
   });
 
@@ -95,59 +105,51 @@ describe('ProductCostBanner', () => {
   });
 
   it('takes its text from the i18n layer rather than a hardcoded string', () => {
-    render(<ProductCostBanner data={blocking} />);
+    render(<ProductCostBanner data={warning} />);
     // The mocked useUI echoes the key back, so the rendered text IS the key.
     expect(screen.getByText('productCostRequired')).toBeInTheDocument();
   });
 
   /**
-   * ETP-5245 — banners are dismissible by default now, but this one explains a HARD SAVE BLOCK.
-   * Closing it must not be able to leave the user refused with nothing on screen saying why, so
-   * the save gate's own refusal (announced on the save-block bus under the same stable toast id
-   * it uses for the toast, `product-cost-required`) brings it back.
+   * Visibility follows the record, one prop, every time: the same component instance must show
+   * and hide as the cost flag changes (a cost line added on the Costing tab re-reads the header).
    */
-  describe('reopens when the save it explains is refused', () => {
-    beforeEach(() => {
-      resetSaveBlockSignals();
-    });
+  it('follows the cost flag across re-renders of the same instance', () => {
+    const { rerender } = render(<ProductCostBanner data={warning} />);
+    expect(screen.getByTestId('product-cost-banner')).toBeInTheDocument();
 
+    rerender(<ProductCostBanner data={{ ...warning, etgoHasCost: true }} />);
+    expect(screen.queryByTestId('product-cost-banner')).not.toBeInTheDocument();
+
+    rerender(<ProductCostBanner data={{ ...warning, etgoHasCost: false }} />);
+    expect(screen.getByTestId('product-cost-banner')).toBeInTheDocument();
+  });
+
+  /**
+   * Advisory banners are dismissible and STAY dismissed. There is no save-block bus wiring left —
+   * nothing publishes `product-cost-required` any more, so a banner that re-opened itself would be
+   * re-opening on someone else's signal.
+   */
+  describe('dismissal', () => {
     it('can be dismissed by the user', () => {
-      render(<ProductCostBanner data={blocking} />);
+      render(<ProductCostBanner data={warning} />);
       fireEvent.click(screen.getByTestId('info-banner-dismiss'));
       expect(screen.queryByTestId('product-cost-banner')).not.toBeInTheDocument();
     });
 
-    it('reappears when the save gate refuses a save for this reason', () => {
-      render(<ProductCostBanner data={blocking} />);
+    it('stays dismissed while the record still has no cost', () => {
+      const { rerender } = render(<ProductCostBanner data={warning} />);
       fireEvent.click(screen.getByTestId('info-banner-dismiss'));
-      expect(screen.queryByTestId('product-cost-banner')).not.toBeInTheDocument();
-      act(() => notifySaveBlock('product-cost-required'));
-      expect(screen.getByTestId('product-cost-banner')).toBeInTheDocument();
-    });
-
-    it('stays closed when a DIFFERENT save block fires', () => {
-      render(<ProductCostBanner data={blocking} />);
-      fireEvent.click(screen.getByTestId('info-banner-dismiss'));
-      act(() => notifySaveBlock('numeric-field-usableLifeMonths'));
+      rerender(<ProductCostBanner data={{ ...warning, name: 'Widget renamed' }} />);
       expect(screen.queryByTestId('product-cost-banner')).not.toBeInTheDocument();
     });
 
-    it('reopens again on every further refusal, not just the first', () => {
-      render(<ProductCostBanner data={blocking} />);
+    it('comes back when the record is re-read as a fresh banner', () => {
+      const { unmount } = render(<ProductCostBanner data={warning} />);
       fireEvent.click(screen.getByTestId('info-banner-dismiss'));
-      act(() => notifySaveBlock('product-cost-required'));
-      fireEvent.click(screen.getByTestId('info-banner-dismiss'));
-      expect(screen.queryByTestId('product-cost-banner')).not.toBeInTheDocument();
-      act(() => notifySaveBlock('product-cost-required'));
-      expect(screen.getByTestId('product-cost-banner')).toBeInTheDocument();
-    });
+      unmount();
 
-    // A block fired while the banner was NOT on screen (product had a cost, or the user was on
-    // another record) must not leave a stale "already dismissed at count N" behind: the banner
-    // reads the live count on mount, so it starts open regardless of the history.
-    it('starts open even if blocks were recorded before it mounted', () => {
-      act(() => notifySaveBlock('product-cost-required'));
-      render(<ProductCostBanner data={blocking} />);
+      render(<ProductCostBanner data={warning} />);
       expect(screen.getByTestId('product-cost-banner')).toBeInTheDocument();
     });
   });

@@ -292,7 +292,58 @@
         },
         "oBTIKTaxIDKey": {
           "visibility": "editable",
-          "order": 6
+          "order": 6,
+          "enumValues": [
+            {
+              "value": "1",
+              "name": "NIF",
+              "labels": {
+                "es_ES": "NIF"
+              }
+            },
+            {
+              "value": "2",
+              "name": "NIF Intracomunitario",
+              "labels": {
+                "es_ES": "NIF Intracomunitario"
+              }
+            },
+            {
+              "value": "3",
+              "name": "Pasaporte",
+              "labels": {
+                "es_ES": "Pasaporte"
+              }
+            },
+            {
+              "value": "4",
+              "name": "Documento oficial de identificación expedido por el país",
+              "labels": {
+                "es_ES": "Documento oficial de identificación expedido por el país"
+              }
+            },
+            {
+              "value": "5",
+              "name": "Certificado de residencia fiscal",
+              "labels": {
+                "es_ES": "Certificado de residencia fiscal"
+              }
+            },
+            {
+              "value": "6",
+              "name": "Otro documento probatorio",
+              "labels": {
+                "es_ES": "Otro documento probatorio"
+              }
+            },
+            {
+              "value": "7",
+              "name": "No Censado",
+              "labels": {
+                "es_ES": "No Censado"
+              }
+            }
+          ]
         },
         "etgoWeb": {
           "visibility": "editable",
@@ -317,7 +368,8 @@
           "grid": true,
           "label": "Phone",
           "section": "principal",
-          "order": 11
+          "order": 11,
+          "maxLength": 15
         },
         "creditLimit": {
           "visibility": "editable",

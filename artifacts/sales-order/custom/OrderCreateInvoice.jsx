@@ -53,6 +53,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
   const [showActions,   setShowActions]   = useState(false);
   const [actionsScroll, setActionsScroll] = useState(null); // 'shipment'|'invoice'|null
   const [fetched,       setFetched]       = useState(null);
+  const [refreshKey,    setRefreshKey]    = useState(0);
   const [confirmedDocs,  setConfirmedDocs]  = useState(null); // set after confirm+reload when both docs created
   const [confirmedTitle, setConfirmedTitle] = useState(null); // null = "Order confirmed", string = custom title
   const status      = data?.documentStatus;
@@ -88,6 +89,21 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
     };
     window.addEventListener('sales-order:open-actions-modal', handler);
     return () => window.removeEventListener('sales-order:open-actions-modal', handler);
+  }, []);
+
+  // ETP-5315 — the confirm/create-docs flows below dispatch this same event on success
+  // (ConfirmModal.handleConfirm, ConfirmModal.handleClose, CreateDocsModal.handleCreate), but
+  // this component never listened for it itself. `fetched` (shipments/invoices/orderLines) was
+  // therefore only ever loaded once on mount, so `buttonLabel` kept showing "Gestionar envío y
+  // factura" after the user had just created the shipment/invoice through it — letting them
+  // reopen the modal and create duplicates. Mirrors the `refreshKey` pattern already used by the
+  // sibling topbarExtra component (OrderDraftChips.jsx) for the same event: bump a counter and
+  // include it in the fetch effect's deps below to force a refetch without touching that
+  // effect's cancellation/early-return guards.
+  useEffect(() => {
+    const handler = () => setRefreshKey(k => k + 1);
+    window.addEventListener('sales-order:document-created', handler);
+    return () => window.removeEventListener('sales-order:document-created', handler);
   }, []);
 
   // ETP-5260 — the Send button now lives in the topbarSecondary slot
@@ -127,7 +143,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
     })();
 
     return () => { cancelled = true; };
-  }, [isCompleted, recordId, base, headers, apiBaseUrl]);
+  }, [isCompleted, recordId, base, headers, apiBaseUrl, refreshKey]);
 
   // ETP-5063 — a confirm that created neither a shipment nor an invoice has
   // nothing worth a blocking modal for; only render it when at least one
@@ -894,6 +910,40 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
     return () => { cancelled = true; };
   }, [orderId, base, headers, apiBaseUrl]);
 
+  // ETP-5295 — every hook below (including the close-effect) must run unconditionally, in the same
+  // order, on every render. The derivation is guarded against `fetched` being null (loading state)
+  // instead of being placed after the `if (!fetched) return spinner` early return: this component
+  // used to compute `nothingToManage` and its close-effect AFTER that return, which meant the effect
+  // was skipped on the first (loading) render and only registered once `fetched` arrived — React
+  // then saw a different number of hooks between renders ("Rendered more hooks than during the
+  // previous render") and unmounted the entire app (no ErrorBoundary anywhere catches it).
+  const { shipments, invoices, orderLines } = fetched ?? { shipments: [], invoices: [], orderLines: [] };
+  const shipmentsDraft   = shipments.filter(s => s.documentStatus === 'DR');
+  const shipmentsComplete = shipments.filter(s => s.documentStatus === 'CO');
+  const invoiceDraft     = invoices.find(i => i.documentStatus === 'DR') ?? null;
+  const invoicesComplete = invoices.filter(i => i.documentStatus === 'CO');
+
+  const qtyOrdered   = orderLines.reduce((s, l) => s + (Number(l.orderedQuantity)   || 0), 0);
+  const qtyDelivered = orderLines.reduce((s, l) => s + (Number(l.deliveredQuantity) || 0), 0);
+  const qtyPending   = qtyOrdered - qtyDelivered;
+
+  const totalOrder    = Number(data?.grandTotalAmount) || 0;
+  const totalInvoiced = invoicesComplete.reduce((s, i) => s + (Number(i.grandTotalAmount) || 0), 0);
+  const totalPending  = totalOrder - totalInvoiced;
+
+  // `fetched != null` gates all three: while still loading, neither "needs" flag may read true off
+  // the placeholder empty arrays above, or the close-effect below could fire before data ever loads.
+  const needsShip    = fetched != null && qtyPending !== 0 && shipmentsDraft.length === 0;
+  const needsInvoice = fetched != null && totalPending !== 0 && !invoiceDraft;
+  const nothingToManage = fetched != null && !needsShip && !needsInvoice;
+
+  // Close asynchronously when there's nothing pending — avoids the
+  // "Cannot update a component while rendering" warning that occurs when a
+  // child triggers parent setState during its own render.
+  useEffect(() => {
+    if (nothingToManage) onClose?.();
+  }, [nothingToManage, onClose]);
+
   if (!fetched) {
     // Lightweight overlay so the user gets feedback while the row's docs load.
     return createPortal(
@@ -908,31 +958,6 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
       document.body,
     );
   }
-
-  const { shipments, invoices, orderLines } = fetched;
-  const shipmentsDraft   = shipments.filter(s => s.documentStatus === 'DR');
-  const shipmentsComplete = shipments.filter(s => s.documentStatus === 'CO');
-  const invoiceDraft     = invoices.find(i => i.documentStatus === 'DR') ?? null;
-  const invoicesComplete = invoices.filter(i => i.documentStatus === 'CO');
-
-  const qtyOrdered   = orderLines.reduce((s, l) => s + (Number(l.orderedQuantity)   || 0), 0);
-  const qtyDelivered = orderLines.reduce((s, l) => s + (Number(l.deliveredQuantity) || 0), 0);
-  const qtyPending   = qtyOrdered - qtyDelivered;
-
-  const totalOrder    = Number(data?.grandTotalAmount) || 0;
-  const totalInvoiced = invoicesComplete.reduce((s, i) => s + (Number(i.grandTotalAmount) || 0), 0);
-  const totalPending  = totalOrder - totalInvoiced;
-
-  const needsShip    = qtyPending !== 0 && shipmentsDraft.length === 0;
-  const needsInvoice = totalPending !== 0 && !invoiceDraft;
-  const nothingToManage = !needsShip && !needsInvoice;
-
-  // Close asynchronously when there's nothing pending — avoids the
-  // "Cannot update a component while rendering" warning that occurs when a
-  // child triggers parent setState during its own render.
-  useEffect(() => {
-    if (nothingToManage) onClose?.();
-  }, [nothingToManage, onClose]);
 
   if (nothingToManage) return null;
 

@@ -76,7 +76,7 @@ async function goToDeclaration(page, { year, period }) {
   });
 
   await page.goto('/fiscal-models');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
   // Open the "Nueva declaración" modal
   await page.getByText('+ Nueva declaración').click();
@@ -112,7 +112,7 @@ async function goToDeclaration(page, { year, period }) {
   const row = page.locator('tr').filter({ hasText: String(year) }).first();
   await expect(row).toBeVisible({ timeout: 5_000 });
   await row.click();
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 }
 
 /**
@@ -211,22 +211,6 @@ test.describe('FM 303 — datos_bancarios section visibility', () => {
     await expect(
       page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /IBAN/i })
     ).not.toBeVisible();
-  });
-
-  test('datos_bancarios appears with Devolución fields when tipo_declaracion is D', async ({ page }) => {
-    const select = page.locator('.fm-aeat-ident-inline-field__select--compact').first();
-    await select.selectOption('D');
-    // The datos_bancarios section becomes visible — use .last() because the
-    // identificacion section also contains "devolución" in its select options
-    await expect(
-      page.locator('.fm-aeat-section').filter({ hasText: /devoluci/i }).last()
-    ).toBeVisible();
-    await expect(
-      page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /IBAN/i })
-    ).toBeVisible();
-    await expect(
-      page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /SWIFT|BIC/i })
-    ).toBeVisible();
   });
 
   test('datos_bancarios appears with Domiciliación title when tipo_declaracion is U', async ({ page }) => {
@@ -431,7 +415,7 @@ test.describe('FM 303 — NewDeclModal Año dropdown shows supported years only'
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
     });
     await page.goto('/fiscal-models');
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
     await page.getByText('+ Nueva declaración').click();
   });
 

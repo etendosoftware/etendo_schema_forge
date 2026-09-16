@@ -4,7 +4,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 // @sf-generated-start columns:quotation
 const columns = [
   { key: 'orderDate', column: 'DateOrdered', type: 'date', label: 'Quotation Date', required: true },
-  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.', required: true },
+  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.', required: true, maxLength: 30 },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner', required: true },
   { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', enumLabels: { 'AE': 'docStatusAe', 'CO': 'docStatusCo', 'CL': 'docStatusCl', 'ETGO_CI': 'docStatusEtgoCi', 'CA': 'docStatusCa', 'CJ': 'docStatusCj', 'DR': 'docStatusDr', 'ME': 'docStatusMe', 'NA': 'docStatusNa', 'NC': 'docStatusNc', 'WP': 'docStatusWp', 'RE': 'docStatusRe', 'TMP': 'docStatusTmp', 'UE': 'docStatusUe', 'IP': 'docStatusIp', '??': 'docStatus', 'VO': 'docStatusVo' }, required: true },
   { key: 'validUntil', column: 'validuntil', type: 'date', label: 'Valid Until' },

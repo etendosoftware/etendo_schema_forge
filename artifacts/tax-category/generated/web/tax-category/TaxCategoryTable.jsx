@@ -3,7 +3,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:taxCategory
 const columns = [
-  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
+  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true, maxLength: 60 },
   { key: 'default', column: 'IsDefault', type: 'boolean', label: 'Default', required: true },
 ];
 // @sf-generated-end columns:taxCategory
