@@ -7,7 +7,7 @@ const fields = [
   { key: 'movementQuantity', column: 'MovementQty', type: 'number', label: 'Movement Quantity', required: true, readOnly: true, section: 'principal', defaultValue: '0', readOnlyLogic: (record) => record['processed'] === true || record['uomManagement'] === 'Y' },
   { key: 'uOM', column: 'C_UOM_ID', type: 'search', label: 'UOM', required: true, readOnly: true, section: 'other', reference: 'UOM', inputMode: 'search', readOnlyLogic: (record) => record['uomManagement'] === 'Y' },
   { key: 'salesOrderLine', column: 'C_OrderLine_ID', type: 'search', label: 'Return from Customer line', readOnly: true, section: 'other', reference: 'OrderLine', inputMode: 'search' },
-  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'other' },
+  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'other', maxLength: 2000 },
   { key: 'orderQuantity', column: 'QuantityOrder', type: 'number', label: 'Order Quantity', readOnly: true, section: 'principal', readOnlyLogic: (record) => record['processed'] === true },
 ];
 // @sf-generated-end fields:returnMaterialReceiptLine

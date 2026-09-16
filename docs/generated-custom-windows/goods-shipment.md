@@ -225,6 +225,23 @@ tab (`artifacts/goods-shipment/custom/RelatedDocuments.jsx`) needs no separate r
 derives its chips straight from `data.linkedOrders` / `linkedInvoices` / `returnReceipts`, so
 refreshing the header via `onRefresh` is sufficient to update it — no manual reload required.
 
+## "Crear Factura" modal closed with no loading feedback — ETP-5333
+
+Same defect and same fix as `goods-receipt.md`'s equivalent note. On a **completed** shipment
+with no invoice yet, "Crear Factura" opens the shared `CreateInvoiceConfirmModal.jsx`
+("Gestionar documentos"); clicking "Crear →" used to close it synchronously in
+`GoodsShipmentActions.jsx`'s `onConfirm` before `handleCreateInvoice`'s request even started,
+so the `loading={creatingInvoice}` prop already passed to the modal never got a chance to
+render its spinner/"Procesando…" state.
+
+Fixed by moving `setShowInvoiceConfirm(false)` into `handleCreateInvoice`'s success branch,
+right before `setInvoiceResult({...})`, so `onConfirm` is now just
+`onConfirm={handleCreateInvoice}`. On failure the modal stays open (the existing `toast.error`
+fires). The draft-status confirm flow (`GoodsShipmentConfirmModal.jsx` → `ConfirmInOutModal.jsx`)
+never had this defect — it owns its own `loading` state and is unaffected by this change.
+`CreateInvoiceConfirmModal.jsx` was also hardened so its backdrop/× no longer close it while
+`loading` is `true` (previously only the "Cancelar" footer button was disabled).
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.

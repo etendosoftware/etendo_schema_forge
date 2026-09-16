@@ -5,6 +5,7 @@ import HeaderTable from '@generated/purchase-order/generated/web/purchase-order/
 import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import BulkPurchaseOrderMoreMenu from '@generated/purchase-order/custom/BulkPurchaseOrderMoreMenu';
+import PurchaseOrderReactivateBulkAction from '@generated/purchase-order/custom/PurchaseOrderReactivateBulkAction';
 import { ConfirmModal as PoConfirmModal, PoConfirmResultModal, ManageDocsLauncher as PoManageDocsLauncher } from '@generated/purchase-order/custom/PurchaseOrderActions';
 import PurchaseOrderSecondaryActions from '@generated/purchase-order/custom/PurchaseOrderSecondaryActions';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
@@ -77,6 +78,13 @@ function PurchaseOrderBulkActions(props) {
         buildActions={buildInOutActions}
         labelKey="process"
         data-testid="BulkDocumentAction__b7ace5" />
+      {/* ETP-5315 — grid bulk-select Reactivate, mirroring sales-order's
+          OrderReactivateBulkAction. Kept as a SEPARATE component (not folded
+          into the BulkDocumentAction above) so the existing CO-only action
+          stays untouched, per the ticket's scope. That sibling is the
+          "Procesar" button (ETP-5302 renamed it from "Confirmar"); this one
+          carries its own `reactivateBulk` key so the two never read alike. */}
+      <PurchaseOrderReactivateBulkAction {...props} data-testid="PurchaseOrderReactivateBulkAction__b7ace5" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
@@ -117,6 +125,7 @@ export default function PurchaseOrderWindow(props) {
     ConfirmResultModal: PoConfirmResultModal,
     ManageDocsLauncher: PoManageDocsLauncher,
     setCloneTargets,
+    showReactivate: true,
     usePdf: usePurchaseOrderPdf,
     documentType: tMenu('Purchase Order'),
   });

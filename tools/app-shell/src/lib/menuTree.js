@@ -1,4 +1,18 @@
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
+
+// ETP-5375 — reserved key `fetchMenuAccess()`/`useRoleMenu()` (App.jsx) use to flag a
+// menuAccess map that could NOT be resolved (SFListMenu unreachable, malformed response, or
+// the 1s race in `resolveMenuAccessWithoutBlocking` timing out) — as opposed to a map that
+// resolved successfully to zero allowed ids (a role — or lack of one — that legitimately
+// grants no window/process access, the ETP-4514 blocking-screen case). Both used to collapse
+// to the SAME plain `{}`, so `useRoleMenu()` could never tell "confirmed empty" apart from
+// "unknown" and treated every empty menuAccess as fail-open — permanently defeating the
+// blocking screen for any genuinely zero-access role. Real allowed ids are AD_Window_ID/
+// AD_Process_ID/obuiappProcessId strings (numeric or UUID) and can never collide with this
+// reserved key, so it is safe to smuggle inside the same flat map AuthContext's generic
+// `sameFlatMap` diff already expects.
+export const MENU_ACCESS_UNREACHABLE = '__menu_access_unreachable__';
+
 function detectBase() {
   const path = window.location.pathname;
   const webIdx = path.indexOf('/web/');

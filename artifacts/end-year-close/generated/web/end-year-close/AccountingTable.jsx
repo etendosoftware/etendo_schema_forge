@@ -3,11 +3,11 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:accounting
 const columns = [
-  { key: 'account', column: 'Account_ID', type: 'string', label: 'Account' },
+  { key: 'account', column: 'Account_ID', type: 'string', label: 'Account', maxLength: 60 },
   { key: 'debit', column: 'Debit', type: 'amount', label: 'Debit' },
   { key: 'credit', column: 'Credit', type: 'amount', label: 'Credit' },
   { key: 'type', column: 'Factaccttype', type: 'enum', label: 'Type', enumLabels: { 'C': 'factaccttypeC', 'D': 'factaccttypeD', 'R': 'factaccttypeR', 'O': 'factaccttypeO', 'N': 'factaccttypeN' } },
-  { key: 'description', column: 'description', type: 'string', label: 'Description' },
+  { key: 'description', column: 'description', type: 'string', label: 'Description', maxLength: 255 },
 ];
 // @sf-generated-end columns:accounting
 
