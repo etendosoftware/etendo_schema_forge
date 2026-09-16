@@ -94,7 +94,15 @@ test('imports a product and creates its missing category', async ({ page }) => {
     ].join('\n')),
   });
 
-  await expect(page.getByTestId('ImportColumnMapping__chip-categoria')).toContainText('Category');
+  // ETP-5223: the chip reads `<source column>→<target caption>`, and the target
+  // caption is now resolved through `fieldLabelFn` (the session language) instead of
+  // the English `field.label` declared in decisions.json. Mocked specs run in es_ES,
+  // so accept either locale's caption for M_Product_Category_ID ("Category" /
+  // "Categoría") — per the e2e guide's mock-mode rule on localized text. The regex is
+  // anchored on `categoria→` so it still asserts the RESOLVED TARGET half: the
+  // `categoria` source column on its own can never satisfy it.
+  await expect(page.getByTestId('ImportColumnMapping__chip-categoria'))
+    .toContainText(/categoria\s*→\s*(Categoría|Category)/);
   await captureScreenshot(page, {
     path: resolve(evidenceDir, 'ETP-4905-product-import-category-review.png'),
     fullPage: true,

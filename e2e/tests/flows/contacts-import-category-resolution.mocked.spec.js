@@ -151,7 +151,15 @@ test('imports contacts with existing, normalized, new, and legacy category input
   // ETP-4954: the mapping modal is now field-first — the count is FIELDS with a source out
   // of all importable fields (20 for Contacts), not columns mapped out of columns present.
   await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('14/20');
-  await expect(page.getByTestId('ImportColumnMapping__chip-categoria')).toContainText('Contact Category');
+  // ETP-5223: the chip reads `<source column>→<target caption>`, and the target
+  // caption is now resolved through `fieldLabelFn` (the session language) instead of
+  // the English `field.label` declared in decisions.json. Mocked specs run in es_ES,
+  // so accept either locale's caption for C_BP_Group_ID ("Contact Category" /
+  // "Categoría de contacto") — per the e2e guide's mock-mode rule on localized text.
+  // The regex is anchored on `categoria→` so it still asserts the RESOLVED TARGET
+  // half: the `categoria` source column on its own can never satisfy it.
+  await expect(page.getByTestId('ImportColumnMapping__chip-categoria'))
+    .toContainText(/categoria\s*→\s*(Categoría de contacto|Contact Category)/);
   await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-category-review.png'), fullPage: true });
 
   await page.getByTestId('ImportDialog__importButton').click();

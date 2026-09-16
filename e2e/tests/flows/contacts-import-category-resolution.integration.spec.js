@@ -108,7 +108,18 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     // ETP-4954: the mapping modal is now field-first — the count is FIELDS with a source out
     // of all importable fields (20 for Contacts), not columns mapped out of columns present.
     await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('14/20');
-    await expect(page.getByTestId('ImportColumnMapping__chip-categoria')).toContainText('Contact Category');
+    // ETP-5223: the chip reads `<source column>→<target caption>`, and the target caption
+    // is now resolved through `fieldLabelFn` (the AD label dictionary for the SESSION locale)
+    // instead of the English `field.label` declared in decisions.json. The locale here is
+    // deterministically es_ES — the `integration` project reuses no storageState, `login()`
+    // never seeds `schema-forge-locale`, and core's `useLocaleState` defaults to es_ES — so
+    // "Categoría de contacto" is what a live run prints for C_BP_Group_ID. The English
+    // alternative is deliberate tolerance for a session that DID switch language, not
+    // uncertainty: this assertion is about the mapping, not about the UI language. The regex
+    // is anchored on `categoria→` so it still asserts the RESOLVED TARGET half — the
+    // `categoria` source column on its own can never satisfy it.
+    await expect(page.getByTestId('ImportColumnMapping__chip-categoria'))
+      .toContainText(/categoria\s*→\s*(Categoría de contacto|Contact Category)/);
     await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-tomcat-review.png'), fullPage: true });
 
     await page.getByTestId('ImportDialog__importButton').click();
