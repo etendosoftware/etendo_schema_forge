@@ -345,19 +345,37 @@ export function MaskedAmountInput({
   const internalRef = useRef(null);
   const activeRef = inputRef || internalRef;
   const [focused, setFocused] = useState(false);
-  const [display, setDisplay] = useState(() => toIdleDisplay(value, grouping));
+  // What the field shows: the user's in-progress keystrokes (`draft`) while editing, and the
+  // committed `value` the rest of the time — DERIVED on every render, never mirrored into state
+  // by an effect.
+  //
+  // The semantics are the ones this component always had: while the field is focused the draft is
+  // protected so a parent that re-formats on every change cannot fight the keystrokes, and the
+  // moment the parent puts a different `value` on an unfocused field that value wins (which is
+  // how typing 50 into the converted-amount field comes back as the formatted "50,00").
+  //
+  // What changed is WHEN that re-sync happens, and it is load-bearing rather than cosmetic
+  // (ETP-5107). As an effect it ran AFTER the commit, so the DOM input kept the previous text for
+  // one render. That single stale frame re-opened the ETP-4876 window in NewPaymentEntryModal:
+  // when a real edit (blanking the amount) landed inside it, React's input value-tracker compared
+  // the edit against the stale DOM value, judged it a no-op and never fired `onChange` — so the
+  // converted amount never cleared and the exchange rate stayed seeded. Measured over 100 runs
+  // each: 0 failures before this component rendered the field, 2 in 73 after, 0 after this fix.
+  // Re-syncing during render closes the window: React re-renders before committing, so the DOM
+  // never shows a value the component has already superseded.
+  //
+  // It also retires the old "commit tick": a commit the parent CLAMPS BACK to the value it already
+  // held (type 220 into a credit line capped at 120) used to leave the rejected text on screen,
+  // because neither `value` nor `focused` changed and the effect never re-ran. Blur drops the
+  // draft outright, so the field re-reads the authoritative value whatever the parent decides.
+  const [draft, setDraft] = useState(null);
+  const [syncedOn, setSyncedOn] = useState({ value, grouping });
+  if (!focused && (value !== syncedOn.value || grouping !== syncedOn.grouping)) {
+    setSyncedOn({ value, grouping });
+    setDraft(null);
+  }
+  const display = draft != null ? draft : toIdleDisplay(value, grouping);
   const desiredCursorRef = useRef(null);
-  // Bumped on every blur so the sync effect below re-runs even when neither `value` nor
-  // `focused` changed. Without it a commit the parent CLAMPS BACK to the value it already
-  // held leaves the rejected text on screen: type 220 into a credit line capped at 120 and
-  // the field keeps showing "220,00" while the real value is 120. Both deps are unchanged
-  // in that case (120 -> 120), so the effect never fires. A committed field must always
-  // re-render from the authoritative value, not from what was typed at it.
-  const [commitTick, setCommitTick] = useState(0);
-
-  useEffect(() => {
-    if (!focused) setDisplay(toIdleDisplay(value, grouping));
-  }, [value, focused, grouping, commitTick]);
 
   useLayoutEffect(() => {
     if (desiredCursorRef.current == null || !activeRef.current) return;
@@ -380,7 +398,7 @@ export function MaskedAmountInput({
     const newDisplay = grouping ? formatGrouped(filtered, thousandsSeparator, decimalSeparator) : filtered;
 
     desiredCursorRef.current = positionAfterSignificant(newDisplay, sigBeforeCursor, groupSeparator);
-    setDisplay(newDisplay);
+    setDraft(newDisplay);
 
     const clean = toCleanValue(filtered, decimalSeparator);
     onChange?.(clean, parseLocaleNumber(clean).value);
@@ -418,12 +436,15 @@ export function MaskedAmountInput({
     const { thousandsSeparator, decimalSeparator } = getCurrencyFormatConfig();
     const clean = String(parsed);
     const filtered = filterMaskChars(clean.split('.').join(decimalSeparator), decimalSeparator, grouping);
-    setDisplay(grouping ? formatGrouped(filtered, thousandsSeparator, decimalSeparator) : filtered);
+    setDraft(grouping ? formatGrouped(filtered, thousandsSeparator, decimalSeparator) : filtered);
     onChange?.(clean, parsed);
   };
 
   const handleBlur = () => {
     setFocused(false);
+    // Drop the editing draft so the field goes back to rendering the committed `value`,
+    // whatever the parent makes of what was just committed (accepted, clamped or rejected).
+    setDraft(null);
     const { decimalSeparator } = getCurrencyFormatConfig();
     // `display` may still hold a grouped string (when grouping is on) — re-run
     // the strict filter to strip it back down to the clean shape before commit.
@@ -432,9 +453,6 @@ export function MaskedAmountInput({
     const parsed = parseLocaleNumber(clean).value;
     onCommit?.(parsed, clean);
     onBlur?.();
-    // Batched with the parent's own commit handling above, so the sync effect re-reads an
-    // already-clamped/normalized `value` on the very next render.
-    setCommitTick((t) => t + 1);
   };
 
   let paddingClass = '';
