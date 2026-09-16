@@ -618,7 +618,7 @@ describe('PurchaseInvoiceHeaderTable — column render branches (inline)', () =>
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
     const { container } = render(<>{getColRender('outstandingAmount')(CREDIT_ROW)}</>);
     expect(container.querySelector('button')).toBeTruthy();
-    expect(container.textContent).toBe('cpFavorBadge · 500:EUR');
+    expect(container.textContent).toBe('cpFavorBadge 500:EUR');
   });
 
   it('eTGODueDate — dash when no due date', () => {
@@ -652,7 +652,7 @@ describe('PurchaseInvoiceHeaderTable — outstandingAmount credit-note/return ba
   it('mostly-applied credit memo shows the credit badge, never the pending one (bug repro)', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
     // MOCK_ROWS[7] — -25.30 total, -2.30 left unused.
-    expect(screen.getByText(/cpFavorBadge · 2\.3:GBP/)).toBeInTheDocument();
+    expect(screen.getByText(/cpFavorBadge 2\.3:GBP/)).toBeInTheDocument();
     const outstandingCol = screen.getByTestId('col-render-outstandingAmount');
     expect(outstandingCol.querySelector('[aria-label="addPago"]')?.textContent ?? '')
       .not.toMatch(/cpFavorBadge/);
@@ -660,7 +660,7 @@ describe('PurchaseInvoiceHeaderTable — outstandingAmount credit-note/return ba
 
   it('fully-unapplied return also shows the credit badge (regression guard)', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    expect(screen.getByText(/cpFavorBadge · 27\.6:CHF/)).toBeInTheDocument();
+    expect(screen.getByText(/cpFavorBadge 27\.6:CHF/)).toBeInTheDocument();
   });
 
   it('fully-applied credit memo still shows the green fully-applied badge (unchanged)', () => {
@@ -706,7 +706,7 @@ describe('PurchaseInvoiceHeaderTable — sign-driven payment badge (ETP-4841)', 
 
   it('an ordinary Factura with a NEGATIVE total renders the credit badge, not "pagada"', () => {
     const { container } = renderOutstanding(NEGATIVE_ORDINARY_ROW);
-    expect(container.textContent).toBe('cpFavorBadge · 750:EUR');
+    expect(container.textContent).toBe('cpFavorBadge 750:EUR');
     expect(container.textContent).not.toMatch(/pagada/);
   });
 
@@ -734,7 +734,7 @@ describe('PurchaseInvoiceHeaderTable — sign-driven payment badge (ETP-4841)', 
     expect(col.querySelector('[aria-label="addPago"]')).toBeTruthy();
     expect(screen.getByText('400:USD').closest('button')).toHaveAttribute('aria-label', 'addPago');
     // Case B — negative ordinary invoice is a credit (MOCK_ROWS[3], 900 SEK).
-    expect(screen.getByText(/cpFavorBadge · 900:SEK/)).toBeInTheDocument();
+    expect(screen.getByText(/cpFavorBadge 900:SEK/)).toBeInTheDocument();
     // Case C — negative invoice fully applied (MOCK_ROWS[4]).
     expect(screen.getByText('cpCreditFullyApplied')).toBeInTheDocument();
     // Case D — overpaid positive invoice reads paid (MOCK_ROWS[1] and [5]).
@@ -798,7 +798,7 @@ describe('PurchaseInvoiceHeaderTable — apInvoiceSubtype column-render coverage
   it('outstandingAmount — a NEGATIVE Factura Rectificativa shows the credit badge', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
     const { container } = render(<>{getColRender('outstandingAmount')(RECTIFICATIVA_ROW)}</>);
-    expect(container.textContent).toBe('cpFavorBadge · 15:EUR');
+    expect(container.textContent).toBe('cpFavorBadge 15:EUR');
   });
 
   it('outstandingAmount — fully-consumed negative Factura Rectificativa shows the green fully-applied pill', () => {
@@ -943,14 +943,14 @@ describe('PurchaseInvoiceHeaderTable — branch/fallback coverage (ETP-4738)', (
   it('clicking the credit badge opens the payment history modal', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
     expect(screen.queryByTestId('payment-history-modal')).toBeNull();
-    // MOCK_ROWS[7] credit memo with -2.30 unused → "cpFavorBadge · 2.3:GBP"
-    fireEvent.click(screen.getByText(/cpFavorBadge · 2\.3:GBP/));
+    // MOCK_ROWS[7] credit memo with -2.30 unused → "cpFavorBadge 2.3:GBP"
+    fireEvent.click(screen.getByText(/cpFavorBadge 2\.3:GBP/));
     expect(screen.getByTestId('payment-history-modal')).toBeInTheDocument();
   });
 
   it('closing the modal opened from the credit badge clears the selected row', () => {
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
-    fireEvent.click(screen.getByText(/cpFavorBadge · 27\.6:CHF/));
+    fireEvent.click(screen.getByText(/cpFavorBadge 27\.6:CHF/));
     expect(screen.getByTestId('payment-history-modal')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Close payment modal'));
     expect(screen.queryByTestId('payment-history-modal')).toBeNull();
@@ -1045,7 +1045,7 @@ describe('PurchaseInvoiceHeaderTable — branch/fallback coverage (ETP-4738)', (
     render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
     const row = { ...CREDIT_ROW, outstandingAmount: '-5', 'currency$_identifier': undefined };
     const { container } = renderCell('outstandingAmount', row);
-    expect(container.textContent).toBe('cpFavorBadge · 5:EUR');
+    expect(container.textContent).toBe('cpFavorBadge 5:EUR');
   });
 
   it('outstanding cell falls back to the full total when the amount is missing — the credit reads as fully unapplied', () => {
@@ -1054,7 +1054,7 @@ describe('PurchaseInvoiceHeaderTable — branch/fallback coverage (ETP-4738)', (
     delete row.outstandingAmount;
     const { container } = renderCell('outstandingAmount', row);
     // CREDIT_ROW total is -1000, so the whole balance is still available.
-    expect(container.textContent).toBe('cpFavorBadge · 1000:EUR');
+    expect(container.textContent).toBe('cpFavorBadge 1000:EUR');
     expect(container.textContent).not.toMatch(/cpCreditFullyApplied/);
   });
 
