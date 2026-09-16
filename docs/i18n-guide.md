@@ -136,6 +136,42 @@ const label = resolveUI(dictionary, 'save');           // "Save" or "Guardar"
 const field = resolveLabel(dictionary, 'C_BPartner_ID'); // "Business Partner"
 ```
 
+### Errors thrown from a plain module (carry the key, translate at the boundary)
+
+A module with no dictionary in scope — a parser, a validator, anything in
+`app-shell-core/lib/` — must NOT swallow the problem into an English sentence and call it
+done. Attach the locale key and its params to the error and let the component that owns
+`translate` resolve it; keep the English text on `message` so existing callers, tests and a
+missing locale entry all still read something sensible instead of a raw key.
+
+```js
+// thrower (plain module)
+throw new ImportParseError(`Duplicate column header: "${header}"`, {
+  messageKey: 'importErrorDuplicateHeader',
+  params: { header },
+});
+
+// boundary (the component that holds `translate`)
+const localize = (key, fallback, params) => {
+  if (typeof translate !== 'function') return fallback;
+  const translated = translate(key, params);
+  return translated && translated !== key ? translated : fallback;   // ui() echoes unknown keys
+};
+const message = error.messageKey
+  ? localize(error.messageKey, error.message, error.params)
+  : error.message;
+```
+
+Reference implementation: `parseDelimited.js` / `parseXlsx.js` → `ImportDialog.jsx` (ETP-5223).
+The same posture, without the error object, is what `validateRows.js` and `importEngine.js`
+already use for their row-level messages.
+
+**A user-visible string that is built from a count or a value is not exempt.** The two
+end-of-import toasts (`"N records imported successfully"`) survived four i18n passes purely
+because they were template literals rather than a `DEFAULT_LABELS` entry — a template literal
+is invisible to every "find the hardcoded label" review. Grep for `` toast.success(` `` and
+`` toast.info(` `` before calling a flow translated.
+
 ## Rules for Adding New Translations
 
 ### 1. NEVER hardcode user-visible strings

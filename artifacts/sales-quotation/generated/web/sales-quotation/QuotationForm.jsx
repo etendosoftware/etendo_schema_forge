@@ -3,7 +3,7 @@ import { EntityForm } from '@/components/contract-ui';
 // @sf-generated-start fields:quotation
 const fields = [
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'search', label: 'Business Partner', required: true, section: 'principal', reference: 'BusinessPartner', inputMode: 'search', readOnlyLogic: (record) => record['processed'] === true || record['documentStatus'] === 'TMP' },
-  { key: 'documentNo', column: 'DocumentNo', type: 'text', label: 'Document No.', required: true, readOnly: true, section: 'principal', readOnlyLogic: (record) => record['processed'] === true || record['documentStatus'] === 'TMP' },
+  { key: 'documentNo', column: 'DocumentNo', type: 'text', label: 'Document No.', required: true, readOnly: true, section: 'principal', maxLength: 30, readOnlyLogic: (record) => record['processed'] === true || record['documentStatus'] === 'TMP' },
   { key: 'orderDate', column: 'DateOrdered', type: 'date', label: 'Quotation Date', required: true, section: 'principal', readOnlyLogic: (record) => record['processed'] === true },
   { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: 'Currency', required: true, section: 'principal', reference: 'Currency', inputMode: 'selector', defaultValue: '@C_Currency_ID@', readOnlyLogic: (record) => record['processed'] === true },
   { key: 'priceList', column: 'M_PriceList_ID', type: 'selector', label: 'Price List', required: true, section: 'principal', reference: 'PriceList', inputMode: 'selector', readOnlyLogic: (record) => record['processed'] === true || record['documentStatus'] === 'TMP' },
@@ -14,7 +14,7 @@ const fields = [
   { key: 'rejectReason', column: 'C_Reject_Reason_ID', type: 'selector', label: 'Reject Reason', readOnly: true, section: 'principal', reference: 'Reject_Reason', inputMode: 'selector', displayLogic: (record) => record.documentStatus === 'CJ', readOnlyLogic: (record) => record['documentStatus'] === 'CJ' || record['documentStatus'] === 'CA' },
   { key: 'grandTotalAmount', column: 'GrandTotal', type: 'number', label: 'Total Gross Amount', required: true, readOnly: true, section: 'summary' },
   { key: 'summedLineAmount', column: 'TotalLines', type: 'number', label: 'Total Net Amount', required: true, readOnly: true, section: 'summary' },
-  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'collapsed', readOnlyLogic: (record) => record['processed'] === true },
+  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'collapsed', maxLength: 255, readOnlyLogic: (record) => record['processed'] === true },
 ];
 // @sf-generated-end fields:quotation
 

@@ -98,6 +98,7 @@ import {
   mergeSelectorAuxFields,
   applyLocalChildRowUpdate,
   collectRowFieldValues,
+  preserveGridReadOnlyValues,
 } from '../DetailView.jsx';
 
 describe('mergeSelectorContextFields', () => {
@@ -270,6 +271,74 @@ describe('applyLocalChildRowUpdate', () => {
     expect(() =>
       applyLocalChildRowUpdate({}, 'product', 'PROD123', {}, undefined, {}, { id: 'row-1' })
     ).not.toThrow();
+  });
+});
+
+describe('preserveGridReadOnlyValues', () => {
+  // ETP-5319: Goods Receipt / Goods Shipment `orderQuantity` is `readOnly: true` in both the
+  // generated Table `columns` and Form `fields` statics — it's only ever populated by
+  // AbstractInOutLineHandler's GET-time join onto C_OrderLine, never recomputed by a PATCH's
+  // own single-record response (M_InOutLine.QuantityOrder is null for single-UOM products).
+  const fields = [
+    { key: 'movementQuantity', readOnly: false },
+    { key: 'orderQuantity', readOnly: true },
+  ];
+
+  it('keeps the local value when the server response nulls a readOnly derived column', () => {
+    const currentRow = { id: 'L1', movementQuantity: 5, orderQuantity: 10 };
+    const serverRow = { id: 'L1', movementQuantity: 7, orderQuantity: null };
+    const result = preserveGridReadOnlyValues(currentRow, serverRow, fields);
+    expect(result.orderQuantity).toBe(10);
+    expect(result.movementQuantity).toBe(7);
+  });
+
+  it('keeps the local value when the server response omits a readOnly derived column (undefined)', () => {
+    const currentRow = { id: 'L1', orderQuantity: 10 };
+    const serverRow = { id: 'L1', movementQuantity: 7 };
+    const result = preserveGridReadOnlyValues(currentRow, serverRow, fields);
+    expect(result.orderQuantity).toBe(10);
+  });
+
+  it('does NOT block a legitimate null on a field the user can actually edit', () => {
+    // The user is allowed to clear an editable field — only `readOnly` columns are protected.
+    const currentRow = { id: 'L1', movementQuantity: 5, description: 'old note' };
+    const serverRow = { id: 'L1', movementQuantity: 5, description: null };
+    const fieldsWithDescription = [...fields, { key: 'description', readOnly: false }];
+    const result = preserveGridReadOnlyValues(currentRow, serverRow, fieldsWithDescription);
+    expect(result.description).toBeNull();
+  });
+
+  it('lets a real (non-null) server value for a readOnly column through unchanged', () => {
+    const currentRow = { id: 'L1', orderQuantity: 10 };
+    const serverRow = { id: 'L1', orderQuantity: 25 };
+    const result = preserveGridReadOnlyValues(currentRow, serverRow, fields);
+    expect(result.orderQuantity).toBe(25);
+  });
+
+  it('does not restore a readOnly column when the local row never had a real value either', () => {
+    const currentRow = { id: 'L1', orderQuantity: null };
+    const serverRow = { id: 'L1', orderQuantity: undefined };
+    const result = preserveGridReadOnlyValues(currentRow, serverRow, fields);
+    expect(result.orderQuantity).toBeUndefined();
+  });
+
+  it('is a no-op (returns serverRow as-is) when fields is empty or absent', () => {
+    const currentRow = { id: 'L1', orderQuantity: 10 };
+    const serverRow = { id: 'L1', orderQuantity: null };
+    expect(preserveGridReadOnlyValues(currentRow, serverRow, [])).toBe(serverRow);
+    expect(preserveGridReadOnlyValues(currentRow, serverRow)).toBe(serverRow);
+  });
+
+  it('returns serverRow unchanged (identity) when nothing needed patching', () => {
+    const currentRow = { id: 'L1', orderQuantity: 10 };
+    const serverRow = { id: 'L1', orderQuantity: 10 };
+    expect(preserveGridReadOnlyValues(currentRow, serverRow, fields)).toBe(serverRow);
+  });
+
+  it('passes through null/non-object serverRow and missing currentRow safely', () => {
+    expect(preserveGridReadOnlyValues({ id: 'L1' }, null, fields)).toBeNull();
+    expect(preserveGridReadOnlyValues(null, { id: 'L1', orderQuantity: null }, fields))
+      .toEqual({ id: 'L1', orderQuantity: null });
   });
 });
 
