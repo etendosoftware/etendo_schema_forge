@@ -258,6 +258,14 @@ for (const entry of await readdir(artifactsRoot, { withFileTypes: true })) {
   } catch {
     rawContract = null;
   }
+  let decisions;
+  try {
+    decisions = JSON.parse(await readFile(join(artifactsRoot, entry.name, 'decisions.json'), 'utf8'));
+  } catch {
+    decisions = null;
+  }
+  const configuredVisibleChildren = new Set(Object.keys(decisions?.window?.secondaryTabs ?? {}));
+  const hasExplicitChildVisibility = configuredVisibleChildren.size > 0;
   const primaryEntityName = contract.frontendContract.window.primaryEntity;
   const primarySource = contract.frontendContract.entities[primaryEntityName];
   const primaryRaw = rawContract?.entities?.find((candidate) => candidate.tableName === primarySource?.tableName);
@@ -280,6 +288,11 @@ for (const entry of await readdir(artifactsRoot, { withFileTypes: true })) {
         parent = { resource: entry.name, entityName: primaryEntityName, foreignKey: parentField.name };
       }
     }
+    // Custom window decisions are the source of truth for which child tabs are
+    // actually visible in that window. Do not publish every schema-linked tab
+    // when the UI intentionally exposes only a curated subset. Standard
+    // windows without an explicit child-tab map retain their linked children.
+    if (!isPrimary && hasExplicitChildVisibility && !configuredVisibleChildren.has(entityName)) continue;
     // Only expose children whose parent link is explicitly present in the
     // extracted schema. This prevents unrelated tabs and orphan technical
     // datasets from becoming public resources by accident.
