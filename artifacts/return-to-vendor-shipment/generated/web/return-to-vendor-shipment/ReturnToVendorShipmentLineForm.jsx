@@ -6,7 +6,7 @@ const fields = [
   { key: 'product', column: 'M_Product_ID', type: 'search', label: 'Product', readOnly: true, section: 'principal', reference: 'Product', inputMode: 'search', readOnlyLogic: (record) => record['processed'] === true },
   { key: 'movementQuantity', column: 'MovementQty', type: 'number', labels: {"es_ES":"Cant. a devolver","en_US":"Return Qty"}, label: 'Movement Quantity', required: true, section: 'principal', defaultValue: '0', readOnlyLogic: (record) => record['processed'] === true || record['uomManagement'] === 'Y' },
   { key: 'uOM', column: 'C_UOM_ID', type: 'search', label: 'UOM', required: true, readOnly: true, section: 'other', reference: 'UOM', inputMode: 'search', readOnlyLogic: (record) => record['uomManagement'] === 'Y' },
-  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'other' },
+  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'other', maxLength: 2000 },
   { key: 'orderQuantity', column: 'QuantityOrder', type: 'number', labels: {"es_ES":"Cant. recibida orig.","en_US":"Original Received Qty"}, label: 'Order Quantity', readOnly: true, section: 'principal', readOnlyLogic: (record) => record['processed'] === true },
 ];
 // @sf-generated-end fields:returnToVendorShipmentLine
