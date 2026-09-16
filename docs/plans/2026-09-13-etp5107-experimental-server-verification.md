@@ -933,6 +933,62 @@ This also answers the report's recommendation #1 more completely than a warning 
 longer happens, so there is nothing to warn about in the common case. The residual §7.14.2 asymmetry
 (a TYPED `.`) is unchanged and still a product call.
 
+### 7.20 Closing the branch: the flake this migration introduced, and the gate (2026-09-15/16)
+
+**The component's own regression.** The branch carried a test that failed roughly 1 run in 37 —
+`NewPaymentEntryModal > clears the rate and shows the required-rate error when the amount-in-account
+is blanked` — always by TIMEOUT rather than a wrong value, and always with the rate still reading
+`0,92` instead of blank. Two measurements settled who owned it, same harness and machine: `origin/main`
+0 failures in 100 runs, this branch 2 in 73. It arrived with the field's migration to
+`MaskedAmountInput`.
+
+The cause was WHEN the component re-synced, not what it did. It mirrored `value` into a `display`
+state from an effect, and an effect runs AFTER the commit — so the DOM input kept the previous text
+for one render. That single stale frame re-opened the window ETP-4876 documents: when a real edit
+(blanking the amount) landed inside it, React's input value-tracker compared the edit against the
+stale DOM value, judged it a no-op, and never fired `onChange`. The converted amount then never
+cleared, so the rate stayed seeded.
+
+`display` is now DERIVED on every render, with the arbitration the component always had and the
+tests already encoded: while focused the user's keystrokes are protected so a parent that re-formats
+on every change cannot fight them; the moment the parent puts a different `value` on an unfocused
+field, that value wins. React re-renders before committing, so the DOM never shows a value the
+component has already superseded — the window is removed, not narrowed. The `commitTick` added
+earlier in this branch went with it: it existed only to force that effect to re-run when a parent
+clamped a value back to the one it already held, which a derived display handles by construction.
+
+Two wrong attempts got there first, and the existing tests caught both: gating the draft on `focused`
+silently dropped programmatic edits (`fireEvent.change` without a focus event — ProductPriceBar's
+write-queue spec), and letting the draft always win broke the payment modal's bidirectional
+recompute. **No test was changed to make any of this pass.**
+
+**The `field-number` contract.** `npm run apply:data-testid` names an element it touches
+`<Component>__<hash>`, and that OVERRIDES the meaningful default `MaskedAmountInput` publishes
+(`fields.jsx`: `dataTestId || (name ? 'field-number-' + name : 'field-number')`). Applied blind to
+AmortizationLinesTable it emptied `querySelectorAll('input[data-testid="field-number"]')` and two
+specs died on a 5s `waitFor` — the shape that reads like flakiness and is not. Any new
+`MaskedAmountInput` that the codemod flags should be given its real testid explicitly; the codemod
+skips an element that already has one.
+
+**Two E2E specs encoded the pre-migration input contract.** Both were reproduced live before being
+touched, because a test that fails after a migration is a claim about the app until proven otherwise:
+
+- `assets.integration.spec.js` read the sidebar with the locale-aware `parseCurrency` but the form
+  input with a bare `parseFloat`. `assetValue`/`residualAssetValue` are AD `Amount` references and now
+  group, so `parseFloat("2.000,00")` returned 2 — the reported "Expected: 2, Received: 2000". Live:
+  typing 2000 shows `2.000,00` in the form AND `2.000,00 €` in the sidebar, saves `2000` to
+  `A_ASSET.assetvalueamt`, and survives a reload. Only the parser disagreed.
+- `financial-account-cash-close.integration.spec.js` filled a dot-decimal string, which this ticket's
+  keystroke filter drops under es-ES. Live, on a drawer calculating `-207.636,00 €`: filling
+  `-207636.00` showed `-20.763.600` and left the drawer unbalanced, while `-207636,00` matched the
+  calculated balance, drove the difference to `0,00 €` and raised the balanced pill. The field needed
+  no change in either window.
+
+**Unrelated finding, left for its own ticket.** `lines-overflow-etp5133.mocked.spec.js` called
+`page.screenshot()` directly instead of the gated `captureScreenshot` helper, rewriting twelve
+committed PNGs on every mocked run and leaving the tree dirty. Routed through the helper; the images
+were removed and the README that documents the ETP-5133 bug was kept.
+
 ### 7.13 Still open beyond the 7 points
 
 - The add-line callout race condition from §4.2/§4.3 (typing a price within ~0.85s of selecting the product) — pre-existing, unrelated to ETP-5107, still awaiting a decision on whether it gets its own ticket.
@@ -943,7 +999,13 @@ longer happens, so there is nothing to warn about in the common case. The residu
   narrower residue than it was, and ETP-4777's "prefer the backend-persisted total over a client
   recomputation" principle limits how much client-side rounding should exist at all. Deferred
   deliberately — recorded here so it is not lost.
-- Nothing committed; the full pre-push gate has not been run.
+- Gate status (2026-09-16): steps 0-4 all green — `npm ci`, `check:data-testid` (0 ok), unit tests
+  926 files / 17974 passed, SonarQube Quality Gate **OK** with 0 issues after clearing 12 findings
+  (12 -> 2 -> 0), offline regen 49/49 windows with no drift, XML regen-check 49 OK / 0 FAIL. Mocked
+  E2E green; integration E2E green except two failures unrelated to this ticket: the contacts import
+  silently skips the row whose category is given by CODE (ETP-4905's own subject — the other four
+  rows persist), and the invitation email returns DELIVERY_FAILED from the mail sink. E2E are run by
+  the human; the push is theirs to make.
 
 ---
 
