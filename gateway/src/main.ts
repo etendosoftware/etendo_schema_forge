@@ -113,14 +113,21 @@ async function bootstrap() {
     return res.json(document);
   });
 
-  app.getHttpAdapter().get('/docs', (_req, res) => {
+  const docsPage = (_req: unknown, res: { type: (contentType: string) => { send: (body: string) => void } }) => {
     res.type('html').send(`<!doctype html>
 <html><head><title>Etendo Go Public API Docs</title></head>
 <body>
-  <script id="api-reference" data-url="/api/v1/openapi.json"></script>
+  <script id="api-reference" data-url="/api/openapi.json"></script>
   <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
 </body></html>`);
-  });
+  };
+  // /api is the public production documentation entrypoint. It intentionally
+  // has no app-session guard; data operations under /api/v1 still require an
+  // API key through PublicApiKeyGuard.
+  app.getHttpAdapter().get('/api', docsPage);
+  app.getHttpAdapter().get('/docs', docsPage);
+  app.getHttpAdapter().get('/api/openapi.json', (_req, res) => res.json(document));
+  app.getHttpAdapter().get('/healthz', (_req, res) => res.json({ status: 'ok' }));
 
   await app.listen(process.env.GATEWAY_PORT ?? 4300);
 }
