@@ -23,7 +23,7 @@ const breadcrumb = 'Purchases / Purchase Invoice';
 
 // @sf-generated-start summary:header
 const summary = [
-
+  { key: 'documentNo', column: 'DocumentNo', type: 'string' },
 ];
 
 const statusField = 'documentStatus';
@@ -54,7 +54,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['transactionDocument', 'invoiceDate', 'businessPartner', 'partnerAddress', 'priceList', 'accountingDate', 'paymentTerms', 'paymentMethod', 'currency'];
+const requiredHeaderFields = ['transactionDocument', 'documentNo', 'invoiceDate', 'businessPartner', 'partnerAddress', 'priceList', 'accountingDate', 'paymentTerms', 'paymentMethod', 'currency'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -999,7 +999,8 @@ export const api = {
       "C_DocTypeTarget_ID": "Tipo de documento",
       "PriceList": "Precio",
       "Foreign_Amount": "Importe en Moneda Objetivo",
-      "em_etgo_tbai_status": "Estado Batuz"
+      "em_etgo_tbai_status": "Estado Batuz",
+      "DocumentNo": "N° interno"
     },
     "en_US": {
       "POReference": "Document No.",
@@ -1008,7 +1009,8 @@ export const api = {
       "em_etgo_delivery_status": "Reception Status",
       "C_DocTypeTarget_ID": "Document Type",
       "Foreign_Amount": "Target Currency Amount",
-      "em_etgo_tbai_status": "Batuz Status"
+      "em_etgo_tbai_status": "Batuz Status",
+      "DocumentNo": "Internal No."
     },
     "es_AR": {
       "OutstandingAmt": "Saldo pendiente"

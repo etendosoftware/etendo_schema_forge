@@ -1,8 +1,8 @@
 {
-  "version": "0.94.0",
+  "version": "0.97.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-09-14T18:30:37.761Z",
-  "contractChecksum": "69549fc423c905ef",
+  "updatedAt": "2026-09-16T13:37:22.392Z",
+  "contractChecksum": "11869e4f5a9f5047",
   "apiPrediction": {
     "specName": "purchase-invoice",
     "baseUrl": "/sws/neo/purchase-invoice",
@@ -1374,7 +1374,8 @@
         "C_DocTypeTarget_ID": "Tipo de documento",
         "PriceList": "Precio",
         "Foreign_Amount": "Importe en Moneda Objetivo",
-        "em_etgo_tbai_status": "Estado Batuz"
+        "em_etgo_tbai_status": "Estado Batuz",
+        "DocumentNo": "N° interno"
       },
       "en_US": {
         "POReference": "Document No.",
@@ -1383,7 +1384,8 @@
         "em_etgo_delivery_status": "Reception Status",
         "C_DocTypeTarget_ID": "Document Type",
         "Foreign_Amount": "Target Currency Amount",
-        "em_etgo_tbai_status": "Batuz Status"
+        "em_etgo_tbai_status": "Batuz Status",
+        "DocumentNo": "Internal No."
       },
       "es_AR": {
         "OutstandingAmt": "Saldo pendiente"
@@ -2256,5 +2258,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "5b97daab23cfcd30"
+  "checksum": "4bd3c08df9738927"
 }

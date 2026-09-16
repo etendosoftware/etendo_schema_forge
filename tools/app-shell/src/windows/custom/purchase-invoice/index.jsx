@@ -71,6 +71,7 @@ const LIST_COLUMNS = [
 // before DataTable fires onColumnsReady.
 const OVERDUE_INITIAL_COLUMNS = [
   { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', required: true },
+  { key: 'documentNo', column: 'DocumentNo', type: 'string', required: true },
   { key: 'orderReference', column: 'POReference', type: 'string' },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', required: true },
   { key: 'documentStatus', column: 'DocStatus', type: 'status', required: true },
@@ -88,11 +89,13 @@ const LABEL_OVERRIDES = {
     POReference: 'Nº documento',
     OutstandingAmt: 'Saldo pendiente',
     em_etgo_delivery_status: 'Estado de recepción',
+    DocumentNo: 'N° interno',
   },
   en_US: {
     POReference: 'Document No.',
     OutstandingAmt: 'Outstanding Amount',
     em_etgo_delivery_status: 'Reception Status',
+    DocumentNo: 'Internal No.',
   },
   // ETP-5106: es_AR carried no overrides at all, so the grid fell through to the
   // raw AD label ("Total Pendiente"). Only OutstandingAmt is declared here — the

@@ -528,6 +528,15 @@ export function mergeDefaultsPreservingUserEdits(prev, defaults, userChangedKeys
     return merged;
 }
 
+/**
+ * True for a NEO sequence preview placeholder (e.g. "<10000000>", "<REC-1000008>") — a display
+ * hint for an auto-generated value, never something the user typed. The prefix is doc-type
+ * dependent, so it is not necessarily numeric.
+ */
+export function isSequencePlaceholder(value) {
+    return typeof value === 'string' && /^<[^<>]+>$/.test(value);
+}
+
 export function shouldSkipPayloadField(key, value, backendDefaultKeysRef, userChangedKeysRef, requiredFormKeys, isContactsBusinessPartnerCreate, editing) {
     // Always skip ID fields, identifier companions, and legacy FK keys (e.g. ad_org_id)
     // managed by the backend — these should never be sent by the client on create/update.
@@ -538,9 +547,9 @@ export function shouldSkipPayloadField(key, value, backendDefaultKeysRef, userCh
         return true;
     }
 
-    // Skip NEO sequence placeholders (e.g. "<10000000>") — these are display hints
-    // for auto-generated values and must not be sent to the backend on create.
-    if (typeof value === 'string' && /^<\d+>$/.test(value)) {
+    // Skip NEO sequence placeholders — display hints for auto-generated values that must not
+    // reach the backend.
+    if (isSequencePlaceholder(value)) {
         return true;
     }
 
@@ -757,6 +766,10 @@ export function buildPatchPayload(editing, selected) {
     const payload = {};
     for (const [key, value] of Object.entries(editing)) {
         if (key === 'id') continue;
+        // A sequence placeholder is a display hint, never a user-authored value: the backend
+        // strips it as read-only anyway, and sending it makes the server read the field as
+        // "the caller chose this number", which suppresses its own re-numbering (ETP-5274).
+        if (isSequencePlaceholder(value)) continue;
         if (value !== selected[key]) payload[key] = value;
     }
     return payload;

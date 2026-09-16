@@ -1,8 +1,8 @@
 {
-  "version": "0.94.0",
+  "version": "0.97.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-09-14T18:30:37.761Z",
-  "checksum": "69549fc423c905ef",
+  "updatedAt": "2026-09-16T14:02:24.295Z",
+  "checksum": "38b67b2bee49e106",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -57,7 +57,8 @@
           "C_DocTypeTarget_ID": "Tipo de documento",
           "PriceList": "Precio",
           "Foreign_Amount": "Importe en Moneda Objetivo",
-          "em_etgo_tbai_status": "Estado Batuz"
+          "em_etgo_tbai_status": "Estado Batuz",
+          "DocumentNo": "N° interno"
         },
         "en_US": {
           "POReference": "Document No.",
@@ -66,7 +67,8 @@
           "em_etgo_delivery_status": "Reception Status",
           "C_DocTypeTarget_ID": "Document Type",
           "Foreign_Amount": "Target Currency Amount",
-          "em_etgo_tbai_status": "Batuz Status"
+          "em_etgo_tbai_status": "Batuz Status",
+          "DocumentNo": "Internal No."
         },
         "es_AR": {
           "OutstandingAmt": "Saldo pendiente"
@@ -172,7 +174,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "!!record.id"
+              "js": "record['processed'] === true"
             }
           },
           {
@@ -184,16 +186,17 @@
             "tsType": "string",
             "visibility": "readOnly",
             "required": true,
-            "grid": false,
-            "form": false,
+            "grid": true,
+            "form": true,
             "sourceRequired": true,
             "derivation": {
               "type": "sequence",
               "source": "documentType.sequence"
             },
             "section": "principal",
-            "seq": 20,
+            "seq": 12,
             "businessCritical": true,
+            "gridOrder": 10,
             "validation": {
               "required": true,
               "maxLength": 30
@@ -5336,7 +5339,8 @@
           "C_DocTypeTarget_ID": "Tipo de documento",
           "PriceList": "Precio",
           "Foreign_Amount": "Importe en Moneda Objetivo",
-          "em_etgo_tbai_status": "Estado Batuz"
+          "em_etgo_tbai_status": "Estado Batuz",
+          "DocumentNo": "N° interno"
         },
         "en_US": {
           "POReference": "Document No.",
@@ -5345,7 +5349,8 @@
           "em_etgo_delivery_status": "Reception Status",
           "C_DocTypeTarget_ID": "Document Type",
           "Foreign_Amount": "Target Currency Amount",
-          "em_etgo_tbai_status": "Batuz Status"
+          "em_etgo_tbai_status": "Batuz Status",
+          "DocumentNo": "Internal No."
         },
         "es_AR": {
           "OutstandingAmt": "Saldo pendiente"
@@ -10731,7 +10736,8 @@
         "C_DocTypeTarget_ID": "Tipo de documento",
         "PriceList": "Precio",
         "Foreign_Amount": "Importe en Moneda Objetivo",
-        "em_etgo_tbai_status": "Estado Batuz"
+        "em_etgo_tbai_status": "Estado Batuz",
+        "DocumentNo": "N° interno"
       },
       "en_US": {
         "POReference": "Document No.",
@@ -10740,7 +10746,8 @@
         "em_etgo_delivery_status": "Reception Status",
         "C_DocTypeTarget_ID": "Document Type",
         "Foreign_Amount": "Target Currency Amount",
-        "em_etgo_tbai_status": "Batuz Status"
+        "em_etgo_tbai_status": "Batuz Status",
+        "DocumentNo": "Internal No."
       },
       "es_AR": {
         "OutstandingAmt": "Saldo pendiente"

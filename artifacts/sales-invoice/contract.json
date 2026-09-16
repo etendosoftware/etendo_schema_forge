@@ -1,8 +1,8 @@
 {
-  "version": "0.89.0",
+  "version": "0.90.0",
   "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-09-14T18:30:38.298Z",
-  "checksum": "7d1889e746ca5e40",
+  "updatedAt": "2026-09-16T13:15:49.014Z",
+  "checksum": "15bd910a9b725fa0",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -222,7 +222,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "!!record.id"
+              "js": "record['processed'] === true"
             }
           },
           {
