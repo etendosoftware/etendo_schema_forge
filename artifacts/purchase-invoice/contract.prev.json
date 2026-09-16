@@ -1,8 +1,8 @@
 {
-  "version": "0.97.0",
+  "version": "0.98.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-09-16T14:02:24.295Z",
-  "checksum": "38b67b2bee49e106",
+  "updatedAt": "2026-09-16T16:35:38.308Z",
+  "checksum": "11869e4f5a9f5047",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -194,7 +194,7 @@
               "source": "documentType.sequence"
             },
             "section": "principal",
-            "seq": 12,
+            "seq": 17,
             "businessCritical": true,
             "gridOrder": 10,
             "validation": {
