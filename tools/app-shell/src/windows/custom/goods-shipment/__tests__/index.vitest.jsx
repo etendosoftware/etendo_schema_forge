@@ -61,7 +61,10 @@ vi.mock('@generated/goods-shipment/custom/BulkInvoiceFromShipment', () => ({
 }));
 
 let bulkDocumentActionCalls = [];
-vi.mock('@/components/contract-ui/BulkDocumentAction', () => ({
+// The named exports come from the shared helper (it documents why a mock must expose
+// the module's FULL export surface); only the `default` stub is window-specific.
+vi.mock('@/components/contract-ui/BulkDocumentAction', async () => ({
+  ...(await import('@/test/bulkDocumentActionMock.js')).bulkDocumentActionNamedExports(),
   default: (props) => {
     bulkDocumentActionCalls.push(props);
     const { entity, labelKey } = props;
@@ -69,15 +72,6 @@ vi.mock('@/components/contract-ui/BulkDocumentAction', () => ({
       <div data-testid={`bulk-document-action-${labelKey}`} data-entity={entity} data-label-key={labelKey} />
     );
   },
-  buildInOutActions: vi.fn(() => []),
-  buildPostActions: vi.fn(() => []),
-  postRowFilter: vi.fn(),
-  // ETP-5302 — the bulk Descontabilizar pair. A module mock must expose EVERY
-  // named export the module under test imports: this window's import statement
-  // pulls these two in, and omitting them makes the whole file fail to load with
-  // "No <export> is defined on the ... mock", not just the unpost tests.
-  buildUnpostActions: vi.fn(() => []),
-  unpostRowFilter: vi.fn(),
 }));
 
 vi.mock('../GoodsShipmentPreview', () => ({
