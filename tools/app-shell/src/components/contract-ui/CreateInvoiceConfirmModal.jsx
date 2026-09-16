@@ -108,11 +108,36 @@ export default function CreateInvoiceConfirmModal({
     : ui('soCreateInvoiceCheckDesc');
 
   const canConfirm = checked && (!showPriceListPicker || !!priceListId);
+  // Sonar S3776 — the primary button below reused `loading || !canConfirm`
+  // three times (disabled, opacity, cursor); computing it once removes two
+  // redundant evaluations from the function's cognitive complexity.
+  const confirmDisabled = loading || !canConfirm;
   // ETP-5333 — while the invoice is being created, the modal must stay mounted
   // (see the primary button below): a backdrop click or the × must not close it
   // out from under the in-flight request, which would reproduce the same
   // "closes with no feedback" symptom the loading state exists to prevent.
   const dismiss = loading ? undefined : onClose;
+  // Sonar S3776 — the checkbox card below branched on `checked` six separate
+  // times (padding/border/background/title color/box border/box background).
+  // Collapsing them into one lookup keeps the same rendered values but leaves
+  // only one ternary instead of six.
+  const checkedStyle = checked
+    ? {
+        cardPadding: '11px 13px',
+        cardBorder: '2px solid var(--status-info-fg)',
+        cardBackground: 'var(--status-info-bg)',
+        titleColor: 'var(--status-info-fg)',
+        boxBorder: 'none',
+        boxBackground: 'var(--status-info-fg)',
+      }
+    : {
+        cardPadding: '12px 14px',
+        cardBorder: '1px solid hsl(var(--border-subtle))',
+        cardBackground: 'hsl(var(--card))',
+        titleColor: 'hsl(var(--foreground))',
+        boxBorder: '1.5px solid hsl(var(--text-disabled))',
+        boxBackground: 'hsl(var(--card))',
+      };
 
   return createPortal(
     <div data-testid="create-invoice-confirm-modal" onClick={dismiss} style={overlayStyle}>
@@ -154,15 +179,15 @@ export default function CreateInvoiceConfirmModal({
             onClick={() => setChecked(v => !v)}
             style={{
               display: 'flex', alignItems: 'center', gap: 12,
-              padding: checked ? '11px 13px' : '12px 14px', borderRadius: 8, cursor: 'pointer',
-              border: checked ? '2px solid var(--status-info-fg)' : '1px solid hsl(var(--border-subtle))',
-              background: checked ? 'var(--status-info-bg)' : 'hsl(var(--card))',
+              padding: checkedStyle.cardPadding, borderRadius: 8, cursor: 'pointer',
+              border: checkedStyle.cardBorder,
+              background: checkedStyle.cardBackground,
               transition: 'border-color 0.15s, background 0.15s',
             }}
           >
             <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>🧾</span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 500, color: checked ? 'var(--status-info-fg)' : 'hsl(var(--foreground))' }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: checkedStyle.titleColor }}>
                 {ui('soCreateInvoiceTitle')}
               </div>
               <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 3, lineHeight: 1.4 }}>
@@ -171,8 +196,8 @@ export default function CreateInvoiceConfirmModal({
             </div>
             <div style={{
               width: 18, height: 18, borderRadius: 4, flexShrink: 0,
-              border: checked ? 'none' : '1.5px solid hsl(var(--text-disabled))',
-              background: checked ? 'var(--status-info-fg)' : 'hsl(var(--card))',
+              border: checkedStyle.boxBorder,
+              background: checkedStyle.boxBackground,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
               {checked && (
@@ -191,8 +216,8 @@ export default function CreateInvoiceConfirmModal({
           <button
             type="button"
             onClick={() => onConfirm(priceListId)}
-            disabled={loading || !canConfirm}
-            style={{ ...btnPrimaryStyle, opacity: (loading || !canConfirm) ? 0.6 : 1, cursor: (loading || !canConfirm) ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            disabled={confirmDisabled}
+            style={{ ...btnPrimaryStyle, opacity: confirmDisabled ? 0.6 : 1, cursor: confirmDisabled ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
             {loading && <Spinner data-testid="Spinner__e6fb8b" />}
             {loading ? ui('soProcessing') : ui('soCreateDocsBtn')}
