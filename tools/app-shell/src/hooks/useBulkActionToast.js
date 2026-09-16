@@ -16,7 +16,12 @@ function normalizeBulkActionResult(result) {
   };
 }
 
-function showBulkActionToast(ui, result) {
+// ETP-5302 — exported so a caller that already holds a `useUI()` result can show the
+// toast immediately, without mounting `useBulkActionToast()` itself. Mounting the hook
+// just to reach `showResult` also installs its sessionStorage-draining effect, which
+// re-runs whenever `ui` changes identity and would consume the caller's own persisted
+// result before a fallback reload could hand it to the next mount.
+export function showBulkActionToast(ui, result) {
   const { ok, omitted, failed } = normalizeBulkActionResult(result);
   // Backward compatible: when nothing was omitted (every consumer that doesn't pass
   // a `rowFilter`, plus a clean run of one that does), the message stays the plain

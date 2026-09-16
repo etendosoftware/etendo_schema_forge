@@ -75,10 +75,10 @@ describe('ReturnToVendorShipmentWindow custom wrapper', () => {
       );
     });
 
-    it('wires BulkDocumentAction to labelKey="confirmBulk"', () => {
+    it('wires BulkDocumentAction to labelKey="process" (ETP-5302)', () => {
       assert.match(
         src,
-        /<BulkDocumentAction[\s\S]{0,200}labelKey="confirmBulk"/,
+        /<BulkDocumentAction[\s\S]{0,200}labelKey="process"/,
       );
     });
 

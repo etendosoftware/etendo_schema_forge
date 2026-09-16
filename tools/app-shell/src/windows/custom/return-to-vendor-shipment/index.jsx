@@ -15,7 +15,7 @@ function ReturnToVendorShipmentBulkActions(props) {
         {...props}
         entity="returnToVendorShipment"
         buildActions={buildInOutActions}
-        labelKey="confirmBulk"
+        labelKey="process"
         data-testid="BulkDocumentAction__a5f79c" />
       <CopyLinkButton
         selectedRows={props.selectedRows}

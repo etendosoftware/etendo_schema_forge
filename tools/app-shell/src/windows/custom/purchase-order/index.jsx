@@ -75,7 +75,7 @@ function PurchaseOrderBulkActions(props) {
       <BulkDocumentAction
         {...props}
         buildActions={buildInOutActions}
-        labelKey="confirmBulk"
+        labelKey="process"
         data-testid="BulkDocumentAction__b7ace5" />
       <CopyLinkButton
         selectedRows={props.selectedRows}

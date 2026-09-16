@@ -155,6 +155,12 @@ vi.mock('@/components/contract-ui/BulkDocumentAction', () => ({
   buildInOutActions: vi.fn(),
   buildPostActions: vi.fn(() => []),
   postRowFilter: vi.fn(),
+  // ETP-5302 — the bulk Descontabilizar pair. A module mock must expose EVERY
+  // named export the module under test imports: this window's import statement
+  // pulls these two in, and omitting them makes the whole file fail to load with
+  // "No <export> is defined on the ... mock", not just the unpost tests.
+  buildUnpostActions: vi.fn(() => []),
+  unpostRowFilter: vi.fn(),
 }));
 
 vi.mock('@/components/contract-ui/CloneOrderModal', () => ({
@@ -215,7 +221,9 @@ vi.mock('react-router-dom', () => ({
 
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
+import {
+  postRowFilter, buildPostActions, buildUnpostActions, unpostRowFilter,
+} from '@/components/contract-ui/BulkDocumentAction';
 import GoodsReceiptWindow from '../index.jsx';
 
 const DEFAULT_PROPS = {
@@ -456,6 +464,70 @@ describe('GoodsReceiptWindow', () => {
     const postCall = bulkDocumentActionCalls.find((p) => p.labelKey === 'post');
     expect(postCall).toBeDefined();
     expect(postCall.rowFilter).toBe(postRowFilter);
+  });
+
+  // ETP-5302 — the in-out (DR→CO) bulk button is labelled "Procesar" (`process`),
+  // NOT "Confirmar" (`confirmBulk`, now deleted from the locales): "Confirmar" is
+  // the label of the dropdown OPTION inside the dialog. Asserted alongside the
+  // `post` instance above so the two BulkDocumentAction mounts of this window
+  // stay distinguishable by labelKey.
+  it('wires the in-out bulk BulkDocumentAction to labelKey="process"', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    const labelKeys = bulkDocumentActionCalls.map((p) => p.labelKey);
+    expect(labelKeys).toContain('process');
+    expect(labelKeys).not.toContain('confirmBulk');
+    const processCall = bulkDocumentActionCalls.find((p) => p.labelKey === 'process');
+    expect(processCall.entity).toBe('goodsReceipt');
+  });
+
+  // ── ETP-5302 — bulk Descontabilizar (unpost) ───────────────────────────────
+  // Its own button rather than a second option inside "Contabilizar" (that button
+  // would then be named after the opposite of what it does). The gate itself
+  // (`buildUnpostActions` / `unpostRowFilter`) is covered exhaustively in
+  // BulkDocumentAction.vitest.jsx — these tests only verify this window mounts a
+  // THIRD instance and hands the SHARED helper references through, rather than
+  // re-deriving its own local copies (which is how two implementations of one rule
+  // drift apart — the root cause of the ETP-5302 bug itself).
+  describe('ETP-5302 — bulk unpost button', () => {
+    const unpostCall = () => bulkDocumentActionCalls.find((p) => p.labelKey === 'unpost');
+
+    it('mounts a third BulkDocumentAction for unpost, on the neoAction path', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+
+      // Deduped, order preserved: proves all three instances mount in this order
+      // without being brittle about how many times React re-rendered them.
+      const labelKeys = bulkDocumentActionCalls.map((p) => p.labelKey);
+      expect(labelKeys.filter((k, i) => labelKeys.indexOf(k) === i)).toEqual(['process', 'post', 'unpost']);
+      expect(unpostCall().actionMode).toBe('neoAction');
+      expect(unpostCall().entity).toBe('goodsReceipt');
+    });
+
+    it('wires the SHARED buildUnpostActions/unpostRowFilter references, not local copies', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+
+      expect(unpostCall().buildActions).toBe(buildUnpostActions);
+      expect(unpostCall().rowFilter).toBe(unpostRowFilter);
+    });
+
+    it('keeps the post and unpost instances independent (no crossed helpers)', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+
+      const postCall = bulkDocumentActionCalls.find((p) => p.labelKey === 'post');
+      expect(postCall.buildActions).toBe(buildPostActions);
+      expect(postCall.rowFilter).toBe(postRowFilter);
+      expect(postCall.rowFilter).not.toBe(unpostRowFilter);
+    });
+
+    // A receipt's accounting reversal IS a standalone action here, so no bulk
+    // instance of this window chains an unpost before its document action — that
+    // opt-in belongs to the invoice windows only.
+    it('never opts into preUnpostActions on any of its bulk instances', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+
+      for (const call of bulkDocumentActionCalls) {
+        expect(call.preUnpostActions).toBeUndefined();
+      }
+    });
   });
 
   // ETP-5209 regression: production crash root cause. The real

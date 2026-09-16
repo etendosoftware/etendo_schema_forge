@@ -481,3 +481,58 @@ the padding rules change.
 Covered by `getTabStripBleedClassName` cases in
 `src/components/contract-ui/__tests__/DetailView.helpers.vitest.jsx` (one per row of the
 table above, plus a `formScrollPaddingX` override).
+
+## Bulk actions refetch the list in place — ETP-5302
+
+**Applies to every list with a selection toolbar.** Running a bulk action from the floating
+selection bar no longer reloads the browser page. The action ends with
+`clearSelection()` → result toast → `refresh()`, where `refresh` is the in-place refetch
+`ListView` now hands to its `bulkActions` slot.
+
+What a user sees change: scroll position, the active filters (column filters, subset/quick
+filters, the advanced-filter popover) and the SPA itself all survive the action, and the
+result toast appears immediately instead of after a full reboot.
+
+The reload was never about the data. It was the mechanism that let the toast survive: the
+result was written to `sessionStorage` under `bulkActionResult` and read back by
+`useBulkActionToast()`'s mount effect on the *next* mount. Showing the toast directly removes
+the only reason to reload. That persist-then-reload path is kept, but only as a fallback for
+a bulk host mounted outside `ListView`'s slot, so no caller can silently lose its result.
+
+Windows affected: every `BulkDocumentAction` mount (sales-invoice, purchase-invoice,
+goods-receipt, goods-shipment, sales-order, purchase-order, return-material-receipt,
+return-to-vendor-shipment, matched-purchase-invoices), the sales-order and purchase-order
+kebabs ("Crear facturas" / "Crear albaranes"), and goods-shipment's "Crear Factura" — that
+last one previously neither reloaded nor refreshed, so it left the rows it had just invoiced
+showing a stale invoicing status.
+
+In the same change, the bulk dialog's confirm button reads **Aceptar** / **Accept**
+(`accept`) instead of **Completado** (`done`). "Completado" is the name of a document
+*state* — the same lists show it in their "Estado doc." column — so the button read as
+though pressing it would mark the selected documents completed. `done` is unchanged;
+`RecordCreateModal.jsx` still uses it.
+
+Developer contract (the slot's context object, the mandatory fallback branch,
+`showBulkActionToast` vs `useBulkActionToast`): [`../ui-customization.md`](../ui-customization.md)
+§9e.
+
+## Reversing a posted document before reactivating it lives in one helper — ETP-5302
+
+**Applies to every window whose `decisions.json` carries `preUnpost: true` on a menu action**
+(today sales-invoice, purchase-invoice, amortization). The rule — *reactivating an
+already-posted record unposts it first* — is implemented exactly once, in
+`tools/app-shell/src/lib/preUnpost.js`, and both surfaces call it: the detail kebab
+(`DetailMoreActionsMenu.jsx`) and the list's bulk bar (`BulkDocumentAction.jsx`, via its
+`preUnpostActions` prop).
+
+This is a rule that was previously implemented in one surface only, and the divergence was
+invisible until a user hit it: reactivating a posted invoice from the form worked, while the
+very same invoice reactivated from the list's bulk bar failed with "Factura contabilizada",
+because the bulk path sent a bare `docAction: 'RE'` that Core's `C_INVOICE_POST` rejects.
+Two implementations of one rule is what let them diverge, so there is now one.
+
+It is **opt-in per window**, and deliberately so: orders do not carry `preUnpostActions`
+because `C_ORDER_POST1` has no posted-state guard on its `RE` branch, making an unpost there
+a gratuitous accounting reversal. Full reference, including the `isPosted` /
+`runPreUnpost` contracts and why the helper is a plain module rather than a hook:
+[`../ui-customization.md`](../ui-customization.md) §9e.

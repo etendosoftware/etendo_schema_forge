@@ -17,8 +17,10 @@
 
 // Kebab menu in the list selection toolbar that groups bulk creation actions
 // (Create Invoices / Create Shipments) for selected Sales Orders. Each action
-// fans out to the per-record NeoHandler endpoint and aggregates results via
-// sessionStorage, consumed by useBulkActionToast on next page load.
+// fans out to the per-record NeoHandler endpoint and aggregates the results into a
+// single toast. ETP-5302 — the aggregate is shown directly and the list refetches in
+// place via the `refresh` handed to the `bulkActions` slot; the sessionStorage-then-
+// full-reload handoff survives only as a fallback for hosts outside that slot.
 
 import { useState } from 'react';
 import { MoreVertical, Receipt, Truck } from 'lucide-react';
@@ -31,8 +33,7 @@ import {
 } from '@/components/ui/dropdown-menu.jsx';
 import { useUI } from '@/i18n';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
-
-const STORAGE_KEY = 'bulkActionResult';
+import { showBulkActionToast, persistBulkActionResult } from '@/hooks/useBulkActionToast';
 const COMPLETED = 'CO';
 const DRAFT = 'DR';
 
@@ -120,10 +121,13 @@ async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
     }));
   const ok = outcomes.length - failed.length;
 
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ ok, failed }));
+  // ETP-5302 — returns the result instead of persisting it. Persisting is only needed
+  // by the legacy reload path; when the list can refetch in place the caller shows the
+  // toast directly and sessionStorage never comes into play.
+  return { ok, failed };
 }
 
-export default function BulkOrderMoreMenu({ selectedRows, clearSelection, token, apiBaseUrl }) {
+export default function BulkOrderMoreMenu({ selectedRows, clearSelection, token, apiBaseUrl, refresh }) {
   const ui = useUI();
   const [running, setRunning] = useState(false);
 
@@ -132,8 +136,20 @@ export default function BulkOrderMoreMenu({ selectedRows, clearSelection, token,
   const handleSelect = (action) => async () => {
     if (running) return;
     setRunning(true);
-    await runBulkOrderAction({ rows: selectedRows, action, apiBaseUrl, token, ui });
+    const result = await runBulkOrderAction({ rows: selectedRows, action, apiBaseUrl, token, ui });
     setRunning(false);
+
+    // ETP-5302 — refetch the rows in place rather than reloading the whole browser page,
+    // matching BulkDocumentAction's button right next to this menu in the same bar.
+    if (refresh) {
+      clearSelection();
+      showBulkActionToast(ui, result);
+      refresh();
+      return;
+    }
+
+    // No refetch available (mounted outside ListView's `bulkActions` slot): legacy path.
+    persistBulkActionResult(result);
     setTimeout(() => {
       clearSelection();
       window.location.reload();

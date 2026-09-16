@@ -1,14 +1,60 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toast } from 'sonner';
 
-vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+// ETP-5302 — the identity translator every pre-existing test relies on
+// (`bulkCompletion`, `confirm`, `accept`, … render as their own key), EXCEPT for the
+// two bulk-result message keys, which carry `{ok}`/`{omitted}`/`{failed}`
+// placeholders the toast fills in. Mapping only those two leaves every existing
+// assertion untouched while letting the new toast tests assert the real counts
+// instead of a bare key. Declared through vi.hoisted because vi.mock factories are
+// hoisted above every import (a plain const would be in the TDZ when it runs).
+const { UI_MESSAGES } = vi.hoisted(() => ({
+  UI_MESSAGES: {
+    processExecuted: '{ok} ok, {failed} failed',
+    processExecutedWithOmitted: '{ok} ok, {omitted} omitted, {failed} failed',
+  },
 }));
 
+vi.mock('@/i18n', () => ({
+  useUI: () => (key) => UI_MESSAGES[key] ?? key,
+}));
+
+// ETP-5302 — the new in-place path shows the result toast synchronously (the old
+// one persisted it to sessionStorage and let the post-reload mount of
+// `useBulkActionToast` render it), so `sonner` is now an observable collaborator
+// of this component and has to be mocked to be asserted on.
+vi.mock('sonner', () => ({
+  toast: {
+    success: vi.fn(),
+    warning: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
+// ETP-5302 — promoted from an inline `vi.fn()` (a NEW spy on every render, so nothing
+// could be asserted on it) to a stable hoisted mock. The pre-unpost tests at the bottom
+// of this file need to prove the ORDER of two calls that go through two DIFFERENT
+// executors: the unpost runs on `useNeoAction`, the document action on
+// `useDocumentAction`. Its resolved value ({}, a success) is re-armed in the file-level
+// beforeEach below, exactly matching the old inline behaviour every pre-existing test
+// relies on.
+const { mockDocExecute } = vi.hoisted(() => ({ mockDocExecute: vi.fn() }));
 vi.mock('@/hooks/useDocumentAction', () => ({
-  useDocumentAction: () => ({
-    execute: vi.fn().mockResolvedValue({}),
-  }),
+  useDocumentAction: () => ({ execute: mockDocExecute }),
+}));
+
+// ETP-5302 — the pre-unpost failure message reaches the user through
+// `translateBackendError` ("Factura contabilizada" → the localized wording), so the
+// translator is now an observable collaborator. Spread over the real module so every
+// other export stays genuine; the default implementation is the identity function, which
+// leaves every pre-existing assertion in this file untouched.
+const { mockTranslateBackendError } = vi.hoisted(() => ({
+  mockTranslateBackendError: vi.fn((msg) => msg),
+}));
+vi.mock('@/lib/backendErrors.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  translateBackendError: (...args) => mockTranslateBackendError(...args),
 }));
 
 // ETP-5075 — `useNeoAction` backs the `actionMode="neoAction"` path. Exposed as
@@ -53,12 +99,39 @@ vi.mock('@/components/ui/label.jsx', () => ({
   Label: ({ children }) => <label>{children}</label>,
 }));
 
-import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter } from '../BulkDocumentAction.jsx';
+import BulkDocumentAction, {
+  buildInOutActions, buildPostActions, postRowFilter, buildUnpostActions, unpostRowFilter,
+} from '../BulkDocumentAction.jsx';
 
+// ETP-5302 — the dialog's confirm button moved from `done` to `accept`. `done` renders
+// "Completado" in es_ES, which is the name of a document STATUS, so the button read as if
+// it would mark the selected documents as completed; it now reads "Aceptar"/"Accept".
+// (`done` itself is untouched — RecordCreateModal still uses it.) The mocked useUI is the
+// identity function, so the rendered text IS the key: centralized here so the next rename
+// is a one-line change instead of ten.
+const CONFIRM_BUTTON = 'accept';
+
+// File-level: re-arms the two hoisted mocks' default behaviour before EVERY test, so a
+// per-test override (a rejection, a deferred promise, a `{ success: false }`) can never
+// leak into the next one. Runs before any nested beforeEach, and `vi.clearAllMocks()`
+// (used by several blocks below) only clears recorded calls, never implementations.
+beforeEach(() => {
+  mockDocExecute.mockReset();
+  mockDocExecute.mockResolvedValue({});
+  mockTranslateBackendError.mockReset();
+  mockTranslateBackendError.mockImplementation((msg) => msg);
+});
+
+// ETP-5302 — the DR→CO dropdown option is labelled with the `confirm` key
+// ("Confirmar" in es_ES), NOT `book`. `book` also resolves to "Procesar" in
+// es_ES, which is the label the *button* that opens this dialog now carries
+// (`labelKey="process"` at every call site), so the old wiring rendered a
+// "Procesar" button whose only dropdown option was also "Procesar" — the two
+// halves of the same dialog said the same word and neither said "Confirmar".
 describe('buildInOutActions', () => {
   it('returns CO action when rows have draft status', () => {
     const rows = [{ documentStatus: 'DR' }];
-    expect(buildInOutActions(rows)).toEqual([{ value: 'CO', labelKey: 'book' }]);
+    expect(buildInOutActions(rows)).toEqual([{ value: 'CO', labelKey: 'confirm' }]);
   });
 
   it('returns empty array when no draft rows', () => {
@@ -68,16 +141,22 @@ describe('buildInOutActions', () => {
 
   it('checks docStatus fallback', () => {
     const rows = [{ docStatus: 'DR' }];
-    expect(buildInOutActions(rows)).toEqual([{ value: 'CO', labelKey: 'book' }]);
+    expect(buildInOutActions(rows)).toEqual([{ value: 'CO', labelKey: 'confirm' }]);
+  });
+
+  it('never labels the CO action with the legacy book key (ETP-5302)', () => {
+    const rows = [{ documentStatus: 'DR' }, { docStatus: 'DR' }];
+    expect(buildInOutActions(rows).map((a) => a.labelKey)).not.toContain('book');
   });
 });
 
 // ETP-5209 — buildPostActions/postRowFilter back the row-hover kebab and the
 // second bulk BulkDocumentAction instance added to purchase-invoice, sales-invoice,
 // goods-receipt and goods-shipment. Unlike buildInOutActions (and the
-// matched-purchase-invoices post/unpost pair), this gate offers only 'post' — there
-// is no bulk unpost for these windows — and requires a row to be BOTH processed
-// (completed) AND not yet posted.
+// matched-purchase-invoices post/unpost pair), this gate offers only 'post' and requires
+// a row to be BOTH processed (completed) AND not yet posted. The bulk UNPOST counterpart
+// is a separate pair (buildUnpostActions/unpostRowFilter, added by ETP-5302 and covered
+// below), mounted only by goods-receipt and goods-shipment.
 describe('buildPostActions', () => {
   it('offers post when at least one selected row is processed and not posted', () => {
     const rows = [{ processed: 'Y', posted: 'N' }];
@@ -134,6 +213,69 @@ describe('postRowFilter — pre-blocks rows the Post action cannot touch', () =>
 
   it('does not gate a different action (always true when action !== post)', () => {
     expect(postRowFilter({ processed: 'N', posted: 'Y' }, 'unpost', ui)).toBe(true);
+  });
+});
+
+// ETP-5302 — bulk "Descontabilizar". A SEPARATE pair from buildPostActions/postRowFilter
+// on purpose: goods-receipt and goods-shipment mount both, while sales-invoice and
+// purchase-invoice mount only the post pair — on an invoice the accounting reversal is a
+// step INSIDE Reactivar (see `preUnpostActions` at the bottom of this file), never a
+// standalone user action. Keeping the two pairs separate is what makes that difference
+// expressible per window instead of a flag inside one shared helper.
+describe('buildUnpostActions', () => {
+  it('offers unpost when at least one selected row is posted', () => {
+    expect(buildUnpostActions([{ posted: 'Y' }])).toEqual([{ value: 'unpost', labelKey: 'unpost' }]);
+  });
+
+  it('returns empty array when no selected row is posted', () => {
+    expect(buildUnpostActions([{ posted: 'N' }, { posted: 'N' }])).toEqual([]);
+  });
+
+  it('offers unpost for a mixed selection (at least one posted row is enough)', () => {
+    const rows = [{ posted: 'N' }, { processed: 'Y', posted: 'Y' }, {}];
+    expect(buildUnpostActions(rows)).toEqual([{ value: 'unpost', labelKey: 'unpost' }]);
+  });
+
+  it('treats a real boolean true/false the same as Y/N', () => {
+    expect(buildUnpostActions([{ posted: true }])).toEqual([{ value: 'unpost', labelKey: 'unpost' }]);
+    expect(buildUnpostActions([{ posted: false }])).toEqual([]);
+  });
+
+  it('returns empty array for an empty selection (the button never renders)', () => {
+    expect(buildUnpostActions([])).toEqual([]);
+  });
+
+  // Unlike buildPostActions, this gate deliberately does NOT look at `processed`: a
+  // posted document is by definition already completed, so adding the check would only
+  // hide the action on rows whose `processed` flag the list happens not to carry.
+  it('does not require the processed flag — being posted is enough', () => {
+    expect(buildUnpostActions([{ posted: 'Y' }])).toEqual([{ value: 'unpost', labelKey: 'unpost' }]);
+  });
+});
+
+describe('unpostRowFilter — pre-blocks rows the Unpost action cannot touch', () => {
+  const ui = (key) => key;
+
+  it('allows a posted row', () => {
+    expect(unpostRowFilter({ posted: 'Y' }, 'unpost', ui)).toBe(true);
+    expect(unpostRowFilter({ posted: true }, 'unpost', ui)).toBe(true);
+  });
+
+  it('blocks a not-posted row with bulkRowNotPosted', () => {
+    expect(unpostRowFilter({ posted: 'N' }, 'unpost', ui)).toBe('bulkRowNotPosted');
+    expect(unpostRowFilter({}, 'unpost', ui)).toBe('bulkRowNotPosted');
+  });
+
+  it('routes the rejection through the supplied ui() translator', () => {
+    const translate = vi.fn(() => 'No está contabilizado');
+    expect(unpostRowFilter({ posted: 'N' }, 'unpost', translate)).toBe('No está contabilizado');
+    expect(translate).toHaveBeenCalledWith('bulkRowNotPosted');
+  });
+
+  it('does not gate a different action (always true when action !== unpost)', () => {
+    expect(unpostRowFilter({ posted: 'N' }, 'post', ui)).toBe(true);
+    expect(unpostRowFilter({ posted: 'N' }, 'CO', ui)).toBe(true);
+    expect(unpostRowFilter({ posted: 'N' }, 'RE', ui)).toBe(true);
   });
 });
 
@@ -197,6 +339,23 @@ describe('BulkDocumentAction', () => {
     expect(screen.getByText('documentAction')).toBeInTheDocument();
   });
 
+  // ETP-5302 — the footer confirms with "Aceptar" (`accept`), never "Completado"
+  // (`done`): the dialog operates on document ACTIONS, and "Completado" is the name
+  // of a document STATUS, so the old label read as a promise to complete the
+  // selected documents. `cancel` alongside it is unchanged.
+  it('labels the footer confirm button with accept, not the status-like done key', async () => {
+    const user = userEvent.setup();
+    const rows = [{ id: '1', documentStatus: 'DR' }];
+    render(
+      <BulkDocumentAction selectedRows={rows} clearSelection={vi.fn()} token="tok" apiBaseUrl="/api" />,
+    );
+    await user.click(screen.getByText('bulkCompletion'));
+
+    expect(screen.getByText(CONFIRM_BUTTON)).toBeInTheDocument();
+    expect(screen.queryByText('done')).not.toBeInTheDocument();
+    expect(screen.getByText('cancel')).toBeInTheDocument();
+  });
+
   it('uses custom buildActions when provided', () => {
     const rows = [{ id: '1', documentStatus: 'DR' }];
     const buildActions = vi.fn().mockReturnValue([{ value: 'CUSTOM', labelKey: 'customAction' }]);
@@ -223,6 +382,70 @@ describe('BulkDocumentAction', () => {
   });
 });
 
+// ETP-5302 — the built-in (no `buildActions` prop) action list, asserted through
+// a REAL render of the dialog rather than on the useMemo's return value, because
+// what regressed is what the user reads in the dropdown. The mocked `useUI` (top
+// of file) is the identity function, so each `<SelectItem>` renders its own i18n
+// KEY as text: seeing `confirm` here is seeing "Confirmar" in es_ES, and seeing
+// `book` would be seeing "Procesar" — the same word as the button that opened
+// the dialog.
+describe('BulkDocumentAction — built-in action labels (ETP-5302)', () => {
+  const openDialog = (rows) => {
+    render(
+      <BulkDocumentAction selectedRows={rows} clearSelection={vi.fn()} token="tok" apiBaseUrl="/api" />,
+    );
+    // Click while 'bulkCompletion' is still unambiguous — once the dialog is
+    // open the DialogTitle renders the same label as the trigger button.
+    fireEvent.click(screen.getByText('bulkCompletion'));
+  };
+
+  const optionFor = (labelKey) => screen.getByText(labelKey).closest('option');
+
+  it('labels the CO (complete) option with the confirm key, not book', () => {
+    openDialog([{ id: '1', documentStatus: 'DR' }]);
+    expect(optionFor('confirm')).not.toBeNull();
+    expect(optionFor('confirm')).toHaveAttribute('value', 'CO');
+    expect(screen.queryByText('book')).not.toBeInTheDocument();
+  });
+
+  it('keeps the RE (reactivate) option on the reactivate key — unchanged by ETP-5302', () => {
+    openDialog([{ id: '1', documentStatus: 'CO' }]);
+    expect(optionFor('reactivate')).toHaveAttribute('value', 'RE');
+    expect(screen.queryByText('book')).not.toBeInTheDocument();
+  });
+
+  it('offers confirm + reactivate (in that order) for a mixed draft/completed selection', () => {
+    openDialog([
+      { id: '1', documentStatus: 'DR' },
+      { id: '2', documentStatus: 'CO' },
+    ]);
+    // Read the options off the mocked <Select> subtree rather than by ARIA role:
+    // the SelectItem stub renders a bare <option> outside any <select>, so the
+    // implicit-role lookup is not something to depend on here.
+    const options = [...screen.getByTestId('select').querySelectorAll('option')];
+    expect(options.map((o) => o.getAttribute('value'))).toEqual(['CO', 'RE']);
+    expect(options.map((o) => o.textContent)).toEqual(['confirm', 'reactivate']);
+  });
+
+  it('applies the same confirm label through the buildInOutActions helper (receipt/shipment/return windows)', () => {
+    const rows = [{ id: '1', documentStatus: 'DR' }];
+    render(
+      <BulkDocumentAction
+        selectedRows={rows}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+        labelKey="process"
+        buildActions={buildInOutActions}
+      />,
+    );
+    // The button says "process" ("Procesar"); the single dropdown option must
+    // say "confirm" ("Confirmar") — the two must not collapse to one word.
+    fireEvent.click(screen.getByText('process'));
+    expect(screen.getByText('confirm').closest('option')).toHaveAttribute('value', 'CO');
+  });
+});
+
 // ETP-5209 — proves the `rowFilter` contract works end-to-end through a REAL
 // render of BulkDocumentAction: the caller only needs to pass a plain
 // `(row, action, ui) => ...` function reference (like `postRowFilter` above)
@@ -233,6 +456,19 @@ describe('BulkDocumentAction', () => {
 // hook-derived `ui` — forcing every `bulkActions` wrapper (invoked as a plain
 // function by ListView.jsx, not JSX) to call `useUI()` itself, a Rules-of-Hooks
 // violation the instant the selection toolbar mounted.
+//
+// NOTE (ETP-5302): these renders pass NO `refresh` prop, so they run the LEGACY
+// FALLBACK path — persist to sessionStorage, then `window.location.reload()`. That
+// is deliberate (the fallback still has to work for a host mounted outside
+// ListView's `bulkActions` slot) and it is why the assertions below read the
+// sessionStorage payload. The primary path is covered in the ETP-5302 describe at
+// the bottom of this file.
+//
+// INVARIANT for every fallback-path test in this file: it MUST await its own
+// `window.location.reload` before finishing. The fallback arms a real 600ms/1500ms
+// timer; one that outlives its test fires inside a later test and calls that test's
+// reload stub, which silently satisfies the later test's expectation early. Both
+// tests below already comply.
 describe('BulkDocumentAction — supplies ui() to rowFilter itself (ETP-5209)', () => {
   const STORAGE_KEY = 'bulkActionResult';
 
@@ -259,7 +495,7 @@ describe('BulkDocumentAction — supplies ui() to rowFilter itself (ETP-5209)', 
     );
 
     fireEvent.click(screen.getByText('bulkCompletion'));
-    fireEvent.click(screen.getByText('done'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
 
     await waitFor(() => expect(rowFilter).toHaveBeenCalled());
     const [row, action, ui] = rowFilter.mock.calls[0];
@@ -287,7 +523,7 @@ describe('BulkDocumentAction — supplies ui() to rowFilter itself (ETP-5209)', 
     );
 
     fireEvent.click(screen.getByText('bulkCompletion'));
-    fireEvent.click(screen.getByText('done'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
 
     await waitFor(() => expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull());
     // ETP-5209 — a row blocked by rowFilter BEFORE any API call is `omitted`,
@@ -312,6 +548,10 @@ describe('BulkDocumentAction — supplies ui() to rowFilter itself (ETP-5209)', 
 // would read "N ok, 0 failed" — a silent data-integrity lie. These tests
 // assert on the real `sessionStorage` payload `handleDone` writes, the same
 // contract the ETP-4972 floating toolbar reads to render its result toast.
+//
+// NOTE (ETP-5302): like the ETP-5209 block above, these renders pass NO `refresh`
+// prop, so they exercise the LEGACY FALLBACK path (persist + full reload) — which
+// is exactly why `sessionStorage` is still the readable record of the run here.
 describe('BulkDocumentAction — actionMode (ETP-5075)', () => {
   const STORAGE_KEY = 'bulkActionResult';
   const buildActions = () => [{ value: 'post', labelKey: 'post' }];
@@ -346,7 +586,7 @@ describe('BulkDocumentAction — actionMode (ETP-5075)', () => {
     );
 
     fireEvent.click(screen.getByText('bulkCompletion'));
-    fireEvent.click(screen.getByText('done'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
 
     await waitFor(() => expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull());
     const { ok, failed } = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
@@ -377,7 +617,7 @@ describe('BulkDocumentAction — actionMode (ETP-5075)', () => {
     );
 
     fireEvent.click(screen.getByText('bulkCompletion'));
-    fireEvent.click(screen.getByText('done'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
 
     await waitFor(() => expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull());
     const { ok, failed } = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
@@ -388,6 +628,17 @@ describe('BulkDocumentAction — actionMode (ETP-5075)', () => {
     // not useDocumentAction's execute (/action/documentAction).
     expect(mockNeoExecute).toHaveBeenCalledWith('row-2', 'post');
     expect(mockUseNeoAction).toHaveBeenCalled();
+
+    // HYGIENE (ETP-5302) — MANDATORY in every fallback-path test: this run armed a
+    // 600ms reload timer, so await it here instead of letting it outlive the test.
+    // A timer that survives its test fires inside whichever LATER test happens to be
+    // waiting at that moment and calls `window.location.reload` — which by then is a
+    // DIFFERENT stub object, belonging to that later test (each beforeEach in this
+    // file re-stubs window.location). The later test's reload expectation is then
+    // satisfied by this test's leftover timer, before its own timer has run. That is
+    // exactly what made the ETP-5302 fallback test at the bottom of this file pass in
+    // isolation and fail when run with its neighbours.
+    await waitFor(() => expect(window.location.reload).toHaveBeenCalled(), { timeout: 3000 });
   });
 
   it('non-regression: default actionMode (prop omitted) still uses the DocAction path — existing windows unchanged', async () => {
@@ -404,7 +655,7 @@ describe('BulkDocumentAction — actionMode (ETP-5075)', () => {
     );
 
     fireEvent.click(screen.getByText('bulkCompletion'));
-    fireEvent.click(screen.getByText('done'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
 
     await waitFor(() => expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull());
     const { ok, failed } = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
@@ -414,5 +665,465 @@ describe('BulkDocumentAction — actionMode (ETP-5075)', () => {
     expect(ok).toBe(1);
     expect(failed).toEqual([]);
     expect(mockNeoExecute).not.toHaveBeenCalled();
+
+    // HYGIENE (ETP-5302) — same rule as the test above: consume the 600ms reload
+    // timer this run armed, so it cannot fire inside a later test.
+    await waitFor(() => expect(window.location.reload).toHaveBeenCalled(), { timeout: 3000 });
+  });
+});
+
+// ETP-5302 — the reported bug: running a bulk action reloaded the whole browser
+// tab. The reload was never about the data — it was the transport for the result
+// toast, which was persisted to sessionStorage so `useBulkActionToast`'s mount
+// effect could read it back on the other side. ListView's `bulkActions` slot now
+// hands down an in-place `refresh`, so the toast can be shown directly and the
+// reload (with the scroll position, the active filters and the whole SPA boot it
+// threw away) disappears.
+//
+// Every test here renders WITH a `refresh` prop — that is the primary path. The
+// last test is the explicit guard that omitting it still yields the legacy
+// behaviour, for a host that mounts this component outside the slot.
+describe('BulkDocumentAction — refreshes the list in place instead of reloading the page (ETP-5302)', () => {
+  const STORAGE_KEY = 'bulkActionResult';
+  const buildPostActions = () => [{ value: 'post', labelKey: 'post' }];
+
+  let reloadSpy;
+  let originalLocationDescriptor;
+
+  const run = (extraProps = {}) => {
+    const props = {
+      selectedRows: [{ id: 'row-1', documentStatus: 'DR' }],
+      clearSelection: vi.fn(),
+      token: 'tok',
+      apiBaseUrl: '/api',
+      refresh: vi.fn(),
+      ...extraProps,
+    };
+    render(<BulkDocumentAction {...props} />);
+    fireEvent.click(screen.getByText(props.labelKey || 'bulkCompletion'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
+    return props;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+    // Reset instead of clear: a leftover `mockResolvedValueOnce` from the ETP-5075
+    // block would otherwise leak into the first test here. The base resolved value
+    // is re-declared per test that needs a different one.
+    mockNeoExecute.mockReset();
+    mockNeoExecute.mockResolvedValue({ success: true });
+    mockUseNeoAction.mockReturnValue({ execute: mockNeoExecute, loading: false });
+    // jsdom throws "Not implemented: navigation" on a real reload(); the spy is the
+    // only way to prove the NEGATIVE ("no reload happened") these tests are about.
+    // Captured and restored so the stub does not leak out of this block.
+    originalLocationDescriptor = Object.getOwnPropertyDescriptor(window, 'location');
+    reloadSpy = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { reload: reloadSpy },
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  afterEach(() => {
+    if (originalLocationDescriptor) {
+      Object.defineProperty(window, 'location', originalLocationDescriptor);
+    }
+  });
+
+  it('refetches the list, clears the selection and never reloads the page on a clean run', async () => {
+    const { refresh, clearSelection } = run();
+
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    expect(clearSelection).toHaveBeenCalledTimes(1);
+    expect(reloadSpy).not.toHaveBeenCalled();
+    // The result is handed to the toast directly — nothing is parked in
+    // sessionStorage waiting for a reload to pick it up.
+    expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it('shows the success toast immediately, with the real ok/failed counts', async () => {
+    const { refresh } = run();
+
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(toast.success).toHaveBeenCalledWith('1 ok, 0 failed');
+    expect(toast.warning).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('shows the error toast and STILL refetches when every row fails', async () => {
+    mockNeoExecute.mockResolvedValue({ success: false, message: 'boom' });
+    const { refresh } = run({
+      selectedRows: [{ id: 'row-1' }],
+      windowName: 'matched-purchase-invoices',
+      actionMode: 'neoAction',
+      buildActions: buildPostActions,
+    });
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('0 ok, 1 failed'));
+    // The list must refresh even on a total failure: a row can fail for a reason
+    // that still changed its server-side state, and a stale grid hides that.
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(reloadSpy).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it('shows the warning toast and still refetches on a partial failure', async () => {
+    mockNeoExecute
+      .mockResolvedValueOnce({ success: true })
+      .mockResolvedValueOnce({ success: false, message: 'boom' });
+    const { refresh } = run({
+      selectedRows: [{ id: 'row-1' }, { id: 'row-2' }],
+      windowName: 'matched-purchase-invoices',
+      actionMode: 'neoAction',
+      buildActions: buildPostActions,
+    });
+
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith('1 ok, 1 failed'));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(reloadSpy).not.toHaveBeenCalled();
+  });
+
+  it('uses the 3-count message when rowFilter omitted a row (mixed run)', async () => {
+    // ETP-5209 — `omitted` (pre-blocked, never sent) stays separate from `failed`,
+    // and switches the message to the "with omitted" wording. The in-place path
+    // must render exactly the same toast the reload path used to.
+    const rowFilter = (row) => (row.id === 'row-2' ? 'bulkRowAlreadyPosted' : true);
+    const { refresh } = run({
+      selectedRows: [
+        { id: 'row-1', documentStatus: 'DR' },
+        { id: 'row-2', documentStatus: 'DR' },
+      ],
+      rowFilter,
+    });
+
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith('1 ok, 1 omitted, 0 failed'));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(reloadSpy).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  // Dynamic proof that the refresh path arms NO delayed reload. Two earlier attempts at
+  // this were abandoned for good reasons, and this version avoids both:
+  //   - a real sleep asserting `reloadSpy` was never called measured LEAKAGE, not this
+  //     component: the fallback tests above used to arm 600ms timers and never await
+  //     them, so a stray timer fired during the sleep and hit this test's reload stub
+  //     (the stub is re-created per test). Fixed at the source — every fallback test in
+  //     this file now awaits its own reload, so no timer outlives its test.
+  //   - spying on global `setTimeout` left the clock in a state that broke the fallback
+  //     test below, so the negative is asserted on OBSERVABLE effects instead.
+  // The primary signal here is `clearSelection`'s CALL COUNT, which is orphan-proof: a
+  // leaked timer from another test can reach the shared `window.location` stub but can
+  // never reach this test's own `clearSelection`. The refresh path calls it exactly once,
+  // synchronously; the fallback would call it a SECOND time from its timer.
+  // The structural twin of this guarantee (no `setTimeout`/`location.reload` inside the
+  // refresh branch, exactly one reload call site in the file) lives in
+  // BulkDocumentAction.test.js and costs nothing to run.
+  it('arms no delayed reload: nothing else happens after the refresh, even past the 600ms fallback delay', async () => {
+    const { refresh, clearSelection } = run();
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+
+    // 700ms > the 600ms delay a clean fallback run would use, so a reload timer armed
+    // by this run would have fired by the time this resolves.
+    await new Promise((resolve) => { setTimeout(resolve, 700); });
+
+    expect(clearSelection).toHaveBeenCalledTimes(1);
+    expect(reloadSpy).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  // ─── Fallback guard ──────────────────────────────────────────────────────
+  it('FALLBACK (no refresh prop): persists the result and reloads the page, as before', async () => {
+    const clearSelection = vi.fn();
+    render(
+      <BulkDocumentAction
+        selectedRows={[{ id: 'row-1', documentStatus: 'DR' }]}
+        clearSelection={clearSelection}
+        token="tok"
+        apiBaseUrl="/api"
+        // refresh intentionally omitted — a host mounted outside ListView's
+        // `bulkActions` slot has no in-place refetch to offer.
+      />,
+    );
+    fireEvent.click(screen.getByText('bulkCompletion'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
+
+    await waitFor(() => expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull());
+    expect(JSON.parse(sessionStorage.getItem(STORAGE_KEY))).toEqual({ ok: 1, omitted: [], failed: [] });
+    // The toast is NOT shown here — it is deliberately deferred to the next mount
+    // of useBulkActionToast, on the other side of the reload.
+    expect(toast.success).not.toHaveBeenCalled();
+
+    // Waits on THIS test's own `clearSelection` — a mock nothing else in the file can
+    // reach — and asserts the reload inside the SAME waitFor. The fallback timer runs
+    // `clearSelection(); window.location.reload();` in that order, so a wait keyed on
+    // the reload stub alone can be satisfied by a timer leaked from another test (the
+    // stub is re-created per test, so a stray timer hits whichever one is current)
+    // while this test's own timer has not run yet — and the follow-up clearSelection
+    // assertion then fails with the same "expected vi.fn() to be called at least once"
+    // message. Keying on the test-local mock makes the assertion immune to that even if
+    // a future test forgets to await its own reload.
+    await waitFor(() => {
+      expect(clearSelection).toHaveBeenCalled();
+      expect(reloadSpy).toHaveBeenCalled();
+    }, { timeout: 3000 });
+  });
+});
+
+// ETP-5302 — the reported bug. Reactivating a COMPLETED + POSTED invoice from the list's
+// bulk bar failed with {"status":"error","message":"Factura contabilizada"}, while the very
+// same action from the form's kebab worked. The kebab chained `unpost` → `documentAction: RE`
+// (its `decisions.json` marks the action `preUnpost: true`); the bulk bar sent a bare `RE`,
+// which Core rejects in C_INVOICE_POST (`IF (v_Posted='Y') THEN RAISE_APPLICATION_ERROR`).
+//
+// `preUnpostActions` is OPT-IN PER WINDOW, and that is the whole design: only sales-invoice
+// and purchase-invoice pass `['RE']`. Orders must NOT — C_ORDER_POST1's RE branch has no
+// `Posted` guard, so unposting there would be a gratuitous accounting reversal. The
+// "default = never unposts" test below is the guard for that.
+//
+// Every test here renders WITH `refresh` (the in-place path) unless it needs to read the
+// per-row failure MESSAGE, which only the fallback's persisted record carries — the toast
+// itself shows counts. Those few follow this file's mandatory hygiene rule: await your own
+// reload before finishing.
+describe('BulkDocumentAction — preUnpostActions unposts before a bulk reactivate (ETP-5302)', () => {
+  const STORAGE_KEY = 'bulkActionResult';
+  const POSTED_COMPLETED = { id: 'inv-1', documentNo: 'FV-001', documentStatus: 'CO', posted: 'Y' };
+
+  let reloadSpy;
+  let originalLocationDescriptor;
+
+  const run = (extraProps = {}) => {
+    const props = {
+      selectedRows: [POSTED_COMPLETED],
+      clearSelection: vi.fn(),
+      token: 'tok',
+      apiBaseUrl: '/api',
+      windowName: 'sales-invoice',
+      labelKey: 'process',
+      preUnpostActions: ['RE'],
+      refresh: vi.fn(),
+      ...extraProps,
+    };
+    render(<BulkDocumentAction {...props} />);
+    fireEvent.click(screen.getByText(props.labelKey));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
+    return props;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+    mockNeoExecute.mockReset();
+    mockNeoExecute.mockResolvedValue({ success: true });
+    mockUseNeoAction.mockReturnValue({ execute: mockNeoExecute, loading: false });
+    originalLocationDescriptor = Object.getOwnPropertyDescriptor(window, 'location');
+    reloadSpy = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { reload: reloadSpy },
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  afterEach(() => {
+    if (originalLocationDescriptor) {
+      Object.defineProperty(window, 'location', originalLocationDescriptor);
+    }
+  });
+
+  // The ORDER is the fix. Asserted causally, not just by "both were called": the unpost is
+  // held on a deferred promise, and the document action must still be unfired while it is
+  // pending. A regression that fires them concurrently (or in the wrong order) fails here
+  // even though both calls eventually happen.
+  it('unposts FIRST and dispatches the RE document action only after the unpost resolves', async () => {
+    let resolveUnpost;
+    mockNeoExecute.mockImplementationOnce(() => new Promise((resolve) => { resolveUnpost = resolve; }));
+    const { refresh } = run();
+
+    await waitFor(() => expect(mockNeoExecute).toHaveBeenCalledWith('inv-1', 'unpost'));
+    // The document action is still gated behind the pending unpost.
+    expect(mockDocExecute).not.toHaveBeenCalled();
+
+    await act(async () => { resolveUnpost({ success: true }); });
+
+    await waitFor(() => expect(mockDocExecute).toHaveBeenCalledWith('inv-1', 'RE'));
+    expect(mockNeoExecute.mock.invocationCallOrder[0])
+      .toBeLessThan(mockDocExecute.mock.invocationCallOrder[0]);
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    expect(reloadSpy).not.toHaveBeenCalled();
+  });
+
+  it('counts the reactivated row as ok when the unpost + document action both succeed', async () => {
+    const { refresh } = run();
+
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    expect(toast.success).toHaveBeenCalledWith('1 ok, 0 failed');
+    expect(mockNeoExecute).toHaveBeenCalledTimes(1);
+    expect(mockDocExecute).toHaveBeenCalledWith('inv-1', 'RE');
+  });
+
+  it('skips the unpost for a NOT-posted row and runs the document action directly', async () => {
+    const { refresh } = run({
+      selectedRows: [{ id: 'inv-2', documentNo: 'FV-002', documentStatus: 'CO', posted: 'N' }],
+    });
+
+    await waitFor(() => expect(mockDocExecute).toHaveBeenCalledWith('inv-2', 'RE'));
+    expect(mockNeoExecute).not.toHaveBeenCalled();
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(toast.success).toHaveBeenCalledWith('1 ok, 0 failed');
+  });
+
+  // The gate is the ACTION LIST, not just the posted flag: this row IS posted, but the
+  // selected action is CO (confirm), which no window ever lists in `preUnpostActions`.
+  // Unposting before a confirm would be nonsense.
+  it('skips the unpost for an action that is not listed in preUnpostActions (CO)', async () => {
+    const { refresh } = run({
+      selectedRows: [{ id: 'inv-3', documentNo: 'FV-003', documentStatus: 'DR', posted: 'Y' }],
+    });
+
+    await waitFor(() => expect(mockDocExecute).toHaveBeenCalledWith('inv-3', 'CO'));
+    expect(mockNeoExecute).not.toHaveBeenCalled();
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+
+  // GUARD for every window that does NOT opt in — sales-order / purchase-order and the
+  // return windows included. Without `preUnpostActions`, a bulk RE must reach the backend
+  // exactly as it did before ETP-5302: no accounting reversal, ever.
+  it('DEFAULT (prop omitted): never unposts, even for a posted row being reactivated', async () => {
+    const { refresh } = run({ preUnpostActions: undefined, windowName: 'sales-order' });
+
+    await waitFor(() => expect(mockDocExecute).toHaveBeenCalledWith('inv-1', 'RE'));
+    expect(mockNeoExecute).not.toHaveBeenCalled();
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(toast.success).toHaveBeenCalledWith('1 ok, 0 failed');
+  });
+
+  it('an empty preUnpostActions array behaves exactly like the default', async () => {
+    const { refresh } = run({ preUnpostActions: [] });
+
+    await waitFor(() => expect(mockDocExecute).toHaveBeenCalledWith('inv-1', 'RE'));
+    expect(mockNeoExecute).not.toHaveBeenCalled();
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+
+  it('a FAILED unpost fails the row and never dispatches the document action for it', async () => {
+    mockNeoExecute.mockResolvedValue({ success: false, message: 'Factura contabilizada' });
+    const { refresh } = run();
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('0 ok, 1 failed'));
+    // The whole point: reactivating a still-posted document must not be attempted.
+    expect(mockDocExecute).not.toHaveBeenCalled();
+    // The list is still refetched — the unpost may have changed server-side state.
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(reloadSpy).not.toHaveBeenCalled();
+  });
+
+  it('reports the TRANSLATED backend message for the failed row', async () => {
+    const raw = 'Factura contabilizada';
+    const translated = 'La factura ya está contabilizada';
+    mockNeoExecute.mockResolvedValue({ success: false, message: raw });
+    mockTranslateBackendError.mockImplementation((msg) => (msg === raw ? translated : msg));
+    // FALLBACK path (no `refresh`): the per-row message is only readable in the persisted
+    // record — the toast itself shows counts only.
+    const clearSelection = vi.fn();
+    render(
+      <BulkDocumentAction
+        selectedRows={[POSTED_COMPLETED]}
+        clearSelection={clearSelection}
+        token="tok"
+        apiBaseUrl="/api"
+        windowName="sales-invoice"
+        labelKey="process"
+        preUnpostActions={['RE']}
+      />,
+    );
+    fireEvent.click(screen.getByText('process'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
+
+    await waitFor(() => expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull());
+    const { ok, failed } = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+    expect(ok).toBe(0);
+    expect(failed).toEqual([{ documentNo: 'FV-001', message: translated }]);
+    expect(mockTranslateBackendError).toHaveBeenCalledWith(raw, expect.any(Function));
+    expect(mockDocExecute).not.toHaveBeenCalled();
+
+    // HYGIENE: consume this run's own reload timer, keyed on the test-local mock.
+    await waitFor(() => {
+      expect(clearSelection).toHaveBeenCalled();
+      expect(reloadSpy).toHaveBeenCalled();
+    }, { timeout: 3000 });
+  });
+
+  it('falls back to the generic actionFailed label when the message cannot be translated', async () => {
+    mockNeoExecute.mockResolvedValue({ success: false, message: undefined });
+    mockTranslateBackendError.mockImplementation(() => '');
+    const clearSelection = vi.fn();
+    render(
+      <BulkDocumentAction
+        selectedRows={[POSTED_COMPLETED]}
+        clearSelection={clearSelection}
+        token="tok"
+        apiBaseUrl="/api"
+        windowName="sales-invoice"
+        labelKey="process"
+        preUnpostActions={['RE']}
+      />,
+    );
+    fireEvent.click(screen.getByText('process'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
+
+    await waitFor(() => expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull());
+    const { failed } = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+    // The mocked useUI is the identity function, so `ui('actionFailed')` renders its key.
+    expect(failed).toEqual([{ documentNo: 'FV-001', message: 'actionFailed' }]);
+
+    await waitFor(() => {
+      expect(clearSelection).toHaveBeenCalled();
+      expect(reloadSpy).toHaveBeenCalled();
+    }, { timeout: 3000 });
+  });
+
+  // Per-row isolation: one row's failed unpost must not cancel the others. The unposted
+  // row goes straight to RE and succeeds; only the posted one fails.
+  it('isolates the failure per row in a mixed selection', async () => {
+    mockNeoExecute.mockResolvedValue({ success: false, message: 'Factura contabilizada' });
+    const { refresh } = run({
+      selectedRows: [
+        POSTED_COMPLETED,
+        { id: 'inv-9', documentNo: 'FV-009', documentStatus: 'CO', posted: 'N' },
+      ],
+    });
+
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith('1 ok, 1 failed'));
+    // The unpost was attempted only for the posted row…
+    expect(mockNeoExecute).toHaveBeenCalledTimes(1);
+    expect(mockNeoExecute).toHaveBeenCalledWith('inv-1', 'unpost');
+    // …and the document action ran only for the row that never needed one.
+    expect(mockDocExecute).toHaveBeenCalledTimes(1);
+    expect(mockDocExecute).toHaveBeenCalledWith('inv-9', 'RE');
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  // The pre-unpost always goes through useNeoAction's generic /action/{name} endpoint,
+  // even when the document action itself rides the DocAction endpoint (the invoice
+  // windows' default `actionMode`). Both executors are involved in one row's run.
+  it('routes the unpost through useNeoAction while the document action keeps the DocAction path', async () => {
+    const { refresh } = run();
+
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(mockUseNeoAction).toHaveBeenCalled();
+    expect(mockNeoExecute).toHaveBeenCalledWith('inv-1', 'unpost');
+    expect(mockDocExecute).toHaveBeenCalledWith('inv-1', 'RE');
+  });
+
+  // A row pre-blocked by `rowFilter` is never attempted at all — not even its unpost.
+  it('does not unpost a row that rowFilter already omitted', async () => {
+    const { refresh } = run({ rowFilter: () => 'cannotReactivateLinkedDocs' });
+
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith('0 ok, 1 omitted, 0 failed'));
+    expect(mockNeoExecute).not.toHaveBeenCalled();
+    expect(mockDocExecute).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 });

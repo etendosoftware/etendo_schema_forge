@@ -9,9 +9,16 @@
  *       empty; clicking it produces no visible dropdown.
  *
  *   B — List bulk-action toolbar: selecting only completed (CO) rows does NOT
- *       show the "Procesado masivo" button because buildInOutActions returns []
- *       when no draft rows are present.  If the button IS somehow rendered
- *       (safety net), the dialog must not offer value="RE".
+ *       show the bulk button because buildInOutActions returns [] when no draft
+ *       rows are present.  If the button IS somehow rendered (safety net), the
+ *       dialog must not offer value="RE".
+ *
+ * ETP-5302 — scenario B's locator was matching the DEFAULT labelKey
+ * ("bulkCompletion" → "Procesado masivo"), a label this window has never used:
+ * purchase-order/index.jsx passes an explicit labelKey, so the locator resolved
+ * to nothing and BOTH assertions below were vacuously satisfied regardless of
+ * the real behaviour. The button now reads "Procesar" (labelKey="process"),
+ * and the locator matches it exactly so the guard actually guards.
  */
 
 import { test, expect } from '@playwright/test';
@@ -147,7 +154,7 @@ test.describe('Purchase Order list — bulk action has no RE option (ETP-4011)',
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
-  test('selecting a completed row does not show Procesado masivo button', async ({ page }) => {
+  test('selecting a completed row does not show the bulk Procesar button', async ({ page }) => {
     // Wait for the table to render
     const row = page.locator('tbody tr').filter({ hasText: 'PO-CO-001' }).first();
     await expect(row).toBeVisible({ timeout: 8_000 });
@@ -165,13 +172,13 @@ test.describe('Purchase Order list — bulk action has no RE option (ETP-4011)',
 
     // With buildInOutActions and only CO rows, BulkDocumentAction returns []
     // and renders null — the button should NOT appear.
-    const bulkBtn = page.getByRole('button', { name: /procesado masivo|bulkcompletion/i });
+    const bulkBtn = page.getByRole('button', { name: /^(procesar|process)$/i });
     await expect(bulkBtn).toHaveCount(0, {
-      message: 'Procesado masivo button must not appear when only completed rows are selected',
+      message: 'The bulk Procesar button must not appear when only completed rows are selected',
     });
   });
 
-  test('if Procesado masivo button appears (safety net), the dialog has no RE option', async ({ page }) => {
+  test('if the bulk Procesar button appears (safety net), the dialog has no RE option', async ({ page }) => {
     // This test guards against a future regression where BulkDocumentAction
     // falls back to the default code-path that adds RE for completed rows.
     await installMock(page, [CO_ROW, DR_ROW]);
@@ -192,7 +199,7 @@ test.describe('Purchase Order list — bulk action has no RE option (ETP-4011)',
       await coRow.locator('td').first().click();
     }
 
-    const bulkBtn = page.getByRole('button', { name: /procesado masivo|bulkcompletion/i });
+    const bulkBtn = page.getByRole('button', { name: /^(procesar|process)$/i });
     const bulkBtnVisible = await bulkBtn.isVisible({ timeout: 2_000 }).catch(() => false);
 
     if (bulkBtnVisible) {
@@ -200,13 +207,13 @@ test.describe('Purchase Order list — bulk action has no RE option (ETP-4011)',
       // The dialog must not offer value="RE" — scan for select items with that value.
       const reOption = page.locator('[data-value="RE"], [value="RE"]');
       await expect(reOption).toHaveCount(0, {
-        message: 'RE (Reactivate) must not be an option inside the Procesado masivo dialog',
+        message: 'RE (Reactivate) must not be an option inside the bulk Procesar dialog',
       });
 
       // Also check by text to catch label-only renderings.
       const reText = page.locator('text=/reactivar|reactivate/i');
       await expect(reText).toHaveCount(0, {
-        message: 'No Reactivate text should appear inside the Procesado masivo dialog',
+        message: 'No Reactivate text should appear inside the bulk Procesar dialog',
       });
     }
     // If bulkBtnVisible === false → correct behaviour, nothing more to assert.

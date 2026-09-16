@@ -623,6 +623,13 @@ export function ListView({
   const refreshRef = useRef(hook.refresh);
   refreshRef.current = hook.refresh;
 
+  // ETP-5302 — stable in-place refetch handed to the `bulkActions` slot, so a bulk
+  // action can reload just the rows instead of doing a full `window.location.reload()`
+  // (which threw away scroll position, active filters and the whole SPA boot). Reads
+  // through `refreshRef` rather than closing over `hook.refresh`, so the identity stays
+  // stable across renders even though `hook.refresh` does not.
+  const refreshList = useCallback(() => refreshRef.current?.(), []);
+
   useEffect(() => {
     if (!didInitialFetchRef.current) {
       didInitialFetchRef.current = true;
@@ -1047,7 +1054,7 @@ export function ListView({
                     <Trash2 className={iconSizeClass(selectionBarSize)} data-testid="Trash2__620cbc" />
                   </Button>
                 )}
-                {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api })}
+                {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api, refresh: refreshList })}
                 {selectionBarRightActions && selectionBarRightActions({
                   selectedRows,
                   clearSelection,
