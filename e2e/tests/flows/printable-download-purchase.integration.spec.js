@@ -91,17 +91,10 @@ test.describe('Printable downloads — purchase flow (integration)', () => {
     });
   });
 
-  // SKIPPED until the HELPERS bug in useReturnToVendorPdf.js is fixed (tracked
-  // separately). `generateReturnToVendorPdf` and `generateReturnToVendorHtml`
-  // reference a bare `HELPERS`, which is not defined in that module — it imports
-  // `RETURN_DOC_HELPERS` — so the detail print drawer dies with
-  // `ReferenceError: HELPERS is not defined` and no download is ever produced.
-  // The row-preview path works because it goes through the hook, which uses the
-  // right constant; that is why the bug is easy to miss.
-  //
-  // This test PASSES with the one-word fix (verified: 43.4s green). Re-enable it
-  // by deleting the `.skip` below — do not weaken the assertions instead.
-  test.skip('a confirmed return to vendor downloads a real PDF (movement template)', async ({ page }) => {
+  // The HELPERS bug this test was originally skipped for was fixed in 23248d4ae
+  // (Feature ETP-5124): the two standalone print functions now use the imported
+  // RETURN_DOC_HELPERS, same as the hook path always did.
+  test('a confirmed return to vendor downloads a real PDF (movement template)', async ({ page }) => {
     await ensureOpenPeriod();
     await loginAndAssertJsreport(page);
 
