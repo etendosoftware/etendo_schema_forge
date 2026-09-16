@@ -2,6 +2,19 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { MODAL_STYLES } from './modal-styles.js';
 import { LABEL_GAP, FIELD_HEIGHT_IMPORTANT } from '@/components/ui/formDensity';
+import PrefixedInput from './PrefixedInput.jsx';
+// ETP-5031 follow-up — the SAME generic, window-agnostic format checks EntityForm.jsx
+// uses for any email/tel/website-typed field (unlike contactsFieldValidation.js, which
+// is deliberately gated to windowName === 'contacts' and must not be imported here).
+// This modal is reused across many windows' "Create contact" popup (e.g. /sales-order),
+// so wiring the check in here — rather than per-caller — covers all of them at once.
+import { getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from './recipientEdits.js';
+// `filterPhoneCharacters` is the ungated primitive contactsFieldValidation.js exports
+// specifically for callers OUTSIDE the Contacts window that already know they want
+// phone keystroke filtering (see its own doc comment — OrganizationPage.jsx does the
+// same for its hand-built "Teléfono" field). Importing this one function does not pull
+// in the window-gated `getContactsTextFieldError`/`getContactsTaxIdError` checks.
+import { filterPhoneCharacters } from './contactsFieldValidation.js';
 
 const INPUT_BASE =
   'w-full rounded-md border border-input bg-card px-3 focus:ring-2 focus:ring-primary focus:outline-none';
@@ -118,18 +131,35 @@ function FieldRenderer({ field, value, onChange, opts, ui, form, autoFocus }) {
     );
   }
 
+  // ETP-4749 parity — a fixed, non-editable "https://" chip when the field declares
+  // `inputPrefix` (mirrors EntityForm.jsx's renderInputField: same shared PrefixedInput,
+  // same border/radius handoff to the wrapper so only one focus ring is ever drawn).
+  const hasPrefix = Boolean(field.inputPrefix);
+  const plainInputCls = INPUT_CLS + (hasPrefix ? ' border-0 focus:ring-0 focus:outline-none' : '');
   return (
-    <input
-      type={
-        getInputType(field)
-      }
-      className={INPUT_CLS}
-      value={value}
-      onChange={e => onChange(field.id, e.target.value)}
-      placeholder={field.placeholder ?? ''}
-      // eslint-disable-next-line jsx-a11y/no-autofocus
-      autoFocus={autoFocus}
-    />
+    <PrefixedInput
+      prefix={field.inputPrefix}
+      testId={`field-${field.id}-prefix-wrapper`}
+      data-testid={"PrefixedInput__" + field.id}>
+      <input
+        type={
+          getInputType(field)
+        }
+        className={plainInputCls}
+        value={value}
+        onChange={e => {
+          // Same keystroke-level charset guard the Contacts window applies to its own
+          // "Teléfono" field (ETP-5031 follow-up) — a phone-typed field here never lets
+          // a letter appear in the input at all, instead of only rejecting it on Save.
+          const nextValue = field.type === 'tel' ? filterPhoneCharacters(e.target.value) : e.target.value;
+          onChange(field.id, nextValue);
+        }}
+        placeholder={field.placeholder ?? ''}
+        maxLength={field.maxLength}
+        // eslint-disable-next-line jsx-a11y/no-autofocus
+        autoFocus={autoFocus}
+      />
+    </PrefixedInput>
   );
 }
 
@@ -467,6 +497,34 @@ export default function EntityCreationModal({
     ...sections.flatMap(s => s.fields ?? []),
   ], [headerFields, sections]);
 
+  // ETP-5031 follow-up — email/website/phone format, checked against the SAME
+  // top-level `form` fields render() reads (headerFields + plain/CollapsibleFieldSection
+  // fields). Deliberately excludes repeatable-row and component-section fields: those
+  // don't live in `form` (repeatable rows are separate `repeatables` state; component
+  // sections manage their own fields), so this list stays a subset of allDeclaredFields.
+  const formatCheckedFields = useMemo(() => [
+    ...headerFields,
+    ...sections.filter(s => !s.repeatable && !s.component).flatMap(s => s.fields ?? []),
+  ], [headerFields, sections]);
+
+  const getFormatError = useCallback((form) => {
+    for (const f of formatCheckedFields) {
+      const value = form[f.id];
+      // isEmailField() short-circuits on `type === 'email'` alone, but isPhoneField()/
+      // isWebsiteField() (recipientEdits.js) ONLY match by `field.key`/`field.column` name
+      // — this modal's field descriptors carry `id`, never `key`, so without this alias
+      // getPhoneFieldError/getWebsiteFieldError silently never fire here (caught by
+      // EntityCreationModal.vitest.jsx's format-validation tests).
+      const namedField = { ...f, key: f.key ?? f.id };
+      const errorKey =
+        getEmailFieldError(namedField, value) ||
+        getWebsiteFieldError(namedField, value) ||
+        getPhoneFieldError(namedField, value);
+      if (errorKey) return ui(errorKey);
+    }
+    return null;
+  }, [formatCheckedFields, ui]);
+
   const onChange = useCallback((id, value) => {
     const dependents = allDeclaredFields.filter(f => f.dependsOn === id && f.clearOnDependencyChange);
     setForm(f => {
@@ -481,6 +539,12 @@ export default function EntityCreationModal({
   const isSaveDisabled = loading || !requiredFields.every(id => hasValue(form[id]));
 
   const handleSave = async () => {
+    const formatError = getFormatError(form);
+    if (formatError) {
+      setError(formatError);
+      return;
+    }
+
     const validationError = validate?.(form, repeatables);
     if (validationError) {
       setError(validationError);

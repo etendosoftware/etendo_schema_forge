@@ -343,26 +343,53 @@ async function acceptExistingInvitation(browser, inviteLink, email, password, {
   // `action-stay-in-current` does not render at all and this option is moot —
   // 'go-to-app' is the only choice and remains correct.
   landingButton = 'go-to-app',
+  // ETP-5327 — when set, reuse this page (and its context) instead of opening a
+  // fresh one, and leave both open afterwards: the caller owns their lifecycle,
+  // not this helper. This is required whenever a LATER acceptance in the same
+  // test needs the `sf_auth_token`/`sf_auth_client_name` this call may write via
+  // `action-go-to-app` -> `enterByClientName` — those keys are scoped to the
+  // BROWSER CONTEXT, not to the invitee's account, so a brand-new
+  // `browser.newContext()` per call (still the right default for a standalone
+  // acceptance, and for the other two callers of this helper) can never see
+  // them. See "Opening /invite with a session already open (ETP-5202)" in
+  // docs/etendo-go-invitation-e2e-learnings.md.
+  existingPage = null,
 } = {}) {
-  const context = await browser.newContext({ baseURL: process.env.BASE_URL });
-  const page = await context.newPage();
+  const ownsContext = !existingPage;
+  const context = ownsContext
+    ? await browser.newContext({ baseURL: process.env.BASE_URL })
+    : existingPage.context();
+  const page = ownsContext ? await context.newPage() : existingPage;
   const httpSignals = [];
-  page.on('response', (response) => {
+  const onResponse = (response) => {
     const url = new URL(response.url());
     if (url.pathname.startsWith('/sws/go/company-invitations')
       || url.pathname === '/sws/go/login'
       || url.pathname === '/sws/go/environments') {
       httpSignals.push({ method: response.request().method(), path: url.pathname, status: response.status() });
     }
-  });
+  };
+  page.on('response', onResponse);
   try {
     await page.goto(invitePathFromLink(inviteLink));
-    await expect(page.getByTestId('invite-shared-login')).toBeVisible({ timeout: 30_000 });
-    await expect(page.locator('#login-email')).toHaveValue(email);
-    await expect(page.locator('#login-email')).toBeDisabled();
-    await page.locator('#login-password').fill(password);
-    await page.getByTestId('action-login-submit').click();
-    await expect(page.getByTestId('invite-authenticated-step')).toBeVisible({ timeout: 30_000 });
+    // ETP-5327 — when `existingPage` already carries a session for THIS SAME
+    // invitee (e.g. it just accepted a sibling invitation earlier in this same
+    // test), the ETP-5202 session guard resolves the identity match before
+    // first render and sets `existingAuthenticated` up front: the login form
+    // (`invite-shared-login`) never appears, and the page goes straight to
+    // `invite-authenticated-step`. A brand-new context has no session at all,
+    // so it always shows the login form first. Handle both instead of assuming
+    // the login form always renders.
+    const sharedLogin = page.getByTestId('invite-shared-login');
+    const authenticatedStep = page.getByTestId('invite-authenticated-step');
+    await expect(sharedLogin.or(authenticatedStep)).toBeVisible({ timeout: 30_000 });
+    if (await sharedLogin.isVisible()) {
+      await expect(page.locator('#login-email')).toHaveValue(email);
+      await expect(page.locator('#login-email')).toBeDisabled();
+      await page.locator('#login-password').fill(password);
+      await page.getByTestId('action-login-submit').click();
+      await expect(authenticatedStep).toBeVisible({ timeout: 30_000 });
+    }
     await page.getByTestId('action-accept-invitation').click();
     await expect(page.getByTestId('invite-success-state')).toBeVisible({ timeout: 30_000 });
     await captureScreenshot(page, {
@@ -403,7 +430,11 @@ async function acceptExistingInvitation(browser, inviteLink, email, password, {
     if (afterDashboard) await afterDashboard(page);
     return httpSignals;
   } finally {
-    await context.close();
+    // Always detach — an `existingPage` outlives this call (the caller reuses it
+    // for another acceptance), and a listener left attached would keep pushing
+    // that NEXT call's requests into this already-returned `httpSignals` array.
+    page.off('response', onResponse);
+    if (ownsContext) await context.close();
   }
 }
 
@@ -562,83 +593,116 @@ test.describe('Company User Invitations — email integration E2E — ETP-4894',
     const firstResolution = await expectInvitationResolves(request, firstInviteLink);
     expect(firstResolution.clientName).toBe(org1Name);
 
-    const firstHttpSignals = await acceptExistingInvitation(
-      browser,
-      firstInviteLink,
-      invitee.email,
-      invitee.password,
-      { evidenceStem: 'ETP-4894-cross-client-org1' },
-    );
-    await verifyAcceptedLinkIsIdempotent(
-      browser,
-      firstInviteLink,
-      '../artifacts/delivery-evidence/ETP-4894/ETP-4894-cross-client-idempotent.png',
-    );
+    // ETP-5327 — ONE shared browser context for both acceptances, passed to
+    // `acceptExistingInvitation` as `existingPage`, instead of the two isolated
+    // `browser.newContext()`s this test used to open (one per call, each closed
+    // before the next started). This is also the more realistic simulation: a
+    // real user opens both invite links in the SAME browser/tab, not two
+    // incognito profiles.
+    //
+    // It is also what makes `canStayInCurrent` genuinely true for the org2
+    // acceptance below: `sf_auth_token`/`sf_auth_client_name` are written ONLY
+    // by `enterByClientName` (via `action-go-to-app`, clicked by the org1 call),
+    // and they are scoped to the BROWSER CONTEXT, not to the invitee's account.
+    // Two separate contexts — the old shape — meant org1's write was discarded
+    // with its context before org2's success screen ever rendered, so
+    // `canStayInCurrent` was structurally `false` there and
+    // `action-stay-in-current` could never appear, no matter what the invitee
+    // already owns in the database. See "Opening /invite with a session already
+    // open (ETP-5202)" in docs/etendo-go-invitation-e2e-learnings.md.
+    const sharedContext = await browser.newContext({ baseURL: process.env.BASE_URL });
+    const sharedPage = await sharedContext.newPage();
+    let firstHttpSignals;
+    let secondHttpSignals;
+    try {
+      firstHttpSignals = await acceptExistingInvitation(
+        browser,
+        firstInviteLink,
+        invitee.email,
+        invitee.password,
+        { evidenceStem: 'ETP-4894-cross-client-org1', existingPage: sharedPage },
+      );
+      // Read-only and does not touch `sf_auth_*` state, so it stays on its own
+      // isolated context rather than folding into the shared one above.
+      await verifyAcceptedLinkIsIdempotent(
+        browser,
+        firstInviteLink,
+        '../artifacts/delivery-evidence/ETP-4894/ETP-4894-cross-client-idempotent.png',
+      );
 
-    const secondHttpSignals = await acceptExistingInvitation(
-      browser,
-      secondInviteLink,
-      invitee.email,
-      invitee.password,
-      {
-        evidenceStem: 'ETP-4894-cross-client-org2',
-        // By this point the invitee already belongs to org1 (accepted just above), so
-        // `canStayInCurrent` is true and BOTH landing buttons render. Explicitly pick
-        // 'stay-in-current' so this acceptance exercises the "accepting does not move
-        // your session" contract the `afterDashboard` assertions below rely on — the
-        // default 'go-to-app' would now ENTER org2 instead, which is a different (also
-        // valid) UI path but would falsify the `toContainText(org1Name)` assertion.
-        landingButton: 'stay-in-current',
-        afterDashboard: async (page) => {
-          // Selected by data-testid, NOT by aria-label: that label is ui('switchCompany'),
-          // i.e. the TRANSLATED string ("Cambiar empresa"/"Switch company"), so
-          // getByLabel('switchCompany') matches nothing once a locale dictionary loads.
-          const companySwitcher = page.getByTestId('company-switcher');
-          // The dashboard opens with the Etendo side menu collapsed, and the switcher only
-          // renders while it is expanded. Expanding is a click plus an explicit wait for the
-          // switcher — the click landing is not proof the menu finished opening, and the
-          // switch below re-navigates, which collapses the menu again.
-          const openSideMenu = async () => {
-            const expandMenu = page.getByLabel(/Expandir menú|Expand menu/);
-            if (await expandMenu.isVisible()) await expandMenu.click();
-            await expect(companySwitcher).toBeVisible({ timeout: 30_000 });
-          };
-          // Switching is only possible TOWARDS the other company: SideMenu renders every
-          // membership as an option but leaves the current one `disabled`, so a click on
-          // the company you are already in would hang waiting for it to become clickable.
-          const switchToCompany = async (targetName) => {
-            await openSideMenu();
-            await companySwitcher.click();
-            const options = page.locator('[data-testid^="company-option-"]');
-            await expect(options).toHaveCount(2, { timeout: 30_000 });
-            await options.filter({ hasText: targetName }).click();
-            await page.waitForURL('**/dashboard', { timeout: 60_000 });
-            await openSideMenu();
-            await expect(companySwitcher).toContainText(targetName);
-          };
+      secondHttpSignals = await acceptExistingInvitation(
+        browser,
+        secondInviteLink,
+        invitee.email,
+        invitee.password,
+        {
+          evidenceStem: 'ETP-4894-cross-client-org2',
+          existingPage: sharedPage,
+          // The org1 acceptance above ran in THIS SAME shared browser context
+          // (`existingPage: sharedPage`) and clicked `action-go-to-app`, which
+          // called `enterByClientName('org1')` and genuinely wrote
+          // `sf_auth_token`/`sf_auth_client_name` for org1 into this context's
+          // storage. So `canStayInCurrent` is genuinely true here and BOTH
+          // landing buttons render. Explicitly pick 'stay-in-current' so this
+          // acceptance exercises the "accepting does not move your session"
+          // contract the `afterDashboard` assertions below rely on — the
+          // default 'go-to-app' would now ENTER org2 instead, which is a
+          // different (also valid) UI path but would falsify the
+          // `toContainText(org1Name)` assertion.
+          landingButton: 'stay-in-current',
+          afterDashboard: async (page) => {
+            // Selected by data-testid, NOT by aria-label: that label is ui('switchCompany'),
+            // i.e. the TRANSLATED string ("Cambiar empresa"/"Switch company"), so
+            // getByLabel('switchCompany') matches nothing once a locale dictionary loads.
+            const companySwitcher = page.getByTestId('company-switcher');
+            // The dashboard opens with the Etendo side menu collapsed, and the switcher only
+            // renders while it is expanded. Expanding is a click plus an explicit wait for the
+            // switcher — the click landing is not proof the menu finished opening, and the
+            // switch below re-navigates, which collapses the menu again.
+            const openSideMenu = async () => {
+              const expandMenu = page.getByLabel(/Expandir menú|Expand menu/);
+              if (await expandMenu.isVisible()) await expandMenu.click();
+              await expect(companySwitcher).toBeVisible({ timeout: 30_000 });
+            };
+            // Switching is only possible TOWARDS the other company: SideMenu renders every
+            // membership as an option but leaves the current one `disabled`, so a click on
+            // the company you are already in would hang waiting for it to become clickable.
+            const switchToCompany = async (targetName) => {
+              await openSideMenu();
+              await companySwitcher.click();
+              const options = page.locator('[data-testid^="company-option-"]');
+              await expect(options).toHaveCount(2, { timeout: 30_000 });
+              await options.filter({ hasText: targetName }).click();
+              await page.waitForURL('**/dashboard', { timeout: 60_000 });
+              await openSideMenu();
+              await expect(companySwitcher).toContainText(targetName);
+            };
 
-          await openSideMenu();
-          // Accepting an invitation does NOT have to move the session into the invited
-          // company. InviteAcceptancePage's success screen offers a choice once the
-          // invitee already belongs to another company: `action-go-to-app` enters the
-          // just-joined company, while `action-stay-in-current` (only rendered in that
-          // same situation) calls navigate('/') and leaves the session in whatever
-          // company it was already in. The `acceptExistingInvitation` call above for
-          // this org2 invitation explicitly clicked `action-stay-in-current`
-          // (`landingButton: 'stay-in-current'`), so the session should still be in
-          // org1 here. What this test proves is that both memberships now exist and are
-          // reachable from the switcher regardless — hence org1, then org2, then back.
-          await expect(companySwitcher).toContainText(org1Name);
-          await switchToCompany(org2Name);
-          await switchToCompany(org1Name);
-          await expect(page.getByText(/Estas son tus tareas pendientes|These are your pending tasks/)).toBeVisible({ timeout: 60_000 });
-          await captureScreenshot(page, {
-            path: '../artifacts/delivery-evidence/ETP-4894/ETP-4894-cross-client-return-org1.png',
-            fullPage: true,
-          });
+            await openSideMenu();
+            // Accepting an invitation does NOT have to move the session into the invited
+            // company. InviteAcceptancePage's success screen offers a choice once the
+            // invitee already belongs to another company: `action-go-to-app` enters the
+            // just-joined company, while `action-stay-in-current` (only rendered in that
+            // same situation) calls navigate('/') and leaves the session in whatever
+            // company it was already in. The `acceptExistingInvitation` call above for
+            // this org2 invitation explicitly clicked `action-stay-in-current`
+            // (`landingButton: 'stay-in-current'`), so the session should still be in
+            // org1 here. What this test proves is that both memberships now exist and are
+            // reachable from the switcher regardless — hence org1, then org2, then back.
+            await expect(companySwitcher).toContainText(org1Name);
+            await switchToCompany(org2Name);
+            await switchToCompany(org1Name);
+            await expect(page.getByText(/Estas son tus tareas pendientes|These are your pending tasks/)).toBeVisible({ timeout: 60_000 });
+            await captureScreenshot(page, {
+              path: '../artifacts/delivery-evidence/ETP-4894/ETP-4894-cross-client-return-org1.png',
+              fullPage: true,
+            });
+          },
         },
-      },
-    );
+      );
+    } finally {
+      await sharedContext.close();
+    }
 
     const inviteeAfterAcceptance = await loginAsAdmin(request, invitee);
     const visibleClients = new Set(inviteeAfterAcceptance.environments.map((env) => env.clientId));
