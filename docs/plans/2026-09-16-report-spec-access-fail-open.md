@@ -110,3 +110,31 @@ Confirming a denial needs a role with no grants; that could not be exercised fro
 this was written in, which authenticates with full access. What can be checked after a deploy
 is the absence of a regression — that a properly granted role still receives each of the three
 reports, and that the six financial specs are unaffected.
+
+## 8. Live verification of the `tax-report` fix (2026-09-16)
+
+The `TaxReportHandler` check was verified end to end by connecting the MCP twice: once with a
+fully granted role, once with the `Sales` role.
+
+| Report | `Sales` grant | Result under `Sales` |
+|---|---|---|
+| `aging-receivable` | `obuiapp_process_access` on `0D37…` — **yes** | `200`, real data |
+| `tax-report` | `ad_process_access` on `8C1331B9…` — **no** | **`403`** |
+| `inventory-stock-report` | `ad_window_access` on `6346B886…` — **no** | **`403`** |
+
+Behaviour matches the grants exactly, so the mechanism discriminates rather than blanket-denying.
+The same `generate_tax_report` call that returned VAT bases, tax amounts and every contact's tax
+id under the granted role is refused under `Sales`. No regression: the granted role still gets
+the full report, and `inventory-stock-report` still blocks as it did before.
+
+The aging report returning `200` is **correct** — `Sales` holds that grant. The original review's
+note that aging blocked was presumably taken under a different role, or against the payables
+variant, which is a different OBUIAPP process (`EB4C…`).
+
+### Evidence for the fail-open, from the same run
+
+`neo_discover` under `Sales` lists all three reports with `callable: true`, including the two
+that answer `403`. The catalogue is built through the same permissive `R`-spec path, so it
+advertises reports the role cannot run — and, for a spec whose very existence is sensitive,
+names it. This is the defect this document proposes to close, observed from the discovery side
+rather than the execution side.
