@@ -1951,6 +1951,102 @@ export function renderLinesColgroup({
 }
 
 /**
+ * Renders the <colgroup> that drives column widths for the plain document-list
+ * mode (real header, own scroll) once its header row moves out of this table —
+ * see StickyHeaderRow just below for why. Mirrors renderColumnHeaderCell's own
+ * width computation (`columnMinWidthPx`, `col.headClass` opt-out) exactly, one
+ * <col> per header cell in the same order, so the two tables' columns land at
+ * identical pixel widths without the header row needing to be present here to
+ * drive table-layout: fixed.
+ */
+function renderMainColgroup({
+  hasDimensionsPanel, selectable, visibleColumns, hoverRowActions, onDeleteRow,
+  legacyDeleteEnabled, onCloneRow, quickActionsEnabled, quickActionsColWidthPx,
+}) {
+  return (
+    <colgroup>
+      {hasDimensionsPanel && <col style={{ width: CHEVRON_COLUMN_WIDTH }} />}
+      {selectable && <col style={{ width: 40 }} />}
+      {visibleColumns.map((col, colIdx) => (
+        <col key={col.key} style={col.headClass ? undefined : { width: columnMinWidthPx(col, colIdx) }} />
+      ))}
+      {hoverRowActions && <col style={{ width: 40 }} />}
+      {hoverRowActions && onDeleteRow && <col style={{ width: 40 }} />}
+      {!hoverRowActions && legacyDeleteEnabled && <col style={{ width: 40 }} />}
+      {!hoverRowActions && onCloneRow && !quickActionsEnabled && <col style={{ width: 40 }} />}
+      {quickActionsEnabled && <col style={{ width: quickActionsColWidthPx }} />}
+    </colgroup>
+  );
+}
+
+/**
+ * Keeps the document-list header visible while its body scrolls vertically —
+ * "necesito que se quede siempre visible los nombres de las columnas [...] sin
+ * romper paginación ni nada" (ETP-5268 follow-up).
+ *
+ * WHY A SEPARATE TABLE, NOT `sticky` ON THIS TABLE'S OWN <thead>: this list's
+ * vertical scroll is owned by an ANCESTOR (ScrollPane, outside DataTable
+ * entirely — its own `min-h-0 flex-1 overflow-auto` is what actually scrolls;
+ * see ListView.jsx's ListTableRegion doc comment). Between `<thead>` and that
+ * real scroll container sits THIS table's own horizontal-scroll wrapper
+ * (schema_forge_core's table.jsx, `overflow-auto`) — required for the
+ * mirror-scrollbar mechanism above. Per the CSS overflow spec, when one axis is
+ * `visible` and the other isn't, the `visible` one is silently forced to `auto`
+ * too (verified live: even `overflow-y: visible !important` inline on that
+ * exact node still computed as `auto`) — so that wrapper can never be made a
+ * horizontal-only scroller. `position: sticky` resolves against the NEAREST
+ * such container regardless of whether it ever actually overflows, so `<thead
+ * sticky>` inside it just travels with the page instead of pinning (confirmed
+ * live: it scrolled fully off-screen, top: -419px).
+ *
+ * The only way around that without giving this element a bounded height (which
+ * would make it start scrolling body content itself, an `ownScroll`-style
+ * layout that disables ScrollPane's `onReachBottom` infinite-load — explicitly
+ * out of scope, see the git history on this function) is to keep the header
+ * OUTSIDE that wrapper's DOM subtree entirely. This renders it in its own
+ * `<table>`, sticky against ScrollPane directly, and mirrors the body's
+ * horizontal scroll position onto it via a transform — imperatively, via a
+ * plain scroll listener, not React state, for the same reason
+ * HorizontalScrollThumb below is its own component: a state update on every
+ * scroll frame would re-render the whole (unmemoized) row list.
+ */
+function StickyHeaderRow({ elRef, attachSeq, children }) {
+  const tableRef = useRef(null);
+
+  useEffect(() => {
+    const el = elRef.current;
+    const tableEl = tableRef.current;
+    if (!el || !tableEl) return undefined;
+    const sync = () => {
+      tableEl.style.transform = `translateX(${-el.scrollLeft}px)`;
+    };
+    sync();
+    el.addEventListener('scroll', sync, { passive: true });
+    return () => el.removeEventListener('scroll', sync);
+    // `attachSeq` bumps whenever useHorizontalScrollGeometry's callback ref
+    // re-attaches to a new scrolling element (e.g. after a remount) — re-run
+    // to bind the listener to the current `el`, exactly like
+    // HorizontalScrollThumb's own effect below.
+  }, [elRef, attachSeq]);
+
+  return (
+    <div
+      className="sticky top-0 z-20 overflow-hidden bg-card"
+      data-testid="StickyHeaderRow__eb5261">
+      {/* `width: '100%'` matches getTableContainerStyle() on the body table below —
+          needed for more than symmetry: with `table-layout: fixed`, a <colgroup>
+          whose widths sum to LESS than the table's own width gets stretched
+          proportionally to fill it (verified live), so without this the header's
+          columns sized to the raw colgroup sum while the body's — width: 100% —
+          stretched wider, drifting further apart column by column. */}
+      <table ref={tableRef} style={{ tableLayout: 'fixed', width: '100%', willChange: 'transform' }}>
+        {children}
+      </table>
+    </div>
+  );
+}
+
+/**
  * Renders the header for a `multiField` column as N independently sortable
  * segments joined by `col.partSeparator` (default ' & '). Each segment sorts on
  * its own `part.key` (a real NEO field), reusing the same none→asc→desc→clear
@@ -2916,8 +3012,55 @@ export function DataTable({
     quickActionsColWidthPx,
   });
 
+  // ETP-5268 follow-up — see StickyHeaderRow's own doc comment for the full
+  // rationale: the plain document-list mode's header can't be made `sticky`
+  // in place (it's inside a wrapper that's unavoidably a scroll container on
+  // both axes, per the CSS overflow spec, so `sticky` there just travels with
+  // the page), so it moves to its own table, sticky against the ScrollPane
+  // ancestor that actually owns this list's vertical scroll. hideHeader
+  // (add-row-only) and inlineEditable (already sticky via a bounded flex box
+  // elsewhere) are unaffected — both keep the header exactly where it was.
+  const useOwnStickyHeader = !hideHeader && linesLayout !== 'inlineEditable';
+  const headerRowContent = (
+    <TableRow className="border-b border-border/40" data-testid="TableRow__eb5261">
+      {/* ETP-4735 — mirrors the leading chevron cell added to InlineAddRow/TableDataRow
+          below: keeps this table's own header self-consistent with its body whenever a
+          dimensionsPanel column is present (only actually exercised in hideHeader mode,
+          where InlineLinesPanel's rows are what this table's add-row must align with —
+          see renderLinesColgroup's leading <col>). */}
+      {hasDimensionsPanel && <TableHead aria-hidden="true" style={{ width: CHEVRON_COLUMN_WIDTH }} data-testid="TableHead__eb5261" />}
+      {selectable && (
+        <TableHead
+          className="w-10 px-3 align-middle"
+          onClick={(e) => e.stopPropagation()}
+          data-testid="TableHead__eb5261">
+          <Checkbox
+            checked={allSelected}
+            indeterminate={someSelected}
+            onChange={toggleAll}
+            onClick={(e) => e.stopPropagation()}
+            data-testid="Checkbox__eb5261" />
+        </TableHead>
+      )}
+      {visibleColumns.map((col, colIdx) => renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort, linesLayout, locale, t }))}
+      {renderRowActionHeaderCells(hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled)}
+      {quickActionsEnabled && (
+        <TableHead
+          className={quickActionsColumnClassName('px-2')}
+          style={quickActionsColumnStyle(quickActionsColWidthPx)}
+          aria-hidden="true"
+          data-testid="TableHead__eb5261" />
+      )}
+    </TableRow>
+  );
+
   return (
     <div className="space-y-0">
+      {useOwnStickyHeader && (
+        <StickyHeaderRow elRef={horizontalScrollElRef} attachSeq={horizontalScrollAttachSeq}>
+          <TableHeader data-testid="TableHeader__eb5261">{headerRowContent}</TableHeader>
+        </StickyHeaderRow>
+      )}
       {/*
         `overflow-y-visible` next to `overflow-x-auto` is computed as `auto` by the CSS
         spec, so this wrapper does clip vertically. With `rowHoverStyle="elevated"` the
@@ -2951,50 +3094,29 @@ export function DataTable({
         ].filter(Boolean).join(' ')}
       >
         <Table style={getTableContainerStyle()} data-testid="Table__eb5261">
-          {/* When hideHeader is true (add-row-only mode), a <colgroup> drives column
-              widths — see renderLinesColgroup() above for the full rationale. */}
-          {renderLinesColgroup({
-            hideHeader, selectable, visibleColumns, colFlexSpecs, fixedColsTotalPx, growCount,
-            ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow,
-            quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel,
-            quickActionsColWidthPx,
-          })}
-          <TableHeader
-            className={linesLayout === 'inlineEditable' ? 'sticky top-0 z-20 bg-card' : ''}
-            aria-hidden={hideHeader || undefined}
-            style={hideHeader ? { display: 'none' } : undefined}
-            data-testid="TableHeader__eb5261">
-            <TableRow className="border-b border-border/40" data-testid="TableRow__eb5261">
-              {/* ETP-4735 — mirrors the leading chevron cell added to InlineAddRow/TableDataRow
-                  below: keeps this table's own header self-consistent with its body whenever a
-                  dimensionsPanel column is present (only actually exercised in hideHeader mode,
-                  where InlineLinesPanel's rows are what this table's add-row must align with —
-                  see renderLinesColgroup's leading <col>). */}
-              {hasDimensionsPanel && <TableHead aria-hidden="true" style={{ width: CHEVRON_COLUMN_WIDTH }} data-testid="TableHead__eb5261" />}
-              {selectable && (
-                <TableHead
-                  className="w-10 px-3 align-middle"
-                  onClick={(e) => e.stopPropagation()}
-                  data-testid="TableHead__eb5261">
-                  <Checkbox
-                    checked={allSelected}
-                    indeterminate={someSelected}
-                    onChange={toggleAll}
-                    onClick={(e) => e.stopPropagation()}
-                    data-testid="Checkbox__eb5261" />
-                </TableHead>
-              )}
-              {visibleColumns.map((col, colIdx) => renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort, linesLayout, locale, t }))}
-              {renderRowActionHeaderCells(hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled)}
-              {quickActionsEnabled && (
-                <TableHead
-                  className={quickActionsColumnClassName('px-2')}
-                  style={quickActionsColumnStyle(quickActionsColWidthPx)}
-                  aria-hidden="true"
-                  data-testid="TableHead__eb5261" />
-              )}
-            </TableRow>
-          </TableHeader>
+          {/* When hideHeader is true (add-row-only mode), or the header just moved out to
+              StickyHeaderRow above, a <colgroup> drives column widths instead of the (now
+              absent-from-this-table, or hidden) header row's own cell widths. */}
+          {useOwnStickyHeader
+            ? renderMainColgroup({
+              hasDimensionsPanel, selectable, visibleColumns, hoverRowActions, onDeleteRow,
+              legacyDeleteEnabled, onCloneRow, quickActionsEnabled, quickActionsColWidthPx,
+            })
+            : renderLinesColgroup({
+              hideHeader, selectable, visibleColumns, colFlexSpecs, fixedColsTotalPx, growCount,
+              ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow,
+              quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel,
+              quickActionsColWidthPx,
+            })}
+          {!useOwnStickyHeader && (
+            <TableHeader
+              className={linesLayout === 'inlineEditable' ? 'sticky top-0 z-20 bg-card' : ''}
+              aria-hidden={hideHeader || undefined}
+              style={hideHeader ? { display: 'none' } : undefined}
+              data-testid="TableHeader__eb5261">
+              {headerRowContent}
+            </TableHeader>
+          )}
           <TableBody data-testid="TableBody__eb5261">
             {renderTableRows({
               hideDataRows, filteredData, addRow, colSpan, hasActiveFilter, data, selectedRows,
