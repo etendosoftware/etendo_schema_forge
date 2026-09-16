@@ -36,7 +36,10 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
   const ui = useUI();
   const t = useLabel(labelOverrides);
   const apiFetch = useApiFetch(apiBaseUrl);
-  const { runBatch } = useBatch({ apiBaseUrl, token });
+  // ETP-5371 — `useBatch` asks `neoBaseUrl.js` for the NEO root itself; it no longer takes
+  // `apiBaseUrl`, which it used to chop a segment off. `apiBaseUrl` is still this hook's own
+  // base for the existing-record lookup below, and must be the SPEC's URL.
+  const { runBatch } = useBatch({ token });
   const entity = importConfig?.entity;
 
   // ETP-4696/ETP-4997 — `headerScope` appends a localized qualifier naming the tab a column

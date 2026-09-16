@@ -134,6 +134,26 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   3. Open `/unknown-window` and confirm the not-found error state is rendered.
   4. Open `/report-viewer?category=inventory` and confirm it uses the explicit report viewer route rather than the generic `:windowName` loader.
 
+#### 3.1 Backend base URLs (ETP-5371)
+
+- **Why it has its own section:** a wrong base URL does not fail loudly. It produces a plausible request to a path that does not exist, and the resulting 403/404 names the CDN or the data, never the line that built it.
+- **The one owner:** `tools/app-shell/src/lib/neoBaseUrl.js`.
+  - `detectBasePath()` → `{ apiBase, routerBase }` from the `/web/` marker in `window.location.pathname`, with `VITE_API_BASE` overriding `apiBase`.
+  - `getNeoBaseUrl()` → the NEO root: `/etendo/sws/neo` (or `<base>/api` under `VITE_MOCK`). `/batch` and every webhook hang off this.
+  - `getSpecBaseUrl(spec)` → one spec's URL: `/etendo/sws/neo/product`. This is the shape `WindowLoader` passes down as `apiBaseUrl`, so it is what `useApiFetch` and `useWindowImportDialog`'s existing-record lookup are written against.
+- **Rule:** any surface that drives a window's data from OUTSIDE the `:windowName` route builds its base with `getSpecBaseUrl(spec)`. Never derive one base from another by string surgery.
+- **What this fixed:** `FirstStepsImportButton` passed `getApiBase()` — the deployment prefix (`/etendo`) — where the spec URL was expected. Both are non-empty strings, so nothing downstream rejected it, and the checklist's bulk load broke in two ways at once: the batch POST resolved to `/batch` (CloudFront answered 403, which read as an infrastructure outage) and the duplicate pre-check to `/etendo/product` (404, swallowed by `findExistingKeys`, so no row was ever marked as already existing). `useBatch` also stopped deriving the NEO root by stripping a segment off its caller's base; it asks `getNeoBaseUrl()` and no longer takes `apiBaseUrl`.
+- **Why it never reproduced locally:** dev has no `VITE_API_BASE`, so the prefix is `''` and the old chop produced the correct URL by accident. Only a deployment WITH a context path (`.env.production` sets `VITE_API_BASE=/etendo`) shows the bug.
+- **Automated evidence:**
+  - `tools/app-shell/src/lib/__tests__/neoBaseUrl.vitest.js` — the three helpers across root / context-path / `VITE_API_BASE` / `VITE_MOCK` deployments, plus the assertion that `getSpecBaseUrl` equals what `WindowLoader` builds for the same window.
+  - `tools/app-shell/src/pages/first-steps/__tests__/FirstStepsImportButton.vitest.jsx` — pins the base the checklist hands `useWindowImportDialog`, per step spec.
+  - `tools/app-shell/src/components/copilot/ocr/ingest/__tests__/useBatch.vitest.jsx` — the batch URL keeps the context path whatever the caller passes, and both entry points reach the same endpoint.
+- **Manual verification path:**
+  1. On a deployment served under a context path, open Primeros pasos → "Carga masiva de productos" and import a file.
+  2. In the Network tab, confirm the POST goes to `<context>/sws/neo/batch` and not to `/batch`.
+  3. Import the same file again and confirm the rows come back as Omitidas — that is the duplicate pre-check, which uses the same base.
+  4. Repeat both from the Productos window and confirm the two flows issue identical URLs.
+
 ### 4. Entity list/detail data flow
 
 - **User goal / entry point:** Browse a window list, open a record, create/update/delete records, and work with child rows.
