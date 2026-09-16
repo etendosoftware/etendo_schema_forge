@@ -307,6 +307,18 @@ declared map, its survival into `contract.json`, and the resolved label against 
 unchanged. `schema_forge_core`'s `cli/test/resolve-curated-enum-values-precedence.test.js`
 covers the precedence fix.
 
+## "Crear Factura Rectificativa" modal closed with no loading feedback — ETP-5333
+
+Same defect and same fix as `return-to-vendor-shipment.md`'s equivalent note — this window
+shares `ConfirmWithCreditButtonBase.jsx` (via its own `ConfirmWithCreditButton.jsx` wrapper), so
+it inherited the bug: on a completed receipt with no return invoice yet, clicking "Crear →" on
+the "Gestionar documentos" modal closed it synchronously instead of showing the in-place
+"Procesando…" spinner the modal already supported. Fixed in the shared
+`tools/app-shell/src/windows/custom/shared/useConfirmWithCredit.js`'s
+`handleCreateReturnInvoice` — the modal now closes only in the success branch, right before the
+result is set — so this window required no window-specific change. See
+`return-to-vendor-shipment.md` for the full root-cause writeup.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.

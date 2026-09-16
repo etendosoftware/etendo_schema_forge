@@ -108,16 +108,21 @@ export default function CreateInvoiceConfirmModal({
     : ui('soCreateInvoiceCheckDesc');
 
   const canConfirm = checked && (!showPriceListPicker || !!priceListId);
+  // ETP-5333 — while the invoice is being created, the modal must stay mounted
+  // (see the primary button below): a backdrop click or the × must not close it
+  // out from under the in-flight request, which would reproduce the same
+  // "closes with no feedback" symptom the loading state exists to prevent.
+  const dismiss = loading ? undefined : onClose;
 
   return createPortal(
-    <div data-testid="create-invoice-confirm-modal" onClick={onClose} style={overlayStyle}>
+    <div data-testid="create-invoice-confirm-modal" onClick={dismiss} style={overlayStyle}>
       <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: 460 }}>
 
         <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid hsl(var(--border-subtle))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
             {ui('soManageDocsTitle')}
           </div>
-          <button type="button" onClick={onClose} style={closeBtnStyle}>&times;</button>
+          <button type="button" onClick={dismiss} disabled={loading} style={closeBtnStyle}>&times;</button>
         </div>
 
         <div style={{ padding: '14px 20px' }}>

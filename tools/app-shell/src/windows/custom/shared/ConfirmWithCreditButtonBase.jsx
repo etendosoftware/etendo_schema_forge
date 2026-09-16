@@ -108,7 +108,7 @@ export default function ConfirmWithCreditButtonBase({
         <CreateInvoiceConfirmModal
           data={data}
           loading={creatingInvoice}
-          onConfirm={() => { setShowModal(false); handleCreateReturnInvoice(); }}
+          onConfirm={handleCreateReturnInvoice}
           onClose={() => setShowModal(false)}
           data-testid="CreateInvoiceConfirmModal__f9608e" />,
         document.body,

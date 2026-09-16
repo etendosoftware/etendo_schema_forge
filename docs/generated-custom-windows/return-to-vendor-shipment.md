@@ -171,6 +171,39 @@ declared map, its survival into `contract.json`, and the resolved label against 
 unchanged. `schema_forge_core`'s `cli/test/resolve-curated-enum-values-precedence.test.js`
 covers the precedence fix.
 
+## "Crear Factura Rectificativa" modal closed with no loading feedback — ETP-5333
+
+On a **completed** shipment with no return invoice yet, the "Crear Factura Rectificativa"
+button opens `CreateInvoiceConfirmModal.jsx` ("Gestionar documentos"). Before this fix, clicking
+its primary "Crear →" button closed the modal **synchronously**, then the invoice-creation
+request ran with no visible UI, and `ConfirmResultModal` ("Factura rectificativa de compra
+creada") only appeared once the request resolved — on a slow connection this looked like the
+click did nothing. The sibling **draft**-status flow (`ConfirmInOutModal.jsx`, opened from the
+same shared `ConfirmWithCreditButtonBase.jsx` for `status === 'DR'`) never had this problem: it
+owns its own `loading` state and only calls back to close itself once the request settles.
+
+Root cause: `CreateInvoiceConfirmModal.jsx` already accepted a `loading` prop and rendered a
+spinner + `ui('soProcessing')` on its primary button — that support was already wired in this
+window (`loading={creatingInvoice}` in `ConfirmWithCreditButtonBase.jsx`) but was dead code,
+because the caller's `onConfirm` called `setShowModal(false)` **before** the async handler
+even started, unmounting the modal before the loading state could ever render.
+
+Fixed by moving the modal-close call into the async handler's success branch, right before the
+result is set, in `tools/app-shell/src/windows/custom/shared/useConfirmWithCredit.js`'s
+`handleCreateReturnInvoice` (shared by this window and `return-material-receipt`) —
+`onConfirm={handleCreateReturnInvoice}` in `ConfirmWithCreditButtonBase.jsx` now does nothing
+but invoke the handler. On failure the modal is deliberately left open (a `toast.error` already
+fires) so the user can retry, matching `ConfirmInOutModal`'s behavior. The same defect and the
+same fix pattern were applied to the equivalent post-completion "Crear Factura" flows on
+`goods-receipt` and `goods-shipment` (`GoodsReceiptActions.jsx` / `GoodsShipmentActions.jsx`),
+which reuse the same `CreateInvoiceConfirmModal.jsx`.
+
+Also hardened while in flight: `CreateInvoiceConfirmModal.jsx`'s backdrop click and × button
+previously still called `onClose` even while `loading` was `true` (only the "Cancelar" footer
+button was disabled) — a stray click during "Procesando…" could reproduce the same
+premature-close symptom. Both now route through a `dismiss = loading ? undefined : onClose`
+guard.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.
