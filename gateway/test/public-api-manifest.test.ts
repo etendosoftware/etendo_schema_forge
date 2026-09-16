@@ -33,3 +33,11 @@ test('does not publish Contacts child tabs without explicit public API curation'
   assert.equal(manifest.entities['contacts-costSalaryCategory'], undefined);
   assert.equal(manifest.entities['contacts-basicDiscount'], undefined);
 });
+
+test('publishes fiscal monitors as read-only resources in one OpenAPI group', () => {
+  for (const resource of ['monitor-verifactu', 'sii-monitor', 'tbai-facturas-enviadas']) {
+    assert.deepEqual(manifest.entities[resource].operations, ['GET', 'LIST']);
+    assert.equal(manifest.entities[resource].group, 'Fiscal Monitors');
+    assert.deepEqual(manifest.entities[resource].processes, []);
+  }
+});

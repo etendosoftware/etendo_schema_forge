@@ -30,6 +30,7 @@ type FunctionalDocumentation = {
 type PublicApiEntity = PublicApiSchema['entities'][string] & {
   functional?: FunctionalDocumentation;
   parent?: { resource: string; pathSegment: string; foreignKey: string };
+  group?: string;
 };
 
 function response(description: string, schema: JsonSchema, status = '200') {
@@ -75,7 +76,7 @@ export function buildPerEntityOpenApiPaths(schema: PublicApiSchema): Record<stri
     const entity = rawEntity as PublicApiEntity;
     const parent = entity.parent ? schema.entities[entity.parent.resource] as PublicApiEntity | undefined : undefined;
     const title = entity.functional?.functionalName ?? entityName;
-    const groupTitle = parent?.functional?.functionalName ?? title;
+    const groupTitle = entity.group ?? parent?.functional?.functionalName ?? title;
     const summary = entity.functional?.functionalSummary;
     const capabilities = entity.functional?.functionalCapabilities ?? [];
     const description = [

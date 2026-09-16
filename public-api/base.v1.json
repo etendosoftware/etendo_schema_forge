@@ -964,13 +964,10 @@
       "specName": "monitor-verifactu",
       "entityName": "cabeceraDeEmisor",
       "publicApi": true,
+      "group": "Fiscal Monitors",
       "operations": [
         "GET",
-        "POST",
-        "PUT",
-        "DELETE",
-        "LIST",
-        "PATCH"
+        "LIST"
       ],
       "fields": {
         "id": {
@@ -2391,13 +2388,10 @@
       "specName": "sii-monitor",
       "entityName": "organizations",
       "publicApi": true,
+      "group": "Fiscal Monitors",
       "operations": [
         "GET",
-        "POST",
-        "PUT",
-        "DELETE",
-        "LIST",
-        "PATCH"
+        "LIST"
       ],
       "fields": {
         "id": {
@@ -2442,13 +2436,10 @@
       "specName": "tbai-facturas-enviadas",
       "entityName": "sincronización",
       "publicApi": true,
+      "group": "Fiscal Monitors",
       "operations": [
         "GET",
-        "POST",
-        "PUT",
-        "DELETE",
-        "LIST",
-        "PATCH"
+        "LIST"
       ],
       "fields": {
         "id": {

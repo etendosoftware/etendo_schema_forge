@@ -44,6 +44,12 @@ const excludedWindows = new Set([
 
 const excludedChildTabs = [/accounting/i];
 
+const fiscalMonitorWindows = new Set([
+  'monitor-verifactu',
+  'sii-monitor',
+  'tbai-facturas-enviadas',
+]);
+
 function publicName(specName, entityName, primaryEntity) {
   return entityName === primaryEntity ? specName : `${specName}-${entityName}`;
 }
@@ -129,7 +135,7 @@ function buildEntity({ specName, entityName, contract, functional, parent, rawEn
   const endpoints = (backend.endpoints ?? []).filter(
     (endpoint) => endpoint.entity === entityName
   );
-  const operations = [...new Set(
+  let operations = [...new Set(
     endpoints.map((endpoint) => endpoint.method).concat(['GET', 'LIST'])
   )];
   // NeoServlet supports partial updates through the same resource endpoint
@@ -139,6 +145,8 @@ function buildEntity({ specName, entityName, contract, functional, parent, rawEn
   if (operations.includes('PUT') && !operations.includes('PATCH')) {
     operations.push('PATCH');
   }
+  const readOnlyFiscalMonitor = fiscalMonitorWindows.has(specName);
+  if (readOnlyFiscalMonitor) operations = ['GET', 'LIST'];
   const writable = endpoints.some((endpoint) => writeMethods.has(endpoint.method));
 
   const fields = {};
@@ -214,9 +222,10 @@ function buildEntity({ specName, entityName, contract, functional, parent, rawEn
     specName,
     entityName,
     publicApi: true,
+    ...(readOnlyFiscalMonitor ? { group: 'Fiscal Monitors' } : {}),
     operations,
     fields,
-    processes: (backend.processEndpoints ?? []).filter(
+    processes: (readOnlyFiscalMonitor ? [] : backend.processEndpoints ?? []).filter(
       (process) => process.entity === entityName
     ),
     ...(parent ? {
