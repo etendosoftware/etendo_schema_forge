@@ -255,6 +255,10 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
       const json = await res.json();
       const invoiceId = json?.response?.data?.id;
       const docNo = json?.response?.data?.documentNo || '';
+      // ETP-5381: the invoice is confirmed in the same request now, so the copy no longer tells
+      // the user to go and review a draft. Falls back to the old wording if an older backend
+      // still returns a draft, rather than asserting something untrue.
+      const confirmed = json?.response?.data?.documentStatus === 'CO';
       if (invoiceId) {
         const bp = window.location.pathname.replace(/\/goods-shipment\/.*$/, '').replace(/\/goods-shipment\/?$/, '');
         const invoiceUrl = `${bp}/sales-invoice/${invoiceId}`;
@@ -264,8 +268,12 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--card))" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap' }}>{`${ui('invoiceRef')}${docNo} ${ui('createdAsDraft')}`}</div>
-              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{ui('reviewBeforeConfirming')}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                {`${ui('invoiceRef')}${docNo} ${confirmed ? ui('invoiceCreatedAndConfirmed') : ui('createdAsDraft')}`}
+              </div>
+              {!confirmed && (
+                <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{ui('reviewBeforeConfirming')}</div>
+              )}
             </div>
             <button
               onClick={() => { toast.dismiss(t); window.location.href = invoiceUrl; }}

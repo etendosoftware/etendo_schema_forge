@@ -163,6 +163,20 @@ const BACKEND_ERROR_MAP = {
   // AD_Message/i18n involvement, so it always renders in Spanish regardless of session
   // locale (ETP-4831 case 2, inverse symptom of the invoice-line skeleton below).
   'No hay líneas a facturar en este pedido': 'backendError.noLinesToInvoice',
+  // ETP-5381 duplicate-invoice guards. Auto-generated invoices are now created AND confirmed in
+  // one step, which finally makes the source document's invoiced quantities reliable; these four
+  // are the server-side rejections that back the (previously UI-only) protection. All are
+  // returned as 409, unlike the 400 "nothing to invoice" messages around them.
+  'This shipment has already been fully invoiced.': 'backendError.shipmentAlreadyInvoiced',
+  'This goods receipt has already been fully invoiced.': 'backendError.receiptAlreadyInvoiced',
+  'A rectificative invoice already exists for this return document.':
+    'backendError.returnInvoiceAlreadyExists',
+  'An invoice has already been generated for this quotation.':
+    'backendError.quotationAlreadyInvoiced',
+  // ETP-5381 — a rectificative invoice cannot be confirmed without declaring which invoice it
+  // rectifies (ETSG_CHECK_RECTIF_INV_DOC), so the request is rejected before anything is written.
+  'Select at least one invoice to rectify: a rectificative invoice cannot be confirmed without it.':
+    'backendError.rectifiedInvoiceRequired',
   // CreateDraftInvoiceHandler (com.etendoerp.go) — same hardcoded-Spanish-literal bug
   // as above, but from the shipment-invoicing flow. Two throw sites emit this exact
   // string: capShipmentLineOverrides (~L952) and the line-selection loop inside

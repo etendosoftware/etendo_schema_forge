@@ -464,7 +464,10 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(ui('soOrderConfirmedInvoiceError') + (e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`));
+          // ETP-5381: was the only branch here not running the backend message through
+          // translateBackendError (the shipment branch above always did), so the new
+          // duplicate-invoice and completion messages would have surfaced in English.
+          throw new Error(ui('soOrderConfirmedInvoiceError') + translateBackendError(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`, ui));
         }
         const doc = (await res.json())?.response?.data;
         currentInvoice = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
