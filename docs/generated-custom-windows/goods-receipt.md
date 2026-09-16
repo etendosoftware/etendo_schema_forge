@@ -327,6 +327,31 @@ no separate refetch of its own: it derives its chips straight from `data.linkedO
 `linkedInvoices` / `linkedReturns`, which `GoodsReceiptHeaderHandler.afterHandle` enriches on
 every header GET — so refreshing the header via `onRefresh` is sufficient to update it.
 
+## "Crear Factura" modal closed with no loading feedback — ETP-5333
+
+On a **completed** receipt with no invoice yet, "Crear Factura" opens the shared
+`CreateInvoiceConfirmModal.jsx` ("Gestionar documentos"). Before this fix, clicking "Crear →"
+closed the modal **synchronously** in `handleCreateInvoice` (`GoodsReceiptActions.jsx`) via
+`onConfirm={(priceListId) => { setShowInvoiceConfirm(false); handleCreateInvoice(priceListId); }}`
+— the request then ran with no visible UI, and the "Factura de compra creada" result modal only
+appeared once it resolved. `CreateInvoiceConfirmModal.jsx` already accepted a `loading` prop and
+rendered a spinner + "Procesando…" on its primary button (`loading={creatingInvoice}` was
+already passed here), but it was dead code: the modal unmounted before the loading state could
+ever render.
+
+Fixed by moving `setShowInvoiceConfirm(false)` into `handleCreateInvoice`'s success branch,
+right before `setConfirmedDocs({...})`, so `onConfirm` is now just
+`onConfirm={handleCreateInvoice}`. On failure the modal stays open (the existing `toast.error`
+fires) so the user can retry, matching the draft-status confirm flow
+(`ConfirmGoodsReceiptModal.jsx` → `ConfirmInOutModal.jsx`), which never had this defect because
+it owns its own `loading` state. The identical defect and fix were applied to
+`return-to-vendor-shipment`/`return-material-receipt` (`ConfirmWithCreditButtonBase.jsx`) and to
+`goods-shipment` (`GoodsShipmentActions.jsx`), all of which share `CreateInvoiceConfirmModal.jsx`.
+
+Also hardened while in flight: the modal's backdrop click and × button previously still closed
+it even while `loading` was `true` (only the "Cancelar" footer button was disabled) — fixed with
+a `dismiss = loading ? undefined : onClose` guard in `CreateInvoiceConfirmModal.jsx`.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.

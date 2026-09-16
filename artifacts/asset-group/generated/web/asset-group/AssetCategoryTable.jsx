@@ -3,8 +3,8 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:assetCategory
 const columns = [
-  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
-  { key: 'description', column: 'Description', type: 'string', label: 'Description' },
+  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true, maxLength: 60 },
+  { key: 'description', column: 'Description', type: 'string', label: 'Description', maxLength: 255 },
 ];
 // @sf-generated-end columns:assetCategory
 

@@ -3,7 +3,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:locationAddress
 const columns = [
-  { key: 'name', column: 'Name', type: 'string', labels: {"en_US":"Location / Address","es_ES":"Dirección"}, label: 'Name', required: true },
+  { key: 'name', column: 'Name', type: 'string', labels: {"en_US":"Location / Address","es_ES":"Dirección"}, label: 'Name', required: true, maxLength: 60 },
   { key: 'shipToAddress', column: 'IsShipTo', type: 'boolean', labels: {"en_US":"Shipping Address","es_ES":"Dir.envíos"}, label: 'Shipping Address', required: true },
   { key: 'invoiceToAddress', column: 'IsBillTo', type: 'boolean', labels: {"en_US":"Invoicing Address","es_ES":"Dir.factura"}, label: 'Invoicing Address', required: true },
 ];

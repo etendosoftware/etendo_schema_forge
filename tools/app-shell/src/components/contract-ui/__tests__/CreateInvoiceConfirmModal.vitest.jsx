@@ -244,6 +244,28 @@ describe('CreateInvoiceConfirmModal', () => {
     expect(props.onClose).toHaveBeenCalledTimes(1);
   });
 
+  // ETP-5333 — the overlay's own onClick={dismiss} was never previously exercised
+  // here (only the explicit cancel/× buttons were). While a request is in flight,
+  // a backdrop click must not be able to reproduce the "closes with no feedback"
+  // symptom the loading state exists to prevent.
+  it('calls onClose when the backdrop overlay is clicked and loading is false', () => {
+    const { props } = renderModal({ loading: false });
+    fireEvent.click(screen.getByTestId('create-invoice-confirm-modal'));
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT call onClose when the backdrop overlay is clicked while loading is true (ETP-5333)', () => {
+    const { props } = renderModal({ loading: true });
+    fireEvent.click(screen.getByTestId('create-invoice-confirm-modal'));
+    expect(props.onClose).not.toHaveBeenCalled();
+  });
+
+  it('does NOT call onClose when × is clicked while loading is true (ETP-5333)', () => {
+    const { props } = renderModal({ loading: true });
+    fireEvent.click(screen.getByText('×'));
+    expect(props.onClose).not.toHaveBeenCalled();
+  });
+
   it('calls onConfirm when confirm button is clicked and checkbox is checked (showPriceListPicker=false)', () => {
     const { props } = renderModal();
     fireEvent.click(screen.getByText('soCreateDocsBtn'));
