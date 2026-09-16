@@ -5,6 +5,7 @@ import HeaderTable from '@generated/purchase-order/generated/web/purchase-order/
 import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import BulkPurchaseOrderMoreMenu from '@generated/purchase-order/custom/BulkPurchaseOrderMoreMenu';
+import PurchaseOrderReactivateBulkAction from '@generated/purchase-order/custom/PurchaseOrderReactivateBulkAction';
 import { ConfirmModal as PoConfirmModal, PoConfirmResultModal, ManageDocsLauncher as PoManageDocsLauncher } from '@generated/purchase-order/custom/PurchaseOrderActions';
 import PurchaseOrderSecondaryActions from '@generated/purchase-order/custom/PurchaseOrderSecondaryActions';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
@@ -77,6 +78,11 @@ function PurchaseOrderBulkActions(props) {
         buildActions={buildInOutActions}
         labelKey="confirmBulk"
         data-testid="BulkDocumentAction__b7ace5" />
+      {/* ETP-5315 — grid bulk-select Reactivate, mirroring sales-order's
+          OrderReactivateBulkAction. Kept as a SEPARATE component (not folded
+          into the BulkDocumentAction above) so the existing CO-only
+          confirmBulk action stays untouched, per the ticket's scope. */}
+      <PurchaseOrderReactivateBulkAction {...props} data-testid="PurchaseOrderReactivateBulkAction__b7ace5" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
@@ -109,11 +115,15 @@ export default function PurchaseOrderWindow(props) {
     deliveryKey: 'deliveryStatusPurchase',
     manageLabelKeys: PO_MANAGE_LABELS,
     confirmLabelKey: 'poConfirmBtn',
+    confirmedTitleKey: 'poConfirmedTitle',
+    primaryDoc: { key: 'receipt', type: 'entrada', route: 'goods-receipt' },
+    invoiceDoc: { key: 'invoice', type: 'facturaCompra', route: 'purchase-invoice' },
     headers,
     ConfirmModal: PoConfirmModal,
     ConfirmResultModal: PoConfirmResultModal,
     ManageDocsLauncher: PoManageDocsLauncher,
     setCloneTargets,
+    showReactivate: true,
     usePdf: usePurchaseOrderPdf,
     documentType: tMenu('Purchase Order'),
   });

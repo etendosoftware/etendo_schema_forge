@@ -7,8 +7,8 @@ const columns = [
   { key: 'toCurrency', column: 'C_Currency_ID_To', type: 'selector', label: 'To Currency', required: true },
   { key: 'validFromDate', column: 'ValidFrom', type: 'date', label: 'Valid From Date', required: true },
   { key: 'validToDate', column: 'ValidTo', type: 'date', label: 'Valid To Date' },
-  { key: 'multipleRateBy', column: 'MultiplyRate', type: 'string', label: 'Multiple Rate By', required: true },
-  { key: 'divideRateBy', column: 'DivideRate', type: 'string', label: 'Divide Rate By', required: true },
+  { key: 'multipleRateBy', column: 'MultiplyRate', type: 'string', label: 'Multiple Rate By', required: true, maxLength: 22 },
+  { key: 'divideRateBy', column: 'DivideRate', type: 'string', label: 'Divide Rate By', required: true, maxLength: 22 },
   { key: 'sMFCRSynced', column: 'EM_SMFCR_Is_Synced', type: 'boolean', label: 'Synced' },
 ];
 // @sf-generated-end columns:conversionRate

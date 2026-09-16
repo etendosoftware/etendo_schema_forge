@@ -1,5 +1,25 @@
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
+import { createRequire } from 'node:module';
 import appShellCorePreset from '@etendosoftware/app-shell-core/tailwind-preset';
+
+// Resolve a published package's src/ glob via its own export map instead of a
+// hardcoded '../../node_modules/<pkg>/src/**/*.{js,jsx}' relative path. npm
+// workspace hoisting is NOT guaranteed to place a package at the repo root's
+// node_modules — observed live: @etendosoftware/etendo-go-core landed under
+// tools/app-shell/node_modules instead after a plain `npm install`, which
+// silently purged every onboarding/auth utility below (ETP-5031 QA round).
+// `require.resolve` follows the real resolution algorithm, so it finds the
+// package wherever npm actually put it. Not `import.meta.resolve`: this file
+// also loads through Vitest's Vite-based module runner (for
+// tailwind-purge-guard.vitest.js), which does not support it.
+const require = createRequire(import.meta.url);
+function packageSrcGlob(pkgName) {
+  const entryPath = require.resolve(pkgName);
+  return resolve(dirname(entryPath), '**/*.{js,jsx}');
+}
+
+const APP_SHELL_CORE_SRC_GLOB = packageSrcGlob('@etendosoftware/app-shell-core');
+const ETENDO_GO_CORE_SRC_GLOB = packageSrcGlob('@etendosoftware/etendo-go-core');
 
 // LOCAL_CORE dev mode (`make dev-local-core`): app-shell-core resolves to the
 // sibling ../schema_forge_core source (see vite.config.js/vitest.config.js),
@@ -29,11 +49,11 @@ export default {
     // popover/calendar surfaces render with a transparent background (ETP-4083).
     // `packages/*` no longer exists locally after the core/functional split —
     // this now scans the installed dependency's source directly.
-    '../../node_modules/@etendosoftware/app-shell-core/src/**/*.{js,jsx}',
+    APP_SHELL_CORE_SRC_GLOB,
     // Onboarding/login components live in the installed etendo-go-core package.
     // Scan them too; otherwise Tailwind purges layout and auth-form utilities
     // after the core/functional package split.
-    '../../node_modules/@etendosoftware/etendo-go-core/src/**/*.{js,jsx}',
+    ETENDO_GO_CORE_SRC_GLOB,
     // LOCAL_CORE only — scan the live sibling source in addition to (not
     // instead of) the published copy above, so classes work under both dev
     // profiles without needing a publish/reinstall cycle.

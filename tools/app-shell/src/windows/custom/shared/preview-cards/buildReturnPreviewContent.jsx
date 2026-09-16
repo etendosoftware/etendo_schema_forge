@@ -11,6 +11,12 @@ export function buildReturnPreviewContent({
   // PreviewActionButtons renders the "Enviar" button. Omitted by callers that don't
   // wire send yet, so existing behavior (no send button) stays unchanged for them.
   onEmail,
+  // ETP-5124 — optional: callers with a working send contract pass the props for the
+  // real email-history card ({ documentId, apiBaseUrl, refreshSignal, onSend }), same
+  // shape as InvoicePreview/OrderPreview/GoodsShipmentPreview wire directly. Omitted by
+  // return-to-vendor-shipment (no send contract, so no history to show yet) — existing
+  // behavior (no card) stays unchanged for it.
+  emailsCard,
 }) {
   const actionButtons = (
     <PreviewActionButtons
@@ -37,6 +43,7 @@ export function buildReturnPreviewContent({
           apiBaseUrl={apiBaseUrl}
           ui={ui}
           specs={specs}
+          emailsCard={emailsCard}
           data-testid="ReturnDocStatsPanel__634d79" />
       ),
     },

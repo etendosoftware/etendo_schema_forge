@@ -4,7 +4,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 // @sf-generated-start columns:clearedItems
 const columns = [
   { key: 'transactionDate', column: 'Statementdate', type: 'date', label: 'Transaction Date' },
-  { key: 'description', column: 'Description', type: 'string', label: 'Description' },
+  { key: 'description', column: 'Description', type: 'string', label: 'Description', maxLength: 255 },
   { key: 'financialAccountTransaction', column: 'FIN_Finacc_Transaction_ID', type: 'selector', label: 'Financial account transaction' },
   { key: 'payment', column: 'FIN_Payment_ID', type: 'selector', label: 'Payment' },
   { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: 'Currency' },
