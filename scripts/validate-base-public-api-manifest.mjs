@@ -7,6 +7,9 @@ const errors = [];
 
 for (const [resource, entity] of Object.entries(entities)) {
   if (!entity.publicApi) errors.push(`${resource}: publicApi must be true`);
+  if (entity.fields?.id?.internalPath !== 'id') {
+    errors.push(`${resource}: public id must map to NeoServlet field id`);
+  }
   if (/accounting/i.test(resource) || /accounting/i.test(entity.functional?.functionalName ?? '')) {
     errors.push(`${resource}: excluded accounting resource is present`);
   }

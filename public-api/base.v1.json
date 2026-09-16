@@ -55,7 +55,7 @@
         "id": {
           "sourceVisibility": "readOnly",
           "direction": "out",
-          "internalPath": "etgoIdentifier",
+          "internalPath": "id",
           "type": "passthrough",
           "dataType": {
             "type": "string"
@@ -1458,6 +1458,17 @@
           "sourceVisibility": "editable",
           "direction": "inout",
           "internalPath": "tags",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
           "type": "passthrough",
           "dataType": {
             "type": "string"
@@ -4968,6 +4979,17 @@
             "type": "string"
           },
           "reference": "Priority",
+          "handlerId": null
+        },
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
           "handlerId": null
         }
       },
@@ -11173,6 +11195,17 @@
           "type": "passthrough",
           "dataType": {
             "type": "boolean"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
           },
           "reference": null,
           "handlerId": null

@@ -187,6 +187,27 @@ function buildEntity({ specName, entityName, contract, functional, parent, rawEn
     }
   }
 
+  // Some legacy artifacts do not include schema-raw.json. Their NEO
+  // resources still expose the standard `id` response key, so keep the
+  // JSON:API identifier present even when extraction metadata is incomplete.
+  if (!fields.id) {
+    fields.id = {
+      sourceVisibility: 'system',
+      direction: 'out',
+      internalPath: 'id',
+      type: 'passthrough',
+      dataType: { type: 'string' },
+      reference: null,
+      handlerId: null,
+    };
+  }
+
+  // NeoServlet always returns the JSON resource identifier under `id`, even
+  // when the curated contract exposes a legacy alias such as
+  // `etgoIdentifier`. Keep the public name stable while mapping the runtime
+  // source to the actual NEO response key.
+  if (fields.id) fields.id.internalPath = 'id';
+
   return {
     publicName: publicName(specName, entityName, contract.frontendContract.window.primaryEntity),
     specName,
