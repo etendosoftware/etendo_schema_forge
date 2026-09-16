@@ -9,7 +9,7 @@ Use this window to register and complete outbound customer shipments. The functi
 - Create or review a shipment header with warehouse, customer, delivery address, movement date, status (rendered as a status badge, not a dot indicator), currency, and invoicing state.
 - Maintain shipment lines that represent the delivered products and quantities for the selected shipment.
 - Complete a draft shipment when it is ready to be executed.
-- Create a draft sales invoice from one completed shipment or from multiple completed shipments when they are invoiceable together.
+- Create a sales invoice from one completed shipment or from multiple completed shipments when they are invoiceable together. Since ETP-5381 that invoice is created **and confirmed** in one step — it is never left in Borrador.
 - Start a return flow from a completed shipment so the user can select shipped lines and quantities to send back through the return process.
 - Open related downstream or upstream documents from the shipment, especially the linked sales order and the invoices created from that order.
 - Send the shipment document by email from the detail view, once the shipment is completed.
@@ -41,8 +41,8 @@ Use this window to register and complete outbound customer shipments. The functi
 - **Single unified kebab (ETP-4702, fixed 2026-08-04):** the detail top bar shows exactly one kebab (⋮) menu, containing Post/Unpost plus Download PDF for a completed shipment. Previously `GoodsShipmentActions.jsx` (the `topbarRight` component) rendered its own private "⋮" popover with only Download PDF, right next to the platform's generic kebab that already lists Post/Unpost — two separate dropdown buttons side by side after "Imprimir". Download PDF is now declared through `decisions.json → window.customComponents.moreMenuContent`, the platform's convention for an instant, no-confirmation kebab action (same pattern as `internal-consumption`'s Void and `physical-inventory`'s "Actualizar conteo de sistema") — it fires the download immediately on click, no dialog. See `docs/plans/2026-08-04-etp-4702-duplicate-kebab-menu.md` for the full diagnosis and decision trail (including why `menuActions[].component`, used for confirm-dialog actions like Close Year / New Sub-account, was ruled out in favor of `moreMenuContent`).
 - **Currency (ETP-4028)**: header field `etgoCurrency` (`M_InOut.EM_Etgo_Currency_ID`, mandatory). Defaults to the organization's currency (`defaultExpr: "@C_Currency_ID@"`), editable while the shipment is in draft, and becomes read-only once the shipment is processed (`readOnlyLogic: "@Processed@='Y'"`). Changing the currency after lines already exist does **not** recalculate those existing lines' prices — it only applies to newly added lines going forward. When a shipment is created from a sales order (via `NeoCommercialDocumentFactory.createShipmentReceiptHeader`), it inherits the order's currency; other shipment-creation paths (from an invoice, return receipts) inherit the currency of their respective source document. There is deliberately **no** total/amount display that converts the shipment's currency into the organization's currency — `M_InOutLine` carries no monetary columns at all (a shipment is a pure goods movement), so no reliable "document total" exists to convert; this was scoped out of ETP-4028 and left as an open question on the ticket (see comment 2026-07-29).
 - Currency filter on line import (ETP-4028): the shipment's own `etgoCurrency` value determines which source documents appear in **Import from Sales Order** and **Import from Sales Invoice**. Each modal's `fetchDocuments` self-fetches the current shipment header to read its currency, then filters candidates so only documents in the same currency are selectable; when the filter excludes all candidates, the modal shows a dedicated empty-state message (`noSalesOrdersMatchShipmentCurrency` / `noSalesInvoicesMatchShipmentCurrency`).
-- Single-shipment invoicing opens a preview modal that loads shipment lines, enriches them with unit prices from the related sales order lines, lets the user reduce quantities per line, warns when a draft invoice already exists, and posts to `createDraftInvoice`. The visible total in that modal is a preview derived from selected lines and prices, not a shipment-header total. Since ETP-4028, confirming the invoice also requires an explicit **Tarifa** (price list) selection in `CreateInvoiceConfirmModal` — the shipment's currency is shown read-only (inherited, not editable) while the price list is a required, user-selectable dropdown; the chosen `priceListId` is sent to `createDraftInvoice` and applied to the generated invoice before its lines are created, so every line prices off that price list (if a product has no price there, its price field is left blank for the user to fill in).
-- Batch invoicing from the list is constrained by current UI logic: only completed shipments that are not fully invoiced are counted as invoiceable, and all selected invoiceable shipments must belong to the same business partner before `Create Invoice` is enabled. Since ETP-4028, batch invoicing also requires all selected shipments to share the same currency (`currencyCheck` guard) — mixed-currency selections disable `Create Invoice` with an explanatory tooltip; a full price-list picker for this batch flow was not implemented (backend already accepts `priceListId` for the multi-shipment path if a future UI needs it). The batch modal lets the user include or exclude specific lines, adjust quantities per line, previews a derived total, checks for an existing draft invoice, and creates one draft invoice for the selected shipment set.
+- Single-shipment invoicing opens a preview modal that loads shipment lines, enriches them with unit prices from the related sales order lines, lets the user reduce quantities per line, warns when a draft invoice already exists (a hand-made one — generated invoices are no longer drafts, see ETP-5381 below), and posts to `createDraftInvoice`, which since ETP-5381 creates and confirms the invoice in the same request. The visible total in that modal is a preview derived from selected lines and prices, not a shipment-header total. Since ETP-4028, confirming the invoice also requires an explicit **Tarifa** (price list) selection in `CreateInvoiceConfirmModal` — the shipment's currency is shown read-only (inherited, not editable) while the price list is a required, user-selectable dropdown; the chosen `priceListId` is sent to `createDraftInvoice` and applied to the generated invoice before its lines are created, so every line prices off that price list (if a product has no price there, its price field is left blank for the user to fill in).
+- Batch invoicing from the list is constrained by current UI logic: only completed shipments that are not fully invoiced are counted as invoiceable, and all selected invoiceable shipments must belong to the same business partner before `Create Invoice` is enabled. Since ETP-4028, batch invoicing also requires all selected shipments to share the same currency (`currencyCheck` guard) — mixed-currency selections disable `Create Invoice` with an explanatory tooltip; a full price-list picker for this batch flow was not implemented (backend already accepts `priceListId` for the multi-shipment path if a future UI needs it). The batch modal lets the user include or exclude specific lines, adjust quantities per line, previews a derived total, checks for an existing draft invoice, and creates one invoice — confirmed on creation since ETP-5381 — for the selected shipment set.
 - Related documents currently react to the shipment's linked sales order. The tab fetches the sales order by `salesOrder`, then fetches sales invoices by the same order id, and renders navigation chips for both. Return receipts are only shown from an internal `_returnReceipts` payload if present.
 - Send Email recipient resolution: the Send Email modal (`SendDocumentModal`) pre-fills the `Para` field by fetching `GET /sws/neo/contacts/businessPartner/{businessPartner}` when the modal opens, reading `etgoEmail` (`C_BPartner.EM_Etgo_Email`) from the contacts spec. The field is left empty if no email is registered for the business partner. The modal title uses `useMenuLabel()` so it renders in the active UI language (e.g. "Factura de Venta" in Spanish instead of "Invoice").
 - Send Email editable subject/message (ETP-4717): the `Asunto` (subject, auto-derived as `${documentType} #${documentNo} — ${bpName}`) and `Mensaje` fields in the Send Email modal are editable text inputs, not read-only display fields. If the user leaves both untouched, the outgoing command is byte-identical to the legacy payload (no `messageEdits` key is sent). If either is changed, `SendDocumentModal` sends `messageEdits: { subject, message }` alongside the existing `recipientEdits`.
@@ -56,7 +56,7 @@ Use this window to register and complete outbound customer shipments. The functi
 ## Gap assessment
 
 - The return workflow is not fully backed by stable observed behavior yet. `ReturnWizard.jsx` explicitly marks the `createReturn` endpoint as pending backend implementation, and the related-documents tab says return receipts are reserved for backend support. The business intent is clear, but end-to-end return creation should be treated as a gap until backend support is confirmed.
-- Batch invoice creation is clearly implemented as a draft-invoice flow, but current evidence only proves source shape and endpoint usage, not a browser-tested logistics scenario. It should be treated as supported-by-code with limited automated proof.
+- Batch invoice creation posts to the same `createDraftInvoice` endpoint as the single-shipment flow and, since ETP-5381, produces a confirmed invoice rather than a draft. Current evidence only proves source shape and endpoint usage, not a browser-tested logistics scenario. It should be treated as supported-by-code with limited automated proof.
 - The documented shipment-to-invoice relationship is order-centric: the related-documents tab resolves invoices through the linked sales order, not by directly querying invoices from the shipment id. If the business expects shipment-specific invoice traceability independent of the order link, that remains an open ambiguity.
 - The top-bar and list invoicing logic check a `completelyInvoiced` flag in custom components, while the contract and generated fields expose the frontend field as `invoiced` / `Iscompletelyinvoiced`. The runtime payload may normalize both names, but this is not explicit in current evidence, so the exact gating behavior for already invoiced shipments remains an implementation ambiguity.
 - **ETP-4729 — Print action unified, custom print button removed**: the generic print icon is now available on both the list grid and the detail view. The bespoke "Imprimir"/"Descargar PDF" entry that used to live in `GoodsShipmentActions.jsx`'s `⋮` menu was removed, since it duplicated the unified print flow with a client-side-generated PDF.
@@ -68,7 +68,7 @@ Use this window to register and complete outbound customer shipments. The functi
 3. Open a shipment detail and verify it behaves as a master-child page with editable header fields in draft status and child shipment lines underneath.
 4. Change the business partner on a draft shipment and confirm the partner-address selector reacts as a dependent field.
 5. Open a draft shipment and confirm the top bar does **not** expose the Send/"Enviar" action, neither in the topbar nor as a row quick action in the list. Complete the shipment and confirm the top bar now exposes `Create Invoice`, `Create Return`, and the Send/"Enviar" action in both places.
-6. Use `Create Invoice` on a completed shipment and confirm the preview loads shipment lines, allows quantity reduction, warns if a draft invoice already exists, and navigates to the created draft invoice when successful.
+6. Use `Create Invoice` on a completed shipment and confirm the preview loads shipment lines, allows quantity reduction, warns if a hand-made draft invoice already exists, and navigates to the created invoice when successful — which since ETP-5381 opens in **Confirmado**, not Borrador.
 7. From the list, select multiple completed shipments for the same customer and confirm batch `Create Invoice` is enabled; repeat with different customers and confirm it stays disabled.
 8. In the batch invoice modal, deselect some lines or reduce quantities and confirm the preview total changes before creation.
 9. Open `Related Documents` on a shipment that came from a sales order and confirm the order chip and any invoice chips navigate to the expected records.
@@ -83,13 +83,13 @@ Use this window to register and complete outbound customer shipments. The functi
 18. On a shipment with Currency = USD, open **Import from Sales Order** / **Import from Sales Invoice** and confirm only USD-denominated source documents are listed, with EUR (or other-currency) documents excluded and an explanatory empty-state message shown when nothing matches.
 19. Use `Create Invoice` on a completed shipment and confirm the confirmation popup shows Currency read-only (inherited from the shipment) and a required Tarifa (price list) selector; confirm the created invoice's lines price off the selected price list.
 20. Select multiple completed shipments with different currencies from the list and confirm `Create Invoice` stays disabled with an explanatory tooltip; repeat with same-currency shipments and confirm it enables.
-21. Create a draft shipment with **no** linked sales order (not created "from" an order), open the `Confirm` popup, leave "Crear factura de venta en borrador" ON, and confirm a **Tarifa** selector appears and blocks "Confirmar y crear factura" until a price list is chosen; choosing one and confirming must succeed and create the draft invoice with that price list, never a 500. Repeat on a shipment that **does** have a linked order and confirm the selector still appears (pre-filled) but does **not** block confirming even if left untouched. Then confirm a shipment with "Crear factura de venta en borrador" OFF (no invoice created) and verify **no** result modal appears — instead an auto-dismissing green `sonner` toast reads `goodsShipment.confirmModal.confirmedTitle` ("Albarán de venta confirmado" / "Goods shipment confirmed") and the page refreshes (ETP-5063). Confirm the result modal still appears, listing the created invoice, when the toggle is ON and an invoice is created.
+21. Create a draft shipment with **no** linked sales order (not created "from" an order), open the `Confirm` popup, leave the "Crear factura de venta" toggle ON (`goodsShipment.confirmModal.createInvoiceTitle` — the label no longer carries the "en borrador" suffix this step used to quote), and confirm a **Tarifa** selector appears and blocks "Confirmar y crear factura" until a price list is chosen; choosing one and confirming must succeed and create the invoice with that price list — in **Confirmado** since ETP-5381 — never a 500. Repeat on a shipment that **does** have a linked order and confirm the selector still appears (pre-filled) but does **not** block confirming even if left untouched. Then confirm a shipment with the "Crear factura de venta" toggle OFF (no invoice created) and verify **no** result modal appears — instead an auto-dismissing green `sonner` toast reads `goodsShipment.confirmModal.confirmedTitle` ("Albarán de venta confirmado" / "Goods shipment confirmed") and the page refreshes (ETP-5063). Confirm the result modal still appears, listing the created invoice, when the toggle is ON and an invoice is created.
 
 ## Automated evidence
 
 - `artifacts/goods-shipment/generated/web/goods-shipment/GoodsShipmentPage.jsx` defines the master-child page, status-driven detail actions, related-documents tab, and list bulk-action entry point.
-- `artifacts/goods-shipment/custom/GoodsShipmentActions.jsx` implements single-shipment draft invoice creation, shipment return launch, shipment sending, existing-draft warning, and quantity-based invoice preview.
-- `artifacts/goods-shipment/custom/BulkInvoiceFromShipment.jsx` implements batch draft invoice creation for completed shipments from the same customer, with per-line selection, quantity editing, draft-invoice checking, and preview totals.
+- `artifacts/goods-shipment/custom/GoodsShipmentActions.jsx` implements single-shipment invoice creation (confirmed on creation since ETP-5381), shipment return launch, shipment sending, existing-draft warning, and quantity-based invoice preview.
+- `artifacts/goods-shipment/custom/BulkInvoiceFromShipment.jsx` implements batch invoice creation for completed shipments from the same customer, with per-line selection, quantity editing, draft-invoice checking, and preview totals. Since ETP-5381 it reads `documentStatus` off the response and labels the created document "creada y confirmada" / "created and confirmed" instead of the unconditional "creada como Borrador".
 - `artifacts/goods-shipment/custom/RelatedDocuments.jsx` shows that related-document navigation currently resolves the linked sales order and sales invoices, with return receipts left pending backend support.
 - `artifacts/goods-shipment/custom/ReturnWizard.jsx` explicitly documents the pending backend dependency for `createReturn`.
 - `artifacts/goods-shipment/custom/__tests__/BulkInvoiceFromShipment.test.js` provides source-shape coverage for the bulk invoice component, including invoiceable filtering, same-customer enforcement, line fetching, sales-order price enrichment, draft-invoice checking, and draft-invoice creation endpoint usage.
@@ -239,3 +239,82 @@ Structural surfaces and controls consume background, card, foreground, muted, an
 border roles; operational feedback uses success, warning, information, neutral,
 and destructive roles. No local palette is used, so the active application theme
 controls the appearance.
+
+## Invoice is created and confirmed in one step, and guard P2 — ETP-5381
+
+Both invoicing paths on this window — the "Crear factura de venta" toggle in the
+`Confirm` popup, and `Create Invoice` on a completed shipment (single or batch) —
+used to leave a **draft** sales invoice. A draft reserves nothing:
+`m_inoutline.isinvoiced` is only written when the invoice is completed, so the
+same shipment could be invoiced over and over, and `invoiceStatus` (which filters
+`docstatus NOT IN ('VO','CL','DR')`) stayed at 0%, blinding the
+`completelyInvoiced` gating described under "Gap assessment".
+
+`createDraftInvoice` now creates **and completes** the invoice in one atomic
+request. The endpoint name is unchanged; only the outcome is. Completion runs the
+`CO` document action through core `ProcessInvoiceUtil` via
+`InvoiceCompletionService` (`InvoiceCompletionService.java:110`, `:167`) rather
+than `C_Invoice_Post0` directly, so the `ProcessInvoiceHook` CDI chain
+(Verifactu / TBAI) fires — it never did through NEO's generic process dispatch.
+Rollback is all-or-nothing: the handler only `flush()`es and `ProcessInvoiceUtil`
+owns the commit, so a failed completion reverts the header, its lines and the
+document-number sequence advance together — no orphan draft, no burned number.
+
+### Guard P2 — 409 on a shipment with nothing left to invoice
+
+`CreateDraftInvoiceHandler.assertShipmentsHavePending`
+(`CreateDraftInvoiceHandler.java:917-927`, called at `:206` before
+`createFromShipments`) throws `AlreadyInvoicedException` with the literal
+**"This shipment has already been fully invoiced."**, surfaced as **HTTP 409** by
+the catch at `:254-256`. The condition is that
+`NeoInvoiceSupport.computePendingQtyPerLineOrThrow(shipmentId, true)` is empty for
+*every* selected shipment — one shipment with pending lines is enough to pass, so
+a mixed batch is not blocked.
+
+The hole it closes: `createFromShipments` delegates to `createFromOrder` for the
+single-shipment-with-order case, and `capShipmentLineOverrides` returns the
+overrides map untouched when it is empty — which it always is, because the UI
+posts only `priceListId`. The *throwing* variant of the pending computation is
+used deliberately so a DB failure surfaces as a 500 instead of being mistaken for
+"already fully invoiced".
+
+`backendErrors.js` maps the literal to `backendError.shipmentAlreadyInvoiced`
+("Este albarán ya está totalmente facturado." / "This shipment has already been
+fully invoiced."). Note the HTTP-status convention introduced by this ticket:
+**409 means "already invoiced" (a duplicate); 400 means "nothing to invoice" or a
+missing datum** — the pre-existing `shipmentPriceListRequired` 400 from ETP-4942
+is unaffected.
+
+**To modify a generated invoice**, the user reactivates it: `sales-invoice`
+exposes a `reactivate` menu action (`documentAction: 'RE'`, `preUnpost: true`,
+visible at `DocStatus='CO'`), now the only route back to `DR`.
+
+**Known residual gap (UI copy, not behavior):** `BulkInvoiceFromShipment.jsx`'s
+fallback toast still reads `invoiceCreatedAsDraftToast` ("Factura creada como
+Borrador" / "Invoice created as Draft") when the response carries no
+`documentStatus`. The in-modal result line was updated (`createdAsDraft` →
+`invoiceCreatedAndConfirmed` when `documentStatus === 'CO'`, with the "Revisar
+antes de confirmar" subline hidden in that case), but the toast key was not.
+
+### Manual verification
+
+1. On a completed shipment that has never been invoiced, use `Create Invoice` and
+   verify the resulting invoice opens in **Confirmado**, and that the shipment's
+   "Facturado" percentage moves off 0% immediately.
+2. Trigger `Create Invoice` again on that same shipment and verify it is rejected
+   with the translated 409 ("Este albarán ya está totalmente facturado.") and that
+   no second invoice is created.
+3. Repeat from the batch flow with a selection mixing one fully-invoiced shipment
+   and one with pending lines, and verify the run is **not** blocked — P2 only
+   fires when every selected shipment is exhausted.
+4. Confirm a draft shipment with the invoice toggle ON and verify the result modal
+   lists the invoice as confirmed; then verify the in-modal line reads "creada y
+   confirmada" rather than "creada como Borrador".
+5. Force the completion to fail and verify nothing is persisted — no draft
+   invoice, and the next successful attempt reuses the same document number.
+
+### Automated evidence
+
+- `{etendo_root}/modules/com.etendoerp.go/src-test/src/com/etendoerp/go/schemaforge/InvoiceCompletionServiceTest.java` (new) covers the extracted completion path.
+- `CreateDraftInvoiceHandlerTest.java` and `NeoInvoiceSupportTest.java` were extended for the create-and-confirm flow and guard P2 (including `computePendingQtyPerLineOrThrow`'s throwing behavior).
+- `artifacts/goods-shipment/custom/__tests__/BulkInvoiceFromShipment.test.js` gained a `success toast copy follows the returned documentStatus (ETP-5381)` block: it asserts `confirmed` is derived from the response `documentStatus === 'CO'` (read from the create response, not from the selected shipment rows), that the headline switches between `invoiceCreatedAndConfirmed` and `createdAsDraft`, that the `reviewBeforeConfirming` subtitle is hidden once the invoice is confirmed and is never rendered unconditionally, and that neither string is hardcoded Draft/Borrador copy.
