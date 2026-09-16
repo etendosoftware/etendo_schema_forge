@@ -275,6 +275,14 @@ function resolveInitialEmail(bpEmail) {
   return bpEmail?.includes('@') ? bpEmail : '';
 }
 
+// ETP-5294 — Bug 2: an empty (or whitespace-only) Subject had no validation at
+// all, so it silently sent. Only meaningful when the email panel (and its
+// Subject field) is actually rendered. Extracted (rather than inlined in the
+// component body) to keep SendDocumentModal's cognitive complexity in check.
+function resolveNoSubject(allowEmail, subject) {
+  return allowEmail && !subject.trim();
+}
+
 function resolveContactsBaseUrl(apiBaseUrl) {
   return apiBaseUrl.replace(/\/[^/]+$/, '/contacts');
 }
@@ -629,10 +637,7 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
   const noToRecipient = editableRecipients && toRecipients.length === 0;
   const overMaxRecipients = editableRecipients
     && toRecipients.length + ccRecipients.length > policy.maxRecipients;
-  // ETP-5294 — Bug 2: an empty (or whitespace-only) Subject had no validation
-  // at all, so it silently sent. Only meaningful when the email panel (and
-  // its Subject field) is actually rendered.
-  const noSubject = allowEmail && !subject.trim();
+  const noSubject = resolveNoSubject(allowEmail, subject);
   const sendDisabled = !documentId || sending || waitingForCacheablePreview || noSubject
     || (editableRecipients && (hasInvalidDraft || noToRecipient || overMaxRecipients));
 
