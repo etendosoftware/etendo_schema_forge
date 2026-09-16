@@ -227,7 +227,7 @@ test.describe('Financial Accounts — row kebab delete (ETP-4871)', () => {
   // Suspected cause: ETP-5281's new default `overflow-hidden` on the shared TableCell not
   // compensated on AccountsHeaderTable.jsx's own `_rowActions` column. Not yet confirmed live —
   // re-enable once the layout bug is fixed.
-  test.skip('offers "Eliminar cuenta" on every row, deletable or not', async ({ page }) => {
+  test('offers "Eliminar cuenta" on every row, deletable or not', async ({ page }) => {
     // The kebab trigger sits behind `opacity-0 group-hover:opacity-100` — hover the row first,
     // same as the existing financial-accounts-page.mocked.spec.js row-actions coverage.
     await page.getByTestId('row-acc-1').hover();
@@ -242,7 +242,7 @@ test.describe('Financial Accounts — row kebab delete (ETP-4871)', () => {
   });
 
   // Skipped — same row-kebab-obscured-by-eTGOPendingCount issue as the test above.
-  test.skip('confirming the delete removes the row and shows a success toast', async ({ page }) => {
+  test('confirming the delete removes the row and shows a success toast', async ({ page }) => {
     await page.getByTestId('row-acc-1').hover();
     await page.getByTestId('account-row-menu-trigger-acc-1').click();
     await page.getByTestId('account-row-menu-delete-acc-1').click();
@@ -258,7 +258,7 @@ test.describe('Financial Accounts — row kebab delete (ETP-4871)', () => {
   });
 
   // Skipped — same row-kebab-obscured-by-eTGOPendingCount issue as the two tests above.
-  test.skip('cancel dismisses the dialog without deleting', async ({ page }) => {
+  test('cancel dismisses the dialog without deleting', async ({ page }) => {
     await page.getByTestId('row-acc-1').hover();
     await page.getByTestId('account-row-menu-trigger-acc-1').click();
     await page.getByTestId('account-row-menu-delete-acc-1').click();
@@ -284,7 +284,7 @@ test.describe('Financial Accounts — delete rejected with 409 (ETP-4871)', () =
 
   // Skipped — same row-kebab-obscured-by-eTGOPendingCount issue as
   // financial-account-delete.mocked.spec.js's other 3 tests above.
-  test.skip('shows the backend message verbatim and keeps the dialog open and the row in place', async ({ page }) => {
+  test('shows the backend message verbatim and keeps the dialog open and the row in place', async ({ page }) => {
     await page.getByTestId('row-acc-1').hover();
     await page.getByTestId('account-row-menu-trigger-acc-1').click();
     await page.getByTestId('account-row-menu-delete-acc-1').click();

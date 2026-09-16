@@ -317,7 +317,7 @@ test.describe('Financial Account Detail (T6) — mocked', () => {
   // the eTGOPendingCount cell (Playwright reports "element intercepts pointer events"), same
   // known issue hitting financial-account-delete.mocked.spec.js and
   // financial-accounts-page.mocked.spec.js. Re-enable once the layout bug is fixed.
-  test.skip('entering the detail from the list and pressing back returns to the list', async ({ page }) => {
+  test('entering the detail from the list and pressing back returns to the list', async ({ page }) => {
     await page.goto('/financial-account');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 

@@ -332,7 +332,7 @@ test.describe('Financial Accounts list — Cuentas', () => {
   // the eTGOPendingCount cell (Playwright reports "element intercepts pointer events"), same
   // known issue hitting financial-account-delete.mocked.spec.js and
   // financial-account-detail.mocked.spec.js. Re-enable once the layout bug is fixed.
-  test.skip('the slot owns the row actions — no generic quick-actions overlay', async ({ page }) => {
+  test('the slot owns the row actions — no generic quick-actions overlay', async ({ page }) => {
     const row = page.getByTestId('row-acc-1');
     await row.hover();
 
