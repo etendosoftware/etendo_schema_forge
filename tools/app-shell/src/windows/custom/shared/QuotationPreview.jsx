@@ -136,13 +136,28 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
   // ahead of the jsreport regeneration and closes the preview/button gap.
   const hasPdf = !!pdfUrl || !!cachedAttachment;
 
-  const handleDownloadPdf = () => {
-    if (cachedAttachment) {
+  // ETP-5358 Part 2 — cachedAttachment.objectUrl is null right after onFileChange fires in
+  // autoFetch mode (see useMainAttachment's skipBlobFetch): existence is known, bytes were
+  // never eagerly downloaded. fetchBlobUrl() resolves them lazily, on demand, right here. Falls
+  // through to the live-rendered pdfUrl if that comes back empty (e.g. a concurrent re-upload
+  // replaced the attachment mid-fetch).
+  const handleDownloadPdf = async () => {
+    if (cachedAttachment?.objectUrl) {
       const a = document.createElement('a');
       a.href = cachedAttachment.objectUrl;
       a.download = cachedAttachment.fileName || `quotation-${quotation.documentNo || quotation.id}.pdf`;
       a.click();
       return;
+    }
+    if (cachedAttachment?.fetchBlobUrl) {
+      const url = await cachedAttachment.fetchBlobUrl();
+      if (url) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = cachedAttachment.fileName || `quotation-${quotation.documentNo || quotation.id}.pdf`;
+        a.click();
+        return;
+      }
     }
     if (!pdfUrl) return;
     const a = document.createElement('a');
