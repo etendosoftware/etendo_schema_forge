@@ -18,6 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { Ban, Copy, ExternalLink, KeyRound, MoreHorizontal, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
+import { useFeatureFlag, PUBLIC_API_KEYS } from '@/lib/flags';
 
 const CAPABILITIES = [
   ['public-api:read', 'Read published public API data'],
@@ -25,7 +26,7 @@ const CAPABILITIES = [
   ['public-api:process', 'Run explicitly published processes'],
 ];
 
-const SCALAR_DOCS_URL = import.meta.env.VITE_PUBLIC_API_DOCS_URL || 'http://localhost:4300/api';
+const SCALAR_DOCS_URL = import.meta.env.VITE_PUBLIC_API_DOCS_URL || 'https://app.etendo.software/api';
 
 function detectBaseUrl() {
   const path = window.location.pathname;
@@ -36,6 +37,7 @@ function detectBaseUrl() {
 export default function ApiKeysPage() {
   const ui = useUI();
   const { token, capabilities } = useAuth();
+  const publicApiKeysEnabled = useFeatureFlag(PUBLIC_API_KEYS);
   const logout = useLogout();
   const [keys, setKeys] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -95,7 +97,7 @@ export default function ApiKeysPage() {
   };
 
   // The route is registered for deep links, but the menu capability is the authoritative gate.
-  if (capabilities?.publicApiKeyManagement !== true) return null;
+  if (!publicApiKeysEnabled || capabilities?.isAdminOrClientAdmin !== true || capabilities?.publicApiKeyManagement !== true) return null;
 
   return (
     <div className="space-y-6 p-6" data-testid="ApiKeysPage">

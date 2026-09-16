@@ -27,7 +27,7 @@ const exceptions = {
   'first-steps': {},
   authorize: {},
   roles: { capability: 'isAdminOrClientAdmin' },
-  'api-keys': { capability: 'publicApiKeyManagement' },
+  'api-keys': { capability: 'isAdminOrClientAdmin', flag: 'public-api-keys' },
   // ETP-5269. Synthetic destination (runtime-routes.jsx), no AD window of its own.
   // Additionally hidden behind the `acct-process-monitor` feature flag. That gate lives in
   // SideMenu and is invisible to buildMenuGroups — the boundary this catalog measures — so here

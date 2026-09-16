@@ -481,7 +481,8 @@
           "label": "Public API Keys",
           "favname": "Public API Keys",
           "icon": "KeyRound",
-          "capability": "publicApiKeyManagement"
+          "featureFlag": "public-api-keys",
+          "capability": "isAdminOrClientAdmin"
         },
         {
           "name": "fiscal-config",
