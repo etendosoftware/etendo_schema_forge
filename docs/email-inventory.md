@@ -64,6 +64,7 @@ graph LR
   D5["◐ ✉️ purchase-order-send"]
   D6["◐ ✉️ return-to-vendor-send"]
   D7["◐ ✉️ return-material-receipt-send"]
+  D8["◐ ✉️ return-to-vendor-shipment-send"]
   C1["⬜ ✉️ document with attachments"]
   C2["⬜ ✉️ portal: new user / cancelled"]
   C3["⬜ ✉️ [OB Alert] and error notices"]
@@ -87,15 +88,15 @@ graph LR
   OPER --> O5 --> M5
   OPER -.-> M6
   OPER --> O4
-  O4 --> D1 & D2 & D3 & D4 & D5 & D6 & D7
-  D1 & D2 & D3 & D4 & D5 & D6 & D7 --> PARTY
+  O4 --> D1 & D2 & D3 & D4 & D5 & D6 & D7 & D8
+  D1 & D2 & D3 & D4 & D5 & D6 & D7 & D8 --> PARTY
 
   ADMIN --> K1 --> C1
   ADMIN --> K2 --> C2
   K3 --> C3
 
   M1 & M2 & M3 & M4 & M5 & M6 & M7 & M8 & M9 --> LAYOUT --> PROVIDER
-  D1 & D2 & D3 & D4 & D5 & D6 & D7 --> LAYOUT
+  D1 & D2 & D3 & D4 & D5 & D6 & D7 & D8 --> LAYOUT
   C1 & C2 & C3 --> SMTP
   SMTP -. "no SMTP configured" .-> PROVIDER
 
@@ -106,7 +107,7 @@ graph LR
   classDef who fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
   classDef hub fill:#fef9c3,stroke:#ca8a04,color:#713f12
   class M1,M2,M3,M4,M7,D1 verified
-  class M5,M6,M8,M9,D2,D3,D4,D5,D6,D7 migrated
+  class M5,M6,M8,M9,D2,D3,D4,D5,D6,D7,D8 migrated
   class C1,C2,C3 todo
   class A1,A2,A3,A4,O1,O2,O3,O4,O5,K1,K2,K3 act
   class ADMIN,OPER,PARTY who
@@ -137,8 +138,9 @@ the only flow the `403 EMAIL_NOT_VERIFIED` gate protects. Its button goes to the
 Operator received rendered through `EmailLayout`, everything the Customer or Supplier received did
 not. Since 2026-08-26 the document emails go through the same layout, so an invoice reaching a
 customer now looks like the welcome reaching the admin. `sales-invoice-send` was opened in a real
-inbox that day, PDF download link included; the other six (`return-material-receipt-send` added by
-ETP-5124) share one implementation (`DefaultDocumentSendEmailContract`) and differ only in their
+inbox that day, PDF download link included; the other seven (`return-material-receipt-send` and
+`return-to-vendor-shipment-send` added by ETP-5124) share one implementation
+(`DefaultDocumentSendEmailContract`) and differ only in their
 catalog entry, so the risk of an unseen one looking different is low — but they have not been
 observed arriving.
 
@@ -182,8 +184,9 @@ React shell (`SendDocumentModal` → `documentEmailSend.js`). Contract name conv
 | 5 | Purchase order to vendor | `purchase-order-send` | Purchase Order window | shared layout | `contracts/PurchaseOrderSendEmailContract.java`, `contracts/DalPurchaseOrderEmailDocumentResolver.java`, `contracts/PurchaseDocumentEmailContractProvider.java` |
 | 6 | Return to vendor | `return-to-vendor-send` | Return to Vendor window | shared layout | `contracts/ReturnToVendorSendEmailContract.java` |
 | 7 | Sales return receipt (Devolución de Venta) | `return-material-receipt-send` | Return Material Receipt window | shared layout | `contracts/ReturnMaterialReceiptSendEmailContract.java`, `contracts/DalReturnMaterialReceiptEmailDocumentResolver.java`, `contracts/ShipmentDocumentEmailContractProvider.java` |
+| 8 | Purchase return shipment (Devolución de Compra) | `return-to-vendor-shipment-send` | Return to Vendor Shipment window | shared layout | `contracts/ReturnToVendorShipmentSendEmailContract.java`, `contracts/DalReturnToVendorShipmentEmailDocumentResolver.java`, `contracts/ShipmentDocumentEmailContractProvider.java` |
 
-Since F3 (2026-08-26) all render through `EmailLayout` (#7 added by ETP-5124), and their copy lives in
+Since F3 (2026-08-26) all render through `EmailLayout` (#7 and #8 added by ETP-5124), and their copy lives in
 `email/render/messages/emails_{es_ES,en_US}.properties` (`document.subject`, `document.body`,
 `document.cta`, plus one `{contract}.documentType` key each) rather than in Java literals.
 
@@ -195,7 +198,7 @@ Since F3 (2026-08-26) all render through `EmailLayout` (#7 added by ETP-5124), a
 > agree, and they diverged once already, so `__tests__/defaultCopyInSync.vitest.js` reads the
 > module's `.properties` and fails when they drift. Fix the mismatch, never the test.
 
-Shared plumbing for 1–7:
+Shared plumbing for 1–8:
 `DefaultDocumentSendEmailContract.java`, `TransactionalEmailService.java`,
 `NeoBuiltInEndpointHandler.java` (routes `email-contracts/{name}/send`),
 `DocumentDownloadTokenService.java` (signed download link), `EmailMessageEdits.java` /
@@ -344,12 +347,13 @@ The privacy decision this document used to flag as "to be made explicitly" **has
 recipients, subject, the operator's message and the signed download link are stored **in clear**,
 **per tenant**, under **client-level AD security**. The justification is narrow and worth keeping
 in view — an operator must be able to prove to their own customer what was sent, to whom and when,
-and a hash cannot do that. The scope is correspondingly narrow: only the seven document-send
+and a hash cannot do that. The scope is correspondingly narrow: only the eight document-send
 contracts opt in.
 
 - **Gate:** `EmailContract#logsSendHistory()` defaults to `false`.
-  `DefaultDocumentSendEmailContract` overrides it to `true`, so the seven document-send contracts
-  (`sales-invoice-send` and siblings, `return-material-receipt-send` added by ETP-5124) opt in
+  `DefaultDocumentSendEmailContract` overrides it to `true`, so the eight document-send contracts
+  (`sales-invoice-send` and siblings, `return-material-receipt-send` and
+  `return-to-vendor-shipment-send` added by ETP-5124) opt in
   automatically. The **account/auth family** (`company-invitation`, `reset-password`,
   `password-changed`, `verify-email`, `login-alert`, `organization-joined`) inherits `false` and
   **never reaches the table** — those recipients are the platform's own users and that copy carries
@@ -358,17 +362,19 @@ contracts opt in.
   *before* the safety-store audit row, so both land in the same transaction and can never disagree.
   `DalEmailSendLogStore` writes **without** admin mode, which is what makes `AD_CLIENT_ID` /
   `AD_ORG_ID` / `CREATEDBY` the caller's real values — and incidentally closes the
-  null-`userId` gap §5.1 complains about, for these seven contracts.
+  null-`userId` gap §5.1 complains about, for these eight contracts.
 - **`MESSAGE_BODY` is the operator's text, not the rendered email.** What is stored is
   `EmailMessageEdits#getMessage()`, pre-escape. A send that used the catalog's default copy stores
   `null` there and keeps its `SUBJECT`.
 - **Read path:** the AD window **Email Send History** (module `com.etendoerp.go`, read-only,
   client-scoped), or `GET /sws/neo/documentemailhistory?recordId=<id>[&specName=<spec>]`, which the
   app-shell's `EmailsCard` calls from the preview panel of Sales Order, Purchase Order, Sales
-  Quotation, Sales Invoice, Goods Shipment and — since ETP-5124 — Return Material Receipt. Note the
-  asymmetry: **seven contracts record, six windows display.** `return-to-vendor-send` opts in like
-  its six siblings, but has no preview card yet — its rows are readable only through the backoffice
-  window and the endpoint. Adding the card later needs no backend change. Reads go through
+  Quotation, Sales Invoice, Goods Shipment and — since ETP-5124 — Return Material Receipt and
+  Return to Vendor Shipment. Note the asymmetry: **eight contracts record, seven windows display.**
+  `return-to-vendor-send` (the purchase-order-return contract, #6 above — not to be confused with
+  `return-to-vendor-shipment-send`, #8) opts in like its seven siblings, but has no preview card
+  yet — its rows are readable only through the backoffice window and the endpoint. Adding the card
+  later needs no backend change. Reads go through
   `OBQuery`'s default
   `filterOnReadableClients` / `filterOnReadableOrganizations` — **not** `OBContext.setAdminMode()` —
   so DAL's own client/org filtering *is* the access rule. Row shape and rationale:

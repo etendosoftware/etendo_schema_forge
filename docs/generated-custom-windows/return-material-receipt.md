@@ -242,10 +242,12 @@ deliberately **not** added: that value (`sourceShipmentDocNo`) is produced by
 real Hibernate property the email resolver could read directly without widening that utility's
 visibility — out of scope for this ticket. Revisit if product wants it.
 
-`return-to-vendor-shipment` (the purchase-side sibling) is **unaffected and still has no working
-send trigger** — see the updated comments in its own `index.jsx` and
-`ReturnToVendorShipmentPreview.jsx`, which used to cite this window as being in the same
-no-live-trigger state and now explicitly say that is no longer true for `return-material-receipt`.
+`return-to-vendor-shipment` (the purchase-side sibling) **also got its own working send contract
+under this same ETP-5124 epic** (`ReturnToVendorShipmentSendEmailContract`, registered alongside
+this window's `ReturnMaterialReceiptSendEmailContract` in `ShipmentDocumentEmailContractProvider`)
+— see `docs/generated-custom-windows/return-to-vendor-shipment.md`'s own `"Enviar" (Send) wired
+end-to-end` section for that window's wiring detail. Both windows now share the identical
+`emailAction`/`onEmail`/`emailsCard` shape.
 
 Test coverage: `tools/app-shell/src/windows/custom/return-material-receipt/__tests__/ReturnMaterialReceiptPreview.vitest.jsx`
 (onEmail/emailsCard wiring, `pdfBlobLoading`, `onSent` refresh-signal bump),
