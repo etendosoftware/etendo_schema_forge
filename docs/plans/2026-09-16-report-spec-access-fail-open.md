@@ -1,7 +1,9 @@
 # Proposal: report specs must not be fail-open
 
 Date: 2026-09-16
-Status: **proposal — not implemented**
+Status: **partially implemented.** The handler declaration (step 1) is done and verified live.
+The flip itself (step 2) is **not** done, and §5 below has been corrected — the flip as it was
+first written takes all three reports down and breaks two unrelated specs in the SPA.
 Task: ETP-5335
 Origin: found while fixing `generate_tax_report`, which returned invoices, amounts, VAT
 rates and every contact's tax id to a role holding no window grants at all (external
@@ -24,15 +26,33 @@ ETP-4596 chose it deliberately, to avoid regressing specs that had no data to ch
 and said so in its javadoc. The cost is that the shared gate protects nothing for those specs,
 and any report added later inherits the same default without anyone noticing.
 
-Measured on the local instance:
+### What actually reaches the empty case
 
-| `spec_type` | anchor | count | specs |
+`hasAccessToConstituentWindows` is **shared**. Two callers reach it, not one:
+
+- `hasReportSpecAccess` — for `R` specs;
+- `hasWindowAccessForSpec` — for windowless `W` specs.
+
+And both are reached from **both** front doors: the MCP (`McpToolRouterSupport`,
+`ToolRegistry`) and the REST layer the SPA uses (`NeoRequestRouter:130` and `:189`), plus
+`NeoDiscoveryHelper`, which builds the catalogue for both. **This is not MCP-only code.** Any
+change here is visible in the SPA.
+
+Measured on the local instance — every active spec with no window and no process:
+
+| Spec | type | constituent tabs | reaches the empty case |
 |---|---|---|---|
-| `R` | constituent windows | 6 | `bank-*`, `cash-close`, `financial-*` |
-| `R` | **none — passes through** | 3 | `aging-receivable`, `inventory-stock-report`, `tax-report` |
-| `P` | — | 0 | none exist |
+| `tax-report` | `R` | 0 | **yes** |
+| `aging-receivable` | `R` | 0 | **yes** |
+| `inventory-stock-report` | `R` | 0 | **yes** |
+| `dashboard` | `W` | 0 | **yes** |
+| `not-posted-documents` | `W` | 0 | **yes** |
+| `bank-statements`, `bank-reconciliation`, `cash-close`, `financial-accounts-page`, `financial-account-transactions`, `financial-account-bank-connection` | `R` | 1 | no — gated on their window |
+| any `P` spec | `P` | — | none exist |
 
-So the hole is enumerable today: three specs, and no process specs at all.
+So the hole is five specs, not three. The first version of this document counted only the `R`
+side and missed `dashboard` and `not-posted-documents` entirely — which is precisely what made
+step 2 below look like a one-line change.
 
 ## 2. Why those three were not simply given an anchor
 
@@ -76,15 +96,84 @@ the part that makes the fix hold: without it, the next report is added, its 403 
 somebody "fixes" it by hand-writing a fourth ad-hoc check — which is exactly how this shape
 survived. With it, a report that declares neither fails the build.
 
-## 5. Sequence
+This is not hypothetical. **During the 2026-09-16 review, `InventoryStockReportHandler`'s inline
+window check was replaced by the call to the new method before its override existed.** It
+inherited the `true` default and the report was readable by any role — stock quantities and
+valuations for both warehouses — for a full deploy. It was caught only because `neo_discover`
+was inspected for an unrelated reason.
 
-1. Add the handler-enforced declaration and wire the gate to it, keeping today's behaviour for
-   the three known specs.
-2. Flip `hasAccessToConstituentWindows`' empty case from `true` to `false`.
-3. Add the guardrail test.
-4. Re-verify the six financial specs still resolve through their constituent windows.
+That is the exact failure the guardrail catches, and the reason it must land before the empty
+case changes rather than after.
 
-Step 2 cannot come first: on its own it takes all three reports down.
+## 5. Sequence — CORRECTED 2026-09-16
+
+The original step 2 read: *"flip `hasAccessToConstituentWindows`' empty case from `true` to
+`false`."* **That is wrong in both directions, and must not be executed as written.**
+
+### Why the literal flip fails
+
+**(a) It closes all three reports for every role, including fully granted ones.** The order
+inside `hasReportSpecAccess` puts the handler declaration *behind* the check being flipped:
+
+```java
+if (!hasAccessToConstituentWindows(spec, httpMethod)) {
+  return false;                        // with the flip, every report leaves here
+}
+return handlerDeclaredAccess(spec);    // never reached
+```
+
+The declaration built in step 1 — the whole point of the exercise — sits behind the door the
+flip closes. The result is not a stricter default; it is three dead reports.
+
+**(b) It closes `dashboard` and `not-posted-documents` in the SPA, for everyone.** Those are
+`W` specs. They go through `hasWindowAccessForSpec`, which does **not** consult
+`handlerDeclaredAccess` at all, so they have no way to declare anything. They would simply
+stop resolving, for every role, in the main UI.
+
+### Corrected sequence
+
+1. **Done (commits `b5a54f72`, `dc11f2cf`).** `NeoHandler.isAccessibleForCurrentRole()` added;
+   the three report handlers declare their rule; `hasReportSpecAccess` consults it; role
+   refusals answer `403` instead of `500`. Catalogue and execution now agree.
+2. **Add the guardrail test first, not last** (see §4). It is what makes the remaining steps
+   safe, and it is cheap and behaviour-neutral, so it carries no deploy risk.
+3. **Change the empty case in the report path only, and make it defer rather than decide.**
+   The empty case must not be a fixed boolean. When there are no constituent windows to
+   evaluate, the answer belongs to the handler declaration, not to a blanket default:
+
+   ```java
+   // in hasReportSpecAccess, replacing the short-circuit
+   if (!constituentWindowsAllow(spec, httpMethod)) {
+     return false;          // real windows exist and the role fails them
+   }
+   return handlerDeclaredAccess(spec);   // no windows to check -> the handler answers
+   ```
+
+   Leave `hasWindowAccessForSpec` untouched at this step, so `dashboard` and
+   `not-posted-documents` keep working.
+4. **Re-verify with two roles after deploy** — the granted role still receives all three
+   reports and both `W` specs; the `Sales` role still gets `403` on `tax-report` and
+   `inventory-stock-report` and data on `aging-receivable`. This is the ETP-4596 regression
+   check, and it is the one that matters.
+5. **Only then**, separately: give `dashboard` and `not-posted-documents` a way to declare, and
+   close the `W` path too. Out of scope here; it needs its own measurement of who consumes them.
+
+### The limitation this leaves, stated plainly
+
+`handlerDeclaredAccess` returns `true` when a spec has no handler, and
+`isAccessibleForCurrentRole()` defaults to `true` — a default that is required, because ~40
+non-report handlers must not have to declare anything. So after step 3 a **new report handler
+that declares nothing is still open at runtime.**
+
+The guardrail is therefore not a nicety on top of the fix; it *is* the fix for that case. It is
+the only thing standing between an omission and an open report, which is why step 2 moves ahead
+of step 3.
+
+Distinguishing "the handler explicitly allowed" from "the handler never answered" at runtime
+would need a second signal — a separate `enforcesOwnAccess()`, or a reflective check that the
+method is overridden. Both were considered and neither is proposed here: the first is two
+methods to keep in sync, the second puts reflection on an authorization path. The build-time
+guardrail achieves the same outcome earlier and more visibly.
 
 ## 6. Out of scope, and a correction worth recording
 
