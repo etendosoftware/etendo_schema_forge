@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-stripe-local test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration test-e2e-purchase-sales test-e2e-last-failed email-stress-limits email-stress-limits-report email-stress-help ast-churn-ranking ast-churn-heatmap generate regen dev dev-local-core dev-mock ai-bff-install build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage flag-debt menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status ci-parity ci-parity-help regen-public-api gateway-link-local-core gateway-dev-local-core
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-stripe-local test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration test-e2e-purchase-sales test-e2e-last-failed email-stress-limits email-stress-limits-report email-stress-help ast-churn-ranking ast-churn-heatmap generate regen dev dev-local-core dev-mock ai-bff-install build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage flag-debt menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status ci-parity ci-parity-help regen-public-api generate-base-public-api-manifest gateway-link-local-core gateway-dev-local-core docs-api-sync docs-api-generate docs-api-build docs-api-dev
 
 export SF_ROOT := $(CURDIR)
 
@@ -311,6 +311,10 @@ regen-help: ## Show usage and examples for `make regen`
 regen-public-api: ## Generate artifacts/_public-api/allowlist.v1.json from curated publicApi fields
 	$(SF) sf-generate-public-api-schema --artifacts-root artifacts
 
+generate-base-public-api-manifest: ## Generate the editable primary-entity Base-window public API manifest
+	node scripts/generate-base-public-api-manifest.mjs artifacts public-api/base.v1.json
+	node scripts/validate-base-public-api-manifest.mjs public-api/base.v1.json
+
 # gateway/'s package.json declares @etendosoftware/api-gateway-core as a real npm
 # dependency (not a CLI bin, not bundler-resolved React source) — neither of the two
 # mechanisms above fits, so LOCAL_CORE consumption here uses `npm link`, gated the
@@ -345,6 +349,18 @@ gateway-link-local-core: ## Build api-gateway-core in the sibling core repo and 
 # resolution for other, unrelated symlinked packages this monorepo may have.
 gateway-dev-local-core: ## Start the gateway dev server against the linked local api-gateway-core (LOCAL_CORE dev only)
 	cd gateway && NODE_OPTIONS=--preserve-symlinks npm run start:dev
+
+docs-api-sync: ## Copy the running gateway OpenAPI contract into the Docusaurus portal
+	cd docs-api && npm run sync:openapi
+
+docs-api-generate: docs-api-sync ## Generate Docusaurus API reference pages from OpenAPI
+	cd docs-api && npx docusaurus clean-api-docs publicApi && npm run gen:api
+
+docs-api-build: docs-api-generate ## Build the static self-hosted API documentation portal
+	cd docs-api && npm run build
+
+docs-api-dev: ## Docusaurus is disabled while Scalar is the active API documentation
+	@echo 'Docusaurus is disabled for now. Use Scalar at http://localhost:4300/docs'
 
 # --- Push-to-NEO Delta Dump ---
 
