@@ -3,7 +3,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:Dimensiones
 const columns = [
-  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
+  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true, maxLength: 60 },
   { key: 'type', column: 'ElementType', type: 'enum', label: 'Type', enumLabels: { 'AC': 'elementTypeAc', 'AY': 'elementTypeAy', 'AS': 'elementTypeAs', 'BP': 'elementTypeBp', 'MC': 'elementTypeMc', 'CC': 'elementTypeCc', 'LF': 'elementTypeLf', 'LT': 'elementTypeLt', 'OO': 'elementTypeOo', 'PR': 'elementTypePr', 'PJ': 'elementTypePj', 'SR': 'elementTypeSr', 'OT': 'elementTypeOt', 'U1': 'elementTypeU1', 'U2': 'elementTypeU2' }, required: true },
   { key: 'active', column: 'IsActive', type: 'boolean', label: 'Active', required: true },
   { key: 'mandatory', column: 'IsMandatory', type: 'boolean', label: 'Mandatory', required: true },

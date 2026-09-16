@@ -15,13 +15,11 @@ import { downloadBlobAsFile } from '@/windows/custom/shared/pdfUtils.js';
 import { formatBytes } from '@/lib/formatBytes.js';
 import { ImportColumnMapping } from '@etendosoftware/app-shell-core/components/import/ImportColumnMapping.jsx';
 import { ImportReviewQueue, buildErrorsCsv } from '@etendosoftware/app-shell-core/components/import/ImportReviewQueue.jsx';
-import {
-  BANK_STATEMENT_IMPORT_FIELDS,
-  bankStatementFieldLabel,
-} from './bankStatementImportFields.js';
+import { bankStatementFieldLabel } from './bankStatementImportFields.js';
 import {
   buildStatementCreatePayload,
   buildStatementPreview,
+  localizeFields,
   sendableEntries,
 } from './bankStatementImportPipeline.js';
 import { parseStatementAmount } from './statementAmount.js';
@@ -339,7 +337,7 @@ function TemplateLinks({ ui }) {
   const baseName = ui('financeAccountStatementsImportTemplateFileName');
 
   const downloadCsv = () => {
-    const csv = buildTemplateCsv(BANK_STATEMENT_IMPORT_FIELDS, { headerFor });
+    const csv = buildTemplateCsv(localizeFields(ui), { headerFor });
     downloadBlobAsFile(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), `${baseName}.csv`);
   };
 
@@ -348,7 +346,7 @@ function TemplateLinks({ ui }) {
     // only one that can fail on its own; a failure must not leave the link stuck in `busy`.
     setBusy(true);
     try {
-      const blob = await buildTemplateXlsx(BANK_STATEMENT_IMPORT_FIELDS, { headerFor });
+      const blob = await buildTemplateXlsx(localizeFields(ui), { headerFor });
       downloadBlobAsFile(blob, `${baseName}.xlsx`);
     } catch {
       toast.error(ui('financeAccountStatementsImportTemplateError'));
@@ -723,6 +721,7 @@ function MappingBody({
           onApplyMapping={review.applyMapping}
           labels={{
             notImported: ui('financeAccountStatementsImportMapNotImported'),
+            alreadyAssigned: ui('financeAccountStatementsImportMapAlreadyAssigned'),
             mappedSummary: ui('financeAccountStatementsImportMapSummary'),
             editMatch: ui('financeAccountStatementsImportMapEdit'),
             editTitle: ui('financeAccountStatementsImportMapEditTitle'),

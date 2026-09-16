@@ -2,7 +2,7 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:reconciliations
 const fields = [
-  { key: 'documentNo', column: 'DocumentNo', type: 'text', label: 'Document No.', required: true, readOnly: true, section: 'other', readOnlyLogic: (record) => record['processed'] === true },
+  { key: 'documentNo', column: 'DocumentNo', type: 'text', label: 'Document No.', required: true, readOnly: true, section: 'other', maxLength: 30, readOnlyLogic: (record) => record['processed'] === true },
   { key: 'endingDate', column: 'Dateto', type: 'date', label: 'Ending Date', required: true, readOnly: true, section: 'other', readOnlyLogic: (record) => record['processed'] === true },
   { key: 'transactionDate', column: 'Statementdate', type: 'date', label: 'Transaction Date', required: true, readOnly: true, section: 'other', readOnlyLogic: (record) => record['processed'] === true },
   { key: 'startingbalance', column: 'Startingbalance', type: 'number', label: 'Starting Balance', required: true, readOnly: true, section: 'other', defaultValue: '0' },
