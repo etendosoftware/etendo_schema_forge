@@ -563,6 +563,20 @@ POST/PUT /sws/neo/financial-account/accountingConfiguration
     Type-switch note right below.)
 ```
 
+**"Clears it" only became true in ETP-5305 — do not remove the `isNull` guard.** The clearing
+half of the contract above was broken from the start: `applyCombination` read each key with
+Jettison's `optString(field, null)`, which for an explicit JSON `null` returns the **literal
+4-character string `"null"`**, not a Java `null` (the parsed value is the `JSONObject.NULL`
+sentinel, and `optString` hands back its `toString()`). That string was then looked up as an
+accounting-combination id, so every save died with `Accounting combination not found: null`.
+Because `EditAccountModal.jsx` always sends all 9 keys — and `clearedPaymentAccount`/
+`clearedPaymentAccountOUT` are `null` **by design** since ETP-5207 — this made the Contabilidad
+tab unsaveable for *every* account, not just accounts with a blank field (QA case OF-24). The fix
+tests `body.isNull(field)` before falling back to `optString`. Note the guard must stay *inside*
+the existing `body.has(field)` check: `isNull` is also `true` for an absent key, so hoisting it
+would turn "leave untouched" into "clear". Same root cause and same fix as
+`FinancialAccountCountrySupport.bodyString` on the General tab of this window.
+
 **Type-switch mid-edit — payload scoped to the type actually being saved (ETP-4872 QA fix,
 BUG-1).** `accounting.values` (the field-value map inside `useFinancialAccountAccounting`) is keyed
 on all 9 fields regardless of the account's current type, and nothing resets or filters it when the
@@ -1138,7 +1152,7 @@ financeAccountsMenuArchive           "Archive account"
 - **Real bank logos**: `bankCatalog.js` uses `<Landmark>` as a placeholder icon for all banks.
 - **Card accounts**: the CARD step shows a "Coming soon" placeholder — actual card creation requires a bank connection.
 - **Bank catalog from endpoint**: `bankCatalog.js` is a static list; the component is designed so the data source can be swapped to a live endpoint without changing the layout.
-- **`enablebankstatement` flag** (ETP-4530): `FinancialAccountAccountingHandler` auto-sets it to `true` on every Contabilidad save (whenever any of the 9 accounting fields, ETP-4872, are saved) — broader than what the tab visually presents, since the flag itself is not exposed as an editable field here. If Classic UI surfaces this checkbox elsewhere, a user could find it pre-checked after using this tab; this is a deliberate scope call (the flag must be `Y` for Classic's bank-statement accounting engine to read the accounts at all), not a bug.
+- **`enablebankstatement` flag** (ETP-4530, narrowed by ETP-5305): `FinancialAccountAccountingHandler` used to set it to `true` on *every* Contabilidad save. It now only does so when the stored row already carries **both** `FIN_Asset_Acct` and `FIN_Transitory_Acct`. Forcing it unconditionally had become purely destructive once ETP-4872 retired that pair from this handler: the DB constraint `fin_finacc_acct_bsconfig_check` rejects `EnableBankStatement='Y'` when either account is null, so the save died at flush with an HTTP 500 — and Classic gained nothing from the flag anyway, since `DocFINBankStatement.getDocumentConfirmation` requires the flag *and* both accounts before it will post. Verified against the live DB: all 479 `FIN_Financial_Account_Acct` rows have the pair null and the flag `'N'`, so an A/B on the real table confirmed the old write fails the constraint and the new one succeeds. In practice the flag now stays as-is, which matches reality — bank-statement posting was never actually enabled through this tab. If the pair is ever re-exposed as editable fields, the flag starts being set again on its own, with no further change here.
 - **Remaining `FIN_Financial_Account_Acct` columns** (ETP-4530/ETP-4872): `receivePaymentAccount`, `makePaymentAccount`, `creditAccount`, `debitAccount` stay `discarded` in `decisions.json` — explicitly out of scope per the ETP-4872 ticket, unlike the deposit/withdrawal/bank-fee/revaluation accounts it moved to `editable`.
 - **"No field required" is an inference, not a confirmed product decision** (ETP-4872): the ticket's field tables carry no "required" marker for any of the 9 accounting fields, so the old `fINAssetAcct`-required validation was dropped entirely rather than moved to one of the new fields. This is flagged as pending product/PM confirmation in the implementation plan's Open Questions — do not treat it as permanently settled without checking whether that confirmation has since landed.
 - **New-account "Con conexión" path is NOT country-gated** (ETP-4896): the Spain-only restriction applies to *accounts*, which is what Test Cases 5–7 specify ("una cuenta … tiene como país X"). In the New Account wizard's CONNECTION step no account and no country exist yet — the account is created *from* whichever bank account Salt Edge returns — so there is nothing to gate on. Consequence worth knowing: a user can still reach Salt Edge from that step and pick a non-Spanish provider via the BankPicker's country filter (`BANK_COUNTRIES` offers ES/IT/FR/DE/PT/GB/NL/BE/IE/AT). Whether that filter should also be restricted to ES is a **product decision left open**, deliberately not assumed here.

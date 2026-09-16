@@ -6,6 +6,7 @@ import { fetchTemplateRoles, fetchRolesOverview } from '@/lib/rolesApi.js';
 import { resolveDefaultRoleId } from './RoleChipsCell.jsx';
 import { useRoleSelection } from './roleSelectionContext.js';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const MAX_COLLAPSED_CHIPS = 3;
 
@@ -135,6 +136,22 @@ export default function AssignTemplateRolesControl(props) {
       <div className="flex flex-col gap-2 w-full" data-testid="AssignTemplateRolesControl__save-first">
         <label className="text-sm font-medium text-foreground">{ui('assignedRolesLabel')}</label>
         <p className="text-sm text-muted-foreground">{ui('saveUserFirstForRoles')}</p>
+      </div>
+    );
+  }
+
+  // ETP-5278 — `roles`/`adminRoleId` are still `[]`/`null` while the effect above is in
+  // flight (mount, or a re-mount after navigating away and back). Without this guard the
+  // code below falls straight through to `selectedRoles = roles.filter(...)` with `roles`
+  // still empty, rendering "Sin roles asignados" regardless of what selectedRoleIds
+  // actually holds — checked BEFORE isAdminRoleHolder for the same reason UserRolesTab.jsx
+  // checks its own `loading` before its "zero selected" empty state (see that file's own
+  // comment on the dead-code ordering bug this exact mistake causes).
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-2 w-full" data-testid="AssignTemplateRolesControl__loading">
+        <label className="text-sm font-medium text-foreground">{ui('assignedRolesLabel')}</label>
+        <Skeleton className="h-10 w-full" data-testid="AssignTemplateRolesControl__loading-skeleton" />
       </div>
     );
   }

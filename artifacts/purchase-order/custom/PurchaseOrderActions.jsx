@@ -909,21 +909,14 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
     return () => { cancelled = true; };
   }, [orderId, base, headers, apiBaseUrl]);
 
-  if (!fetched) {
-    return createPortal(
-      <div style={{
-        position: 'fixed', inset: 0, background: 'hsl(var(--foreground) / 0.2)', zIndex: 9998,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <div style={{ background: 'hsl(var(--card))', padding: '16px 24px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Spinner data-testid="Spinner__8b5323" /><span style={{ fontSize: 13 }}>{ui('loading')}</span>
-        </div>
-      </div>,
-      document.body,
-    );
-  }
-
-  const { receipts, invoices, orderLines } = fetched;
+  // ETP-5295 — every hook below (including the close-effect) must run unconditionally, in the same
+  // order, on every render. The derivation is guarded against `fetched` being null (loading state)
+  // instead of being placed after the `if (!fetched) return spinner` early return: this component
+  // used to compute `nothingToManage` and its close-effect AFTER that return, which meant the effect
+  // was skipped on the first (loading) render and only registered once `fetched` arrived — React
+  // then saw a different number of hooks between renders ("Rendered more hooks than during the
+  // previous render") and unmounted the entire app (no ErrorBoundary anywhere catches it).
+  const { receipts, invoices, orderLines } = fetched ?? { receipts: [], invoices: [], orderLines: [] };
   const receiptsDraft    = receipts.filter(r => r.documentStatus === 'DR');
   const receiptsComplete = receipts.filter(r => r.documentStatus === 'CO');
   const invoiceDraft     = invoices.find(i => i.documentStatus === 'DR') ?? null;
@@ -937,9 +930,11 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
   const totalInvoiced = invoicesComplete.reduce((s, i) => s + (Number(i.grandTotalAmount) || 0), 0);
   const totalPending  = totalOrder - totalInvoiced;
 
-  const needsReceipt = qtyPending !== 0 && receiptsDraft.length === 0;
-  const needsInvoice = totalPending !== 0 && !invoiceDraft;
-  const nothingToManage = !needsReceipt && !needsInvoice;
+  // `fetched != null` gates all three: while still loading, neither "needs" flag may read true off
+  // the placeholder empty arrays above, or the close-effect below could fire before data ever loads.
+  const needsReceipt = fetched != null && qtyPending !== 0 && receiptsDraft.length === 0;
+  const needsInvoice = fetched != null && totalPending !== 0 && !invoiceDraft;
+  const nothingToManage = fetched != null && !needsReceipt && !needsInvoice;
 
   // Close asynchronously when there's nothing pending — avoids the
   // "Cannot update a component while rendering" warning that occurs when a
@@ -947,6 +942,20 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
   useEffect(() => {
     if (nothingToManage) onClose?.();
   }, [nothingToManage, onClose]);
+
+  if (!fetched) {
+    return createPortal(
+      <div style={{
+        position: 'fixed', inset: 0, background: 'hsl(var(--foreground) / 0.2)', zIndex: 9998,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <div style={{ background: 'hsl(var(--card))', padding: '16px 24px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Spinner data-testid="Spinner__8b5323" /><span style={{ fontSize: 13 }}>{ui('loading')}</span>
+        </div>
+      </div>,
+      document.body,
+    );
+  }
 
   if (nothingToManage) return null;
 

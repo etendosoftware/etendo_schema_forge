@@ -201,9 +201,27 @@ export function reportUnnavigableSave({ saved, isNew, windowName, ui }) {
   return true;
 }
 
+/**
+ * ETP-5199 — the post-save side-effect (`onAfterCreate`/`onAfterExistingSave`) extracted out
+ * of `handlePostSaveNavigation` so a caller that must NOT navigate afterwards — the
+ * "Guardar y salir" unsaved-changes-navigation-guard saver in `DetailView.jsx` — can still run
+ * it. `handlePostSaveNavigation` (below) is the ONLY other caller and keeps its exact previous
+ * behaviour: this is a behaviour-preserving extraction, not a new rule.
+ *
+ * Deliberately no try/catch here: a rejection propagates to the caller exactly as it did when
+ * this line lived inline in `handlePostSaveNavigation`, so both save paths (the toolbar Save
+ * button and the unsaved-changes-guard saver) treat a throwing hook identically. Individual
+ * `onAfterExistingSave`/`onAfterCreate` implementations are expected to handle their own
+ * errors when a failure must not look like the whole save failed — see
+ * `handleRoleAssignmentSave` in `windows/custom/user/index.jsx`, which already does.
+ */
+export async function runAfterSaveHook(saved, { isNew, onAfterCreate, onAfterExistingSave, token, apiBaseUrl }) {
+  await (isNew ? onAfterCreate : onAfterExistingSave)?.(saved, { token, apiBaseUrl });
+}
+
 export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterExistingSave, onAfterSave, navigate, windowName, token, apiBaseUrl, hook, ui }) {
   if (!saved) return;
-  await (isNew ? onAfterCreate : onAfterExistingSave)?.(saved, { token, apiBaseUrl });
+  await runAfterSaveHook(saved, { isNew, onAfterCreate, onAfterExistingSave, token, apiBaseUrl });
   if (onAfterSave) {
     navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved, justSaved: saved } });
   } else if (saved.id && isNew) {
@@ -212,6 +230,57 @@ export async function handlePostSaveNavigation(saved, { isNew, onAfterCreate, on
   } else {
     reportUnnavigableSave({ saved, isNew, windowName, ui });
   }
+}
+
+/**
+ * ETP-5199 — builds the saver `DetailView.jsx` registers with `useUnsavedChangesGuard` for the
+ * in-app "Guardar y salir" navigation-guard path (see `unsavedChanges.js`'s
+ * `savePendingNavigation`). Extracted here rather than inlined in `DetailView.jsx` per that
+ * component's own no-growth guardrail (`.claude/hooks/check-detailview-growth.mjs`).
+ *
+ * Bug this fixes: this saver used to be `() => hook.handleSave({ silent: true })` only, so
+ * "Guardar y salir" persisted plain header fields (they live in `hook.editing`, part of
+ * `handleSave`'s own payload) but silently dropped any state a window keeps OUTSIDE
+ * `hook.editing` and persists via `onAfterExistingSave`/`onAfterCreate` — e.g. the Users
+ * window's "Roles asignados" multi-select (`handleRoleAssignmentSave` in
+ * `windows/custom/user/index.jsx`; see `docs/generated-custom-windows/user.md`'s
+ * "Save-lifecycle hook" section). The toolbar Save button never had this gap: its own
+ * `onClick` always chains `handlePostSaveNavigation`, which calls `runAfterSaveHook`.
+ *
+ * Deliberately does NOT call `handlePostSaveNavigation` itself: this saver's caller
+ * (`savePendingNavigation`) already owns and performs the pending navigation, so this must
+ * run ONLY the post-save side-effect, never a second, competing redirect. Mirrors
+ * `handlePostSaveNavigation`'s own `if (!saved) return;` guard: a validation refusal must
+ * stop here so the false/null `handleSave` result still blocks navigation for the caller.
+ *
+ * QA follow-up (same ETP-5199 change): `runAfterSaveHook` is wrapped in its own try/catch,
+ * unlike the toolbar Save button's `handlePostSaveNavigation` (which deliberately lets it
+ * propagate — see that function's own comment). This path has no such luxury: an uncaught
+ * rejection here propagates through `savePendingNavigation()` all the way to
+ * `UnsavedChangesNavigationDialog`'s `handleSave`, neither of which has a try/catch, leaving
+ * the "Guardar y salir" modal stuck open (spinner forever, every button disabled, no way out
+ * short of reloading and losing the edits this guard exists to protect). The record itself
+ * DID save by this point (`hook.handleSave` already resolved truthy) — only the follow-up
+ * side-effect failed — so this reports it with a toast and still `return`s `saved`, exactly
+ * like a genuine save success: this is NOT the `!saved` case above, which correctly blocks
+ * navigation because the record itself never persisted. Mirrors the tone/precedent of
+ * `handleRoleAssignmentSave`'s own `roleAssignmentSaveFailedAfterUserSaved` toast in
+ * `windows/custom/user/index.jsx`, generalized here (via `savedButFollowUpActionFailed`)
+ * since this helper is not Users-specific.
+ */
+export function buildUnsavedChangesSaver({ hook, isNew, onAfterCreate, onAfterExistingSave, token, apiBaseUrl, ui }) {
+  return async () => {
+    const saved = await hook.handleSave({ silent: true });
+    if (saved) {
+      try {
+        await runAfterSaveHook(saved, { isNew, onAfterCreate, onAfterExistingSave, token, apiBaseUrl });
+      } catch (err) {
+        const detail = err?.message || '';
+        toast.error(ui?.('savedButFollowUpActionFailed', { detail }) || 'savedButFollowUpActionFailed');
+      }
+    }
+    return saved;
+  };
 }
 
 /**
