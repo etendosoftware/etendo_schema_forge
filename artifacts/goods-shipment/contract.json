@@ -1,8 +1,8 @@
 {
   "version": "0.1.0",
   "generatedAt": "2026-08-13T11:56:58.444Z",
-  "updatedAt": "2026-08-13T12:12:34.435Z",
-  "checksum": "147dea7725088bb3",
+  "updatedAt": "2026-09-14T12:02:33.050Z",
+  "checksum": "714ce2765a9f7c09",
   "frontendContract": {
     "window": {
       "id": "169",
@@ -21,8 +21,7 @@
         "topbarRight": "GoodsShipmentActions",
         "topbarExtra": "GoodsShipmentBillingBadge",
         "bulkActions": "BulkInvoiceFromShipment",
-        "bottomSection": "GoodsShipmentBottomPanel",
-        "moreMenuContent": "GoodsShipmentMoreMenu"
+        "bottomSection": "GoodsShipmentBottomPanel"
       },
       "menuActions": [
         {
@@ -994,8 +993,7 @@
         "topbarRight": "GoodsShipmentActions",
         "topbarExtra": "GoodsShipmentBillingBadge",
         "bulkActions": "BulkInvoiceFromShipment",
-        "bottomSection": "GoodsShipmentBottomPanel",
-        "moreMenuContent": "GoodsShipmentMoreMenu"
+        "bottomSection": "GoodsShipmentBottomPanel"
       },
       "menuActions": [
         {

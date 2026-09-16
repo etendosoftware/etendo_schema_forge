@@ -54,6 +54,12 @@ describe('buildReturnPreviewContent', () => {
     assert.match(src, /\bonEmail,/);
   });
 
+  // ETP-5124: return-material-receipt is the second caller (after invoice/order/quotation/
+  // goods-shipment) to wire a send contract, so it needs the EmailsCard slot too.
+  it('accepts an optional emailsCard param (ETP-5124 — EmailsCard wiring)', () => {
+    assert.match(src, /\bemailsCard,/);
+  });
+
   // ── Return value ───────────────────────────────────────────────────────────
 
   it('returns an object with actionButtons and tabs keys', () => {
@@ -100,6 +106,10 @@ describe('buildReturnPreviewContent', () => {
     assert.match(src, /apiBaseUrl=\{apiBaseUrl\}/);
     assert.match(src, /ui=\{ui\}/);
     assert.match(src, /specs=\{specs\}/);
+  });
+
+  it('forwards the emailsCard param to ReturnDocStatsPanel (ETP-5124)', () => {
+    assert.match(src, /<ReturnDocStatsPanel[\s\S]{0,300}emailsCard=\{emailsCard\}/);
   });
 
   // ── tabs — general only ───────────────────────────────────────────────────
