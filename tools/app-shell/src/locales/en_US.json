@@ -16766,6 +16766,7 @@
     "optional": "optional",
     "delete": "Delete",
     "reactivate": "Reactivate",
+    "reactivateBulk": "Reactivate",
     "reactivateOrder": "Reactivate Order",
     "cannotReactivateLinkedDocs": "Cannot reactivate: order has linked documents",
     "bulkRowAlreadyPosted": "Already posted",
