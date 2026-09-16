@@ -1,12 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
-import { createPortal } from 'react-dom';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Search, Inbox, X, Trash2, Copy, Loader2, Pencil, Check, ArrowUpRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLabel, useUI, useLocale, useMenuLabel, useLocaleSwitch } from '@/i18n';
-import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
@@ -49,7 +47,6 @@ function growColumnWidth(basisPx, fixedTotalPx, growCount) {
   if (!growCount) return undefined;
   return `calc((100% - ${fixedTotalPx}px) / ${growCount} + ${basisPx}px)`;
 }
-import { SelectorInput } from './SelectorInput.jsx';
 import { InlineSearchCombo } from './InlineSearchCombo.jsx';
 import { ComputedFreshnessHint } from './ComputedFreshnessHint.jsx';
 import { PillToggle } from '@/components/PillToggle';

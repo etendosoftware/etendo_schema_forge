@@ -122,7 +122,6 @@ export function usePaymentBalance({
   total, dir = 'in', sources = [], usedSources = EMPTY_USED_SOURCES, canLeaveCredit = false,
 }) {
   const applied = round2(total);
-  const isReceipt = dir === 'in';
 
   const [amount, setAmount] = useState(applied);
   const [amountStr, setAmountStr] = useState(formatPlain(applied));

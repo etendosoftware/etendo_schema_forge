@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { DateField } from '@/components/ui/date-field';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
 import { FIELD_HEIGHT, ROW_GAP_Y, LABEL_GAP } from '@/components/ui/formDensity';
 import { PillToggle } from '@/components/PillToggle';
 import { ArrowUpRight, Loader2, Search } from 'lucide-react';
@@ -23,7 +22,6 @@ import { CreateContactContext } from './CreateContactContext.js';
 import { PartnerAddressPicker } from './PartnerAddressPicker.jsx';
 import { CurrencyRatePicker } from './CurrencyRatePicker.jsx';
 import PrefixedInput from './PrefixedInput.jsx';
-import { SelectorChip } from './SelectorChip.jsx';
 import { SelectorInput } from './SelectorInput.jsx';
 import { CreatableSearchSelect } from './CreatableSearchSelect.jsx';
 import { InlineCreateSelector } from './InlineCreateSelector.jsx';
@@ -245,6 +243,13 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
     }
   }, [parentValue, value]);
 
+  // Flattened out of a nested ternary (Sonar S3358) — same three cases, read top to bottom.
+  let selectPlaceholder = ui('selectParentFirst');
+  if (loading) {
+    selectPlaceholder = ui('loading');
+  } else if (parentValue) {
+    selectPlaceholder = buildSelectPlaceholder(ui, resolvedLabel);
+  }
   return (
     <Select
       value={value || '__empty__'}
@@ -261,7 +266,7 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
       data-testid={"Select__" + field.id}>
       <SelectTrigger id={field.key} data-testid={`field-${field.key}`} className="focus:ring-2 focus:ring-primary">
         <SelectValue
-          placeholder={loading ? ui('loading') : (parentValue ? buildSelectPlaceholder(ui, resolvedLabel) : ui('selectParentFirst'))}
+          placeholder={selectPlaceholder}
           data-testid={"SelectValue__" + field.id} />
         {loading && <Loader2
           className="h-4 w-4 text-muted-foreground animate-spin ml-auto mr-1"
@@ -1204,7 +1209,11 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
     // focus ring, but it should still LOOK like every other input otherwise.
     const inputClassName = getInputStateClass(isReadOnly)
       + (hasPrefix ? ' border-0 rounded-none focus-visible:ring-0 focus-visible:outline-none prefixed-input-control' : '');
-    const inputEl = calloutOnBlur && !isReadOnly ? (
+    // if/else rather than a nested ternary: Sonar S3358, and the same shape ETP-5210 used
+    // when it rewrote the other chains in this file.
+    let inputEl;
+    if (calloutOnBlur && !isReadOnly) {
+      inputEl = (
       <DeferredInput
         f={f}
         committedValue={data?.[f.key] ?? ''}
@@ -1217,7 +1226,9 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
         disabled={isReadOnly || savingField === f.key}
         maxLength={f.maxLength}
         data-testid="DeferredInput__a8d626" />
-    ) : (isNumericField(f) && !isReadOnly) ? (
+      );
+    } else if (isNumericField(f) && !isReadOnly) {
+      inputEl = (
       // Numeric, no blur-callout: same reason as DeferredInput above — a native number input
       // swallows the comma keystroke. Read-only numerics keep the plain <Input> below, since they
       // render `displayValue` (already formatted upstream) and accept no keystrokes at all.
@@ -1234,7 +1245,9 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
         className={inputClassName}
         required={f.required}
         disabled={savingField === f.key} />)
-    ) : (
+      );
+    } else {
+      inputEl = (
       <Input
         id={f.key}
         name={f.key}
@@ -1254,7 +1267,8 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
         disabled={isReadOnly || savingField === f.key}
         maxLength={f.maxLength}
       />
-    );
+      );
+    }
     return (
       <div key={f.key} className={LABEL_GAP}>
         <Label

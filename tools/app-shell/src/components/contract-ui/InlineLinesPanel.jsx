@@ -20,7 +20,6 @@ import { formatSignedDelta } from '@/lib/formatSigned.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { InlineSearchCombo } from './InlineSearchCombo.jsx';
-import { SelectorInput } from './SelectorInput.jsx';
 import { PillToggle } from '@/components/PillToggle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { resolveLookupDrawer } from './lookupDrawers.js';

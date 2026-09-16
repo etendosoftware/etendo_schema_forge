@@ -2,7 +2,6 @@ import { Lock } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { DateField } from '@/components/ui/date-field';
-import { Input } from '@/components/ui/input';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { getCurrencySymbol } from '@/lib/formatCurrency.js';
 import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
