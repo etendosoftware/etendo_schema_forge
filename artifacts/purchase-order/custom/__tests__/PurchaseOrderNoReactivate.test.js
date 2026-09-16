@@ -14,8 +14,17 @@
  *   2. `showReactivate: true` is passed to useOrderWindow (grid row-hover
  *      kebab Reactivate — see useOrderWindow.jsx's own showReactivate test
  *      for the generic behavior, shared with sales-order).
- *   3. The pre-existing CO-only confirmBulk action (buildInOutActions) is
- *      untouched — it is unrelated to Reactivate and must keep excluding RE.
+ *   3. That bulk component is the bar's ONE document-action button (ETP-5302).
+ *
+ * Point 3 replaces an earlier pair of assertions that pinned the SEPARATE
+ * CO-only `<BulkDocumentAction buildActions={buildInOutActions}>` this window
+ * used to mount alongside it. ETP-5315 shipped bulk Reactivate as that second
+ * button, which is exactly what the user reported on screen — "Procesar" and
+ * "Reactivar" side by side for a mixed draft+completed selection, and a lone
+ * "Reactivar" for a completed-only one. ETP-5302 folded both into a single
+ * "Procesar" whose dropdown offers Confirmar and/or Reactivar, like every other
+ * document window, so the CO-only mount (and the `buildInOutActions` import that
+ * fed it) is gone and its absence is now the thing worth guarding.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -50,19 +59,32 @@ describe('PurchaseOrderWindow — Reactivate wired consistently (ETP-5315, super
     );
   });
 
-  it('still imports buildInOutActions from BulkDocumentAction (unrelated confirmBulk action)', () => {
-    assert.match(
-      src,
-      /import\s+BulkDocumentAction\s*,\s*\{\s*buildInOutActions\s*\}\s+from\s+'@\/components\/contract-ui\/BulkDocumentAction'/,
-      'buildInOutActions must still be imported alongside BulkDocumentAction',
+  it('mounts it exactly once — it is the bar\'s only document-action button (ETP-5302)', () => {
+    const mounts = src.match(/<PurchaseOrderReactivateBulkAction\b/g) ?? [];
+    assert.equal(
+      mounts.length,
+      1,
+      'The selection bar must carry ONE document-action button, not one per action',
     );
   });
 
-  it('still wires buildActions={buildInOutActions} to the existing confirm-only BulkDocumentAction', () => {
-    assert.match(
+  it('no longer mounts a separate CO-only BulkDocumentAction beside it (ETP-5302)', () => {
+    assert.doesNotMatch(
+      src,
+      /<BulkDocumentAction\b/,
+      'Confirmar is now an option inside the single Procesar dialog, not a second button',
+    );
+    // Matched on the import and the prop, not on the bare identifier: index.jsx's
+    // own comment names `buildInOutActions` while explaining why it was retired.
+    assert.doesNotMatch(
+      src,
+      /import[^\n]*\bbuildInOutActions\b[^\n]*from/,
+      'The CO-only action builder went with the button it fed — nothing imports it here anymore',
+    );
+    assert.doesNotMatch(
       src,
       /buildActions=\{buildInOutActions\}/,
-      'The pre-existing CO-only bulk action must keep receiving buildInOutActions via the buildActions prop',
+      'No component in this window may still be wired to the CO-only action builder',
     );
   });
 
