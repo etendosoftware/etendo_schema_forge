@@ -1,6 +1,7 @@
 import ReturnToVendorShipmentPage from '@generated/return-to-vendor-shipment/generated/web/return-to-vendor-shipment/ReturnToVendorShipmentPage';
 import ReturnToVendorShipmentPreview from './ReturnToVendorShipmentPreview';
 import { useReturnToVendorPdf } from './useReturnToVendorPdf.js';
+import ReturnToVendorShipmentSecondaryActions from './ReturnToVendorShipmentSecondaryActions.jsx';
 import ReturnWindowShell from '../shared/ReturnWindowShell';
 import { useMenuLabel } from '@/i18n';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
@@ -48,6 +49,12 @@ export default function ReturnToVendorShipmentWindow({ windowName, recordId, api
       entity="returnToVendorShipment"
       headerEntity="returnToVendorShipment"
       routePrefix="/return-to-vendor-shipment/"
+      // ETP-5260 defect fix — forwarded through ReturnWindowShell's `...pageProps`
+      // and the generated ReturnToVendorShipmentPage's own `{...props}` spread
+      // straight to DetailView; renders Copy link to the LEFT of Save/Confirm.
+      // ConfirmWithCreditButton (topbarRight, hardcoded in the generated Page)
+      // is untouched — see ReturnToVendorShipmentSecondaryActions' doc comment.
+      topbarSecondary={ReturnToVendorShipmentSecondaryActions}
       duplicateAction={{ show: false }}
       hideLink
       bulkActions={ReturnToVendorShipmentBulkActions}

@@ -1,5 +1,6 @@
 import { createElement } from 'react';
 import { formatCurrency } from '../../../lib/formatCurrency.js';
+import { parseCalendarDate } from '../../../lib/dateOnly.js';
 import { toast } from 'sonner';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
@@ -97,6 +98,22 @@ const BOX_PARAM_MAP = {
  *   manualOverrides — editable box values keyed by box number
  *   filename      — optional download filename (defaults to 303_<period>_<year>.txt)
  */
+// Formats a date-only value (as read from the `fecha_concurso` `<input type="date">`, always a
+// plain `yyyy-MM-dd` string — see fm303Layouts.js) into AEAT's strict `ddMMyyyy` digit format
+// (no separators), which is what ConcursoDate must carry (AEAT303Report2014.java:350-372,
+// unchanged through AEAT303Report2025; strict format validated by AEAT303Report2023+, ETP-5272).
+// Reuses the canonical `parseCalendarDate` (per this project's date-only parsing policy) rather
+// than a hand-rolled `new Date(string)` parse. Returns null when there's nothing to format
+// (blank/undefined/unparsable) — callers must not send a garbage ConcursoDate in that case.
+function formatAeatConcursoDate(raw) {
+  const date = parseCalendarDate(raw);
+  if (!date) return null;
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const yyyy = String(date.getFullYear());
+  return `${dd}${mm}${yyyy}`;
+}
+
 function applyRectificativaParams(params, identChecks) {
   params.set('IsComplementary', 'Y');
   if (identChecks.nro_justificante) params.set('ComplementaryNo', identChecks.nro_justificante);
@@ -105,24 +122,48 @@ function applyRectificativaParams(params, identChecks) {
     params.set('AdministrativeDiscrepancyRectifyingReason', 'Y');
 }
 
-export function applyIdentParams(params, identChecks) {
+// 1:1 string forwarding of IDENT_PARAM_MAP — value is set only when truthy. Split out of
+// applyIdentParams (SonarQube S3776) so the loop's own nested if/ternary doesn't stack on
+// top of every other ident-check branch below.
+function applyMappedIdentParams(params, identChecks) {
   for (const [field, paramName] of IDENT_PARAM_MAP) {
     const v = identChecks[field];
     if (v) params.set(paramName, paramName === 'IBAN' ? v.replace(/\s/g, '') : v);
   }
+}
+
+// Concurso de acreedores — AEAT303Report2014's "IsConcurso"/"ConcursoType" constants, still
+// read unchanged through the override chain up to AEAT303Report2025 (ETP-5027). ConcursoDate
+// (the bankruptcy statement date) must go alongside them — AEAT303Report2023+ throws
+// @AEAT303_Bad_Bankruptcy_Statement_Date_Format@ when it's missing/blank, and 2021/2022 ship
+// 8 blank spaces into that AEAT field slot otherwise (ETP-5272 pt.7). Only sent when there's
+// an actual date to format — fm303Layouts.js's `fecha_concurso` required-field gate is what
+// stops a blank date from reaching this point in the first place.
+function applyConcursoParams(params, identChecks) {
+  if (identChecks.concurso === true) {
+    params.set('IsConcurso', 'Y');
+    const concursoDate = formatAeatConcursoDate(identChecks.fecha_concurso);
+    if (concursoDate) params.set('ConcursoDate', concursoDate);
+  }
+  if (identChecks.postconcursal === true) params.set('ConcursoType', 'Y');
+}
+
+function applyComplementariaParams(params, identChecks) {
+  if (identChecks.complementaria === true) {
+    params.set('IsComplementary', 'Y');
+    if (identChecks.nro_justificante) params.set('ComplementaryNo', identChecks.nro_justificante);
+  }
+}
+
+export function applyIdentParams(params, identChecks) {
+  applyMappedIdentParams(params, identChecks);
   if (identChecks.sin_actividad === true) params.set('Declaration_NoActivity', 'Y');
   // Sujeto pasivo inscrito en el Registro de devolución mensual (art. 30 RIVA) — read by
   // AEAT303Report.java's MONTHLY_REGISTER constant; box 65 defaults to "not registered"
   // (2) unless this is explicitly "Y" (ETP-5027).
   if (identChecks.redeme === true) params.set('MonthlyRegister', 'Y');
-  // Concurso de acreedores — AEAT303Report2014's "IsConcurso"/"ConcursoType" constants, still
-  // read unchanged through the override chain up to AEAT303Report2025 (ETP-5027).
-  if (identChecks.concurso === true) params.set('IsConcurso', 'Y');
-  if (identChecks.postconcursal === true) params.set('ConcursoType', 'Y');
-  if (identChecks.complementaria === true) {
-    params.set('IsComplementary', 'Y');
-    if (identChecks.nro_justificante) params.set('ComplementaryNo', identChecks.nro_justificante);
-  }
+  applyConcursoParams(params, identChecks);
+  applyComplementariaParams(params, identChecks);
   // Rectificativa (2024+): IsComplementary=Y activates rectAssessment in the AEAT module.
   if (identChecks.rectificativa) applyRectificativaParams(params, identChecks);
 }
@@ -438,6 +479,72 @@ export function deriveResultKind(summary, { hasInvoices = false } = {}) {
   if (amount > 0) return 'I';
   if (amount < 0) return 'C';
   return hasInvoices ? 'zero' : 'N';
+}
+
+// ── Manual-override box merging (ETP-5272 pt.6) ────────────────────
+// Single source of truth for merging a declaration's manual box overrides onto a
+// backend-computed box set and re-deriving the boxes the AEAT 303 formula computes
+// FROM other boxes. Shared by FmModel303Page.jsx (detail view) and FmListPage.jsx
+// (list's own "Resultado" column) — GET /fiscal303/boxes always computes purely
+// from invoice data, with no declaration id and no knowledge of manualOverrides, so
+// every caller that wants the TRUE final result (box 71, "Resultado de la
+// liquidación") rather than the raw backend sub-total (box 46, "Resultado régimen
+// general") must route through these three helpers instead of re-deriving the
+// formula locally — that duplication is exactly how this bug class (ETP-5272)
+// happened in the first place.
+
+// Normalizes the two shapes `boxes` can arrive in — a plain object
+// ({ [boxNum]: value }, e.g. straight off the backend) or an array of
+// { num, value } (e.g. already-merged output from these helpers) — to the array
+// form the other helpers below operate on.
+export function toBoxArray(src) {
+  if (Array.isArray(src)) return src;
+  if (src && typeof src === 'object') return Object.entries(src).map(([n, v]) => ({ num: Number(n), value: v }));
+  return [];
+}
+
+// Merges manualOverrides (decl.manualData.manualOverrides, keyed by box number)
+// onto the backend-computed boxes — an overridden box replaces the computed value,
+// everything else passes through unchanged.
+export function applyOverrides(boxes, overrides) {
+  const ov = overrides ?? {};
+  if (!Object.keys(ov).length) return toBoxArray(boxes);
+  const arr = toBoxArray(boxes);
+  const result = arr.filter(b => !(b.num in ov));
+  Object.entries(ov).forEach(([num, val]) => {
+    if (val != null) result.push({ num: Number(num), value: val });
+  });
+  return result;
+}
+
+// Re-derives every box the AEAT 303 formula computes from other boxes (45, 46, 64,
+// 66, 69, 71) so a manual override on any of their inputs (e.g. 42/43/44, or the
+// territorial-split box 65) is reflected in the final liquidation result. Always
+// call this AFTER applyOverrides.
+export function recomputeDerivedBoxes(boxArr) {
+  const r2 = v => Math.round(v * 100) / 100;
+  const get = num => { const e = boxArr.find(b => b.num === num); return e != null ? (e.value ?? 0) : 0; };
+  const box65entry = boxArr.find(b => b.num === 65);
+  const box65 = box65entry != null ? (box65entry.value ?? 100) : 100;
+  const box45 = r2([29,31,33,35,37,39,41,42,43,44].reduce((s, n) => s + get(n), 0));
+  const box46 = r2(get(27) - box45);
+  const box64 = r2(box46 + get(58) + get(76));
+  const box66 = r2(box64 * box65 / 100);
+  const box69 = r2(box66 + get(77) - get(78) + get(68) + get(108));
+  const box71 = r2(box69 - get(70) + get(109) - get(112));
+  const derived = { 45: box45, 46: box46, 64: box64, 66: box66, 69: box69, 71: box71 };
+  return [
+    ...boxArr.filter(b => !(b.num in derived)),
+    ...Object.entries(derived).map(([num, value]) => ({ num: Number(num), value })),
+  ];
+}
+
+// Reads a single box's value out of the array shape (as returned by
+// applyOverrides/recomputeDerivedBoxes) — null when the box isn't present at all
+// (distinct from a present box whose value is 0).
+export function getBoxValue(liveBoxes, num) {
+  const e = toBoxArray(liveBoxes).find(b => b.num === num);
+  return e ? (e.value ?? 0) : null;
 }
 
 function roundEur(n) {

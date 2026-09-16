@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { formatCurrency } from '../../../../tools/app-shell/src/lib/formatCurrency.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'GoodsShipmentActions.jsx'), 'utf8');
@@ -94,13 +93,21 @@ describe('GoodsShipmentActions', () => {
     });
   });
 
+  // ETP-5260 — the Send button itself (SendDocumentButton) moved to the
+  // topbarSecondary slot (GoodsShipmentSecondaryActions, which gates it on
+  // `isCompleted` — see that component's own test). This component now only
+  // owns the SendDocumentModal (with its PDF/documentType context), opened via
+  // the `goods-shipment:open-send-modal` window event — see the "listens to
+  // goods-shipment:open-confirm-modal"-style wiring assertions below.
   describe('SendDocumentModal integration', () => {
-    it('imports SendDocumentModal and SendDocumentButton', () => {
-      assert.match(src, /import\s+SendDocumentModal\s*,\s*\{[^}]*SendDocumentButton[^}]*\}\s*from/);
+    it('imports SendDocumentModal (but no longer SendDocumentButton — that moved out)', () => {
+      assert.match(src, /import\s+SendDocumentModal\s+from/);
+      assert.doesNotMatch(src, /SendDocumentButton/);
     });
 
-    it('renders SendDocumentButton when completed', () => {
-      assert.match(src, /SendDocumentButton/);
+    it('listens to the goods-shipment:open-send-modal custom event to open its own SendDocumentModal', () => {
+      assert.match(src, /window\.addEventListener\(['"]goods-shipment:open-send-modal['"]/);
+      assert.match(src, /window\.removeEventListener\(['"]goods-shipment:open-send-modal['"]/);
     });
   });
 
@@ -150,55 +157,64 @@ describe('GoodsShipmentActions', () => {
     });
   });
 
-  describe('ConfirmShipmentInvoicedModal — fmtAmount (real currency formatting)', () => {
-    // fmtAmount is not exported (internal to the modal, reachable only via a hard-to-
-    // stage UI state — a draft shipment that already has a linked invoice). Extract
-    // the real function source and eval it directly rather than skip coverage.
-    function extractFunctionSource(source, fnName) {
-      const startIdx = source.search(new RegExp(`const\\s+${fnName}\\s*=\\s*\\([^)]*\\)\\s*=>\\s*\\{`));
-      if (startIdx === -1) throw new Error(`${fnName} not found`);
-      const braceStart = source.indexOf('{', startIdx);
-      let depth = 0;
-      let i = braceStart;
-      for (; i < source.length; i++) {
-        if (source[i] === '{') depth++;
-        else if (source[i] === '}') {
-          depth--;
-          if (depth === 0) break;
-        }
-      }
-      return source.slice(startIdx, i + 1);
-    }
+  // ETP-5265 — the intermediate "already fully invoiced" confirmation popup
+  // (ConfirmShipmentInvoicedModal, now deleted entirely) was removed. Confirming
+  // a fully-invoiced shipment now calls the documentAction endpoint directly via
+  // the canonical useDocumentAction hook — no modal, a loading toast while in
+  // flight, then the same success path the popup used to trigger
+  // (setInvoiceResult({ invoice: null })), or toast.error on failure.
+  describe('fully-invoiced confirm skips the modal and calls documentAction directly (ETP-5265)', () => {
+    it('no longer imports or references the deleted ConfirmShipmentInvoicedModal', () => {
+      assert.doesNotMatch(src, /ConfirmShipmentInvoicedModal/);
+    });
 
-    function getRealFmtAmount() {
-      const fnSource = extractFunctionSource(src, 'fmtAmount');
-      // fmtAmount now delegates to the real, imported formatCurrency() — inject it
-      // into the eval'd scope so the extracted source can still call it.
-      const fn = new Function('formatCurrency', `${fnSource}; return fmtAmount;`);
-      return fn(formatCurrency);
-    }
+    it('imports and uses the canonical useDocumentAction hook', () => {
+      assert.match(src, /import\s*\{[^}]*useDocumentAction[^}]*\}\s*from\s*['"]@\/hooks\/useDocumentAction['"]/);
+      assert.match(src, /useDocumentAction\(\{[^}]*apiBaseUrl[^}]*entity:\s*['"]goodsShipment['"][^}]*token[^}]*\}\)/s);
+    });
 
-    it('groups thousands and uses the real currency symbol, never the raw ISO code', () => {
-      const fmtAmount = getRealFmtAmount();
-      assert.equal(fmtAmount(1234.56, 'EUR'), '1.234,56 €');
-      assert.doesNotMatch(fmtAmount(1234.56, 'EUR'), /EUR/);
+    it('defines handleConfirmFullyInvoiced calling confirmDocAction.execute(recordId, "CO")', () => {
+      assert.match(src, /const handleConfirmFullyInvoiced\s*=\s*useCallback\(async\s*\(\)\s*=>\s*\{/);
+      assert.match(src, /confirmDocAction\.execute\(recordId,\s*['"]CO['"]\)/);
+    });
+
+    it('the open-confirm-modal handler branches on isFullyInvoiced: direct action vs the not-fully-invoiced modal', () => {
+      assert.match(
+        src,
+        /const handler = \(\) => \{\s*if\s*\(isFullyInvoiced\)\s*\{\s*handleConfirmFullyInvoiced\(\);\s*\}\s*else\s*\{\s*setShowConfirmModal\(true\);\s*\}\s*\};/,
+      );
+    });
+
+    it('on success, sets invoiceResult to the no-invoice shape (drives the existing success-toast/refresh effect)', () => {
+      assert.match(src, /await confirmDocAction\.execute\(recordId, ['"]CO['"]\);[\s\S]*?setInvoiceResult\(\{ invoice: null \}\);/);
+    });
+
+    it('on failure, shows toast.error with the error message (or a fallback)', () => {
+      assert.match(src, /catch\s*\(err\)\s*\{\s*toast\.dismiss\(toastId\);\s*toast\.error\(err\.message \|\| ui\(['"]networkError['"]\)\);/);
+    });
+
+    it('shows a loading toast while the request is in flight and dismisses it afterward', () => {
+      assert.match(src, /const toastId = toast\.loading\(ui\(['"]processing['"]\)\);/);
+      assert.match(src, /toast\.dismiss\(toastId\);/);
+    });
+
+    it('guards against re-entrant double-confirm via a ref', () => {
+      assert.match(src, /confirmingFullyInvoicedRef\.current/);
+    });
+
+    it('GoodsShipmentConfirmModal now only renders for the NOT-fully-invoiced flow', () => {
+      assert.match(src, /\{!isCompleted && !isFullyInvoiced && showConfirmModal && \(/);
     });
   });
 
-  // ETP-4717 (Pair 2 — P2) — regression lock-in. Unlike sales-order,
-  // purchase-order, sales-invoice, and sales-quotation, this window already
-  // gates the Send button correctly (Completed/CO only). This test locks that
-  // in so a future shared-logic refactor across the 5 windows cannot silently
-  // regress the one window that already does it right.
-  describe('Send button visibility gated by document status (ETP-4717 — already correct)', () => {
-    it('gates the Send button on isCompleted only (not isDraft || isCompleted)', () => {
-      assert.match(src, /\{isCompleted && <SendDocumentButton/);
-    });
-
-    it('does not also show the Send button while in Draft (DR)', () => {
-      assert.doesNotMatch(src, /\{\(isDraft \|\| isCompleted\) && <SendDocumentButton/);
-    });
-  });
+  // ETP-4717 (Pair 2 — P2) — regression lock-in, relocated by ETP-5260. Unlike
+  // sales-order, purchase-order, sales-invoice, and sales-quotation (fixed
+  // separately), this window already gated the Send button correctly
+  // (Completed/CO only). That gate now lives in GoodsShipmentSecondaryActions
+  // (`showSend={isCompleted}`) — see
+  // artifacts/goods-shipment/custom/__tests__/GoodsShipmentSecondaryActions.test.js,
+  // which is what now locks in "not isDraft || isCompleted" so a future
+  // shared-logic refactor cannot silently regress it.
 
   // ETP-4702 — regression guard. This component used to render its own private
   // kebab popover (menuOpen/menuRef state, previously ~lines 207-237) as a SECOND,

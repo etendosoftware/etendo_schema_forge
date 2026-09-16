@@ -89,11 +89,18 @@ describe('FmListPage — "Resultado" column reads from the correct map', () => {
     useFiscalAutoCompute.mockClear();
     // Echo back a computedMap keyed by whichever decls this specific call
     // received — draft-only vs non-draft-only, per FmListPage.jsx's own split.
+    // ETP-5272 pt.6 — the "Resultado" column now re-derives box 71 from
+    // `computed.boxes` (via recomputeDerivedBoxes/applyOverrides/getBoxValue)
+    // instead of trusting the raw `computed.summary.result` (box 46), so the
+    // mock must carry a `boxes` shape that yields the same 500/-300 through
+    // that derivation (box 27 alone, no other inputs, box65 defaults to 100 —
+    // see fiscalModelsUtils.js's recomputeDerivedBoxes for the full formula).
     useFiscalAutoCompute.mockImplementation((decls) => {
       const map = {};
       decls.forEach(d => {
         if (d.model === '303') {
-          map[d.id] = { summary: { result: d.status === 'draft' ? 500 : -300 }, error: null };
+          const box27 = d.status === 'draft' ? 500 : -300;
+          map[d.id] = { summary: { result: box27 }, error: null, boxes: { 27: box27 } };
         }
       });
       return { computedMap: map };
@@ -144,5 +151,96 @@ describe('FmListPage — "Resultado" column reads from the correct map', () => {
     const texts = Array.from(rows).map(r => r.querySelectorAll('td')[5].textContent);
     expect(texts.some(t => t.includes('500'))).toBe(true);
     expect(texts.some(t => t.includes('300'))).toBe(true);
+  });
+});
+
+// ── "Resultado" merges manualData.manualOverrides (ETP-5272 pt.6) ────────────
+// GET /fiscal303/boxes (the real backend behind `useFiscalAutoCompute`) computes
+// purely from invoice data — no declaration id, no manualOverrides input — so
+// `computed.summary.result` is always the raw box 46 sub-total. The list column
+// must re-derive box 71 from `computed.boxes` merged with this row's own
+// `decl.manualData.manualOverrides` (same helpers FmModel303Page.jsx's detail
+// view uses), never trust the raw backend summary.
+describe('FmListPage — "Resultado" column merges manualData.manualOverrides', () => {
+  const TOKEN = 'test-token';
+  const API_BASE_URL = 'http://host/neo/fiscal-models';
+
+  const makeRow = (overrides) => ({
+    id: `row-${Math.random()}`,
+    model: '303',
+    year: 2026,
+    period: 'T1',
+    type: 'ord',
+    status: 'draft',
+    result: null,
+    incidents: { blocking: 0, warning: 0 },
+    updatedAt: '2026-01-20',
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    useFiscalAutoCompute.mockClear();
+    // `summary.result` is deliberately a stale/wrong value (9999) — the whole
+    // point of these tests is proving the column never falls back to trusting it
+    // once real `boxes` are present.
+    useFiscalAutoCompute.mockImplementation((decls) => {
+      const map = {};
+      decls.forEach(d => {
+        if (d.model === '303') {
+          map[d.id] = { summary: { result: 9999 }, error: null, boxes: { 27: 1000 } };
+        }
+      });
+      return { computedMap: map };
+    });
+    globalThis.fetch = vi.fn((url) => {
+      if (String(url).includes('fiscal-models-catalog')) {
+        return Promise.resolve({ ok: true, json: async () => ({ '303': true, '349': true }) });
+      }
+      return Promise.resolve({ ok: false, status: 404 });
+    });
+  });
+
+  async function waitForCatalogLoad() {
+    await waitFor(() => expect(screen.queryByText('loading')).not.toBeInTheDocument());
+  }
+
+  it('re-derives box 71 from the row\'s manualOverrides instead of the raw backend summary.result', async () => {
+    const decl = makeRow({
+      id: 'override-x',
+      manualData: { manualOverrides: { 42: 500 } },
+    });
+    const { container } = render(
+      <FmListPage declarations={[decl]} token={TOKEN} apiBaseUrl={API_BASE_URL} />
+    );
+    await waitForCatalogLoad();
+
+    const resultCell = container.querySelector('tbody tr').querySelectorAll('td')[5];
+    // box45 = 500 (override on 42), box46 = 1000-500 = 500, and every box downstream
+    // of it (64/66/69/71) carries the same 500 through — see recomputeDerivedBoxes.
+    expect(resultCell.textContent).toContain('500');
+    expect(resultCell.textContent).not.toContain('9999');
+  });
+
+  it('renders the box-71-derived result (no override applied) when manualData is absent', async () => {
+    const decl = makeRow({ id: 'no-override-x' });
+    const { container } = render(
+      <FmListPage declarations={[decl]} token={TOKEN} apiBaseUrl={API_BASE_URL} />
+    );
+    await waitForCatalogLoad();
+
+    const resultCell = container.querySelector('tbody tr').querySelectorAll('td')[5];
+    expect(resultCell.textContent).toContain('1.000');
+    expect(resultCell.textContent).not.toContain('9999');
+  });
+
+  it('an empty manualOverrides object behaves exactly like manualData being absent', async () => {
+    const decl = makeRow({ id: 'empty-override-x', manualData: { manualOverrides: {} } });
+    const { container } = render(
+      <FmListPage declarations={[decl]} token={TOKEN} apiBaseUrl={API_BASE_URL} />
+    );
+    await waitForCatalogLoad();
+
+    const resultCell = container.querySelector('tbody tr').querySelectorAll('td')[5];
+    expect(resultCell.textContent).toContain('1.000');
   });
 });
