@@ -82,11 +82,25 @@ const BOX_PARAM_MAP = {
   44:  'Adjustment_Final_Percentage',// prorrata definitiva
   68:  'AnnualRegularAmt',           // regularización anual prorrata (T4/12 only)
   78:  'PreviousPeriodAmtApplied',   // cuotas a compensar aplicadas en este período
+  89:  'ALAVA',                      // territorio Araba/Álava % (last period only, ETP-5391)
+  90:  'GUIPUZCOA',                  // territorio Gipuzkoa % (last period only, ETP-5391)
+  91:  'VIZCAYA',                    // territorio Bizkaia % (last period only, ETP-5391)
+  92:  'NAVARRA',                    // territorio Navarra % (last period only, ETP-5391)
+  95:  '303REAGYP',                  // régimen especial agricultura/ganadería/pesca (last period only, ETP-5391)
+  97:  '303USED_GOODS',              // bienes usados/objetos de arte/antigüedades (last period only, ETP-5391)
+  98:  '303TRAVEL_AGENCY',           // régimen especial agencias de viajes (last period only, ETP-5391)
+  107: 'ToPublicTreasury',           // territorio común % (last period only, ETP-5391 — SAME key as
+                                     // box 65/atribuible_estado; see AEAT303Report2014.java:818 and
+                                     // AEAT303Report2018LastPeriod's commonTerritory(), both read this
+                                     // one param. Box 65 itself is NOT in this map yet (pre-existing
+                                     // gap, out of ETP-5391's scope — see fm303Layouts.js note).
   108: 'AdministrativeCriteriaDiscrepancy', // discrepancia criterio administrativo (2024+)
   109: 'ReturnsPendingSettlement',   // devoluciones en tramitación (2023+)
   110: 'PreviousPeriodAmt',          // cuotas a compensar pendientes de períodos anteriores
   111: 'RectifyingAmount',           // rectificación. importe (2024+ rectificativa)
   124: 'OSS_SujetaYAcogida',         // operaciones OSS sujetas y acogidas (2021+)
+  127: 'OPSUJETASCONOSS',            // operaciones sujetas y acogidas a la OSS (last period only, ETP-5391)
+  128: 'OPINTRAGRUPO',               // operaciones intragrupo, arts. 78/79 LIVA (last period only, ETP-5391)
 };
 
 /**
@@ -166,6 +180,12 @@ export function applyIdentParams(params, identChecks) {
   applyComplementariaParams(params, identChecks);
   // Rectificativa (2024+): IsComplementary=Y activates rectAssessment in the AEAT module.
   if (identChecks.rectificativa) applyRectificativaParams(params, identChecks);
+  // Modelo 347 exemption checkbox (last period only, ETP-5391). NOT forwarded via
+  // IDENT_PARAM_MAP: AEAT303Report2019.java checks inputParams.get('347TAX_FORM').equals('Y')
+  // literally (unlike Cancel_Modify_Debit's mere-presence check above), so this must send the
+  // exact string 'Y' rather than IDENT_PARAM_MAP's raw boolean forwarding (which would send the
+  // string 'true' and never match).
+  if (identChecks.declaracion_terceros === true) params.set('347TAX_FORM', 'Y');
 }
 
 function applyBoxParams(params, manualOverrides) {
