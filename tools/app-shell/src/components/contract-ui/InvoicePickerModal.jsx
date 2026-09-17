@@ -36,7 +36,7 @@ export default function InvoicePickerModal({
   title,
   zIndex = 50,
   idPrefix = 'invoice-picker',
-  maxVisible = 50,
+  maxVisible = 5,
 }) {
   const ui = useUI();
   const [search, setSearch] = useState('');
@@ -46,7 +46,12 @@ export default function InvoicePickerModal({
     setDraft(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
 
   const label = (inv) => inv.documentNo || inv._identifier || inv.id;
-  const partner = (inv) => inv.businessPartner || inv['businessPartner$_identifier'] || '';
+  // `businessPartner$_identifier` FIRST, and not the other way round: rows coming from the NEO
+  // header entity carry the raw id in `businessPartner` and the display name in the `$_identifier`
+  // twin, so reading `businessPartner` first renders a UUID at the user. Rows from the
+  // rectifiableInvoices action have no `$_identifier` and put the name in `businessPartner`, which
+  // is why both are read at all.
+  const partner = (inv) => inv['businessPartner$_identifier'] || inv.businessPartner || '';
   const amount = (inv) => inv.grandTotalAmount ?? inv.grandTotalAmt;
 
   const { filtered, hiddenCount } = useMemo(() => {

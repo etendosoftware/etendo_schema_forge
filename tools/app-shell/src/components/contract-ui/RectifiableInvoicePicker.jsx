@@ -248,15 +248,16 @@ export function RectifiableInvoiceField({
  * overlay at 70, which ETP-5108 established must stay on top.
  */
 export function RectifiableInvoicePickerModal({ invoices, selectedIds, onApply, onClose, idPrefix = 'rectify' }) {
-  const ui = useUI();
   return createPortal(
+    // Title and page size are deliberately NOT overridden: this has to read as the very same picker
+    // the Rectificaciones tab shows, so the only visible difference is the checkbox `multiple` adds.
+    // Passing a custom title and a larger maxVisible made it look like a second, unrelated dialog.
     <InvoicePickerModal
       invoices={invoices}
       multiple
       selectedIds={selectedIds}
       onApply={onApply}
       onClose={onClose}
-      title={ui('invoiceToRectifyLabel')}
       idPrefix={idPrefix}
       // Above the host modal (the app's modal tier is 50) but below the walkthrough overlay at 70,
       // which ETP-5108 established must stay on top.
