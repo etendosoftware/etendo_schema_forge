@@ -3,7 +3,7 @@ import { EntityForm } from '@/components/contract-ui';
 // @sf-generated-start fields:binContents
 const fields = [
   { key: 'product', column: 'M_Product_ID', type: 'search', label: 'Product', required: true, section: 'principal', reference: 'Product', inputMode: 'search' },
-  { key: 'attributeSetValue', column: 'M_AttributeSetInstance_ID', type: 'text', label: 'Attribute Set Value', readOnly: true, section: 'other' },
+  { key: 'attributeSetValue', column: 'M_AttributeSetInstance_ID', type: 'text', label: 'Attribute Set Value', readOnly: true, section: 'other', maxLength: 12 },
   { key: 'lastInventoryCountDate', column: 'DateLastInventory', type: 'date', label: 'Last Inventory Count Date', readOnly: true, section: 'other' },
   { key: 'uOM', column: 'C_UOM_ID', type: 'selector', label: 'UOM', required: true, section: 'principal', reference: 'UOM', inputMode: 'selector' },
   { key: 'orderUOM', column: 'M_Product_Uom_Id', type: 'selector', label: 'Order UOM', section: 'principal', reference: 'Product_Uom', inputMode: 'selector' },

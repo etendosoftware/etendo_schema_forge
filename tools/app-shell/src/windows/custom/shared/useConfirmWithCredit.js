@@ -44,6 +44,7 @@ export function useConfirmWithCredit({
         throw new Error(err?.response?.message || err?.message || `Error (${res.status})`);
       }
       const invData = (await res.json())?.response?.data;
+      setShowModal(false);
       setResult({
         title: ui(invoiceCreatedTitleKey),
         docs: invData?.id ? [{
@@ -58,7 +59,7 @@ export function useConfirmWithCredit({
     } finally {
       setCreatingInvoice(false);
     }
-  }, [data, recordId, apiFetch, ui, creatingInvoice, entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey]);
+  }, [data, recordId, apiFetch, ui, creatingInvoice, entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey, setShowModal]);
 
   const buildInvoiceResultFromConfirm = useCallback((invoice) => {
     if (!invoice?.id) return null;

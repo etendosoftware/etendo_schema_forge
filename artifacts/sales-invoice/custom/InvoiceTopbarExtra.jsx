@@ -276,7 +276,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-info-bg)', border: '1px solid var(--status-info-border)', color: 'hsl(var(--primary))', fontVariantNumeric: 'tabular-nums' }}
         >
           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--primary))' }} />
-          {ui('cpFavorBadge')} · {fmt(outstandingAbs, currency)}
+          {ui('cpFavorBadge')} {fmt(outstandingAbs, currency)}
         </button>
         {showPaymentsModal && (
           <InvoicePaymentHistoryModal

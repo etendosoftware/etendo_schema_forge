@@ -368,7 +368,9 @@ chip, forever — not merely delayed. This is a timing-dependent race (QA's orig
 not to hit it), not a regression from any other change.
 
 `CreateDocsModal` (the separate "Gestionar" modal for already-`CO` orders, further down in the
-same file) never had this bug — it already dispatched once, after its POST(s) resolved.
+same file) never had this bug — it already dispatched the event once, after its POST(s) resolved,
+correctly notifying `RelatedDocuments.jsx`. That dispatch was always correct; a separate,
+still-open gap remained in the same file until ETP-5315 (see below).
 
 **Fix:** moved the dispatch in `handleConfirm` to fire once, after Steps 2/3 both settle, right
 before `onConfirmed({...})` — mirroring `CreateDocsModal.handleCreate`'s already-correct
@@ -386,6 +388,24 @@ Same fix pattern, same file shape, as
 `docs/generated-custom-windows/purchase-order.md`'s "Related Documents auto-refresh — ETP-4779"
 section — read that one for the fuller before/after narrative (missing-listener pass +
 premature-dispatch pass) since both bugs were found and fixed in the same two-pass sequence.
+
+**Gestionar button refresh — ETP-5315.** A related, separate gap in the same file:
+`OrderCreateInvoice.jsx`'s own topbar button (the "Gestionar envío y factura" trigger, the same
+component that owns `ConfirmModal`/`CreateDocsModal` above) renders its label and visibility from
+its own `fetched` state (shipments/invoices/orderLines), loaded once on mount by a `useEffect`
+keyed on `[isCompleted, recordId, base, headers, apiBaseUrl]`. Like `purchase-order`'s sibling
+component before its own ETP-5315 fix, this component never listened for the
+`sales-order:document-created` event itself — so after creating a shipment/invoice through its own
+"Gestionar" modal (`CreateDocsModal`, whose dispatch was always correct, per above), the button
+kept showing its pre-creation label/visibility until the user switched Grilla→Formulario and back,
+remounting the component. In the meantime the user could reopen the same modal and create a
+duplicate document. Fixed the same way: added a `refreshKey` counter — mirroring the pattern
+already used by the sibling `topbarExtra` component `OrderDraftChips.jsx` for the same event —
+bumped by a new listener effect, and included it in the fetch effect's dependency array, forcing a
+refetch without touching the effect's existing cancellation/early-return guards. See
+`docs/generated-custom-windows/purchase-order.md`'s "Related Documents auto-refresh — ETP-4779"
+section (item 3) for the fuller root-cause writeup — same file shape, same fix pattern. Regression
+test: `tools/app-shell/src/windows/custom/sales-order/__tests__/OrderCreateInvoice.manageButtonRefresh.vitest.jsx`.
 
 ## Printable — generic tax labels and document currency — ETP-5125
 

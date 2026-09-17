@@ -6,7 +6,7 @@ import ConfirmWithCreditButtonBase from '../shared/ConfirmWithCreditButtonBase';
 // now lives in ReturnMaterialReceiptSecondaryActions (topbarSecondary, left of
 // Save/Confirm). ConfirmWithCreditButtonBase is a PRIMARY action available in
 // Borrador (ETP-4933) and stays here in topbarRight — do not move it.
-export default function ConfirmWithCreditButton({ data, recordId, token, apiBaseUrl, onSave, isDirty, saveGate }) {
+export default function ConfirmWithCreditButton({ data, recordId, token, apiBaseUrl, onSave, isDirty, saveGate, onRefresh }) {
   const ui = useUI();
   return (
     <>
@@ -18,6 +18,7 @@ export default function ConfirmWithCreditButton({ data, recordId, token, apiBase
         onSave={onSave}
         isDirty={isDirty}
         saveGate={saveGate}
+        onRefresh={onRefresh}
         entitySegment="returnMaterialReceipt"
         invoiceRoute="/sales-invoice/"
         invoiceType="facturaVenta"

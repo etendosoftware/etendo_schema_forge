@@ -1,8 +1,8 @@
 {
   "version": "0.48.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-08-28T15:51:04.433Z",
-  "checksum": "03903b84bac83ab0",
+  "updatedAt": "2026-09-14T15:11:32.464Z",
+  "checksum": "ba952abe392278fa",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -27,7 +27,17 @@
         "topbarExtra": "PurchaseOrderDraftChips",
         "bottomSection": "PurchaseOrderBottomPanel"
       },
-      "menuActions": [],
+      "menuActions": [
+        {
+          "key": "reactivate",
+          "label": "Reactivate",
+          "labelKey": "reactivate",
+          "visibleWhenStatus": "CO",
+          "visibleWhenFieldFalse": "hasLinkedDocuments",
+          "documentAction": "RE",
+          "successKey": "reactivated"
+        }
+      ],
       "secondaryTabs": {},
       "documentDateField": "orderDate",
       "labelOverrides": {
@@ -2728,7 +2738,17 @@
         "topbarExtra": "PurchaseOrderDraftChips",
         "bottomSection": "PurchaseOrderBottomPanel"
       },
-      "menuActions": [],
+      "menuActions": [
+        {
+          "key": "reactivate",
+          "label": "Reactivate",
+          "labelKey": "reactivate",
+          "visibleWhenStatus": "CO",
+          "visibleWhenFieldFalse": "hasLinkedDocuments",
+          "documentAction": "RE",
+          "successKey": "reactivated"
+        }
+      ],
       "secondaryTabs": {},
       "documentDateField": "orderDate",
       "labelOverrides": {
