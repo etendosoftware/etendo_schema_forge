@@ -251,20 +251,20 @@ const G1_DEBT = new Set([
  * ETP-4576 — the two `app-shell/src` entries are NOT debt and must stay: neither
  * `token` is a session credential. `mixpanel.js` gates on the Mixpanel project
  * token, and `InviteAcceptancePage` on the invitation token from the emailed link,
- * which IS that request's credential. Everything else on this surface was migrated.
+ * which IS that request's credential. Everything else on this surface was migrated —
+ * `lib/authMethodsApi.js` last, see the note in the list below.
  */
 const G2_DEBT = new Set([
   // Not debt — see above: neither token is the session credential.
   'lib/observability/providers/mixpanel.js',
   'pages/InviteAcceptancePage.jsx',
-  // Arrived with develop (ETP-5115, account sign-in methods), not from this branch.
-  // The line the pattern matches is a localStorage write-guard rather than a request
-  // gate, so on that count it is a false positive — but the module is debt for a
-  // stronger reason: it reads its credential from `sf_platform_token`, one of the keys
-  // `purgeLegacyAuthStorage` deletes on mount, so under the cookie session it removes a
-  // method with no credential at all. Fixing that is ETP-5115's call, not this branch's;
-  // recorded here so the ratchet keeps holding for everything else.
-  'lib/authMethodsApi.js',
+  // `lib/authMethodsApi.js` was listed here (ETP-5115 arrived with develop reading its
+  // credential out of `sf_platform_token`, a key `purgeLegacyAuthStorage` deletes, so under
+  // the cookie session the removal went out with no credential at all). ETP-4576 moved it to
+  // `apiFetch`, which resolves the credential from the active scheme, and both the
+  // `readPlatformToken`/`writePlatformToken` accessors went with it — so there is no token
+  // left to gate on and the entry is gone. Do not put it back: the G2 accuracy check below
+  // fails on a stale entry precisely so this list cannot outlive its reason.
   // -- artifacts/<window>/custom (ETP-4576) ----------------------------------
   // Same measured-not-migrated batch as G1's. A `!token` gate here is the silent
   // failure at its most literal: the window's panel renders, and its action simply

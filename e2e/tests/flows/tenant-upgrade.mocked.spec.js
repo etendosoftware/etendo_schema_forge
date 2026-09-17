@@ -41,8 +41,16 @@ function ndjsonBody({ success = true } = {}) {
 }
 
 /**
- * Seeds the account-level token `getPlatformToken()` reads. `login()` only seeds
- * the ERP session token, and tenant creation authenticates with the platform one.
+ * Seeds a LEGACY key, on purpose, and expects it to change nothing.
+ *
+ * It used to be the account-level token `getPlatformToken()` read and handed to
+ * `buildAuthHeaders`, which puts whatever it receives into `X-Go-CSRF`. ETP-4576 —
+ * `purgeLegacyAuthStorage` deletes this key, so the value was always null and both checkout
+ * POSTs went out with no proof of intent while the environments GET beside them kept working
+ * (the browser attaches the session cookie itself and a read needs no proof). Both readers are
+ * gone: the whole flow authenticates with the `__Host-` session `login()` establishes, and
+ * `apiFetch` adds the proof on the writes. The seed stays so this file also covers the upgrade
+ * running against a browser that still has an entry left over from an older release.
  */
 async function seedPlatformToken(page) {
   await page.addInitScript(() => {

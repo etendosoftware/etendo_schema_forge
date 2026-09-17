@@ -472,13 +472,12 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         return;
       }
 
-      if (data.token) {
-        try {
-          globalThis.localStorage?.setItem('sf_platform_token', data.token);
-        } catch {
-          // Ignore
-        }
-      }
+      // ETP-4576 — the token the legacy backend still returns here is deliberately DROPPED.
+      // `sf_platform_token` is a legacy auth key: `purgeLegacyAuthStorage` deletes it, so storing
+      // it wrote a credential into the very storage this migration exists to empty, and left it
+      // racing the purge. Under the cookie session the session arrives as the `__Host-` cookie the
+      // browser installs on its own, and the screen below enters the company through
+      // `enterByClientName`, which reads the credential from the active scheme — never from here.
 
       clearTokenFromUrl();
       setSuccessData({
