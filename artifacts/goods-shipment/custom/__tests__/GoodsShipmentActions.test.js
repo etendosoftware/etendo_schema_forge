@@ -162,9 +162,14 @@ describe('GoodsShipmentActions', () => {
   // ETP-5265 — the intermediate "already fully invoiced" confirmation popup
   // (ConfirmShipmentInvoicedModal, now deleted entirely) was removed. Confirming
   // a fully-invoiced shipment now calls the documentAction endpoint directly via
-  // the canonical useDocumentAction hook — no modal, a loading toast while in
-  // flight, then the same success path the popup used to trigger
-  // (setInvoiceResult({ invoice: null })), or toast.error on failure.
+  // the canonical useDocumentAction hook — no modal, then the same success path the
+  // popup used to trigger (setInvoiceResult({ invoice: null })), or toast.error on
+  // failure.
+  //
+  // ETP-5265 QA follow-up — the in-flight feedback is no longer a floating
+  // toast.loading card: the promise is handed back through the CustomEvent `detail`
+  // so the core's Confirm button shows its own spinner (see runDraftModeConfirm in
+  // tools/app-shell/src/components/contract-ui/saveActions.jsx).
   describe('fully-invoiced confirm skips the modal and calls documentAction directly (ETP-5265)', () => {
     it('no longer imports or references the deleted ConfirmShipmentInvoicedModal', () => {
       assert.doesNotMatch(src, /ConfirmShipmentInvoicedModal/);
@@ -183,21 +188,77 @@ describe('GoodsShipmentActions', () => {
     it('the open-confirm-modal handler branches on isFullyInvoiced: direct action vs the not-fully-invoiced modal', () => {
       assert.match(
         src,
-        /const handler = \(\) => \{\s*if\s*\(isFullyInvoiced\)\s*\{\s*handleConfirmFullyInvoiced\(\);\s*\}\s*else\s*\{\s*setShowConfirmModal\(true\);\s*\}\s*\};/,
+        /const handler = \(e\) => \{\s*if\s*\(isFullyInvoiced\)\s*\{\s*if \(e\?\.detail\) e\.detail\.promise = handleConfirmFullyInvoiced\(\);\s*else handleConfirmFullyInvoiced\(\);\s*\}\s*else\s*\{\s*setShowConfirmModal\(true\);\s*\}\s*\};/,
       );
     });
 
-    it('on success, sets invoiceResult to the no-invoice shape (drives the existing success-toast/refresh effect)', () => {
-      assert.match(src, /await confirmDocAction\.execute\(recordId, ['"]CO['"]\);[\s\S]*?setInvoiceResult\(\{ invoice: null \}\);/);
+    // ETP-5265 QA follow-up — this assignment is the whole mechanism behind the
+    // spinner: without it the core awaits `undefined` and the button never goes busy.
+    // The else-branch fallback keeps a bare CustomEvent (no detail) working.
+    it('hands the in-flight promise back to the core through the event detail', () => {
+      assert.match(src, /e\.detail\.promise = handleConfirmFullyInvoiced\(\);/);
+      assert.match(src, /else handleConfirmFullyInvoiced\(\);/);
     });
 
-    it('on failure, shows toast.error with the error message (or a fallback)', () => {
-      assert.match(src, /catch\s*\(err\)\s*\{\s*toast\.dismiss\(toastId\);\s*toast\.error\(err\.message \|\| ui\(['"]networkError['"]\)\);/);
+    // The modal branch must NOT set detail.promise — opening a modal is instantaneous,
+    // and a resolved-but-assigned promise would make the button flash a spinner.
+    it('the not-fully-invoiced branch leaves detail.promise unset', () => {
+      const handlerIdx = src.indexOf('const handler = (e) =>');
+      assert.notEqual(handlerIdx, -1);
+      const elseIdx = src.indexOf('setShowConfirmModal(true);', handlerIdx);
+      assert.notEqual(elseIdx, -1);
+      assert.doesNotMatch(src.slice(elseIdx, elseIdx + 120), /detail\.promise/);
     });
 
-    it('shows a loading toast while the request is in flight and dismisses it afterward', () => {
-      assert.match(src, /const toastId = toast\.loading\(ui\(['"]processing['"]\)\);/);
-      assert.match(src, /toast\.dismiss\(toastId\);/);
+    // ETP-5265 QA follow-up (2) — the fully-invoiced branch no longer routes through
+    // setInvoiceResult: that setter's effect toasts AND refreshes but cannot be awaited,
+    // so it could not hold the Confirm button busy. It toasts inline instead, at the same
+    // point the native draftMode path does (right after the action POST, before the
+    // refetch — see useEntity's handleSaveAndProcess), and then AWAITS onRefresh so the
+    // button spins until the refreshed record is on screen.
+    it('on success, toasts inline and then awaits onRefresh (busy until the record is back)', () => {
+      assert.match(
+        src,
+        /await confirmDocAction\.execute\(recordId, ['"]CO['"]\);[\s\S]*?toast\.success\(ui\('goodsShipment\.confirmModal\.confirmedTitle'\)\);[\s\S]*?await Promise\.resolve\(onRefresh\?\.\(\)\)/,
+      );
+    });
+
+    it('the success toast fires BEFORE the awaited refresh, mirroring the native path', () => {
+      const toastIdx = src.indexOf("toast.success(ui('goodsShipment.confirmModal.confirmedTitle'));");
+      const refreshIdx = src.indexOf('await Promise.resolve(onRefresh?.())');
+      assert.notEqual(toastIdx, -1);
+      assert.notEqual(refreshIdx, -1);
+      assert.ok(toastIdx < refreshIdx, 'toast.success must precede the awaited refresh');
+    });
+
+    // A refetch failure is NOT a failed confirmation — it must never reach toast.error.
+    it('swallows a refresh rejection so it cannot be reported as a failed confirm', () => {
+      assert.match(src, /await Promise\.resolve\(onRefresh\?\.\(\)\)\.catch\(\(\) => \{\}\);/);
+    });
+
+    it('on POST failure, shows toast.error with the error message (or a fallback) and stops', () => {
+      assert.match(
+        src,
+        /catch\s*\(err\)\s*\{[\s\S]{0,160}?toast\.error\(err\.message \|\| ui\(['"]networkError['"]\)\);\s*return;/,
+      );
+    });
+
+    // The ETP-5063 effect still exists and still serves GoodsShipmentConfirmModal's
+    // onConfirmed — only the fully-invoiced branch stopped using it.
+    it('keeps the setInvoiceResult effect alive for the modal path', () => {
+      assert.match(src, /if \(invoiceResult && !invoiceResult\.invoice\?\.id\) \{/);
+    });
+
+    it('depends on onRefresh in the useCallback dependency array', () => {
+      assert.match(src, /\}, \[confirmDocAction\.execute, recordId, ui, onRefresh\]\);/);
+    });
+
+    // ETP-5265 QA follow-up — QA explicitly rejected the floating "processing" card:
+    // "debería estar en el botón de Procesar el spinner (como al procesar una factura)".
+    // The button-side spinner is covered in DetailView.saveButtons.vitest.jsx.
+    it('shows NO loading toast — the in-flight feedback is the Confirm button spinner', () => {
+      assert.doesNotMatch(src, /toast\.loading/);
+      assert.doesNotMatch(src, /toast\.dismiss/);
     });
 
     it('guards against re-entrant double-confirm via a ref', () => {

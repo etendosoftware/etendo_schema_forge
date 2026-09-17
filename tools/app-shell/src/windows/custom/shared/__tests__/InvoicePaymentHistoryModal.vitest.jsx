@@ -1143,4 +1143,88 @@ describe('InvoicePaymentHistoryModal', () => {
       openSpy.mockRestore();
     });
   });
+
+  // ETP-5253 regression: the modal used to render a shorter box for the loading skeleton than
+  // for the empty/populated states, so it visibly resized as it settled. BODY_MIN_HEIGHT (200)
+  // is now threaded through as `bodyMinHeight` and applied as an inline `minHeight` on all three
+  // render branches of PaymentHistoryBody — this locks that floor in place.
+  describe('body minHeight floor (ETP-5253)', () => {
+    it('applies the 200px minHeight floor to the loading skeleton', async () => {
+      // A never-resolving fetch keeps `loading` true forever, so the skeleton stays mounted.
+      useApiFetch.mockReturnValue(vi.fn(() => new Promise(() => {})));
+      render(
+        <InvoicePaymentHistoryModal
+          invoiceId="42"
+          invoiceData={INVOICE_DATA}
+          specName="sales-invoice"
+          apiBaseUrl="http://host/sws/neo/sales-invoice"
+          onClose={vi.fn()}
+        />,
+      );
+      const skeleton = await screen.findByTestId('InvoicePaymentHistoryModal__skeleton');
+      expect(skeleton.style.minHeight).toBe('200px');
+    });
+
+    it('applies the 200px minHeight floor to the empty state (CP-2)', async () => {
+      useApiFetch.mockReturnValue(makeApiFetch([]));
+      render(
+        <InvoicePaymentHistoryModal
+          invoiceId="42"
+          invoiceData={INVOICE_DATA}
+          specName="sales-invoice"
+          apiBaseUrl="http://host/sws/neo/sales-invoice"
+          onClose={vi.fn()}
+        />,
+      );
+      const empty = await screen.findByTestId('InvoicePaymentHistoryModal__empty');
+      expect(empty.style.minHeight).toBe('200px');
+    });
+
+    it('applies the 200px minHeight floor to a populated list with a single row', async () => {
+      useApiFetch.mockReturnValue(makeApiFetch([
+        { id: 'p1', documentNo: 'PAY-001', paymentDate: '2026-01-01', amount: '500', status: 'RPR' },
+      ]));
+      render(
+        <InvoicePaymentHistoryModal
+          invoiceId="42"
+          invoiceData={INVOICE_DATA}
+          specName="sales-invoice"
+          apiBaseUrl="http://host/sws/neo/sales-invoice"
+          onClose={vi.fn()}
+        />,
+      );
+      const list = await screen.findByTestId('InvoicePaymentHistoryModal__list');
+      // The minHeight lives on the parent wrapping the header row + the list, not on the
+      // list element itself — see the outer <div> in the populated branch of PaymentHistoryBody.
+      expect(list.parentElement.style.minHeight).toBe('200px');
+    });
+
+    it('keeps the same 200px floor for a populated list with many rows (floor, not a cap)', async () => {
+      const manyPayments = Array.from({ length: 20 }, (_, i) => ({
+        id: `p${i}`,
+        documentNo: `PAY-${String(i).padStart(3, '0')}`,
+        paymentDate: '2026-01-01',
+        amount: '10',
+        status: 'RPR',
+      }));
+      useApiFetch.mockReturnValue(makeApiFetch(manyPayments));
+      render(
+        <InvoicePaymentHistoryModal
+          invoiceId="42"
+          invoiceData={INVOICE_DATA}
+          specName="sales-invoice"
+          apiBaseUrl="http://host/sws/neo/sales-invoice"
+          onClose={vi.fn()}
+        />,
+      );
+      await waitFor(() =>
+        expect(screen.getAllByTestId('InvoicePaymentHistoryModal__row')).toHaveLength(20),
+      );
+      const list = screen.getByTestId('InvoicePaymentHistoryModal__list');
+      // Same minHeight regardless of row count, and there is no maxHeight anywhere on this
+      // container to defeat — the 20-row list is free to grow past the 200px floor.
+      expect(list.parentElement.style.minHeight).toBe('200px');
+      expect(list.parentElement.style.maxHeight).toBe('');
+    });
+  });
 });

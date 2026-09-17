@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useUI, useMenuLabel } from '@/i18n';
 import { useGlobalSearch } from '@/components/global-search/GlobalSearchContext.jsx';
+import { useAuth } from '@/auth/AuthContext.jsx';
+import { useFeatureFlag, ACCT_PROCESS_MONITOR, PUBLIC_API_KEYS } from '@/lib/flags';
 import { useVectorSearchContracts } from '@/hooks/useVectorSearchContracts.js';
 import { useRecentSearches } from '@/hooks/useRecentSearches.js';
 import { useVectorSearch } from '@/hooks/useVectorSearch.js';
@@ -91,6 +93,9 @@ export function CommandPalette() {
   const initializedScopeTarget = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const { capabilities } = useAuth();
+  const accountingProcessMonitorEnabled = useFeatureFlag(ACCT_PROCESS_MONITOR);
+  const publicApiKeysEnabled = useFeatureFlag(PUBLIC_API_KEYS);
   const ui = useUI();
   const tMenu = useMenuLabel();
   const vectorSearchTargets = useMemo(
@@ -501,7 +506,13 @@ export function CommandPalette() {
         {relatedVectorMatches.length > 0 && !vectorMatchesConcentrated && <CommandGroup heading={ui('relatedSearchResults')} data-testid="vector-search-related">{relatedVectorMatches.map(renderVectorMatch)}</CommandGroup>}
         {menuConfig.menu.filter(g => !g.hidden).map((group) => {
           const Icon = ICON_MAP[group.icon] || Package;
-          const visibleItems = group.items.filter(i => !i.hidden);
+          const featureFlagValues = {
+            [ACCT_PROCESS_MONITOR]: accountingProcessMonitorEnabled,
+            [PUBLIC_API_KEYS]: publicApiKeysEnabled,
+          };
+          const visibleItems = group.items.filter(i => !i.hidden
+            && (!i.featureFlag || featureFlagValues[i.featureFlag] === true)
+            && (!i.capability || capabilities?.[i.capability] === true));
           if (visibleItems.length === 0) return null;
           return (
             <CommandGroup

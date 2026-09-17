@@ -11,6 +11,22 @@ Execution requires `DRY_RUN=0` explicitly.
 - Profiles: `pipelines/ci-parity-profiles.json`
 - Targets: `make ci-parity`, `make ci-parity-help`
 
+The report also includes a read-only health check for the committed AD dictionary
+cache (`cli/cache/ad-snapshot/`). This makes cache alignment visible in the same
+parity report as module/branch alignment. Use `CHECK_CACHE=1` when the cache must be
+a blocking precondition; otherwise a missing or invalid cache is reported with the
+refresh action but does not block module-only verification.
+
+```bash
+make ci-parity PHASES=verify JSON=1 NO_FETCH=1
+make ci-parity PHASES=verify CHECK_CACHE=1
+```
+
+The actual offline drift gate is `make regen-check`: it preflights the cache and
+stops before classifying XML differences when the snapshot is not trustworthy. A
+cache refresh is explicit: `make regen CACHE_DB=1` (or `ONLY=<spec>` for a scoped
+refresh), followed by `make regen-check FROM_CACHE=1`.
+
 ---
 
 ## 1. What CI actually does
@@ -308,12 +324,17 @@ fails the command.
 
 ### `align` — make the module set match
 
-- **MISSING** → `git clone <ssh url>` into `modules/`, then the expected checkout chain.
+- **MISSING** → if a preserved checkout exists under `.modules-disabled/`, the newest
+  matching entry is restored into `modules/`; otherwise `git clone <ssh url>` is used,
+  followed by the expected checkout chain. Matching is based on the module name, so
+  timestamp/version suffixes from previous tool versions remain usable.
   For an `ungrounded` module, the clone runs with **no** checkout: it lands on the remote
   default branch.
 - **DRIFT** → `git fetch --all --prune` then the expected checkout chain.
 - **EXTRA / STRAY** → **moved** to `<core>/.modules-disabled/<name>.<timestamp>/`.
   Never `rm -rf`, never `git clean`.
+- Previous parked copies are never deleted or overwritten. If more than one copy exists,
+  `align` restores the newest one and leaves older copies available for recovery.
 - **EXCLUDED** → prints `SKIPPED` plus the reason; touches nothing.
 
 A `DIRTY-BUILD` module already on its expected branch needs no step: the dirt is tracked
@@ -399,6 +420,7 @@ In dry run the diff is printed, redacted.
 | `ALLOW_LOCAL_SID` | unset | `1` permits a target sid equal to the local dev sid. |
 | `JSON` | unset | `1` = machine-readable report. **Report-only**: `JSON=1` never executes, even with `DRY_RUN=0`. |
 | `NO_FETCH` | unset | `1` = offline mode: do not refresh remote refs before measuring freshness. The report labels results as cached. |
+| `CHECK_CACHE` | unset | `1` = fail if the committed AD cache is missing, empty, malformed, or has invalid checksums. |
 | `HELP` | unset | `1` = same as `make ci-parity-help`. |
 
 `PHASES`, `DRY_RUN`, `PROFILE` and `BBDD_SID` are names **already used by unrelated

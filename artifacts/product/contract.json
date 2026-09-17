@@ -1,8 +1,8 @@
 {
-  "version": "0.11.0",
+  "version": "0.12.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-09-11T17:31:31.863Z",
-  "checksum": "bad220067d7dd649",
+  "updatedAt": "2026-09-15T16:30:42.198Z",
+  "checksum": "f8449fb0215dd691",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -260,6 +260,12 @@
             "validation": {
               "required": true,
               "maxLength": 40
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "searchKey",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -303,6 +309,12 @@
             "validation": {
               "required": true,
               "maxLength": 60
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "name",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -373,6 +385,12 @@
               "code": "Issummary='N'",
               "contextParams": [],
               "cascadeParams": []
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "category",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -458,6 +476,12 @@
             "explicitType": true,
             "validation": {
               "maxLength": 255
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "description",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -748,6 +772,12 @@
             },
             "validation": {
               "maxLength": 22
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "salePrice",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -768,6 +798,12 @@
             },
             "validation": {
               "maxLength": 22
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "stock",
+              "type": "passthrough",
+              "handlerId": null
             }
           }
         ],

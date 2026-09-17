@@ -793,6 +793,29 @@ native app-shell UI; only the bank login is an external popup.
 - **Provider memory:** creating an account offline with a real Salt Edge provider selected stores
   that provider on the FA (`psd2Provider` FK, metadata only — the account stays offline). A later
   connect then preselects that bank, so the Salt Edge widget skips the bank picker.
+- **Sandbox/fake banks are offered to Demo tenants only (ETP-5344).** Whether the Salt Edge widget
+  lists test banks alongside the real ones is decided by `handleConnect` and passed down as the
+  `includeSandboxes` argument of `SaltEdgeConnectionBuilder.createSaltEdgeConnection`, which is the only
+  thing that puts `include_sandboxes` in the consent body. Two conditions, both required: the PSD2
+  module's own `PSD2_ShowFakeProviders` preference must be `Y` (an operator who turns it off is
+  never overridden), **and** the tenant must not carry `ETGO_TenantPlan = productive`. A tenant that
+  paid for its plan is connecting its real bank and has no use for test providers; a Demo tenant
+  needs them to exercise the flow without real credentials. This is the same demo/productive signal
+  (`TenantPlanService#resolvePlan`) that `OnboardingForceTestModeService` uses to keep Demo tenants'
+  fiscal submissions in test mode, and absence of the plan marker reads back as Demo.
+  - `com.etendoerp.go` ships the System-level `PSD2_ShowFakeProviders='Y'` row (its only
+    `AD_PREFERENCE.xml` entry) so the preference is on everywhere and the plan is what
+    discriminates. That row carries **`SELECTED='Y'` and must keep it**: the PSD2 module ships its
+    own System row at `'N'`, and two System rows with different values and no `Selected` flag make
+    `Preferences.getHighestPriority` report a conflict — `isFakeProvidersEnabled()` swallows the
+    resulting `PropertyConflictException` and returns `false`, which would silently disable fake
+    banks for every tenant, Demo included.
+  - The plan is read **live on every connect**, not cached into a preference, so upgrading a tenant
+    takes effect on its next connection with no data-fix and nothing to re-run.
+  - Unaffected on purpose: the offline bank picker (`BankPicker` → `GET ?action=providers`) never
+    lists sandbox providers in any tenant — its middleware query omits `include_sandboxes`, and Salt
+    Edge keeps sandboxes under `country_code=XF` while the picker only queries `ES`. The PIS
+    (payments) flow and the `SyncBankProviders` catalog job still decide from the preference alone.
 - **Sync statements:** bank-synced accounts run the PSD2 module per-account statement fetch (the
   Classic "Get Bank Statement" equivalent) from the row-hover sync icon, the kebab "Sincronizar
   ahora", the Edit modal "Sincronizar ahora", and — on the Imported Statements tab — a dedicated
