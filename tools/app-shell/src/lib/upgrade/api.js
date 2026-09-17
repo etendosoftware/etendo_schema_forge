@@ -96,6 +96,19 @@ export async function getBillingOverview(fetchImpl, baseUrl, token) {
   return data || { purchases: [] };
 }
 
+/** Reads the server-owned productive offer used to render purchase terms. */
+export async function getBillingOffer(fetchImpl, baseUrl, token) {
+  const response = await fetchImpl(`${baseUrl}/sws/go/billing/offers`, {
+    headers: buildAuthHeaders(token),
+  });
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
+      : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message, response.status);
+  }
+  return data;
+}
+
 /** Reads one account-scoped purchase without exposing provider identifiers. */
 export async function getBillingPurchase(fetchImpl, baseUrl, token, purchaseId) {
   const response = await fetchImpl(

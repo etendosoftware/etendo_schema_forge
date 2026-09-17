@@ -7,6 +7,7 @@ import {
   createCheckoutSession,
   createBillingPurchase,
   getBillingOverview,
+  getBillingOffer,
   getBillingPurchase,
 } from '../upgrade/api.js';
 
@@ -51,6 +52,13 @@ describe('account billing projection', () => {
       error => error.code === UPGRADE_ERROR_CODES.checkoutCreationFailed && error.status === 404
     );
     assert.equal(fetchImpl.calls[0].url, '/sws/go/billing/purchases/purchase%2F1');
+  });
+
+  it('reads the server-owned billing offer', async () => {
+    const fetchImpl = recordingFetch(jsonResponse({ amountMinor: 4900, currency: 'EUR', interval: 'month' }));
+    const result = await getBillingOffer(fetchImpl, '', 'token');
+    assert.equal(result.amountMinor, 4900);
+    assert.equal(fetchImpl.calls[0].url, '/sws/go/billing/offers');
   });
 });
 

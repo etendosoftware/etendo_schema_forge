@@ -17847,6 +17847,7 @@
     "upgradeMigrationBody": "Después de entrar en tu entorno productivo, usa las herramientas existentes de Exportar/Importar para transferir productos y contactos compatibles.",
     "upgradeMigrateProducts": "Abrir Productos",
     "upgradeMigrateContacts": "Abrir Contactos",
+    "upgradePlanProductivePriceUnavailable": "Precio disponible en facturación",
     "navigation": "Navegación",
     "collapseMenu": "Contraer menú",
     "expandMenu": "Expandir menú",

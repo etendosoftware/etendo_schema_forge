@@ -17615,6 +17615,7 @@
     "upgradeMigrationBody": "After entering your productive environment, use the existing Export/Import tools to transfer supported products and contacts.",
     "upgradeMigrateProducts": "Open Products",
     "upgradeMigrateContacts": "Open Contacts",
+    "upgradePlanProductivePriceUnavailable": "Price available in billing",
     "navigation": "Navigation",
     "collapseMenu": "Collapse menu",
     "expandMenu": "Expand menu",

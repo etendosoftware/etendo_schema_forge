@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   createBillingPurchase,
   getBillingOverview,
+  getBillingOffer,
   getBillingPurchase,
   getCheckoutToken,
   getCheckoutStatus,
@@ -21,11 +22,6 @@ import {
   UPGRADE_ERROR_CODES,
 } from '@/lib/upgrade/api.js';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
-
-/**
- * Display price until the backend plan catalog is exposed to the product UI.
- */
-const PRODUCTIVE_MONTHLY_PRICE = '€49';
 
 const FREE_FEATURES = ['upgradeFreeFeatureExplore', 'upgradeFreeFeatureSample', 'upgradeFreeFeatureSingle'];
 const PRODUCTIVE_FEATURES = [
@@ -244,6 +240,17 @@ function BillingOverviewPanel({ purchases, ui }) {
   );
 }
 
+function formatOfferPrice(offer, locale) {
+  if (!offer || !Number.isFinite(Number(offer.amountMinor)) || !offer.currency) return null;
+  try {
+    return new Intl.NumberFormat(String(locale || 'en-US').replace('_', '-'), {
+      style: 'currency', currency: offer.currency,
+    }).format(Number(offer.amountMinor) / 100);
+  } catch {
+    return `${offer.currency} ${(Number(offer.amountMinor) / 100).toFixed(2)}`;
+  }
+}
+
 export default function UpgradePage() {
   const ui = useUI();
   const navigate = useNavigate();
@@ -259,6 +266,7 @@ export default function UpgradePage() {
   const [accountState, setAccountState] = useState('loading');
   const [environments, setEnvironments] = useState([]);
   const [billingPurchases, setBillingPurchases] = useState([]);
+  const [billingOffer, setBillingOffer] = useState(null);
   // Bumped by the retry button so the lookup effect re-runs. A failed lookup is recoverable —
   // the usual cause is a transient/auth error, not an account without environments.
   const [lookupAttempt, setLookupAttempt] = useState(0);
@@ -291,6 +299,14 @@ export default function UpgradePage() {
       })
       .catch(() => {
         // Environment lookup remains the primary page state; billing is a recoverable projection.
+      });
+
+    getBillingOffer(fetch, getUpgradeBaseUrl(), token)
+      .then(offer => {
+        if (!cancelled) setBillingOffer(offer);
+      })
+      .catch(() => {
+        // The backend still validates the offer; the page only loses the price preview.
       });
 
     return () => {
@@ -492,7 +508,8 @@ export default function UpgradePage() {
           testId="upgrade-plan-productive"
           name={ui('upgradePlanProductiveName')}
           tagline={ui('upgradePlanProductiveTagline')}
-          price={ui('upgradePlanProductivePrice', { amount: PRODUCTIVE_MONTHLY_PRICE })}
+          price={formatOfferPrice(billingOffer, getStoredLocale())
+            || ui('upgradePlanProductivePriceUnavailable')}
           features={PRODUCTIVE_FEATURES}
           highlighted
           ui={ui}

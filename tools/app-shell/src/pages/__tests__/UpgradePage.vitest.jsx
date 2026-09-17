@@ -98,6 +98,9 @@ function installFetch({ environments = [], checkout = {}, statuses = ['paid'], o
     if (target.includes('/sws/go/billing/overview')) {
       return jsonResponse({ canManageBilling: true, purchases: [] });
     }
+    if (target.includes('/sws/go/billing/offers')) {
+      return jsonResponse({ code: 'productive-tenant', amountMinor: 4900, currency: 'EUR', interval: 'month' });
+    }
     if (target.includes('/sws/go/billing/purchases')) {
       if (!init.method) {
         return jsonResponse({ purchaseId: 'upgrade-request-1', status: 'PAID', clientName: 'Acme Productive' });
@@ -237,6 +240,7 @@ describe('UpgradePage — hosted checkout', () => {
     const requests = installFetch({ environments: [{ clientName: 'Acme Trial' }] });
     globalThis.fetch.mockImplementationOnce(async () => jsonResponse({ environments: [{ clientName: 'Acme Trial' }] }));
     globalThis.fetch.mockImplementationOnce(async () => jsonResponse({ canManageBilling: true, purchases: [] }));
+    globalThis.fetch.mockImplementationOnce(async () => jsonResponse({ amountMinor: 4900, currency: 'EUR', interval: 'month' }));
     globalThis.fetch.mockImplementationOnce(async () => jsonResponse(
       { message: 'Stripe unavailable' },
       { ok: false, status: 503 }
@@ -356,6 +360,7 @@ describe('UpgradePage — checkout funnel tracking', () => {
     installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
     globalThis.fetch.mockImplementationOnce(async () => jsonResponse({ environments: [{ clientName: EXISTING_TENANT }] }));
     globalThis.fetch.mockImplementationOnce(async () => jsonResponse({ canManageBilling: true, purchases: [] }));
+    globalThis.fetch.mockImplementationOnce(async () => jsonResponse({ amountMinor: 4900, currency: 'EUR', interval: 'month' }));
     globalThis.fetch.mockImplementationOnce(async () => jsonResponse(
       { message: 'Stripe unavailable' },
       { ok: false, status: 503 }
