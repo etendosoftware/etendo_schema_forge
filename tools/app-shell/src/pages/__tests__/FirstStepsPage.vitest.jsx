@@ -591,4 +591,30 @@ describe('FirstStepsPage — Owner-only gate (ETP-5395)', () => {
     expect(screen.getByTestId('first-steps-page')).toBeInTheDocument();
     expect(screen.queryByTestId('dashboard-landed')).not.toBeInTheDocument();
   });
+
+  // [ETP-5395 QA] — ownership transferred (or the capabilities map otherwise refreshed to
+  // isOwner: false) WHILE the user already has this page open, with no full page reload. The
+  // gate is not a mount-only check: `useCapabilitiesSafe()` reads live context state and the
+  // `if (capabilities.isOwner !== true) return <Navigate .../>` runs on every render, so the
+  // very next re-render (triggered by AuthContext's own focus/visibility/poll-driven capability
+  // refresh — see AuthContext.jsx's refresh()) must bounce the now-non-owner user out, not leave
+  // them stranded on a page they can no longer legitimately see.
+  it('redirects to /dashboard on the next render after isOwner flips to false mid-session (ownership transferred, no reload)', () => {
+    capabilitiesRef.current = { isOwner: true };
+    const { rerender } = renderAtFirstSteps();
+    expect(screen.getByTestId('first-steps-page')).toBeInTheDocument();
+
+    capabilitiesRef.current = { isOwner: false };
+    rerender(
+      <MemoryRouter initialEntries={['/first-steps']}>
+        <Routes>
+          <Route path="/first-steps" element={<FirstStepsPage />} />
+          <Route path="/dashboard" element={<div data-testid="dashboard-landed" />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('dashboard-landed')).toBeInTheDocument();
+    expect(screen.queryByTestId('first-steps-page')).not.toBeInTheDocument();
+  });
 });

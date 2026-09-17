@@ -414,4 +414,32 @@ describe('fetchWindowAccess', () => {
       vi.useRealTimers();
     }
   });
+
+  // [ETP-5395 QA] — the shrunk 3s TTL still caches the FAILURE case (the
+  // `MENU_ACCESS_UNREACHABLE` sentinel, see fetchMenuAccess()'s catch branch), not
+  // just successful resolutions. This is what bounds the request-volume regression
+  // under a genuinely down/unreachable SFListMenu: without this, every refresh
+  // trigger (bootstrap, focus, visibility, the 5-min poll) would hit `/listmenu`
+  // again immediately, defeating the cache entirely for the one case (a sustained
+  // outage) where repeated failed round trips are most costly. With the cache
+  // applying to failures too, the worst case is bounded to one attempt per 3s
+  // (~20/min) — still a ~20x increase over the previous 60s TTL's ~1/min ceiling,
+  // but bounded rather than unbounded.
+  it('caches the SFListMenu FAILURE too, so two calls within the TTL only attempt /listmenu once', async () => {
+    vi.stubGlobal('fetch', vi.fn((url) => (
+      String(url).includes('/listmenu')
+        ? Promise.reject(new Error('network down'))
+        : Promise.resolve(jsonResponse(PAYLOAD))
+    )));
+
+    const first = await fetchWindowAccess({ token: 'tok' });
+    const second = await fetchWindowAccess({ token: 'tok' });
+
+    expect(first).toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
+    expect(second).toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
+
+    const calls = globalThis.fetch.mock.calls.map(([url]) => String(url));
+    const menuCalls = calls.filter((url) => url.includes('/listmenu'));
+    expect(menuCalls).toHaveLength(1);
+  });
 });
