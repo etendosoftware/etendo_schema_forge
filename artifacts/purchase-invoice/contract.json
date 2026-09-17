@@ -1,8 +1,8 @@
 {
   "version": "0.94.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-09-14T18:30:37.761Z",
-  "checksum": "69549fc423c905ef",
+  "updatedAt": "2026-09-16T11:49:06.923Z",
+  "checksum": "7c5f8eb5e65bb38f",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -1869,7 +1869,8 @@
           "processValue": "CO",
           "label": "Confirm",
           "keepSaveWhenCompletedFields": [
-            "orderReference"
+            "orderReference",
+            "accountingDate"
           ]
         }
       },

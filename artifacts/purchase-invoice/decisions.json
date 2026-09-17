@@ -46,7 +46,7 @@
       "processField": "documentAction",
       "processValue": "CO",
       "label": "Confirm",
-      "keepSaveWhenCompletedFields": ["orderReference"]
+      "keepSaveWhenCompletedFields": ["orderReference", "accountingDate"]
     },
     "dateFilterKey": "invoiceDate",
     "subsetFilters": [
