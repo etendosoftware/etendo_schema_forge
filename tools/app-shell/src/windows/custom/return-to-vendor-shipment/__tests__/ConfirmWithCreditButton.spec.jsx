@@ -64,11 +64,57 @@ describe('ConfirmWithCreditButton (return-to-vendor)', () => {
     expect(screen.getByTestId('action-confirm-with-credit')).not.toBeDisabled();
   });
 
-  it('renders create-return-invoice button in CO status when no CO invoice exists', () => {
+  // ── ETP-5381 — a DRAFT rectificative invoice already counts as "invoiced" ─────────
+  // This assertion is deliberately inverted. It used to demand the button stay VISIBLE
+  // while a rectificative invoice sat in DR, which is precisely how a second one got
+  // created: a draft reserves nothing (C_Invoice_Post is what raises qtyinvoiced /
+  // isinvoiced), so the same return document could be invoiced twice. The gate now
+  // mirrors the server-side duplicate guard — any non-voided invoice hides the button.
+  it('does NOT render create-return-invoice button when a DRAFT return invoice already exists', () => {
     render(
       <ConfirmWithCreditButton
         {...BASE_PROPS}
         data={{ documentStatus: 'CO', returnInvoices: [{ documentStatus: 'DR' }] }}
+      />,
+    );
+    expect(screen.queryByTestId('action-create-return-invoice')).not.toBeInTheDocument();
+  });
+
+  it('renders create-return-invoice button in CO status when no invoice exists at all', () => {
+    render(
+      <ConfirmWithCreditButton
+        {...BASE_PROPS}
+        data={{ documentStatus: 'CO', returnInvoices: [] }}
+      />,
+    );
+    expect(screen.getByTestId('action-create-return-invoice')).toBeInTheDocument();
+  });
+
+  it('renders create-return-invoice button when the backend reports hasReturnInvoice: false', () => {
+    render(
+      <ConfirmWithCreditButton
+        {...BASE_PROPS}
+        data={{ documentStatus: 'CO', hasReturnInvoice: false }}
+      />,
+    );
+    expect(screen.getByTestId('action-create-return-invoice')).toBeInTheDocument();
+  });
+
+  it('hides create-return-invoice when the backend flag is true, even if the array lists only a voided invoice (flag wins over the fallback)', () => {
+    render(
+      <ConfirmWithCreditButton
+        {...BASE_PROPS}
+        data={{ documentStatus: 'CO', hasReturnInvoice: true, returnInvoices: [{ documentStatus: 'VO' }] }}
+      />,
+    );
+    expect(screen.queryByTestId('action-create-return-invoice')).not.toBeInTheDocument();
+  });
+
+  it('array fallback uses the non-voided predicate: a VO-only list still shows the button', () => {
+    render(
+      <ConfirmWithCreditButton
+        {...BASE_PROPS}
+        data={{ documentStatus: 'CO', returnInvoices: [{ documentStatus: 'VO' }] }}
       />,
     );
     expect(screen.getByTestId('action-create-return-invoice')).toBeInTheDocument();

@@ -372,6 +372,191 @@ describe('ConfirmInOutModal', () => {
     spy.mockRestore();
   });
 
+  // ── ETP-5381 — rectifiable-invoice picker ──────────────────────────────────
+  // The invoice this modal creates is now confirmed in the same request, and the
+  // completion is rejected unless it declares which invoice it rectifies. So the
+  // picker is not decoration: it is a hard gate on the confirm button, and its
+  // selection has to reach the invoice action's request body.
+
+  const RECTIFY_URL = '/sws/neo/return-material-receipt/returnReceipt/REC-001/action/rectifiableInvoices';
+
+  const RECTIFIABLE = [
+    { id: 'inv-1', documentNo: 'FAC-001', invoiceDate: '2026-08-10', grandTotalAmount: 300, currency: 'EUR' },
+    { id: 'inv-2', documentNo: 'FAC-002', invoiceDate: '2026-08-11', grandTotalAmount: 200, currency: 'EUR' },
+  ];
+
+  function mockRectifyRouter({ invoices = RECTIFIABLE, suggestedInvoiceId } = {}) {
+    vi.stubGlobal('fetch', vi.fn((url) => {
+      const u = String(url);
+      if (u.includes('/action/rectifiableInvoices')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ response: { data: { invoices, suggestedInvoiceId } } }),
+        });
+      }
+      if (u.includes('/action/documentAction')) {
+        return Promise.resolve({ ok: true, json: async () => ({ response: { data: {} } }) });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ response: { data: { id: 'INV-001', documentNo: 'FAC-NEW', grandTotalAmount: 500 } } }),
+      });
+    }));
+  }
+
+  const RECTIFY_PROPS = {
+    ...BASE_PROPS,
+    specName: 'return-material-receipt',
+    entityName: 'returnReceipt',
+    invoiceAction: 'createReturnInvoice',
+    defaultCreateInvoice: true,
+    rectifiableInvoicesUrl: RECTIFY_URL,
+    token: 'test-token',
+  };
+
+  const invoiceCall = () =>
+    globalThis.fetch.mock.calls.find(([url]) => String(url).includes('/action/createReturnInvoice'));
+
+  describe('rectifiable-invoice picker (ETP-5381)', () => {
+    it('renders the picker rows when a rectifiableInvoicesUrl is supplied and the invoice toggle is on', async () => {
+      mockRectifyRouter();
+      render(<ConfirmInOutModal {...RECTIFY_PROPS} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('confirm-modal-rectify-option-inv-1')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('confirm-modal-rectify-option-inv-2')).toBeInTheDocument();
+    });
+
+    it('blocks the confirm button until an invoice is picked', async () => {
+      mockRectifyRouter();
+      render(<ConfirmInOutModal {...RECTIFY_PROPS} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('confirm-modal-rectify-option-inv-1')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('confirm-modal-confirm-btn')).toBeDisabled();
+
+      fireEvent.click(screen.getByTestId('confirm-modal-rectify-option-inv-1'));
+      await waitFor(() => {
+        expect(screen.getByTestId('confirm-modal-confirm-btn')).not.toBeDisabled();
+      });
+    });
+
+    it('sends the picked invoice as originInvoices in the invoice action body', async () => {
+      mockRectifyRouter();
+      render(<ConfirmInOutModal {...RECTIFY_PROPS} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('confirm-modal-rectify-option-inv-1')).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByTestId('confirm-modal-rectify-option-inv-1'));
+      await waitFor(() => {
+        expect(screen.getByTestId('confirm-modal-confirm-btn')).not.toBeDisabled();
+      });
+      fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+      await waitFor(() => {
+        expect(invoiceCall()).toBeTruthy();
+        expect(invoiceCall()[1].body).toBe(JSON.stringify({ originInvoices: ['inv-1'] }));
+      });
+    });
+
+    it('sends every picked invoice — C_Invoice_Reverse is a 1:N bridge', async () => {
+      mockRectifyRouter();
+      render(<ConfirmInOutModal {...RECTIFY_PROPS} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('confirm-modal-rectify-option-inv-1')).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByTestId('confirm-modal-rectify-option-inv-1'));
+      fireEvent.click(screen.getByTestId('confirm-modal-rectify-option-inv-2'));
+      fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+      await waitFor(() => {
+        expect(invoiceCall()).toBeTruthy();
+        expect(invoiceCall()[1].body).toBe(JSON.stringify({ originInvoices: ['inv-1', 'inv-2'] }));
+      });
+    });
+
+    it('accepts the backend suggestion as a preselection, so confirming without touching the picker still links an invoice', async () => {
+      mockRectifyRouter({ suggestedInvoiceId: 'inv-2' });
+      render(<ConfirmInOutModal {...RECTIFY_PROPS} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('confirm-modal-rectify-option-inv-2')).toHaveAttribute('data-selected', 'true');
+      });
+      expect(screen.getByTestId('confirm-modal-confirm-btn')).not.toBeDisabled();
+
+      fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+      await waitFor(() => {
+        expect(invoiceCall()).toBeTruthy();
+        expect(invoiceCall()[1].body).toBe(JSON.stringify({ originInvoices: ['inv-2'] }));
+      });
+    });
+
+    it('keeps the confirm button blocked when there is genuinely nothing to rectify', async () => {
+      mockRectifyRouter({ invoices: [] });
+      render(<ConfirmInOutModal {...RECTIFY_PROPS} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('confirm-modal-rectify-empty')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('confirm-modal-confirm-btn')).toBeDisabled();
+    });
+
+    it('does not render the picker or block anything when the invoice toggle is OFF', async () => {
+      mockRectifyRouter();
+      render(<ConfirmInOutModal {...RECTIFY_PROPS} defaultCreateInvoice={false} />);
+      await new Promise(r => setTimeout(r, 0));
+      expect(screen.queryByTestId('confirm-modal-rectify-option-inv-1')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('confirm-modal-rectify-empty')).not.toBeInTheDocument();
+      // Confirming without an invoice has nothing to rectify, so the gate must stay open.
+      expect(screen.getByTestId('confirm-modal-confirm-btn')).not.toBeDisabled();
+    });
+
+    it('confirming with the toggle OFF calls only documentAction — no invoice request, no originInvoices', async () => {
+      mockRectifyRouter();
+      const onConfirmed = vi.fn();
+      render(<ConfirmInOutModal {...RECTIFY_PROPS} defaultCreateInvoice={false} onConfirmed={onConfirmed} />);
+      fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+      await waitFor(() => expect(onConfirmed).toHaveBeenCalledWith({ invoice: null }));
+      expect(invoiceCall()).toBeFalsy();
+      expect(globalThis.fetch.mock.calls.some(([u]) => String(u).includes('rectifiableInvoices'))).toBe(false);
+    });
+
+    it('activates the picker only after the user switches the invoice toggle on', async () => {
+      mockRectifyRouter();
+      render(<ConfirmInOutModal {...RECTIFY_PROPS} defaultCreateInvoice={false} />);
+      expect(screen.queryByTestId('confirm-modal-rectify-option-inv-1')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('switch'));
+      await waitFor(() => {
+        expect(screen.getByTestId('confirm-modal-rectify-option-inv-1')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('confirm-modal-confirm-btn')).toBeDisabled();
+    });
+
+    it('does not render the picker when no rectifiableInvoicesUrl is supplied, even with the invoice toggle on', async () => {
+      mockRectifyRouter();
+      render(<ConfirmInOutModal {...RECTIFY_PROPS} rectifiableInvoicesUrl={undefined} />);
+      await new Promise(r => setTimeout(r, 0));
+      expect(screen.queryByTestId('confirm-modal-rectify-option-inv-1')).not.toBeInTheDocument();
+      expect(screen.getByTestId('confirm-modal-confirm-btn')).not.toBeDisabled();
+    });
+
+    it('does not render the picker when there is no invoiceAction to gate', async () => {
+      mockRectifyRouter();
+      const { invoiceAction, ...noInvoiceAction } = RECTIFY_PROPS;
+      render(<ConfirmInOutModal {...noInvoiceAction} />);
+      await new Promise(r => setTimeout(r, 0));
+      expect(screen.queryByTestId('confirm-modal-rectify-option-inv-1')).not.toBeInTheDocument();
+      expect(screen.getByTestId('confirm-modal-confirm-btn')).not.toBeDisabled();
+    });
+
+    it('omits originInvoices from the body when the picker is inactive', async () => {
+      mockRectifyRouter();
+      render(<ConfirmInOutModal {...RECTIFY_PROPS} rectifiableInvoicesUrl={undefined} />);
+      fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+      await waitFor(() => {
+        expect(invoiceCall()).toBeTruthy();
+        expect(invoiceCall()[1].body).toBe(JSON.stringify({}));
+      });
+    });
+  });
+
   // ── ETP-5108: one typeface across the whole modal ───────────────────────────
   // Same defect as ConfirmResultModal, which this modal hands off to: the shell
   // declared a system-font stack, so the two steps of one flow disagreed.

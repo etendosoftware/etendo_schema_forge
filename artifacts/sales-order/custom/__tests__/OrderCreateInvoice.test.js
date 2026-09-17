@@ -763,8 +763,13 @@ describe('OrderCreateInvoice', () => {
     describe('ConfirmModal.handleConfirm — Step 3 (createDraftInvoice)', () => {
       function resolveMessage(e, res) {
         const expr = extractCallExprAround(src, 'soOrderConfirmedInvoiceError', 'throw new Error(');
-        const fn = new Function('e', 'res', 'ui', `return ${expr};`);
-        return fn(e, res, (k) => k);
+        // ETP-5381: this branch was the last one still appending the RAW backend message;
+        // it now goes through translateBackendError(msg, ui) like its shipment sibling, so
+        // the new duplicate-invoice / completion messages surface translated. Stub it as
+        // identity — the point here is that the raw message survives end-to-end, not
+        // re-testing the mapping table (covered by backendErrors.test.js).
+        const fn = new Function('e', 'res', 'ui', 'translateBackendError', `return ${expr};`);
+        return fn(e, res, (k) => k, (msg) => msg);
       }
 
       it('appends the real backend message after the ui() prefix for a flat 400 body', () => {
