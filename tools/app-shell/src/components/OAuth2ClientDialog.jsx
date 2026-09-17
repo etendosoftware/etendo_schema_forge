@@ -308,13 +308,19 @@ export function SecretRevealDialog({ open, onClose, clientId, clientSecret, auth
           </div>
 
           {authorizationValue && <div className="grid gap-1.5">
-            <Label className="text-xs text-muted-foreground">Scalar bearer value</Label>
+            <Label className="text-xs text-muted-foreground" data-testid="Label__4aea7f">Scalar bearer value</Label>
             <div className="flex items-center gap-2">
               <code className="flex-1 rounded-md bg-muted px-3 py-2 text-sm font-mono break-all">{authorizationValue}</code>
-              <Button type="button" variant="outline" size="icon" className="shrink-0" onClick={() => copyToClipboard(authorizationValue, 'Authorization value')}><Copy className="h-4 w-4" /></Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="shrink-0"
+                onClick={() => copyToClipboard(authorizationValue, 'Authorization value')}
+                data-testid="Button__4aea7f"><Copy className="h-4 w-4" data-testid="Copy__4aea7f" /></Button>
             </div>
             <p className="text-xs text-muted-foreground">Paste this value in Scalar under <span className="font-medium">Authentication → bearer</span>. Scalar adds <code className="rounded bg-muted px-1 font-mono">Bearer</code> automatically.</p>
-            {docsUrl && <a className="inline-flex items-center gap-1 text-sm text-primary underline underline-offset-4" href={docsUrl} target="_blank" rel="noreferrer">Open Scalar docs <ExternalLink className="h-3.5 w-3.5" /></a>}
+            {docsUrl && <a className="inline-flex items-center gap-1 text-sm text-primary underline underline-offset-4" href={docsUrl} target="_blank" rel="noreferrer">Open Scalar docs <ExternalLink className="h-3.5 w-3.5" data-testid="ExternalLink__4aea7f" /></a>}
           </div>}
 
           {/* Client Secret */}
