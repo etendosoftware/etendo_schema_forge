@@ -87,6 +87,12 @@ const BOX_PARAM_MAP = {
                                      // commonTerritory() both read this one key off box 65, so 107 no
                                      // longer needs its own BOX_PARAM_MAP entry (ETP-5391).
   68:  'AnnualRegularAmt',           // regularización anual prorrata (T4/12 only)
+  70:  'ComplementaryAmt',           // a_deducir — importe complementaria/rectificativa a deducir
+                                     // (AEAT303Report2014.java:946-958, gated by IsComplementary=Y)
+  76:  'REG_CUOTAS_ART80',           // regularización cuotas art. 80.cinco.5ª LIVA (last period only,
+                                     // AEAT303Report2014LastPeriod.java)
+  77:  'IVA_IMPORT_ADUANA',          // IVA importación liquidado por la Aduana pendiente de ingreso
+                                     // (last period only, AEAT303Report2014LastPeriod.java)
   78:  'PreviousPeriodAmtApplied',   // cuotas a compensar aplicadas en este período
   89:  'ALAVA',                      // territorio Araba/Álava % (last period only, ETP-5391)
   90:  'GUIPUZCOA',                  // territorio Gipuzkoa % (last period only, ETP-5391)
