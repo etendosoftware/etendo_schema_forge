@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   createBillingPurchase,
   getBillingOverview,
+  getBillingPurchase,
   getCheckoutToken,
   getCheckoutStatus,
   runPaidOnboarding,
@@ -302,21 +303,27 @@ export default function UpgradePage() {
     if (params.get('checkout') !== 'success') return undefined;
     const requestId = params.get('requestId');
     const token = getCheckoutToken();
-    const tenantName = sessionStorage.getItem(PENDING_CHECKOUT_NAME) || '';
+    const storedTenantName = sessionStorage.getItem(PENDING_CHECKOUT_NAME) || '';
     const upgradeAction = sessionStorage.getItem(PENDING_CHECKOUT_ACTION) || 'create-productive';
     // Persisted alongside the pending tenant name in runUpgrade, since a local
     // closure variable does not survive the full-page redirect to Stripe.
     const startedAtRaw = sessionStorage.getItem(PENDING_CHECKOUT_STARTED_AT);
     const startedAt = startedAtRaw ? Number(startedAtRaw) : null;
-    if (!requestId || !token || !tenantName) {
+    if (!requestId || !token) {
       setFormError('upgradeCheckoutCreationFailed');
       return undefined;
     }
     let cancelled = false;
-    setForm(previous => ({ ...previous, tenantName, upgradeAction }));
     setPhase('running');
     (async () => {
       try {
+        let tenantName = storedTenantName;
+        if (!tenantName) {
+          const purchase = await getBillingPurchase(fetch, getUpgradeBaseUrl(), token, requestId);
+          tenantName = purchase?.clientName || '';
+        }
+        if (!tenantName) throw new Error('Purchase has no environment name');
+        setForm(previous => ({ ...previous, tenantName, upgradeAction }));
         let status = { status: 'pending' };
         for (let attempt = 0; attempt < 60 && status.status === 'pending'; attempt += 1) {
           status = await getCheckoutStatus(fetch, getUpgradeBaseUrl(), token, requestId);

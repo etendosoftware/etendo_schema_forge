@@ -99,6 +99,9 @@ function installFetch({ environments = [], checkout = {}, statuses = ['paid'], o
       return jsonResponse({ canManageBilling: true, purchases: [] });
     }
     if (target.includes('/sws/go/billing/purchases')) {
+      if (!init.method) {
+        return jsonResponse({ purchaseId: 'upgrade-request-1', status: 'PAID', clientName: 'Acme Productive' });
+      }
       requests.push({ url, init, body: JSON.parse(init.body || '{}') });
       return jsonResponse({
         requestId: 'upgrade-request-1',
@@ -154,7 +157,7 @@ function setupCheckoutReturn({
     search: `?checkout=success&requestId=${requestId}`,
     assign: assignMock,
   });
-  sessionStorage.setItem(PENDING_CHECKOUT_NAME, tenantName);
+  if (tenantName) sessionStorage.setItem(PENDING_CHECKOUT_NAME, tenantName);
   sessionStorage.setItem(PENDING_CHECKOUT_ACTION, upgradeAction);
   sessionStorage.setItem(PENDING_CHECKOUT_STARTED_AT, String(startedAt));
 }
@@ -386,6 +389,22 @@ describe('UpgradePage — checkout funnel tracking', () => {
     expect(succeeded).toEqual({ upgradeAction: 'create-productive', durationMs: expect.any(Number) });
     expect(succeeded.durationMs).toBeGreaterThanOrEqual(0);
     expect(trackedEvents('upgrade_tenant_provisioning_failed')).toEqual([]);
+  });
+
+  it('recovers the environment name from the durable purchase when session storage is empty', async () => {
+    setupCheckoutReturn({ tenantName: '' });
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      statuses: ['paid'],
+      onboarding: () => successStream(),
+    });
+    await renderUpgradePage();
+
+    await screen.findByTestId('upgrade-success');
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/sws/go/billing/purchases/upgrade-request-1',
+      expect.objectContaining({ headers: expect.any(Object) })
+    );
   });
 
   it('resumes after the Stripe redirect and reports a failed onboarding stream', async () => {
