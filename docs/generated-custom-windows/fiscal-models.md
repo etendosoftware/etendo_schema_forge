@@ -320,6 +320,33 @@ themselves were **not** rebuilt for this — they already exist and are reachabl
 "Resultado final" nav section (`fm303Layouts.js`'s `rectificativa` section, `CASILLAS_SECTIONS` in
 `FmModel303Page.jsx`); this fix only adds the warning + gate around the existing checkbox.
 
+### Tipo column derivation (ETP-5338)
+
+`FmListPage.jsx`'s "Tipo" list column used to render `decl.type === 'ord' ? 'Ordinaria' :
+'Complementaria'` — i.e. it read `DECL_TYPE` (AEAT's genuine ordinaria/complementaria business
+value, see `FiscalDeclCrudHandler#declToJson`). No UI flow in this window ever sends
+`type: 'com'`; every declaration is created with `DECL_TYPE = 'O'` (see "NEO Headless endpoints"
+below), so this column always showed "Ordinaria" — including for declarations the user had
+explicitly marked as a rectificativa via the "Autoliquidación Rectificativa" checkbox (see
+"Duplicate-period warning and rectificativa gate" above). `decl.type`/`DECL_TYPE` is a real,
+independent AEAT concept and was **not** repurposed to fix this — it stays available on the row
+for whenever a UI flow legitimately needs to set/show "Complementaria".
+
+The column now derives from the same rectificativa flag the detail page's checkbox writes:
+`decl.manualData?.identification?.rectificativa` (persisted by `FmModel303Page.jsx`'s
+`identChecks.rectificativa` → `manualData.identification.rectificativa`, already present on list
+rows since `declToJson` includes `manualData` on every declaration, not just the one being
+edited).
+
+- `rectificativa` truthy → "Tipo" shows `fm.type.rectificative` ("Rectificativa").
+- `rectificativa` falsy/absent → "Tipo" shows `fm.type.ordinary` ("Ordinaria"), same as before.
+- Modelo 349 declarations have no rectificativa checkbox/field, so `manualData.identification` is
+  always empty for them and this column correctly falls back to "Ordinaria" — unchanged from
+  before this fix, since 349 also never produced `type: 'com'`.
+
+`fm.type.rectificative` is a new key (all 3 locale files); `fm.type.complementary` is kept as-is
+for the reason above, not removed or repurposed.
+
 ### Required-field pre-flight gate (ETP-5187)
 
 `fm303Layouts.js` marks exactly 2 fields `required: true`: `tipo_declaracion` (always visible, in
@@ -1648,7 +1675,7 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 | Method | Path | Used by |
 |--------|------|---------|
 | `GET` | `/fiscal303/declarations` | FmListPage — fetch all declarations |
-| `POST` | `/fiscal303/declarations` (body: model, year, period, status, type) | FmListPage's `handleNewDecl` — creates a declaration. `FiscalDeclCrudHandler#resolveNextDeclSeq` (ETP-5187) assigns the new row the next `DECL_SEQ` ordinal (`MAX(DECL_SEQ) + 1` for the same client/org/model/year/period, or `0` for the first one) — a dedicated, unbounded sequence column added specifically for this uniqueness disambiguation, distinct from `DECL_TYPE` (AEAT's own ordinaria/complementaria business value, still `VARCHAR(1)` CHECKed to `'O'`/`'C'` and rendered verbatim by `FmListPage.jsx`). `ETGO_FISCAL_DECL_UQ` is unique on `(client, org, model, year, period, DECL_SEQ)`, so there is no cap: a 2nd, 3rd, 4th or Nth declaration for the same period always succeeds — matching the real AEAT/legal rule that there is no limit on how many rectificativas can be filed for a period. (An earlier version of this fix repurposed `DECL_TYPE` itself as a 2-slot disambiguator, which capped the system at 2 declarations per period and conflated a real business field with an artificial counter — replaced by the dedicated column above.) **ETP-5272 pt.5:** now answers `409 Conflict` instead, BEFORE reaching `resolveNextDeclSeq`, when a `draft` declaration already exists for the exact same `(client, org, model, year, period)` key — see "Draft periods ARE disabled again" above for the full rationale; a non-draft existing declaration is unaffected and still succeeds via `resolveNextDeclSeq` exactly as described here. |
+| `POST` | `/fiscal303/declarations` (body: model, year, period, status, type) | FmListPage's `handleNewDecl` — creates a declaration. `FiscalDeclCrudHandler#resolveNextDeclSeq` (ETP-5187) assigns the new row the next `DECL_SEQ` ordinal (`MAX(DECL_SEQ) + 1` for the same client/org/model/year/period, or `0` for the first one) — a dedicated, unbounded sequence column added specifically for this uniqueness disambiguation, distinct from `DECL_TYPE` (AEAT's own ordinaria/complementaria business value, still `VARCHAR(1)` CHECKed to `'O'`/`'C'`, exposed as `decl.type` — see "Tipo column derivation (ETP-5338)" below for why the list's "Tipo" column no longer reads this field directly). `ETGO_FISCAL_DECL_UQ` is unique on `(client, org, model, year, period, DECL_SEQ)`, so there is no cap: a 2nd, 3rd, 4th or Nth declaration for the same period always succeeds — matching the real AEAT/legal rule that there is no limit on how many rectificativas can be filed for a period. (An earlier version of this fix repurposed `DECL_TYPE` itself as a 2-slot disambiguator, which capped the system at 2 declarations per period and conflated a real business field with an artificial counter — replaced by the dedicated column above.) **ETP-5272 pt.5:** now answers `409 Conflict` instead, BEFORE reaching `resolveNextDeclSeq`, when a `draft` declaration already exists for the exact same `(client, org, model, year, period)` key — see "Draft periods ARE disabled again" above for the full rationale; a non-draft existing declaration is unaffected and still succeeds via `resolveNextDeclSeq` exactly as described here. |
 | `PUT` | `/fiscal303/declarations?id=` | FmListPage — persist status change |
 | `DELETE` | `/fiscal303/declarations?id=` | `FmRowActions`' delete action (ETP-5187), via `deleteDeclaration` — rejects (409) deleting anything but a `draft` declaration (defense in depth; the frontend also only ever shows the action for draft rows) |
 | `GET` | `/fiscal-models-catalog` | FmListPage — fetch the active-models catalog on mount (per-Client); also consumed cross-spec by `ReversedInvoicesPanel.jsx` (sales-invoice/purchase-invoice) to gate the "Correctiva del 349" checkbox — see "Downstream consumer" above |

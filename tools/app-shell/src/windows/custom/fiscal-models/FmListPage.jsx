@@ -938,7 +938,19 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                   <span className="fm-model-year" style={{ marginLeft: 6, fontWeight: 600 }}>{decl.year}</span>
                 </td>
                 <td><span className="fm-period">{decl.period}</span></td>
-                <td>{decl.type === 'ord' ? t('fm.type.ordinary') : t('fm.type.complementary')}</td>
+                {/* ETP-5338 pt.3 — "Tipo" must reflect AEAT's rectificativa flag, which the
+                    user sets on the 303 detail page's "Autoliquidación Rectificativa" checkbox
+                    (`identChecks.rectificativa`, persisted as
+                    `manualData.identification.rectificativa`). `decl.type` (DECL_TYPE, ord/com)
+                    is a genuine but DIFFERENT AEAT concept (ordinaria/complementaria) that no UI
+                    flow currently sets to "com" — every declaration is created with DECL_TYPE=O,
+                    so deriving "Tipo" from it always showed "Ordinaria". 349 declarations have no
+                    rectificativa checkbox, so this correctly falls back to "Ordinaria" for them. */}
+                <td>
+                  {decl.manualData?.identification?.rectificativa
+                    ? t('fm.type.rectificative')
+                    : t('fm.type.ordinary')}
+                </td>
                 <td>
                   <StatusText status={decl.status} submissionMethod={decl.submissionMethod} t={t} data-testid="StatusText__cb728e" />
                 </td>
