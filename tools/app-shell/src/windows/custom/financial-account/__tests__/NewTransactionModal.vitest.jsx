@@ -61,9 +61,13 @@ vi.mock('@/components/forms/fields', () => ({
   DateInput: ({ value, onChange, disabled, 'data-testid': dtid }) => (
     <input data-testid={dtid} value={value ?? ''} onChange={(e) => onChange(e.target.value)} disabled={disabled} />
   ),
-  AmountInput: ({ value, onChange, onBlur, currency, 'data-testid': dtid }) => (
+  // readOnly forwarded to disabled (QA/ETP-4879): the real AmountInput renders
+  // `disabled={readOnly}` on its underlying <Input> (fields.jsx), so the mock must
+  // forward it too — otherwise a test asserting the amount lock on a Processed
+  // movement would pass even if the real component stopped honoring `readOnly`.
+  AmountInput: ({ value, onChange, onBlur, currency, readOnly, 'data-testid': dtid }) => (
     <div>
-      <input data-testid={dtid} value={value ?? ''} onChange={onChange} onBlur={onBlur} />
+      <input data-testid={dtid} value={value ?? ''} onChange={onChange} onBlur={onBlur} disabled={readOnly} />
       <span data-testid={`${dtid}-currency`}>{currency}</span>
     </div>
   ),
@@ -465,6 +469,10 @@ describe('NewTransactionModal — edit mode', () => {
     // Amount/type are read-only on a processed movement (Classic parity).
     expect(screen.getByTestId('tx-dir-in')).toBeDisabled();
     expect(screen.getByTestId('tx-dir-out')).toBeDisabled();
+    // The amount input itself must be locked too, not just the direction toggle — this was
+    // previously unasserted (the mock silently dropped `readOnly`), so a regression here would
+    // have gone undetected (QA, ETP-4879).
+    expect(screen.getByTestId('tx-amount')).toBeDisabled();
     // Confirmar is gone (already processed); only Guardar remains.
     expect(screen.queryByTestId('tx-new-confirm')).not.toBeInTheDocument();
     expect(screen.getByTestId('tx-new-save')).toBeInTheDocument();
