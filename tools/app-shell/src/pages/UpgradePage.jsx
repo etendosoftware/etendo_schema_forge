@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
   createCheckoutSession,
+  getBillingOverview,
   getCheckoutToken,
   getCheckoutStatus,
   runPaidOnboarding,
@@ -206,6 +207,28 @@ function SuccessPanel({ ui, onContinue, entering, enterError }) {
   );
 }
 
+function BillingOverviewPanel({ purchases, ui }) {
+  if (!purchases.length) return null;
+  return (
+    <Card data-testid="upgrade-billing-overview">
+      <CardHeader data-testid="CardHeader__58bad7">
+        <CardTitle className="text-base">{ui('upgradeBillingOverviewTitle')}</CardTitle>
+        <p className="mt-1 text-sm text-muted-foreground">{ui('upgradeBillingOverviewBody')}</p>
+      </CardHeader>
+      <CardContent data-testid="CardContent__58bad7">
+        <ul className="space-y-2 text-sm">
+          {purchases.map(purchase => (
+            <li key={purchase.purchaseId} className="flex items-center justify-between gap-3">
+              <span className="truncate">{purchase.clientName || ui('upgradeUnnamedPurchase')}</span>
+              <Badge variant="secondary">{purchase.status}</Badge>
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function UpgradePage() {
   const ui = useUI();
   const navigate = useNavigate();
@@ -220,6 +243,7 @@ export default function UpgradePage() {
   // legitimate upgrade.
   const [accountState, setAccountState] = useState('loading');
   const [environments, setEnvironments] = useState([]);
+  const [billingPurchases, setBillingPurchases] = useState([]);
   // Bumped by the retry button so the lookup effect re-runs. A failed lookup is recoverable —
   // the usual cause is a transient/auth error, not an account without environments.
   const [lookupAttempt, setLookupAttempt] = useState(0);
@@ -243,6 +267,14 @@ export default function UpgradePage() {
       })
       .catch(() => {
         if (!cancelled) setAccountState('unavailable');
+      });
+
+    getBillingOverview(fetch, getUpgradeBaseUrl(), token)
+      .then(overview => {
+        if (!cancelled) setBillingPurchases(Array.isArray(overview?.purchases) ? overview.purchases : []);
+      })
+      .catch(() => {
+        // Environment lookup remains the primary page state; billing is a recoverable projection.
       });
 
     return () => {
@@ -423,6 +455,7 @@ export default function UpgradePage() {
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{ui('upgradeSubtitle')}</p>
         </div>
       </div>
+      <BillingOverviewPanel purchases={billingPurchases} ui={ui} />
       <div className="grid gap-4 md:grid-cols-2">
         <PlanCard
           testId="upgrade-plan-free"

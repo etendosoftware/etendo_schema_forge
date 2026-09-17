@@ -95,6 +95,9 @@ function installFetch({ environments = [], checkout = {}, statuses = ['paid'], o
     if (target.includes('/sws/go/environments')) {
       return typeof environments === 'function' ? environments() : jsonResponse({ environments });
     }
+    if (target.includes('/sws/go/billing/overview')) {
+      return jsonResponse({ canManageBilling: true, purchases: [] });
+    }
     // Status polling hits `/checkout/sessions/:requestId` — checked before the
     // session-creation route below, since that path is a substring of this one.
     if (target.includes('/sws/go/checkout/sessions/')) {
@@ -222,6 +225,7 @@ describe('UpgradePage — hosted checkout', () => {
     const user = userEvent.setup();
     const requests = installFetch({ environments: [{ clientName: 'Acme Trial' }] });
     globalThis.fetch.mockImplementationOnce(async () => jsonResponse({ environments: [{ clientName: 'Acme Trial' }] }));
+    globalThis.fetch.mockImplementationOnce(async () => jsonResponse({ canManageBilling: true, purchases: [] }));
     globalThis.fetch.mockImplementationOnce(async () => jsonResponse(
       { message: 'Stripe unavailable' },
       { ok: false, status: 503 }
@@ -340,6 +344,7 @@ describe('UpgradePage — checkout funnel tracking', () => {
     const user = userEvent.setup();
     installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
     globalThis.fetch.mockImplementationOnce(async () => jsonResponse({ environments: [{ clientName: EXISTING_TENANT }] }));
+    globalThis.fetch.mockImplementationOnce(async () => jsonResponse({ canManageBilling: true, purchases: [] }));
     globalThis.fetch.mockImplementationOnce(async () => jsonResponse(
       { message: 'Stripe unavailable' },
       { ok: false, status: 503 }
