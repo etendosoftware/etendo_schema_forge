@@ -11,6 +11,15 @@
  */
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+
+// ETP-5395 — mutable ref so most tests can leave the page's actual body under test (Owner
+// granted, same convention as DetailView.secondaryTabCapabilityGate.vitest.jsx) while the
+// dedicated gate describe block below flips it to exercise the redirect.
+const capabilitiesRef = vi.hoisted(() => ({ current: { isOwner: true } }));
+vi.mock('@/hooks/useCapabilitiesSafe.js', () => ({
+  useCapabilitiesSafe: () => capabilitiesRef.current,
+}));
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -87,6 +96,7 @@ function setHook({ completed = [], loading = false, error = null, toggleResult =
 beforeEach(() => {
   vi.clearAllMocks();
   setHook();
+  capabilitiesRef.current = { isOwner: true };
 });
 
 describe('FirstStepsPage — smoke and wiring', () => {
@@ -538,5 +548,47 @@ describe('FirstStepsPage — the completion checkbox', () => {
     await user.click(screen.getByTestId('first-steps-toggle-company-data'));
     await waitFor(() => expect(hookState.value.toggleStep).toHaveBeenCalled());
     expect(toastMock.error).not.toHaveBeenCalled();
+  });
+});
+
+describe('FirstStepsPage — Owner-only gate (ETP-5395)', () => {
+  /**
+   * A real destination route rather than a mocked `useNavigate`/stubbed `<Navigate>`, so the
+   * redirect is asserted by where the user actually ends up — same convention as
+   * InviteAcceptancePage.tenantEntry.vitest.jsx's `renderPage()`.
+   */
+  function renderAtFirstSteps() {
+    return render(
+      <MemoryRouter initialEntries={['/first-steps']}>
+        <Routes>
+          <Route path="/first-steps" element={<FirstStepsPage />} />
+          <Route path="/dashboard" element={<div data-testid="dashboard-landed" />} />
+        </Routes>
+      </MemoryRouter>
+    );
+  }
+
+  it('redirects to /dashboard instead of rendering when the user is not the account Owner', () => {
+    capabilitiesRef.current = { isOwner: false };
+    renderAtFirstSteps();
+
+    expect(screen.getByTestId('dashboard-landed')).toBeInTheDocument();
+    expect(screen.queryByTestId('first-steps-page')).not.toBeInTheDocument();
+  });
+
+  it('redirects to /dashboard when isOwner is missing from the capabilities map (fail-closed)', () => {
+    capabilitiesRef.current = {};
+    renderAtFirstSteps();
+
+    expect(screen.getByTestId('dashboard-landed')).toBeInTheDocument();
+    expect(screen.queryByTestId('first-steps-page')).not.toBeInTheDocument();
+  });
+
+  it('renders the page normally, not the redirect, when isOwner is true', () => {
+    capabilitiesRef.current = { isOwner: true };
+    renderAtFirstSteps();
+
+    expect(screen.getByTestId('first-steps-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('dashboard-landed')).not.toBeInTheDocument();
   });
 });
