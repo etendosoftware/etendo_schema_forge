@@ -85,12 +85,20 @@ export function localizeFields(ui) {
   const headerFor = bankStatementFieldLabel(ui);
   return BANK_STATEMENT_IMPORT_FIELDS.map((field) => {
     const localized = headerFor(field);
-    if (!localized || localized === field.label) return field;
+    // The sample row the template writer emits, in the session language. The headers were
+    // already translated; the example values were not, so an English template came out with
+    // Spanish sample data under English headers. The date deliberately stays ISO in every
+    // locale: the parser reads every separated date DAY-FIRST, so a localized `08/01/2026`
+    // would teach an English reader to fill the column in a format the importer then reads as
+    // 8 January. ISO is unambiguous everywhere and the parser accepts it.
+    const example = field.exampleKey ? (ui(field.exampleKey) || field.example) : field.example;
+    if ((!localized || localized === field.label) && example === field.example) return field;
     // The previous label, when there was one, is kept as an alias so a file written with it still
     // auto-maps — the round trip that lets a template downloaded in one language be re-uploaded.
     return {
       ...field,
-      label: localized,
+      example,
+      label: localized || field.label,
       aliases: [...(field.aliases ?? []), field.label].filter(Boolean),
     };
   });

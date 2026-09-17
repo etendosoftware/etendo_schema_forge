@@ -86,7 +86,10 @@ test.describe('Suite E — Product smoke (mocked)', () => {
     });
 
     await page.goto(`/product/${PRODUCT_ID}`);
-    await page.waitForLoadState('networkidle').catch(() => {});
+    // Bounded — same as every other mocked spec (e.g. amortization.mocked.spec.js). No
+    // explicit timeout here defaults to Playwright's ~30s navigation timeout, which is
+    // half this test's entire 60s budget for a wait whose result is discarded either way.
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     await expect(page.getByTestId('tab-custom:attachments')).toBeVisible({ timeout: 8_000 });
   });
@@ -131,7 +134,7 @@ test.describe('Suite E — Product smoke (mocked)', () => {
     });
 
     await page.goto(`/product/${PRODUCT_ID}`);
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     const tabBtn = page.getByTestId('tab-custom:attachments');
     await tabBtn.waitFor({ state: 'visible', timeout: 8_000 });
@@ -259,7 +262,13 @@ async function installSalesOrderMocks(page, { items = [], onUpload = null, onDel
 /** Navigate to a Sales Order detail view and wait for it to settle. */
 async function gotoSalesOrder(page) {
   await page.goto(`/sales-order/${SO_ID}`);
-  await page.waitForLoadState('networkidle').catch(() => {});
+  // Bounded — same as every other mocked spec (e.g. amortization.mocked.spec.js). Without
+  // an explicit timeout this falls back to Playwright's ~30s navigation timeout, and the
+  // Sales Order detail page doesn't reliably go network-idle within that window under load
+  // — eating half of every Suite F-I test's 60s budget for a wait whose result is discarded
+  // either way, which is what turned F1's real (fast) render into a 60s timeout + "context
+  // closed" failure instead of a normal pass.
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 }
 
 const SO_ATT_1 = {

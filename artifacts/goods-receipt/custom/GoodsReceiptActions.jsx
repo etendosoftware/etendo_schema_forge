@@ -82,12 +82,6 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
   }, [isFullyInvoiced, handleConfirmFullyInvoiced]);
 
   useEffect(() => {
-    const handler = () => downloadLinkRef.current?.click();
-    window.addEventListener('goods-receipt:download-pdf', handler);
-    return () => window.removeEventListener('goods-receipt:download-pdf', handler);
-  }, []);
-
-  useEffect(() => {
     if (!wizardOpen || !recordId || !base) return;
     const bpId = data?.businessPartner;
     if (!bpId) return;
@@ -134,6 +128,7 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
         throw new Error(err?.response?.message || err?.message || `Error (${res.status})`);
       }
       const invData = (await res.json())?.response?.data;
+      setShowInvoiceConfirm(false);
       setConfirmedDocs({ invoice: { id: invData?.id ?? null, documentNo: invData?.documentNo || '' } });
     } catch (err) {
       toast.error(err.message || ui('failedToCreateInvoice'));
@@ -212,7 +207,7 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
           isSOTrx={false}
           apiBaseUrl={apiBaseUrl}
           token={token}
-          onConfirm={(priceListId) => { setShowInvoiceConfirm(false); handleCreateInvoice(priceListId); }}
+          onConfirm={handleCreateInvoice}
           onClose={() => setShowInvoiceConfirm(false)}
         />
       )}

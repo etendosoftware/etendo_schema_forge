@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { allIconsAs } from '@/test/lucideIconMock.js';
 
 // Same dependency stubs as DataTable.fieldHelpers.vitest.jsx, EXCEPT
 // `@/lib/applyCalloutUpdates.js` is intentionally left unmocked here — this
@@ -40,10 +41,7 @@ vi.mock('./SelectorInput.jsx', () => ({ SelectorInput: () => null }));
 vi.mock('./RowQuickActions.jsx', () => ({ default: () => null }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 const Stub = () => null;
-vi.mock('lucide-react', () => ({
-  Search: Stub, Inbox: Stub, X: Stub, ChevronDown: Stub, Trash2: Stub,
-  Copy: Stub, Loader2: Stub, Pencil: Stub, Check: Stub,
-}));
+vi.mock('lucide-react', async (importOriginal) => allIconsAs(Stub, importOriginal));
 vi.mock('@/components/ui/table', () => ({
   Table: Stub, TableBody: Stub, TableCell: Stub, TableHead: Stub,
   TableHeader: Stub, TableRow: Stub, TableFooter: Stub,

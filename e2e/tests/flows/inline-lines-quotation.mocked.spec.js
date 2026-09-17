@@ -134,7 +134,7 @@ test.describe('Inline-editable lines — Sales Quotation (mocked)', () => {
     await login(page);
     await installQuotationMocks(page);
     await page.goto(`/sales-quotation/${QUOT_ID}`);
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     await expect(page.locator('[data-testid="inline-lines-panel"]')).toBeVisible({ timeout: 8_000 });
     await expect(page.locator(`[data-testid="line-row-${LINE_A.id}"]`)).toBeVisible();
@@ -239,7 +239,7 @@ test.describe('Inline lines — Sales Order regression (classic layout)', () => 
   test('Sales Order uses DataTable (no inline-lines-panel)', async ({ page }) => {
     await login(page);
     await page.goto('/sales-order');
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     // The classic layout must NOT render the inline panel
     await expect(page.locator('[data-testid="inline-lines-panel"]')).toHaveCount(0);

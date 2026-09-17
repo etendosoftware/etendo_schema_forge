@@ -2,8 +2,8 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:organization
 const fields = [
-  { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'principal' },
-  { key: 'socialName', column: 'Social_Name', type: 'text', label: 'Legal Name', required: true, section: 'principal' },
+  { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'principal', maxLength: 60 },
+  { key: 'socialName', column: 'Social_Name', type: 'text', label: 'Legal Name', required: true, section: 'principal', maxLength: 60 },
   { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: 'Currency', readOnly: true, section: 'other', reference: 'Currency', inputMode: 'selector' },
   { key: 'etgoBusinessType', column: 'EM_Etgo_Business_Type', type: 'select', label: 'Business Type', required: true, section: 'principal', options: [{ value: 'CO', label: 'Company' }, { value: 'FL', label: 'Freelancer' }], defaultValue: 'CO' },
 ];

@@ -258,10 +258,27 @@ describe('contacts import descriptor', () => {
       etgoLastname: 'García',
       etgoEmail: 'ana@acme.example',
       etgoPhone: '+34 910 000 001',
-      etgoWeb: 'https://acme.example',
+      // ETP-5031 follow-up — stripped of its scheme, matching what the Contacts form itself
+      // stores (its "https://" chip is a fixed prefix, never part of the value) and what
+      // BusinessPartnerHandler's server-side domain-shape check now requires.
+      etgoWeb: 'acme.example',
       taxID: 'B12345678',
       searchKey: 'Acme Iberia',
     });
+  });
+
+  it('strips a bare http:// scheme from etgoWeb too', async () => {
+    const ops = await buildOperations({
+      name: 'Acme Iberia', etgoWeb: 'http://acme.example',
+    }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+    assert.equal(ops[0].body.etgoWeb, 'acme.example');
+  });
+
+  it('leaves an already-bare etgoWeb value untouched', async () => {
+    const ops = await buildOperations({
+      name: 'Acme Iberia', etgoWeb: 'acme.example',
+    }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+    assert.equal(ops[0].body.etgoWeb, 'acme.example');
   });
 
   it('builds a location operation when an imported contact includes address data', async () => {
