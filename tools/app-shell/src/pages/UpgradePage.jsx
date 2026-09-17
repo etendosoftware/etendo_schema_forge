@@ -177,7 +177,7 @@ function FirstTenantFreePanel({ ui, onContinue }) {
   );
 }
 
-function SuccessPanel({ ui, onContinue, entering, enterError }) {
+function SuccessPanel({ ui, onContinue, onTransfer, entering, transferTarget, enterError }) {
   return (
     <Card data-testid="upgrade-success">
       <CardHeader data-testid="CardHeader__58bad7">
@@ -203,6 +203,20 @@ function SuccessPanel({ ui, onContinue, entering, enterError }) {
               <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />
             </>}
         </Button>
+        <div className="border-t pt-4">
+          <p className="text-sm font-medium">{ui('upgradeMigrationTitle')}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{ui('upgradeMigrationBody')}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => onTransfer('product')} disabled={entering}
+              data-testid="upgrade-migrate-products">
+              {transferTarget === 'product' ? <Loader2 className="h-4 w-4 animate-spin" /> : ui('upgradeMigrateProducts')}
+            </Button>
+            <Button variant="outline" onClick={() => onTransfer('contacts')} disabled={entering}
+              data-testid="upgrade-migrate-contacts">
+              {transferTarget === 'contacts' ? <Loader2 className="h-4 w-4 animate-spin" /> : ui('upgradeMigrateContacts')}
+            </Button>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
@@ -251,6 +265,7 @@ export default function UpgradePage() {
   const { enterByClientName } = useEnvironmentSwitch({ enabled: false });
   const [entering, setEntering] = useState(false);
   const [enterError, setEnterError] = useState(false);
+  const [transferTarget, setTransferTarget] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -488,6 +503,7 @@ export default function UpgradePage() {
         ui={ui}
         entering={entering}
         enterError={enterError}
+        transferTarget={transferTarget}
         // Enter the tenant that was just provisioned. Signing out is the
         // fallback, not the route: it only happens when the new environment
         // cannot be reached, which is also the only case where re-authenticating
@@ -498,6 +514,20 @@ export default function UpgradePage() {
           const entered = await enterByClientName(form.tenantName);
           if (!entered) {
             setEntering(false);
+            setEnterError(true);
+            emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_ENTER_TENANT_FAILED);
+          }
+        }}
+        onTransfer={async windowName => {
+          setEnterError(false);
+          setTransferTarget(windowName);
+          setEntering(true);
+          const entered = await enterByClientName(form.tenantName);
+          if (entered) {
+            navigate(`/${windowName}`);
+          } else {
+            setEntering(false);
+            setTransferTarget(null);
             setEnterError(true);
             emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_ENTER_TENANT_FAILED);
           }
