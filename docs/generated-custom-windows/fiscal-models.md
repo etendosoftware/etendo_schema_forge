@@ -459,6 +459,26 @@ on the form at all. If either concept is ever reintroduced, it needs a NEW real 
 computation behind it first — reusing the old id/labelKey would misleadingly imply a fix to a
 Classic limitation that still exists.
 
+### Box-to-AEAT-param wiring — `BOX_PARAM_MAP` completeness (ETP-5391)
+
+`BOX_PARAM_MAP` (`fiscalModelsUtils.js`) is the box-value counterpart of `applyIdentParams`'s
+checkbox table above: it maps an AD box number to the exact AEAT request-param name
+`applyBoxParams` forwards it under, on both the file-generation path (`generate303File`) and the
+AEAT telematic-submission path (`AeatSubmitFlow.jsx`). A box with no entry here is editable in the
+UI but silently dropped — identical failure mode to an unwired `identChecks` checkbox before
+ETP-5027.
+
+Four boxes had exactly that gap and are now fixed — all four already existed as editable UI rows
+in the (always-visible, not last-period-gated) `resultado_final` section; only their `BOX_PARAM_MAP`
+entry was missing:
+
+| Box | AEAT param | Note |
+|---|---|---|
+| 65 | `ToPublicTreasury` | "Atribuible al Estado" %, `atribuible_estado` row. Also the same value casilla 107 (`territorio_comun`) mirrors in the UI — see "Last-period-only sections" below. `AEAT303Report2014.java:818` and `AEAT303Report2018LastPeriod`'s `commonTerritory()` both read this one key off box 65, so 107 needs no `BOX_PARAM_MAP` entry of its own. |
+| 70 | `ComplementaryAmt` | "A deducir" — complementary/rectifying-return amount to deduct, `a_deducir` row. Gated server-side by `IsComplementary=Y` (`AEAT303Report2014.java:946-958`). |
+| 76 | `REG_CUOTAS_ART80` | Regularización cuotas art. 80.cinco.5ª LIVA, `reg_cuotas_art80` row (`AEAT303Report2014LastPeriod`). |
+| 77 | `IVA_IMPORT_ADUANA` | IVA de importación liquidado por la Aduana pendiente de ingreso, `iva_importacion` row (`AEAT303Report2014LastPeriod`). |
+
 ### Live data
 
 When in real mode, `FmModel303Page` reads `liveBoxes` / `liveSummary` from the `_precomputed` field passed at navigation. The compute button triggers a fresh `computeBoxes303` call. File generation calls `generate303File(decl, { token, apiBaseUrl })` → `GET /fiscal303/generate?year=&period=&tipo=`.
@@ -556,6 +576,53 @@ so it is not silently reopened later:
   chain to `AEAT303Report2025` (see "Identification section" above, which already documents its
   bank-data visibility gating) — it does not feed into `recomputeDerivedBoxes`'s formula at all,
   by design, matching Classic's own handling. This is expected behavior, not a gap.
+
+### Last-period-only sections — "Información adicional" (ETP-5391)
+
+The Modelo 303 detail page's "Información adicional" tab (`CASILLAS_SECTIONS`'s `info_adicional`
+group in `FmModel303Page.jsx`) now renders three extra sections — matching Classic's own last-period
+popup — but **only when the declaration's period is the last of the fiscal year** (`T4` quarterly or
+`12` monthly, per `isLastPeriodOfYear`). For any other period they are absent from the layout
+entirely: `getLayout303` (`fm303Layouts.js`) filters them out via a dedicated
+`LAST_PERIOD_ONLY_SECTIONS` set, the same mechanism box 44 ("prorrata definitiva") already used for
+its own last-period-only row. All three sections are plain AEAT-protocol request params forwarded
+verbatim by `Fiscal303SubmissionSupport`'s `mergeAeatRequestParams` — no backend change was needed,
+same mechanism as every other `BOX_PARAM_MAP`/`IDENT_PARAM_MAP` entry (see "Identification
+checkboxes" and "Box-to-AEAT-param wiring" above).
+
+- **`declaracion_terceros`** — a single checkbox, "Presentación de la declaración anual de
+  operaciones con terceros (Modelo 347)" (the Modelo 347 filing-exemption declaration). Forwarded as
+  the literal string param `347TAX_FORM = 'Y'` when checked — **not** through the generic
+  `IDENT_PARAM_MAP` boolean-forwarding path the rest of `applyIdentParams` uses, because
+  `AEAT303Report2019.java` compares `inputParams.get('347TAX_FORM')` against the literal string
+  `'Y'`; the generic path would have sent the string `'true'` and never matched.
+- **`tributacion_territorial`** — the territorial-taxation split, four editable percent boxes plus
+  one read-only derived one:
+  - Casillas **89 (Álava)**, **90 (Gipuzkoa)**, **91 (Vizcaya)**, **92 (Navarra)** — editable
+    percentages, each a plain `BOX_PARAM_MAP` entry (`ALAVA`/`GUIPUZCOA`/`VIZCAYA`/`NAVARRA`) read
+    straight from AEAT's `AEAT303Report2018LastPeriod` last-period input params.
+  - Casilla **107 (Territorio Común)** is **read-only** and always mirrors casilla **65**
+    ("Atribuible al Estado", the always-visible percent box in the `resultado_final` section — see
+    "Box-to-AEAT-param wiring" above). It is a `derivedValue: { box: 65, defaultValue: 100 }` row,
+    rendered by `FmBoxes303`'s `renderDerivedCell`, not an independently editable field. This is
+    deliberate: Classic's own `commonTerritory()` computes 107 from the exact same `ToPublicTreasury`
+    value box 65 already carries, so two independently-editable UI fields for the same underlying
+    AEAT param used to let a user set them to conflicting values — fixed by making 107 a live mirror
+    instead of its own row. `BOX_PARAM_MAP` no longer has a 107 entry; box 65 alone is forwarded.
+- **`info_adicional_ultimo_periodo`** — five plain manual-override boxes, each a straightforward
+  `BOX_PARAM_MAP` entry read from `inputParams` by `AEAT303Report2018LastPeriod`/
+  `AEAT303Report2021`, exactly like box 44 (prorrata definitiva): casilla **95** (REAGYP — régimen
+  especial agricultura/ganadería/pesca), **97** (bienes usados/objetos de arte/antigüedades/objetos
+  de colección), **98** (régimen especial de Agencias de Viajes), **127** (operaciones sujetas y
+  acogidas a la OSS), **128** (operaciones intragrupo, arts. 78/79 LIVA). Boxes 96 (always
+  zero-filled) and 99 (computed from DB) are intentionally NOT exposed as manual inputs here.
+
+**Percent-box validation (65, 89, 90, 91, 92).** Any cell whose column is typed `'percent'` (via
+`cellTypes`/`colTypes` in `fm303Layouts.js`) is now clamped to `[0, 100]` and rounded to 2 decimal
+places on blur or Enter — `FmBoxes303.jsx`'s `clampPercentValue`, applied in `renderCellInput`'s
+`commit` before calling `onBoxChange`. This is the same validation for the pre-existing box 65 field
+and the four new last-period territorial boxes; the HTML `max`/`min` attributes alone don't stop
+someone typing `150` and tabbing away, so the clamp also runs in JS right before the value commits.
 
 ### Organization identity
 
@@ -1320,7 +1387,7 @@ This in-modal guard is now **defense in depth**: `FmListPage`'s "+ Nueva declara
 `NewDeclModal` was restyled from a plain 3-`<select>` form into the richer modal chrome the rest of `FmOverlays.jsx` already used (`.fm-config-modal` header/body/footer, same as `PresentModal`/`FileGenModal`/`ConfigDrawer`). Behaviorally, `onConfirm` still fires with the exact same shape, `{ model, year, period, status: 'draft' }` — this was a markup/CSS change only, plus one additive feature described below.
 
 - **Modelo** is now a button that opens a searchable dropdown (`ModelSelectMenu`, a private helper in `FmOverlays.jsx`) — one row per active model, each showing the model-number badge, its catalog name and description (reusing the same `fm.catalog.{id}.name` / `.desc` keys `FmCatalogPage.jsx` already relies on, so the row content stays in sync with the catalog automatically), and a search input that filters by number or name. It closes on outside-click via the same ref+`mousedown`-listener idiom used elsewhere in this file.
-- **Año** is now a button-triggered dropdown (`YearSelectMenu`, another private helper in `FmOverlays.jsx`) instead of a `<select>` — mechanically a simplified sibling of the Modelo dropdown: same button + outside-click-closing panel + checkmark on the selected row, backed by `SUPPORTED_YEARS` sorted most-recent-first. It skips the parts that don't apply to a short flat list of year numbers — no search input, no chip, no subtitle — just the year label and, on the selected row, a checkmark.
+- **Año** is now a button-triggered dropdown (`YearSelectMenu`, another private helper in `FmOverlays.jsx`) instead of a `<select>` — mechanically a simplified sibling of the Modelo dropdown: same button + outside-click-closing panel + checkmark on the selected row. It skips the parts that don't apply to a short flat list of year numbers — no search input, no chip, no subtitle — just the year label and, on the selected row, a checkmark. **Restricted to a single selectable year (ETP-5391):** this dropdown is backed by `SELECTABLE_YEARS` (currently `[2026]`), sorted most-recent-first — not by the broader `SUPPORTED_YEARS`. `SUPPORTED_YEARS` (2021-2026) is a separate, wider list that `getLayout303` still uses to resolve the correct historical layout for an EXISTING declaration created in a past year, so those keep opening and rendering correctly; `SELECTABLE_YEARS` only narrows what a user may pick when creating a brand-new one, since AEAT only accepts filings for the current campaign year. `SELECTABLE_YEARS` is intentionally not derived from `SUPPORTED_YEARS` and must be updated by hand (append the new year, `fm303Layouts.js`) whenever a new filing year opens up — past years remain in `SUPPORTED_YEARS` so old declarations never break.
 - **Frecuencia** is a new segmented pill control (Trimestral/Mensual) that drives which **Período** grid is shown: 4 quarter buttons (`T1`–`T4`) or a 6×2 grid of month buttons (`01`–`12`). Switching frequency resets the selected period to the first value of the new list.
 - **Duplicate-declaration awareness — informational only for any non-draft status, no longer disabled (ETP-5187)**: `NewDeclModal` accepts an optional `existingDeclarations` prop — `FmListPage` passes its own `decls` state. Any period button that already has a declaration for the currently selected model+year still renders with a small dot badge (`.fm-newdecl-period-btn--existing` + `.fm-newdecl-period-btn__dot`, plus a `title` hint, `fm.new_decl.period_existing_hint`) but **is no longer disabled** — the user can select it and create a new declaration for that period. This is the rectificativa flow (filed early, more invoices arrived later for the same period), and blocking it outright was wrong. The previous rationale for disabling it (a duplicate submission 500'd server-side on `ETGO_FISCAL_DECL_UQ`) is fixed on the backend side, with no cap on how many declarations a period can have: `FiscalDeclCrudHandler#resolveNextDeclSeq` (`com.etendoerp.go`) assigns each new declaration the next `DECL_SEQ` ordinal (`MAX(DECL_SEQ) + 1` for the same client/org/model/year/period, or `0` for the first one) — a dedicated, unbounded sequence column, not a repurposing of the `DECL_TYPE` ordinaria/complementaria business field, so a 3rd, 4th or Nth declaration for the same period succeeds exactly like the 2nd (matching the real AEAT/legal rule that there is no limit on rectificativas per period) — see "NEO Headless endpoints" below. The real warning ("you're filing a 2nd declaration for this period, check Autoliquidación rectificativa") lives on the newly created declaration's own detail page instead — see "Duplicate-period warning and rectificativa gate" under "Modelo 303 detail page" above. The `useEffect` that used to jump the selection off a disabled period, and the `allPeriodsTaken`-driven disabling of the "Crear declaración" CTA, were both removed along with the disabling itself. `existingDeclarations` is still optional and defaults to "no existing declarations" when omitted, so every caller that predates this feature is unaffected.
 - **Draft periods ARE disabled again — a narrower, status-scoped reversal (ETP-5272 pt.5).** ETP-5187 (above) removed period-disabling entirely; ETP-5272 reintroduces it, but only for a period that already carries a declaration whose `status === 'draft'` — a draft is unfinished, in-progress work, and spawning a 2nd declaration for the exact same period just fragments it instead of the user completing (or deleting) the existing draft first. `NewDeclModal` computes a separate `draftPeriods` set (distinct from the purely-informational `existingPeriods` above, scoped to the same selected `model`+`year`) and, for a period in that set: the button gets `disabled`, its `onClick` returns early, and its `title` hint switches to the distinct `fm.new_decl.period_draft_blocked_hint` ("There's already a draft declaration for this period. Finish or delete it before creating a new one.") instead of the informational `period_existing_hint` — so the user understands *why* this one specific period can't be picked, rather than seeing the same dot-badge hint as a non-draft duplicate. **Any other existing status** (ready/submitted/submitted_ext/submitted_ack) is still the intended rectificativa case from ETP-5187 above and stays exactly as selectable/informational as before — this reversal is scoped to `draft` only, it does not restore the old blanket disabling.
