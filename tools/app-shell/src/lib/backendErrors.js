@@ -224,6 +224,18 @@ const BACKEND_ERROR_MAP = {
   // of the map rather than next to its sibling to stay clear of the pre-existing
   // duplicate block Sonar flags across lines ~41-189 of this file.
   'No pending lines to receive in this purchase order': 'backendError.noPendingLinesToReceiveOrder',
+  // AD_MESSAGE 20552 (module org.openbravo, core-owned — not fixed there). Core's literal says
+  // "business partner" ("tercero" in Spanish), which is wrong Etendo Go terminology: the
+  // equivalent concept in this UI is "Contact" ("Contacto"). Both EN and ES source literals are
+  // mapped so the header save path (DetailView.jsx) renders the correct term (ETP-5397).
+  'Cannot change business partner if there are lines.': 'backendError.cannotChangeBpWithLines',
+  'No se puede modificar el tercero cuando hay líneas.': 'backendError.cannotChangeBpWithLines',
+  // AD_MESSAGE 20502 — sibling of 20552 with the identical "tercero" terminology bug, also
+  // core-owned (org.openbravo). Same fix: translation-only mapping, no core change (ETP-5397).
+  'Cannot change business partner or price list if there are lines.':
+    'backendError.cannotChangeBpOrPriceListWithLines',
+  'No se puede cambiar de tercero ni la tarifa de la factura por existir líneas.':
+    'backendError.cannotChangeBpOrPriceListWithLines',
   // UserRoleAssignmentHandler (com.etendoerp.go, ETP-5264) — the admin-facing "create user" form
   // never shows a username field, so a raw DB username-unique-constraint message would confusingly
   // name a field the user never typed. rejectDuplicateEmail() proactively rejects a duplicate
