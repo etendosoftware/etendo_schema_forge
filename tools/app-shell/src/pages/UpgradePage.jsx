@@ -43,7 +43,7 @@ const STEP_LABELS = {
   finalize: 'upgradeStepFinalize',
 };
 
-const EMPTY_FORM = { tenantName: '', upgradeAction: 'create-productive', conversionClientId: '' };
+const EMPTY_FORM = { tenantName: '', upgradeAction: 'create-productive' };
 const PENDING_CHECKOUT_NAME = 'sf_pending_checkout_tenant_name';
 const PENDING_CHECKOUT_ACTION = 'sf_pending_checkout_action';
 /** Checkout-submitted timestamp, so durationMs survives the Stripe redirect. */
@@ -382,21 +382,6 @@ export default function UpgradePage() {
   const showAccountLoading = phase === 'form' && accountState === 'loading';
   const showFirstTenantFree = phase === 'form' && hasNoTenants;
   const showCheckout = phase === 'form' && accountState !== 'loading' && !hasNoTenants;
-  const demoEnvironments = environments.filter(env => env?.plan !== 'productive');
-  const currentDemo = demoEnvironments.find(env => env.clientId === localStorage.getItem('sf_auth_client_id'))
-    || demoEnvironments[0];
-
-  useEffect(() => {
-    if (currentDemo && !form.conversionClientId) {
-      setForm(previous => ({
-        ...previous,
-        upgradeAction: 'convert-demo',
-        conversionClientId: currentDemo.clientId,
-        tenantName: currentDemo.clientName || previous.tenantName,
-      }));
-    }
-  }, [currentDemo?.clientId]);
-
   const handleSubmit = event => {
     event.preventDefault();
     setFormError(null);
@@ -412,7 +397,7 @@ export default function UpgradePage() {
     const alreadyOwned = environments.some(
       env => String(env?.clientName ?? '').trim().toLowerCase() === requested
     );
-    if (form.upgradeAction === 'create-productive' && requested && alreadyOwned) {
+    if (requested && alreadyOwned) {
       validation.tenantName = 'upgradeTenantNameTaken';
       emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_EXISTING_TENANT_NAME_BLOCKED);
     }
@@ -536,9 +521,6 @@ export default function UpgradePage() {
                 >
                   <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" data-testid="CircleAlert__58bad7" />
                   <div className="space-y-2">
-                    {/* Without the environment list the convert-this-environment option cannot be
-                        offered, so the form silently collapses to "create a new tenant". Say so
-                        rather than letting the user pay for something they did not choose. */}
                     <p>{ui('upgradeEnvironmentsUnavailable')}</p>
                     <Button
                       type="button"
@@ -554,43 +536,6 @@ export default function UpgradePage() {
                     </Button>
                   </div>
                 </div>
-              )}
-
-              {demoEnvironments.length > 0 && (
-                <fieldset className="space-y-3" data-testid="upgrade-target-choice">
-                  <legend className="text-sm font-medium">{ui('upgradeTargetLabel')}</legend>
-                  <label className="flex items-start gap-2 rounded-md border p-3">
-                    <input
-                      type="radio"
-                      name="upgradeAction"
-                      value="convert-demo"
-                      checked={form.upgradeAction === 'convert-demo'}
-                      onChange={() => update('upgradeAction', 'convert-demo')}
-                      data-testid="upgrade-target-convert"
-                    />
-                    <span>
-                      <span className="block text-sm font-medium">{ui('upgradeConvertDemo')}</span>
-                      <span className="block text-xs text-muted-foreground">{ui('upgradeConvertDemoBody')}</span>
-                    </span>
-                  </label>
-                  <label className="flex items-start gap-2 rounded-md border p-3">
-                    <input
-                      type="radio"
-                      name="upgradeAction"
-                      value="create-productive"
-                      checked={form.upgradeAction === 'create-productive'}
-                      onChange={() => {
-                        update('upgradeAction', 'create-productive');
-                        update('tenantName', '');
-                      }}
-                      data-testid="upgrade-target-create"
-                    />
-                    <span>
-                      <span className="block text-sm font-medium">{ui('upgradeCreateNew')}</span>
-                      <span className="block text-xs text-muted-foreground">{ui('upgradeCreateNewBody')}</span>
-                    </span>
-                  </label>
-                </fieldset>
               )}
 
               {formError && (

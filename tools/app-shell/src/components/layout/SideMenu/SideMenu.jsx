@@ -74,7 +74,7 @@ import { useMenuLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import { useFeatureFlag, PROOF_OF_CONCEPT_MENU } from '@/lib/flags';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
-import { environmentPlanLabelKey } from '@/lib/environmentPresentation.js';
+import { environmentPlanLabelKey, environmentTrialLabel } from '@/lib/environmentPresentation.js';
 import menuConfig from '@/menu.json';
 
 const ICON_MAP = {
@@ -619,6 +619,14 @@ export default function SideMenu({
                       {ui(environmentPlanLabelKey(currentEnvironment))}
                     </span>
                   )}
+                  {currentEnvironment && environmentTrialLabel(currentEnvironment, ui) && (
+                    <span
+                      className="shrink-0 text-[10px] text-muted-foreground"
+                      data-testid="current-environment-trial-status"
+                    >
+                      {environmentTrialLabel(currentEnvironment, ui)}
+                    </span>
+                  )}
                   <ChevronDown
                     className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
                     data-testid="ChevronDown__247c75" />
@@ -653,6 +661,14 @@ export default function SideMenu({
                         )}>
                           {ui(environmentPlanLabelKey(env))}
                         </span>
+                        {environmentTrialLabel(env, ui) && (
+                          <span
+                            className="ml-2 shrink-0 text-[10px] text-muted-foreground"
+                            data-testid={`environment-trial-status-${env.clientId}`}
+                          >
+                            {environmentTrialLabel(env, ui)}
+                          </span>
+                        )}
                         {switching === env.clientId && (
                           <Loader2
                             className="h-3.5 w-3.5 ml-2 shrink-0 animate-spin"

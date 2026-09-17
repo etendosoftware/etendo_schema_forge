@@ -172,6 +172,15 @@ For expired managed demos without a subscription, retain the historical trial. P
 
 ## 6. Access policy and enforcement
 
+The first implementation slice is the provider-neutral `EnvironmentAccessPolicy` in
+`com.etendoerp.go.payment`. It validates the configured trial duration, starts the demo clock from
+the persisted trial start instant, treats the exact deadline as expired, and evaluates membership
+before commercial eligibility. A current subscription grants access to both demo and productive
+environments; invitations therefore remain independent from the account that owns billing. The
+policy is intentionally pure and receives the current time and configuration from its caller, so
+database adapters and request filters can share the same decision without contacting Stripe or any
+other provider on the request path.
+
 ### Decision order
 
 ```text

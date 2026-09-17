@@ -17504,6 +17504,8 @@
     "switchCompany": "Cambiar empresa",
     "environmentDemo": "Demo",
     "environmentProductive": "Productivo",
+    "environmentTrialDaysRemaining": "Quedan {days} días",
+    "environmentDemoExpired": "Demo vencido",
     "navigation": "Navegación",
     "collapseMenu": "Contraer menú",
     "expandMenu": "Expandir menú",

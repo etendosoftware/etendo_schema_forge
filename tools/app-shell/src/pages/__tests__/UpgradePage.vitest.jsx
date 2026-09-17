@@ -436,9 +436,8 @@ describe('UpgradePage — environment lookup failure (ETP-4985)', () => {
   }
 
   it('warns that the environment list is missing instead of silently offering only a new tenant', async () => {
-    // Without the list the convert-this-environment option cannot be rendered, so the page would
-    // otherwise show a bare "create a new tenant" checkout — the user pays for the wrong thing
-    // with no indication anything went wrong.
+    // The environment list is still useful for the account view, but never controls whether the
+    // upgrade page offers conversion: productive creation always targets a new environment.
     installFetch({ environments: unauthorizedEnvironments });
     await renderUpgradePage();
 
@@ -454,7 +453,7 @@ describe('UpgradePage — environment lookup failure (ETP-4985)', () => {
     expect(screen.getByTestId('upgrade-submit')).toBeEnabled();
   });
 
-  it('retries the lookup and reveals the convert option once it succeeds', async () => {
+  it('retries the lookup without exposing a demo conversion option', async () => {
     const user = userEvent.setup();
     let attempt = 0;
     installFetch({
@@ -469,7 +468,7 @@ describe('UpgradePage — environment lookup failure (ETP-4985)', () => {
 
     await user.click(screen.getByTestId('upgrade-environments-retry'));
 
-    await screen.findByTestId('upgrade-target-choice');
+    await waitFor(() => expect(screen.queryByTestId('upgrade-target-choice')).not.toBeInTheDocument());
     expect(screen.queryByTestId('upgrade-environments-unavailable')).not.toBeInTheDocument();
   });
 
@@ -478,6 +477,6 @@ describe('UpgradePage — environment lookup failure (ETP-4985)', () => {
     await renderUpgradePage();
 
     expect(screen.queryByTestId('upgrade-environments-unavailable')).not.toBeInTheDocument();
-    expect(screen.getByTestId('upgrade-target-choice')).toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-target-choice')).not.toBeInTheDocument();
   });
 });
