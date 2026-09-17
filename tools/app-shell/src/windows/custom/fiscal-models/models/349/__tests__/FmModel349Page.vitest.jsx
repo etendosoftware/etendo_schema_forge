@@ -7,6 +7,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 
 // Paths below are relative to THIS test file (__tests__/).

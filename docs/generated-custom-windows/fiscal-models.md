@@ -31,7 +31,7 @@ debug contracts.
 - Route: `/fiscal-models` (list, `FmListPage`); model detail pages render inline within the same route (no separate URL) via `FmModel303Page`/`FmModel349Page`.
 - Implementation type: `layoutType: "custom"` — loaded from `customLoaders` in `tools/app-shell/src/windows/registry.js`.
 - Breadcrumb — list page: `Finanzas / Modelos Fiscales` (`` `${ui('finance')} / ${ui('fm.breadcrumb.section')}` ``, `FmListPage.jsx`).
-- Breadcrumb — Modelo 303/349 detail pages: `Finanzas / Modelos Fiscales / Modelo 303 - {periodLabel}` (`FmModel303Page.jsx`) and `Finanzas / Modelos Fiscales / Modelo 349 - {periodLabel}` (`FmModel349Page.jsx`) — 3 segments, consistent between both models. ETP-4945 replaced 3 independently hardcoded, mutually inconsistent breadcrumbs (a raw Spanish literal `Tesorería` on all three pages, with 303 at 2 segments and 349 at 3), and introduced the shared `ui('finance')` / `ui('fm.breadcrumb.section')` keys reused across all three surfaces so the "Modelos Fiscales" segment can't drift between the list and its two detail pages again.
+- Breadcrumb — Modelo 303/349 detail pages: `Finanzas / Modelos Fiscales / Modelo 303 - {periodLabel}` (es_ES) / `Finance / Fiscal Models / Form 303 - {periodLabel}` (en_US) (`FmModel303Page.jsx`), and the equivalent for 349 (`FmModel349Page.jsx`) — 3 segments, consistent between both models. ETP-4945 replaced 3 independently hardcoded, mutually inconsistent breadcrumbs (a raw Spanish literal `Tesorería` on all three pages, with 303 at 2 segments and 349 at 3), and introduced the shared `ui('finance')` / `ui('fm.breadcrumb.section')` keys reused across all three surfaces so the "Modelos Fiscales" segment can't drift between the list and its two detail pages again. ETP-5338 fixed a follow-on bug ETP-4945 left in place: the "Modelo 303"/"Modelo 349" segment itself (and the matching page-title text) was still a raw hardcoded Spanish literal even under `en_US` — now resolved via the shared `fm.config.m303.title` / `fm.config.m349.title` keys (already used by the catalog config section header), which is also why the English segment reads "Form 303", not "Model 303" — "Form" is this codebase's established translation of AEAT's "Modelo" (see `fm.catalog.303.name` / `fm.config.m303.title`).
 
 ## Auto-compute architecture (`useFiscalAutoCompute`)
 
@@ -1306,6 +1306,43 @@ The 303/349 color pairs (background/foreground/border) are defined once, in `fis
 ### Resultado sign-coloring — KPI and list column (`resolveResultColors`, ETP-5236)
 
 The Modelo 303 detail page's "Resultado" KPI (`FmModel303Page.jsx`) and the declarations list's "Resultado" column (`ResultText` in `FmListPage.jsx`) both color the result by the AEAT result kind's sign, through one shared helper — `resolveResultColors(resultKind)` in `fiscalModelsUtils.js` (a `RESULT_COLOR_MAP` lookup): `'I'` (a ingresar — the org owes money) renders green, via the `--status-success-{bg,fg}` tokens; `'V'`/`'C'` (a devolver / a compensar — refundable or offsettable) render blue, via `--status-info-{bg,fg}`; anything else (`'N'`, null) keeps the neutral styling (`hsl(var(--muted))` / `hsl(var(--foreground))`) this always had. `FmModel303Page.jsx` originally carried its own local copy of this mapping (`RESULT_COLOR_MAP`/`resolveResultColors`); it now imports the shared export instead, so the two call sites cannot drift apart. Modelo 349 declarations don't currently produce `I`/`V`/`C` result kinds (see "Result in list view" below), so in the shared list only 303 rows are actually colored by this today — the code path itself is shared across both models, not gated to 303.
+
+### Toolbar filters, KPI badges, and "+ Nueva declaración" — hardcoded Spanish under en_US (ETP-5338)
+
+Reported via manual testing with the English locale selected: the year/model/status
+`FilterDropdown` labels ("Todos los años" / "Todos los modelos" / "Todos los estados"), the
+"+ Nueva declaración" CTA, the model dropdown option labels ("Modelo 303"/"Modelo 349"), and two
+KPI card labels/badges ("Por vencer" / "Esta semana", "Incidencias" / "Requiere revisión") were
+Spanish string literals in `FmListPage.jsx`, never routed through `t()`/`useUI()`, so they stayed
+in Spanish regardless of the selected locale. All of the corresponding `fm.*` keys already existed
+in all 3 locale files (`fm.filter.all_years/all_models/all_statuses`, `fm.action.new_declaration`,
+`fm.kpi.upcoming`/`fm.kpi.upcoming_sub`, `fm.m303.kpi.incidents`/`fm.kpi.incidents_sub`,
+`fm.config.m303.title`/`fm.config.m349.title`) — this was a "forgot to call the existing key"
+regression from rapid iteration, not a missing-translation gap. Fixed by wiring each literal
+through the existing `t`/`ui` (`useUI()`) already in scope in `FmListPage.jsx`.
+
+Same fix also covers the row's "Última actualización" date (`normDecl`'s `updatedAt` field): it
+was formatted with a hardcoded `toLocaleDateString('es-ES')`, always rendering the Spanish
+`DD/MM/YYYY` shape regardless of locale. Now reads the active locale via `useLocaleSwitch()`
+(the same hook `components/ui/date-range-popover.jsx` uses) and formats with the BCP-47 tag
+derived from it.
+
+**Addendum — Modelo 349's `periodLabel` month name (ETP-5338).** A related but distinct bug found
+in the same sweep: `FmModel349Page.jsx`'s breadcrumb/page-title `periodLabel` (`"{year} / {month
+name}"`) built its month name with `new Intl.DateTimeFormat(undefined, { month: 'long' })`. Passing
+`undefined` as the locale does not fall back to the app's UI locale — it resolves to the
+**runtime's/browser's default locale** (typically the OS language), so under an es-language OS the
+month name rendered in Spanish ("octubre") even with the in-app language toggle set to English, and
+vice versa. Fixed the same way as `normDecl.updatedAt` above: read the active locale via
+`useLocaleSwitch()` and convert it to a BCP-47 tag (`appLocale.replace('_', '-')`, defaulting to
+`es-ES`) before handing it to `Intl.DateTimeFormat`, so the month name now tracks the UI locale
+toggle instead of the host environment.
+
+Modelo 303's period label was checked as part of the same fix and confirmed **unaffected** — it
+never calls `Intl.DateTimeFormat` at all. 303 periods are AEAT period codes (`1T`/`2T`/`3T`/`4T`,
+monthly codes, etc.), not calendar month numbers, and its label is built by the model-specific
+`formatPeriod()` helper, which maps codes to i18n keys directly rather than deriving a month name
+from a `Date`. There was no locale leak to fix on 303.
 
 ### Sort and search (ETP-4755)
 

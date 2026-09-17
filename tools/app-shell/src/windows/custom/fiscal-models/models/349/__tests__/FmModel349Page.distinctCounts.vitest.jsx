@@ -20,6 +20,7 @@ vi.mock('@/i18n', () => ({
     if (key === 'fm.m349.banner.vies_sub') return 'Consulta en vivo al servicio VIES — informativa, no bloquea la declaración';
     return key;
   },
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 vi.mock('../../../fiscalModelsUtils.js', () => ({
   formatAmount: (n) => (n == null ? '—' : String(n)),

@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
-import { useUI } from '@/i18n';
+import { useUI, useLocaleSwitch } from '@/i18n';
 import {
   LayoutGrid, ArrowUpDown,
   ChevronDown, Calendar, Clock, TriangleAlert, OctagonAlert, Check,
@@ -286,8 +286,8 @@ function KpiCardsRow({ decls, t, kpiFilter, onFilterClick }) {
         <KpiWidget
           icon={<Calendar size={20} strokeWidth={1.75} data-testid="Calendar__cb728e" />}
           iconColor="hsl(var(--muted-foreground))"
-          label="Por vencer"
-          badge="Esta semana"
+          label={t('fm.kpi.upcoming') ?? 'Por vencer'}
+          badge={t('fm.kpi.upcoming_sub') ?? 'Esta semana'}
           badgeBg="var(--status-warning-bg)"
           badgeColor="var(--status-warning-fg)"
           value={upcomingCount}
@@ -300,7 +300,7 @@ function KpiCardsRow({ decls, t, kpiFilter, onFilterClick }) {
           icon={<Clock size={20} strokeWidth={1.75} data-testid="Clock__cb728e" />}
           iconColor="hsl(var(--muted-foreground))"
           label={t('fm.kpi.pending') ?? 'Pendientes'}
-          badge="Sin presentar"
+          badge={t('fm.kpi.pending_sub') ?? 'Sin presentar'}
           badgeBg="hsl(var(--muted))"
           badgeColor="hsl(var(--muted-foreground))"
           value={pendingCount}
@@ -312,8 +312,8 @@ function KpiCardsRow({ decls, t, kpiFilter, onFilterClick }) {
         <KpiWidget
           icon={<TriangleAlert size={20} strokeWidth={1.75} data-testid="TriangleAlert__cb728e" />}
           iconColor="hsl(var(--muted-foreground))"
-          label="Incidencias"
-          badge="Requiere revisión"
+          label={t('fm.m303.kpi.incidents') ?? 'Incidencias'}
+          badge={t('fm.kpi.incidents_sub') ?? 'Requiere revisión'}
           badgeBg="var(--status-destructive-bg)"
           badgeColor="hsl(var(--destructive))"
           value={incidentCount}
@@ -325,10 +325,12 @@ function KpiCardsRow({ decls, t, kpiFilter, onFilterClick }) {
   );
 }
 
-function normDecl(d) {
+// `bcpLocale` defaults to 'es-ES' to preserve behavior for callers outside a
+// component render (e.g. tests) that don't have access to the active locale.
+function normDecl(d, bcpLocale = 'es-ES') {
   return {
     ...d,
-    updatedAt: d.updatedAt ? new Date(d.updatedAt).toLocaleDateString('es-ES') : '—',
+    updatedAt: d.updatedAt ? new Date(d.updatedAt).toLocaleDateString(bcpLocale) : '—',
     result: d.result ?? null,
     incidents: d.incidents ?? { blocking: 0, warning: 0 },
   };
@@ -502,6 +504,8 @@ function fmListRowClassName({ selected, current }) {
 export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, declStatusPatch, declManualDataPatch, token, apiBaseUrl }) {
   const ui = useUI();
   const t  = ui;
+  const { locale: appLocale } = useLocaleSwitch();
+  const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
   const apiFetch = useApiFetch(apiBaseUrl);
 
   const [decls, setDecls] = useState(propDecls ?? []);
@@ -511,9 +515,9 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     apiFetch(`${base}/fiscal303/declarations`, { baseUrl: '' })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(data => setDecls((Array.isArray(data) ? data : (data?.data ?? [])).map(normDecl)))
+      .then(data => setDecls((Array.isArray(data) ? data : (data?.data ?? [])).map(d => normDecl(d, bcpLocale))))
       .catch(() => {});
-  }, [token, apiBaseUrl, apiFetch]);
+  }, [token, apiBaseUrl, apiFetch, bcpLocale]);
 
   // ETP-5338 CRITICAL FIX — this component "stays mounted at all times" (see the render
   // below) so that `useFiscalAutoCompute` keeps polling, which means it is NEVER remounted
@@ -719,7 +723,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
         body: JSON.stringify({ model, year: parseInt(year, 10), period, status }),
       })
         .then(r => r.ok ? r.json() : Promise.reject(r.status))
-        .then(created => setDecls(ds => [normDecl(created?.data ?? created), ...ds]))
+        .then(created => setDecls(ds => [normDecl(created?.data ?? created, bcpLocale), ...ds]))
         .catch(() => {
           // ETP-5272 — this used to silently swallow the backend's error (a 409 when a draft
           // already exists for the period, or any other failure), leaving the user staring at a
@@ -728,7 +732,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           toast.error(t('fm.list.new_decl_failed') ?? 'No se pudo crear la declaración.');
         });
     }
-  }, [token, apiBaseUrl, apiFetch, t]);
+  }, [token, apiBaseUrl, apiFetch, t, bcpLocale]);
 
   // Row hover "delete" action (ETP-5187) — draft declarations only, gated the same
   // way both here (caller only ever passes a draft decl into setDeleteTarget) and
@@ -778,8 +782,8 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
   const statusOptions = STATUS_FILTER_OPTIONS;
 
   const modelOptions = [
-    { value: '303', label: 'Modelo 303', badge: '303' },
-    { value: '349', label: 'Modelo 349', badge: '349' },
+    { value: '303', label: t('fm.config.m303.title') ?? 'Modelo 303', badge: '303' },
+    { value: '349', label: t('fm.config.m349.title') ?? 'Modelo 349', badge: '349' },
   ].filter(opt => activeModels[opt.value]);
 
   const activeDecls = decls.filter(d => activeModels[d.model]);
@@ -1019,21 +1023,21 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
       {/* ── Toolbar ──────────────────────────────────────────────── */}
       <div className="fm-toolbar">
         <FilterDropdown
-          label="Todos los años"
+          label={t('fm.filter.all_years') ?? 'Todos los años'}
           value={yearFilter}
           options={yearOptions}
           onChange={setYearFilter}
           data-testid="FilterDropdown__cb728e" />
         {catalogLoaded && (
           <FilterDropdown
-            label="Todos los modelos"
+            label={t('fm.filter.all_models') ?? 'Todos los modelos'}
             value={modelFilter}
             options={modelOptions}
             onChange={setModelFilter}
             data-testid="FilterDropdown__cb728e" />
         )}
         <FilterDropdown
-          label="Todos los estados"
+          label={t('fm.filter.all_statuses') ?? 'Todos los estados'}
           value={statusFilter}
           options={statusOptions}
           onChange={setStatusFilter}
@@ -1112,7 +1116,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
             onClick={() => setShowNewDecl(true)}
           >
-            + Nueva declaración
+            + {t('fm.action.new_declaration') ?? 'Nueva declaración'}
           </button>
         )}
       </div>

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
-import { useUI } from '@/i18n';
+import { useUI, useLocaleSwitch } from '@/i18n';
 import {
   Download, CircleCheck, Search,
   Loader2, Globe, ChevronDown, Users, FileEdit,
@@ -665,6 +665,8 @@ function DetailTabContent({
 export default function FmModel349Page({ decl, onBack, onStatusChange, token, apiBaseUrl }) {
   const ui = useUI();
   const t = ui;
+  const { locale: appLocale } = useLocaleSwitch();
+  const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
 
   const [status,      setStatus]      = useState(decl.status);
   // submissionMethod (ETP-4755) — see FmModel303Page.jsx's identical state for the full
@@ -714,9 +716,14 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
 
   const operators = liveOperators ?? decl.operators ?? MOCK_OPERATORS;
 
+  // ETP-5338 — `undefined` locale here used to resolve to the RUNTIME's/browser's
+  // default locale (typically the OS language), not the app's selected UI locale —
+  // so under an es-language OS the breadcrumb showed "octubre" even with the UI
+  // set to English. Pass the resolved `bcpLocale` explicitly, same fix pattern as
+  // `normDecl.updatedAt` in FmListPage.jsx.
   const monthNum  = /^\d{2}$/.test(decl.period) ? parseInt(decl.period, 10) : null;
   const monthName = monthNum
-    ? new Intl.DateTimeFormat(undefined, { month: 'long' }).format(new Date(2000, monthNum - 1, 1))
+    ? new Intl.DateTimeFormat(bcpLocale, { month: 'long' }).format(new Date(2000, monthNum - 1, 1))
     : null;
   const periodLabel = monthName ? `${decl.year} / ${monthName}` : `${decl.year} ${decl.period}`;
 
@@ -963,7 +970,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span className="fm-model-badge fm-model-badge--349">349</span>
           <span style={{ fontWeight: 600, fontSize: 20, color: 'hsl(var(--foreground))' }}>
-            Modelo 349 - {periodLabel}
+            {t('fm.config.m349.title') ?? 'Modelo 349'} - {periodLabel}
           </span>
           <div style={{ flex: 1 }} />
           <MoreOptionsMenu
@@ -972,7 +979,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
             data-testid="MoreOptionsMenu__346dd5" />
         </div>
         <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginTop: 2 }}>
-          {ui('finance')} / {ui('fm.breadcrumb.section')} / Modelo 349 - {periodLabel}
+          {ui('finance')} / {ui('fm.breadcrumb.section')} / {t('fm.config.m349.title') ?? 'Modelo 349'} - {periodLabel}
         </div>
       </div>
       {/* ── Action bar ───────────────────────────────────────────── */}

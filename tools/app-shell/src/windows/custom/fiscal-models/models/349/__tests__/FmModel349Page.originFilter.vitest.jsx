@@ -21,6 +21,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 vi.mock('../../../fiscalModelsUtils.js', () => ({
   formatAmount: (n) => (n == null ? '—' : String(n)),

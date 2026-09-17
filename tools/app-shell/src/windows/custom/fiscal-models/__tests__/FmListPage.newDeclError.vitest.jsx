@@ -13,6 +13,13 @@ import { registerApiSession, resetApiSessionForTests } from '@/auth/api.js';
 vi.mock('@etendosoftware/app-shell-core', () => ({
   useUI: () => (key) => key,
 }));
+// ETP-5338 — FmListPage.jsx imports useUI/useLocaleSwitch from '@/i18n' (which
+// re-exports the app-shell-core '/i18n' subpath, a different module id than the
+// bare package mocked above), so this is the mock that actually intercepts.
+vi.mock('@/i18n', () => ({
+  useUI: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
+}));
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }));
@@ -101,7 +108,7 @@ async function waitForCatalogLoad() {
 }
 
 function openNewDeclModal() {
-  fireEvent.click(screen.getByText('+ Nueva declaración'));
+  fireEvent.click(screen.getByText('+ fm.action.new_declaration'));
 }
 
 beforeEach(() => {

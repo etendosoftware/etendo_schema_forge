@@ -42,6 +42,7 @@ vi.mock('@/i18n', () => ({
     if (raw == null) return key;
     return Object.keys(params ?? {}).reduce((acc, p) => acc.replace(`{${p}}`, params[p]), raw);
   },
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 
 vi.mock('sonner', () => ({

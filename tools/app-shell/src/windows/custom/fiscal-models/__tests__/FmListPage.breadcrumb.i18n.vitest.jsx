@@ -23,7 +23,7 @@ const realUiEs = makeRealUI(esES);
 const realUiEn = makeRealUI(enUS);
 
 let activeUi = realUiEs;
-vi.mock('@/i18n', () => ({ useUI: () => activeUi }));
+vi.mock('@/i18n', () => ({ useUI: () => activeUi, useLocaleSwitch: () => ({ locale: 'es_ES' }) }));
 
 vi.mock('../fiscal-models.css', () => ({}));
 vi.mock('../useFiscalAutoCompute.js', () => ({

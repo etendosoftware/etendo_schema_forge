@@ -790,7 +790,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="fm-model-badge fm-model-badge--303">303</span>
           <span style={{ fontWeight: 600, fontSize: 20, color: 'hsl(var(--foreground))' }}>
-            Modelo 303 - {periodLabel}
+            {t('fm.config.m303.title') ?? 'Modelo 303'} - {periodLabel}
           </span>
           <MoreOptionsMenu
             favKey="fiscal-models"
@@ -798,7 +798,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
             data-testid="MoreOptionsMenu__4f6c0d" />
         </div>
         <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginTop: 1 }}>
-          {ui('finance')} / {ui('fm.breadcrumb.section')} / Modelo 303 - {periodLabel}
+          {ui('finance')} / {ui('fm.breadcrumb.section')} / {t('fm.config.m303.title') ?? 'Modelo 303'} - {periodLabel}
         </div>
       </div>
       {/* ── Action bar ───────────────────────────────────────────── */}

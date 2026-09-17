@@ -15,6 +15,7 @@ vi.mock('@/i18n', () => ({
     const raw = copy[key] ?? key;
     return Object.keys(params ?? {}).reduce((acc, p) => acc.replace(`{${p}}`, params[p]), raw);
   },
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 vi.mock('../../../fiscalModelsUtils.js', () => ({
   formatAmount: (n) => (n == null ? '—' : String(n)),
