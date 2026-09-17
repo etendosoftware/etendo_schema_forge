@@ -1,8 +1,8 @@
 {
-  "version": "0.14.0",
+  "version": "0.15.0",
   "generatedAt": "2026-04-27T19:18:32.198Z",
-  "updatedAt": "2026-09-17T12:26:07.975Z",
-  "checksum": "c60877a3a44b6718",
+  "updatedAt": "2026-09-17T13:47:19.773Z",
+  "checksum": "b0bcbe82092fc325",
   "frontendContract": {
     "window": {
       "id": "137",
@@ -79,6 +79,8 @@
             "grid": false,
             "form": true,
             "sourceRequired": true,
+            "backendFilterKey": "validFromDate",
+            "backendSortKey": "validFromDate",
             "section": "principal",
             "seq": 5,
             "validation": {
@@ -178,6 +180,7 @@
               }
             ],
             "backendFilterKey": "salesPurchaseType",
+            "backendSortKey": "salesPurchaseType",
             "defaultValue": "B",
             "section": "principal",
             "seq": 3,
