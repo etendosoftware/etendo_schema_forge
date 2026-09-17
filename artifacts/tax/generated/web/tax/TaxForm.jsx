@@ -2,7 +2,7 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:tax
 const fields = [
-  { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, readOnly: true, section: 'principal' },
+  { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, readOnly: true, section: 'principal', maxLength: 60 },
   { key: 'rate', column: 'Rate', type: 'number', label: 'Rate', required: true, readOnly: true, section: 'principal' },
   { key: 'applicableTo', column: 'SOPOType', type: 'select', label: 'Sales/Purchase Type', required: true, readOnly: true, section: 'principal', options: [{ value: 'B', label: 'Both', labels: {"es_ES":"Ambos"} }, { value: 'P', label: 'Purchase Tax', labels: {"es_ES":"Impuesto compras"} }, { value: 'S', label: 'Sales Tax', labels: {"es_ES":"Impuesto ventas"} }], defaultValue: 'B' },
   { key: 'validFrom', column: 'ValidFrom', type: 'date', label: 'Valid From Date', required: true, readOnly: true, section: 'principal' },

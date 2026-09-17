@@ -194,6 +194,45 @@ describe('useOrderWindow', () => {
     expect(result.current.refreshKey).toBe(2);
   });
 
+  it('hides reactivate entirely when showReactivate is not passed (defaults to false)', () => {
+    const { result } = renderOrderHook();
+
+    const actions = result.current.rowQuickActions.menuActions({
+      row: { id: 'so-5', deliveryStatus: 100, invoiceStatus: 100, hasLinkedDocuments: false },
+      status: 'CO',
+    });
+
+    expect(actions.find((action) => action.key === 'reactivate')).toBeUndefined();
+  });
+
+  it('hides reactivate when the row has linked documents, even if showReactivate is true', () => {
+    const { result } = renderOrderHook({ showReactivate: true });
+
+    const actions = result.current.rowQuickActions.menuActions({
+      row: { id: 'so-6', deliveryStatus: 100, invoiceStatus: 100, hasLinkedDocuments: true },
+      status: 'CO',
+    });
+
+    expect(actions.find((action) => action.key === 'reactivate')).toMatchObject({
+      documentAction: 'RE',
+      visible: false,
+    });
+  });
+
+  it('hides reactivate when the row status is not Confirmed (CO), even if showReactivate is true', () => {
+    const { result } = renderOrderHook({ showReactivate: true });
+
+    const actions = result.current.rowQuickActions.menuActions({
+      row: { id: 'so-7', deliveryStatus: 100, invoiceStatus: 100, hasLinkedDocuments: false },
+      status: 'DR',
+    });
+
+    expect(actions.find((action) => action.key === 'reactivate')).toMatchObject({
+      documentAction: 'RE',
+      visible: false,
+    });
+  });
+
   // ETP-4717 — this hook builds rowQuickActions by hand (bypassing the
   // generated contract's rowQuickActions.actions.email.visibleWhen), so the
   // gate must be asserted here directly. Regression: without it, the Grid

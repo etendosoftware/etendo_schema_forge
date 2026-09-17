@@ -40,6 +40,18 @@ const ELASTIC_BASIS_PX = {
 
 const SELECTOR_TYPES = new Set(['selector', 'search', 'foreignKey']);
 
+// A `boolean` column with `badge: true` renders a rounded pill (see `Tag`,
+// DataTable.cellRenderers.jsx), not a plain "Sí"/"No" string — the generic
+// 120px fallback below fits the latter but clips the former: "Sin
+// contabilizar" (the widest badge label in the codebase today) alone
+// measures ~103px, and the cell's own horizontal padding (24px) pushes the
+// total past 120px. The overflow gets cut by the cell's `overflow: hidden`,
+// slicing through the pill's rounded end — which reads as a stray dot/period
+// next to the label, not as a truncated pill (ETP-5268 follow-up). Reuses
+// the existing 152px tier (see FIXED_BASIS_PX) rather than inventing a new
+// one, leaving comfortable slack for longer locales.
+const BOOLEAN_BADGE_BASIS_PX = 152;
+
 // Column types that never render as a fixed grid column in EITHER lines
 // renderer — InlineLinesPanel (flex layout, saved rows) or DataTable's
 // inline-add row (HTML table layout, hideHeader mode). `dimensionsPanel`
@@ -84,6 +96,7 @@ function selectorFlex(col, idx) {
  */
 export function columnFlex(col, idx) {
   if (col.minWidth) return `1 1 ${col.minWidth}px`;
+  if (col.type === 'boolean' && col.badge) return `0 0 ${BOOLEAN_BADGE_BASIS_PX}px`;
   if (SELECTOR_TYPES.has(col.type)) return selectorFlex(col, idx);
   const elasticPx = ELASTIC_BASIS_PX[col.type];
   if (elasticPx !== undefined) return `1 0 ${elasticPx}px`;
@@ -100,6 +113,7 @@ export function columnFlex(col, idx) {
  */
 export function columnMinWidthPx(col) {
   if (col.minWidth) return col.minWidth;
+  if (col.type === 'boolean' && col.badge) return BOOLEAN_BADGE_BASIS_PX;
   if (SELECTOR_TYPES.has(col.type)) return 192;
   return ELASTIC_BASIS_PX[col.type] ?? FIXED_BASIS_PX[col.type] ?? 120;
 }
