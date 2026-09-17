@@ -308,6 +308,29 @@ count, and the now-dead `.fm-regime-pill` CSS rule and the `regime:` demo fields
 locale key was dropped from all 3 locale files (`en_US`/`es_ES`/`es_AR`) — grepped first and
 confirmed to have no other consumer.
 
+### Sources tab — "Fecha" relabeled to "Fecha Factura" + new "Fecha Contable" column (ETP-5338 pt.5)
+
+The `SourcesTab` table's first column (`fm.sources.col.date`) always rendered `C_Invoice.DateInvoiced`
+(invoice date) — confirmed by re-reading `Fiscal303SourcesSupport.java#buildNewInvoiceRow`, which
+only ever populated `r.put("date", sdf.format(inv.getInvoiceDate()))`. The header label "Fecha" was
+ambiguous next to the also-relevant `C_Invoice.AccountingDate`, so the locale key's value was changed
+to "Fecha Factura" (`en_US`: "Invoice Date") in all 3 locale files — the key itself (`fm.sources.col.date`)
+was NOT renamed, since it is used exactly once and no other consumer would be affected either way; the
+underlying data did not change.
+
+A second column, "Fecha Contable" (`fm.sources.col.accountingDate` / "Accounting Date"), was added
+right after it, backed by a NEW backend field: `Fiscal303SourcesSupport.java` now also puts
+`r.put("accountingDate", inv.getAccountingDate() != null ? sdf.format(inv.getAccountingDate()) : null)`
+— null-guarded because `C_Invoice.AccountingDate` can be null on some invoices (unlike `DateInvoiced`,
+which this file has never null-guarded, since it's not nullable at the AD level). No existing nullable
+date field in this file was available to copy a guard pattern from, so this is a plain ternary rather
+than a shared helper. On the frontend, `SourcesTab` renders it with the SAME `fmtDate()` helper already
+used for the invoice-date column — `fmtDate` already treats a falsy input as "no value" and renders
+`'—'`, so a null `accountingDate` shows a dash rather than throwing or rendering `Invalid Date`. The
+empty-state row's `colSpan` was bumped from 8 to 9 to match the new column count. `FmDebugPanel.jsx`'s
+`MOCK_SOURCES` fixture got a matching `accountingDate` field per row (including one explicit `null` to
+exercise the blank-render path in manual QA).
+
 ### Duplicate-period warning and rectificativa gate (ETP-5187)
 
 A declaration can legitimately be a 2nd (or later) one for the same `(model, year, period)` — the
