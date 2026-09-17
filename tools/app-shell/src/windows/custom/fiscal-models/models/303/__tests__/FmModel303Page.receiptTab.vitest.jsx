@@ -64,7 +64,7 @@ vi.mock('../AeatSubmitFlow.jsx', () => ({
 // Explicit per-icon mock (matching the sibling files' established pattern) rather
 // than a catch-all Proxy — see FmModel303Page.aeatFlow.vitest.jsx for why.
 vi.mock('lucide-react', () => ({
-  Settings: () => null, Download: () => null, OctagonAlert: () => null,
+  Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
   TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
   TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,

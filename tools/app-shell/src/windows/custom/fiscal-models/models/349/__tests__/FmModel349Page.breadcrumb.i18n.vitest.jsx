@@ -63,7 +63,7 @@ vi.mock('../../../FmTabContent.jsx', () => ({
 }));
 
 vi.mock('lucide-react', () => ({
-  ArrowLeft: () => null, Download: () => null, FileDown: () => null, Play: () => null,
+  ArrowLeft: () => null, Save: () => null, Download: () => null, FileDown: () => null, Play: () => null,
   OctagonAlert: () => null, CircleCheck: () => null, Search: () => null, RefreshCw: () => null,
   Globe: () => null, Eye: () => null, Lock: () => null, MoreVertical: () => null,
   ChevronDown: () => null, ChevronRight: () => null, Users: () => null, FileEdit: () => null,

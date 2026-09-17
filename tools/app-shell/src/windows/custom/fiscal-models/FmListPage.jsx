@@ -499,7 +499,7 @@ function fmListRowClassName({ selected, current }) {
   return current ? 'fm-table__row--current' : '';
 }
 
-export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, token, apiBaseUrl }) {
+export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, declStatusPatch, declManualDataPatch, token, apiBaseUrl }) {
   const ui = useUI();
   const t  = ui;
   const apiFetch = useApiFetch(apiBaseUrl);
@@ -514,6 +514,47 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
       .then(data => setDecls((Array.isArray(data) ? data : (data?.data ?? [])).map(normDecl)))
       .catch(() => {});
   }, [token, apiBaseUrl, apiFetch]);
+
+  // ETP-5338 CRITICAL FIX — this component "stays mounted at all times" (see the render
+  // below) so that `useFiscalAutoCompute` keeps polling, which means it is NEVER remounted
+  // (and therefore never refetches `decls`) when the user opens a declaration, presents it,
+  // and navigates back — via "Volver"/go-back OR the pre-existing "Cancelar", both of which
+  // just call `onBack` to flip `FiscalModelsPage`'s view back to `{ type: 'list' }`.
+  //
+  // The actual status change IS persisted correctly server-side by `FiscalModelsPage`'s
+  // `onStatusChange` handler (`persistDeclarationStatus`) — that PUT is not tied to component
+  // lifecycle and completes regardless of whether the detail page is still mounted. But
+  // nothing ever pushed that new status into THIS component's own `decls` state, which was
+  // fetched once on mount and never touched again for anything but computedMap/incidents
+  // patches. So the row the user just presented kept showing its stale pre-submission status
+  // (typically "Borrador"/draft) the moment they landed back on the list — reported as
+  // "presenting a declaration and going back reverts it to draft". It never actually
+  // reverted anything: the backend was right, this list's cache was stale.
+  //
+  // `declStatusPatch` is a one-shot `{ id, patch }` (a fresh object each time, so this effect
+  // re-fires on every status change even if `id`/status happen to repeat) pushed down by
+  // `FiscalModelsPage` right after a successful `persistDeclarationStatus`, applied the exact
+  // same way `handleConfirmReactivate` above already patches `decls` for a change made
+  // in-place in this same component.
+  useEffect(() => {
+    if (!declStatusPatch) return;
+    setDecls(ds => ds.map(d => (d.id === declStatusPatch.id ? { ...d, ...declStatusPatch.patch } : d)));
+  }, [declStatusPatch]);
+
+  // ETP-5338 Bug A fix — same one-shot patch mechanism as `declStatusPatch` above, but for a
+  // successful manualData save (Guardar/Calcular) on the detail page instead of a status change.
+  // Root cause this closes: `FmModel303Page` used to autosave `identChecks`/`manualOverrides` via
+  // a debounced background PUT, and NOTHING ever pushed that saved value into this component's
+  // own cached `decls` — reopening the same declaration from the list (without a full page
+  // reload) handed the stale pre-edit `manualData` right back into a freshly-mounted detail page,
+  // which re-hydrates its local state from it. Under the redesigned explicit-save-only model
+  // (identChecks/manualOverrides are pure local state until Guardar/Calcular), Guardar is now the
+  // ONE place a save can succeed, so patching the cache here from that single call site is enough
+  // — see `FmModel303Page.jsx`'s `persistEditableFields`.
+  useEffect(() => {
+    if (!declManualDataPatch) return;
+    setDecls(ds => ds.map(d => (d.id === declManualDataPatch.id ? { ...d, ...declManualDataPatch.patch } : d)));
+  }, [declManualDataPatch]);
 
   // Real per-declaration incidents (ETP-4755 fix): GET /fiscal303/declarations above never
   // carries real blocking/warning counts — `FiscalDeclCrudHandler#declToJson` doesn't serialize

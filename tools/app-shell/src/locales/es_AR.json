@@ -20740,6 +20740,7 @@
     "fm.action.close": "Cerrar",
     "fm.action.create": "Crear",
     "fm.action.save": "Guardar",
+    "fm.action.save_error": "No se pudo guardar. Intentá de nuevo.",
     "fm.action.save_draft": "Guardar borrador",
     "fm.action.compare": "Comparar",
     "fm.action.recalc": "Recalcular",

@@ -51,7 +51,7 @@ vi.mock('../FmBoxes303.jsx', () => ({ default: () => null }));
 // only FmModel303Page.jsx's own icon imports need stubbing here (Landmark included since
 // FmModel303Page.jsx also uses it for the "Go to Organization" button).
 vi.mock('lucide-react', () => ({
-  Settings: () => null, Download: () => null, OctagonAlert: () => null,
+  Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
   TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
   TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,

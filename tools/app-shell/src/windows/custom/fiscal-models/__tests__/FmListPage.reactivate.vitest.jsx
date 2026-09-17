@@ -142,6 +142,61 @@ describe('FmListPage — canReactivate gating (Reactivar button visibility)', ()
   });
 });
 
+// ── canReactivate generalizes to model 349 (ETP-5338) ────────────────────────
+//
+// `canReactivate(decl)` only reads `status`/`submissionMethod` — it never branches on
+// `decl.model` — so the same gate already covers 349 rows with zero source changes.
+// These cases lock that claim in with a real regression test instead of leaving it as
+// an unverified reading of the source.
+
+describe('FmListPage — canReactivate gating generalizes to model 349', () => {
+  const cases349 = [
+    { desc: 'draft', status: 'draft', submissionMethod: undefined, expectButton: false },
+    { desc: 'submitted + manual_ack', status: 'submitted', submissionMethod: 'manual_ack', expectButton: true },
+    { desc: 'submitted_ack + manual_no_receipt', status: 'submitted_ack', submissionMethod: 'manual_no_receipt', expectButton: true },
+  ];
+
+  it.each(cases349)('349 — $desc → reactivate button %s', async ({ status, submissionMethod, expectButton }) => {
+    globalThis.fetch = mockCatalogFetch();
+    const decl = makeDecl({ id: 'gate-349-decl', model: '349', status, submissionMethod });
+    render(<FmListPage declarations={[decl]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    const button = screen.queryByTestId('FmRowActions__reactivate');
+    if (expectButton) {
+      expect(button).toBeInTheDocument();
+    } else {
+      expect(button).not.toBeInTheDocument();
+    }
+  });
+});
+
+// ── Confirm-dialog flow generalizes to model 349 ─────────────────────────────
+
+describe('FmListPage — Reactivar confirm dialog flow (model 349)', () => {
+  it('confirming calls persistDeclarationStatus with status:"draft" only and patches a 349 row on success', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    persistDeclarationStatus.mockResolvedValue({ ok: true });
+    render(<FmListPage declarations={[makeDecl({ id: 'react-349-1', model: '349', status: 'submitted', submissionMethod: 'manual_ack' })]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    fireEvent.click(screen.getByTestId('FmRowActions__reactivate'));
+    fireEvent.click(screen.getByTestId('fm-reactivate-confirm'));
+
+    await waitFor(() => expect(persistDeclarationStatus).toHaveBeenCalledWith(
+      'react-349-1',
+      'draft',
+      expect.objectContaining({ token: TOKEN }),
+    ));
+    const callArgs = persistDeclarationStatus.mock.calls[0];
+    expect(callArgs[1]).toBe('draft');
+    expect(callArgs[2]).not.toHaveProperty('submissionMethod');
+
+    await waitFor(() => expect(screen.queryByTestId('fm-reactivate-confirm')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByTestId('FmRowActions__reactivate')).not.toBeInTheDocument());
+  });
+});
+
 // ── Confirm-dialog flow ──────────────────────────────────────────────────────
 
 describe('FmListPage — Reactivar confirm dialog flow', () => {

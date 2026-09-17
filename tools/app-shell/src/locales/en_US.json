@@ -21487,6 +21487,7 @@
     "fm.action.close": "Close",
     "fm.action.create": "Create",
     "fm.action.save": "Save",
+    "fm.action.save_error": "Could not save. Please try again.",
     "fm.action.save_draft": "Save as draft",
     "fm.action.compare": "Compare",
     "fm.action.recalc": "Recalculate",

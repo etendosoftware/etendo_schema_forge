@@ -141,6 +141,23 @@ describe('FmListPage — row actions rendered only for draft declarations', () =
     expect(screen.getByTestId('FmRowActions__reactivate')).toBeInTheDocument();
   });
 
+  // ETP-5338 — the row-actions gate (isDraft / canReactivate) reads only status,
+  // submissionMethod, and the row's own id — never `decl.model` — so the same
+  // Edit/Delete/Reactivate wiring already applies unchanged to a 349 row.
+  it('renders Edit/Delete for a draft 349 row, Reactivate for a submitted 349 row', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const decls = [
+      makeDecl({ id: 'm349-draft', model: '349', status: 'draft' }),
+      makeDecl({ id: 'm349-submitted', model: '349', status: 'submitted', submissionMethod: 'manual_no_receipt' }),
+    ];
+    render(<FmListPage declarations={decls} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    expect(screen.getByTestId('FmRowActions__edit')).toBeInTheDocument();
+    expect(screen.getByTestId('FmRowActions__delete')).toBeInTheDocument();
+    expect(screen.getByTestId('FmRowActions__reactivate')).toBeInTheDocument();
+  });
+
   it('renders no row actions at all when there are no draft/reactivatable declarations', async () => {
     globalThis.fetch = mockCatalogFetch();
     const decls = [

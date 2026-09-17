@@ -40,6 +40,7 @@ vi.mock('../../../FmTabContent.jsx', () => ({
 }));
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('lucide-react', () => ({
+  ArrowLeft: () => null, Save: () => null,
   Download: () => null, CircleCheck: () => null, Search: () => null, Loader2: () => null,
   Globe: () => null, MoreVertical: () => null, ChevronDown: () => null, Users: () => null,
   FileEdit: () => null, TriangleAlert: () => null, Folder: () => null, ReceiptText: () => null,

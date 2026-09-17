@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import {
-  Download,
+  Download, Save,
   OctagonAlert, TriangleAlert, CircleCheck,
   Calculator, Loader2, TrendingUp, TrendingDown,
   ClipboardCheck, ReceiptText, FileCheck,
@@ -192,7 +192,7 @@ function buildIncidentVariants(blocking, warning, t) {
 
 // ── Main page ─────────────────────────────────────────────────────
 
-export default function FmModel303Page({ decl, onBack, onStatusChange, token, apiBaseUrl }) {
+export default function FmModel303Page({ decl, onBack, onStatusChange, onManualDataSaved, token, apiBaseUrl }) {
   const ui = useUI();
   const t = ui;
   // Both hooks below back the ETP-4975 missing-default-IAE-activity guard only
@@ -218,7 +218,21 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   // Hydrate from persisted decl.manualData when present, falling back to the old
   // non-persisted decl.identification only for fixtures/demo declarations that predate it.
   const [identChecks, setIdentChecks] = useState(decl.manualData?.identification ?? decl.identification ?? {});
+  /**
+   * ETP-5338 (architecture change) — `identChecks`/`manualOverrides` are now purely LOCAL,
+   * in-memory state until the user explicitly clicks "Guardar". There is no more debounced
+   * autosave-on-every-commit: that was the root cause of Bug B (a "Cancelar" that could not
+   * actually cancel anything older than the 800ms debounce, because it had already been PUT to
+   * the server by the time the user clicked it). See `handleCancel`/`handleSave` below.
+   *
+   * `hasPendingManualDataEditRef` still tracks "at least one edit happened since the last
+   * successful save" — flipped synchronously (not via an effect) the instant an identification
+   * or box edit happens, so `handleSave` can gate on it without waiting for a render, and
+   * `handleCancel` can clear it as part of discarding those edits.
+   */
+  const hasPendingManualDataEditRef = useRef(false);
   const handleIdentChange = (id, value) => {
+    hasPendingManualDataEditRef.current = true;
     setIdentChecks(prev => ({ ...prev, [id]: value }));
     if (id === 'motivo_rectificacion' && value !== 'D') {
       setManualOverrides(prev => { const n = { ...prev }; delete n[108]; return n; });
@@ -227,44 +241,35 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   };
   const [liveBoxes,      setLiveBoxes]      = useState(decl._precomputed?.boxes   ?? null);
   const [manualOverrides, setManualOverrides] = useState(decl.manualData?.manualOverrides ?? {});
-  // Refs backing the debounced manualData autosave effect further below (defined after
-  // isSubmitted is computed, since it depends on it) — declared here alongside the state
-  // they track.
-  const manualDataSaveTimer = useRef(null);
-  const isFirstManualDataRender = useRef(true);
+  // ETP-5338 (Guardar) — drives the Save/Loader2 icon swap and disables the button while a
+  // flush is in flight, same convention as the shared `saveActions.jsx` Save buttons.
+  const [isSavingManualData, setIsSavingManualData] = useState(false);
   /**
-   * Single-flight state for that autosave (ETP-5255). `clearTimeout` only prevents overlapping
-   * TIMERS; when a PUT outlives the 800 ms debounce and the user keeps editing, a second PUT used
-   * to go out while the first was still open.
-   *
-   * A ref, not state: the timer callback has to read the guard synchronously, and state is always
-   * one render behind — exactly the mistake that made the equivalent contacts bug (ETP-5263)
-   * intermittent.
-   *
-   * The write queue records that a newer edit arrived while a PUT was open, and
-   * `manualDataLatest` holds the value it produced: the timer closure captures
-   * identChecks/manualOverrides at SCHEDULE time, so replaying that closure would resend a stale
-   * snapshot. A queued save is never dropped for being late — this endpoint has NO
-   * optimistic-locking check (`FiscalDeclCrudHandler#handleDeclPut` never compares `updated`), so a
-   * lost edit here produces no 409 and no error of any kind, just silently missing data. It IS
-   * dropped when it becomes ineligible; see `isManualDataEligible`.
+   * Snapshot of the payload the most recent (or in-flight) `persistManualData` call is sending —
+   * rebuilt fresh from current state by `handleSave` itself, immediately before flushing. No
+   * longer mirrored by a background debounce effect (there isn't one anymore); it exists purely
+   * so `flushManualData()` has a stable value to read at the instant it's called.
    */
   const manualDataLatest = useRef(null);
   /**
-   * Mirror of the effect's own preconditions (`!isSubmitted && token && apiBaseUrl`), kept in a
-   * ref for the same reason `manualDataLatest` is: a queued replay fires from a `finally` long
-   * after its closure was created, so it cannot read that state fresh.
-   *
-   * Without it this was reachable: PUT(A) in flight → user edits again (queued) → user submits the
-   * declaration → PUT(A) settles → the replay writes manualData to a declaration that is now
-   * filed. The server does not stop it — `FiscalDeclCrudHandler#handleDeclPut` has no submitted
-   * guard, it applies whatever fields it receives (its own comments only defend field-by-field
-   * against a "stray/racy PUT"), so this ref is the sole gate.
-   *
+   * `useRecordWriteQueue` below still serialises writes per declaration — kept because Guardar
+   * clicks can still race each other: a rapid double-click, or a second click landing while an
+   * earlier Guardar's PUT is still in flight. This ref is the eligibility gate a QUEUED replay
+   * re-checks right before it fires (`writeManualData`), for the same reason it existed under
+   * the old debounce design: PUT(A) in flight → user clicks Guardar again (queued) → declaration
+   * gets filed via the Present flow before PUT(A) settles → the replay would otherwise write
+   * manualData to a declaration that is now submitted. The server does not stop it —
+   * `FiscalDeclCrudHandler#handleDeclPut` has no submitted guard — so this ref is the sole gate.
    * Kept in sync by its own effect rather than written during render, so it always reflects the
    * render that actually committed.
    */
   const isManualDataEligible = useRef(false);
+  /**
+   * ETP-5338 (Guardar) — the outcome of the most recent `persistManualData` call, so an
+   * explicit user-initiated save (`handleSave`) can tell the user whether it actually
+   * succeeded. Read by `handleSave` AFTER awaiting `flushManualData()`/`waitUntilManualDataIdle`.
+   */
+  const lastManualDataResultRef = useRef({ ok: true });
 
   /**
    * The single write path for manualData. At most one PUT is open at a time; a save requested
@@ -284,10 +289,12 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     // beats queueing.
     if (!isManualDataEligible.current) return false;
     if (!value) return false;
-    await persistManualData(value.id, value.manualData, {
+    const result = await persistManualData(value.id, value.manualData, {
       token: value.token,
       apiBaseUrl: value.apiBaseUrl,
     });
+    // Recorded for `persistEditableFields` to read after the flush settles.
+    lastManualDataResultRef.current = result;
     return true;
   }, []);
 
@@ -300,12 +307,15 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
    * per input and let two writes to one record overlap. Using the same queue here is what stops
    * this file from drifting back into a fourth private copy.
    */
-  const { persist: persistManualDataQueued } = useRecordWriteQueue({ write: writeManualData });
+  const { persist: persistManualDataQueued, waitUntilIdle: waitUntilManualDataIdle } =
+    useRecordWriteQueue({ write: writeManualData });
 
+  // Returns the (settled-or-not) promise so callers that need durability before proceeding —
+  // currently only `handleSave` — can await it instead of firing-and-forgetting.
   function flushManualData() {
     const snapshot = manualDataLatest.current;
-    if (!snapshot) return;
-    persistManualDataQueued(snapshot.id, 'manualData', snapshot).catch(() => {});
+    if (!snapshot) return Promise.resolve();
+    return persistManualDataQueued(snapshot.id, 'manualData', snapshot).catch(() => {});
   }
 
   // Only used to grab `upload()` for the manual acuse-de-recibo path below —
@@ -320,6 +330,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   });
 
   function handleBoxChange(boxNum, rawValue) {
+    hasPendingManualDataEditRef.current = true;
     const value = parseBoxInput(rawValue);
     const fallback = decl._precomputed?.boxes ?? decl.boxes;
 
@@ -395,6 +406,11 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decl.id, token, apiBaseUrl]);
 
+  // Pure recompute — no persistence. Called both by the "Calcular" button (via
+  // `handleComputeClick` below) and by the mount effect further down, which fires
+  // AUTOMATICALLY (not from a user click) whenever the list didn't hand this page any
+  // precomputed data. That automatic call must never persist editable-field edits — see
+  // `handleComputeClick`'s comment for why the two are kept deliberately separate.
   async function handleCompute() {
     setComputing(true);
     try {
@@ -403,6 +419,27 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     } finally {
       setComputing(false);
     }
+  }
+
+  // ETP-5338 (design decision) — "Calcular" is an explicit user click too, so — unlike the
+  // automatic mount-time recompute above, and unlike `FmListPage`'s own `useFiscalAutoCompute`
+  // polling hook (a wholly separate mechanism in a different component that recomputes LIST
+  // rows from invoice data on an interval; it never touches this page's identChecks/
+  // manualOverrides and has no write path at all) — it also flushes any pending editable-field
+  // edits, via the exact same `persistEditableFields` "Guardar" uses rather than a second
+  // hand-rolled copy.
+  //
+  // The recompute and the persist run independently: `handleCompute` owns its own `computing`
+  // spinner and is unaffected by how long the save takes, and a save failure must not stop the
+  // KPIs/boxes from refreshing (the user asked for a recompute; a slow save is not their
+  // problem). The save's only feedback here is a toast on failure — no success toast, so a
+  // "Calcular" click that also happens to persist doesn't stack a second, confusing "guardado"
+  // message on top of the compute's own visual feedback (the refreshed KPI/box values).
+  function handleComputeClick() {
+    persistEditableFields().then(({ ok }) => {
+      if (!ok) toast.error(t('fm.action.save_error') ?? 'No se pudo guardar. Inténtalo de nuevo.');
+    });
+    return handleCompute();
   }
 
   // Auto-compute on mount when the list didn't hand us any precomputed data
@@ -486,6 +523,104 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     onStatusChange?.(decl.id, newStatus, newSubmissionMethod);
   }
 
+  // ETP-5338 (architecture change) — the single write path for `identChecks`/`manualOverrides`,
+  // extracted out of `handleSave` so BOTH explicit user actions that must persist them — "Guardar"
+  // and, per the later product decision, "Calcular" (see `handleComputeClick` below) — share
+  // exactly one implementation instead of a second hand-rolled copy. There is no more debounced
+  // background autosave: these fields are pure local React state until one of those two clicks
+  // flushes them. That is what makes "Cancelar" (`handleCancel` below) able to genuinely discard
+  // an edit again — under the old debounce, anything older than 800ms was already on the wire and
+  // no client-side "cancel" could undo it (Bug B).
+  //
+  // Everything through the `waitUntilManualDataIdle`/`flushManualData` calls is carried over
+  // verbatim from the debounce-era `handleSave` (ETP-5338 Bug 2 hardening): rebuild the snapshot
+  // from CURRENT state rather than trust a possibly-stale mirror, and wait for a write already in
+  // flight — now from an earlier explicit Guardar/Calcular click rather than an earlier debounce
+  // cycle — before flushing this one, via `waitUntilIdle`'s re-read loop rather than a single
+  // captured promise. `useRecordWriteQueue` (and the `isManualDataEligible` gate it wraps) is kept
+  // for exactly this: two explicit saves can still race (a rapid double-click, or Calcular firing
+  // while a Guardar from moments ago is still in flight).
+  //
+  // Returns `{ ok }` so each caller can apply its own feedback: `handleSave` always toasts (it's
+  // the user's one unambiguous "save" action), `handleComputeClick` only toasts on failure (its
+  // own success signal is the recomputed KPIs/boxes, not a second "saved" toast layered on top of
+  // "Calcular").
+  async function persistEditableFields() {
+    if (isSubmitted) return { ok: true };
+    if (!hasPendingManualDataEditRef.current || !token || !apiBaseUrl) return { ok: true };
+    setIsSavingManualData(true);
+    let ok = true;
+    try {
+      // ETP-5338 Bug 2, part 1 — an edit made while a field still has focus (no blur — none of
+      // these inputs have a blur handler, they commit via `onChange` on every keystroke, see
+      // `handleIdentChange`/`handleBoxChange`) is already in `identChecks`/`manualOverrides` React
+      // state by the time this runs. Rebuilding the snapshot directly from current state (rather
+      // than trusting a mirror populated by a background effect) removes that indirection
+      // entirely.
+      //
+      // ETP-5338 Bug 2, part 2 — wait for any write ALREADY in flight (from an earlier explicit
+      // save) before flushing this one. `persistManualDataQueued` (in `flushManualData`) is
+      // single-flight per record: calling it while a write is still open only QUEUES this
+      // snapshot and returns immediately, it does not wait for the eventual replay.
+      // `waitUntilIdle` (from `useRecordWriteQueue`) loops instead of trusting one captured
+      // promise reference, so it is structurally guaranteed to wait for a replay armed mid-wait
+      // too — see its own doc.
+      await waitUntilManualDataIdle(decl.id);
+      manualDataLatest.current = {
+        id: decl.id,
+        manualData: { identification: identChecks, manualOverrides },
+        token,
+        apiBaseUrl,
+      };
+      await flushManualData();
+      // Wait for the flush just issued (not just whatever was in flight before it) to settle, so
+      // `lastManualDataResultRef` reflects THIS call's own write, not a stale one.
+      await waitUntilManualDataIdle(decl.id);
+      ok = lastManualDataResultRef.current?.ok !== false;
+      // Only clear the pending-edit flag on success — a failed save must still look "pending" so
+      // a retry click actually attempts the write again instead of silently no-op'ing.
+      if (ok) {
+        hasPendingManualDataEditRef.current = false;
+        // ETP-5338 Bug A fix — pushes the just-saved manualData into `FmListPage`'s own cached
+        // `decls` entry for this declaration, the same way `onStatusChange` already does for
+        // status changes. Without this, reopening the declaration from the list (without a full
+        // page reload) would show the pre-save value again: `FmListPage` never refetches on its
+        // own, and there is otherwise no mechanism that updates its cache for a manualData save.
+        onManualDataSaved?.(decl.id, { identification: identChecks, manualOverrides });
+      }
+    } finally {
+      setIsSavingManualData(false);
+    }
+    return { ok };
+  }
+
+  // "Guardar" — the user's explicit, unambiguous save action. Always reports its outcome via
+  // toast (unlike the old debounced autosave, which stayed silent-on-failure by design — a button
+  // the user explicitly clicked must say whether it worked). Defense in depth: a submitted
+  // declaration has nothing left to flush (`persistEditableFields` itself is gated on
+  // `!isSubmitted`) and the button is hidden once submitted, but the explicit guard is kept so a
+  // stray call is still a no-op.
+  async function handleSave() {
+    const { ok } = await persistEditableFields();
+    if (ok) {
+      toast.success(t('recordSaved') ?? 'Registro guardado');
+    } else {
+      toast.error(t('fm.action.save_error') ?? 'No se pudo guardar. Inténtalo de nuevo.');
+    }
+  }
+
+  // "Cancelar" (ETP-5338 Bug B fix) — genuinely discards any unsaved edit now, with NO network
+  // call: since `identChecks`/`manualOverrides` are pure local state with no background autosave
+  // racing ahead of this click, simply not flushing them and unmounting (this page always
+  // unmounts on `onBack`) IS the discard. `hasPendingManualDataEditRef` is still cleared
+  // explicitly — not because unmounting needs it, but so the intent reads the same as
+  // `persistEditableFields`'s own bookkeeping, and so it stays correct if this page is ever made
+  // to survive its own `onBack` (e.g. a future "confirm discard" prompt reusing this handler).
+  function handleCancel() {
+    hasPendingManualDataEditRef.current = false;
+    onBack?.();
+  }
+
   // Bumped by AeatSubmitFlow's onAttached whenever the backend reports a
   // PDF was returned for the submission — including TEST_SUCCESS, which
   // deliberately does NOT go through handleStatusChange (test mode must
@@ -565,40 +700,15 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     toast.error(t(actionKey, { fields: missingFieldNames }) ?? fallback.replace('{fields}', missingFieldNames));
   }
 
-  // Keeps `isManualDataEligible` current so a queued autosave replay can re-check the same
-  // preconditions the effect below checks before arming its timer. Runs before that effect on
-  // every commit (declaration order), so an edit and the eligibility it was made under can never
-  // disagree.
+  // Keeps `isManualDataEligible` current so a QUEUED explicit-save replay (see
+  // `persistEditableFields`/`writeManualData`) can re-check the same preconditions right before
+  // it fires — it cannot read fresh React state from inside a `finally` that runs long after the
+  // click that scheduled it. There is no more background debounce effect here: identChecks/
+  // manualOverrides are local-only state now, flushed exclusively by an explicit "Guardar" or
+  // "Calcular" click (see `persistEditableFields`).
   useEffect(() => {
     isManualDataEligible.current = !isSubmitted && !!token && !!apiBaseUrl;
   }, [isSubmitted, token, apiBaseUrl]);
-
-  // Debounced autosave of identChecks/manualOverrides via PUT /fiscal303/declarations, so
-  // manual identification/box edits survive a page refresh (ETP-4755). Skipped once the
-  // declaration is submitted (nothing is editable at that point) and on the very first render
-  // (that render is just the hydration above — not a genuine user edit).
-  useEffect(() => {
-    if (isFirstManualDataRender.current) {
-      isFirstManualDataRender.current = false;
-      return;
-    }
-    if (isSubmitted || !token || !apiBaseUrl) return;
-    // Publish the edit to a ref BEFORE arming the timer: this is what both the debounced save and
-    // any queued replay read, so whichever one ends up firing sends the latest value.
-    manualDataLatest.current = {
-      id: decl.id,
-      manualData: { identification: identChecks, manualOverrides },
-      token,
-      apiBaseUrl,
-    };
-    if (manualDataSaveTimer.current) clearTimeout(manualDataSaveTimer.current);
-    manualDataSaveTimer.current = setTimeout(() => {
-      manualDataSaveTimer.current = null;
-      flushManualData();
-    }, 800);
-    return () => { if (manualDataSaveTimer.current) clearTimeout(manualDataSaveTimer.current); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identChecks, manualOverrides, isSubmitted, token, apiBaseUrl, decl.id]);
 
   const fileBlocked = blocking > 0;
   // Derive KPI card values from liveBoxes so manual overrides (box 42, 43, etc.)
@@ -674,7 +784,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
       }}>
         <button
           className="fm-btn"
-          onClick={onBack}
+          onClick={handleCancel}
           style={{ borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14, color: 'hsl(var(--foreground))' }}
         >
           {t('fm.action.cancel') ?? 'Cancelar'}
@@ -695,10 +805,33 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
 
         <div style={{ flex: 1 }} />
 
+        {/* ETP-5338 PIVOT — "Guardar" replaces the earlier go-back button (which used to sit
+            next to Cancelar on the left). Moved into the right-aligned primary-action group,
+            leftmost of it, matching `saveActions.jsx`'s convention of Save preceding the
+            Confirm/primary action. Persists pending manual edits (handleSave) without
+            navigating away; hidden once submitted since there is nothing left to save on a
+            filed declaration (same `!isSubmitted` gate as "Calcular"/"Registrar-Presentar"). */}
         {!isSubmitted && (
           <button
             className="fm-btn"
-            onClick={handleCompute}
+            onClick={handleSave}
+            disabled={isSavingManualData}
+            title={t('fm.action.save') ?? 'Guardar'}
+            aria-label={t('fm.action.save') ?? 'Guardar'}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14, color: 'hsl(var(--foreground))' }}
+            data-testid="FmModel303Page__save"
+          >
+            {isSavingManualData
+              ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__save" />
+              : <Save size={16} strokeWidth={1.75} data-testid="Save__save" />}
+            {t('fm.action.save') ?? 'Guardar'}
+          </button>
+        )}
+
+        {!isSubmitted && (
+          <button
+            className="fm-btn"
+            onClick={handleComputeClick}
             disabled={computing}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', border: '1px solid hsl(var(--border-control))', padding: '9px 12px', fontSize: 14 }}
           >

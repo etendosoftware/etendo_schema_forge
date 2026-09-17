@@ -208,7 +208,80 @@ A former 6th tab, **Historial** (`HistoryTab`), was removed together with this p
 
 ### Action bar
 
-Left to right: **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Calcular** (`handleCompute`, spinner while `computing`), a standalone **"Generar fichero 303"** button, and, only while the declaration is not yet submitted (`!isSubmitted`), a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. "Generar fichero 303" is always visible regardless of submission status — it is not gated the way "Registrar/Presentar" is. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
+Left to right: **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Guardar** (`Save`/`Loader2` icon, `handleSave` — ETP-5338, leftmost of the right-aligned group, replacing an earlier go-back button that used to sit next to Cancelar, see below), **Calcular** (`handleComputeClick` — persists any pending `identChecks`/`manualOverrides` edit via the same `persistEditableFields()` helper Guardar uses, then triggers the actual box recompute via `handleCompute`; spinner while `computing`), a standalone **"Generar fichero 303"** button, and, only while the declaration is not yet submitted (`!isSubmitted`), a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. "Generar fichero 303" is always visible regardless of submission status — it is not gated the way "Registrar/Presentar" is. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
+
+**Guardar's position (ETP-5338 pt.6).** Guardar briefly landed in the old go-back slot (left, next to Cancelar) when it first replaced go-back, then moved into the right-aligned primary-action group — leftmost of it, before "Calcular" — to match `saveActions.jsx`'s established Save-before-Confirm ordering convention used by every AD-window's generic DetailView toolbar. It is not grouped with Cancelar: Cancelar discards/navigates away, Guardar persists and stays, and the two are visually separated by the `flex: 1` spacer between the left-aligned pair (Cancelar + status pill) and the right-aligned action cluster.
+
+**"Guardar" replaces the earlier go-back button (ETP-5338 pivot).** The button in this slot started life as a go-back affordance (`ArrowLeft` icon, `handleGoBack`) that flushed pending edits and then navigated back to the list, same as "Cancelar" but data-safe. Product later decided the correct affordance here is a genuine **Save** — matching the rest of Etendo Go's Save-button convention (icon swap to a spinning `Loader2` while saving, disabled while saving, `toast.success`/`toast.error` feedback; see `saveActions.jsx`'s shared Save/Confirm buttons) — that persists the current data and **stays on the same declaration view**, rather than one more way to navigate away. `handleSave` is hidden entirely once the declaration is submitted (`!isSubmitted`, same gate as "Calcular"/"Registrar-Presentar") since there is nothing left to save on a filed declaration.
+
+The underlying data-safety problem is the same one go-back was hardened against, and `handleSave` reuses the exact same machinery — only the final navigation step is gone. **Note:** the next few paragraphs (through "Known related exposure") describe the mechanics as they existed under the original debounced-autosave design; that design was later removed entirely — see "Architecture pivot" below for the current, autosave-free behavior:
+
+- **Cancelar** (`onClick={onBack}`) unmounts the page immediately. The debounced `identChecks`/`manualOverrides` autosave effect's own cleanup then runs `clearTimeout(manualDataSaveTimer.current)` — a pending, not-yet-fired save is discarded, never sent. This is the "Cancelar always reverts" behavior users were routing around by switching windows and back.
+- **Guardar** (`handleSave`) clears that same pending timer itself and force-flushes the same `PUT` the debounce would eventually have sent, then reports the outcome via toast — but it never calls `onBack`, so the user always ends up back on the same declaration, saved or not.
+
+**Edit committed but never sent — the "field still had focus" bug (ETP-5338 Bug 2, still fixed, now under Guardar).** Reported as: type into a text field (e.g. "Nº de justificante"), don't tab away, click the button in this slot — reopen the declaration and the old value is still there. The field's `onChange` DOES commit every keystroke straight into `identChecks`/`manualOverrides` React state (none of these inputs has a blur handler; focus is a red herring), so that part was never the problem. The real cause is a second, EARLIER edit's autosave still being in flight when the button is clicked: `persistManualDataQueued` (the shared `useRecordWriteQueue`) is single-flight per record — calling it while a write is already open only QUEUES the new snapshot and returns immediately, it does not wait for the eventual replay. The original `handleGoBack` called `onBack?.()` right after that queueing, unmounting the page — and the queue's own `mountedRef` guard (correct for every other caller of that hook) then abandoned the queued replay once the in-flight write finally settled, discarding the newer edit with no error anywhere. Fix (unchanged by the pivot to Guardar): `await`s `useRecordWriteQueue`'s own `waitUntilIdle(recordId)` before building and flushing its own snapshot (read directly from current `identChecks`/`manualOverrides` state, not from the `manualDataLatest` mirror a separate `useEffect` maintains, closing that indirection too). See `FmModel303Page.save.vitest.jsx`'s "does not drop an edit queued behind an in-flight write" test.
+
+**Hardened against a queued-replay race (ETP-5338 review follow-up).** The first fix had this handler await ONE in-flight promise captured by value (a `manualDataInFlight` ref set by `writeManualData`). Review found that interleaving fragile: if the captured promise settled in the exact same tick the write queue's own replay logic reassigns the tracked in-flight write to a NEW promise (arming a queued edit), awaiting only the old reference would resume the handler while the replay was still genuinely open. This exact interleaving cannot happen from a real click vs. a real network response — browser task-boundary semantics prevent it — but the bug class ("edit silently dropped because of the write queue") had already shipped twice on this file, so it was hardened rather than left resting on that implicit guarantee. `useRecordWriteQueue` now exposes `waitUntilIdle(recordId)`, which loops — re-reading its own in-flight/queued state after every await — until the record has no write in flight and nothing queued behind it, instead of trusting one promise reference. `handleSave` uses it directly (twice — once before rebuilding its own snapshot, once again after issuing its own flush, so it reads back its OWN write's result and not a stale one); the `manualDataInFlight` ref and the promise-identity trick it depended on are gone. The new API is purely additive to the hook (`ContactsFinancialPanel`, `ProductPriceBar`, `AmortizationLinesTable` keep calling `persist` exactly as before). See `useRecordWriteQueue.vitest.jsx`'s "waitUntilIdle (ETP-5338 review follow-up)" suite, which forces the race directly.
+
+A second review pass on this same hardening found the single-key loop above was not the whole story: when more than one field key is queued for the same record (e.g. a caller persisting two distinct fields, like `ProductPriceBar`'s `standardPrice`/`listPrice`), `persist`'s replay loop clears its in-flight/queued state for the record BETWEEN replaying one queued field and starting the next — a real tick in which `waitUntilIdle` could have resumed early, before the later field in the batch had even started replaying. `useRecordWriteQueue` now tracks that batch explicitly (`replayInProgressRef`, armed before the replay loop starts and cleared only after every queued field for the record has been replayed) and `waitUntilIdle` also waits on that marker, so the guarantee now covers the full queued batch, not just its first entry. `FmModel303Page` is unaffected in practice (`flushManualData` only ever queues the single literal key `'manualData'`), but the hook's own guarantee — and this doc's description of it — now hold for any future multi-field-key adopter too. See `useRecordWriteQueue.vitest.jsx`'s "waits for the entire queued batch, not just the first entry" test.
+
+**Guardar now surfaces failures that go-back used to swallow.** `identChecks`/`manualOverrides` still have no OTHER write path — they only ever persist through this one per-declaration autosave, and Guardar's flush uses exactly that path. But unlike the old go-back (which awaited the flush purely to sequence a safe navigation and never inspected whether it actually succeeded), `handleSave` reads `writeManualData`'s result via `lastManualDataResultRef` after the flush settles and toasts success or failure accordingly — a network failure during Guardar's flush is no longer silently indistinguishable from success. A failed save also leaves `hasPendingManualDataEditRef` set, so clicking Guardar again genuinely retries the write instead of no-op'ing. The background debounced autosave itself is unchanged and stays silent-on-failure by design (nothing appropriate to toast from a timer firing in the background); only the explicit, user-clicked Guardar reports outcome.
+
+**Known related exposure, not fixed here (flagged for follow-up).** `useRecordWriteQueue`'s "abandon the queued replay on unmount" behavior is shared by `ContactsFinancialPanel`, `ProductPriceBar` and `AmortizationLinesTable` too — any of those panels could in principle lose a coalesced edit the same way if its host view unmounts while a write to the same record is in flight. None of them currently has a "flush and wait before leaving" affordance like this page's `handleSave`, and none was audited as part of this fix. The fix here is intentionally scoped to `FmModel303Page.jsx` (per ETP-5338's own scope) rather than changing `useRecordWriteQueue`'s shared contract.
+
+**Architecture pivot — no more debounced autosave (ETP-5338, later in the same ticket).** Everything
+described above through "Known related exposure" documents the ORIGINAL debounce-based design
+(`manualDataSaveTimer`, an 800ms background autosave effect). That design was subsequently removed
+entirely: `identChecks`/`manualOverrides` are now pure local React state until one of two explicit
+user actions flushes them — **Guardar** (`handleSave`) or **Calcular** (`handleComputeClick`, which
+persists the pending edit via the same path before recomputing) — both funneling through one shared
+`persistEditableFields()` helper. **Cancelar** (`handleCancel`) now performs a genuine, network-free
+discard: it clears `hasPendingManualDataEditRef` and calls `onBack?.()`, with no timer to race and
+nothing in flight it started itself. `useRecordWriteQueue` (`persistManualDataQueued`/
+`waitUntilManualDataIdle`) is kept for the same reason as before — Guardar and Calcular can still
+race each other, e.g. a Calcular click landing while an earlier Guardar's PUT is still open.
+
+**Closed edge case — a Calcular save queued behind Guardar used to survive Cancelar (ETP-5338,
+narrow follow-up to the pivot above).** The new explicit-save design reopened a narrower version of
+the original "abandon the queued replay on unmount" guarantee. Scenario: Guardar's PUT is held open
+by the server; the user clicks Calcular, whose own `persistEditableFields()` call reaches
+`waitUntilManualDataIdle(decl.id)` and pauses there — genuinely "queued" behind Guardar's write,
+but NOT via `useRecordWriteQueue`'s internal `queuedRef` (that only coalesces edits arriving after
+`persist()`'s own single-flight check trips; here, `persistEditableFields` itself serializes ahead
+of that, via its own `waitUntilManualDataIdle` wait). The user then clicks Cancelar, which unmounts
+the page before Guardar's PUT resolves. Once Guardar's PUT finally settled, Calcular's
+`persistEditableFields()` call resumed from its `await waitUntilManualDataIdle(...)` and went on to
+build and flush its own snapshot — a live PUT firing after the user had explicitly clicked Cancelar
+expecting a full discard, with no mount-guard anywhere in that resumed code path:
+`useRecordWriteQueue`'s existing `mountedRef` check only gated the hook's OWN internal replay logic
+(the `finally` block inside `persist()`), not a fresh top-level call to `persist()` arriving later
+from a caller's own resumed `await`.
+
+Fix, in `useRecordWriteQueue.js` (`tools/app-shell/src/hooks/useRecordWriteQueue.js`): `persist()`
+now checks `mountedRef.current` at its own entry point, immediately after the null/empty-id guard —
+not only inside the post-write `finally` block. This refuses to START any new write once the owning
+component has unmounted, whether the call is a queued replay the hook armed itself or an entirely
+independent call arriving from the caller's own code (exactly `persistEditableFields`'s resumed
+`await`). A write that is already past this check when unmount happens (i.e. already in flight) is
+left alone — the fix does not abort an in-flight HTTP request, it only stops a NEW one from being
+issued after the point of no return. The fix lives in the shared hook, not in `FmModel303Page.jsx`
+itself, so it also closes the exposure flagged above for `ContactsFinancialPanel`, `ProductPriceBar`
+and `AmortizationLinesTable` — any caller shaped the same way (persist → await idle → build snapshot
+→ flush) is covered without having to add its own guard.
+
+Regression coverage: `FmModel303Page.cancelDiscard.vitest.jsx`'s "never fires a Calcular save queued
+behind an in-flight Guardar PUT once Cancelar has unmounted the page" reproduces the exact sequence
+(Guardar PUT held open → Calcular click queues behind it → Cancelar unmounts → Guardar PUT settles →
+asserts no second PUT). Flagged as a first defensive test written alongside the fix, per this
+ticket's established pattern — a full audit pass is still expected from Tester. The three
+pre-existing single-flight/race regression suites (`useRecordWriteQueue.vitest.jsx`,
+`FmModel303Page.explicitSaveSingleFlight.vitest.jsx`, and the rest of this file) were re-run and
+still pass unmodified in behavior — the new check only rejects a call that arrives after unmount, it
+does not change anything about an already-in-flight write or a same-component queued replay.
+
+**"Presenting a declaration reverts it to draft" (ETP-5338, confirmed bug, root cause — predates the Guardar pivot).** Users reported that clicking the go-back button that used to live in this slot — and the pre-existing Cancelar — right after presenting a 303/349 declaration made it show as `draft` again. The declaration's status was **never actually reverted**: neither that flush nor `Cancelar` ever sends a `status` field (the manualData `PUT` body is `{ manualData }` only — see `persistManualData` in `fiscalModelsUtils.js`), and `FiscalDeclCrudHandler#handleDeclPut` (com.etendoerp.go) only touches `declarationStatus` `if (hasStatus)`, so a manualData-only PUT can never change it server-side either. The real cause is that `FmListPage` "stays mounted at all times" (so `useFiscalAutoCompute` keeps polling) and is therefore **never remounted, and never refetches `decls`,** when the user opens a declaration, presents it, and navigates back — the row it renders is the same `decls` array entry fetched once on mount, still holding the pre-submission status. `FiscalModelsPage`'s `onStatusChange` handler does correctly persist the new status server-side via `persistDeclarationStatus`, but nothing pushed that change into `FmListPage`'s own state. Fix: `FiscalModelsPage` now pushes a one-shot `declStatusPatch={{ id, patch: { status, submissionMethod } }}` down to `FmListPage` right after a successful persist (a fresh object each time, so the effect re-fires even for a repeat status), and `FmListPage` applies it to its `decls` state the same way `handleConfirmReactivate` already patches a row changed in place. If the user re-opens the same declaration from the list right after going back, they now see the correct, current status instead of the stale cached one.
+
+**349's final toolbar: Cancelar (left) + Guardar, a deliberate no-op (ETP-5338 pt.5).** `FmModel349Page.jsx` originally got a go-back icon button (`ArrowLeft`, `handleGoBack`, `data-testid="FmModel349Page__goBack"`) next to Cancelar for visual/UX consistency across Modelo detail pages (ETP-5338 pt.1) — functionally identical to "Cancelar", since both just called `onBack` directly. Once the requirement widened to "every fiscal-models declaration gets a Guardar button" (not just 303, which already had an autosave to piggyback on), 349 was re-investigated with that wider bar in mind: a fresh grep of every `useState`/write path in the file confirms it has zero locally-edited, persistable declaration data — `keyFilter`/`searchQuery`/`selected`/`activeTab`/`viesBannerDismissed` are ephemeral view state, `liveOperators`/`liveInvoices`/`liveRectifications`/`liveRectifSummary` are read-only server-computed snapshots, and VIES validation (`handleValidateVies`) already persists its result server-side the instant it runs — there is no staged, unsaved state anywhere on this page. Rather than skip Guardar here (which would break the "every model" requirement) or fake a network call that flushes nothing, 349's `handleSave` is a deliberate **no-op confirmation**: it shows `toast.success(...)` immediately, with no PUT and no loading state, in the right-aligned toolbar position (leftmost of the primary-action group, before "Calcular"). Once Guardar existed, the old go-back button became pure duplication of "Cancelar" — both did the same `onBack` call, sitting side by side — so it was removed entirely: 349's toolbar now has exactly Cancelar on the left and Guardar (plus Calcular/Registrar-Presentar) on the right, no go-back affordance. This is intentionally honest rather than a misleading "unsaved work exists" affordance — clicking Guardar always "succeeds" because there is genuinely nothing that could fail. If 349 ever grows real locally-edited declaration fields, `handleSave` is the handler to wire an actual flush into.
 
 ### Sources tab — "Régimen" column removed (ETP-5187)
 
@@ -467,9 +540,10 @@ When in real mode, `FmModel303Page` reads `liveBoxes` / `liveSummary` from the `
 
 `GET /fiscal303/boxes` (`computeBoxes303`, backed by `Fiscal303BoxesHandler`) always computes
 purely from **invoice data** — no declaration id, no `manualData` input at all — so its response
-never reflects a user's manual box overrides (`decl.manualData.manualOverrides`, persisted by an
-800ms-debounced autosave effect — see the "Debounce-vs-navigation race" entry in "Known gaps and
-residual findings" near the end of this file for a caveat on that autosave). Every consumer that wants the TRUE, override-aware figures
+never reflects a user's manual box overrides (`decl.manualData.manualOverrides`, persisted only by
+an explicit user action — **Guardar** or **Calcular** — via `persistEditableFields()`; see the
+"Architecture pivot" note under "Action bar" above — there is no background autosave anymore).
+Every consumer that wants the TRUE, override-aware figures
 must merge overrides onto the raw response and re-derive the boxes AEAT computes FROM other boxes
 (45, 46, 64, 66, 69, 71) — this ticket found and fixed 3 separate places that were reading the raw,
 override-blind backend value instead, plus extracted the merge/derive logic itself so the 3rd bug
@@ -622,7 +696,8 @@ is no warning banner and no submission gate for this relationship.
   On every box commit it recomputes what box78's effective value would be (`nextBox78`) against
   what box110's effective value would be after this commit (`nextBox110`); if `nextBox78 >
   nextBox110`, box78 is capped to `nextBox110` before being written into both `liveBoxes` (the
-  rendered state) and `manualOverrides` (the persisted-on-autosave state, so a later
+  rendered state) and `manualOverrides` (in-memory local state until "Guardar"/"Calcular" explicitly
+  persist it — see "Architecture pivot" above; there is no autosave), so a later
   `handleCompute`/"Calcular" recompute — which re-applies `manualOverrides` on top of a fresh
   backend result — doesn't resurrect the un-clamped value).
 - **Reactive in both directions**: because the check runs on *every* box commit (not just box78's
@@ -1243,6 +1318,21 @@ whatever the request body claims, so this can't be bypassed by a client that sim
 falsifies the field. Each of these frontend/backend gate pairs is independent; either gate alone
 would have been insufficient.
 
+**Applies to Modelo 349 too, with no model-specific code.** `FmListPage.jsx` renders one shared
+table for both models — `canReactivate`, the `isDraft`/hover-column logic and `FmRowActions` never
+branch on `decl.model`, and `persistDeclarationStatus`/`deleteDeclaration` always hit
+`/fiscal303/declarations?id=<id>` regardless of which model the declaration belongs to (the path
+name is legacy; the handler resolves the record by `id` against the generic `ETGO_Fiscal_Decl`
+table). On the backend, `FiscalDeclCrudHandler#handleDeclPut`'s `aeat_telematic` guard reads
+`PROPERTY_SUBMISSION_METHOD` off the stored record with no model filter either. 349's own status
+lifecycle (`draft`/`submitted`/`submitted_ack`) and `submissionMethod` values (`manual_ack`/
+`manual_no_receipt` — see "AEAT electronic submission" above: 349's `PresentModal` never passes
+`showAeatPath`, so a 349 declaration's `submissionMethod` can never be `aeat_telematic`) line up
+with `canReactivate`'s conditions without any adaptation. Practical effect: a submitted/
+submitted_ack Modelo 349 row already shows the Reactivar icon and reactivates correctly today,
+and — since 349 never produces `aeat_telematic` — the exclusion clause simply never triggers for
+it, which is the correct behavior for a model with no telematic-submission concept, not a gap.
+
 ### "Fichero" column — removed, no download action to offer (ETP-4755)
 
 The list's "Fichero" column (`FileCell`) was first fixed to read the correct backend field
@@ -1522,14 +1612,17 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
   meaningful — a user can enter a value in either box on a declaration where it has no real AEAT
   meaning, and nothing in the UI stops them. Not enforced as a restriction today; flagged, not
   fixed.
-- **Debounce-vs-navigation race in the 303 autosave** (`FmModel303Page.jsx`'s 800ms debounced
-  `persistManualData` effect, see "Manual box overrides" above) — **pre-existing, not introduced or
-  fixed by ETP-5272, but confirmed still real** while auditing point 6. An edit to
-  `identChecks`/`manualOverrides` made less than 800ms before the user navigates away from the
-  page never fires: the effect's cleanup (`clearTimeout`) cancels the pending `setTimeout` on
-  unmount without ever flushing it, so the debounced write is simply lost, silently — no error, no
-  toast, no retry. A fix would need a flush-on-unmount (e.g. an unmount-time synchronous save of
-  the latest `identChecks`/`manualOverrides`), which is out of scope for this ticket.
+- **Debounce-vs-navigation race in the 303 autosave — resolved by the ETP-5338 architecture pivot.**
+  This entry originally flagged a real race in `FmModel303Page.jsx`'s 800ms debounced
+  `persistManualData` effect (pre-existing, confirmed still real while auditing ETP-5272 point 6):
+  an edit made less than 800ms before the user navigated away never fired, because the effect's
+  `clearTimeout` cleanup discarded the pending write on unmount with no error, toast, or retry. The
+  debounced autosave effect no longer exists — see the "Architecture pivot" note under "Action bar"
+  above — so this exact race is structurally eliminated: `identChecks`/`manualOverrides` are pure
+  local state until an explicit "Guardar"/"Calcular" click flushes them, Cancelar is a network-free
+  discard, and the `mountedRef` fix (also documented under "Action bar") closes the narrower
+  Calcular-queued-behind-Guardar edge case that survived the pivot. Kept here as a historical record
+  rather than deleted, so the original finding isn't silently lost.
 
 ## Key files
 

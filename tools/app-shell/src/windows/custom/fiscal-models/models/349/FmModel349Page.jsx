@@ -5,7 +5,7 @@ import {
   Download, CircleCheck, Search,
   Loader2, Globe, ChevronDown, Users, FileEdit,
   TriangleAlert, ReceiptText, Calculator, PenLine, ShieldAlert, Info, FileCheck,
-  X,
+  X, Save,
 } from 'lucide-react';
 import { KpiWidget, Tabs, MoreOptionsMenu } from '../../FmCommon.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
@@ -742,6 +742,29 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     onStatusChange?.(decl.id, newStatus, newSubmissionMethod);
   }
 
+  // ETP-5338 pt.5 — 349's "Guardar", added for cross-model consistency once the requirement
+  // became "every fiscal-models declaration gets a Guardar button", not "only where an
+  // existing autosave can be piggybacked on" (303's original scope). Re-investigated with that
+  // wider bar in mind — grepped this file for every `useState`/write path — and 349 genuinely
+  // has NO locally-edited, persistable declaration data:
+  //   - `keyFilter`/`searchQuery`/`selected`/`activeTab`/`viesBannerDismissed` are ephemeral
+  //     view/session state (filters, tab selection, a dismissed banner) — not declaration data,
+  //     and not something a "Guardar" on THIS document should persist even if it could.
+  //   - `liveOperators`/`liveInvoices`/`liveRectifications`/`liveRectifSummary` are read-only
+  //     server-computed snapshots (`compute349Operators`), never locally edited.
+  //   - VIES validation (`handleValidateVies`) already persists its result server-side the
+  //     instant it runs — see the "conclusive AND persisted, nothing to do" comment on that
+  //     flow — so there is no staged, unsaved VIES state either.
+  // A "real" Guardar that flushes nothing would be indistinguishable from a fake one, and
+  // giving it its own PUT with no payload would be a lie in the other direction — implying a
+  // save mechanism exists here that doesn't. This is therefore a deliberate no-op confirmation:
+  // there is nothing pending, so clicking it always "succeeds" immediately (no network call,
+  // no loading state). If 349 ever grows real locally-edited declaration fields, this is the
+  // handler to wire an actual flush into.
+  function handleSave() {
+    toast.success(t('recordSaved') ?? 'Registro guardado');
+  }
+
   // Manual "Presentación con Acuse de recibo" path: persist the uploaded
   // receipt to the same attachments store the "Justificante" tab reads
   // from. Fire-and-forget — useAttachments.upload() already toasts its
@@ -976,6 +999,25 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
         </span>
 
         <div style={{ flex: 1 }} />
+
+        {/* ETP-5338 pt.5 — "Guardar", right-aligned leftmost of the primary-action group
+            (matching 303 and `saveActions.jsx`'s Save-before-Confirm convention). See
+            `handleSave`'s own comment above for why this is a deliberate no-op confirmation:
+            349 has no locally-edited declaration data to actually persist. Hidden once
+            submitted, same `!isSubmitted` gate as "Calcular"/"Registrar-Presentar". */}
+        {!isSubmitted && (
+          <button
+            className="fm-btn"
+            onClick={handleSave}
+            title={t('fm.action.save') ?? 'Guardar'}
+            aria-label={t('fm.action.save') ?? 'Guardar'}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14, color: 'hsl(var(--foreground))' }}
+            data-testid="FmModel349Page__save"
+          >
+            <Save size={16} strokeWidth={1.75} data-testid="Save__save" />
+            {t('fm.action.save') ?? 'Guardar'}
+          </button>
+        )}
 
         {!isSubmitted && (
           <button

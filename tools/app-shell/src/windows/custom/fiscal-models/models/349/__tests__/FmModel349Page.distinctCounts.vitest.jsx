@@ -81,7 +81,7 @@ vi.mock('lucide-react', () => ({
   ChevronDown: () => null, ChevronRight: () => null, Users: () => null, FileEdit: () => null,
   Clock: () => null, TriangleAlert: () => null, Folder: () => null, ReceiptText: () => null,
   Calculator: () => null, PenLine: () => null, ShieldAlert: () => null, Info: () => null,
-  OctagonAlert: () => null, ArrowLeft: () => null, FileText: () => null,
+  OctagonAlert: () => null, ArrowLeft: () => null, Save: () => null, FileText: () => null,
   Star: () => null, ArrowUpRight: () => null, Loader2: () => null, X: () => null, Check: () => null,
   FileCheck: () => null,
 }));

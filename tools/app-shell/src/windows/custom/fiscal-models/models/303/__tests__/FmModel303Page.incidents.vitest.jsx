@@ -71,7 +71,7 @@ vi.mock('../../../FmTabContent.jsx', () => ({
 }));
 vi.mock('../FmBoxes303.jsx', () => ({ default: () => null }));
 vi.mock('lucide-react', () => ({
-  Settings: () => null, Download: () => null, OctagonAlert: () => null,
+  Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
   TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
   TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,
