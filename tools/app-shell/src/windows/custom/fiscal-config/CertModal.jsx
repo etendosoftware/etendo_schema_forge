@@ -307,26 +307,55 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
 
               {/* Password */}
               <div>
-                <label className="block text-sm font-medium mb-1.5">
+                <label htmlFor="cert-passphrase" className="block text-sm font-medium mb-1.5">
                   {ui('fiscal.cert.pwd.label')} <span className="text-destructive">*</span>
                 </label>
-                <div className="relative">
+                {/*
+                  autoComplete="off" alone does not stop Chromium/Firefox password
+                  managers — their save-password heuristic operates at the page
+                  level and can deliberately ignore "off" on a field it classifies
+                  as a login password. Wrapping in its own <form autoComplete="off">
+                  plus a hidden dummy "username" input gives the heuristic an
+                  explicit, harmless pairing target instead of letting it walk the
+                  DOM and grab the nearest visible text input (which was
+                  `authorizationno` in SiiSection — see ETP-5338 point 6 and
+                  docs/generated-custom-windows/fiscal-config.md).
+                */}
+                <form autoComplete="off" onSubmit={e => e.preventDefault()}>
+                  {/* Dummy username field: never read, never sent — exists only
+                      so the browser's credential heuristic has something to pair
+                      the password with besides an unrelated visible field. */}
                   <input
-                    type={showPwd ? 'text' : 'password'}
-                    value={pwd}
-                    onChange={e => setPwd(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full h-10 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                    type="text"
+                    name="username"
+                    autoComplete="username"
+                    value=""
+                    readOnly
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    style={{ display: 'none' }}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPwd(v => !v)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground"
-                    aria-label={showPwd ? ui('fiscal.cert.pwd.hide') : ui('fiscal.cert.pwd.show')}
-                  >
-                    {showPwd ? <EyeOff size={14} strokeWidth={1.75} data-testid="EyeOff__a22bc2" /> : <Eye size={14} strokeWidth={1.75} data-testid="Eye__a22bc2" />}
-                  </button>
-                </div>
+                  <div className="relative">
+                    <input
+                      id="cert-passphrase"
+                      name="cert-passphrase"
+                      type={showPwd ? 'text' : 'password'}
+                      value={pwd}
+                      onChange={e => setPwd(e.target.value)}
+                      placeholder="••••••••"
+                      autoComplete="new-password"
+                      className="w-full h-10 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPwd(v => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground"
+                      aria-label={showPwd ? ui('fiscal.cert.pwd.hide') : ui('fiscal.cert.pwd.show')}
+                    >
+                      {showPwd ? <EyeOff size={14} strokeWidth={1.75} data-testid="EyeOff__a22bc2" /> : <Eye size={14} strokeWidth={1.75} data-testid="Eye__a22bc2" />}
+                    </button>
+                  </div>
+                </form>
                 <p className="text-xs text-[hsl(var(--foreground))] mt-1.5 flex items-center gap-1">
                   <Lock size={11} strokeWidth={2} data-testid="Lock__a22bc2" /> {ui('fiscal.cert.pwd.hint')}
                 </p>

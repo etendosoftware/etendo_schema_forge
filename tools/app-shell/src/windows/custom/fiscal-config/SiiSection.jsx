@@ -95,6 +95,8 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
               disabled={locked}
               className="bg-card"
               autoComplete="off"
+              name="sii-authorization-number"
+              id="sii-authorization-number"
               maxLength={15}
               data-testid="Input__fcb159" />
           </div>
