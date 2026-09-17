@@ -264,6 +264,8 @@ export default function ConfirmInOutModal({
               invoices={rectify.invoices}
               selectedIds={rectify.selectedIds}
               onToggle={rectify.toggle}
+
+              onApply={rectify.setSelectedIds}
               loading={rectify.loading}
               isEmpty={rectify.isEmpty}
               idPrefix="confirm-modal-rectify" />

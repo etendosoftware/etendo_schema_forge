@@ -6,6 +6,7 @@ import { formatCalendarDate } from '@/lib/dateOnly';
 import { toast } from 'sonner';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import SharedInvoicePickerModal from '@/components/contract-ui/InvoicePickerModal.jsx';
 /* eslint-disable react/prop-types */
 
 const PERIOD_VALUES = ['0A', '1T', '2T', '3T', '4T',
@@ -110,17 +111,17 @@ function InfoTooltip({ text }) {
 }
 
 // ── InvoicePickerModal ────────────────────────────────────────────────────────
-// Modal for selecting the original invoice to rectify.
-// Bypasses the NEO selector endpoint and queries the header entity directly.
-// Candidates: COMPLETED invoices of the same flow (sales or purchase). No
-// business-partner filter here — the C_Invoice_Reverse DB trigger enforces
-// same-BP only when applicable (Verifactu orgs allow cross-BP rectifications),
-// and any rejection is surfaced to the user via the save error message.
+// Loads the candidates and hands rendering to the shared
+// components/contract-ui/InvoicePickerModal — the same list the return-document flow uses in
+// multi-select mode (ETP-5381). Only the fetch stays here, because this tab reads the NEO header
+// entity directly while the return flow reads its own action endpoint.
+//
+// Candidates: COMPLETED invoices of the same flow (sales or purchase). No business-partner filter
+// — the C_Invoice_Reverse DB trigger enforces same-BP only when applicable (Verifactu orgs allow
+// cross-BP rectifications), and any rejection is surfaced via the save error message.
 // NEO ignores arbitrary query-param filters, so all filtering is client-side.
 function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose }) {
-  const ui = useUI();
   const apiFetch = useApiFetch(apiBaseUrl);
-  const [search, setSearch] = useState('');
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -143,82 +144,15 @@ function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose })
       .catch(() => setLoading(false));
   }, [apiBaseUrl, token, apiFetch]);
 
-  const MAX_VISIBLE = 5;
-  const { filtered, hiddenCount } = useMemo(() => {
-    let visible = invoices.filter(inv => inv.id !== currentId);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      visible = visible.filter(inv =>
-        `${inv.documentNo || inv._identifier || ''} ${inv['businessPartner$_identifier'] || ''}`.toLowerCase().includes(q));
-    }
-    return { filtered: visible.slice(0, MAX_VISIBLE), hiddenCount: Math.max(0, visible.length - MAX_VISIBLE) };
-  }, [invoices, search, currentId]);
-
-  const fmtDate = (d) => formatCalendarDate(d, 'es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const fmtAmt = (v) => v != null ? Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
-
-  const invoiceRow = (inv) => (
-    <div
-      key={inv.id}
-      onClick={() => { onSelect(inv.id, inv.documentNo || inv._identifier || inv.id); onClose(); }}
-      style={{ display: 'flex', alignItems: 'center', padding: '10px 16px', cursor: 'pointer', borderBottom: '0.5px solid hsl(var(--border) / 0.3)' }}
-      onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--muted))'; }}
-      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-    >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{inv.documentNo || inv._identifier}</span>
-          <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>{fmtDate(inv.invoiceDate)}</span>
-        </div>
-        {inv['businessPartner$_identifier'] && (
-          <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {inv['businessPartner$_identifier']}
-          </div>
-        )}
-      </div>
-      <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(inv.grandTotalAmount ?? inv.grandTotalAmt)}</span>
-    </div>
-  );
-
-  let listBody;
-  if (loading) {
-    listBody = <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', padding: '24px 0', textAlign: 'center' }}>{ui('loading')}</p>;
-  } else if (filtered.length === 0) {
-    listBody = <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', padding: '24px 0', textAlign: 'center' }}>{ui('rectNoInvoices')}</p>;
-  } else {
-    listBody = filtered.map(invoiceRow);
-  }
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30" onClick={onClose}>
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{ width: 580, maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))', boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border))' }}
-      >
-        <div style={{ padding: '14px 16px', borderBottom: '2px solid hsl(var(--border))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{ui('rectPickerTitle')}</span>
-          <button type="button" onClick={onClose} style={{ fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }}>&times;</button>
-        </div>
-        <div style={{ padding: '10px 16px 0' }}>
-          <input
-            type="text" value={search} onChange={e => setSearch(e.target.value)}
-            placeholder={ui('rectSearchInvoice')} autoFocus
-            style={{ width: '100%', fontSize: 13, padding: '7px 10px', border: '0.5px solid hsl(var(--border))', borderRadius: 6, outline: 'none', color: 'hsl(var(--foreground))' }}
-          />
-        </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
-          {listBody}
-          {hiddenCount > 0 && (
-            <p style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '8px 16px 4px', textAlign: 'center' }}>
-              +{hiddenCount} {ui('rectMoreInvoicesHint')}
-            </p>
-          )}
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', background: 'hsl(var(--muted))', borderTop: '1px solid hsl(var(--border))', padding: '10px 16px' }}>
-          <button type="button" onClick={onClose} style={{ fontSize: 13, padding: '5px 14px', borderRadius: 6, border: '1px solid hsl(var(--border))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer' }}>{ui('cancel')}</button>
-        </div>
-      </div>
-    </div>
+    <SharedInvoicePickerModal
+      invoices={invoices}
+      loading={loading}
+      currentId={currentId}
+      onSelect={onSelect}
+      onClose={onClose}
+      maxVisible={5}
+    />
   );
 }
 

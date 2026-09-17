@@ -25025,7 +25025,9 @@
     "rectifySelectedCount": "{count} seleccionadas",
     "rectifySuggestedBadge": "Detectada",
     "rectifyNoMatches": "Ninguna factura coincide con la búsqueda.",
-    "rectifyMoreHidden": "{count} más — afina la búsqueda para verlas."
+    "rectifyMoreHidden": "{count} más — afina la búsqueda para verlas.",
+    "rectifySelectInvoices": "Seleccionar facturas a rectificar…",
+    "rectifyChangeSelection": "Cambiar selección"
   },
   "menus": {
     "Goods Movement": {

@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import InvoicePickerModal from './InvoicePickerModal.jsx';
 
 /**
  * ETP-5381 — picker for the invoice(s) a rectificative invoice will rectify.
@@ -17,11 +19,13 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  * The backend still detects the chain (return line → original line → its invoice) and flags those
  * rows as `suggested` so they sort first and come preselected, but detection cannot be a
  * restriction: a return created standalone has no chain at all, and a return covering two
- * shipments billed on two invoices has to name both. So this is a searchable multi-select, the
- * same shape as the picker in the rectificative-invoice window.
+ * shipments billed on two invoices has to name both.
+ *
+ * <p>The browsing list lives in its own modal rather than inline: the host modal already carries a
+ * summary card, an optional tariff selector and the generate-documents block, and an embedded
+ * scrolling list of every invoice in the system pushed its actions below the fold. The field below
+ * shows only what is selected; picking happens in {@link RectifiableInvoicePickerModal}.
  */
-
-const MAX_VISIBLE = 6;
 
 /**
  * Loads the invoices this return document can rectify.
@@ -55,7 +59,7 @@ export function useRectifiableInvoices({ enabled, url, token }) {
         setInvoices(list);
         // Preselect every chain-detected invoice, not just one: a return covering two invoiced
         // shipments must rectify both, and making the user re-find the second by hand is the
-        // friction this list exists to remove.
+        // friction this picker exists to remove.
         const suggested = Array.isArray(data?.suggestedInvoiceIds) ? data.suggestedInvoiceIds : [];
         const valid = suggested.filter(id => list.some(inv => inv.id === id));
         if (valid.length > 0) setSelectedIds(valid);
@@ -81,6 +85,7 @@ export function useRectifiableInvoices({ enabled, url, token }) {
     invoices,
     selectedIds,
     toggle,
+    setSelectedIds,
     loading,
     // True only once we know there is genuinely nothing to rectify.
     isEmpty: loaded && invoices.length === 0,
@@ -89,45 +94,31 @@ export function useRectifiableInvoices({ enabled, url, token }) {
   };
 }
 
-const rowStyle = (selected) => ({
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  padding: '8px 10px',
-  borderRadius: 6,
-  cursor: 'pointer',
-  border: selected ? '1.5px solid var(--status-info-fg)' : '1px solid hsl(var(--border-subtle))',
-  background: selected ? 'var(--status-info-bg)' : 'hsl(var(--card))',
-});
+const invoiceMeta = (inv) => [
+  inv.invoiceDate ? formatCalendarDate(inv.invoiceDate) : null,
+  inv.businessPartner,
+].filter(Boolean).join(' · ');
+
+const invoiceAmount = (inv) => (inv.grandTotalAmount == null
+  ? null
+  : (inv.currency ? formatCurrency(inv.currency, inv.grandTotalAmount) : String(inv.grandTotalAmount)));
+
+// ── Selection field ───────────────────────────────────────────────────────────
 
 /**
- * Renders a searchable, multi-select list of rectifiable invoices.
- *
- * Selected rows are pinned above the search results, so what is about to be rectified stays
- * visible once the user types a query that no longer matches it.
+ * Compact field for the host modal: shows only the selected invoices plus a trigger that opens
+ * {@link RectifiableInvoicePickerModal} to change the selection.
  */
-export function RectifiableInvoiceField({ invoices, selectedIds, onToggle, loading, isEmpty, idPrefix = 'rectify' }) {
+export function RectifiableInvoiceField({
+  invoices, selectedIds, onToggle, onApply, loading, isEmpty, idPrefix = 'rectify',
+}) {
   const ui = useUI();
-  const [search, setSearch] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
 
-  const { selected, results, hiddenCount } = useMemo(() => {
-    const isSelected = inv => selectedIds.includes(inv.id);
-    const pinned = invoices.filter(isSelected);
-    let rest = invoices.filter(inv => !isSelected(inv));
-    const q = search.trim().toLowerCase();
-    if (q) {
-      rest = rest.filter(inv =>
-        `${inv.documentNo || ''} ${inv.businessPartner || ''}`.toLowerCase().includes(q));
-    } else {
-      // With no query, lead with what the backend detected from the return's own chain.
-      rest = [...rest].sort((a, b) => Number(Boolean(b.suggested)) - Number(Boolean(a.suggested)));
-    }
-    return {
-      selected: pinned,
-      results: rest.slice(0, MAX_VISIBLE),
-      hiddenCount: Math.max(0, rest.length - MAX_VISIBLE),
-    };
-  }, [invoices, selectedIds, search]);
+  const selected = useMemo(
+    () => invoices.filter(inv => selectedIds.includes(inv.id)),
+    [invoices, selectedIds],
+  );
 
   if (loading) {
     return (
@@ -153,100 +144,124 @@ export function RectifiableInvoiceField({ invoices, selectedIds, onToggle, loadi
     );
   }
 
-  const renderRow = (inv) => {
-    const isSelected = selectedIds.includes(inv.id);
-    return (
-      <div
-        key={inv.id}
-        role="button"
-        tabIndex={0}
-        onClick={() => onToggle(inv.id)}
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(inv.id); } }}
-        data-testid={`${idPrefix}-option-${inv.id}`}
-        data-selected={isSelected ? 'true' : 'false'}
-        style={rowStyle(isSelected)}
-      >
-        <div style={{
-          width: 16, height: 16, borderRadius: 4, flexShrink: 0,
-          border: isSelected ? 'none' : '1.5px solid hsl(var(--text-disabled))',
-          background: isSelected ? 'var(--status-info-fg)' : 'hsl(var(--card))',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          {isSelected && (
-            <svg width="10" height="8" viewBox="0 0 11 9" fill="none" stroke="hsl(var(--card))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="1 4 4 7.5 10 1" />
-            </svg>
-          )}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 500, color: 'hsl(var(--foreground))', display: 'flex', alignItems: 'center', gap: 6 }}>
-            {inv.documentNo}
-            {inv.suggested && (
-              <span
-                data-testid={`${idPrefix}-suggested-${inv.id}`}
-                style={{ fontSize: 9, fontWeight: 500, padding: '1px 6px', borderRadius: 999, background: 'var(--status-info-bg)', color: 'var(--status-info-fg)', whiteSpace: 'nowrap' }}
-              >
-                {ui('rectifySuggestedBadge')}
-              </span>
-            )}
-          </div>
-          <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {[inv.invoiceDate ? formatCalendarDate(inv.invoiceDate) : null, inv.businessPartner]
-              .filter(Boolean).join(' · ')}
-          </div>
-        </div>
-        {inv.grandTotalAmount != null && (
-          <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', flexShrink: 0 }}>
-            {inv.currency ? formatCurrency(inv.currency, inv.grandTotalAmount) : inv.grandTotalAmount}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
         <span style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))' }}>
           {ui('invoiceToRectifyLabel')}
         </span>
-        {selectedIds.length > 0 && (
+        {selected.length > 0 && (
           <span data-testid={`${idPrefix}-selected-count`} style={{ fontSize: 11, color: 'var(--status-info-fg)', fontWeight: 500 }}>
-            {ui('rectifySelectedCount', { count: selectedIds.length })}
+            {ui('rectifySelectedCount', { count: selected.length })}
           </span>
         )}
       </div>
 
-      <input
-        type="text"
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        placeholder={ui('rectifySearchPlaceholder')}
-        data-testid={`${idPrefix}-search`}
-        style={{
-          width: '100%', boxSizing: 'border-box', fontSize: 12, padding: '7px 10px',
-          borderRadius: 6, border: '1px solid hsl(var(--border-subtle))',
-          background: 'hsl(var(--card))', color: 'hsl(var(--foreground))', outline: 'none',
-        }}
-      />
+      {selected.length === 0 ? (
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          data-testid={`${idPrefix}-open`}
+          style={{
+            width: '100%', textAlign: 'left', fontSize: 12, padding: '9px 11px', borderRadius: 6,
+            border: '1px dashed hsl(var(--border-subtle))', background: 'hsl(var(--card))',
+            color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
+          }}
+        >
+          {ui('rectifySelectInvoices')}
+        </button>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {selected.map(inv => (
+            <div
+              key={inv.id}
+              data-testid={`${idPrefix}-selected-${inv.id}`}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 6,
+                border: '1px solid var(--status-info-border)', background: 'var(--status-info-bg)',
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'hsl(var(--foreground))' }}>{inv.documentNo}</div>
+                <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {invoiceMeta(inv)}
+                </div>
+              </div>
+              {invoiceAmount(inv) && (
+                <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', flexShrink: 0 }}>{invoiceAmount(inv)}</span>
+              )}
+              <button
+                type="button"
+                onClick={() => onToggle(inv.id)}
+                aria-label={ui('remove')}
+                data-testid={`${idPrefix}-remove-${inv.id}`}
+                style={{
+                  flexShrink: 0, border: 'none', background: 'transparent', cursor: 'pointer',
+                  color: 'hsl(var(--muted-foreground))', fontSize: 16, lineHeight: 1, padding: '0 2px',
+                }}
+              >
+                &times;
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            data-testid={`${idPrefix}-open`}
+            style={{
+              alignSelf: 'flex-start', fontSize: 12, fontWeight: 500, padding: '4px 0',
+              border: 'none', background: 'transparent', color: 'var(--status-info-fg)', cursor: 'pointer',
+            }}
+          >
+            {ui('rectifyChangeSelection')}
+          </button>
+        </div>
+      )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 230, overflowY: 'auto' }}>
-        {selected.map(renderRow)}
-        {selected.length > 0 && results.length > 0 && (
-          <div style={{ height: 1, background: 'hsl(var(--border-subtle))', margin: '2px 0' }} />
-        )}
-        {results.map(renderRow)}
-        {results.length === 0 && selected.length === 0 && (
-          <div data-testid={`${idPrefix}-no-matches`} style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '6px 2px' }}>
-            {ui('rectifyNoMatches')}
-          </div>
-        )}
-        {hiddenCount > 0 && (
-          <div style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', padding: '2px 2px' }}>
-            {ui('rectifyMoreHidden', { count: hiddenCount })}
-          </div>
-        )}
-      </div>
+      {pickerOpen && (
+        <RectifiableInvoicePickerModal
+          invoices={invoices}
+          selectedIds={selectedIds}
+          onApply={(ids) => { onApply(ids); setPickerOpen(false); }}
+          onClose={() => setPickerOpen(false)}
+          idPrefix={idPrefix}
+        />
+      )}
     </div>
+  );
+}
+
+// ── Picker modal ──────────────────────────────────────────────────────────────
+//
+// Thin wrapper over the shared InvoicePickerModal — the very list the
+// "Rectificaciones" tab of the invoice window uses, in multi-select mode. Kept as a named export
+// so the return-document flow imports one name, but there is deliberately no second picker
+// implementation to drift from the first.
+
+/**
+ * Searchable multi-select list of invoices, opened from {@link RectifiableInvoiceField}.
+ *
+ * Holds its own draft selection so Cancel really discards — committing straight to the parent on
+ * every click would make the Cancel button a lie.
+ *
+ * <p>zIndex 60: above the host modal (the app's modal tier is 50) but below the walkthrough
+ * overlay at 70, which ETP-5108 established must stay on top.
+ */
+export function RectifiableInvoicePickerModal({ invoices, selectedIds, onApply, onClose, idPrefix = 'rectify' }) {
+  const ui = useUI();
+  return createPortal(
+    <InvoicePickerModal
+      invoices={invoices}
+      multiple
+      selectedIds={selectedIds}
+      onApply={onApply}
+      onClose={onClose}
+      title={ui('invoiceToRectifyLabel')}
+      idPrefix={idPrefix}
+      // Above the host modal (the app's modal tier is 50) but below the walkthrough overlay at 70,
+      // which ETP-5108 established must stay on top.
+      zIndex={60}
+    />,
+    document.body,
   );
 }

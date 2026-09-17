@@ -190,6 +190,7 @@ export default function CreateInvoiceConfirmModal({
               invoices={rectify.invoices}
               selectedIds={rectify.selectedIds}
               onToggle={rectify.toggle}
+              onApply={rectify.setSelectedIds}
               loading={rectify.loading}
               isEmpty={rectify.isEmpty}
               idPrefix="invoice-confirm-rectify" />

@@ -24787,7 +24787,9 @@
     "rectifySelectedCount": "{count} selected",
     "rectifySuggestedBadge": "Detected",
     "rectifyNoMatches": "No invoices match your search.",
-    "rectifyMoreHidden": "{count} more — refine your search to see them."
+    "rectifyMoreHidden": "{count} more — refine your search to see them.",
+    "rectifySelectInvoices": "Select invoices to rectify…",
+    "rectifyChangeSelection": "Change selection"
   },
   "menus": {
     "Currency": {
