@@ -5,6 +5,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx';
 import EmbeddedWindowRoute from './EmbeddedWindowRoute.jsx';
 import { renderPrimaryTabButtons } from './detailViewHelpers.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { saveEmbeddedUnsavedChanges } from '@/lib/unsavedChanges.js';
 import { mergeDefaultsPreservingUserEdits } from '@/hooks/useEntity.js';
 import { LocaleProvider, useLocale, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
 
@@ -16,9 +17,13 @@ import { LocaleProvider, useLocale, useLocaleSwitch, useMenuLabel, useUI } from 
  * `target.loadForm()` lazily imports the generated `<Entity>Form.jsx` from the artifact
  * (via the `@generated` vite alias) and renders it as-is, so labels, types, options,
  * requiredness, defaults, references and compiled `readOnlyLogic` all stay owned by
- * `decisions.json` — a `make regen` propagates here for free. This is deliberately
- * unlike `CreateContactModal` / `EntityCreationModal`, which hand-roll their field list
- * and have already drifted from the Contacts window they mirror.
+ * `decisions.json` — a `make regen` propagates here for free.
+ *
+ * That property is the whole argument for this component. `CreateContactModal` /
+ * `EntityCreationModal` hand-rolled their field list and had drifted from the Contacts
+ * window they mirrored — missing fields, different validations, options in the wrong
+ * language. ETP-5332 pointed the Contacto affordance at this modal and deleted all
+ * ~1,972 lines of them. Drift is now structurally impossible, not merely fixed once.
  *
  * It runs in two phases, because the window's own Price and Attachments panels cannot
  * exist before the record does (`ProductPriceBar` derives `recordId` from `data?.id` and
@@ -42,6 +47,10 @@ import { LocaleProvider, useLocale, useLocaleSwitch, useMenuLabel, useUI } from 
  *                                  (carries `entity`, `apiBaseUrl`, i18n keys, `loadForm`).
  * @param {string}   initialQuery - text typed in the lookup, used to prefill the name.
  * @param {string}   token        - session token, forwarded to the embedded form's selectors.
+ * @param {object}   initialData  - field values to seed the embedded window's new record with.
+ *                                  `initialQuery`/`target.prefill` only reach the FALLBACK form;
+ *                                  the window mounts its own `useEntity`, so a seed for it has to
+ *                                  travel as a prop down to `useEntity({ initialData })` (ETP-5332).
  * @param {Function} onCancel     - () => void. Closes without writing anything.
  * @param {Function} onCreated    - (createdRecord) => void. Receives the POST response.
  */
@@ -50,6 +59,7 @@ export default function RecordCreateModal({
   target,
   initialQuery = '',
   token,
+  initialData = null,
   onCancel,
   onCreated,
 }) {
@@ -89,6 +99,9 @@ export default function RecordCreateModal({
   // instance (we render two: the `principal` section and the `other` one). Mirrors
   // useEntity's own formFieldsRef bookkeeping.
   const registeredFieldsRef = useRef(new Map());
+  // The dialog's own DOM node, so `onEscapeKeyDown` can ask whether the inline add-row that
+  // should own this Escape is inside THIS dialog rather than in the document behind it.
+  const contentRef = useRef(null);
 
   const registerFields = useCallback((fields, formId) => {
     if (fields === null) registeredFieldsRef.current.delete(formId);
@@ -303,13 +316,25 @@ export default function RecordCreateModal({
   const windowMode = !!target?.windowName && !windowFailed;
 
   /**
-   * Hands the line the record the embedded window just saved. Re-reads it first for the
-   * same reason phase 2 does: the window's own state is not ours to reach into, and the
-   * single-record GET is what carries the identifier and backend-computed fields the line's
-   * selector row expects.
+   * Hands the line the record the embedded window just saved.
+   *
+   * Saves the window's OWN pending edits first (ETP-5332). The window's Save button is what
+   * normally does this, but nothing forces the user to click it again after an edit made
+   * after their last save — e.g. ticking Proveedor and filling its billing fields, then going
+   * straight to "Completado" — and closing over that silently discarded it. `saveEmbeddedUnsavedChanges()`
+   * is scoped to forms mounted inside THIS popup (`useUnsavedChangesGuard` tags them via the
+   * `EmbeddedWindowContext` the embedded window already sits in): it can never reach the
+   * document behind the dialog, which is a separate, untagged registry entry. A refusal (a
+   * validation error the window's own form now displays) must stop here, same as any other
+   * save — finishing over it would still lose the edit, just with an extra network round trip.
+   *
+   * Re-reads afterwards for the same reason phase 2 always did: the window's own state is not
+   * ours to reach into, and the single-record GET is what carries the identifier and
+   * backend-computed fields the line's selector row expects.
    */
   const finishFromWindow = async () => {
     if (!windowRecordId) return;
+    if (!(await saveEmbeddedUnsavedChanges())) return;
     onCreated(await rereadRecord(apiFetch, target.entity, { id: windowRecordId }));
   };
 
@@ -327,7 +352,25 @@ export default function RecordCreateModal({
       onOpenChange={(next) => { if (!next) dismiss(); }}
       data-testid="Dialog__928459">
       <DialogContent
+        ref={contentRef}
         data-testid="record-create-modal"
+        /*
+          Escape belongs to the INNERMOST dismissable thing, and an open inline add-row inside the
+          embedded window is inner to this dialog — its own hint says "Esc para cancelar".
+          It could never win on its own: Radix listens for Escape on `document` with
+          `{ capture: true }`, so it decides to dismiss before the event has even reached the row,
+          and the row's `preventDefault()` arrives too late to matter. `onEscapeKeyDown` is
+          Radix's own hook for this — DismissableLayer calls it and only dismisses
+          `if (!event.defaultPrevented)` — so preventing here leaves the row's handler to cancel
+          the row while the dialog stays open. A second Escape, with no row left, closes the
+          dialog as before.
+
+          Scoped by containment on purpose: a row open in the DOCUMENT BEHIND the dialog is not
+          inside `contentRef`, so it does not hold this Escape hostage (ETP-5332).
+        */
+        onEscapeKeyDown={(e) => {
+          if (contentRef.current?.querySelector('[data-inline-add-row]')) e.preventDefault();
+        }}
         // Escape must close THIS dialog and nothing else. React synthetic events bubble
         // through the React tree, not the DOM, so an unstopped Escape travels from the
         // in-tree window up through the drawer shell into the host's inline add row, whose
@@ -383,6 +426,14 @@ export default function RecordCreateModal({
                     windowName={target.windowName}
                     apiBaseUrl={target.apiBaseUrl}
                     token={token}
+                    initialData={initialData}
+                    // Per-target opt-in, not unconditional: DetailView renders a delete button
+                    // on any saved record regardless of who created it, but a record created
+                    // seconds ago inside THIS popup has Cancel/the dialog's X for "discard it"
+                    // instead. `target.hideDeleteButton` lets each registry entry decide — the
+                    // window's own route (e.g. `/contacts`) is untouched either way, since this
+                    // prop is only ever passed here, never in decisions.json.
+                    hideDeleteButton={!!target.hideDeleteButton}
                     data-testid="WindowApp__928459" />
                 </EmbeddedWindowRoute>
               ) : (
@@ -401,7 +452,7 @@ export default function RecordCreateModal({
               cannot do: hand the saved record back to the document line.
             */}
             <div className="mt-4 flex items-center justify-end gap-3">
-              <p className="text-xs text-muted-foreground">{ui('createProductWindowHint')}</p>
+              <p className="text-xs text-muted-foreground">{ui(target.windowHintKey)}</p>
               <button
                 type="button"
                 onClick={finishFromWindow}

@@ -1953,9 +1953,9 @@ piece is the Products window's:
 - **The form.** `target.loadForm()` lazily imports the generated `<Entity>Form.jsx` through the
   `@generated` vite alias and renders it as-is, so labels, types, options, requiredness, defaults,
   references and compiled `readOnlyLogic` stay owned by `artifacts/product/decisions.json`: a
-  `make regen ONLY=product` propagates into the popup for free. This is deliberately unlike
-  `CreateContactModal` / `EntityCreationModal`, which hand-roll their field lists and have already
-  drifted from the window they mirror.
+  `make regen ONLY=product` propagates into the popup for free. This was deliberately unlike
+  `CreateContactModal` / `EntityCreationModal`, which hand-rolled their field lists and had drifted
+  from the Contacts window they mirrored — both deleted by ETP-5332 (see §19b).
 - **The tab strip.** `renderPrimaryTabButtons(target.tabsVariant, tabs, …)` from
   `detailViewHelpers.jsx` — the same helper and the same `'pill'` variant `ProductPage` passes to
   `DetailView`, so the General / Additional Info strip is literally the same control. Captions run
@@ -2098,6 +2098,77 @@ close-means-done semantics), `ProductDrawerShell.vitest.jsx` (`— create afford
   per-window note on the affordance.
 - [`docs/request-policy.md`](request-policy.md) — the `useApiFetch`/`apiFetch` helper both the modal
   and the selector re-query go through.
+
+### 19b. The second target: Contacts (`LOOKUP_CREATE_TARGETS.contact`) — ETP-5332
+
+**What it does:** the **"+ Crear contacto"** row in a document's `Contacto` selector now opens the
+**real Contacts window**, mounted at `/contacts/new` inside the dialog by the §19 machinery. It used
+to open `CreateContactModal`, a hand-rolled reimplementation of that window.
+
+**What was deleted** — ~1,972 lines: `CreateContactModal.jsx` (667), `EntityCreationModal.jsx` (737,
+whose only real importer was CreateContactModal), `AddressSection.jsx` (224), `FinancialSection.jsx`
+(263), `contactModalConfig.js` (81), plus their tests. `contactsFieldValidation.js` **stays** — it is
+shared by `EntityForm`, `DataTable`, `useEntity`, `InlineLinesPanel` and `OrganizationPage`.
+
+**What did NOT change, and why that is the point.** None of the six document windows
+(`sales-order`, `sales-quotation`, `sales-invoice`, `purchase-order`, `purchase-invoice`,
+`goods-shipment`) were touched. The trigger chain is untouched too — `CreateContactContext` →
+`EntityForm.SearchSelectField` → `CreatableSearchSelect.onCreateRequest`. The single change point is
+what `useCreateContactModal`'s `onOpen` renders, and `onSelect` still receives `{ id, name }`.
+
+**The affordance is NOT resolved from a selector URL.** Unlike `product`, the contact target never
+goes through `resolveLookupCreateTarget`: that function is the product *drawer's* resolver, keyed off
+`{neoBaseUrl}/{spec}/{entity}/selectors/{column}`. The Contacto affordance predates the drawer
+pattern and is context-wired, and `useCreateContactModal` already knows the contacts API base and the
+document's sale/purchase nature — so it spreads the registry entry with its own `apiBaseUrl`. There is
+no `allowedSpecs` on this entry.
+
+#### Seeding a new record — the `initialData` extension point
+
+Window mode mounts the window at its own `new` route, and the window runs **its own** `useEntity`.
+`target.prefill` only ever reached the *fallback* generated form, so in window mode there was no way
+to pre-fill anything. Three things depended on it:
+
+- the typed query filling Razón social,
+- the document's sale/purchase nature checking **Cliente** or **Proveedor** — not cosmetic: a contact
+  created from a purchase invoice that is not flagged `vendor` never comes back in a purchase
+  selector, so the user creates it, uses it once and cannot find it again,
+- the Copilot OCR flow's extracted values.
+
+`useEntity` therefore takes an `initialData` option, applied in `handleNew`:
+
+```js
+const seed = initialDataRef.current ?? {};
+userChangedKeysRef.current = new Set(Object.keys(seed));   // ← the whole trick
+setEditing({ ...seed });
+```
+
+**Marking the seeded keys as user-changed is the entire mechanism.** The pre-existing ETP-4741 guard
+`mergeDefaultsPreservingUserEdits` already refuses to overwrite a user-changed key, so the in-flight
+`GET /<entity>/defaults` response cannot clobber the seed — no new race handling was written. It also
+stops `shouldSkipPayloadField` from dropping a seeded legacy-looking numeric FK id out of the POST.
+
+- `initialData` is held in a **ref**, not in `handleNew`'s dependency array. `useNewRouteEditingReset`
+  (`detailViewHelpers.jsx`) has `handleNew` in its effect deps, so an unstable `handleNew` — which any
+  caller passing an object literal would cause — re-fires that effect.
+- `DetailView` forwards the prop into its `useEntity` call. From there it reaches the Contacts window
+  through the **existing** `{...props}` spreads (`ContactsWindow` → `BusinessPartnerPage` →
+  `DetailView`); no intermediate file needed changing.
+- **The caller must memoise `target`.** `RecordCreateModal`'s reset effect has `target` in its
+  dependency array: a fresh object per render reloads the window module and refetches `/defaults` on
+  every keystroke in the document behind the dialog.
+
+Seed keys are verified `businessPartner` field names — `name`, `customer`, `vendor` — built by the
+exported `buildContactSeed(query, { documentType })`.
+
+**Known gap.** `initialData` seeds the **header record only**. The Copilot OCR flow also extracts
+`address` / `postalCode` / `city` / `country`, which belong to the `locationAddress` **child tab**, so
+those are no longer pre-filled and the user types them. Seeding a child tab's new row is a different
+mechanism from `useEntity.handleNew`. Debt: `ocr-contact-address-prefill`.
+
+**Person vs company captions.** A company carries `name`; a PERSON is stored as
+`etgoFirstname`/`etgoLastname` and may have an empty `name`, so callers resolve the selector caption
+through the exported `resolveContactName(record)` rather than reading `name` directly.
 
 ---
 

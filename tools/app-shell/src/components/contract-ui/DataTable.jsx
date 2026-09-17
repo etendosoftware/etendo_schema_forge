@@ -178,7 +178,47 @@ const INLINE_ADD_IGNORED_PORTAL_SELECTORS = [
   '[data-radix-popper-content-wrapper]',
 ];
 
-function isClickInsideIgnoredPortal(target) {
+/**
+ * The dialog this row is rendered INSIDE, if any — as opposed to a dialog layered on top of it.
+ *
+ * Every guard below was written for a row living on a plain page, where "a dialog exists" could
+ * only mean "something opened over the row, so do not silently save". ETP-5332 mounts whole
+ * windows inside `RecordCreateModal`, so the row itself now lives in a dialog and each of those
+ * guards fired on every click, which is why an inline row inside the popup never auto-saved while
+ * the same row on `/contacts` did.
+ *
+ * Returns null for a row outside any dialog, which is what makes every check below collapse back
+ * to its previous behaviour verbatim.
+ */
+function getHostDialog(rowEl) {
+  return rowEl?.closest?.('[role="dialog"]') ?? null;
+}
+
+/**
+ * Whether an inline add-row holds nothing worth saving, and should therefore be abandoned
+ * rather than submitted.
+ *
+ * "Has the user touched a field" is the obvious test and the wrong one, because touching is
+ * STICKY: type a name into a new row, change your mind and clear it, and the field stays in
+ * `touchedFieldsRef` with an empty value. The row was then submitted empty and the backend
+ * answered "Missing required fields" for a row the user had visibly abandoned. Asking what the
+ * touched fields are actually WORTH now is the question that matches the user's intent.
+ *
+ * Only null/undefined and blank strings count as empty. `0` and `false` are deliberately real
+ * values — a typed zero, or a checkbox turned off against a default of on, is content.
+ */
+function isInlineRowAbandoned(touchedFieldsRef, valuesRef) {
+  const touched = touchedFieldsRef?.current;
+  if (!touched || touched.size === 0) return true;
+  const values = valuesRef?.current ?? {};
+  return ![...touched].some((key) => {
+    const value = values[key];
+    if (value == null) return false;
+    return typeof value === 'string' ? value.trim() !== '' : true;
+  });
+}
+
+function isClickInsideIgnoredPortal(target, hostDialog = null) {
   // Radix primitives that render via a DismissableLayer with
   // disableOutsidePointerEvents (e.g. <Select>, <Dialog>) set
   // document.body.style.pointerEvents = 'none' while open, so a click meant
@@ -188,9 +228,21 @@ function isClickInsideIgnoredPortal(target) {
   // without this check it reads as "genuinely outside, nothing touched" and
   // wrongly discards the row. Treat any click while such a layer is active
   // as belonging to that layer, regardless of what element it resolves to.
-  if (document.body.style.pointerEvents === 'none') return true;
+  //
+  // Hosted in a dialog, `body` is permanently 'none' for as long as that dialog is open, so the
+  // signal is useless there. Radix's own layer stack gives the equivalent one per element: the
+  // topmost layer keeps `pointer-events: auto` and every layer below it is set to 'none'. So the
+  // host dialog turning 'none' means something (a Select, a nested dialog) is layered above it.
+  if (hostDialog ? hostDialog.style.pointerEvents === 'none'
+    : document.body.style.pointerEvents === 'none') return true;
   if (!(target instanceof Element)) return false;
-  return INLINE_ADD_IGNORED_PORTAL_SELECTORS.some(sel => target.closest(sel));
+  return INLINE_ADD_IGNORED_PORTAL_SELECTORS.some((sel) => {
+    const hit = target.closest(sel);
+    if (!hit) return false;
+    // The row's own host dialog is not a portal "over" the row — clicking elsewhere inside it is
+    // the ordinary click-outside-to-save gesture, not an interaction with something on top.
+    return !(hostDialog && sel === '[role="dialog"]' && hit === hostDialog);
+  });
 }
 
 function applyLocalSearch(rows, filters, searchQuery) {
@@ -955,7 +1007,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
       if (inflightRef.current) {
         return (await inflightRef.current) !== false;
       }
-      if (touchedFieldsRef.current.size === 0) {
+      if (isInlineRowAbandoned(touchedFieldsRef, valuesRef)) {
         onCancel();
         return true;
       }
@@ -975,14 +1027,22 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
       const target = e.target;
       if (!(target instanceof Node)) return;
       if (rowRef.current?.contains(target)) return;
+      // The dialog hosting the row, when the whole window is mounted inside one
+      // (RecordCreateModal). null on a normal page, which keeps both checks below identical
+      // to what they did before ETP-5332.
+      const hostDialog = getHostDialog(rowRef.current);
       // Skip whitelisted portals: open dialog/drawer, inline-add combo portal, and
       // Radix Select dropdowns (rendered outside the row via portal). Treating
       // these as part of the row prevents silent saves when the user is still
       // interacting with a popover/listbox (e.g. switching the tax).
-      if (isClickInsideIgnoredPortal(target)) return;
-      if (document.querySelector('[role="dialog"]')) return;
+      if (isClickInsideIgnoredPortal(target, hostDialog)) return;
+      // A dialog OVER the row still suppresses the commit. Asking whether one merely exists
+      // would suppress it forever once the row itself lives in a dialog, so the question is
+      // whether any dialog fails to contain the row.
+      if ([...document.querySelectorAll('[role="dialog"]')]
+        .some(d => !d.contains(rowRef.current))) return;
       if (inflightRef.current) return;
-      if (touchedFieldsRef.current.size === 0) {
+      if (isInlineRowAbandoned(touchedFieldsRef, valuesRef)) {
         onCancel();
       } else {
         submitLine({ closeAfterSave: true }).catch((err) => {
@@ -1072,8 +1132,14 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
   // gets the autofocus ref. An object (not a bare boolean) so the callee can flip it.
   const firstInputCtx = { assigned: false };
 
+  // `data-inline-add-row` below is a FUNCTIONAL marker, not a test hook (that is the data-testid
+  // beside it, which must stay free to change). A host that can also be dismissed by Escape —
+  // today `RecordCreateModal`, which mounts whole windows in a dialog — looks for it inside
+  // itself to decide that Escape belongs to this row and not to the dialog: Radix listens for
+  // Escape on `document` in the CAPTURE phase, so it would otherwise always win the race and
+  // close over a row the user was only trying to discard (ETP-5332).
   return (
-    <TableRow ref={rowRef} data-testid="inline-add-row" className="bg-status-info/30 border-t border-primary/20">
+    <TableRow ref={rowRef} data-inline-add-row="" data-testid="inline-add-row" className="bg-status-info/30 border-t border-primary/20">
       {/* ETP-4735 — matches the leading CHEVRON_COLUMN_WIDTH <col> renderLinesColgroup
           reserves when hasDimensionsPanel. A <col> alone doesn't reserve visual space —
           table column widths/positions are driven by the actual cells present in a row,
