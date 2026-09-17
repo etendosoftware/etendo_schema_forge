@@ -140,6 +140,8 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
           id: invoiceId || null,
           documentNo: docNo,
           amount: json?.response?.data?.grandTotalAmount ?? null,
+          // ETP-5381: the result modal badges off this — the invoice is confirmed on creation.
+          documentStatus: json?.response?.data?.documentStatus ?? null,
         },
       });
     } catch (err) {
@@ -229,7 +231,7 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
       {invoiceResult?.invoice?.id && createPortal(
         <ConfirmResultModal
           title={ui('soInvoiceCreated')}
-          docs={[{ type: 'facturaVenta', num: invoiceResult.invoice.documentNo, amount: invoiceResult.invoice.amount, route: `/sales-invoice/${invoiceResult.invoice.id}` }]}
+          docs={[{ type: 'facturaVenta', num: invoiceResult.invoice.documentNo, amount: invoiceResult.invoice.amount, documentStatus: invoiceResult.invoice.documentStatus, route: `/sales-invoice/${invoiceResult.invoice.id}` }]}
           primary={ui('soViewInvoice')}
           currency={data?.['currency$_identifier'] || ''}
           navigate={(route) => { resultNavigatedRef.current = true; navigate(route); }}

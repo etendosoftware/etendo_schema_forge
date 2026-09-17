@@ -123,6 +123,9 @@ export default function ConfirmInOutModal({
           id: invData?.id ?? null,
           documentNo: invData?.documentNo || '',
           amount: invData?.grandTotalAmount ?? null,
+          // ETP-5381: the result modal badges off this — the invoice is confirmed on creation,
+          // while the shipment shown beside it is still a draft.
+          documentStatus: invData?.documentStatus ?? null,
         };
       }
 

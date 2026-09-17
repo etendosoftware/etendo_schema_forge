@@ -149,7 +149,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
           title={confirmedTitle || ui('poConfirmedTitle')}
           docs={[
             confirmedDocs?.receipt?.id && { type: 'entrada', num: confirmedDocs.receipt.documentNo, amount: confirmedDocs.receipt.amount, route: `/goods-receipt/${confirmedDocs.receipt.id}` },
-            confirmedDocs?.invoice?.id && { type: 'facturaCompra', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, route: `/purchase-invoice/${confirmedDocs.invoice.id}` },
+            confirmedDocs?.invoice?.id && { type: 'facturaCompra', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, documentStatus: confirmedDocs.invoice.documentStatus, route: `/purchase-invoice/${confirmedDocs.invoice.id}` },
           ].filter(Boolean)}
           currency={data?.['currency$_identifier'] || ''}
           navigate={navigate}
@@ -763,7 +763,9 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
         }
         const doc = (await res.json())?.response?.data;
         const docObj = Array.isArray(doc) ? doc[0] : doc;
-        result.invoice = { id: docObj?.id ?? null, documentNo: docObj?.documentNo ?? '', amount: docObj?.grandTotalAmount ?? null };
+        // ETP-5381: carry documentStatus so the result modal badges the invoice as Confirmada
+        // instead of defaulting to Borrador — it is confirmed on creation now.
+        result.invoice = { id: docObj?.id ?? null, documentNo: docObj?.documentNo ?? '', amount: docObj?.grandTotalAmount ?? null, documentStatus: docObj?.documentStatus ?? null };
         trackDocumentCreated('purchase-invoice');
       }
 

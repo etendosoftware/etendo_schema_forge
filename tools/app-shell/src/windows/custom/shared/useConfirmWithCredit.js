@@ -64,6 +64,9 @@ export function useConfirmWithCredit({
           type: invoiceType,
           num: invData.documentNo || '',
           amount: invData.grandTotalAmount ?? null,
+          // ETP-5381: the rectificative invoice is confirmed on creation; without this the
+          // result modal would badge it as Borrador.
+          documentStatus: invData.documentStatus ?? null,
           route: `${invoiceRoute}${invData.id}`,
         }] : [],
       });
@@ -82,6 +85,7 @@ export function useConfirmWithCredit({
         type: invoiceType,
         num: invoice.documentNo || '',
         amount: invoice.amount ?? invoice.grandTotal,
+        documentStatus: invoice.documentStatus ?? null,
         route: `${invoiceRoute}${invoice.id}`,
       }],
     };

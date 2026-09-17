@@ -56,7 +56,8 @@ describe('ConfirmInOutModal', () => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ response: { data: { id: 'INV-001', documentNo: 'FAC-001', grandTotalAmount: 500 } } }),
+      // ETP-5381: the invoice action now returns documentStatus, and it comes back confirmed.
+      json: async () => ({ response: { data: { id: 'INV-001', documentNo: 'FAC-001', grandTotalAmount: 500, documentStatus: 'CO' } } }),
     }));
   });
 
@@ -146,8 +147,10 @@ describe('ConfirmInOutModal', () => {
     const onConfirmed = vi.fn();
     render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={true} onConfirmed={onConfirmed} />);
     fireEvent.click(screen.getByText('Confirm + Invoice'));
+    // ETP-5381: documentStatus travels with the invoice so ConfirmResultModal can badge it
+    // as Confirmada — without it the result modal falls back to the Borrador badge.
     await waitFor(() => expect(onConfirmed).toHaveBeenCalledWith({
-      invoice: { id: 'INV-001', documentNo: 'FAC-001', amount: 500 },
+      invoice: { id: 'INV-001', documentNo: 'FAC-001', amount: 500, documentStatus: 'CO' },
     }));
   });
 
@@ -215,7 +218,8 @@ describe('ConfirmInOutModal', () => {
       }
       return Promise.resolve({
         ok: true,
-        json: async () => ({ response: { data: { id: 'INV-001', documentNo: 'FAC-001', grandTotalAmount: 500 } } }),
+        // ETP-5381: the invoice action now returns documentStatus, and it comes back confirmed.
+      json: async () => ({ response: { data: { id: 'INV-001', documentNo: 'FAC-001', grandTotalAmount: 500, documentStatus: 'CO' } } }),
       });
     }));
   }

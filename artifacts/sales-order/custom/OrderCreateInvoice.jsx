@@ -156,7 +156,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
           title={confirmedTitle || ui('soConfirmedTitle')}
           docs={[
             confirmedDocs?.shipment?.id && { type: 'salida', num: confirmedDocs.shipment.documentNo, amount: confirmedDocs.shipment.amount, route: `/goods-shipment/${confirmedDocs.shipment.id}` },
-            confirmedDocs?.invoice?.id && { type: 'facturaVenta', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, route: `/sales-invoice/${confirmedDocs.invoice.id}` },
+            confirmedDocs?.invoice?.id && { type: 'facturaVenta', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, documentStatus: confirmedDocs.invoice.documentStatus, route: `/sales-invoice/${confirmedDocs.invoice.id}` },
           ].filter(Boolean)}
           currency={data?.['currency$_identifier'] || ''}
           navigate={navigate}
@@ -470,7 +470,9 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           throw new Error(ui('soOrderConfirmedInvoiceError') + translateBackendError(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`, ui));
         }
         const doc = (await res.json())?.response?.data;
-        currentInvoice = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
+        // ETP-5381: carry documentStatus so the result modal badges the invoice as Confirmada
+        // instead of defaulting to Borrador — it is confirmed on creation now.
+        currentInvoice = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null, documentStatus: doc?.documentStatus ?? null };
         setInvoiceResult(currentInvoice);
         trackDocumentCreated('sales-invoice');
       } catch (e) {
