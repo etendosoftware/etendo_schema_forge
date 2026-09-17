@@ -76,8 +76,10 @@ function DemoTrialIndicator({ ui }) {
   return (
     <div
       className={cn(
-        'flex min-h-[42px] w-full items-center justify-between gap-4 border-b px-6 py-2 text-sm',
-        expired ? 'border-status-danger/40 bg-status-danger/10' : 'border-status-success/30 bg-status-success/10'
+        'flex min-h-[46px] w-full flex-wrap items-center justify-start gap-x-4 gap-y-2 border-b px-6 py-2 text-sm',
+        expired
+          ? 'border-status-danger-border bg-status-danger text-status-danger-foreground'
+          : 'border-status-success-border bg-status-success text-status-success-foreground'
       )}
       aria-label={label}
       title={environment.trialExpiresAt || undefined}
@@ -85,22 +87,30 @@ function DemoTrialIndicator({ ui }) {
     >
       <div className="flex min-w-0 items-center gap-3">
         <span className={cn(
-          'rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wide',
-          expired ? 'bg-status-danger text-white' : 'bg-status-success text-white'
+          'rounded-full border px-2.5 py-1 text-xs font-bold uppercase tracking-wide',
+          expired
+            ? 'border-status-danger-border bg-status-danger text-status-danger-foreground'
+            : 'border-status-success-border bg-status-success text-status-success-foreground'
         )}>
           {productive ? ui('environmentProductive') : ui('environmentDemo')}
         </span>
         <span className="truncate font-semibold text-foreground">{label}</span>
       </div>
       <div className="flex w-full max-w-[360px] items-center gap-3">
-        {!productive && <span className="shrink-0 text-sm font-bold text-foreground" aria-hidden="true">
-          {expired ? '0' : environment.trialDaysRemaining}
-        </span>}
-        <div className="h-2 min-w-20 flex-1 overflow-hidden rounded-full bg-background/70" aria-hidden="true">
         <div
-          className={cn('h-full rounded-full', expired ? 'bg-status-danger' : 'bg-status-success')}
-          style={{ width: `${progress}%` }}
-        />
+          className={cn(
+            'h-2 min-w-20 flex-1 overflow-hidden rounded-full',
+            expired ? 'bg-status-danger-border' : 'bg-status-success-border'
+          )}
+          aria-hidden="true"
+        >
+          <div
+            className={cn(
+              'h-full rounded-full',
+              expired ? 'bg-status-danger-foreground' : 'bg-status-success-foreground'
+            )}
+            style={{ width: `${progress}%` }}
+          />
         </div>
       </div>
     </div>
@@ -190,6 +200,7 @@ export default function TopBar({
   return (
     <TooltipProvider data-testid="TooltipProvider__133e64">
       <div className="flex min-w-0 shrink-0 flex-col">
+        <DemoTrialIndicator ui={ui} data-testid="DemoTrialIndicator__133e64" />
         <header
           className={cn(
             'relative flex h-[62px] shrink-0 items-center gap-4 pl-0 pr-6 bg-page-bg',
@@ -446,7 +457,6 @@ export default function TopBar({
           {rightExtras}
         </div>
         </header>
-        <DemoTrialIndicator ui={ui} data-testid="DemoTrialIndicator__133e64" />
       </div>
     </TooltipProvider>
   );

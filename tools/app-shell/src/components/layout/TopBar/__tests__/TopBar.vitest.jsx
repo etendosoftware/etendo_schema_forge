@@ -58,10 +58,13 @@ import TopBar from '../TopBar.jsx';
 const LONG_NAME = 'Banco Santander S.A (Sandbox) - PT50018000354378591102009';
 
 describe('TopBar title', () => {
-  it('shows the active demo trial prominently in the global header', () => {
+  it('shows the active demo trial prominently above the global header', () => {
     render(<TopBar title="Inicio" />);
-    expect(screen.getByTestId('topbar-demo-trial-indicator')).toBeInTheDocument();
-    expect(screen.getByTestId('topbar-demo-trial-indicator')).toHaveTextContent('7');
+    const indicator = screen.getByTestId('topbar-demo-trial-indicator');
+    expect(indicator).toBeInTheDocument();
+    expect(indicator).toHaveTextContent('environmentDemo');
+    expect(indicator).toHaveTextContent('environmentTrialDaysRemaining');
+    expect(indicator.querySelector('[style*="width"]')).toBeTruthy();
   });
 
   it('truncates a long title instead of letting it overflow the header', () => {
