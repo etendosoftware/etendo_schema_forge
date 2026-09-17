@@ -169,6 +169,43 @@ describe('TC-03 — InvoicePickerModal lists CO invoices, sorted, capped at 5, s
     expect(screen.getAllByText(/^100000\d\d$/).map(el => el.textContent)).toEqual(['10000002']);
   });
 
+  it('TC-03: renders the partner NAME, never the raw id, for a NEO header row carrying both', async () => {
+    // The NEO `/header` entity returns the UUID in `businessPartner` and the readable name in the
+    // `$_identifier` twin. Every fixture in this suite used to define only the twin, so the wrong
+    // branch of the shared picker was never evaluated and it shipped showing a UUID to the user.
+    const BP_ID = '0ABDA2D3D6C249598F3564C566B8C511';
+    renderPanel({
+      headerInvoices: [{
+        id: 'inv-twin', documentNo: '10000077', invoiceDate: '2026-05-02', documentStatus: 'CO',
+        businessPartner: BP_ID, 'businessPartner$_identifier': 'Laura Morat', grandTotalAmount: 100,
+      }],
+    });
+    fireEvent.click(await screen.findByTestId('btn__addFirstRectificacion'));
+    fireEvent.click(screen.getByText('Seleccionar...'));
+    await screen.findByPlaceholderText('rectSearchInvoice');
+    await waitFor(() => expect(screen.queryByText('loading')).not.toBeInTheDocument());
+
+    expect(screen.getByText('Laura Morat')).toBeInTheDocument();
+    // The assertion that actually guards the regression.
+    expect(screen.queryByText(BP_ID)).not.toBeInTheDocument();
+  });
+
+  it('TC-03: also renders a row shaped like the return flow — name in `businessPartner`, no twin', async () => {
+    // Same shared component, the mirror row shape produced by the rectifiableInvoices action.
+    renderPanel({
+      headerInvoices: [{
+        id: 'inv-plain', documentNo: '10000078', invoiceDate: '2026-05-03', documentStatus: 'CO',
+        businessPartner: 'Laura Morat', grandTotalAmount: 100,
+      }],
+    });
+    fireEvent.click(await screen.findByTestId('btn__addFirstRectificacion'));
+    fireEvent.click(screen.getByText('Seleccionar...'));
+    await screen.findByPlaceholderText('rectSearchInvoice');
+    await waitFor(() => expect(screen.queryByText('loading')).not.toBeInTheDocument());
+
+    expect(screen.getByText('Laura Morat')).toBeInTheDocument();
+  });
+
   it('TC-03/TC-07: selecting an invoice closes the modal and fills the draft field', async () => {
     await openPicker();
     fireEvent.click(screen.getByText('10000030'));
