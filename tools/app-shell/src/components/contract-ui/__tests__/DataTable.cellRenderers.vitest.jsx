@@ -415,9 +415,13 @@ describe('renderDefaultCell', () => {
       visibleColumns: [{ key: 'name', type: 'string' }, { key: 'note', type: 'string' }],
     }));
 
+    // ETP-5268 follow-up — swapped the native `title` tooltip for `TruncatedText`
+    // (styled, only opens when genuinely clipped — see components/ui/truncated-text.jsx),
+    // so the trigger span no longer carries a `title` attribute; the tooltip's own
+    // open/close behavior is covered by truncated-text's own test, not re-tested here.
     const truncated = container.querySelector('span.truncate');
     expect(truncated).toBeTruthy();
-    expect(truncated).toHaveAttribute('title', long);
+    expect(truncated).not.toHaveAttribute('title');
     expect(truncated).toHaveTextContent(long);
   });
 });
