@@ -1186,3 +1186,18 @@ The tax-id assertion is dispatched the way the backend dispatches it: the NIF al
 runs when the row declares document type NIF, which the template does in a sibling column, so
 the test resolves `oBTIKTaxIDKey`'s example through the descriptor's own `TAX_ID_KEY_VALUES`
 label table rather than assuming it.
+
+## ETP-5374 — Duplicate detection died in silence above ~72 rows
+
+Engine-level work shared with Product, reported against Product Import but landing entirely in
+the shared `existingRecordLookup.js` + `ImportDialog`, so Contacts gets all of it. Full write-up
+in `product.md` → *ETP-5374*.
+
+One point specific to this window: Contacts dedupes on `taxID`, a single column, so its batches
+land at ~38 keys each — the same order as Product's `searchKey`. A window that ever declares a
+composite `dedupe.key` gets proportionally smaller batches automatically, which is the whole
+reason the new rule measures URL length instead of counting keys.
+
+The threshold was the same here as in Product, because the limit is Tomcat's and not the
+window's: above ~72 distinct NIFs the pre-check was refused with a 400 and every row showed as
+Correcta.

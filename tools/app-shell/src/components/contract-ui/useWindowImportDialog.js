@@ -81,7 +81,14 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
     params.append('criteria', JSON.stringify(criteria));
     params.append('_startRow', '0');
     params.append('_endRow', '1000');
-    const res = await apiFetch(`/${entity}?${params.toString()}`);
+    // ETP-5374 — `on401: 'ignore'`. This is a pre-flight courtesy check whose whole contract is
+    // that failing must never block an import the server would have accepted; logging the user
+    // out is the most extreme way of blocking it. Without this, one 401 here tears down the
+    // session and the import dialog along with it, mid-review, with nothing said. A genuinely
+    // expired session still logs out at the next real request, which is the one the user is
+    // actually waiting on. The 401 is handed back as a normal `!res.ok` and the review screen
+    // reports the check as incomplete.
+    const res = await apiFetch(`/${entity}?${params.toString()}`, { on401: 'ignore' });
     if (!res.ok) throw new Error(`existing-record lookup failed: ${res.status}`);
     const json = await res.json().catch(() => null);
     const data = json?.response?.data ?? json?.data ?? [];
