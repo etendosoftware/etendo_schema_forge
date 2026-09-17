@@ -731,6 +731,24 @@ export function classifyModules({ profile, dirEntries, probes, unpinnedPolicy })
   };
 }
 
+/**
+ * Find the newest preserved checkout for a module parked by a previous align
+ * run. Parking names are intentionally opaque to the parity logic: the
+ * module name is the stable part and everything after the first dot is a
+ * version/run suffix. This keeps old and new parking formats usable.
+ *
+ * @param {string} moduleName
+ * @param {string[]} parkedEntries immediate directory names under .modules-disabled
+ * @returns {string|null} the selected parked directory name
+ */
+export function findParkedModule(moduleName, parkedEntries = []) {
+  const prefix = `${moduleName}.`;
+  const candidates = parkedEntries
+    .filter((entry) => entry === moduleName || entry.startsWith(prefix))
+    .sort((a, b) => b.localeCompare(a));
+  return candidates[0] || null;
+}
+
 // ---------------------------------------------------------------------------
 // PURE: gradle.properties handling
 // ---------------------------------------------------------------------------
@@ -915,7 +933,7 @@ export function assertSidGuard({ targetSid, localSid, allowLocalSid }) {
  *   blocked?: boolean, reason?: string}>}
  */
 export function buildAlignPlan({
-  rows, profile, coreDir, gitBranch, branchPolicy, timestamp,
+  rows, profile, coreDir, gitBranch, branchPolicy, timestamp, parkedEntries = [],
 }) {
   const steps = [];
   const modulesDir = path.join(coreDir, 'modules');
@@ -1014,6 +1032,17 @@ export function buildAlignPlan({
     if (row.status === 'MISSING') {
       const mod = requiredByName.get(row.name);
       const ungrounded = mod.branchPolicySource === 'ungrounded';
+      const parked = findParkedModule(row.name, parkedEntries);
+      if (parked) {
+        steps.push({
+          kind: 'restore',
+          description: `RESTORE ${row.name} from previous parking (${parked})`,
+          commands: [`mv ${path.join(parkDir, parked)} ${path.join(modulesDir, row.name)}`],
+          cwd: coreDir,
+          reason: `${row.reason} A preserved checkout was found; restore it instead of cloning.`,
+        });
+        continue;
+      }
       steps.push({
         kind: 'clone',
         description: ungrounded
@@ -1492,6 +1521,12 @@ function listModuleDirs(modulesDir) {
     .filter((n) => !n.startsWith('.') && statSync(path.join(modulesDir, n)).isDirectory());
 }
 
+function listParkedEntries(parkDir) {
+  if (!existsSync(parkDir)) return [];
+  return readdirSync(parkDir)
+    .filter((n) => statSync(path.join(parkDir, n)).isDirectory());
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
@@ -1502,6 +1537,8 @@ function main() {
   const { config, configPath } = loadConfig();
   const { coreDir, layout } = resolveCoreDir(REPO_ROOT);
   const modulesDir = path.join(coreDir, 'modules');
+  const parkDir = path.join(coreDir, '.modules-disabled');
+  const parkedEntries = listParkedEntries(parkDir);
   const branchPolicy = config.branchPolicy;
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const logDir = path.join(REPO_ROOT, 'tmp', 'ci-parity', timestamp);
@@ -1621,7 +1658,7 @@ function main() {
   const wants = (p) => args.phases.includes(p);
   const alignPlan = wants('align')
     ? buildAlignPlan({
-      rows: classification.rows, profile, coreDir, gitBranch, branchPolicy, timestamp,
+      rows: classification.rows, profile, coreDir, gitBranch, branchPolicy, timestamp, parkedEntries,
     })
     : [];
   const parity = buildParityGradleProperties(propsText, { sid: args.sid });

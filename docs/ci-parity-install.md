@@ -324,12 +324,17 @@ fails the command.
 
 ### `align` — make the module set match
 
-- **MISSING** → `git clone <ssh url>` into `modules/`, then the expected checkout chain.
+- **MISSING** → if a preserved checkout exists under `.modules-disabled/`, the newest
+  matching entry is restored into `modules/`; otherwise `git clone <ssh url>` is used,
+  followed by the expected checkout chain. Matching is based on the module name, so
+  timestamp/version suffixes from previous tool versions remain usable.
   For an `ungrounded` module, the clone runs with **no** checkout: it lands on the remote
   default branch.
 - **DRIFT** → `git fetch --all --prune` then the expected checkout chain.
 - **EXTRA / STRAY** → **moved** to `<core>/.modules-disabled/<name>.<timestamp>/`.
   Never `rm -rf`, never `git clean`.
+- Previous parked copies are never deleted or overwritten. If more than one copy exists,
+  `align` restores the newest one and leaves older copies available for recovery.
 - **EXCLUDED** → prints `SKIPPED` plus the reason; touches nothing.
 
 A `DIRTY-BUILD` module already on its expected branch needs no step: the dirt is tracked

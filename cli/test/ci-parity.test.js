@@ -49,6 +49,7 @@ import {
   summarizePaths,
   // classification
   classifyModules,
+  findParkedModule,
   // git freshness
   upstreamFreshness,
   fetchRepo,
@@ -1632,6 +1633,30 @@ describe('buildAlignPlan', () => {
       'git -C m-missing checkout mergeblock/ETP-5137',
     ]);
     assert.match(step.description, /CLONE m-missing -> mergeblock\/ETP-5137/);
+  });
+
+  it('restores the newest parked checkout instead of cloning it', () => {
+    const [step] = plan([row('m-missing', 'MISSING')], {
+      parkedEntries: [
+        'm-missing.2026-09-04T00-00-00-000Z',
+        'm-missing.2026-09-17T12-54-51-950Z',
+      ],
+    });
+    assert.equal(step.kind, 'restore');
+    assert.deepEqual(step.commands, [
+      'mv /core/.modules-disabled/m-missing.2026-09-17T12-54-51-950Z /core/modules/m-missing',
+    ]);
+    assert.match(step.description, /RESTORE m-missing from previous parking/);
+  });
+
+  it('matches parked entries by module name without depending on their suffix', () => {
+    assert.equal(
+      findParkedModule('com.example.module', [
+        'com.example.module.previous-version',
+      ]),
+      'com.example.module.previous-version',
+    );
+    assert.equal(findParkedModule('com.example.module', ['com.example.module-extra']), null);
   });
 
   it('clones an ungrounded MISSING module WITHOUT asserting a branch', () => {
