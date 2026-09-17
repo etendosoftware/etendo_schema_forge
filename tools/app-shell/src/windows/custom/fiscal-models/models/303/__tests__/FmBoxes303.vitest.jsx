@@ -927,6 +927,148 @@ describe('FmBoxes303 — identificacion visibleWhen conditions', () => {
 // the edit-pencil buttons must be entirely absent (not just disabled), since
 // they are the only way to enter cell-edit mode.
 
+// ── Percent cell clamping/rounding (ETP-5391) ────────────────────────────────
+// Percent boxes (89/90/91/92 in tributacion_territorial — last-period-only,
+// so year/period must resolve to the last period for the section to exist at
+// all) follow the AEAT rule "los porcentajes se expresarán con dos decimales":
+// never above 100, never negative, at most 2 decimal places.
+
+describe('FmBoxes303 — percent cell input attributes (colType="percent")', () => {
+  const PERCENT_PROPS = { year: 2026, period: 'T4', sectionIds: ['tributacion_territorial'] };
+
+  function openFirstEditor(container) {
+    const editBtns = container.querySelectorAll('.fm-aeat-cell__edit-btn');
+    expect(editBtns.length).toBeGreaterThan(0);
+    fireEvent.click(editBtns[0]);
+    return container.querySelector('.fm-aeat-cell__input');
+  }
+
+  it('renders max=100 and min=0 on a percent cell input (box 89 — Álava)', () => {
+    const { container } = render(<FmBoxes303 {...PERCENT_PROPS} boxes={{ 89: 50 }} />);
+    const input = openFirstEditor(container);
+    expect(input.getAttribute('max')).toBe('100');
+    expect(input.getAttribute('min')).toBe('0');
+  });
+
+  it('does NOT render max/min on an amount cell input (box 76, resultado_final)', () => {
+    const { container } = render(
+      <FmBoxes303 year={2026} period="T2" boxes={{ 76: 100 }} sectionIds={['resultado_final']} />
+    );
+    const editBtns = container.querySelectorAll('.fm-aeat-cell__edit-btn');
+    fireEvent.click(editBtns[0]);
+    const input = container.querySelector('.fm-aeat-cell__input');
+    expect(input.hasAttribute('max')).toBe(false);
+    expect(input.hasAttribute('min')).toBe(false);
+  });
+
+  it('clamps a value above 100 down to "100" on blur', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(<FmBoxes303 {...PERCENT_PROPS} boxes={{ 89: 50 }} onBoxChange={onBoxChange} />);
+    const input = openFirstEditor(container);
+    fireEvent.change(input, { target: { value: '150' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(89, '100');
+  });
+
+  it('clamps a negative value up to "0" on Enter', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(<FmBoxes303 {...PERCENT_PROPS} boxes={{ 89: 50 }} onBoxChange={onBoxChange} />);
+    const input = openFirstEditor(container);
+    fireEvent.change(input, { target: { value: '-5' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onBoxChange).toHaveBeenCalledWith(89, '0');
+  });
+
+  it('rounds a value with more than 2 decimals to 2 decimals', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(<FmBoxes303 {...PERCENT_PROPS} boxes={{ 89: 50 }} onBoxChange={onBoxChange} />);
+    const input = openFirstEditor(container);
+    fireEvent.change(input, { target: { value: '33.456' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(89, '33.46');
+  });
+
+  it('leaves an in-range, already-2-decimal value untouched (no spurious rounding)', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(<FmBoxes303 {...PERCENT_PROPS} boxes={{ 89: 50 }} onBoxChange={onBoxChange} />);
+    const input = openFirstEditor(container);
+    fireEvent.change(input, { target: { value: '50.5' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(89, '50.5');
+  });
+
+  it('preserves an empty value as-is ("clear the field"), does not coerce it to a number', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(<FmBoxes303 {...PERCENT_PROPS} boxes={{ 89: 50 }} onBoxChange={onBoxChange} />);
+    const input = openFirstEditor(container);
+    fireEvent.change(input, { target: { value: '' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(89, '');
+  });
+
+  it('a value of exactly 100 is left unclamped', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(<FmBoxes303 {...PERCENT_PROPS} boxes={{ 89: 50 }} onBoxChange={onBoxChange} />);
+    const input = openFirstEditor(container);
+    fireEvent.change(input, { target: { value: '100' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(89, '100');
+  });
+
+  it('an amount-type cell (box 76) is NOT clamped/rounded — raw string forwarded verbatim', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303 year={2026} period="T2" boxes={{ 76: 100 }} sectionIds={['resultado_final']} onBoxChange={onBoxChange} />
+    );
+    const editBtns = container.querySelectorAll('.fm-aeat-cell__edit-btn');
+    fireEvent.click(editBtns[0]);
+    const input = container.querySelector('.fm-aeat-cell__input');
+    fireEvent.change(input, { target: { value: '999.999999' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(76, '999.999999');
+  });
+});
+
+// ── Casilla 107 (territorio_comun) mirrors box 65 live (ETP-5391) ───────────
+// 107 is a read-only derivedValue row — it must never carry its own edit
+// affordance, must reflect the live box 65 value (not a snapshot), and must
+// default to 100 when box 65 hasn't been entered yet.
+
+describe('FmBoxes303 — casilla 107 (territorio_comun) mirrors box 65', () => {
+  const TERR_PROPS = { year: 2026, period: 'T4', sectionIds: ['tributacion_territorial'] };
+
+  it('renders box number 107 with the live value of box 65, formatted as a percent', () => {
+    const { container } = render(<FmBoxes303 {...TERR_PROPS} boxes={{ 65: 42.5 }} />);
+    const nums = Array.from(container.querySelectorAll('.fm-aeat-cell__num')).map(n => n.textContent);
+    expect(nums).toContain('107');
+    expect(container.textContent).toContain('42,50');
+  });
+
+  it('defaults to 100 (dv.defaultValue) when box 65 is absent from boxes', () => {
+    const { container } = render(<FmBoxes303 {...TERR_PROPS} boxes={{}} />);
+    expect(container.textContent).toContain('100,00');
+  });
+
+  it('tracks a live update to box 65 across a rerender (not a frozen snapshot)', () => {
+    const { container, rerender } = render(<FmBoxes303 {...TERR_PROPS} boxes={{ 65: 30 }} />);
+    expect(container.textContent).toContain('30,00');
+    rerender(<FmBoxes303 {...TERR_PROPS} boxes={{ 65: 77 }} />);
+    expect(container.textContent).toContain('77,00');
+    expect(container.textContent).not.toContain('30,00');
+  });
+
+  it('renders empty (not "0,00") when the mirrored box-65 value is exactly 0', () => {
+    const { container } = render(<FmBoxes303 {...TERR_PROPS} boxes={{ 65: 0 }} />);
+    expect(container.textContent).not.toContain('0,00');
+  });
+
+  it('carries no edit-pencil button (read-only mirror, unlike the 4 editable territorial percent rows)', () => {
+    const { container } = render(<FmBoxes303 {...TERR_PROPS} boxes={{ 65: 42, 89: 10, 90: 20, 91: 30, 92: 40 }} />);
+    // Exactly 4 editable rows in this section (89/90/91/92) — territorio_comun (107) must not add a 5th.
+    expect(container.querySelectorAll('.fm-aeat-cell__edit-btn').length).toBe(4);
+  });
+});
+
 describe('FmBoxes303 — readOnly prop', () => {
   describe('renderIdentSelectField select', () => {
     it('disables the tipo_declaracion select when readOnly is true', () => {

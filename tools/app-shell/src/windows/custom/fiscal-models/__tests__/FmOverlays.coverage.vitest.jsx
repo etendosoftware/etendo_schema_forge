@@ -113,10 +113,13 @@ describe('FmOverlays interactive coverage', () => {
     await user.click(option349);
 
     // Año is a button + dropdown (YearSelectMenu), not a segmented-pill group.
+    // ETP-5391: SELECTABLE_YEARS is now restricted to the current filing year (2026) —
+    // 2025 is no longer an offered choice for a brand-new declaration.
     await user.click(container.querySelector('.fm-newdecl-year-trigger'));
-    const yearOption2025 = Array.from(container.querySelectorAll('.fm-newdecl-year-option'))
-      .find(o => o.textContent.trim() === '2025');
-    await user.click(yearOption2025);
+    const yearOption2026 = Array.from(container.querySelectorAll('.fm-newdecl-year-option'))
+      .find(o => o.textContent.trim() === '2026');
+    expect(yearOption2026).toBeTruthy();
+    await user.click(yearOption2026);
 
     // Frecuencia defaults to quarterly; switch to monthly to reach period "01".
     await user.click(screen.getByText('fm.new_decl.period_monthly'));
@@ -126,7 +129,7 @@ describe('FmOverlays interactive coverage', () => {
 
     await user.click(screen.getByText('fm.new_decl.create_cta'));
 
-    expect(onConfirm).toHaveBeenCalledWith({ model: '349', year: 2025, period: '01', status: 'draft' });
+    expect(onConfirm).toHaveBeenCalledWith({ model: '349', year: 2026, period: '01', status: 'draft' });
     expect(onClose).toHaveBeenCalled();
   });
 
