@@ -37,6 +37,7 @@ describe('SelectorChip (ETP-4000 Figma chip)', () => {
     assert.match(src, /disabled\s*=\s*false/);
     assert.match(src, /disabled=\{disabled\}/);
     assert.match(src, /clearable && !disabled/);
+    assert.match(src, /disabled \? 'text-\[hsl\(var\(--text-disabled\)\)\]/);
   });
 
   it('renders the X icon from lucide-react', () => {
