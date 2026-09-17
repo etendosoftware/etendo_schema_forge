@@ -46,23 +46,27 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
 
   // ETP-5265 — when the receipt is already fully invoiced, Confirm skips the
   // intermediate "already invoiced" popup entirely and calls the document-action
-  // endpoint directly, like any other direct action in the app: a loading toast
-  // while in flight, then the same success path the popup used to trigger
-  // (setConfirmedDocs({ invoice: null }) — picked up by the toast effect below),
-  // or a toast.error on failure. The non-fully-invoiced flow (ConfirmGoodsReceiptModal)
-  // is untouched.
+  // endpoint directly, like any other direct action in the app: the same success path
+  // the popup used to trigger (setConfirmedDocs({ invoice: null }) — picked up by the toast
+  // effect below), or a toast.error on failure. The non-fully-invoiced flow
+  // (ConfirmGoodsReceiptModal) is untouched.
+  //
+  // ETP-5265 QA follow-up — QA rejected the floating "processing" toast that used to
+  // stand in for in-flight feedback here: the spinner belongs IN the Confirm button,
+  // the way the invoice windows behave. The loading toast is gone. Instead the
+  // listener below hands this promise back to the core through the CustomEvent
+  // `detail` (see dispatchConfirmModalEvent in the window's index.jsx), and
+  // runDraftModeConfirm in saveActions.jsx awaits it to drive the button's spinner and
+  // disabled state. The error toast and the success path are unchanged.
   const confirmDocAction = useDocumentAction({ apiBaseUrl, entity: 'goodsReceipt', token });
   const confirmingFullyInvoicedRef = useRef(false);
   const handleConfirmFullyInvoiced = useCallback(async () => {
     if (confirmingFullyInvoicedRef.current) return;
     confirmingFullyInvoicedRef.current = true;
-    const toastId = toast.loading(ui('processing'));
     try {
       await confirmDocAction.execute(recordId, 'CO');
-      toast.dismiss(toastId);
       setConfirmedDocs({ invoice: null });
     } catch (err) {
-      toast.dismiss(toastId);
       toast.error(err.message || ui('networkError'));
     } finally {
       confirmingFullyInvoicedRef.current = false;
@@ -70,9 +74,14 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
   }, [confirmDocAction.execute, recordId, ui]);
 
   useEffect(() => {
-    const handler = () => {
+    // ETP-5265 QA follow-up — `e.detail.promise` is how the in-flight documentAction
+    // call reaches the core's Confirm button (see dispatchConfirmModalEvent in the
+    // window's index.jsx). The modal branch deliberately leaves it unset: opening a
+    // modal is instantaneous, so the button must not spin for it.
+    const handler = (e) => {
       if (isFullyInvoiced) {
-        handleConfirmFullyInvoiced();
+        if (e?.detail) e.detail.promise = handleConfirmFullyInvoiced();
+        else handleConfirmFullyInvoiced();
       } else {
         setShowConfirm(true);
       }

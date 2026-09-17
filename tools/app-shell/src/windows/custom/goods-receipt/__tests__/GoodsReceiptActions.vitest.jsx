@@ -353,23 +353,50 @@ describe('confirming a fully-invoiced receipt (ETP-5265 — direct documentActio
     expect(screen.queryByTestId('confirm-goods-receipt-modal')).not.toBeInTheDocument();
   });
 
-  it('shows a loading toast while the request is in flight, then dismisses it', async () => {
+  // ETP-5265 QA follow-up — QA rejected the floating "processing" card: the spinner
+  // must live in the Confirm button, like the invoice windows. So there is no loading
+  // toast at all any more; instead the listener publishes its in-flight promise on the
+  // event `detail`, which the window's onConfirm returns and the core's
+  // runDraftModeConfirm awaits to drive the button's spinner + disabled state.
+  it('shows NO loading toast — it hands the in-flight promise back through event detail instead', async () => {
     let resolveExecute;
     mockExecute.mockReturnValueOnce(new Promise((resolve) => { resolveExecute = resolve; }));
     renderActions({ ...fullyInvoicedProps, onRefresh: vi.fn() });
 
+    const detail = {};
     act(() => {
-      window.dispatchEvent(new CustomEvent('goods-receipt:open-confirm-modal'));
+      window.dispatchEvent(new CustomEvent('goods-receipt:open-confirm-modal', { detail }));
     });
 
-    expect(toast.loading).toHaveBeenCalledWith('processing');
+    expect(toast.loading).not.toHaveBeenCalled();
     expect(toast.dismiss).not.toHaveBeenCalled();
+    // The promise must still be pending here — that is what keeps the button busy.
+    expect(detail.promise).toBeInstanceOf(Promise);
+    let settled = false;
+    detail.promise.then(() => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
 
     await act(async () => {
       resolveExecute({ response: { status: 'Success' } });
     });
 
-    expect(toast.dismiss).toHaveBeenCalledWith('toast-id');
+    await expect(detail.promise).resolves.toBeUndefined();
+    expect(toast.loading).not.toHaveBeenCalled();
+    expect(toast.dismiss).not.toHaveBeenCalled();
+  });
+
+  // A bare CustomEvent (no detail) must keep working — the listener falls back to
+  // fire-and-forget rather than throwing on a missing detail object.
+  it('still runs the confirm when the event carries no detail', async () => {
+    mockExecute.mockResolvedValueOnce({ response: { status: 'Success' } });
+    renderActions({ ...fullyInvoicedProps, onRefresh: vi.fn() });
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('goods-receipt:open-confirm-modal'));
+    });
+
+    expect(mockExecute).toHaveBeenCalledWith('receipt-1', 'CO');
   });
 
   it('on success, shows the success toast and refreshes — no result modal', async () => {

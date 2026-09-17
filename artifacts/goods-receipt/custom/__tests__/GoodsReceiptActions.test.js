@@ -26,6 +26,39 @@ describe('GoodsReceiptActions', () => {
     });
   });
 
+  // ETP-5265 QA follow-up — symmetric with goods-shipment. QA rejected the floating
+  // "processing" card the fully-invoiced Confirm used to show ("debería estar en el
+  // botón de Procesar el spinner, como al procesar una factura"). The in-flight
+  // promise is now handed back through the CustomEvent `detail` so the core's Confirm
+  // button spins instead (runDraftModeConfirm in saveActions.jsx). Behavioural
+  // coverage lives in
+  // tools/app-shell/src/windows/custom/goods-receipt/__tests__/GoodsReceiptActions.vitest.jsx.
+  describe('ETP-5265 — fully-invoiced confirm feedback lives in the Confirm button', () => {
+    it('shows NO loading toast anywhere in the component', () => {
+      assert.doesNotMatch(src, /toast\.loading/);
+      assert.doesNotMatch(src, /toast\.dismiss/);
+    });
+
+    it('hands the in-flight promise back to the core through the event detail', () => {
+      assert.match(src, /const handler = \(e\) => \{/);
+      assert.match(src, /if \(e\?\.detail\) e\.detail\.promise = handleConfirmFullyInvoiced\(\);/);
+      assert.match(src, /else handleConfirmFullyInvoiced\(\);/);
+    });
+
+    it('the not-fully-invoiced branch only opens the modal — detail.promise stays unset', () => {
+      const handlerIdx = src.indexOf('const handler = (e) =>');
+      assert.notEqual(handlerIdx, -1);
+      const elseIdx = src.indexOf('setShowConfirm(true);', handlerIdx);
+      assert.notEqual(elseIdx, -1);
+      assert.doesNotMatch(src.slice(elseIdx, elseIdx + 120), /detail\.promise/);
+    });
+
+    it('still reports failures with toast.error and keeps the re-entrancy guard', () => {
+      assert.match(src, /catch\s*\(err\)\s*\{\s*toast\.error\(err\.message \|\| ui\(['"]networkError['"]\)\);/);
+      assert.match(src, /confirmingFullyInvoicedRef\.current/);
+    });
+  });
+
   describe('ETP-4028 — CreateInvoiceConfirmModal price-list picker wiring', () => {
     it('imports CreateInvoiceConfirmModal', () => {
       assert.match(src, /import CreateInvoiceConfirmModal from '@\/components\/contract-ui\/CreateInvoiceConfirmModal'/);

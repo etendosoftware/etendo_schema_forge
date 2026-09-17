@@ -232,6 +232,35 @@ never had this defect — it owns its own `loading` state and is unaffected by t
 `CreateInvoiceConfirmModal.jsx` was also hardened so its backdrop/× no longer close it while
 `loading` is `true` (previously only the "Cancelar" footer button was disabled).
 
+## Confirming an already fully-invoiced shipment (ETP-5265)
+
+A shipment whose `invoiceStatus` is already >= 100 used to open an intermediate "already
+invoiced" confirmation popup on `Confirm`. ETP-5265 removed that popup: `Confirm` now calls
+the canonical `documentAction` endpoint directly (`useDocumentAction`, `documentAction=CO`),
+then takes the same success path the popup used to trigger (`setInvoiceResult({ invoice: null })` -> the
+`goodsShipment.confirmModal.confirmedTitle` success toast + refresh), or shows
+`toast.error` on failure. The non-fully-invoiced flow still opens `GoodsShipmentConfirmModal` and is untouched.
+
+**In-flight feedback lives in the Confirm button, not in a toast (ETP-5265 QA follow-up).**
+The first cut showed a floating `toast.loading` card while the POST was in flight; QA rejected
+it, because every other document (invoices in particular) spins inside the `Confirm` button
+itself. The mechanism:
+
+1. `GoodsShipmentActions.jsx` publishes the in-flight promise on the event object:
+   `e.detail.promise = handleConfirmFullyInvoiced()`. The modal branch deliberately leaves
+   `detail.promise` unset — opening a modal is instantaneous and must not spin the button.
+2. The window's `draftMode.onConfirm` (`dispatchConfirmModalEvent` in the window's
+   `index.jsx`) dispatches `goods-shipment:open-confirm-modal` with a mutable `detail` object and returns
+   `detail.promise`.
+3. The core awaits it: `runDraftModeConfirm` in
+   `tools/app-shell/src/components/contract-ui/saveActions.jsx` wraps `await
+   draftMode.onConfirm()` in `DraftModeConfirmButton`'s local `customConfirmBusy` state
+   (try/finally), which drives the button's `Loader2` spinner and its `disabled`.
+
+This is additive for every other `draftMode.onConfirm` window: an `onConfirm` that returns
+nothing makes `await undefined` settle on the next microtask, so the button never renders a
+spinner and its DOM is unchanged.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.
