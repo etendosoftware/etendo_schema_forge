@@ -4,7 +4,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 // @sf-generated-start columns:header
 const columns = [
   { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', label: 'Invoice Date', required: true },
-  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.', required: true },
+  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.', required: true, maxLength: 30 },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner', required: true },
   { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', enumLabels: { 'CL': 'docStatusCl', 'CO': 'docStatusCo', 'DR': 'docStatusDr', 'NA': 'docStatusNa', 'WP': 'docStatusWp', 'RE': 'docStatusRe', 'TEMP': 'docStatusTemp', 'IP': 'docStatusIp', '??': 'docStatus', 'VO': 'docStatusVo' }, required: true },
   { key: 'posted', column: 'Posted', type: 'boolean', label: 'Posted', badge: true, badgeLabels: {"true":{"en_US":"Posted","es_ES":"Contabilizado"},"false":{"en_US":"Not posted","es_ES":"Sin contabilizar"}}, badgeVariants: {"true":"green","false":"orange"}, required: true, visibleWhenCapability: 'showAccountingFields' },

@@ -390,7 +390,7 @@ describe('renderCellValue — truncated-fallback', () => {
     expect(screen.getByText('short note')).toBeInTheDocument();
   });
 
-  it('wraps long strings (> 30 chars) in a truncated span with title attribute', () => {
+  it('wraps long strings (> 30 chars) in a truncated span', () => {
     const columns = [
       { key: 'name', label: 'Name', type: 'string' },
       { key: 'note', label: 'Note', type: 'string' },
@@ -400,7 +400,10 @@ describe('renderCellValue — truncated-fallback', () => {
     const cell = screen.getByTestId('cell-1-note');
     const inner = cell.querySelector('span.truncate');
     expect(inner).toBeTruthy();
-    expect(inner.getAttribute('title')).toBe(long);
+    // ETP-5268 follow-up — swapped the native `title` tooltip for `TruncatedText`
+    // (styled, only opens when genuinely clipped — see components/ui/truncated-text.jsx
+    // and its own test suite), so the trigger span no longer carries a `title` attribute.
+    expect(inner.getAttribute('title')).toBeNull();
     expect(inner.textContent).toBe(long);
   });
 });

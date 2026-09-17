@@ -853,12 +853,21 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
 
   // Always `text`: the `col.type === 'date'` branch above returns EditDateCell, so a date
   // column can never reach here (ETP-5245 left the ternary behind when it added that branch).
+  // ETP-5323: `maxLength` (when the column declares one — see generate-frontend.js's
+  // `maxLengthColPart`, sourced from the contract's DB-derived `validation.maxLength`) is a
+  // hard client-side stop on keystrokes, e.g. C_OrderLine/C_InvoiceLine.Description's 2000-char
+  // AD column length. It only PREVENTS typing past the limit; it does not replace the backend's
+  // own StringPropertyValidator rejection, which still applies (and is now translated into a
+  // friendly toast — see backendErrors.js's fieldTooLong matcher) for any value that reaches the
+  // server some other way (paste beyond the limit is still trimmed by the browser's native
+  // maxLength enforcement, so this covers that path too).
   return (
     <Input
       ref={inputRef}
       data-testid={`field-${col.key}`}
       type="text"
       defaultValue={value ?? ''}
+      maxLength={col.maxLength}
       onBlur={(e) => onCommit(e.target.value)}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {

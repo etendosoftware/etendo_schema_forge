@@ -18,8 +18,8 @@ const fields = [
   { key: 'paymentMethod', column: 'FIN_Paymentmethod_ID', type: 'selector', label: 'Payment Method', required: true, section: 'other', reference: 'Paymentmethod', inputMode: 'selector', readOnlyLogic: (record) => record['processed'] === true },
   { key: 'salesTransaction', column: 'IsSOTrx', type: 'checkbox', label: 'Sales Transaction', required: true, readOnly: true, section: 'other', defaultValue: '@IsSOTrx@' },
   { key: 'aeatsiiErrorRegistral', column: 'EM_Aeatsii_Error_Registral', type: 'checkbox', label: 'Register Error Modified', required: true, section: 'other', readOnlyLogic: (record) => (record['em_aeatsii_estado'] !== 'CO' && record['em_aeatsii_estado'] !== 'AE') || record['em_aeatsii_modified'] === 'Y' || record['documentStatus'] === 'VO' },
-  { key: 'aeatsiiErrorCode', column: 'EM_Aeatsii_Error_Code', type: 'text', label: 'SII error code', section: 'other', readOnlyLogic: (record) => true },
-  { key: 'aeatsiiErrorMsg', column: 'EM_Aeatsii_Error_Msg', type: 'text', label: 'SII error message', section: 'other', readOnlyLogic: (record) => true },
+  { key: 'aeatsiiErrorCode', column: 'EM_Aeatsii_Error_Code', type: 'text', label: 'SII error code', section: 'other', maxLength: 10, readOnlyLogic: (record) => true },
+  { key: 'aeatsiiErrorMsg', column: 'EM_Aeatsii_Error_Msg', type: 'text', label: 'SII error message', section: 'other', maxLength: 255, readOnlyLogic: (record) => true },
   { key: 'aeatsiiInsiidate', column: 'EM_Aeatsii_Insiidate', type: 'date', label: 'SII registry date', section: 'other', readOnlyLogic: (record) => true },
 ];
 // @sf-generated-end fields:issuedInvoices
