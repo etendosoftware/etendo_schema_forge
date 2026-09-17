@@ -6,10 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AuthShell, LoginStep, RegisterStep } from '@etendosoftware/etendo-go-core/onboarding';
+import { fetchEnvironments } from '@etendosoftware/etendo-go-core/onboarding/api';
+import { LAST_ENVIRONMENT_KEY } from '@etendosoftware/etendo-go-core/onboarding/state';
 import { useAuthOptional } from '@/auth/AuthContext.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useLogout } from '@/auth/useLogout.js';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
+import { getApiBase } from '@/hooks/useNeoResource.js';
 /**
  * Public Company Invitation Acceptance Page (ETP-4894).
  *
@@ -104,6 +107,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   const authStatus = useAuthOptional()?.status ?? null;
   const [entering, setEntering] = useState(false);
   const [enterError, setEnterError] = useState(false);
+  const [currentClientName, setCurrentClientName] = useState('');
 
   const clearTokenFromUrl = () => {
     try {
@@ -286,6 +290,42 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
       isMounted = false;
     };
   }, [invitationData, apiFetch, authStatus]);
+
+  // ETP-4576 — "the company you are in right now", for the second button on the success screen.
+  //
+  // develop answered this with two localStorage reads: `sf_auth_token` proved a session was
+  // open and `sf_auth_client_name` named the tenant. The cookie migration deleted both — the
+  // session moved into the `__Host-` cookie, and `sf_auth_client_name` is in LEGACY_AUTH_KEYS,
+  // so `purgeLegacyAuthStorage` removes it and it cannot simply be written again. The result
+  // was a silent regression: `canStayInCurrent` was permanently false, and somebody who joined
+  // a second company from an open session was offered no way back to the one they were in.
+  //
+  // Both halves come from the one call `enterByClientName` already makes. `GET /sws/go/environments`
+  // is account-scoped and rides the session cookie, so a visitor with no session gets a rejection
+  // instead of a list — which IS the "no token" answer develop read out of storage, just asked of
+  // the server. The tenant is picked out of that list by `sf_last_environment`, the clientId
+  // `rememberEnvironment` writes on every switch; it is deliberately NOT a legacy auth key (the
+  // last tenant entered must survive a logout), so the purge leaves it alone.
+  useEffect(() => {
+    const rememberedClientId = readStoredValue(LAST_ENVIRONMENT_KEY);
+    if (!rememberedClientId) return undefined;
+
+    let isMounted = true;
+    (async () => {
+      try {
+        const envs = await fetchEnvironments(fetch, getApiBase());
+        if (!isMounted) return;
+        const match = envs.find((env) => env?.clientId === rememberedClientId);
+        setCurrentClientName(match?.clientName || '');
+      } catch {
+        // No session, or the list cannot be read: no tenant to offer, so no button. Same
+        // outcome as develop's missing token, and the "enter the company" button above is
+        // unaffected either way.
+      }
+    })();
+
+    return () => { isMounted = false; };
+  }, []);
 
   // ETP-5202 — signing the previous user out happens BEFORE the invitee is asked for any
   // credential, never after accepting: a logout at the end would still pass through the state
@@ -486,13 +526,12 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
 
   const companyName = invitationData?.clientName || successData?.clientName || 'Etendo Go';
   const invitedEmail = invitationData?.email || invitationData?.maskedEmail || '';
-  // Whether there is a tenant to stay in — read from storage on every render rather than
-  // remembered by the guard effect, because the guard only runs on the actionable branches: an
-  // already-accepted invitation reopened from the email skipped it entirely and silently lost
-  // the "stay where you are" option, even though the situation is identical to the screen shown
-  // right after accepting.
-  const currentClientName = readStoredValue('sf_auth_client_name');
-  const canStayInCurrent = Boolean(readStoredValue('sf_auth_token') && currentClientName);
+  // Whether there is a tenant to stay in. Resolved by the effect above rather than read from
+  // storage on every render, but for the same reason the storage read was unconditional: the
+  // session guard only runs on the actionable branches, so an already-accepted invitation
+  // reopened from the email would otherwise silently lose the "stay where you are" option,
+  // even though the situation is identical to the screen shown right after accepting.
+  const canStayInCurrent = Boolean(currentClientName);
 
   // The marketing shell is identical on every full-page state; the pre-existing states below
   // spell it out inline, the ETP-5202 states share this bag rather than copying it three times.
