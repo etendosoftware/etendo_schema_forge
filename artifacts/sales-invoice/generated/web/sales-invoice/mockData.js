@@ -46,9 +46,9 @@ export const header = [
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
     "eTGOCurrencyRate": "USD",
+    "eTGOTbaiStatus": "DR",
     "eTGODeliveryStatus": "DR",
-    "eTGODueDate": "2026-01-15",
-    "eTGOTbaiStatus": "DR"
+    "eTGODueDate": "2026-01-15"
   },
   {
     "id": "mock-header-002",
@@ -95,9 +95,9 @@ export const header = [
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
     "eTGOCurrencyRate": "EUR",
+    "eTGOTbaiStatus": "CO",
     "eTGODeliveryStatus": "CO",
-    "eTGODueDate": "2026-01-16",
-    "eTGOTbaiStatus": "CO"
+    "eTGODueDate": "2026-01-16"
   },
   {
     "id": "mock-header-003",
@@ -144,9 +144,9 @@ export const header = [
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
     "eTGOCurrencyRate": "GBP",
+    "eTGOTbaiStatus": "VO",
     "eTGODeliveryStatus": "VO",
-    "eTGODueDate": "2026-01-17",
-    "eTGOTbaiStatus": "VO"
+    "eTGODueDate": "2026-01-17"
   },
   {
     "id": "mock-header-004",
@@ -193,9 +193,9 @@ export const header = [
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
     "eTGOCurrencyRate": "USD",
+    "eTGOTbaiStatus": "IP",
     "eTGODeliveryStatus": "IP",
-    "eTGODueDate": "2026-01-18",
-    "eTGOTbaiStatus": "IP"
+    "eTGODueDate": "2026-01-18"
   },
   {
     "id": "mock-header-005",
@@ -242,9 +242,9 @@ export const header = [
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
     "eTGOCurrencyRate": "EUR",
+    "eTGOTbaiStatus": "DR",
     "eTGODeliveryStatus": "DR",
-    "eTGODueDate": "2026-01-19",
-    "eTGOTbaiStatus": "DR"
+    "eTGODueDate": "2026-01-19"
   },
   {
     "id": "mock-header-006",
@@ -291,9 +291,9 @@ export const header = [
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
     "eTGOCurrencyRate": "GBP",
+    "eTGOTbaiStatus": "CO",
     "eTGODeliveryStatus": "CO",
-    "eTGODueDate": "2026-01-20",
-    "eTGOTbaiStatus": "CO"
+    "eTGODueDate": "2026-01-20"
   },
   {
     "id": "mock-header-007",
@@ -340,9 +340,9 @@ export const header = [
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
     "eTGOCurrencyRate": "USD",
+    "eTGOTbaiStatus": "VO",
     "eTGODeliveryStatus": "VO",
-    "eTGODueDate": "2026-01-21",
-    "eTGOTbaiStatus": "VO"
+    "eTGODueDate": "2026-01-21"
   },
   {
     "id": "mock-header-008",
@@ -389,9 +389,9 @@ export const header = [
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
     "eTGOCurrencyRate": "EUR",
+    "eTGOTbaiStatus": "IP",
     "eTGODeliveryStatus": "IP",
-    "eTGODueDate": "2026-01-22",
-    "eTGOTbaiStatus": "IP"
+    "eTGODueDate": "2026-01-22"
   },
   {
     "id": "mock-header-009",
@@ -438,9 +438,9 @@ export const header = [
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
     "eTGOCurrencyRate": "GBP",
+    "eTGOTbaiStatus": "DR",
     "eTGODeliveryStatus": "DR",
-    "eTGODueDate": "2026-01-23",
-    "eTGOTbaiStatus": "DR"
+    "eTGODueDate": "2026-01-23"
   },
   {
     "id": "mock-header-010",
@@ -487,9 +487,9 @@ export const header = [
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
     "eTGOCurrencyRate": "USD",
+    "eTGOTbaiStatus": "CO",
     "eTGODeliveryStatus": "CO",
-    "eTGODueDate": "2026-01-24",
-    "eTGOTbaiStatus": "CO"
+    "eTGODueDate": "2026-01-24"
   },
   {
     "id": "mock-header-011",
@@ -536,9 +536,9 @@ export const header = [
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
     "eTGOCurrencyRate": "EUR",
+    "eTGOTbaiStatus": "VO",
     "eTGODeliveryStatus": "VO",
-    "eTGODueDate": "2026-01-25",
-    "eTGOTbaiStatus": "VO"
+    "eTGODueDate": "2026-01-25"
   },
   {
     "id": "mock-header-012",
@@ -585,9 +585,9 @@ export const header = [
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
     "eTGOCurrencyRate": "GBP",
+    "eTGOTbaiStatus": "IP",
     "eTGODeliveryStatus": "IP",
-    "eTGODueDate": "2026-01-26",
-    "eTGOTbaiStatus": "IP"
+    "eTGODueDate": "2026-01-26"
   }
 ];
 

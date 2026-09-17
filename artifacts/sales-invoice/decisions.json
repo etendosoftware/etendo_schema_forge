@@ -402,8 +402,8 @@
           "grid": false,
           "reference": "DocumentType",
           "inputMode": "selector",
-          "readOnlyLogicJs": "!!record.id",
-          "readOnlyLogic": null,
+          "readOnlyLogicJs": null,
+          "readOnlyLogic": "@Processed@='Y'",
           "seq": 15
         },
         "documentType": {
