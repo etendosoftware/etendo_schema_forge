@@ -80,6 +80,12 @@ const BOX_PARAM_MAP = {
   42:  'Special_Compensations',      // compensaciones régimen especial / agrario
   43:  'Investment_Adjustment',      // regularización bienes de inversión
   44:  'Adjustment_Final_Percentage',// prorrata definitiva
+  65:  'ToPublicTreasury',           // atribuible al Estado % (resultado_final/atribuible_estado).
+                                     // SAME AEAT param casilla 107 (territorio_comun) mirrors in the
+                                     // UI — see fm303Layouts.js's territorio_comun `derivedValue`.
+                                     // AEAT303Report2014.java:818 and AEAT303Report2018LastPeriod's
+                                     // commonTerritory() both read this one key off box 65, so 107 no
+                                     // longer needs its own BOX_PARAM_MAP entry (ETP-5391).
   68:  'AnnualRegularAmt',           // regularización anual prorrata (T4/12 only)
   78:  'PreviousPeriodAmtApplied',   // cuotas a compensar aplicadas en este período
   89:  'ALAVA',                      // territorio Araba/Álava % (last period only, ETP-5391)
@@ -89,11 +95,6 @@ const BOX_PARAM_MAP = {
   95:  '303REAGYP',                  // régimen especial agricultura/ganadería/pesca (last period only, ETP-5391)
   97:  '303USED_GOODS',              // bienes usados/objetos de arte/antigüedades (last period only, ETP-5391)
   98:  '303TRAVEL_AGENCY',           // régimen especial agencias de viajes (last period only, ETP-5391)
-  107: 'ToPublicTreasury',           // territorio común % (last period only, ETP-5391 — SAME key as
-                                     // box 65/atribuible_estado; see AEAT303Report2014.java:818 and
-                                     // AEAT303Report2018LastPeriod's commonTerritory(), both read this
-                                     // one param. Box 65 itself is NOT in this map yet (pre-existing
-                                     // gap, out of ETP-5391's scope — see fm303Layouts.js note).
   108: 'AdministrativeCriteriaDiscrepancy', // discrepancia criterio administrativo (2024+)
   109: 'ReturnsPendingSettlement',   // devoluciones en tramitación (2023+)
   110: 'PreviousPeriodAmt',          // cuotas a compensar pendientes de períodos anteriores

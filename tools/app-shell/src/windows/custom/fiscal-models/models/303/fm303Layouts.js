@@ -222,13 +222,15 @@ const BASE = {
       rows: [],
     },
     // Casillas 89/90/91/92 (Álava, Gipuzkoa, Bizkaia, Navarra) map 1:1 to AEAT303Report2018LastPeriod's
-    // ALAVA/GUIPUZCOA/VIZCAYA/NAVARRA inputParams keys. Casilla 107 (Territorio Común) reuses the
-    // SAME "ToPublicTreasury" param already used for box 65 (atribuible_estado, resultado_final
-    // section) — Classic's own commonTerritory() reads that identical key, only gated behind
+    // ALAVA/GUIPUZCOA/VIZCAYA/NAVARRA inputParams keys. Casilla 107 (Territorio Común) is a READ-ONLY
+    // mirror of box 65 (atribuible_estado, resultado_final section) — Classic's own commonTerritory()
+    // computes 107 from the exact same "ToPublicTreasury" value box 65 carries, only gated behind
     // isLastPeriod + SII-installed-org + a persisted TaxReportGroup/Parameter pair seeded from this
-    // module's own referencedata for the model-303 TaxReport. Kept as its own editable row here
-    // (rather than mirroring box 65 live) so it only needs BOX_PARAM_MAP, not a shared-renderer
-    // change to FmBoxes303's derivedValue (which only formats as 'amount', not 'percent').
+    // module's own referencedata for the model-303 TaxReport. Two independently-editable UI fields for
+    // the same underlying AEAT param let a user set them to conflicting values (fixed in ETP-5391) —
+    // 107 is now a `derivedValue` (see FmBoxes303's renderDerivedCell, which reads box 65 live via
+    // `valueMap`) instead of its own editable row. BOX_PARAM_MAP no longer carries a 107 entry; box 65
+    // alone is forwarded to AEAT now (see fiscalModelsUtils.js).
     tributacion_territorial: {
       titleKey: 'fm.box.terr.title',
       colHeaderKeys: [],
@@ -238,7 +240,7 @@ const BASE = {
         { id: 'territorio_vizcaya',   labelKey: 'fm.box.terr.vizcaya',   cells: [91],  cellTypes: ['percent'], cellUnits: ['%'], editable: true },
         { id: 'territorio_navarra',   labelKey: 'fm.box.terr.navarra',   cells: [92],  cellTypes: ['percent'], cellUnits: ['%'], editable: true },
         { id: 'territorio_comun',     labelKey: 'fm.box.terr.territorio_comun', cells: [107], cellTypes: ['percent'], cellUnits: ['%'],
-          editable: true, defaultValues: { 107: 100 }, formula: '100 − (89 + 90 + 91 + 92)' },
+          derivedValue: { box: 65, defaultValue: 100 } },
       ],
     },
     // Casillas 95 (REAGYP), 97 (bienes usados), 98 (agencias de viaje), 127 (OSS) and 128

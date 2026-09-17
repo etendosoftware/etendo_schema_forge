@@ -48,19 +48,41 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
     ? layout.sections.filter(s => sectionIds.includes(s.id))
     : layout.sections;
 
-  const renderCellInput = (boxNum, val) => (
-    <input
-      type="number"
-      step="any"
-      className="fm-aeat-cell__input"
-      value={pendingValues[boxNum] ?? (val != null ? String(val) : '')}
-      onChange={e => setPendingValues(prev => ({ ...prev, [boxNum]: e.target.value }))}
-      onBlur={() => { onBoxChange?.(boxNum, pendingValues[boxNum]); setEditingCell(null); }}
-      onKeyDown={e => { if (e.key === 'Enter') { onBoxChange?.(boxNum, pendingValues[boxNum]); setEditingCell(null); e.target.blur(); } if (e.key === 'Escape') setEditingCell(null); }}
-      autoFocus
-      disabled={readOnly}
-    />
-  );
+  // Percent boxes (casillas 65/89/90/91/92) follow the AEAT rule "los porcentajes se expresarán
+  // con dos decimales": never above 100, never negative, at most 2 decimal places. The HTML
+  // `max` attribute alone doesn't stop someone typing 150 and tabbing away, so the value is also
+  // clamped/rounded here, right before it's committed via onBoxChange. Returns the raw string
+  // unchanged when it isn't a parseable number (e.g. empty string, to preserve "clear the field").
+  const clampPercentValue = (raw) => {
+    const num = parseFloat(String(raw ?? '').replace(',', '.'));
+    if (isNaN(num)) return raw;
+    const clamped = Math.min(100, Math.max(0, num));
+    return String(Math.round(clamped * 100) / 100);
+  };
+
+  const renderCellInput = (boxNum, val, colType = 'amount') => {
+    const isPercent = colType === 'percent';
+    const commit = () => {
+      const raw = pendingValues[boxNum];
+      onBoxChange?.(boxNum, isPercent ? clampPercentValue(raw) : raw);
+      setEditingCell(null);
+    };
+    return (
+      <input
+        type="number"
+        step="any"
+        className="fm-aeat-cell__input"
+        value={pendingValues[boxNum] ?? (val != null ? String(val) : '')}
+        onChange={e => setPendingValues(prev => ({ ...prev, [boxNum]: e.target.value }))}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') { commit(); e.target.blur(); } if (e.key === 'Escape') setEditingCell(null); }}
+        autoFocus
+        disabled={readOnly}
+        max={isPercent ? 100 : undefined}
+        min={isPercent ? 0 : undefined}
+      />
+    );
+  };
 
   const renderIdentSelectField = (f, compact = false) => (
     <div key={f.id} className="fm-aeat-ident-inline-field">
@@ -99,15 +121,21 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
     return conds.every(c => matchesSvw(c));
   };
 
-  const renderDerivedCell = (dv, ci) => {
-    const raw = valueMap[dv.box] ?? null;
+  // `boxNum`/`colType`/`unit` are optional — passed by renderRowCell when the derived cell should
+  // also carry its own AD box number (e.g. casilla 107 mirroring box 65, ETP-5391) and format per
+  // the row's declared cellTypes/colTypes (reuses the same `formatCell` every other cell uses),
+  // rather than always formatting as 'amount' regardless of what the underlying box actually is.
+  const renderDerivedCell = (dv, ci, boxNum = null, colType = 'amount', unit = null) => {
+    const raw = valueMap[dv.box] ?? dv.defaultValue ?? null;
     const absRaw = dv.abs ? Math.abs(raw) : raw;
     let display = raw != null ? absRaw : null;
     if (display != null && dv.subtractBox != null) display = display - (valueMap[dv.subtractBox] ?? 0);
     if (display != null && dv.clampMin != null) display = Math.max(dv.clampMin, display);
     return (
       <div key={ci} className="fm-aeat-cell">
-        <span className="fm-aeat-cell__value">{display != null && display !== 0 ? formatCell(display, 'amount') : ''}</span>
+        {boxNum != null && <span className="fm-aeat-cell__num">{String(boxNum).padStart(2, '0')}</span>}
+        <span className="fm-aeat-cell__value">{display != null && display !== 0 ? formatCell(display, colType) : ''}</span>
+        {unit && <span className="fm-aeat-cell__unit">{unit}</span>}
       </div>
     );
   };
@@ -125,7 +153,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
     return (
       <div key={ci} className={`fm-aeat-cell${isFixed ? ' fm-aeat-cell--fixed' : ''}${isCellEditable ? ' fm-aeat-cell--editable' : ''}`}>
         <span className="fm-aeat-cell__num">{String(boxNum).padStart(2, '0')}</span>
-        {isCellEditing ? renderCellInput(boxNum, val) : (
+        {isCellEditing ? renderCellInput(boxNum, val, colType) : (
           <>
             <span className="fm-aeat-cell__value">{val != null ? formatCell(val, colType) : ''}</span>
             {unit && <span className="fm-aeat-cell__unit">{unit}</span>}
@@ -142,8 +170,12 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
 
   const renderRowCell = (row, section, ci) => {
     const boxNum = row.cells?.[ci] ?? null;
+    if (row.derivedValue) {
+      const colType = row.cellTypes?.[ci] ?? section.colTypes?.[ci] ?? 'amount';
+      const unit = row.cellUnits?.[ci];
+      return renderDerivedCell(row.derivedValue, ci, boxNum, colType, unit);
+    }
     if (boxNum === null) {
-      if (row.derivedValue) return renderDerivedCell(row.derivedValue, ci);
       return row.total ? null : <div key={ci} className="fm-aeat-cell fm-aeat-cell--empty" />;
     }
     return renderBoxCell(row, section, ci, boxNum);
