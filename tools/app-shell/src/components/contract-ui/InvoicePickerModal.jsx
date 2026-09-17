@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useUI } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 /**
  * Modal for choosing the invoice(s) a rectificative invoice corrects.
@@ -70,7 +71,13 @@ export default function InvoicePickerModal({
   }, [invoices, search, currentId, multiple, maxVisible]);
 
   const fmtDate = (d) => formatCalendarDate(d, 'es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const fmtAmt = (v) => v != null ? Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+  // Through the canonical helper, never a hand-rolled toLocaleString: CLAUDE.md makes that
+  // mandatory, and the inline picker this replaced did render the symbol. Carrying the old
+  // hand-rolled version over would have silently dropped it from the return flow, and pinned the
+  // separators to es-ES instead of the instance's configured ones. formatCurrency degrades to the
+  // plain number when the code is missing or invalid, which is what the header rows need.
+  const currencyCode = (inv) => inv.currency || inv['currency$_identifier'];
+  const fmtAmt = (inv) => formatCurrency(currencyCode(inv), amount(inv));
 
   const activate = (inv) => {
     if (multiple) {
@@ -133,7 +140,7 @@ export default function InvoicePickerModal({
             </div>
           )}
         </div>
-        <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(amount(inv))}</span>
+        <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(inv)}</span>
       </div>
     );
   };
@@ -175,7 +182,7 @@ export default function InvoicePickerModal({
         <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
           {listBody}
           {hiddenCount > 0 && (
-            <p style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '8px 16px 4px', textAlign: 'center' }}>
+            <p data-testid={`${idPrefix}-more-hidden`} style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '8px 16px 4px', textAlign: 'center' }}>
               +{hiddenCount} {ui('rectMoreInvoicesHint')}
             </p>
           )}
