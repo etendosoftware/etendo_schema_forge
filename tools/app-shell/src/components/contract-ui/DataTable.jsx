@@ -2030,7 +2030,10 @@ function renderHeaderSection({
   if (useOwnStickyHeader) {
     return {
       stickyHeader: (
-        <StickyHeaderRow elRef={horizontalScrollElRef} attachSeq={horizontalScrollAttachSeq}>
+        <StickyHeaderRow
+          elRef={horizontalScrollElRef}
+          attachSeq={horizontalScrollAttachSeq}
+          data-testid="StickyHeaderRow__eb5261">
           <TableHeader data-testid="TableHeader__eb5261">{headerRowContent}</TableHeader>
         </StickyHeaderRow>
       ),
@@ -3241,7 +3244,7 @@ export function DataTable({
           elRef={horizontalScrollElRef}
           attachSeq={horizontalScrollAttachSeq}
           bottomOffsetPx={horizontalScrollMirrorBottomPx}
-        />
+          data-testid="HorizontalScrollThumb__eb5261" />
       )}
       {addRow?.active && (
         <p className="text-xs text-muted-foreground mt-1 text-center">
