@@ -185,12 +185,13 @@ export default function FirstStepsPage() {
   // menu entry (menu.json's `"capability": "isOwner"`) is not enough on its own — a non-owner
   // typing the URL directly must be bounced too. `capabilities.isOwner` is absent/false until
   // proven true (fail-closed, same convention as every other capability read through
-  // `useCapabilitiesSafe()`), so this redirects unless it is explicitly `true`.
+  // `useCapabilitiesSafe()`), so this redirects unless it is explicitly `true`. The check itself
+  // runs AFTER every hook below (see the `return <Navigate .../>` right before the JSX return) —
+  // Rules of Hooks forbids an early return before hooks are called, so `useCapabilitiesSafe()` is
+  // read here but acted on only once every hook has executed unconditionally, mirroring the
+  // AppLayout.jsx "ETP-5395 Point 1 Fix B" gate in that same file (its `if (allowedIds ===
+  // undefined) return <AppLayoutLoading />;` also runs only after every hook above it).
   const capabilities = useCapabilitiesSafe();
-  if (capabilities.isOwner !== true) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
   const ui = useUI();
   const navigate = useGuardedNavigate();
   // `steps`, `completedCount` and `total` come from the provider rather than from the
@@ -225,6 +226,12 @@ export default function FirstStepsPage() {
       return effective === id ? '' : id;
     });
   }, [completed, plan]);
+
+  // Gate acted on here, after every hook above has already been called unconditionally on
+  // every render (see the ETP-5395 comment at the top of this component).
+  if (capabilities.isOwner !== true) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return (
     <div className="flex flex-col h-full" data-testid="first-steps-page">
