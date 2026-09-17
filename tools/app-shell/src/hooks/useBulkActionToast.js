@@ -4,6 +4,20 @@ import { useUI } from '@/i18n';
 
 const STORAGE_KEY = 'bulkActionResult';
 
+/**
+ * Same guard as `lib/listViewSession.js`: with site data blocked (strict private
+ * mode, corporate policy) reading the `sessionStorage` ACCESSOR throws, not just
+ * its methods. This hook runs inside ListView's render tree, so an unguarded
+ * access takes the whole grid down instead of degrading to "no persisted toast".
+ */
+function session() {
+  try {
+    return globalThis.sessionStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function normalizeBulkActionResult(result) {
   return {
     ok: Number(result?.ok || 0),
@@ -45,7 +59,14 @@ function showBulkActionToast(ui, result) {
 }
 
 export function persistBulkActionResult(result) {
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeBulkActionResult(result)));
+  const store = session();
+  if (!store) return;
+  try {
+    store.setItem(STORAGE_KEY, JSON.stringify(normalizeBulkActionResult(result)));
+  } catch {
+    // Quota exceeded or storage blocked — the toast just won't survive the
+    // navigation. Never a reason to fail the bulk action that already ran.
+  }
 }
 
 export function useBulkActionToast() {
@@ -59,9 +80,18 @@ export function useBulkActionToast() {
   }, [ui]);
 
   useEffect(() => {
-    const stored = sessionStorage.getItem(STORAGE_KEY);
-    if (!stored) return;
-    sessionStorage.removeItem(STORAGE_KEY);
+    const store = session();
+    if (!store) return;
+    let stored;
+    try {
+      stored = store.getItem(STORAGE_KEY);
+      if (!stored) return;
+      store.removeItem(STORAGE_KEY);
+    } catch {
+      // Storage unreadable: there is no pending toast to replay. Returning here
+      // is what keeps the failure local instead of unmounting the list.
+      return;
+    }
     let parsed;
     try {
       parsed = JSON.parse(stored);
