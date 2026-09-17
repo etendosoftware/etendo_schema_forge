@@ -17842,6 +17842,7 @@
     "upgradeBillingOverviewTitle": "Actividad de facturación",
     "upgradeBillingOverviewBody": "El estado de la compra y la preparación se guarda en tu cuenta.",
     "upgradeUnnamedPurchase": "Entorno sin nombre",
+    "upgradePurchaseAlreadyExists": "Ya hay una compra en curso para este entorno. Actualiza la actividad de facturación para continuar.",
     "navigation": "Navegación",
     "collapseMenu": "Contraer menú",
     "expandMenu": "Expandir menú",

@@ -17610,6 +17610,7 @@
     "upgradeBillingOverviewTitle": "Billing activity",
     "upgradeBillingOverviewBody": "Purchase and provisioning status is saved to your account.",
     "upgradeUnnamedPurchase": "Unnamed environment",
+    "upgradePurchaseAlreadyExists": "A purchase for this environment is already in progress. Refresh billing activity to continue.",
     "navigation": "Navigation",
     "collapseMenu": "Collapse menu",
     "expandMenu": "Expand menu",

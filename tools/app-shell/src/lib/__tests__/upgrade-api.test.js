@@ -123,4 +123,15 @@ describe('createBillingPurchase', () => {
       language: 'es_ES',
     });
   });
+
+  it('returns an identifiable error for a duplicate active purchase', async () => {
+    const fetchImpl = recordingFetch(jsonResponse(
+      { purchaseId: 'req-1', status: 'CREATED' }, { ok: false, status: 409 }
+    ));
+    await assert.rejects(
+      () => createBillingPurchase(fetchImpl, '', 'token', { clientName: 'Acme' }),
+      error => error.code === UPGRADE_ERROR_CODES.purchaseAlreadyExists
+        && error.purchase.purchaseId === 'req-1'
+    );
+  });
 });

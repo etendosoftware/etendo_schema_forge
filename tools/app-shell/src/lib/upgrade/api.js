@@ -4,6 +4,7 @@ import { buildAuthHeaders } from '@etendosoftware/etendo-go-core/onboarding/api'
 export const UPGRADE_ERROR_CODES = {
   checkoutUnavailable: 'upgradeCheckoutUnavailable',
   checkoutCreationFailed: 'upgradeCheckoutCreationFailed',
+  purchaseAlreadyExists: 'upgradePurchaseAlreadyExists',
   sessionExpired: 'upgradeSessionExpired',
   failed: 'upgradeGenericError',
 };
@@ -54,6 +55,12 @@ export async function createBillingPurchase(fetchImpl, baseUrl, token, input = {
   });
   const data = await readJsonSafely(response);
   if (!response.ok) {
+    if (response.status === 409 && data?.purchaseId) {
+      const error = buildError(UPGRADE_ERROR_CODES.purchaseAlreadyExists,
+        data.status || 'Purchase already exists', response.status);
+      error.purchase = data;
+      throw error;
+    }
     throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
       : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message || data?.message, response.status);
   }
