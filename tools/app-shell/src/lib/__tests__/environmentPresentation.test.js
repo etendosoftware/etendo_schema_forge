@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   environmentPlanLabelKey,
+  environmentCommercialLabel,
+  environmentRelationshipLabel,
   environmentTrialLabel,
   isProductiveEnvironment,
   sortEnvironments,
@@ -12,6 +14,20 @@ test('recognizes productive and demo environment plans', () => {
   assert.equal(isProductiveEnvironment({ plan: 'free' }), false);
   assert.equal(environmentPlanLabelKey({ plan: 'productive' }), 'environmentProductive');
   assert.equal(environmentPlanLabelKey({ plan: 'free' }), 'environmentDemo');
+});
+
+test('shows subscription and membership state from backend metadata', () => {
+  const ui = (key) => key;
+  assert.equal(environmentCommercialLabel({ plan: 'free', subscriptionStatus: 'CURRENT' }, ui),
+    'environmentIncludedWithSubscription');
+  assert.equal(environmentCommercialLabel({ plan: 'productive', subscriptionStatus: 'CURRENT' }, ui),
+    'environmentSubscriptionActive');
+  assert.equal(environmentCommercialLabel({ accessState: 'SUBSCRIPTION_REQUIRED' }, ui),
+    'environmentAccessSuspended');
+  assert.equal(environmentCommercialLabel({ subscriptionStatus: 'PAST_DUE' }, ui),
+    'environmentPaymentGrace');
+  assert.equal(environmentRelationshipLabel({ relationship: 'OWNER' }, ui), 'environmentOwner');
+  assert.equal(environmentRelationshipLabel({ relationship: 'INVITED' }, ui), 'environmentInvited');
 });
 
 test('sorts productive environments before demos and keeps names deterministic', () => {

@@ -18,6 +18,25 @@ export function environmentTrialLabel(environment, ui) {
     : ui('environmentDemoExpired');
 }
 
+/** Returns a commercial state label when the backend has evaluated access. */
+export function environmentCommercialLabel(environment, ui) {
+  if (environment?.subscriptionStatus === 'CURRENT') {
+    return isProductiveEnvironment(environment)
+      ? ui('environmentSubscriptionActive')
+      : ui('environmentIncludedWithSubscription');
+  }
+  if (environment?.subscriptionStatus === 'PAST_DUE') return ui('environmentPaymentGrace');
+  if (environment?.accessState === 'SUBSCRIPTION_REQUIRED') return ui('environmentAccessSuspended');
+  if (environment?.accessState === 'DEMO_TRIAL_EXPIRED') return ui('environmentDemoExpired');
+  return null;
+}
+
+export function environmentRelationshipLabel(environment, ui) {
+  if (environment?.relationship === 'OWNER') return ui('environmentOwner');
+  if (environment?.relationship === 'INVITED') return ui('environmentInvited');
+  return null;
+}
+
 /**
  * Keep productive tenants first. The backend uses the same ordering for the initial
  * post-login redirect, while the client applies it defensively for older backends.

@@ -74,7 +74,12 @@ import { useMenuLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import { useFeatureFlag, PROOF_OF_CONCEPT_MENU } from '@/lib/flags';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
-import { environmentPlanLabelKey, environmentTrialLabel } from '@/lib/environmentPresentation.js';
+import {
+  environmentCommercialLabel,
+  environmentPlanLabelKey,
+  environmentRelationshipLabel,
+  environmentTrialLabel,
+} from '@/lib/environmentPresentation.js';
 import menuConfig from '@/menu.json';
 
 const ICON_MAP = {
@@ -627,6 +632,11 @@ export default function SideMenu({
                       {environmentTrialLabel(currentEnvironment, ui)}
                     </span>
                   )}
+                  {currentEnvironment && environmentCommercialLabel(currentEnvironment, ui) && (
+                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                      {environmentCommercialLabel(currentEnvironment, ui)}
+                    </span>
+                  )}
                   <ChevronDown
                     className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
                     data-testid="ChevronDown__247c75" />
@@ -667,6 +677,16 @@ export default function SideMenu({
                             data-testid={`environment-trial-status-${env.clientId}`}
                           >
                             {environmentTrialLabel(env, ui)}
+                          </span>
+                        )}
+                        {environmentCommercialLabel(env, ui) && (
+                          <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">
+                            {environmentCommercialLabel(env, ui)}
+                          </span>
+                        )}
+                        {environmentRelationshipLabel(env, ui) && (
+                          <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">
+                            {environmentRelationshipLabel(env, ui)}
                           </span>
                         )}
                         {switching === env.clientId && (
