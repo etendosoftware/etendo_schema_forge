@@ -67,7 +67,6 @@ export default function PurchaseInvoiceTopbar({ data, recordId, apiBaseUrl, onRe
             >
               <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'var(--status-info-fg)' }} />
               {ui('cpFavorBadge')}
-              <span style={{ opacity: 0.4 }}>&middot;</span>
               <span className="font-semibold tabular-nums">{formatCurrency(currency || 'USD', badge.amount)}</span>
             </span>
           );
