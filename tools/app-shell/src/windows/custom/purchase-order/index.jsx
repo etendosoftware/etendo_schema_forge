@@ -112,7 +112,6 @@ export default function PurchaseOrderWindow(props) {
   } = useOrderWindow({
     windowName, token, apiBaseUrl,
     specName: 'purchase-order',
-    deliveryKey: 'deliveryStatusPurchase',
     manageLabelKeys: PO_MANAGE_LABELS,
     confirmLabelKey: 'poConfirmBtn',
     confirmedTitleKey: 'poConfirmedTitle',
