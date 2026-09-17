@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMenuLabel, useUI } from '@/i18n';
+import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
+import { environmentTrialLabel, isProductiveEnvironment } from '@/lib/environmentPresentation.js';
 import { useCopilot } from '@/components/CopilotContext';
 import { WalkthroughLauncher } from '@etendosoftware/app-shell-core/walkthrough';
 import { cn } from '@/lib/utils.js';
@@ -50,6 +52,41 @@ function resolveSelectedScope(searchSelectionTargets, currentWindowScope, vector
 function resolveScopeLabel(scope, tMenu) {
   if (!scope?.target) return scope?.label;
   return tMenu(scope.label) || scope.label;
+}
+
+function DemoTrialIndicator({ ui }) {
+  const { environments, currentClientId } = useEnvironmentSwitch();
+  const environment = environments.find(item => item.clientId === currentClientId);
+  if (!environment || isProductiveEnvironment(environment)
+      || !Number.isInteger(environment.trialDaysRemaining)) return null;
+  const expired = environment.trialDaysRemaining <= 0;
+  const start = Date.parse(environment.trialStartedAt);
+  const end = Date.parse(environment.trialExpiresAt);
+  const total = end - start;
+  const remaining = Math.max(0, end - Date.now());
+  const progress = total > 0 ? Math.min(100, Math.max(0, (remaining / total) * 100)) : 0;
+  return (
+    <div
+      className={cn(
+        'hidden min-w-[190px] max-w-[250px] rounded-lg border px-3 py-1.5 lg:block',
+        expired ? 'border-status-danger/40 bg-status-danger/10' : 'border-status-success/30 bg-status-success/10'
+      )}
+      aria-label={environmentTrialLabel(environment, ui) || ui('environmentDemoExpired')}
+      title={environment.trialExpiresAt || undefined}
+      data-testid="topbar-demo-trial-indicator"
+    >
+      <div className="flex items-center justify-between gap-3 text-xs font-semibold">
+        <span>{expired ? ui('environmentDemoExpired') : ui('environmentTrialDaysRemaining', { days: environment.trialDaysRemaining })}</span>
+        <span aria-hidden="true">{expired ? '0' : environment.trialDaysRemaining}</span>
+      </div>
+      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-background/70" aria-hidden="true">
+        <div
+          className={cn('h-full rounded-full', expired ? 'bg-status-danger' : 'bg-status-success')}
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </div>
+  );
 }
 
 export default function TopBar({
@@ -338,6 +375,7 @@ export default function TopBar({
 
         {/* Right: action icons */}
         <div className="ml-auto flex items-center gap-1 shrink-0">
+          <DemoTrialIndicator ui={ui} data-testid="DemoTrialIndicator__133e64" />
           {/* ETP-5144 — guided walkthroughs. Hardcoded here rather than passed
               via `rightExtras` (which comes from per-page PageMeta) so the
               entry point is reachable from every screen. Renders nothing when
