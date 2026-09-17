@@ -426,6 +426,117 @@ describe('confirming a fully-invoiced receipt (ETP-5265 — direct documentActio
     expect(onRefresh).not.toHaveBeenCalled();
   });
 
+  // ── ETP-5265 QA follow-up (2): the busy window must cover the REFETCH ────────
+  // The first cut resolved on the documentAction POST alone (~150-300 ms locally) and
+  // the spinner was imperceptible, because the record refresh ran afterwards, out of
+  // band. `handleConfirmFullyInvoiced` now awaits `onRefresh` too, so the promise it
+  // publishes on `detail.promise` — which the core's Confirm button awaits — stays
+  // pending until the refreshed record is back.
+  describe('the awaited promise spans the refetch, not just the POST', () => {
+    it('stays pending after the POST resolves and settles only once onRefresh resolves', async () => {
+      let resolveExecute;
+      let resolveRefresh;
+      mockExecute.mockReturnValueOnce(new Promise((resolve) => { resolveExecute = resolve; }));
+      const onRefresh = vi.fn(() => new Promise((resolve) => { resolveRefresh = resolve; }));
+      renderActions({ ...fullyInvoicedProps, onRefresh });
+
+      const detail = {};
+      act(() => {
+        window.dispatchEvent(new CustomEvent('goods-receipt:open-confirm-modal', { detail }));
+      });
+
+      let settled = false;
+      detail.promise.then(() => { settled = true; });
+
+      // POST resolves — the old implementation stopped here.
+      await act(async () => { resolveExecute({ response: { status: 'Success' } }); });
+      expect(onRefresh).toHaveBeenCalled();
+      expect(settled).toBe(false);
+
+      await act(async () => { resolveRefresh(); });
+      await detail.promise;
+      expect(settled).toBe(true);
+    });
+
+    // Native parity: useEntity's handleSaveAndProcess fires toast.success as soon as the
+    // action POST succeeds and only then refetches, so ours must too — the toast lands
+    // while the button is still spinning, not after it stops.
+    it('fires the success toast after the POST but BEFORE the refresh settles', async () => {
+      let resolveRefresh;
+      mockExecute.mockResolvedValueOnce({ response: { status: 'Success' } });
+      const onRefresh = vi.fn(() => new Promise((resolve) => { resolveRefresh = resolve; }));
+      renderActions({ ...fullyInvoicedProps, onRefresh });
+
+      const detail = {};
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent('goods-receipt:open-confirm-modal', { detail }));
+      });
+
+      expect(toast.success).toHaveBeenCalledWith('goodsReceipt.confirmModal.confirmedTitle');
+      expect(toast.success).toHaveBeenCalledTimes(1);
+
+      await act(async () => { resolveRefresh(); });
+      await detail.promise;
+      // Still exactly once — the removed setConfirmedDocs route must not double-toast.
+      expect(toast.success).toHaveBeenCalledTimes(1);
+    });
+
+    // A failed refetch is a different failure domain from a failed confirmation: the
+    // document IS confirmed, the screen is merely stale.
+    it('a rejecting refresh still shows the success toast, shows no error toast, and settles', async () => {
+      mockExecute.mockResolvedValueOnce({ response: { status: 'Success' } });
+      const onRefresh = vi.fn(() => Promise.reject(new Error('refresh boom')));
+      renderActions({ ...fullyInvoicedProps, onRefresh });
+
+      const detail = {};
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent('goods-receipt:open-confirm-modal', { detail }));
+      });
+      await expect(detail.promise).resolves.toBeUndefined();
+
+      expect(toast.success).toHaveBeenCalledWith('goodsReceipt.confirmModal.confirmedTitle');
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    // Domain 1: a failed POST must not toast success and must not refresh at all.
+    it('a failed POST shows only the error toast and never calls onRefresh', async () => {
+      mockExecute.mockRejectedValueOnce(new Error('Document already completed'));
+      const onRefresh = vi.fn();
+      renderActions({ ...fullyInvoicedProps, onRefresh });
+
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent('goods-receipt:open-confirm-modal'));
+      });
+
+      expect(toast.error).toHaveBeenCalledWith('Document already completed');
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(onRefresh).not.toHaveBeenCalled();
+    });
+
+    // The re-entrancy guard must survive until BOTH the POST and the refresh settled.
+    it('a second dispatch while the refresh is still in flight is ignored', async () => {
+      let resolveRefresh;
+      mockExecute.mockResolvedValue({ response: { status: 'Success' } });
+      const onRefresh = vi.fn(() => new Promise((resolve) => { resolveRefresh = resolve; }));
+      renderActions({ ...fullyInvoicedProps, onRefresh });
+
+      const first = {};
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent('goods-receipt:open-confirm-modal', { detail: first }));
+      });
+      expect(mockExecute).toHaveBeenCalledTimes(1);
+
+      const second = {};
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent('goods-receipt:open-confirm-modal', { detail: second }));
+      });
+      expect(mockExecute).toHaveBeenCalledTimes(1);
+
+      await act(async () => { resolveRefresh(); });
+      await first.promise;
+    });
+  });
+
   it('falls back to the generic network-error label when the rejection has no message', async () => {
     mockExecute.mockRejectedValueOnce(new Error());
     renderActions({ ...fullyInvoicedProps, onRefresh: vi.fn() });

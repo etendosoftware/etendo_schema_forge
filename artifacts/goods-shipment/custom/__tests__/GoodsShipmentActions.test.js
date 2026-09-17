@@ -210,12 +210,47 @@ describe('GoodsShipmentActions', () => {
       assert.doesNotMatch(src.slice(elseIdx, elseIdx + 120), /detail\.promise/);
     });
 
-    it('on success, sets invoiceResult to the no-invoice shape (drives the existing success-toast/refresh effect)', () => {
-      assert.match(src, /await confirmDocAction\.execute\(recordId, ['"]CO['"]\);[\s\S]*?setInvoiceResult\(\{ invoice: null \}\);/);
+    // ETP-5265 QA follow-up (2) — the fully-invoiced branch no longer routes through
+    // setInvoiceResult: that setter's effect toasts AND refreshes but cannot be awaited,
+    // so it could not hold the Confirm button busy. It toasts inline instead, at the same
+    // point the native draftMode path does (right after the action POST, before the
+    // refetch — see useEntity's handleSaveAndProcess), and then AWAITS onRefresh so the
+    // button spins until the refreshed record is on screen.
+    it('on success, toasts inline and then awaits onRefresh (busy until the record is back)', () => {
+      assert.match(
+        src,
+        /await confirmDocAction\.execute\(recordId, ['"]CO['"]\);[\s\S]*?toast\.success\(ui\('goodsShipment\.confirmModal\.confirmedTitle'\)\);[\s\S]*?await Promise\.resolve\(onRefresh\?\.\(\)\)/,
+      );
     });
 
-    it('on failure, shows toast.error with the error message (or a fallback)', () => {
-      assert.match(src, /catch\s*\(err\)\s*\{\s*toast\.error\(err\.message \|\| ui\(['"]networkError['"]\)\);/);
+    it('the success toast fires BEFORE the awaited refresh, mirroring the native path', () => {
+      const toastIdx = src.indexOf("toast.success(ui('goodsShipment.confirmModal.confirmedTitle'));");
+      const refreshIdx = src.indexOf('await Promise.resolve(onRefresh?.())');
+      assert.notEqual(toastIdx, -1);
+      assert.notEqual(refreshIdx, -1);
+      assert.ok(toastIdx < refreshIdx, 'toast.success must precede the awaited refresh');
+    });
+
+    // A refetch failure is NOT a failed confirmation — it must never reach toast.error.
+    it('swallows a refresh rejection so it cannot be reported as a failed confirm', () => {
+      assert.match(src, /await Promise\.resolve\(onRefresh\?\.\(\)\)\.catch\(\(\) => \{\}\);/);
+    });
+
+    it('on POST failure, shows toast.error with the error message (or a fallback) and stops', () => {
+      assert.match(
+        src,
+        /catch\s*\(err\)\s*\{[\s\S]{0,160}?toast\.error\(err\.message \|\| ui\(['"]networkError['"]\)\);\s*return;/,
+      );
+    });
+
+    // The ETP-5063 effect still exists and still serves GoodsShipmentConfirmModal's
+    // onConfirmed — only the fully-invoiced branch stopped using it.
+    it('keeps the setInvoiceResult effect alive for the modal path', () => {
+      assert.match(src, /if \(invoiceResult && !invoiceResult\.invoice\?\.id\) \{/);
+    });
+
+    it('depends on onRefresh in the useCallback dependency array', () => {
+      assert.match(src, /\}, \[confirmDocAction\.execute, recordId, ui, onRefresh\]\);/);
     });
 
     // ETP-5265 QA follow-up — QA explicitly rejected the floating "processing" card:

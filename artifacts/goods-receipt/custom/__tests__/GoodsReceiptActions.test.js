@@ -53,9 +53,37 @@ describe('GoodsReceiptActions', () => {
       assert.doesNotMatch(src.slice(elseIdx, elseIdx + 120), /detail\.promise/);
     });
 
-    it('still reports failures with toast.error and keeps the re-entrancy guard', () => {
-      assert.match(src, /catch\s*\(err\)\s*\{\s*toast\.error\(err\.message \|\| ui\(['"]networkError['"]\)\);/);
+    it('still reports POST failures with toast.error and keeps the re-entrancy guard', () => {
+      assert.match(
+        src,
+        /catch\s*\(err\)\s*\{[\s\S]{0,160}?toast\.error\(err\.message \|\| ui\(['"]networkError['"]\)\);\s*return;/,
+      );
       assert.match(src, /confirmingFullyInvoicedRef\.current/);
+    });
+
+    // ETP-5265 QA follow-up (2) — symmetric with goods-shipment: the busy window must
+    // cover the refetch, not just the POST, or the spinner is imperceptible.
+    it('toasts inline right after the POST and then awaits onRefresh', () => {
+      assert.match(
+        src,
+        /await confirmDocAction\.execute\(recordId, ['"]CO['"]\);[\s\S]*?toast\.success\(ui\('goodsReceipt\.confirmModal\.confirmedTitle'\)\);[\s\S]*?await Promise\.resolve\(onRefresh\?\.\(\)\)/,
+      );
+      const toastIdx = src.indexOf("toast.success(ui('goodsReceipt.confirmModal.confirmedTitle'));");
+      const refreshIdx = src.indexOf('await Promise.resolve(onRefresh?.())');
+      assert.ok(toastIdx !== -1 && refreshIdx !== -1 && toastIdx < refreshIdx);
+    });
+
+    it('swallows a refresh rejection so it cannot be reported as a failed confirm', () => {
+      assert.match(src, /await Promise\.resolve\(onRefresh\?\.\(\)\)\.catch\(\(\) => \{\}\);/);
+    });
+
+    it('no longer routes through setConfirmedDocs, but keeps that effect for the modal path', () => {
+      assert.doesNotMatch(src, /await confirmDocAction\.execute\(recordId, 'CO'\);\s*setConfirmedDocs/);
+      assert.match(src, /if \(confirmedDocs && !confirmedDocs\.invoice\?\.id\) \{/);
+    });
+
+    it('depends on onRefresh in the useCallback dependency array', () => {
+      assert.match(src, /\}, \[confirmDocAction\.execute, recordId, ui, onRefresh\]\);/);
     });
   });
 

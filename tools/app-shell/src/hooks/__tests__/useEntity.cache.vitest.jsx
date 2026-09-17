@@ -114,6 +114,29 @@ describe('useEntity — shared cache integration (ETP-4563)', () => {
     expect(counts.record).toBe(1); // reused from cache
   });
 
+  // ETP-5265 QA follow-up (2) — `fetchById` returns the refetch promise so a caller can
+  // stay busy until the record is genuinely back. DetailView's `onRefresh` prop is
+  // literally `() => hook.fetchById?.(id, { force: true })`, and the goods-shipment /
+  // goods-receipt Confirm flow awaits it to keep the button's spinner up; before the
+  // `return` was added it awaited `undefined` and resumed immediately.
+  it('2b. fetchById returns an awaitable promise that settles once the record is loaded', async () => {
+    const { fetchMock } = makeFetch();
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts({ skipListFetch: true })), { wrapper });
+
+    let returned;
+    await act(async () => { returned = a.result.current.fetchById('42'); });
+    expect(typeof returned?.then).toBe('function');
+    await act(async () => { await returned; });
+    expect(a.result.current.selected?.id).toBe('42');
+
+    // The id guard still short-circuits to undefined, exactly as before.
+    let guarded = 'unset';
+    await act(async () => { guarded = a.result.current.fetchById(''); });
+    expect(guarded).toBeUndefined();
+  });
+
   it('3. two consumers requesting the same record share a single request', async () => {
     const { fetchMock, counts } = makeFetch();
     globalThis.fetch = fetchMock;

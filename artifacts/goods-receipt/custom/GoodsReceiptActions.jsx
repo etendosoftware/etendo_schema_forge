@@ -46,32 +46,56 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
 
   // ETP-5265 — when the receipt is already fully invoiced, Confirm skips the
   // intermediate "already invoiced" popup entirely and calls the document-action
-  // endpoint directly, like any other direct action in the app: the same success path
-  // the popup used to trigger (setConfirmedDocs({ invoice: null }) — picked up by the toast
-  // effect below), or a toast.error on failure. The non-fully-invoiced flow
-  // (ConfirmGoodsReceiptModal) is untouched.
+  // endpoint directly, like any other direct action in the app. The non-fully-invoiced
+  // flow (ConfirmGoodsReceiptModal) is untouched.
   //
-  // ETP-5265 QA follow-up — QA rejected the floating "processing" toast that used to
-  // stand in for in-flight feedback here: the spinner belongs IN the Confirm button,
-  // the way the invoice windows behave. The loading toast is gone. Instead the
-  // listener below hands this promise back to the core through the CustomEvent
-  // `detail` (see dispatchConfirmModalEvent in the window's index.jsx), and
-  // runDraftModeConfirm in saveActions.jsx awaits it to drive the button's spinner and
-  // disabled state. The error toast and the success path are unchanged.
+  // ETP-5265 QA follow-up (2) — in-flight feedback is the Confirm button's own spinner,
+  // never a floating toast. The listener below hands this promise back through the
+  // CustomEvent `detail` (see dispatchConfirmModalEvent in the window's index.jsx) and
+  // runDraftModeConfirm in saveActions.jsx awaits it, so whatever this function awaits
+  // is exactly how long the button stays busy. It therefore awaits the refetch too
+  // (`onRefresh`, which is `hook.fetchById(id, { force: true })` and became awaitable in
+  // useEntity.js): the first cut resolved on the POST alone (~150-300 ms locally) and the
+  // spinner was imperceptible, because the record refresh happened afterwards, out of
+  // band. Now the busy state runs unbroken from the click until the refreshed record is
+  // on screen.
+  //
+  // Two failure domains, deliberately separate: a failed POST is a failed confirmation
+  // (toast.error, no success toast, no refresh); a failed REFRESH is not — the document
+  // is confirmed, the screen is merely stale, and reporting it as an error would be a
+  // lie. Success-toast placement mirrors the native draftMode path exactly: useEntity's
+  // handleSaveAndProcess fires `toast.success` as soon as the action POST succeeds and
+  // only then refetches, so ours fires there too, not after the refresh.
+  //
+  // NOTE — this path no longer routes through `setConfirmedDocs({ invoice: null })`. That
+  // setter's effect (ETP-5063) both toasts AND refreshes, and it cannot be awaited, so it
+  // cannot hold the button busy. The effect is still live and still owns the
+  // ConfirmGoodsReceiptModal path, which is why the two look different here: only this
+  // branch needs a promise to hand back.
   const confirmDocAction = useDocumentAction({ apiBaseUrl, entity: 'goodsReceipt', token });
   const confirmingFullyInvoicedRef = useRef(false);
   const handleConfirmFullyInvoiced = useCallback(async () => {
     if (confirmingFullyInvoicedRef.current) return;
     confirmingFullyInvoicedRef.current = true;
     try {
-      await confirmDocAction.execute(recordId, 'CO');
-      setConfirmedDocs({ invoice: null });
-    } catch (err) {
-      toast.error(err.message || ui('networkError'));
+      try {
+        await confirmDocAction.execute(recordId, 'CO');
+      } catch (err) {
+        // Domain 1 — the confirmation itself failed. Nothing else must run.
+        toast.error(err.message || ui('networkError'));
+        return;
+      }
+      // The document IS confirmed from here on. Same moment the native path toasts.
+      toast.success(ui('goodsReceipt.confirmModal.confirmedTitle'));
+      // Domain 2 — a refetch failure must never read as a failed confirmation. Swallowed
+      // on purpose; the button simply stops spinning on stale (but correct) data.
+      await Promise.resolve(onRefresh?.()).catch(() => {});
     } finally {
+      // Cleared only once BOTH the POST and the refresh have settled, so a second click
+      // cannot start while the first operation is still in flight.
       confirmingFullyInvoicedRef.current = false;
     }
-  }, [confirmDocAction.execute, recordId, ui]);
+  }, [confirmDocAction.execute, recordId, ui, onRefresh]);
 
   useEffect(() => {
     // ETP-5265 QA follow-up — `e.detail.promise` is how the in-flight documentAction
