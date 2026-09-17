@@ -3,9 +3,9 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:sequence
 const columns = [
-  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
-  { key: 'prefix', column: 'Prefix', type: 'string', label: 'Prefix' },
-  { key: 'suffix', column: 'Suffix', type: 'string', label: 'Suffix' },
+  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true, maxLength: 60 },
+  { key: 'prefix', column: 'Prefix', type: 'string', label: 'Prefix', maxLength: 10 },
+  { key: 'suffix', column: 'Suffix', type: 'string', label: 'Suffix', maxLength: 10 },
   { key: 'nextAssignedNumber', column: 'CurrentNext', type: 'number', label: 'Next Assigned Number', required: true },
   { key: 'startingNo', column: 'StartNo', type: 'number', label: 'Starting No.', required: true },
   { key: 'restartSequenceEveryYear', column: 'StartNewYear', type: 'boolean', label: 'Restart sequence every Year' },

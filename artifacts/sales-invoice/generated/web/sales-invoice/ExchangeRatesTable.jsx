@@ -5,7 +5,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 const columns = [
   { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: 'Currency', required: true, readOnly: true },
   { key: 'toCurrency', column: 'C_Currency_Id_To', type: 'selector', label: 'To Currency', required: true, readOnly: true },
-  { key: 'rate', column: 'Rate', type: 'string', label: 'Rate' },
+  { key: 'rate', column: 'Rate', type: 'string', label: 'Rate', maxLength: 10 },
   { key: 'foreignAmount', column: 'Foreign_Amount', type: 'amount', label: 'Foreign  Amount', required: true, noTrailing: true },
 ];
 // @sf-generated-end columns:exchangeRates
