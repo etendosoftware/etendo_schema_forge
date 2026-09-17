@@ -285,9 +285,9 @@ Paths below marked proposed are additive design, not existing endpoints. Use exi
 | Endpoint | Status / behavior |
 | --- | --- |
 | `GET /sws/go/environments` | Existing; add type, readiness, access reason/deadline, relationship and capabilities. Include blocked memberships for safe account navigation; omit financial details from member projections |
-| `GET /sws/go/billing/overview` | Proposed account-level read: owned company subscriptions and pending purchases, normalized offers/actions; company filters require ownership |
+| `GET /sws/go/billing/overview` | Account-level read: authenticated account purchase projections and billing ownership capability; ERP access is not required |
 | `POST /sws/go/billing/purchases` | Proposed new use-case endpoint: validate ownership, snapshot offer/demo/input context, deduplicate operation and delegate to existing checkout through the bridge |
-| `GET /sws/go/billing/purchases/{purchaseId}` | Proposed neutral projection combining existing payment evidence with new work stage, target when ready, safe failure code and allowed retry |
+| `GET /sws/go/billing/purchases/{purchaseId}` | Account-scoped projection combining existing payment evidence with the current work stage and safe failure information |
 | `POST /sws/go/checkout/sessions` and `GET /sws/go/checkout/sessions/{requestId}` | Existing Stripe-backed contracts remain; do not generalize their API in this task. Reuse service behavior from the bridge, and add only necessary authorization/functional guards to prevent bypassing the new owned purchase path |
 | `POST /sws/go/billing/purchases/{purchaseId}/retry` | Proposed; owner-only scheduling of the same retryable confirmed purchase, returns 202/current work state; no new charge. An unresolved outbound creation is not eligible for this action |
 | `POST /sws/go/billing/subscriptions/{subscriptionId}/management-session` | Proposed optional new capability; owner check, opaque reference lookup through bridge and return-URL allowlist; short-lived redirect, no customer ID from caller |

@@ -5,6 +5,8 @@ import {
   getCheckoutToken,
   getPlatformToken,
   createCheckoutSession,
+  getBillingOverview,
+  getBillingPurchase,
 } from '../upgrade/api.js';
 
 function jsonResponse(data, { ok = true, status = 200 } = {}) {
@@ -29,6 +31,25 @@ describe('getPlatformToken', () => {
   it('returns null when storage is absent or throws', () => {
     assert.equal(getPlatformToken(undefined), null);
     assert.equal(getPlatformToken({ getItem: () => { throw new Error('blocked'); } }), null);
+  });
+});
+
+describe('account billing projection', () => {
+  it('reads overview with account authentication', async () => {
+    const fetchImpl = recordingFetch(jsonResponse({ canManageBilling: true, purchases: [] }));
+    const result = await getBillingOverview(fetchImpl, '', 'account-token');
+    assert.deepEqual(result, { canManageBilling: true, purchases: [] });
+    assert.equal(fetchImpl.calls[0].url, '/sws/go/billing/overview');
+    assert.equal(fetchImpl.calls[0].init.headers.Authorization, 'Bearer account-token');
+  });
+
+  it('encodes purchase ids and returns a stable error for an unavailable projection', async () => {
+    const fetchImpl = recordingFetch(jsonResponse({ message: 'missing' }, { ok: false, status: 404 }));
+    await assert.rejects(
+      () => getBillingPurchase(fetchImpl, '', 'token', 'purchase/1'),
+      error => error.code === UPGRADE_ERROR_CODES.checkoutCreationFailed && error.status === 404
+    );
+    assert.equal(fetchImpl.calls[0].url, '/sws/go/billing/purchases/purchase%2F1');
   });
 });
 

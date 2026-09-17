@@ -52,6 +52,33 @@ export async function getCheckoutStatus(fetchImpl, baseUrl, token, requestId) {
   return data || { status: 'pending' };
 }
 
+/** Reads the authenticated account-level billing projection. */
+export async function getBillingOverview(fetchImpl, baseUrl, token) {
+  const response = await fetchImpl(`${baseUrl}/sws/go/billing/overview`, {
+    headers: buildAuthHeaders(token),
+  });
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
+      : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message, response.status);
+  }
+  return data || { purchases: [] };
+}
+
+/** Reads one account-scoped purchase without exposing provider identifiers. */
+export async function getBillingPurchase(fetchImpl, baseUrl, token, purchaseId) {
+  const response = await fetchImpl(
+    `${baseUrl}/sws/go/billing/purchases/${encodeURIComponent(purchaseId)}`,
+    { headers: buildAuthHeaders(token) }
+  );
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
+      : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message, response.status);
+  }
+  return data;
+}
+
 /** Starts the existing idempotent onboarding chain after the webhook authorizes the request. */
 export async function runPaidOnboarding(fetchImpl, baseUrl, token, input, onMessage) {
   const response = await fetchImpl(`${baseUrl}/sws/go/onboarding`, {
