@@ -218,7 +218,7 @@ function SuccessPanel({ ui, onContinue, onTransfer, entering, transferTarget, en
   );
 }
 
-function BillingOverviewPanel({ purchases, ui }) {
+function BillingOverviewPanel({ purchases, onResume, resumingPurchaseId, ui }) {
   if (!purchases.length) return null;
   return (
     <Card data-testid="upgrade-billing-overview">
@@ -231,7 +231,22 @@ function BillingOverviewPanel({ purchases, ui }) {
           {purchases.map(purchase => (
             <li key={purchase.purchaseId} className="flex items-center justify-between gap-3">
               <span className="truncate">{purchase.clientName || ui('upgradeUnnamedPurchase')}</span>
-              <Badge variant="secondary">{purchase.status}</Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">{purchase.status}</Badge>
+                {purchase.status === 'PAID' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onResume(purchase)}
+                    disabled={Boolean(resumingPurchaseId)}
+                    data-testid={`upgrade-resume-purchase-${purchase.purchaseId}`}
+                  >
+                    {resumingPurchaseId === purchase.purchaseId
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : ui('upgradeResumePurchase')}
+                  </Button>
+                )}
+              </div>
             </li>
           ))}
         </ul>
@@ -267,6 +282,7 @@ export default function UpgradePage() {
   const [environments, setEnvironments] = useState([]);
   const [billingPurchases, setBillingPurchases] = useState([]);
   const [billingOffer, setBillingOffer] = useState(null);
+  const [resumingPurchaseId, setResumingPurchaseId] = useState(null);
   // Bumped by the retry button so the lookup effect re-runs. A failed lookup is recoverable —
   // the usual cause is a transient/auth error, not an account without environments.
   const [lookupAttempt, setLookupAttempt] = useState(0);
@@ -274,6 +290,33 @@ export default function UpgradePage() {
   const [entering, setEntering] = useState(false);
   const [enterError, setEnterError] = useState(false);
   const [transferTarget, setTransferTarget] = useState(null);
+
+  const resumePaidPurchase = async purchase => {
+    const token = getCheckoutToken();
+    if (!token || !purchase?.purchaseId || !purchase?.clientName) {
+      setFormError('upgradeCheckoutCreationFailed');
+      return;
+    }
+    setResumingPurchaseId(purchase.purchaseId);
+    setForm(previous => ({ ...previous, tenantName: purchase.clientName, upgradeAction: 'create-productive' }));
+    setFormError(null);
+    setPhase('running');
+    try {
+      await runPaidOnboarding(fetch, getUpgradeBaseUrl(), token, {
+        clientName: purchase.clientName,
+        paymentToken: purchase.purchaseId,
+        upgradeAction: 'create-productive',
+        language: getStoredLocale(),
+        countryCode: 'AR',
+      }, message => setSteps(previous => applyProgressMessage(previous, message)));
+      setPhase('success');
+    } catch (error) {
+      setPhase('form');
+      setFormError(error?.code || 'upgradeCheckoutCreationFailed');
+    } finally {
+      setResumingPurchaseId(null);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -493,7 +536,12 @@ export default function UpgradePage() {
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{ui('upgradeSubtitle')}</p>
         </div>
       </div>
-      <BillingOverviewPanel purchases={billingPurchases} ui={ui} />
+      <BillingOverviewPanel
+        purchases={billingPurchases}
+        onResume={resumePaidPurchase}
+        resumingPurchaseId={resumingPurchaseId}
+        ui={ui}
+      />
       <div className="grid gap-4 md:grid-cols-2">
         <PlanCard
           testId="upgrade-plan-free"

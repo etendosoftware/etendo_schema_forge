@@ -87,7 +87,7 @@ function successStream({ success = true, clientName = 'Acme Productive' } = {}) 
  * poll attempt reject/error). `onboarding` feeds the NDJSON stream behind
  * `/sws/go/onboarding`, defaulting to a successful run.
  */
-function installFetch({ environments = [], checkout = {}, statuses = ['paid'], onboarding } = {}) {
+function installFetch({ environments = [], purchases = [], checkout = {}, statuses = ['paid'], onboarding } = {}) {
   const requests = [];
   let statusCallIndex = 0;
   globalThis.fetch = vi.fn(async (url, init = {}) => {
@@ -96,7 +96,7 @@ function installFetch({ environments = [], checkout = {}, statuses = ['paid'], o
       return typeof environments === 'function' ? environments() : jsonResponse({ environments });
     }
     if (target.includes('/sws/go/billing/overview')) {
-      return jsonResponse({ canManageBilling: true, purchases: [] });
+      return jsonResponse({ canManageBilling: true, purchases });
     }
     if (target.includes('/sws/go/billing/offers')) {
       return jsonResponse({ code: 'productive-tenant', amountMinor: 4900, currency: 'EUR', interval: 'month' });
@@ -409,6 +409,23 @@ describe('UpgradePage — checkout funnel tracking', () => {
     expect(globalThis.fetch).toHaveBeenCalledWith(
       '/sws/go/billing/purchases/upgrade-request-1',
       expect.objectContaining({ headers: expect.any(Object) })
+    );
+  });
+
+  it('resumes a paid purchase from billing activity without starting checkout', async () => {
+    const user = userEvent.setup();
+    const requests = installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      purchases: [{ purchaseId: 'purchase-1', status: 'PAID', clientName: 'Acme Productive' }],
+      onboarding: () => successStream(),
+    });
+    await renderUpgradePage();
+
+    await user.click(screen.getByTestId('upgrade-resume-purchase-purchase-1'));
+    await screen.findByTestId('upgrade-success');
+    expect(requests).toHaveLength(0);
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/sws/go/onboarding', expect.objectContaining({ method: 'POST' })
     );
   });
 
