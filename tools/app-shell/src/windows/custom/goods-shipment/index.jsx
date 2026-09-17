@@ -10,7 +10,7 @@ import GoodsShipmentPage from '@generated/goods-shipment/generated/web/goods-shi
 import GoodsShipmentTable from '@generated/goods-shipment/generated/web/goods-shipment/GoodsShipmentTable';
 import BulkInvoiceFromShipment from '@generated/goods-shipment/custom/BulkInvoiceFromShipment';
 import GoodsShipmentSecondaryActions from '@generated/goods-shipment/custom/GoodsShipmentSecondaryActions';
-import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter, buildUnpostActions, unpostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import { useUI, useMenuLabel } from '@/i18n';
 import { useRowEmailModal } from '../shared/useRowEmailModal.jsx';
@@ -46,7 +46,7 @@ function GoodsShipmentBulkActions(props) {
         {...props}
         entity="goodsShipment"
         buildActions={buildInOutActions}
-        labelKey="confirmBulk"
+        labelKey="process"
         data-testid="BulkDocumentAction__9851c7" />
       {/* ETP-5209 — bulk Contabilizar (post), gated to processed & not-yet-posted rows */}
       <BulkDocumentAction
@@ -57,6 +57,19 @@ function GoodsShipmentBulkActions(props) {
         rowFilter={postRowFilter}
         labelKey="post"
         data-testid="BulkDocumentActionPost__9851c7" />
+      {/* ETP-5302 — bulk Descontabilizar, the counterpart of the unpost entry this
+          window's detail kebab already offers. Its own button rather than a second
+          option inside "Contabilizar": that button would then be named after the
+          opposite of what it does. Only shows when a posted row is selected, so in
+          practice it and "Contabilizar" are rarely on screen together. */}
+      <BulkDocumentAction
+        {...props}
+        entity="goodsShipment"
+        actionMode="neoAction"
+        buildActions={buildUnpostActions}
+        rowFilter={unpostRowFilter}
+        labelKey="unpost"
+        data-testid="BulkDocumentActionUnpost__9851c7" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}

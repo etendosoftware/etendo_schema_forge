@@ -61,7 +61,10 @@ vi.mock('@generated/goods-shipment/custom/BulkInvoiceFromShipment', () => ({
 }));
 
 let bulkDocumentActionCalls = [];
-vi.mock('@/components/contract-ui/BulkDocumentAction', () => ({
+// The named exports come from the shared helper (it documents why a mock must expose
+// the module's FULL export surface); only the `default` stub is window-specific.
+vi.mock('@/components/contract-ui/BulkDocumentAction', async () => ({
+  ...(await import('@/test/bulkDocumentActionMock.js')).bulkDocumentActionNamedExports(),
   default: (props) => {
     bulkDocumentActionCalls.push(props);
     const { entity, labelKey } = props;
@@ -69,9 +72,6 @@ vi.mock('@/components/contract-ui/BulkDocumentAction', () => ({
       <div data-testid={`bulk-document-action-${labelKey}`} data-entity={entity} data-label-key={labelKey} />
     );
   },
-  buildInOutActions: vi.fn(() => []),
-  buildPostActions: vi.fn(() => []),
-  postRowFilter: vi.fn(),
 }));
 
 vi.mock('../GoodsShipmentPreview', () => ({
@@ -102,7 +102,9 @@ vi.mock('@generated/goods-shipment/generated/web/goods-shipment/GoodsShipmentPag
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
+import {
+  postRowFilter, buildPostActions, buildUnpostActions, unpostRowFilter,
+} from '@/components/contract-ui/BulkDocumentAction';
 import GoodsShipmentWindow from '../index.jsx';
 
 describe('GoodsShipmentWindow', () => {
@@ -132,7 +134,7 @@ describe('GoodsShipmentWindow', () => {
     render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
 
     expect(screen.getByTestId('bulk-invoice')).toBeInTheDocument();
-    expect(screen.getByTestId('bulk-document-action-confirmBulk')).toHaveAttribute('data-entity', 'goodsShipment');
+    expect(screen.getByTestId('bulk-document-action-process')).toHaveAttribute('data-entity', 'goodsShipment');
     // ETP-5209 — bulk Post button, gated to processed & not-yet-posted rows.
     expect(screen.getByTestId('bulk-document-action-post')).toHaveAttribute('data-entity', 'goodsShipment');
     expect(screen.getByTestId('shipment-preview')).toHaveAttribute('data-window-name', 'goods-shipment');
@@ -227,10 +229,10 @@ describe('GoodsShipmentWindow', () => {
       expect(lastPageProps.refreshTrigger).toBe(0);
     });
 
-    it('renders both the confirmBulk (in-out) and the post bulk BulkDocumentAction instances', () => {
+    it('renders both the process (in-out) and the post bulk BulkDocumentAction instances', () => {
       render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
 
-      expect(screen.getByTestId('bulk-document-action-confirmBulk')).toHaveAttribute('data-entity', 'goodsShipment');
+      expect(screen.getByTestId('bulk-document-action-process')).toHaveAttribute('data-entity', 'goodsShipment');
       expect(screen.getByTestId('bulk-document-action-post')).toHaveAttribute('data-entity', 'goodsShipment');
       // ETP-5209 — GoodsShipmentBulkActions passes the imported postRowFilter
       // reference straight through as rowFilter — no caller-side factory/hook
@@ -261,6 +263,56 @@ describe('GoodsShipmentWindow', () => {
         apiBaseUrl: '/api',
         windowName: 'goods-shipment',
       })).not.toThrow();
+    });
+  });
+
+  // ── ETP-5302 — bulk Descontabilizar (unpost) ─────────────────────────────────
+  // Its own button rather than a second option inside "Contabilizar" (that button
+  // would then be named after the opposite of what it does). The gate itself
+  // (`buildUnpostActions` / `unpostRowFilter`) is covered exhaustively in
+  // BulkDocumentAction.vitest.jsx — these tests only verify this window mounts a
+  // THIRD instance and hands the SHARED helper references through, rather than
+  // re-deriving its own local copies (which is how two implementations of one rule
+  // drift apart — the root cause of the ETP-5302 bug itself).
+  describe('ETP-5302 — bulk unpost button', () => {
+    const unpostCall = () => bulkDocumentActionCalls.find((p) => p.labelKey === 'unpost');
+
+    it('renders a third BulkDocumentAction for unpost, on the neoAction path', () => {
+      render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
+
+      expect(screen.getByTestId('bulk-document-action-unpost')).toHaveAttribute('data-entity', 'goodsShipment');
+      // Deduped, order preserved: proves all three instances mount in this order
+      // without being brittle about how many times React re-rendered them.
+      const labelKeys = bulkDocumentActionCalls.map((p) => p.labelKey);
+      expect(labelKeys.filter((k, i) => labelKeys.indexOf(k) === i)).toEqual(['process', 'post', 'unpost']);
+      expect(unpostCall().actionMode).toBe('neoAction');
+    });
+
+    it('wires the SHARED buildUnpostActions/unpostRowFilter references, not local copies', () => {
+      render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
+
+      expect(unpostCall().buildActions).toBe(buildUnpostActions);
+      expect(unpostCall().rowFilter).toBe(unpostRowFilter);
+    });
+
+    it('keeps the post and unpost instances independent (no crossed helpers)', () => {
+      render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
+
+      const postCall = bulkDocumentActionCalls.find((p) => p.labelKey === 'post');
+      expect(postCall.buildActions).toBe(buildPostActions);
+      expect(postCall.rowFilter).toBe(postRowFilter);
+      expect(postCall.rowFilter).not.toBe(unpostRowFilter);
+    });
+
+    // A shipment's accounting reversal IS a standalone action here, so no bulk
+    // instance of this window chains an unpost before its document action — that
+    // opt-in belongs to the invoice windows only.
+    it('never opts into preUnpostActions on any of its bulk instances', () => {
+      render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
+
+      for (const call of bulkDocumentActionCalls) {
+        expect(call.preUnpostActions).toBeUndefined();
+      }
     });
   });
 });

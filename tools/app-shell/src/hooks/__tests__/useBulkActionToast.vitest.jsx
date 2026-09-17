@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 import { toast } from 'sonner';
-import { useBulkActionToast, persistBulkActionResult } from '../useBulkActionToast';
+import { useBulkActionToast, persistBulkActionResult, showBulkActionToast } from '../useBulkActionToast';
 
 vi.mock('sonner', () => ({
   toast: {
@@ -298,5 +298,62 @@ describe('useBulkActionToast', () => {
     const stored = JSON.parse(sessionStorage.getItem('bulkActionResult'));
     expect(stored.ok).toBe(5);
     expect(stored.failed).toEqual(['err1']);
+  });
+});
+
+// ETP-5302 — `showBulkActionToast` went from module-private to EXPORTED so a caller
+// that already holds a `useUI()` result can show the toast WITHOUT mounting the hook.
+// That matters because mounting the hook only to reach `showResult` also installs its
+// sessionStorage-DRAINING effect, which re-runs on every `ui` identity change and eats
+// the caller's own persisted result before a fallback reload can hand it to the next
+// mount (tried and reverted while fixing the bulk-action full-page reload).
+//
+// Called with an explicit `ui` here — no renderHook — which IS the contract
+// BulkDocumentAction, BulkOrderMoreMenu and BulkPurchaseOrderMoreMenu rely on.
+describe('showBulkActionToast — exported pure helper (ETP-5302)', () => {
+  const ui = (key) => ({
+    processExecuted: '{ok} ok, {failed} failed',
+    processExecutedWithOmitted: '{ok} ok, {omitted} omitted, {failed} failed',
+  }[key] ?? key);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+  });
+
+  it('shows a success toast and writes nothing to sessionStorage', () => {
+    showBulkActionToast(ui, { ok: 3, failed: [] });
+    expect(toast.success).toHaveBeenCalledWith('3 ok, 0 failed');
+    expect(sessionStorage.getItem('bulkActionResult')).toBeNull();
+  });
+
+  it('shows an error toast when every attempted row failed', () => {
+    showBulkActionToast(ui, { ok: 0, failed: ['e1', 'e2'] });
+    expect(toast.error).toHaveBeenCalledWith('0 ok, 2 failed');
+  });
+
+  it('shows a warning toast on a partial failure', () => {
+    showBulkActionToast(ui, { ok: 2, failed: ['e1'] });
+    expect(toast.warning).toHaveBeenCalledWith('2 ok, 1 failed');
+  });
+
+  it('switches to the 3-count message when rows were omitted', () => {
+    showBulkActionToast(ui, { ok: 1, omitted: ['skipped'], failed: [] });
+    expect(toast.warning).toHaveBeenCalledWith('1 ok, 1 omitted, 0 failed');
+  });
+
+  it('normalizes a null result instead of throwing', () => {
+    showBulkActionToast(ui, null);
+    expect(toast.success).toHaveBeenCalledWith('0 ok, 0 failed');
+  });
+
+  it('has no side effect: it never consumes a result persisted by another run', () => {
+    persistBulkActionResult({ ok: 9, failed: [] });
+
+    showBulkActionToast(ui, { ok: 1, failed: [] });
+
+    // The other (fallback-path) run's persisted result must survive untouched —
+    // this is the exact regression that made mounting the hook here unusable.
+    expect(JSON.parse(sessionStorage.getItem('bulkActionResult')).ok).toBe(9);
   });
 });

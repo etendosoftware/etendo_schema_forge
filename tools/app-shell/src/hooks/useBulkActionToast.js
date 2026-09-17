@@ -35,7 +35,12 @@ function buildFailureDetail(failed, ui) {
     .join('\n');
 }
 
-function showBulkActionToast(ui, result) {
+// ETP-5302 — exported so a caller that already holds a `useUI()` result can show the
+// toast immediately, without mounting `useBulkActionToast()` itself. Mounting the hook
+// just to reach `showResult` also installs its sessionStorage-draining effect, which
+// re-runs whenever `ui` changes identity and would consume the caller's own persisted
+// result before a fallback reload could hand it to the next mount.
+export function showBulkActionToast(ui, result) {
   const { ok, omitted, failed } = normalizeBulkActionResult(result);
 
   // ETP-5316 — exactly one record was selected (nothing else attempted, nothing

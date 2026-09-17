@@ -17,7 +17,7 @@ function ReturnMaterialReceiptBulkActions(props) {
         {...props}
         entity="returnMaterialReceipt"
         buildActions={buildInOutActions}
-        labelKey="confirmBulk"
+        labelKey="process"
         data-testid="BulkDocumentAction__4e1c28" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
