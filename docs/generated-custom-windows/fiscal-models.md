@@ -31,7 +31,7 @@ debug contracts.
 - Route: `/fiscal-models` (list, `FmListPage`); model detail pages render inline within the same route (no separate URL) via `FmModel303Page`/`FmModel349Page`.
 - Implementation type: `layoutType: "custom"` — loaded from `customLoaders` in `tools/app-shell/src/windows/registry.js`.
 - Breadcrumb — list page: `Finanzas / Modelos Fiscales` (`` `${ui('finance')} / ${ui('fm.breadcrumb.section')}` ``, `FmListPage.jsx`).
-- Breadcrumb — Modelo 303/349 detail pages: `Finanzas / Modelos Fiscales / Modelo 303 - {periodLabel}` (`FmModel303Page.jsx`) and `Finanzas / Modelos Fiscales / Modelo 349 - {periodLabel}` (`FmModel349Page.jsx`) — 3 segments, consistent between both models. ETP-4945 replaced 3 independently hardcoded, mutually inconsistent breadcrumbs (a raw Spanish literal `Tesorería` on all three pages, with 303 at 2 segments and 349 at 3), and introduced the shared `ui('finance')` / `ui('fm.breadcrumb.section')` keys reused across all three surfaces so the "Modelos Fiscales" segment can't drift between the list and its two detail pages again.
+- Breadcrumb — Modelo 303/349 detail pages: `Finanzas / Modelos Fiscales / Modelo 303 - {periodLabel}` (es_ES) / `Finance / Fiscal Models / Form 303 - {periodLabel}` (en_US) (`FmModel303Page.jsx`), and the equivalent for 349 (`FmModel349Page.jsx`) — 3 segments, consistent between both models. ETP-4945 replaced 3 independently hardcoded, mutually inconsistent breadcrumbs (a raw Spanish literal `Tesorería` on all three pages, with 303 at 2 segments and 349 at 3), and introduced the shared `ui('finance')` / `ui('fm.breadcrumb.section')` keys reused across all three surfaces so the "Modelos Fiscales" segment can't drift between the list and its two detail pages again. ETP-5338 fixed a follow-on bug ETP-4945 left in place: the "Modelo 303"/"Modelo 349" segment itself (and the matching page-title text) was still a raw hardcoded Spanish literal even under `en_US` — now resolved via the shared `fm.config.m303.title` / `fm.config.m349.title` keys (already used by the catalog config section header), which is also why the English segment reads "Form 303", not "Model 303" — "Form" is this codebase's established translation of AEAT's "Modelo" (see `fm.catalog.303.name` / `fm.config.m303.title`).
 
 ## Auto-compute architecture (`useFiscalAutoCompute`)
 
@@ -208,7 +208,92 @@ A former 6th tab, **Historial** (`HistoryTab`), was removed together with this p
 
 ### Action bar
 
-Left to right: **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Calcular** (`handleCompute`, spinner while `computing`), a standalone **"Generar fichero 303"** button, and, only while the declaration is not yet submitted (`!isSubmitted`), a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. "Generar fichero 303" is always visible regardless of submission status — it is not gated the way "Registrar/Presentar" is. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
+Left to right: **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Guardar** (`Save`/`Loader2` icon, `handleSave` — ETP-5338, leftmost of the right-aligned group, replacing an earlier go-back button that used to sit next to Cancelar, see below), **Calcular** (`handleComputeClick` — persists any pending `identChecks`/`manualOverrides` edit via the same `persistEditableFields()` helper Guardar uses, then triggers the actual box recompute via `handleCompute`; spinner while `computing`), a standalone **"Generar fichero 303"** button, and, only while the declaration is not yet submitted (`!isSubmitted`), a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. "Generar fichero 303" is always visible regardless of submission status — it is not gated the way "Registrar/Presentar" is. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
+
+**Guardar's position (ETP-5338 pt.6).** Guardar briefly landed in the old go-back slot (left, next to Cancelar) when it first replaced go-back, then moved into the right-aligned primary-action group — leftmost of it, before "Calcular" — to match `saveActions.jsx`'s established Save-before-Confirm ordering convention used by every AD-window's generic DetailView toolbar. It is not grouped with Cancelar: Cancelar discards/navigates away, Guardar persists and stays, and the two are visually separated by the `flex: 1` spacer between the left-aligned pair (Cancelar + status pill) and the right-aligned action cluster.
+
+**"Guardar" replaces the earlier go-back button (ETP-5338 pivot).** The button in this slot started life as a go-back affordance (`ArrowLeft` icon, `handleGoBack`) that flushed pending edits and then navigated back to the list, same as "Cancelar" but data-safe. Product later decided the correct affordance here is a genuine **Save** — matching the rest of Etendo Go's Save-button convention (icon swap to a spinning `Loader2` while saving, disabled while saving, `toast.success`/`toast.error` feedback; see `saveActions.jsx`'s shared Save/Confirm buttons) — that persists the current data and **stays on the same declaration view**, rather than one more way to navigate away. `handleSave` is hidden entirely once the declaration is submitted (`!isSubmitted`, same gate as "Calcular"/"Registrar-Presentar") since there is nothing left to save on a filed declaration.
+
+The underlying data-safety problem is the same one go-back was hardened against, and `handleSave` reuses the exact same machinery — only the final navigation step is gone. **Note:** the next few paragraphs (through "Known related exposure") describe the mechanics as they existed under the original debounced-autosave design; that design was later removed entirely — see "Architecture pivot" below for the current, autosave-free behavior:
+
+- **Cancelar** (`onClick={onBack}`) unmounts the page immediately. The debounced `identChecks`/`manualOverrides` autosave effect's own cleanup then runs `clearTimeout(manualDataSaveTimer.current)` — a pending, not-yet-fired save is discarded, never sent. This is the "Cancelar always reverts" behavior users were routing around by switching windows and back.
+- **Guardar** (`handleSave`) clears that same pending timer itself and force-flushes the same `PUT` the debounce would eventually have sent, then reports the outcome via toast — but it never calls `onBack`, so the user always ends up back on the same declaration, saved or not.
+
+**Edit committed but never sent — the "field still had focus" bug (ETP-5338 Bug 2, still fixed, now under Guardar).** Reported as: type into a text field (e.g. "Nº de justificante"), don't tab away, click the button in this slot — reopen the declaration and the old value is still there. The field's `onChange` DOES commit every keystroke straight into `identChecks`/`manualOverrides` React state (none of these inputs has a blur handler; focus is a red herring), so that part was never the problem. The real cause is a second, EARLIER edit's autosave still being in flight when the button is clicked: `persistManualDataQueued` (the shared `useRecordWriteQueue`) is single-flight per record — calling it while a write is already open only QUEUES the new snapshot and returns immediately, it does not wait for the eventual replay. The original `handleGoBack` called `onBack?.()` right after that queueing, unmounting the page — and the queue's own `mountedRef` guard (correct for every other caller of that hook) then abandoned the queued replay once the in-flight write finally settled, discarding the newer edit with no error anywhere. Fix (unchanged by the pivot to Guardar): `await`s `useRecordWriteQueue`'s own `waitUntilIdle(recordId)` before building and flushing its own snapshot (read directly from current `identChecks`/`manualOverrides` state, not from the `manualDataLatest` mirror a separate `useEffect` maintains, closing that indirection too). See `FmModel303Page.save.vitest.jsx`'s "does not drop an edit queued behind an in-flight write" test.
+
+**Hardened against a queued-replay race (ETP-5338 review follow-up).** The first fix had this handler await ONE in-flight promise captured by value (a `manualDataInFlight` ref set by `writeManualData`). Review found that interleaving fragile: if the captured promise settled in the exact same tick the write queue's own replay logic reassigns the tracked in-flight write to a NEW promise (arming a queued edit), awaiting only the old reference would resume the handler while the replay was still genuinely open. This exact interleaving cannot happen from a real click vs. a real network response — browser task-boundary semantics prevent it — but the bug class ("edit silently dropped because of the write queue") had already shipped twice on this file, so it was hardened rather than left resting on that implicit guarantee. `useRecordWriteQueue` now exposes `waitUntilIdle(recordId)`, which loops — re-reading its own in-flight/queued state after every await — until the record has no write in flight and nothing queued behind it, instead of trusting one promise reference. `handleSave` uses it directly (twice — once before rebuilding its own snapshot, once again after issuing its own flush, so it reads back its OWN write's result and not a stale one); the `manualDataInFlight` ref and the promise-identity trick it depended on are gone. The new API is purely additive to the hook (`ContactsFinancialPanel`, `ProductPriceBar`, `AmortizationLinesTable` keep calling `persist` exactly as before). See `useRecordWriteQueue.vitest.jsx`'s "waitUntilIdle (ETP-5338 review follow-up)" suite, which forces the race directly.
+
+A second review pass on this same hardening found the single-key loop above was not the whole story: when more than one field key is queued for the same record (e.g. a caller persisting two distinct fields, like `ProductPriceBar`'s `standardPrice`/`listPrice`), `persist`'s replay loop clears its in-flight/queued state for the record BETWEEN replaying one queued field and starting the next — a real tick in which `waitUntilIdle` could have resumed early, before the later field in the batch had even started replaying. `useRecordWriteQueue` now tracks that batch explicitly (`replayInProgressRef`, armed before the replay loop starts and cleared only after every queued field for the record has been replayed) and `waitUntilIdle` also waits on that marker, so the guarantee now covers the full queued batch, not just its first entry. `FmModel303Page` is unaffected in practice (`flushManualData` only ever queues the single literal key `'manualData'`), but the hook's own guarantee — and this doc's description of it — now hold for any future multi-field-key adopter too. See `useRecordWriteQueue.vitest.jsx`'s "waits for the entire queued batch, not just the first entry" test.
+
+**Guardar now surfaces failures that go-back used to swallow.** `identChecks`/`manualOverrides` still have no OTHER write path — they only ever persist through this one per-declaration autosave, and Guardar's flush uses exactly that path. But unlike the old go-back (which awaited the flush purely to sequence a safe navigation and never inspected whether it actually succeeded), `handleSave` reads `writeManualData`'s result via `lastManualDataResultRef` after the flush settles and toasts success or failure accordingly — a network failure during Guardar's flush is no longer silently indistinguishable from success. A failed save also leaves `hasPendingManualDataEditRef` set, so clicking Guardar again genuinely retries the write instead of no-op'ing. The background debounced autosave itself is unchanged and stays silent-on-failure by design (nothing appropriate to toast from a timer firing in the background); only the explicit, user-clicked Guardar reports outcome.
+
+**Known related exposure, not fixed here (flagged for follow-up).** `useRecordWriteQueue`'s "abandon the queued replay on unmount" behavior is shared by `ContactsFinancialPanel`, `ProductPriceBar` and `AmortizationLinesTable` too — any of those panels could in principle lose a coalesced edit the same way if its host view unmounts while a write to the same record is in flight. None of them currently has a "flush and wait before leaving" affordance like this page's `handleSave`, and none was audited as part of this fix. The fix here is intentionally scoped to `FmModel303Page.jsx` (per ETP-5338's own scope) rather than changing `useRecordWriteQueue`'s shared contract.
+
+**Architecture pivot — no more debounced autosave (ETP-5338, later in the same ticket).** Everything
+described above through "Known related exposure" documents the ORIGINAL debounce-based design
+(`manualDataSaveTimer`, an 800ms background autosave effect). That design was subsequently removed
+entirely: `identChecks`/`manualOverrides` are now pure local React state until one of two explicit
+user actions flushes them — **Guardar** (`handleSave`) or **Calcular** (`handleComputeClick`, which
+persists the pending edit via the same path before recomputing) — both funneling through one shared
+`persistEditableFields()` helper. **Cancelar** (`handleCancel`) now performs a genuine, network-free
+discard: it clears `hasPendingManualDataEditRef` and calls `onBack?.()`, with no timer to race and
+nothing in flight it started itself. `useRecordWriteQueue` (`persistManualDataQueued`/
+`waitUntilManualDataIdle`) is kept for the same reason as before — Guardar and Calcular can still
+race each other, e.g. a Calcular click landing while an earlier Guardar's PUT is still open.
+
+**Closed edge case — a Calcular save queued behind Guardar used to survive Cancelar (ETP-5338,
+narrow follow-up to the pivot above).** The new explicit-save design reopened a narrower version of
+the original "abandon the queued replay on unmount" guarantee. Scenario: Guardar's PUT is held open
+by the server; the user clicks Calcular, whose own `persistEditableFields()` call reaches
+`waitUntilManualDataIdle(decl.id)` and pauses there — genuinely "queued" behind Guardar's write,
+but NOT via `useRecordWriteQueue`'s internal `queuedRef` (that only coalesces edits arriving after
+`persist()`'s own single-flight check trips; here, `persistEditableFields` itself serializes ahead
+of that, via its own `waitUntilManualDataIdle` wait). The user then clicks Cancelar, which unmounts
+the page before Guardar's PUT resolves. Once Guardar's PUT finally settled, Calcular's
+`persistEditableFields()` call resumed from its `await waitUntilManualDataIdle(...)` and went on to
+build and flush its own snapshot — a live PUT firing after the user had explicitly clicked Cancelar
+expecting a full discard, with no mount-guard anywhere in that resumed code path:
+`useRecordWriteQueue`'s existing `mountedRef` check only gated the hook's OWN internal replay logic
+(the `finally` block inside `persist()`), not a fresh top-level call to `persist()` arriving later
+from a caller's own resumed `await`.
+
+Fix, in `useRecordWriteQueue.js` (`tools/app-shell/src/hooks/useRecordWriteQueue.js`): `persist()`
+now checks `mountedRef.current` at its own entry point, immediately after the null/empty-id guard —
+not only inside the post-write `finally` block. This refuses to START any new write once the owning
+component has unmounted, whether the call is a queued replay the hook armed itself or an entirely
+independent call arriving from the caller's own code (exactly `persistEditableFields`'s resumed
+`await`). A write that is already past this check when unmount happens (i.e. already in flight) is
+left alone — the fix does not abort an in-flight HTTP request, it only stops a NEW one from being
+issued after the point of no return. The fix lives in the shared hook, not in `FmModel303Page.jsx`
+itself, so it also closes the exposure flagged above for `ContactsFinancialPanel`, `ProductPriceBar`
+and `AmortizationLinesTable` — any caller shaped the same way (persist → await idle → build snapshot
+→ flush) is covered without having to add its own guard.
+
+Regression coverage: `FmModel303Page.cancelDiscard.vitest.jsx`'s "never fires a Calcular save queued
+behind an in-flight Guardar PUT once Cancelar has unmounted the page" reproduces the exact sequence
+(Guardar PUT held open → Calcular click queues behind it → Cancelar unmounts → Guardar PUT settles →
+asserts no second PUT). Flagged as a first defensive test written alongside the fix, per this
+ticket's established pattern — a full audit pass is still expected from Tester. The three
+pre-existing single-flight/race regression suites (`useRecordWriteQueue.vitest.jsx`,
+`FmModel303Page.explicitSaveSingleFlight.vitest.jsx`, and the rest of this file) were re-run and
+still pass unmodified in behavior — the new check only rejects a call that arrives after unmount, it
+does not change anything about an already-in-flight write or a same-component queued replay.
+
+**"Presenting a declaration reverts it to draft" (ETP-5338, confirmed bug, root cause — predates the Guardar pivot).** Users reported that clicking the go-back button that used to live in this slot — and the pre-existing Cancelar — right after presenting a 303/349 declaration made it show as `draft` again. The declaration's status was **never actually reverted**: neither that flush nor `Cancelar` ever sends a `status` field (the manualData `PUT` body is `{ manualData }` only — see `persistManualData` in `fiscalModelsUtils.js`), and `FiscalDeclCrudHandler#handleDeclPut` (com.etendoerp.go) only touches `declarationStatus` `if (hasStatus)`, so a manualData-only PUT can never change it server-side either. The real cause is that `FmListPage` "stays mounted at all times" (so `useFiscalAutoCompute` keeps polling) and is therefore **never remounted, and never refetches `decls`,** when the user opens a declaration, presents it, and navigates back — the row it renders is the same `decls` array entry fetched once on mount, still holding the pre-submission status. `FiscalModelsPage`'s `onStatusChange` handler does correctly persist the new status server-side via `persistDeclarationStatus`, but nothing pushed that change into `FmListPage`'s own state. Fix: `FiscalModelsPage` now pushes a one-shot `declStatusPatch={{ id, patch: { status, submissionMethod } }}` down to `FmListPage` right after a successful persist (a fresh object each time, so the effect re-fires even for a repeat status), and `FmListPage` applies it to its `decls` state the same way `handleConfirmReactivate` already patches a row changed in place. If the user re-opens the same declaration from the list right after going back, they now see the correct, current status instead of the stale cached one.
+
+**"Autoliquidación Rectificativa" un-checks itself on Registrar/Presentar (ETP-5338 pt.4, confirmed bug, real root cause).** Reported symptom: check "Autoliquidación Rectificativa" on a duplicate-period declaration, click "Registrar/Presentar" without clicking "Guardar" first, and the checkbox reads unchecked again on reopen — as if processing/presenting the declaration reverted it. The checkbox's own local React state (`identChecks.rectificativa`) was never actually cleared by anything: the real bug is that it was never SENT to the server at all. Unlike `handleComputeClick` ("Calcular"), which always calls `persistEditableFields()` before recomputing, `handlePresent` never flushed pending `identChecks`/`manualOverrides` edits before transitioning the declaration's status. Once `handleStatusChange` flips local `status` to a submitted value, `persistEditableFields` becomes a **permanent no-op** (`if (isSubmitted) return { ok: true }`, unchanged by this fix) — so an edit made right before clicking "Registrar/Presentar", with no intervening "Guardar" click, was not just delayed, it was unrecoverable: there is no later point at which it can still be saved. Every other surface that reads the flag back from persisted `manualData` (reopening the declaration, the list's "Tipo" column — see "Tipo column derivation" above) then correctly shows the server's un-updated value, which reads to the user as "the checkbox unchecked itself".
+
+Fix, in `FmModel303Page.jsx`'s `handlePresent` (now `async`): it `await`s `persistEditableFields()` immediately after the required-field pre-flight check and BEFORE any status transition — for both the 2 manual paths (`submitted`/`submitted_ack`) and the `'aeat_telematic'` sentinel (opening `AeatSubmitFlow`). If the flush fails, the transition is aborted (toast, early return) rather than proceeding and losing the edit permanently — `persistEditableFields` only clears the pending-edit flag on success, so the user can retry via "Guardar" or by clicking "Registrar/Presentar" again. `AeatSubmitFlow`'s own AEAT submission params are read live off the `identChecks` prop regardless (via `applyIdentParams`, see "Identification checkboxes → AEAT params" above), so what actually gets filed with AEAT was never affected by this bug — only the persisted `manualData` copy was; the flush keeps that copy in sync with what is about to be (or was just) filed.
+
+**"Autoliquidación Rectificativa" LOOKS unchecked on an already-submitted declaration, even though the persisted value is `true` (ETP-5338, second, unrelated bug — pure rendering, not data).** Follow-up report after the pt.4 fix above: on a submitted declaration whose `manualData.identification.rectificativa` really is `true` (confirmed — the adjacent "Nº de justificante" text field on the same identification section showed its correct saved value), the checkbox itself still rendered visually unchecked in read-only mode. This is NOT a recurrence of pt.4 and NOT a hydration bug — `identChecks` is seeded correctly from `decl.manualData?.identification` on mount (`FmModel303Page.jsx` line ~220), `identification={{ ...orgIdent, ...identChecks }}` is passed straight through to `FmBoxes303`, and the native `<input type="checkbox">` really did have `checked={true}`/`aria-checked="true"` the whole time — verified with a source-level trace, not just the report. The bug was generic to the shared `Checkbox` component (`@etendosoftware/app-shell-core/components/ui/checkbox.jsx`, consumed here via `tools/app-shell/src/components/ui/checkbox.jsx`), not specific to this window or this field: the checked+disabled visual state used the identical `bg-muted` box class as unchecked+disabled, and the checkmark's `stroke` was hardcoded to `"white"` — invisible against the near-white `--muted` token (96% lightness in the light theme). Every other read-only checkbox in this window (`sin_actividad`, `baja_domiciliacion`, `redeme`, `concurso`, …) shared the exact same risk since they all rendered through the same component.
+
+A component-level fix for this exists in `schema_forge_core` (`packages/app-shell-core/src/components/ui/checkbox.jsx`, commit `a8b8384a0`: checkmark stroke changed to `currentColor` plus a `border-text-disabled` accent on the checked+disabled box class). **That fix is not what fiscal-models ships on.** Publishing it would require bumping `@etendosoftware/app-shell-core` in this repo (see `docs/repo-topology.md`), affects every OTHER consumer of the shared `Checkbox` too, and — critically — would have left fiscal-models with two coexisting checkbox implementations: the (now-fixed) shared `Checkbox` here, and the already-correct hand-rolled checkbox the Sales Invoice SIF tab (`SifTab.jsx`) used all along, which never had this bug because it dims the whole control via `disabled:opacity-50` instead of swapping the box/checkmark colors. The product decision was instead to **consolidate fiscal-models on the SIF tab's implementation**: it was extracted into `tools/app-shell/src/windows/custom/shared/CheckboxField.jsx` (a `<button role="checkbox">`, exported for reuse — `SifTab.jsx` now imports it too, replacing its former inline copy) and every checkbox in both Modelo 303 and Modelo 349 (`FmOverlays.jsx`, `FmListPage.jsx`, `FmModel349Page.jsx`, `FmBoxes303.jsx`, `AeatSubmitFlow.jsx`) was switched from `@/components/ui/checkbox`'s `Checkbox` (or, for `AeatSubmitFlow`'s `testMode` toggle, a raw `<input type="checkbox">`) to `CheckboxField`. Fiscal-models now has exactly one checkbox implementation, and it does not depend on a cross-repo publish to stay correct. The `schema_forge_core` fix (`a8b8384a0`) remains valid for other consumers of the shared `Checkbox`; whether to pursue publishing it is a separate, still-open decision. Two small pre-existing spots were deliberately left alone as out of scope: `FmOverlays.jsx`'s `CfgSection303` (dead code, never rendered) and the "keys" checkboxes in `CfgSection349` (uncontrolled `defaultChecked` placeholders with no `onChange`/state at all) — converting either to `CheckboxField` would mean inventing controlled state that doesn't exist today, which is a behavior change, not the pure visual swap this fix is scoped to.
+
+This also closes a narrower, related gap: `handlePresent` calling `persistEditableFields()` can now race an already-in-flight Calcular/Guardar flush queued behind an earlier one (e.g. Guardar's PUT still open when the user immediately clicks Calcular, then immediately Registrar/Presentar). Both concurrent callers proceed independently — neither is deduped — and `useRecordWriteQueue`'s own single-flight `persist()` (`tools/app-shell/src/hooks/useRecordWriteQueue.js`) correctly serializes them: the second caller's write is coalesced into `queuedRef` and replayed once the first settles, rather than overlapping on the wire. In this specific interleaving that can mean one extra, content-identical PUT (the queued replay) beyond the minimum — harmless (same content, single-flight, no data loss) but a known follow-on effect, not eliminated here; see `FmModel303Page.explicitSaveSingleFlight.vitest.jsx`'s "flushes a queued save before filing the declaration, instead of dropping it" test, which drains every PUT this path can produce rather than asserting an exact count.
+
+**Regression test note:** `FmModel303Page.explicitSaveSingleFlight.vitest.jsx` used to have a test named "drops a queued save when the declaration is submitted while a PUT is open", asserting the OPPOSITE of the fix above — that a save queued behind an in-flight Guardar was dropped once the declaration got filed. That was the same bug from a different angle and has been replaced with "flushes a queued save before filing the declaration, instead of dropping it", which asserts the corrected behavior: the queued edit is flushed (not dropped), and the status transition — and the `onStatusChange` callback — wait for that flush to actually settle. The file's top-of-file "four properties" comment and property (3) were updated to match: (3) now covers only the session-ending case (`token`/`apiBaseUrl` going falsy mid-flight), which is unaffected by this fix and still legitimately drops the queued edit (there is nothing left to flush it to).
+
+**349's final toolbar: Cancelar (left) + Guardar, a deliberate no-op (ETP-5338 pt.5).** `FmModel349Page.jsx` originally got a go-back icon button (`ArrowLeft`, `handleGoBack`, `data-testid="FmModel349Page__goBack"`) next to Cancelar for visual/UX consistency across Modelo detail pages (ETP-5338 pt.1) — functionally identical to "Cancelar", since both just called `onBack` directly. Once the requirement widened to "every fiscal-models declaration gets a Guardar button" (not just 303, which already had an autosave to piggyback on), 349 was re-investigated with that wider bar in mind: a fresh grep of every `useState`/write path in the file confirms it has zero locally-edited, persistable declaration data — `keyFilter`/`searchQuery`/`selected`/`activeTab`/`viesBannerDismissed` are ephemeral view state, `liveOperators`/`liveInvoices`/`liveRectifications`/`liveRectifSummary` are read-only server-computed snapshots, and VIES validation (`handleValidateVies`) already persists its result server-side the instant it runs — there is no staged, unsaved state anywhere on this page. Rather than skip Guardar here (which would break the "every model" requirement) or fake a network call that flushes nothing, 349's `handleSave` is a deliberate **no-op confirmation**: it shows `toast.success(...)` immediately, with no PUT and no loading state, in the right-aligned toolbar position (leftmost of the primary-action group, before "Calcular"). Once Guardar existed, the old go-back button became pure duplication of "Cancelar" — both did the same `onBack` call, sitting side by side — so it was removed entirely: 349's toolbar now has exactly Cancelar on the left and Guardar (plus Calcular/Registrar-Presentar) on the right, no go-back affordance. This is intentionally honest rather than a misleading "unsaved work exists" affordance — clicking Guardar always "succeeds" because there is genuinely nothing that could fail. If 349 ever grows real locally-edited declaration fields, `handleSave` is the handler to wire an actual flush into.
 
 ### Sources tab — "Régimen" column removed (ETP-5187)
 
@@ -222,6 +307,29 @@ count, and the now-dead `.fm-regime-pill` CSS rule and the `regime:` demo fields
 `FmDebugPanel.jsx`'s `MOCK_SOURCES` fixture were removed alongside it. The `fm.sources.col.regime`
 locale key was dropped from all 3 locale files (`en_US`/`es_ES`/`es_AR`) — grepped first and
 confirmed to have no other consumer.
+
+### Sources tab — "Fecha" relabeled to "Fecha Factura" + new "Fecha Contable" column (ETP-5338 pt.5)
+
+The `SourcesTab` table's first column (`fm.sources.col.date`) always rendered `C_Invoice.DateInvoiced`
+(invoice date) — confirmed by re-reading `Fiscal303SourcesSupport.java#buildNewInvoiceRow`, which
+only ever populated `r.put("date", sdf.format(inv.getInvoiceDate()))`. The header label "Fecha" was
+ambiguous next to the also-relevant `C_Invoice.AccountingDate`, so the locale key's value was changed
+to "Fecha Factura" (`en_US`: "Invoice Date") in all 3 locale files — the key itself (`fm.sources.col.date`)
+was NOT renamed, since it is used exactly once and no other consumer would be affected either way; the
+underlying data did not change.
+
+A second column, "Fecha Contable" (`fm.sources.col.accountingDate` / "Accounting Date"), was added
+right after it, backed by a NEW backend field: `Fiscal303SourcesSupport.java` now also puts
+`r.put("accountingDate", inv.getAccountingDate() != null ? sdf.format(inv.getAccountingDate()) : null)`
+— null-guarded because `C_Invoice.AccountingDate` can be null on some invoices (unlike `DateInvoiced`,
+which this file has never null-guarded, since it's not nullable at the AD level). No existing nullable
+date field in this file was available to copy a guard pattern from, so this is a plain ternary rather
+than a shared helper. On the frontend, `SourcesTab` renders it with the SAME `fmtDate()` helper already
+used for the invoice-date column — `fmtDate` already treats a falsy input as "no value" and renders
+`'—'`, so a null `accountingDate` shows a dash rather than throwing or rendering `Invalid Date`. The
+empty-state row's `colSpan` was bumped from 8 to 9 to match the new column count. `FmDebugPanel.jsx`'s
+`MOCK_SOURCES` fixture got a matching `accountingDate` field per row (including one explicit `null` to
+exercise the blank-render path in manual QA).
 
 ### Duplicate-period warning and rectificativa gate (ETP-5187)
 
@@ -246,6 +354,33 @@ The `rectificativa`/`nro_justificante`/`baja_domiciliacion`/`motivo_rectificacio
 themselves were **not** rebuilt for this — they already exist and are reachable via the Boxes tab's
 "Resultado final" nav section (`fm303Layouts.js`'s `rectificativa` section, `CASILLAS_SECTIONS` in
 `FmModel303Page.jsx`); this fix only adds the warning + gate around the existing checkbox.
+
+### Tipo column derivation (ETP-5338)
+
+`FmListPage.jsx`'s "Tipo" list column used to render `decl.type === 'ord' ? 'Ordinaria' :
+'Complementaria'` — i.e. it read `DECL_TYPE` (AEAT's genuine ordinaria/complementaria business
+value, see `FiscalDeclCrudHandler#declToJson`). No UI flow in this window ever sends
+`type: 'com'`; every declaration is created with `DECL_TYPE = 'O'` (see "NEO Headless endpoints"
+below), so this column always showed "Ordinaria" — including for declarations the user had
+explicitly marked as a rectificativa via the "Autoliquidación Rectificativa" checkbox (see
+"Duplicate-period warning and rectificativa gate" above). `decl.type`/`DECL_TYPE` is a real,
+independent AEAT concept and was **not** repurposed to fix this — it stays available on the row
+for whenever a UI flow legitimately needs to set/show "Complementaria".
+
+The column now derives from the same rectificativa flag the detail page's checkbox writes:
+`decl.manualData?.identification?.rectificativa` (persisted by `FmModel303Page.jsx`'s
+`identChecks.rectificativa` → `manualData.identification.rectificativa`, already present on list
+rows since `declToJson` includes `manualData` on every declaration, not just the one being
+edited).
+
+- `rectificativa` truthy → "Tipo" shows `fm.type.rectificative` ("Rectificativa").
+- `rectificativa` falsy/absent → "Tipo" shows `fm.type.ordinary` ("Ordinaria"), same as before.
+- Modelo 349 declarations have no rectificativa checkbox/field, so `manualData.identification` is
+  always empty for them and this column correctly falls back to "Ordinaria" — unchanged from
+  before this fix, since 349 also never produced `type: 'com'`.
+
+`fm.type.rectificative` is a new key (all 3 locale files); `fm.type.complementary` is kept as-is
+for the reason above, not removed or repurposed.
 
 ### Required-field pre-flight gate (ETP-5187)
 
@@ -467,9 +602,10 @@ When in real mode, `FmModel303Page` reads `liveBoxes` / `liveSummary` from the `
 
 `GET /fiscal303/boxes` (`computeBoxes303`, backed by `Fiscal303BoxesHandler`) always computes
 purely from **invoice data** — no declaration id, no `manualData` input at all — so its response
-never reflects a user's manual box overrides (`decl.manualData.manualOverrides`, persisted by an
-800ms-debounced autosave effect — see the "Debounce-vs-navigation race" entry in "Known gaps and
-residual findings" near the end of this file for a caveat on that autosave). Every consumer that wants the TRUE, override-aware figures
+never reflects a user's manual box overrides (`decl.manualData.manualOverrides`, persisted only by
+an explicit user action — **Guardar** or **Calcular** — via `persistEditableFields()`; see the
+"Architecture pivot" note under "Action bar" above — there is no background autosave anymore).
+Every consumer that wants the TRUE, override-aware figures
 must merge overrides onto the raw response and re-derive the boxes AEAT computes FROM other boxes
 (45, 46, 64, 66, 69, 71) — this ticket found and fixed 3 separate places that were reading the raw,
 override-blind backend value instead, plus extracted the merge/derive logic itself so the 3rd bug
@@ -556,6 +692,86 @@ so it is not silently reopened later:
   chain to `AEAT303Report2025` (see "Identification section" above, which already documents its
   bank-data visibility gating) — it does not feed into `recomputeDerivedBoxes`'s formula at all,
   by design, matching Classic's own handling. This is expected behavior, not a gap.
+
+### Box 87 display-only derivation (`derivedValue` fallback on a real box, ETP-5338 pt.2)
+
+Box 87 ("Cuotas a compensar de períodos previos pendientes para períodos posteriores") is labeled
+with the formula `(110 - 78)` right in its AEAT text, but was never populated: `computeBoxes303`
+(backend) never returns a value for box 87, and it is deliberately outside
+`recomputeDerivedBoxes`'s set (`{45, 46, 64, 66, 69, 71}` — see "Manual box overrides" above)
+because AEAT computes and validates 110-78 themselves at submission time. The `.303` file always
+uploaded correctly with box 87 blank; this was a **display-only** gap.
+
+Fix, entirely client-side, entirely in the render layer:
+- `fm303Layouts.js`'s `cuotas_compensar_post` row (still `cells: [87]`, a real box) now also
+  declares `derivedValue: { box: 110, subtractBox: 78, clampMin: 0, treatMissingAsZero: true }`.
+- `FmBoxes303.jsx` extracts the `derivedValue` computation (previously inlined only in
+  `renderDerivedCell`, used by boxless rows like `importe_devolucion`) into a shared
+  `computeDerivedValue(dv)` helper: `valueMap[dv.box]` (optionally `Math.abs`'d), minus
+  `valueMap[dv.subtractBox]` when present, floored at `dv.clampMin` when present.
+- `renderBoxCell` (the path for rows that DO have a real box number) now falls back to
+  `computeDerivedValue(row.derivedValue)` **only when the real box has no value** from
+  `valueMap`/`fixedValues`/`defaultValues` — it never overrides a genuine backend/manual value.
+  This is a new, generic combination (`cells` + `derivedValue` on the same row) any future box in
+  this window can reuse; it is not hardcoded to box 87.
+
+Clamped at 0 because box 87 ("cuotas pendientes de compensar") can by AEAT definition never be
+negative.
+
+**Missing-operand semantics — confirmed with the product owner in cycle 2, and DIFFERENT from
+`importe_devolucion`'s:**
+- Box 110 present, box 78 missing → shows box 110 (missing box 78 treated as 0).
+- Box 110 missing, box 78 present → shows `max(0, 0 - box78)` = 0 (missing box 110 treated as 0,
+  then clamped).
+- Both missing → stays blank (nothing to compute at all — the only blank case for this row).
+- Both present → normal `max(0, box110 - box78)`.
+
+This is implemented via a new opt-in flag on the shared helper, `derivedValue.treatMissingAsZero`,
+set **only** on box 87's row. **`computeDerivedValue` branches on this flag and every other
+`derivedValue` row — in particular `importe_devolucion` (box 71 minus box 70) — keeps the original,
+unrelated behavior: a missing operand blanks the whole result, with no zero-defaulting.** Do not
+assume the two rows behave the same; they diverge on purpose. (ETP-5338 QA cycle 1 had rejected an
+earlier `?? 0` fallback that applied indiscriminately to box 87's subtrahend; that rejection
+correctly caught a bug in the *implementation* — a `?? 0` with no "both missing" exception — but the
+"stays blank on any missing operand" conclusion it initially shipped with was based on an AEAT
+semantics assumption that was never confirmed with the user and turned out to be wrong for box 87.
+Cycle 2 corrects it to the rule above, confirmed by the product owner, while leaving
+`importe_devolucion` exactly as cycle 1 left it.)
+
+Does **not** touch `manualData`, `recomputeDerivedBoxes`, `applyOverrides`, or anything sent in the
+`.303` submission payload — purely a rendering fallback for a value AEAT already computes
+independently.
+
+### Box 78 auto-clamped to box 110 (ETP-5338 pt.2, scope extension)
+
+Boxes 110, 78 and 87 are unsigned — casilla 87 clamps to 0 whenever box78 > box110 (see previous
+section). box78 ("cuotas de períodos anteriores que se compensan en esta declaración") can never
+legitimately exceed box110 ("cuotas pendientes de compensar de períodos anteriores") — there's
+nothing to compensate beyond what's actually pending. An earlier iteration of this ticket shipped
+an advisory warning banner for this case (see git history at commit `75b033d0c`); the product owner
+subsequently replaced that requirement entirely: **box78 is now silently auto-clamped to box110's
+value instead of merely warning**, making the invalid state structurally impossible to enter. There
+is no warning banner and no submission gate for this relationship.
+
+- The clamp lives in `FmModel303Page.jsx`'s `handleBoxChange` — the single commit path used by
+  every editable box in `FmBoxes303.jsx` (`onBoxChange` fires from the box input's `onBlur`/Enter).
+  On every box commit it recomputes what box78's effective value would be (`nextBox78`) against
+  what box110's effective value would be after this commit (`nextBox110`); if `nextBox78 >
+  nextBox110`, box78 is capped to `nextBox110` before being written into both `liveBoxes` (the
+  rendered state) and `manualOverrides` (in-memory local state until "Guardar"/"Calcular" explicitly
+  persist it — see "Architecture pivot" above; there is no autosave), so a later
+  `handleCompute`/"Calcular" recompute — which re-applies `manualOverrides` on top of a fresh
+  backend result — doesn't resurrect the un-clamped value).
+- **Reactive in both directions**: because the check runs on *every* box commit (not just box78's
+  own edit), typing a value into box78 greater than box110 clamps box78 immediately, **and**
+  lowering box110 below an already-larger box78 re-clamps box78 downward too, keeping the
+  invariant true at all times rather than only at box78's own edit time.
+- **Edge case — box110 blank**: if box110 has no value at the time box78 is edited, there is
+  nothing to clamp against, so box78 is accepted exactly as typed. The clamp only engages once
+  both boxes hold a value.
+- Does **not** touch `computeDerivedValue`/`treatMissingAsZero` (the casilla 87 display clamp logic
+  stays exactly as shipped) and does **not** add any submission-time gate — the invariant is
+  enforced purely at the point of entry.
 
 ### Organization identity
 
@@ -1091,28 +1307,72 @@ The 303/349 color pairs (background/foreground/border) are defined once, in `fis
 
 The Modelo 303 detail page's "Resultado" KPI (`FmModel303Page.jsx`) and the declarations list's "Resultado" column (`ResultText` in `FmListPage.jsx`) both color the result by the AEAT result kind's sign, through one shared helper — `resolveResultColors(resultKind)` in `fiscalModelsUtils.js` (a `RESULT_COLOR_MAP` lookup): `'I'` (a ingresar — the org owes money) renders green, via the `--status-success-{bg,fg}` tokens; `'V'`/`'C'` (a devolver / a compensar — refundable or offsettable) render blue, via `--status-info-{bg,fg}`; anything else (`'N'`, null) keeps the neutral styling (`hsl(var(--muted))` / `hsl(var(--foreground))`) this always had. `FmModel303Page.jsx` originally carried its own local copy of this mapping (`RESULT_COLOR_MAP`/`resolveResultColors`); it now imports the shared export instead, so the two call sites cannot drift apart. Modelo 349 declarations don't currently produce `I`/`V`/`C` result kinds (see "Result in list view" below), so in the shared list only 303 rows are actually colored by this today — the code path itself is shared across both models, not gated to 303.
 
+### Toolbar filters, KPI badges, and "+ Nueva declaración" — hardcoded Spanish under en_US (ETP-5338)
+
+Reported via manual testing with the English locale selected: the year/model/status
+`FilterDropdown` labels ("Todos los años" / "Todos los modelos" / "Todos los estados"), the
+"+ Nueva declaración" CTA, the model dropdown option labels ("Modelo 303"/"Modelo 349"), and two
+KPI card labels/badges ("Por vencer" / "Esta semana", "Incidencias" / "Requiere revisión") were
+Spanish string literals in `FmListPage.jsx`, never routed through `t()`/`useUI()`, so they stayed
+in Spanish regardless of the selected locale. All of the corresponding `fm.*` keys already existed
+in all 3 locale files (`fm.filter.all_years/all_models/all_statuses`, `fm.action.new_declaration`,
+`fm.kpi.upcoming`/`fm.kpi.upcoming_sub`, `fm.m303.kpi.incidents`/`fm.kpi.incidents_sub`,
+`fm.config.m303.title`/`fm.config.m349.title`) — this was a "forgot to call the existing key"
+regression from rapid iteration, not a missing-translation gap. Fixed by wiring each literal
+through the existing `t`/`ui` (`useUI()`) already in scope in `FmListPage.jsx`.
+
+Same fix also covers the row's "Última actualización" date (`normDecl`'s `updatedAt` field): it
+was formatted with a hardcoded `toLocaleDateString('es-ES')`, always rendering the Spanish
+`DD/MM/YYYY` shape regardless of locale. Now reads the active locale via `useLocaleSwitch()`
+(the same hook `components/ui/date-range-popover.jsx` uses) and formats with the BCP-47 tag
+derived from it.
+
+**Addendum — Modelo 349's `periodLabel` month name (ETP-5338).** A related but distinct bug found
+in the same sweep: `FmModel349Page.jsx`'s breadcrumb/page-title `periodLabel` (`"{year} / {month
+name}"`) built its month name with `new Intl.DateTimeFormat(undefined, { month: 'long' })`. Passing
+`undefined` as the locale does not fall back to the app's UI locale — it resolves to the
+**runtime's/browser's default locale** (typically the OS language), so under an es-language OS the
+month name rendered in Spanish ("octubre") even with the in-app language toggle set to English, and
+vice versa. Fixed the same way as `normDecl.updatedAt` above: read the active locale via
+`useLocaleSwitch()` and convert it to a BCP-47 tag (`appLocale.replace('_', '-')`, defaulting to
+`es-ES`) before handing it to `Intl.DateTimeFormat`, so the month name now tracks the UI locale
+toggle instead of the host environment.
+
+Modelo 303's period label was checked as part of the same fix and confirmed **unaffected** — it
+never calls `Intl.DateTimeFormat` at all. 303 periods are AEAT period codes (`1T`/`2T`/`3T`/`4T`,
+monthly codes, etc.), not calendar month numbers, and its label is built by the model-specific
+`formatPeriod()` helper, which maps codes to i18n keys directly rather than deriving a month name
+from a `Date`. There was no locale leak to fix on 303.
+
 ### Sort and search (ETP-4755)
 
 **Sort** is a real field-selector popover, not a bare toggle. Clicking "Ordenar" opens a list of sortable fields (`SORT_FIELDS` in `FmListPage.jsx`: Modelo, Año, Período, Estado), explicitly modeled on `components/contract-ui/ListView.jsx`'s existing `sortColumn`/`sortDirection`/`handleSortSelect`/`handleClearSort` pattern — clicking a field sorts ascending, clicking the same field again flips to descending. A **"Limpiar orden"** entry, shown only once a field is active, resets `sortColumn` to `null`, restoring the default order (year + period, most recent first).
 
 **Search** was removed entirely — the search input/icon button is gone from the toolbar. Narrowing the list is handled by the existing year/model/status `FilterDropdown` filters instead.
 
-### Row hover actions — Edit/Delete (`FmRowActions`, ETP-5187)
+### Row hover actions — Edit/Delete/Reactivar (`FmRowActions`, ETP-5187, ETP-5338)
 
 Each **draft** declaration row (`decl.status === 'draft'`) reveals a small Edit/Delete icon pair on
 row hover, in a dedicated last column (`<th style={{ width: 72 }} aria-hidden="true" />` /
-`<td style={{ position: 'relative' }}>`). Non-draft rows render the same empty `<td>` (keeps column
-alignment) but no icons — this window has no per-row edit/delete affordance for anything past
-draft.
+`<td style={{ position: 'relative' }}>`). A **submitted/submitted_ack** row (excluding
+`aeat_telematic` — see below) instead reveals a single **Reactivar** icon in the same column. Any
+other row (`submitted_ext`, or a submitted/submitted_ack row filed via `aeat_telematic`) renders the
+same empty `<td>` (keeps column alignment) but no icon at all.
 
-`FmRowActions.jsx` is a new, window-local component — **not** the generic
+`FmRowActions.jsx` is a window-local component — **not** the generic
 `components/contract-ui/RowQuickActions.jsx` used by schema-driven windows (sales-invoice, etc.):
 that component's hooks (`useDocumentAction`/`useNeoAction`) assume a `specName`/entity backend
 contract this fully-custom window (no `decisions.json`/`contract.json`) doesn't have. `FmRowActions`
 mirrors its hover-reveal visual language (`.fm-row-actions`/`.fm-row-action-btn` in
 `fiscal-models.css`, plain CSS keyed off the existing `.fm-table tbody tr:hover` rule rather than
-Tailwind's `group/row` utility) but exposes only the 2 actions this window actually needs — no
-clone, no email/send, no kebab menu.
+Tailwind's `group/row` utility) but exposes only the actions this window actually needs — no clone,
+no email/send, no kebab menu. Each of the 3 actions (`onEdit`/`onDelete`/`onReactivate`) only
+renders when its handler prop is passed — the component has no status awareness of its own, the
+caller (`FmListPage`) decides which case a row is in and passes only the matching handler(s). This
+is also why an ineligible Reactivar row gets **no button at all**, not a disabled one: `FmListPage`
+simply never passes `onReactivate` for it (`{!isDraft && canReactivate(decl) && <FmRowActions
+onReactivate={...} .../>}`) — there is no code path that renders a disabled/grayed-out Reactivar
+button.
 
 - **Edit** calls the same `onSelect` callback the row's own `onClick` already used, so it's
   identical to clicking the row.
@@ -1126,13 +1386,51 @@ clone, no email/send, no kebab menu.
   calls `deleteDeclaration(id, { token, apiBaseUrl })` (`fiscalModelsUtils.js`, `DELETE
   /fiscal303/declarations?id=`); on success the row is removed from `FmListPage`'s own `decls`
   state (no refetch), on failure a toast (`fm.list.delete_failed`) is shown and the row stays.
+- **Reactivar** (ETP-5338) opens a small non-destructive confirmation dialog
+  (`ReactivateConfirmDialog`, a local `FmListPage.jsx` component built from the same `Dialog`
+  primitives as `DeleteConfirmDialog` but with its own copy/testids — not that shared component,
+  whose title/message are hardcoded to the delete flow), mounted only while a reactivation is
+  pending (`{reactivateTarget && <ReactivateConfirmDialog .../>}`, same conditional-mount
+  convention). Confirming calls `persistDeclarationStatus(id, 'draft', { token, apiBaseUrl })`
+  (`fiscalModelsUtils.js`, `PUT /fiscal303/declarations?id=` with `{ "status": "draft" }`, no
+  `submissionMethod` sent); on success the row's `status` is patched to `'draft'` in `FmListPage`'s
+  own `decls` state (no refetch — the row immediately re-renders as a draft row, with Edit/Delete
+  instead of Reactivar), on failure a toast (`fm.list.reactivate_failed`) is shown and the row
+  stays as-is.
+
+**Reactivar eligibility** (`canReactivate(decl)` in `FmListPage.jsx`): `decl.status === 'submitted'
+|| decl.status === 'submitted_ack'`, **and** `decl.submissionMethod !== 'aeat_telematic'`.
+`submitted_ext` is deliberately excluded — it's a legacy status that predates `submissionMethod`
+(the "Otra Plataforma" path that used to produce it was removed from `PresentModal`, see the
+Status lifecycle section above) and reactivating it was not requested by ETP-5338. A declaration
+with no `submissionMethod` at all (any declaration submitted before ETP-4755 shipped) is treated as
+reactivatable — `submissionMethod` is only ever `'aeat_telematic'` when a real AEAT submission set
+it, so absence is the safe default, not an ambiguous one.
 
 **Backend defense in depth**: `FiscalDeclCrudHandler#handleDeclDelete` (already existed, wired to
-`DELETE /fiscal303/declarations?id=`) now also rejects (409) deleting anything but a `draft`
-declaration — previously it had no status check at all and would delete any declaration regardless
-of status, relying entirely on the frontend to only ever show the action for drafts. The frontend
-gate (only draft rows get the icons) and the backend gate are independent; either one alone would
-have been insufficient.
+`DELETE /fiscal303/declarations?id=`) rejects (409) deleting anything but a `draft` declaration —
+previously it had no status check at all and would delete any declaration regardless of status,
+relying entirely on the frontend to only ever show the action for drafts. `#handleDeclPut` (ETP-5338)
+now similarly rejects (409) any PUT that sets `status: "draft"` on a declaration whose *currently
+stored* `submissionMethod` is `aeat_telematic` — read from the declaration record itself, not from
+whatever the request body claims, so this can't be bypassed by a client that simply omits or
+falsifies the field. Each of these frontend/backend gate pairs is independent; either gate alone
+would have been insufficient.
+
+**Applies to Modelo 349 too, with no model-specific code.** `FmListPage.jsx` renders one shared
+table for both models — `canReactivate`, the `isDraft`/hover-column logic and `FmRowActions` never
+branch on `decl.model`, and `persistDeclarationStatus`/`deleteDeclaration` always hit
+`/fiscal303/declarations?id=<id>` regardless of which model the declaration belongs to (the path
+name is legacy; the handler resolves the record by `id` against the generic `ETGO_Fiscal_Decl`
+table). On the backend, `FiscalDeclCrudHandler#handleDeclPut`'s `aeat_telematic` guard reads
+`PROPERTY_SUBMISSION_METHOD` off the stored record with no model filter either. 349's own status
+lifecycle (`draft`/`submitted`/`submitted_ack`) and `submissionMethod` values (`manual_ack`/
+`manual_no_receipt` — see "AEAT electronic submission" above: 349's `PresentModal` never passes
+`showAeatPath`, so a 349 declaration's `submissionMethod` can never be `aeat_telematic`) line up
+with `canReactivate`'s conditions without any adaptation. Practical effect: a submitted/
+submitted_ack Modelo 349 row already shows the Reactivar icon and reactivates correctly today,
+and — since 349 never produces `aeat_telematic` — the exclusion clause simply never triggers for
+it, which is the correct behavior for a model with no telematic-submission concept, not a gap.
 
 ### "Fichero" column — removed, no download action to offer (ETP-4755)
 
@@ -1374,12 +1672,29 @@ the underlying data (and the read-only grid badge) stays intact.
 Surfaced while investigating points 5–7 above. None of these are bugs being fixed now — they are
 recorded here so a future pass doesn't have to rediscover them from scratch.
 
-- **Box 87 ("Cuotas a compensar de períodos previos pendientes para períodos posteriores")** is
-  labeled in `fm303Layouts.js` with the formula `(110 - 78)` right in its i18n string
-  (`fm.box.row.cuotas_compensar_post`), but it is **not** one of the boxes `recomputeDerivedBoxes`
-  re-derives (that set is exactly `{45, 46, 64, 66, 69, 71}` — see "Manual box overrides" above).
-  Whether box 87 is meant to recalculate client-side when box 110 or box 78 change has not been
-  confirmed either way; it currently does not, regardless of intent. Flagged, not fixed.
+- **Box 87 ("Cuotas a compensar de períodos previos pendientes para períodos posteriores") — FIXED
+  under ETP-5338 pt.2.** It is labeled in `fm303Layouts.js` with the formula `(110 - 78)` right in
+  its i18n string (`fm.box.row.cuotas_compensar_post`), and it is confirmed **display-only**: AEAT
+  computes and validates 110-78 on their own side at submission time, so the `.303` file always
+  uploaded correctly even while the box showed blank. It is still **not** one of the boxes
+  `recomputeDerivedBoxes` re-derives (that set stays exactly `{45, 46, 64, 66, 69, 71}` — see
+  "Manual box overrides" above) — the fix does not touch `manualData`, `recomputeDerivedBoxes`, or
+  the submission payload at all. Instead, the row now declares
+  `derivedValue: { box: 110, subtractBox: 78, clampMin: 0, treatMissingAsZero: true }`, and
+  `FmBoxes303.jsx`'s `renderBoxCell` falls back to this formula (via the shared
+  `computeDerivedValue` helper, also used by `renderDerivedCell` for boxless rows like
+  `importe_devolucion`) whenever the real box has no value from
+  `valueMap`/`fixedValues`/`defaultValues`. Clamped at 0 because box 87 by AEAT definition
+  ("cuotas pendientes de compensar") can never be negative.
+  **Confirmed missing-operand rule (cycle 2, corrects cycle 1's assumption):** a missing box 110 or
+  box 78 defaults to 0 — box 110 present + box 78 missing shows box 110; box 110 missing + box 78
+  present shows `max(0, 0 - box78)` = 0 — and the cell stays blank **only** when both are missing.
+  This is scoped to box 87 via the new `derivedValue.treatMissingAsZero` flag; every other
+  `derivedValue` row, including `importe_devolucion`, keeps the original "any missing operand blanks
+  the result" behavior unchanged. (QA cycle 1 had correctly caught a bug in an earlier `?? 0`
+  fallback — it lacked the "both missing → blank" exception — but the "stays blank on any missing
+  operand" rule it shipped with afterward was an unconfirmed assumption about AEAT semantics; the
+  product owner has now confirmed the rule documented here.)
 - **Box 110** has no confirmed path into the box 71 result formula anywhere in
   `recomputeDerivedBoxes` — box 71's actual formula is `box69 - box70 + box109 - box112` (see
   above), which does not reference box 110 at all. If box 110 is supposed to feed into the final
@@ -1396,14 +1711,17 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
   meaningful — a user can enter a value in either box on a declaration where it has no real AEAT
   meaning, and nothing in the UI stops them. Not enforced as a restriction today; flagged, not
   fixed.
-- **Debounce-vs-navigation race in the 303 autosave** (`FmModel303Page.jsx`'s 800ms debounced
-  `persistManualData` effect, see "Manual box overrides" above) — **pre-existing, not introduced or
-  fixed by ETP-5272, but confirmed still real** while auditing point 6. An edit to
-  `identChecks`/`manualOverrides` made less than 800ms before the user navigates away from the
-  page never fires: the effect's cleanup (`clearTimeout`) cancels the pending `setTimeout` on
-  unmount without ever flushing it, so the debounced write is simply lost, silently — no error, no
-  toast, no retry. A fix would need a flush-on-unmount (e.g. an unmount-time synchronous save of
-  the latest `identChecks`/`manualOverrides`), which is out of scope for this ticket.
+- **Debounce-vs-navigation race in the 303 autosave — resolved by the ETP-5338 architecture pivot.**
+  This entry originally flagged a real race in `FmModel303Page.jsx`'s 800ms debounced
+  `persistManualData` effect (pre-existing, confirmed still real while auditing ETP-5272 point 6):
+  an edit made less than 800ms before the user navigated away never fired, because the effect's
+  `clearTimeout` cleanup discarded the pending write on unmount with no error, toast, or retry. The
+  debounced autosave effect no longer exists — see the "Architecture pivot" note under "Action bar"
+  above — so this exact race is structurally eliminated: `identChecks`/`manualOverrides` are pure
+  local state until an explicit "Guardar"/"Calcular" click flushes them, Cancelar is a network-free
+  discard, and the `mountedRef` fix (also documented under "Action bar") closes the narrower
+  Calcular-queued-behind-Guardar edge case that survived the pivot. Kept here as a historical record
+  rather than deleted, so the original finding isn't silently lost.
 
 ## Key files
 
@@ -1429,7 +1747,7 @@ recorded here so a future pass doesn't have to rediscover them from scratch.
 | Method | Path | Used by |
 |--------|------|---------|
 | `GET` | `/fiscal303/declarations` | FmListPage — fetch all declarations |
-| `POST` | `/fiscal303/declarations` (body: model, year, period, status, type) | FmListPage's `handleNewDecl` — creates a declaration. `FiscalDeclCrudHandler#resolveNextDeclSeq` (ETP-5187) assigns the new row the next `DECL_SEQ` ordinal (`MAX(DECL_SEQ) + 1` for the same client/org/model/year/period, or `0` for the first one) — a dedicated, unbounded sequence column added specifically for this uniqueness disambiguation, distinct from `DECL_TYPE` (AEAT's own ordinaria/complementaria business value, still `VARCHAR(1)` CHECKed to `'O'`/`'C'` and rendered verbatim by `FmListPage.jsx`). `ETGO_FISCAL_DECL_UQ` is unique on `(client, org, model, year, period, DECL_SEQ)`, so there is no cap: a 2nd, 3rd, 4th or Nth declaration for the same period always succeeds — matching the real AEAT/legal rule that there is no limit on how many rectificativas can be filed for a period. (An earlier version of this fix repurposed `DECL_TYPE` itself as a 2-slot disambiguator, which capped the system at 2 declarations per period and conflated a real business field with an artificial counter — replaced by the dedicated column above.) **ETP-5272 pt.5:** now answers `409 Conflict` instead, BEFORE reaching `resolveNextDeclSeq`, when a `draft` declaration already exists for the exact same `(client, org, model, year, period)` key — see "Draft periods ARE disabled again" above for the full rationale; a non-draft existing declaration is unaffected and still succeeds via `resolveNextDeclSeq` exactly as described here. |
+| `POST` | `/fiscal303/declarations` (body: model, year, period, status, type) | FmListPage's `handleNewDecl` — creates a declaration. `FiscalDeclCrudHandler#resolveNextDeclSeq` (ETP-5187) assigns the new row the next `DECL_SEQ` ordinal (`MAX(DECL_SEQ) + 1` for the same client/org/model/year/period, or `0` for the first one) — a dedicated, unbounded sequence column added specifically for this uniqueness disambiguation, distinct from `DECL_TYPE` (AEAT's own ordinaria/complementaria business value, still `VARCHAR(1)` CHECKed to `'O'`/`'C'`, exposed as `decl.type` — see "Tipo column derivation (ETP-5338)" below for why the list's "Tipo" column no longer reads this field directly). `ETGO_FISCAL_DECL_UQ` is unique on `(client, org, model, year, period, DECL_SEQ)`, so there is no cap: a 2nd, 3rd, 4th or Nth declaration for the same period always succeeds — matching the real AEAT/legal rule that there is no limit on how many rectificativas can be filed for a period. (An earlier version of this fix repurposed `DECL_TYPE` itself as a 2-slot disambiguator, which capped the system at 2 declarations per period and conflated a real business field with an artificial counter — replaced by the dedicated column above.) **ETP-5272 pt.5:** now answers `409 Conflict` instead, BEFORE reaching `resolveNextDeclSeq`, when a `draft` declaration already exists for the exact same `(client, org, model, year, period)` key — see "Draft periods ARE disabled again" above for the full rationale; a non-draft existing declaration is unaffected and still succeeds via `resolveNextDeclSeq` exactly as described here. |
 | `PUT` | `/fiscal303/declarations?id=` | FmListPage — persist status change |
 | `DELETE` | `/fiscal303/declarations?id=` | `FmRowActions`' delete action (ETP-5187), via `deleteDeclaration` — rejects (409) deleting anything but a `draft` declaration (defense in depth; the frontend also only ever shows the action for draft rows) |
 | `GET` | `/fiscal-models-catalog` | FmListPage — fetch the active-models catalog on mount (per-Client); also consumed cross-spec by `ReversedInvoicesPanel.jsx` (sales-invoice/purchase-invoice) to gate the "Correctiva del 349" checkbox — see "Downstream consumer" above |

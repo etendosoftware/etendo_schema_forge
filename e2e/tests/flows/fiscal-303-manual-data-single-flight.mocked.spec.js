@@ -2,24 +2,44 @@ import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
 
 /**
- * Modelo 303 — manual-data autosave serialisation (ETP-5255, mocked).
+ * Modelo 303 — manual-data explicit-save serialisation (ETP-5255, then re-premised for
+ * ETP-5338, mocked).
  *
- * `FmModel303Page` autosaves the identification checkboxes and box overrides through a debounced
- * (800ms) `PUT /fiscal303/declarations?id=…`. It was the one panel of the four that was already
- * correct before the shared queue existed — but only because it saves the WHOLE record at once, so
- * its single in-flight flag was a per-record key by accident of shape rather than by design. It
- * now uses `useRecordWriteQueue` so it cannot drift back into a fourth private copy of the guard.
+ * (ETP-5338) `FmModel303Page` no longer autosaves. The 800ms-debounced background write this
+ * spec originally pinned was removed entirely: `identChecks`/`manualOverrides` (identification
+ * checkboxes and box overrides, including the `redeme` checkbox this spec drives) are now pure
+ * local React state until the user explicitly clicks "Guardar" or "Calcular" — both flush through
+ * the shared `persistEditableFields()` (see `FmModel303Page.jsx`), which still PUTs the whole
+ * record to `/fiscal303/declarations?id=…`.
  *
- * This spec pins that behaviour from the browser, where the debounce, the autosave effect and the
- * queue actually interact:
+ * The single-flight guarantee this spec protects did NOT go away with the debounce — it moved
+ * from "two debounced autosaves 800ms apart" to "two explicit clicks in quick succession":
+ * Guardar disables itself while its own save is in flight (`disabled={isSavingManualData}`), but
+ * Calcular is gated only by `computing`, so a Guardar save still in flight when the user clicks
+ * Calcular is the realistic race under the new model. `useRecordWriteQueue` still serialises per
+ * declaration for exactly that reason (see `FmModel303Page.jsx`'s own comment on
+ * `useRecordWriteQueue`).
  *
- *  - two edits made ~1s apart never have two PUTs in flight at once (asserted as NON-OVERLAP, not
- *    arrival order — anything that dispatches two writes also dispatches them in order, so an
- *    order-only assertion would pass against the exact bug);
- *  - the write requested mid-flight is coalesced and replayed with the LATEST state, not with the
- *    state the first write already saved. That is what makes serialisation safe here: the panel
- *    sends a whole snapshot, so a replay of a stale snapshot would silently undo the user's second
- *    edit rather than merely duplicating a write.
+ * This spec pins that behaviour from the browser, where the click handlers, `persistEditableFields`
+ * and the queue actually interact:
+ *
+ *  - a Guardar click followed by a Calcular click while the first PUT is still open never have two
+ *    PUTs in flight at once (asserted as NON-OVERLAP, not arrival order — anything that dispatches
+ *    two writes also dispatches them in order, so an order-only assertion would pass against the
+ *    exact bug);
+ *  - the write requested mid-flight (via Calcular) is coalesced and replayed with the LATEST
+ *    state, not with the state the first write already saved. That is what makes serialisation
+ *    safe here: the panel sends a whole snapshot, so a replay of a stale snapshot would silently
+ *    undo the user's second edit rather than merely duplicating a write.
+ *
+ * Equivalent single-flight guarantees for the OTHER failure modes (queued save dropped on session
+ * end, a failed save not permanently blocking later saves, unmount mid-flight, the
+ * filing-while-a-save-is-queued ordering) are already covered at the unit level in
+ * `FmModel303Page.explicitSaveSingleFlight.vitest.jsx`, which mocks `persistManualData`'s network
+ * layer directly and can control PUT timing far more precisely than a browser-level mock — this
+ * spec is deliberately scoped to the two properties that specifically need real browser click
+ * timing (two DOM button clicks, one genuinely queued behind the other's fetch) rather than
+ * duplicating that file's full matrix.
  *
  * There is deliberately NO token assertion. Unlike the other three panels, this write does not go
  * through the generic per-record CRUD path — it targets a bespoke route that carries the record id
@@ -66,7 +86,8 @@ const REDEME_LABEL = /Registro de devoluci[oó]n mensual|Monthly VAT Refund Regi
  * @param {object} [options]
  * @param {number} [options.holdMs]
  *   How long every PUT is held open INSIDE the route handler. This is what makes an overlap
- *   observable at all, and it must exceed the panel's 800ms autosave debounce.
+ *   observable at all: it just needs to comfortably outlast the round-trip of the explicit click
+ *   that triggers it (there is no debounce left to outlast).
  */
 async function installFiscal303Mock(page, options = {}) {
   const { holdMs = 0 } = options;
@@ -91,6 +112,19 @@ async function installFiscal303Mock(page, options = {}) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({ 303: true, 349: false }),
+    });
+  });
+
+  // (ETP-5338) "Calcular" now also triggers a recompute (`handleCompute` → `computeBoxes303`)
+  // independently of the save this spec is about — mocked here purely so that click has a clean,
+  // fast, well-shaped answer instead of falling through to login()'s generic `/sws/**` catch-all
+  // (whose wrong-shape 200 the compute path would still swallow via its own `res.ok` check, but
+  // there is no reason to rely on that fallback instead of an explicit, readable mock).
+  await page.route('**/fiscal303/boxes**', (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ boxes: [], summary: null, sources: [] }),
     });
   });
 
@@ -182,16 +216,33 @@ async function openIdentificacion(page, options) {
  * — this spec must not touch production code), so each is identified by its own label text, which
  * is the user-visible and stable anchor.
  *
- * The clickable element is the `<label>`, not the `<input>`: the shared `Checkbox` renders its
- * input `sr-only` and the visible box intercepts pointer events, so clicking the input itself
- * fails actionability with "…intercepts pointer events" until it times out.
+ * (ETP-5338) `identificacion`'s checkboxes were migrated from the shared `Checkbox` component (a
+ * native `sr-only` `<input type="checkbox">` behind a clickable `<label>`) to the local
+ * `CheckboxField` (`tools/app-shell/src/windows/custom/shared/CheckboxField.jsx`) — a bare
+ * `<button role="checkbox" aria-checked>`, not wrapped in a `<label>`. The clickable element is
+ * now the button itself.
  */
 const redemeCheckbox = (page) => page
   .locator('.fm-aeat-ident-cb')
   .filter({ hasText: REDEME_LABEL })
   .first()
-  .locator('label')
-  .first();
+  .getByRole('checkbox');
+
+/**
+ * "Guardar" — the explicit save action. `data-testid="FmModel303Page__save"` on the `<button>`
+ * itself (see `FmModel303Page.jsx`). Disables itself while its own save is in flight, so it is
+ * clickable only for the FIRST of the two explicit saves in each test below.
+ */
+const guardarButton = (page) => page.getByTestId('FmModel303Page__save');
+
+/**
+ * "Calcular" — gated only by `computing`, never by `isSavingManualData` (unlike Guardar), so it
+ * is the one explicit action that can genuinely be clicked while an earlier Guardar save is still
+ * in flight — the same race `FmModel303Page.explicitSaveSingleFlight.vitest.jsx` drives via its
+ * own `clickCalcular()` helper. No `data-testid`; located by its own translated label text
+ * (`fm.action.compute` → "Calcular" in `es_ES.json`, the mock-mode default locale).
+ */
+const calcularButton = (page) => page.getByRole('button', { name: 'Calcular', exact: true });
 
 /** How many writes have been ANSWERED (as opposed to merely started). */
 const settledCount = (journal) => journal.writes.filter((w) => w.finishedAt != null).length;
@@ -209,32 +260,38 @@ const describeWrites = (journal) => JSON.stringify(
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-test.describe('Modelo 303 manual data — single-flight per declaration (ETP-5255)', () => {
-  test('two autosaves of one declaration never have two PUTs in flight at once', async ({ page }) => {
-    // 2500ms comfortably exceeds the panel's own 800ms autosave debounce, so the second edit's
-    // save is guaranteed to be requested while the first PUT is still open.
+test.describe('Modelo 303 manual data — single-flight per declaration (ETP-5255 / ETP-5338)', () => {
+  test('a Guardar click followed by a Calcular click never have two PUTs in flight at once', async ({ page }) => {
+    // 2500ms comfortably outlasts the round trip of a single explicit click, so the second
+    // explicit save is guaranteed to be requested while the first PUT is still open.
     const journal = await openIdentificacion(page, { holdMs: 2_500 });
 
     const redeme = redemeCheckbox(page);
     await expect(redeme).toBeVisible({ timeout: 15_000 });
 
-    // Edit 1 — tick it. The autosave fires 800ms later and is then held open by the mock.
+    // Edit 1 — tick it, then explicitly click Guardar. There is no debounce left to wait out: the
+    // PUT is dispatched immediately and then held open by the mock.
     await redeme.click();
+    await guardarButton(page).click();
     await expect
       .poll(() => journal.writes.length, {
         timeout: 20_000,
-        message: 'expected the first autosave PUT to be dispatched',
+        message: 'expected the Guardar click to dispatch a PUT',
       })
       .toBe(1);
 
-    // Edit 2, made while that PUT is still open — untick it. The autosave for this edit must be
-    // queued, not dispatched alongside the first.
+    // Edit 2, made while that PUT is still open — untick it. Guardar disables itself while its
+    // own save is in flight (`disabled={isSavingManualData}`), so Calcular is the only explicit
+    // action that can request a second save right now — exactly the race
+    // `FmModel303Page.explicitSaveSingleFlight.vitest.jsx` exercises via its own `clickCalcular()`.
+    await expect(guardarButton(page)).toBeDisabled();
     await redeme.click();
+    await calcularButton(page).click();
 
     await expect
       .poll(() => settledCount(journal), {
         timeout: 30_000,
-        message: 'expected two answered autosave PUTs to /fiscal303/declarations',
+        message: 'expected two answered PUTs to /fiscal303/declarations',
       })
       .toBe(2);
     expect(journal.writes, `exactly two PUTs expected. Journal: ${describeWrites(journal)}`)
@@ -242,14 +299,13 @@ test.describe('Modelo 303 manual data — single-flight per declaration (ETP-525
 
     const [first, second] = journal.writes;
 
-    // Arrival ORDER is not the property under test — a debounce that merely got longer would also
-    // dispatch in order. The property is that the second PUT goes out only once the first has been
-    // answered.
+    // Arrival ORDER is not the property under test — dispatching both writes in sequence would
+    // also arrive in order. The property is that the second PUT goes out only once the first has
+    // been answered.
     expect(
       second.openOnArrival,
-      `The two autosave PUTs overlapped: the second arrived while ${second.openOnArrival} earlier `
-      + `write(s) to the same declaration were still unanswered. clearTimeout alone cannot prevent `
-      + `this — once a save is in flight the timer that armed it is already gone. `
+      `The Guardar and Calcular PUTs overlapped: the second arrived while ${second.openOnArrival} `
+      + `earlier write(s) to the same declaration were still unanswered. `
       + `Journal: ${describeWrites(journal)}`,
     ).toBe(0);
 
@@ -261,31 +317,36 @@ test.describe('Modelo 303 manual data — single-flight per declaration (ETP-525
     ).toBeGreaterThanOrEqual(first.finishedAt);
   });
 
-  test('the queued autosave replays the LATEST snapshot, not the one already saved', async ({ page }) => {
+  test('the queued Calcular save replays the LATEST snapshot, not the one Guardar already saved', async ({ page }) => {
     const journal = await openIdentificacion(page, { holdMs: 2_500 });
 
     const redeme = redemeCheckbox(page);
     await expect(redeme).toBeVisible({ timeout: 15_000 });
 
     await redeme.click();
+    await guardarButton(page).click();
     await expect.poll(() => journal.writes.length, { timeout: 20_000 }).toBe(1);
+
+    await expect(guardarButton(page)).toBeDisabled();
     await redeme.click();
+    await calcularButton(page).click();
     await expect.poll(() => settledCount(journal), { timeout: 30_000 }).toBe(2);
 
     const [first, second] = journal.writes;
 
     // This panel sends a whole snapshot of the manual data, which is what makes a stale replay
-    // dangerous rather than merely redundant: replaying the snapshot the first write already saved
-    // would silently undo the user's second edit. The timer closure captured the state at SCHEDULE
-    // time, so the replay has to read the latest value from a ref instead.
+    // dangerous rather than merely redundant: replaying the snapshot Guardar already saved would
+    // silently undo the user's Calcular-time edit. `persistEditableFields` rebuilds the snapshot
+    // from CURRENT state right before flushing (see its own comment in `FmModel303Page.jsx`), so
+    // the replay must carry the latest value rather than the one queued at click time.
     expect(
       first.body?.manualData?.identification?.redeme,
-      `the first PUT must carry the first edit (redeme: true). Journal: ${describeWrites(journal)}`,
+      `the Guardar PUT must carry the first edit (redeme: true). Journal: ${describeWrites(journal)}`,
     ).toBe(true);
     expect(
       second.body?.manualData?.identification?.redeme,
-      `the queued PUT replayed a stale snapshot — it must carry the state as of the SECOND edit `
-      + `(redeme: false), otherwise the user's later edit is silently undone. `
+      `the queued Calcular PUT replayed a stale snapshot — it must carry the state as of the `
+      + `SECOND edit (redeme: false), otherwise the user's later edit is silently undone. `
       + `Journal: ${describeWrites(journal)}`,
     ).toBe(false);
   });

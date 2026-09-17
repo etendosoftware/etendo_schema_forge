@@ -29,10 +29,20 @@ const OPENING = 19.0;
 const STATEMENT_DATE = '2026-08-05';
 const MARKED = new Set(['1', '2', '3', '4', '7']);
 
+// Since ETP-5107 the "Saldo declarado" box is a MaskedAmountInput, so parseDeclaredAmount only
+// ever receives that component's CLEAN value — digits, an optional leading '-', at most one '.'
+// as the decimal point — or a plain number. `declaredInput` in CashClose/index.jsx starts as ''
+// and is written by nothing else, so a grouped display string can no longer reach this function.
 describe('parseDeclaredAmount', () => {
-  it('parses es-ES notation with thousands dots and a decimal comma', () => {
-    assert.equal(parseDeclaredAmount('1.234,56'), 1234.56);
+  it('parses the masked input clean value, with the lone dot as the decimal point', () => {
+    assert.equal(parseDeclaredAmount('1234.56'), 1234.56);
+    assert.equal(parseDeclaredAmount('182.61'), 182.61);
+    // The canonical parser also accepts the instance decimal separator (',' by default), so a
+    // single-separator comma value still parses — it just cannot arrive from the masked input.
     assert.equal(parseDeclaredAmount('182,61'), 182.61);
+    // A both-separators DISPLAY string is not a clean value: two decimal separators are rejected
+    // outright (0) rather than guessed at. Pre-mask this returned 1234.56.
+    assert.equal(parseDeclaredAmount('1.234,56'), 0);
   });
 
   it('treats a lone dot with 1-2 trailing digits as a decimal point, not thousands', () => {
@@ -41,8 +51,14 @@ describe('parseDeclaredAmount', () => {
     assert.equal(parseDeclaredAmount('12.5'), 12.5);
   });
 
-  it('treats a lone dot with 3 trailing digits as thousands grouping', () => {
-    assert.equal(parseDeclaredAmount('1.234'), 1234);
+  it('treats a lone dot with 3 trailing digits as a decimal too, never as thousands grouping', () => {
+    // The case the mask makes decisive: typing "1,500" (one and a half) reaches here clean as
+    // "1.500". The old structural rule read a 3-digit group as thousands and returned 1500 —
+    // a 1000x overstatement of the declared balance. It is a fraction, always.
+    assert.equal(parseDeclaredAmount('1.234'), 1.234);
+    assert.equal(parseDeclaredAmount('1.500'), 1.5);
+    // And the live-verified sub-cent case: "0,004" arrives as "0.004" and keeps the close balanced.
+    assert.equal(parseDeclaredAmount('0.004'), 0.004);
   });
 
   it('handles negatives, numbers, blanks and garbage', () => {

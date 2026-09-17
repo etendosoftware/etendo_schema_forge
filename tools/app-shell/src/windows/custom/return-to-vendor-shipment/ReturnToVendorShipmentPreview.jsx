@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly';
 import GenericPreviewModal from '../shared/GenericPreviewModal.jsx';
@@ -13,6 +13,10 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
   const { locale } = useLocaleSwitch();
   const modalRef = useRef(null);
   const sendModal = usePreviewSendModal();
+  // ETP-5124 — bumped on a successful send so EmailsCard refetches instead of
+  // showing its pre-send state (see InvoicePreview/OrderPreview/GoodsShipmentPreview/
+  // ReturnMaterialReceiptPreview).
+  const [emailsRefreshSignal, setEmailsRefreshSignal] = useState(0);
 
   // ETP-4315 follow-up (2026-08-18) — same tableName as attachmentConfig below; lets
   // useReturnToVendorPdf skip the jsreport round-trip and serve the marked attachment
@@ -27,11 +31,14 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
 
   if (!shipment) return null;
 
-  // ETP-4789 — this window has no Send action (no pre-existing isSendable to
-  // reuse), so Download PDF gets its own status gate: only downloadable once
+  // ETP-4789 — Download PDF gets its own status gate: only downloadable once
   // the return shipment is Confirmed (CO), matching the rule applied to the
   // other 5 preview panels in this bug.
   const isDownloadable = shipment.documentStatus === 'CO';
+  // ETP-5124 — Send is only available once the shipment is Confirmed (CO), matching
+  // the grid row quick-action's `emailAction.visibleWhen` gate in index.jsx and the
+  // pattern used by every other document preview (e.g. ReturnMaterialReceiptPreview).
+  const isSendable = shipment.documentStatus === 'CO';
 
   const partnerName = shipment['businessPartner$_identifier'] || '—';
   const movementDate = shipment.movementDate ? formatCalendarDate(shipment.movementDate, locale) : '—';
@@ -69,25 +76,22 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
       data-testid="PreviewPdfPanel__93f029" />
   );
 
-  // ETP-4717 — QA (Emilio Polliotti) rejected the ETP-4718 "Enviar" action on this
-  // window: the frontend derives the email contract name as `${windowName}-send`
-  // (`return-to-vendor-shipment-send`), but the backend only registers
-  // `ReturnToVendorSendEmailContract.NAME` = `return-to-vendor-send` (which actually
-  // targets a Purchase Order return, not this M_InOut window), so every click fails
-  // with "Unknown email contract". QA explicitly asked to remove the action from this
-  // window rather than reconcile the contract name — no `onEmail` is wired to
-  // `buildReturnPreviewContent`, so the "Enviar" button never renders here
-  // (`PreviewActionButtons` only shows it when `onEmail` is set). `sendModal`/
-  // `ReceiptSendModal` stay wired below in case a future ticket builds a
-  // `return-to-vendor-shipment-send` contract and re-enables Send for this window.
-  //
-  // ETP-5124 — the sibling `return-material-receipt` preview now DOES wire `onEmail`
-  // (its own contract, `return-material-receipt-send`, exists), so it is no longer an
-  // example of this same gap — do not cite it as one in a future edit here.
+  // ETP-5124 — the backend contract (`return-to-vendor-shipment-send`) now exists,
+  // so this window gets the same "Enviar" button and email-history card as
+  // Invoice/Order/Quotation/Goods Shipment/Return Material Receipt. The prior
+  // ETP-4717 removal (contract-name mismatch — see docs/feedback.md) no longer
+  // applies.
   const { actionButtons, tabs } = buildReturnPreviewContent({
     doc: shipment, pdfBlob, handleDownload, modalRef,
     specs, partnerName, movementDate, token, apiBaseUrl, ui,
     canDownload: isDownloadable,
+    onEmail: isSendable ? sendModal.openEmailModal : undefined,
+    emailsCard: {
+      onSend: isSendable ? sendModal.openEmailModal : undefined,
+      documentId: shipment.id,
+      apiBaseUrl,
+      refreshSignal: emailsRefreshSignal,
+    },
   });
 
   return (
@@ -112,6 +116,8 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
         token={token}
         windowName={windowName}
         pdfBlobUrl={pdfUrl}
+        pdfBlobLoading={pdfLoading}
+        onSent={() => setEmailsRefreshSignal(n => n + 1)}
         data-testid="ReceiptSendModal__93f029" />
     </>
   );

@@ -1,9 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { DataTable } from '@/components/contract-ui';
 import { useUI, useLocaleSwitch } from '@/i18n';
-import RoleChipsCell, { resolveDefaultRoleId, resolveUserId, useUserRoleGridData } from './RoleChipsCell.jsx';
-import { RoleFilterControl } from './RoleFilterControl.jsx';
+import RoleChipsCell, {
+  NO_ROLE_FILTER_VALUE, buildRoleEnumLabels, buildRoleFilterQueryParams,
+  hasNoRole, resolveDefaultRoleId, resolveUserId, useUserRoleGridData,
+} from './RoleChipsCell.jsx';
+import { RoleQuickFilterToolbarSlot } from './RoleQuickFilterToolbarSlot.jsx';
 import { useUserDebugMode } from './useUserDebugMode.js';
 import UserDebugPanel from './UserDebugPanel.jsx';
 import PendingInvitationPill from './PendingInvitationPill.jsx';
@@ -90,14 +93,17 @@ const columns = [
 const filters = ['name', 'email'];
 
 export default function UserHeaderTable(props) {
-  const { roles, rolesById, adminRoleId, assignments, loading } = useUserRoleGridData();
+  const { rolesById, adminRoleId, assignments, loading } = useUserRoleGridData();
   const [searchParams] = useSearchParams();
-  // ETP-4999 — a role summary card on the Roles overview page (`RoleSummaryCard.jsx`)
-  // links here as `/user?role=<id>`; a lazy initializer applies it exactly once, on
-  // mount, as the SAME `roleFilter` state `RoleFilterControl`'s dropdown already owns
-  // and can change afterward — this is a starting value, not a controlled sync back
-  // to the URL (no `useEffect` re-reading `searchParams` on every render).
-  const [roleFilter, setRoleFilter] = useState(() => searchParams.get('role'));
+  // ETP-4999 / ETP-5188 — a role summary card on the Roles overview page
+  // (`RoleSummaryCard.jsx`) links here as `/user?role=<id>`, and the quick-filter
+  // dropdown itself now lives in `ListView`'s own toolbar row (rendered separately, via
+  // `UserHeaderTable.ToolbarQuickFilter` — see `RoleQuickFilterToolbarSlot.jsx`), not in
+  // this component's own markup any more. The `role` URL param is the single shared
+  // source of truth between the two component instances — read LIVE here (not just as a
+  // one-time mount initializer), so a change made in the toolbar slot is reflected in
+  // this filter on the very next render.
+  const roleFilter = searchParams.get('role');
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   // ETP-4830 (item #4) — dev/QA-only debug panel, activated by typing `debuguser` anywhere in
@@ -128,11 +134,17 @@ export default function UserHeaderTable(props) {
     key: 'defaultRole',
     column: 'Default_Ad_Role_ID',
     type: 'custom',
-    // `type: 'custom'` drives the chip render, but the underlying column is still a
-    // plain FK (`_ID` suffix) — `filterMode` restores the identifier picker in the
-    // advanced filter without touching the grid cell (same rationale as
-    // `PurchaseInvoiceHeaderTable.jsx`'s `transactionDocument`/`outstandingAmount`).
-    filterMode: 'identifier',
+    // ETP-5188 (Point 3) — per explicit user instruction, "Rol por Defecto" must NOT
+    // appear in "Filtros avanzados"' field list any more (straight removal, no
+    // replacement field there). ETP-4906 had added `filterMode: 'identifier'` here
+    // specifically to restore that picker; this reverts just that one addition.
+    // `filterable: false` is the actual opt-out `isFilterableColumn()`
+    // (`@etendosoftware/app-shell-core`'s `AdvancedFilterBuilder.jsx`) checks FIRST,
+    // before its own `_ID$`-suffix inference on `column` — which would otherwise still
+    // classify `Default_Ad_Role_ID` as filterable even with no `filterMode` set at all.
+    // The now-correctly-positioned quick filter (`RoleQuickFilterToolbarSlot`, via
+    // `ToolbarQuickFilter` below) is the one supported way to filter by role.
+    filterable: false,
     render: (row) => (
       <RoleChipsCell
         row={row}
@@ -143,6 +155,59 @@ export default function UserHeaderTable(props) {
         data-testid="RoleChipsCell__cell" />
     ),
   }), [rolesById, adminRoleId, assignments, loading]);
+
+  // ETP-5188 (Item 3) — dedicated "Rol" ADVANCED-FILTER field, replacing the removed
+  // "Rol por Defecto" entry above (`roleColumn`, now `filterable: false`): a closed,
+  // preloaded catalog of the system role templates + the tenant's admin role + "Sin
+  // rol", multi-selectable ("filtrar por uno o multiples roles a la vez" per the
+  // ticket). Deliberately separate from `roleColumn`:
+  //   - No `column:` — this field has no backing `AD_User` property at all (a user's
+  //     roles live in the N:M `SFUserRoleAssignments` composition), so there is
+  //     nothing for `labelOf(col.column)` to resolve; `label: ui('role')` is used
+  //     directly instead of `labelOverrides` (which only matters for overriding a
+  //     REAL AD dictionary entry — there is none here to override).
+  //   - `filterable: true` — REQUIRED, not cosmetic: `isFilterableColumn()`
+  //     (`@etendosoftware/app-shell-core`'s `AdvancedFilterBuilder.jsx`) silently
+  //     drops any `type: 'custom'` column with no `column`/`backendFilterKey` UNLESS
+  //     `filterable === true` is set explicitly — exactly the "list column silently
+  //     unfilterable" trap this repo's own CLAUDE.md warns about, just for an
+  //     advanced-filter field instead of a grid column.
+  //   - `filterOnly: true` — this field must NEVER render as a 7th grid column (it
+  //     has no `render`/real data on the row); `isLineGridColumn()`
+  //     (`linesColumnWidth.js`) excludes any `filterOnly` column from `DataTable`'s
+  //     actual rendered `visibleColumns` while still letting it flow through the raw
+  //     `columns` prop into `onColumnsReady` → `ListView`'s `filterColumns`, which is
+  //     the only place this field needs to exist.
+  //   - `toQueryParams: buildRoleFilterQueryParams` — this field's condition must
+  //     never reach the generic `criteria=` builder (a naive HQL criteria against the
+  //     role-assignment collection 500s — confirmed live, see
+  //     `docs/plans/2026-09-11-etp-5188-role-filter-open-questions.md`).
+  //     `ListView.jsx`'s `extractQueryParamConditions` strips it out unconditionally
+  //     and turns the selection into the backend's dedicated `RoleIds=`/`NoRole=`
+  //     params instead (see that function's own docstring, `gridQuery.js`).
+  //   - `enumLabels` reuses the SAME merged `rolesById` index (`useUserRoleGridData()`
+  //     above) the grid chips and the quick filter already read — one role catalog,
+  //     one id space, three surfaces. Since it's a closed, declared catalog,
+  //     `DistinctEnumPicker`'s `hasDeclaredLabels` branch seeds the option list (and
+  //     the partial-search box, CP-2) entirely client-side from `enumLabels` — it
+  //     still attempts a live `_distinct=roleFilter` backend call when the popover
+  //     opens (no per-column way to suppress that in the published
+  //     `AdvancedFilterBuilder`, only a single window-wide `entity`/`apiBaseUrl` pair
+  //     — investigated, not changed this round), but that call fails as a clean
+  //     `400 Bad Request` ("Unknown field") from `NeoCrudHandler`, is swallowed
+  //     silently by `useDistinctValues`' own try/catch, and is never surfaced in the
+  //     UI (`DistinctValuesList` never reads `distinct.error`) — so the picker still
+  //     renders and searches correctly from the declared catalog regardless.
+  const roleFilterColumn = useMemo(() => ({
+    key: 'roleFilter',
+    type: 'custom',
+    filterMode: 'enumLabel',
+    filterable: true,
+    filterOnly: true,
+    label: ui('role'),
+    enumLabels: buildRoleEnumLabels(rolesById, ui),
+    toQueryParams: buildRoleFilterQueryParams,
+  }), [rolesById, ui]);
 
   // ETP-4830 scope addition — "Invitation" column, placed immediately before the
   // "Rol" column: both are administrative/onboarding-state indicators about the
@@ -183,8 +248,8 @@ export default function UserHeaderTable(props) {
   );
 
   const tableColumns = useMemo(
-    () => [...baseColumns, invitationColumn, roleColumn],
-    [baseColumns, invitationColumn, roleColumn],
+    () => [...baseColumns, invitationColumn, roleColumn, roleFilterColumn],
+    [baseColumns, invitationColumn, roleColumn, roleFilterColumn],
   );
 
   // Client-side role filter, applied over the rows already loaded for this page —
@@ -195,6 +260,11 @@ export default function UserHeaderTable(props) {
   const filteredData = useMemo(() => {
     const rows = props.data ?? [];
     if (!roleFilter) return rows;
+    // ETP-5188 (Point 5) — "Sin rol": NOT the client-admin AND zero entries in the bulk
+    // assignments map. See `hasNoRole()` in `RoleChipsCell.jsx` for the shared predicate.
+    if (roleFilter === NO_ROLE_FILTER_VALUE) {
+      return rows.filter((row) => hasNoRole(row, { adminRoleId, assignments }));
+    }
     if (roleFilter === adminRoleId) {
       return rows.filter((row) => resolveDefaultRoleId(row) === adminRoleId);
     }
@@ -213,13 +283,10 @@ export default function UserHeaderTable(props) {
           onDataMutated={props.onDataMutated}
           data-testid="UserDebugPanel__grid" />
       )}
-      <div className="flex items-center gap-2 px-6 pb-2 pt-3" data-testid="UserHeaderTable__toolbar">
-        <RoleFilterControl
-          value={roleFilter}
-          onChange={setRoleFilter}
-          roles={roles}
-          data-testid="RoleFilterControl__toolbar" />
-      </div>
+      {/* ETP-5188 — the role quick-filter no longer renders in its own wrapper div here;
+          it moved to `ListView`'s own toolbar row via `ToolbarQuickFilter` below, so it
+          lands in the same toolbar row as "Filtros" instead of a separate region above
+          the table. */}
       <DataTable
         columns={tableColumns}
         filters={filters}
@@ -230,3 +297,9 @@ export default function UserHeaderTable(props) {
     </>
   );
 }
+
+// ETP-5188 (Points 2 + 4) — companion toolbar-slot component, read by `ListView.jsx` via
+// `Table?.ToolbarQuickFilter` and rendered in its OWN toolbar row (immediately left of
+// "Filtros"), not by this component's own markup. See `RoleQuickFilterToolbarSlot.jsx`'s
+// docstring for the full rationale and the `role` URL-param state-sharing mechanism.
+UserHeaderTable.ToolbarQuickFilter = RoleQuickFilterToolbarSlot;

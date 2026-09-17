@@ -970,6 +970,77 @@ describe('InvoicePreview', () => {
       expect(screen.queryByTestId('Download__cf88e6')).not.toBeInTheDocument();
     });
   });
+
+  // ── ETP-5358 Part 2: Download lazily fetches the blob when the cache is metadata-only ──
+  // In autoFetch mode (sales-invoice, non-draft) useMainAttachment now reports the cached
+  // attachment's existence without eagerly downloading its bytes (skipBlobFetch — see
+  // useMainAttachment.js), so cachedAttachment.objectUrl starts out null even though the
+  // attachment is known to exist. handleDownloadPdf must fetch the bytes on demand, via the
+  // fetchBlobUrl the mock/real hook attaches to that same object, instead of trying to
+  // download a null href — the bug this test suite exists to prevent.
+  describe('Download PDF lazily fetches the blob when cached objectUrl is null (ETP-5358 Part 2)', () => {
+    function renderSalesInvoiceCO() {
+      const invoice = { ...defaultInvoice, documentStatus: 'CO' };
+      useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+        displayInvoice: invoice,
+        isSalesInvoice: true,
+        isDraft: false,
+        pdfUrl: null,
+        pdfBlob: null,
+      }));
+      renderInvoicePreview({ specName: 'sales-invoice', invoice });
+      const calls = vi.mocked(GenericPreviewModal).mock.calls;
+      return calls[calls.length - 1][0].attachmentConfig;
+    }
+
+    function downloadButton() {
+      return screen.getByTestId('Download__cf88e6').closest('button');
+    }
+
+    it('enables the button from existence alone (objectUrl null), then downloads via the resolved fetchBlobUrl', async () => {
+      const attachmentConfig = renderSalesInvoiceCO();
+      const fetchBlobUrl = vi.fn().mockResolvedValue('blob:lazy-fetched-url');
+
+      act(() => {
+        attachmentConfig.onFileChange({ attachmentId: 'att-1', objectUrl: null, fileName: 'lazy.pdf', fetchBlobUrl });
+      });
+
+      expect(downloadButton()).not.toBeDisabled();
+
+      const clickMock = vi.fn();
+      const fakeAnchor = { href: '', download: '', click: clickMock };
+      const createElementSpy = vi.spyOn(document, 'createElement').mockReturnValue(fakeAnchor);
+      const { handleDownloadPdf: parentHandleDownloadPdf } = useInvoicePreview.mock.results.at(-1).value;
+
+      try {
+        await act(async () => { fireEvent.click(downloadButton()); });
+
+        expect(fetchBlobUrl).toHaveBeenCalledTimes(1);
+        expect(fakeAnchor.href).toBe('blob:lazy-fetched-url');
+        expect(fakeAnchor.download).toBe('lazy.pdf');
+        expect(clickMock).toHaveBeenCalledTimes(1);
+        expect(parentHandleDownloadPdf).not.toHaveBeenCalled();
+      } finally {
+        createElementSpy.mockRestore();
+      }
+    });
+
+    it('falls back to p.handleDownloadPdf when fetchBlobUrl resolves nothing (e.g. the attachment was replaced mid-fetch)', async () => {
+      const attachmentConfig = renderSalesInvoiceCO();
+      const fetchBlobUrl = vi.fn().mockResolvedValue(null);
+
+      act(() => {
+        attachmentConfig.onFileChange({ attachmentId: 'att-1', objectUrl: null, fileName: 'lazy.pdf', fetchBlobUrl });
+      });
+
+      const { handleDownloadPdf: parentHandleDownloadPdf } = useInvoicePreview.mock.results.at(-1).value;
+
+      await act(async () => { fireEvent.click(downloadButton()); });
+
+      expect(fetchBlobUrl).toHaveBeenCalledTimes(1);
+      expect(parentHandleDownloadPdf).toHaveBeenCalledTimes(1);
+    });
+  });
 });
 
 // ── ETP-5069: the EMAILS card now reads the document's real send history ─────

@@ -14,9 +14,64 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
   });
 
   it('drives the cuadre via the usePaymentBalance hook', () => {
-    // round2 is also imported (ETP-4504 amount-in-account conversion math).
-    assert.match(src, /import \{ usePaymentBalance, formatPlain, round2 \} from '\.\/usePaymentBalance\.js'/);
+    // round2 is also imported (ETP-4504 amount-in-account conversion math), and
+    // parseMaskedAmount since ETP-5107 (reading back a value that came OUT of a
+    // MaskedAmountInput — see the three-parser note below).
+    // Asserted per-name rather than as one exact import line, so reordering or adding a
+    // binding does not fail the suite while every required binding stays pinned.
+    const importClause = src.match(/import \{([^}]*)\} from '\.\/usePaymentBalance\.js'/);
+    assert.ok(importClause, 'the modal must import from ./usePaymentBalance.js');
+    const imported = importClause[1].split(',').map(s => s.trim()).filter(Boolean);
+    // NOTE: parsePlain is deliberately NOT required here. Since ETP-5107 it has no call site
+    // left in this file (the amount-in-account field moved to parseMaskedAmount), so pinning it
+    // would freeze a dead import into the contract. The category itself is still guarded below.
+    for (const name of ['usePaymentBalance', 'formatPlain', 'parseMaskedAmount', 'round2']) {
+      assert.ok(
+        imported.includes(name),
+        `${name} must be imported from ./usePaymentBalance.js (got: ${imported.join(', ')})`,
+      );
+    }
     assert.match(src, /usePaymentBalance\(\{\s*total,\s*dir,\s*sources,\s*usedSources:/s);
+  });
+
+  // ETP-5107: this modal reads THREE different SHAPES of numeric string, each with its own
+  // parser, and the distinction is load-bearing — pick the wrong one and the value is silently
+  // off by 1000, with no error anywhere.
+  //
+  //  1. RATES → parseLocaleNumber directly. A rate arrives canonical dot-decimal from the
+  //     backend, where `0.92` means zero-point-nine-two; the STRUCTURAL parser (parsePlain,
+  //     lib/parseAmountInput.js) would strip that '.' as grouping and read it as 92.
+  //  2. Values coming OUT of a masked field → parseMaskedAmount. MaskedAmountInput emits a
+  //     CLEAN dot-decimal value, so a user typing `483,945` produces the string "483.945".
+  //     parsePlain's structural rule ("a lone separator with exactly 3 digits after it is
+  //     thousands grouping") read that as 483945 — a silent 1000x error. On this very
+  //     amount-in-account field the same defect turned a typed `329,225` into 329225 and
+  //     derived an exchange rate of 680,28722 out of thin air (QA, ETP-5107). That is why the
+  //     field moved OFF parsePlain; parseMaskedAmount tries the canonical parser first and
+  //     falls back to the structural one only for a two-separator string.
+  //  3. Pure formatPlain DISPLAY strings ("1.234,56") → parsePlain. Still correct, still used:
+  //     a clean value can never carry two separators, so a string the canonical parser rejects
+  //     is necessarily formatPlain output, which is exactly what parsePlain exists to read.
+  //
+  // A bare parseFloat remains banned in all three categories — that is the ORIGINAL defect this
+  // guard was written for: parseFloat read the seeded "5.050,00" as 5.05 and derived a wildly
+  // wrong rate from it.
+  it('parses the amount-in-account field with parseMaskedAmount and the rate with parseLocaleNumber (ETP-5107)', () => {
+    assert.match(src, /import \{ parseLocaleNumber \} from '@\/lib\/parseLocaleNumber\.js'/);
+    // Amount-in-account onChange: the masked-aware reader, never a bare parseFloat on the raw input.
+    assert.match(src, /const raw = e\.target\.value;\s*\n\s*setAmountStr\(raw\);[\s\S]{0,600}?const n = parseMaskedAmount\(raw\);/);
+    assert.doesNotMatch(src, /parseFloat\(raw/);
+    assert.doesNotMatch(src, /parseFloat\([^)]*\.replace\(/);
+    // ...and never the STRUCTURAL parser again: `const n = parsePlain(raw)` is the 1000x bug.
+    assert.doesNotMatch(src, /const n = parsePlain\(raw\)/);
+    // The same field's value prop reads the state back with the same masked-aware parser.
+    assert.match(src, /value=\{parseMaskedAmount\(amountStr\)/);
+    assert.doesNotMatch(src, /parsePlain\(amountStr\)/);
+    // Typed rate memo and the rate seeding: parseLocaleNumber directly.
+    assert.match(src, /const n = parseLocaleNumber\(rateStr\)\.value;/);
+    assert.match(src, /const n = parseLocaleNumber\(rawRate\)\.value;/);
+    assert.doesNotMatch(src, /parsePlain\(rateStr\)/);
+    assert.doesNotMatch(src, /parsePlain\(rawRate\)/);
   });
 
   // ETP-4314: fmtCur() (used for the read-only ExcessBand amount and the PIS
