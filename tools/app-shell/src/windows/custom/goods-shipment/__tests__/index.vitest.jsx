@@ -192,6 +192,39 @@ describe('GoodsShipmentWindow', () => {
     expect(events).toEqual(['open']);
   });
 
+  // ETP-5265 QA follow-up — onConfirm must return whatever promise the
+  // GoodsShipmentActions listener attaches to the event detail, so the core's Confirm
+  // button can await it and show its spinner instead of a floating "processing" toast.
+  it('draftMode.onConfirm returns the listener promise attached to the event detail', async () => {
+    const pending = Promise.resolve('done');
+    const listener = (e) => { e.detail.promise = pending; };
+    window.addEventListener('goods-shipment:open-confirm-modal', listener);
+    try {
+      render(
+        <GoodsShipmentWindow windowName="goods-shipment" recordId="ship-1" apiBaseUrl="/api" token="tkn" />,
+      );
+      await expect(lastPageProps.draftMode.onConfirm()).resolves.toBe('done');
+    } finally {
+      window.removeEventListener('goods-shipment:open-confirm-modal', listener);
+    }
+  });
+
+  // The not-fully-invoiced path only opens a modal and never touches detail.promise —
+  // onConfirm must then return undefined, which is exactly the pre-ETP-5265 behaviour
+  // (`await undefined` in runDraftModeConfirm: no spinner, nothing changes).
+  it('draftMode.onConfirm returns undefined when no listener sets detail.promise', () => {
+    const listener = () => {};
+    window.addEventListener('goods-shipment:open-confirm-modal', listener);
+    try {
+      render(
+        <GoodsShipmentWindow windowName="goods-shipment" recordId="ship-1" apiBaseUrl="/api" token="tkn" />,
+      );
+      expect(lastPageProps.draftMode.onConfirm()).toBeUndefined();
+    } finally {
+      window.removeEventListener('goods-shipment:open-confirm-modal', listener);
+    }
+  });
+
   // ── ETP-5209 — Post row-kebab entry and bulk button ────────────────────────
   // The gate itself (processed + not posted) is covered exhaustively in
   // BulkDocumentAction.vitest.jsx (buildPostActions/postRowFilter) — these

@@ -96,6 +96,17 @@ function GoodsReceiptBulkAction(props) {
   );
 }
 
+/**
+ * ETP-5265 QA follow-up — dispatches the confirm event and returns whatever promise the
+ * GoodsReceiptActions listener attached to `detail`. Undefined when that listener only
+ * opened the confirm modal, which is the unchanged pre-existing behaviour.
+ */
+function dispatchConfirmModalEvent() {
+  const detail = {};
+  window.dispatchEvent(new CustomEvent('goods-receipt:open-confirm-modal', { detail }));
+  return detail.promise;
+}
+
 export default function GoodsReceiptWindow(props) {
   useBulkActionToast();
   const ui = useUI();
@@ -174,7 +185,10 @@ export default function GoodsReceiptWindow(props) {
           processValue: 'CO',
           label: ui('confirm'),
           keepSaveWhenCompletedFields: ['orderReference'],
-          onConfirm: () => window.dispatchEvent(new CustomEvent('goods-receipt:open-confirm-modal')),
+          // ETP-5265 QA follow-up — see dispatchConfirmModalEvent above: the listener's
+          // in-flight promise comes back through the event `detail` so the Confirm button
+          // can await it and spin. Undefined on the modal path = unchanged behaviour.
+          onConfirm: () => dispatchConfirmModalEvent(),
         }}
         notesField="description"
         bottomSection={GoodsReceiptBottomPanel}

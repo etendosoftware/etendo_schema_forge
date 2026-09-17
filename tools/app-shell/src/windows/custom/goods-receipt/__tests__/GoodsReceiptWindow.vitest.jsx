@@ -289,6 +289,19 @@ describe('GoodsReceiptWindow', () => {
     window.removeEventListener('goods-receipt:open-confirm-modal', listener);
   });
 
+  // ETP-5265 QA follow-up — the event carries a mutable `detail` so the
+  // GoodsReceiptActions listener can hand its in-flight promise back; onConfirm returns
+  // it so the core's Confirm button can await it and spin (no more "processing" toast).
+  it('draftMode.onConfirm dispatches an event with a mutable detail object', () => {
+    let seen = null;
+    const listener = (e) => { seen = e.detail; };
+    window.addEventListener('goods-receipt:open-confirm-modal', listener);
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    fireEvent.click(screen.getByTestId('trigger-confirm'));
+    window.removeEventListener('goods-receipt:open-confirm-modal', listener);
+    expect(seen).toEqual({});
+  });
+
   // ── menuActionsForForm ─────────────────────────────────────────────────────
 
   it('menuActionsForForm returns empty array for non-CO status', () => {

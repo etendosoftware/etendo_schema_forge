@@ -1424,7 +1424,16 @@ export function useEntity(entity, childEntity, {
                 const raw = extractSingleRow(data);
                 return raw ? normalizeRecord(raw, entity) : null;
             });
-        runQuery(key, fetcher, { force })
+        // ETP-5265 QA follow-up — `return` (added, the rest of the chain is untouched):
+        // callers that must stay busy until the record is actually back on screen need to
+        // await the refetch. `onRefresh` in DetailView is literally
+        // `() => hook.fetchById?.(id, { force: true })`, so without this the awaiting
+        // caller waited on `undefined` and resumed immediately. Behaviour-preserving: no
+        // existing caller reads the return value, and the chain ends in `.catch`, so the
+        // promise handed out always settles as fulfilled and can never surface as an
+        // unhandled rejection in a caller that ignores it. The `if (!id) return;` guard
+        // above still returns undefined, exactly as before.
+        return runQuery(key, fetcher, { force })
             .then(row => {
                 if (!isCurrent()) return;
                 // ETP-4563: a mutation superseded this read while it was in flight: drop the

@@ -242,6 +242,65 @@ never had this defect — it owns its own `loading` state and is unaffected by t
 `CreateInvoiceConfirmModal.jsx` was also hardened so its backdrop/× no longer close it while
 `loading` is `true` (previously only the "Cancelar" footer button was disabled).
 
+## Confirming an already fully-invoiced shipment (ETP-5265)
+
+A shipment whose `invoiceStatus` is already >= 100 used to open an intermediate "already
+invoiced" confirmation popup on `Confirm`. ETP-5265 removed that popup: `Confirm` now calls
+the canonical `documentAction` endpoint directly (`useDocumentAction`, `documentAction=CO`),
+then takes the same success path the popup used to trigger (`setInvoiceResult({ invoice: null })` -> the
+`goodsShipment.confirmModal.confirmedTitle` success toast + refresh), or shows
+`toast.error` on failure. The non-fully-invoiced flow still opens `GoodsShipmentConfirmModal` and is untouched.
+
+**In-flight feedback lives in the Confirm button, not in a toast (ETP-5265 QA follow-up).**
+The first cut showed a floating `toast.loading` card while the POST was in flight; QA rejected
+it, because every other document (invoices in particular) spins inside the `Confirm` button
+itself. The mechanism:
+
+1. `GoodsShipmentActions.jsx` publishes the in-flight promise on the event object:
+   `e.detail.promise = handleConfirmFullyInvoiced()`. The modal branch deliberately leaves
+   `detail.promise` unset — opening a modal is instantaneous and must not spin the button.
+2. The window's `draftMode.onConfirm` (`dispatchConfirmModalEvent` in the window's
+   `index.jsx`) dispatches `goods-shipment:open-confirm-modal` with a mutable `detail` object and returns
+   `detail.promise`.
+3. The core awaits it: `runDraftModeConfirm` in
+   `tools/app-shell/src/components/contract-ui/saveActions.jsx` wraps `await
+   draftMode.onConfirm()` in `DraftModeConfirmButton`'s local `customConfirmBusy` state
+   (try/finally), which drives the button's `Loader2` spinner and its `disabled`.
+
+This is additive for every other `draftMode.onConfirm` window: an `onConfirm` that returns
+nothing makes `await undefined` settle on the next microtask, so the button never renders a
+spinner and its DOM is unchanged.
+
+**The busy window spans the refetch, not just the POST (ETP-5265 QA follow-up 2).** The
+first version of the mechanism above resolved as soon as the `documentAction` POST came
+back (~150-300 ms locally) and the spinner was imperceptible: the record refresh happened
+afterwards, out of band, through the `setInvoiceResult` effect. `handleConfirmFullyInvoiced`
+therefore awaits the refetch as well, so the busy state runs unbroken from the click until
+the refreshed record is on screen. Three consequences:
+
+- `useEntity.fetchById` now **returns** its `runQuery` promise (`useEntity.js`, one added
+  `return`). DetailView's `onRefresh` prop is literally
+  `() => hook.fetchById?.(id, { force: true })`, so without it the caller awaited
+  `undefined`. No other caller reads the return value and the chain still ends in `.catch`,
+  so this is behaviour-preserving.
+- **Two failure domains, kept apart.** A failed POST is a failed confirmation:
+  `toast.error`, no success toast, no refresh. A failed *refresh* is not — the document is
+  confirmed and only the screen is stale, so the rejection is swallowed rather than
+  reported as a failed confirm.
+- This branch **no longer routes through `setInvoiceResult({ invoice: null })`**. That
+  setter's effect both toasts and refreshes but cannot be awaited, so it could not hold the
+  button busy; the success toast (`goodsShipment.confirmModal.confirmedTitle`) is emitted
+  inline instead, at the same point the native draftMode path emits its own — right after
+  the action POST succeeds and **before** the refetch (see `handleSaveAndProcess` in
+  `useEntity.js`). The effect is still live and still owns the `GoodsShipmentConfirmModal`
+  path, which is why the two branches read differently in `GoodsShipmentActions.jsx`.
+
+Known divergence from the native path: `hook.isSaving` only covers the save PATCH inside
+`handleSaveAndProcess`, not its process POST or its refetch, so a fully-invoiced albarán now
+spins for at least as long as — and usually longer than — an invoice does. That is the
+behaviour the acceptance bar asked for (busy until the record is back); unifying the native
+path to the same span would be a core change affecting every `draftMode` window.
+
 ## Theme roles
 
 The window's live artifact custom components use the shared semantic theme.

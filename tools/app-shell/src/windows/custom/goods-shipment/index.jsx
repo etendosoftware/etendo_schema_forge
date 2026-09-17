@@ -78,6 +78,17 @@ function GoodsShipmentBulkActions(props) {
   );
 }
 
+/**
+ * ETP-5265 QA follow-up — dispatches the confirm event and returns whatever promise the
+ * GoodsShipmentActions listener attached to `detail`. Undefined when that listener only
+ * opened the confirm modal, which is the unchanged pre-existing behaviour.
+ */
+function dispatchConfirmModalEvent() {
+  const detail = {};
+  window.dispatchEvent(new CustomEvent('goods-shipment:open-confirm-modal', { detail }));
+  return detail.promise;
+}
+
 export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, token, ...rest }) {
   useBulkActionToast();
   const navigate = useNavigate();
@@ -145,7 +156,12 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
           token={token}
           Table={CustomGoodsShipmentTable}
           processes={[]}
-          draftMode={{ enabled: true, label: 'Confirm', style: 'positive', onConfirm: () => window.dispatchEvent(new CustomEvent('goods-shipment:open-confirm-modal')) }}
+          // ETP-5265 QA follow-up — onConfirm hands the listener's in-flight promise back
+          // to the core through the event `detail`, so the Confirm button can await it and
+          // show its own spinner (see runDraftModeConfirm in saveActions.jsx). The
+          // not-fully-invoiced path only opens a modal and leaves `detail.promise`
+          // undefined, which the core treats exactly as the previous fire-and-forget call.
+          draftMode={{ enabled: true, label: 'Confirm', style: 'positive', onConfirm: () => dispatchConfirmModalEvent() }}
           hideMoreMenu={({ data }) => data?.documentStatus !== 'CO'}
           autoSaveOnBlur={true}
           // ETP-5058 — GoodsShipmentHeaderHandler.afterHandle only enriches linkedInvoices/
