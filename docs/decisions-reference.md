@@ -975,12 +975,13 @@ Applied to fields with `grid: true` to control how the list cell renders.
 | `visibleWhenCapability` | string | `null` | Names a capability key (e.g. `"showAccountingFields"`) from the `capabilities` map returned by the `GET /sws/neo/windowaccessmap` webhook (NEO pseudo-spec bridge — see `com.etendoerp.go/docs/neo-headless.md` §4.10). Opt-in — absent means always visible. Gates both the grid column and any `window.statusPills` entry referencing this field; the field is omitted entirely (not disabled) when the capability resolves `false`. Full mechanics (generator wiring, fail-closed behavior): `schema_forge_core`'s `docs/decisions-reference.md`. Shipped example: `posted` on `sales-invoice`/`purchase-invoice` — see those windows' `docs/generated-custom-windows/*.md` guides. |
 | `summable` | boolean | _absent_ | **Tri-state, not a flag.** Controls whether an `amount` column feeds the grid's footer TOTAL row. `false` opts the column out while keeping every bit of its money formatting; `true` is the explicit opt-in; **absent means "sums"** — the historical default ~99 existing amount columns rely on. See below. |
 | `currencyField` | string | _absent_ | Names the sibling field carrying THIS column's currency, for grids whose rows are not all in the same currency. Value is the contract field name (`"cCurrencyID"`), not the AD column (`C_Currency_ID`) — the renderer appends `$_identifier` to it. See below. |
-| `backendFilterKey` | string | **auto-derived** | Entity property the grid's **filter** criteria is built against. You almost never write this — the generator derives it automatically for every renamed field. See below. |
-| `backendSortKey` | string | **auto-derived** | Entity property the grid's **sort** parameter is built against. Same story: auto-derived for every renamed field. See below. |
+| `backendFilterKey` | string | _absent_ | Entity property the grid's **filter** criteria is built against. **Required** whenever `name` renames a `grid: true` field. See below. |
+| `backendSortKey` | string | _absent_ | Entity property the grid's **sort** parameter is built against. **Required** whenever `name` renames a `grid: true` field — and for a foreign key the value must carry the `$_identifier` suffix. See below. |
 
 #### Renaming a field (`name`) and the backend query keys — ETP-5382
 
-**You normally write nothing here. This section exists so you know why.**
+**Renaming a `grid: true` field is a two-part change. If you write only `name`, you have
+shipped a broken filter and a broken sort, and nothing will tell you.**
 
 A field renamed with `name` is exposed to the frontend under the new key, but the backend
 still only knows the field by its real OBDal/Hibernate property — the one derived from
@@ -993,43 +994,52 @@ bug reported on Tax Rate's *Applicable To* (AD column `SOPOType`, property
 `salesPurchaseType`, exposed as `applicableTo`): the filter did nothing and looked like it
 had matched everything.
 
-**The generator now closes the gap by itself.** Whenever `resolve-curated` sees a field
-whose exposed key differs from its real backend property, it emits **both**
-`backendFilterKey` and `backendSortKey` onto the contract field and, from there, onto the
-generated grid column literal. Nothing to declare per window, and it applies retroactively
-to every rename already in the repo.
-
-| Case | Derived `backendFilterKey` | Derived `backendSortKey` |
-|---|---|---|
-| Field **not** renamed | _(absent — the key already IS the property)_ | _(absent)_ |
-| Renamed scalar field (`salesPurchaseType` → `applicableTo`) | `salesPurchaseType` | `salesPurchaseType` |
-| Renamed **FK** field (`finPaymentmethodID` → `paymentMethod`) | `finPaymentmethodID` | `finPaymentmethodID$_identifier` |
-| Synthetic `virtualFields` entry | _(never — there is no backend property)_ | _(never)_ |
-
-The FK row is not a special case for its own sake: an unrenamed FK renders a `selector`
-column, which `resolveBackendSort()` sorts on `<property>$_identifier` (by label). Setting
-`backendSortKey` makes that helper use the value verbatim, so the suffix has to be part of
-the derived value — otherwise the column would order by the join column's UUID, which looks
-random and, again, fails silently. The filter key stays unsuffixed, matching what an
-unrenamed FK column does.
-
-**Writing either key by hand is an escape hatch, not the normal path.** An explicit value
-in `decisions.json` always wins over the derived one (they are applied first; the derivation
-only fills what is still absent), and you only need it when the real backend property is
-*not* the field's own — e.g. filtering a column against a joined entity's property. If you
-find yourself typing the field's own raw name, delete it: it is already implied.
+Nothing in the pipeline infers these keys. Declare both, by hand, in the **same**
+`decisions.json` field entry as the `name` override:
 
 ```json
-"applicableTo": {
+"salesPurchaseType": {
+  "name": "applicableTo",
   "grid": true,
-  "filterMode": "enumLabel"
+  "searchable": true,
+  "backendFilterKey": "salesPurchaseType",
+  "backendSortKey": "salesPurchaseType",
+  "cellType": "taxScope"
 }
 ```
 
+The decisions key (`salesPurchaseType` above) is the field's raw AD-derived name, which is
+normally the exact value both backend keys need. **Normally, not always** — read the raw
+`schema-raw.json` entry rather than assuming, because `deduplicateFieldNames()` appends a
+counter to the raw name when two AD fields of the same tab resolve to the same property
+(`payment-out` lines carry `documentNo` and `documentNo2`, both really `documentNo`). A
+suffixed `documentNo2` is not a Hibernate property and would be dropped exactly like the
+unresolvable rename it was meant to fix.
+
+| Case | `backendFilterKey` | `backendSortKey` |
+|---|---|---|
+| Field **not** renamed | _(omit — the contract key already IS the property)_ | _(omit)_ |
+| Renamed scalar field (`salesPurchaseType` → `applicableTo`) | `salesPurchaseType` | `salesPurchaseType` |
+| Renamed **FK** field (`finPaymentmethodID` → `paymentMethod`) | `finPaymentmethodID` | `finPaymentmethodID$_identifier` |
+| Renamed but `grid: false` | _(omit — never reaches the grid query)_ | _(omit)_ |
+| Synthetic `virtualFields` entry | _(omit — there is no backend property)_ | _(omit)_ |
+
+**The FK row is the easy one to get wrong.** An unrenamed FK renders a `selector` column,
+and `resolveBackendSort()` (app-shell-core's `gridQuery.js`) infers `sortMode: 'identifier'`
+for it, sorting on `<property>$_identifier` — by label. Declaring `backendSortKey` at all
+flips `isIdentifierSort` true and routes the column down the identifier branch with your
+value taken **verbatim**: the suffix is no longer appended for you. So a renamed FK must
+spell out `finPaymentmethodID$_identifier` itself, or the column orders by the join column's
+UUID — visually random, and silent. The **filter** key stays unsuffixed, matching what an
+unrenamed FK column does.
+
+Only two things make these keys differ from the field's raw name: the FK suffix above, and
+the rare column filtered against a joined entity's property rather than its own.
+
 > Hand-written custom list components (`artifacts/<window>/custom/*HeaderTable.jsx`,
 > `tools/app-shell/src/windows/custom/**`) are **outside** this pipeline — the generator
-> never touches their column literals, so they still declare `backendFilterKey` /
-> `backendSortKey` themselves where needed. See [`list-filters.md`](list-filters.md).
+> never touches their column literals, so they declare `backendFilterKey` /
+> `backendSortKey` directly in the column object. See [`list-filters.md`](list-filters.md).
 
 #### Boolean badge rendering (`badge`, `badgeLabels`, `badgeVariants`)
 

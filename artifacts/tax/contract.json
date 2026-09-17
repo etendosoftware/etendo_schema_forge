@@ -1,8 +1,8 @@
 {
-  "version": "0.15.0",
+  "version": "0.16.0",
   "generatedAt": "2026-04-27T19:18:32.198Z",
-  "updatedAt": "2026-09-17T13:47:19.773Z",
-  "checksum": "b0bcbe82092fc325",
+  "updatedAt": "2026-09-17T14:15:05.926Z",
+  "checksum": "fa0bf50e5fe31449",
   "frontendContract": {
     "window": {
       "id": "137",
@@ -79,8 +79,6 @@
             "grid": false,
             "form": true,
             "sourceRequired": true,
-            "backendFilterKey": "validFromDate",
-            "backendSortKey": "validFromDate",
             "section": "principal",
             "seq": 5,
             "validation": {

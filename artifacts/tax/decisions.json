@@ -104,6 +104,7 @@
           "grid": true,
           "searchable": true,
           "backendFilterKey": "salesPurchaseType",
+          "backendSortKey": "salesPurchaseType",
           "section": "principal",
           "seq": 3,
           "cellType": "taxScope"
