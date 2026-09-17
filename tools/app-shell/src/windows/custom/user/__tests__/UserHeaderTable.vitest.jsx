@@ -61,17 +61,12 @@ vi.mock('@/components/contract-ui', () => ({
   },
 }));
 
-vi.mock('../RoleFilterControl.jsx', () => ({
-  RoleFilterControl: ({ value, onChange, roles }) => (
-    <div data-testid="stub-role-filter">
-      <div data-testid="stub-role-filter-value">{value ?? '__null__'}</div>
-      <div data-testid="stub-role-filter-count">{(roles ?? []).length}</div>
-      <button type="button" data-testid="stub-select-role-fin" onClick={() => onChange('role-fin')}>fin</button>
-      <button type="button" data-testid="stub-select-role-admin" onClick={() => onChange('role-admin')}>admin</button>
-      <button type="button" data-testid="stub-clear-filter" onClick={() => onChange(null)}>clear</button>
-    </div>
-  ),
-}));
+// ETP-5188 — `RoleFilterControl` is no longer rendered by `UserHeaderTable` itself (it
+// moved to `RoleQuickFilterToolbarSlot`, rendered separately by `ListView` via
+// `UserHeaderTable.ToolbarQuickFilter` — see that component's own suite,
+// `RoleQuickFilterToolbarSlot.vitest.jsx`, for the toolbar-rendering/roles-catalog/
+// value-threading coverage that used to live here). `UserHeaderTable` now only reads
+// the shared `role` URL param live and applies it to `filteredData` — no stub needed.
 
 // ETP-4830 (item #4) — UserHeaderTable mounts UserDebugPanel only while useUserDebugMode() is
 // active. Mocked here so tests control activation directly rather than driving the real
@@ -129,22 +124,14 @@ beforeEach(() => {
 });
 
 describe('UserHeaderTable — layout', () => {
-  it('renders the role-filter toolbar above the grid', async () => {
+  it('renders the grid', async () => {
     mockDataOk();
     render(<UserHeaderTable data={ROWS} />);
 
-    expect(await screen.findByTestId('UserHeaderTable__toolbar')).toBeInTheDocument();
-    expect(screen.getByTestId('data-table')).toBeInTheDocument();
+    expect(await screen.findByTestId('data-table')).toBeInTheDocument();
   });
 
-  it('hands the fetched roles catalog down to the filter control', async () => {
-    mockDataOk();
-    render(<UserHeaderTable data={ROWS} />);
-
-    expect(await screen.findByTestId('stub-role-filter-count')).toHaveTextContent('3');
-  });
-
-  it('appends invitationStatus and defaultRole (both custom) after the hand-mirrored base columns', async () => {
+  it('appends invitationStatus, defaultRole (both custom) and the roleFilter advanced-filter-only column after the hand-mirrored base columns', async () => {
     mockDataOk();
     render(<UserHeaderTable data={ROWS} />);
 
@@ -153,8 +140,10 @@ describe('UserHeaderTable — layout', () => {
     // from the hand-mirrored column list: neither is a user-editable field, so neither
     // belongs as a grid column (or, by extension, as an AdvancedFilterButton filter
     // option — every grid column doubles as a filter option).
+    // ETP-5188 (Item 3) — `roleFilter` is the new dedicated advanced-filter-only "Rol"
+    // field, added after `defaultRole` (now `filterable: false`, see below).
     expect(tableProps.columns.map((c) => c.key)).toEqual([
-      'name', 'email', 'active', 'invitationStatus', 'defaultRole',
+      'name', 'email', 'active', 'invitationStatus', 'defaultRole', 'roleFilter',
     ]);
   });
 
@@ -173,15 +162,40 @@ describe('UserHeaderTable — layout', () => {
     expect(col.toggle).toBe(true);
   });
 
-  it('marks the defaultRole column as type "custom" with an identifier filterMode', async () => {
+  // ETP-5188 (Point 3) — "Rol por Defecto" must NOT appear in "Filtros avanzados" any
+  // more (straight removal, no replacement field on THIS column — `roleFilterColumn`
+  // below is the dedicated replacement). `filterMode: 'identifier'` (ETP-4906) is gone;
+  // `filterable: false` is the actual opt-out `isFilterableColumn()` checks first.
+  it('marks the defaultRole column as type "custom", not filterable, with no filterMode', async () => {
     mockDataOk();
     render(<UserHeaderTable data={ROWS} />);
 
     await screen.findByTestId('data-table');
     const col = tableProps.columns.find((c) => c.key === 'defaultRole');
     expect(col.type).toBe('custom');
-    expect(col.filterMode).toBe('identifier');
+    expect(col.filterable).toBe(false);
+    expect(col.filterMode).toBeUndefined();
     expect(typeof col.render).toBe('function');
+  });
+
+  // ETP-5188 (Item 3) — the dedicated "Rol" advanced-filter field replacing the removed
+  // `defaultRole` filter entry above: no backing AD column, multi-selectable, routed to
+  // the backend's dedicated RoleIds=/NoRole= params instead of a generic criteria=.
+  it('declares the roleFilter column as a filter-only, non-rendering advanced-filter field', async () => {
+    mockDataOk();
+    render(<UserHeaderTable data={ROWS} />);
+
+    await screen.findByTestId('data-table');
+    const col = tableProps.columns.find((c) => c.key === 'roleFilter');
+    expect(col.type).toBe('custom');
+    expect(col.filterMode).toBe('enumLabel');
+    expect(col.filterable).toBe(true);
+    expect(col.filterOnly).toBe(true);
+    expect(col.label).toBe('role');
+    expect(col.column).toBeUndefined();
+    expect(col.render).toBeUndefined();
+    expect(typeof col.toQueryParams).toBe('function');
+    expect(col.enumLabels).toMatchObject({ 'role-admin': expect.any(String) });
   });
 
   it('marks the invitationStatus column as type "custom" with a translated label and a render function', async () => {
@@ -243,7 +257,17 @@ describe('UserHeaderTable — layout', () => {
   });
 });
 
-describe('UserHeaderTable — role filter (client-side row filtering)', () => {
+/**
+ * ETP-5188 — the quick-filter dropdown UI moved out of `UserHeaderTable` entirely (see
+ * `RoleQuickFilterToolbarSlot.vitest.jsx` for that UI's own coverage, including value
+ * threading and roles-catalog wiring). What's STILL genuinely owned by
+ * `UserHeaderTable` is `filteredData`: applying the shared `role` URL search param
+ * (read LIVE on every render, not just once at mount — see the component's own doc
+ * comment) to the rows already loaded for the page. These tests drive that param
+ * directly (as `RoleQuickFilterToolbarSlot` would, via `setSearchParams`) instead of
+ * clicking a filter control this component no longer renders.
+ */
+describe('UserHeaderTable — role filter (client-side row filtering, driven by the shared ?role= URL param)', () => {
   it('shows every row when no role filter is applied', async () => {
     mockDataOk();
     render(<UserHeaderTable data={ROWS} />);
@@ -254,103 +278,68 @@ describe('UserHeaderTable — role filter (client-side row filtering)', () => {
     expect(screen.getByTestId('row-user-3')).toBeInTheDocument();
   });
 
-  it('filters to only users whose bulk assignments include the selected template role', async () => {
+  it('filters to only users whose bulk assignments include the role selected via the URL param', async () => {
+    mockSearchParams = new URLSearchParams('role=role-fin');
     mockDataOk();
     render(<UserHeaderTable data={ROWS} />);
     await screen.findByTestId('data-table');
-
-    fireEvent.click(screen.getByTestId('stub-select-role-fin'));
 
     expect(screen.getByTestId('row-user-1')).toBeInTheDocument(); // has role-fin
     expect(screen.queryByTestId('row-user-2')).not.toBeInTheDocument(); // has role-sales only
     expect(screen.queryByTestId('row-user-3')).not.toBeInTheDocument(); // classic Admin, no assignments entry
   });
 
-  it('filters to only the classic-Admin user(s) when the admin role id is selected', async () => {
+  it('filters to only the classic-Admin user(s) when the admin role id is selected via the URL param', async () => {
+    mockSearchParams = new URLSearchParams('role=role-admin');
     mockDataOk();
     render(<UserHeaderTable data={ROWS} />);
     await screen.findByTestId('data-table');
-
-    fireEvent.click(screen.getByTestId('stub-select-role-admin'));
 
     expect(screen.queryByTestId('row-user-1')).not.toBeInTheDocument();
     expect(screen.queryByTestId('row-user-2')).not.toBeInTheDocument();
     expect(screen.getByTestId('row-user-3')).toBeInTheDocument(); // defaultRole === adminRoleId
   });
 
-  it('restores every row when the filter is cleared back to null', async () => {
+  it('re-reads the ?role= param live: changing it after mount (no remount) updates the visible rows', async () => {
     mockDataOk();
+    const { rerender } = render(<UserHeaderTable data={ROWS} />);
+    await screen.findByTestId('data-table');
+    expect(screen.getByTestId('row-user-2')).toBeInTheDocument();
+
+    mockSearchParams = new URLSearchParams('role=role-fin');
+    rerender(<UserHeaderTable data={ROWS} />);
+
+    expect(screen.getByTestId('row-user-1')).toBeInTheDocument();
+    expect(screen.queryByTestId('row-user-2')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('row-user-3')).not.toBeInTheDocument();
+  });
+
+  // ETP-5188 (Point 5) — "Sin rol": NOT the client-admin AND zero entries in the bulk
+  // assignments map (see `hasNoRole()` in `RoleChipsCell.jsx`). This is the one
+  // `filteredData` branch not otherwise exercised by the role-id/admin-id cases above.
+  it('filters to only users with "Sin rol" (no bulk assignments, not the classic-Admin) when the sentinel is selected via the URL param', async () => {
+    mockSearchParams = new URLSearchParams('role=__no_role__');
+    mockDataOk({
+      assignments: { 'user-1': ['role-fin'] }, // user-2 deliberately has NO assignments entry
+    });
     render(<UserHeaderTable data={ROWS} />);
     await screen.findByTestId('data-table');
 
-    fireEvent.click(screen.getByTestId('stub-select-role-fin'));
+    expect(screen.queryByTestId('row-user-1')).not.toBeInTheDocument(); // has role-fin
+    expect(screen.getByTestId('row-user-2')).toBeInTheDocument(); // no assignments entry at all
+    expect(screen.queryByTestId('row-user-3')).not.toBeInTheDocument(); // classic Admin, excluded from "Sin rol"
+  });
+
+  it('restores every row when the URL role param is cleared back to absent', async () => {
+    mockSearchParams = new URLSearchParams('role=role-fin');
+    mockDataOk();
+    const { rerender } = render(<UserHeaderTable data={ROWS} />);
+    await screen.findByTestId('data-table');
     expect(screen.queryByTestId('row-user-2')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('stub-clear-filter'));
-    expect(screen.getByTestId('row-user-1')).toBeInTheDocument();
-    expect(screen.getByTestId('row-user-2')).toBeInTheDocument();
-    expect(screen.getByTestId('row-user-3')).toBeInTheDocument();
-  });
+    mockSearchParams = new URLSearchParams();
+    rerender(<UserHeaderTable data={ROWS} />);
 
-  it('threads the selected role id down as the stub filter\'s current value', async () => {
-    mockDataOk();
-    render(<UserHeaderTable data={ROWS} />);
-    await screen.findByTestId('data-table');
-
-    fireEvent.click(screen.getByTestId('stub-select-role-fin'));
-    expect(screen.getByTestId('stub-role-filter-value')).toHaveTextContent('role-fin');
-  });
-});
-
-/**
- * ETP-4999 — a role summary card on the Roles overview page links here as
- * `/user?role=<id>`; `roleFilter`'s lazy `useState` initializer reads that
- * query param exactly once, on mount, as the starting value for the SAME
- * state `RoleFilterControl`'s dropdown already owns/can change afterward.
- * Reuses the exact same `stub-role-filter-value`/`row-*` assertion approach
- * the "role filter (client-side row filtering)" suite above already
- * established for a non-null `roleFilter`.
- */
-describe('UserHeaderTable — initial role filter from the ?role= query param (ETP-4999)', () => {
-  it('seeds RoleFilterControl\'s initial value from the ?role= query param', async () => {
-    mockSearchParams = new URLSearchParams('role=role-fin');
-    mockDataOk();
-    render(<UserHeaderTable data={ROWS} />);
-
-    expect(await screen.findByTestId('stub-role-filter-value')).toHaveTextContent('role-fin');
-  });
-
-  it('filters the grid rows on mount using the seeded ?role= value, with no click needed', async () => {
-    mockSearchParams = new URLSearchParams('role=role-fin');
-    mockDataOk();
-    render(<UserHeaderTable data={ROWS} />);
-    await screen.findByTestId('data-table');
-
-    expect(screen.getByTestId('row-user-1')).toBeInTheDocument(); // has role-fin
-    expect(screen.queryByTestId('row-user-2')).not.toBeInTheDocument(); // has role-sales only
-    expect(screen.queryByTestId('row-user-3')).not.toBeInTheDocument(); // classic Admin, no assignments entry
-  });
-
-  it('defaults to null (no filter) when the ?role= param is absent, showing every row', async () => {
-    mockDataOk();
-    render(<UserHeaderTable data={ROWS} />);
-
-    expect(await screen.findByTestId('stub-role-filter-value')).toHaveTextContent('__null__');
-    expect(screen.getByTestId('row-user-1')).toBeInTheDocument();
-    expect(screen.getByTestId('row-user-2')).toBeInTheDocument();
-    expect(screen.getByTestId('row-user-3')).toBeInTheDocument();
-  });
-
-  it('the seeded value is only an initial value — RoleFilterControl can still change it afterward', async () => {
-    mockSearchParams = new URLSearchParams('role=role-fin');
-    mockDataOk();
-    render(<UserHeaderTable data={ROWS} />);
-    await screen.findByTestId('data-table');
-    expect(screen.getByTestId('stub-role-filter-value')).toHaveTextContent('role-fin');
-
-    fireEvent.click(screen.getByTestId('stub-clear-filter'));
-
-    expect(screen.getByTestId('stub-role-filter-value')).toHaveTextContent('__null__');
     expect(screen.getByTestId('row-user-1')).toBeInTheDocument();
     expect(screen.getByTestId('row-user-2')).toBeInTheDocument();
     expect(screen.getByTestId('row-user-3')).toBeInTheDocument();

@@ -18,7 +18,7 @@ describe('usePaymentBalance', () => {
     it('prefills the amount to the rounded total', () => {
       const { result } = setup({ total: 6420, dir: 'in', sources: [] });
       expect(result.current.amount).toBe(6420);
-      expect(result.current.amountStr).toBe('6,420.00');
+      expect(result.current.amountStr).toBe('6.420,00');
       expect(result.current.applied).toBe(6420);
     });
 
@@ -131,12 +131,12 @@ describe('usePaymentBalance', () => {
     });
   });
 
-  describe('onAmountChange / onAmountBlur (en-US)', () => {
+  describe('onAmountChange / onAmountBlur (instance-configured format)', () => {
     it('parses the typed string into a number', () => {
       const { result } = setup({ total: 1000, dir: 'in', sources: [] });
-      act(() => result.current.onAmountChange('1,234.50'));
+      act(() => result.current.onAmountChange('1.234,50'));
       expect(result.current.amount).toBe(1234.5);
-      expect(result.current.amountStr).toBe('1,234.50');
+      expect(result.current.amountStr).toBe('1.234,50');
     });
 
     it('treats a blank string as 0', () => {
@@ -145,18 +145,32 @@ describe('usePaymentBalance', () => {
       expect(result.current.amount).toBe(0);
     });
 
-    it('reformats to grouped en-US on blur', () => {
+    it('reformats to a grouped amount on blur', () => {
       const { result } = setup({ total: 1000, dir: 'in', sources: [] });
-      act(() => result.current.onAmountChange('1234.5'));
+      act(() => result.current.onAmountChange('1234,5'));
       act(() => result.current.onAmountBlur());
-      expect(result.current.amountStr).toBe('1,234.50');
+      expect(result.current.amountStr).toBe('1.234,50');
     });
 
-    it('blur on an empty value normalizes to 0.00', () => {
+    it('blur on an empty value normalizes to zero', () => {
       const { result } = setup({ total: 1000, dir: 'in', sources: [] });
       act(() => result.current.onAmountChange(''));
       act(() => result.current.onAmountBlur());
-      expect(result.current.amountStr).toBe('0.00');
+      expect(result.current.amountStr).toBe('0,00');
+    });
+
+    // ETP-5107 (QA round 2): typing `50,50` on a €139,15 invoice used to strip the
+    // comma as grouping and register a 5.050,00 € payment — ~36x the typed amount,
+    // which the modal then offered to refund. The comma is the decimal separator.
+    it('reads a typed comma as the decimal separator (ETP-5107)', () => {
+      const { result } = setup({ total: 139.15, dir: 'in', sources: [] });
+      act(() => result.current.onAmountChange('50,50'));
+      expect(result.current.amount).toBe(50.5);
+      expect(result.current.isExcess).toBe(false);
+      expect(result.current.isPartial).toBe(true);
+      expect(result.current.missingAmount).toBe(88.65);
+      act(() => result.current.onAmountBlur());
+      expect(result.current.amountStr).toBe('50,50');
     });
   });
 
@@ -311,7 +325,7 @@ describe('usePaymentBalance', () => {
       expect(result.current.usedCredit).toBe(500);
       act(() => result.current.equalize());
       expect(result.current.amount).toBe(500); // applied 1000 - used 500
-      expect(result.current.amountStr).toBe('500.00');
+      expect(result.current.amountStr).toBe('500,00');
       expect(result.current.isExact).toBe(true);
     });
 
@@ -398,7 +412,7 @@ describe('usePaymentBalance', () => {
       act(() => result.current.onLineUseBlur('c1'));
       const line = result.current.lines.find(l => l.id === 'c1');
       expect(line.use).toBe(200); // clamped to avail
-      expect(line.useStr).toBe('200.00');
+      expect(line.useStr).toBe('200,00');
     });
 
     it('onLineUseBlur treats a blank typed value as 0', () => {
@@ -407,7 +421,7 @@ describe('usePaymentBalance', () => {
       act(() => result.current.onLineUseBlur('c1'));
       const line = result.current.lines.find(l => l.id === 'c1');
       expect(line.use).toBe(0);
-      expect(line.useStr).toBe('0.00');
+      expect(line.useStr).toBe('0,00');
     });
 
     it('onLineUseBlur on one line leaves a sibling line untouched', () => {
@@ -434,7 +448,7 @@ describe('usePaymentBalance', () => {
       const line = result.current.lines.find(l => l.id === 'c1');
       expect(line.sel).toBe(true);
       expect(line.use).toBe(150);
-      expect(line.useStr).toBe('150.00');
+      expect(line.useStr).toBe('150,00');
     });
 
     it('preselects an abono line matching usedSources by psdId', () => {
@@ -445,7 +459,7 @@ describe('usePaymentBalance', () => {
       const line = result.current.lines.find(l => l.id === 'a1');
       expect(line.sel).toBe(true);
       expect(line.use).toBe(300);
-      expect(line.useStr).toBe('300.00');
+      expect(line.useStr).toBe('300,00');
       expect(result.current.usedCredit).toBe(300);
     });
 

@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { createClient, updateClient } from '@/lib/oauth2Api.js';
 import { toast } from 'sonner';
-import { Copy, AlertTriangle, Loader2 } from 'lucide-react';
+import { Copy, AlertTriangle, ExternalLink, Loader2 } from 'lucide-react';
 
 const ALL_SCOPES = ['neo:read', 'neo:write', 'neo:process', 'neo:report', 'neo:*'];
 const GRANULAR_SCOPES = ALL_SCOPES.filter((s) => s !== 'neo:*');
@@ -255,7 +255,7 @@ export default function OAuth2ClientDialog({ open, onOpenChange, client, apiFetc
  * Dialog shown once after client creation, displaying the generated secret.
  * The secret cannot be retrieved again after closing.
  */
-export function SecretRevealDialog({ open, onClose, clientId, clientSecret }) {
+export function SecretRevealDialog({ open, onClose, clientId, clientSecret, authorizationValue, docsUrl }) {
   const [copied, setCopied] = useState(null);
 
   const copyToClipboard = async (text, label) => {
@@ -306,6 +306,22 @@ export function SecretRevealDialog({ open, onClose, clientId, clientSecret }) {
               </Button>
             </div>
           </div>
+
+          {authorizationValue && <div className="grid gap-1.5">
+            <Label className="text-xs text-muted-foreground" data-testid="Label__4aea7f">Scalar bearer value</Label>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 rounded-md bg-muted px-3 py-2 text-sm font-mono break-all">{authorizationValue}</code>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="shrink-0"
+                onClick={() => copyToClipboard(authorizationValue, 'Authorization value')}
+                data-testid="Button__4aea7f"><Copy className="h-4 w-4" data-testid="Copy__4aea7f" /></Button>
+            </div>
+            <p className="text-xs text-muted-foreground">Paste this value in Scalar under <span className="font-medium">Authentication → bearer</span>. Scalar adds <code className="rounded bg-muted px-1 font-mono">Bearer</code> automatically.</p>
+            {docsUrl && <a className="inline-flex items-center gap-1 text-sm text-primary underline underline-offset-4" href={docsUrl} target="_blank" rel="noreferrer">Open Scalar docs <ExternalLink className="h-3.5 w-3.5" data-testid="ExternalLink__4aea7f" /></a>}
+          </div>}
 
           {/* Client Secret */}
           <div className="grid gap-1.5">

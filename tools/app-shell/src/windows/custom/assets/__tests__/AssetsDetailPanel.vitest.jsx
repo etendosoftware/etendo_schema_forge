@@ -85,16 +85,20 @@ describe('AssetsDetailPanel — depreciation on', () => {
     // ETP-4914 — corrected matrix: Centro de costo is also "Por config" for Activo
     // (Amortizaciones) Cabecera, not "Nunca" as ETP-4529 originally recorded. It is
     // now a second dimension candidate alongside Project; the evaluator (mocked here
-    // as visible-by-default) lets both through. Contacto remains "Nunca"-equivalent
-    // in this pass (deferred pending an AD-metadata fix) and Producto is still not a
-    // GL-config-gated dimension, so neither is a candidate here.
+    // as visible-by-default) lets both through. Contacto is corrected in this same
+    // pass too, but is "Siempre" (shown whenever `depreciate` is on — see the
+    // dedicated describe block below) rather than GL-config-gated, so it is NOT a
+    // dimension candidate — it renders in the separate Financial Info form instead.
+    // Producto is still not a GL-config-gated dimension either, so neither appears here.
     const { container } = render(
       <AssetsDetailPanel {...BASE_PROPS} data={{ id: 'a1', depreciate: 'Y' }} />,
     );
     const dimForm = formsByFields(container).find(f => f.includes('project'));
     expect(dimForm).toBeDefined();
     expect(dimForm.split(',')).toEqual(['project', 'eTADASCostCenter']);
-    // Contacto/Producto and the 5 out-of-scope dimensions never appear.
+    // Contacto/Producto never appear in the DIMENSIONS form specifically — they're
+    // plain fields rendered elsewhere (Financial Info / Asset Info respectively),
+    // not GL-config-gated dimensions. The 5 out-of-scope dimensions never appear either.
     for (const key of [
       'businessPartner', 'product',
       'eTADASUser1', 'eTADASUser2', 'eTADASSalesRegion', 'eTADASActivity', 'eTADASSalesCampaign',
@@ -164,6 +168,31 @@ describe('AssetsDetailPanel — depreciation on', () => {
     const forms = formsByFields(container);
     expect(forms.some(f => f.includes('assetValue'))).toBe(true);       // financial
     expect(forms.some(f => f.includes('purchaseDate'))).toBe(true);     // dates
+  });
+});
+
+describe('AssetsDetailPanel — Contacto (businessPartner) visibility (ETP-4914)', () => {
+  it('shows businessPartner in the Financial Info form when depreciate is on', () => {
+    // Corrected matrix: Contacto is "Siempre" for this Cabecera — gated only by
+    // `depreciate`, not by GL Configuration (unlike Project/Cost Center).
+    const { container } = render(
+      <AssetsDetailPanel {...BASE_PROPS} data={{ id: 'a1', depreciate: 'Y' }} />,
+    );
+    const forms = formsByFields(container);
+    expect(forms.some(f => f.includes('businessPartner'))).toBe(true);
+    // It lands in the same form as the other Financial Info fields (group2Fields),
+    // not in the accounting-dimensions form.
+    const financialForm = forms.find(f => f.includes('currency'));
+    expect(financialForm).toBeDefined();
+    expect(financialForm).toContain('businessPartner');
+  });
+
+  it('hides businessPartner entirely when depreciate is off, matching the raw AD DisplayLogic (@IsDepreciated@=\'Y\')', () => {
+    const { container } = render(
+      <AssetsDetailPanel {...BASE_PROPS} data={{ id: 'a1', depreciate: 'N' }} />,
+    );
+    const forms = formsByFields(container);
+    expect(forms.some(f => f.includes('businessPartner'))).toBe(false);
   });
 });
 
