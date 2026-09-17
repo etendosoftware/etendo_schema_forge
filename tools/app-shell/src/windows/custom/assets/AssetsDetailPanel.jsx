@@ -197,7 +197,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     // keep the ETP-4333 local-recompute behavior intact.
     // Column order (per ETP-4539 follow-up): Identificador, Nombre, Grupo Activo, Producto,
     // Valor del Activo, Descripcion — assetValue must render BEFORE description.
-    { key: 'assetValue', column: 'AssetValueAmt', type: 'number', label: ui('assetsAssetValueLabel'), section: 'principal', calloutOn: 'blur' },
+    { key: 'assetValue', column: 'AssetValueAmt', type: 'amount', label: ui('assetsAssetValueLabel'), section: 'principal', calloutOn: 'blur' },
     { key: 'description', column: 'Description', type: 'textarea', label: ui('Description'), section: 'other', maxLength: 255 },
   ];
 
@@ -220,9 +220,9 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     //    onChange) replicates the SL_Assets arithmetic LOCALLY and synchronously
     //    (computeAssetAmounts) and writes the recomputed triple via onLocalChange. Deterministic,
     //    no async round-trip to race. The Java remains the source of truth (see computeAssetAmounts).
-    { key: 'residualAssetValue', column: 'Residualassetvalueamt', type: 'number', label: ui('assetsResidualValueLabel'), section: 'principal', calloutOn: 'blur' },
-    { key: 'depreciationAmt', column: 'Amortizationvalueamt', type: 'number', label: ui('assetsDepreciationAmtLabel'), section: 'principal', calloutOn: 'blur', requiredVisual: true },
-    { key: 'previouslyDepreciatedAmt', column: 'Depreciatedpreviousamt', type: 'number', label: ui('assetsPrevDepreciatedLabel'), section: 'principal', defaultValue: '0' },
+    { key: 'residualAssetValue', column: 'Residualassetvalueamt', type: 'amount', label: ui('assetsResidualValueLabel'), section: 'principal', calloutOn: 'blur' },
+    { key: 'depreciationAmt', column: 'Amortizationvalueamt', type: 'amount', label: ui('assetsDepreciationAmtLabel'), section: 'principal', calloutOn: 'blur', requiredVisual: true },
+    { key: 'previouslyDepreciatedAmt', column: 'Depreciatedpreviousamt', type: 'amount', label: ui('assetsPrevDepreciatedLabel'), section: 'principal', defaultValue: '0' },
     // ETP-4914 — Contacto is "Siempre" for this Cabecera, gated only by
     // `depreciate` (see the dimensionFieldCandidates comment above for why it
     // is not a GL-config-gated dimension). Plain `type: 'search'` with neither
