@@ -231,9 +231,13 @@ function renderDraftModeSaveActions({
       {!onlySaveButton && (
         <DraftModeConfirmButton
           confirmParams={{ flushPendingLines, draftMode, isDirty, hook, isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, ui, setShowProcessingModal }}
-          hook={hook} ui={ui} draftMode={draftMode} saveBtnCls={saveBtnCls} saveGate={saveGate}
+          hook={hook}
+          ui={ui}
+          draftMode={draftMode}
+          saveBtnCls={saveBtnCls}
+          saveGate={saveGate}
           blockCompleteForBalance={blockCompleteForBalance}
-        />
+          data-testid="DraftModeConfirmButton__22ebc2" />
       )}
     </>
   );
