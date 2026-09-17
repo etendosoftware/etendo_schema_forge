@@ -40,6 +40,14 @@ import { ADMIN_NAME_I18N_KEY, resolveRoleDisplayName } from '@/lib/roleNameI18n.
 
 const MAX_CHIPS = 2;
 
+/**
+ * ETP-5188 (Point 5) — sentinel value for the "Sin rol" quick-filter option. Not a real
+ * role id (never sent to the backend as one) — only ever produced by
+ * `RoleQuickFilterToolbarSlot.jsx`'s option list and interpreted by
+ * `UserHeaderTable.jsx`'s `filteredData` via `hasNoRole()` below.
+ */
+export const NO_ROLE_FILTER_VALUE = '__no_role__';
+
 /** `row.id` as a plain string, matching the bulk `assignments` map's string keys. */
 export function resolveUserId(row) {
   const id = row?.id;
@@ -60,6 +68,167 @@ export function resolveDefaultRoleId(row) {
     return id == null || id === '' ? null : String(id);
   }
   return String(value);
+}
+
+/**
+ * ETP-5188 (Point 5) — true when `row` counts as "Sin rol": NOT the client-admin AND zero
+ * entries in the bulk `assignments` map for its user id. Mirrors, in a reusable predicate,
+ * the exact same two branches `RoleChipsCell`'s own render below already checks (admin
+ * branch first, then the assignments lookup) — kept in sync deliberately, since both read
+ * the same underlying "does this user have a role" concept.
+ *
+ * @param {object} row
+ * @param {{adminRoleId: string|null, assignments: Record<string, string[]>}} ctx
+ */
+export function hasNoRole(row, { adminRoleId, assignments }) {
+  const defaultRoleId = resolveDefaultRoleId(row);
+  if (adminRoleId && defaultRoleId === adminRoleId) return false;
+  const userId = resolveUserId(row);
+  const applied = userId ? assignments?.[userId] : null;
+  return !Array.isArray(applied) || applied.length === 0;
+}
+
+/**
+ * ETP-5188 (Item 3) — builds the `enumLabels` catalog for the advanced-filter "Rol"
+ * field (`UserHeaderTable.jsx`'s `roleFilterColumn`) from the SAME merged roles index
+ * (`rolesById`, from `useUserRoleGridData()`/`useRolesCatalog()`'s `buildRolesIndex()`
+ * below) the grid's own chip renderer and the quick-filter dropdown already use — one
+ * role catalog, one id space, three surfaces (grid chips, quick filter, advanced
+ * filter). `NO_ROLE_FILTER_VALUE` is added first, same ordering rationale as
+ * `RoleFilterControl`'s own "Sin rol" placement.
+ *
+ * @param {Record<string, object>} rolesById
+ * @param {(key: string) => string} ui
+ * @returns {Record<string, string>}
+ */
+export function buildRoleEnumLabels(rolesById, ui) {
+  const enumLabels = { [NO_ROLE_FILTER_VALUE]: ui('noRole') };
+  for (const role of Object.values(rolesById ?? {})) {
+    if (role?.id == null) continue;
+    enumLabels[String(role.id)] = role.isClientAdmin
+      ? ui(ADMIN_NAME_I18N_KEY)
+      : resolveRoleDisplayName(ui, role.name);
+  }
+  return enumLabels;
+}
+
+/**
+ * ETP-5188 (Item 3) — translates an applied "Rol" advanced-filter condition into
+ * the backend's dedicated `RoleIds=`/`NoRole=`/`RoleFilterNegate=` query params
+ * instead of a generic `criteria=` entry. Assigned as `roleFilterColumn.
+ * toQueryParams` in `UserHeaderTable.jsx`; `ListView.jsx`'s
+ * `extractQueryParamConditions` (see `gridQuery.js`) strips this field's
+ * condition out of the criteria array UNCONDITIONALLY (regardless of what this
+ * function returns), before it can ever reach `buildAdvancedFilterCriteria` — a
+ * naive `criteria=` entry against the underlying N:M role-assignment collection
+ * 500s (confirmed live against this environment's own NEO Headless; see
+ * `docs/plans/2026-09-11-etp-5188-role-filter-open-questions.md`).
+ *
+ * **All 4 operators offered by `enumLabel` mode are translated** (`equals`,
+ * `notEqual`, `isNull`, `isNotNull` — see `OPERATORS_BY_MODE.enumLabel` in the
+ * published `AdvancedFilterBuilder.jsx`), all reusing the same two backend
+ * predicates plus one boolean negation flag the backend adds:
+ *   - `equals` ("Es") — selected ids → `RoleIds=`, the `NO_ROLE_FILTER_VALUE`
+ *     sentinel → `NoRole=true`, OR'd (both combinable in one request). No
+ *     `RoleFilterNegate`.
+ *   - `notEqual` ("No es") — the SAME `RoleIds=`/`NoRole=` construction as
+ *     `equals` (same selected ids — `DistinctEnumPicker`'s checkbox popover
+ *     produces an array of ticked codes for both operators identically) PLUS
+ *     `RoleFilterNegate=true`: "this user has NONE of the selected roles."
+ *   - `isNull` ("Está vacío") — equivalent to the existing "Sin rol" case:
+ *     `NoRole=true` alone, no `RoleIds=`, no `RoleFilterNegate`. This operator
+ *     renders no `ValueInput` at all (`showValue` in `AdvancedFilterBuilder.jsx`
+ *     is `false` for any op in `NULLISH_OPS`), and `updateRow` there resets
+ *     `row.value` to `null` on switching to it (`emptyValueForShape('nullish')`)
+ *     — so this branch MUST NOT (and does not) read `row.value`.
+ *   - `isNotNull` ("No está vacío") — `NoRole=true` PLUS `RoleFilterNegate=true`:
+ *     "this user has some role, whichever it is."
+ *
+ * @param {{ operator: string, value: unknown }} row
+ * @returns {string|null}
+ */
+export function buildRoleFilterQueryParams(row) {
+  const operator = row?.operator;
+  if (operator === 'isNull') return 'NoRole=true';
+  if (operator === 'isNotNull') return 'NoRole=true&RoleFilterNegate=true';
+  if (operator !== 'equals' && operator !== 'notEqual') return null;
+
+  const raw = Array.isArray(row.value) ? row.value : (row.value ? [row.value] : []);
+  const ids = raw.map(String).filter(Boolean);
+  if (ids.length === 0) return null;
+  const roleIds = ids.filter((id) => id !== NO_ROLE_FILTER_VALUE);
+  const noRole = ids.includes(NO_ROLE_FILTER_VALUE);
+  const segments = [];
+  if (roleIds.length > 0) segments.push(`RoleIds=${encodeURIComponent(roleIds.join(','))}`);
+  if (noRole) segments.push('NoRole=true');
+  if (operator === 'notEqual') segments.push('RoleFilterNegate=true');
+  return segments.length > 0 ? segments.join('&') : null;
+}
+
+/**
+ * Merges the 4 system-level role templates with the tenant's own client-admin role (if
+ * any) into the combined roles array both `useUserRoleGridData()` and `useRolesCatalog()`
+ * need — see either hook's own docstring for why both sources are required. Pure, no
+ * fetch — extracted so the merge rule has exactly one implementation.
+ */
+function mergeRolesCatalog(templateRoles, overviewRoles) {
+  const adminRole = (overviewRoles ?? []).find((role) => role?.isClientAdmin === true) ?? null;
+  return adminRole ? [...(templateRoles ?? []), adminRole] : (templateRoles ?? []);
+}
+
+/** `{ rolesById, adminRoleId }` derived from a combined roles array. Pure, no fetch. */
+function buildRolesIndex(roles) {
+  const rolesById = {};
+  for (const role of roles) {
+    if (role?.id != null) rolesById[String(role.id)] = role;
+  }
+  const admin = roles.find((role) => role?.isClientAdmin);
+  const adminRoleId = admin?.id != null ? String(admin.id) : null;
+  return { rolesById, adminRoleId };
+}
+
+/**
+ * ETP-5188 — lightweight twin of `useUserRoleGridData()` below, for callers that only
+ * need the SELECTABLE roles list (id/name/isClientAdmin) and not the heavier bulk
+ * `SFUserRoleAssignments` map. Used by `RoleQuickFilterToolbarSlot.jsx`, which renders in
+ * `ListView`'s own toolbar row — a separate component instance from `UserHeaderTable`
+ * (which still calls the full `useUserRoleGridData()` for chip rendering / row
+ * filtering), with no common ancestor to share one fetch from (the page that mounts both
+ * is a generated file — see the Generated Files Policy — so no shared provider can be
+ * introduced there this round). This deliberately duplicates only the two LIGHT catalog
+ * fetches (`fetchTemplateRoles`/`fetchRolesOverview`), never the heavy bulk assignments
+ * fetch, which stays exclusive to `useUserRoleGridData()`.
+ *
+ * @returns {{
+ *   roles: Array<{id: string, name: string, isClientAdmin?: boolean}>,
+ *   rolesById: Record<string, object>,
+ *   adminRoleId: string|null,
+ *   loading: boolean,
+ *   error: Error|null,
+ * }}
+ */
+export function useRolesCatalog() {
+  const [state, setState] = useState({ roles: [], loading: true, error: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([fetchTemplateRoles(), fetchRolesOverview()])
+      .then(([templateRolesResult, overviewResult]) => {
+        if (cancelled) return;
+        const templateRoles = Array.isArray(templateRolesResult?.roles) ? templateRolesResult.roles : [];
+        const overviewRoles = Array.isArray(overviewResult?.roles) ? overviewResult.roles : [];
+        setState({ roles: mergeRolesCatalog(templateRoles, overviewRoles), loading: false, error: null });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setState((prev) => ({ ...prev, loading: false, error }));
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const { rolesById, adminRoleId } = useMemo(() => buildRolesIndex(state.roles), [state.roles]);
+
+  return { ...state, rolesById, adminRoleId };
 }
 
 /**
@@ -96,9 +265,8 @@ export function useUserRoleGridData() {
         if (cancelled) return;
         const templateRoles = Array.isArray(templateRolesResult?.roles) ? templateRolesResult.roles : [];
         const overviewRoles = Array.isArray(overviewResult?.roles) ? overviewResult.roles : [];
-        const adminRole = overviewRoles.find((role) => role?.isClientAdmin === true) ?? null;
         setState({
-          roles: adminRole ? [...templateRoles, adminRole] : templateRoles,
+          roles: mergeRolesCatalog(templateRoles, overviewRoles),
           assignments: assignmentsResult?.assignments ?? {},
           loading: false,
           error: null,
@@ -111,18 +279,7 @@ export function useUserRoleGridData() {
     return () => { cancelled = true; };
   }, []);
 
-  const rolesById = useMemo(() => {
-    const map = {};
-    for (const role of state.roles) {
-      if (role?.id != null) map[String(role.id)] = role;
-    }
-    return map;
-  }, [state.roles]);
-
-  const adminRoleId = useMemo(() => {
-    const admin = state.roles.find((role) => role?.isClientAdmin);
-    return admin?.id != null ? String(admin.id) : null;
-  }, [state.roles]);
+  const { rolesById, adminRoleId } = useMemo(() => buildRolesIndex(state.roles), [state.roles]);
 
   return { ...state, rolesById, adminRoleId };
 }

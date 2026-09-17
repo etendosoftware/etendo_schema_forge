@@ -23,7 +23,7 @@ import SelectionToolbar from './SelectionToolbar.jsx';
 import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
 import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-pane.jsx';
 import { useWindowImportDialog } from './useWindowImportDialog.js';
-import { buildAdvancedFilterCriteria } from '@/lib/gridQuery';
+import { buildAdvancedFilterCriteria, extractQueryParamConditions } from '@/lib/gridQuery';
 import { useWindowFilterPresets } from '@/hooks/useWindowFilterPresets';
 import { trackSearchPerformed, trackWindowOpened } from '@/lib/productUsageTelemetry.js';
 import {
@@ -463,9 +463,17 @@ export function ListView({
   );
 
   const advancedFilterPart = useMemo(() => {
-    const criteria = buildAdvancedFilterCriteria(advancedFilter, filterColumns);
-    if (!criteria || criteria.length === 0) return null;
-    return `criteria=${encodeURIComponent(JSON.stringify(criteria))}`;
+    // ETP-5188 — a column can declare `toQueryParams` to opt its condition out of
+    // the generic `criteria=` builder entirely and translate it into raw backend
+    // query params instead (e.g. Users' "Rol" field → `RoleIds=`/`NoRole=`, whose
+    // condition targets an N:M role-assignment collection the HQL criteria layer
+    // cannot dot-path through). See `extractQueryParamConditions` in `gridQuery.js`.
+    const { conditions, extraParams } = extractQueryParamConditions(advancedFilter, filterColumns);
+    const criteria = buildAdvancedFilterCriteria(conditions, filterColumns);
+    const segments = [];
+    if (criteria && criteria.length > 0) segments.push(`criteria=${encodeURIComponent(JSON.stringify(criteria))}`);
+    if (extraParams) segments.push(extraParams);
+    return segments.length > 0 ? segments.join('&') : null;
   }, [advancedFilter, filterColumns]);
 
   const effectiveFilter = useMemo(() => {
@@ -1106,6 +1114,22 @@ export function ListView({
                       </button>
                     ))}
                   </div>
+                )}
+                {/* ETP-5188 — a custom `Table` component may expose a companion
+                    toolbar-slot component via a static property (same convention
+                    `DetailView.jsx` uses for `formFooter.inlineInHeaderCard`), so it can
+                    render a quick-filter control right here — same toolbar row as
+                    "Filtros", left of it — with zero changes to the generated page,
+                    `decisions.json`, or the generator. See `UserHeaderTable.
+                    ToolbarQuickFilter` / `RoleQuickFilterToolbarSlot.jsx` for the
+                    reference implementation. */}
+                {Table?.ToolbarQuickFilter && (
+                  <Table.ToolbarQuickFilter
+                    entity={entity}
+                    windowName={windowName}
+                    token={token}
+                    apiBaseUrl={apiBaseUrl}
+                    data-testid="TableToolbarQuickFilter__620cbc" />
                 )}
                 <ListFilterBarSection
                   hideFilters={listViewOptions?.hideFilters}

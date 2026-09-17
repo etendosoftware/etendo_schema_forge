@@ -54,10 +54,23 @@ const NON_GRID_COLUMN_TYPES = new Set(['dimensionsPanel']);
 /**
  * True if `col` should participate in the shared grid layout (colgroup /
  * flex row) computed by both InlineLinesPanel and DataTable. False for
- * column types that render out-of-band (e.g. `dimensionsPanel`).
+ * column types that render out-of-band (e.g. `dimensionsPanel`), and false
+ * for any column explicitly marked `filterOnly: true`.
+ *
+ * ETP-5188 — `filterOnly` is a generic, type-independent escape hatch for a
+ * column that exists ONLY to appear in the advanced-filter field list (it
+ * still flows through `DataTable`'s raw `columns` prop into `onColumnsReady`
+ * → `ListView`'s `filterColumns`) and must never render as an actual grid
+ * cell/header — e.g. a synthetic field with no backing AD column, whose
+ * condition is intercepted before it reaches the generic criteria builder
+ * (see `UserHeaderTable.jsx`'s `roleFilterColumn` / `toQueryParams`, and
+ * `ListView.jsx`'s `extractQueryParamConditions`). Unlike
+ * `NON_GRID_COLUMN_TYPES`, this is not tied to a specific `type` — any
+ * column type can opt out of rendering this way without hijacking an
+ * unrelated type's semantics.
  */
 export function isLineGridColumn(col) {
-  return !NON_GRID_COLUMN_TYPES.has(col.type);
+  return col.filterOnly !== true && !NON_GRID_COLUMN_TYPES.has(col.type);
 }
 
 function selectorFlex(col, idx) {
