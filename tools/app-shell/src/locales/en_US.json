@@ -16490,6 +16490,8 @@
     "walkthroughContactStepLastNameBody": "The person’s last name. Together with the first name it forms the contact name.",
     "walkthroughContactStepCategoryTitle": "Contact category",
     "walkthroughContactStepCategoryBody": "The category groups contacts and provides their accounting and payment defaults.",
+    "walkthroughContactStepTaxIdKeyTitle": "Residence Country Tax ID Key",
+    "walkthroughContactStepTaxIdKeyBody": "Select the type of document that identifies this contact for tax purposes. For companies and freelancers resident in Spain this is \"NIF\"; the list also offers Intra-Community NIF, Passport and other options.",
     "walkthroughContactStepTaxIdTitle": "Tax ID",
     "walkthroughContactStepTaxIdBody": "Enter the tax identifier. It is required in order to invoice this contact.",
     "walkthroughContactStepEmailTitle": "Email address",
