@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, Plus } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { DataTable } from '@/components/contract-ui';
 import { useLocale, useLocaleSwitch, useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
@@ -205,6 +205,12 @@ export default function PurchaseInvoiceHeaderTable(props) {
         // which otherwise resolves to "Documento transacción".
         labels: { [locale]: t('documentType') },
         label: t('documentType'),
+        // `custom` has no width entry in linesColumnWidth.js (generic 120px
+        // fallback), but the widest label here ("Factura rectificativa") alone
+        // measures ~128px — with the cell's own overflow-hidden now in effect
+        // (ETP-5281), a too-narrow column clipped the pill mid-word with no
+        // ellipsis instead of showing the full label.
+        minWidth: 160,
         render: (row) => {
           const cfg = SUBTYPE_BADGE[getApSubtype(row)];
           if (!cfg) return <span className="text-muted-foreground">—</span>;
@@ -267,6 +273,14 @@ export default function PurchaseInvoiceHeaderTable(props) {
         // to text mode, which has no `greaterThan`, and the operator select
         // renders empty (ETP-4681).
         filterMode: 'numeric',
+        // `custom` has no width entry in linesColumnWidth.js, so it falls back
+        // to the generic 120px basis — 24px of cell padding leaves only 96px
+        // for the button, and the "pending" badge (dot + amount) alone already
+        // measures ~97px for a 3-digit amount. The ~1px overflow made the
+        // cell's own `text-overflow: ellipsis` kick in on the whole button,
+        // rendering a literal "…" next to the pill. 160px covers larger
+        // amounts too.
+        minWidth: 160,
         render: (row) => {
           const currency = row['currency$_identifier'] || 'EUR';
           // ETP-4841: the badge follows the SIGN of the total, not the document
@@ -293,7 +307,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
                 style={{...NOWRAP_FLEX,display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-info-bg)',border:'1px solid var(--status-info-border)',color:'var(--status-info-fg)',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
               >
                 <span style={{width:8,height:8,borderRadius:'50%',background:'var(--status-info-fg)',flexShrink:0,display:'inline-block'}}/>
-                {ui('cpFavorBadge')} · {formatCurrency(currency, badge.amount)}
+                {ui('cpFavorBadge')} {formatCurrency(currency, badge.amount)}
               </button>
             );
           }
@@ -333,7 +347,6 @@ export default function PurchaseInvoiceHeaderTable(props) {
             >
               <span style={{width:8,height:8,borderRadius:'50%',background:'var(--status-warning-fg)',flexShrink:0,display:'inline-block'}}/>
               {formatCurrency(currency, badge.amount)}
-              <span style={{display:'inline-flex',alignItems:'center',color:'var(--status-warning-fg)'}}><Plus size={13} data-testid="Plus__6b7cdb" /></span>
             </button>
           );
         },
