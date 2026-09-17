@@ -21,6 +21,8 @@ This PRD supersedes conflicting older rules about converting demos, fixed 14-day
 ### Included
 
 - Configurable demo trial, initially 15 days, and server-enforced expiry.
+- The global application header always shows the current environment type and its commercial
+  status; active demo days remain visible in a dedicated full-width banner below the search header.
 - New productive environment after a confirmed purchase; removal of demo conversion.
 - Continued access to the associated demo while the subscription is current.
 - Optional transfer of products and contacts through existing Export/Import.

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMenuLabel, useUI } from '@/i18n';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
-import { environmentTrialLabel, isProductiveEnvironment } from '@/lib/environmentPresentation.js';
+import { isProductiveEnvironment } from '@/lib/environmentPresentation.js';
 import { useCopilot } from '@/components/CopilotContext';
 import { WalkthroughLauncher } from '@etendosoftware/app-shell-core/walkthrough';
 import { cn } from '@/lib/utils.js';
@@ -57,33 +57,51 @@ function resolveScopeLabel(scope, tMenu) {
 function DemoTrialIndicator({ ui }) {
   const { environments, currentClientId } = useEnvironmentSwitch();
   const environment = environments.find(item => item.clientId === currentClientId);
-  if (!environment || isProductiveEnvironment(environment)
-      || !Number.isInteger(environment.trialDaysRemaining)) return null;
-  const expired = environment.trialDaysRemaining <= 0;
+  if (!environment) return null;
+  const productive = isProductiveEnvironment(environment);
+  const hasTrial = Number.isInteger(environment.trialDaysRemaining);
+  if (!productive && !hasTrial) return null;
+  const expired = !productive && environment.trialDaysRemaining <= 0;
   const start = Date.parse(environment.trialStartedAt);
   const end = Date.parse(environment.trialExpiresAt);
   const total = end - start;
   const remaining = Math.max(0, end - Date.now());
-  const progress = total > 0 ? Math.min(100, Math.max(0, (remaining / total) * 100)) : 0;
+  const progress = productive ? 100 : total > 0
+    ? Math.min(100, Math.max(0, (remaining / total) * 100)) : 0;
+  const label = productive
+    ? ui('environmentSubscriptionActive')
+    : expired
+      ? ui('environmentDemoExpired')
+      : ui('environmentTrialDaysRemaining', { days: environment.trialDaysRemaining });
   return (
     <div
       className={cn(
-        'hidden min-w-[190px] max-w-[250px] rounded-lg border px-3 py-1.5 lg:block',
+        'flex min-h-[42px] w-full items-center justify-between gap-4 border-b px-6 py-2 text-sm',
         expired ? 'border-status-danger/40 bg-status-danger/10' : 'border-status-success/30 bg-status-success/10'
       )}
-      aria-label={environmentTrialLabel(environment, ui) || ui('environmentDemoExpired')}
+      aria-label={label}
       title={environment.trialExpiresAt || undefined}
       data-testid="topbar-demo-trial-indicator"
     >
-      <div className="flex items-center justify-between gap-3 text-xs font-semibold">
-        <span>{expired ? ui('environmentDemoExpired') : ui('environmentTrialDaysRemaining', { days: environment.trialDaysRemaining })}</span>
-        <span aria-hidden="true">{expired ? '0' : environment.trialDaysRemaining}</span>
+      <div className="flex min-w-0 items-center gap-3">
+        <span className={cn(
+          'rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wide',
+          expired ? 'bg-status-danger text-white' : 'bg-status-success text-white'
+        )}>
+          {productive ? ui('environmentProductive') : ui('environmentDemo')}
+        </span>
+        <span className="truncate font-semibold text-foreground">{label}</span>
       </div>
-      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-background/70" aria-hidden="true">
+      <div className="flex w-full max-w-[360px] items-center gap-3">
+        {!productive && <span className="shrink-0 text-sm font-bold text-foreground" aria-hidden="true">
+          {expired ? '0' : environment.trialDaysRemaining}
+        </span>}
+        <div className="h-2 min-w-20 flex-1 overflow-hidden rounded-full bg-background/70" aria-hidden="true">
         <div
           className={cn('h-full rounded-full', expired ? 'bg-status-danger' : 'bg-status-success')}
           style={{ width: `${progress}%` }}
         />
+        </div>
       </div>
     </div>
   );
@@ -171,12 +189,13 @@ export default function TopBar({
 
   return (
     <TooltipProvider data-testid="TooltipProvider__133e64">
-      <header
-        className={cn(
-          'relative flex h-[62px] shrink-0 items-center gap-4 pl-0 pr-6 bg-page-bg',
-          className
-        )}
-      >
+      <div className="flex min-w-0 shrink-0 flex-col">
+        <header
+          className={cn(
+            'relative flex h-[62px] shrink-0 items-center gap-4 pl-0 pr-6 bg-page-bg',
+            className
+          )}
+        >
         {/* Left: back button + title + breadcrumb + 3-dot menu */}
         {(title || onBack) && (
           <div className="relative z-10 flex items-center gap-1 shrink-0 min-w-0">
@@ -375,7 +394,6 @@ export default function TopBar({
 
         {/* Right: action icons */}
         <div className="ml-auto flex items-center gap-1 shrink-0">
-          <DemoTrialIndicator ui={ui} data-testid="DemoTrialIndicator__133e64" />
           {/* ETP-5144 — guided walkthroughs. Hardcoded here rather than passed
               via `rightExtras` (which comes from per-page PageMeta) so the
               entry point is reachable from every screen. Renders nothing when
@@ -427,7 +445,9 @@ export default function TopBar({
 
           {rightExtras}
         </div>
-      </header>
+        </header>
+        <DemoTrialIndicator ui={ui} data-testid="DemoTrialIndicator__133e64" />
+      </div>
     </TooltipProvider>
   );
 }
