@@ -1,8 +1,8 @@
 {
-  "version": "0.12.1",
+  "version": "0.13.0",
   "generatedAt": "2026-04-27T19:18:32.198Z",
-  "updatedAt": "2026-09-08T12:57:26.077Z",
-  "checksum": "a22af17a9ef70175",
+  "updatedAt": "2026-09-17T11:53:53.443Z",
+  "checksum": "8baeb3006790777a",
   "frontendContract": {
     "window": {
       "id": "137",
@@ -25,14 +25,16 @@
           "Rate": "Índice",
           "SOPOType": "Tipo venta/compra",
           "ValidFrom": "Válido desde",
-          "Description": "Descripción"
+          "Description": "Descripción",
+          "C_TaxCategory_ID": "Categoría de impuesto"
         },
         "en_US": {
           "Name": "Name",
           "Rate": "Rate",
           "SOPOType": "Sales/Purchase Type",
           "ValidFrom": "Valid From",
-          "Description": "Description"
+          "Description": "Description",
+          "C_TaxCategory_ID": "Tax Category"
         }
       },
       "noHeaderBorder": true,
@@ -78,10 +80,31 @@
             "form": true,
             "sourceRequired": true,
             "section": "principal",
-            "seq": 4,
+            "seq": 5,
             "validation": {
               "required": true,
               "maxLength": 10
+            }
+          },
+          {
+            "name": "taxCategory",
+            "apiKey": "taxCategory",
+            "column": "C_TaxCategory_ID",
+            "label": "Tax Category",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "TaxCategory",
+            "inputMode": "selector",
+            "section": "principal",
+            "seq": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 22
             }
           },
           {
@@ -197,7 +220,7 @@
             ],
             "defaultValue": "D",
             "section": "principal",
-            "seq": 5,
+            "seq": 6,
             "validation": {
               "required": true,
               "maxLength": 60
@@ -262,7 +285,7 @@
             ],
             "defaultValue": "LNA",
             "section": "principal",
-            "seq": 6,
+            "seq": 7,
             "validation": {
               "required": true,
               "maxLength": 10
@@ -794,7 +817,8 @@
           }
         ],
         "searchableFields": [
-          "name"
+          "name",
+          "applicableTo"
         ],
         "computedFields": [
           {
@@ -902,14 +926,16 @@
           "Rate": "Índice",
           "SOPOType": "Tipo venta/compra",
           "ValidFrom": "Válido desde",
-          "Description": "Descripción"
+          "Description": "Descripción",
+          "C_TaxCategory_ID": "Categoría de impuesto"
         },
         "en_US": {
           "Name": "Name",
           "Rate": "Rate",
           "SOPOType": "Sales/Purchase Type",
           "ValidFrom": "Valid From",
-          "Description": "Description"
+          "Description": "Description",
+          "C_TaxCategory_ID": "Tax Category"
         }
       },
       "noHeaderBorder": true,
@@ -950,7 +976,7 @@
             "apiKey": "taxCategory",
             "column": "C_TaxCategory_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -1547,7 +1573,8 @@
         "path": "/tax",
         "entity": "tax",
         "supportedFilters": [
-          "name"
+          "name",
+          "applicableTo"
         ]
       },
       {
@@ -1621,7 +1648,8 @@
         "listUrl": "/sws/neo/tax-rate/tax",
         "detailUrl": "/sws/neo/tax-rate/tax/{id}",
         "supportedFilters": [
-          "name"
+          "name",
+          "applicableTo"
         ]
       },
       "accounting": {
@@ -1637,6 +1665,14 @@
       }
     },
     "selectors": [
+      {
+        "entity": "tax",
+        "field": "taxCategory",
+        "column": "C_TaxCategory_ID",
+        "reference": "TaxCategory",
+        "inputMode": "selector",
+        "url": "/sws/neo/tax-rate/tax/selectors/taxCategory"
+      },
       {
         "entity": "accounting",
         "field": "taxDue",
@@ -1677,14 +1713,16 @@
         "Rate": "Índice",
         "SOPOType": "Tipo venta/compra",
         "ValidFrom": "Válido desde",
-        "Description": "Descripción"
+        "Description": "Descripción",
+        "C_TaxCategory_ID": "Categoría de impuesto"
       },
       "en_US": {
         "Name": "Name",
         "Rate": "Rate",
         "SOPOType": "Sales/Purchase Type",
         "ValidFrom": "Valid From",
-        "Description": "Description"
+        "Description": "Description",
+        "C_TaxCategory_ID": "Tax Category"
       }
     }
   },
@@ -2009,6 +2047,14 @@
         "description": "Field 'rate' should be present in tax"
       },
       {
+        "id": "t-field-presence-tax-taxCategory",
+        "category": "field-presence",
+        "entity": "tax",
+        "field": "taxCategory",
+        "runner": "node",
+        "description": "Field 'taxCategory' should be present in tax"
+      },
+      {
         "id": "t-field-presence-tax-taxExempt",
         "category": "field-presence",
         "entity": "tax",
@@ -2151,6 +2197,14 @@
         "field": "rate",
         "runner": "node",
         "description": "Field 'rate' should have type 'number' in tax"
+      },
+      {
+        "id": "t-field-type-tax-taxCategory",
+        "category": "field-type",
+        "entity": "tax",
+        "field": "taxCategory",
+        "runner": "node",
+        "description": "Field 'taxCategory' should have type 'string' in tax"
       },
       {
         "id": "t-field-type-tax-taxExempt",
@@ -2410,6 +2464,14 @@
         "description": "Rule 'tax-Tax-Rate-displayLogic' (displayLogic) should be declared"
       },
       {
+        "id": "t-searchable-filters-tax-applicableTo",
+        "category": "searchable-filters",
+        "entity": "tax",
+        "field": "applicableTo",
+        "runner": "node",
+        "description": "Field 'applicableTo' should be a supported filter for tax"
+      },
+      {
         "id": "t-searchable-filters-tax-name",
         "category": "searchable-filters",
         "entity": "tax",
@@ -2432,6 +2494,14 @@
         "field": "taxDue",
         "runner": "node",
         "description": "Selector endpoint for 'taxDue' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-tax-taxCategory",
+        "category": "selector-endpoint",
+        "entity": "tax",
+        "field": "taxCategory",
+        "runner": "node",
+        "description": "Selector endpoint for 'taxCategory' in tax should exist"
       },
       {
         "id": "t-system-field-accounting-accountingSchema",
@@ -2858,14 +2928,6 @@
         "description": "System field 'taxBase' should exist in backend but not frontend for tax"
       },
       {
-        "id": "t-system-field-tax-taxCategory",
-        "category": "system-field",
-        "entity": "tax",
-        "field": "taxCategory",
-        "runner": "node",
-        "description": "System field 'taxCategory' should exist in backend but not frontend for tax"
-      },
-      {
         "id": "t-system-field-tax-taxSearchKey",
         "category": "system-field",
         "entity": "tax",
@@ -2913,22 +2975,22 @@
       }
     ],
     "summary": {
-      "total": 157,
+      "total": 160,
       "byCategory": {
         "crud-flags": 2,
         "default-value-type": 3,
         "displaylogic-evaluable": 11,
         "displaylogic-valid": 11,
-        "field-presence": 18,
-        "field-type": 18,
+        "field-presence": 19,
+        "field-type": 19,
         "rule-declared": 31,
-        "searchable-filters": 1,
-        "selector-endpoint": 2,
-        "system-field": 58,
+        "searchable-filters": 2,
+        "selector-endpoint": 3,
+        "system-field": 57,
         "visibility": 2
       },
       "byRunner": {
-        "node": 157,
+        "node": 160,
         "junit": 0
       }
     }

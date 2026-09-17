@@ -10,6 +10,7 @@ Users should be able to review and update tax definitions by setting a tax name,
 
 From the current generated form and decisions, the visible window allows a user to:
 - name the tax rate record
+- view the Tax Category the rate belongs to (read-only, `C_TaxCategory_ID`)
 - enter the rate as a numeric percentage value
 - choose whether the tax applies to both flows, sales only, or purchases only
 - set a valid-from date
@@ -52,7 +53,10 @@ No dependent selector behavior, automatic defaulting between these fields, statu
 1. Open `/tax` from the `System` menu and confirm the list view loads.
 2. Confirm the list renders the rate as a colored percentage tag (`+N %` green for positive rates, `0 %` neutral/gray for zero, `-N %` red for negative/withholding rates) and `Applicable To` as `Sales` / `Purchase` tags.
 3. For a tax whose applicability is `Both`, confirm the list shows both tags together instead of a raw code.
-4. Open `/tax/<recordId>` and confirm the form exposes `Name`, `Rate`, `Applicable To`, `Valid From`, `Doc Tax Amount`, and `Base Amount`. Confirm `Active` is NOT shown.
+4. Open `/tax/<recordId>` and confirm the form exposes `Name`, `Tax Category` (read-only), `Rate`, `Applicable To`, `Valid From`, `Doc Tax Amount`, and `Base Amount`. Confirm `Active` is NOT shown.
+4a. In the list view, confirm `Tax Category` appears as a grid column right after `Name`.
+4b. Open the funnel/advanced filter and confirm `Applicable To` is offered as a filterable field (in addition to `Name`); apply a filter and confirm it narrows the list correctly.
+4c. Open the "Ordenar por" (sort) control and confirm `Applicable To` is offered; click the `Applicable To` column header and confirm the list re-sorts by scope.
 5. Confirm `Applicable To` offers `Both`, `Sales Tax`, and `Purchase Tax`.
 6. Confirm `Doc Tax Amount` offers `Document Amount` and `Line Amount`.
 7. Confirm `Base Amount` offers `Line Net Amount`, `Line Net Amount + Tax`, `Tax Amount`, `Alternative Base Amount`, and `Alternative Base + Tax`.
@@ -152,3 +156,18 @@ The Taxes header now exposes the SIF (Sistemas de Información de Facturación) 
 ## ETP-4565 — Accounting tab: single record, entity-level non-deletable
 
 **`window.maxDetailLines: 1`** added — the `accounting` detail entity (`window.detailEntity: "accounting"`) now caps at exactly one row; the add-line affordance disappears once the row exists. **`entities.accounting.hideDelete: true`** added as defense-in-depth alongside the pre-existing window-level `hideDelete`/`hideDeleteButton` (ETP-4464) — the accounting row's delete capability is now also explicitly disabled at the entity/API level (`apiPrediction.crud.accounting.delete: false`), not just implied by the window-wide flags. Regenerated via `make regen ONLY=tax`; `sf-validate-pipeline --scope=tax` reports 0 violations. Regression test: `artifacts/__tests__/etp-4565-accounting-tab-restrictions.test.js`.
+
+## Tax Category exposed + Applicable To made filterable/sortable in the list — ETP-5382
+
+Two independent bugs fixed in `artifacts/tax/decisions.json`, both under `entities.tax.fields`:
+
+**1. `taxCategory` (`C_TaxCategory_ID`) was `visibility: "discarded"` with no `reason`** — every other discarded field in this entity carries one, so this was an oversight, not a deliberate scope cut. Jira asked for it to be visible and editable. AD inspection (`ad_column`: `isupdateable='Y'`, empty `readonlylogic`) shows `C_TaxCategory_ID` is just as AD-editable as `Name`/`Rate`/`SOPOType` — all three of which this window nonetheless keeps `readOnly` by deliberate product design (this window is a locked-down reference view over Classic tax config; only the newer SIF-override columns are genuinely `editable`). Since the AD data does not distinguish `taxCategory` from its already-`readOnly` siblings, it was classified **`readOnly`** to match the established pattern rather than taken literally as `editable` — **flagged here for human review** in case product intent genuinely wants it editable despite the sibling precedent.
+   - Set to `visibility: "readOnly"`, `grid: true`, `form: true`, `section: "principal"`, `seq: 4` (between `salesPurchaseType` and `validFromDate`; `validFromDate`/`docTaxAmount`/`baseAmount` seqs bumped by one).
+   - Added a `labelOverrides` entry (`C_TaxCategory_ID`: "Categoría de impuesto" / "Tax Category") — the raw AD element translation is "Grupo de impuesto" (es_ES), which doesn't match the terminology Jira/product asked for.
+   - In the generated grid, the column lands right after `Name` (grid column order follows the raw AD `AD_Field.seqno`, not the decisions.json `seq`, which only orders the detail/form section) — this matches Classic's own field order.
+
+**2. `salesPurchaseType` (`applicableTo`, `SOPOType`) was not in the list's filter/search set** — added `"searchable": true` (the same flag `name` already carries). Regenerated `TaxTable.jsx`'s `filters` array and `contract.json`'s `apiPrediction.crud.tax.supportedFilters` now read `['name', 'applicableTo']` instead of `['name']`.
+   - **Sortability was investigated separately, not assumed to be fixed by the same flag.** `ListSortPopover`/`DataTable`'s column-header sort both gate purely on `col.sortable !== false` (`tools/app-shell/src/components/contract-ui/DataTable.jsx`, `ListSortPopover.jsx`), independent of the `filters`/`searchable` flag; `applicableTo` already carries a real `column: 'SOPOType'` binding with no `sortable: false` override, and `resolveBackendSort()` (`tools/app-shell/src/lib/gridQuery.js`) builds a valid `_sortBy=applicableTo` request off that binding. So sorting on this column was already wired correctly before this change — no `filterMode`/`sortable` flag was needed (unlike the `type: 'custom'`-with-no-`column'` case documented in `docs/decisions-reference.md` and `artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx`'s `transactionDocument`/`eTGOTbaiStatus` pattern, which doesn't apply here since `applicableTo` is `type: 'enum'` with a real `column`, not `type: 'custom'`).
+   - **Classic label correspondence verified against the AD, not assumed:** queried `ad_ref_list`/`ad_ref_list_trl` for `SOPOType`'s reference (`ad_reference_id=287`) — Classic's own es_ES labels are `B`→"Ambos", `P`→"Impuesto compras", `S`→"Impuesto ventas". These already match `enumLabels`' i18n keys (`sopotypeB`/`sopotypeP`/`sopotypeS` in `es_ES.json`/`en_US.json`) exactly — **no locale mismatch found, no string changes needed**. The grid cell's own badge labels (`taxScopeSales`="Ventas", `taxScopePurchase`="Compras") are a deliberate two-badge decomposition of the "Both" case for the compact list cell, not a literal translation of the enum values — also correct as-is.
+
+Regenerated via `make regen ONLY=tax SKIP_EXTRACT=1` (DB extraction still ran under the hood; `SKIP_EXTRACT` did not skip the `[F1a]` field-extraction step for this pipeline version). Contract-integrity check: `draftMode` is `false` for this window (no completion flow), so the "editable header fields must have `readOnlyLogic`" rule does not apply here; no field regressed. `push-to-neo` was **not** run as part of this change — pending Review/QA before deployment.
