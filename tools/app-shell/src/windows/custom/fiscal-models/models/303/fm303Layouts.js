@@ -392,6 +392,15 @@ export const SUPPORTED_YEARS = [...new Set([
   BASE_YEAR,
 ])].sort((a, b) => a - b);
 
+// ── Selectable years (NEW declarations only) ───────────────────────
+// SUPPORTED_YEARS above spans every year a layout can be RESOLVED for
+// (historical declarations, 2021-2025, still need their original layout to
+// open/edit correctly — see getLayout303). SELECTABLE_YEARS is the narrower
+// list of years a user may pick when CREATING a new declaration — today just
+// the current filing year. Keep this in sync manually (it is intentionally
+// not derived from SUPPORTED_YEARS) whenever a new filing year opens up.
+export const SELECTABLE_YEARS = [BASE_YEAR];
+
 // ── Patch engine ──────────────────────────────────────────────────
 
 function opDeleteRow(sections, op) {
