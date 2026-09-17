@@ -1131,3 +1131,58 @@ Two points specific to this window:
   touch those — they are disambiguated *before* they are written — but it does mean a
   hand-edited file that flattens two qualified headers back onto the same name is now caught at
   upload instead of silently losing a column.
+
+## ETP-5373 — The downloaded template could not be imported as-is
+
+Two of the template's own example values were refused by `BusinessPartnerHandler` at confirm
+time, each with a different error, so the user discovered them one at a time and the "download
+the template, fill it in, upload it" path never completed without hand-editing the sample row.
+
+| Column | Shipped | Result | Now |
+| --- | --- | --- | --- |
+| `taxID` | `B12345678` | Rejected — wrong check digit (`SpanishTaxIdValidator`) | `B12345674` |
+| `etgoWeb` | `https://distribucionesgarcia.es` | Rejected — the validator wants a bare domain | `distribucionesgarcia.es` |
+
+The other format-validated examples (`etgoEmail`, `email`, `etgoPhone`, `phone`) were already
+fine.
+
+### Why the web example was wrong, and the rule that prevents the next one
+
+`EM_Etgo_Web` stores **only the host**: the form renders a fixed, non-editable `https://` chip
+before the input (`inputPrefix` on the field descriptor, ETP-4749), so what the user sees is not
+what the column holds. The backend validates the stored value as a host — at least two
+dot-separated labels, the last a 2+ letter TLD — and `https://…` makes the first label invalid.
+
+The general rule, which is the one worth remembering: **an import example is the value that will
+be STORED, not the one a user sees in the form.** That covers the coded columns too, from the
+other direction — `etgoIsperson` ships `"Empresa"` and `oBTIKTaxIDKey` ships `"NIF"` because
+those cells are labels the descriptor resolves (`'N'`, `'1'`) before sending.
+
+### Why nothing caught it
+
+The examples live in `artifacts/contacts/decisions.json` → `window.import.fields[].example` and
+the pipeline writes them into the contract. Client-side, the review screen runs `validateRow`,
+which knows about required / email / numeric and nothing else — so both values previewed as
+correct. Nothing connected the examples to the rules that would judge them, and an invalid
+example therefore shipped without anything failing.
+
+### The guard
+
+`importTemplateRoundTrip.vitest.js` → *ETP-5373* now judges every window's examples with the
+browser mirrors of the Java validators (`lib/taxIdValidation.js` ↔ `SpanishTaxIdValidator.java`,
+`recipientEdits.js` ↔ the handler's `EMAIL_PATTERN` / `isDomainShaped` / `isPlausiblePhone`) —
+imported, never restated, so a third copy cannot drift from either side.
+
+It is deliberately not a list of the two values that were wrong. It asks the **same detectors
+production uses** (`isTaxIdField`, `isEmailField`, `isWebsiteField`, `isPhoneField`) which
+columns carry a format rule, so the next import column named `*email*`, `*phone*`, `*web*` or
+`taxID` is covered the day it is declared. Four assertions hold it up: every detected example
+passes its rule; the set of detected columns is pinned (otherwise the guard could pass by
+matching nothing); every example fits its AD column length (`etgoPhone`'s 15 is the same cap the
+handler applies); and the two values shipped before this ticket are still rejected, so the rules
+cannot go soft without the suite saying so.
+
+The tax-id assertion is dispatched the way the backend dispatches it: the NIF algorithm only
+runs when the row declares document type NIF, which the template does in a sibling column, so
+the test resolves `oBTIKTaxIDKey`'s example through the descriptor's own `TAX_ID_KEY_VALUES`
+label table rather than assuming it.
