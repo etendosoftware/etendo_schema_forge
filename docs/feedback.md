@@ -2518,3 +2518,46 @@ variation involved.
 letting the page settle (e.g. two `requestAnimationFrame`s, or a short fixed wait) before taking the
 "before" measurement, not loosening the 0.5px tolerance (which is correctly guarding against a real
 class of bug — table-layout content-driven resize — that this spec exists to catch).
+
+## [2026-09-17] ETP-4879 — One date field feeding two backend date properties silently rolled back the accounting date
+
+**Component:** `NewTransactionModal.jsx` (`tools/app-shell/src/windows/custom/financial-account/`)
+and `FinancialAccountTransactionsHandler.applyEditableDimensions` (`com.etendoerp.go`).
+
+**Symptom:** QA reported that editing a "Procesada" (Processed but not yet Posted) financial-account
+movement from the kebab's Editar action could fail to save ("falla al guardar"). **This specific
+symptom was never reproduced live** — a full static read of the Core trigger that guards this table
+(`APRM_FIN_FINACC_TRAN_CHECK_TRG`) found no condition in the common case (Processed, not
+reconciled, G/L item preserved) that would reject the save. The real, confirmed bug found during
+that same investigation is a separate data-integrity issue, described below — it is a plausible but
+**unconfirmed** explanation for the original report, not a proven root cause. Treat ETP-4879 as
+having fixed a real bug it found, not as a confirmed fix for the exact QA repro; if "falla al
+guardar" resurfaces, reproduce it live (capture the actual HTTP response / Tomcat log) before
+assuming this ticket already covers it.
+
+**Root cause (confirmed).** `NewTransactionModal.jsx` collapses the movement's transaction date and
+accounting date into a single form field (`form.date`), and built both `transactionDate` and
+`accountingDate` from that one value on every save. The backend's `applyEditableDimensions` — the
+applier used whenever a movement is Processed but not Posted — unconditionally called
+`trx.setTransactionDate(...)` and `trx.setDateAcct(...)` from whatever the request body carried.
+So a movement whose accounting date (`DATEACCT`) had legitimately diverged from its transaction
+date got `DATEACCT` silently rewritten back to the transaction date on **any** edit through this
+modal while Processed — including an edit that only touched a dimension. No error, no warning: the
+save succeeded, and the wrong date change is exactly what a purely-dimensions edit should never
+have caused.
+
+**Fix.** `applyEditableDimensions` no longer touches `transactionDate`/`dateAcct` at all — a
+Processed-but-not-Posted movement's dates are now immutable through this endpoint, matching the
+other locked fields (amount, direction, currency, status). The frontend was updated in lockstep:
+`NewTransactionModal.jsx` now disables the date input whenever `movement.processed` is true
+(`lockWhileProcessed`), so the UI and the backend contract agree instead of the UI silently sending
+a value the backend used to accept and misapply.
+
+**Lesson.** When a UI field maps to more than one backend property (here: one date input feeding
+both `transactionDate` and `accountingDate`), a handler that blindly reassigns both from the same
+incoming value will silently collapse them the moment they are allowed to diverge — even on an
+edit that has nothing to do with either field. The fix is not to validate the incoming value more
+carefully; it is to stop accepting it at all once the record's state says that property is no
+longer editable. See `docs/generated-custom-windows/financial-account.md` ("Edit mode") for the
+full field-acceptance table, and `com.etendoerp.go`'s `docs/neo-headless.md` §5.3 ("Real-world
+example — `FinancialAccountTransactionsHandler`") for the backend contract.
