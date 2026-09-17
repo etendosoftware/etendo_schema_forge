@@ -450,7 +450,12 @@ test.describe('Roles overview — click-through to filtered Users grid (ETP-4999
     await page.getByTestId(`RoleSummaryCard__${ROLE_IDS.finance}`).click();
 
     await expect(page).toHaveURL(new RegExp(`/user\\?role=${ROLE_IDS.finance}$`));
-    await expect(page.getByTestId('UserHeaderTable__toolbar')).toBeVisible();
+    // ETP-5188 — the role quick-filter no longer renders inside `UserHeaderTable`'s own
+    // markup (that `UserHeaderTable__toolbar` wrapper is gone). It moved to `ListView`'s
+    // own toolbar row via the `Table.ToolbarQuickFilter` convention
+    // (`RoleQuickFilterToolbarSlot.jsx`), which renders `RoleFilterControl` under the
+    // `RoleFilterControl__toolbar` testid — see that component's own doc comment.
+    await expect(page.getByTestId('RoleFilterControl__toolbar')).toBeVisible();
 
     // The dropdown trigger's visible label already reflects the seeded filter —
     // no click/open needed to prove it arrived pre-set (DistinctValuesFilter's
@@ -459,7 +464,7 @@ test.describe('Roles overview — click-through to filtered Users grid (ETP-4999
     // (see `RoleFilterControl.jsx`'s doc comment / the identical gotcha noted in
     // `user-role-assignment.mocked.spec.js`), so — mirroring that spec's own
     // workaround — locate the trigger button structurally inside the toolbar.
-    const filterTrigger = page.getByTestId('UserHeaderTable__toolbar').locator('button').first();
+    const filterTrigger = page.getByTestId('RoleFilterControl__toolbar').locator('button').first();
     await expect(filterTrigger).toContainText('Finanzas');
 
     await expect(page.locator('tbody tr').filter({ hasText: 'Ada Lovelace' })).toBeVisible();
