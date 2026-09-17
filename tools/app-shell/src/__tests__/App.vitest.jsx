@@ -382,4 +382,36 @@ describe('fetchWindowAccess', () => {
     expect(menuCalls).toHaveLength(1);
     expect(windowAccessCalls).toHaveLength(2);
   });
+
+  // [ETP-5395] — the other half of the TTL shrink: the whole point of moving from
+  // 60s to 3s (see App.jsx's MENU_ACCESS_CACHE_TTL_MS comment) is that the cache
+  // must actually EXPIRE quickly enough to pick up a real permission change, not
+  // just dedupe a same-burst sequence of calls (already proven by the test above).
+  // Uses fake timers to advance `Date.now()` past the 3s TTL between two calls —
+  // real timers would make this test slow and flaky. This mirrors the existing
+  // "does not block window access forever" test's use of fake timers with the same
+  // mocked-fetch setup, so no `advanceTimersByTimeAsync` is needed to unblock the
+  // calls themselves (the fetch/menu mocks resolve via microtasks, not timers) —
+  // it's only used here to move the clock forward.
+  it('refetches SFListMenu once the TTL has elapsed instead of serving the stale cache', async () => {
+    vi.useFakeTimers();
+    try {
+      stubFetch(jsonResponse(PAYLOAD));
+
+      const first = await fetchWindowAccess({ token: 'tok' });
+      expect(first).toEqual({ ...PAYLOAD, menuAccess: EXPECTED_MENU_ACCESS });
+
+      // Past the 3s TTL, with margin.
+      await vi.advanceTimersByTimeAsync(3_100);
+
+      const second = await fetchWindowAccess({ token: 'tok' });
+      expect(second).toEqual({ ...PAYLOAD, menuAccess: EXPECTED_MENU_ACCESS });
+
+      const calls = globalThis.fetch.mock.calls.map(([url]) => String(url));
+      const menuCalls = calls.filter((url) => url.includes('/listmenu'));
+      expect(menuCalls).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
