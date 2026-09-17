@@ -209,6 +209,46 @@ Custom windows may hydrate default filter state from the URL so that menu links 
 
 `decisions.json`-driven windows do not have a URL-param hook today — if you need one, declare the filter in the custom window file instead.
 
+## State persistence across List -> Form -> List (ETP-4994)
+
+Grid state survives leaving the list for a record and coming back. It is restored on ALL
+three return paths — breadcrumb, the form's Cancel button, and the browser Back button —
+because every one of them remounts `ListView`.
+
+**What is restored:** column filters, the advanced (conditional) filter, the active subset
+filter, the active quick filters, and the sort column + direction.
+
+**Where it lives:** `sessionStorage`, one key per window — `listState:<windowName || entity>` —
+written and read by `tools/app-shell/src/lib/listViewSession.js`.
+
+Why sessionStorage rather than the URL or a router-level context:
+
+| Option | Breadcrumb | Cancel | Browser Back | Refresh |
+|---|---|---|---|---|
+| Query params | needs the link rebuilt | needs the link rebuilt | yes | yes |
+| Context above the Outlet | yes | yes | yes | no |
+| **sessionStorage (chosen)** | yes | yes | yes | yes |
+
+It is a per-viewer convenience — nothing else reads it back — which is the case browser
+storage is allowed for. Scoped to the tab, so a second tab on the same window keeps its own
+view, and it never outlives the session. Every access is `try`/`catch` guarded: a private
+window or blocked site data degrades to "no saved state", never to a thrown render.
+
+**Invariant — an untouched list stores NOTHING.** `persistListState` compares the live state
+against the window's declared defaults and *removes* the key instead of writing a default
+snapshot. A window that was never filtered behaves exactly as it did before this existed, and
+clearing the filters cleans the key up rather than pinning a stale default.
+
+**Not persisted:** scroll position / page. The grid pages in through `loadMore` (infinite
+scroll), so restoring a deep scroll offset would mean replaying every page before the first
+paint, against a row set that may have changed meanwhile. Explicitly out of scope.
+
+**Not persisted (no feature to persist):** user column *order*. There is no column-reorder
+affordance in the grid today — `DataTable`'s `onColumnsReady` only echoes the column array it
+was given. If drag-to-reorder is ever added, its order belongs in this same snapshot.
+
+To clear the saved state programmatically, call `clearListState(scope)`.
+
 ## Choosing the right surface
 
 | Need | Surface |
@@ -229,3 +269,4 @@ All four toolbar surfaces use the same size tokens (`h-9`, `px-3`, `text-xs`) so
 - Source files:
   - `tools/app-shell/src/components/contract-ui/ListView.jsx` — filter state + toolbar layout.
   - `tools/app-shell/src/components/contract-ui/ListFilterBar.jsx` — document-type filters + advanced filter popover.
+  - `tools/app-shell/src/lib/listViewSession.js` — session snapshot of the grid state (ETP-4994).

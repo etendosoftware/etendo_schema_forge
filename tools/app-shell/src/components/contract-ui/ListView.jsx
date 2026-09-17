@@ -24,6 +24,13 @@ import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/I
 import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-pane.jsx';
 import { useWindowImportDialog } from './useWindowImportDialog.js';
 import { buildAdvancedFilterCriteria } from '@/lib/gridQuery';
+import {
+  readListState,
+  persistListState,
+  resolveDefaultSubsetIndex,
+  resolveDefaultQuickFilterIndices,
+  sanitizeFilterIndices,
+} from '@/lib/listViewSession.js';
 import { useWindowFilterPresets } from '@/hooks/useWindowFilterPresets';
 import { trackSearchPerformed, trackWindowOpened } from '@/lib/productUsageTelemetry.js';
 import {
@@ -418,11 +425,20 @@ export function ListView({
   listSortBy = null,
   import: importConfig = null,
 }) {
+  // ETP-4994 — the grid state saved the last time this window's list was left, restored on
+  // every return path (breadcrumb, Cancel, browser back) because all three remount ListView.
+  // Read ONCE per mount: a later read would fight the live state it is meant to seed.
+  // `null` when there is nothing saved, which is the "behave exactly as before" path.
+  const listStateScope = windowName || entity;
+  const [restoredListState] = useState(() => readListState(listStateScope));
+
   // Subset filters — radio-style, always one active, applied first.
+  const defaultSubsetIndex = resolveDefaultSubsetIndex(subsetFilters, initialSubsetIndex);
   const [activeSubsetIndex, setActiveSubsetIndex] = useState(() => {
     if (!subsetFilters?.length) return null;
-    const idx = initialSubsetIndex != null && subsetFilters[initialSubsetIndex] ? initialSubsetIndex : 0;
-    return idx;
+    const saved = restoredListState?.subsetIndex;
+    if (Number.isInteger(saved) && subsetFilters[saved]) return saved;
+    return defaultSubsetIndex;
   });
 
   const selectSubset = useCallback((i) => {
@@ -430,11 +446,18 @@ export function ListView({
   }, []);
 
   // Quick filters — independent toggles, refine the current subset.
-  const [activeFilterIndices, setActiveFilterIndices] = useState(() =>
-    initialQuickFilterIndex != null && quickFilters?.[initialQuickFilterIndex]
-      ? new Set([initialQuickFilterIndex])
-      : new Set(),
+  // Memoized: it feeds the persistence effect's dependency array, and a fresh array every
+  // render would re-run that effect (and re-hit sessionStorage) on every render.
+  const defaultQuickFilterIndices = useMemo(
+    () => resolveDefaultQuickFilterIndices(quickFilters, initialQuickFilterIndex),
+    [quickFilters, initialQuickFilterIndex],
   );
+  const [activeFilterIndices, setActiveFilterIndices] = useState(() => {
+    // A saved snapshot can outlive a change to `quickFilters`, so validate every index
+    // against the CURRENT props before trusting it.
+    const saved = sanitizeFilterIndices(restoredListState?.quickFilterIndices, quickFilters);
+    return new Set(saved ?? defaultQuickFilterIndices);
+  });
 
   const toggleQuickFilter = useCallback((i) => {
     setActiveFilterIndices(prev => {
@@ -445,8 +468,12 @@ export function ListView({
     });
   }, []);
 
-  // Advanced filter (funnel popover) — ephemeral state, lost on page refresh.
-  const [advancedFilter, setAdvancedFilter] = useState(initialAdvancedFilter);
+  // Advanced filter (funnel popover). ETP-4994 — no longer ephemeral: it is restored from the
+  // session snapshot when the user comes back from a record. Stale field references are
+  // harmless, `buildAdvancedFilterCriteria` already drops conditions whose column is gone.
+  const [advancedFilter, setAdvancedFilter] = useState(
+    restoredListState ? (restoredListState.advancedFilter ?? null) : initialAdvancedFilter,
+  );
 
   const [tableColumns, setTableColumns] = useState(initialColumns ?? []);
 
@@ -525,7 +552,11 @@ export function ListView({
     return (item) => fns.every(fn => fn(item));
   }, [subsetFilters, activeSubsetIndex, quickFilters, activeFilterIndices, rowFilter]);
 
-  const [columnFilters, setColumnFilters] = useState(initialColumnFilters ?? {});
+  const [columnFilters, setColumnFilters] = useState(() => {
+    const saved = restoredListState?.columnFilters;
+    if (saved && typeof saved === 'object') return saved;
+    return initialColumnFilters ?? {};
+  });
   const columnDefs = useMemo(
     () => Object.fromEntries(tableColumns.map(c => [c.key, c])),
     [tableColumns],
@@ -607,9 +638,42 @@ export function ListView({
     columnFilters,
     trailingFilter: advancedFilterPart,
     specName: windowName,
-    initialSortColumn,
-    initialSortDirection,
+    // ETP-4994 — seed the hook with the sort the user left behind, if any. Deliberately NOT
+    // folded into `initialSortColumn`/`initialSortDirection`: those stay the WINDOW's declared
+    // default, which `isDefaultSort` and `handleClearSort` below must keep pointing at.
+    initialSortColumn: restoredListState?.sortColumn ?? initialSortColumn,
+    initialSortDirection: restoredListState?.sortDirection ?? initialSortDirection,
   });
+
+  // ETP-4994 — mirror the live grid state into the session snapshot. Writes nothing (and
+  // removes any previous key) while the list is still at the window's own default, so an
+  // untouched window never gains persisted state.
+  useEffect(() => {
+    persistListState(
+      listStateScope,
+      {
+        columnFilters,
+        advancedFilter,
+        subsetIndex: activeSubsetIndex,
+        quickFilterIndices: [...activeFilterIndices],
+        sortColumn: hook.sortColumn,
+        sortDirection: hook.sortDirection,
+      },
+      {
+        columnFilters: initialColumnFilters ?? {},
+        advancedFilter: initialAdvancedFilter ?? null,
+        subsetIndex: subsetFilters?.length ? defaultSubsetIndex : null,
+        quickFilterIndices: defaultQuickFilterIndices,
+        sortColumn: initialSortColumn,
+        sortDirection: initialSortDirection,
+      },
+    );
+  }, [
+    listStateScope, columnFilters, advancedFilter, activeSubsetIndex, activeFilterIndices,
+    hook.sortColumn, hook.sortDirection, initialColumnFilters, initialAdvancedFilter,
+    subsetFilters, defaultSubsetIndex, defaultQuickFilterIndices,
+    initialSortColumn, initialSortDirection,
+  ]);
 
   useEffect(() => {
     if (!entity && !windowName) return;
