@@ -58,7 +58,8 @@ export const BANK_STATEMENT_IMPORT_FIELDS = [
     labelKey: 'financeAccountStatementsManualColDate',
     aliases: ['Fecha', 'Date', 'Transaction Date', 'Fecha Transacción', 'Fecha de transacción', 'Fecha valor'],
     required: true,
-    example: '01/08/2026',
+    exampleKey: 'financeAccountStatementsImportExampleDate',
+    example: '2026-08-01',
   },
   {
     target: 'reference',
@@ -69,6 +70,7 @@ export const BANK_STATEMENT_IMPORT_FIELDS = [
     // and the pre-ETP-4954 importer already did. Marking it required in the template would
     // invent a constraint neither flow has.
     required: false,
+    exampleKey: 'financeAccountStatementsImportExampleReference',
     example: 'REF-001',
   },
   {
@@ -77,6 +79,7 @@ export const BANK_STATEMENT_IMPORT_FIELDS = [
     labelKey: 'financeAccountStatementsManualColDesc',
     aliases: ['Descripción', 'Description', 'Concepto'],
     required: false,
+    exampleKey: 'financeAccountStatementsImportExampleDesc',
     example: 'Transferencia recibida',
   },
   {
@@ -85,6 +88,7 @@ export const BANK_STATEMENT_IMPORT_FIELDS = [
     labelKey: 'financeAccountStatementsManualColContactName',
     aliases: ['Nombre del contacto', 'Contact name', 'Business Partner Name', 'Contacto', 'Tercero'],
     required: false,
+    exampleKey: 'financeAccountStatementsImportExampleContact',
     example: 'Cliente Ejemplo, S.L.',
   },
   {
@@ -94,6 +98,7 @@ export const BANK_STATEMENT_IMPORT_FIELDS = [
     aliases: ['Salida', 'Out', 'Amount OUT', 'Importe salida', 'Debe', 'Cargo'],
     required: false,
     isNumeric: true,
+    exampleKey: 'financeAccountStatementsImportExampleOut',
     example: '150,00',
   },
   {
@@ -103,6 +108,7 @@ export const BANK_STATEMENT_IMPORT_FIELDS = [
     aliases: ['Entrada', 'In', 'Amount IN', 'Importe entrada', 'Haber', 'Abono'],
     required: false,
     isNumeric: true,
+    exampleKey: 'financeAccountStatementsImportExampleIn',
     example: '0,00',
   },
 ];

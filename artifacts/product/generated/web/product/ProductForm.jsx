@@ -2,13 +2,13 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:product
 const fields = [
-  { key: 'searchKey', column: 'Value', type: 'text', label: 'Search Key', required: true, section: 'principal' },
-  { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'principal' },
+  { key: 'searchKey', column: 'Value', type: 'text', label: 'Search Key', required: true, section: 'principal', maxLength: 40 },
+  { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'principal', maxLength: 60 },
   { key: 'productType', column: 'ProductType', type: 'select', label: 'Product Type', required: true, section: 'principal', options: [{ value: 'E', label: 'Expense type', labels: {"es_ES":"Gasto"} }, { value: 'I', label: 'Item', labels: {"es_ES":"Artículo"} }, { value: 'R', label: 'Resource', labels: {"es_ES":"Recurso"} }, { value: 'S', label: 'Service', labels: {"es_ES":"Servicio"} }], defaultValue: 'I' },
   { key: 'productCategory', column: 'M_Product_Category_ID', type: 'selector', label: 'Product Category', required: true, section: 'principal', reference: 'ProductCategory', inputMode: 'selector', defaultValue: '@SQL=SELECT MAX(M_PRODUCT_CATEGORY_ID) FROM M_PRODUCT_CATEGORY WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = \'Y\' AND AD_CLIENT_ID = @#AD_CLIENT_ID@ AND ISSUMMARY=\'N\'' },
   { key: 'uOM', column: 'C_UOM_ID', type: 'search', label: 'UOM', required: true, section: 'principal', reference: 'UOM', inputMode: 'search' },
   { key: 'active', column: 'IsActive', type: 'checkbox', label: 'Active', required: true, section: 'principal', defaultValue: 'Y' },
-  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'principal', span: 3 },
+  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'principal', maxLength: 255, span: 3 },
   { key: 'image', column: 'AD_Image_ID', type: 'image', label: 'Image', section: 'principal' },
   { key: 'taxCategory', column: 'C_TaxCategory_ID', type: 'selector', label: 'Tax Category', required: true, section: 'other', reference: 'TaxCategory', inputMode: 'selector' },
   { key: 'purchase', column: 'IsPurchased', type: 'checkbox', label: 'Purchase', required: true, section: 'other', defaultValue: 'Y' },
@@ -17,7 +17,7 @@ const fields = [
   { key: 'weight', column: 'Weight', type: 'number', label: 'Weight', section: 'other' },
   { key: 'uOMForWeight', column: 'C_Uom_Weight_ID', type: 'selector', label: 'UOM for Weight', section: 'other', reference: 'UOM', inputMode: 'selector' },
   { key: 'attributeSet', column: 'M_AttributeSet_ID', type: 'selector', label: 'Attribute Set', section: 'other', reference: 'AttributeSet', inputMode: 'selector' },
-  { key: 'uPCEAN', column: 'UPC', type: 'text', label: 'UPC/EAN', section: 'other' },
+  { key: 'uPCEAN', column: 'UPC', type: 'text', label: 'UPC/EAN', section: 'other', maxLength: 30 },
   { key: 'brand', column: 'M_Brand_ID', type: 'selector', label: 'Brand', section: 'other', reference: 'Brand', inputMode: 'selector' },
   { key: 'returnable', column: 'Returnable', type: 'checkbox', label: 'Returnable', required: true, section: 'other', defaultValue: 'Y' },
   { key: 'mProductStatusID', column: 'M_Product_Status_ID', type: 'selector', label: 'Lifecycle Status', section: 'other', reference: 'ProductStatus', inputMode: 'selector' },

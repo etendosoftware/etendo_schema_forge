@@ -134,6 +134,7 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
       const json = await res.json();
       const invoiceId = json?.response?.data?.id;
       const docNo = json?.response?.data?.documentNo || '';
+      setShowInvoiceConfirm(false);
       setInvoiceResult({
         invoice: {
           id: invoiceId || null,
@@ -220,7 +221,7 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
           isSOTrx
           apiBaseUrl={apiBaseUrl}
           token={token}
-          onConfirm={(priceListId) => { setShowInvoiceConfirm(false); handleCreateInvoice(priceListId); }}
+          onConfirm={handleCreateInvoice}
           onClose={() => setShowInvoiceConfirm(false)}
         />
       )}

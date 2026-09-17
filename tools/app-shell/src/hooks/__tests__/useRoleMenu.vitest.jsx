@@ -10,9 +10,11 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 
 const mockFetchMenuTree = vi.fn();
 const mockCollectAllowedIds = vi.fn();
+const MENU_ACCESS_UNREACHABLE = '__menu_access_unreachable__';
 vi.mock('@/lib/menuTree.js', () => ({
   fetchMenuTree: (...args) => mockFetchMenuTree(...args),
   collectAllowedIds: (...args) => mockCollectAllowedIds(...args),
+  MENU_ACCESS_UNREACHABLE: '__menu_access_unreachable__',
 }));
 
 import { useRoleMenu } from '../useRoleMenu.js';
@@ -25,6 +27,7 @@ function authState(overrides = {}) {
   return {
     isAuthenticated: true,
     isSessionReady: true,
+    accessLoaded: true,
     authRevision: 0,
     captureSession: () => ({}),
     isCurrentSession: () => true,
@@ -53,6 +56,18 @@ describe('useRoleMenu', () => {
 
     expect(result.current).toBeUndefined();
     expect(mockFetchMenuTree).not.toHaveBeenCalled();
+  });
+
+  it('keeps the legacy fetch path when the core does not expose accessLoaded', async () => {
+    const allowedIds = new Set(['108']);
+    mockUseAuth.mockReturnValue(authState({ accessLoaded: undefined }));
+    mockFetchMenuTree.mockResolvedValue({ tree: [{ windowId: '108' }] });
+    mockCollectAllowedIds.mockReturnValue(allowedIds);
+
+    const { result } = renderHook(() => useRoleMenu());
+
+    await waitFor(() => expect(result.current).toBe(allowedIds));
+    expect(mockFetchMenuTree).toHaveBeenCalledTimes(1);
   });
 
   it('does not apply a resolved response once the session is no longer current', async () => {
@@ -98,6 +113,44 @@ describe('useRoleMenu', () => {
 
     expect(mockFetchMenuTree).toHaveBeenCalledTimes(1);
     expect(mockCollectAllowedIds).toHaveBeenCalledWith(tree);
+  });
+
+  it('reuses AuthContext menuAccess instead of fetching listmenu a second time', async () => {
+    const menuAccess = { '108': true, P1: true };
+    mockUseAuth.mockReturnValue(authState({ menuAccess }));
+
+    const { result } = renderHook(() => useRoleMenu());
+
+    await waitFor(() => expect(result.current).toEqual(new Set(['108', 'P1'])));
+    expect(mockFetchMenuTree).not.toHaveBeenCalled();
+    expect(mockCollectAllowedIds).not.toHaveBeenCalled();
+  });
+
+  // ETP-5375 — a PLAIN empty menuAccess is now a CONFIRMED, resolved zero-access allow
+  // set (a role — or lack of one — that legitimately grants no window/process access,
+  // per ETP-4514) and must filter to an empty Set, not fail open. The previous behavior
+  // (treating any empty menuAccess as fail-open) made AppLayout's blocking screen
+  // impossible to ever reach, since a genuinely zero-access role and an unreachable menu
+  // webhook both serialized to the same `{}` by the time they got here.
+  it('resolves to an empty Set (confirmed zero access) when AuthContext publishes a plain empty menuAccess', async () => {
+    mockUseAuth.mockReturnValue(authState({ menuAccess: {} }));
+
+    const { result } = renderHook(() => useRoleMenu());
+
+    await waitFor(() => expect(result.current).toEqual(new Set()));
+    expect(result.current).toBeInstanceOf(Set);
+    expect(mockFetchMenuTree).not.toHaveBeenCalled();
+    expect(mockCollectAllowedIds).not.toHaveBeenCalled();
+  });
+
+  it('fails open (null) when AuthContext publishes the unreachable-menu sentinel', async () => {
+    mockUseAuth.mockReturnValue(authState({ menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } }));
+
+    const { result } = renderHook(() => useRoleMenu());
+
+    await waitFor(() => expect(result.current).toBeNull());
+    expect(mockFetchMenuTree).not.toHaveBeenCalled();
+    expect(mockCollectAllowedIds).not.toHaveBeenCalled();
   });
 
   it('returns null (does not throw) when fetchMenuTree rejects', async () => {
