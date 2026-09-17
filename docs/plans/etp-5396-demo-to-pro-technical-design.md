@@ -286,6 +286,7 @@ Paths below marked proposed are additive design, not existing endpoints. Use exi
 | --- | --- |
 | `GET /sws/go/environments` | Existing; add type, readiness, access reason/deadline, relationship and capabilities. Include blocked memberships for safe account navigation; omit financial details from member projections |
 | `GET /sws/go/billing/overview` | Account-level read: authenticated account purchase projections and billing ownership capability; ERP access is not required |
+| `GET /sws/go/billing/offers` | Account-level read: server-owned provider-neutral offer amount, currency, and interval |
 | `POST /sws/go/billing/purchases` | Proposed new use-case endpoint: validate ownership, snapshot offer/demo/input context, deduplicate operation and delegate to existing checkout through the bridge |
 | `GET /sws/go/billing/purchases/{purchaseId}` | Account-scoped projection combining existing payment evidence with the current work stage and safe failure information |
 | `POST /sws/go/checkout/sessions` and `GET /sws/go/checkout/sessions/{requestId}` | Existing Stripe-backed contracts remain; do not generalize their API in this task. Reuse service behavior from the bridge, and add only necessary authorization/functional guards to prevent bypassing the new owned purchase path |
