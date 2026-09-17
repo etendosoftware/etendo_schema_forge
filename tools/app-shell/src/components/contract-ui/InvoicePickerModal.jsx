@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useUI } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { Checkbox } from '@/components/ui/checkbox';
 
 /**
  * Modal for choosing the invoice(s) a rectificative invoice corrects.
@@ -108,18 +109,10 @@ export default function InvoicePickerModal({
         onMouseLeave={e => { if (!checked) e.currentTarget.style.background = 'transparent'; }}
       >
         {multiple && (
-          <div style={{
-            width: 16, height: 16, borderRadius: 4, flexShrink: 0,
-            border: checked ? 'none' : '1.5px solid hsl(var(--text-disabled))',
-            background: checked ? 'var(--status-info-fg)' : 'hsl(var(--card))',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            {checked && (
-              <svg width="10" height="8" viewBox="0 0 11 9" fill="none" stroke="hsl(var(--card))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="1 4 4 7.5 10 1" />
-              </svg>
-            )}
-          </div>
+          // The shared Checkbox, not a hand-drawn box: it carries the design system's own
+          // `primary` tokens, so the tick reads black like every other checkbox in the app
+          // instead of the informational blue this used to paint.
+          <Checkbox checked={checked} onChange={() => {}} className="shrink-0" />
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
@@ -200,7 +193,10 @@ export default function InvoicePickerModal({
                 type="button"
                 onClick={() => onApply(draft)}
                 data-testid={`${idPrefix}-apply`}
-                style={{ fontSize: 13, fontWeight: 500, padding: '5px 14px', borderRadius: 6, border: 'none', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))', cursor: 'pointer' }}
+                // Same hover as every other primary action in the app (DashboardGreeting,
+                // AccountsToolbar, InlineCreateModal): foreground → accent-highlight.
+                className="bg-[hsl(var(--foreground))] text-primary-foreground transition-colors hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))]"
+                style={{ fontSize: 13, fontWeight: 500, padding: '5px 14px', borderRadius: 6, border: 'none', cursor: 'pointer' }}
               >
                 {ui('confirm')}
               </button>
