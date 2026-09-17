@@ -26,8 +26,8 @@ test('Public API key page only sends safe editable fields', () => {
 
 test('Public API key creation explains the Scalar credential format and links to docs', () => {
   assert.match(page, /ApiKeysScalarHelp/);
-  assert.match(page, /Connect it from Scalar/);
-  assert.match(page, /clientId:clientSecret/);
+  assert.match(page, /apiKeysScalarDialogTitle/);
+  assert.match(page, /apiKeysCredentialFormat/);
   assert.match(page, /VITE_PUBLIC_API_DOCS_URL/);
   assert.match(page, /https:\/\/app\.etendo\.software\/api/);
   assert.match(page, /authorizationValue=\{`\$\{reveal\.clientId\}:\$\{reveal\.clientSecret\}`\}/);
