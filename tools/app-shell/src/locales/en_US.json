@@ -24782,7 +24782,12 @@
     "backendError.rectifiedInvoiceRequired": "Select at least one invoice to rectify: a rectificative invoice cannot be confirmed without it.",
     "invoiceToRectifyLabel": "Invoice to rectify",
     "noInvoicesToRectify": "There are no confirmed invoices to rectify for this return document.",
-    "invoiceCreatedAndConfirmed": "created and confirmed"
+    "invoiceCreatedAndConfirmed": "created and confirmed",
+    "rectifySearchPlaceholder": "Search by invoice number or business partner…",
+    "rectifySelectedCount": "{count} selected",
+    "rectifySuggestedBadge": "Detected",
+    "rectifyNoMatches": "No invoices match your search.",
+    "rectifyMoreHidden": "{count} more — refine your search to see them."
   },
   "menus": {
     "Currency": {

@@ -389,13 +389,13 @@ describe('ConfirmInOutModal', () => {
     { id: 'inv-2', documentNo: 'FAC-002', invoiceDate: '2026-08-11', grandTotalAmount: 200, currency: 'EUR' },
   ];
 
-  function mockRectifyRouter({ invoices = RECTIFIABLE, suggestedInvoiceId } = {}) {
+  function mockRectifyRouter({ invoices = RECTIFIABLE, suggestedInvoiceIds } = {}) {
     vi.stubGlobal('fetch', vi.fn((url) => {
       const u = String(url);
       if (u.includes('/action/rectifiableInvoices')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ response: { data: { invoices, suggestedInvoiceId } } }),
+          json: async () => ({ response: { data: { invoices, suggestedInvoiceIds } } }),
         });
       }
       if (u.includes('/action/documentAction')) {
@@ -478,7 +478,7 @@ describe('ConfirmInOutModal', () => {
     });
 
     it('accepts the backend suggestion as a preselection, so confirming without touching the picker still links an invoice', async () => {
-      mockRectifyRouter({ suggestedInvoiceId: 'inv-2' });
+      mockRectifyRouter({ suggestedInvoiceIds: ['inv-2'] });
       render(<ConfirmInOutModal {...RECTIFY_PROPS} />);
       await waitFor(() => {
         expect(screen.getByTestId('confirm-modal-rectify-option-inv-2')).toHaveAttribute('data-selected', 'true');

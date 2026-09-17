@@ -28,7 +28,7 @@ const INVOICES = [
  * currency-format config) resolve to a harmless empty payload, so the assertions below can
  * never be satisfied by the wrong request.
  */
-function mockFetch({ invoices = INVOICES, suggestedInvoiceId, ok = true, reject = false, deferred = false } = {}) {
+function mockFetch({ invoices = INVOICES, suggestedInvoiceIds, ok = true, reject = false, deferred = false } = {}) {
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
   const stub = vi.fn((url) => {
@@ -38,7 +38,7 @@ function mockFetch({ invoices = INVOICES, suggestedInvoiceId, ok = true, reject 
     if (reject) return Promise.reject(new Error('Network down'));
     const answer = {
       ok,
-      json: async () => ({ response: { data: { invoices, suggestedInvoiceId } } }),
+      json: async () => ({ response: { data: { invoices, suggestedInvoiceIds } } }),
     };
     return deferred ? gate.then(() => answer) : Promise.resolve(answer);
   });
@@ -106,9 +106,9 @@ describe('useRectifiableInvoices', () => {
     });
   });
 
-  describe('preselection of suggestedInvoiceId', () => {
+  describe('preselection of suggestedInvoiceIds', () => {
     it('preselects the backend suggestion when it is part of the list', async () => {
-      mockFetch({ suggestedInvoiceId: 'inv-2' });
+      mockFetch({ suggestedInvoiceIds: ['inv-2'] });
       const { result } = renderHook(() => useRectifiableInvoices({ enabled: true, url: URL, token: 't' }));
       await waitFor(() => expect(result.current.selectedIds).toEqual(['inv-2']));
       // Preselected means the caller can confirm straight away and reproduce exactly the
@@ -117,7 +117,7 @@ describe('useRectifiableInvoices', () => {
     });
 
     it('does NOT preselect a suggestion that is absent from the list', async () => {
-      mockFetch({ suggestedInvoiceId: 'inv-does-not-exist' });
+      mockFetch({ suggestedInvoiceIds: ['inv-does-not-exist'] });
       const { result } = renderHook(() => useRectifiableInvoices({ enabled: true, url: URL, token: 't' }));
       await waitFor(() => expect(result.current.loading).toBe(false));
       expect(result.current.selectedIds).toEqual([]);
@@ -125,7 +125,7 @@ describe('useRectifiableInvoices', () => {
     });
 
     it('selects nothing when the backend sends no suggestion', async () => {
-      mockFetch({ suggestedInvoiceId: undefined });
+      mockFetch({ suggestedInvoiceIds: undefined });
       const { result } = renderHook(() => useRectifiableInvoices({ enabled: true, url: URL, token: 't' }));
       await waitFor(() => expect(result.current.loading).toBe(false));
       expect(result.current.selectedIds).toEqual([]);
@@ -134,14 +134,14 @@ describe('useRectifiableInvoices', () => {
 
   describe('isSatisfied — the confirm gate', () => {
     it('is false while the picker is enabled and nothing is selected', async () => {
-      mockFetch({ suggestedInvoiceId: undefined });
+      mockFetch({ suggestedInvoiceIds: undefined });
       const { result } = renderHook(() => useRectifiableInvoices({ enabled: true, url: URL, token: 't' }));
       await waitFor(() => expect(result.current.loading).toBe(false));
       expect(result.current.isSatisfied).toBe(false);
     });
 
     it('flips to true as soon as an invoice is selected', async () => {
-      mockFetch({ suggestedInvoiceId: undefined });
+      mockFetch({ suggestedInvoiceIds: undefined });
       const { result } = renderHook(() => useRectifiableInvoices({ enabled: true, url: URL, token: 't' }));
       await waitFor(() => expect(result.current.loading).toBe(false));
       act(() => result.current.toggle('inv-1'));
@@ -149,7 +149,7 @@ describe('useRectifiableInvoices', () => {
     });
 
     it('falls back to false when the last selection is removed', async () => {
-      mockFetch({ suggestedInvoiceId: 'inv-1' });
+      mockFetch({ suggestedInvoiceIds: ['inv-1'] });
       const { result } = renderHook(() => useRectifiableInvoices({ enabled: true, url: URL, token: 't' }));
       await waitFor(() => expect(result.current.isSatisfied).toBe(true));
       act(() => result.current.toggle('inv-1'));
@@ -188,7 +188,7 @@ describe('useRectifiableInvoices', () => {
 
   describe('toggle — multiple selection', () => {
     it('accumulates selections in click order', async () => {
-      mockFetch({ suggestedInvoiceId: undefined });
+      mockFetch({ suggestedInvoiceIds: undefined });
       const { result } = renderHook(() => useRectifiableInvoices({ enabled: true, url: URL, token: 't' }));
       await waitFor(() => expect(result.current.loading).toBe(false));
       act(() => result.current.toggle('inv-1'));
@@ -199,7 +199,7 @@ describe('useRectifiableInvoices', () => {
     });
 
     it('removes only the toggled id and keeps the rest selected', async () => {
-      mockFetch({ suggestedInvoiceId: undefined });
+      mockFetch({ suggestedInvoiceIds: undefined });
       const { result } = renderHook(() => useRectifiableInvoices({ enabled: true, url: URL, token: 't' }));
       await waitFor(() => expect(result.current.loading).toBe(false));
       act(() => result.current.toggle('inv-1'));

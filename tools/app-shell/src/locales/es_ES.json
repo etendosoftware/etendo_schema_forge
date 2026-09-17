@@ -25020,7 +25020,12 @@
     "backendError.rectifiedInvoiceRequired": "Selecciona al menos una factura a rectificar: sin ella la factura rectificativa no se puede confirmar.",
     "invoiceToRectifyLabel": "Factura a rectificar",
     "noInvoicesToRectify": "No hay facturas confirmadas que rectificar para este documento de devolución.",
-    "invoiceCreatedAndConfirmed": "creada y confirmada"
+    "invoiceCreatedAndConfirmed": "creada y confirmada",
+    "rectifySearchPlaceholder": "Buscar por nº de factura o tercero…",
+    "rectifySelectedCount": "{count} seleccionadas",
+    "rectifySuggestedBadge": "Detectada",
+    "rectifyNoMatches": "Ninguna factura coincide con la búsqueda.",
+    "rectifyMoreHidden": "{count} más — afina la búsqueda para verlas."
   },
   "menus": {
     "Goods Movement": {
