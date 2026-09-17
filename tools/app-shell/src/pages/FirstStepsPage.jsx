@@ -1,9 +1,11 @@
 import { useCallback, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { Check, Circle, Clock, Receipt } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils.js';
 import { useGuardedNavigate } from '@/hooks/useGuardedNavigate.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import {
   areAllStepsDone,
@@ -179,6 +181,16 @@ function StepRow({ step, done, expanded, loading, onToggle, onOpen, onConfigure,
 }
 
 export default function FirstStepsPage() {
+  // ETP-5395 — "Primeros pasos" is Owner-only (AD_User.EM_ETGO_Is_Owner, ETP-4830). Hiding the
+  // menu entry (menu.json's `"capability": "isOwner"`) is not enough on its own — a non-owner
+  // typing the URL directly must be bounced too. `capabilities.isOwner` is absent/false until
+  // proven true (fail-closed, same convention as every other capability read through
+  // `useCapabilitiesSafe()`), so this redirects unless it is explicitly `true`.
+  const capabilities = useCapabilitiesSafe();
+  if (capabilities.isOwner !== true) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   const ui = useUI();
   const navigate = useGuardedNavigate();
   // `steps`, `completedCount` and `total` come from the provider rather than from the
