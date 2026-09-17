@@ -112,7 +112,15 @@ export default function InvoicePickerModal({
           // The shared Checkbox, not a hand-drawn box: it carries the design system's own
           // `primary` tokens, so the tick reads black like every other checkbox in the app
           // instead of the informational blue this used to paint.
-          <Checkbox checked={checked} onChange={() => {}} className="shrink-0" />
+          //
+          // pointer-events-none is what makes clicking the box itself work. Checkbox is a <label>
+          // wrapping a hidden <input>, so a click on it fires TWICE at the row — once for the
+          // label, once for the click the browser forwards to the input — and the row's toggle ran
+          // both times, selecting and immediately deselecting. Letting the click fall through to
+          // the row keeps exactly one handler for the whole row, box included.
+          // The no-op onChange is required, not decorative: Checkbox forwards it to a controlled
+          // <input checked>, and React warns without it.
+          <Checkbox checked={checked} onChange={() => {}} className="shrink-0 pointer-events-none" />
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
