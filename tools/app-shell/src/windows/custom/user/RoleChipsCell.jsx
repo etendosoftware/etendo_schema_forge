@@ -153,7 +153,14 @@ export function buildRoleFilterQueryParams(row) {
   if (operator === 'isNotNull') return 'NoRole=true&RoleFilterNegate=true';
   if (operator !== 'equals' && operator !== 'notEqual') return null;
 
-  const raw = Array.isArray(row.value) ? row.value : (row.value ? [row.value] : []);
+  let raw;
+  if (Array.isArray(row.value)) {
+    raw = row.value;
+  } else if (row.value) {
+    raw = [row.value];
+  } else {
+    raw = [];
+  }
   const ids = raw.map(String).filter(Boolean);
   if (ids.length === 0) return null;
   const roleIds = ids.filter((id) => id !== NO_ROLE_FILTER_VALUE);

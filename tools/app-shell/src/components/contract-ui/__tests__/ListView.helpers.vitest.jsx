@@ -39,7 +39,13 @@ vi.mock('@/i18n', () => ({
 vi.mock('@/components/CurrentWindowContext', () => ({ useRegisterWindowContext: () => {} }));
 vi.mock('@/components/layout/PageMetaContext', () => ({ useSetPageMeta: () => vi.fn() }));
 vi.mock('@/components/layout/FavoritesContext', () => ({ useFavorites: () => ({ isFavorite: () => false, toggleFavorite: vi.fn() }) }));
-vi.mock('@/lib/gridQuery', () => ({ buildAdvancedFilterCriteria: () => null }));
+vi.mock('@/lib/gridQuery', () => ({
+  buildAdvancedFilterCriteria: () => null,
+  // ETP-5188 — real no-op contract (see `extractQueryParamConditions` in
+  // `@/lib/gridQuery.js`): with no `toQueryParams`-declaring column intercepting any
+  // row, it hands back the advancedFilter unchanged as `conditions` and no `extraParams`.
+  extractQueryParamConditions: (advancedFilter) => ({ conditions: advancedFilter, extraParams: null }),
+}));
 vi.mock('@/hooks/useWindowFilterPresets', () => ({ useWindowFilterPresets: () => ({ presets: [], savePreset: vi.fn(), deletePreset: vi.fn() }) }));
 vi.mock('../ReportDrawer.jsx', () => ({ default: () => null }));
 vi.mock('../DocumentPrintDrawer.jsx', () => ({ default: () => null, printDocuments: vi.fn() }));
