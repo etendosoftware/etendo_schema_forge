@@ -975,6 +975,61 @@ Applied to fields with `grid: true` to control how the list cell renders.
 | `visibleWhenCapability` | string | `null` | Names a capability key (e.g. `"showAccountingFields"`) from the `capabilities` map returned by the `GET /sws/neo/windowaccessmap` webhook (NEO pseudo-spec bridge — see `com.etendoerp.go/docs/neo-headless.md` §4.10). Opt-in — absent means always visible. Gates both the grid column and any `window.statusPills` entry referencing this field; the field is omitted entirely (not disabled) when the capability resolves `false`. Full mechanics (generator wiring, fail-closed behavior): `schema_forge_core`'s `docs/decisions-reference.md`. Shipped example: `posted` on `sales-invoice`/`purchase-invoice` — see those windows' `docs/generated-custom-windows/*.md` guides. |
 | `summable` | boolean | _absent_ | **Tri-state, not a flag.** Controls whether an `amount` column feeds the grid's footer TOTAL row. `false` opts the column out while keeping every bit of its money formatting; `true` is the explicit opt-in; **absent means "sums"** — the historical default ~99 existing amount columns rely on. See below. |
 | `currencyField` | string | _absent_ | Names the sibling field carrying THIS column's currency, for grids whose rows are not all in the same currency. Value is the contract field name (`"cCurrencyID"`), not the AD column (`C_Currency_ID`) — the renderer appends `$_identifier` to it. See below. |
+| `backendFilterKey` | string | **auto-derived** | Entity property the grid's **filter** criteria is built against. You almost never write this — the generator derives it automatically for every renamed field. See below. |
+| `backendSortKey` | string | **auto-derived** | Entity property the grid's **sort** parameter is built against. Same story: auto-derived for every renamed field. See below. |
+
+#### Renaming a field (`name`) and the backend query keys — ETP-5382
+
+**You normally write nothing here. This section exists so you know why.**
+
+A field renamed with `name` is exposed to the frontend under the new key, but the backend
+still only knows the field by its real OBDal/Hibernate property — the one derived from
+`AD_Column.Name` by Etendo's own `NamingUtil.getPropertyMappingName()`. Etendo Classic's
+`AdvancedQueryBuilder` / `JsonUtils.getPropertiesOnPath()` resolves every filter and sort
+parameter against that property, and **when it cannot match one it drops the filter
+criterion in total silence** — the list simply comes back unfiltered, with no error, no
+warning and no log. (Sorting is louder: the unresolvable path usually 500s.) This is the
+bug reported on Tax Rate's *Applicable To* (AD column `SOPOType`, property
+`salesPurchaseType`, exposed as `applicableTo`): the filter did nothing and looked like it
+had matched everything.
+
+**The generator now closes the gap by itself.** Whenever `resolve-curated` sees a field
+whose exposed key differs from its real backend property, it emits **both**
+`backendFilterKey` and `backendSortKey` onto the contract field and, from there, onto the
+generated grid column literal. Nothing to declare per window, and it applies retroactively
+to every rename already in the repo.
+
+| Case | Derived `backendFilterKey` | Derived `backendSortKey` |
+|---|---|---|
+| Field **not** renamed | _(absent — the key already IS the property)_ | _(absent)_ |
+| Renamed scalar field (`salesPurchaseType` → `applicableTo`) | `salesPurchaseType` | `salesPurchaseType` |
+| Renamed **FK** field (`finPaymentmethodID` → `paymentMethod`) | `finPaymentmethodID` | `finPaymentmethodID$_identifier` |
+| Synthetic `virtualFields` entry | _(never — there is no backend property)_ | _(never)_ |
+
+The FK row is not a special case for its own sake: an unrenamed FK renders a `selector`
+column, which `resolveBackendSort()` sorts on `<property>$_identifier` (by label). Setting
+`backendSortKey` makes that helper use the value verbatim, so the suffix has to be part of
+the derived value — otherwise the column would order by the join column's UUID, which looks
+random and, again, fails silently. The filter key stays unsuffixed, matching what an
+unrenamed FK column does.
+
+**Writing either key by hand is an escape hatch, not the normal path.** An explicit value
+in `decisions.json` always wins over the derived one (they are applied first; the derivation
+only fills what is still absent), and you only need it when the real backend property is
+*not* the field's own — e.g. filtering a column against a joined entity's property. If you
+find yourself typing the field's own raw name, delete it: it is already implied.
+
+```json
+"applicableTo": {
+  "grid": true,
+  "filterMode": "enumLabel"
+}
+```
+
+> Hand-written custom list components (`artifacts/<window>/custom/*HeaderTable.jsx`,
+> `tools/app-shell/src/windows/custom/**`) are **outside** this pipeline — the generator
+> never touches their column literals, so they still declare `backendFilterKey` /
+> `backendSortKey` themselves where needed. See [`list-filters.md`](list-filters.md).
 
 #### Boolean badge rendering (`badge`, `badgeLabels`, `badgeVariants`)
 
@@ -1455,7 +1510,7 @@ that already has values stored with the scheme included.
 
 | Property | Type | Default | Purpose |
 |----------|------|---------|---------|
-| `name` | string | Raw field name | Override field's public API name. |
+| `name` | string | Raw field name | Override field's public API name. The grid's backend filter/sort keys are derived automatically from the real property whenever this differs from the raw name — see [Renaming a field (`name`) and the backend query keys](#renaming-a-field-name-and-the-backend-query-keys--etp-5382) under Grid cell flags. |
 | `required` | boolean | From AD mandatory | Force field as required. |
 | `min` | number | `undefined` | Minimum allowed value for numeric fields. In **grid / inline rows** (DataTable) the UI autocorrects values below this limit to `min` on blur. In **detail forms** (EntityForm) a value below `min` raises a `fieldMinValueError` toast on blur and blocks the save (via `getNumericFieldViolation` in `useEntity`). The toast interpolates the declared threshold — "Value must be at least `{min}`" — so a `0` on a `min: 1` field is reported accurately (never as "negative"). Travels through the full pipeline (`decisions.json` → `resolve-curated` → contract → generated FieldDefs). |
 | `max` | number | `undefined` | Maximum allowed value for numeric fields. On blur the grid UI autocorrects values above this limit to `max`. Travels through the full pipeline (`decisions.json` → contract → generated FieldDefs). Example: `"max": 100` on a discount (%) field prevents values above 100. |
