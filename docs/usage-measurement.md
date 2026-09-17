@@ -165,7 +165,10 @@ The process is `ETGO_UsageAggregation` (`Billing Resource Usage Aggregation`), `
 with two optional parameters.
 
 - **No parameters** → the settling window: `[today - (W+1), today]`. This is what a schedule runs.
-- **`DateFrom` / `DateTo`** → a backfill of that range, which *may* rewrite final days. This is
+- **`Starting Date` / `Ending Date`** → a backfill of that range, which *may* rewrite final days.
+  (Labelled with Etendo's standard terminology; the underlying parameter columns are still
+  `datefrom`/`dateto`, and the lookup is case-insensitive, so a scheduled request's JSON may
+  use either spelling.) This is
   what makes shadow mode useful: a full past month can be reviewed before anyone is billed.
 
 Dates are accepted in the instance's display format (`dateFormat.java`) or `yyyy-MM-dd`, parsed
