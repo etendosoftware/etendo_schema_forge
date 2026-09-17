@@ -3,9 +3,6 @@
   "window": {
     "category": "purchases",
     "name": "Return to Vendor Shipment",
-    "sendDocument": {
-      "enabled": false
-    },
     "relatedDocuments": true,
     "notesField": "description",
     "dateFilterKey": "movementDate",
