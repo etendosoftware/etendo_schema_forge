@@ -414,7 +414,11 @@ describe('FundsTransferModal', () => {
       selectDest('USD');
 
       expect(screen.getByTestId('transfer-fx-block')).toBeInTheDocument();
-      expect(screen.getByTestId('transfer-rate')).toHaveValue('1.1');
+      // ETP-5107 — the rate field is a MaskedAmountInput now, so what it DISPLAYS is
+      // localized (es-ES decimal comma) while the value it reports outward, and therefore
+      // the one that reaches the payload, stays clean dot-decimal. The two are deliberately
+      // different strings; see the payload assertion in the last case of this block.
+      expect(screen.getByTestId('transfer-rate')).toHaveValue('1,1');
       // No rate on file hint must not appear when a rate was found.
       expect(screen.queryByTestId('transfer-rate-missing')).not.toBeInTheDocument();
 
@@ -428,16 +432,16 @@ describe('FundsTransferModal', () => {
       mockConversion = { rate: 1.1, hasRate: true, loading: false };
       renderModal();
       selectDest('USD');
-      expect(screen.getByTestId('transfer-rate')).toHaveValue('1.1');
+      expect(screen.getByTestId('transfer-rate')).toHaveValue('1,1');
 
-      fireEvent.change(screen.getByTestId('transfer-rate'), { target: { value: '1.25' } });
-      expect(screen.getByTestId('transfer-rate')).toHaveValue('1.25');
+      fireEvent.change(screen.getByTestId('transfer-rate'), { target: { value: '1,25' } });
+      expect(screen.getByTestId('transfer-rate')).toHaveValue('1,25');
 
       // Any unrelated state change re-renders the modal; the seeding effect must not re-fire.
       fireEvent.change(screen.getByTestId('transfer-amount'), { target: { value: '200' } });
       fireEvent.change(screen.getByTestId('transfer-description'), { target: { value: 'Manual' } });
 
-      expect(screen.getByTestId('transfer-rate')).toHaveValue('1.25');
+      expect(screen.getByTestId('transfer-rate')).toHaveValue('1,25');
       expect(screen.getByTestId('transfer-receive-amount')).toHaveTextContent(money('USD', 250));
     });
 
@@ -451,12 +455,12 @@ describe('FundsTransferModal', () => {
       renderModal();
 
       selectDest('USD');
-      expect(screen.getByTestId('transfer-rate')).toHaveValue('1.1');
+      expect(screen.getByTestId('transfer-rate')).toHaveValue('1,1');
 
       selectDest('GBP');
       // ETP-4504 W1 regression guard: the previous pair's rate must not survive the switch.
-      expect(screen.getByTestId('transfer-rate')).not.toHaveValue('1.1');
-      expect(screen.getByTestId('transfer-rate')).toHaveValue('0.85');
+      expect(screen.getByTestId('transfer-rate')).not.toHaveValue('1,1');
+      expect(screen.getByTestId('transfer-rate')).toHaveValue('0,85');
 
       fireEvent.change(screen.getByTestId('transfer-amount'), { target: { value: '100' } });
       expect(screen.getByTestId('transfer-receive-amount')).toHaveTextContent(money('GBP', 85));
@@ -469,7 +473,7 @@ describe('FundsTransferModal', () => {
       renderModal();
 
       selectDest('USD');
-      expect(screen.getByTestId('transfer-rate')).toHaveValue('1.1');
+      expect(screen.getByTestId('transfer-rate')).toHaveValue('1,1');
 
       selectDest('DST');
       expect(screen.queryByTestId('transfer-fx-block')).not.toBeInTheDocument();
@@ -515,7 +519,8 @@ describe('FundsTransferModal', () => {
       mockConversion = { rate: 1.085, hasRate: true, loading: false };
       renderModal();
       selectDest('USD');
-      expect(screen.getByTestId('transfer-rate')).toHaveValue('1.085');
+      // Displayed localized ('1,085'), forwarded clean ('1.085' — asserted below).
+      expect(screen.getByTestId('transfer-rate')).toHaveValue('1,085');
 
       fireEvent.change(screen.getByTestId('transfer-amount'), { target: { value: '100' } });
       selectGl();

@@ -7,10 +7,19 @@ import FiscalDefaultsSection from './FiscalDefaultsSection';
 import ContactsSummaryWidget from './ContactsSummaryWidget';
 
 
+import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
 /**
- * Credit-limit field: a number input plus -/+ steppers, with ONE commit path (ETP-5263).
+ * Single value representation for the stepper ARITHMETIC only: null/'' -> 0, everything else
+ * -> Number. Deliberately NOT used for the displayed value — see {@link CreditLimitStepper}.
+ */
+function toNumber(raw) {
+  return raw == null || raw === '' ? 0 : Number(raw);
+}
+
+/**
+ * Credit-limit field: a masked amount input plus -/+ steppers, with ONE commit path (ETP-5263).
  *
  * The bug this shape exists to prevent: the input used to call `onBlur` directly while `step()`
  * armed its own 400 ms debounced `onBlur`, so a "+" click followed by clicking away inside the
@@ -29,10 +38,18 @@ import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
  * `saving` deliberately does NOT lock the field: freezing the input mid-save would drop a
  * keystroke the user has already typed. A save triggered while another is in flight is queued by
  * the parent instead (see `persistCreditTaxField`).
+ *
+ * The text box is `MaskedAmountInput` and NOT a controlled `<input type="number">` (ETP-5328).
+ * The old shape rendered a value coerced with `Number()` while propagating the DOM's raw string
+ * outward, so deleting the field sent `''` up, the very next render mapped it back to `0`, and the
+ * `0` reappeared under the caret on every delete keystroke — the field could only be cleared by
+ * typing an extra digit first. The same round-trip also destroyed a half-typed decimal (`1,` ->
+ * `1`) and jumped the caret. `MaskedAmountInput` owns its own typing buffer, so the box may be
+ * genuinely EMPTY while the user edits; `SO_CreditLimit` is AD-mandatory, so empty is normalised
+ * to 0 at commit time (see {@link commitTyped}) and never persisted as null.
  */
 function CreditLimitStepper({ value, readOnly, onChange, onBlur, saving }) {
   const ui = useUI();
-  const num = value === '' || value == null ? 0 : Number(value);
   const debounceRef = useRef(null);
 
   useEffect(() => () => clearTimeout(debounceRef.current), []);
@@ -51,13 +68,23 @@ function CreditLimitStepper({ value, readOnly, onChange, onBlur, saving }) {
 
   function step(delta) {
     if (readOnly) return;
-    const next = Math.max(0, num + delta);
+    const next = Math.max(0, toNumber(value) + delta);
     onChange(next);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       debounceRef.current = null;
       onBlur();
     }, 400);
+  }
+
+  /**
+   * Blur / Enter. `parsed` is `null` for an empty box (`parseLocaleNumber('')`), which here means
+   * 0 rather than "no value": the AD marks `SO_CreditLimit` mandatory, so a null would be refused
+   * on flush. Emptiness is a legitimate EDITING state, never a persisted one.
+   */
+  function commitTyped(parsed) {
+    onChange(parsed == null ? 0 : parsed);
+    commit();
   }
 
   return (
@@ -67,14 +94,15 @@ function CreditLimitStepper({ value, readOnly, onChange, onBlur, saving }) {
         <span className="text-sm text-destructive">*</span>
       </div>
       <div className="flex flex-row items-center h-10 border border-border-control rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)] overflow-hidden bg-card hover:bg-muted focus-within:ring-1 focus-within:ring-focus-ring transition-colors">
-        <input
-          type="number"
-          value={num}
-          readOnly={readOnly}
-          onChange={e => !readOnly && onChange(e.target.value)}
-          onBlur={commit}
-          className="flex-1 px-3 text-sm text-text-primary bg-transparent outline-none min-w-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-        />
+        <MaskedAmountInput
+          bare
+          grouping
+          value={value}
+          disabled={readOnly}
+          onChange={(clean) => onChange(clean)}
+          onCommit={commitTyped}
+          className="flex-1 h-full !text-left px-3 text-sm text-text-primary bg-transparent border-0 shadow-none rounded-none outline-none ring-0 focus-visible:ring-0 focus-visible:outline-none min-w-0"
+          data-testid="CreditLimitStepperInput" />
         <button
           type="button"
           onClick={() => step(-1)}
@@ -101,8 +129,11 @@ function CreditLimitStepper({ value, readOnly, onChange, onBlur, saving }) {
  *
  * An empty field means "no value", which the backend expects as an explicit `null` rather than
  * an empty string. `creditLimit` is numeric, so it is additionally coerced — and its blank check
- * also covers `null`/`undefined`, because the stepper clears the input to an empty string while
- * the parent may hand the field down as absent.
+ * also covers `null`/`undefined`, because the parent may hand the field down as absent.
+ *
+ * `creditLimit` should never actually reach here blank: `SO_CreditLimit` is AD-mandatory, so the
+ * stepper normalises an empty box to 0 at commit time (ETP-5328). The blank branch stays as a net
+ * for any OTHER caller, not as the credit limit's intended wire shape.
  */
 function normalizeCreditTaxValue(fieldKey, value) {
   if (fieldKey === 'creditLimit') {

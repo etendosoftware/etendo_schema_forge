@@ -254,12 +254,22 @@ async function toggleRowEdit(page, lineId) {
 }
 
 /**
- * The two numeric inputs of a row in edit mode, in DOM order: percentage then amount.
- * Neither emits a `data-testid` (reported, not patched — this spec must not touch production
- * code), so they are located by type, scoped to the row.
+ * The two amount inputs of a row in edit mode, in DOM order: percentage then amount.
+ *
+ * ETP-5283 (merge block): these used to be selected as `input[type="number"]`. ETP-5107 replaced
+ * both cells with `MaskedAmountInput`, which is `type="text"` on purpose — a native number input
+ * makes the BROWSER itself reject the comma keystroke under es-ES, which was the defect being
+ * fixed, so the element type had to change and that selector now matches nothing. Same retarget
+ * the `PriceStepper` locator already needed (`product-price-single-flight.mocked.spec.js`).
+ *
+ * `EditAmountCell` passes neither `name` nor `data-testid`, so `MaskedAmountInput` falls back to
+ * its stable `field-number` testid on the input itself (`bare` + no `currency` → no wrapper
+ * element). It is not per-field unique, so the pair is still taken in DOM order, scoped to the
+ * row — but it no longer depends on the input's type. A per-field testid would still be an
+ * improvement; reported, not patched, since this spec must not touch production code.
  */
 function numericInputs(page, lineId) {
-  const inputs = lineRow(page, lineId).locator('input[type="number"]');
+  const inputs = lineRow(page, lineId).getByTestId('field-number');
   return { percentage: inputs.nth(0), amount: inputs.nth(1) };
 }
 

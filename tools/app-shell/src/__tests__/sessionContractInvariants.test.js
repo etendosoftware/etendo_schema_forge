@@ -229,13 +229,36 @@ function unsafeSitesWithoutProof(raw) {
  * ETP-4576 — the `app-shell/src` half of this list reached ZERO: no file there
  * hand-builds an Authorization/Bearer header any more, and every call site asks a
  * builder for one without learning which scheme is active. Do not put an
- * `app-shell/src` path back here; the fix is to use the builder, not to list the
- * file.
+ * `app-shell/src` path back here as DEBT; the fix is to use the builder, not to
+ * list the file. The one `app-shell/src` entry below is NOT debt — see its note.
  *
  * What remains is the per-window `custom` batch, which this rule only started
  * seeing when the scan grew a second root.
  */
 const G1_DEBT = new Set([
+  // Not debt, and it can never become debt. `OAuth2ClientDialog.jsx` builds no
+  // header at all: it takes `apiFetch` as a prop and hands it to the API module,
+  // so it never learns which scheme is active — exactly what G1 asks for.
+  //
+  // What trips the detector is one word of PROSE. `SecretRevealDialog` shows the
+  // freshly minted OAuth2 client credentials once, and tells the user where to
+  // paste them: "Paste this value in Scalar under Authentication -> bearer.
+  // Scalar adds `Bearer` automatically." That `Bearer` is JSX TEXT, not a string
+  // literal, so `code()` (which blanks literals precisely to stop prose matching)
+  // leaves it standing and `/\bBearer\b/` finds it. The `authorizationValue` prop
+  // is likewise only rendered and copied to the clipboard.
+  //
+  // And the credential on screen is not this app's session: `ApiKeysPage` passes
+  // `authorizationValue={`${clientId}:${clientSecret}`}` — an OAuth2 client pair
+  // for an EXTERNAL API tool (Scalar), minted by the user for their own use. There
+  // is no session credential here to migrate to a builder, so do not "fix" this
+  // file: rewording the sentence to dodge the regex would only make the
+  // instructions wrong, and the next person would write it back.
+  //
+  // Consequence to know: the accuracy check below asserts every entry still
+  // matches, so if that sentence is ever reworded away from the word "Bearer"
+  // this entry must be deleted with it. That is the ratchet working, not a break.
+  'components/OAuth2ClientDialog.jsx',
   // -- artifacts/<window>/custom (ETP-4576) ----------------------------------
   // Measured, not migrated. Extending the scan to the per-window `custom/` trees
   // (see ARTIFACTS above) surfaced these at once; they were never swept because no

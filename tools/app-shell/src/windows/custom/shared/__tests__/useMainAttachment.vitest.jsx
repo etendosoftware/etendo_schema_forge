@@ -474,4 +474,171 @@ describe('useMainAttachment', () => {
       expect(fetchMainAttachment).toHaveBeenCalledTimes(1);
     });
   });
+
+  // ── skipBlobFetch / fetchBlobUrl (ETP-5358 Part 2) ──────────────────────────
+  //
+  // GenericPreviewModal's ManagedLeftPanel passes skipBlobFetch: true when autoFetch is true
+  // (see ETP-5358 Part 1): nothing renders this hook's own file view in that mode, so eagerly
+  // downloading the blob on every mount was pure waste — it duplicated the same GET already
+  // made by the caller's own usePdfGenerator-backed viewer. This mode keeps the mount fetch to
+  // metadata only, and fetchBlobUrl() resolves the bytes lazily, on demand.
+
+  describe('skipBlobFetch (ETP-5358 Part 2)', () => {
+    it('on mount, fetches only metadata — never the blob — and reports storedFile with objectUrl: null', async () => {
+      fetchMainAttachment.mockResolvedValue(MAIN_ATTACHMENT);
+
+      const { result } = renderHook(() =>
+        useMainAttachment({ ...BASE_PARAMS, skipBlobFetch: true }),
+      );
+
+      await waitFor(() => expect(result.current.isBusy).toBe(false));
+
+      expect(fetchMainAttachment).toHaveBeenCalledTimes(1);
+      expect(fetchAttachmentBlobUrl).not.toHaveBeenCalled();
+      expect(result.current.storedFile).toEqual({
+        attachmentId: 'att-1', fileName: 'supplier.pdf', mimeType: 'application/pdf', objectUrl: null,
+      });
+    });
+
+    it('still computes storedFileIsStale in metadata-only mode (staleness never needed the blob)', async () => {
+      fetchMainAttachment.mockResolvedValue({ ...MAIN_ATTACHMENT, uploadedAt: '2026-08-24T10:00:00Z' });
+
+      const { result } = renderHook(() =>
+        useMainAttachment({ ...BASE_PARAMS, skipBlobFetch: true, recordUpdated: '2026-08-24T12:15:30+02:00' }),
+      );
+
+      await waitFor(() => expect(result.current.isBusy).toBe(false));
+
+      expect(result.current.storedFileIsStale).toBe(true);
+      expect(fetchAttachmentBlobUrl).not.toHaveBeenCalled();
+    });
+
+    it('leaves storedFile null when no attachment is marked, same as eager mode', async () => {
+      fetchMainAttachment.mockResolvedValue(null);
+
+      const { result } = renderHook(() =>
+        useMainAttachment({ ...BASE_PARAMS, skipBlobFetch: true }),
+      );
+
+      await waitFor(() => expect(result.current.isBusy).toBe(false));
+
+      expect(result.current.storedFile).toBeNull();
+      expect(fetchAttachmentBlobUrl).not.toHaveBeenCalled();
+    });
+
+    describe('fetchBlobUrl', () => {
+      it('resolves the blob lazily on first call and updates storedFile.objectUrl', async () => {
+        fetchMainAttachment.mockResolvedValue(MAIN_ATTACHMENT);
+        fetchAttachmentBlobUrl.mockResolvedValue('blob:lazy-url');
+
+        const { result } = renderHook(() =>
+          useMainAttachment({ ...BASE_PARAMS, skipBlobFetch: true }),
+        );
+        await waitFor(() => expect(result.current.storedFile).not.toBeNull());
+        expect(result.current.storedFile.objectUrl).toBeNull();
+
+        let url;
+        await act(async () => { url = await result.current.fetchBlobUrl(); });
+
+        expect(url).toBe('blob:lazy-url');
+        expect(fetchAttachmentBlobUrl).toHaveBeenCalledWith({
+          token: 'test-token', attachmentId: 'att-1', apiBaseUrl: '/sws/neo/purchase-invoice',
+        });
+        expect(result.current.storedFile.objectUrl).toBe('blob:lazy-url');
+      });
+
+      it('returns the already-resolved URL on a second call, without a second network request', async () => {
+        fetchMainAttachment.mockResolvedValue(MAIN_ATTACHMENT);
+        fetchAttachmentBlobUrl.mockResolvedValue('blob:lazy-url');
+
+        const { result } = renderHook(() =>
+          useMainAttachment({ ...BASE_PARAMS, skipBlobFetch: true }),
+        );
+        await waitFor(() => expect(result.current.storedFile).not.toBeNull());
+
+        await act(async () => { await result.current.fetchBlobUrl(); });
+        expect(fetchAttachmentBlobUrl).toHaveBeenCalledTimes(1);
+
+        let secondUrl;
+        await act(async () => { secondUrl = await result.current.fetchBlobUrl(); });
+
+        expect(secondUrl).toBe('blob:lazy-url');
+        expect(fetchAttachmentBlobUrl).toHaveBeenCalledTimes(1);
+      });
+
+      it('de-dupes a concurrent double-call onto a single in-flight request (e.g. an impatient double-click)', async () => {
+        fetchMainAttachment.mockResolvedValue(MAIN_ATTACHMENT);
+        let resolveBlob;
+        fetchAttachmentBlobUrl.mockReturnValue(new Promise((resolve) => { resolveBlob = resolve; }));
+
+        const { result } = renderHook(() =>
+          useMainAttachment({ ...BASE_PARAMS, skipBlobFetch: true }),
+        );
+        await waitFor(() => expect(result.current.storedFile).not.toBeNull());
+
+        let firstCall;
+        let secondCall;
+        act(() => {
+          firstCall = result.current.fetchBlobUrl();
+          secondCall = result.current.fetchBlobUrl();
+        });
+
+        expect(fetchAttachmentBlobUrl).toHaveBeenCalledTimes(1);
+
+        await act(async () => { resolveBlob('blob:concurrent-url'); await Promise.all([firstCall, secondCall]); });
+
+        expect(await firstCall).toBe('blob:concurrent-url');
+        expect(await secondCall).toBe('blob:concurrent-url');
+        expect(fetchAttachmentBlobUrl).toHaveBeenCalledTimes(1);
+      });
+
+      it('returns null and leaves storedFile untouched when there is no marked attachment to fetch', async () => {
+        fetchMainAttachment.mockResolvedValue(null);
+
+        const { result } = renderHook(() =>
+          useMainAttachment({ ...BASE_PARAMS, skipBlobFetch: true }),
+        );
+        await waitFor(() => expect(result.current.isBusy).toBe(false));
+
+        let url;
+        await act(async () => { url = await result.current.fetchBlobUrl(); });
+
+        expect(url).toBeNull();
+        expect(fetchAttachmentBlobUrl).not.toHaveBeenCalled();
+        expect(result.current.storedFile).toBeNull();
+      });
+
+      it('returns null (does not throw) when the underlying request fails', async () => {
+        fetchMainAttachment.mockResolvedValue(MAIN_ATTACHMENT);
+        fetchAttachmentBlobUrl.mockRejectedValue(new Error('network error'));
+
+        const { result } = renderHook(() =>
+          useMainAttachment({ ...BASE_PARAMS, skipBlobFetch: true }),
+        );
+        await waitFor(() => expect(result.current.storedFile).not.toBeNull());
+
+        let url;
+        await act(async () => { url = await result.current.fetchBlobUrl(); });
+
+        expect(url).toBeNull();
+        expect(result.current.storedFile.objectUrl).toBeNull();
+      });
+
+      it('in eager mode (skipBlobFetch not set), returns the already-fetched URL without an extra request', async () => {
+        fetchMainAttachment.mockResolvedValue(MAIN_ATTACHMENT);
+        fetchAttachmentBlobUrl.mockResolvedValue('blob:main-url');
+
+        const { result } = renderHook(() => useMainAttachment(BASE_PARAMS));
+        await waitFor(() => expect(result.current.storedFile?.objectUrl).toBe('blob:main-url'));
+        expect(fetchAttachmentBlobUrl).toHaveBeenCalledTimes(1);
+
+        let url;
+        await act(async () => { url = await result.current.fetchBlobUrl(); });
+
+        expect(url).toBe('blob:main-url');
+        expect(fetchAttachmentBlobUrl).toHaveBeenCalledTimes(1);
+      });
+    });
+  });
+
 });

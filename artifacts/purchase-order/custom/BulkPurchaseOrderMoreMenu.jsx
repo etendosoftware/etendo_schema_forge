@@ -18,8 +18,8 @@
 // Kebab menu in the list selection toolbar that groups bulk creation actions
 // (Create Purchase Invoices / Create Goods Receipts) for selected Purchase
 // Orders. Mirrors artifacts/sales-order/custom/BulkOrderMoreMenu.jsx — same
-// per-record fan-out, same fail-open pre-checks, same sessionStorage toast
-// aggregation consumed by useBulkActionToast.
+// per-record fan-out, same fail-open pre-checks, same aggregated toast, and (ETP-5302)
+// the same in-place list refetch instead of a full page reload.
 
 import { useState } from 'react';
 // ETP-4576 - module-level helpers cannot hold a hook, so they take the module-level
@@ -36,8 +36,7 @@ import {
 import { useUI } from '@/i18n';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
-
-const STORAGE_KEY = 'bulkActionResult';
+import { showBulkActionToast, persistBulkActionResult } from '@/hooks/useBulkActionToast';
 const COMPLETED = 'CO';
 const DRAFT = 'DR';
 
@@ -124,10 +123,13 @@ async function runBulkPurchaseOrderAction({ rows, action, apiBaseUrl, token, ui 
     }));
   const ok = outcomes.length - failed.length;
 
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ ok, failed }));
+  // ETP-5302 — returns the result instead of persisting it. Persisting is only needed
+  // by the legacy reload path; when the list can refetch in place the caller shows the
+  // toast directly and sessionStorage never comes into play.
+  return { ok, failed };
 }
 
-export default function BulkPurchaseOrderMoreMenu({ selectedRows, clearSelection, token, apiBaseUrl }) {
+export default function BulkPurchaseOrderMoreMenu({ selectedRows, clearSelection, token, apiBaseUrl, refresh }) {
   const ui = useUI();
   const [running, setRunning] = useState(false);
 
@@ -136,8 +138,20 @@ export default function BulkPurchaseOrderMoreMenu({ selectedRows, clearSelection
   const handleSelect = (action) => async () => {
     if (running) return;
     setRunning(true);
-    await runBulkPurchaseOrderAction({ rows: selectedRows, action, apiBaseUrl, token, ui });
+    const result = await runBulkPurchaseOrderAction({ rows: selectedRows, action, apiBaseUrl, token, ui });
     setRunning(false);
+
+    // ETP-5302 — refetch the rows in place rather than reloading the whole browser page,
+    // matching BulkDocumentAction's button right next to this menu in the same bar.
+    if (refresh) {
+      clearSelection();
+      showBulkActionToast(ui, result);
+      refresh();
+      return;
+    }
+
+    // No refetch available (mounted outside ListView's `bulkActions` slot): legacy path.
+    persistBulkActionResult(result);
     setTimeout(() => {
       clearSelection();
       window.location.reload();

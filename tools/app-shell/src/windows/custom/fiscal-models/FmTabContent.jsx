@@ -67,6 +67,7 @@ export function SourcesTab({ decl, t }) {
             <thead>
               <tr>
                 <th>{t('fm.sources.col.date')}</th>
+                <th>{t('fm.sources.col.accountingDate')}</th>
                 <th>{t('fm.sources.col.ref')}</th>
                 <th>{t('fm.sources.col.type')}</th>
                 <th>{t('fm.sources.col.party')}</th>
@@ -78,7 +79,7 @@ export function SourcesTab({ decl, t }) {
             </thead>
             <tbody>
               {visible.length === 0 && (
-                <tr><td colSpan={8} style={{ textAlign:'center', color:'hsl(var(--text-disabled))', padding:'24px 0', fontSize:13 }}>{t('fm.incidents.empty') ?? 'Sin incidencias'}</td></tr>
+                <tr><td colSpan={9} style={{ textAlign:'center', color:'hsl(var(--text-disabled))', padding:'24px 0', fontSize:13 }}>{t('fm.incidents.empty') ?? 'Sin incidencias'}</td></tr>
               )}
               {visible.map((r) => {
                 const incs = rowIncidents(r);
@@ -91,6 +92,7 @@ export function SourcesTab({ decl, t }) {
                 return (
                   <tr key={r.ref} className={rowClass}>
                     <td className="strong">{fmtDate(r.date)}</td>
+                    <td>{fmtDate(r.accountingDate)}</td>
                     <td>{r.ref}</td>
                     <td>{r.type}</td>
                     <td>{r.party}</td>

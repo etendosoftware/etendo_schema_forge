@@ -7,13 +7,30 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'BulkInvoiceFromShipment.jsx'), 'utf8');
 
+/**
+ * The source with comments removed, for the `doesNotMatch` assertions only.
+ *
+ * This file's own prose names the things it forbids — "the credential belongs to apiFetch"
+ * mentions the credential, and any future note about the old `Bearer` header would too. A
+ * negative regex over the raw text would then fail on an ACCURATE comment and push the next
+ * reader to delete the explanation rather than keep the code right. Positive assertions still
+ * run against `src`: matching a pattern that only exists in a comment is a mistake this
+ * component's shape (every fetch is a real call site) does not make.
+ */
+const code = src
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+
 describe('BulkInvoiceFromShipment', () => {
   it('exports a default function component', () => {
     assert.match(src, /export default function BulkInvoiceFromShipment/);
   });
 
-  it('accepts selectedRows, clearSelection, token, and apiBaseUrl props', () => {
-    assert.match(src, /\{\s*selectedRows.*clearSelection.*token.*apiBaseUrl\s*\}/);
+  it('accepts selectedRows, clearSelection, token, apiBaseUrl and refresh props', () => {
+    assert.match(
+      src,
+      /export default function BulkInvoiceFromShipment\(\{\s*selectedRows,\s*clearSelection,\s*token,\s*apiBaseUrl,\s*refresh\s*\}\)/,
+    );
   });
 
   it('filters invoiceable rows by documentStatus CO and not completely invoiced', () => {
@@ -62,6 +79,76 @@ describe('BulkInvoiceFromShipment', () => {
   it('supports collapse/expand per shipment', () => {
     assert.match(src, /toggleCollapse/);
     assert.match(src, /collapsed/);
+  });
+
+  // ETP-5302 — this action used to close the modal and clear the selection but never
+  // refetch (and never reload either), so the shipments it had just invoiced kept
+  // showing a stale invoicing status with nothing on screen hinting they were out of
+  // date. `refresh` comes from ListView's `bulkActions` slot context, the same one
+  // BulkDocumentAction and the kebab menu now use.
+  describe('ETP-5302 — refetches the list after a successful bulk invoice', () => {
+    it('invokes refresh (in addition to clearSelection) from the modal onSuccess', () => {
+      assert.match(
+        src,
+        /onSuccess=\{\(\)\s*=>\s*\{[\s\S]*?clearSelection\(\);[\s\S]*?refresh\?\.\(\);[\s\S]*?\}\}/,
+      );
+    });
+
+    it('calls refresh optionally so a host that supplies no refresh cannot crash', () => {
+      assert.match(src, /refresh\?\.\(\)/);
+      assert.doesNotMatch(src, /[^?.]\brefresh\(\)/);
+    });
+
+    it('still closes the modal on success', () => {
+      assert.match(src, /onSuccess=\{\(\)\s*=>\s*\{\s*setShowModal\(false\);/);
+    });
+
+    it('does not refetch on a plain cancel/close (nothing changed server-side)', () => {
+      assert.match(src, /onClose=\{\(\)\s*=>\s*setShowModal\(false\)\}/);
+    });
+
+    it('the modal reports success through onSuccess after the create call', () => {
+      assert.match(src, /onSuccess\(\);/);
+    });
+  });
+
+  // ETP-4576 — the other half of this file's post-merge state. Develop contributed the
+  // `refresh` prop asserted above; this branch contributed the credential change, and it had
+  // no coverage here at all while both sibling bulk components (BulkOrderMoreMenu,
+  // BulkPurchaseOrderMoreMenu) assert theirs. A union resolution needs both halves pinned, or
+  // the next merge can quietly drop the unasserted one.
+  describe('ETP-4576 — every request goes through apiFetch', () => {
+    it('imports useApiFetch rather than holding a credential', () => {
+      assert.match(src, /import \{ useApiFetch \} from '@\/auth\/useApiFetch\.js'/);
+    });
+
+    // The empty base is load-bearing, not a default someone forgot to fill in: the URLs here
+    // are already absolute and several address a DIFFERENT spec than this window's
+    // (`sales-order/lines`, `goods-shipment/...`). `resolveApiUrl` only skips the prefix when
+    // the path already starts with that same base, so passing this window's base would build
+    // /sws/neo/<this>/sws/neo/<other>/... and 404. Asserted so a later "tidy-up" that threads
+    // `apiBaseUrl` in here fails loudly instead of at runtime.
+    it('resolves apiFetch with an EMPTY base, because the URLs are cross-spec', () => {
+      assert.match(src, /const apiFetch = useApiFetch\(''\);/);
+      assert.doesNotMatch(code, /useApiFetch\(\s*apiBaseUrl\s*\)/);
+    });
+
+    it('issues every backend call through apiFetch, never a bare fetch', () => {
+      const apiFetchCalls = code.match(/\bapiFetch\(/g) || [];
+      assert.ok(apiFetchCalls.length >= 5, `expected the call sites to use apiFetch, found ${apiFetchCalls.length}`);
+      assert.doesNotMatch(code, /[^.\w$]fetch\(/);
+    });
+
+    it('never hand-builds a credential header', () => {
+      assert.doesNotMatch(code, /\bAuthorization\b/);
+      assert.doesNotMatch(code, /\bBearer\b/);
+    });
+
+    // Required by docs/request-policy.md: `apiFetch` is a hook result, so an effect that calls
+    // it and omits it from the dep array can keep a stale binding across a credential change.
+    it('lists apiFetch in the dependency array of the effect that uses it', () => {
+      assert.match(src, /\}, \[shipments, base, apiFetch\]\);/);
+    });
   });
 
   describe('ETP-4028 — currencyCheck (mixed-currency selections block bulk invoicing)', () => {

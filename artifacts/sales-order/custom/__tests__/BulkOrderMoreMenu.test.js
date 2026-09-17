@@ -35,14 +35,63 @@ describe('BulkOrderMoreMenu source', () => {
     assert.match(src, /Promise\.allSettled/);
   });
 
-  it('persists result to sessionStorage before reload', () => {
-    assert.match(src, /sessionStorage\.setItem\(\s*STORAGE_KEY/);
-    assert.match(src, /STORAGE_KEY\s*=\s*'bulkActionResult'/);
+  // ETP-5302 — the runner no longer owns what happens to the result: it RETURNS
+  // `{ ok, failed }` and the component decides (refetch in place, or the legacy
+  // persist + full reload when no `refresh` is available). The raw
+  // `sessionStorage.setItem` write and the local STORAGE_KEY const are gone —
+  // persistence now lives in useBulkActionToast's `persistBulkActionResult`, so the
+  // storage key and payload shape exist in exactly one place.
+  it('runner returns the aggregate result instead of persisting it', () => {
+    assert.match(src, /return \{ ok, failed \};/);
+    assert.doesNotMatch(src, /sessionStorage\.setItem/);
+    assert.doesNotMatch(src, /STORAGE_KEY/);
   });
 
-  it('reloads the page and clears selection after run', () => {
-    assert.match(src, /clearSelection\(\)/);
-    assert.match(src, /window\.location\.reload\(\)/);
+  it('accepts the refresh callback handed down by the bulkActions slot', () => {
+    assert.match(src, /export default function BulkOrderMoreMenu\(\{[^}]*\brefresh\b[^}]*\}\)/);
+  });
+
+  // PRIMARY path. The old full-page reload was never about the data — it was how the
+  // result toast survived, since it was parked in sessionStorage for the next mount
+  // of useBulkActionToast to read. Showing the toast directly removes the only reason
+  // to reload, so scroll position, active filters and the SPA boot all survive.
+  it('primary path: clears the selection, shows the toast and refetches the list in place', () => {
+    assert.match(src, /import \{[^}]*showBulkActionToast[^}]*\} from '@\/hooks\/useBulkActionToast'/);
+    assert.match(
+      src,
+      /if \(refresh\) \{[\s\S]*?clearSelection\(\);[\s\S]*?showBulkActionToast\(ui, result\);[\s\S]*?refresh\(\);[\s\S]*?return;[\s\S]*?\}/,
+    );
+    const refreshBranch = src.indexOf('if (refresh)');
+    const persist = src.indexOf('persistBulkActionResult(result)');
+    assert.ok(refreshBranch > -1 && refreshBranch < persist, 'the refresh branch must short-circuit first');
+    const branch = src.slice(refreshBranch, persist);
+    assert.doesNotMatch(branch, /setTimeout/);
+    assert.doesNotMatch(branch, /location\.reload/);
+  });
+
+  // FALLBACK path only — a host that mounts this menu outside ListView's
+  // `bulkActions` slot has no in-place refetch to offer, so the result must still be
+  // handed across a reload rather than dropped on the floor.
+  it('fallback path (no refresh): persists the result, then clears selection and reloads', () => {
+    assert.match(src, /persistBulkActionResult\(result\)/);
+    assert.match(
+      src,
+      /setTimeout\([\s\S]*?clearSelection\(\);[\s\S]*?window\.location\.reload\(\);[\s\S]*?\}, 600\)/,
+    );
+  });
+
+  it('keeps exactly one reload call site (the fallback)', () => {
+    const reloads = src.match(/window\.location\.reload\(\)/g) || [];
+    assert.equal(reloads.length, 1);
+  });
+
+  // Regression guard: reaching `showResult` by mounting `useBulkActionToast()` here
+  // would also install the hook's sessionStorage-DRAINING effect, which re-runs on
+  // every `ui` identity change and eats this component's own persisted result before
+  // the fallback reload can hand it to the next mount. The exported pure function
+  // has no effect and is the only safe way in.
+  it('imports the pure showBulkActionToast helper and never mounts the hook itself', () => {
+    assert.doesNotMatch(src, /useBulkActionToast\(\)/);
   });
 
   it('skips orders not in CO with the soBulkOrderNotCompleted i18n key', () => {

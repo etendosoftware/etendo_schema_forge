@@ -16,7 +16,14 @@ import { useBPartnerLookup, useGLItemLookup } from '@/hooks/useMovementLookups';
 import { AddLineButton } from '@/components/ui/add-line-button';
 import { ChipSelect } from '@/components/forms/fields';
 import { FieldRow, inputClass, textareaClass } from './formFields';
-import { parseAmount } from './statementAmount.js';
+// The manual grid's cells are MaskedAmountInput, so their values arrive CLEAN (dot-decimal,
+// already disambiguated by the mask) — they parse with parseLocaleNumber. The structural
+// statementAmount parser stays where it belongs: the CSV/xlsx import path, whose cells nobody
+// masked and whose separators really are ambiguous.
+import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
+import { MaskedAmountInput } from '@/components/forms/fields.jsx';
+
+const parseAmount = (v) => parseLocaleNumber(v).value ?? 0;
 import { FINANCIAL_ACCOUNT_FIELD_LIMITS } from './fieldLengthValidation.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -307,10 +314,11 @@ function EditRow({ row, onChange, onRemove, ui, currencySym, currencySymRightSid
   const setVal = (field) => (value) => onChange(row.id, field, value);
   const amountCell = (field, testId) => (
     <div className="relative">
-      <input
-        type="text" inputMode="decimal" value={row[field]} onChange={set(field)}
+      <MaskedAmountInput
+        bare
+        value={row[field]}
+        onChange={(clean) => onChange(row.id, field, clean)}
         placeholder={ui('financeAccountAmountPlaceholder')}
-        title={row[field]}
         className={cn(cellAmount, currencySymRightSide ? 'pr-7' : 'pl-7')} data-testid={testId} />
       <span
         className={`pointer-events-none absolute ${currencySymRightSide ? 'right-2' : 'left-2'} top-1/2 -translate-y-1/2 text-xs text-[hsl(var(--text-disabled))]`}>

@@ -2,6 +2,7 @@ import { Switch } from '@/components/ui/switch';
 import { StatusTag } from '@/components/ui/status-tag';
 import { Tag } from '@/components/ui/tag';
 import { BoxIcon } from '@/components/ui/box-icon';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import { useNeoImage } from '@/hooks/useNeoImage';
 import { formatAmount } from '@/lib/formatAmount.js';
 import { resolveRowCurrency } from '@/lib/rowCurrency.js';
@@ -159,11 +160,27 @@ export function renderStatusCell({ row, col, dictionary, ui }) {
 export function renderPercentCell({ row, col }) {
   const { color, pct, textColor } = getPercentCellPalette(row, col);
   return (
-    <div className="flex items-center gap-2">
+    // `percent` is in NUMERIC_FIELD_TYPES, so DataTable right-aligns this
+    // column's header and <td> — but `text-align` has no effect on a `flex`
+    // child (flex items are positioned by `justify-content`, not text-align),
+    // so without `justify-end` this bar-plus-label combo silently ignored
+    // that alignment and hugged the cell's LEFT edge while its header stayed
+    // right-aligned. `renderAmountCell` (plain <span>) and
+    // `renderSignedDeltaCell` (`text-right` on a block <span>) don't need
+    // this because neither uses `display: flex`.
+    <div className="flex items-center justify-end gap-2">
       <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
         <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
       </div>
-      <span className={`text-xs tabular-nums ${textColor}`}>{pct}%</span>
+      {/* Fixed width, independent of digit count — "0%" is narrower than "100%", and
+          without a shared width here the bar (first in the row) shifts left/right
+          per row as the flex group's total width changes, even though `justify-end`
+          keeps the group itself flush right. `shrink-0` stops the bar from eating
+          into this space when the row is tight. `text-left` (not `text-right`) so the
+          digit right after the bar sits at the same x every row — right-aligning
+          inside this fixed box did the opposite: "100%" (wider) started right next
+          to the bar while "0%" (narrower) floated with a gap first. */}
+      <span className={`text-xs tabular-nums text-left w-9 shrink-0 ${textColor}`}>{pct}%</span>
     </div>
   );
 }
@@ -313,12 +330,17 @@ export function renderDefaultCell({ row, col, display, visibleColumns }) {
       // truncate — `min-w-0` overrides that floor. The pill badge is `shrink-0`
       // so it always stays fully visible next to the truncated text.
       <span className="inline-flex items-center gap-2 max-w-[200px]">
-        <span
-          className="min-w-0 truncate"
-          title={typeof display === 'string' ? display : undefined}
-        >
-          {display}
-        </span>
+        {/* ETP-5268 follow-up — "necesito agregarlas para saber que dice cada
+            parte del registro": `TruncatedText` (already used elsewhere, e.g.
+            ReconciliationSplitPanel) swaps the plain native `title` tooltip
+            for the app's own styled one, and only opens it when the text is
+            actually clipped (measures `scrollWidth > clientWidth`), same
+            gate the native `title` had no way to express. Non-string
+            `display` (e.g. an already-formatted node) skips it entirely —
+            same as before, there was never a `title` for those either. */}
+        {typeof display === 'string'
+          ? <TruncatedText text={display} className="min-w-0" data-testid="TruncatedText__a91437" />
+          : <span className="min-w-0 truncate">{display}</span>}
         {pillLabel && (
           <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${pill.className || 'bg-muted text-muted-foreground border-border-subtle'}`} style={{ borderWidth: '0.5px' }}>
             {pillLabel}
@@ -329,7 +351,7 @@ export function renderDefaultCell({ row, col, display, visibleColumns }) {
   }
   const val = display;
   if (typeof val === 'string' && val.length > 30) {
-    return <span className="block max-w-[200px] truncate" title={val}>{val}</span>;
+    return <TruncatedText text={val} className="max-w-[200px]" data-testid="TruncatedText__a91437" />;
   }
   return val;
 }

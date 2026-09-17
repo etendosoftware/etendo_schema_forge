@@ -6,7 +6,11 @@ import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
-export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, token, apiBaseUrl }) {
+// ETP-5302 — `refresh` comes from ListView's `bulkActions` slot context. Without it this
+// action used to close the modal and clear the selection but never refetch, so the rows
+// it had just invoiced kept showing a stale invoicing status with nothing on screen
+// hinting they were out of date.
+export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, token, apiBaseUrl, refresh }) {
   // ETP-4576 - the credential belongs to apiFetch, not to the component.
   // Empty base ON PURPOSE: every URL below is already absolute, and several address a
   // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
@@ -92,7 +96,7 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
           token={token}
           apiBaseUrl={apiBaseUrl}
           onClose={() => setShowModal(false)}
-          onSuccess={() => { setShowModal(false); clearSelection(); }}
+          onSuccess={() => { setShowModal(false); clearSelection(); refresh?.(); }}
         />,
         document.body,
       )}
