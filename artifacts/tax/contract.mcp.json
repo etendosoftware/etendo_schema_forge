@@ -1,8 +1,8 @@
 {
-  "version": "0.13.0",
+  "version": "0.13.1",
   "generatedAt": "2026-04-27T19:18:32.198Z",
-  "updatedAt": "2026-09-17T11:53:53.443Z",
-  "contractChecksum": "8baeb3006790777a",
+  "updatedAt": "2026-09-17T12:09:42.949Z",
+  "contractChecksum": "02bed0e4ebdc7264",
   "apiPrediction": {
     "specName": "tax-rate",
     "baseUrl": "/sws/neo/tax-rate",
@@ -108,7 +108,6 @@
             "required": true
           },
           "taxCategory": {
-            "readOnly": true,
             "required": true
           },
           "rate": {
@@ -167,11 +166,15 @@
       "Use for tax rate management."
     ],
     "minimumCreate": {
+      "headerFields": [
+        "taxCategory"
+      ],
       "lineFields": [
         "taxDue",
         "taxCredit"
       ],
       "recommendedOrder": [
+        "createHeader",
         "createLines"
       ]
     },
@@ -179,10 +182,18 @@
     "actions": [],
     "workflow": [],
     "edgeCases": [],
-    "examples": [],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "taxCategory"
+        ]
+      }
+    ],
     "warnings": [],
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "59c69d7c52a94688"
+  "checksum": "5966c2ffcc9338e5"
 }

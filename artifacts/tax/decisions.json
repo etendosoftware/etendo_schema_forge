@@ -108,7 +108,7 @@
           "cellType": "taxScope"
         },
         "taxCategory": {
-          "visibility": "readOnly",
+          "visibility": "editable",
           "grid": true,
           "form": true,
           "section": "principal",

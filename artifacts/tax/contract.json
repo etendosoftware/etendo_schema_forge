@@ -1,8 +1,8 @@
 {
-  "version": "0.13.0",
+  "version": "0.13.1",
   "generatedAt": "2026-04-27T19:18:32.198Z",
-  "updatedAt": "2026-09-17T11:53:53.443Z",
-  "checksum": "8baeb3006790777a",
+  "updatedAt": "2026-09-17T12:09:42.949Z",
+  "checksum": "02bed0e4ebdc7264",
   "frontendContract": {
     "window": {
       "id": "137",
@@ -93,7 +93,7 @@
             "label": "Tax Category",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true,
             "grid": true,
             "form": true,
@@ -976,7 +976,7 @@
             "apiKey": "taxCategory",
             "column": "C_TaxCategory_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true
           },
           {
