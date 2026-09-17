@@ -362,4 +362,99 @@ describe('useEntity — shared cache integration (ETP-4563)', () => {
     await act(async () => { a.result.current.fetchById('77'); });
     await waitFor(() => expect(counts.record).toBe(recordCountAfterProcess));
   });
+
+  // --- ETP-5366 regression: invalidateChildrenCache is part of the public API ---
+  // A secondary tab whose rows are written by a `customAddModal` never goes through
+  // handleAddChild, so nothing marked the cached child collection stale and the
+  // follow-up handleSelect re-read was served from the cache (same array instance →
+  // no-op setChildren → the tab kept showing the pre-save rows). DetailView now calls
+  // this from the modal's onSaved, which only works if the hook exports it.
+
+  it('15. invalidateChildrenCache is exported by the hook', async () => {
+    const { fetchMock } = makeFetch();
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts({ skipListFetch: true })), { wrapper });
+    expect(typeof a.result.current.invalidateChildrenCache).toBe('function');
+  });
+
+  it('16. invalidateChildrenCache marks only the given parent collection stale', async () => {
+    const { fetchMock, counts } = makeFetch();
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts({ skipListFetch: true })), { wrapper });
+    await act(async () => { a.result.current.fetchChildren('p1'); });
+    await waitFor(() => expect(counts.children).toBe(1));
+    await act(async () => { a.result.current.fetchChildren('p2'); });
+    await waitFor(() => expect(counts.children).toBe(2));
+
+    // Both collections are fresh: plain re-reads are served from the cache.
+    await act(async () => { a.result.current.fetchChildren('p1'); });
+    await act(async () => { a.result.current.fetchChildren('p2'); });
+    await waitFor(() => expect(counts.children).toBe(2));
+
+    await act(async () => { a.result.current.invalidateChildrenCache('p1'); });
+
+    // p1 was dropped → a NON-forced read now reaches the network...
+    await act(async () => { a.result.current.fetchChildren('p1'); });
+    await waitFor(() => expect(counts.children).toBe(3));
+    // ...while p2's entry is untouched and still served from the cache.
+    await act(async () => { a.result.current.fetchChildren('p2'); });
+    await waitFor(() => expect(counts.children).toBe(3));
+  });
+
+  it('17. invalidateChildrenCache without a parent id is a no-op', async () => {
+    const { fetchMock, counts } = makeFetch();
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts({ skipListFetch: true })), { wrapper });
+    await act(async () => { a.result.current.fetchChildren('p1'); });
+    await waitFor(() => expect(counts.children).toBe(1));
+
+    // Guarded on parentId: a parent-less call must not blow away every collection.
+    await act(async () => { a.result.current.invalidateChildrenCache(undefined); });
+
+    await act(async () => { a.result.current.fetchChildren('p1'); });
+    await waitFor(() => expect(counts.children).toBe(1));
+  });
+
+  it('18. reproduces the customAddModal sequence: an out-of-band row surfaces only after the invalidation', async () => {
+    // The server-side collection. The modal writes to it directly (its own raw
+    // apiFetch POST), which is exactly why nothing in the hook knows it changed.
+    const rows = [{ id: 'ADDR-1' }];
+    const { fetchMock, counts } = makeFetch({
+      handler: ({ method, path }) => (method === 'GET' && path === '/lines'
+        ? { ok: true, status: 200, _label: 'children', json: async () => ({ response: { data: [...rows] } }) }
+        : null),
+    });
+    globalThis.fetch = fetchMock;
+
+    const parent = { id: 'BP-1', name: 'ACME' };
+    const a = renderHook(() => useEntity('header', 'lines', opts({ skipListFetch: true })), { wrapper });
+    await act(async () => { a.result.current.handleSelect(parent); });
+    await waitFor(() => expect(a.result.current.children).toHaveLength(1));
+    expect(counts.children).toBe(1);
+
+    // The modal persisted a second row without going through handleAddChild.
+    rows.push({ id: 'ADDR-2' });
+
+    // Pre-fix path: DetailView's onSaved called handleSelect ALONE. Its non-forced
+    // fetchChildren resolves from the still-fresh cache entry with the very same
+    // array instance, so setChildren is an Object.is no-op and the tab never updates.
+    const childrenBefore = a.result.current.children;
+    await act(async () => { a.result.current.handleSelect(parent); });
+    expect(counts.children).toBe(1);
+    expect(a.result.current.children).toBe(childrenBefore);
+    expect(a.result.current.children).toHaveLength(1);
+
+    // ETP-5366: dropping the entry first is what makes that same handleSelect reach
+    // the network — and only then does the new row reach the consumer.
+    await act(async () => {
+      a.result.current.invalidateChildrenCache(parent.id);
+      a.result.current.handleSelect(parent);
+    });
+    await waitFor(() => expect(a.result.current.children).toHaveLength(2));
+    expect(counts.children).toBe(2);
+    expect(a.result.current.children.map(r => r.id)).toEqual(['ADDR-1', 'ADDR-2']);
+  });
 });

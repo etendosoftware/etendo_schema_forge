@@ -2359,6 +2359,10 @@ export function useEntity(entity, childEntity, {
         handleAddChild, handleUpdateChild, handleDeleteChild, primeSaved,
         refresh, fetchById, fetchChildren, fetchChildDefaults, loadMore, refreshHeaderTotals, clearUserChangedKey,
         invalidateEntityCache,
+        // ETP-5366: exposed for the callers that write a child collection OUTSIDE this hook
+        // (a customAddModal doing its own POST/PUT). They have no other way to tell the shared
+        // cache that the collection they just changed is no longer what it holds.
+        invalidateChildrenCache,
         buildListQuery,
         sortColumn, sortDirection, setSortColumn, setSortDirection,
     };
