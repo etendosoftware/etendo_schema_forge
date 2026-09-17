@@ -557,6 +557,85 @@ so it is not silently reopened later:
   bank-data visibility gating) — it does not feed into `recomputeDerivedBoxes`'s formula at all,
   by design, matching Classic's own handling. This is expected behavior, not a gap.
 
+### Box 87 display-only derivation (`derivedValue` fallback on a real box, ETP-5338 pt.2)
+
+Box 87 ("Cuotas a compensar de períodos previos pendientes para períodos posteriores") is labeled
+with the formula `(110 - 78)` right in its AEAT text, but was never populated: `computeBoxes303`
+(backend) never returns a value for box 87, and it is deliberately outside
+`recomputeDerivedBoxes`'s set (`{45, 46, 64, 66, 69, 71}` — see "Manual box overrides" above)
+because AEAT computes and validates 110-78 themselves at submission time. The `.303` file always
+uploaded correctly with box 87 blank; this was a **display-only** gap.
+
+Fix, entirely client-side, entirely in the render layer:
+- `fm303Layouts.js`'s `cuotas_compensar_post` row (still `cells: [87]`, a real box) now also
+  declares `derivedValue: { box: 110, subtractBox: 78, clampMin: 0, treatMissingAsZero: true }`.
+- `FmBoxes303.jsx` extracts the `derivedValue` computation (previously inlined only in
+  `renderDerivedCell`, used by boxless rows like `importe_devolucion`) into a shared
+  `computeDerivedValue(dv)` helper: `valueMap[dv.box]` (optionally `Math.abs`'d), minus
+  `valueMap[dv.subtractBox]` when present, floored at `dv.clampMin` when present.
+- `renderBoxCell` (the path for rows that DO have a real box number) now falls back to
+  `computeDerivedValue(row.derivedValue)` **only when the real box has no value** from
+  `valueMap`/`fixedValues`/`defaultValues` — it never overrides a genuine backend/manual value.
+  This is a new, generic combination (`cells` + `derivedValue` on the same row) any future box in
+  this window can reuse; it is not hardcoded to box 87.
+
+Clamped at 0 because box 87 ("cuotas pendientes de compensar") can by AEAT definition never be
+negative.
+
+**Missing-operand semantics — confirmed with the product owner in cycle 2, and DIFFERENT from
+`importe_devolucion`'s:**
+- Box 110 present, box 78 missing → shows box 110 (missing box 78 treated as 0).
+- Box 110 missing, box 78 present → shows `max(0, 0 - box78)` = 0 (missing box 110 treated as 0,
+  then clamped).
+- Both missing → stays blank (nothing to compute at all — the only blank case for this row).
+- Both present → normal `max(0, box110 - box78)`.
+
+This is implemented via a new opt-in flag on the shared helper, `derivedValue.treatMissingAsZero`,
+set **only** on box 87's row. **`computeDerivedValue` branches on this flag and every other
+`derivedValue` row — in particular `importe_devolucion` (box 71 minus box 70) — keeps the original,
+unrelated behavior: a missing operand blanks the whole result, with no zero-defaulting.** Do not
+assume the two rows behave the same; they diverge on purpose. (ETP-5338 QA cycle 1 had rejected an
+earlier `?? 0` fallback that applied indiscriminately to box 87's subtrahend; that rejection
+correctly caught a bug in the *implementation* — a `?? 0` with no "both missing" exception — but the
+"stays blank on any missing operand" conclusion it initially shipped with was based on an AEAT
+semantics assumption that was never confirmed with the user and turned out to be wrong for box 87.
+Cycle 2 corrects it to the rule above, confirmed by the product owner, while leaving
+`importe_devolucion` exactly as cycle 1 left it.)
+
+Does **not** touch `manualData`, `recomputeDerivedBoxes`, `applyOverrides`, or anything sent in the
+`.303` submission payload — purely a rendering fallback for a value AEAT already computes
+independently.
+
+### Box 78 auto-clamped to box 110 (ETP-5338 pt.2, scope extension)
+
+Boxes 110, 78 and 87 are unsigned — casilla 87 clamps to 0 whenever box78 > box110 (see previous
+section). box78 ("cuotas de períodos anteriores que se compensan en esta declaración") can never
+legitimately exceed box110 ("cuotas pendientes de compensar de períodos anteriores") — there's
+nothing to compensate beyond what's actually pending. An earlier iteration of this ticket shipped
+an advisory warning banner for this case (see git history at commit `75b033d0c`); the product owner
+subsequently replaced that requirement entirely: **box78 is now silently auto-clamped to box110's
+value instead of merely warning**, making the invalid state structurally impossible to enter. There
+is no warning banner and no submission gate for this relationship.
+
+- The clamp lives in `FmModel303Page.jsx`'s `handleBoxChange` — the single commit path used by
+  every editable box in `FmBoxes303.jsx` (`onBoxChange` fires from the box input's `onBlur`/Enter).
+  On every box commit it recomputes what box78's effective value would be (`nextBox78`) against
+  what box110's effective value would be after this commit (`nextBox110`); if `nextBox78 >
+  nextBox110`, box78 is capped to `nextBox110` before being written into both `liveBoxes` (the
+  rendered state) and `manualOverrides` (the persisted-on-autosave state, so a later
+  `handleCompute`/"Calcular" recompute — which re-applies `manualOverrides` on top of a fresh
+  backend result — doesn't resurrect the un-clamped value).
+- **Reactive in both directions**: because the check runs on *every* box commit (not just box78's
+  own edit), typing a value into box78 greater than box110 clamps box78 immediately, **and**
+  lowering box110 below an already-larger box78 re-clamps box78 downward too, keeping the
+  invariant true at all times rather than only at box78's own edit time.
+- **Edge case — box110 blank**: if box110 has no value at the time box78 is edited, there is
+  nothing to clamp against, so box78 is accepted exactly as typed. The clamp only engages once
+  both boxes hold a value.
+- Does **not** touch `computeDerivedValue`/`treatMissingAsZero` (the casilla 87 display clamp logic
+  stays exactly as shipped) and does **not** add any submission-time gate — the invariant is
+  enforced purely at the point of entry.
+
 ### Organization identity
 
 A `GET /session` call on mount populates the NIF/nombre fields used in the generated `.txt` header when `token` and `apiBaseUrl` are provided.
@@ -1404,12 +1483,29 @@ the underlying data (and the read-only grid badge) stays intact.
 Surfaced while investigating points 5–7 above. None of these are bugs being fixed now — they are
 recorded here so a future pass doesn't have to rediscover them from scratch.
 
-- **Box 87 ("Cuotas a compensar de períodos previos pendientes para períodos posteriores")** is
-  labeled in `fm303Layouts.js` with the formula `(110 - 78)` right in its i18n string
-  (`fm.box.row.cuotas_compensar_post`), but it is **not** one of the boxes `recomputeDerivedBoxes`
-  re-derives (that set is exactly `{45, 46, 64, 66, 69, 71}` — see "Manual box overrides" above).
-  Whether box 87 is meant to recalculate client-side when box 110 or box 78 change has not been
-  confirmed either way; it currently does not, regardless of intent. Flagged, not fixed.
+- **Box 87 ("Cuotas a compensar de períodos previos pendientes para períodos posteriores") — FIXED
+  under ETP-5338 pt.2.** It is labeled in `fm303Layouts.js` with the formula `(110 - 78)` right in
+  its i18n string (`fm.box.row.cuotas_compensar_post`), and it is confirmed **display-only**: AEAT
+  computes and validates 110-78 on their own side at submission time, so the `.303` file always
+  uploaded correctly even while the box showed blank. It is still **not** one of the boxes
+  `recomputeDerivedBoxes` re-derives (that set stays exactly `{45, 46, 64, 66, 69, 71}` — see
+  "Manual box overrides" above) — the fix does not touch `manualData`, `recomputeDerivedBoxes`, or
+  the submission payload at all. Instead, the row now declares
+  `derivedValue: { box: 110, subtractBox: 78, clampMin: 0, treatMissingAsZero: true }`, and
+  `FmBoxes303.jsx`'s `renderBoxCell` falls back to this formula (via the shared
+  `computeDerivedValue` helper, also used by `renderDerivedCell` for boxless rows like
+  `importe_devolucion`) whenever the real box has no value from
+  `valueMap`/`fixedValues`/`defaultValues`. Clamped at 0 because box 87 by AEAT definition
+  ("cuotas pendientes de compensar") can never be negative.
+  **Confirmed missing-operand rule (cycle 2, corrects cycle 1's assumption):** a missing box 110 or
+  box 78 defaults to 0 — box 110 present + box 78 missing shows box 110; box 110 missing + box 78
+  present shows `max(0, 0 - box78)` = 0 — and the cell stays blank **only** when both are missing.
+  This is scoped to box 87 via the new `derivedValue.treatMissingAsZero` flag; every other
+  `derivedValue` row, including `importe_devolucion`, keeps the original "any missing operand blanks
+  the result" behavior unchanged. (QA cycle 1 had correctly caught a bug in an earlier `?? 0`
+  fallback — it lacked the "both missing → blank" exception — but the "stays blank on any missing
+  operand" rule it shipped with afterward was an unconfirmed assumption about AEAT semantics; the
+  product owner has now confirmed the rule documented here.)
 - **Box 110** has no confirmed path into the box 71 result formula anywhere in
   `recomputeDerivedBoxes` — box 71's actual formula is `box69 - box70 + box109 - box112` (see
   above), which does not reference box 110 at all. If box 110 is supposed to feed into the final

@@ -321,10 +321,46 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
 
   function handleBoxChange(boxNum, rawValue) {
     const value = parseBoxInput(rawValue);
-    setManualOverrides(prev => ({ ...prev, [boxNum]: value }));
-    setLiveSummary(null);
     const fallback = decl._precomputed?.boxes ?? decl.boxes;
-    setLiveBoxes(prev => applyBoxChange(prev, boxNum, value, fallback));
+
+    // ETP-5338 pt.2 (replaces the advisory-warning-only approach from the previous commit):
+    // box78 ("cuotas de periodos anteriores que se compensan en esta declaracion") can never
+    // legitimately exceed box110 ("cuotas pendientes de compensar de periodos anteriores") —
+    // there's nothing to compensate beyond what's actually pending. Rather than warn the user
+    // post-hoc, the invalid state is made structurally impossible: whenever this commit would
+    // leave box78 > box110, box78 is silently clamped down to box110's value. This fires both
+    // when box78 itself is the box being edited (clamp its own new value), AND reactively when
+    // box110 is edited/lowered below an already-larger box78 (re-clamp box78 so the invariant
+    // holds at all times, not just at box78's own edit time). When box110 is blank/absent there
+    // is nothing to clamp against, so box78 is accepted as typed.
+    const currentBoxes = liveBoxes ?? fallback;
+    const nextBox110 = boxNum === 110 ? value : getBoxValue(currentBoxes, 110);
+    const rawNextBox78 = boxNum === 78 ? value : getBoxValue(currentBoxes, 78);
+    const nextBox78 = (nextBox110 != null && rawNextBox78 != null && rawNextBox78 > nextBox110)
+      ? nextBox110
+      : rawNextBox78;
+    const box78WasClamped = nextBox78 !== rawNextBox78;
+
+    setManualOverrides(prev => {
+      const next = { ...prev, [boxNum]: value };
+      // Pin the clamped box78 value into the overrides too — otherwise a later recompute
+      // (handleCompute/"Calcular" -> applyComputeResult -> applyOverrides) would re-merge the
+      // un-clamped manual override and resurrect box78 > box110.
+      if (box78WasClamped) next[78] = nextBox78;
+      return next;
+    });
+    setLiveSummary(null);
+    setLiveBoxes(prev => {
+      const applied = applyBoxChange(prev, boxNum, value, fallback);
+      if (!box78WasClamped) return applied;
+      // applyBoxChange already ran recomputeDerivedBoxes once, but it did so against the
+      // un-clamped box78 (e.g. 900 before being pinned down to box110's 500) — box69/71 in
+      // `applied` are derived from that transiently-invalid value. Splice in the corrected
+      // box78 and recompute a SECOND time so 69/71 reflect the final, clamped figure instead
+      // of a materially wrong one that would otherwise only self-heal on the next edit.
+      const corrected = applied.map(b => (b.num === 78 ? { ...b, value: nextBox78 } : b));
+      return recomputeDerivedBoxes(corrected);
+    });
   }
 
   const [liveSummary, setLiveSummary] = useState(decl._precomputed?.summary ?? null);
