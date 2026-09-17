@@ -119,10 +119,14 @@ function incidentsTabButton() {
   return screen.getAllByRole('tab').find(t => t.textContent.includes('fm.tab.incidents'));
 }
 
-function openAeatFlow() {
+// ETP-5338 pt.4 — `handlePresent` now `await`s `persistEditableFields()` before opening
+// AeatSubmitFlow (see FmModel303Page.jsx), so the flow no longer mounts synchronously off the
+// 'aeat_telematic' click — callers must await its actual mount before interacting with it.
+async function openAeatFlow() {
   const btns = Array.from(document.querySelectorAll('button'));
   fireEvent.click(btns.find(b => b.textContent.includes('fm.action.submit')));
   fireEvent.click(screen.getByTestId('present-confirm-aeat'));
+  await screen.findByTestId('aeat-flow-incidents-changed');
 }
 
 beforeEach(() => {
@@ -198,7 +202,7 @@ describe('FmModel303Page — incidents fetched on mount (ETP-4456)', () => {
     render(<FmModel303Page decl={BASE_DECL} token="tok" apiBaseUrl="/api" onBack={vi.fn()} onStatusChange={vi.fn()} />);
     await waitFor(() => expect(screen.getByTestId('kpi-fm.tab.incidents').getAttribute('data-value')).toBe('2'));
 
-    openAeatFlow();
+    await openAeatFlow();
     fireEvent.click(screen.getByTestId('aeat-flow-incidents-changed'));
 
     await waitFor(() => expect(fetchDeclarationIncidents).toHaveBeenCalledTimes(2));

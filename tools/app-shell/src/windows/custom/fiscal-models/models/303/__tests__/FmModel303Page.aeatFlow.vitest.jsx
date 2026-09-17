@@ -97,7 +97,12 @@ const BASE_DECL = {
 beforeEach(() => vi.clearAllMocks());
 
 describe('FmModel303Page — AEAT flow wiring (ETP-4456)', () => {
-  it('opens AeatSubmitFlow (instead of changing status) when the aeat_telematic path is confirmed', () => {
+  // ETP-5338 pt.4 — `handlePresent` is now `async` (it awaits `persistEditableFields()`
+  // before any status transition, including opening AeatSubmitFlow — see FmModel303Page.jsx).
+  // With no pending edit these tests still resolve on the very next microtask, but that is
+  // still a real await, so `fireEvent.click` on the confirming button no longer flips
+  // `showAeatFlow` synchronously — assertions must wait for it via `findByTestId`.
+  it('opens AeatSubmitFlow (instead of changing status) when the aeat_telematic path is confirmed', async () => {
     const onStatusChange = vi.fn();
     render(<FmModel303Page decl={BASE_DECL} onBack={vi.fn()} onStatusChange={onStatusChange} />);
 
@@ -109,10 +114,10 @@ describe('FmModel303Page — AEAT flow wiring (ETP-4456)', () => {
     // Our PresentModal mock immediately reports the aeat_telematic sentinel.
     fireEvent.click(screen.getByTestId('present-confirm-aeat'));
 
+    // AeatSubmitFlow must now be mounted (awaits handlePresent's flush of pending edits).
+    expect(await screen.findByTestId('aeat-flow-succeed')).toBeInTheDocument();
     // The sentinel must NOT have been treated as a real status change.
     expect(onStatusChange).not.toHaveBeenCalled();
-    // AeatSubmitFlow must now be mounted.
-    expect(screen.getByTestId('aeat-flow-succeed')).toBeInTheDocument();
     // Regression guard: PresentModal must be unmounted, not stacked underneath
     // AeatSubmitFlow — two full-viewport overlays mounted at once, and the
     // stale path-selection screen reappearing when AeatSubmitFlow later
@@ -120,14 +125,14 @@ describe('FmModel303Page — AEAT flow wiring (ETP-4456)', () => {
     expect(screen.queryByTestId('present-confirm-aeat')).not.toBeInTheDocument();
   });
 
-  it('propagates AeatSubmitFlow onSuccess through the normal status-change path', () => {
+  it('propagates AeatSubmitFlow onSuccess through the normal status-change path', async () => {
     const onStatusChange = vi.fn();
     render(<FmModel303Page decl={BASE_DECL} onBack={vi.fn()} onStatusChange={onStatusChange} />);
 
     const btns = Array.from(document.querySelectorAll('button'));
     fireEvent.click(btns.find(b => b.textContent.includes('fm.action.submit')));
     fireEvent.click(screen.getByTestId('present-confirm-aeat'));
-    fireEvent.click(screen.getByTestId('aeat-flow-succeed'));
+    fireEvent.click(await screen.findByTestId('aeat-flow-succeed'));
 
     // AEAT telematic success never sends a submissionMethod from the frontend —
     // it is set server-side by Fiscal303SubmissionSupport.persistSuccessfulSubmission.

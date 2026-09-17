@@ -7,7 +7,7 @@
 // can't affect the existing suites there.
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 const navigateMock = vi.fn();
 
@@ -207,7 +207,10 @@ describe('FmModel303Page — "Justificante" tab remounts on status change (key={
 });
 
 describe('FmModel303Page — "Justificante" tab remounts on a test-mode attach (receiptRefreshTick, ETP-4456 follow-up)', () => {
-  it('remounts AttachmentsTab when AeatSubmitFlow calls onAttached, even though status does not change', () => {
+  // ETP-5338 pt.4 — `handlePresent` now `await`s `persistEditableFields()` (a flush of pending
+  // `identChecks`/`manualOverrides` edits) before opening AeatSubmitFlow, so AeatSubmitFlow no
+  // longer mounts synchronously off the 'aeat_telematic' click — wait for it via `findByTestId`.
+  it('remounts AttachmentsTab when AeatSubmitFlow calls onAttached, even though status does not change', async () => {
     const onStatusChange = vi.fn();
     render(<FmModel303Page decl={BASE_DECL} onBack={vi.fn()} onStatusChange={onStatusChange} />);
     const tabs = screen.getAllByRole('tab');
@@ -221,7 +224,7 @@ describe('FmModel303Page — "Justificante" tab remounts on a test-mode attach (
     // never go through onStatusChange — `status` itself stays untouched.
     openPresentModal();
     fireEvent.click(screen.getByTestId('present-confirm-aeat'));
-    fireEvent.click(screen.getByTestId('aeat-flow-attach'));
+    fireEvent.click(await screen.findByTestId('aeat-flow-attach'));
 
     const secondMountCount = Number(screen.getByTestId('attachments-tab-mock').getAttribute('data-mount-count'));
     expect(secondMountCount).toBeGreaterThan(firstMountCount);
@@ -230,13 +233,18 @@ describe('FmModel303Page — "Justificante" tab remounts on a test-mode attach (
 });
 
 describe('FmModel303Page — handlePresent uploads acuse-de-recibo (ETP-4456 fix)', () => {
-  it('uploads the file and still fires the status change for submitted_ack with a file', () => {
+  // ETP-5338 pt.4 — `handlePresent` is now `async` (it awaits `persistEditableFields()` before
+  // any status transition — see FmModel303Page.jsx). With no `token`/`apiBaseUrl` here that flush
+  // is a no-op, but it is still a real `await`, so the upload/status-change side effects land one
+  // microtask after the click rather than synchronously with it.
+  it('uploads the file and still fires the status change for submitted_ack with a file', async () => {
     const onStatusChange = vi.fn();
     render(<FmModel303Page decl={BASE_DECL} onBack={vi.fn()} onStatusChange={onStatusChange} />);
 
     openPresentModal();
     fireEvent.click(screen.getByTestId('present-confirm-ack-with-file'));
 
+    await waitFor(() => expect(onStatusChange).toHaveBeenCalled());
     expect(uploadMock).toHaveBeenCalledTimes(1);
     expect(uploadMock).toHaveBeenCalledWith(FILE_FIXTURE);
     expect(onStatusChange).toHaveBeenCalledWith(BASE_DECL.id, 'submitted_ack', 'manual_ack');
@@ -250,36 +258,44 @@ describe('FmModel303Page — handlePresent uploads acuse-de-recibo (ETP-4456 fix
     }));
   });
 
-  it('does not upload for submitted_ack with no file (defensive — no null-file POST)', () => {
+  it('does not upload for submitted_ack with no file (defensive — no null-file POST)', async () => {
     const onStatusChange = vi.fn();
     render(<FmModel303Page decl={BASE_DECL} onBack={vi.fn()} onStatusChange={onStatusChange} />);
 
     openPresentModal();
     fireEvent.click(screen.getByTestId('present-confirm-ack-no-file'));
 
+    await waitFor(() => expect(onStatusChange).toHaveBeenCalled());
     expect(uploadMock).not.toHaveBeenCalled();
     expect(onStatusChange).toHaveBeenCalledWith(BASE_DECL.id, 'submitted_ack', 'manual_ack');
   });
 
-  it('does not upload for the submitted path', () => {
-    render(<FmModel303Page decl={BASE_DECL} onBack={vi.fn()} onStatusChange={vi.fn()} />);
+  it('does not upload for the submitted path', async () => {
+    const onStatusChange = vi.fn();
+    render(<FmModel303Page decl={BASE_DECL} onBack={vi.fn()} onStatusChange={onStatusChange} />);
     openPresentModal();
     fireEvent.click(screen.getByTestId('present-confirm-submitted'));
+    await waitFor(() => expect(onStatusChange).toHaveBeenCalled());
     expect(uploadMock).not.toHaveBeenCalled();
   });
 
-  it('does not upload for the submitted_ext path', () => {
-    render(<FmModel303Page decl={BASE_DECL} onBack={vi.fn()} onStatusChange={vi.fn()} />);
+  it('does not upload for the submitted_ext path', async () => {
+    const onStatusChange = vi.fn();
+    render(<FmModel303Page decl={BASE_DECL} onBack={vi.fn()} onStatusChange={onStatusChange} />);
     openPresentModal();
     fireEvent.click(screen.getByTestId('present-confirm-submitted-ext'));
+    await waitFor(() => expect(onStatusChange).toHaveBeenCalled());
     expect(uploadMock).not.toHaveBeenCalled();
   });
 
-  it('does not upload for the aeat_telematic sentinel path', () => {
+  it('does not upload for the aeat_telematic sentinel path', async () => {
     const onStatusChange = vi.fn();
     render(<FmModel303Page decl={BASE_DECL} onBack={vi.fn()} onStatusChange={onStatusChange} />);
     openPresentModal();
     fireEvent.click(screen.getByTestId('present-confirm-aeat'));
+    // aeat_telematic opens AeatSubmitFlow instead of changing status — wait for that mount as
+    // the async signal instead of `onStatusChange`, which this path never calls.
+    await screen.findByTestId('aeat-flow-attach');
     expect(uploadMock).not.toHaveBeenCalled();
     // aeat_telematic is a sentinel, never a real status change.
     expect(onStatusChange).not.toHaveBeenCalled();

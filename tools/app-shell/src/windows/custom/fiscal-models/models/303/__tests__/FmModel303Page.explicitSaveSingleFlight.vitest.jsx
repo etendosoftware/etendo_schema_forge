@@ -37,17 +37,21 @@
 //      NEWEST value, not the snapshot that was current when it was queued.
 //   2. No two PUTs OVERLAP — a request made while one is in flight issues no PUT of its own until
 //      the first settles.
-//   3. A queued save that has become INELIGIBLE is DROPPED — deliberately the opposite of (1),
-//      because once the declaration is filed with the AEAT its stored content must match what
-//      was filed. (1) and (3) must both be asserted or a later change will "fix" one by
-//      breaking the other.
+//   3. A queued save that has become INELIGIBLE for a reason `handlePresent` itself cannot flush
+//      away (the session ending — token/apiBaseUrl going falsy — while a PUT is open) is DROPPED,
+//      never replayed onto a record whose content no longer matches what would be filed. This
+//      used to also cover "the declaration got filed while a save was queued behind an in-flight
+//      Guardar" — but that was the ETP-5338 pt.4 bug ("processing a rectificativa un-checks the
+//      checkbox"): `handlePresent` now `await`s `persistEditableFields()` BEFORE transitioning
+//      status, so a save queued at filing time is flushed first, not dropped. (1) and (3) must
+//      both be asserted or a later change will "fix" one by breaking the other.
 //   4. The in-flight guard can never get STUCK — a failed save must not silence the write path
 //      for the rest of the session, which is a worse outcome than the duplicate write the guard
 //      removes. Exercised across BOTH callers (a failed Guardar must not block a later Calcular
 //      save), since they now share one `persistEditableFields` implementation.
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { toast } from 'sonner';
 
 const navigateMock = vi.fn();
@@ -93,11 +97,24 @@ vi.mock('../../../FmTabContent.jsx', () => ({
 // one the real FmBoxes303 calls), so driving it exercises the genuine local-state update
 // `persistEditableFields` later reads. 'nif' is used rather than 'motivo_rectificacion', which
 // has extra box-108 side effects irrelevant here.
+//
+// A second, boolean-valued input drives `identChecks.rectificativa` through the exact same
+// `onIdentChange` callback the real "Autoliquidación Rectificativa" checkbox uses (see
+// FmBoxes303.jsx) — needed for the ETP-5338 pt.4 ticket-scenario test below, which drives the
+// actual field the bug report named rather than the generic 'nif' stand-in the rest of this file
+// uses.
 vi.mock('../FmBoxes303.jsx', () => ({
-  default: ({ onIdentChange }) => React.createElement('input', {
-    'data-testid': 'ident-nif',
-    onChange: (e) => onIdentChange('nif', e.target.value),
-  }),
+  default: ({ onIdentChange }) => React.createElement(React.Fragment, null,
+    React.createElement('input', {
+      'data-testid': 'ident-nif',
+      onChange: (e) => onIdentChange('nif', e.target.value),
+    }),
+    React.createElement('input', {
+      type: 'checkbox',
+      'data-testid': 'ident-rectificativa',
+      onChange: (e) => onIdentChange('rectificativa', e.target.checked),
+    }),
+  ),
 }));
 
 // PresentModal mock: a button that reports the plain manual `submitted` path, which is how the
@@ -349,17 +366,31 @@ describe('FmModel303Page — single-flight explicit-save write path (ETP-5255 / 
     expect(server.openPutCount).toBe(1);
   });
 
-  // Deliberately the OPPOSITE of the first test: once the declaration is filed with the AEAT,
-  // its stored content must match what was filed, so a queued save is DROPPED rather than
-  // replayed. The server does not stop it — `FiscalDeclCrudHandler#handleDeclPut` has no
-  // submitted guard — so the client-side eligibility re-check is the only gate.
-  it('drops a queued save when the declaration is submitted while a PUT is open', async () => {
+  // ETP-5338 pt.4 — this test used to assert the OPPOSITE: that a save queued behind an
+  // in-flight Guardar was DROPPED once the declaration got filed before it could flush. That was
+  // exactly the "processing a rectificativa un-checks the checkbox" bug (see FmModel303Page.md /
+  // FmModel303Page.jsx's own comment on `handlePresent`): a user who edits a field (e.g. checks
+  // "Autoliquidación Rectificativa") and clicks "Registrar/Presentar" before an earlier Guardar's
+  // PUT has settled had that edit silently discarded — `writeManualData`'s `isManualDataEligible`
+  // gate closed the instant `handleStatusChange` flipped local `status` to a submitted value,
+  // and once submitted `persistEditableFields` is a permanent no-op, so the edit could never be
+  // retried either.
+  //
+  // Fixed by having `handlePresent` itself `await persistEditableFields()` BEFORE transitioning
+  // the status (see FmModel303Page.jsx). That means the pending edit here is not dropped at all:
+  // it flushes as its own PUT, and the status transition — and the `onStatusChange` callback
+  // that reports it — waits for that flush to actually settle. `FiscalDeclCrudHandler#handleDeclPut`
+  // still has no submitted guard server-side, so the ordering guarantee is entirely client-side,
+  // which is exactly why it has to hold here.
+  it('flushes a queued save before filing the declaration, instead of dropping it', async () => {
     const server = installServer();
-    renderPage();
+    const onStatusChange = vi.fn();
+    renderPage({ onStatusChange });
 
     editNif('A');
     await clickGuardar();
     expect(putCalls()).toHaveLength(1);
+    expect(nifOf(putCalls()[0])).toBe('A');
 
     editNif('B');
     await clickCalcular();
@@ -368,11 +399,105 @@ describe('FmModel303Page — single-flight explicit-save write path (ETP-5255 / 
     // Filed while the first PUT is still open.
     submitDeclaration();
 
+    // Settling A releases B's own flush — the status transition must not have happened yet,
+    // since `handlePresent` awaits the flush before calling `handleStatusChange`.
     await server.settleNextPut();
+    expect(putCalls()).toHaveLength(2);
+    expect(nifOf(putCalls()[1])).toBe('B');
+    expect(onStatusChange).not.toHaveBeenCalled();
 
-    // The queued replay must NOT have fired: 'B' is lost on purpose.
+    // Drain any further PUTs (e.g. a Calcular flush and handlePresent's own flush both racing
+    // to persist the same 'B' snapshot can produce one coalesced follow-up write via the shared
+    // write queue's own queued-replay mechanism — see useRecordWriteQueue.js) until the record is
+    // genuinely idle, then let handlePresent proceed to the actual status transition.
+    for (let i = 0; i < 5 && server.openPutCount > 0; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await server.settleNextPut();
+    }
+    await waitFor(() => {
+      expect(onStatusChange).toHaveBeenCalledWith('303-2026-T2', 'submitted', 'manual_no_receipt');
+    });
+  });
+
+  // ETP-5338 pt.4 — the exact ticket scenario, driving the named field itself: check
+  // "Autoliquidación Rectificativa" and click "Registrar/Presentar" directly, with NO
+  // intervening "Guardar". Before the fix the checkbox's own `identChecks.rectificativa: true`
+  // never reached the server at all — `handlePresent` transitioned `status` straight away and
+  // `persistEditableFields` becomes a permanent no-op once `isSubmitted`, so the edit was lost
+  // for good, not merely delayed. `onManualDataSaved` is the observable proxy for "reopening the
+  // declaration / the list's 'Tipo' column would show Rectificativa, not Ordinaria" — it is the
+  // exact payload `FiscalModelsPage` patches into `FmListPage`'s cache on a successful save (see
+  // `FiscalModelsPage.manualDataSaved.vitest.jsx` and `FmListPage.declManualDataPatch.vitest.jsx`
+  // for that plumbing's own coverage), so asserting it fires with `rectificativa: true` here
+  // proves the full chain end-to-end without re-testing already-covered wiring in a second place.
+  it('persists a checked "Autoliquidación Rectificativa" when Presentar is clicked directly', async () => {
+    installImmediateServer(200);
+    const onStatusChange = vi.fn();
+    const onManualDataSaved = vi.fn();
+    // Checking 'rectificativa' makes the 'datos_bancarios' section visible (fm303Layouts.js),
+    // whose 'bank_iban' is itself `required: true` — seeded here so the ETP-5187 pre-flight
+    // gate this test is not exercising doesn't block `submitDeclaration()` below.
+    renderPage({
+      onStatusChange,
+      onManualDataSaved,
+      decl: {
+        ...BASE_DECL,
+        manualData: { identification: { tipo_declaracion: 'N', bank_iban: 'ES0000000000000000000000' } },
+      },
+    });
+
+    fireEvent.click(screen.getByTestId('ident-rectificativa'));
+    submitDeclaration();
+
+    // The saved payload must carry the checked box — this is what a reopened declaration (or
+    // the list's "Tipo" column) would read back.
+    await waitFor(() => {
+      expect(onManualDataSaved).toHaveBeenCalledWith(
+        '303-2026-T2',
+        expect.objectContaining({
+          identification: expect.objectContaining({ rectificativa: true }),
+        }),
+      );
+    });
     expect(putCalls()).toHaveLength(1);
-    expect(nifOf(putCalls()[0])).toBe('A');
+    expect(JSON.parse(putCalls()[0][1].body).manualData.identification.rectificativa).toBe(true);
+
+    // The flush must have settled BEFORE the status transition — not raced against it, not
+    // skipped by it.
+    const savedOrder = onManualDataSaved.mock.invocationCallOrder[0];
+    const statusOrder = onStatusChange.mock.invocationCallOrder[0];
+    expect(onStatusChange).toHaveBeenCalledWith('303-2026-T2', 'submitted', 'manual_no_receipt');
+    expect(savedOrder).toBeLessThan(statusOrder);
+  });
+
+  // ETP-5338 pt.4 — the other half of the fix: `handlePresent`'s own flush can FAIL (a genuine
+  // network/server error, not an eligibility drop). `persistEditableFields` never throws — a
+  // failed PUT comes back as `{ ok: false }` — so `handlePresent` must check that return value
+  // and abort the transition itself rather than proceeding on the assumption the flush always
+  // succeeds. Unlike the eligibility-drop tests above (which cover a save becoming ineligible
+  // WHILE queued behind an earlier PUT), this drives the flush directly off the Presentar click
+  // with no earlier PUT in flight, so it is `handlePresent`'s own `if (!savedOk)` branch under
+  // test, not `writeManualData`'s eligibility re-check.
+  it('aborts the status transition when its own flush fails, and the edit stays retryable', async () => {
+    installImmediateServer(500);
+    const onStatusChange = vi.fn();
+    renderPage({ onStatusChange });
+
+    editNif('B');
+    submitDeclaration();
+
+    await waitFor(() => expect(putCalls()).toHaveLength(1));
+    expect(nifOf(putCalls()[0])).toBe('B');
+    // The failed flush must abort the transition — no status change, and a toast instead.
+    expect(onStatusChange).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+
+    // The edit must still read as pending (not silently dropped): a retry via Guardar issues a
+    // fresh PUT rather than silently no-op'ing, and this time it succeeds.
+    installImmediateServer(200);
+    await clickGuardar();
+    expect(putCalls()).toHaveLength(1);
+    expect(nifOf(putCalls()[0])).toBe('B');
   });
 
   // The same eligibility gate, reached the other way: the session ends (`token` goes falsy)

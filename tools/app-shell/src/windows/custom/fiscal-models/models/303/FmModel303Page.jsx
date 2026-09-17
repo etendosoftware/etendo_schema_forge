@@ -632,7 +632,27 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     setReceiptRefreshTick(t => t + 1);
   }
 
-  function handlePresent({ status: newStatus, acuseFile }) {
+  // ETP-5338 pt.4 — "processing a rectificativa un-checks the checkbox" root cause: unlike
+  // `handleComputeClick` (which always calls `persistEditableFields()` before recomputing),
+  // this handler never flushed pending `identChecks`/`manualOverrides` edits before changing
+  // the declaration's status. A user who checks "Autoliquidación Rectificativa" and clicks
+  // "Registrar/Presentar" directly — without an intervening "Guardar" click — had that edit
+  // discarded: `persistEditableFields()` is gated on `!isSubmitted` (see its own comment
+  // above), and `handleStatusChange` below flips local `status` to a submitted value, so any
+  // call to `persistEditableFields()` AFTER that point becomes a silent permanent no-op. The
+  // checkbox itself never actually unchecks in this page's own local state — what happens is
+  // the check was simply never sent to the server, so every OTHER surface that reads it back
+  // from persisted `manualData` (reopening the declaration, the list's "Tipo" column) shows it
+  // unchecked, which reads to the user as "the checkbox unchecked itself".
+  //
+  // Fix: flush pending edits BEFORE any status transition, for both the two manual paths and
+  // the 'aeat_telematic' sentinel (AeatSubmitFlow's own AEAT params are read live off
+  // `identChecks`, but the persisted `manualData` copy needs the same flush so it doesn't
+  // drift from what was actually filed). If the flush fails, the transition is aborted rather
+  // than proceeding and losing the edit permanently — the pending-edit flag stays set
+  // (`persistEditableFields` only clears it on success), so the user can retry via "Guardar"
+  // or by clicking "Registrar/Presentar" again.
+  async function handlePresent({ status: newStatus, acuseFile }) {
     // ETP-5187 — required-field pre-flight (see `missingRequiredFields` above), covering all
     // paths this function can take — including 'aeat_telematic' below, which only opens the
     // AeatSubmitFlow but must not even get that far with an unset declaration type.
@@ -641,6 +661,11 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
         'fm.validation.missing_required_present',
         "Completá {fields} antes de marcar la declaración como presentada.",
       );
+      return;
+    }
+    const { ok: savedOk } = await persistEditableFields();
+    if (!savedOk) {
+      toast.error(t('fm.action.save_error') ?? 'No se pudo guardar. Inténtalo de nuevo.');
       return;
     }
     // 'aeat_telematic' is a sentinel from PresentModal's 4th path, never a
