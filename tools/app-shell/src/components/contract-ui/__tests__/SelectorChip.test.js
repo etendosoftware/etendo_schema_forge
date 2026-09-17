@@ -28,9 +28,15 @@ describe('SelectorChip (ETP-4000 Figma chip)', () => {
     assert.match(src, /<button[\s\S]*?type="button"/);
   });
 
-  it('forwards onClick to the chip body and testId to data-testid', () => {
-    assert.match(src, /onClick=\{onClick\}/);
+  it('forwards onClick to the chip body (unless disabled) and testId to data-testid', () => {
+    assert.match(src, /onClick=\{disabled \? undefined : onClick\}/);
     assert.match(src, /data-testid=\{testId\}/);
+  });
+
+  it('accepts a disabled prop that locks the chip: no click, no clear, dimmed text (ETP-4879)', () => {
+    assert.match(src, /disabled\s*=\s*false/);
+    assert.match(src, /disabled=\{disabled\}/);
+    assert.match(src, /clearable && !disabled/);
   });
 
   it('renders the X icon from lucide-react', () => {

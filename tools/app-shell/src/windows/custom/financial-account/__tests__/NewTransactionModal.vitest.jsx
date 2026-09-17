@@ -58,8 +58,8 @@ vi.mock('@/components/forms/fields', () => ({
       {children}
     </div>
   ),
-  DateInput: ({ value, onChange, 'data-testid': dtid }) => (
-    <input data-testid={dtid} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
+  DateInput: ({ value, onChange, disabled, 'data-testid': dtid }) => (
+    <input data-testid={dtid} value={value ?? ''} onChange={(e) => onChange(e.target.value)} disabled={disabled} />
   ),
   AmountInput: ({ value, onChange, onBlur, currency, 'data-testid': dtid }) => (
     <div>
@@ -67,22 +67,24 @@ vi.mock('@/components/forms/fields', () => ({
       <span data-testid={`${dtid}-currency`}>{currency}</span>
     </div>
   ),
-  ChipSelect: ({ value, onChange, testId }) => (
+  ChipSelect: ({ value, onChange, testId, disabled }) => (
     <div>
       <span data-testid={`${testId}-value`}>{value?.id ?? ''}</span>
       <button
         type="button"
+        disabled={disabled}
         data-testid={`${testId}-pick`}
         onClick={() => onChange({ id: `${testId}-id`, name: `${testId}-name` })}>
         pick
       </button>
       <button
         type="button"
+        disabled={disabled}
         data-testid={`${testId}-pick2`}
         onClick={() => onChange({ id: `${testId}-id-2`, name: `${testId}-name-2` })}>
         pick2
       </button>
-      <button type="button" data-testid={`${testId}-clear`} onClick={() => onChange(null)}>clear</button>
+      <button type="button" disabled={disabled} data-testid={`${testId}-clear`} onClick={() => onChange(null)}>clear</button>
     </div>
   ),
 }));
@@ -466,8 +468,18 @@ describe('NewTransactionModal — edit mode', () => {
     // Confirmar is gone (already processed); only Guardar remains.
     expect(screen.queryByTestId('tx-new-confirm')).not.toBeInTheDocument();
     expect(screen.getByTestId('tx-new-save')).toBeInTheDocument();
-    // The G/L item is still editable.
-    expect(screen.getByTestId('tx-glitem-pick')).toBeInTheDocument();
+  });
+
+  it('locks date, but keeps G/L item, description and dimensions editable, when editing a Processed movement (ETP-4879)', () => {
+    renderModal({ movement: { ...EDIT_MOVEMENT, processed: true }, dimensions: ['project'] });
+    // Backend only persists the 4 accounting dimensions + G/L item + description once Processed —
+    // date changes used to be sent but silently dropped, so the UI now locks it too.
+    expect(screen.getByTestId('tx-date')).toBeDisabled();
+    // G/L item, description and the accounting dimensions (Contacto + enabled optional dims) stay editable.
+    expect(screen.getByTestId('tx-glitem-pick')).not.toBeDisabled();
+    expect(screen.getByTestId('tx-description')).not.toBeDisabled();
+    expect(screen.getByTestId('tx-contact-pick')).not.toBeDisabled();
+    expect(screen.getByTestId('tx-dim-project-pick')).not.toBeDisabled();
   });
 });
 
