@@ -1,8 +1,8 @@
 {
-  "version": "0.13.1",
+  "version": "0.14.0",
   "generatedAt": "2026-04-27T19:18:32.198Z",
-  "updatedAt": "2026-09-17T12:09:42.949Z",
-  "checksum": "02bed0e4ebdc7264",
+  "updatedAt": "2026-09-17T12:26:07.975Z",
+  "checksum": "c60877a3a44b6718",
   "frontendContract": {
     "window": {
       "id": "137",
@@ -177,6 +177,7 @@
                 }
               }
             ],
+            "backendFilterKey": "salesPurchaseType",
             "defaultValue": "B",
             "section": "principal",
             "seq": 3,

@@ -2,7 +2,7 @@
   "version": "0.13.1",
   "generatedAt": "2026-04-27T19:18:32.198Z",
   "updatedAt": "2026-09-17T12:09:42.949Z",
-  "contractChecksum": "02bed0e4ebdc7264",
+  "contractChecksum": "c60877a3a44b6718",
   "apiPrediction": {
     "specName": "tax-rate",
     "baseUrl": "/sws/neo/tax-rate",

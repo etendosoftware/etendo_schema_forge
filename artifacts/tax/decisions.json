@@ -103,6 +103,7 @@
           "name": "applicableTo",
           "grid": true,
           "searchable": true,
+          "backendFilterKey": "salesPurchaseType",
           "section": "principal",
           "seq": 3,
           "cellType": "taxScope"
