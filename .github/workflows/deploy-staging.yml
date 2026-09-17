@@ -106,6 +106,8 @@ jobs:
           VITE_MIXPANEL_DEBUG: "false"
           VITE_MIXPANEL_API_HOST: ${{ vars.VITE_MIXPANEL_API_HOST }}
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
+          # Public API documentation endpoint used by the API keys screen.
+          VITE_PUBLIC_API_DOCS_URL: https://app.etendo.software/api
           # ConfigCat control plane (ETP-4691) — key as variable, not secret: Vite
           # bakes it into the JS bundle, so it is public by construction and
           # masking it would only hide it from the build log. Production and

@@ -243,6 +243,8 @@ export default defineConfig(({ mode }) => {
         skipWaiting: true,
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallbackDenylist: [
+          // API routes must reach the backend and must never receive the SPA fallback.
+          /^\/api(?:\/|$)/,
           /^\/etendo\//,
           /^\/mcp(?:\/|$)/,
           /^\/\.well-known\//,

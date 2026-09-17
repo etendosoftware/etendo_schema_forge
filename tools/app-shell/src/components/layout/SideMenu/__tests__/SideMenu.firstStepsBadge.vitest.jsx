@@ -35,6 +35,7 @@ vi.mock('@/lib/flags', () => ({
   useFeatureFlag: () => false,
   PROOF_OF_CONCEPT_MENU: 'proof-of-concept-menu',
   ACCT_PROCESS_MONITOR: 'acct-process-monitor',
+  PUBLIC_API_KEYS: 'public-api-keys',
 }));
 vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
   useEnvironmentSwitch: () => ({

@@ -74,13 +74,15 @@ describe('MatchedInvoiceBulkActions — props handed to the shared BulkDocumentA
     render(<MatchedInvoiceBulkActions selectedRows={[]} />);
   });
 
-  it('targets the matchedInvoice entity in neoAction mode with the Confirmar label', () => {
+  it('targets the matchedInvoice entity in neoAction mode with the Procesar label', () => {
     // actionMode is the load-bearing one: it retargets each per-row call to
     // POST …/matchedInvoice/{id}/action/{post|unpost} instead of the DocAction endpoint,
     // which this window has no field for.
     expect(captured.props.entity).toBe('matchedInvoice');
     expect(captured.props.actionMode).toBe('neoAction');
-    expect(captured.props.labelKey).toBe('confirmBulk');
+    // ETP-5302 — the floating-bar button is "Procesar" (`process`); "Confirmar"
+    // is now the dropdown OPTION label, not the button label.
+    expect(captured.props.labelKey).toBe('process');
     expect(captured.props.buildActions).toBe(buildPostActions);
   });
 

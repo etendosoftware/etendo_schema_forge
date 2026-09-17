@@ -16,9 +16,18 @@
  *       row-quick-actions.mocked.spec.js for the canonical pattern): same
  *       gate as scenario A, driven by `useOrderWindow`'s `showReactivate`.
  *
- *   C — List bulk-action toolbar: selecting completed (CO) rows shows the
- *       ETP-5315 `PurchaseOrderReactivateBulkAction` button ("Confirmar")
- *       offering `RE`, separate from the pre-existing CO-only button.
+ *   C — List bulk-action toolbar: the bar's single "Procesar" button offers
+ *       `RE` in its dropdown when completed (CO) rows are selected, and does
+ *       not when only drafts are.
+ *
+ * ETP-5302 (scenario C) folded the two bulk buttons into ONE. ETP-5315 had
+ * shipped its Reactivate as a SECOND button beside the pre-existing CO-only
+ * one, with its own `reactivateBulk` key ("Reactivar") so the pair could be
+ * told apart; the bar therefore showed two buttons for a mixed selection and a
+ * lone "Reactivar" for a completed-only one. Purchase Order now behaves like
+ * every other document window: one "Procesar" button (`process`), with
+ * Confirmar / Reactivar as options inside its dialog. `reactivateBulk` is gone
+ * from every locale file.
  */
 
 import { test, expect } from '@playwright/test';
@@ -197,7 +206,7 @@ test.describe('Purchase Order list — row-hover kebab Reactivate follows hasLin
 // --------------------------------------------------------------------------
 
 test.describe('Purchase Order list — bulk-select Reactivate (ETP-5315)', () => {
-  test('selecting a completed row with no linked documents offers RE in the (second) Confirmar dialog', async ({ page }) => {
+  test('selecting a completed row with no linked documents offers RE inside the single Procesar dialog', async ({ page }) => {
     await login(page);
     await installMock(page, [CO_ROW_FREE]);
     await page.goto('/purchase-order');
@@ -213,18 +222,21 @@ test.describe('Purchase Order list — bulk-select Reactivate (ETP-5315)', () =>
       await row.locator('td').first().click();
     }
 
-    // The pre-existing CO-only BulkDocumentAction renders null here (no draft
-    // row selected, nothing for it to offer), so PurchaseOrderReactivateBulkAction
-    // is the ONLY button rendered for this CO-only selection. It no longer
-    // says "Confirmar" — that label collision (two indistinguishable
-    // "Confirmar" buttons for a mixed draft+completed-unlinked selection) was
-    // fixed by giving it its own `reactivateBulk` label key, so it renders as
-    // "Reactivar" / "Reactivate" instead (see
-    // artifacts/purchase-order/custom/PurchaseOrderReactivateBulkAction.jsx).
-    const reactivateButtons = page.getByRole('button', { name: /reactivar|reactivate/i });
-    await expect(reactivateButtons.first()).toBeVisible({ timeout: 5_000 });
-    await reactivateButtons.first().click();
+    // ETP-5302 — the bar carries exactly ONE document-action button and it is
+    // always "Procesar", whatever the selection: Reactivar is an option INSIDE
+    // its dialog, not a button of its own. A completed-only selection used to
+    // render a lone "Reactivar" button here (the `reactivateBulk` key, now
+    // deleted), which is the symptom this assertion pins down — the toolbar must
+    // carry no Reactivar button BEFORE the dialog is opened.
+    await expect(page.getByRole('button', { name: /^(reactivar|reactivate)$/i })).toHaveCount(0);
 
+    const processButtons = page.getByRole('button', { name: /^(procesar|process)$/i });
+    await expect(processButtons).toHaveCount(1, {
+      message: 'The selection bar must carry a single document-action button',
+    });
+    await processButtons.first().click();
+
+    // Reactivar now appears only as the dialog's dropdown option.
     const reOption = page.locator('[data-value="RE"], [value="RE"]');
     const reText = page.locator('text=/reactivar|reactivate/i');
     await expect(reOption.or(reText).first()).toBeVisible({
@@ -248,13 +260,13 @@ test.describe('Purchase Order list — bulk-select Reactivate (ETP-5315)', () =>
       await row.locator('td').first().click();
     }
 
-    // Only ONE "Confirmar" button renders here: PurchaseOrderReactivateBulkAction's
-    // buildReactivateActions returns [] for an all-draft selection (no CO row),
-    // so it renders nothing at all — leaving just the pre-existing CO-only
-    // BulkDocumentAction. No double-button ambiguity to account for.
-    const confirmButtons = page.getByRole('button', { name: /confirmar|confirm/i });
-    await expect(confirmButtons.first()).toBeVisible({ timeout: 5_000 });
-    await confirmButtons.first().click();
+    // The same single "Procesar" button as the test above — ETP-5302 renamed it
+    // from "Confirmar" because it opens an action picker rather than confirming
+    // anything by itself, and "Confirmar" is now the name of the CO option INSIDE
+    // the dialog. With no completed row selected, that dialog must offer CO only.
+    const processButtons = page.getByRole('button', { name: /^(procesar|process)$/i });
+    await expect(processButtons).toHaveCount(1);
+    await processButtons.first().click();
 
     const reOption = page.locator('[data-value="RE"], [value="RE"]');
     await expect(reOption).toHaveCount(0, {
