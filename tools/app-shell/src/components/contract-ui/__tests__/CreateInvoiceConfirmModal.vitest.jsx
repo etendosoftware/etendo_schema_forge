@@ -173,35 +173,28 @@ describe('CreateInvoiceConfirmModal', () => {
     expect(screen.queryByText(/\$/)).toBeNull();
   });
 
-  // ── Checkbox state ─────────────────────────────────────────────────────────
+  // ── No create-invoice checkbox (ETP-5381) ──────────────────────────────────
+  // Every button that opens this modal already says "Crear factura", so the checkbox asked the
+  // user to confirm a confirmation — and unticking it left a dialog whose only action did nothing.
+  // The toggle in ConfirmInOutModal is a different case and stays: there the button says
+  // "Confirmar" and the invoice is genuinely optional.
 
-  it('starts with checkbox checked', () => {
-    const { container } = renderModal();
-    // The checkmark SVG polyline is rendered only when checked
-    expect(container.querySelector('polyline')).toBeInTheDocument();
+  it('does not render a create-invoice checkbox', () => {
+    renderModal();
+    expect(screen.queryByText('soCreateInvoiceTitle')).not.toBeInTheDocument();
+    expect(screen.queryByText('soGenerateDocs')).not.toBeInTheDocument();
   });
 
-  it('toggles checkbox when the row is clicked', () => {
-    const { container } = renderModal();
-    // Find the clickable checkbox row by its title text's parent
-    const checkboxRow = screen.getByText('soCreateInvoiceTitle').closest('div[style]');
-    fireEvent.click(checkboxRow);
-    // After toggle: unchecked → no polyline
-    expect(container.querySelector('polyline')).not.toBeInTheDocument();
-  });
-
-  it('confirm button is enabled when checkbox is checked and not loading', () => {
+  it('confirm button is enabled straight away, with nothing left to tick', () => {
     renderModal();
     const confirmBtn = screen.getByText('soCreateDocsBtn').closest('button');
     expect(confirmBtn).not.toBeDisabled();
   });
 
-  it('confirm button is disabled when checkbox is unchecked', () => {
-    renderModal();
-    const checkboxRow = screen.getByText('soCreateInvoiceTitle').closest('div[style]');
-    fireEvent.click(checkboxRow); // uncheck
-    const confirmBtn = screen.getByText('soCreateDocsBtn').closest('button');
-    expect(confirmBtn).toBeDisabled();
+  it('confirms without any prior interaction', () => {
+    const { props } = renderModal();
+    fireEvent.click(screen.getByText('soCreateDocsBtn'));
+    expect(props.onConfirm).toHaveBeenCalledWith('', []);
   });
 
   // ── Loading state ──────────────────────────────────────────────────────────
@@ -272,16 +265,6 @@ describe('CreateInvoiceConfirmModal', () => {
     expect(props.onConfirm).toHaveBeenCalledWith('', []);
   });
 
-  it('does not call onConfirm when checkbox is unchecked', () => {
-    const { props } = renderModal();
-    const checkboxRow = screen.getByText('soCreateInvoiceTitle').closest('div[style]');
-    fireEvent.click(checkboxRow); // uncheck
-    // Confirm button is disabled — verify attribute before asserting
-    const confirmBtn = screen.getByText('soCreateDocsBtn').closest('button');
-    expect(confirmBtn).toBeDisabled();
-    expect(props.onConfirm).not.toHaveBeenCalled();
-  });
-
   // ── pendingQtyUrl — subtitle behavior ─────────────────────────────────────
 
   it('shows generic subtitle when pendingQtyUrl is not provided', () => {
@@ -331,16 +314,6 @@ describe('CreateInvoiceConfirmModal', () => {
 
     await act(async () => {});
     expect(screen.getByText('soCreateInvoiceCheckDesc')).toBeInTheDocument();
-  });
-
-  it('shows soGenerateDocs section label', () => {
-    renderModal();
-    expect(screen.getByText('soGenerateDocs')).toBeInTheDocument();
-  });
-
-  it('shows soCreateInvoiceTitle inside the checkbox row', () => {
-    renderModal();
-    expect(screen.getByText('soCreateInvoiceTitle')).toBeInTheDocument();
   });
 
   // ── formatCurrency usage (ETP-4314 policy: no hand-rolled currency formatting) ──
