@@ -58,6 +58,16 @@ const DATA_COLOR_LITERALS = new Map([
   // (confirmed by sampling the Figma reference vs. the rendered pixel). See PaymentDraftBanner.jsx.
   ['payment-in/custom/PaymentDraftBanner.jsx', new Set(['#121217'])],
   ['payment-out/custom/PaymentDraftBanner.jsx', new Set(['#121217'])],
+  // ETP-5268: two pixel-matching literals, neither with a semantic-token equivalent.
+  // `#c1c5cf` is the horizontal-scroll mirror thumb, matching (by design)
+  // ScrollPane's own hardcoded thumb color in app-shell-core (schema_forge_core repo,
+  // components/ui/scroll-pane.jsx) — that component isn't tokenized either, so this
+  // one can't be without the two thumbs visibly diverging. `rgb(2` (the regex only
+  // captures up to the first digit) is the quick-actions sticky mask, which must
+  // stay a SOLID color while floating (a translucent mask would let the scrolled-
+  // away row content show through) but needs to match the eye against the row's own
+  // translucent `hover:bg-muted/50` — see the comment at its call site for the math.
+  ['components/contract-ui/DataTable.jsx', new Set(['#c1c5cf', 'rgb(2'])],
 ]);
 
 const COLOR_LITERAL = /#[0-9a-f]{3,8}\b|\brgba?\(\s*\d|\bhsl\(\s*\d|['"](?:white|black)['"]|\b(?:bg|text|border|ring|outline|fill|stroke)-(?:white|black|slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)(?:-[0-9]{2,3})?\b/gi;
