@@ -654,13 +654,14 @@ describe('getLayout303 — identificacion no longer carries dep_aduanero/dep_for
   });
 });
 
-// ── Last-period-only sections (ETP-5391): declaracion_terceros,
-// tributacion_territorial, info_adicional_ultimo_periodo ───────────────────
+// ── Last-period-only sections (ETP-5391): tributacion_territorial,
+// info_adicional_ultimo_periodo (the latter also carries the merged
+// declaracion_terceros checkbox as a leading field) ─────────────────────────
 // Only meaningful/populated by Classic's AEAT303Report when the declared
 // period is the last one of the fiscal year (quarterly T4 / monthly 12) —
-// getLayout303 must strip all three out entirely for any other period.
+// getLayout303 must strip both out entirely for any other period.
 
-const LAST_PERIOD_SECTION_IDS = ['declaracion_terceros', 'tributacion_territorial', 'info_adicional_ultimo_periodo'];
+const LAST_PERIOD_SECTION_IDS = ['tributacion_territorial', 'info_adicional_ultimo_periodo'];
 
 describe('getLayout303 — last-period-only sections are present for T4/12 and absent otherwise', () => {
   it.each([
@@ -689,7 +690,7 @@ describe('getLayout303 — last-period-only sections are present for T4/12 and a
     for (const id of LAST_PERIOD_SECTION_IDS) expect(ids).toContain(id);
   });
 
-  it('sectionOrder still places the three sections between resultado_final and sin_actividad for T4', () => {
+  it('sectionOrder still places the two sections between resultado_final and sin_actividad for T4', () => {
     const ids = sectionIds(getLayout303(2026, 'T4'));
     const rfIdx = ids.indexOf('resultado_final');
     const saIdx = ids.indexOf('sin_actividad');
@@ -700,26 +701,6 @@ describe('getLayout303 — last-period-only sections are present for T4/12 and a
       expect(idx).toBeGreaterThan(rfIdx);
       expect(idx).toBeLessThan(saIdx);
     }
-  });
-});
-
-describe('getLayout303 — declaracion_terceros section content (T4)', () => {
-  const layout = getLayout303(2026, 'T4');
-  const sec = layout.sections.find(s => s.id === 'declaracion_terceros');
-
-  it('exists with sectionType identificacion and a single editable checkbox field', () => {
-    expect(sec).toBeTruthy();
-    expect(sec.sectionType).toBe('identificacion');
-    expect(sec.fields).toHaveLength(1);
-    const field = sec.fields[0];
-    expect(field.id).toBe('declaracion_terceros');
-    expect(field.type).toBe('checkbox');
-    expect(field.readOnly).toBe(false);
-    expect(field.labelKey).toBe('fm.ident.declaracion_terceros');
-  });
-
-  it('has no rows (identificacion-style section, not a grid)', () => {
-    expect(sec.rows).toEqual([]);
   });
 });
 
@@ -760,6 +741,22 @@ describe('getLayout303 — tributacion_territorial section content (T4)', () => 
 describe('getLayout303 — info_adicional_ultimo_periodo section content (T4)', () => {
   const layout = getLayout303(2026, 'T4');
   const sec = layout.sections.find(s => s.id === 'info_adicional_ultimo_periodo');
+
+  // ETP-5391 follow-up: declaracion_terceros (Modelo 347 filing-exemption checkbox) no longer
+  // has its own section — it is merged in as this section's leading field, matching Classic's
+  // own popup layout (grouped with these 5 boxes under one heading, no separate title of its own).
+  it('carries the merged declaracion_terceros checkbox as its leading field', () => {
+    expect(sec.fields).toHaveLength(1);
+    const field = sec.fields[0];
+    expect(field.id).toBe('declaracion_terceros');
+    expect(field.type).toBe('checkbox');
+    expect(field.readOnly).toBe(false);
+    expect(field.labelKey).toBe('fm.ident.declaracion_terceros');
+  });
+
+  it('is not sectionType identificacion (row-based section carrying a leading fields checkbox)', () => {
+    expect(sec.sectionType).toBeUndefined();
+  });
 
   it('exists and has exactly 5 editable rows for casillas 95/97/98/127/128', () => {
     expect(sec).toBeTruthy();

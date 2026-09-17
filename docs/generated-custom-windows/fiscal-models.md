@@ -580,22 +580,16 @@ so it is not silently reopened later:
 ### Last-period-only sections — "Información adicional" (ETP-5391)
 
 The Modelo 303 detail page's "Información adicional" tab (`CASILLAS_SECTIONS`'s `info_adicional`
-group in `FmModel303Page.jsx`) now renders three extra sections — matching Classic's own last-period
+group in `FmModel303Page.jsx`) now renders two extra sections — matching Classic's own last-period
 popup — but **only when the declaration's period is the last of the fiscal year** (`T4` quarterly or
 `12` monthly, per `isLastPeriodOfYear`). For any other period they are absent from the layout
 entirely: `getLayout303` (`fm303Layouts.js`) filters them out via a dedicated
 `LAST_PERIOD_ONLY_SECTIONS` set, the same mechanism box 44 ("prorrata definitiva") already used for
-its own last-period-only row. All three sections are plain AEAT-protocol request params forwarded
+its own last-period-only row. Both sections are plain AEAT-protocol request params forwarded
 verbatim by `Fiscal303SubmissionSupport`'s `mergeAeatRequestParams` — no backend change was needed,
 same mechanism as every other `BOX_PARAM_MAP`/`IDENT_PARAM_MAP` entry (see "Identification
 checkboxes" and "Box-to-AEAT-param wiring" above).
 
-- **`declaracion_terceros`** — a single checkbox, "Presentación de la declaración anual de
-  operaciones con terceros (Modelo 347)" (the Modelo 347 filing-exemption declaration). Forwarded as
-  the literal string param `347TAX_FORM = 'Y'` when checked — **not** through the generic
-  `IDENT_PARAM_MAP` boolean-forwarding path the rest of `applyIdentParams` uses, because
-  `AEAT303Report2019.java` compares `inputParams.get('347TAX_FORM')` against the literal string
-  `'Y'`; the generic path would have sent the string `'true'` and never matched.
 - **`tributacion_territorial`** — the territorial-taxation split, four editable percent boxes plus
   one read-only derived one:
   - Casillas **89 (Álava)**, **90 (Gipuzkoa)**, **91 (Vizcaya)**, **92 (Navarra)** — editable
@@ -609,13 +603,24 @@ checkboxes" and "Box-to-AEAT-param wiring" above).
     value box 65 already carries, so two independently-editable UI fields for the same underlying
     AEAT param used to let a user set them to conflicting values — fixed by making 107 a live mirror
     instead of its own row. `BOX_PARAM_MAP` no longer has a 107 entry; box 65 alone is forwarded.
-- **`info_adicional_ultimo_periodo`** — five plain manual-override boxes, each a straightforward
-  `BOX_PARAM_MAP` entry read from `inputParams` by `AEAT303Report2018LastPeriod`/
-  `AEAT303Report2021`, exactly like box 44 (prorrata definitiva): casilla **95** (REAGYP — régimen
-  especial agricultura/ganadería/pesca), **97** (bienes usados/objetos de arte/antigüedades/objetos
-  de colección), **98** (régimen especial de Agencias de Viajes), **127** (operaciones sujetas y
-  acogidas a la OSS), **128** (operaciones intragrupo, arts. 78/79 LIVA). Boxes 96 (always
-  zero-filled) and 99 (computed from DB) are intentionally NOT exposed as manual inputs here.
+- **`info_adicional_ultimo_periodo`** — a leading checkbox (`declaracion_terceros`) followed by five
+  plain manual-override boxes, all under this section's single heading — no separate title for the
+  checkbox, matching Classic's own popup layout, which groups them together:
+  - **`declaracion_terceros`** — "Presentación de la declaración anual de operaciones con terceros
+    (Modelo 347)" (the Modelo 347 filing-exemption declaration). Rendered via `fm303Layouts.js`'s
+    `fields` array on this (row-based, non-`identificacion`) section — `FmBoxes303.jsx` renders a
+    leading `section.fields` checkbox ahead of the row grid for exactly this case, reusing the same
+    Checkbox markup/behavior the `identificacion`-typed sections already use. Forwarded as the
+    literal string param `347TAX_FORM = 'Y'` when checked — **not** through the generic
+    `IDENT_PARAM_MAP` boolean-forwarding path the rest of `applyIdentParams` uses, because
+    `AEAT303Report2019.java` compares `inputParams.get('347TAX_FORM')` against the literal string
+    `'Y'`; the generic path would have sent the string `'true'` and never matched.
+  - Five plain `BOX_PARAM_MAP` entries read from `inputParams` by `AEAT303Report2018LastPeriod`/
+    `AEAT303Report2021`, exactly like box 44 (prorrata definitiva): casilla **95** (REAGYP — régimen
+    especial agricultura/ganadería/pesca), **97** (bienes usados/objetos de arte/antigüedades/objetos
+    de colección), **98** (régimen especial de Agencias de Viajes), **127** (operaciones sujetas y
+    acogidas a la OSS), **128** (operaciones intragrupo, arts. 78/79 LIVA). Boxes 96 (always
+    zero-filled) and 99 (computed from DB) are intentionally NOT exposed as manual inputs here.
 
 **Percent-box validation (65, 89, 90, 91, 92).** Any cell whose column is typed `'percent'` (via
 `cellTypes`/`colTypes` in `fm303Layouts.js`) is now clamped to `[0, 100]` and rounded to 2 decimal

@@ -61,7 +61,7 @@ const TIPO_DECLARACION_FIELD = {
 
 // BASE reflects the full 2026 AEAT Modelo 303 form (source: official PDF, May 2026).
 const BASE = {
-  sectionOrder: ['identificacion', 'datos_bancarios', 'iva_devengado', 'iva_deducible', 'resultado', 'info_adicional', 'resultado_final', 'declaracion_terceros', 'tributacion_territorial', 'info_adicional_ultimo_periodo', 'sin_actividad', 'rectificativa'],
+  sectionOrder: ['identificacion', 'datos_bancarios', 'iva_devengado', 'iva_deducible', 'resultado', 'info_adicional', 'resultado_final', 'tributacion_territorial', 'info_adicional_ultimo_periodo', 'sin_actividad', 'rectificativa'],
   sections: {
     identificacion: {
       sectionType: 'identificacion',
@@ -208,19 +208,10 @@ const BASE = {
     // Classic's AEAT303Report2019/AEAT303Report2021 (`insertLastPeriodInfo`/`commonTerritory`)
     // only populate these boxes when the declared period is the last of the fiscal year
     // (quarterly T4 / monthly 12) — see isLastPeriodOfYear below, which getLayout303 uses to
-    // strip these three sections out entirely for any other period. All values here are plain
+    // strip these two sections out entirely for any other period. All values here are plain
     // AEAT-protocol request params forwarded verbatim by Fiscal303SubmissionSupport's
     // mergeAeatRequestParams — no backend change needed, same mechanism as every other
     // BOX_PARAM_MAP/IDENT_PARAM_MAP entry (see fiscalModelsUtils.js).
-    declaracion_terceros: {
-      sectionType: 'identificacion',
-      titleKey: 'fm.section.declaracion_terceros',
-      colHeaderKeys: [],
-      fields: [
-        { id: 'declaracion_terceros', labelKey: 'fm.ident.declaracion_terceros', type: 'checkbox', readOnly: false },
-      ],
-      rows: [],
-    },
     // Casillas 89/90/91/92 (Álava, Gipuzkoa, Bizkaia, Navarra) map 1:1 to AEAT303Report2018LastPeriod's
     // ALAVA/GUIPUZCOA/VIZCAYA/NAVARRA inputParams keys. Casilla 107 (Territorio Común) is a READ-ONLY
     // mirror of box 65 (atribuible_estado, resultado_final section) — Classic's own commonTerritory()
@@ -248,9 +239,18 @@ const BASE = {
     // AEAT303Report2018LastPeriod/AEAT303Report2021, exactly like box 44 (prorrata_definitiva)
     // above. Box 96 (always zero-filled) and box 99 (computed from DB) are NOT manual inputs and
     // are intentionally omitted — see docs/feedback.md discussion on ETP-5391.
+    //
+    // `declaracion_terceros` (the Modelo 347 filing-exemption checkbox) used to have its own
+    // section with its own heading — merged in here as a leading inline checkbox (no separate
+    // title of its own) to match Classic's actual popup layout, which groups it together with
+    // these five boxes under one heading. FmBoxes303.jsx renders `fields` (if present) before
+    // `rows` for a non-identificacion-typed section — see its "leading fields checkbox" support.
     info_adicional_ultimo_periodo: {
       titleKey: 'fm.box.section.info_adicional_ultimo_periodo',
       colHeaderKeys: [],
+      fields: [
+        { id: 'declaracion_terceros', labelKey: 'fm.ident.declaracion_terceros', type: 'checkbox', readOnly: false },
+      ],
       rows: [
         { id: 'info_reagyp',         labelKey: 'fm.box.row.info_reagyp',         cells: [95],  editable: true },
         { id: 'info_bienes_usados',  labelKey: 'fm.box.row.info_bienes_usados',  cells: [97],  editable: true },
@@ -551,10 +551,10 @@ export function isLastPeriodOfYear(period) {
 }
 
 // Section ids only meaningful in the last period of the fiscal year (ETP-5391) — see the
-// declaracion_terceros/tributacion_territorial/info_adicional_ultimo_periodo section
-// definitions in BASE above. getLayout303 strips these out entirely for any other period.
+// tributacion_territorial/info_adicional_ultimo_periodo section definitions in BASE above
+// (the latter also carries the declaracion_terceros checkbox as a leading field). getLayout303
+// strips these out entirely for any other period.
 const LAST_PERIOD_ONLY_SECTIONS = new Set([
-  'declaracion_terceros',
   'tributacion_territorial',
   'info_adicional_ultimo_periodo',
 ]);
@@ -622,9 +622,9 @@ export function getLayout303(year, period) {
     ? applyPatch(ops).sections
     : BASE.sectionOrder.map(id => ({ id, ...BASE.sections[id] })).filter(s => s.titleKey || s.titleKeyMap);
 
-  // Box 44 (prorrata definitiva) and the three last-period-only sections (declaracion_terceros,
-  // tributacion_territorial, info_adicional_ultimo_periodo — ETP-5391) are only applicable in the
-  // last period of the fiscal year (T4 quarterly / 12 monthly).
+  // Box 44 (prorrata definitiva) and the two last-period-only sections (tributacion_territorial,
+  // info_adicional_ultimo_periodo — ETP-5391) are only applicable in the last period of the
+  // fiscal year (T4 quarterly / 12 monthly).
   const isLastPeriod = isLastPeriodOfYear(period);
   const filteredSections = sections
     .filter(sec => isLastPeriod || !LAST_PERIOD_ONLY_SECTIONS.has(sec.id))

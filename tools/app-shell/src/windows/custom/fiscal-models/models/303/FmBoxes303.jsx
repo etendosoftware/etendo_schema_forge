@@ -330,6 +330,27 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                 ))}
               </div>
             )}
+            {/* Leading section.fields checkbox(es) — e.g. info_adicional_ultimo_periodo's merged
+                declaracion_terceros (ETP-5391). Row-based (non-identificacion) sections don't
+                otherwise render `fields`; kept minimal on purpose — reuses the exact same
+                Checkbox markup/behavior as the identificacion-type sections above, just checkbox
+                fields, rendered ahead of the row grid. */}
+            {Array.isArray(section.fields) && section.fields.length > 0 && (
+              <div className="fm-aeat-ident">
+                {section.fields
+                  .filter(f => !f.visibleWhen || matchesSvw(f.visibleWhen))
+                  .map(f => f.type === 'checkbox' && (
+                    <div key={f.id} className="fm-aeat-ident-cb">
+                      <Checkbox
+                        checked={identification?.[f.id] ?? false}
+                        onChange={() => onIdentChange?.(f.id, !(identification?.[f.id] ?? false))}
+                        disabled={readOnly}
+                        data-testid="Checkbox__49d327" />
+                      <span className="fm-aeat-ident-cb__label">{t(f.labelKey)}</span>
+                    </div>
+                  ))}
+              </div>
+            )}
             {/* Rows — group consecutive group rows into bracket containers */}
             {(() => {
               const items = [];

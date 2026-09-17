@@ -1,11 +1,13 @@
 // Vitest render-level test for ETP-5391's CASILLAS_SECTIONS registration
 // (FmModel303Page.jsx). Unlike FmModel303Page.vitest.jsx, FmBoxes303.jsx is
 // intentionally NOT mocked here — this file renders the real component so a
-// regression like the one caught in manual testing (the three new last-period
+// regression like the one caught in manual testing (the two new last-period
 // sections defined + gated in fm303Layouts.js, but never added to the
 // CASILLAS_SECTIONS registry FmModel303Page.jsx owns) fails at the DOM level,
 // not just at getLayout303() (see fm303Layouts.vitest.js for the layout-only
-// coverage of the gating itself).
+// coverage of the gating itself). declaracion_terceros (the Modelo 347
+// filing-exemption checkbox) is merged into info_adicional_ultimo_periodo as
+// a leading field — no section of its own — see fm303Layouts.js.
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react';
