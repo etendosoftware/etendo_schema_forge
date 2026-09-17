@@ -277,6 +277,9 @@ export default function PurchaseInvoiceWindow(props) {
         subsetFilters={INVOICE_SUBSET_FILTERS}
         initialColumnFilters={initialColumnFilters}
         initialAdvancedFilter={initialAdvancedFilter}
+        /* ETP-5009 — these two came from the URL, so they must outrank any grid
+           state saved from a previous visit to this window. */
+        initialFiltersFromUrl={isInvoiceFilter || Boolean(docStatus)}
         initialColumns={isInvoiceFilter ? OVERDUE_INITIAL_COLUMNS : null}
         dateFilterKey="invoiceDate"
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}

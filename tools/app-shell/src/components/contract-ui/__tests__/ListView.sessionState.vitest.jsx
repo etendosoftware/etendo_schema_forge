@@ -478,3 +478,316 @@ describe('ListView session state — scoping', () => {
     expect(storedSnapshot(WINDOW)).toBeNull();
   });
 });
+
+// ─── ETP-5009 — a URL deep-link outranks the saved snapshot ─────────────────
+//
+// Precedence: deep-link (URL) > session snapshot > the window's declared default.
+// `initialFiltersFromUrl` is the explicit signal that the `initial*` props of THIS
+// render came from the URL and are therefore an intent for THIS navigation.
+
+describe('ListView session state — a URL deep-link wins over the snapshot', () => {
+  it('applies the deep-linked advanced filter although a snapshot exists', () => {
+    const first = render(<ListView {...defaultProps} />);
+    act(() => { filterBarProps.onAdvancedFilterChange({ token: 'userTyped' }); });
+    expect(storedSnapshot().advancedFilter).toEqual({ token: 'userTyped' });
+    first.unmount();
+
+    capturedEntityOptions = null;
+    render(
+      <ListView
+        {...defaultProps}
+        initialAdvancedFilter={{ token: 'overdue' }}
+        initialFiltersFromUrl
+      />,
+    );
+
+    expect(capturedEntityOptions.trailingFilter).toContain('overdue');
+    expect(capturedEntityOptions.trailingFilter).not.toContain('userTyped');
+  });
+
+  it('applies the deep-link when the snapshot holds a sort but no advanced filter', () => {
+    // The `?? null` variant: a snapshot that only carries sort used to blank the
+    // deep-link filter entirely, showing every record with no filter at all.
+    window.sessionStorage.setItem(listStateKey(WINDOW), JSON.stringify({
+      v: 1,
+      columnFilters: {},
+      advancedFilter: null,
+      sortColumn: 'documentNo',
+      sortDirection: 'asc',
+    }));
+
+    render(
+      <ListView
+        {...defaultProps}
+        initialAdvancedFilter={{ token: 'overdue' }}
+        initialFiltersFromUrl
+      />,
+    );
+
+    expect(capturedEntityOptions.trailingFilter).toContain('overdue');
+  });
+
+  it('behaves exactly as before when there is no snapshot at all', () => {
+    // The common case: the user clicks a dashboard card on a window they never
+    // filtered. `initialFiltersFromUrl` must be a no-op here, not a different path.
+    render(
+      <ListView
+        {...defaultProps}
+        quickFilters={QUICK_FILTERS}
+        subsetFilters={SUBSET_FILTERS}
+        initialAdvancedFilter={{ token: 'overdue' }}
+        initialColumnFilters={{ status: { value: 'CO' } }}
+        initialSubsetIndex={1}
+        initialQuickFilterIndex={1}
+        listSortBy="documentNo asc"
+        initialFiltersFromUrl
+      />,
+    );
+
+    expect(capturedEntityOptions.trailingFilter).toContain('overdue');
+    expect(capturedEntityOptions.columnFilters).toEqual({ status: { value: 'CO' } });
+    expect(capturedEntityOptions.initialSortColumn).toBe('documentNo');
+    expect(capturedEntityOptions.initialSortDirection).toBe('asc');
+    expect(capturedEntityOptions.baseFilter).toContain(encodeURIComponent('owner'));
+    expect(capturedEntityOptions.baseFilter).toContain(encodeURIComponent('status'));
+    expect(filterBarProps.advancedFilter).toEqual({ token: 'overdue' });
+  });
+
+  it('uses the deep-linked column filters instead of merging the saved ones in', () => {
+    const first = render(<ListView {...defaultProps} />);
+    act(() => { tableProps.onFilterChange('country', { operator: 'equals', value: 'ES' }); });
+    expect(storedSnapshot().columnFilters).toEqual({ country: { operator: 'equals', value: 'ES' } });
+    first.unmount();
+
+    capturedEntityOptions = null;
+    render(
+      <ListView
+        {...defaultProps}
+        initialColumnFilters={{ documentStatus: { mode: 'enumLabel', value: ['CO'] } }}
+        initialFiltersFromUrl
+      />,
+    );
+
+    // The deep-link set REPLACES the saved one — no merge, or the user would land on
+    // a grid filtered by a country they picked before ever seeing the dashboard.
+    expect(capturedEntityOptions.columnFilters).toEqual({
+      documentStatus: { mode: 'enumLabel', value: ['CO'] },
+    });
+    expect(capturedEntityOptions.columnFilters.country).toBeUndefined();
+  });
+
+  it('uses the declared subset and quick-filter defaults, not the saved selection', async () => {
+    const user = userEvent.setup();
+    const first = render(
+      <ListView
+        {...defaultProps}
+        quickFilters={QUICK_FILTERS}
+        subsetFilters={SUBSET_FILTERS}
+      />,
+    );
+    await user.click(screen.getByTestId('quick-filter-mine'));   // index 1 — `owner`
+    await user.click(screen.getByTestId('filter-open'));         // subset 1 — `status`
+    expect(storedSnapshot().quickFilterIndices).toEqual([1]);
+    expect(storedSnapshot().subsetIndex).toBe(1);
+    first.unmount();
+
+    capturedEntityOptions = null;
+    render(
+      <ListView
+        {...defaultProps}
+        quickFilters={QUICK_FILTERS}
+        subsetFilters={SUBSET_FILTERS}
+        initialQuickFilterIndex={0}
+        initialSubsetIndex={0}
+        initialAdvancedFilter={{ token: 'overdueLink' }}
+        initialFiltersFromUrl
+      />,
+    );
+
+    // Quick filter 0 (`overdue`) and subset 0 (no criteria) — the window's declared
+    // defaults — win over the saved index 1 pair.
+    expect(capturedEntityOptions.baseFilter).toContain(encodeURIComponent('overdue'));
+    expect(capturedEntityOptions.baseFilter).not.toContain(encodeURIComponent('owner'));
+    expect(capturedEntityOptions.baseFilter).not.toContain(encodeURIComponent('status'));
+  });
+
+  it('uses the window\'s declared sort, not the saved one', async () => {
+    const user = userEvent.setup();
+    const first = render(<ListView {...defaultProps} listSortBy="documentNo asc" />);
+
+    await openSortPopover(user);
+    await user.click(screen.getByText('AD_Country'));
+    expect(storedSnapshot().sortColumn).toBe('country');
+    first.unmount();
+
+    capturedEntityOptions = null;
+    tableProps = null;
+    render(
+      <ListView
+        {...defaultProps}
+        listSortBy="documentNo asc"
+        initialAdvancedFilter={{ token: 'overdue' }}
+        initialFiltersFromUrl
+      />,
+    );
+
+    expect(capturedEntityOptions.initialSortColumn).toBe('documentNo');
+    expect(capturedEntityOptions.initialSortDirection).toBe('asc');
+    expect(tableProps.sortColumn).toBe('documentNo');
+    expect(tableProps.sortDirection).toBe('asc');
+  });
+
+  it('overwrites the stale snapshot so it cannot resurface one navigation later', () => {
+    const first = render(<ListView {...defaultProps} />);
+    act(() => { tableProps.onFilterChange('country', { operator: 'equals', value: 'ES' }); });
+    act(() => { filterBarProps.onAdvancedFilterChange({ token: 'userTyped' }); });
+    expect(storedSnapshot().advancedFilter).toEqual({ token: 'userTyped' });
+    first.unmount();
+
+    render(
+      <ListView
+        {...defaultProps}
+        initialAdvancedFilter={{ token: 'overdue' }}
+        initialFiltersFromUrl
+      />,
+    );
+
+    // Nothing of what the user had typed before the deep-link survives.
+    const snapshot = storedSnapshot();
+    expect(snapshot.advancedFilter).toEqual({ token: 'overdue' });
+    expect(snapshot.columnFilters).toEqual({});
+  });
+
+  it('persists the deep-linked view, so returning from a record comes back to it', () => {
+    // Breadcrumb and Cancel both navigate to the bare `/${windowName}` — the query
+    // string is gone, so the deep-linked view can only survive through the snapshot.
+    // That is why the persistence defaults are the EMPTY grid when the flag is set:
+    // the deep-linked state must not be classified as "still at the default".
+    const deepLink = render(
+      <ListView
+        {...defaultProps}
+        initialAdvancedFilter={{ token: 'overdue' }}
+        initialFiltersFromUrl
+      />,
+    );
+    expect(storedSnapshot().advancedFilter).toEqual({ token: 'overdue' });
+    deepLink.unmount();
+
+    capturedEntityOptions = null;
+    filterBarProps = null;
+    // Back from the record: no query string left, hence no flag and no initial props.
+    render(<ListView {...defaultProps} />);
+
+    expect(filterBarProps.advancedFilter).toEqual({ token: 'overdue' });
+    expect(capturedEntityOptions.trailingFilter).toContain('overdue');
+  });
+
+  it('stores nothing when the flag is set but the URL produced no filter', () => {
+    // `initialFiltersFromUrl` on its own is not "state worth saving": the baseline it
+    // switches to is the EMPTY grid, and an empty grid equals that baseline. The
+    // "untouched list stores nothing" invariant survives the flag.
+    render(<ListView {...defaultProps} initialFiltersFromUrl />);
+
+    expect(storedSnapshot()).toBeNull();
+    expect(window.sessionStorage.length).toBe(0);
+  });
+
+  it('removes a previous snapshot when the deep-link resolves to no filter', () => {
+    const first = render(<ListView {...defaultProps} />);
+    act(() => { tableProps.onFilterChange('country', { operator: 'equals', value: 'ES' }); });
+    expect(storedSnapshot()).not.toBeNull();
+    first.unmount();
+
+    capturedEntityOptions = null;
+    render(<ListView {...defaultProps} initialFiltersFromUrl />);
+
+    // The snapshot is neither read nor kept: the user lands on the bare list.
+    expect(capturedEntityOptions.columnFilters).toEqual({});
+    expect(window.sessionStorage.getItem(listStateKey(WINDOW))).toBeNull();
+  });
+
+  it('keeps saving the grid state once the user changes something after the deep-link', () => {
+    render(
+      <ListView
+        {...defaultProps}
+        initialAdvancedFilter={{ token: 'overdue' }}
+        initialFiltersFromUrl
+      />,
+    );
+
+    act(() => { tableProps.onFilterChange('country', { operator: 'equals', value: 'FR' }); });
+
+    // Persistence is not disabled by the flag — only the initial READ is skipped.
+    expect(storedSnapshot().columnFilters).toEqual({ country: { operator: 'equals', value: 'FR' } });
+    expect(storedSnapshot().advancedFilter).toEqual({ token: 'overdue' });
+  });
+
+  // ─── Guards: the ETP-4994 path is untouched without the flag ───────────────
+
+  it('without the flag, the snapshot still wins over identical initial props (ETP-4994)', async () => {
+    const user = userEvent.setup();
+    const first = render(
+      <ListView
+        {...defaultProps}
+        quickFilters={QUICK_FILTERS}
+        subsetFilters={SUBSET_FILTERS}
+        listSortBy="documentNo asc"
+      />,
+    );
+    act(() => { tableProps.onFilterChange('country', { operator: 'equals', value: 'ES' }); });
+    act(() => { filterBarProps.onAdvancedFilterChange({ token: 'userTyped' }); });
+    await user.click(screen.getByTestId('quick-filter-mine'));
+    await user.click(screen.getByTestId('filter-open'));
+    await openSortPopover(user);
+    await user.click(screen.getByText('AD_Country'));
+    first.unmount();
+
+    capturedEntityOptions = null;
+    filterBarProps = null;
+    render(
+      <ListView
+        {...defaultProps}
+        quickFilters={QUICK_FILTERS}
+        subsetFilters={SUBSET_FILTERS}
+        listSortBy="documentNo asc"
+        initialAdvancedFilter={{ token: 'overdue' }}
+        initialColumnFilters={{ documentStatus: { mode: 'enumLabel', value: ['CO'] } }}
+        initialQuickFilterIndex={0}
+        initialSubsetIndex={0}
+      />,
+    );
+
+    // Exactly the same props as the deep-link tests above, minus the flag: everything
+    // comes from the snapshot instead.
+    expect(filterBarProps.advancedFilter).toEqual({ token: 'userTyped' });
+    expect(capturedEntityOptions.trailingFilter).toContain('userTyped');
+    // The snapshot's column filters replace the props wholesale (the first mount had
+    // none declared, so nothing of the deep-link set survives).
+    expect(capturedEntityOptions.columnFilters).toEqual({
+      country: { operator: 'equals', value: 'ES' },
+    });
+    expect(capturedEntityOptions.initialSortColumn).toBe('country');
+    expect(capturedEntityOptions.baseFilter).toContain(encodeURIComponent('owner'));
+    expect(capturedEntityOptions.baseFilter).toContain(encodeURIComponent('status'));
+    expect(capturedEntityOptions.baseFilter).not.toContain(encodeURIComponent('overdue'));
+    expect(storedSnapshot()).not.toBeNull();
+  });
+
+  it('an explicit initialFiltersFromUrl={false} is the same as omitting it', () => {
+    const first = render(<ListView {...defaultProps} />);
+    act(() => { filterBarProps.onAdvancedFilterChange({ token: 'userTyped' }); });
+    first.unmount();
+
+    capturedEntityOptions = null;
+    filterBarProps = null;
+    render(
+      <ListView
+        {...defaultProps}
+        initialAdvancedFilter={{ token: 'overdue' }}
+        initialFiltersFromUrl={false}
+      />,
+    );
+
+    expect(filterBarProps.advancedFilter).toEqual({ token: 'userTyped' });
+  });
+});

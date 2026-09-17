@@ -402,6 +402,12 @@ export function ListView({
   onCloneRow = null,
   initialColumnFilters,
   initialAdvancedFilter = null,
+  // ETP-5009 — set by a window whose `initial*` props were derived from the URL
+  // (a dashboard deep-link such as `/sales-invoice?filter=overdue`). It is the ONLY
+  // way ListView can tell "this is the intent of THIS navigation" from "this is the
+  // window's own declared default" — the props themselves look identical, and a
+  // window is free to declare an initial filter with no deep-link in sight.
+  initialFiltersFromUrl = false,
   initialColumns = null,
   rowFilter,
   dateFilterKey = null,
@@ -430,7 +436,21 @@ export function ListView({
   // Read ONCE per mount: a later read would fight the live state it is meant to seed.
   // `null` when there is nothing saved, which is the "behave exactly as before" path.
   const listStateScope = windowName || entity;
-  const [restoredListState] = useState(() => readListState(listStateScope));
+  // ETP-5009 — precedence is: deep-link (URL) > session snapshot > window default.
+  // A deep-link is an explicit intent for THIS navigation, so the snapshot is not read
+  // at all: every state seeded below (advanced filter, column filters, subset and quick
+  // filters, sort) falls back to the `initial*` props the URL produced. Reading it only
+  // for some of them would leave the grid half-restored and half-deep-linked.
+  //
+  // The previous snapshot is DISCARDED, not kept: the persistence effect below rewrites
+  // the key from the deep-linked state on this very mount (see the baseline it compares
+  // against). Consequence for the user: after arriving from a dashboard card, opening a
+  // record and coming back, the DEEP-LINKED view is what is restored — the filter they
+  // had typed before visiting the dashboard is gone for good. The newest explicit intent
+  // wins, and no stale filter can silently resurface one navigation later.
+  const [restoredListState] = useState(
+    () => (initialFiltersFromUrl ? null : readListState(listStateScope)),
+  );
 
   // Subset filters — radio-style, always one active, applied first.
   const defaultSubsetIndex = resolveDefaultSubsetIndex(subsetFilters, initialSubsetIndex);
@@ -660,8 +680,16 @@ export function ListView({
         sortDirection: hook.sortDirection,
       },
       {
-        columnFilters: initialColumnFilters ?? {},
-        advancedFilter: initialAdvancedFilter ?? null,
+        // ETP-5009 — when the `initial*` props came from the URL they are NOT the
+        // window's own default, they are this navigation's filter. Measuring "is the
+        // grid still at its default?" against them would classify the deep-linked view
+        // as default and remove the key, so returning from a record (breadcrumb and
+        // Cancel both navigate to the bare `/${windowName}`, dropping the query string)
+        // would land on an unfiltered list. Compare against the empty grid instead: the
+        // deep-linked view is persisted, so it is what comes back, and the filter the
+        // user had before the deep-link is overwritten rather than resurrected.
+        columnFilters: initialFiltersFromUrl ? {} : (initialColumnFilters ?? {}),
+        advancedFilter: initialFiltersFromUrl ? null : (initialAdvancedFilter ?? null),
         subsetIndex: subsetFilters?.length ? defaultSubsetIndex : null,
         quickFilterIndices: defaultQuickFilterIndices,
         sortColumn: initialSortColumn,
@@ -671,6 +699,7 @@ export function ListView({
   }, [
     listStateScope, columnFilters, advancedFilter, activeSubsetIndex, activeFilterIndices,
     hook.sortColumn, hook.sortDirection, initialColumnFilters, initialAdvancedFilter,
+    initialFiltersFromUrl,
     subsetFilters, defaultSubsetIndex, defaultQuickFilterIndices,
     initialSortColumn, initialSortDirection,
   ]);
