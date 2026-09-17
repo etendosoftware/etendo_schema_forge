@@ -17,7 +17,7 @@ const groups = {
   Inventory: 'product product-category physical-inventory goods-movements internal-consumption warehouse report-viewer-inventory',
   Finance: 'payment-in payment-out financial-account chart-of-accounts cost-center service-project general-ledger-configuration calendar assets asset-group amortization not-posted-documents simple-g-l-journal fiscal-monitor conversion-rates fiscal-models tax tax-category report-viewer-finance',
   Connections: 'authorize',
-  Settings: 'organization document-sequence price-list payment-term business-partner-category user roles api-keys acct-process-monitor smart-scan fiscal-config',
+  Settings: 'organization document-sequence price-list payment-term business-partner-category user roles api-keys acct-process-monitor fiscal-config',
 };
 
 // Composition aliases documented in calendar/fiscal-monitor/fiscal-config guides.
