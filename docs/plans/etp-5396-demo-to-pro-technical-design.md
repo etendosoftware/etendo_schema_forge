@@ -181,6 +181,17 @@ policy is intentionally pure and receives the current time and configuration fro
 database adapters and request filters can share the same decision without contacting Stripe or any
 other provider on the request path.
 
+The NEO authentication adapter now applies this decision after resolving the JWT client and before
+dispatching CRUD or process work. Commercial denial is returned as HTTP 402 while the account
+session remains available for billing actions. A tenant without lifecycle metadata is intentionally
+left for the legacy transition step; this avoids assigning an invented historical trial date.
+
+Productive lifecycle metadata also stores a neutral subscription status and renewal due instant.
+`CURRENT` and reviewed `LEGACY_ENTITLEMENT` states allow access; `PAST_DUE` remains usable only
+before `dueAt + configuredGraceDays`, with an initial grace period of 15 days. The equality boundary
+is suspended. A future billing reconciler can update this projection without changing the policy or
+the existing Stripe transport.
+
 ### Decision order
 
 ```text
