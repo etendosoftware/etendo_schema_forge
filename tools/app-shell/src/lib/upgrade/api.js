@@ -39,6 +39,30 @@ export async function createCheckoutSession(fetchImpl, baseUrl, token, input = {
   return { checkoutUrl: data.checkoutUrl, requestId: data.requestId, expiresAt: data.expiresAt || null };
 }
 
+/** Starts a new account-level purchase through the provider-neutral billing boundary. */
+export async function createBillingPurchase(fetchImpl, baseUrl, token, input = {}) {
+  const response = await fetchImpl(`${baseUrl}/sws/go/billing/purchases`, {
+    method: 'POST',
+    headers: buildAuthHeaders(token),
+    body: JSON.stringify({
+      action: input.action || 'productive-tenant',
+      upgradeAction: input.upgradeAction || 'create-productive',
+      ...(input.clientName ? { clientName: input.clientName } : {}),
+      ...(input.language ? { language: input.language } : {}),
+      ...(input.countryCode ? { countryCode: input.countryCode } : {}),
+    }),
+  });
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
+      : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message || data?.message, response.status);
+  }
+  if (!data?.checkoutUrl || !data?.requestId) {
+    throw buildError(UPGRADE_ERROR_CODES.checkoutUnavailable);
+  }
+  return { checkoutUrl: data.checkoutUrl, requestId: data.requestId, expiresAt: data.expiresAt || null };
+}
+
 export async function getCheckoutStatus(fetchImpl, baseUrl, token, requestId) {
   const response = await fetchImpl(
     `${baseUrl}/sws/go/checkout/sessions/${encodeURIComponent(requestId)}`,

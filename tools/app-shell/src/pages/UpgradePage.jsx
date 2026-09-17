@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
-  createCheckoutSession,
+  createBillingPurchase,
   getBillingOverview,
   getCheckoutToken,
   getCheckoutStatus,
@@ -377,7 +377,7 @@ export default function UpgradePage() {
     emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_CHECKOUT_SUBMITTED, { upgradeAction: form.upgradeAction });
 
     try {
-      const session = await createCheckoutSession(
+      const session = await createBillingPurchase(
         fetch,
         getUpgradeBaseUrl(),
         token,

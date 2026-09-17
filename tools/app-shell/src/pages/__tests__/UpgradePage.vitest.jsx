@@ -98,6 +98,14 @@ function installFetch({ environments = [], checkout = {}, statuses = ['paid'], o
     if (target.includes('/sws/go/billing/overview')) {
       return jsonResponse({ canManageBilling: true, purchases: [] });
     }
+    if (target.includes('/sws/go/billing/purchases')) {
+      requests.push({ url, init, body: JSON.parse(init.body || '{}') });
+      return jsonResponse({
+        requestId: 'upgrade-request-1',
+        checkoutUrl: 'https://checkout.stripe.test/session-1',
+        ...checkout,
+      });
+    }
     // Status polling hits `/checkout/sessions/:requestId` — checked before the
     // session-creation route below, since that path is a substring of this one.
     if (target.includes('/sws/go/checkout/sessions/')) {
@@ -191,7 +199,7 @@ describe('UpgradePage — hosted checkout', () => {
 
     await waitFor(() => expect(assignMock).toHaveBeenCalledWith('https://checkout.stripe.test/session-1'));
     expect(requests).toHaveLength(1);
-    expect(requests[0].url).toBe('/sws/go/checkout/sessions');
+    expect(requests[0].url).toBe('/sws/go/billing/purchases');
     expect(requests[0].body).toEqual({
       action: 'productive-tenant',
       clientName: 'Acme Productive',

@@ -5,6 +5,7 @@ import {
   getCheckoutToken,
   getPlatformToken,
   createCheckoutSession,
+  createBillingPurchase,
   getBillingOverview,
   getBillingPurchase,
 } from '../upgrade/api.js';
@@ -101,5 +102,25 @@ describe('createCheckoutSession', () => {
       () => createCheckoutSession(fetchImpl, '', 'token'),
       error => error.code === UPGRADE_ERROR_CODES.checkoutUnavailable
     );
+  });
+});
+
+describe('createBillingPurchase', () => {
+  it('uses the account-level billing boundary while sending only product intent', async () => {
+    const fetchImpl = recordingFetch(jsonResponse({
+      requestId: 'req-2',
+      checkoutUrl: 'https://checkout.example/session-2',
+    }));
+    const result = await createBillingPurchase(fetchImpl, 'https://api.test', 'token', {
+      clientName: 'Acme Productive', language: 'es_ES',
+    });
+    assert.equal(result.requestId, 'req-2');
+    assert.equal(fetchImpl.calls[0].url, 'https://api.test/sws/go/billing/purchases');
+    assert.deepEqual(JSON.parse(fetchImpl.calls[0].init.body), {
+      action: 'productive-tenant',
+      upgradeAction: 'create-productive',
+      clientName: 'Acme Productive',
+      language: 'es_ES',
+    });
   });
 });
