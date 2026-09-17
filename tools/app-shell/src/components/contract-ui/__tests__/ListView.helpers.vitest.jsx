@@ -1,6 +1,7 @@
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import { noOpExtractQueryParamConditions } from './testUtils/gridQueryMock.js';
 import { splitFilterParts, ListView } from '../ListView.jsx';
 
 const mockHook = {
@@ -41,10 +42,7 @@ vi.mock('@/components/layout/PageMetaContext', () => ({ useSetPageMeta: () => vi
 vi.mock('@/components/layout/FavoritesContext', () => ({ useFavorites: () => ({ isFavorite: () => false, toggleFavorite: vi.fn() }) }));
 vi.mock('@/lib/gridQuery', () => ({
   buildAdvancedFilterCriteria: () => null,
-  // ETP-5188 — real no-op contract (see `extractQueryParamConditions` in
-  // `@/lib/gridQuery.js`): with no `toQueryParams`-declaring column intercepting any
-  // row, it hands back the advancedFilter unchanged as `conditions` and no `extraParams`.
-  extractQueryParamConditions: (advancedFilter) => ({ conditions: advancedFilter, extraParams: null }),
+  extractQueryParamConditions: noOpExtractQueryParamConditions,
 }));
 vi.mock('@/hooks/useWindowFilterPresets', () => ({ useWindowFilterPresets: () => ({ presets: [], savePreset: vi.fn(), deletePreset: vi.fn() }) }));
 vi.mock('../ReportDrawer.jsx', () => ({ default: () => null }));

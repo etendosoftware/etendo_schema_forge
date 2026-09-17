@@ -373,6 +373,25 @@ test.describe('User role assignment — detail form (existing user)', () => {
   });
 });
 
+// ETP-5188 — the role quick-filter no longer renders inside `UserHeaderTable`'s own
+// markup (that `UserHeaderTable__toolbar` wrapper is gone). It moved to `ListView`'s
+// own toolbar row via the `Table.ToolbarQuickFilter` convention
+// (`RoleQuickFilterToolbarSlot.jsx`), which renders `RoleFilterControl` under the
+// `RoleFilterControl__toolbar` testid.
+//
+// `DistinctValuesFilter` popover option rows have no stable data-testid (the
+// `data-testid` prop `RoleFilterControl.jsx` passes it is silently dropped — the
+// component never destructures it) — scope by the popover's own structural class
+// (`w-64 p-0`, from `DistinctValuesFilter.jsx`'s `popoverWidth` + `p-0`) to
+// disambiguate from same-labeled sidebar icon buttons ("Finanzas" is also an app
+// icon in the left rail).
+async function openRoleQuickFilter(page) {
+  const filterTrigger = page.getByTestId('RoleFilterControl__toolbar').locator('button').first();
+  const popover = page.locator('.w-64.p-0');
+  await filterTrigger.click();
+  return popover;
+}
+
 test.describe('User role assignment — Users grid role filter', () => {
   const GRID_ROWS = [
     { id: 'row-001', name: 'Ada Lovelace', firstName: 'Ada', lastName: 'Lovelace', email: 'ada@example.com', locked: false, defaultRole: 'role-personal-ada' },
@@ -443,21 +462,7 @@ test.describe('User role assignment — Users grid role filter', () => {
   });
 
   test('filtering by a template role narrows the grid to users carrying that composed role', async ({ page }) => {
-    // ETP-5188 — the role quick-filter no longer renders inside `UserHeaderTable`'s own
-    // markup (that `UserHeaderTable__toolbar` wrapper is gone). It moved to `ListView`'s
-    // own toolbar row via the `Table.ToolbarQuickFilter` convention
-    // (`RoleQuickFilterToolbarSlot.jsx`), which renders `RoleFilterControl` under the
-    // `RoleFilterControl__toolbar` testid.
-    const filterTrigger = page.getByTestId('RoleFilterControl__toolbar').locator('button').first();
-    // `DistinctValuesFilter` popover option rows have no stable data-testid (the
-    // `data-testid` prop `RoleFilterControl.jsx` passes it is silently dropped — the
-    // component never destructures it) — scope by the popover's own structural class
-    // (`w-64 p-0`, from `DistinctValuesFilter.jsx`'s `popoverWidth` + `p-0`) to
-    // disambiguate from same-labeled sidebar icon buttons ("Finanzas" is also an app
-    // icon in the left rail).
-    const popover = page.locator('.w-64.p-0');
-
-    await filterTrigger.click();
+    const popover = await openRoleQuickFilter(page);
     await popover.getByRole('button', { name: 'Finanzas' }).click();
 
     await expect(page.locator('tbody tr').filter({ hasText: 'Ada Lovelace' })).toBeVisible();
@@ -466,15 +471,7 @@ test.describe('User role assignment — Users grid role filter', () => {
   });
 
   test('filtering by the Admin option narrows to classic-Admin users (Filtro Usuarios Admin)', async ({ page }) => {
-    // ETP-5188 — the role quick-filter no longer renders inside `UserHeaderTable`'s own
-    // markup (that `UserHeaderTable__toolbar` wrapper is gone). It moved to `ListView`'s
-    // own toolbar row via the `Table.ToolbarQuickFilter` convention
-    // (`RoleQuickFilterToolbarSlot.jsx`), which renders `RoleFilterControl` under the
-    // `RoleFilterControl__toolbar` testid.
-    const filterTrigger = page.getByTestId('RoleFilterControl__toolbar').locator('button').first();
-    const popover = page.locator('.w-64.p-0');
-
-    await filterTrigger.click();
+    const popover = await openRoleQuickFilter(page);
     await popover.getByRole('button', { name: 'Administrador' }).click();
 
     await expect(page.locator('tbody tr').filter({ hasText: 'Grace Hopper' })).toBeVisible();

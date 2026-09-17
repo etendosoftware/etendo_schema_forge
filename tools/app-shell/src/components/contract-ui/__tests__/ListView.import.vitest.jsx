@@ -51,12 +51,11 @@ vi.mock('../DocumentPrintDrawer.jsx', () => ({
 vi.mock('../ListFilterBar.jsx', () => ({
   ListFilterBar: () => <div data-testid="list-filter-bar" />,
 }));
+import { noOpExtractQueryParamConditions } from './testUtils/gridQueryMock.js';
+
 vi.mock('@/lib/gridQuery', () => ({
   buildAdvancedFilterCriteria: () => null,
-  // ETP-5188 — real no-op contract (see `extractQueryParamConditions` in
-  // `@/lib/gridQuery.js`): with no `toQueryParams`-declaring column intercepting any
-  // row, it hands back the advancedFilter unchanged as `conditions` and no `extraParams`.
-  extractQueryParamConditions: (advancedFilter) => ({ conditions: advancedFilter, extraParams: null }),
+  extractQueryParamConditions: noOpExtractQueryParamConditions,
 }));
 vi.mock('@/hooks/useWindowFilterPresets', () => ({
   useWindowFilterPresets: () => ({ presets: {}, savePreset: vi.fn(), deletePreset: vi.fn() }),

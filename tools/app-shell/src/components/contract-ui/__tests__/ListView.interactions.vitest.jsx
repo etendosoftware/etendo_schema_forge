@@ -95,15 +95,14 @@ vi.mock('@/hooks/useWindowFilterPresets', () => ({
   }),
 }));
 
+import { noOpExtractQueryParamConditions } from './testUtils/gridQueryMock.js';
+
 // Real implementation returns null for an empty funnel; here it must produce
 // criteria so the trailingFilter (advanced-filter) leg is actually exercised.
 vi.mock('@/lib/gridQuery', () => ({
   buildAdvancedFilterCriteria: (advancedFilter) =>
     advancedFilter ? [{ fieldName: 'advField', operator: 'equals', value: advancedFilter.token }] : null,
-  // ETP-5188 — real no-op contract (see `extractQueryParamConditions` in
-  // `@/lib/gridQuery.js`): with no `toQueryParams`-declaring column intercepting any
-  // row, it hands back the advancedFilter unchanged as `conditions` and no `extraParams`.
-  extractQueryParamConditions: (advancedFilter) => ({ conditions: advancedFilter, extraParams: null }),
+  extractQueryParamConditions: noOpExtractQueryParamConditions,
 }));
 
 const trackSearchPerformedMock = vi.fn();
