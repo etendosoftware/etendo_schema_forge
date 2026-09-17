@@ -391,6 +391,47 @@ describe('AssignTemplateRolesControl', () => {
     });
   });
 
+  // ETP-5278 — while `roles`/`adminRoleId` are still being fetched (Promise.all in the
+  // effect above), the old render fell straight through to `selectedRoles = roles.filter(...)`
+  // with `roles` still `[]`, showing "Sin roles asignados" regardless of what `selectedRoleIds`
+  // actually held — see the ETP-5019 test above, whose own comment already named this exact
+  // transient state ("the normal loading editor renders in the meantime"). A loading guard,
+  // checked before the admin-lock/empty/chips branches, closes it.
+  describe('loading state (ETP-5278)', () => {
+    it('renders a loading placeholder, not the empty-roles toggle row, while the catalog fetch is in flight', () => {
+      let resolveTemplates;
+      fetchTemplateRoles.mockReturnValue(new Promise((resolve) => { resolveTemplates = resolve; }));
+      renderControl({ selectedRoleIds: ['role-fin', 'role-sales'] });
+
+      expect(screen.getByTestId('AssignTemplateRolesControl__loading')).toBeInTheDocument();
+      expect(screen.queryByTestId('AssignTemplateRolesControl__toggle-expand')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('AssignTemplateRolesControl__empty')).not.toBeInTheDocument();
+
+      resolveTemplates({ roles: TEMPLATE_ROLES });
+    });
+
+    it('transitions from the loading placeholder to the real chips once the catalog fetch resolves', async () => {
+      let resolveTemplates;
+      fetchTemplateRoles.mockReturnValue(new Promise((resolve) => { resolveTemplates = resolve; }));
+      renderControl({ selectedRoleIds: ['role-fin', 'role-sales'] });
+
+      expect(screen.getByTestId('AssignTemplateRolesControl__loading')).toBeInTheDocument();
+
+      resolveTemplates({ roles: TEMPLATE_ROLES });
+
+      await waitFor(() => expect(screen.getByTestId('AssignTemplateRolesControl__chip-role-fin')).toBeInTheDocument());
+      expect(screen.getByTestId('AssignTemplateRolesControl__chip-role-sales')).toBeInTheDocument();
+      expect(screen.queryByTestId('AssignTemplateRolesControl__loading')).not.toBeInTheDocument();
+    });
+
+    it('never shows the loading placeholder for a brand-new, not-yet-persisted user', () => {
+      renderControl({ data: {} });
+
+      expect(screen.queryByTestId('AssignTemplateRolesControl__loading')).not.toBeInTheDocument();
+      expect(screen.getByTestId('AssignTemplateRolesControl__save-first')).toBeInTheDocument();
+    });
+  });
+
   // ETP-5193 (Fix 1) — the options panel used to be a normal-flow flex sibling, so
   // expanding the control pushed every form section below it downward. It is now an
   // `absolute` overlay anchored to a `relative` container, adding zero layout height.

@@ -3,12 +3,12 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:bankAccount
 const columns = [
-  { key: 'bankName', column: 'Bank_Name', type: 'string', label: 'Bank Name' },
+  { key: 'bankName', column: 'Bank_Name', type: 'string', label: 'Bank Name', maxLength: 50 },
   { key: 'country', column: 'C_Country_ID', type: 'selector', label: 'Country' },
   { key: 'bankFormat', column: 'BankFormat', type: 'enum', labels: {"en_US":"Format","es_ES":"Formato"}, label: 'Bank Account Format', enumLabels: { 'GENERIC': 'bankFormatGeneric', 'IBAN': 'bankFormatIban', 'SWIFT': 'bankFormatSwift', 'SPANISH': 'bankFormatSpanish' }, required: true, minWidth: 320 },
-  { key: 'accountNo', column: 'AccountNo', type: 'string', label: 'Generic Account No.', minWidth: 360 },
-  { key: 'iBAN', column: 'Iban', type: 'string', label: 'IBAN', minWidth: 400 },
-  { key: 'swiftCode', column: 'SwiftCode', type: 'string', label: 'SWIFT Code' },
+  { key: 'accountNo', column: 'AccountNo', type: 'string', label: 'Generic Account No.', maxLength: 100, minWidth: 360 },
+  { key: 'iBAN', column: 'Iban', type: 'string', label: 'IBAN', maxLength: 34, minWidth: 400 },
+  { key: 'swiftCode', column: 'SwiftCode', type: 'string', label: 'SWIFT Code', maxLength: 20 },
 ];
 // @sf-generated-end columns:bankAccount
 

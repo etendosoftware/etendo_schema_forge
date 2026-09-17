@@ -1218,6 +1218,59 @@ describe('UserWindow — admin promote/demote SELF-refresh (ETP-5195 Bugs 1&2)',
   });
 });
 
+// ETP-5278 — neither promote nor demote used to touch `selectedRoleIds`/`appliedRoleIdsRef`
+// at all: the only effect that populates them is gated on [recordId, token, apiBaseUrl], none
+// of which change for the common "admin acts on a different user" case, so the composed-roles
+// chip list had no defined resync path tied to the server-side action that changes it. These
+// tests render WITHOUT `token`/`apiBaseUrl` props (matching the sibling promote/demote describe
+// blocks above) so the mount-time fetch never fires — every `fetchUserRoleAssignments` call
+// observed here is unambiguously the new post-action resync, not conflated with a mount fetch.
+describe('UserWindow — role assignment resync after promote/demote (ETP-5278)', () => {
+  it('re-fetches and applies the role assignments after a successful demote', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    fetchUserRoleAssignments.mockResolvedValue({ userId: 'u1', templateRoleIds: ['role-fin', 'role-sales'] });
+    demoteUserFromAdmin.mockResolvedValue({ success: true, userId: 'u1', roleId: 'personal-role' });
+    render(<UserWindow recordId="u1" data={{ id: 'u1', isOwner: false, defaultRole: 'admin-role' }} />);
+
+    expect(fetchUserRoleAssignments).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByTestId('DemoteFromAdminButton'));
+
+    await waitFor(() => expect(demoteUserFromAdmin).toHaveBeenCalledWith('u1'));
+    await waitFor(() => expect(fetchUserRoleAssignments).toHaveBeenCalledWith('u1'));
+    await waitFor(() => expect(screen.getByTestId('selected-ids')).toHaveTextContent('["role-fin","role-sales"]'));
+  });
+
+  it('re-fetches and applies the role assignments after a successful promote', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    fetchUserRoleAssignments.mockResolvedValue({ userId: 'u1', templateRoleIds: [] });
+    promoteUserToAdmin.mockResolvedValue({ success: true, userId: 'u1', roleId: 'admin-role' });
+    render(<UserWindow recordId="u1" data={{ id: 'u1', isOwner: false, defaultRole: 'personal-role-1' }} />);
+
+    fireEvent.click(await screen.findByTestId('PromoteToAdminButton'));
+
+    await waitFor(() => expect(promoteUserToAdmin).toHaveBeenCalledWith('u1'));
+    await waitFor(() => expect(fetchUserRoleAssignments).toHaveBeenCalledWith('u1'));
+  });
+
+  it('does not crash and leaves the selection at its last-known value when the post-action resync fetch fails', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    fetchUserRoleAssignments.mockRejectedValue(new Error('network down'));
+    demoteUserFromAdmin.mockResolvedValue({ success: true, userId: 'u1', roleId: 'personal-role' });
+    render(<UserWindow recordId="u1" data={{ id: 'u1', isOwner: false, defaultRole: 'admin-role' }} />);
+
+    fireEvent.click(await screen.findByTestId('DemoteFromAdminButton'));
+
+    await waitFor(() => expect(demoteUserFromAdmin).toHaveBeenCalledWith('u1'));
+    await waitFor(() => expect(fetchUserRoleAssignments).toHaveBeenCalledWith('u1'));
+    // The demote itself still succeeded (its own toast fired) — only the resync read failed,
+    // and it must not crash the component or reset a correct-but-untouched selection to empty
+    // as a side effect of ITS OWN failure (no token/apiBaseUrl here, so the selection was never
+    // loaded in the first place — it stays at its initial `[]`, not overwritten by the catch).
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('demoteFromAdminSuccessToast'));
+    expect(screen.getByTestId('selected-ids')).toHaveTextContent('[]');
+  });
+});
+
 describe('UserWindow — self-demotion guard (ETP-5206, useAdminPromotionExtraActions)', () => {
   it('hides the demote action entirely when viewing your OWN record and you currently hold the Admin role', async () => {
     fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });

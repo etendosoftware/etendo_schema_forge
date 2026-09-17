@@ -1,0 +1,34 @@
+[project]
+name = "mcp-tests"
+version = "0.1.0"
+description = "Agentic test harness for the Etendo GO MCP server (vertical slice)."
+requires-python = ">=3.11"
+dependencies = [
+    "langchain>=0.3",
+    "langgraph>=0.3",
+    "langchain-mcp-adapters>=0.1",
+    "mcp>=1.9",
+    # Default provider is deliberately NOT Anthropic (D8). The OpenAI client also
+    # drives any OpenAI-compatible gateway via `base_url`.
+    "langchain-openai>=0.2",
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+]
+
+# The Streamlit panel is STRICTLY optional (§9): running suites in CI must not
+# drag a web UI in. Install it with `uv sync --extra ui` (what `make mcp-ui`
+# does), never by default.
+[project.optional-dependencies]
+# >=1.39 for st.code(wrap_lines=...): without it a long JSON argument renders
+# as one unbroken line behind a horizontal scrollbar.
+ui = ["streamlit>=1.39"]
+
+[project.scripts]
+mcp-test = "runner.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["runner", "ui"]

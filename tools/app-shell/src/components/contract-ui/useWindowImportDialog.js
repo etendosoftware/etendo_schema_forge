@@ -121,6 +121,7 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
     },
     mapping: {
       notImported: ui('importNotImported'),
+      alreadyAssigned: ui('importAlreadyAssigned'),
       mappedSummary: ui('importMappedSummary'),
       editMatch: ui('importEditMatch'),
       editTitle: ui('importEditColumnTitle'),

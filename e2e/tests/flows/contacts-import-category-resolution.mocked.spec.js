@@ -148,7 +148,9 @@ test('imports contacts with existing, normalized, new, and legacy category input
     ].map((row) => row.join(',')).join('\n')),
   });
 
-  await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('14/14');
+  // ETP-4954: the mapping modal is now field-first — the count is FIELDS with a source out
+  // of all importable fields (20 for Contacts), not columns mapped out of columns present.
+  await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('14/20');
   // ETP-5223: the chip reads `<source column>→<target caption>`, and the target
   // caption is now resolved through `fieldLabelFn` (the session language) instead of
   // the English `field.label` declared in decisions.json. Mocked specs run in es_ES,
@@ -183,7 +185,10 @@ test('imports contacts with existing, normalized, new, and legacy category input
   await expect(page).toHaveURL(/\/contacts\/contact-4905-\d+$/);
   await expect(page.getByTestId('field-etgoEmail')).toHaveValue('lucia.code@example.com');
   await expect(page.getByTestId('field-etgoPhone')).toHaveValue('+34 910 000 001');
-  await expect(page.getByTestId('field-etgoWeb')).toHaveValue('https://code.example');
+  // ETP-5031 — the form's fixed "https://" prefix chip means the stored/displayed
+  // value in the input itself is scheme-less; the import normalizes the CSV's full
+  // URL the same way (contactsImportDescriptor.js's stripUrlScheme).
+  await expect(page.getByTestId('field-etgoWeb')).toHaveValue('code.example');
   await expect(page.getByTestId('field-taxID')).toHaveValue('B12345678');
   await page.getByTestId('tab-locationAddress').click();
   await expect(page.getByText('Madrid, Calle Mayor 1', { exact: true })).toBeVisible();

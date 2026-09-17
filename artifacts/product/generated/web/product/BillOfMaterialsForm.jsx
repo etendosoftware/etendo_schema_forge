@@ -6,7 +6,7 @@ const fields = [
   { key: 'bOMProduct', column: 'M_ProductBOM_ID', type: 'search', label: 'BOM Product', required: true, section: 'principal', reference: 'Product', inputMode: 'search' },
   { key: 'bOMQuantity', column: 'BOMQty', type: 'number', label: 'BOM Quantity', required: true, section: 'principal', defaultValue: '1' },
   { key: 'bomprice', column: 'Bomprice', type: 'number', label: 'BOM Price', section: 'principal' },
-  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'other' },
+  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'other', maxLength: 255 },
 ];
 // @sf-generated-end fields:billOfMaterials
 
