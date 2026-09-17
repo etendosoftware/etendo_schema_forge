@@ -3,8 +3,8 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:warehouse
 const columns = [
-  { key: 'searchKey', column: 'Value', type: 'string', label: 'Search Key', required: true },
-  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
+  { key: 'searchKey', column: 'Value', type: 'string', label: 'Search Key', required: true, maxLength: 40 },
+  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true, maxLength: 60 },
   { key: 'locationAddress', column: 'C_Location_ID', type: 'selector', label: 'Location / Address', required: true },
 ];
 // @sf-generated-end columns:warehouse

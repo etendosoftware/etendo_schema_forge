@@ -32,13 +32,27 @@ vi.mock('@etendosoftware/app-shell-core/auth', async (importOriginal) => ({
   useAuthOptional: () => ({ logout: logoutMock, ...authOverrides }),
 }));
 
+// ETP-5329: `resolveRoleDisplayName` translates a handful of fixed role-name keys
+// (roleNameFinance/Sales/Purchasing/Inventory) via `ui(key)`. A plain identity `ui` mock
+// (`(key) => key`) can't distinguish "translated" from "unresolved key leaked through" — both
+// existing tests below would still read a plausible-looking string either way. This lookup makes
+// the translated output visibly different from both the raw AD_Role name and the raw i18n key,
+// so a regression that stops calling `resolveRoleDisplayName` (or a call to the wrong key) fails
+// the assertions instead of passing by coincidence.
+const ROLE_NAME_TRANSLATIONS = {
+  roleNameFinance: 'Finanzas',
+  roleNameSales: 'Ventas',
+  roleNamePurchasing: 'Compras',
+  roleNameInventory: 'Inventario',
+};
+
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key) => ROLE_NAME_TRANSLATIONS[key] ?? key,
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: setLocaleMock, ...localeOverrides }),
 }));
 
 vi.mock('@/i18n/index.js', () => ({
-  useUI: () => (key) => key,
+  useUI: () => (key) => ROLE_NAME_TRANSLATIONS[key] ?? key,
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: setLocaleMock, ...localeOverrides }),
 }));
 
@@ -164,6 +178,123 @@ describe('UserAvatarButton', () => {
     expect(screen.getByText(`organization: ${longOrg}`)).toHaveAttribute('title', longOrg);
   });
 
+  // ETP-5329. The role line wraps long joined names instead of clipping them with an ellipsis
+  // (the org line below it still truncates on purpose) — a long composed role list previously
+  // rendered "Ventas-Finanzas-Compras" truncated inside the fixed w-56 dropdown. Assert the class
+  // itself, not just the title tooltip: the title-only assertions elsewhere in this file would
+  // still pass if `break-words` regressed back to `truncate`.
+  it('wraps the role line instead of truncating it, unlike the organization line', () => {
+    authOverrides = {
+      selectedRole: { name: 'A Very Long Role Name That Would Otherwise Overflow The Container' },
+      selectedOrg: { name: 'Some Organization' },
+    };
+
+    render(<UserAvatarButton />);
+
+    const roleLine = screen.getByText(/^role: /);
+    expect(roleLine.className).toMatch(/\bbreak-words\b/);
+    expect(roleLine.className).not.toMatch(/\btruncate\b/);
+
+    const orgLine = screen.getByText(/^organization: /);
+    expect(orgLine.className).toMatch(/\btruncate\b/);
+  });
+
+  // ETP-5329. The dropdown should prefer the backend-resolved composed template role names
+  // (effectiveRoleNames) over the raw auto-generated personal-role name, in both the visible
+  // text and the title tooltip — a prior regression fixed only the visible text and left the
+  // tooltip showing the stale personal-role name. Each composed name is also translated via
+  // resolveRoleDisplayName before being joined, so the expected string here is the translated
+  // 'Finanzas-Ventas', not the raw 'Finance-Sales'.
+  it('renders the joined, translated effective role names instead of the raw personal-role name', () => {
+    authOverrides = {
+      selectedRole: { name: 'Personal – x', effectiveRoleNames: ['Finance', 'Sales'] },
+    };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText('role: Finanzas-Ventas')).toHaveAttribute('title', 'Finanzas-Ventas');
+    expect(screen.queryByText(/Personal – x/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Finance-Sales/)).not.toBeInTheDocument();
+  });
+
+  // ETP-5329. A single composed role must render bare, with no stray leading/trailing
+  // separator from the join('-') logic, in both the visible text and the title tooltip — and
+  // translated, not the raw AD_Role name.
+  it('renders a single effective role name with no stray separator', () => {
+    authOverrides = {
+      selectedRole: { name: 'Personal – x', effectiveRoleNames: ['Finance'] },
+    };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText('role: Finanzas')).toHaveAttribute('title', 'Finanzas');
+  });
+
+  // ETP-5329. Same single-role-name shape as above, exercised with a different translatable
+  // name to confirm the resolution (not just the join/fallback plumbing) drives both the visible
+  // text and the title tooltip — neither the raw name nor the raw i18n key should leak through.
+  it('renders a single translated effective role name, including in the title tooltip', () => {
+    authOverrides = {
+      selectedRole: { name: 'Personal – x', effectiveRoleNames: ['Sales'] },
+    };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText('role: Ventas')).toHaveAttribute('title', 'Ventas');
+    expect(screen.queryByText(/Sales/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/roleNameSales/)).not.toBeInTheDocument();
+  });
+
+  // ETP-5329. A role name outside the fixed 4-entry i18n map (e.g. a custom/admin template role)
+  // must fall back to the raw, untranslated name — resolveRoleDisplayName's own fallback path.
+  it('falls back to the raw name for an effective role name outside the fixed i18n map', () => {
+    authOverrides = {
+      selectedRole: { name: 'Personal – x', effectiveRoleNames: ['CustomTemplateRole'] },
+    };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText('role: CustomTemplateRole')).toHaveAttribute(
+      'title',
+      'CustomTemplateRole'
+    );
+  });
+
+  // ETP-5329. Resolution must happen per-item, not all-or-nothing: a translatable name and an
+  // unmapped one in the same list should each resolve independently before being joined.
+  it('resolves each effective role name independently, translating only the ones in the fixed map', () => {
+    authOverrides = {
+      selectedRole: { name: 'Personal – x', effectiveRoleNames: ['Sales', 'CustomTemplateRole'] },
+    };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText('role: Ventas-CustomTemplateRole')).toHaveAttribute(
+      'title',
+      'Ventas-CustomTemplateRole'
+    );
+  });
+
+  it('falls back to the personal-role name when effectiveRoleNames is an empty array', () => {
+    authOverrides = {
+      selectedRole: { name: 'Personal Role', effectiveRoleNames: [] },
+    };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText('role: Personal Role')).toHaveAttribute('title', 'Personal Role');
+  });
+
+  it('falls back to the personal-role name when effectiveRoleNames is absent', () => {
+    authOverrides = {
+      selectedRole: { name: 'Personal Role' },
+    };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText('role: Personal Role')).toHaveAttribute('title', 'Personal Role');
+  });
+
   it('renders the expanded sidebar-footer row with username and chevron', () => {
     render(<UserAvatarButton expanded />);
 
@@ -187,6 +318,19 @@ describe('UserAvatarButton', () => {
     render(<UserAvatarButton />);
 
     expect(screen.getByText('A')).toBeInTheDocument();
+  });
+
+  // ETP-5329. The avatar-badge initial deliberately still derives from selectedRole.name, not
+  // from the joined effectiveRoleNames — it must not flip to the first composed role's initial.
+  it('keeps the role-initial badge derived from the personal-role name, not the joined effective roles', () => {
+    authOverrides = {
+      selectedRole: { name: 'Admin', effectiveRoleNames: ['Finance', 'Sales'] },
+    };
+
+    render(<UserAvatarButton />);
+
+    expect(screen.getByText('A')).toBeInTheDocument();
+    expect(screen.queryByText('F')).not.toBeInTheDocument();
   });
 
   it('hides the language section when locale switching is unavailable', () => {

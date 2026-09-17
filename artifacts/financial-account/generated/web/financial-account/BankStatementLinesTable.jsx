@@ -4,11 +4,11 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 // @sf-generated-start columns:bankStatementLines
 const columns = [
   { key: 'transactionDate', column: 'Datetrx', type: 'date', label: 'Transaction Date', required: true },
-  { key: 'description', column: 'Description', type: 'string', label: 'Description' },
-  { key: 'bpartnername', column: 'Bpartnername', type: 'string', label: 'Business Partner Name' },
+  { key: 'description', column: 'Description', type: 'string', label: 'Description', maxLength: 2000 },
+  { key: 'bpartnername', column: 'Bpartnername', type: 'string', label: 'Business Partner Name', maxLength: 60 },
   { key: 'businessPartner', column: 'C_Bpartner_ID', type: 'selector', label: 'Business Partner' },
   { key: 'gLItem', column: 'C_Glitem_ID', type: 'selector', label: 'Accounting account' },
-  { key: 'referenceNo', column: 'Referenceno', type: 'string', label: 'Reference No.', required: true },
+  { key: 'referenceNo', column: 'Referenceno', type: 'string', label: 'Reference No.', required: true, maxLength: 30 },
   { key: 'dramount', column: 'Dramount', type: 'amount', label: 'Amount OUT', required: true },
   { key: 'cramount', column: 'Cramount', type: 'amount', label: 'Amount IN', required: true },
 ];

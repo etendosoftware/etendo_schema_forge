@@ -488,3 +488,59 @@ describe('product import descriptor', () => {
     });
   });
 });
+
+/**
+ * ETP-5227 — "importar con codigoCategoria existente falla persistentemente".
+ *
+ * The catalogue read used to swallow every failure into `[]`, which is indistinguishable from
+ * "this tenant has no categories": the resolver then auto-created a category that already
+ * existed and the database rejected it on its unique index, so the user was shown a raw English
+ * backend complaint about a category plainly visible in the UI. And because that `[]` was cached
+ * per token, every retry for the life of the tab replayed it.
+ */
+describe('ETP-5227 — a category catalogue that cannot be read', () => {
+  const translate = (key, params = {}) => (key === 'importErrorCategoryLookupFailed'
+    ? `No se pudieron consultar las categorías, no se pudo asignar "${params.category}".`
+    : key);
+
+  /** Fails the category endpoint, serves everything else normally. */
+  function stubCategoryFailure(shouldFail) {
+    const fetchMock = vi.fn(async (url) => {
+      if (String(url).includes('/product-category/')) {
+        return shouldFail() ? { ok: false, status: 500, json: async () => ({}) }
+          : { ok: true, json: async () => ({ response: { data: [{ id: 'CAT-HERR', searchKey: 'HERRAMIENTAS', name: 'Herramientas' }] } }) };
+      }
+      return { ok: true, json: async () => ({ items: SALES_ITEMS }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('fails the row with a translated message rather than creating a category that already exists', async () => {
+    stubCategoryFailure(() => true);
+    await assert.rejects(
+      () => buildOperations(
+        { ...baseRow, category: 'HERRAMIENTAS' },
+        productConfig('tok-5227-lookup', { translate }),
+      ),
+      /No se pudieron consultar las categorías, no se pudo asignar "HERRAMIENTAS"\./,
+    );
+  });
+
+  it('does not remember the failure — the next attempt reads the catalogue again and resolves', async () => {
+    // The "persistente" half of the report: the failed read was cached per token, so retrying
+    // could never succeed until the tab was reloaded.
+    let failing = true;
+    stubCategoryFailure(() => failing);
+    const token = 'tok-5227-retry';
+
+    await assert.rejects(
+      () => buildOperations({ ...baseRow, category: 'HERRAMIENTAS' }, productConfig(token, { translate })),
+      /No se pudieron consultar/,
+    );
+
+    failing = false;
+    const ops = await buildOperations({ ...baseRow, category: 'HERRAMIENTAS' }, productConfig(token, { translate }));
+    assert.equal(ops[0].body.productCategory, 'CAT-HERR');
+  });
+});

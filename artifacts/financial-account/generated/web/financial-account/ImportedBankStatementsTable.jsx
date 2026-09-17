@@ -3,10 +3,10 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:importedBankStatements
 const columns = [
-  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.', required: true },
-  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
-  { key: 'fileName', column: 'Filename', type: 'string', label: 'File Name' },
-  { key: 'notes', column: 'Notes', type: 'string', label: 'Notes' },
+  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.', required: true, maxLength: 30 },
+  { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true, maxLength: 60 },
+  { key: 'fileName', column: 'Filename', type: 'string', label: 'File Name', maxLength: 255 },
+  { key: 'notes', column: 'Notes', type: 'string', label: 'Notes', maxLength: 255 },
   { key: 'importdate', column: 'Importdate', type: 'date', label: 'Import Date', required: true },
   { key: 'transactionDate', column: 'Statementdate', type: 'date', label: 'Transaction Date', required: true },
 ];
