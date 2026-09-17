@@ -37,8 +37,8 @@ vi.mock('lucide-react', () => ({
   TrendingDown: () => null,
   Pencil: () => null,
 }));
-vi.mock('@/components/ui/checkbox', () => ({
-  Checkbox: () => null,
+vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
+  CheckboxField: () => null,
 }));
 
 vi.mock('../fm303Layouts.js', async (importOriginal) => {

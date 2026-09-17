@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { KpiWidget, Tabs, MoreOptionsMenu } from '../../FmCommon.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
-import { Checkbox } from '@/components/ui/checkbox';
+import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { PresentModal, FileGenModal } from '../../FmOverlays.jsx';
 import { formatAmount, compute349Operators, generate349File, validate349Vies } from '../../fiscalModelsUtils.js';
 import { invalidateFiscalComputeCache } from '../../useFiscalAutoCompute.js';
@@ -1173,11 +1173,11 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
                     <thead>
                       <tr>
                         <th style={{ width: 32, paddingLeft: 20 }} onClick={e => e.stopPropagation()}>
-                          <Checkbox
+                          <CheckboxField
                             checked={allSelected}
-                            onChange={() => setSelected(allSelected ? new Set() : new Set(filteredOps.map(rowKey)))}
+                            onToggle={() => setSelected(allSelected ? new Set() : new Set(filteredOps.map(rowKey)))}
                             onClick={e => e.stopPropagation()}
-                            data-testid="Checkbox__346dd5" />
+                            data-testid="CheckboxField__346dd5" />
                         </th>
                         <th>{t('fm.m349.col.nif_iva')}</th>
                         <th>{t('fm.m349.col.operator')}</th>
@@ -1195,11 +1195,11 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
                           data-rectificative={isRectificativeOp(op) ? 'true' : undefined}
                         >
                           <td style={{ paddingLeft: 20 }} onClick={e => e.stopPropagation()}>
-                            <Checkbox
+                            <CheckboxField
                               checked={selected.has(rowKey(op))}
-                              onChange={() => toggleSelect(rowKey(op))}
+                              onToggle={() => toggleSelect(rowKey(op))}
                               onClick={e => e.stopPropagation()}
-                              data-testid="Checkbox__346dd5" />
+                              data-testid="CheckboxField__346dd5" />
                           </td>
                           <td>{op.nif}</td>
                           <td style={{ fontWeight: 600 }}>

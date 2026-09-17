@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
-import { Checkbox } from '@/components/ui/checkbox';
+import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { TrendingUp, TrendingDown, Pencil } from 'lucide-react';
 import { getLayout303, matchesVisibility } from './fm303Layouts.js';
 import { formatAmount, formatPercent } from '../../fiscalModelsUtils.js';
@@ -229,11 +229,11 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                     if (f.type === 'checkbox') {
                       return (
                         <div key={f.id} className="fm-aeat-ident-cb">
-                          <Checkbox
+                          <CheckboxField
                             checked={identification?.[f.id] ?? false}
-                            onChange={() => onIdentChange?.(f.id, !(identification?.[f.id] ?? false))}
+                            onToggle={val => onIdentChange?.(f.id, val)}
                             disabled={readOnly}
-                            data-testid="Checkbox__49d327" />
+                            data-testid="CheckboxField__49d327" />
                           <span className="fm-aeat-ident-cb__label">{t(f.labelKey)}</span>
                         </div>
                       );
@@ -292,11 +292,11 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                     };
                     return (
                       <div key={f.id} className="fm-aeat-ident-cb">
-                        <Checkbox
+                        <CheckboxField
                           checked={identification?.[f.id] ?? false}
-                          onChange={handleChange}
+                          onToggle={handleChange}
                           disabled={readOnly}
-                          data-testid="Checkbox__49d327" />
+                          data-testid="CheckboxField__49d327" />
                         <span className="fm-aeat-ident-cb__label">{t(f.labelKey)}</span>
                       </div>
                     );

@@ -6,7 +6,7 @@ import {
   ChevronDown, Calendar, Clock, TriangleAlert, OctagonAlert, Check,
 } from 'lucide-react';
 import { EmptyState, KpiWidget, MoreOptionsMenu } from './FmCommon.jsx';
-import { Checkbox } from '@/components/ui/checkbox';
+import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { NewDeclModal } from './FmOverlays.jsx';
 import FmCatalogPage from './FmCatalogPage.jsx';
 import FmRowActions from './FmRowActions.jsx';
@@ -857,11 +857,11 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
         <thead>
           <tr>
             <th style={{ width: 32 }} onClick={e => e.stopPropagation()}>
-              <Checkbox
+              <CheckboxField
                 checked={allSelected}
-                onChange={toggleAll}
+                onToggle={toggleAll}
                 onClick={e => e.stopPropagation()}
-                data-testid="Checkbox__cb728e" />
+                data-testid="CheckboxField__cb728e" />
             </th>
             <th>{t('fm.col.model')}</th>
             <th>{t('fm.col.period')}</th>
@@ -927,11 +927,11 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                 onClick={() => onSelect?.({ ...decl, _precomputed: computed, _hasDuplicatePeriod: hasDuplicatePeriod })}
               >
                 <td onClick={e => e.stopPropagation()}>
-                  <Checkbox
+                  <CheckboxField
                     checked={selected.has(decl.id)}
-                    onChange={() => toggleSelect(decl.id)}
+                    onToggle={() => toggleSelect(decl.id)}
                     onClick={e => e.stopPropagation()}
-                    data-testid="Checkbox__cb728e" />
+                    data-testid="CheckboxField__cb728e" />
                 </td>
                 <td>
                   <ModelBadge model={decl.model} data-testid="ModelBadge__cb728e" />

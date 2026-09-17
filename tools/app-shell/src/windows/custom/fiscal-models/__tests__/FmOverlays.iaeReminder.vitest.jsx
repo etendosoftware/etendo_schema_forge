@@ -19,9 +19,9 @@ vi.mock('lucide-react', () => ({
   OctagonAlert: () => null, TriangleAlert: () => null, X: () => null,
   Check: () => null, ChevronDown: () => null, Search: () => null,
 }));
-vi.mock('@/components/ui/checkbox', () => ({
-  Checkbox: ({ checked, onChange }) => (
-    React.createElement('input', { type: 'checkbox', checked: !!checked, onChange: onChange ?? (() => {}) })
+vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
+  CheckboxField: ({ checked, onToggle }) => (
+    React.createElement('input', { type: 'checkbox', checked: !!checked, onChange: e => onToggle?.(e.target.checked) })
   ),
 }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));

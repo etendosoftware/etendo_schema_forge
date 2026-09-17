@@ -11,14 +11,14 @@ vi.mock('lucide-react', () => ({
   TrendingDown: () => null,
   Pencil: () => null,
 }));
-vi.mock('@/components/ui/checkbox', () => ({
-  // Forwards `disabled` straight through, matching the real Checkbox
-  // component's contract (node_modules/@etendosoftware/app-shell-core/src/
-  // components/ui/checkbox.jsx passes `disabled` to the native input as-is).
-  Checkbox: ({ checked, disabled, onChange }) =>
+vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
+  // Forwards `disabled` straight through, matching the real CheckboxField
+  // component's contract (tools/app-shell/src/windows/custom/shared/
+  // CheckboxField.jsx forwards `disabled` to the underlying <button> as-is).
+  CheckboxField: ({ checked, disabled, onToggle }) =>
     React.createElement('input', {
       type: 'checkbox', checked: !!checked, disabled,
-      onChange: onChange ?? (() => {}),
+      onChange: e => onToggle?.(e.target.checked),
     }),
 }));
 

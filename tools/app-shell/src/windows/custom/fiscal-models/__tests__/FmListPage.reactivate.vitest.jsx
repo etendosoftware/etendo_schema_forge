@@ -38,9 +38,9 @@ vi.mock('../FmOverlays.jsx', () => ({
 vi.mock('../FmCatalogPage.jsx', () => ({
   default: () => null,
 }));
-vi.mock('@/components/ui/checkbox', () => ({
-  Checkbox: ({ checked, onChange }) =>
-    React.createElement('input', { type: 'checkbox', checked: !!checked, onChange: onChange ?? (() => {}) }),
+vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
+  CheckboxField: ({ checked, onToggle }) =>
+    React.createElement('input', { type: 'checkbox', checked: !!checked, onChange: e => onToggle?.(e.target.checked) }),
 }));
 vi.mock('lucide-react', () => ({
   LayoutGrid: () => null, Settings: () => null, ListFilter: () => null,

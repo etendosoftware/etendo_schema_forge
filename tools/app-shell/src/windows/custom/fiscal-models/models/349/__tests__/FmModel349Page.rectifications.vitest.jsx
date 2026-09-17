@@ -498,8 +498,11 @@ describe('FmModel349Page — several corrected periods for one operator (QA F4)'
     );
   }
 
+  // CheckboxField renders a `<button role="checkbox" aria-checked>` (ETP-5338 —
+  // migrated off the shared `Checkbox` component), not a native `<input>`.
   const rowCheckboxes = () =>
-    Array.from(document.querySelectorAll('.fm-table tbody tr input[type="checkbox"]'));
+    Array.from(document.querySelectorAll('.fm-table tbody tr button[role="checkbox"]'));
+  const isChecked = (el) => el.getAttribute('aria-checked') === 'true';
 
   it('renders one row per corrected period, each with its own amount', () => {
     renderTwoPeriods();
@@ -527,17 +530,17 @@ describe('FmModel349Page — several corrected periods for one operator (QA F4)'
 
     fireEvent.click(boxes[1]);
 
-    expect(rowCheckboxes()[1].checked).toBe(true);
-    expect(rowCheckboxes()[2].checked).toBe(false);
-    expect(rowCheckboxes()[0].checked).toBe(false);
+    expect(isChecked(rowCheckboxes()[1])).toBe(true);
+    expect(isChecked(rowCheckboxes()[2])).toBe(false);
+    expect(isChecked(rowCheckboxes()[0])).toBe(false);
   });
 
   it('selecting all then one still leaves the two corrective rows independent', () => {
     renderTwoPeriods();
     fireEvent.click(rowCheckboxes()[2]);
 
-    expect(rowCheckboxes()[2].checked).toBe(true);
-    expect(rowCheckboxes()[1].checked).toBe(false);
+    expect(isChecked(rowCheckboxes()[2])).toBe(true);
+    expect(isChecked(rowCheckboxes()[1])).toBe(false);
   });
 
   // A corrective row that predates the backend emitting the discriminator still
