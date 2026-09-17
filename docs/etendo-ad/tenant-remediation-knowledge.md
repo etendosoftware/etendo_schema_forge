@@ -2963,6 +2963,56 @@ implementation detail.
   `setMaxResults(1)` (as `OnboardingBankConnectionSyncService#findExistingRequest` is); without
   that guard it throws on a tenant like GOClient.
 
+  > **SUPERSEDED 2026-09-16 (ETP-5370): the cadence is now every 30 SECONDS**, not 5 minutes —
+  > `frequency='1'` + `secondly_interval=30` + `minutely_interval=NULL`. Everything else in this
+  > entry still holds (the inert daily columns, the start-boundary semantics, the multiple-matches
+  > warning). Note the irony: the "legacy" GOClient sampledata row this entry flags as an oddity was
+  > already the correct shape, and is now the reference row for the whole fleet.
+
+- **2026-09-16 — A scheduled process's cadence CANNOT be changed with SQL. Not on a running
+  instance, not by UPDATE, not by DELETE.** This is the most reusable fact in this file about
+  `AD_PROCESS_REQUEST`, and it invalidates the obvious data-fix for any "reprogram the job" ticket.
+  `OBScheduler.initialize()` (`src/org/openbravo/scheduling/OBScheduler.java:296-318`) reads the
+  table **exactly once, at Quartz startup**. After that the trigger lives in Quartz's own JobStore
+  and `DefaultJob.execute` (`DefaultJob.java:51-53`) rebuilds its bundle from the `JobDataMap` — it
+  never re-reads the row. So:
+  - an `UPDATE` of the interval columns is **invisible** until the scheduler re-initializes;
+  - `isactive='N'` does **not** stop the job either — nothing reads that column at fire time;
+  - even a `DELETE` does not: the PSD2 schedule-removal fix
+    (`20260910T120000Z__R36-psd2-bank-statement-schedule-removal.sql:81-86`) documents that the job
+    keeps firing and starts failing with an FK violation against the deleted row.
+
+  Two independent confirmations already in the codebase, both reached from source rather than by
+  experiment: the fix above, and `SFAcctProcessMonitor`'s class javadoc (ETP-5269), which rejected
+  "update `start_date`/`start_time` on the recurring row" with *"Refuted from source"* for exactly
+  this reason and chose to insert a separate one-shot request instead.
+
+  **Apply:** if the ticket is "change/stop/re-point an existing schedule", the fix is Java calling
+  `OBScheduler` inside the live JVM, exposed as a remediation webhook — the escape hatch
+  `tenant-fixer.md` § "How to choose the fix mechanism" already reserves for work too stateful for
+  hand SQL. ETP-5370 is the worked example: `OnboardingCostingScheduleService#realignCadence` +
+  the `SFCostingCadence` webhook. Three more traps found while writing it:
+  - `OBScheduler.schedule(requestId, bundle)` is a **no-op when the Quartz job already exists**
+    (`OBScheduler.java:173-175`). Use `reschedule(...)`, which unschedules + deletes first.
+  - **Commit before re-arming.** `TriggerProvider` reads the timing columns through the scheduler's
+    OWN JDBC connection, which cannot see an uncommitted DAL row.
+  - **Do not gate the re-arm on the row's current values.** A row reading `1`/30 proves nothing
+    about the live trigger — that is the whole premise. Re-arm unconditionally; it is idempotent.
+  - **NULL `NEXT_FIRE_TIME` before re-arming, or the new cadence is correct but DORMANT.** The one
+    trap that only a live run exposes. `ScheduledTriggerGenerator#getBuilder` starts a rebuilt
+    trigger AT the row's `nextFireTime` when it has one, and only falls back to
+    `START_DATE`/`START_TIME` when it is empty — and that column still holds the OLD trigger's next
+    fire. Measured on ETP-5370: webhook at 19:55:02, row read `1|30` instantly, **zero executions
+    until 19:58:55** (the stale next fire), 30 s exactly from then on. A 5-minute old cadence makes
+    this a ≤5-minute delay; a daily one would hide the fix for a day. The column is deliberately NOT
+    mapped on the `ProcessRequest` entity (scheduler bookkeeping, written by `ProcessMonitor` via
+    `ProcessRequestData` XSQL), so clearing it needs native SQL, after the DAL flush and before the
+    commit. Restate `START_DATE`/`START_TIME` at the same time.
+
+  And a caveat that would silently invalidate a "successful" run: on a node under the no-execute
+  background policy Quartz sits in standby, where `schedule`/`reschedule` **silently no-op**. Check
+  `OBScheduler.isSchedulingAllowed()` first and report the refusal instead of a false success.
+
 - **2026-09-10 — METHOD FAILURE, catalog-wide: hand-substituting placeholders in `psql` does NOT
   validate an `@apply`.** R36 was reported "validated, converges" twice on the strength of a
   `check → apply → apply → check` cycle run through `psql` in a rolled-back transaction. It then
