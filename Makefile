@@ -390,7 +390,7 @@ dump-delta: ## Dump the writes push-to-neo WOULD make for ONLY=<spec> (no DB wri
 # Default prev-XML dir: ../modules/com.etendoerp.go/src-db/database/sourcedata
 # Output: tmp/regen-check/<spec>/{neo-delta.json,predicted/,prev/}
 
-REGEN_CHECK_PREV_XML_DIR ?= ../modules/com.etendoerp.go/src-db/database/sourcedata
+REGEN_CHECK_PREV_XML_DIR ?= $(firstword $(wildcard etendo_core/modules/com.etendoerp.go/src-db/database/sourcedata ../modules/com.etendoerp.go/src-db/database/sourcedata))
 REGEN_CHECK_OUT_ROOT     ?= tmp/regen-check
 
 regen-check: ## Predict and compare ETGO_SF_*.xml against committed XML (no DB, no gradle). Defaults to all AD-backed windows.
@@ -403,11 +403,29 @@ process.stdout.write(r.windows.filter(w=>{\
 }).map(w=>w.name).join(','))"); \
 	  echo "No ONLY= given — running registry windows with decisions+contract ($$SPECS)"; \
 	fi; \
+	if [ "$(CACHE_DB)" = "1" ] && [ "$(FROM_CACHE)" = "1" ]; then \
+	  echo "regen-check: CACHE_DB=1 and FROM_CACHE=1 are mutually exclusive."; exit 1; \
+	fi; \
+	if [ "$(CACHE_DB)" != "1" ]; then \
+	  echo "=== regen-check cache preflight ==="; \
+	  node cli/src/cache-preflight.js "$(SF_CACHE_PATH)" --strict || { \
+	    echo "regen-check stopped before drift comparison: the AD cache is not trustworthy."; \
+	    echo "Action: make regen CACHE_DB=1 (full) or make regen ONLY=<spec> CACHE_DB=1; then rerun with FROM_CACHE=1."; \
+	    exit 1; \
+	  }; \
+	fi; \
 	REGEN_ARGS="--only $$SPECS --skip-extract"; \
 	if [ "$(CACHE_DB)" = "1" ]; then REGEN_ARGS="--only $$SPECS --write-cache"; fi; \
 	CACHE_ENV=""; \
-	if [ "$(FROM_CACHE)" = "1" ]; then REGEN_ARGS="--only $$SPECS"; CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
-	env $$CACHE_ENV $(SF) sf-regen-all $$REGEN_ARGS || exit $$?; \
+	if [ "$(CACHE_DB)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=write SF_CACHE_PATH=$(SF_CACHE_PATH)"; \
+	else REGEN_ARGS="--only $$SPECS"; CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
+	if ! env $$CACHE_ENV $(SF) sf-regen-all $$REGEN_ARGS; then \
+	  if [ "$(CACHE_DB)" != "1" ]; then \
+	    echo "regen-check stopped before drift comparison: regeneration could not be served by the AD cache (possibly AD_CACHE_MISS)."; \
+	    echo "Action: refresh with make regen CACHE_DB=1 (full) or make regen ONLY=<spec> CACHE_DB=1, then rerun FROM_CACHE=1."; \
+	  fi; \
+	  exit 1; \
+	fi; \
 	FAIL=0; TOTAL_OK=0; TOTAL_FAIL=0; \
 	for spec in $$(echo "$$SPECS" | tr ',' ' '); do \
 	  OUTDIR="$(REGEN_CHECK_OUT_ROOT)/$$spec"; \
@@ -415,11 +433,15 @@ process.stdout.write(r.windows.filter(w=>{\
 	  echo ""; \
 	  echo "=== regen-check: $$spec ==="; \
 	  CACHE_ENV=""; \
-	  if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
+	  if [ "$(CACHE_DB)" != "1" ]; then CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
 	  if [ "$(CACHE_DB)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=write SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
 	  env $$CACHE_ENV $(SF) sf-push-neo $$spec \
 	    --dump-delta "$$OUTDIR/neo-delta.json" \
-	    --prev-xml-dir "$(REGEN_CHECK_PREV_XML_DIR)" || { FAIL=1; TOTAL_FAIL=$$((TOTAL_FAIL+1)); continue; }; \
+	    --prev-xml-dir "$(REGEN_CHECK_PREV_XML_DIR)" || { \
+	      FAIL=1; TOTAL_FAIL=$$((TOTAL_FAIL+1)); \
+	      if [ "$(CACHE_DB)" != "1" ]; then echo "  action: inspect the command output and previous XML path; refresh cache only if AD_CACHE_MISS is reported"; fi; \
+	      continue; \
+	    }; \
 	  $(SF) sf-xml-apply-delta \
 	    --prev-xml-dir "$(REGEN_CHECK_PREV_XML_DIR)" \
 	    --delta "$$OUTDIR/neo-delta.json" \
@@ -444,7 +466,7 @@ regen-check-help: ## Show usage and examples for `make regen-check`
 	@echo ""
 	@echo "Variables:"
 	@echo "  ONLY=<spec>[,<spec>...]      Comma-separated window specs (kebab-case)"
-	@echo "  FROM_CACHE=1                 Run the full check offline from $(SF_CACHE_PATH)"
+	@echo "  FROM_CACHE=1                 Run the full check offline from $(SF_CACHE_PATH) (explicit; default mode)"
 	@echo "  CACHE_DB=1                   Refresh cache from DB during the regen step (writes snapshot)"
 	@echo "  REGEN_CHECK_PREV_XML_DIR     Path to committed ETGO_SF_*.xml directory"
 	@echo "                               (default: ../modules/com.etendoerp.go/src-db/database/sourcedata)"
@@ -457,7 +479,9 @@ regen-check-help: ## Show usage and examples for `make regen-check`
 	@echo ""
 	@echo "Notes:"
 	@echo "  - Windows only (specType=W). Process/report specs are NOT supported yet."
-	@echo "  - Exit code 0 = no drift, non-zero = drift or pipeline error."
+	@echo "  - The AD cache is preflighted before comparison. Missing, empty, invalid, or cache-miss runs stop before reporting drift."
+	@echo "  - Without CACHE_DB=1, the check reads the cache by default (FROM_CACHE=1 is explicit for CI readability)."
+	@echo "  - Exit code 0 = no drift, non-zero = drift, cache action required, or pipeline error."
 	@echo "  - Outputs are under tmp/regen-check/<spec>/ (gitignored)."
 	@echo "  - To refresh the AD cache when AD changes: make regen ONLY=<spec> CACHE_DB=1, then commit $(SF_CACHE_PATH)."
 
@@ -661,6 +685,7 @@ CI_PARITY_SID       = $(call ci_parity_var,BBDD_SID,etendo_ci)
 CI_PARITY_ALLOW_SID = $(call ci_parity_var,ALLOW_LOCAL_SID,)
 CI_PARITY_JSON      = $(call ci_parity_var,JSON,)
 CI_PARITY_NO_FETCH  = $(call ci_parity_var,NO_FETCH,)
+CI_PARITY_CHECK_CACHE = $(call ci_parity_var,CHECK_CACHE,)
 
 ci-parity: ## Bring the local Etendo checkout to CI parity, then clean DB + install (DRY RUN by default; HELP=1 or `make ci-parity-help` for options)
 	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s ci-parity-help; exit 0; fi; \
@@ -671,6 +696,7 @@ ci-parity: ## Bring the local Etendo checkout to CI parity, then clean DB + inst
 	PARITY_ARGS="$$PARITY_ARGS --dry-run $(or $(CI_PARITY_DRY_RUN),1)"; \
 	if [ "$(CI_PARITY_ALLOW_SID)" = "1" ]; then PARITY_ARGS="$$PARITY_ARGS --allow-local-sid"; fi; \
 	if [ "$(CI_PARITY_NO_FETCH)" = "1" ]; then PARITY_ARGS="$$PARITY_ARGS --no-fetch"; fi; \
+	if [ "$(CI_PARITY_CHECK_CACHE)" = "1" ]; then PARITY_ARGS="$$PARITY_ARGS --check-cache"; fi; \
 	if [ "$(CI_PARITY_JSON)" = "1" ]; then PARITY_ARGS="$$PARITY_ARGS --json"; fi; \
 	node cli/src/ci-parity.js $$PARITY_ARGS
 
@@ -688,6 +714,7 @@ ci-parity-help: ## Show usage and examples for `make ci-parity`
 	@echo "  BBDD_SID=<sid>      Target database (default: etendo_ci)"
 	@echo "  ALLOW_LOCAL_SID=1   Permit a target sid equal to your local dev sid (DESTROYS it)"
 	@echo "  NO_FETCH=1          Use cached remote refs; freshness can be stale (offline mode)"
+	@echo "  CHECK_CACHE=1       Fail if the committed AD cache is missing or invalid"
 	@echo "  JSON=1              Machine-readable report (secrets redacted)"
 	@echo ""
 	@echo "Phases:"
