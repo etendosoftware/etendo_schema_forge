@@ -7,6 +7,7 @@ import { useOrderPdf } from './useOrderPdf.js';
 import { usePurchaseOrderPdf } from './usePurchaseOrderPdf.js';
 import { useDocumentCurrency, resolveDualCurrencyDisplay } from './useDocumentCurrency.js';
 import PreviewActionButtons, { PreviewPdfPanel } from './PreviewActionButtons.jsx';
+import { downloadFromCachedAttachment } from './downloadFromCachedAttachment.js';
 import SummaryCard from './preview-cards/SummaryCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
@@ -211,31 +212,17 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
 
   // ETP-5358 Part 2 — cachedAttachment.objectUrl is null right after onFileChange fires in
   // autoFetch mode (see useMainAttachment's skipBlobFetch): existence is known, bytes were
-  // never eagerly downloaded. fetchBlobUrl() resolves them lazily, on demand, right here. Falls
-  // through to the live-rendered pdfUrl if that comes back empty (e.g. a concurrent re-upload
-  // replaced the attachment mid-fetch).
+  // never eagerly downloaded. downloadFromCachedAttachment() resolves them lazily, on demand
+  // (shared with QuotationPreview.jsx — see its own docstring). Falls through to the
+  // live-rendered pdfUrl if that returns false (e.g. a concurrent re-upload replaced the
+  // attachment mid-fetch).
   const handleDownloadPdf = async () => {
-    if (cachedAttachment?.objectUrl) {
-      const a = document.createElement('a');
-      a.href = cachedAttachment.objectUrl;
-      a.download = cachedAttachment.fileName || `${order.documentNo || 'order'}.pdf`;
-      a.click();
-      return;
-    }
-    if (cachedAttachment?.fetchBlobUrl) {
-      const url = await cachedAttachment.fetchBlobUrl();
-      if (url) {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = cachedAttachment.fileName || `${order.documentNo || 'order'}.pdf`;
-        a.click();
-        return;
-      }
-    }
+    const fileName = `${order.documentNo || 'order'}.pdf`;
+    if (await downloadFromCachedAttachment(cachedAttachment, fileName)) return;
     if (!pdfBlob) return;
     const a = document.createElement('a');
     a.href = pdfUrl;
-    a.download = `${order.documentNo || 'order'}.pdf`;
+    a.download = fileName;
     a.click();
   };
 
