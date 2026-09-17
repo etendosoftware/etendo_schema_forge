@@ -7,7 +7,9 @@
 import { render, screen, fireEvent, within } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  // The key plus its interpolation vars: lets a test assert the number a label carries
+  // (e.g. the footer counter) without hardcoding a translated string.
+  useUI: () => (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
 }));
 
 import InvoicePickerModal from '../InvoicePickerModal.jsx';
@@ -27,6 +29,12 @@ const BASE = {
 
 const optionIds = () => [...document.body.querySelectorAll('[data-testid^="invoice-picker-option-"]')]
   .map(node => node.getAttribute('data-testid'));
+
+const rowOf = (id) => screen.getByTestId(`invoice-picker-option-${id}`);
+// The interactive control nested inside the clickable row — the path a user actually aims at,
+// and the one no test covered while it was broken.
+const checkboxOf = (id) => rowOf(id).querySelector('input[type="checkbox"]');
+const footerCount = () => screen.getByText(/rectifySelectedCount/).textContent;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -113,7 +121,9 @@ describe('InvoicePickerModal — single select (the Rectificaciones tab)', () =>
   it('offers no multi-select affordance: no apply button and no row ever marked', () => {
     render(<InvoicePickerModal {...BASE} />);
     expect(screen.queryByTestId('invoice-picker-apply')).not.toBeInTheDocument();
-    expect(screen.queryByText('rectifySelectedCount')).not.toBeInTheDocument();
+    expect(screen.queryByText(/rectifySelectedCount/)).not.toBeInTheDocument();
+    // No nested control to mis-aim at either: the checkbox belongs to `multiple` alone.
+    expect(rowOf('inv-1').querySelector('input[type="checkbox"]')).toBeNull();
     for (const id of ['inv-1', 'inv-2', 'inv-3']) {
       expect(screen.getByTestId(`invoice-picker-option-${id}`)).toHaveAttribute('data-selected', 'false');
     }
@@ -175,7 +185,102 @@ describe('InvoicePickerModal — multiple select (the return-document flow)', ()
 
   it('reports the draft size', () => {
     render(<InvoicePickerModal {...MULTI} selectedIds={['inv-1']} />);
-    expect(screen.getByText('rectifySelectedCount')).toBeInTheDocument();
+    expect(footerCount()).toBe('rectifySelectedCount:{"count":1}');
+  });
+
+  // ── clicking the checkbox itself ────────────────────────────────────────────
+  //
+  // The regression these guard reached the UI precisely because every other test in this file
+  // clicks the ROW container. The shared Checkbox is a <label> wrapping a hidden <input>, so a
+  // click on it reached the row twice — once from the label, once from the click the browser
+  // forwards to the input — and the row's toggle selected and immediately deselected in a single
+  // gesture: aiming at the box did nothing at all, while aiming anywhere else worked.
+  describe('clicking the checkbox itself, not the row container', () => {
+    it('selects the row with a single click on the checkbox element', () => {
+      render(<InvoicePickerModal {...MULTI} />);
+      expect(rowOf('inv-1')).toHaveAttribute('data-selected', 'false');
+      fireEvent.click(checkboxOf('inv-1'));
+      expect(rowOf('inv-1')).toHaveAttribute('data-selected', 'true');
+    });
+
+    it('deselects an already-selected row with a single click on the checkbox element', () => {
+      render(<InvoicePickerModal {...MULTI} selectedIds={['inv-1']} />);
+      expect(rowOf('inv-1')).toHaveAttribute('data-selected', 'true');
+      fireEvent.click(checkboxOf('inv-1'));
+      expect(rowOf('inv-1')).toHaveAttribute('data-selected', 'false');
+    });
+
+    it('lands on the parity the clicks imply — the assert that tells "does nothing" from "does two things that cancel out"', () => {
+      render(<InvoicePickerModal {...MULTI} />);
+      // An even number of clicks must return to unselected...
+      for (let i = 0; i < 4; i += 1) fireEvent.click(checkboxOf('inv-1'));
+      expect(rowOf('inv-1')).toHaveAttribute('data-selected', 'false');
+      // ...and the next one must actually select. A double-firing handler passes the first
+      // assertion by accident and fails this one.
+      fireEvent.click(checkboxOf('inv-1'));
+      expect(rowOf('inv-1')).toHaveAttribute('data-selected', 'true');
+    });
+
+    it('keeps the footer counter in step with every checkbox click', () => {
+      render(<InvoicePickerModal {...MULTI} />);
+      expect(footerCount()).toBe('rectifySelectedCount:{"count":0}');
+      fireEvent.click(checkboxOf('inv-1'));
+      expect(footerCount()).toBe('rectifySelectedCount:{"count":1}');
+      fireEvent.click(checkboxOf('inv-2'));
+      expect(footerCount()).toBe('rectifySelectedCount:{"count":2}');
+      fireEvent.click(checkboxOf('inv-1'));
+      expect(footerCount()).toBe('rectifySelectedCount:{"count":1}');
+    });
+
+    it('applies what the checkbox clicks drafted', () => {
+      const onApply = vi.fn();
+      render(<InvoicePickerModal {...MULTI} onApply={onApply} />);
+      fireEvent.click(checkboxOf('inv-2'));
+      fireEvent.click(checkboxOf('inv-1'));
+      fireEvent.click(screen.getByTestId('invoice-picker-apply'));
+      expect(onApply).toHaveBeenCalledWith(['inv-2', 'inv-1']);
+    });
+
+    it('never lets the row close or select through the single-select path', () => {
+      const onSelect = vi.fn();
+      const onClose = vi.fn();
+      render(<InvoicePickerModal {...MULTI} onSelect={onSelect} onClose={onClose} />);
+      fireEvent.click(checkboxOf('inv-1'));
+      expect(onSelect).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    // The visible box is what a user actually clicks, and it was the broken path: the label and
+    // the click the browser forwards to the hidden input both reached the row, so its toggle ran
+    // twice and the selection netted to nothing. stopPropagation on the Checkbox is observable in
+    // JSDOM, so these assert the behaviour instead of the styling that used to stand in for it.
+    it('selects when the visible box is clicked, not just the input', () => {
+      render(<InvoicePickerModal {...MULTI} />);
+      const box = checkboxOf('inv-1').closest('label').querySelector('div');
+      fireEvent.click(box);
+      expect(rowOf('inv-1').getAttribute('data-selected')).toBe('true');
+    });
+
+    it('toggles once per click on the visible box — the double-fire regression', () => {
+      render(<InvoicePickerModal {...MULTI} />);
+      const box = checkboxOf('inv-1').closest('label').querySelector('div');
+      // Odd number of clicks must leave it selected. A double-firing row nets to zero on every
+      // click, so it would read 'false' here while a dead control would too — the alternation
+      // below is what tells those two apart.
+      fireEvent.click(box);
+      expect(rowOf('inv-1').getAttribute('data-selected')).toBe('true');
+      fireEvent.click(box);
+      expect(rowOf('inv-1').getAttribute('data-selected')).toBe('false');
+      fireEvent.click(box);
+      expect(rowOf('inv-1').getAttribute('data-selected')).toBe('true');
+    });
+
+    it('does not let a click on the visible box reach the row twice', () => {
+      render(<InvoicePickerModal {...MULTI} />);
+      const box = checkboxOf('inv-2').closest('label').querySelector('div');
+      fireEvent.click(box);
+      expect(screen.getByText('rectifySelectedCount:{"count":1}')).toBeInTheDocument();
+    });
   });
 });
 

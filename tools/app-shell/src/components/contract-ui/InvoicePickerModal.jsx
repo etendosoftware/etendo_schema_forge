@@ -103,24 +103,31 @@ export default function InvoicePickerModal({
         style={{
           display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', cursor: 'pointer',
           borderBottom: '0.5px solid hsl(var(--border) / 0.3)',
-          background: checked ? 'var(--status-info-bg)' : 'transparent',
+          // The same neutral grey the row already uses on hover, not the informational blue: the
+          // black tick is what signals selection, so tinting the row as well read as a status
+          // ("this invoice is special") rather than as "you picked this one".
+          background: checked ? 'hsl(var(--muted))' : 'transparent',
         }}
         onMouseEnter={e => { if (!checked) e.currentTarget.style.background = 'hsl(var(--muted))'; }}
         onMouseLeave={e => { if (!checked) e.currentTarget.style.background = 'transparent'; }}
       >
         {multiple && (
           // The shared Checkbox, not a hand-drawn box: it carries the design system's own
-          // `primary` tokens, so the tick reads black like every other checkbox in the app
-          // instead of the informational blue this used to paint.
+          // `primary` tokens, so the tick reads black like every other checkbox in the app.
           //
-          // pointer-events-none is what makes clicking the box itself work. Checkbox is a <label>
-          // wrapping a hidden <input>, so a click on it fires TWICE at the row — once for the
-          // label, once for the click the browser forwards to the input — and the row's toggle ran
-          // both times, selecting and immediately deselecting. Letting the click fall through to
-          // the row keeps exactly one handler for the whole row, box included.
-          // The no-op onChange is required, not decorative: Checkbox forwards it to a controlled
-          // <input checked>, and React warns without it.
-          <Checkbox checked={checked} onChange={() => {}} className="shrink-0 pointer-events-none" />
+          // stopPropagation + its own onChange is the codebase's established answer to a checkbox
+          // inside a clickable row (DataTable, ListModalWindow, ImportLinesModal,
+          // AssignTemplateRolesControl — the last citing ETP-5067). Without it the box fires TWICE
+          // at the row, once for the label and once for the click the browser forwards to the
+          // hidden input, so the row's toggle ran both times and the click netted to nothing.
+          // pointer-events-none also fixes that, but jsdom does not implement pointer-events, so
+          // the real-user path would only be provable in Playwright — this way it is unit-testable.
+          <Checkbox
+            checked={checked}
+            onClick={e => e.stopPropagation()}
+            onChange={() => toggleDraft(inv.id)}
+            className="shrink-0"
+          />
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>

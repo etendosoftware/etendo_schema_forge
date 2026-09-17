@@ -379,6 +379,22 @@ describe('RectifiableInvoiceField', () => {
       expect(onApply).not.toHaveBeenCalled();
     });
 
+    it('drafts from a click on the checkbox itself, not just on the row container', () => {
+      // The path the user actually aims at, and the one that was silently broken: the shared
+      // Checkbox is a <label> over a hidden <input>, so the click used to reach the row twice and
+      // cancel itself out. Reached here through the field, the way both consumers wire it.
+      const onApply = vi.fn();
+      render(<RectifiableInvoiceField {...BASE} onApply={onApply} />);
+      fireEvent.click(screen.getByTestId('rectify-open'));
+
+      const row = screen.getByTestId('rectify-option-inv-2');
+      fireEvent.click(row.querySelector('input[type="checkbox"]'));
+      expect(row).toHaveAttribute('data-selected', 'true');
+
+      fireEvent.click(screen.getByTestId('rectify-apply'));
+      expect(onApply).toHaveBeenCalledWith(['inv-2']);
+    });
+
     it('propagates the draft to the parent on Apply and closes the picker', () => {
       const onApply = vi.fn();
       render(<RectifiableInvoiceField {...BASE} onApply={onApply} />);
