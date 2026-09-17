@@ -329,17 +329,21 @@ describe('showBulkActionToast — exported pure helper (ETP-5302)', () => {
 
   it('shows an error toast when every attempted row failed', () => {
     showBulkActionToast(ui, { ok: 0, failed: ['e1', 'e2'] });
-    expect(toast.error).toHaveBeenCalledWith('0 ok, 2 failed');
+    expect(toast.error).toHaveBeenCalledWith('0 ok, 2 failed', {
+      description: 'actionFailed\nactionFailed',
+    });
   });
 
   it('shows a warning toast on a partial failure', () => {
     showBulkActionToast(ui, { ok: 2, failed: ['e1'] });
-    expect(toast.warning).toHaveBeenCalledWith('2 ok, 1 failed');
+    expect(toast.warning).toHaveBeenCalledWith('2 ok, 1 failed', {
+      description: 'actionFailed',
+    });
   });
 
   it('switches to the 3-count message when rows were omitted', () => {
     showBulkActionToast(ui, { ok: 1, omitted: ['skipped'], failed: [] });
-    expect(toast.warning).toHaveBeenCalledWith('1 ok, 1 omitted, 0 failed');
+    expect(toast.warning).toHaveBeenCalledWith('1 ok, 1 omitted, 0 failed', undefined);
   });
 
   it('normalizes a null result instead of throwing', () => {

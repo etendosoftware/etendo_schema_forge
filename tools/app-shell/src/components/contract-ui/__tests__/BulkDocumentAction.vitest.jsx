@@ -761,7 +761,9 @@ describe('BulkDocumentAction — refreshes the list in place instead of reloadin
       buildActions: buildPostActions,
     });
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('0 ok, 1 failed'));
+    // Single-row total failure takes the ETP-5316 direct-error path — the raw
+    // backend message, not the templated "0 ok, 1 failed" count.
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('boom'));
     // The list must refresh even on a total failure: a row can fail for a reason
     // that still changed its server-side state, and a stale grid hides that.
     expect(refresh).toHaveBeenCalledTimes(1);
@@ -780,7 +782,10 @@ describe('BulkDocumentAction — refreshes the list in place instead of reloadin
       buildActions: buildPostActions,
     });
 
-    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith('1 ok, 1 failed'));
+    // ETP-5316 — a mixed run also gets the per-failed-row detail as the toast description.
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith('1 ok, 1 failed', {
+      description: 'row-2: boom',
+    }));
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(reloadSpy).not.toHaveBeenCalled();
   });
@@ -798,7 +803,7 @@ describe('BulkDocumentAction — refreshes the list in place instead of reloadin
       rowFilter,
     });
 
-    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith('1 ok, 1 omitted, 0 failed'));
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith('1 ok, 1 omitted, 0 failed', undefined));
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(reloadSpy).not.toHaveBeenCalled();
     expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
@@ -1011,7 +1016,9 @@ describe('BulkDocumentAction — preUnpostActions unposts before a bulk reactiva
     mockNeoExecute.mockResolvedValue({ success: false, message: 'Factura contabilizada' });
     const { refresh } = run();
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('0 ok, 1 failed'));
+    // Single-row total failure takes the ETP-5316 direct-error path — the raw
+    // backend message, not the templated "0 ok, 1 failed" count.
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Factura contabilizada'));
     // The whole point: reactivating a still-posted document must not be attempted.
     expect(mockDocExecute).not.toHaveBeenCalled();
     // The list is still refetched — the unpost may have changed server-side state.
@@ -1095,7 +1102,10 @@ describe('BulkDocumentAction — preUnpostActions unposts before a bulk reactiva
       ],
     });
 
-    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith('1 ok, 1 failed'));
+    // ETP-5316 — a mixed run also gets the per-failed-row detail as the toast description.
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith('1 ok, 1 failed', {
+      description: 'FV-001: Factura contabilizada',
+    }));
     // The unpost was attempted only for the posted row…
     expect(mockNeoExecute).toHaveBeenCalledTimes(1);
     expect(mockNeoExecute).toHaveBeenCalledWith('inv-1', 'unpost');
@@ -1121,7 +1131,7 @@ describe('BulkDocumentAction — preUnpostActions unposts before a bulk reactiva
   it('does not unpost a row that rowFilter already omitted', async () => {
     const { refresh } = run({ rowFilter: () => 'cannotReactivateLinkedDocs' });
 
-    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith('0 ok, 1 omitted, 0 failed'));
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith('0 ok, 1 omitted, 0 failed', undefined));
     expect(mockNeoExecute).not.toHaveBeenCalled();
     expect(mockDocExecute).not.toHaveBeenCalled();
     expect(refresh).toHaveBeenCalledTimes(1);
