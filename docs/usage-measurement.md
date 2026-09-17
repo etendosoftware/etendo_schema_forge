@@ -13,12 +13,13 @@ that is still open.
 
 ## 1. What it is
 
-Two tables, both System-level (`ACCESSLEVEL=4`):
+Three tables, all System-level (`ACCESSLEVEL=4`):
 
 | Table | Holds |
 |---|---|
 | `ETGO_BILLING_RESOURCE` | the catalog: what is countable, and how to count it |
 | `ETGO_USAGE_DAILY` | the aggregate: one row per (tenant, resource, day) |
+| `ETGO_USAGE_RUN_LOG` | the run log: what each run did, per tenant (§6) |
 
 `ETGO_USAGE_DAILY` is System-owned data *about* a tenant, so `AD_CLIENT_ID = '0'` and the
 measured tenant is a plain FK in `MEASURED_CLIENT_ID`. That is what makes cross-tenant
@@ -159,7 +160,51 @@ Two constraints on messages here, both learned the hard way:
 - A message must contain **no `@` character**. Openbravo treats `@` as its message-parameter
   delimiter, so a message carrying one can reach the user blank.
 
-## 6. Running it
+## 6. The run log
+
+Every run records what it did in `ETGO_USAGE_RUN_LOG`, a read-only child tab of Billing
+Resource. Without it a failure left a log line and a count, which is not an answer to "did last
+night work, and for whom" once this runs nightly and unattended.
+
+**Granularity is per run, not per run-day.** The engine works per resource-day, but a row per
+day would make the log as large as the aggregate it describes — a seventeen-year backfill of one
+resource wrote 74,520 usage rows and would have written as many log rows beside them. `RUN_ID`
+groups one execution; `DATE_FROM`/`DATE_TO` carry the range.
+
+**Two shapes of row**, which is what the nullable tenant column is for:
+
+| Row | Written when | Carries |
+|---|---|---|
+| per (run, resource, **tenant**) | that tenant was counted | `DAYS_SUCCEEDED`, `ROWS_WRITTEN` |
+| per (run, resource), **no tenant** | something failed | `DAYS_FAILED`, `ERROR_MESSAGE` |
+
+The tenant-less row is not a fallback. The common failures — a fragment that will not compile, a
+qualifier no counter carries — happen *before any tenant is known*, so there is nowhere else to
+record them.
+
+`STATUS` is `S` success, `E` error, `P` partial. Partial is the one worth having: a resource
+where four days of six succeeded is neither a success nor a failure, and flattening it to either
+loses exactly what an operator needs to know. `ERROR_MESSAGE` is a `CLOB` because these messages
+quote a composed query or a deployed-qualifier list, and a `VARCHAR` would truncate the half
+that explains the failure.
+
+**The log is accumulated in memory and written once, after the day loop.** It has to be: each
+resource-day commits or rolls back on its own, so a row written inside a unit that later fails
+would be rolled back with it — losing precisely the failure worth recording. A failure to write
+the log is logged loudly and swallowed, because the usage rows are already committed and correct
+and losing the log must not fail the run.
+
+**A failed run is reported as an error, naming what failed.** A scheduled run previously recorded
+`Success` even when every resource failed: `ProcessMonitor` sets the status from a propagating
+exception and never consults the process result. The process now sets the result *and* throws,
+which is what the two surfaces need — the interactive launcher renders the exception message, the
+scheduler needs the throw. The message names each failed resource with its first reason, and says
+how many resource-days succeeded and are therefore already committed.
+
+Deleting a billing resource that has ever run is refused while its log exists. That is correct
+for an audit trail and follows from the FK; the catalog is `ISDELETEABLE=N` anyway.
+
+## 7. Running it
 
 The process is `ETGO_UsageAggregation` (`Billing Resource Usage Aggregation`), `ISBACKGROUND=Y`,
 with two optional parameters.
@@ -181,15 +226,17 @@ so that route always runs the settling window. A scheduled request can carry the
 
 Re-running any range is safe and produces identical rows.
 
-## 7. Verified behaviour
+## 8. Verified behaviour
 
 - **Counts are right.** A full backfill produced 308 counted invoices against exactly 308 posted
   sales invoices in the database — every invoice counted once, attributed to one tenant.
 - **Containment holds.** A fragment of `1=1) or (1=1` stays inside its tenant and its day.
-- **253 unit and DAL tests**, including an extensibility proof: a new catalog row added in a
+- **301 unit and DAL tests**, including an extensibility proof: a new catalog row added in a
   fixture is counted on the next run with no production code change.
+- **The run log works against a real database**: 48 rows over 48 runs, each attributing its days
+  and usage rows to the right tenant.
 
-## 8. Deliberately not done
+## 9. Deliberately not done
 
 - **Rollup of any kind** — no SUM or MAX over a period, no would-have-billed figure, no price.
 - **Late changes** after the settling window are not counted.
@@ -197,7 +244,7 @@ Re-running any range is safe and produces identical rows.
 - **A nightly schedule** — the process exists and runs on demand; nothing schedules it yet.
 - **Seeded catalog rows** — the catalog ships empty.
 
-## 9. AD defects worth remembering
+## 10. AD defects worth remembering
 
 Three came from hand-written Application Dictionary records where a field left at its default
 only showed up much later in generated output. None was visible in the XML or caught by
