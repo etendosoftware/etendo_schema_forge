@@ -62,8 +62,9 @@ vi.mock('lucide-react', () => ({
   MoreVertical: () => null, Calendar: () => null, Clock: () => null,
   TriangleAlert: () => null, OctagonAlert: () => null, ArrowUpRight: () => null,
   Search: () => null, Play: () => null, Check: () => null,
-  // FmRowActions.jsx (ETP-5187, rendered per draft-status row) imports these 3.
-  Pencil: () => null, Trash2: () => null, Loader2: () => null,
+  // FmRowActions.jsx (ETP-5187 Edit/Delete for draft rows, ETP-5338 Reactivate for
+  // submitted/submitted_ack rows) imports these 4.
+  Pencil: () => null, Trash2: () => null, Loader2: () => null, RotateCcw: () => null,
 }));
 vi.mock('../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,

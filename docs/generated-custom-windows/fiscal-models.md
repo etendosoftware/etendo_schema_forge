@@ -1097,22 +1097,29 @@ The Modelo 303 detail page's "Resultado" KPI (`FmModel303Page.jsx`) and the decl
 
 **Search** was removed entirely — the search input/icon button is gone from the toolbar. Narrowing the list is handled by the existing year/model/status `FilterDropdown` filters instead.
 
-### Row hover actions — Edit/Delete (`FmRowActions`, ETP-5187)
+### Row hover actions — Edit/Delete/Reactivar (`FmRowActions`, ETP-5187, ETP-5338)
 
 Each **draft** declaration row (`decl.status === 'draft'`) reveals a small Edit/Delete icon pair on
 row hover, in a dedicated last column (`<th style={{ width: 72 }} aria-hidden="true" />` /
-`<td style={{ position: 'relative' }}>`). Non-draft rows render the same empty `<td>` (keeps column
-alignment) but no icons — this window has no per-row edit/delete affordance for anything past
-draft.
+`<td style={{ position: 'relative' }}>`). A **submitted/submitted_ack** row (excluding
+`aeat_telematic` — see below) instead reveals a single **Reactivar** icon in the same column. Any
+other row (`submitted_ext`, or a submitted/submitted_ack row filed via `aeat_telematic`) renders the
+same empty `<td>` (keeps column alignment) but no icon at all.
 
-`FmRowActions.jsx` is a new, window-local component — **not** the generic
+`FmRowActions.jsx` is a window-local component — **not** the generic
 `components/contract-ui/RowQuickActions.jsx` used by schema-driven windows (sales-invoice, etc.):
 that component's hooks (`useDocumentAction`/`useNeoAction`) assume a `specName`/entity backend
 contract this fully-custom window (no `decisions.json`/`contract.json`) doesn't have. `FmRowActions`
 mirrors its hover-reveal visual language (`.fm-row-actions`/`.fm-row-action-btn` in
 `fiscal-models.css`, plain CSS keyed off the existing `.fm-table tbody tr:hover` rule rather than
-Tailwind's `group/row` utility) but exposes only the 2 actions this window actually needs — no
-clone, no email/send, no kebab menu.
+Tailwind's `group/row` utility) but exposes only the actions this window actually needs — no clone,
+no email/send, no kebab menu. Each of the 3 actions (`onEdit`/`onDelete`/`onReactivate`) only
+renders when its handler prop is passed — the component has no status awareness of its own, the
+caller (`FmListPage`) decides which case a row is in and passes only the matching handler(s). This
+is also why an ineligible Reactivar row gets **no button at all**, not a disabled one: `FmListPage`
+simply never passes `onReactivate` for it (`{!isDraft && canReactivate(decl) && <FmRowActions
+onReactivate={...} .../>}`) — there is no code path that renders a disabled/grayed-out Reactivar
+button.
 
 - **Edit** calls the same `onSelect` callback the row's own `onClick` already used, so it's
   identical to clicking the row.
@@ -1126,13 +1133,36 @@ clone, no email/send, no kebab menu.
   calls `deleteDeclaration(id, { token, apiBaseUrl })` (`fiscalModelsUtils.js`, `DELETE
   /fiscal303/declarations?id=`); on success the row is removed from `FmListPage`'s own `decls`
   state (no refetch), on failure a toast (`fm.list.delete_failed`) is shown and the row stays.
+- **Reactivar** (ETP-5338) opens a small non-destructive confirmation dialog
+  (`ReactivateConfirmDialog`, a local `FmListPage.jsx` component built from the same `Dialog`
+  primitives as `DeleteConfirmDialog` but with its own copy/testids — not that shared component,
+  whose title/message are hardcoded to the delete flow), mounted only while a reactivation is
+  pending (`{reactivateTarget && <ReactivateConfirmDialog .../>}`, same conditional-mount
+  convention). Confirming calls `persistDeclarationStatus(id, 'draft', { token, apiBaseUrl })`
+  (`fiscalModelsUtils.js`, `PUT /fiscal303/declarations?id=` with `{ "status": "draft" }`, no
+  `submissionMethod` sent); on success the row's `status` is patched to `'draft'` in `FmListPage`'s
+  own `decls` state (no refetch — the row immediately re-renders as a draft row, with Edit/Delete
+  instead of Reactivar), on failure a toast (`fm.list.reactivate_failed`) is shown and the row
+  stays as-is.
+
+**Reactivar eligibility** (`canReactivate(decl)` in `FmListPage.jsx`): `decl.status === 'submitted'
+|| decl.status === 'submitted_ack'`, **and** `decl.submissionMethod !== 'aeat_telematic'`.
+`submitted_ext` is deliberately excluded — it's a legacy status that predates `submissionMethod`
+(the "Otra Plataforma" path that used to produce it was removed from `PresentModal`, see the
+Status lifecycle section above) and reactivating it was not requested by ETP-5338. A declaration
+with no `submissionMethod` at all (any declaration submitted before ETP-4755 shipped) is treated as
+reactivatable — `submissionMethod` is only ever `'aeat_telematic'` when a real AEAT submission set
+it, so absence is the safe default, not an ambiguous one.
 
 **Backend defense in depth**: `FiscalDeclCrudHandler#handleDeclDelete` (already existed, wired to
-`DELETE /fiscal303/declarations?id=`) now also rejects (409) deleting anything but a `draft`
-declaration — previously it had no status check at all and would delete any declaration regardless
-of status, relying entirely on the frontend to only ever show the action for drafts. The frontend
-gate (only draft rows get the icons) and the backend gate are independent; either one alone would
-have been insufficient.
+`DELETE /fiscal303/declarations?id=`) rejects (409) deleting anything but a `draft` declaration —
+previously it had no status check at all and would delete any declaration regardless of status,
+relying entirely on the frontend to only ever show the action for drafts. `#handleDeclPut` (ETP-5338)
+now similarly rejects (409) any PUT that sets `status: "draft"` on a declaration whose *currently
+stored* `submissionMethod` is `aeat_telematic` — read from the declaration record itself, not from
+whatever the request body claims, so this can't be bypassed by a client that simply omits or
+falsifies the field. Each of these frontend/backend gate pairs is independent; either gate alone
+would have been insufficient.
 
 ### "Fichero" column — removed, no download action to offer (ETP-4755)
 

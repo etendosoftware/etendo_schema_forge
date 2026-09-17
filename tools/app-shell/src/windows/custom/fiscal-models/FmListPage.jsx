@@ -12,9 +12,14 @@ import FmCatalogPage from './FmCatalogPage.jsx';
 import FmRowActions from './FmRowActions.jsx';
 import DeleteConfirmDialog from '@/components/contract-ui/DeleteConfirmDialog.jsx';
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
+} from '@/components/ui/dialog.jsx';
+import { Button } from '@/components/ui/button.jsx';
+import {
   formatAmount, countUpcomingDeadlines, isUpcomingDeadline, checkModified303, checkModified349,
   compute349Operators, fetchDeclarationIncidents, deriveResultKind, deleteDeclaration,
   applyOverrides, recomputeDerivedBoxes, getBoxValue, resolveResultColors,
+  persistDeclarationStatus,
 } from './fiscalModelsUtils.js';
 import useFiscalAutoCompute from './useFiscalAutoCompute.js';
 
@@ -329,9 +334,65 @@ function normDecl(d) {
   };
 }
 
+// ETP-5338 — "Reactivar declaración": eligible only for a filed declaration
+// (submitted / submitted_ack) that was NOT a real AEAT telematic submission —
+// reactivating one of those would desync this table from what Hacienda already
+// has on record. `submitted_ext` is deliberately excluded: it's a legacy status
+// that predates `submissionMethod` (PresentModal can no longer produce it, see
+// fiscal-models.md) and was not requested by ETP-5338; the backend guard
+// (FiscalDeclCrudHandler#handleDeclPut) is the actual enforcement, this is only
+// the UI gate.
+function canReactivate(decl) {
+  return (decl.status === 'submitted' || decl.status === 'submitted_ack')
+    && decl.submissionMethod !== 'aeat_telematic';
+}
+
 // ── Sub-components ───────────────────────────────────────────────
 function ModelBadge({ model }) {
   return <span className={`fm-model-badge fm-model-badge--${model}`}>{model}</span>;
+}
+
+// ETP-5338 — "Reactivar declaración" confirmation. Not the app's shared
+// DeleteConfirmDialog (that component's copy/testids are hardcoded to the
+// delete flow — see its header comment); this is a non-destructive analogue
+// built from the same Dialog primitives, same shape.
+function ReactivateConfirmDialog({ open, reactivating = false, onConfirm, onClose, t }) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => { if (!next) onClose?.(); }}
+      data-testid="Dialog__fm-reactivate">
+      <DialogContent className="max-w-sm" data-testid="DialogContent__fm-reactivate">
+        <DialogHeader data-testid="DialogHeader__fm-reactivate">
+          <DialogTitle data-testid="DialogTitle__fm-reactivate">
+            {t('fm.reactivate.confirm_title') ?? 'Reactivar declaración'}
+          </DialogTitle>
+          <DialogDescription data-testid="DialogDescription__fm-reactivate">
+            {t('fm.reactivate.confirm_message')
+              ?? 'La declaración volverá a estado borrador y podrá editarse de nuevo. ¿Continuar?'}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter data-testid="DialogFooter__fm-reactivate">
+          <DialogClose asChild data-testid="DialogClose__fm-reactivate">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={reactivating}
+              data-testid="Button__fm-reactivate-cancel">{t('cancel') ?? 'Cancelar'}</Button>
+          </DialogClose>
+          <Button
+            variant="default"
+            size="sm"
+            disabled={reactivating}
+            data-testid="fm-reactivate-confirm"
+            onClick={onConfirm}
+          >
+            {t('fm.action.reactivate') ?? 'Reactivar'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function IncidentsCell({ blocking, warning, t }) {
@@ -590,6 +651,10 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
   // so the confirm dialog can disable its buttons while it's outstanding.
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deletingId,   setDeletingId]   = useState(null);
+  // Row hover "reactivate" action (ETP-5338) — submitted/submitted_ack rows only, excluding
+  // aeat_telematic (see canReactivate above). Mirrors the deleteTarget/deletingId pattern.
+  const [reactivateTarget, setReactivateTarget] = useState(null);
+  const [reactivatingId,   setReactivatingId]   = useState(null);
   // Sort state — field-selector popover (mirrors ListView.jsx's sortColumn/sortDirection
   // pattern used by the generated/Factura windows, not a generic single-toggle button).
   // `null` sortColumn = default order (year+period, most recent first).
@@ -641,6 +706,27 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
       })
       .finally(() => setDeletingId(null));
   }, [deleteTarget, token, apiBaseUrl, t]);
+
+  // Row hover "reactivate" action (ETP-5338) — reverts a submitted/submitted_ack declaration
+  // back to draft. Gated the same way both here (caller only ever passes a
+  // canReactivate(decl) === true declaration into setReactivateTarget) and server-side
+  // (FiscalDeclCrudHandler#handleDeclPut rejects reverting an aeat_telematic declaration to
+  // draft, defense in depth). No submissionMethod is sent — persistDeclarationStatus only
+  // includes it when explicitly passed, and reactivating doesn't set one.
+  const handleConfirmReactivate = useCallback(() => {
+    if (!reactivateTarget) return;
+    setReactivatingId(reactivateTarget.id);
+    persistDeclarationStatus(reactivateTarget.id, 'draft', { token, apiBaseUrl })
+      .then((result) => {
+        if (result.ok) {
+          setDecls(ds => ds.map(d => d.id === reactivateTarget.id ? { ...d, status: 'draft' } : d));
+          setReactivateTarget(null);
+        } else {
+          toast.error(t('fm.list.reactivate_failed') ?? 'No se pudo reactivar la declaración.');
+        }
+      })
+      .finally(() => setReactivatingId(null));
+  }, [reactivateTarget, token, apiBaseUrl, t]);
 
   const yearOptions = useMemo(
     () => Array.from(new Set(decls.map(d => String(d.year)))).sort((a, b) => b - a)
@@ -839,6 +925,12 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                       deleting={deletingId === decl.id}
                       data-testid="FmRowActions__cb728e" />
                   )}
+                  {!isDraft && canReactivate(decl) && (
+                    <FmRowActions
+                      onReactivate={() => setReactivateTarget(decl)}
+                      reactivating={reactivatingId === decl.id}
+                      data-testid="FmRowActions__reactivate-cb728e" />
+                  )}
                 </td>
               </tr>
             );
@@ -998,6 +1090,15 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           onConfirm={handleConfirmDelete}
           onClose={() => setDeleteTarget(null)}
           data-testid="DeleteConfirmDialog__cb728e" />
+      )}
+      {reactivateTarget && (
+        <ReactivateConfirmDialog
+          open
+          reactivating={reactivatingId != null}
+          onConfirm={handleConfirmReactivate}
+          onClose={() => setReactivateTarget(null)}
+          t={t}
+          data-testid="ReactivateConfirmDialog__cb728e" />
       )}
       {showNewDecl && <NewDeclModal
         onConfirm={handleNewDecl}

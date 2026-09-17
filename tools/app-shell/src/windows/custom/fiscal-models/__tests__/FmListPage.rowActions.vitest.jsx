@@ -47,6 +47,7 @@ vi.mock('lucide-react', () => ({
   TriangleAlert: () => null, OctagonAlert: () => null, ArrowUpRight: () => null,
   Search: () => null, Play: () => null, Check: () => null,
   Pencil: () => null, Trash2: () => null, Loader2: () => null,
+  RotateCcw: () => null,
   X: () => null,
 }));
 vi.mock('../FmCommon.jsx', () => ({
@@ -114,7 +115,13 @@ afterEach(() => {
 // ── Draft-only rendering ─────────────────────────────────────────────────────
 
 describe('FmListPage — row actions rendered only for draft declarations', () => {
-  it('renders FmRowActions only for the draft row among draft/submitted/pending', async () => {
+  // Note (ETP-5338): a 'submitted' declaration (no submissionMethod) is now also eligible for
+  // row actions — the Reactivar button — via canReactivate(). This test previously asserted
+  // exactly one row had actions among draft/submitted/pending; that is no longer correct on its
+  // own, so it now asserts the Edit/Delete pair (draft) vs. the Reactivate button (submitted) are
+  // each on the right row, and 'pending' still has none. Dedicated Reactivate coverage (gating
+  // truth table, confirm-dialog flow) lives in FmListPage.reactivate.vitest.jsx.
+  it('renders Edit/Delete for the draft row, Reactivate for the submitted row, nothing for pending', async () => {
     globalThis.fetch = mockCatalogFetch();
     const decls = [
       makeDecl({ id: 'd-draft', status: 'draft' }),
@@ -127,14 +134,19 @@ describe('FmListPage — row actions rendered only for draft declarations', () =
     const rows = Array.from(container.querySelectorAll('tbody tr'));
     expect(rows.length).toBe(3);
     const rowsWithActions = rows.filter(r => r.querySelector('.fm-row-actions'));
-    expect(rowsWithActions.length).toBe(1);
-    expect(rowsWithActions[0].textContent).toContain('T1');
+    expect(rowsWithActions.length).toBe(2);
+
+    expect(screen.getByTestId('FmRowActions__edit')).toBeInTheDocument();
+    expect(screen.getByTestId('FmRowActions__delete')).toBeInTheDocument();
+    expect(screen.getByTestId('FmRowActions__reactivate')).toBeInTheDocument();
   });
 
-  it('renders no row actions at all when there are no draft declarations', async () => {
+  it('renders no row actions at all when there are no draft/reactivatable declarations', async () => {
     globalThis.fetch = mockCatalogFetch();
     const decls = [
-      makeDecl({ id: 'd-submitted', status: 'submitted' }),
+      // aeat_telematic makes this NOT reactivatable (canReactivate gate) — see
+      // FmListPage.reactivate.vitest.jsx for the full gating truth table.
+      makeDecl({ id: 'd-submitted', status: 'submitted', submissionMethod: 'aeat_telematic' }),
       makeDecl({ id: 'd-pending', status: 'pending' }),
     ];
     const { container } = render(<FmListPage declarations={decls} {...withCatalogProps} />);
