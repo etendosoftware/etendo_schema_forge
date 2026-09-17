@@ -1,8 +1,8 @@
 {
   "version": "0.2.0",
   "generatedAt": "2026-09-09T11:18:23.940Z",
-  "updatedAt": "2026-09-17T14:54:08.692Z",
-  "checksum": "85381000022a2571",
+  "updatedAt": "2026-09-17T17:12:23.600Z",
+  "checksum": "9bfd06d868e97fc6",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -93,7 +93,7 @@
         "en_US": {
           "Name": "Legal Name",
           "FIN_Financial_Account_ID": "Account",
-          "PO_Financial_Account_ID": "Expense Account",
+          "PO_Financial_Account_ID": "Account",
           "EM_Etgo_Web": "Website",
           "EM_Etgo_Firstname": "First Name",
           "EM_Etgo_Lastname": "Last Name",
@@ -103,7 +103,7 @@
           "Name": "Razón Social",
           "EM_Etgo_Identifier": "Identificador",
           "FIN_Financial_Account_ID": "Cuenta",
-          "PO_Financial_Account_ID": "Cuenta contable de gastos",
+          "PO_Financial_Account_ID": "Cuenta",
           "EM_Etgo_Web": "Página web",
           "EM_Etgo_Firstname": "Nombre",
           "EM_Etgo_Lastname": "Apellidos",
@@ -5387,7 +5387,7 @@
         "en_US": {
           "Name": "Legal Name",
           "FIN_Financial_Account_ID": "Account",
-          "PO_Financial_Account_ID": "Expense Account",
+          "PO_Financial_Account_ID": "Account",
           "EM_Etgo_Web": "Website",
           "EM_Etgo_Firstname": "First Name",
           "EM_Etgo_Lastname": "Last Name",
@@ -5397,7 +5397,7 @@
           "Name": "Razón Social",
           "EM_Etgo_Identifier": "Identificador",
           "FIN_Financial_Account_ID": "Cuenta",
-          "PO_Financial_Account_ID": "Cuenta contable de gastos",
+          "PO_Financial_Account_ID": "Cuenta",
           "EM_Etgo_Web": "Página web",
           "EM_Etgo_Firstname": "Nombre",
           "EM_Etgo_Lastname": "Apellidos",
@@ -12204,7 +12204,7 @@
       "en_US": {
         "Name": "Legal Name",
         "FIN_Financial_Account_ID": "Account",
-        "PO_Financial_Account_ID": "Expense Account",
+        "PO_Financial_Account_ID": "Account",
         "EM_Etgo_Web": "Website",
         "EM_Etgo_Firstname": "First Name",
         "EM_Etgo_Lastname": "Last Name",
@@ -12214,7 +12214,7 @@
         "Name": "Razón Social",
         "EM_Etgo_Identifier": "Identificador",
         "FIN_Financial_Account_ID": "Cuenta",
-        "PO_Financial_Account_ID": "Cuenta contable de gastos",
+        "PO_Financial_Account_ID": "Cuenta",
         "EM_Etgo_Web": "Página web",
         "EM_Etgo_Firstname": "Nombre",
         "EM_Etgo_Lastname": "Apellidos",
