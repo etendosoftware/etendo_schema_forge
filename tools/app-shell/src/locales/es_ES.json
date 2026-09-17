@@ -20612,7 +20612,7 @@
     "backendError.orderNotFound": "Pedido no encontrado: {orderId}",
     "backendError.shipmentNotFound": "Albarán no encontrado: {id}",
     "backendError.accountAlreadyExists": "La cuenta {code} ya existe.",
-    "backendError.costNotCalculated": "El costo del producto aún no ha sido calculado. El sistema lo calcula automáticamente; por favor, intente contabilizar el documento en unos minutos.",
+    "backendError.costNotCalculated": "El costo del producto aún no ha sido calculado. El sistema lo calcula automáticamente; por favor, intente contabilizar el documento en unos minutos. Para evitar bloqueos, asegúrese que todos sus productos tengan un costo inicial configurado.",
     "backendError.conversionRateNotDraft": "No es posible modificar el tipo de cambio del documento cuando la factura no está en estado Borrador.",
     "backendError.cashCloseNoConcept": "Esta cuenta no tiene configurada una cuenta contable para las diferencias. Configúrala en Editar cuenta antes de confirmar un cierre que no cuadra.",
     "backendError.cashCloseDateInFuture": "La fecha del cierre no puede ser futura.",
