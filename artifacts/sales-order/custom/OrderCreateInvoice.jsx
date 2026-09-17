@@ -753,7 +753,9 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           throw new Error(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`);
         }
         const doc = (await res.json())?.response?.data;
-        result.invoice = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
+        // ETP-5381: carry documentStatus so the result modal badges the invoice as Confirmada
+        // instead of defaulting to Borrador — it is confirmed on creation now.
+        result.invoice = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null, documentStatus: doc?.documentStatus ?? null };
         trackDocumentCreated('sales-invoice');
       }
 

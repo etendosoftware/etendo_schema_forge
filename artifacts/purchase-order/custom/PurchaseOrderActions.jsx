@@ -474,6 +474,9 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           id:         docObj?.id ?? null,
           documentNo: docObj?.documentNo ?? '',
           amount:     docObj?.grandTotalAmount ?? null,
+          // ETP-5381: carry documentStatus so the result modal badges the invoice as Confirmada
+          // instead of defaulting to Borrador — it is confirmed on creation now.
+          documentStatus: docObj?.documentStatus ?? null,
         };
         setInvoiceResult(currentInvoice);
         trackDocumentCreated('purchase-invoice');
