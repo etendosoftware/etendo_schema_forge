@@ -134,7 +134,7 @@ The Contacts window should let users maintain a shared business-partner master r
 - `tools/app-shell/src/windows/custom/contacts/ContactsFinancialPanel.jsx` and `BillingPreferencesForm.jsx` confirm post-save financial editing, customer/vendor-dependent sections, credit-limit persistence, and discount-row maintenance. The Financial tab layout uses a horizontal two-column design (descriptive text fixed-width on the left, interactive widget on the right) for both the Credit and Billing Preferences sections. `ContactsFinancialPanel.jsx` includes an inline `CreditLimitStepper` sub-component that renders a numeric input with − and + buttons; rapid clicks are debounced (400 ms via `useRef + setTimeout + clearTimeout`) so at most one PATCH is sent per burst. An `<hr>` separator divides the Credit section from the Billing Preferences section. The container uses `space-y-2` for tight vertical rhythm. `BillingPreferencesForm.jsx` renders billing fields in a two-row layout: the top row holds price list, payment method, and financial account; the bottom row holds payment terms alongside a `YesNoRadio` for the customer/vendor blocking flag. Customer and vendor checkboxes are wrapped in a `[&_.pt-6]:pt-0` div to neutralize `EntityForm`'s label-alignment padding without removing the expand-on-click toggle behavior.
 - `tools/app-shell/src/windows/custom/contacts/LocationEditorModal.jsx` confirms saved-header dependency, country/region selector dependency, paginated searchable country/region pickers, and atomic create/update/delete behavior through the `locationAddress` endpoint. All user-facing labels including the close button are i18n-driven via `useUI`.
 - `tools/app-shell/src/components/contract-ui/PartnerAddressPicker.jsx` and `tools/app-shell/src/components/contract-ui/__tests__/PartnerAddressPicker.test.js` confirm that the same contacts location modal now supports inline "+ Add address" creation for partner-address selectors outside the Contacts window.
-- `tools/app-shell/src/components/contract-ui/CreateContactModal.jsx` provides partial supporting evidence for person/company create payload semantics in the shared quick-create flow, but no contacts-window-specific automated test was found for the main detail-route save behavior.
+- `CreateContactModal.jsx` (and its `EntityCreationModal.jsx`/`AddressSection.jsx`/`FinancialSection.jsx`/`contactModalConfig.js` supporting files) — the shared quick-create flow's former hand-rolled reimplementation of this window — was deleted in ETP-5332. The "+ Crear contacto" affordance in other windows' partner/contact selectors now mounts this Contacts window itself via `RecordCreateModal` (`docs/ui-customization.md` §19b), so person/company create payload semantics for that flow are exercised through this window's own tests rather than a separate quick-create test suite; no contacts-window-specific automated test was found for the main detail-route save behavior.
 - `tools/app-shell/src/menu.json` and `tools/app-shell/src/windows/registry.js` confirm menu visibility and route-to-loader registration for `/contacts`.
 - `tools/app-shell/src/windows/custom/contacts/ContactsSummaryWidget.jsx`, `ContactsPeriodButton.jsx`, `ContactsFinanceContext.jsx`, and `ContactsFinancialPanel.jsx` implement the horizontal financial summary that replaced the former right-side sidebar (`BusinessPartnerSidebar.jsx`, deleted). `ContactsFinanceContext` holds the shared period state and fetches `bp-stats`/`bp-trend` by record id. `ContactsSummaryWidget` renders the three KPIs with period-aware trend badges and the "Ver gráfico" dialog (reusing the local `BPChartSVGContent` in `contacts/BPChartSVGContent.jsx`); Net Balance value is Income − Expenses and every badge trend is computed from the `bp-trend` series via `windowTrend` (last month vs first month of the selected period). In the General tab the widget is wired through `DetailView` `headerContent`; in the Financial tab it is rendered at the top of `ContactsFinancialPanel`, so the same summary is visible in both tabs. `ContactsPeriodButton` (wired via the `DetailView` `tabsBarAfter` slot) renders the period selector immediately to the right of the General/Financial tabs. The sidebar is removed by setting `window.sidebarLayout: false` in `decisions.json`, which stops the generator from emitting `sidebarContent`.
 - `tools/app-shell/src/components/contract-ui/__tests__/DetailView.autoSaveOnBlur.test.js` is a static regression guard (ETP-3660) that reads `DetailView.jsx` as a string and asserts: `autoSaveOnBlur` prop has a `false` default; `handleFieldBlur` exists alongside `hook.editing`, `hook.selected`, and `hook.handleSave` usage; `onFieldBlur={autoSaveOnBlur ? handleFieldBlur : undefined}` appears on both Form instances (principal and collapsed sections).
@@ -709,6 +709,14 @@ modal's tax-ID input by locating its label text, were updated from
 `<label>` specifically because the sibling "Clave NIF país residencia" `<select>` also has a
 literal `<option>NIF</option>`, which a plain `getByText(/^nif/i)` would ambiguously match too.
 
+**Superseded by ETP-5332.** `CreateContactModal.jsx` and `EntityCreationModal.jsx` no longer
+exist — the "+ crear contacto" flow from other windows now mounts this Contacts window itself
+via `RecordCreateModal` (see `docs/ui-customization.md` §19b), so the tax-ID field it renders is
+this window's own `TaxID`, already resolved to "NIF" through the `window.labelOverrides.es_ES`
+mechanism described above. `genericLabels.taxIDField` (still `"NIF"` in `es_ES.json`) has no
+remaining consumer in the codebase; the paragraph above is kept as the historical record of why
+the label was changed on that day, not as a description of current wiring.
+
 The import's `TAX_ID_KEY_VALUES` alias list in `contactsImportDescriptor.js` (accepting
 user-typed `'CIF'`/`'CIF/NIF'`/`'NIF/CIF'` as synonyms for the *Tax ID Type* enum value `NIF`)
 remains unchanged — it recognizes what users type in their own CSV files and is unrelated to
@@ -1106,3 +1114,98 @@ No secondary sort key was needed here, unlike `financial-account`'s two-key rest
 Purely declarative — no new generator or component logic — so no new test was added beyond the
 existing generic `listSortBy` coverage (`parseListSortBy.test.js`,
 `ListView.interactions.vitest.jsx`).
+
+## ETP-5348 — Import: the file is judged before the mapping step
+
+Engine-level work shared with Product, reported against Product Import but landing entirely in
+the shared `ImportDialog` and parsers, so Contacts gets all of it. Full write-up in
+`product.md` → *ETP-5348*.
+
+Five rejections now happen before the mapping step instead of not at all: a file over the
+window's declared row limit (which used to be truncated in silence, *and* whose declared value
+was never read because the contract nests it under `limit`), a file whose format the window does
+not declare, duplicate headers differing only in case/accents/whitespace, a blank header, and a
+file carrying headers but no data rows.
+
+Two points specific to this window:
+
+- Contacts declares the same `limit: { maxRows: 5000, concurrency: 4 }` as Product, so the
+  nested-key fix changes no effective value here either — it only means the declaration now
+  governs, rather than coinciding with a default.
+- The duplicate-header fix matters more here than in Product: the Contacts template legitimately
+  carries several columns whose AD labels collide before qualification ("Correo electrónico" for
+  both `etgoEmail` and `email`), which is what `resolveTemplateHeaders`' collision fallback and
+  the `headerScope` qualifier exist for. Tightening the guard to normalized comparison does not
+  touch those — they are disambiguated *before* they are written — but it does mean a
+  hand-edited file that flattens two qualified headers back onto the same name is now caught at
+  upload instead of silently losing a column.
+
+## ETP-5373 — The downloaded template could not be imported as-is
+
+Two of the template's own example values were refused by `BusinessPartnerHandler` at confirm
+time, each with a different error, so the user discovered them one at a time and the "download
+the template, fill it in, upload it" path never completed without hand-editing the sample row.
+
+| Column | Shipped | Result | Now |
+| --- | --- | --- | --- |
+| `taxID` | `B12345678` | Rejected — wrong check digit (`SpanishTaxIdValidator`) | `B12345674` |
+| `etgoWeb` | `https://distribucionesgarcia.es` | Rejected — the validator wants a bare domain | `distribucionesgarcia.es` |
+
+The other format-validated examples (`etgoEmail`, `email`, `etgoPhone`, `phone`) were already
+fine.
+
+### Why the web example was wrong, and the rule that prevents the next one
+
+`EM_Etgo_Web` stores **only the host**: the form renders a fixed, non-editable `https://` chip
+before the input (`inputPrefix` on the field descriptor, ETP-4749), so what the user sees is not
+what the column holds. The backend validates the stored value as a host — at least two
+dot-separated labels, the last a 2+ letter TLD — and `https://…` makes the first label invalid.
+
+The general rule, which is the one worth remembering: **an import example is the value that will
+be STORED, not the one a user sees in the form.** That covers the coded columns too, from the
+other direction — `etgoIsperson` ships `"Empresa"` and `oBTIKTaxIDKey` ships `"NIF"` because
+those cells are labels the descriptor resolves (`'N'`, `'1'`) before sending.
+
+### Why nothing caught it
+
+The examples live in `artifacts/contacts/decisions.json` → `window.import.fields[].example` and
+the pipeline writes them into the contract. Client-side, the review screen runs `validateRow`,
+which knows about required / email / numeric and nothing else — so both values previewed as
+correct. Nothing connected the examples to the rules that would judge them, and an invalid
+example therefore shipped without anything failing.
+
+### The guard
+
+`importTemplateRoundTrip.vitest.js` → *ETP-5373* now judges every window's examples with the
+browser mirrors of the Java validators (`lib/taxIdValidation.js` ↔ `SpanishTaxIdValidator.java`,
+`recipientEdits.js` ↔ the handler's `EMAIL_PATTERN` / `isDomainShaped` / `isPlausiblePhone`) —
+imported, never restated, so a third copy cannot drift from either side.
+
+It is deliberately not a list of the two values that were wrong. It asks the **same detectors
+production uses** (`isTaxIdField`, `isEmailField`, `isWebsiteField`, `isPhoneField`) which
+columns carry a format rule, so the next import column named `*email*`, `*phone*`, `*web*` or
+`taxID` is covered the day it is declared. Four assertions hold it up: every detected example
+passes its rule; the set of detected columns is pinned (otherwise the guard could pass by
+matching nothing); every example fits its AD column length (`etgoPhone`'s 15 is the same cap the
+handler applies); and the two values shipped before this ticket are still rejected, so the rules
+cannot go soft without the suite saying so.
+
+The tax-id assertion is dispatched the way the backend dispatches it: the NIF algorithm only
+runs when the row declares document type NIF, which the template does in a sibling column, so
+the test resolves `oBTIKTaxIDKey`'s example through the descriptor's own `TAX_ID_KEY_VALUES`
+label table rather than assuming it.
+
+## ETP-5374 — Duplicate detection died in silence above ~72 rows
+
+Engine-level work shared with Product, reported against Product Import but landing entirely in
+the shared `existingRecordLookup.js` + `ImportDialog`, so Contacts gets all of it. Full write-up
+in `product.md` → *ETP-5374*.
+
+One point specific to this window: Contacts dedupes on `taxID`, a single column, so its batches
+land at ~38 keys each — the same order as Product's `searchKey`. A window that ever declares a
+composite `dedupe.key` gets proportionally smaller batches automatically, which is the whole
+reason the new rule measures URL length instead of counting keys.
+
+The threshold was the same here as in Product, because the limit is Tomcat's and not the
+window's: above ~72 distinct NIFs the pre-check was refused with a 400 and every row showed as
+Correcta.
