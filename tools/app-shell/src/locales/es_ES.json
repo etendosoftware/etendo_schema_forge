@@ -20642,6 +20642,8 @@
     "backendError.cannotDeleteOwner": "Este usuario es el propietario de la empresa y no puede eliminarse.",
     "backendError.cannotDeleteLastAdmin": "No se puede eliminar al último administrador activo de este cliente.",
     "backendError.fieldTooLong": "Este valor es demasiado largo. No puede superar los {maxLength} caracteres.",
+    "backendError.cannotChangeBpWithLines": "No se puede modificar el Contacto cuando hay líneas.",
+    "backendError.cannotChangeBpOrPriceListWithLines": "No se puede cambiar el Contacto ni la tarifa cuando hay líneas.",
     "uomTypeArea": "Área",
     "uomTypeLength": "Longitud",
     "uomTypeTime": "Tiempo",
