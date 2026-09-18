@@ -377,6 +377,7 @@
           "section": "principal"
         },
         "movementQuantity": {
+          "visibility": "editable",
           "grid": true,
           "gridOrder": 2,
           "inputMode": "number",

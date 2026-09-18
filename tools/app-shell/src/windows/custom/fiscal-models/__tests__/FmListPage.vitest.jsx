@@ -6,8 +6,26 @@ import { registerApiSession, resetApiSessionForTests } from '@/auth/api.js';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
+// NOTE: this mocks '@etendosoftware/app-shell-core' (bare package id), but
+// FmListPage.jsx actually imports useUI/useLocaleSwitch from '@/i18n', which
+// re-exports the '@etendosoftware/app-shell-core/i18n' SUBPATH — a different
+// module id, so this mock never intercepts anything (see the identical note in
+// FmListPage.breadcrumb.i18n.vitest.jsx). Every `t('fm.xxx')` call in this file
+// silently exercises the REAL useUI() with no LocaleProvider in scope, which
+// falls back to returning the raw key unchanged — hence the many
+// `toContain('fm.list.title')`-style raw-key assertions below. ETP-5338 adds a
+// matching identity mock on the actual import path so this stays true (and
+// genuinely intercepted) for the newly-i18n'd strings this fix touches
+// ("Todos los modelos", '+ fm.action.new_declaration', etc. — see the updated
+// assertions below expecting their raw keys instead of the old hardcoded
+// Spanish literals). Not fixing the broader test-infra gap here — out of scope
+// for this bugfix, flagged to Tester instead.
 vi.mock('@etendosoftware/app-shell-core', () => ({
   useUI: () => (key) => key,
+}));
+vi.mock('@/i18n', () => ({
+  useUI: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 vi.mock('../fiscal-models.css', () => ({}));
 vi.mock('../useFiscalAutoCompute.js', () => ({
@@ -52,9 +70,15 @@ vi.mock('../FmCatalogPage.jsx', () => ({
       ),
     ),
 }));
-vi.mock('@/components/ui/checkbox', () => ({
-  Checkbox: ({ checked, onChange }) =>
-    React.createElement('input', { type: 'checkbox', checked: !!checked, onChange: onChange ?? (() => {}) }),
+vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
+  CheckboxField: ({ checked, disabled, onToggle, onClick }) =>
+    React.createElement('input', {
+      type: 'checkbox',
+      checked: !!checked,
+      disabled,
+      onClick,
+      onChange: e => onToggle?.(e.target.checked),
+    }),
 }));
 vi.mock('lucide-react', () => ({
   LayoutGrid: () => null, Settings: () => null, ListFilter: () => null,
@@ -62,8 +86,9 @@ vi.mock('lucide-react', () => ({
   MoreVertical: () => null, Calendar: () => null, Clock: () => null,
   TriangleAlert: () => null, OctagonAlert: () => null, ArrowUpRight: () => null,
   Search: () => null, Play: () => null, Check: () => null,
-  // FmRowActions.jsx (ETP-5187, rendered per draft-status row) imports these 3.
-  Pencil: () => null, Trash2: () => null, Loader2: () => null,
+  // FmRowActions.jsx (ETP-5187 Edit/Delete for draft rows, ETP-5338 Reactivate for
+  // submitted/submitted_ack rows) imports these 4.
+  Pencil: () => null, Trash2: () => null, Loader2: () => null, RotateCcw: () => null,
 }));
 vi.mock('../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
@@ -117,7 +142,7 @@ const defaultProps = {
 // when `token`/`apiBaseUrl` are present (see FmListPage.jsx). Without them,
 // `activeModels` starts empty and stays empty — there is no more in-memory
 // default of "303 and 349 active". Tests that need non-empty activeModels
-// (row rendering, filtering, KPI counts, "+ Nueva declaración" visibility,
+// (row rendering, filtering, KPI counts, '+ fm.action.new_declaration' visibility,
 // etc.) must supply these props and mock `fetch`.
 const TOKEN = 'test-token';
 const API_BASE_URL = '/api/window';
@@ -508,7 +533,7 @@ describe('FmListPage — new declaration modal', () => {
     globalThis.fetch = mockCatalogFetch();
     const { container, getByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
     await waitForCatalogLoad();
-    fireEvent.click(getByText('+ Nueva declaración'));
+    fireEvent.click(getByText('+ fm.action.new_declaration'));
     const modal = container.querySelector('[data-testid="new-decl-modal"]');
     expect(modal).toBeTruthy();
     expect(JSON.parse(modal.getAttribute('data-active-models'))).toEqual({ '303': true, '349': true });
@@ -557,19 +582,19 @@ function deactivateAllModels(container, getByText) {
 }
 
 describe('FmListPage — no active models', () => {
-  it('shows "+ Nueva declaración" when at least one model is active (default)', async () => {
+  it('shows the new-declaration CTA when at least one model is active (default)', async () => {
     globalThis.fetch = mockCatalogFetch();
     const { queryByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
     await waitForCatalogLoad();
-    expect(queryByText('+ Nueva declaración')).toBeTruthy();
+    expect(queryByText('+ fm.action.new_declaration')).toBeTruthy();
   });
 
-  it('hides "+ Nueva declaración" once every model is deactivated', async () => {
+  it('hides the new-declaration CTA once every model is deactivated', async () => {
     globalThis.fetch = mockCatalogFetch();
     const { container, getByText, queryByText } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
     await waitForCatalogLoad();
     deactivateAllModels(container, getByText);
-    expect(queryByText('+ Nueva declaración')).toBeFalsy();
+    expect(queryByText('+ fm.action.new_declaration')).toBeFalsy();
   });
 
   it('shows the no-active-models empty state message instead of the generic one', async () => {
@@ -594,19 +619,19 @@ describe('FmListPage — no active models', () => {
     expect(empty.textContent).toContain('fm.list.empty_no_active_models');
   });
 
-  it('reactivating a model from the catalog restores "+ Nueva declaración" and the table, in the same session', async () => {
+  it('reactivating a model from the catalog restores the new-declaration CTA and the table, in the same session', async () => {
     globalThis.fetch = mockCatalogFetch();
     const decls = [makeDecl(), makeDecl()];
     const { container, getByText, queryByText } = render(<FmListPage declarations={decls} {...withCatalogProps} />);
     await waitForCatalogLoad();
 
     // Start with both models active: button shown, table shown.
-    expect(queryByText('+ Nueva declaración')).toBeTruthy();
+    expect(queryByText('+ fm.action.new_declaration')).toBeTruthy();
     expect(container.querySelector('table')).toBeTruthy();
 
     // Deactivate everything: button hidden, dedicated empty state shown.
     deactivateAllModels(container, getByText);
-    expect(queryByText('+ Nueva declaración')).toBeFalsy();
+    expect(queryByText('+ fm.action.new_declaration')).toBeFalsy();
     expect(container.querySelector('table')).toBeFalsy();
     expect(container.querySelector('.fm-empty-state').textContent).toContain('fm.list.empty_no_active_models');
 
@@ -615,7 +640,7 @@ describe('FmListPage — no active models', () => {
     fireEvent.click(container.querySelector('[data-testid="catalog-save-303-only"]'));
 
     // Empty state is gone, the CTA/no-active message no longer shows, button and table are back.
-    expect(queryByText('+ Nueva declaración')).toBeTruthy();
+    expect(queryByText('+ fm.action.new_declaration')).toBeTruthy();
     expect(container.querySelector('table')).toBeTruthy();
     const empty = container.querySelector('.fm-empty-state');
     expect(empty).toBeFalsy();
@@ -629,7 +654,7 @@ describe('FmListPage — no active models', () => {
     // Default state: both models active → count is 2.
     expect(getByText(/fm\.catalog\.title.*\(2\)/)).toBeTruthy();
 
-    // Deactivate 349, keep 303 active → count is 1, "+ Nueva declaración" still shows.
+    // Deactivate 349, keep 303 active → count is 1, '+ fm.action.new_declaration' still shows.
     fireEvent.click(getByText(/fm\.catalog\.title/));
     fireEvent.click(container.querySelector('[data-testid="catalog-save-303-only"]'));
 
@@ -922,7 +947,7 @@ describe('FmListPage — fiscal-models-catalog backend integration', () => {
     fireEvent.click(getByText(/fm\.catalog\.title/));
     fireEvent.click(container.querySelector('[data-testid="catalog-save-303-only"]'));
     expect(globalThis.fetch).not.toHaveBeenCalled();
-    expect(queryByText('+ Nueva declaración')).toBeTruthy();
+    expect(queryByText('+ fm.action.new_declaration')).toBeTruthy();
   });
 });
 
@@ -984,7 +1009,7 @@ describe('FmListPage — fiscal-models-catalog error and malformed-response hand
     // 3 "active" models even though modelOptions/activeDecls correctly see none
     // (string indexing by '303'/'349' is `undefined`). Consequences, both visible
     // in this test: (1) the toolbar shows a misleading "(3)" and the
-    // "+ Nueva declaración" CTA becomes visible, AND (2) because `activeCount`
+    // '+ fm.action.new_declaration' CTA becomes visible, AND (2) because `activeCount`
     // (not `modelOptions.length`) gates the table-vs-empty-state branch, the UI
     // skips the intended "no active models, configure from the Catálogo" empty
     // state and instead falls through to the plain/generic empty table — an
@@ -995,7 +1020,7 @@ describe('FmListPage — fiscal-models-catalog error and malformed-response hand
     const { getByText, container } = render(<FmListPage declarations={[]} {...withCatalogProps} />);
     await waitForCatalogLoad();
     expect(getByText(/fm\.catalog\.title.*\(3\)/)).toBeTruthy();
-    expect(getByText('+ Nueva declaración')).toBeTruthy();
+    expect(getByText('+ fm.action.new_declaration')).toBeTruthy();
     // Falls through to the generic/plain empty state, NOT the "no active models" one.
     expect(container.querySelector('.fm-empty-state').textContent).toBe('empty');
   });

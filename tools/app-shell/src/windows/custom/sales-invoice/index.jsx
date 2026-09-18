@@ -100,7 +100,11 @@ function SalesInvoiceBulkAction(props) {
     <>
       <BulkDocumentAction
         {...props}
-        labelKey="confirmBulk"
+        labelKey="process"
+        // ETP-5302 — Core's C_INVOICE_POST refuses RE while Posted='Y'. The detail kebab
+        // already unposts first (`preUnpost: true` in decisions.json); this makes the bulk
+        // bar run the same two steps instead of failing with "Factura contabilizada".
+        preUnpostActions={['RE']}
         data-testid="BulkDocumentAction__c01c21" />
       {/* ETP-5209 — bulk Contabilizar (post), gated to processed & not-yet-posted rows */}
       <BulkDocumentAction
@@ -179,7 +183,12 @@ export default function SalesInvoiceWindow(props) {
   const effectiveRecord = savedRecord ?? location.state?.savedRecord ?? null;
 
   const clearSavedRecord = useClearSavedRecord(setSavedRecord, location, navigate);
-  const draftModeOverride = getInvoiceDraftMode(ui, { showVerifactuProcessingModal: showVerifactu });
+  // MUST stay in sync with artifacts/sales-invoice/decisions.json ->
+  // window.draftMode.keepSaveWhenCompletedFields. This override is what actually reaches
+  // DetailView: the generated HeaderPage sets draftMode from the contract but expands
+  // {...props} AFTER it, so this value wins and the contract's never applies here (ETP-5273).
+  // draft-mode-allowlist-sync.test.js fails if the two drift apart.
+  const draftModeOverride = getInvoiceDraftMode(ui, { showVerifactuProcessingModal: showVerifactu, keepSaveWhenCompletedFields: ['accountingDate'] });
 
   // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
   // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.

@@ -21,8 +21,14 @@ describe('CommandPalette', () => {
     assert.match(src, /\.filter\s*\(\s*g\s*=>\s*!g\.hidden\s*\)/);
   });
 
-  it('filters items within groups with !i.hidden', () => {
-    assert.match(src, /\.filter\s*\(\s*i\s*=>\s*!i\.hidden\s*\)/);
+  it('filters hidden items within groups before applying restricted-item gates', () => {
+    assert.match(src, /\.filter\s*\(\s*i\s*=>\s*!i\.hidden\s*&&/);
+  });
+
+  it('filters public API keys by the feature flag and admin capability', () => {
+    assert.match(src, /useFeatureFlag, ACCT_PROCESS_MONITOR, PUBLIC_API_KEYS/);
+    assert.match(src, /!i\.featureFlag \|\| featureFlagValues\[i\.featureFlag\] === true/);
+    assert.match(src, /!i\.capability \|\| capabilities\?\.\[i\.capability\] === true/);
   });
 
   it('uses tMenu(group.group) for group headings', () => {

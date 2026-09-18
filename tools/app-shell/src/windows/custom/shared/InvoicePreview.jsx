@@ -316,13 +316,31 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
   // ahead of the jsreport regeneration and closes the preview/button gap.
   const hasPdf = !!p.pdfUrl || !!cachedAttachment;
 
-  const handleDownloadPdf = () => {
-    if (cachedAttachment) {
+  // ETP-5358 Part 2 — cachedAttachment.objectUrl is null right after onFileChange fires in
+  // autoFetch mode (see useMainAttachment's skipBlobFetch): the marked attachment's existence
+  // is known, but its bytes were never eagerly downloaded. fetchBlobUrl() resolves them lazily,
+  // on demand, right here — the one moment they are actually needed. If that comes back empty
+  // (e.g. the attachment was replaced by a concurrent re-upload/re-confirm), fall through to the
+  // live-rendered pdfUrl, same as before this existed. Purchase-invoice never reaches this
+  // (isSendable excludes it, see the actionButtons wiring below), so its always-eager,
+  // always-populated cachedAttachment.objectUrl (drop-zone mode) is unaffected.
+  const handleDownloadPdf = async () => {
+    if (cachedAttachment?.objectUrl) {
       const a = document.createElement('a');
       a.href = cachedAttachment.objectUrl;
       a.download = cachedAttachment.fileName || `invoice-${p.displayInvoice?.documentNo || 'document'}.pdf`;
       a.click();
       return;
+    }
+    if (cachedAttachment?.fetchBlobUrl) {
+      const url = await cachedAttachment.fetchBlobUrl();
+      if (url) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = cachedAttachment.fileName || `invoice-${p.displayInvoice?.documentNo || 'document'}.pdf`;
+        a.click();
+        return;
+      }
     }
     p.handleDownloadPdf();
   };

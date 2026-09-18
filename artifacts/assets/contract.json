@@ -1,8 +1,8 @@
 {
-  "version": "0.44.0",
+  "version": "0.45.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-09-07T16:05:37.885Z",
-  "checksum": "b4310b6d67ab2fcd",
+  "updatedAt": "2026-09-16T18:22:09.873Z",
+  "checksum": "e82283ff80b0689c",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -776,6 +776,28 @@
             }
           },
           {
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_BPartner_ID",
+            "label": "Business Partner",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "BPartner",
+            "inputMode": "search",
+            "section": "principal",
+            "validation": {
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@IsDepreciated@='Y'",
+              "evaluable": true
+            }
+          },
+          {
             "name": "eTADASCostCenter",
             "apiKey": "eTADASCostCenter",
             "column": "EM_Etadas_Costcenter_ID",
@@ -1488,7 +1510,7 @@
             "apiKey": "businessPartner",
             "column": "C_BPartner_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -2239,6 +2261,14 @@
       },
       {
         "entity": "assets",
+        "field": "businessPartner",
+        "column": "C_BPartner_ID",
+        "reference": "BPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/assets/assets/selectors/businessPartner"
+      },
+      {
+        "entity": "assets",
         "field": "eTADASCostCenter",
         "column": "EM_Etadas_Costcenter_ID",
         "reference": "Costcenter",
@@ -2475,6 +2505,14 @@
         "description": "Display logic for 'annualDepreciation' in assets should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-assets-businessPartner",
+        "category": "displaylogic-evaluable",
+        "entity": "assets",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Display logic for 'businessPartner' in assets should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-assets-calculateType",
         "category": "displaylogic-evaluable",
         "entity": "assets",
@@ -2633,6 +2671,14 @@
         "field": "annualDepreciation",
         "runner": "node",
         "description": "Display logic for 'annualDepreciation' in assets should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-assets-businessPartner",
+        "category": "displaylogic-valid",
+        "entity": "assets",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Display logic for 'businessPartner' in assets should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-assets-calculateType",
@@ -2873,6 +2919,14 @@
         "field": "assetValue",
         "runner": "node",
         "description": "Field 'assetValue' should be present in assets"
+      },
+      {
+        "id": "t-field-presence-assets-businessPartner",
+        "category": "field-presence",
+        "entity": "assets",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should be present in assets"
       },
       {
         "id": "t-field-presence-assets-calculateType",
@@ -3169,6 +3223,14 @@
         "field": "assetValue",
         "runner": "node",
         "description": "Field 'assetValue' should have type 'number' in assets"
+      },
+      {
+        "id": "t-field-type-assets-businessPartner",
+        "category": "field-type",
+        "entity": "assets",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should have type 'string' in assets"
       },
       {
         "id": "t-field-type-assets-calculateType",
@@ -3606,6 +3668,14 @@
         "description": "Selector endpoint for 'assetCategory' in assets should exist"
       },
       {
+        "id": "t-selector-endpoint-assets-businessPartner",
+        "category": "selector-endpoint",
+        "entity": "assets",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Selector endpoint for 'businessPartner' in assets should exist"
+      },
+      {
         "id": "t-selector-endpoint-assets-currency",
         "category": "selector-endpoint",
         "entity": "assets",
@@ -3910,14 +3980,6 @@
         "description": "System field 'attributeSetValue' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-system-field-assets-businessPartner",
-        "category": "system-field",
-        "entity": "assets",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "System field 'businessPartner' should exist in backend but not frontend for assets"
-      },
-      {
         "id": "t-system-field-assets-client",
         "category": "system-field",
         "entity": "assets",
@@ -4212,25 +4274,25 @@
       }
     ],
     "summary": {
-      "total": 235,
+      "total": 239,
       "byCategory": {
         "action-endpoint": 2,
         "crud-flags": 3,
         "default-value-type": 9,
-        "displaylogic-evaluable": 20,
-        "displaylogic-valid": 20,
-        "field-presence": 37,
-        "field-type": 37,
+        "displaylogic-evaluable": 21,
+        "displaylogic-valid": 21,
+        "field-presence": 38,
+        "field-type": 38,
         "readonlylogic-evaluable": 4,
         "readonlylogic-valid": 4,
         "rule-declared": 13,
         "searchable-filters": 4,
-        "selector-endpoint": 10,
-        "system-field": 69,
+        "selector-endpoint": 11,
+        "system-field": 68,
         "visibility": 3
       },
       "byRunner": {
-        "node": 235,
+        "node": 239,
         "junit": 0
       }
     }

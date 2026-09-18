@@ -2520,3 +2520,58 @@ variation involved.
 letting the page settle (e.g. two `requestAnimationFrame`s, or a short fixed wait) before taking the
 "before" measurement, not loosening the 0.5px tolerance (which is correctly guarding against a real
 class of bug — table-layout content-driven resize — that this spec exists to catch).
+
+---
+
+## [2026-09-16] ETP-5302 — One rule, two implementations: bulk reactivate failed on a posted invoice
+
+**Component:** `tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx` and
+`DetailMoreActionsMenu.jsx` — the `preUnpost` rule.
+
+**Symptom:** Reactivating a Completed + **Posted** invoice from the list's floating selection
+bar returned `{"status":"error","message":"Factura contabilizada"}` and the row was counted
+as failed. Reactivating the *very same invoice* from its detail-form kebab worked. Two
+surfaces, one action, opposite outcomes — which is what made it read as a data or permissions
+problem rather than a wiring one.
+
+**Root cause:** The rule *"reactivating a posted document reverses its accounting first"* is
+declared per window in `decisions.json` as `preUnpost: true` on the `reactivate` menu action
+(`sales-invoice`, `purchase-invoice`, `amortization`). It was **implemented only in
+`DetailMoreActionsMenu.jsx`** — and duplicated across that component's two branches, so it was
+already two copies before the bulk bar existed. `BulkDocumentAction` had no knowledge of the
+attribute at all and sent a bare `docAction: 'RE'`, which Core rejects:
+`src-db/database/model/functions/C_INVOICE_POST.xml:948` —
+`IF (v_Posted='Y') THEN RAISE_APPLICATION_ERROR('@InvoiceDocumentPosted@')`, translated to
+"Factura contabilizada" through the `InvoiceDocumentPosted` `AD_MESSAGE`.
+
+**Fix:** The rule moved to a single home, `tools/app-shell/src/lib/preUnpost.js`:
+`isPosted(row)` and `runPreUnpost({recordId, record, enabled, execute})` → `{ran, success,
+message}`. `DetailMoreActionsMenu`'s two branches now call it (observable behaviour
+unchanged) and `BulkDocumentAction` gained a `preUnpostActions` prop, mounted as
+`preUnpostActions={['RE']}` by both invoice windows. Each row runs unpost → action; a failed
+unpost aborts that row, so a document still carrying its accounting entries is never
+reactivated.
+
+**Lesson (the generalisable one).** A behaviour *declared* in `decisions.json` but
+*implemented* in one component is a rule with no single owner. Every other surface that can
+trigger the same action silently ignores it, and nothing fails at build time, in review, or
+in the pipeline validator — the divergence only surfaces when a user runs the action from the
+other surface. **Before adding a second surface for an existing action (a bulk bar, a row
+kebab, an MCP tool), grep `decisions.json` for the flags that action carries and check each
+one is honoured, not just the happy-path call.** If a flag's handling lives inline in a
+component, extract it to `lib/` as the first step, not as cleanup afterwards.
+
+**Two supporting notes worth keeping:**
+
+- `isPosted` counts only `'Y'` / `true`. The AD *Posted status* domain also holds `T`, `E`,
+  `D`, `p`, `i` (Error, Invalid Account, …) — none of which mean posted. A truthiness check on
+  `row.posted` would treat every one of them as posted and unpost a document that never was.
+- `preUnpost.js` is deliberately **not a hook**. `BulkDocumentAction` is reached from a
+  `bulkActions` slot that `ListView` invokes as a flat function call, so anything reachable
+  from there must stay hook-free — this is the same constraint that produced the ETP-5209
+  production crash *"Rendered more hooks than during the previous render"*.
+
+**Deliberately not harmonised:** the order windows do **not** get `preUnpostActions`.
+`C_ORDER_POST1.xml` has no `Posted` guard on its `RE` branch, so unposting there would be a
+gratuitous accounting reversal, not a fix. Opt-in per window is the correct shape here — a
+"consistency" pass that applies it to every window offering `RE` would be a regression.
