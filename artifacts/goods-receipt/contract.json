@@ -1,8 +1,8 @@
 {
-  "version": "0.34.0",
+  "version": "0.35.0",
   "generatedAt": "2026-07-30T22:14:36.474Z",
-  "updatedAt": "2026-09-09T16:24:55.236Z",
-  "checksum": "864ee2053576246d",
+  "updatedAt": "2026-09-17T17:06:37.748Z",
+  "checksum": "5e00ccdccf822132",
   "frontendContract": {
     "window": {
       "id": "184",
@@ -161,8 +161,8 @@
             "tsType": "string",
             "visibility": "editable",
             "required": true,
-            "grid": false,
-            "form": false,
+            "grid": true,
+            "form": true,
             "sourceRequired": true,
             "reference": "BusinessPartnerLocation",
             "inputMode": "dependent",
@@ -170,6 +170,8 @@
               "field": "businessPartner",
               "filterKey": "C_BPartner_ID"
             },
+            "section": "principal",
+            "seq": 50,
             "validation": {
               "required": true,
               "maxLength": 22

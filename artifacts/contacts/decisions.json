@@ -5,7 +5,7 @@
     "category": "contact",
     "name": "Contacts",
     "vectorSearch": {
-      "target": "business-partner"
+      "target": "contacts"
     },
     "entityLabel": "Contact",
     "sidebarLayout": false,

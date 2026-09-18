@@ -187,6 +187,8 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
         token={token}
         Table={CustomGoodsShipmentTable}
         initialColumnFilters={initialColumnFilters}
+        /* ETP-5009 — a ?DocStatus deep-link outranks the saved grid state. */
+        initialFiltersFromUrl={Boolean(docStatus)}
         rowQuickActions={rowQuickActions}
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}
         refreshTrigger={refreshKey}
