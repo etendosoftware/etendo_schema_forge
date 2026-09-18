@@ -30,7 +30,7 @@ const columns = [
   { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true, maxLength: 60, grow: true },
   { key: 'taxCategory', column: 'C_TaxCategory_ID', type: 'selector', label: 'Tax Category', required: true },
   { key: 'rate', column: 'Rate', type: 'number', label: 'Rate', render: renderTaxRate, required: true },
-  { key: 'applicableTo', column: 'SOPOType', type: 'enum', label: 'Sales/Purchase Type', enumLabels: { 'B': 'sopotypeB', 'P': 'sopotypeP', 'S': 'sopotypeS' }, render: (row) => <TaxScopeCell row={row} fieldKey="applicableTo" />, required: true, backendFilterKey: 'salesPurchaseType' },
+  { key: 'applicableTo', column: 'SOPOType', type: 'enum', label: 'Sales/Purchase Type', enumLabels: { 'B': 'sopotypeB', 'P': 'sopotypeP', 'S': 'sopotypeS' }, render: (row) => <TaxScopeCell row={row} fieldKey="applicableTo" />, required: true, backendFilterKey: 'salesPurchaseType', backendSortKey: 'salesPurchaseType' },
 ];
 // @sf-generated-end columns:tax
 
