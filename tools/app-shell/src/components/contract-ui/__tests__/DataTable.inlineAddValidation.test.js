@@ -70,19 +70,23 @@ describe('DataTable — inline-add-row validation (ETP-4005)', () => {
     assert.ok(idxBelow > idxMissing, 'below-min check must come after missing-required check');
   });
 
-  it('keeps the inline-add row open on missing-required (returns Promise.resolve(false))', () => {
-    // Must NOT enter the in-flight state — the row stays open so the user can fix it.
-    const block = src.slice(src.indexOf('const missing = fields.filter'), src.indexOf('setIsSaving(true);'));
+  it('keeps the inline-add row open on missing-required (resolves false without saving)', () => {
+    // Validation now runs inside the same async IIFE as the callout wait (see
+    // DataTable.calloutRace.test.js's "runs the callout wait before validation"
+    // case), so a validation failure returns a plain `false` rather than
+    // `Promise.resolve(false)`; the enclosing async function still resolves it
+    // to a Promise for the caller either way.
+    const block = src.slice(src.indexOf('const missing = fields.filter'), src.indexOf('const coercedValues = coerceFieldValues'));
     assert.match(block, /setInvalidFields\(new Set\(missing\.map\(f => f\.key\)\)\)/);
     assert.match(block, /toast\.error\(ui\('requiredFieldsMissing'\)\)/);
-    assert.match(block, /return Promise\.resolve\(false\);/);
+    assert.match(block, /return false;/);
   });
 
   it('keeps the inline-add row open on below-min and toasts fieldMinValueError', () => {
-    const block = src.slice(src.indexOf('const belowMin = fields.filter'), src.indexOf('setIsSaving(true);'));
+    const block = src.slice(src.indexOf('const belowMin = fields.filter'), src.indexOf('const coercedValues = coerceFieldValues'));
     assert.match(block, /setInvalidFields\(new Set\(belowMin\.map\(f => f\.key\)\)\)/);
     assert.match(block, /toast\.error\(ui\('fieldMinValueError', \{ min: belowMin\[0\]\.min \}\)\)/);
-    assert.match(block, /return Promise\.resolve\(false\);/);
+    assert.match(block, /return false;/);
   });
 
   it('focuses the first invalid field via its field-{key} data-testid', () => {

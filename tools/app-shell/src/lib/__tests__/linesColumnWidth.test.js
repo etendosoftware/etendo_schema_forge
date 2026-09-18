@@ -151,6 +151,20 @@ describe('linesColumnWidth', () => {
         assert.equal(columnFlex({ type: 'amount', minWidth: 300, grow: true }, 1), '1 1 300px');
       });
     });
+
+    // A `boolean`+`badge` column normally gets the generic 152px basis, but the
+    // Posted-status column (`postedStatus.js`) needs a wider 240px basis — its
+    // pill can also show one of 15 long reason codes, not just true/false.
+    describe('boolean+badge basis', () => {
+      it('a generic boolean+badge column gets the 152px basis', () => {
+        assert.equal(columnFlex({ type: 'boolean', badge: true, column: 'Active' }, 1), '0 0 152px');
+      });
+
+      it('the Posted-status column gets the wider 240px basis', () => {
+        assert.equal(columnFlex({ type: 'boolean', badge: true, column: 'Posted' }, 1), '0 0 240px');
+        assert.equal(columnFlex({ type: 'boolean', badge: true, column: 'posted' }, 1), '0 0 240px');
+      });
+    });
   });
 
   describe('columnMinWidthPx', () => {
@@ -203,6 +217,18 @@ describe('linesColumnWidth', () => {
       it('wins regardless of idx', () => {
         assert.equal(columnMinWidthPx({ type: 'selector', minWidth: 280 }, 0), 280);
         assert.equal(columnMinWidthPx({ type: 'selector', minWidth: 280 }, 1), 280);
+      });
+    });
+
+    describe('boolean+badge basis', () => {
+      it('a generic boolean+badge column gets the 152px basis', () => {
+        assert.equal(columnMinWidthPx({ type: 'boolean', badge: true, column: 'Active' }), 152);
+      });
+
+      it('the Posted-status column gets the wider 240px basis, matching columnFlex', () => {
+        const col = { type: 'boolean', badge: true, column: 'Posted' };
+        assert.equal(columnMinWidthPx(col), 240);
+        assert.equal(columnMinWidthPx(col), basis(columnFlex(col, 1)));
       });
     });
   });

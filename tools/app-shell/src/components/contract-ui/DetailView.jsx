@@ -1739,13 +1739,9 @@ export function DetailView({
       return () => clearTimeout(t);
     }
   }, [selectedChildRows.length, selectionBarVisible]);
-  // Per-tab close-animation timeouts. Kept in a ref so the lifecycle effect
-  // below doesn't have to depend on visibility state (which would cancel its
-  // own scheduled close on the next re-render).
+  // Per-tab close-animation timeout ids (kept in a ref so the effect below doesn't depend on visibility state).
   const secondaryBarTimeoutRef = useRef({});
-  // Mirrors the primary lifecycle, but iterates secondary tabs. Each tab's
-  // bar mounts when its selection becomes non-empty and slides out 250ms
-  // after the selection is cleared.
+  // Mirrors the primary close-line lifecycle per secondary tab: bar slides out 250ms after selection clears.
   useEffect(() => {
     for (const st of secondaryTabs) {
       const tabKey = st.key;
@@ -1767,9 +1763,9 @@ export function DetailView({
       }
     }
   }, [secondarySelectedRows, secondaryTabs]);
-  // Flush any pending secondary-bar close timeouts on unmount so they can't
-  // fire a setState after teardown (which throws "window is not defined" once
-  // the test/jsdom environment is gone).
+  // Flush pending secondary-bar, close-line and close-secondary-line timeouts on
+  // unmount so they can't fire a setState after teardown (which throws "window is
+  // not defined" once the test/jsdom environment is gone).
   useEffect(() => {
     const timeouts = secondaryBarTimeoutRef.current;
     return () => {
@@ -1777,6 +1773,8 @@ export function DetailView({
         clearTimeout(timeouts[key]);
         delete timeouts[key];
       }
+      clearTimeout(closeLineTimeoutRef.current);
+      clearTimeout(closeSecondaryLineTimeoutRef.current);
     };
   }, []);
   // Clear secondary-tab selection state when the active tab changes. The
@@ -1813,9 +1811,10 @@ export function DetailView({
   const [editingChild, setEditingChild] = useState(null);
   const [savingChild, setSavingChild] = useState(false);
 
+  const closeLineTimeoutRef = useRef(null);
   const closeLine = useCallback(() => {
     setIsClosingLine(true);
-    setTimeout(() => {
+    closeLineTimeoutRef.current = setTimeout(() => {
       setSelectedLine(null);
       setLineEdits(null);
       setLineEditColumns({});
@@ -1835,9 +1834,10 @@ export function DetailView({
     return translateBackendError(raw ?? `Error ${res.status}`, ui);
   }, [ui]);
 
+  const closeSecondaryLineTimeoutRef = useRef(null);
   const closeSecondaryLine = useCallback(() => {
     setIsClosingSecondaryLine(true);
-    setTimeout(() => {
+    closeSecondaryLineTimeoutRef.current = setTimeout(() => {
       setSelectedSecondaryLine(null);
       setSecondaryLineEdits(null);
       setSecondaryLineEditColumns({});

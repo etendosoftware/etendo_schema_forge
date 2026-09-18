@@ -89,7 +89,8 @@
           "grid": true,
           "searchable": true,
           "section": "principal",
-          "seq": 1
+          "seq": 1,
+          "grow": true
         },
         "rate": {
           "visibility": "readOnly",

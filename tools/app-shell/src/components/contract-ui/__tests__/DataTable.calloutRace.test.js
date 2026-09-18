@@ -52,6 +52,31 @@ describe('DataTable InlineAddRow — callout race condition fix (ETP-3662)', () 
     assert.match(src, /await\s+Promise\.all\(pendingCalloutsRef\.current\)/);
   });
 
+  it('runs the callout wait BEFORE the required-field validation, not after', () => {
+    // Regression guard: the callout wait and the required-field check were
+    // originally added independently, in the wrong relative order — a required
+    // field the callout is responsible for (e.g. tax) still read as empty in
+    // valuesRef, so pressing Enter right after picking a product failed
+    // validation before the callout (and this wait) ever ran. If the wait ever
+    // moves back after the check, this test catches it.
+    const idxWait = src.indexOf('await Promise.all(pendingCalloutsRef.current)');
+    const idxMissing = src.indexOf('const missing = fields.filter(f => isMissingRequired(f, valuesRef, fields));');
+    assert.ok(idxWait > 0, 'callout wait not found');
+    assert.ok(idxMissing > idxWait, 'required-field check must come after the callout wait');
+  });
+
+  it('defers the Enter-to-confirm handler to a macrotask instead of calling it inline', () => {
+    // Regression guard: a product pick and the "save the line" Enter can arrive
+    // back-to-back fast enough that handleFieldChange (which registers the
+    // product's callout in pendingCalloutsRef, synchronously but as part of a
+    // separate event) hasn't run yet when handleKeyDown's Enter branch fires —
+    // submitLine's own callout wait only sees whatever is ALREADY in
+    // pendingCalloutsRef at the moment it runs, so an unregistered callout is
+    // invisible to it. Queuing handleConfirm behind a macrotask lets any
+    // same-action callout registration land first.
+    assert.match(src, /setTimeout\(\(\)\s*=>\s*handleConfirm\(\),\s*0\)/);
+  });
+
   it('reads coercedValues from valuesRef.current instead of the stale closure', () => {
     assert.match(src, /coercedValues\s*=\s*\{[^}]*valuesRef\.current[^}]*\}/);
   });
