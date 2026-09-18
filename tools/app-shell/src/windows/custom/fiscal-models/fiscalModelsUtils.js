@@ -547,7 +547,9 @@ export function getBoxValue(liveBoxes, num) {
   return e ? (e.value ?? 0) : null;
 }
 
-function roundEur(n) {
+// Exported (ETP-5409) so FmModel303Page.jsx's parseBoxInput can reuse the same 2-decimal
+// rounding used everywhere else in this file for box values, instead of a second copy.
+export function roundEur(n) {
   return Math.round(n * 100) / 100;
 }
 

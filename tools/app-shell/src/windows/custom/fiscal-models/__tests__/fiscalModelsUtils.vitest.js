@@ -14,6 +14,7 @@ import {
   countUpcomingDeadlines,
   generate303File,
   applyIdentParams,
+  roundEur,
 } from '../fiscalModelsUtils.js';
 
 // ── STATUSES ──────────────────────────────────────────────────────────────────
@@ -777,6 +778,29 @@ describe('deriveBoxes303', () => {
       const { boxes } = deriveBoxes303(data);
       // roundEur: Math.round(n*100)/100
       expect(boxes[9]).toBe(Math.round(21.005 * 100) / 100);
+    });
+  });
+
+  // ── roundEur (ETP-5409 — exported for reuse by FmModel303Page.jsx's parseBoxInput) ──
+  describe('roundEur (exported, ETP-5409)', () => {
+    it('rounds a value with more than 2 decimals to 2 decimals', () => {
+      expect(roundEur(12.345)).toBe(Math.round(12.345 * 100) / 100);
+    });
+
+    it('leaves an already-2-decimal value unchanged', () => {
+      expect(roundEur(12.35)).toBe(12.35);
+    });
+
+    it('rounds an integer value unchanged', () => {
+      expect(roundEur(500)).toBe(500);
+    });
+
+    it('handles negative values', () => {
+      expect(roundEur(-12.345)).toBe(Math.round(-12.345 * 100) / 100);
+    });
+
+    it('handles zero', () => {
+      expect(roundEur(0)).toBe(0);
     });
   });
 

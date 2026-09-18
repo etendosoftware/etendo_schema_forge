@@ -19,7 +19,7 @@ import { useAuth } from '@/auth/AuthContext.jsx';
 import {
   formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents,
   persistManualData, deriveResultKind, toBoxArray, applyOverrides, recomputeDerivedBoxes, getBoxValue,
-  resolveResultColors,
+  resolveResultColors, roundEur,
 } from '../../fiscalModelsUtils.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
@@ -56,7 +56,11 @@ function applyBoxChange(prev, boxNum, value, fallbackBoxes) {
 
 function parseBoxInput(rawValue) {
   const numVal = parseFloat(String(rawValue ?? '').replace(',', '.'));
-  return isNaN(numVal) ? null : numVal;
+  // Every manually-typed box value is capped to 2 decimal places (ETP-5409) — automatic/derived
+  // box values already carry <=2 decimals by construction (recomputeDerivedBoxes' own r2/roundEur
+  // rounding), so this is the single choke point that needs it for manual entry. Reuses the same
+  // roundEur used throughout fiscalModelsUtils.js rather than a second rounding implementation.
+  return isNaN(numVal) ? null : roundEur(numVal);
 }
 
 function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources) {
