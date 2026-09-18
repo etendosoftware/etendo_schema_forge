@@ -166,6 +166,28 @@ vi.mock('@/components/contract-ui/CloneOrderModal', () => ({
   ),
 }));
 
+// ETP-5404 — Contacto (BusinessPartner) selector must offer "create new contact"
+// inline, at parity with purchase-order/goods-shipment. Mirrors the mock shape
+// used in goods-shipment/__tests__/index.vitest.jsx: a stub Provider that stays
+// visible in the DOM (data-testid="contact-provider") and a captured-args hook
+// stub so the documentType wiring can be asserted directly.
+let lastCreateContactModalArgs = null;
+vi.mock('@/components/contract-ui/CreateContactContext.js', () => ({
+  CreateContactContext: {
+    Provider: ({ children }) => <div data-testid="contact-provider">{children}</div>,
+  },
+}));
+
+vi.mock('@/components/contract-ui/useCreateContactModal.jsx', () => ({
+  useCreateContactModal: vi.fn((args) => {
+    lastCreateContactModalArgs = args;
+    return {
+      createContactCtxValue: { fieldKey: 'businessPartner', onOpen: vi.fn() },
+      contactPortal: <div data-testid="contact-portal" />,
+    };
+  }),
+}));
+
 vi.mock('@/components/contract-ui/SendDocumentModal', () => ({
   default: ({ onClose, documentNo }) => (
     <div data-testid="send-modal" data-doc-no={documentNo}>
@@ -234,11 +256,43 @@ describe('GoodsReceiptWindow', () => {
     lastRowQuickActions = null;
     lastBulkActionsFn = null;
     bulkDocumentActionCalls = [];
+    lastCreateContactModalArgs = null;
   });
 
   it('renders the generated app', () => {
     render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
     expect(screen.getByTestId('generated-app')).toBeInTheDocument();
+  });
+
+  // ── ETP-5404 — Contacto selector: create-new-contact wiring ────────────────
+  // The bug: the Contacto (BusinessPartner) selector on this window never
+  // offered "create a new contact" inline, unlike Purchase Order / Sales Order /
+  // Sales Quotation / Purchase Invoice / Sales Invoice / Goods Shipment. The fix
+  // wraps the tree in CreateContactContext.Provider (fed by useCreateContactModal)
+  // and renders its portal alongside the generated app.
+  describe('ETP-5404 — Contacto selector create-new-contact wiring', () => {
+    it('wraps the generated app in CreateContactContext.Provider', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+      const provider = screen.getByTestId('contact-provider');
+      expect(provider).toBeInTheDocument();
+      expect(provider).toContainElement(screen.getByTestId('generated-app'));
+    });
+
+    it('renders the contactPortal returned by useCreateContactModal', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+      expect(screen.getByTestId('contact-portal')).toBeInTheDocument();
+    });
+
+    // Given the user is creating a Goods Receipt (Albarán de Compra), the modal
+    // must build the "create new contact" form for a purchase-side partner.
+    it('calls useCreateContactModal with documentType: "purchase"', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+      expect(lastCreateContactModalArgs).toMatchObject({
+        apiBaseUrl: '/api',
+        token: 'tok',
+        documentType: 'purchase',
+      });
+    });
   });
 
   // ── ETP-5058: refetchAfterSave ─────────────────────────────────────────────
