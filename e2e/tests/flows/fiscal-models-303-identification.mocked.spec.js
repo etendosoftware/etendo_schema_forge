@@ -244,7 +244,10 @@ test.describe('FM 303 — datos_bancarios section visibility', () => {
 
 // ── Suite 3 — Rectificativa fields (2024 T4+) ────────────────────────────────
 // Rectificativa section lives in the "Resultado" sidebar section (resultado_final).
-// The Checkbox component uses a sr-only input; { force: true } is required.
+// (ETP-5338) These checkboxes are now `CheckboxField` — a bare
+// `<button role="checkbox" aria-checked>`, not a native `<input type="checkbox">`.
+// Locate it via role and click it directly; no `{ force: true }` needed since
+// there is no sr-only input hidden behind an overlay anymore.
 
 test.describe('FM 303 — rectificativa conditional fields (2024 T4+)', () => {
   test.beforeEach(async ({ page }) => {
@@ -255,8 +258,8 @@ test.describe('FM 303 — rectificativa conditional fields (2024 T4+)', () => {
 
   test('nro_justificante, baja_domiciliacion and motivo are hidden when rectificativa unchecked', async ({ page }) => {
     const section = page.locator('.fm-aeat-section').filter({ hasText: /rectificativa/i }).last();
-    const checkbox = section.locator('input[type="checkbox"]').first();
-    if (await checkbox.isChecked()) await checkbox.click({ force: true });
+    const checkbox = section.getByRole('checkbox').first();
+    if (await checkbox.isChecked()) await checkbox.click();
 
     await expect(
       page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /justificante/i })
@@ -271,8 +274,8 @@ test.describe('FM 303 — rectificativa conditional fields (2024 T4+)', () => {
 
   test('checking rectificativa reveals nro_justificante, baja_domiciliacion and motivo select', async ({ page }) => {
     const section = page.locator('.fm-aeat-section').filter({ hasText: /rectificativa/i }).last();
-    const checkbox = section.locator('input[type="checkbox"]').first();
-    if (!(await checkbox.isChecked())) await checkbox.click({ force: true });
+    const checkbox = section.getByRole('checkbox').first();
+    if (!(await checkbox.isChecked())) await checkbox.click();
 
     await expect(
       page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /justificante/i })
@@ -288,8 +291,8 @@ test.describe('FM 303 — rectificativa conditional fields (2024 T4+)', () => {
 
   test('motivo select has Rectificaciones and Discrepancia options', async ({ page }) => {
     const section = page.locator('.fm-aeat-section').filter({ hasText: /rectificativa/i }).last();
-    const checkbox = section.locator('input[type="checkbox"]').first();
-    if (!(await checkbox.isChecked())) await checkbox.click({ force: true });
+    const checkbox = section.getByRole('checkbox').first();
+    if (!(await checkbox.isChecked())) await checkbox.click();
 
     const motivoSelect = page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /motivo/i }).locator('select');
     await expect(motivoSelect.locator('option[value="R"]')).toHaveCount(1);
@@ -317,8 +320,8 @@ test.describe('FM 303 — complementaria shows only nro_justificante (2023)', ()
 
   test('checking complementaria shows only nro_justificante, not baja_domiciliacion or motivo', async ({ page }) => {
     const section = page.locator('.fm-aeat-section').filter({ hasText: /complementaria/i }).last();
-    const checkbox = section.locator('input[type="checkbox"]').first();
-    if (!(await checkbox.isChecked())) await checkbox.click({ force: true });
+    const checkbox = section.getByRole('checkbox').first();
+    if (!(await checkbox.isChecked())) await checkbox.click();
 
     await expect(
       page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /justificante/i })
@@ -342,8 +345,8 @@ test.describe('FM 303 — complementaria shows only nro_justificante (2024 T1)',
 
   test('checking complementaria shows only nro_justificante', async ({ page }) => {
     const section = page.locator('.fm-aeat-section').filter({ hasText: /complementaria/i }).last();
-    const checkbox = section.locator('input[type="checkbox"]').first();
-    if (!(await checkbox.isChecked())) await checkbox.click({ force: true });
+    const checkbox = section.getByRole('checkbox').first();
+    if (!(await checkbox.isChecked())) await checkbox.click();
 
     await expect(
       page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /justificante/i })
@@ -359,8 +362,9 @@ test.describe('FM 303 — complementaria shows only nro_justificante (2024 T1)',
 
 // ── Suite 6 — sin_actividad checkbox in Resultado sidebar ────────────────────
 // sin_actividad lives in the "Resultado" sidebar section (after resultado_final
-// in sectionOrder). The Checkbox component renders input[type="checkbox"] with
-// class sr-only inside .fm-aeat-ident-cb — { force: true } is required to click.
+// in sectionOrder). (ETP-5338) Rendered via `CheckboxField`
+// (`<button role="checkbox" aria-checked>`) inside .fm-aeat-ident-cb — locate
+// it via role and click it directly.
 
 test.describe('FM 303 — sin_actividad checkbox', () => {
   test.beforeEach(async ({ page }) => {
@@ -376,24 +380,24 @@ test.describe('FM 303 — sin_actividad checkbox', () => {
 
   test('sin_actividad checkbox is rendered and initially unchecked', async ({ page }) => {
     const section = page.locator('.fm-aeat-section').filter({ hasText: /sin.actividad/i }).last();
-    const checkbox = section.locator('input[type="checkbox"]').first();
+    const checkbox = section.getByRole('checkbox').first();
     await expect(checkbox).not.toBeChecked();
   });
 
   test('sin_actividad checkbox can be toggled on', async ({ page }) => {
     const section = page.locator('.fm-aeat-section').filter({ hasText: /sin.actividad/i }).last();
-    const checkbox = section.locator('input[type="checkbox"]').first();
-    await checkbox.click({ force: true });
+    const checkbox = section.getByRole('checkbox').first();
+    await checkbox.click();
     await expect(checkbox).toBeChecked();
   });
 
   test('sin_actividad checkbox can be toggled back off', async ({ page }) => {
     const section = page.locator('.fm-aeat-section').filter({ hasText: /sin.actividad/i }).last();
-    const checkbox = section.locator('input[type="checkbox"]').first();
+    const checkbox = section.getByRole('checkbox').first();
     // Toggle on then off
-    await checkbox.click({ force: true });
+    await checkbox.click();
     await expect(checkbox).toBeChecked();
-    await checkbox.click({ force: true });
+    await checkbox.click();
     await expect(checkbox).not.toBeChecked();
   });
 });
@@ -470,8 +474,8 @@ test.describe('FM 303 — complementaria shows only nro_justificante (2022)', ()
 
   test('checking complementaria shows only nro_justificante', async ({ page }) => {
     const section = page.locator('.fm-aeat-section').filter({ hasText: /complementaria/i }).last();
-    const checkbox = section.locator('input[type="checkbox"]').first();
-    if (!(await checkbox.isChecked())) await checkbox.click({ force: true });
+    const checkbox = section.getByRole('checkbox').first();
+    if (!(await checkbox.isChecked())) await checkbox.click();
 
     await expect(
       page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /justificante/i })
@@ -502,8 +506,8 @@ test.describe('FM 303 — complementaria shows only nro_justificante (2021)', ()
 
   test('checking complementaria shows only nro_justificante', async ({ page }) => {
     const section = page.locator('.fm-aeat-section').filter({ hasText: /complementaria/i }).last();
-    const checkbox = section.locator('input[type="checkbox"]').first();
-    if (!(await checkbox.isChecked())) await checkbox.click({ force: true });
+    const checkbox = section.getByRole('checkbox').first();
+    if (!(await checkbox.isChecked())) await checkbox.click();
 
     await expect(
       page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /justificante/i })

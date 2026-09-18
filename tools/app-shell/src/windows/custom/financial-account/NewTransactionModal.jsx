@@ -19,8 +19,9 @@ import { FINANCIAL_ACCOUNT_FIELD_LIMITS, getMaxLengthError } from './fieldLength
 import { FieldLengthCounter, FieldLengthError } from './FieldLengthHint.jsx';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { useGLItemLookup, useBPartnerLookup, useDimensionLookup } from '@/hooks/useMovementLookups';
-import { Field, DateInput, AmountInput, ChipSelect } from '@/components/forms/fields';
-import { eur, parseEur, todayISO } from './NewMovementWizard/movementWizardData';
+import { Field, DateInput, MaskedAmountInput, ChipSelect } from '@/components/forms/fields';
+import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
+import { todayISO } from './NewMovementWizard/movementWizardData';
 
 const BTN_PRIMARY =
   'inline-flex h-9 items-center gap-2 rounded-lg bg-[hsl(var(--text-primary))] px-[18px] text-sm font-semibold text-primary-foreground transition-colors hover:bg-accent-highlight hover:text-accent-highlight-foreground disabled:opacity-45 disabled:pointer-events-none';
@@ -98,7 +99,8 @@ function formFromMovement(m) {
     date: (m.date || '').slice(0, 10) || todayISO(),
     dir,
     gl: m.glItemId ? { id: m.glItemId, name: m.glItem } : null,
-    amount: amt != null && amt !== '' ? eur(Number(amt)) : '',
+    // Clean (canonical, dot-decimal) value — MaskedAmountInput owns the display formatting.
+    amount: amt != null && amt !== '' ? String(Number(amt)) : '',
     description: m.description || '',
     contact: m.bpartnerId ? { id: m.bpartnerId, name: m.contact } : null,
     dims: {
@@ -152,7 +154,9 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
   // Editing an already-Processed movement: amount and direction are locked (Classic parity); only
   // G/L item, dimensions, description and dates can change. Confirmar is hidden (already processed).
   const lockAmountType = isEdit && Boolean(movement.processed);
-  const amountValue = parseEur(form.amount);
+  // `form.amount` is MaskedAmountInput's CLEAN value (dot-decimal, no grouping), so it parses
+  // directly — no separator guessing needed now that the component owns the keystrokes.
+  const amountValue = parseLocaleNumber(form.amount).value ?? 0;
   // PSD-23: FIN_Finacc_Transaction.Description is 255 chars — reported here rather than
   // by a 400 from the backend. Part of `valid`, so it gates both Guardar and Confirmar.
   const descriptionError = getMaxLengthError(
@@ -173,12 +177,6 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
     setAutoDesc(nextAuto);
     set({ gl: row, description });
   };
-  // On blur, normalize the typed amount to the European 2-decimal format ("20" → "20,00").
-  const formatAmount = () => {
-    const raw = (form.amount || '').trim();
-    if (raw) set({ amount: eur(parseEur(raw)) });
-  };
-
   // process=false → save as Draft ("Guardar"); process=true → create/update AND
   // process it ("Confirmar", Borrador → Procesado).
   const handleSave = async (process) => {
@@ -270,15 +268,14 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
                 testId="tx-glitem"
                 data-testid="ChipSelect__9a0423" />
             </Field>
-            <AmountInput
+            <MaskedAmountInput
               label={ui('financeAccountTxNewAmount')}
               required
-              readOnly={lockAmountType}
+              disabled={lockAmountType}
               value={form.amount}
               currency={iso}
               placeholder={ui('financeAccountTxNewAmountPlaceholder')}
-              onChange={(e) => set({ amount: e.target.value })}
-              onBlur={formatAmount}
+              onChange={(clean) => set({ amount: clean })}
               name="tx-amount"
               data-testid="tx-amount" />
           </div>

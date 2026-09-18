@@ -1,8 +1,8 @@
 {
   "version": "0.3.0",
   "generatedAt": "2026-08-13T11:56:58.791Z",
-  "updatedAt": "2026-08-31T12:35:28.419Z",
-  "checksum": "36b470c83755c550",
+  "updatedAt": "2026-09-16T13:26:33.418Z",
+  "checksum": "cc45f703fc922c30",
   "frontendContract": {
     "window": {
       "id": "273673D2ED914C399A6C51DB758BE0F9",
@@ -54,9 +54,6 @@
       },
       "dateFilterKey": "movementDate",
       "noHeaderBorder": true,
-      "sendDocument": {
-        "enabled": false
-      },
       "layoutType": "default",
       "linesLayout": "inlineEditable",
       "maxDetailLines": 0,
@@ -731,9 +728,6 @@
       },
       "dateFilterKey": "movementDate",
       "noHeaderBorder": true,
-      "sendDocument": {
-        "enabled": false
-      },
       "linesLayout": "inlineEditable",
       "maxDetailLines": 0,
       "statusPills": [

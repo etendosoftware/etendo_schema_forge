@@ -831,7 +831,7 @@ size="sm">`, for bulk-toolbar action buttons.** `Button`'s `size="sm"` bakes
 in `text-xs` plus a `[&_svg]:size-4` descendant-selector icon rule; that
 selector's specificity beats a child icon's own `h-3.5 w-3.5` classes
 regardless of Tailwind/twMerge class order. Two text-bearing action buttons
-in this toolbar — `BulkDocumentAction.jsx`'s "Confirmar"/"Procesado masivo"
+in this toolbar — `BulkDocumentAction.jsx`'s "Procesar"/"Procesado masivo"
 and `BulkInvoiceFromShipment.jsx`'s "Crear factura" — hit exactly this: they
 rendered at visibly different icon/text sizes until both were rewritten as
 plain hand-rolled `<button>` elements with the same explicit classes,
@@ -860,11 +860,91 @@ usages), `AmortizationLinesTable.jsx`, `AssetsAmortizationPanel.jsx`,
 PeriodsExpandablePanel.jsx` (document bulk-open/close), `windows/custom/
 contacts/index.jsx`.
 
+#### The `bulkActions` slot contract — refetch in place, never reload the page (ETP-5302)
+
+`ListView`'s `bulkActions` prop is a **plain function**, not a component: it is
+invoked as `bulkActions({ ... })` inside the selection toolbar's JSX, so
+anything reached from it must stay hook-free (see the ETP-5209 note in
+`BulkDocumentAction.jsx` — a hook whose call count depends on whether the
+toolbar is mounted produces *"Rendered more hooks than during the previous
+render"* in production). The context object it receives:
+
+| Key | What it is |
+|---|---|
+| `selectedRows` | the checked rows, full row objects |
+| `clearSelection` | clears the checkbox `Set` *and* bumps `clearSelectionCounter` so `DataTable` resets too |
+| `token`, `apiBaseUrl`, `windowName` | wiring for the per-row calls |
+| `api` | the list's data hook, for callers that need more than a refetch |
+| `refresh` | **ETP-5302** — in-place refetch of the current page of rows. Identity is stable across renders (it reads `hook.refresh` through a ref), so it is safe in a dependency array |
+
+**The rule: a bulk action ends with `clearSelection()` → toast → `refresh()`.**
+It must not call `window.location.reload()`.
+
+Until ETP-5302 every bulk host did reload the whole browser page, which threw
+away scroll position, the active filters and the entire SPA boot. The reload was
+never about the data: it was the mechanism that let the result toast survive,
+because the result was written to `sessionStorage` under `bulkActionResult` and
+`useBulkActionToast()`'s mount effect read it back on the *next* mount. Showing
+the toast directly removes the only reason to reload.
+
+```jsx
+// inside a bulkActions slot function
+const result = await runMyBulkAction(...);   // → { ok, omitted, failed }
+if (refresh) {
+  clearSelection();
+  showBulkActionToast(ui, result);           // from '@/hooks/useBulkActionToast'
+  refresh();
+  return;
+}
+// Host mounted outside ListView's bulkActions slot: legacy persist-then-reload.
+persistBulkActionResult(result);
+setTimeout(() => { clearSelection(); window.location.reload(); }, 1500);
+```
+
+**Keep the fallback branch.** `refresh` only exists for a host mounted inside
+`ListView`'s slot; a bulk host mounted anywhere else still has to hand its result
+to the next mount, and dropping the branch would silently lose the toast instead
+of failing loudly.
+
+**Use the exported `showBulkActionToast(ui, result)`, not `useBulkActionToast()`,
+when you already hold a `useUI()` result.** The hook's real job is the mount
+effect that *drains* `sessionStorage`; mounting it just to reach `showResult`
+also installs that effect, and it re-runs whenever `ui` changes identity — so it
+consumes the caller's own persisted result before the fallback reload can hand it
+to the next mount. `useBulkActionToast()` belongs at the list level (it is called
+once in `ListView.jsx`, covering every window), not inside an action.
+
+A bulk action that produces a result and does *not* refetch is a bug of its own
+class, not merely a missed nicety: `BulkInvoiceFromShipment.jsx` ("Crear
+Factura") neither reloaded nor refreshed before ETP-5302, so the rows it had just
+invoiced kept rendering a stale invoicing status with nothing on screen hinting
+they were out of date.
+
+**Hosts on this contract:** `BulkDocumentAction.jsx` (all nine mounts),
+`artifacts/sales-order/custom/BulkOrderMoreMenu.jsx`,
+`artifacts/purchase-order/custom/BulkPurchaseOrderMoreMenu.jsx`,
+`artifacts/goods-shipment/custom/BulkInvoiceFromShipment.jsx`. The two
+`runBulk*Action` helpers behind the order kebabs now **return** `{ ok, failed }`
+instead of writing it to `sessionStorage` themselves — persisting is the caller's
+decision, and only on the fallback path.
+
 #### `BulkDocumentAction`'s `actionMode` — bulk actions that are not DocActions
 
-`BulkDocumentAction.jsx` provides the "Confirmar"/"Procesado masivo" button, its
+`BulkDocumentAction.jsx` provides the "Procesar"/"Procesado masivo" button, its
 modal, the action dropdown, the per-row `Promise.allSettled` loop and the
-ok/failed toast. It used to be **DocAction-only**: the per-row call was always
+ok/failed toast. The button text comes from the `labelKey` prop. The nine
+document-action mounts all pass `labelKey="process"` ("Procesar" / "Process");
+the accounting mounts pass `labelKey="post"` ("Contabilizar", four windows) and,
+since ETP-5302, `labelKey="unpost"` ("Descontabilizar", `goods-receipt` and
+`goods-shipment` — see the pair below). `"bulkCompletion"` ("Procesado masivo")
+is only the prop default, which no window currently relies on.
+Inside the dropdown, `CO` is labeled **Confirmar** /
+**Confirm** (`labelKey: 'confirm'`) and `RE` **Reactivar** / **Reactivate**.
+Until ETP-5302 the button read "Confirmar" (`labelKey="confirmBulk"`, a key that
+no longer exists) and the `CO` entry read "Procesar" (`labelKey: 'book'`) — the
+two were swapped because on a window like `matched-purchase-invoices`, whose
+dropdown only offers *Contabilizar*/*Descontabilizar*, "Confirmar" named an
+action that was never on offer. It used to be **DocAction-only**: the per-row call was always
 `POST …/{id}/action/documentAction` with a `{docAction}` body, so each
 `buildActions` value had to be a DocAction code (`CO`, `RE`, …).
 
@@ -895,6 +975,80 @@ Pair it with `rowFilter` when a selection can legitimately mix states: returning
 a string from `rowFilter(row, action)` pre-blocks that row with that message
 (shown in the failure list) instead of sending a request the backend will reject
 with an opaque error.
+
+**The dialog's confirm button says "Aceptar" / "Accept" (`accept`), not
+"Completado" (`done`) — ETP-5302.** `done` translates to *"Completado"*, which is
+the name of a document **state**: the very list behind the dialog has an "Estado
+doc." column showing it. On a dialog whose whole subject is document actions,
+that button read as if pressing it would mark the selected documents as
+completed. `accept` is a new key in all three locales; `done` was deliberately
+left alone because `RecordCreateModal.jsx` still uses it.
+
+#### `preUnpostActions` — replaying the detail kebab's "unpost first" rule in bulk
+
+Some document actions must **reverse the record's accounting before they run**.
+The rule is declared per window in `decisions.json` as `preUnpost: true` on a
+`menuActions` entry (today: `sales-invoice`, `purchase-invoice`, `amortization`),
+and it is implemented once, in `tools/app-shell/src/lib/preUnpost.js`:
+
+| Export | Contract |
+|---|---|
+| `isPosted(row)` | `true` only for `posted === 'Y'` / `true`. The AD *Posted status* domain also carries `T`, `E`, `D`, `p`, `i` — **none of which mean "posted"** |
+| `runPreUnpost({ recordId, record, enabled, execute })` | → `{ ran, success, message }`. `ran: false` means the step did not apply (not enabled, or the record was not posted) and callers treat that as success |
+
+It is a plain module, **deliberately not a hook**, because `BulkDocumentAction`
+is reached from the `bulkActions` slot, which `ListView` invokes as a flat
+function call (the ETP-5209 constraint above).
+
+Both call sites now go through it: `DetailMoreActionsMenu.jsx` (which had the
+rule inlined, and duplicated across its two branches — observable behaviour
+unchanged) and `BulkDocumentAction`'s new `preUnpostActions` prop:
+
+```jsx
+<BulkDocumentAction {...props} labelKey="process" preUnpostActions={['RE']} />
+```
+
+Each row then runs *unpost → document action*. A failed unpost **aborts that
+row** — a document still carrying its accounting entries is never reactivated —
+and the row is reported with the translated backend message like any other
+failure.
+
+**It is opt-in per window on purpose.** Invoices need it: Core's
+`C_INVOICE_POST` raises `@InvoiceDocumentPosted@` ("Factura contabilizada") if
+`RE` arrives while `Posted='Y'`. Orders must **not** have it: `C_ORDER_POST1` has
+no posted-state guard on its `RE` branch at all, so unposting there would be a
+gratuitous accounting reversal for no functional gain. Do not "harmonise" this by
+applying `preUnpostActions={['RE']}` to every window that offers `RE`.
+
+#### `buildUnpostActions` / `unpostRowFilter` — the bulk "Descontabilizar" pair
+
+A mirror of `buildPostActions`/`postRowFilter`, exported from the same file:
+
+| Export | Behaviour |
+|---|---|
+| `buildUnpostActions(rows)` | offers `{ value: 'unpost', labelKey: 'unpost' }` when **any** selected row is posted |
+| `unpostRowFilter(row, action, ui)` | blocks a not-posted row with `ui('bulkRowNotPosted')` |
+
+Mount it as a third `BulkDocumentAction` instance with
+`actionMode="neoAction"` and `labelKey="unpost"` — it hits
+`POST …/{id}/action/unpost` (`DocumentPostingService`), the same endpoint the
+detail kebab's *Descontabilizar* already used, so no backend or i18n work was
+needed.
+
+**Why a separate pair rather than teaching `buildPostActions` to also emit
+`unpost`:** `sales-invoice` and `purchase-invoice` mount the post pair too, and
+they must **not** offer a standalone unpost. On an invoice, reversing the
+accounting is a step *inside* Reactivate (`preUnpost`), never a user-facing
+action of its own. Only `goods-receipt` and `goods-shipment`, whose detail kebab
+already exposes *Descontabilizar*, mount the unpost pair.
+
+**Why its own button rather than a second option inside "Contabilizar":** the
+dropdown lives under a button whose label is the action — a window offering both
+would present *Descontabilizar* under a button reading "Contabilizar", named as
+the opposite of what it does. Since `buildUnpostActions` only yields an action
+when a posted row is selected and `buildPostActions` only when a
+processed-not-posted one is, the two buttons are rarely on screen together
+anyway.
 
 ---
 
@@ -2185,6 +2339,125 @@ artifacts/contacts/generated/web/contacts/
 2. Add the appropriate key to `decisions.json → window.*`
 3. Run `node cli/src/generate-frontend.js {window}` (or full pipeline)
 4. The generated `*Page.jsx` now imports and wires your component automatically
+
+## Custom `headerTable` toolbar & column hooks (ETP-5188, not `decisions.json` options)
+
+Three generic mechanisms, introduced together for the Users window's list role filter and reusable
+by any other window's custom `headerTable` component. Unlike every numbered option above, none of
+these is a `decisions.json` key — they only apply to a window that already has a hand-written
+`window.customComponents.headerTable` component (§4), where the column list is a plain JS array
+declared by hand rather than derived from grid fields.
+
+### `Table.ToolbarQuickFilter` — companion toolbar-slot component
+
+**What it does:** lets a custom `headerTable` component expose a second component as a static
+property — `MyHeaderTable.ToolbarQuickFilter = SomeComponent` — that `ListView.jsx` renders inline
+in its OWN toolbar row, immediately left of the "Filtros" (advanced filter) trigger, alongside
+"Ordenar por"/"Actualizar"/subset filters/quick filters. Same convention `DetailView.jsx` already
+uses for `formFooter.inlineInHeaderCard` (§3) — a companion flag/property attached to a slot
+component so the generic shell can special-case how it renders.
+
+**Use when:** a custom `headerTable`'s own quick-filter control (built inside its own wrapper
+markup) needs to sit in the SAME toolbar row a built-in quick filter (e.g. Purchase/Sales
+Invoice's "Todos los estados") occupies, instead of a separate region above the table.
+
+**How to use it:** attach the component to the `Table` reference your window's
+`customComponents.headerTable` decision resolves to:
+
+```jsx
+// tools/app-shell/src/windows/custom/{window}/MyHeaderTable.jsx
+export default function MyHeaderTable(props) { /* ... */ }
+MyHeaderTable.ToolbarQuickFilter = MyToolbarQuickFilterSlot;
+```
+
+`ListView.jsx` checks `Table?.ToolbarQuickFilter` and, only when present, renders
+`<Table.ToolbarQuickFilter entity windowName token apiBaseUrl data-testid="TableToolbarQuickFilter__620cbc" />`.
+A slot component is free to ignore any/all of those four props and source its own state
+elsewhere — the reference implementation, `RoleQuickFilterToolbarSlot.jsx`, ignores all four and
+reads/writes the `role` URL search param directly via `useSearchParams()` instead, which is also
+how it stays in sync with `UserHeaderTable`'s own live read of that same param (both component
+instances mount under the same Router).
+
+**Real example:** `tools/app-shell/src/windows/custom/user/RoleQuickFilterToolbarSlot.jsx`, attached
+at the bottom of `UserHeaderTable.jsx` — moves the "Todos los roles" quick filter from its own
+wrapper div into the toolbar row. See `docs/generated-custom-windows/user.md` → "Users list role
+filter" for the full worked example.
+
+### `col.toQueryParams(row)` — per-column raw query-param hook
+
+**What it does:** opts one column's advanced-filter condition OUT of the generic `criteria=` JSON
+mechanism entirely, translating it instead into a raw `key=value[&key=value]` query-string segment
+appended to the list request. Declared as a `toQueryParams` function on the column metadata object
+(see the column-metadata shape documented at the top of `tools/app-shell/src/lib/gridQuery.js`).
+
+**When to use it instead of `col.buildCriteria`:** `buildCriteria` still produces SmartClient
+criteria JSON — an alternate shape within the same `criteria=` mechanism. `toQueryParams` is for a
+condition the generic criteria layer cannot express AT ALL — typically because the field targets a
+collection-valued relation (an N:M or backward FK) that needs a JOIN/subquery, not a dot-path
+property NEO's HQL criteria builder can resolve. Real trigger: Users' "Rol" field needed to filter
+by role composition (`AD_Role_Inheritance`), and a naive `criteria=` entry against that collection
+returned a live `500` from NEO Headless.
+
+**Contract:** `(row: {operator, value}) => string|null` — a URI-encoded `key=value` segment, or
+`null` when this operator/value combination has nothing to contribute. Returning `null` does **not**
+mean "let this condition fall through to `criteria=` instead" — see the next paragraph.
+
+**A condition is ALWAYS stripped once its column declares `toQueryParams`, regardless of what the
+hook returns for that row.** `extractQueryParamConditions()` (`gridQuery.js`) — called by
+`ListView.jsx`'s `advancedFilterPart` before `buildAdvancedFilterCriteria` runs on what remains —
+decides whether to strip a condition based on whether the column intercepted it, never on whether
+the hook actually produced a segment. (This was a real ETP-5188 bug during development: the
+early-return used to key off whether ANY segment was produced across the whole conditions array, so
+a hook legitimately returning `null` for one operator let that condition leak straight back into
+`criteria=` — exactly what this mechanism exists to prevent. Fixed before shipping; the regression
+is now pinned in `gridQuery.vitest.jsx`.)
+
+**Requires `filterable: true`** on the column — a `type: 'custom'` column with no
+`column`/`backendFilterKey` is otherwise silently dropped from the advanced-filter field list
+(`isFilterableColumn`, see this repo's top-level `CLAUDE.md` → "List Columns Must Be Real Columns").
+When the column must never render as an actual grid cell, also set `filterOnly: true` (next
+section).
+
+**No-op for every column/window that doesn't declare it** — confirmed byte-identical before/after
+against a window with no `toQueryParams` column (Purchase Invoice's own advanced filter).
+
+**Real example:** `buildRoleFilterQueryParams` (`tools/app-shell/src/windows/custom/user/RoleChipsCell.jsx`),
+assigned as `roleFilterColumn.toQueryParams` in `UserHeaderTable.jsx` — translates the "Rol" field's
+4 advanced-filter operators (Es/No es/Está vacío/No está vacío) into `RoleIds=`/`NoRole=`/
+`RoleFilterNegate=` query params, consumed server-side by `UserRoleAssignmentHandler#applyRoleFilter`
+(`com.etendoerp.go` — see that repo's `docs/neo-headless.md` §5.3).
+
+### `col.filterOnly: true` — advanced-filter-only synthetic column
+
+**What it does:** a generic, type-independent column flag that excludes a column from the actual
+rendered grid (no header, no cell) while still letting it flow through to the advanced-filter field
+list — i.e. the column exists purely so its field appears as an option in "Filtros avanzados",
+never as a real grid column.
+
+**Consumed by** `isLineGridColumn()` (`tools/app-shell/src/lib/linesColumnWidth.js`):
+`col.filterOnly !== true && !NON_GRID_COLUMN_TYPES.has(col.type)`. A `filterOnly: true` column still
+flows through `DataTable`'s raw `columns` prop into its `onColumnsReady` callback → `ListView`'s
+`filterColumns`, which is the only place it needs to exist.
+
+**Use when:** declaring a synthetic field with no backing AD column at all (no `column:` value) —
+most commonly paired with `toQueryParams` above, since a field with no real backend property has
+nothing for `criteria=` to filter on directly, but the field itself is still a legitimate thing
+users want to filter by.
+
+**Distinct from `NON_GRID_COLUMN_TYPES`** (e.g. `dimensionsPanel`, ETP-4610): that set opts an
+entire column TYPE out of ever rendering as a grid column, everywhere it's used. `filterOnly` is
+per-column and type-independent — any column type can opt out of grid rendering this way without
+hijacking an unrelated type's own semantics.
+
+**Real example:** `roleFilterColumn` in `UserHeaderTable.jsx` — `type: 'custom'`,
+`filterOnly: true`, `filterMode: 'enumLabel'`, no `column:` at all; it never renders as a 7th grid
+column, only as the "Rol" entry in the advanced-filter field list.
+
+**Cross-references:** `docs/generated-custom-windows/user.md` → "Users list role filter" for the
+full worked example combining all three mechanisms; `com.etendoerp.go`'s `docs/neo-headless.md`
+§5.3 for the backend half (`UserRoleAssignmentHandler#applyRoleFilter`).
+
+---
 
 ## FK click-through navigation (`fkNavigation.js`)
 
