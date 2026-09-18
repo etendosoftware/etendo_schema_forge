@@ -376,6 +376,9 @@ describe('useBulkActionToast — storage unavailable', () => {
     });
 
     expect(() => persistBulkActionResult({ ok: 1, failed: [] })).not.toThrow();
+  });
+});
+
 // ETP-5302 — `showBulkActionToast` went from module-private to EXPORTED so a caller
 // that already holds a `useUI()` result can show the toast WITHOUT mounting the hook.
 // That matters because mounting the hook only to reach `showResult` also installs its
