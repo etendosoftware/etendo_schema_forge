@@ -79,6 +79,7 @@ vi.mock('lucide-react', () => ({
   TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,
   ClipboardCheck: () => null, ReceiptText: () => null, Folder: () => null,
   FileCheck: () => null, Landmark: () => null, Pencil: () => null,
+  Save: () => null,
 }));
 
 // NOTE: '../FmBoxes303.jsx' is intentionally NOT mocked in this file.
