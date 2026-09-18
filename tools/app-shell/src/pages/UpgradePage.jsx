@@ -43,6 +43,8 @@ const PENDING_CHECKOUT_NAME = 'sf_pending_checkout_tenant_name';
 const PENDING_CHECKOUT_ACTION = 'sf_pending_checkout_action';
 /** Checkout-submitted timestamp, so durationMs survives the Stripe redirect. */
 const PENDING_CHECKOUT_STARTED_AT = 'sf_pending_checkout_started_at';
+const PENDING_CHECKOUT_DATA_TRANSFER = 'sf_pending_checkout_data_transfer';
+const DEFAULT_DATA_TRANSFER = { products: true, contacts: true };
 
 /** Checkout funnel telemetry — see docs/paid-tenant-infrastructure.md §3.6. */
 function emitUpgradeEvent(eventDefinition, properties) {
@@ -64,6 +66,73 @@ function resolveUpgradePageViewBranch(accountState, environments) {
  */
 function getUpgradeBaseUrl() {
   return import.meta.env?.DEV ? '' : detectBaseUrl();
+}
+
+function readPendingDataTransfer(storage) {
+  try {
+    return JSON.parse(storage.getItem(PENDING_CHECKOUT_DATA_TRANSFER) || '') || DEFAULT_DATA_TRANSFER;
+  } catch {
+    return DEFAULT_DATA_TRANSFER;
+  }
+}
+
+async function resolveCheckoutTenantName({ fetcher, baseUrl, token, requestId, storedTenantName }) {
+  if (storedTenantName) return storedTenantName;
+  const purchase = await getBillingPurchase(fetcher, baseUrl, token, requestId);
+  return purchase?.clientName || '';
+}
+
+async function waitForCheckoutPayment({ fetcher, baseUrl, token, requestId }) {
+  let status = { status: 'pending' };
+  for (let attempt = 0; attempt < 60 && status.status === 'pending'; attempt += 1) {
+    status = await getCheckoutStatus(fetcher, baseUrl, token, requestId);
+    if (status.status === 'pending') await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  return status;
+}
+
+async function resumeCheckoutProvisioning({
+  fetcher,
+  baseUrl,
+  token,
+  requestId,
+  storedTenantName,
+  upgradeAction,
+  startedAt,
+  storage,
+  isCancelled,
+  onTenantName,
+  onPendingProvisioning,
+  onDataTransfer,
+  onReady,
+}) {
+  const tenantName = await resolveCheckoutTenantName({
+    fetcher, baseUrl, token, requestId, storedTenantName,
+  });
+  if (!tenantName) throw new Error('Purchase has no environment name');
+  onTenantName(tenantName);
+
+  const status = await waitForCheckoutPayment({ fetcher, baseUrl, token, requestId });
+  if (status.status !== 'paid') throw new Error('Checkout payment is not confirmed');
+
+  const selectedTransfer = readPendingDataTransfer(storage);
+  onPendingProvisioning({
+    clientName: status.clientName || tenantName,
+    paymentToken: requestId,
+    upgradeAction,
+    language: getStoredLocale(),
+    dataTransfer: selectedTransfer,
+    startedAt,
+  });
+  if (isCancelled()) return;
+
+  storage.removeItem(PENDING_CHECKOUT_NAME);
+  storage.removeItem(PENDING_CHECKOUT_ACTION);
+  storage.removeItem(PENDING_CHECKOUT_STARTED_AT);
+  window.history.replaceState({}, '', '/upgrade');
+  onDataTransfer(selectedTransfer);
+  onReady();
+  storage.removeItem(PENDING_CHECKOUT_DATA_TRANSFER);
 }
 
 function PlanCard({ testId, name, tagline, price, features, current, highlighted, ui, className = '', onSelect }) {
@@ -157,7 +226,7 @@ function CheckoutSteps({ ui, phase, checkoutStep }) {
   );
 }
 
-function AddonsStep({ ui, onContinue }) {
+function AddonsStep({ ui, dataTransfer, onDataTransferChange, onContinue }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]" data-testid="upgrade-addons-step">
       <section className="space-y-5">
@@ -167,7 +236,30 @@ function AddonsStep({ ui, onContinue }) {
           <p className="mt-2 text-sm text-muted-foreground">{ui('upgradeCheckoutAddonsSubtitle')}</p>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
-          {[1, 2, 3, 4, 5, 6].map(item => (
+          <Card className="border-border bg-card" data-testid="upgrade-data-transfer">
+            <CardHeader>
+              <CardTitle className="text-base">{ui('upgradeDataTransferTitle')}</CardTitle>
+              <p className="text-sm text-muted-foreground">{ui('upgradeDataTransferBody')}</p>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-2">
+              {[
+                { key: 'products', labelKey: 'upgradeMigrateProducts' },
+                { key: 'contacts', labelKey: 'upgradeMigrateContacts' },
+              ].map(item => (
+                <label key={item.key} className="flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm hover:bg-muted/40">
+                  <input
+                    type="checkbox"
+                    checked={dataTransfer[item.key]}
+                    onChange={event => onDataTransferChange(item.key, event.target.checked)}
+                    data-testid={`upgrade-data-transfer-${item.key}`}
+                    className="h-4 w-4 accent-primary"
+                  />
+                  <span>{ui(item.labelKey)}</span>
+                </label>
+              ))}
+            </CardContent>
+          </Card>
+          {[1, 2, 3, 4].map(item => (
             <Card key={item} className="min-h-[130px] border-border bg-muted/20" data-testid={`upgrade-addon-skeleton-${item}`}>
               <CardContent className="flex h-full items-center gap-4 p-5">
                 <div className="h-12 w-12 shrink-0 animate-pulse rounded-xl bg-muted" />
@@ -256,8 +348,7 @@ function FirstTenantFreePanel({ ui, onContinue }) {
   );
 }
 
-function SuccessPanel({ ui, onContinue, entering, enterError, migrationRequired }) {
-  const [selectedData, setSelectedData] = useState({ products: true, contacts: true });
+function SuccessPanel({ ui, onContinue, entering, enterError }) {
   return (
     <Card data-testid="upgrade-success">
       <CardHeader data-testid="CardHeader__58bad7">
@@ -275,38 +366,10 @@ function SuccessPanel({ ui, onContinue, entering, enterError, migrationRequired 
             {ui('upgradeEnterFailed')}
           </p>
         )}
-        {migrationRequired ? (
-          <div className="border-t pt-4" data-testid="upgrade-migration-step">
-            <p className="text-sm font-medium">{ui('upgradeMigrationTitle')}</p>
-            <p className="mt-1 text-sm text-muted-foreground">{ui('upgradeMigrationBody')}</p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {[
-                { key: 'products', labelKey: 'upgradeMigrateProducts' },
-                { key: 'contacts', labelKey: 'upgradeMigrateContacts' },
-              ].map(item => (
-                <label key={item.key} className="flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm hover:bg-muted/40">
-                  <input
-                    type="checkbox"
-                    checked={selectedData[item.key]}
-                    onChange={event => setSelectedData(previous => ({ ...previous, [item.key]: event.target.checked }))}
-                    data-testid={`upgrade-migration-${item.key}`}
-                    className="h-4 w-4 accent-primary"
-                  />
-                  <span>{ui(item.labelKey)}</span>
-                </label>
-              ))}
-            </div>
-            <Button className="mt-4 w-full sm:w-auto" onClick={() => onContinue(selectedData)} disabled={entering} data-testid="upgrade-start-migration">
-              {entering ? <Loader2 className="h-4 w-4 animate-spin" /> : ui('upgradeMigrationContinue')}
-              {!entering && <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />}
-            </Button>
-          </div>
-        ) : (
-          <Button className="w-full sm:w-auto" onClick={() => onContinue()} disabled={entering} data-testid="upgrade-enter-productive">
-            {entering ? <Loader2 className="h-4 w-4 animate-spin" /> : ui('upgradeMigrationContinue')}
-            {!entering && <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />}
-          </Button>
-        )}
+        <Button className="w-full sm:w-auto" onClick={() => onContinue()} disabled={entering} data-testid="upgrade-enter-productive">
+          {entering ? <Loader2 className="h-4 w-4 animate-spin" /> : ui('upgradeMigrationContinue')}
+          {!entering && <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />}
+        </Button>
       </CardContent>
     </Card>
   );
@@ -364,7 +427,7 @@ export default function UpgradePage() {
   const ui = useUI();
   const navigate = useNavigate();
 
-  const [phase, setPhase] = useState('form'); // 'form' | 'running' | 'migration' | 'success'
+  const [phase, setPhase] = useState('form'); // 'form' | 'running' | 'success'
   const [checkoutStep, setCheckoutStep] = useState('plan'); // 'plan' | 'addons' | 'payment'
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
@@ -385,8 +448,9 @@ export default function UpgradePage() {
   const [entering, setEntering] = useState(false);
   const [enterError, setEnterError] = useState(false);
   const [pendingProvisioning, setPendingProvisioning] = useState(null);
+  const [dataTransfer, setDataTransfer] = useState(DEFAULT_DATA_TRANSFER);
 
-  const startProvisioning = async migrationSelection => {
+  const startProvisioning = async () => {
     if (!pendingProvisioning) return;
     const token = getCheckoutToken();
     if (!token) {
@@ -394,7 +458,6 @@ export default function UpgradePage() {
       return;
     }
     setEntering(true);
-    sessionStorage.setItem('sf_pending_migration_selection', JSON.stringify(migrationSelection));
     try {
       const { startedAt, ...onboardingInput } = pendingProvisioning;
       await runPaidOnboarding(fetch, getUpgradeBaseUrl(), token, onboardingInput, message => {
@@ -410,15 +473,23 @@ export default function UpgradePage() {
     } catch (error) {
       setEntering(false);
       setFormError(error?.code || 'upgradeCheckoutCreationFailed');
-      setPhase('migration');
       emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_TENANT_PROVISIONING_FAILED, {
         errorCode: error?.code || 'generic',
         ...(pendingProvisioning.startedAt
           ? { durationMs: Date.now() - pendingProvisioning.startedAt }
           : {}),
       });
+      setPhase('form');
     }
   };
+
+  // A confirmed payment starts provisioning immediately. The transfer selection is part of the
+  // paid request; there is no second migration screen and no browser-side export/import step.
+  useEffect(() => {
+    if (phase === 'running' && pendingProvisioning && !entering) {
+      startProvisioning();
+    }
+  }, [phase, pendingProvisioning, entering]);
 
   const resumePaidPurchase = async purchase => {
     const token = getCheckoutToken();
@@ -429,12 +500,13 @@ export default function UpgradePage() {
     setResumingPurchaseId(purchase.purchaseId);
     setForm(previous => ({ ...previous, tenantName: purchase.clientName, upgradeAction: 'create-productive' }));
     setFormError(null);
-    setPhase('migration');
+    setPhase('running');
     setPendingProvisioning({
       clientName: purchase.clientName,
       paymentToken: purchase.purchaseId,
       upgradeAction: 'create-productive',
       language: getStoredLocale(),
+      dataTransfer: dataTransfer,
       startedAt: Date.now(),
     });
     setResumingPurchaseId(null);
@@ -470,9 +542,10 @@ export default function UpgradePage() {
       paymentToken: purchase.purchaseId,
       upgradeAction: 'create-productive',
       language: getStoredLocale(),
+      dataTransfer: dataTransfer,
     });
     setFormError(null);
-    setPhase('migration');
+    setPhase('running');
   };
 
   useEffect(() => {
@@ -553,45 +626,31 @@ export default function UpgradePage() {
     }
     let cancelled = false;
     setPhase('running');
-    (async () => {
-      try {
-        let tenantName = storedTenantName;
-        if (!tenantName) {
-          const purchase = await getBillingPurchase(fetch, getUpgradeBaseUrl(), token, requestId);
-          tenantName = purchase?.clientName || '';
-        }
-        if (!tenantName) throw new Error('Purchase has no environment name');
+    resumeCheckoutProvisioning({
+      fetcher: fetch,
+      baseUrl: getUpgradeBaseUrl(),
+      token,
+      requestId,
+      storedTenantName,
+      upgradeAction,
+      startedAt,
+      storage: sessionStorage,
+      isCancelled: () => cancelled,
+      onTenantName: tenantName => {
         setForm(previous => ({ ...previous, tenantName, upgradeAction }));
-        let status = { status: 'pending' };
-        for (let attempt = 0; attempt < 60 && status.status === 'pending'; attempt += 1) {
-          status = await getCheckoutStatus(fetch, getUpgradeBaseUrl(), token, requestId);
-          if (status.status === 'pending') await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-        if (status.status !== 'paid') throw new Error('Checkout payment is not confirmed');
-        setPendingProvisioning({
-          clientName: status.clientName || tenantName,
-          paymentToken: requestId,
-          upgradeAction,
-          language: getStoredLocale(),
-          startedAt,
-        });
-        if (cancelled) return;
-        sessionStorage.removeItem(PENDING_CHECKOUT_NAME);
-        sessionStorage.removeItem(PENDING_CHECKOUT_ACTION);
-        sessionStorage.removeItem(PENDING_CHECKOUT_STARTED_AT);
-        window.history.replaceState({}, '', '/upgrade');
-        setPhase('migration');
-      } catch (error) {
-        if (!cancelled) {
-          setPhase('form');
-          setFormError(error?.code || 'upgradeCheckoutCreationFailed');
-          emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_TENANT_PROVISIONING_FAILED, {
-            errorCode: error?.code || 'generic',
-            durationMs: startedAt ? Date.now() - startedAt : undefined,
-          });
-        }
-      }
-    })();
+      },
+      onPendingProvisioning: setPendingProvisioning,
+      onDataTransfer: setDataTransfer,
+      onReady: () => setPhase('running'),
+    }).catch(error => {
+      if (cancelled) return;
+      setPhase('form');
+      setFormError(error?.code || 'upgradeCheckoutCreationFailed');
+      emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_TENANT_PROVISIONING_FAILED, {
+        errorCode: error?.code || 'generic',
+        durationMs: startedAt ? Date.now() - startedAt : undefined,
+      });
+    });
     return () => { cancelled = true; };
   }, []);
 
@@ -620,6 +679,7 @@ export default function UpgradePage() {
           clientName: form.tenantName.trim(),
           upgradeAction: form.upgradeAction,
           language: getStoredLocale(),
+          dataTransfer,
         }
       );
       // Payment and provisioning are confirmed by the backend/webhook. The
@@ -627,6 +687,7 @@ export default function UpgradePage() {
       sessionStorage.setItem(PENDING_CHECKOUT_NAME, form.tenantName.trim());
       sessionStorage.setItem(PENDING_CHECKOUT_ACTION, form.upgradeAction);
       sessionStorage.setItem(PENDING_CHECKOUT_STARTED_AT, String(Date.now()));
+      sessionStorage.setItem(PENDING_CHECKOUT_DATA_TRANSFER, JSON.stringify(dataTransfer));
       window.location.assign(session.checkoutUrl);
     } catch (error) {
       if (error.code === UPGRADE_ERROR_CODES.purchaseAlreadyExists && error.purchase) {
@@ -743,19 +804,16 @@ export default function UpgradePage() {
       </div>
       </>}
       {showCheckout && checkoutStep === 'addons' && (
-        <AddonsStep ui={ui} onContinue={() => setCheckoutStep('payment')} />
+        <AddonsStep
+          ui={ui}
+          dataTransfer={dataTransfer}
+          onDataTransferChange={(key, checked) => setDataTransfer(previous => ({ ...previous, [key]: checked }))}
+          onContinue={() => setCheckoutStep('payment')}
+        />
       )}
       {phase === 'running' && <ProgressPanel steps={steps} ui={ui} data-testid="ProgressPanel__58bad7" />}
-      {phase === 'migration' && <SuccessPanel
-        ui={ui}
-        migrationRequired
-        onContinue={startProvisioning}
-        entering={entering}
-        enterError={Boolean(formError)}
-        data-testid="MigrationPanel__58bad7" />}
       {phase === 'success' && <SuccessPanel
         ui={ui}
-        migrationRequired={false}
         entering={entering}
         enterError={enterError}
         // Enter the tenant that was just provisioned. Signing out is the

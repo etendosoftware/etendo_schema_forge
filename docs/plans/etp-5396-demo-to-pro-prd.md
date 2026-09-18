@@ -68,7 +68,7 @@ Having owner permission is sufficient for initial self-service billing administr
 | FR-03 | During an unpaid active trial, show remaining days and the expiration date. At expiry, block the demo for every tenant role, including owner and administrator, existing sessions, and direct data/API requests. |
 | FR-04 | Permit purchase both before and after trial expiry. A confirmed purchase provisions a new productive environment with a different tenant identifier; no in-place conversion endpoint or UI option remains available. |
 | FR-05 | A current subscription grants access to its productive environment and associated demo, including after the original demo deadline, subject to each user's membership and permissions. It grants no access to another company's environments. |
-| FR-06 | Products and contacts may be exported from the demo and imported into production using existing functionality. The step is optional, can be skipped or retried, and does not gate productive readiness. |
+| FR-06 | The owner may select products and/or contacts during checkout. After payment, the selected data is transferred automatically server-side; the user never has to export, download, upload, or import files. The step can be skipped or retried and does not gate productive readiness. |
 | FR-07 | An invited user's own demo/subscription state does not affect access to another company. Evaluate the destination company's eligibility and the user's membership there. |
 | FR-08 | Only the verified owner may initiate or manage a company's billing and provisioning actions. Revalidate on every mutation, including retries. An invited member cannot buy against or associate the host company's demo. |
 | FR-09 | Account login, environment discovery, account settings, and authorized billing/recovery actions remain available without an eligible ERP environment. This area remains authenticated. |
@@ -132,17 +132,22 @@ Invitation acceptance remains a distinct existing journey. Proposed default: acc
 3. Create or resume the purchase and redirect to the selected provider's hosted checkout.
 4. Display payment confirmation separately from provisioning progress. A redirect alone never confirms payment.
 5. Provision a new productive environment from server-persisted inputs after authoritative confirmation.
-6. Show the demo/productive association and offer existing product/contact Export/Import.
+6. Show the demo/productive association and the selected automatic transfer status.
 
 The owner can reopen account billing on another browser and see the same purchase/provisioning outcome. Missing browser storage must not require a new payment. The demo can become eligible from the confirmed subscription while production is still being prepared. If an existing checkout call has an ambiguous outcome that cannot be recovered through its current contract, display a reconciliation/support state and block blind re-creation; fixing Stripe's existing transport is outside this task.
 
-### Optional data transfer
+### Optional automatic data transfer
 
-Use the existing [Contacts](../generated-custom-windows/contacts.md) and [Product](../generated-custom-windows/product.md) tools. Export requires authorized access to the source; import requires authorized access to the destination. Paying restores the associated demo's eligibility when necessary before exporting.
+During checkout, the owner can select **Products**, **Contacts**, both, or neither. The selection is
+stored with the paid provisioning request. After payment confirmation, the backend transfers only
+the selected supported records from the associated demo into the new productive environment. The
+browser does not download a file, call a CSV endpoint, or ask the user to import anything.
 
-Transfer only supported columns and formats. Existing contact export covers the primary contact/address; it is not a full relational copy. Existing export limits, filtering, foreign-key matching, and import validations apply. Product categories and other referenced values may need preparation in the target. Show or link these limits before transfer; never promise every contact child record will migrate.
-
-Users may continue without importing. A failed or repeated import does not cancel the subscription, rerun provisioning, or silently assert deduplication beyond the existing import contract. Keep row-level error handling and any existing duplicate-resolution behavior visible.
+The operation must be server-authorized, idempotent, scoped to the owner's associated demo, and
+retryable independently from payment and tenant creation. It must report partial failures without
+rolling back a confirmed subscription or creating a second productive environment. Unsupported
+columns, references, duplicate resolution, and child-record limits remain explicit in the transfer
+contract; the UI must not promise a full relational clone.
 
 ### Renewal failure and recovery
 
