@@ -161,12 +161,9 @@ const WINDOWS = [
     headerId: 'mock-narrow-gs-001',
     hasSidePanel: false,
     expectOverflow: false,
-    // ETP-5316: `lineNo` is now the leading grid column (idx 0, read-only AD column
-    // exposed for backend error line lookup), so `product` moved to idx 1 — a
-    // selector/search column at idx > 0 is FIXED (`0 0 192px`), not elastic (see the
-    // rule documented above), so it is excluded here. Mirrors simple-g-l-journal below,
-    // which already has `lineNo` leading its grid.
-    leadingColumns: [],
+    leadingColumns: [
+      { key: 'product', minBasis: 192 },
+    ],
     header: {
       id: 'mock-narrow-gs-001',
       documentNo: 'GS-NARROW-001',
