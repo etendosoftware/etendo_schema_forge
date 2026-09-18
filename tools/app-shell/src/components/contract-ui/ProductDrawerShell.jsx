@@ -208,7 +208,16 @@ export default function ProductDrawerShell({
                   value={query}
                   onChange={(e) => { setQuery(e.target.value); doFetch(e.target.value, 0); }}
                   placeholder={`${ui('searchLabelPrefix')} ${resolvedTitle}...`}
-                  className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                  // !bg-transparent (not the plain utility) is deliberate: this drawer renders
+                  // inline, never through a portal, so it stays a DOM descendant of whatever
+                  // window mounted it. A window that applies a blanket `[&_input]:bg-*` override
+                  // to its own panel (e.g. Assets' AssetsDetailPanel.jsx, to keep its OWN
+                  // in-panel inputs matching the panel's card background) has higher specificity
+                  // than a plain `bg-transparent` utility on this input and silently wins,
+                  // painting this floating modal's search box with the host panel's background
+                  // instead of its own (ETP-5357). `!important` makes this input immune to any
+                  // such ancestor override, for every window that mounts this shared drawer.
+                  className="flex-1 !bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
                 />
                 {(loading || loadingMore) && <Loader2
                   className="h-4 w-4 text-muted-foreground animate-spin shrink-0"

@@ -86,17 +86,16 @@ vi.mock('@/components/contract-ui/ListView.jsx', () => ({
   },
 }));
 
-vi.mock('@/components/contract-ui/BulkDocumentAction', () => ({
-  default: () => <div data-testid="bulk-document-action" />,
-  buildInOutActions: vi.fn(),
-}));
-
 vi.mock('@generated/purchase-order/custom/BulkPurchaseOrderMoreMenu', () => ({
   default: () => <div data-testid="bulk-more-menu" />,
 }));
 
 // ETP-5315 — grid bulk-select Reactivate, mirroring sales-order's own mock
 // of OrderReactivateBulkAction in its index.vitest.jsx.
+// ETP-5302 — this is now the bar's ONLY document-action button (it carries the
+// `process` label and offers Confirmar/Reactivar in its dropdown), so index.jsx
+// no longer imports BulkDocumentAction directly and the module mock that used to
+// sit here, alongside its `buildInOutActions` export, went with it.
 vi.mock('@generated/purchase-order/custom/PurchaseOrderReactivateBulkAction', () => ({
   default: () => <div data-testid="reactivate-bulk-action" />,
 }));

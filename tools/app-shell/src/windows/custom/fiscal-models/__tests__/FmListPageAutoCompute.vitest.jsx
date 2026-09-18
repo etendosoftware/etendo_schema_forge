@@ -6,7 +6,7 @@ import FmListPage from '../FmListPage.jsx';
 vi.mock('../useFiscalAutoCompute.js', () => ({
   default: vi.fn(() => ({ computedMap: {} })),
 }));
-vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+vi.mock('@/i18n', () => ({ useUI: () => (key) => key, useLocaleSwitch: () => ({ locale: 'es_ES' }) }));
 
 import useFiscalAutoCompute from '../useFiscalAutoCompute.js';
 

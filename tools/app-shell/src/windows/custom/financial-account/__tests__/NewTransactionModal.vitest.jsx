@@ -51,47 +51,61 @@ vi.mock('@/components/ui/dialog', () => ({
 // Field primitives → lightweight stubs that expose the testids + callbacks.
 // ChipSelect resolves a deterministic { id, name } keyed off its `testId`, so
 // payload assertions can distinguish the GL item, the contact and each dimension.
-vi.mock('@/components/forms/fields', () => ({
-  Field: ({ label, children }) => (
-    <div>
-      <span>{label}</span>
-      {children}
-    </div>
-  ),
-  DateInput: ({ value, onChange, disabled, 'data-testid': dtid }) => (
-    <input data-testid={dtid} value={value ?? ''} onChange={(e) => onChange(e.target.value)} disabled={disabled} />
-  ),
-  // readOnly forwarded to disabled (QA/ETP-4879): the real AmountInput renders
-  // `disabled={readOnly}` on its underlying <Input> (fields.jsx), so the mock must
-  // forward it too — otherwise a test asserting the amount lock on a Processed
-  // movement would pass even if the real component stopped honoring `readOnly`.
-  AmountInput: ({ value, onChange, onBlur, currency, readOnly, 'data-testid': dtid }) => (
-    <div>
-      <input data-testid={dtid} value={value ?? ''} onChange={onChange} onBlur={onBlur} disabled={readOnly} />
-      <span data-testid={`${dtid}-currency`}>{currency}</span>
-    </div>
-  ),
-  ChipSelect: ({ value, onChange, testId, disabled }) => (
-    <div>
-      <span data-testid={`${testId}-value`}>{value?.id ?? ''}</span>
-      <button
-        type="button"
-        disabled={disabled}
-        data-testid={`${testId}-pick`}
-        onClick={() => onChange({ id: `${testId}-id`, name: `${testId}-name` })}>
-        pick
-      </button>
-      <button
-        type="button"
-        disabled={disabled}
-        data-testid={`${testId}-pick2`}
-        onClick={() => onChange({ id: `${testId}-id-2`, name: `${testId}-name-2` })}>
-        pick2
-      </button>
-      <button type="button" disabled={disabled} data-testid={`${testId}-clear`} onClick={() => onChange(null)}>clear</button>
-    </div>
-  ),
-}));
+//
+// ETP-5107 — partial mock (`importOriginal`) instead of a full replacement: the amount
+// field is now a `MaskedAmountInput`, and the REAL one is kept. Its masking is the
+// behaviour the amount cases below assert (a clean dot-decimal value reported outward,
+// the grouped/2-decimal idle display on blur), so stubbing it with a pass-through input
+// would delete that coverage rather than preserve it. The only thing wrapped around it is
+// the `${testid}-currency` span the two ETP-4314 cases read the ISO code from — the real
+// component renders the currency SYMBOL, not the code.
+vi.mock('@/components/forms/fields', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    Field: ({ label, children }) => (
+      <div>
+        <span>{label}</span>
+        {children}
+      </div>
+    ),
+    // `disabled` forwarded (ETP-4879): the real component now locks the date input while
+    // a movement is Processed, so the mock must forward the prop too — otherwise a test
+    // asserting the date lock would pass even if the real component stopped honoring it.
+    DateInput: ({ value, onChange, disabled, 'data-testid': dtid }) => (
+      <input data-testid={dtid} value={value ?? ''} onChange={(e) => onChange(e.target.value)} disabled={disabled} />
+    ),
+    MaskedAmountInput: (props) => (
+      <div>
+        <actual.MaskedAmountInput {...props} />
+        <span data-testid={`${props['data-testid']}-currency`}>{props.currency}</span>
+      </div>
+    ),
+    // `disabled` forwarded (ETP-4879, defensive): none of the ChipSelect usages in the real
+    // component are currently locked while Processed, but forwarding it keeps the mock honest
+    // with the real component's prop surface instead of silently swallowing a future `disabled`.
+    ChipSelect: ({ value, onChange, testId, disabled }) => (
+      <div>
+        <span data-testid={`${testId}-value`}>{value?.id ?? ''}</span>
+        <button
+          type="button"
+          disabled={disabled}
+          data-testid={`${testId}-pick`}
+          onClick={() => onChange({ id: `${testId}-id`, name: `${testId}-name` })}>
+          pick
+        </button>
+        <button
+          type="button"
+          disabled={disabled}
+          data-testid={`${testId}-pick2`}
+          onClick={() => onChange({ id: `${testId}-id-2`, name: `${testId}-name-2` })}>
+          pick2
+        </button>
+        <button type="button" disabled={disabled} data-testid={`${testId}-clear`} onClick={() => onChange(null)}>clear</button>
+      </div>
+    ),
+  };
+});
 
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -470,8 +484,8 @@ describe('NewTransactionModal — edit mode', () => {
     expect(screen.getByTestId('tx-dir-in')).toBeDisabled();
     expect(screen.getByTestId('tx-dir-out')).toBeDisabled();
     // The amount input itself must be locked too, not just the direction toggle — this was
-    // previously unasserted (the mock silently dropped `readOnly`), so a regression here would
-    // have gone undetected (QA, ETP-4879).
+    // previously unasserted (the mock silently dropped the lock prop), so a regression here
+    // would have gone undetected (QA, ETP-4879).
     expect(screen.getByTestId('tx-amount')).toBeDisabled();
     // Confirmar is gone (already processed); only Guardar remains.
     expect(screen.queryByTestId('tx-new-confirm')).not.toBeInTheDocument();
