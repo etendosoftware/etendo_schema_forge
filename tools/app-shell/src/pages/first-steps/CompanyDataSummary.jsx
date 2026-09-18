@@ -32,12 +32,7 @@ export default function CompanyDataSummary({ ui }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // ETP-4576 — gated on `isAuthenticated`, NOT on a token. The intent below is right: do
-    // not fire the GET before the session exists, because its 401 would read as an expired
-    // session and log the user out. But under the cookie scheme the client holds no token at
-    // all, so `!token` is permanently false, the request is never issued, and the page sits
-    // in `loading` for ever with no error anywhere. `isAuthenticated` is true under both
-    // schemes once the session is real.
+    // Wait for the authenticated session: a premature 401 would log the user out.
     if (!isAuthenticated) return undefined;
     let cancelled = false;
     setLoading(true);
