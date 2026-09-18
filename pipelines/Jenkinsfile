@@ -354,7 +354,7 @@ pipeline {
                                 // schema_forge MUST stay clean after regen-check: contract.json,
                                 // artifacts/*/generated/*.jsx, mockData.js, etc. are committed and
                                 // should match what the offline pipeline produces from decisions.json
-                                // + ad-snapshot.json. Any local change means committed UI/contract
+                                // + grouped cli/cache/ad-snapshot/ files. Any local change means committed UI/contract
                                 // files are stale.
                                 def sfDirty = sh(script: 'git status --porcelain', returnStdout: true).trim()
                                 if (sfDirty) {

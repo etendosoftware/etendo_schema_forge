@@ -1,0 +1,2579 @@
+{
+  "apiVersion": "v1",
+  "generatedFrom": "artifacts/*/contract.json",
+  "policy": {
+    "entitySelection": "primary-entity-and-schema-linked-children-per-base-window",
+    "fieldSelection": "editable-readOnly-until-removed",
+    "excludedCategories": [
+      "accounting",
+      "configuration",
+      "crm",
+      "finance",
+      "hr",
+      "settings",
+      "setup"
+    ],
+    "excludedWindows": [
+      "absence",
+      "business-partner",
+      "business-partner-category",
+      "bp-location",
+      "bom-production",
+      "commission-payment",
+      "commission",
+      "cost-adjustment",
+      "employee",
+      "inventory-quality-inspection",
+      "landed-cost",
+      "manage-requisitions",
+      "packing",
+      "requisition",
+      "stock-reservation",
+      "time-tracking",
+      "warehouse-picking-list"
+    ],
+    "excludedChildTabs": [
+      "accounting"
+    ],
+    "failClosed": true
+  },
+  "entities": {
+    "contacts": {
+      "publicName": "contacts",
+      "specName": "contacts",
+      "entityName": "businessPartner",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "search_key": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "searchKey",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "name": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "name",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "tax_id": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "taxID",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "web": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "etgoWeb",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "email": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "etgoEmail",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "phone": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "etgoPhone",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Contacts",
+        "functionalSummary": "The Contacts window should let users maintain a shared business-partner master record for organizations or individual people that the business treats as customers, vendors, or both. From one surface, users can maintain the commercial/person header, related people, bank accounts, addresses, and the financial preferences that drive downstream sales and purchasing behavior.",
+        "functionalCapabilities": [
+          "Create and update a contact header with the fields currently exposed in the merged UI: read-only identifier, commercial name, Contact Category, first name, last name, tax-id type, tax ID, website, VIES status, email, phone. Contact Category (`businessPartnerCategory`) renders as a required selector bound to `C_BP_Group_ID`, positioned right after Razón Social and before First Name — see the ETP-4566 note below.",
+          "Switch the header between Company and Person presentation from a top-bar toggle. In Company mode the form shows Commercial Name (required) and hides first/last name; in Person mode it hides Commercial Name and shows first/last name instead, both marked required with `*`.",
+          "Keep one record visible in the People menu for contact maintenance instead of exposing separate customer and vendor windows.",
+          "Review the list with quick segmentation: **All** (all records constrained to customer/vendor), **Personas** (contacts with `etgoIsperson = true`), and **Empresas** (contacts with `etgoIsperson = false`). All columns are visible under every subset.",
+          "Read the list's Type column badges as customer/vendor business-role flags — **Cliente** (purple) and/or **Proveedor** (blue) — not as the Company/Person persona toggle used in the detail header. A record with neither flag shows \"—\".",
+          "Inline-edit a contact directly from the list by hovering a row and clicking the pencil icon. The active row's editable cells become inputs without navigating to the detail view.",
+          "Delete a single contact from the list by hovering a row and clicking the trash icon; a confirmation dialog appears before the DELETE is sent. If the record has associated elements the API error message is shown as a toast.",
+          "Select multiple contacts with checkboxes and use the selection bar to bulk-delete them. All selected rows are deleted in parallel, so a record that cannot be deleted (e.g. it has associated elements) does not block the others from being deleted. Exactly one outcome toast is shown: a success toast when every row was deleted, an error toast when none were, or a single warning toast reporting how many were deleted and how many were not on a partial failure. On a partial failure the rows that failed stay selected/checked so the user can retry; rows that succeeded are deselected and the list refetches. Error messages are shown translated to Spanish, including a specific \"cannot be deleted because it has associated records\" message for FK-violation failures."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/contacts.md"
+      },
+      "source": {
+        "artifact": "contacts",
+        "contractVersion": "0.2.0",
+        "backendEntity": true
+      }
+    },
+    "contacts-bankAccount": {
+      "publicName": "contacts-bankAccount",
+      "specName": "contacts",
+      "entityName": "bankAccount",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "contacts",
+        "entityName": "businessPartner",
+        "foreignKey": "businessPartner",
+        "pathSegment": "bank-account"
+      },
+      "functional": {
+        "functionalName": "Contacts — Bank Account",
+        "functionalSummary": "The Contacts window should let users maintain a shared business-partner master record for organizations or individual people that the business treats as customers, vendors, or both. From one surface, users can maintain the commercial/person header, related people, bank accounts, addresses, and the financial preferences that drive downstream sales and purchasing behavior.",
+        "functionalCapabilities": [
+          "Create and update a contact header with the fields currently exposed in the merged UI: read-only identifier, commercial name, Contact Category, first name, last name, tax-id type, tax ID, website, VIES status, email, phone. Contact Category (`businessPartnerCategory`) renders as a required selector bound to `C_BP_Group_ID`, positioned right after Razón Social and before First Name — see the ETP-4566 note below.",
+          "Switch the header between Company and Person presentation from a top-bar toggle. In Company mode the form shows Commercial Name (required) and hides first/last name; in Person mode it hides Commercial Name and shows first/last name instead, both marked required with `*`.",
+          "Keep one record visible in the People menu for contact maintenance instead of exposing separate customer and vendor windows.",
+          "Review the list with quick segmentation: **All** (all records constrained to customer/vendor), **Personas** (contacts with `etgoIsperson = true`), and **Empresas** (contacts with `etgoIsperson = false`). All columns are visible under every subset.",
+          "Read the list's Type column badges as customer/vendor business-role flags — **Cliente** (purple) and/or **Proveedor** (blue) — not as the Company/Person persona toggle used in the detail header. A record with neither flag shows \"—\".",
+          "Inline-edit a contact directly from the list by hovering a row and clicking the pencil icon. The active row's editable cells become inputs without navigating to the detail view.",
+          "Delete a single contact from the list by hovering a row and clicking the trash icon; a confirmation dialog appears before the DELETE is sent. If the record has associated elements the API error message is shown as a toast.",
+          "Select multiple contacts with checkboxes and use the selection bar to bulk-delete them. All selected rows are deleted in parallel, so a record that cannot be deleted (e.g. it has associated elements) does not block the others from being deleted. Exactly one outcome toast is shown: a success toast when every row was deleted, an error toast when none were, or a single warning toast reporting how many were deleted and how many were not on a partial failure. On a partial failure the rows that failed stay selected/checked so the user can retry; rows that succeeded are deselected and the list refetches. Error messages are shown translated to Spanish, including a specific \"cannot be deleted because it has associated records\" message for FK-violation failures."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/contacts.md"
+      },
+      "source": {
+        "artifact": "contacts",
+        "contractVersion": "0.2.0",
+        "backendEntity": true
+      }
+    },
+    "contacts-locationAddress": {
+      "publicName": "contacts-locationAddress",
+      "specName": "contacts",
+      "entityName": "locationAddress",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "contacts",
+        "entityName": "businessPartner",
+        "foreignKey": "businessPartner",
+        "pathSegment": "location-address"
+      },
+      "functional": {
+        "functionalName": "Contacts — Location/Address",
+        "functionalSummary": "The Contacts window should let users maintain a shared business-partner master record for organizations or individual people that the business treats as customers, vendors, or both. From one surface, users can maintain the commercial/person header, related people, bank accounts, addresses, and the financial preferences that drive downstream sales and purchasing behavior.",
+        "functionalCapabilities": [
+          "Create and update a contact header with the fields currently exposed in the merged UI: read-only identifier, commercial name, Contact Category, first name, last name, tax-id type, tax ID, website, VIES status, email, phone. Contact Category (`businessPartnerCategory`) renders as a required selector bound to `C_BP_Group_ID`, positioned right after Razón Social and before First Name — see the ETP-4566 note below.",
+          "Switch the header between Company and Person presentation from a top-bar toggle. In Company mode the form shows Commercial Name (required) and hides first/last name; in Person mode it hides Commercial Name and shows first/last name instead, both marked required with `*`.",
+          "Keep one record visible in the People menu for contact maintenance instead of exposing separate customer and vendor windows.",
+          "Review the list with quick segmentation: **All** (all records constrained to customer/vendor), **Personas** (contacts with `etgoIsperson = true`), and **Empresas** (contacts with `etgoIsperson = false`). All columns are visible under every subset.",
+          "Read the list's Type column badges as customer/vendor business-role flags — **Cliente** (purple) and/or **Proveedor** (blue) — not as the Company/Person persona toggle used in the detail header. A record with neither flag shows \"—\".",
+          "Inline-edit a contact directly from the list by hovering a row and clicking the pencil icon. The active row's editable cells become inputs without navigating to the detail view.",
+          "Delete a single contact from the list by hovering a row and clicking the trash icon; a confirmation dialog appears before the DELETE is sent. If the record has associated elements the API error message is shown as a toast.",
+          "Select multiple contacts with checkboxes and use the selection bar to bulk-delete them. All selected rows are deleted in parallel, so a record that cannot be deleted (e.g. it has associated elements) does not block the others from being deleted. Exactly one outcome toast is shown: a success toast when every row was deleted, an error toast when none were, or a single warning toast reporting how many were deleted and how many were not on a partial failure. On a partial failure the rows that failed stay selected/checked so the user can retry; rows that succeeded are deselected and the list refetches. Error messages are shown translated to Spanish, including a specific \"cannot be deleted because it has associated records\" message for FK-violation failures."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/contacts.md"
+      },
+      "source": {
+        "artifact": "contacts",
+        "contractVersion": "0.2.0",
+        "backendEntity": true
+      }
+    },
+    "contacts-contact": {
+      "publicName": "contacts-contact",
+      "specName": "contacts",
+      "entityName": "contact",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "contacts",
+        "entityName": "businessPartner",
+        "foreignKey": "businessPartner",
+        "pathSegment": "contact"
+      },
+      "functional": {
+        "functionalName": "Contacts — Contact",
+        "functionalSummary": "The Contacts window should let users maintain a shared business-partner master record for organizations or individual people that the business treats as customers, vendors, or both. From one surface, users can maintain the commercial/person header, related people, bank accounts, addresses, and the financial preferences that drive downstream sales and purchasing behavior.",
+        "functionalCapabilities": [
+          "Create and update a contact header with the fields currently exposed in the merged UI: read-only identifier, commercial name, Contact Category, first name, last name, tax-id type, tax ID, website, VIES status, email, phone. Contact Category (`businessPartnerCategory`) renders as a required selector bound to `C_BP_Group_ID`, positioned right after Razón Social and before First Name — see the ETP-4566 note below.",
+          "Switch the header between Company and Person presentation from a top-bar toggle. In Company mode the form shows Commercial Name (required) and hides first/last name; in Person mode it hides Commercial Name and shows first/last name instead, both marked required with `*`.",
+          "Keep one record visible in the People menu for contact maintenance instead of exposing separate customer and vendor windows.",
+          "Review the list with quick segmentation: **All** (all records constrained to customer/vendor), **Personas** (contacts with `etgoIsperson = true`), and **Empresas** (contacts with `etgoIsperson = false`). All columns are visible under every subset.",
+          "Read the list's Type column badges as customer/vendor business-role flags — **Cliente** (purple) and/or **Proveedor** (blue) — not as the Company/Person persona toggle used in the detail header. A record with neither flag shows \"—\".",
+          "Inline-edit a contact directly from the list by hovering a row and clicking the pencil icon. The active row's editable cells become inputs without navigating to the detail view.",
+          "Delete a single contact from the list by hovering a row and clicking the trash icon; a confirmation dialog appears before the DELETE is sent. If the record has associated elements the API error message is shown as a toast.",
+          "Select multiple contacts with checkboxes and use the selection bar to bulk-delete them. All selected rows are deleted in parallel, so a record that cannot be deleted (e.g. it has associated elements) does not block the others from being deleted. Exactly one outcome toast is shown: a success toast when every row was deleted, an error toast when none were, or a single warning toast reporting how many were deleted and how many were not on a partial failure. On a partial failure the rows that failed stay selected/checked so the user can retry; rows that succeeded are deselected and the list refetches. Error messages are shown translated to Spanish, including a specific \"cannot be deleted because it has associated records\" message for FK-violation failures."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/contacts.md"
+      },
+      "source": {
+        "artifact": "contacts",
+        "contractVersion": "0.2.0",
+        "backendEntity": true
+      }
+    },
+    "document": {
+      "publicName": "document",
+      "specName": "document",
+      "entityName": "document",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Document",
+        "functionalSummary": "Use this window to maintain document header metadata rather than the document payload itself. The current evidence supports a record-maintenance surface where users classify a document, link it to a project, review upload metadata, track status, and preserve audit history around who created or updated the record.",
+        "functionalCapabilities": [
+          "browse existing document records by name, category, or status",
+          "create a document metadata record with the required identification and classification fields",
+          "link a document to a project when the file belongs to project work",
+          "update status and descriptive tags as the document moves through its lifecycle",
+          "review read-only upload metadata such as who uploaded the record, when it was uploaded, file size, and version",
+          "open a document record directly by id for review or maintenance"
+        ],
+        "functionalDoc": "docs/generated-custom-windows/document.md"
+      },
+      "source": {
+        "artifact": "document",
+        "contractVersion": "0.1.0",
+        "backendEntity": false
+      }
+    },
+    "goods-movements": {
+      "publicName": "goods-movements",
+      "specName": "goods-movements",
+      "entityName": "movement",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Goods Movements",
+        "functionalSummary": "Goods Movements should let an inventory user register a stock transfer from one storage bin to another under a single movement header. The business intent is to capture when inventory is relocated, preserve a movement identifier and date, and process the transfer only after the line set is complete.",
+        "functionalCapabilities": [
+          "browse existing movement headers by name, movement date, document number, and processed status",
+          "create a draft movement header with at least Name and Movement Date; Document No. is auto-generated and read-only",
+          "open a movement record and view the three principal header fields — Name, Movement Date, Document No. — in a flat, borderless form",
+          "add one or more transfer lines to a draft movement using the custom product drawer, which auto-fills the source bin from on-hand stock data",
+          "define each line with product, source storage bin, destination storage bin, and movement quantity; destination bin cannot equal the source bin",
+          "review the line UOM as a read-only column in the lines grid rather than an editable field",
+          "save a draft header with \"Save\" and process the completed movement with \"Process\" (two toolbar buttons driven by draftMode)",
+          "see a locked banner above the form when the document is processed, with a direct link to create a new physical inventory"
+        ],
+        "functionalDoc": "docs/generated-custom-windows/goods-movements.md"
+      },
+      "source": {
+        "artifact": "goods-movements",
+        "contractVersion": "0.19.0",
+        "backendEntity": true
+      }
+    },
+    "goods-movements-movementLine": {
+      "publicName": "goods-movements-movementLine",
+      "specName": "goods-movements",
+      "entityName": "movementLine",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "goods-movements",
+        "entityName": "movement",
+        "foreignKey": "movement",
+        "pathSegment": "movement-line"
+      },
+      "functional": {
+        "functionalName": "Goods Movements — Lines",
+        "functionalSummary": "Goods Movements should let an inventory user register a stock transfer from one storage bin to another under a single movement header. The business intent is to capture when inventory is relocated, preserve a movement identifier and date, and process the transfer only after the line set is complete.",
+        "functionalCapabilities": [
+          "browse existing movement headers by name, movement date, document number, and processed status",
+          "create a draft movement header with at least Name and Movement Date; Document No. is auto-generated and read-only",
+          "open a movement record and view the three principal header fields — Name, Movement Date, Document No. — in a flat, borderless form",
+          "add one or more transfer lines to a draft movement using the custom product drawer, which auto-fills the source bin from on-hand stock data",
+          "define each line with product, source storage bin, destination storage bin, and movement quantity; destination bin cannot equal the source bin",
+          "review the line UOM as a read-only column in the lines grid rather than an editable field",
+          "save a draft header with \"Save\" and process the completed movement with \"Process\" (two toolbar buttons driven by draftMode)",
+          "see a locked banner above the form when the document is processed, with a direct link to create a new physical inventory"
+        ],
+        "functionalDoc": "docs/generated-custom-windows/goods-movements.md"
+      },
+      "source": {
+        "artifact": "goods-movements",
+        "contractVersion": "0.19.0",
+        "backendEntity": true
+      }
+    },
+    "goods-receipt": {
+      "publicName": "goods-receipt",
+      "specName": "goods-receipt",
+      "entityName": "goodsReceipt",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Goods Receipt",
+        "functionalSummary": "This window should let a purchasing user acknowledge that a vendor delivery has physically arrived, capture what was actually received, and complete the receipt so downstream purchasing documents can reflect that intake.",
+        "functionalCapabilities": [
+          "create or continue a draft goods receipt for a vendor delivery",
+          "set the operational header context needed to receive stock, including warehouse, vendor, vendor address, movement date, currency, and order reference",
+          "add receipt lines manually when the delivery needs to be keyed in line by line",
+          "import pending lines from completed purchase orders for the same vendor into the current receipt",
+          "review received-line essentials such as product, received quantity, UOM, storage bin, and invoiced quantity",
+          "confirm the receipt from draft so the document moves out of intake mode",
+          "open linked purchasing documents to understand where the receipt came from and whether invoices already exist for the same order",
+          "complete multiple draft receipts at once from the list selection bar using the bulk action (labeled \"Confirmar\" / i18n key `confirmBulk`), which processes each receipt through the standard `documentAction=CO` endpoint"
+        ],
+        "functionalDoc": "docs/generated-custom-windows/goods-receipt.md"
+      },
+      "source": {
+        "artifact": "goods-receipt",
+        "contractVersion": "0.34.0",
+        "backendEntity": true
+      }
+    },
+    "goods-receipt-goodsReceiptLine": {
+      "publicName": "goods-receipt-goodsReceiptLine",
+      "specName": "goods-receipt",
+      "entityName": "goodsReceiptLine",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "goods-receipt",
+        "entityName": "goodsReceipt",
+        "foreignKey": "shipmentReceipt",
+        "pathSegment": "goods-receipt-line"
+      },
+      "functional": {
+        "functionalName": "Goods Receipt — Lines",
+        "functionalSummary": "This window should let a purchasing user acknowledge that a vendor delivery has physically arrived, capture what was actually received, and complete the receipt so downstream purchasing documents can reflect that intake.",
+        "functionalCapabilities": [
+          "create or continue a draft goods receipt for a vendor delivery",
+          "set the operational header context needed to receive stock, including warehouse, vendor, vendor address, movement date, currency, and order reference",
+          "add receipt lines manually when the delivery needs to be keyed in line by line",
+          "import pending lines from completed purchase orders for the same vendor into the current receipt",
+          "review received-line essentials such as product, received quantity, UOM, storage bin, and invoiced quantity",
+          "confirm the receipt from draft so the document moves out of intake mode",
+          "open linked purchasing documents to understand where the receipt came from and whether invoices already exist for the same order",
+          "complete multiple draft receipts at once from the list selection bar using the bulk action (labeled \"Confirmar\" / i18n key `confirmBulk`), which processes each receipt through the standard `documentAction=CO` endpoint"
+        ],
+        "functionalDoc": "docs/generated-custom-windows/goods-receipt.md"
+      },
+      "source": {
+        "artifact": "goods-receipt",
+        "contractVersion": "0.34.0",
+        "backendEntity": true
+      }
+    },
+    "goods-shipment": {
+      "publicName": "goods-shipment",
+      "specName": "goods-shipment",
+      "entityName": "goodsShipment",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Goods Shipment",
+        "functionalSummary": "Use this window to register and complete outbound customer shipments. The functional goal is to move goods out of inventory, confirm what was actually shipped line by line, and then continue into downstream commercial steps such as draft invoicing, customer returns, and shipment document sending.",
+        "functionalCapabilities": [
+          "Create or review a shipment header with warehouse, customer, delivery address, movement date, status (rendered as a status badge, not a dot indicator), currency, and invoicing state.",
+          "Maintain shipment lines that represent the delivered products and quantities for the selected shipment.",
+          "Complete a draft shipment when it is ready to be executed.",
+          "Create a draft sales invoice from one completed shipment or from multiple completed shipments when they are invoiceable together.",
+          "Start a return flow from a completed shipment so the user can select shipped lines and quantities to send back through the return process.",
+          "Open related downstream or upstream documents from the shipment, especially the linked sales order and the invoices created from that order.",
+          "Send the shipment document by email from the detail view, once the shipment is completed.",
+          "Complete multiple draft shipments at once from the list selection bar using the bulk action (labeled \"Confirmar\" / i18n key `confirmBulk`), which processes each shipment through the standard `documentAction=CO` endpoint."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/goods-shipment.md"
+      },
+      "source": {
+        "artifact": "goods-shipment",
+        "contractVersion": "0.1.0",
+        "backendEntity": true
+      }
+    },
+    "goods-shipment-goodsShipmentLine": {
+      "publicName": "goods-shipment-goodsShipmentLine",
+      "specName": "goods-shipment",
+      "entityName": "goodsShipmentLine",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "goods-shipment",
+        "entityName": "goodsShipment",
+        "foreignKey": "shipmentReceipt",
+        "pathSegment": "goods-shipment-line"
+      },
+      "functional": {
+        "functionalName": "Goods Shipment — Lines",
+        "functionalSummary": "Use this window to register and complete outbound customer shipments. The functional goal is to move goods out of inventory, confirm what was actually shipped line by line, and then continue into downstream commercial steps such as draft invoicing, customer returns, and shipment document sending.",
+        "functionalCapabilities": [
+          "Create or review a shipment header with warehouse, customer, delivery address, movement date, status (rendered as a status badge, not a dot indicator), currency, and invoicing state.",
+          "Maintain shipment lines that represent the delivered products and quantities for the selected shipment.",
+          "Complete a draft shipment when it is ready to be executed.",
+          "Create a draft sales invoice from one completed shipment or from multiple completed shipments when they are invoiceable together.",
+          "Start a return flow from a completed shipment so the user can select shipped lines and quantities to send back through the return process.",
+          "Open related downstream or upstream documents from the shipment, especially the linked sales order and the invoices created from that order.",
+          "Send the shipment document by email from the detail view, once the shipment is completed.",
+          "Complete multiple draft shipments at once from the list selection bar using the bulk action (labeled \"Confirmar\" / i18n key `confirmBulk`), which processes each shipment through the standard `documentAction=CO` endpoint."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/goods-shipment.md"
+      },
+      "source": {
+        "artifact": "goods-shipment",
+        "contractVersion": "0.1.0",
+        "backendEntity": true
+      }
+    },
+    "internal-consumption": {
+      "publicName": "internal-consumption",
+      "specName": "internal-consumption",
+      "entityName": "internalConsumption",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Internal Consumption",
+        "functionalSummary": "Use this window to register stock consumed inside the organization rather than sold or transferred. The current contract and generated page present it as an inventory transaction with a header record and operational lines, then a user-triggered process step that moves the document out of draft and an optional void step that reverses a completed document.",
+        "functionalCapabilities": [
+          "Create and review internal consumption headers with at least Movement Date and Name.",
+          "Add one or more consumption lines under a header.",
+          "Capture the product being consumed, the movement quantity, and the storage bin used for each line.",
+          "Review document status as it moves through Draft, Completed, and Voided states.",
+          "Complete a draft document with the **Process** action that sits next to **Save** in the detail toolbar.",
+          "Void a completed document from the kebab (⋮) **Void** action."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/internal-consumption.md"
+      },
+      "source": {
+        "artifact": "internal-consumption",
+        "contractVersion": "0.17.0",
+        "backendEntity": true
+      }
+    },
+    "internal-consumption-internalConsumptionLine": {
+      "publicName": "internal-consumption-internalConsumptionLine",
+      "specName": "internal-consumption",
+      "entityName": "internalConsumptionLine",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "internal-consumption",
+        "entityName": "internalConsumption",
+        "foreignKey": "internalConsumption",
+        "pathSegment": "internal-consumption-line"
+      },
+      "functional": {
+        "functionalName": "Internal Consumption — Lines",
+        "functionalSummary": "Use this window to register stock consumed inside the organization rather than sold or transferred. The current contract and generated page present it as an inventory transaction with a header record and operational lines, then a user-triggered process step that moves the document out of draft and an optional void step that reverses a completed document.",
+        "functionalCapabilities": [
+          "Create and review internal consumption headers with at least Movement Date and Name.",
+          "Add one or more consumption lines under a header.",
+          "Capture the product being consumed, the movement quantity, and the storage bin used for each line.",
+          "Review document status as it moves through Draft, Completed, and Voided states.",
+          "Complete a draft document with the **Process** action that sits next to **Save** in the detail toolbar.",
+          "Void a completed document from the kebab (⋮) **Void** action."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/internal-consumption.md"
+      },
+      "source": {
+        "artifact": "internal-consumption",
+        "contractVersion": "0.17.0",
+        "backendEntity": true
+      }
+    },
+    "matched-purchase-invoices": {
+      "publicName": "matched-purchase-invoices",
+      "specName": "matched-purchase-invoices",
+      "entityName": "matchedInvoice",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Matched Purchase Invoices",
+        "functionalSummary": "Public API resource for the Matched Purchase Invoices window.",
+        "functionalCapabilities": [],
+        "functionalDoc": "docs/generated-custom-windows/matched-purchase-invoices.md"
+      },
+      "source": {
+        "artifact": "matched-purchase-invoices",
+        "contractVersion": "0.1.1",
+        "backendEntity": true
+      }
+    },
+    "monitor-verifactu": {
+      "publicName": "monitor-verifactu",
+      "specName": "monitor-verifactu",
+      "entityName": "cabeceraDeEmisor",
+      "publicApi": true,
+      "group": "Fiscal Monitors",
+      "operations": [
+        "GET",
+        "LIST"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Monitor Verifactu",
+        "functionalSummary": "Public API resource for the Monitor Verifactu window.",
+        "functionalCapabilities": [],
+        "functionalDoc": "docs/generated-custom-windows/monitor-verifactu.md"
+      },
+      "source": {
+        "artifact": "monitor-verifactu",
+        "contractVersion": "0.12.0",
+        "backendEntity": true
+      }
+    },
+    "physical-inventory": {
+      "publicName": "physical-inventory",
+      "specName": "physical-inventory",
+      "entityName": "inventory",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Physical Inventory",
+        "functionalSummary": "Physical Inventory should let a warehouse user create an inventory count session, save the header before line work begins, generate the initial count list, record counted quantities line by line, refresh the system count when needed, and then process the count once the session is ready to close.",
+        "functionalCapabilities": [
+          "Create a physical inventory header with at least Movement Date, Name, and Warehouse.",
+          "Classify the count as a Normal, Opening Inventory, or Closing Inventory session, with Normal as the visible default in current contract evidence.",
+          "Open a saved header and work with its child inventory lines.",
+          "Generate a count list from the header through a dedicated more-menu action that filters by product search key, optional product category, and inventory-quantity range.",
+          "Generate lines automatically for the current warehouse via a 3-field modal (product category, inventory-quantity comparison, optional book-quantity reset), available both from the empty-state and from the \"+ Add line\" menu.",
+          "Capture user-entered counted quantities on each line while keeping the system count visible as read-only reference data.",
+          "Refresh list system counts before final processing.",
+          "Process the inventory count only when the record still has `processed = false` and at least one line exists."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/physical-inventory.md"
+      },
+      "source": {
+        "artifact": "physical-inventory",
+        "contractVersion": "0.36.0",
+        "backendEntity": true
+      }
+    },
+    "physical-inventory-inventoryLine": {
+      "publicName": "physical-inventory-inventoryLine",
+      "specName": "physical-inventory",
+      "entityName": "inventoryLine",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "physical-inventory",
+        "entityName": "inventory",
+        "foreignKey": "physInventory",
+        "pathSegment": "inventory-line"
+      },
+      "functional": {
+        "functionalName": "Physical Inventory — Lines",
+        "functionalSummary": "Physical Inventory should let a warehouse user create an inventory count session, save the header before line work begins, generate the initial count list, record counted quantities line by line, refresh the system count when needed, and then process the count once the session is ready to close.",
+        "functionalCapabilities": [
+          "Create a physical inventory header with at least Movement Date, Name, and Warehouse.",
+          "Classify the count as a Normal, Opening Inventory, or Closing Inventory session, with Normal as the visible default in current contract evidence.",
+          "Open a saved header and work with its child inventory lines.",
+          "Generate a count list from the header through a dedicated more-menu action that filters by product search key, optional product category, and inventory-quantity range.",
+          "Generate lines automatically for the current warehouse via a 3-field modal (product category, inventory-quantity comparison, optional book-quantity reset), available both from the empty-state and from the \"+ Add line\" menu.",
+          "Capture user-entered counted quantities on each line while keeping the system count visible as read-only reference data.",
+          "Refresh list system counts before final processing.",
+          "Process the inventory count only when the record still has `processed = false` and at least one line exists."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/physical-inventory.md"
+      },
+      "source": {
+        "artifact": "physical-inventory",
+        "contractVersion": "0.36.0",
+        "backendEntity": true
+      }
+    },
+    "product": {
+      "publicName": "product",
+      "specName": "product",
+      "entityName": "product",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "search_key": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "searchKey",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "name": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "name",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "category": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "productCategory",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": "ProductCategory",
+          "handlerId": null,
+          "relationship": {
+            "resource": "product-category",
+            "cardinality": "one",
+            "foreignKey": "category"
+          }
+        },
+        "description": {
+          "sourceVisibility": "editable",
+          "direction": "inout",
+          "internalPath": "description",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "sale_price": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "eTGOSalePrice",
+          "type": "passthrough",
+          "dataType": {
+            "type": "number",
+            "format": "double"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "stock": {
+          "sourceVisibility": "readOnly",
+          "direction": "out",
+          "internalPath": "eTGOStock",
+          "type": "passthrough",
+          "dataType": {
+            "type": "number",
+            "format": "double"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Product",
+        "functionalSummary": "Product lets a user maintain the commercial and inventory identity of an item, then continue into the product-specific surfaces that matter after the master record exists: pricing, stock visibility, transaction history, and the contract-backed child datasets attached to the selected product.",
+        "functionalCapabilities": [
+          "Browse products from the Inventory menu and recognize them quickly by image, name, search key, and category.",
+          "Participate in the global semantic search through the `product` DB Extended search target. The participation is declared by this window's Schema Forge contract, not by a Vite environment variable.",
+          "Create or update the core product definition, including search key, name, description, product type, category, UOM, image, tax category, sale/purchase flags, stocked flag, weight, UOM for weight, attribute set, brand, lifecycle status, returnable flag, active flag, and UPC/EAN.",
+          "Move between a main `General` tab and a separate `Additional Info` tab so commercial and logistics settings are grouped instead of mixed into one form.",
+          "Review and edit pricing from a dedicated `Price` tab without leaving the product page. Pricing tables are entered via per-table pencil icons (one for Sales lists, one for Purchase lists) that open a focused dialog.",
+          "Click a product image to open a lightbox for full-size inspection. Upload, replace, and remove the image from within the same field in the form grid.",
+          "Inspect stock availability and stock movement context from the custom sidebar.",
+          "Record the product's **standard cost** over time from the generated **Cost** tab (`Costing` in `decisions.json`, \"Costo\" in Spanish), the first tab in the unified secondary tab strip (Cost, Accounting, Price, Attachments). Engine-generated cost rows are shown but cannot be edited or deleted; only hand-entered ones can. See the ETP-5245 section below."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/product.md"
+      },
+      "source": {
+        "artifact": "product",
+        "contractVersion": "0.12.0",
+        "backendEntity": true
+      }
+    },
+    "product-costing": {
+      "publicName": "product-costing",
+      "specName": "product",
+      "entityName": "costing",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "product",
+        "entityName": "product",
+        "foreignKey": "product",
+        "pathSegment": "costing"
+      },
+      "functional": {
+        "functionalName": "Product — Costing",
+        "functionalSummary": "Product lets a user maintain the commercial and inventory identity of an item, then continue into the product-specific surfaces that matter after the master record exists: pricing, stock visibility, transaction history, and the contract-backed child datasets attached to the selected product.",
+        "functionalCapabilities": [
+          "Browse products from the Inventory menu and recognize them quickly by image, name, search key, and category.",
+          "Participate in the global semantic search through the `product` DB Extended search target. The participation is declared by this window's Schema Forge contract, not by a Vite environment variable.",
+          "Create or update the core product definition, including search key, name, description, product type, category, UOM, image, tax category, sale/purchase flags, stocked flag, weight, UOM for weight, attribute set, brand, lifecycle status, returnable flag, active flag, and UPC/EAN.",
+          "Move between a main `General` tab and a separate `Additional Info` tab so commercial and logistics settings are grouped instead of mixed into one form.",
+          "Review and edit pricing from a dedicated `Price` tab without leaving the product page. Pricing tables are entered via per-table pencil icons (one for Sales lists, one for Purchase lists) that open a focused dialog.",
+          "Click a product image to open a lightbox for full-size inspection. Upload, replace, and remove the image from within the same field in the form grid.",
+          "Inspect stock availability and stock movement context from the custom sidebar.",
+          "Record the product's **standard cost** over time from the generated **Cost** tab (`Costing` in `decisions.json`, \"Costo\" in Spanish), the first tab in the unified secondary tab strip (Cost, Accounting, Price, Attachments). Engine-generated cost rows are shown but cannot be edited or deleted; only hand-entered ones can. See the ETP-5245 section below."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/product.md"
+      },
+      "source": {
+        "artifact": "product",
+        "contractVersion": "0.12.0",
+        "backendEntity": true
+      }
+    },
+    "product-category": {
+      "publicName": "product-category",
+      "specName": "product-category",
+      "entityName": "productCategory",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Product Category",
+        "functionalSummary": "Product Category lets users maintain the category master record that classifies products and configure the accounting accounts associated with each category per accounting schema. The main form covers the category header fields; the Accounting tab exposes the GL accounts linked to each accounting schema for that category.",
+        "functionalCapabilities": [
+          "browse product categories by Search Key and Name",
+          "open a category and maintain its header fields: Search Key, Name, Description, Default, and Active",
+          "view and edit accounting accounts (Asset, Expense, Revenue, COGS, Invoice Price Variance) for the category directly from the Accounting grid, using inline editing with pencil and trash icons on hover"
+        ],
+        "functionalDoc": "docs/generated-custom-windows/product-category.md"
+      },
+      "source": {
+        "artifact": "product-category",
+        "contractVersion": "0.21.0",
+        "backendEntity": true
+      }
+    },
+    "project": {
+      "publicName": "project",
+      "specName": "project",
+      "entityName": "project",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Project",
+        "functionalSummary": "Use this window to maintain the core record for a project: its identity, client context, responsible manager, lifecycle status, target dates, budget, and priority. From a business perspective, this is the place to define the project header that other operational records can reference.",
+        "functionalCapabilities": [
+          "browse existing projects by name, client, or status",
+          "create a new project with the minimum planning data needed to identify and own the work",
+          "update the project header as ownership, status, dates, budget, or priority change",
+          "remove a project record when it should no longer exist",
+          "open a project directly by record id for review or maintenance"
+        ],
+        "functionalDoc": "docs/generated-custom-windows/project.md"
+      },
+      "source": {
+        "artifact": "project",
+        "contractVersion": "0.1.0",
+        "backendEntity": false
+      }
+    },
+    "purchase-invoice": {
+      "publicName": "purchase-invoice",
+      "specName": "purchase-invoice",
+      "entityName": "header",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Purchase Invoice",
+        "functionalSummary": "Use this window to register supplier invoices, keep the payable document aligned with its invoice lines, and understand what is still owed before or after payments are registered. The current UI is oriented around three linked concerns: the invoice header, the invoice lines that build the commercial amount, and the payable state exposed through outstanding amounts, schedules, and related payment-out records.",
+        "functionalCapabilities": [
+          "Create and edit a purchase invoice header with the supplier, invoice dates, payment terms, payment method, and the supplier invoice reference (`POReference`, displayed as \"Document No.\" / \"Nº documento\") alongside the other payable-identifying fields used by this workflow.",
+          "Add and review invoice lines so the document reflects what the supplier billed, including product, description, quantity, unit price, discount, tax, and line gross amount.",
+          "Review invoice totals at document level, including net amount, gross amount, paid amount, and outstanding amount when those values are available from the header or payment schedule data.",
+          "Inspect the invoice from the list without immediately leaving the list route, then move into full edit mode when needed.",
+          "Understand the payable relationship to the originating purchase order, related goods receipts, and downstream payment-out records.",
+          "Open payment detail flows when the invoice is completed and still has an amount pending.",
+          "Complete multiple draft invoices at once from the list selection bar using the bulk action, labeled \"Confirmar\" (i18n key `confirmBulk`) for draft selections.",
+          "Post (\"Contabilizar\") a completed, not-yet-posted invoice directly from the list — via the row-hover kebab menu for a single record, or via the dedicated \"Contabilizar\" bulk action in the list selection bar for multiple selected records — without needing to open the record in form view first (ETP-5209)."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/purchase-invoice.md"
+      },
+      "source": {
+        "artifact": "purchase-invoice",
+        "contractVersion": "0.94.0",
+        "backendEntity": true
+      }
+    },
+    "purchase-invoice-exchangeRates": {
+      "publicName": "purchase-invoice-exchangeRates",
+      "specName": "purchase-invoice",
+      "entityName": "exchangeRates",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "purchase-invoice",
+        "entityName": "header",
+        "foreignKey": "invoice",
+        "pathSegment": "exchange-rates"
+      },
+      "functional": {
+        "functionalName": "Purchase Invoice — Exchange rates",
+        "functionalSummary": "Use this window to register supplier invoices, keep the payable document aligned with its invoice lines, and understand what is still owed before or after payments are registered. The current UI is oriented around three linked concerns: the invoice header, the invoice lines that build the commercial amount, and the payable state exposed through outstanding amounts, schedules, and related payment-out records.",
+        "functionalCapabilities": [
+          "Create and edit a purchase invoice header with the supplier, invoice dates, payment terms, payment method, and the supplier invoice reference (`POReference`, displayed as \"Document No.\" / \"Nº documento\") alongside the other payable-identifying fields used by this workflow.",
+          "Add and review invoice lines so the document reflects what the supplier billed, including product, description, quantity, unit price, discount, tax, and line gross amount.",
+          "Review invoice totals at document level, including net amount, gross amount, paid amount, and outstanding amount when those values are available from the header or payment schedule data.",
+          "Inspect the invoice from the list without immediately leaving the list route, then move into full edit mode when needed.",
+          "Understand the payable relationship to the originating purchase order, related goods receipts, and downstream payment-out records.",
+          "Open payment detail flows when the invoice is completed and still has an amount pending.",
+          "Complete multiple draft invoices at once from the list selection bar using the bulk action, labeled \"Confirmar\" (i18n key `confirmBulk`) for draft selections.",
+          "Post (\"Contabilizar\") a completed, not-yet-posted invoice directly from the list — via the row-hover kebab menu for a single record, or via the dedicated \"Contabilizar\" bulk action in the list selection bar for multiple selected records — without needing to open the record in form view first (ETP-5209)."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/purchase-invoice.md"
+      },
+      "source": {
+        "artifact": "purchase-invoice",
+        "contractVersion": "0.94.0",
+        "backendEntity": true
+      }
+    },
+    "purchase-order": {
+      "publicName": "purchase-order",
+      "specName": "purchase-order",
+      "entityName": "header",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Purchase Order",
+        "functionalSummary": "This window should let a buyer prepare a supplier order, maintain its commercial header and line details, confirm it, and then follow the downstream procurement flow through receipts, purchase invoices, and payments.",
+        "functionalCapabilities": [
+          "Create a purchase order for a selected vendor with the key commercial header data: vendor, vendor address, order date, scheduled delivery date, payment method, payment terms, and price list.",
+          "Start a new unsaved order with visible `Save`, `Save draft`, and `Cancel` controls while the order-line tab is already available before the first save.",
+          "Add and maintain order lines with at least product, description, ordered quantity, net list price, discount, tax, and the resulting line gross amount.",
+          "Review purchase progress from the order itself through reception status, invoice status, related receipts, related purchase invoices, and linked payments.",
+          "Confirm a draft order and, from the confirmation flow or later follow-up actions, create the operational documents that fulfill it.",
+          "Clone an existing order, and — once confirmed (`CO`) — send the document from the top bar.",
+          "Complete multiple draft orders at once from the list selection bar using the bulk action (labeled \"Confirmar\" / i18n key `confirmBulk`). The action renders `BulkDocumentAction` with `buildActions={buildInOutActions}`, which limits available document actions to `CO` only — `RE` (Reactivate) is intentionally excluded from Purchase Orders. The button is hidden when no draft rows are selected.",
+          "Generate downstream documents in bulk for completed purchase orders from the list selection bar via a kebab (three-dot) menu — `BulkPurchaseOrderMoreMenu`. The menu exposes \"Crear facturas\" and \"Crear albaranes\"; each item posts one request per selected order to the existing per-record `createPurchaseInvoice` and `createGoodsReceipt` NeoHandler endpoints. Before each create call, the kebab pre-checks whether the order already has a draft of the same kind by querying `purchase-invoice/header?criteria=salesOrder=<id>` for invoices and `goods-receipt/goodsReceipt?criteria=salesOrder=<id>` for receipts, mirroring the patterns used in `PurchaseOrderActions.jsx` for the single-record flow. Orders with an existing draft are reported as failed without a duplicate creation; orders not in `CO` are also reported as failed; orders that are fully fulfilled fall back to the backend's \"no pending lines\" message. The run never aborts on per-order failures — the aggregated `{ok}/{failed}` toast is surfaced through `useBulkActionToast` after the page reload."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/purchase-order.md"
+      },
+      "source": {
+        "artifact": "purchase-order",
+        "contractVersion": "0.48.0",
+        "backendEntity": true
+      }
+    },
+    "purchase-order-lines": {
+      "publicName": "purchase-order-lines",
+      "specName": "purchase-order",
+      "entityName": "lines",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "purchase-order",
+        "entityName": "header",
+        "foreignKey": "salesOrder",
+        "pathSegment": "lines"
+      },
+      "functional": {
+        "functionalName": "Purchase Order — Lines",
+        "functionalSummary": "This window should let a buyer prepare a supplier order, maintain its commercial header and line details, confirm it, and then follow the downstream procurement flow through receipts, purchase invoices, and payments.",
+        "functionalCapabilities": [
+          "Create a purchase order for a selected vendor with the key commercial header data: vendor, vendor address, order date, scheduled delivery date, payment method, payment terms, and price list.",
+          "Start a new unsaved order with visible `Save`, `Save draft`, and `Cancel` controls while the order-line tab is already available before the first save.",
+          "Add and maintain order lines with at least product, description, ordered quantity, net list price, discount, tax, and the resulting line gross amount.",
+          "Review purchase progress from the order itself through reception status, invoice status, related receipts, related purchase invoices, and linked payments.",
+          "Confirm a draft order and, from the confirmation flow or later follow-up actions, create the operational documents that fulfill it.",
+          "Clone an existing order, and — once confirmed (`CO`) — send the document from the top bar.",
+          "Complete multiple draft orders at once from the list selection bar using the bulk action (labeled \"Confirmar\" / i18n key `confirmBulk`). The action renders `BulkDocumentAction` with `buildActions={buildInOutActions}`, which limits available document actions to `CO` only — `RE` (Reactivate) is intentionally excluded from Purchase Orders. The button is hidden when no draft rows are selected.",
+          "Generate downstream documents in bulk for completed purchase orders from the list selection bar via a kebab (three-dot) menu — `BulkPurchaseOrderMoreMenu`. The menu exposes \"Crear facturas\" and \"Crear albaranes\"; each item posts one request per selected order to the existing per-record `createPurchaseInvoice` and `createGoodsReceipt` NeoHandler endpoints. Before each create call, the kebab pre-checks whether the order already has a draft of the same kind by querying `purchase-invoice/header?criteria=salesOrder=<id>` for invoices and `goods-receipt/goodsReceipt?criteria=salesOrder=<id>` for receipts, mirroring the patterns used in `PurchaseOrderActions.jsx` for the single-record flow. Orders with an existing draft are reported as failed without a duplicate creation; orders not in `CO` are also reported as failed; orders that are fully fulfilled fall back to the backend's \"no pending lines\" message. The run never aborts on per-order failures — the aggregated `{ok}/{failed}` toast is surfaced through `useBulkActionToast` after the page reload."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/purchase-order.md"
+      },
+      "source": {
+        "artifact": "purchase-order",
+        "contractVersion": "0.48.0",
+        "backendEntity": true
+      }
+    },
+    "purchase-order-lineTax": {
+      "publicName": "purchase-order-lineTax",
+      "specName": "purchase-order",
+      "entityName": "lineTax",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "purchase-order",
+        "entityName": "header",
+        "foreignKey": "salesOrder",
+        "pathSegment": "line-tax"
+      },
+      "functional": {
+        "functionalName": "Purchase Order — Line Tax",
+        "functionalSummary": "This window should let a buyer prepare a supplier order, maintain its commercial header and line details, confirm it, and then follow the downstream procurement flow through receipts, purchase invoices, and payments.",
+        "functionalCapabilities": [
+          "Create a purchase order for a selected vendor with the key commercial header data: vendor, vendor address, order date, scheduled delivery date, payment method, payment terms, and price list.",
+          "Start a new unsaved order with visible `Save`, `Save draft`, and `Cancel` controls while the order-line tab is already available before the first save.",
+          "Add and maintain order lines with at least product, description, ordered quantity, net list price, discount, tax, and the resulting line gross amount.",
+          "Review purchase progress from the order itself through reception status, invoice status, related receipts, related purchase invoices, and linked payments.",
+          "Confirm a draft order and, from the confirmation flow or later follow-up actions, create the operational documents that fulfill it.",
+          "Clone an existing order, and — once confirmed (`CO`) — send the document from the top bar.",
+          "Complete multiple draft orders at once from the list selection bar using the bulk action (labeled \"Confirmar\" / i18n key `confirmBulk`). The action renders `BulkDocumentAction` with `buildActions={buildInOutActions}`, which limits available document actions to `CO` only — `RE` (Reactivate) is intentionally excluded from Purchase Orders. The button is hidden when no draft rows are selected.",
+          "Generate downstream documents in bulk for completed purchase orders from the list selection bar via a kebab (three-dot) menu — `BulkPurchaseOrderMoreMenu`. The menu exposes \"Crear facturas\" and \"Crear albaranes\"; each item posts one request per selected order to the existing per-record `createPurchaseInvoice` and `createGoodsReceipt` NeoHandler endpoints. Before each create call, the kebab pre-checks whether the order already has a draft of the same kind by querying `purchase-invoice/header?criteria=salesOrder=<id>` for invoices and `goods-receipt/goodsReceipt?criteria=salesOrder=<id>` for receipts, mirroring the patterns used in `PurchaseOrderActions.jsx` for the single-record flow. Orders with an existing draft are reported as failed without a duplicate creation; orders not in `CO` are also reported as failed; orders that are fully fulfilled fall back to the backend's \"no pending lines\" message. The run never aborts on per-order failures — the aggregated `{ok}/{failed}` toast is surfaced through `useBulkActionToast` after the page reload."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/purchase-order.md"
+      },
+      "source": {
+        "artifact": "purchase-order",
+        "contractVersion": "0.48.0",
+        "backendEntity": true
+      }
+    },
+    "return-material-receipt": {
+      "publicName": "return-material-receipt",
+      "specName": "return-material-receipt",
+      "entityName": "returnMaterialReceipt",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [
+        {
+          "name": "Process Receipt",
+          "method": "POST",
+          "path": "/returnMaterialReceipt/:id/action/documentAction",
+          "entity": "returnMaterialReceipt",
+          "columnName": "documentAction",
+          "params": [],
+          "preconditions": [],
+          "steps": 0
+        }
+      ],
+      "functional": {
+        "functionalName": "Return Material Receipt",
+        "functionalSummary": "Receive material back into stock after a sales-side return flow. The window is oriented around a receipt header that captures who is returning goods, where the material is received, and which sales order provides the source context, then child lines that record the returned products and quantities against that source document.",
+        "functionalCapabilities": [
+          "Create, review, and update a return material receipt header with movement date, business partner, warehouse, partner address, tracking reference, and notes.",
+          "Keep the receipt anchored to a source sales order so users can understand which commercial transaction the returned material belongs to.",
+          "Maintain receipt lines that identify the returned product, received quantity, UOM, and originating sales-order line. **Lines are import-only (ETP-4462):** a return line must originate from a source shipment line via the \"Importar desde envío\" modal — there is no manual add-line entry path.",
+          "Process the receipt through document actions and operational actions such as creating lines from source context, updating lines, receiving materials, or processing goods.",
+          "Open the related sales order from the receipt detail view when users need upstream order context.",
+          "Copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved.",
+          "Complete multiple draft receipts at once from the list selection bar using the bulk action (labeled \"Confirmar\" / i18n key `confirmBulk`), which processes each receipt through the standard `documentAction=CO` endpoint (ETP-4857)."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/return-material-receipt.md"
+      },
+      "source": {
+        "artifact": "return-material-receipt",
+        "contractVersion": "0.5.0",
+        "backendEntity": true
+      }
+    },
+    "return-material-receipt-returnMaterialReceiptLine": {
+      "publicName": "return-material-receipt-returnMaterialReceiptLine",
+      "specName": "return-material-receipt",
+      "entityName": "returnMaterialReceiptLine",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "return-material-receipt",
+        "entityName": "returnMaterialReceipt",
+        "foreignKey": "shipmentReceipt",
+        "pathSegment": "return-material-receipt-line"
+      },
+      "functional": {
+        "functionalName": "Return Material Receipt — Lines",
+        "functionalSummary": "Receive material back into stock after a sales-side return flow. The window is oriented around a receipt header that captures who is returning goods, where the material is received, and which sales order provides the source context, then child lines that record the returned products and quantities against that source document.",
+        "functionalCapabilities": [
+          "Create, review, and update a return material receipt header with movement date, business partner, warehouse, partner address, tracking reference, and notes.",
+          "Keep the receipt anchored to a source sales order so users can understand which commercial transaction the returned material belongs to.",
+          "Maintain receipt lines that identify the returned product, received quantity, UOM, and originating sales-order line. **Lines are import-only (ETP-4462):** a return line must originate from a source shipment line via the \"Importar desde envío\" modal — there is no manual add-line entry path.",
+          "Process the receipt through document actions and operational actions such as creating lines from source context, updating lines, receiving materials, or processing goods.",
+          "Open the related sales order from the receipt detail view when users need upstream order context.",
+          "Copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved.",
+          "Complete multiple draft receipts at once from the list selection bar using the bulk action (labeled \"Confirmar\" / i18n key `confirmBulk`), which processes each receipt through the standard `documentAction=CO` endpoint (ETP-4857)."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/return-material-receipt.md"
+      },
+      "source": {
+        "artifact": "return-material-receipt",
+        "contractVersion": "0.5.0",
+        "backendEntity": true
+      }
+    },
+    "return-to-vendor-shipment": {
+      "publicName": "return-to-vendor-shipment",
+      "specName": "return-to-vendor-shipment",
+      "entityName": "returnToVendorShipment",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Return to Vendor Shipment",
+        "functionalSummary": "This window should let a purchasing user complete the physical outbound shipment that sends returned goods back to a vendor. It sits after the return-to-vendor authorization step and before any vendor credit-memo settlement, so its business meaning is operational shipment execution rather than commercial approval or invoicing.",
+        "functionalCapabilities": [
+          "pick or edit the shipment lines that will be sent back to the vendor — **lines are import-only (ETP-4462):** new lines can only be created by importing them from the source goods receipt via the \"Añadir desde Albarán\" modal; manual line entry is disabled",
+          "review each shipped product, quantity, UOM, storage bin, and traceability back to the originating return source",
+          "process the shipment so the document moves out of draft once the outbound return is ready to complete",
+          "copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved",
+          "complete multiple draft shipments at once from the list selection bar using the bulk action (labeled \"Confirmar\" / i18n key `confirmBulk`), which processes each shipment through the standard `documentAction=CO` endpoint (ETP-4857)"
+        ],
+        "functionalDoc": "docs/generated-custom-windows/return-to-vendor-shipment.md"
+      },
+      "source": {
+        "artifact": "return-to-vendor-shipment",
+        "contractVersion": "0.3.0",
+        "backendEntity": true
+      }
+    },
+    "return-to-vendor-shipment-returnToVendorShipmentLine": {
+      "publicName": "return-to-vendor-shipment-returnToVendorShipmentLine",
+      "specName": "return-to-vendor-shipment",
+      "entityName": "returnToVendorShipmentLine",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "return-to-vendor-shipment",
+        "entityName": "returnToVendorShipment",
+        "foreignKey": "shipmentReceipt",
+        "pathSegment": "return-to-vendor-shipment-line"
+      },
+      "functional": {
+        "functionalName": "Return to Vendor Shipment — Lines",
+        "functionalSummary": "This window should let a purchasing user complete the physical outbound shipment that sends returned goods back to a vendor. It sits after the return-to-vendor authorization step and before any vendor credit-memo settlement, so its business meaning is operational shipment execution rather than commercial approval or invoicing.",
+        "functionalCapabilities": [
+          "pick or edit the shipment lines that will be sent back to the vendor — **lines are import-only (ETP-4462):** new lines can only be created by importing them from the source goods receipt via the \"Añadir desde Albarán\" modal; manual line entry is disabled",
+          "review each shipped product, quantity, UOM, storage bin, and traceability back to the originating return source",
+          "process the shipment so the document moves out of draft once the outbound return is ready to complete",
+          "copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved",
+          "complete multiple draft shipments at once from the list selection bar using the bulk action (labeled \"Confirmar\" / i18n key `confirmBulk`), which processes each shipment through the standard `documentAction=CO` endpoint (ETP-4857)"
+        ],
+        "functionalDoc": "docs/generated-custom-windows/return-to-vendor-shipment.md"
+      },
+      "source": {
+        "artifact": "return-to-vendor-shipment",
+        "contractVersion": "0.3.0",
+        "backendEntity": true
+      }
+    },
+    "sales-invoice": {
+      "publicName": "sales-invoice",
+      "specName": "sales-invoice",
+      "entityName": "header",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Sales Invoice",
+        "functionalSummary": "This window should let a user issue and follow customer invoices as billing documents that sit between upstream commercial documents and downstream collection activity. From one place, the user should be able to review invoice content, confirm commercial totals, understand whether the invoice is unpaid, partially paid, overdue, or fully paid, and move to the order, shipment, quotation, or original invoice records that explain how this invoice exists.",
+        "functionalCapabilities": [
+          "browse sales invoices by document number, invoice date, business partner, status, and gross total;",
+          "open an invoice from the list into a lateral preview, then move into full record editing when needed;",
+          "create or update a draft invoice header with at least business partner, partner address, invoice date, payment method, and payment terms;",
+          "add invoice lines with product, invoiced quantity, net unit price, discount, tax, and resulting amounts, or import eligible lines from completed shipments or completed (not fully invoiced) sales orders for the same customer;",
+          "review subtotal, derived tax, and total amounts from the invoice itself;",
+          "inspect installment-level payment-plan data and open payment details from the payment-status badge or preview;",
+          "register or review downstream customer payment activity from the invoice payment modal when payment actions are available;",
+          "clone an invoice and navigate to the new invoice record;"
+        ],
+        "functionalDoc": "docs/generated-custom-windows/sales-invoice.md"
+      },
+      "source": {
+        "artifact": "sales-invoice",
+        "contractVersion": "0.89.0",
+        "backendEntity": true
+      }
+    },
+    "sales-invoice-exchangeRates": {
+      "publicName": "sales-invoice-exchangeRates",
+      "specName": "sales-invoice",
+      "entityName": "exchangeRates",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "sales-invoice",
+        "entityName": "header",
+        "foreignKey": "invoice",
+        "pathSegment": "exchange-rates"
+      },
+      "functional": {
+        "functionalName": "Sales Invoice — Exchange rates",
+        "functionalSummary": "This window should let a user issue and follow customer invoices as billing documents that sit between upstream commercial documents and downstream collection activity. From one place, the user should be able to review invoice content, confirm commercial totals, understand whether the invoice is unpaid, partially paid, overdue, or fully paid, and move to the order, shipment, quotation, or original invoice records that explain how this invoice exists.",
+        "functionalCapabilities": [
+          "browse sales invoices by document number, invoice date, business partner, status, and gross total;",
+          "open an invoice from the list into a lateral preview, then move into full record editing when needed;",
+          "create or update a draft invoice header with at least business partner, partner address, invoice date, payment method, and payment terms;",
+          "add invoice lines with product, invoiced quantity, net unit price, discount, tax, and resulting amounts, or import eligible lines from completed shipments or completed (not fully invoiced) sales orders for the same customer;",
+          "review subtotal, derived tax, and total amounts from the invoice itself;",
+          "inspect installment-level payment-plan data and open payment details from the payment-status badge or preview;",
+          "register or review downstream customer payment activity from the invoice payment modal when payment actions are available;",
+          "clone an invoice and navigate to the new invoice record;"
+        ],
+        "functionalDoc": "docs/generated-custom-windows/sales-invoice.md"
+      },
+      "source": {
+        "artifact": "sales-invoice",
+        "contractVersion": "0.89.0",
+        "backendEntity": true
+      }
+    },
+    "sales-order": {
+      "publicName": "sales-order",
+      "specName": "sales-order",
+      "entityName": "header",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Sales Order",
+        "functionalSummary": "This window should let a user create, review, confirm, and manage sales orders from one workspace. The primary outcome is turning a customer request into an order whose lines, fulfillment progress, invoicing progress, and related commercial documents remain visible from the order itself.",
+        "functionalCapabilities": [
+          "Create a new sales order with a business partner, partner address, order date, price list, payment method, and payment terms before saving.",
+          "Start a new unsaved order with visible `Save`, `Save draft`, and `Cancel` actions, while the order-line tab is already available before the first save.",
+          "Add and maintain order lines with product, description, ordered quantity, net unit price, discount, tax, and the resulting line gross amount.",
+          "Review header-level commercial status from the list and detail views, including document status, shipment status, invoice status, total gross amount, and total net amount.",
+          "Confirm a draft order, optionally create a shipment and/or draft invoice from the confirmation flow, clone an existing order, and — once confirmed (`CO`) — send the order document by email.",
+          "Manage follow-on work after confirmation by opening pending shipment or invoice flows, reviewing draft downstream documents, and reactivating a confirmed order back to draft from the detail view kebab menu when the order has no linked documents.",
+          "Inspect related quotation, shipments, invoices, and linked payments from the order detail page.",
+          "Copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/sales-order.md"
+      },
+      "source": {
+        "artifact": "sales-order",
+        "contractVersion": "0.31.0",
+        "backendEntity": true
+      }
+    },
+    "sales-order-lines": {
+      "publicName": "sales-order-lines",
+      "specName": "sales-order",
+      "entityName": "lines",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "sales-order",
+        "entityName": "header",
+        "foreignKey": "salesOrder",
+        "pathSegment": "lines"
+      },
+      "functional": {
+        "functionalName": "Sales Order — Lines",
+        "functionalSummary": "This window should let a user create, review, confirm, and manage sales orders from one workspace. The primary outcome is turning a customer request into an order whose lines, fulfillment progress, invoicing progress, and related commercial documents remain visible from the order itself.",
+        "functionalCapabilities": [
+          "Create a new sales order with a business partner, partner address, order date, price list, payment method, and payment terms before saving.",
+          "Start a new unsaved order with visible `Save`, `Save draft`, and `Cancel` actions, while the order-line tab is already available before the first save.",
+          "Add and maintain order lines with product, description, ordered quantity, net unit price, discount, tax, and the resulting line gross amount.",
+          "Review header-level commercial status from the list and detail views, including document status, shipment status, invoice status, total gross amount, and total net amount.",
+          "Confirm a draft order, optionally create a shipment and/or draft invoice from the confirmation flow, clone an existing order, and — once confirmed (`CO`) — send the order document by email.",
+          "Manage follow-on work after confirmation by opening pending shipment or invoice flows, reviewing draft downstream documents, and reactivating a confirmed order back to draft from the detail view kebab menu when the order has no linked documents.",
+          "Inspect related quotation, shipments, invoices, and linked payments from the order detail page.",
+          "Copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/sales-order.md"
+      },
+      "source": {
+        "artifact": "sales-order",
+        "contractVersion": "0.31.0",
+        "backendEntity": true
+      }
+    },
+    "sales-quotation": {
+      "publicName": "sales-quotation",
+      "specName": "sales-quotation",
+      "entityName": "quotation",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Sales Quotation",
+        "functionalSummary": "Let a sales user prepare a customer quotation, review commercial terms before commitment, and turn an accepted quotation into a downstream sales document without re-entering the header and line data.",
+        "functionalCapabilities": [
+          "Create and review quotation headers with customer, quotation date, validity date, address, price list, payment method, payment terms, notes, and read-only commercial totals.",
+          "Add, edit, and remove quotation lines with product, description, quantity, Net List Price, discount, tax, and line gross amount.",
+          "Render Net List Price in the quotation grid as a currency-formatted `amount` column backed by `PriceList`, instead of exposing the derived `unitPrice` (`PriceActual`) as the visible price column.",
+          "Keep the quotation in draft while the commercial proposal is being prepared, then explicitly send that draft into an `Under Evaluation` state before final conversion.",
+          "From `Under Evaluation`, create a downstream sales order and, in the current custom overlay, optionally create a draft sales invoice.",
+          "Send the quotation document by email from the record view, once it is no longer in `Draft` (from `Under Evaluation` onward).",
+          "Inspect related downstream sales orders and invoices from the quotation record when those documents exist.",
+          "Copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/sales-quotation.md"
+      },
+      "source": {
+        "artifact": "sales-quotation",
+        "contractVersion": "0.26.0",
+        "backendEntity": true
+      }
+    },
+    "sales-quotation-quotationLine": {
+      "publicName": "sales-quotation-quotationLine",
+      "specName": "sales-quotation",
+      "entityName": "quotationLine",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "parent": {
+        "resource": "sales-quotation",
+        "entityName": "quotation",
+        "foreignKey": "salesOrder",
+        "pathSegment": "quotation-line"
+      },
+      "functional": {
+        "functionalName": "Sales Quotation — Lines",
+        "functionalSummary": "Let a sales user prepare a customer quotation, review commercial terms before commitment, and turn an accepted quotation into a downstream sales document without re-entering the header and line data.",
+        "functionalCapabilities": [
+          "Create and review quotation headers with customer, quotation date, validity date, address, price list, payment method, payment terms, notes, and read-only commercial totals.",
+          "Add, edit, and remove quotation lines with product, description, quantity, Net List Price, discount, tax, and line gross amount.",
+          "Render Net List Price in the quotation grid as a currency-formatted `amount` column backed by `PriceList`, instead of exposing the derived `unitPrice` (`PriceActual`) as the visible price column.",
+          "Keep the quotation in draft while the commercial proposal is being prepared, then explicitly send that draft into an `Under Evaluation` state before final conversion.",
+          "From `Under Evaluation`, create a downstream sales order and, in the current custom overlay, optionally create a draft sales invoice.",
+          "Send the quotation document by email from the record view, once it is no longer in `Draft` (from `Under Evaluation` onward).",
+          "Inspect related downstream sales orders and invoices from the quotation record when those documents exist.",
+          "Copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/sales-quotation.md"
+      },
+      "source": {
+        "artifact": "sales-quotation",
+        "contractVersion": "0.26.0",
+        "backendEntity": true
+      }
+    },
+    "sii-monitor": {
+      "publicName": "sii-monitor",
+      "specName": "sii-monitor",
+      "entityName": "organizations",
+      "publicApi": true,
+      "group": "Fiscal Monitors",
+      "operations": [
+        "GET",
+        "LIST"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "SII Monitor",
+        "functionalSummary": "Public API resource for the SII Monitor window.",
+        "functionalCapabilities": [],
+        "functionalDoc": "docs/generated-custom-windows/sii-monitor.md"
+      },
+      "source": {
+        "artifact": "sii-monitor",
+        "contractVersion": "0.14.0",
+        "backendEntity": true
+      }
+    },
+    "tbai-facturas-enviadas": {
+      "publicName": "tbai-facturas-enviadas",
+      "specName": "tbai-facturas-enviadas",
+      "entityName": "sincronización",
+      "publicApi": true,
+      "group": "Fiscal Monitors",
+      "operations": [
+        "GET",
+        "LIST"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "TBAI Facturas Enviadas",
+        "functionalSummary": "Public API resource for the TBAI Facturas Enviadas window.",
+        "functionalCapabilities": [],
+        "functionalDoc": "docs/generated-custom-windows/tbai-facturas-enviadas.md"
+      },
+      "source": {
+        "artifact": "tbai-facturas-enviadas",
+        "contractVersion": "0.3.0",
+        "backendEntity": true
+      }
+    },
+    "uom": {
+      "publicName": "uom",
+      "specName": "uom",
+      "entityName": "uom",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "UOM",
+        "functionalSummary": "Public API resource for the UOM window.",
+        "functionalCapabilities": [],
+        "functionalDoc": null
+      },
+      "source": {
+        "artifact": "uom",
+        "contractVersion": "0.1.0",
+        "backendEntity": false
+      }
+    },
+    "warehouse": {
+      "publicName": "warehouse",
+      "specName": "warehouse",
+      "entityName": "warehouse",
+      "publicApi": true,
+      "operations": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "LIST",
+        "PATCH"
+      ],
+      "fields": {
+        "id": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "id",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string"
+          },
+          "reference": null,
+          "handlerId": null
+        },
+        "updated": {
+          "sourceVisibility": "system",
+          "direction": "out",
+          "internalPath": "updated",
+          "type": "passthrough",
+          "dataType": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reference": null,
+          "handlerId": null
+        }
+      },
+      "processes": [],
+      "functional": {
+        "functionalName": "Warehouse",
+        "functionalSummary": "Use this window to maintain warehouse master records and understand what is physically stored in and moving through each warehouse. Beyond basic setup, the window surfaces operational stock data — total valuation, products with stock, per-product quantities — and provides a full transaction history tracing how stock arrived, moved, or left the warehouse.",
+        "functionalCapabilities": [
+          "Create, review, and update a warehouse header with Search Key, Name, Location / Address, and Description.",
+          "After creation, observe that a default storage bin is automatically created with the coordinate pattern `<searchKey>-0-0-0`.",
+          "Open a saved warehouse and use the detail surface as an operational workspace: view stock data in the sidebar, inspect per-product stock in the Products tab, and trace movements in the Transactions tab.",
+          "Follow navigable links from transaction rows directly to the source document (goods receipt, goods shipment, goods movement, or physical inventory) when a GO window exists for that document type.",
+          "Attach files to a warehouse record via the Attachments tab."
+        ],
+        "functionalDoc": "docs/generated-custom-windows/warehouse.md"
+      },
+      "source": {
+        "artifact": "warehouse",
+        "contractVersion": "0.22.0",
+        "backendEntity": true
+      }
+    }
+  }
+}

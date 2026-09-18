@@ -1,8 +1,8 @@
 {
-  "version": "0.44.0",
+  "version": "0.45.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-08-19T15:15:00.244Z",
-  "contractChecksum": "b4310b6d67ab2fcd",
+  "updatedAt": "2026-09-16T18:22:09.873Z",
+  "contractChecksum": "e82283ff80b0689c",
   "apiPrediction": {
     "specName": "assets",
     "baseUrl": "/sws/neo/assets",
@@ -78,6 +78,14 @@
         "reference": "Project",
         "inputMode": "search",
         "url": "/sws/neo/assets/assets/selectors/project"
+      },
+      {
+        "entity": "assets",
+        "field": "businessPartner",
+        "column": "C_BPartner_ID",
+        "reference": "BPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/assets/assets/selectors/businessPartner"
       },
       {
         "entity": "assets",
@@ -283,6 +291,7 @@
             "required": true,
             "defaultValue": "N"
           },
+          "businessPartner": {},
           "eTADASCostCenter": {},
           "etgoAmortizationStatus": {
             "readOnly": true,
@@ -401,5 +410,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "6f19cd64f27b44c9"
+  "checksum": "0d8887e3e81d710b"
 }

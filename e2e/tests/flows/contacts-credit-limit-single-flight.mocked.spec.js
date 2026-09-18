@@ -208,8 +208,18 @@ function creditStepper(page) {
     .locator('xpath=../..');
 }
 
+/**
+ * The stepper's text box.
+ *
+ * ETP-5328 replaced the raw `<input type="number">` with `MaskedAmountInput`, which renders
+ * `type="text"` + `inputMode="decimal"` — the old `input[type="number"]` selector matches nothing
+ * now. The component forwards an explicit `data-testid`, so anchor on that rather than on the
+ * input's type, which is an implementation detail this spec has already been bitten by once.
+ */
+const creditInput = (page) => creditStepper(page).getByTestId('CreditLimitStepperInput');
+
 /** The stepper's `+` button — inside the control row, the children are input, `−`, then `+`. */
-const creditPlus = (page) => creditStepper(page).locator('input[type="number"]')
+const creditPlus = (page) => creditInput(page)
   .locator('xpath=following-sibling::button[2]');
 
 /** How many writes have been ANSWERED (as opposed to merely started). */

@@ -80,7 +80,7 @@ vi.mock('@/components/attachments', () => ({
   useAttachments: () => ({ upload: vi.fn() }),
 }));
 vi.mock('lucide-react', () => ({
-  Download: () => null, OctagonAlert: () => null, TriangleAlert: () => null,
+  Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null, TriangleAlert: () => null,
   CircleCheck: () => null, Calculator: () => null, Loader2: () => null,
   TrendingUp: () => null, TrendingDown: () => null, ClipboardCheck: () => null,
   ReceiptText: () => null, FileCheck: () => null, Landmark: () => null,

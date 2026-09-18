@@ -356,4 +356,69 @@ describe('RowQuickActions', () => {
       expect(screen.getByText('Reactivate')).toBeTruthy();
     });
   });
+
+  // ── ETP-5316: actionsConfig.show === false is an unconditional hide gate ──
+  describe('actionsConfig.show === false (unconditional hide, ETP-5316)', () => {
+    it('hides Clone when actionsConfig.duplicate.show is false, even though onClone is provided and no visibleWhen restricts it', () => {
+      // With no visibleWhen, the pre-fix behavior rendered Clone whenever onClone was passed.
+      // `show: false` must override that regardless of row status.
+      setup({
+        row: DRAFT_ROW,
+        actionsConfig: { duplicate: { show: false } },
+      });
+      expect(screen.queryByTestId('row-quick-action-clone')).toBeNull();
+      // Sibling actions remain unaffected.
+      expect(screen.getByTestId('row-quick-action-edit')).toBeTruthy();
+    });
+
+    it('hides Clone with show: false on a row where the old visibleWhen fallback would also have been true', () => {
+      // Row status is DR and there is no visibleWhen fallback, so pre-ETP-5316 logic
+      // would render Clone unconditionally. show: false must still win.
+      setup({
+        row: COMPLETED_ROW,
+        actionsConfig: { duplicate: { show: false } },
+      });
+      expect(screen.queryByTestId('row-quick-action-clone')).toBeNull();
+    });
+
+    it('show: false wins even when visibleWhen on the same config would independently evaluate true', () => {
+      // DRAFT_ROW.documentStatus === 'DR', so visibleWhen alone would keep Edit visible.
+      // show: false must take precedence and hide it anyway.
+      setup({
+        row: DRAFT_ROW,
+        actionsConfig: {
+          edit: { visibleWhen: "@DocumentStatus@='DR'", show: false },
+        },
+      });
+      expect(screen.queryByTestId('row-quick-action-edit')).toBeNull();
+    });
+
+    it('filters a kebab menu item out of the "More" popover when its actionsConfig entry has show: false, even if the action itself is visible: true', async () => {
+      const user = userEvent.setup();
+      const menuActions = [
+        { key: 'duplicateAction', label: 'Duplicate', visible: true },
+        { key: 'reactivate', label: 'Reactivate' },
+      ];
+      setup({
+        menuActions,
+        actionsConfig: {
+          duplicateAction: { show: false },
+        },
+      });
+      const more = screen.getByTestId('row-quick-action-more');
+      await user.click(more);
+      expect(screen.queryByText('Duplicate')).toBeNull();
+      expect(screen.getByText('Reactivate')).toBeTruthy();
+    });
+
+    it('renders Clone normally when show is absent (regression — no config, existing behavior unchanged)', () => {
+      setup({ row: DRAFT_ROW, actionsConfig: { duplicate: {} } });
+      expect(screen.getByTestId('row-quick-action-clone')).toBeTruthy();
+    });
+
+    it('renders Clone normally when show is explicitly true', () => {
+      setup({ row: DRAFT_ROW, actionsConfig: { duplicate: { show: true } } });
+      expect(screen.getByTestId('row-quick-action-clone')).toBeTruthy();
+    });
+  });
 });
