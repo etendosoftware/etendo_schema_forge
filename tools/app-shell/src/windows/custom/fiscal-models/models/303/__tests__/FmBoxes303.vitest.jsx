@@ -749,6 +749,118 @@ describe('FmBoxes303 — commitPendingEdit no-op guard (ETP-5409)', () => {
     fireEvent.blur(input);
     expect(onBoxChange).not.toHaveBeenCalled();
   });
+
+  // ── clearPendingValue / startEditingCell (ETP-5409, W1 reject-cycle follow-up) ──
+  // The earlier fix only made commitPendingEdit's guard presence-based; it never
+  // actually cleared the stale `pendingValues[boxNum]` key afterward. These three
+  // cases cover the actual stale-draft bug Alex found: a committed (or escaped)
+  // draft surviving in state and getting resent on a later no-op reopen.
+
+  it('reopening the same box after a real committed edit, then blurring without typing again, does NOT resend the old draft a second time', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 76: 42 }}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+    const editBtns = container.querySelectorAll('.fm-aeat-cell__edit-btn');
+    if (editBtns.length === 0) return;
+
+    // First session: type a real value and commit it.
+    fireEvent.click(editBtns[0]);
+    let input = container.querySelector('.fm-aeat-cell__input');
+    fireEvent.change(input, { target: { value: '900' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledTimes(1);
+    expect(onBoxChange).toHaveBeenCalledWith(76, '900');
+
+    // Second session: reopen the SAME box, type nothing, blur again.
+    fireEvent.click(container.querySelectorAll('.fm-aeat-cell__edit-btn')[0]);
+    input = container.querySelector('.fm-aeat-cell__input');
+    fireEvent.blur(input);
+
+    // The committed "900" draft must not still be sitting in pendingValues —
+    // onBoxChange must NOT have fired a second time.
+    expect(onBoxChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('escaping an uncommitted edit, then reopening without typing and blurring, never resurrects the escaped draft', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 76: 42 }}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+    const editBtns = container.querySelectorAll('.fm-aeat-cell__edit-btn');
+    if (editBtns.length === 0) return;
+
+    // First session: type a value but Escape instead of committing it.
+    fireEvent.click(editBtns[0]);
+    let input = container.querySelector('.fm-aeat-cell__input');
+    fireEvent.change(input, { target: { value: '777' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(onBoxChange).not.toHaveBeenCalled();
+    expect(container.querySelector('.fm-aeat-cell__input')).toBeNull();
+
+    // Second session: reopen the SAME box, type nothing, blur.
+    fireEvent.click(container.querySelectorAll('.fm-aeat-cell__edit-btn')[0]);
+    input = container.querySelector('.fm-aeat-cell__input');
+    fireEvent.blur(input);
+
+    // The escaped "777" draft must not have survived Escape — onBoxChange must
+    // never have been called across the whole sequence.
+    expect(onBoxChange).not.toHaveBeenCalled();
+  });
+
+  it('Alex repro: committed draft must not clobber a later external prop correction on reopen-and-blur-without-typing', () => {
+    const onBoxChange = vi.fn();
+    const { container, rerender } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 76: 42 }}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+    const editBtns = container.querySelectorAll('.fm-aeat-cell__edit-btn');
+    if (editBtns.length === 0) return;
+
+    // Commit box 76 to "900".
+    fireEvent.click(editBtns[0]);
+    let input = container.querySelector('.fm-aeat-cell__input');
+    fireEvent.change(input, { target: { value: '900' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(76, '900');
+    onBoxChange.mockClear();
+
+    // Simulate the parent reactively correcting `boxes` to 500 (e.g. a box78/box110
+    // clamp on another box triggering a recompute) — a prop-only update, no new
+    // user interaction with box 76 yet.
+    rerender(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 76: 500 }}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+
+    // Reopen box 76's pencil and blur without typing anything.
+    fireEvent.click(container.querySelectorAll('.fm-aeat-cell__edit-btn')[0]);
+    input = container.querySelector('.fm-aeat-cell__input');
+    // The input should reflect the corrected external value, not the stale draft.
+    expect(input.value).toBe('500');
+    fireEvent.blur(input);
+
+    // The stale committed "900" must NOT be resent over the new prop value "500".
+    expect(onBoxChange).not.toHaveBeenCalled();
+  });
 });
 
 // ── sin_actividad section ─────────────────────────────────────────────────────

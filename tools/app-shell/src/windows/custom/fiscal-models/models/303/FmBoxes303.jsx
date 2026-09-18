@@ -83,6 +83,29 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
     ? layout.sections.filter(s => sectionIds.includes(s.id))
     : layout.sections;
 
+  // Drops `boxNum`'s draft out of `pendingValues` entirely (deletes the key, not just sets
+  // it to something falsy) — so `hasOwnProperty` genuinely reflects "no draft for this box
+  // right now" afterward. Shared by commitPendingEdit, Escape, and startEditingCell below so
+  // the three spots that must reset a draft can't drift out of sync with each other.
+  const clearPendingValue = (boxNum) => {
+    setPendingValues(prev => {
+      if (!Object.prototype.hasOwnProperty.call(prev, boxNum)) return prev;
+      const next = { ...prev };
+      delete next[boxNum];
+      return next;
+    });
+  };
+
+  // Opens the inline editor for `boxNum`. Always starts from a clean draft: without this, a
+  // stale key left over from a PREVIOUS edit session of the same box (e.g. one that committed
+  // "900", after which an external prop update — a reactive box78/box110 clamp on another box —
+  // corrected `boxes` to "500") would still satisfy commitPendingEdit's hasOwnProperty check on
+  // reopen-and-blur-without-typing, silently resending the stale "900" over the current "500".
+  const startEditingCell = (boxNum) => {
+    clearPendingValue(boxNum);
+    setEditingCell(boxNum);
+  };
+
   // Commits the pending edit for `boxNum`, if there is one. `pendingValues` only gains a
   // key for a box once the user actually types in it (see the input's onChange below) — so
   // a box that was never touched this edit session (pencil clicked, then blur/Escape with no
@@ -90,11 +113,14 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
   // cleared back to `''`. The presence check (not a truthiness check on the value) is what
   // keeps those two cases apart: calling onBoxChange with `undefined` for the untouched case
   // used to flow into parseBoxInput(undefined) -> NaN -> null -> "remove this box", silently
-  // wiping a previously saved value on a pure no-op edit.
+  // wiping a previously saved value on a pure no-op edit. The draft is always cleared after a
+  // commit attempt (whether it fired or not) so the NEXT edit session for this box starts clean
+  // too — see startEditingCell/clearPendingValue above.
   const commitPendingEdit = (boxNum) => {
     if (Object.prototype.hasOwnProperty.call(pendingValues, boxNum)) {
       onBoxChange?.(boxNum, pendingValues[boxNum]);
     }
+    clearPendingValue(boxNum);
     setEditingCell(null);
   };
 
@@ -106,7 +132,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
       value={pendingValues[boxNum] ?? (val != null ? String(val) : '')}
       onChange={e => setPendingValues(prev => ({ ...prev, [boxNum]: e.target.value }))}
       onBlur={() => commitPendingEdit(boxNum)}
-      onKeyDown={e => { if (e.key === 'Enter') { commitPendingEdit(boxNum); e.target.blur(); } if (e.key === 'Escape') setEditingCell(null); }}
+      onKeyDown={e => { if (e.key === 'Enter') { commitPendingEdit(boxNum); e.target.blur(); } if (e.key === 'Escape') { clearPendingValue(boxNum); setEditingCell(null); } }}
       autoFocus
       disabled={readOnly}
     />
@@ -194,7 +220,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
             <span className="fm-aeat-cell__value">{val != null ? formatCell(val, colType) : ''}</span>
             {unit && <span className="fm-aeat-cell__unit">{unit}</span>}
             {isCellEditable && !readOnly && (
-              <button className="fm-aeat-cell__edit-btn" onClick={() => setEditingCell(boxNum)}>
+              <button className="fm-aeat-cell__edit-btn" onClick={() => startEditingCell(boxNum)}>
                 <Pencil size={12} strokeWidth={1.5} data-testid="Pencil__49d327" />
               </button>
             )}
@@ -407,7 +433,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                                     <>
                                       <span className="fm-aeat-cell__value">{val != null ? formatCell(val, 'amount') : ''}</span>
                                       {isCellEditable && !readOnly && (
-                                        <button className="fm-aeat-cell__edit-btn" onClick={() => setEditingCell(boxNum)}>
+                                        <button className="fm-aeat-cell__edit-btn" onClick={() => startEditingCell(boxNum)}>
                                           <Pencil size={12} strokeWidth={1.5} data-testid="Pencil__49d327" />
                                         </button>
                                       )}
