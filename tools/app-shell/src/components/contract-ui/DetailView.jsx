@@ -4323,7 +4323,17 @@ export function DetailView({
             open={customModalState.key === st.key}
             onClose={() => setCustomModalState({ key: null, rowId: null })}
             onSaved={() => {
-              secondaryHooks[idx]?.handleSelect(hook.selected ?? hook.editing, { force: true }); // ETP-5332 — a fresh save must bypass the ≤30s child-list cache, or the just-saved address stays invisible until it ages out
+              const parent = hook.selected ?? hook.editing;
+              // ETP-5366: this modal persists the row with its own raw fetch, so it never went
+              // through handleAddChild and nothing marked the cached child collection stale. The
+              // handleSelect below ends in a NON-forced fetchChildren, which for the next 30s
+              // (recordStaleTime) resolves from the cache with the very same array instance — a
+              // no-op setChildren, so the tab kept showing the pre-save rows and its count until
+              // the user left the record and came back. Dropping the entry first is what makes
+              // that fetch reach the network. Same shape as handleAddChild's own invalidate, and
+              // as the ETP-5278 fix for extraActions' onRefresh.
+              secondaryHooks[idx]?.invalidateChildrenCache?.(parent?.id);
+              secondaryHooks[idx]?.handleSelect(parent);
               setCustomModalState({ key: null, rowId: null });
             }}
             onParentRefresh={() => {

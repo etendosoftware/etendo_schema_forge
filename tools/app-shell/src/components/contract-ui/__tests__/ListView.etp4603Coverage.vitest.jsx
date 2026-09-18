@@ -106,8 +106,11 @@ vi.mock('../ListFilterBar.jsx', () => ({
 }));
 
 let advancedCriteriaResult = null;
+import { noOpExtractQueryParamConditions } from './testUtils/gridQueryMock.js';
+
 vi.mock('@/lib/gridQuery', () => ({
   buildAdvancedFilterCriteria: () => advancedCriteriaResult,
+  extractQueryParamConditions: noOpExtractQueryParamConditions,
 }));
 
 let presetsData = {};

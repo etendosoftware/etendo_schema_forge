@@ -17,33 +17,52 @@ describe('ReturnToVendorShipmentWindow custom wrapper', () => {
     assert.match(src, /import ReturnWindowShell from '\.\.\/shared\/ReturnWindowShell'/);
   });
 
-  describe('ETP-4717 — no emailAction (row-hover "Enviar" removed)', () => {
-    // QA (Emilio Polliotti) rejected the ETP-4718 "Enviar" action for this
-    // window: the frontend derived the email contract name as
-    // `${windowName}-send` (`return-to-vendor-shipment-send`), but the
-    // backend only registers `ReturnToVendorSendEmailContract.NAME` =
+  describe('ETP-5124 — emailAction wired (row-hover "Enviar" re-added)', () => {
+    // ETP-4717 had this action removed: the frontend derived the email
+    // contract name as `${windowName}-send` (`return-to-vendor-shipment-send`),
+    // but the backend only registered `ReturnToVendorSendEmailContract.NAME` =
     // `return-to-vendor-send`, so every send failed with "Unknown email
-    // contract". `decisions.json → window.sendDocument.enabled: false`
-    // already suppresses the row-hover Email icon via `sendDocument`
-    // (which RowQuickActions prioritizes over `documentPreview`); the
-    // `emailAction` prop itself was removed as dead-code cleanup, matching
-    // the sibling `return-material-receipt/index.jsx` (no `emailAction`
-    // either). These assertions guard against `emailAction` (and its
-    // now-unused imports) creeping back in.
-    it('does not import useReturnToVendorPdf', () => {
-      assert.doesNotMatch(src, /import\s*\{\s*useReturnToVendorPdf\s*\}\s*from\s*['"]\.\/useReturnToVendorPdf\.js['"]/);
+    // contract". The backend now registers the correctly-named contract
+    // (`return-to-vendor-shipment-send`, via
+    // `ReturnToVendorShipmentSendEmailContract`), so the mismatch no longer
+    // applies and the `emailAction` prop is wired back in, mirroring the
+    // sibling `return-material-receipt/index.jsx`. These assertions guard
+    // the wiring stays present with the correct shape.
+    it('imports useReturnToVendorPdf', () => {
+      assert.match(src, /import\s*\{\s*useReturnToVendorPdf\s*\}\s*from\s*['"]\.\/useReturnToVendorPdf\.js['"]/);
     });
 
-    it('does not import useMenuLabel from @/i18n', () => {
-      assert.doesNotMatch(src, /import\s*\{\s*useMenuLabel\s*\}\s*from\s*['"]@\/i18n['"]/);
+    it('imports useMenuLabel from @/i18n', () => {
+      assert.match(src, /import\s*\{\s*useMenuLabel\s*\}\s*from\s*['"]@\/i18n['"]/);
     });
 
-    it('does not resolve a tMenu const via useMenuLabel()', () => {
-      assert.doesNotMatch(src, /const tMenu = useMenuLabel\(\);/);
+    it('resolves a tMenu const via useMenuLabel()', () => {
+      assert.match(src, /const tMenu = useMenuLabel\(\);/);
     });
 
-    it('does not pass an emailAction prop to ReturnWindowShell', () => {
-      assert.doesNotMatch(src, /emailAction=/);
+    it('passes an emailAction prop to ReturnWindowShell', () => {
+      assert.match(src, /emailAction=\{\{/);
+    });
+
+    it('wires emailAction.usePdf to useReturnToVendorPdf', () => {
+      assert.match(
+        src,
+        /emailAction=\{\{[\s\S]{0,200}usePdf:\s*useReturnToVendorPdf/,
+      );
+    });
+
+    it('wires emailAction.documentType via tMenu(\'Return to Vendor Shipment\')', () => {
+      assert.match(
+        src,
+        /emailAction=\{\{[\s\S]{0,200}documentType:\s*tMenu\('Return to Vendor Shipment'\)/,
+      );
+    });
+
+    it('wires emailAction.visibleWhen to gate on documentStatus CO', () => {
+      assert.match(
+        src,
+        /emailAction=\{\{[\s\S]{0,200}visibleWhen:\s*"@documentStatus@='CO'"/,
+      );
     });
   });
 
@@ -75,10 +94,10 @@ describe('ReturnToVendorShipmentWindow custom wrapper', () => {
       );
     });
 
-    it('wires BulkDocumentAction to labelKey="confirmBulk"', () => {
+    it('wires BulkDocumentAction to labelKey="process" (ETP-5302)', () => {
       assert.match(
         src,
-        /<BulkDocumentAction[\s\S]{0,200}labelKey="confirmBulk"/,
+        /<BulkDocumentAction[\s\S]{0,200}labelKey="process"/,
       );
     });
 

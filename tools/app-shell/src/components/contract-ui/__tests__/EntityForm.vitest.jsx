@@ -82,7 +82,7 @@ describe('EntityForm', () => {
     expect(input).toHaveValue('Test Value');
   });
 
-  it('renders number inputs for number fields', () => {
+  it('renders locale-aware masked inputs (inputMode=decimal), not native number inputs, for number fields', () => {
     const fields = [
       { key: 'amount', label: 'Amount', type: 'number', column: 'Amount' },
     ];
@@ -90,7 +90,11 @@ describe('EntityForm', () => {
       <EntityForm fields={fields} data={{ amount: 42 }} onChange={vi.fn()} />
     );
     const input = screen.getByTestId('field-amount');
-    expect(input).toHaveAttribute('type', 'number');
+    // ETP-5107: a native number input silently swallows the comma keystroke (`1234,56` →
+    // `123456`, a 100x corruption). Numeric fields render MaskedAmountInput instead; the
+    // meaningful contract is the decimal keypad hint plus the absence of type="number".
+    expect(input).toHaveAttribute('inputMode', 'decimal');
+    expect(input).not.toHaveAttribute('type', 'number');
   });
 
   it('renders fields as disabled when formReadOnly is true', () => {

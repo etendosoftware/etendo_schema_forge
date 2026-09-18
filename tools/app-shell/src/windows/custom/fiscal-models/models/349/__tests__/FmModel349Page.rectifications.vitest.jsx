@@ -15,6 +15,7 @@ vi.mock('@/i18n', () => ({
     const raw = copy[key] ?? key;
     return Object.keys(params ?? {}).reduce((acc, p) => acc.replace(`{${p}}`, params[p]), raw);
   },
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 vi.mock('../../../fiscalModelsUtils.js', () => ({
   formatAmount: (n) => (n == null ? '—' : String(n)),
@@ -71,7 +72,7 @@ vi.mock('lucide-react', () => ({
   ChevronDown: () => null, ChevronRight: () => null, Users: () => null, FileEdit: () => null,
   Clock: () => null, TriangleAlert: () => null, Folder: () => null, ReceiptText: () => null,
   Calculator: () => null, PenLine: () => null, ShieldAlert: () => null, Info: () => null,
-  OctagonAlert: () => null, ArrowLeft: () => null, FileText: () => null,
+  OctagonAlert: () => null, ArrowLeft: () => null, Save: () => null, FileText: () => null,
   Star: () => null, ArrowUpRight: () => null, Loader2: () => null, X: () => null, Check: () => null,
   FileCheck: () => null,
 }));
@@ -498,8 +499,11 @@ describe('FmModel349Page — several corrected periods for one operator (QA F4)'
     );
   }
 
+  // CheckboxField renders a `<button role="checkbox" aria-checked>` (ETP-5338 —
+  // migrated off the shared `Checkbox` component), not a native `<input>`.
   const rowCheckboxes = () =>
-    Array.from(document.querySelectorAll('.fm-table tbody tr input[type="checkbox"]'));
+    Array.from(document.querySelectorAll('.fm-table tbody tr button[role="checkbox"]'));
+  const isChecked = (el) => el.getAttribute('aria-checked') === 'true';
 
   it('renders one row per corrected period, each with its own amount', () => {
     renderTwoPeriods();
@@ -527,17 +531,17 @@ describe('FmModel349Page — several corrected periods for one operator (QA F4)'
 
     fireEvent.click(boxes[1]);
 
-    expect(rowCheckboxes()[1].checked).toBe(true);
-    expect(rowCheckboxes()[2].checked).toBe(false);
-    expect(rowCheckboxes()[0].checked).toBe(false);
+    expect(isChecked(rowCheckboxes()[1])).toBe(true);
+    expect(isChecked(rowCheckboxes()[2])).toBe(false);
+    expect(isChecked(rowCheckboxes()[0])).toBe(false);
   });
 
   it('selecting all then one still leaves the two corrective rows independent', () => {
     renderTwoPeriods();
     fireEvent.click(rowCheckboxes()[2]);
 
-    expect(rowCheckboxes()[2].checked).toBe(true);
-    expect(rowCheckboxes()[1].checked).toBe(false);
+    expect(isChecked(rowCheckboxes()[2])).toBe(true);
+    expect(isChecked(rowCheckboxes()[1])).toBe(false);
   });
 
   // A corrective row that predates the backend emitting the discriminator still

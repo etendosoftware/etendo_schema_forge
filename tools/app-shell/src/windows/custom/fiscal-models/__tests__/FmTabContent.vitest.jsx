@@ -79,6 +79,80 @@ describe('SourcesTab', () => {
     const { container } = render(<SourcesTab decl={decl} t={t} />);
     expect(container.querySelector('.fm-dtable__row--block')).toBeTruthy();
   });
+
+  // ── accountingDate column (ETP-5338) ─────────────────────────────────────
+
+  it('renders the invoice-date column header using the (relabeled) i18n key', () => {
+    const decl = { sources: [{ ref: 'R1', date: '', type: '', party: '', base: 0, total: 0, boxes: '' }], incidents: { items: [] } };
+    render(<SourcesTab decl={decl} t={t} />);
+    const headers = Array.from(document.querySelectorAll('thead th')).map(th => th.textContent);
+    expect(headers).toContain('fm.sources.col.date');
+  });
+
+  it('renders a new "Fecha Contable" column header right after the invoice date one', () => {
+    const decl = { sources: [{ ref: 'R1', date: '', type: '', party: '', base: 0, total: 0, boxes: '' }], incidents: { items: [] } };
+    render(<SourcesTab decl={decl} t={t} />);
+    const headers = Array.from(document.querySelectorAll('thead th')).map(th => th.textContent);
+    const dateIdx = headers.indexOf('fm.sources.col.date');
+    expect(dateIdx).toBeGreaterThanOrEqual(0);
+    expect(headers[dateIdx + 1]).toBe('fm.sources.col.accountingDate');
+  });
+
+  it('renders the accountingDate cell formatted as dd/mm/yyyy for a populated row', () => {
+    const decl = {
+      sources: [{ ref: 'R1', date: '2026-03-05', accountingDate: '2026-03-10', type: 'V', party: 'P', base: 0, total: 0, boxes: '' }],
+      incidents: { items: [] },
+    };
+    render(<SourcesTab decl={decl} t={t} />);
+    expect(document.body.textContent).toContain('05/03/2026');
+    expect(document.body.textContent).toContain('10/03/2026');
+  });
+
+  it('renders "—" for a row with a null accountingDate, without throwing or showing "Invalid Date"', () => {
+    const decl = {
+      sources: [{ ref: 'R1', date: '2026-03-05', accountingDate: null, type: 'V', party: 'P', base: 0, total: 0, boxes: '' }],
+      incidents: { items: [] },
+    };
+    render(<SourcesTab decl={decl} t={t} />);
+    expect(document.body.textContent).not.toContain('Invalid Date');
+    const row = document.querySelector('tbody tr');
+    expect(row.cells[1].textContent).toBe('—');
+  });
+
+  it('renders "—" for a row missing the accountingDate field entirely', () => {
+    const decl = {
+      sources: [{ ref: 'R1', date: '2026-03-05', type: 'V', party: 'P', base: 0, total: 0, boxes: '' }],
+      incidents: { items: [] },
+    };
+    render(<SourcesTab decl={decl} t={t} />);
+    const row = document.querySelector('tbody tr');
+    expect(row.cells[1].textContent).toBe('—');
+  });
+
+  it('bumps the empty-state colSpan to 9 to match the new column count', () => {
+    // Force the "visible.length === 0" branch: start with an incident on R1's box so the
+    // "Con incidencias" filter toggle is shown, click it, then re-render with the incident
+    // resolved (items: []) while `onlyIncidents` state persists — this filters `sources`
+    // down to zero without ever hitting the outer "Sin facturas" (sources.length===0) branch.
+    const declWithIncident = {
+      sources: [{ ref: 'R1', date: '', type: '', party: '', base: 0, total: 0, boxes: '07' }],
+      incidents: { items: [{ origin: 'Casilla 07', severity: 'warn', message: 'x' }] },
+    };
+    const { rerender } = render(<SourcesTab decl={declWithIncident} t={t} />);
+    fireEvent.click(screen.getByText('fm.sources.filter.incidents'));
+
+    const declResolved = {
+      sources: [{ ref: 'R1', date: '', type: '', party: '', base: 0, total: 0, boxes: '07' }],
+      incidents: { items: [] },
+    };
+    rerender(<SourcesTab decl={declResolved} t={t} />);
+
+    const headerCount = document.querySelectorAll('thead th').length;
+    expect(headerCount).toBe(9);
+    const emptyCell = document.querySelector('tbody tr td');
+    expect(emptyCell).toBeTruthy();
+    expect(emptyCell.getAttribute('colspan')).toBe('9');
+  });
 });
 
 // ── IncidentsTab ────────────────────────────────────────────────────────────

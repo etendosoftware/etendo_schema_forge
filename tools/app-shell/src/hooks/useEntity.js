@@ -528,6 +528,15 @@ export function mergeDefaultsPreservingUserEdits(prev, defaults, userChangedKeys
     return merged;
 }
 
+/**
+ * True for a NEO sequence preview placeholder (e.g. "<10000000>", "<REC-1000008>") — a display
+ * hint for an auto-generated value, never something the user typed. The prefix is doc-type
+ * dependent, so it is not necessarily numeric.
+ */
+export function isSequencePlaceholder(value) {
+    return typeof value === 'string' && /^<[^<>]+>$/.test(value);
+}
+
 export function shouldSkipPayloadField(key, value, backendDefaultKeysRef, userChangedKeysRef, requiredFormKeys, isContactsBusinessPartnerCreate, editing) {
     // Always skip ID fields, identifier companions, and legacy FK keys (e.g. ad_org_id)
     // managed by the backend — these should never be sent by the client on create/update.
@@ -538,9 +547,9 @@ export function shouldSkipPayloadField(key, value, backendDefaultKeysRef, userCh
         return true;
     }
 
-    // Skip NEO sequence placeholders (e.g. "<10000000>") — these are display hints
-    // for auto-generated values and must not be sent to the backend on create.
-    if (typeof value === 'string' && /^<\d+>$/.test(value)) {
+    // Skip NEO sequence placeholders — display hints for auto-generated values that must not
+    // reach the backend.
+    if (isSequencePlaceholder(value)) {
         return true;
     }
 
@@ -757,6 +766,10 @@ export function buildPatchPayload(editing, selected) {
     const payload = {};
     for (const [key, value] of Object.entries(editing)) {
         if (key === 'id') continue;
+        // A sequence placeholder is a display hint, never a user-authored value: the backend
+        // strips it as read-only anyway, and sending it makes the server read the field as
+        // "the caller chose this number", which suppresses its own re-numbering (ETP-5274).
+        if (isSequencePlaceholder(value)) continue;
         if (value !== selected[key]) payload[key] = value;
     }
     return payload;
@@ -1421,7 +1434,16 @@ export function useEntity(entity, childEntity, {
                 const raw = extractSingleRow(data);
                 return raw ? normalizeRecord(raw, entity) : null;
             });
-        runQuery(key, fetcher, { force })
+        // ETP-5265 QA follow-up — `return` (added, the rest of the chain is untouched):
+        // callers that must stay busy until the record is actually back on screen need to
+        // await the refetch. `onRefresh` in DetailView is literally
+        // `() => hook.fetchById?.(id, { force: true })`, so without this the awaiting
+        // caller waited on `undefined` and resumed immediately. Behaviour-preserving: no
+        // existing caller reads the return value, and the chain ends in `.catch`, so the
+        // promise handed out always settles as fulfilled and can never surface as an
+        // unhandled rejection in a caller that ignores it. The `if (!id) return;` guard
+        // above still returns undefined, exactly as before.
+        return runQuery(key, fetcher, { force })
             .then(row => {
                 if (!isCurrent()) return;
                 // ETP-4563: a mutation superseded this read while it was in flight: drop the
@@ -2383,6 +2405,10 @@ export function useEntity(entity, childEntity, {
         handleAddChild, handleUpdateChild, handleDeleteChild, primeSaved,
         refresh, fetchById, fetchChildren, fetchChildDefaults, loadMore, refreshHeaderTotals, clearUserChangedKey,
         invalidateEntityCache,
+        // ETP-5366: exposed for the callers that write a child collection OUTSIDE this hook
+        // (a customAddModal doing its own POST/PUT). They have no other way to tell the shared
+        // cache that the collection they just changed is no longer what it holds.
+        invalidateChildrenCache,
         buildListQuery,
         sortColumn, sortDirection, setSortColumn, setSortDirection,
     };
