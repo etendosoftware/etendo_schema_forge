@@ -1015,7 +1015,26 @@ export function useEntity(entity, childEntity, {
     const [children, setChildren] = useState([]);
     const [childDefaults, setChildDefaults] = useState({});
     const [childrenLoading, setChildrenLoading] = useState(false);
-    const [loading, setLoading] = useState(false);
+    // Bug fix: initialize `loading` to match whether a list fetch is actually
+    // guaranteed to start on mount. When `skipListFetch` is false (the common
+    // case), the mount effect below unconditionally calls `loadList(false)`,
+    // whose very first line is `setLoading(true)` — but that only takes effect
+    // on the SECOND render (after the effect runs), so the FIRST render was
+    // rendering with the stale `loading: false` default. `ListView.jsx`'s
+    // `ListTableRegion` branches on `loading && items.length === 0` to decide
+    // between a skeleton and the real `<Table>`; with the old default, the very
+    // first render evaluated that condition as false and mounted `<Table>`
+    // prematurely (before any data existed), which was then unmounted on the
+    // next render once `loading` correctly flipped to `true`, and mounted a
+    // THIRD time once the fetch resolved — an extra, spurious mount+unmount
+    // cycle on every list page load. Any `<Table>`/`headerTable` that runs its
+    // own data fetch in a mount effect (e.g. Users' `UserHeaderTable`) paid for
+    // that spurious cycle as a real, duplicate network request. Seeding
+    // `loading` from `!skipListFetch` makes the very first render already
+    // reflect reality: true when a fetch WILL start (skeleton immediately, no
+    // premature Table mount), false when `skipListFetch` genuinely means no
+    // fetch will ever be triggered (e.g. DetailView, which doesn't need a list).
+    const [loading, setLoading] = useState(!skipListFetch);
     // ETP-5034: outcome of the last fetchById, when it did NOT yield a record.
     // null = nothing wrong (never fetched, or the record loaded fine).
     // 'notFound' = the backend answered but carried no row: the id does not exist,
