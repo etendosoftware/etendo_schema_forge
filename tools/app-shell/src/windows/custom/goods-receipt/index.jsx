@@ -11,6 +11,8 @@ import { AttachmentsTab } from '@/components/attachments';
 import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter, buildUnpostActions, unpostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
+import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
+import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useUI } from '@/i18n';
@@ -119,6 +121,9 @@ export default function GoodsReceiptWindow(props) {
 
   const headers = useMemo(() => (buildHeaders(token)), [token]);
 
+  const { createContactCtxValue, contactPortal } =
+    useCreateContactModal({ apiBaseUrl, token, documentType: 'purchase' });
+
   const { requestDelete, deleteDialog } = useRowDelete({
     apiBaseUrl,
     entity: 'goodsReceipt',
@@ -163,7 +168,7 @@ export default function GoodsReceiptWindow(props) {
   }), [navigate, windowName, requestDelete, ui]);
 
   return (
-    <>
+    <CreateContactContext.Provider value={createContactCtxValue}>
       <GeneratedApp
         {...props}
         autoSaveOnBlur={true}
@@ -212,6 +217,7 @@ export default function GoodsReceiptWindow(props) {
             data-testid="GoodsReceiptPreview__bf4f23" />
         )}
         data-testid="GeneratedApp__bf4f23" />
+      {contactPortal}
       {deleteDialog}
       {cloneTargets && createPortal(
         <CloneOrderModal
@@ -226,6 +232,6 @@ export default function GoodsReceiptWindow(props) {
           data-testid="CloneOrderModal__bf4f23" />,
         document.body,
       )}
-    </>
+    </CreateContactContext.Provider>
   );
 }
