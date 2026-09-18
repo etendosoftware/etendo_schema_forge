@@ -606,6 +606,246 @@ describe('applyOneComboEntry — ETP-4772 stale response guard (combos)', () => 
   });
 });
 
+// ETP-5190: ETP-4772's generation counter was bumped by EVERY applied callout
+// write, including a write of an EMPTY value onto a field that was ALSO still
+// empty. That write changes nothing on the form, but the bump made every OLDER
+// in-flight response for that same field look stale — and nothing ever retries
+// a dropped callout response, so the field stayed empty forever. Selecting a
+// business partner fires ~7 header callouts in ~1.6s, so `partnerAddress` /
+// `warehouse` came back permanently blank and Guardar stayed disabled.
+//
+// The fix only bumps the generation for a genuinely non-empty write. These
+// tests pin BOTH halves: the empty write must still reach the form (an
+// intentional clear is a legitimate callout answer) while leaving the
+// generation alone, and a real non-empty write must STILL bump it so
+// ETP-4772's protection of a user edit is not weakened.
+describe('applyCalloutFieldUpdates / applyOneComboEntry — ETP-5190 empty write must not advance the generation', () => {
+  function makeArgs(overrides = {}) {
+    return {
+      data: {},
+      triggerField: 'trigger',
+      userTouchedRef: { current: new Set() },
+      appliedFields: new Map(),
+      hook: { handleChange: vi.fn() },
+      api: {},
+      catalogs: {},
+      ...overrides,
+    };
+  }
+
+  // A ctx whose handleChange writes back into `data`, the way useEntity does in
+  // the real component. Needed for the ordered sequence tests below, where the
+  // second response must observe the field state left by the first one.
+  function makeLiveArgs(data, dispatchSnapshot, fieldGenerationRef, overrides = {}) {
+    return makeArgs({
+      data,
+      dispatchSnapshot,
+      fieldGenerationRef,
+      hook: { handleChange: vi.fn((k, v) => { data[k] = v; }) },
+      ...overrides,
+    });
+  }
+
+  describe('an empty answer for a still-empty field applies but does not bump', () => {
+    for (const [label, emptyValue] of [
+      ["the empty string", ''],
+      ['null', null],
+      ['undefined', undefined],
+    ]) {
+      it(`applies ${label} to a still-empty field without advancing its generation`, () => {
+        const fieldGenerationRef = { current: { warehouse: 0 } };
+        const a = makeArgs({
+          data: { warehouse: '' },
+          dispatchSnapshot: { warehouse: 0 },
+          fieldGenerationRef,
+        });
+
+        applyCalloutFieldUpdates({ warehouse: { value: emptyValue } }, a);
+
+        // The write itself still happens — the empty-skip guard deliberately
+        // lets an intentional clear through when there is nothing to protect.
+        expect(a.appliedFields.has('warehouse')).toBe(true);
+        expect(a.appliedFields.get('warehouse')).toBe(emptyValue);
+        expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', emptyValue);
+        // ...but the generation must stand still, or every older in-flight
+        // response for this field is silently dropped as stale (ETP-5190).
+        expect(fieldGenerationRef.current.warehouse).toBe(0);
+      });
+    }
+
+    it('does not create a generation entry for a field that had none when the answer is empty', () => {
+      const fieldGenerationRef = { current: {} };
+      const a = makeArgs({
+        data: { partnerAddress: '' },
+        dispatchSnapshot: {},
+        fieldGenerationRef,
+      });
+
+      applyCalloutFieldUpdates({ partnerAddress: { value: '' } }, a);
+
+      expect(a.hook.handleChange).toHaveBeenCalledWith('partnerAddress', '');
+      expect(fieldGenerationRef.current.partnerAddress).toBeUndefined();
+    });
+  });
+
+  // The exact ordered sequence observed in ETP-5190: two callouts dispatched
+  // from the same business-partner change, the one answering EMPTY lands
+  // first, the one carrying the REAL value lands second and must win.
+  describe('out-of-order responses: the empty one lands first, the real value still wins', () => {
+    it('keeps the real warehouse arriving via combos after an earlier empty updates write', () => {
+      const data = { warehouse: '' };
+      const fieldGenerationRef = { current: { warehouse: 0 } };
+      // Callout A (the one that will answer with the real warehouse) is
+      // dispatched first and snapshots generation 0.
+      const snapshotA = { ...fieldGenerationRef.current };
+      // Callout B is dispatched right after, still at generation 0.
+      const snapshotB = { ...fieldGenerationRef.current };
+
+      // B's response arrives FIRST, answering empty for a still-empty field.
+      const b = makeLiveArgs(data, snapshotB, fieldGenerationRef, { triggerField: 'businessPartner' });
+      applyCalloutFieldUpdates({ warehouse: { value: '' } }, b);
+      expect(data.warehouse).toBe('');
+
+      // A's response arrives second with the REAL value through the combo
+      // path, which reads the very generation B would have bumped.
+      const a = makeLiveArgs(data, snapshotA, fieldGenerationRef, { triggerField: 'businessPartner' });
+      applyOneComboEntry('warehouse', { selected: 'WH_REAL', _identifier: 'Real Warehouse' }, a);
+
+      // Before the fix this was discarded as stale and warehouse stayed ''
+      // forever, leaving Guardar permanently disabled.
+      expect(data.warehouse).toBe('WH_REAL');
+      expect(a.appliedFields.get('warehouse')).toBe('WH_REAL');
+      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH_REAL');
+      expect(data['warehouse$_identifier']).toBe('Real Warehouse');
+      // The real write is the one that legitimately advances the generation.
+      expect(fieldGenerationRef.current.warehouse).toBe(1);
+    });
+
+    it('keeps the real value arriving via updates after an earlier empty updates write', () => {
+      const data = { partnerAddress: '' };
+      const fieldGenerationRef = { current: { partnerAddress: 0 } };
+      const snapshotA = { ...fieldGenerationRef.current };
+      const snapshotB = { ...fieldGenerationRef.current };
+
+      const b = makeLiveArgs(data, snapshotB, fieldGenerationRef, { triggerField: 'businessPartner' });
+      applyCalloutFieldUpdates({ partnerAddress: { value: null } }, b);
+      expect(data.partnerAddress).toBeNull();
+
+      const a = makeLiveArgs(data, snapshotA, fieldGenerationRef, { triggerField: 'businessPartner' });
+      applyCalloutFieldUpdates({ partnerAddress: { value: 'ADDR_REAL' } }, a);
+
+      expect(data.partnerAddress).toBe('ADDR_REAL');
+      expect(a.appliedFields.get('partnerAddress')).toBe('ADDR_REAL');
+      expect(fieldGenerationRef.current.partnerAddress).toBe(1);
+    });
+
+    it('survives several consecutive empty answers before the real value lands', () => {
+      // The BP change fires ~7 callouts; more than one can answer empty for
+      // the same field. N empty writes must still leave the generation at 0.
+      const data = { warehouse: '' };
+      const fieldGenerationRef = { current: { warehouse: 0 } };
+      const snapshotA = { ...fieldGenerationRef.current };
+
+      for (const emptyValue of ['', null, undefined, '']) {
+        const stale = makeLiveArgs(data, { ...fieldGenerationRef.current }, fieldGenerationRef, {
+          triggerField: 'businessPartner',
+        });
+        applyCalloutFieldUpdates({ warehouse: { value: emptyValue } }, stale);
+      }
+      expect(fieldGenerationRef.current.warehouse).toBe(0);
+
+      const a = makeLiveArgs(data, snapshotA, fieldGenerationRef, { triggerField: 'businessPartner' });
+      applyOneComboEntry('warehouse', { selected: 'WH_REAL' }, a);
+
+      expect(data.warehouse).toBe('WH_REAL');
+      expect(fieldGenerationRef.current.warehouse).toBe(1);
+    });
+  });
+
+  // ETP-4772 must remain fully in force: a NON-empty write still advances the
+  // generation, so a response dispatched before it is still discarded.
+  describe('ETP-4772 is not weakened by the ETP-5190 narrowing', () => {
+    it('discards a response dispatched before a non-empty write, on the updates path', () => {
+      const data = { warehouse: '' };
+      const fieldGenerationRef = { current: { warehouse: 0 } };
+      const olderSnapshot = { ...fieldGenerationRef.current };
+
+      // A genuine non-empty write lands and bumps the generation to 1.
+      const fresh = makeLiveArgs(data, { ...fieldGenerationRef.current }, fieldGenerationRef);
+      applyCalloutFieldUpdates({ warehouse: { value: 'WH_CHOSEN' } }, fresh);
+      expect(fieldGenerationRef.current.warehouse).toBe(1);
+
+      // A response dispatched BEFORE that write now arrives — still stale.
+      const older = makeLiveArgs(data, olderSnapshot, fieldGenerationRef);
+      applyCalloutFieldUpdates({ warehouse: { value: 'WH_DEFAULT' } }, older);
+
+      expect(older.appliedFields.has('warehouse')).toBe(false);
+      expect(older.hook.handleChange).not.toHaveBeenCalled();
+      expect(data.warehouse).toBe('WH_CHOSEN');
+      expect(fieldGenerationRef.current.warehouse).toBe(1);
+    });
+
+    it('discards a combo response dispatched before a non-empty write, on the combo path', () => {
+      const data = { warehouse: '' };
+      const fieldGenerationRef = { current: { warehouse: 0 } };
+      const olderSnapshot = { ...fieldGenerationRef.current };
+
+      const fresh = makeLiveArgs(data, { ...fieldGenerationRef.current }, fieldGenerationRef);
+      applyCalloutFieldUpdates({ warehouse: { value: 'WH_CHOSEN' } }, fresh);
+
+      const older = makeLiveArgs(data, olderSnapshot, fieldGenerationRef);
+      applyOneComboEntry('warehouse', { selected: 'WH_DEFAULT' }, older);
+
+      expect(older.appliedFields.has('warehouse')).toBe(false);
+      expect(older.hook.handleChange).not.toHaveBeenCalled();
+      expect(data.warehouse).toBe('WH_CHOSEN');
+    });
+  });
+
+  // Boundary: the empty-skip guard and the empty-no-bump rule are two
+  // different things. Nobody should "simplify" ETP-5190 by skipping empty
+  // writes altogether — an intentional clear from a callout must still reach
+  // the form when the field is empty, and must still be ignored when the
+  // field holds a value worth protecting.
+  describe('intentional-clear boundary', () => {
+    it('skips the empty answer entirely when the field already holds a value', () => {
+      const fieldGenerationRef = { current: { warehouse: 0 } };
+      const a = makeArgs({
+        data: { warehouse: 'EXISTING' },
+        dispatchSnapshot: { warehouse: 0 },
+        fieldGenerationRef,
+      });
+
+      applyCalloutFieldUpdates({ warehouse: { value: '' } }, a);
+
+      expect(a.appliedFields.has('warehouse')).toBe(false);
+      expect(a.hook.handleChange).not.toHaveBeenCalled();
+      expect(fieldGenerationRef.current.warehouse).toBe(0);
+    });
+
+    it('still forwards the empty answer to the form when the field is empty', () => {
+      const fieldGenerationRef = { current: { warehouse: 0 } };
+      const a = makeArgs({
+        data: { warehouse: '' },
+        dispatchSnapshot: { warehouse: 0 },
+        fieldGenerationRef,
+      });
+
+      applyCalloutFieldUpdates({ warehouse: { value: '' } }, a);
+
+      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', '');
+    });
+
+    it('does not bump the generation for an empty answer even without generation tracking wired', () => {
+      // Backwards-compatible ctx (no dispatchSnapshot/fieldGenerationRef):
+      // must not throw and must still apply the empty write.
+      const a = makeArgs({ data: { warehouse: '' } });
+      applyCalloutFieldUpdates({ warehouse: { value: '' } }, a);
+      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', '');
+    });
+  });
+});
+
 describe('runAddLineAction', () => {
   afterEach(() => {
     vi.restoreAllMocks();

@@ -1,20 +1,44 @@
 /**
+ * Resolves the fiscal system for the 'siiver' regime — split out of `resolveSystem`
+ * (SonarQube S3776) so the territory veto and the volume/lowChoice branching are each
+ * a flat, independently-readable chain instead of one nested inside the other.
+ *
+ * @param {string|null} territory
+ * @param {'high'|'low'|null} volume
+ * @param {'sii'|'verifactu'|null} lowChoice
+ * @returns {'SII'|'VERIFACTU'|null}
+ */
+function resolveSiiverSystem({ territory, volume, lowChoice }) {
+  // SII only accepts IVA/IGIC taxpayers (verified against the AEATSII_CONFIG.taxtype
+  // AD_Ref_List — ETP-5272 point 4). A territory whose tax scheme SII cannot represent
+  // (Ceuta/Melilla → IPSI) has exactly one applicable system regardless of billing
+  // volume, so the volume/lowChoice answers never matter for it.
+  if (territory && !getAllowedSystemsForTerritory(territory).includes('SII')) {
+    return 'VERIFACTU';
+  }
+  if (volume === 'high') return 'SII';
+  if (volume === 'low' && lowChoice === 'sii') return 'SII';
+  if (volume === 'low' && lowChoice === 'verifactu') return 'VERIFACTU';
+  return null;
+}
+
+/**
  * Derives the active fiscal system from territory regime + user answers.
  *
  * @param {'sii_foral'|'tbai'|'siiver'} regime
  * @param {boolean|null} alsoNational - tbai: does the org also operate under SII national?
  * @param {'high'|'low'|null} volume - siiver: annual billing volume threshold
  * @param {'sii'|'verifactu'|null} lowChoice - siiver + low: chosen system
+ * @param {string|null} [territory] - the selected territory id (e.g. 'ceuta'). Used to
+ *   veto SII when the territory's tax scheme is not one SII supports (see
+ *   `getAllowedSystemsForTerritory`). Optional for backward compatibility with callers
+ *   that only know the regime.
  * @returns {'SII'|'TBAI'|'SII+TBAI'|'VERIFACTU'|null}
  */
-export function resolveSystem({ regime, alsoNational, volume, lowChoice }) {
+export function resolveSystem({ regime, alsoNational, volume, lowChoice, territory = null }) {
   if (regime === 'sii_foral') return 'SII';
   if (regime === 'tbai') return alsoNational ? 'SII+TBAI' : 'TBAI';
-  if (regime === 'siiver') {
-    if (volume === 'high') return 'SII';
-    if (volume === 'low' && lowChoice === 'sii') return 'SII';
-    if (volume === 'low' && lowChoice === 'verifactu') return 'VERIFACTU';
-  }
+  if (regime === 'siiver') return resolveSiiverSystem({ territory, volume, lowChoice });
   return null;
 }
 
@@ -137,21 +161,30 @@ export function getVerifactuTaxTypeLabel(value) {
   return VERIFACTU_TAX_TYPE_BY_VALUE[value] ?? value;
 }
 
+/**
+ * Single source of truth for which fiscal systems are valid per territory.
+ *
+ * `ceuta` (Ceuta/Melilla) is deliberately `['VERIFACTU']` only, unlike
+ * `baleares`/`canarias`: Ceuta/Melilla taxpayers use the IPSI tax scheme, and the
+ * AEATSII_CONFIG.taxtype AD_Ref_List only defines `IVA`/`IGIC` — SII has no way to
+ * represent an IPSI taxpayer at all (confirmed against the DB reference list, ETP-5272
+ * point 4). `canarias` (IGIC) IS supported by SII, so it keeps both options.
+ * TicketBAI is Basque-territory-specific (its own ETSG_SIF_Territory reference list has
+ * no Ceuta/Melilla value either) and was never offered outside `alava`/`bizkaia`/
+ * `gipuzkoa`, so it needed no change here.
+ */
+const TERRITORY_ALLOWED_SYSTEMS = {
+  navarra:  ['SII'],
+  alava:    ['TBAI', 'SII+TBAI'],
+  bizkaia:  ['TBAI', 'SII+TBAI'],
+  gipuzkoa: ['TBAI', 'SII+TBAI'],
+  baleares: ['SII', 'VERIFACTU'],
+  canarias: ['SII', 'VERIFACTU'],
+  ceuta:    ['VERIFACTU'],
+};
+
 export function getAllowedSystemsForTerritory(territory) {
-  switch (territory) {
-    case 'navarra':
-      return ['SII'];
-    case 'alava':
-    case 'bizkaia':
-    case 'gipuzkoa':
-      return ['TBAI', 'SII+TBAI'];
-    case 'baleares':
-    case 'canarias':
-    case 'ceuta':
-      return ['SII', 'VERIFACTU'];
-    default:
-      return [];
-  }
+  return TERRITORY_ALLOWED_SYSTEMS[territory] ?? [];
 }
 
 /**
@@ -241,7 +274,11 @@ export function buildOnboardingPayloads(system, territory) {
         case 'canarias':
           return { sii: { taxtype: 'IGIC', ...siiDefaults }, tbai: null, verifactu: null };
         case 'ceuta':
-          return { sii: { taxtype: 'IPSI', ...siiDefaults }, tbai: null, verifactu: null };
+          // SII does not support the IPSI tax scheme (Ceuta/Melilla) — see
+          // getAllowedSystemsForTerritory / ETP-5272 point 4. resolveSystem() never
+          // resolves to 'SII' for this territory, so this branch should be unreachable;
+          // guarded here too rather than building a payload the server will reject.
+          return { sii: null, tbai: null, verifactu: null };
         default:
           return { sii: null, tbai: null, verifactu: null };
       }
@@ -341,9 +378,11 @@ export function getTerritoryDefaults(territory, inSii) {
         ? { sii: { taxtype: 'IGIC' }, verifactu: null, tbai: null }
         : { sii: null, verifactu: { tAXType: '03' }, tbai: null };
     case 'ceuta':
-      return inSii
-        ? { sii: { taxtype: 'IPSI' }, verifactu: null, tbai: null }
-        : { sii: null, verifactu: { tAXType: '02' }, tbai: null };
+      // SII does not support the IPSI tax scheme (Ceuta/Melilla) — see
+      // getAllowedSystemsForTerritory / ETP-5272 point 4. Unlike baleares/canarias,
+      // `inSii` is not honored here: VERIFACTU is the only valid system for this
+      // territory regardless of caller-supplied SII enrollment state.
+      return { sii: null, verifactu: { tAXType: '02' }, tbai: null };
     case 'navarra':
       return { sii: { navarra: 'Y', taxtype: 'IVA' }, verifactu: null, tbai: null };
     case 'alava':
@@ -367,6 +406,10 @@ export async function parseApiError(res) {
   const body = await res.text().catch(() => res.statusText);
   try {
     const parsed = JSON.parse(body);
+    // NEO handlers (ServletResponseUtils.sendError) always write `error` as a
+    // plain string — never an object — so that shape must be checked first.
+    // The object/top-level fallbacks are kept for any handler that diverges.
+    if (typeof parsed?.error === 'string') return parsed.error;
     return parsed?.error?.message ?? parsed?.message ?? body;
   } catch {
     return body || res.statusText;

@@ -35,7 +35,8 @@
     },
     "draftModeReadOnlyLogic": true,
     "draftModeReadOnlyLogicAllowlist": [
-      "purchase-invoice.header.orderReference"
+      "purchase-invoice.header.orderReference",
+      "goods-receipt.goodsReceipt.orderReference"
     ],
     "notNullRequiresRequired": true,
     "customFormPathRoot": "@/windows/custom/"

@@ -179,3 +179,77 @@ describe('DataTable — per-column isolation', () => {
     expect(td).toContainElement(screen.getByTestId('custom-r1'));
   });
 });
+
+/**
+ * ETP-5281, follow-up ETP-5268 — the generic `columnMinWidthPx(col, colIdx)`
+ * floor applied to both the header (`renderColumnHeaderCell`) and body
+ * (`TableDataRow`) cells, and its skip when the column opts into
+ * `headClass`/`cellClass` pinning. `columnMinWidthPx` is mocked (above) to a
+ * constant 100. The header cell uses `style.width` (a real `width`, not
+ * `minWidth` — `table-layout: fixed` ignores `minWidth` entirely, verified
+ * live: every column rendered at an identical equal share of the container
+ * regardless of it), since table-layout:fixed only reads a column's width
+ * off the FIRST row (the header); the body cell keeps `style.minWidth`,
+ * which is inert for column sizing under fixed layout but harmless to leave.
+ */
+describe('DataTable — generic minWidth floor', () => {
+  it('applies the width floor to the header cell and the minWidth floor to the body cell when no headClass/cellClass is set', () => {
+    render(<DataTable columns={[STRING_COL]} data={DATA} />);
+
+    const th = screen.getByTestId('column-header-name');
+    const td = screen.getByTestId('row-r1').querySelectorAll('td')[1];
+
+    expect(th.style.width).toBe('100px');
+    expect(td.style.minWidth).toBe('100px');
+  });
+
+  it('skips the width/minWidth floor on both header and body cell when headClass/cellClass is set', () => {
+    render(
+      <DataTable
+        columns={[{ ...STRING_COL, headClass: 'w-[200px]', cellClass: 'w-[200px]' }]}
+        data={DATA}
+      />,
+    );
+
+    const th = screen.getByTestId('column-header-name');
+    const td = screen.getByTestId('row-r1').querySelectorAll('td')[1];
+
+    expect(th.style.width).toBe('');
+    expect(td.style.minWidth).toBe('');
+  });
+});
+
+/**
+ * ETP-5281 — `renderHeaderLabelContent` wraps the column label in a
+ * `<span className="min-w-0 truncate" title={colLabel}>`, so a label that overflows
+ * its header cell clips with an ellipsis instead of pushing into the next column, and
+ * the full text stays available via the native title tooltip on hover. The prior guard
+ * (`DataTable.numericHeaderAlignment.test.js`) only regexes the DataTable.jsx source —
+ * it never renders the label, so a change that dropped these classes from the actual
+ * DOM (e.g. an unrelated JSX refactor of renderHeaderLabelContent) would not be caught.
+ */
+describe('DataTable — header label truncation', () => {
+  const LONG_LABEL = 'A very long column header label that would otherwise overflow the cell';
+  const LONG_LABEL_COL = { key: 'name', label: LONG_LABEL, type: 'string' };
+
+  it('renders the label span with truncation classes', () => {
+    render(<DataTable columns={[LONG_LABEL_COL]} data={DATA} />);
+
+    const th = screen.getByTestId('column-header-name');
+    const labelSpan = th.querySelector('span.truncate');
+
+    expect(labelSpan).toBeTruthy();
+    expect(labelSpan.className).toContain('min-w-0');
+    expect(labelSpan.className).toContain('truncate');
+  });
+
+  it('sets the title attribute to the full untruncated label text', () => {
+    render(<DataTable columns={[LONG_LABEL_COL]} data={DATA} />);
+
+    const th = screen.getByTestId('column-header-name');
+    const labelSpan = th.querySelector('span.truncate');
+
+    expect(labelSpan).toHaveAttribute('title', LONG_LABEL);
+    expect(labelSpan).toHaveTextContent(LONG_LABEL);
+  });
+});

@@ -6,6 +6,7 @@ import { captureScreenshot } from '../helpers/captureScreenshot.js';
 import { ensureStockOnHand } from '../helpers/inventory-helpers.js';
 import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../helpers/product-helpers.js';
 import { waitForDocumentActionResponse } from '../helpers/purchase-helpers.js';
+import { selectCustomerWithAddress } from '../helpers/sales-helpers.js';
 
 /**
  * Sales Order → Shipment → Return → Rectificative Invoice — full live-backend
@@ -119,10 +120,9 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
       }).toPass({ timeout: 15_000 });
       await slow(page);
 
-      const bpOption = page.locator('[data-testid^="option-businessPartner-"]')
-        .filter({ hasNotText: /crear|create/i }).first();
-      await expect(bpOption).toBeVisible({ timeout: 15_000 });
-      await bpOption.click();
+      // A customer with no C_BPartner_Location leaves partnerAddress empty, which keeps
+      // action-save-draft disabled forever — see selectCustomerWithAddress.
+      await selectCustomerWithAddress(page);
 
       // BP selection triggers chained callouts — wait until a derived field is populated
       await expect(async () => {
@@ -384,12 +384,24 @@ test.describe('Sales Order → Return → Rectificative Invoice (integration)', 
       await slow(page);
 
       // Verify: doc type shows "Factura rectificativa". "Tipo de documento"
-      // (transactionDocument) renders as a disabled <input> (EntityForm's renderReadOnlyFk),
-      // so its value must be read via toHaveValue — getByText only matches rendered text
-      // content, never an input's value, so it can never see this field regardless of
-      // backend correctness.
-      await expect(page.getByTestId('field-transactionDocument').locator('input'))
-        .toHaveValue(/rectificativ/i, { timeout: 15_000 });
+      // (transactionDocument) is a DocumentType-reference FK, so EntityForm renders it
+      // two different ways depending on readOnlyLogic: a disabled <input>
+      // (renderReadOnlyFk) when the record is locked, or a Radix SelectTrigger <button>
+      // with the label as rendered text (SelectorInput's `field-${key}` testid, ETP-4600)
+      // when it's editable. Since ETP-5274 this field's readOnlyLogic is
+      // `@Processed@='Y'`, and the invoice created here is left in Borrador (not
+      // processed), so it renders editable — but read the value generically instead of
+      // assuming either shape, since a future readOnlyLogic change (or a
+      // differently-processed fixture) could flip it back.
+      const docTypeField = page.getByTestId('field-transactionDocument');
+      await expect(docTypeField).toBeVisible({ timeout: 15_000 });
+      await expect(async () => {
+        const input = docTypeField.locator('input');
+        const displayedValue = (await input.count()) > 0
+          ? await input.inputValue()
+          : await docTypeField.innerText();
+        expect(displayedValue).toMatch(/rectificativ/i);
+      }).toPass({ timeout: 15_000 });
 
       // Verify: line quantity is NEGATIVE. This window's line grid is not a semantic
       // <table> — rows render as data-testid="line-row-<ID>" divs. The only literal

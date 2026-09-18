@@ -1,0 +1,141 @@
+{
+  "$schema": "decisions-v2",
+  "version": 2,
+  "window": {
+    "category": "settings",
+    "name": "Document Sequence",
+    "detailEntity": null,
+    "hideDetailForm": false,
+    "listSortBy": "name asc",
+    "discardPatterns": ["EM_*"],
+    "labelOverrides": {
+      "es_ES": {
+        "Name": "Nombre",
+        "Prefix": "Prefijo",
+        "Suffix": "Sufijo",
+        "StartNo": "Número inicial",
+        "CurrentNext": "Próximo número",
+        "IncrementNo": "Incremento",
+        "StartNewYear": "Reiniciar cada año",
+        "IsAutoSequence": "Numeración automática",
+        "Description": "Descripción"
+      }
+    }
+  },
+  "entities": {
+    "sequence": {
+      "javaQualifier": "document-sequence",
+      "fields": {
+        "name": {
+          "grid": true,
+          "form": true,
+          "visibility": "editable",
+          "gridOrder": 1
+        },
+        "prefix": {
+          "grid": true,
+          "form": true,
+          "visibility": "editable",
+          "gridOrder": 2
+        },
+        "suffix": {
+          "grid": true,
+          "form": true,
+          "visibility": "editable",
+          "gridOrder": 3
+        },
+        "nextAssignedNumber": {
+          "grid": true,
+          "form": true,
+          "visibility": "editable",
+          "integer": true,
+          "gridOrder": 4
+        },
+        "startingNo": {
+          "grid": true,
+          "form": true,
+          "visibility": "editable",
+          "integer": true,
+          "gridOrder": 5
+        },
+        "incrementBy": {
+          "grid": false,
+          "form": true,
+          "visibility": "editable",
+          "integer": true
+        },
+        "restartSequenceEveryYear": {
+          "grid": true,
+          "form": true,
+          "visibility": "editable",
+          "gridOrder": 6
+        },
+        "autoNumbering": {
+          "grid": false,
+          "form": true,
+          "visibility": "editable"
+        },
+        "description": {
+          "grid": false,
+          "form": true,
+          "visibility": "editable"
+        },
+        "mask": {
+          "grid": false,
+          "form": true,
+          "visibility": "editable"
+        },
+        "valueFormat": {
+          "grid": false,
+          "form": true,
+          "visibility": "editable"
+        },
+        "documentType": {
+          "visibility": "discarded"
+        },
+        "currentNextSystem": {
+          "visibility": "discarded"
+        },
+        "usedForRecordID": {
+          "visibility": "discarded"
+        },
+        "aDTableID": {
+          "visibility": "discarded"
+        },
+        "aDColumnID": {
+          "visibility": "discarded"
+        },
+        "etsgIsRectificative": {
+          "visibility": "discarded"
+        },
+        "etaskTaskTypeID": {
+          "visibility": "discarded"
+        },
+        "active": {
+          "visibility": "discarded"
+        },
+        "organization": {
+          "visibility": "discarded"
+        },
+        "client": {
+          "visibility": "discarded"
+        },
+        "id": {
+          "visibility": "discarded"
+        },
+        "creationDate": {
+          "visibility": "discarded"
+        },
+        "createdBy": {
+          "visibility": "discarded"
+        },
+        "updated": {
+          "visibility": "discarded"
+        },
+        "updatedBy": {
+          "visibility": "discarded"
+        }
+      }
+    }
+  }
+}

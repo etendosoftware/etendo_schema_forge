@@ -109,4 +109,149 @@ describe('buildSaveGate', () => {
       expect(gate.title).toBe('saveMissingRequired:businessPartner');
     });
   });
+
+  // ETP-4839 — `buildCompletedFieldsGate` (private, exercised only through
+  // `buildSaveGate`) is the second, independent gate layered on top of the
+  // required-fields gate above: once the document is completed,
+  // `draftMode.keepSaveWhenCompletedFields` is the ONLY list of header fields
+  // Save is allowed to persist. All cases here pass `isValid: true` so the
+  // required-fields gate above is a guaranteed pass-through and only the
+  // completed-fields gate is under test.
+  describe('completed-fields gate (draftMode.keepSaveWhenCompletedFields, ETP-4839)', () => {
+    const PASS_REQUIRED = { isValid: true, labelFor: () => undefined, ui };
+
+    it('is inactive (never blocks) when isDraftModeCompleted is false, even with dirty fields outside the list', () => {
+      const gate = buildSaveGate({
+        ...PASS_REQUIRED,
+        isDraftModeCompleted: false,
+        draftMode: { keepSaveWhenCompletedFields: ['orderReference'] },
+        dirtyFieldKeys: ['businessPartner'],
+      });
+      expect(gate).toEqual({ blocked: false, title: undefined, missingAttr: undefined });
+    });
+
+    it('is inactive when keepSaveWhenCompletedFields is absent entirely', () => {
+      const gate = buildSaveGate({
+        ...PASS_REQUIRED,
+        isDraftModeCompleted: true,
+        draftMode: {},
+        dirtyFieldKeys: ['businessPartner'],
+      });
+      expect(gate.blocked).toBe(false);
+    });
+
+    it('is inactive when keepSaveWhenCompletedFields is an empty array', () => {
+      const gate = buildSaveGate({
+        ...PASS_REQUIRED,
+        isDraftModeCompleted: true,
+        draftMode: { keepSaveWhenCompletedFields: [] },
+        dirtyFieldKeys: ['businessPartner'],
+      });
+      expect(gate.blocked).toBe(false);
+    });
+
+    it('active + no dirty fields → not blocked', () => {
+      const gate = buildSaveGate({
+        ...PASS_REQUIRED,
+        isDraftModeCompleted: true,
+        draftMode: { keepSaveWhenCompletedFields: ['orderReference'] },
+        dirtyFieldKeys: [],
+      });
+      expect(gate).toEqual({ blocked: false, title: undefined, missingAttr: undefined });
+    });
+
+    it('active + every dirty field is allowed → not blocked', () => {
+      const gate = buildSaveGate({
+        ...PASS_REQUIRED,
+        isDraftModeCompleted: true,
+        draftMode: { keepSaveWhenCompletedFields: ['orderReference', 'notes'] },
+        dirtyFieldKeys: ['orderReference'],
+      });
+      expect(gate.blocked).toBe(false);
+    });
+
+    it('active + a dirty field is NOT allowed → blocked, title includes the resolved label, missingAttr includes the key', () => {
+      const labelFor = (col) => ({ businessPartner: 'Business Partner' }[col]);
+      const gate = buildSaveGate({
+        isValid: true, ui, labelFor,
+        isDraftModeCompleted: true,
+        draftMode: { keepSaveWhenCompletedFields: ['orderReference'] },
+        dirtyFieldKeys: ['businessPartner'],
+        gateFields: [{ key: 'businessPartner', column: 'businessPartner', label: 'Fallback BP' }],
+      });
+      expect(gate.blocked).toBe(true);
+      expect(gate.title).toBe('saveBlockedFieldsNotAllowedWhenCompleted:Business Partner');
+      expect(gate.missingAttr).toBe('businessPartner');
+    });
+
+    it('active + a MIX of allowed and disallowed dirty fields → only the disallowed one is reported', () => {
+      const gate = buildSaveGate({
+        ...PASS_REQUIRED,
+        isDraftModeCompleted: true,
+        draftMode: { keepSaveWhenCompletedFields: ['orderReference'] },
+        dirtyFieldKeys: ['orderReference', 'businessPartner'],
+      });
+      expect(gate.blocked).toBe(true);
+      expect(gate.missingAttr).toBe('businessPartner');
+    });
+
+    it('active + multiple disallowed dirty fields → all are comma-joined in missingAttr, in dirtyFieldKeys order', () => {
+      const gate = buildSaveGate({
+        ...PASS_REQUIRED,
+        isDraftModeCompleted: true,
+        draftMode: { keepSaveWhenCompletedFields: ['orderReference'] },
+        dirtyFieldKeys: ['businessPartner', 'warehouse'],
+      });
+      expect(gate.blocked).toBe(true);
+      expect(gate.missingAttr).toBe('businessPartner,warehouse');
+    });
+
+    describe('label resolution fallback chain: labelFor(descriptor.column) -> descriptor.label -> raw key', () => {
+      it('uses labelFor(descriptor.column) when it resolves', () => {
+        const gate = buildSaveGate({
+          isValid: true, ui,
+          labelFor: () => 'Translated Label',
+          isDraftModeCompleted: true,
+          draftMode: { keepSaveWhenCompletedFields: ['orderReference'] },
+          dirtyFieldKeys: ['businessPartner'],
+          gateFields: [{ key: 'businessPartner', column: 'businessPartner', label: 'Fallback Label' }],
+        });
+        expect(gate.title).toBe('saveBlockedFieldsNotAllowedWhenCompleted:Translated Label');
+      });
+
+      it('falls back to descriptor.label when labelFor returns falsy', () => {
+        const gate = buildSaveGate({
+          isValid: true, ui,
+          labelFor: () => undefined,
+          isDraftModeCompleted: true,
+          draftMode: { keepSaveWhenCompletedFields: ['orderReference'] },
+          dirtyFieldKeys: ['businessPartner'],
+          gateFields: [{ key: 'businessPartner', column: 'businessPartner', label: 'Fallback Label' }],
+        });
+        expect(gate.title).toBe('saveBlockedFieldsNotAllowedWhenCompleted:Fallback Label');
+      });
+
+      it('falls back to the raw key when the field has no matching descriptor in gateFields', () => {
+        const gate = buildSaveGate({
+          isValid: true, ui,
+          labelFor: () => 'Should not be used',
+          isDraftModeCompleted: true,
+          draftMode: { keepSaveWhenCompletedFields: ['orderReference'] },
+          dirtyFieldKeys: ['businessPartner'],
+          gateFields: [],
+        });
+        expect(gate.title).toBe('saveBlockedFieldsNotAllowedWhenCompleted:businessPartner');
+      });
+
+      it('falls back to the raw key when gateFields itself is omitted', () => {
+        const gate = buildSaveGate({
+          ...PASS_REQUIRED,
+          isDraftModeCompleted: true,
+          draftMode: { keepSaveWhenCompletedFields: ['orderReference'] },
+          dirtyFieldKeys: ['businessPartner'],
+        });
+        expect(gate.title).toBe('saveBlockedFieldsNotAllowedWhenCompleted:businessPartner');
+      });
+    });
+  });
 });

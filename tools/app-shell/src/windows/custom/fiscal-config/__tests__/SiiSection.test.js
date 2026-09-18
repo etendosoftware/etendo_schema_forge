@@ -71,6 +71,26 @@ describe('SiiSection — certificate section', () => {
   });
 });
 
+// ETP-5272 — accepts an external `locked` prop (forceTestMode) that gates set()
+// and disables the input, mirroring VerifactuSection's isReady lock mechanism.
+describe('SiiSection — external lock prop (ETP-5272)', () => {
+  it('accepts a `locked` prop in its signature', () => {
+    assert.match(src, /forwardRef\(function SiiSection\(\{[^}]*\blocked\b[^}]*\}, ref\)/);
+  });
+
+  it('does not allow form changes when locked (set() guard)', () => {
+    assert.match(src, /function set\(field, value\) \{\s*if \(locked\) return;/);
+  });
+
+  it('disables the authorization number input when locked', () => {
+    assert.match(src, /disabled=\{locked\}/);
+  });
+
+  it('passes the locked prop through to SectionSaveButton', () => {
+    assert.match(src, /locked=\{locked\}/);
+  });
+});
+
 describe('SiiSection — save button', () => {
   it('delegates save button rendering to SectionSaveButton', () => {
     assert.match(src, /SectionSaveButton/);
@@ -84,6 +104,17 @@ describe('SiiSection — save button', () => {
 
   it('hides the save button when hideSave prop is true', () => {
     assert.match(src, /hideSave/);
+  });
+});
+
+// ETP-5338 point 6: explicit name/id on the authorization number input so the
+// browser's password-manager heuristic does not mistake it for a username
+// field paired with CertModal's certificate passphrase.
+describe('SiiSection — anti-autofill hardening (ETP-5338)', () => {
+  it('authorization number input has explicit name and id alongside autoComplete off', () => {
+    assert.match(src, /name="sii-authorization-number"/);
+    assert.match(src, /id="sii-authorization-number"/);
+    assert.match(src, /autoComplete="off"/);
   });
 });
 

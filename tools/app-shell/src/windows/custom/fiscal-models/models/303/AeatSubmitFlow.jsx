@@ -7,6 +7,7 @@ import { neoBase } from '@/components/related-documents/helpers.js';
 import { Loader2, TriangleAlert, OctagonAlert, CircleCheck, Download, Landmark } from 'lucide-react';
 import { formatAmount, formatPeriod, triggerBase64Download, applyIdentParams, IBAN_REQUIRED_TIPOS, DECLARATION_TYPE_INGRESO } from '../../fiscalModelsUtils.js';
 import { isLastPeriodOfYear } from './fm303Layouts.js';
+import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 
 // ── Pure helpers (exported for unit testing — no DOM/React involved) ──────────
 
@@ -423,10 +424,9 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
               </div>
 
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer', marginBottom: testMode ? 12 : 0 }}>
-                <input
-                  type="checkbox"
+                <CheckboxField
                   checked={testMode}
-                  onChange={e => setTestMode(e.target.checked)}
+                  onToggle={val => setTestMode(val)}
                   data-testid="AeatSubmitFlow__testMode" />
                 {t('fm.aeat.test_mode.label') ?? 'Validate without filing'}
               </label>
@@ -443,23 +443,26 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
                   <Banner
                     tone="danger"
                     icon={<OctagonAlert size={16} data-testid="OctagonAlert__aeatConn" />}
-                    title={connError}
-                    data-testid="Banner__aeatConnError">
-                    {/* CTA only for the missing-default-IAE-activity guard — every other
-                        connError (connection failure, IBAN required) has no dedicated
-                        settings screen to send the user to. */}
-                    {missingIaeGuard && (
-                      <button
-                        type="button"
-                        className="fm-btn fm-btn--primary"
-                        style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                        onClick={() => navigate('/organization')}
-                      >
-                        <Landmark size={14} data-testid="Landmark__aeatGoToOrganization" />
-                        {t('fm.aeat.action.go_to_organization') ?? 'Go to Organization'}
-                      </button>
-                    )}
-                  </Banner>
+                    /* CTA only for the missing-default-IAE-activity guard — every other
+                       connError (connection failure, IBAN required) has no dedicated
+                       settings screen to send the user to. Composed into `title` (not a
+                       separate `children` block) so it reads as the tail of the same
+                       sentence instead of a line of its own — this local `Banner` renders
+                       `title` and `children` as separate stacked divs. */
+                    title={missingIaeGuard ? (
+                      <>
+                        {connError}{' '}
+                        <button
+                          type="button"
+                          className="fm-link-btn fm-link-btn--bold"
+                          onClick={() => navigate('/organization')}
+                          data-testid="Landmark__aeatGoToOrganization"
+                        >
+                          {t('fm.aeat.action.go_to_organization') ?? 'Go to Organization'}
+                        </button>
+                      </>
+                    ) : connError}
+                    data-testid="Banner__aeatConnError" />
                 </div>
               )}
             </>

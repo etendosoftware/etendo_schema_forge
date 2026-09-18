@@ -2,9 +2,9 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:priceList
 const fields = [
-  { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'principal' },
+  { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'principal', maxLength: 60 },
   { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: 'Currency', required: true, readOnly: true, section: 'principal', reference: 'Currency', inputMode: 'selector' },
-  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'principal' },
+  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'principal', maxLength: 255 },
   { key: 'salesPriceList', column: 'IsSOPriceList', type: 'checkbox', labels: {"es_ES":"Tipo","en_US":"Type"}, label: 'Sales Price List', required: true, section: 'principal' },
   { key: 'default', column: 'IsDefault', type: 'checkbox', labels: {"es_ES":"Por defecto","en_US":"Default"}, label: 'Default', required: true, section: 'principal' },
   { key: 'active', column: 'IsActive', type: 'checkbox', labels: {"es_ES":"Activo","en_US":"Active"}, label: 'Active', required: true, section: 'principal' },

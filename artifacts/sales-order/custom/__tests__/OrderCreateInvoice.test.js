@@ -16,9 +16,28 @@ describe('OrderCreateInvoice', () => {
     assert.match(src, /\{\s*data.*recordId.*token.*apiBaseUrl/);
   });
 
-  it('renders confirm flow only for draft orders (status DR)', () => {
+  // ETP-5255 — this test used to also assert
+  // `assert.match(src, /\{isDraft && showConfirm && createPortal\(/)`. That half is gone
+  // rather than re-pointed at the new expression, for two reasons.
+  //
+  // It was a source-text assertion, of the kind forbidden since ETP-4958. And it was pinning
+  // the defect: `isDraft` in that gate unmounted the confirm modal the instant `onRefresh()`
+  // reloaded the just-confirmed order as CO, so a failed shipment/invoice step was reported
+  // nowhere — no error, no toast, no retry path — and the expression could not be corrected
+  // without turning this test red. Re-writing the regex would have re-pinned whatever shape
+  // came next, which is the same mistake in a new form.
+  //
+  // The two real properties (the modal does not OPEN outside draft; once open it SURVIVES the
+  // DR→CO transition with its state intact, on both render paths) are asserted behaviourally
+  // in tools/app-shell/src/windows/custom/sales-order/__tests__/
+  //   OrderCreateInvoice.confirmModalLifecycle.vitest.jsx
+  // which mounts THIS module (via `@generated/...`) and drives the real open event. Verified
+  // non-vacuous: those tests fail against the pre-fix source.
+  //
+  // The `isDraft` derivation itself stays — it is a value, not a JSX shape, and it is what the
+  // behavioural tests exercise.
+  it('derives draft status from documentStatus', () => {
     assert.match(src, /const isDraft\s*=\s*status\s*===\s*'DR'/);
-    assert.match(src, /\{isDraft && showConfirm && createPortal\(/);
   });
 
   it('uses createPortal for modal rendering', () => {
@@ -134,15 +153,69 @@ describe('OrderCreateInvoice', () => {
       assert.match(src, /const discountFactor\s*=\s*\(isPreCompletion && discountPct > 0\) \? \(1 - discountPct \/ 100\) : 1/);
     });
 
-    it('computes grandTotal as round(net × factor) + round(tax × factor), not round(gross × factor) (ETP-4017)', () => {
-      // Anti-double-rounding rule: see DocumentTotalsPanel / documentTotals.js.
-      // The displayed total must equal sum of displayed components so it agrees
-      // with the order's right panel and with AEAT-compliant printed invoices.
+    it('computes grandTotal as grossBase directly, not totalLines + a re-derived tax delta (ETP-5132 double-discount fix, supersedes ETP-4017)', () => {
+      // ETP-5132 (confirm-modal double-discount regression — see
+      // docs/bug-reports/2026-09-09-etp5132-confirm-modal-double-discount.md):
+      // grossBase (d.grandTotalAmount) is ALREADY GET-time-compensated for a
+      // pending total discount by the backend (ETP-4029) whenever the order is
+      // still in DR. The old ETP-4017 formula re-applied discountFactor on top
+      // of that already-discounted value, double-discounting the tax portion.
+      // totalLines (the Subtotal row) still needs the client-side factor —
+      // netBase/summedLineAmount is never backend-compensated — only the
+      // grandTotal (Total row) computation itself changes.
       assert.match(src, /const round2\s*=\s*\(n\) => Math\.round\(\(n \+ Number\.EPSILON\) \* 100\) \/ 100/);
       assert.match(src, /const grossBase\s*=\s*Number\(d\.grandTotalAmount\) \|\| 0/);
       assert.match(src, /const netBase\s*=\s*Number\(d\.summedLineAmount \?\? d\.totalLines \?\? grossBase\) \|\| 0/);
       assert.match(src, /const totalLines\s*=\s*round2\(netBase \* discountFactor\)/);
-      assert.match(src, /const grandTotal\s*=\s*totalLines \+ round2\(\(grossBase - netBase\) \* discountFactor\)/);
+      assert.match(src, /const grandTotal\s*=\s*grossBase;/);
+      assert.doesNotMatch(
+        src,
+        /const grandTotal\s*=\s*totalLines \+ round2\(\(grossBase - netBase\) \* discountFactor\)/,
+        'the superseded ETP-4017 formula must not be reintroduced — it double-discounts grossBase',
+      );
+    });
+  });
+
+  // ETP-5132 — proves the double-discount fix with concrete numbers, not just
+  // the literal-formula regex above. Extracts the REAL totals computation
+  // block from the live source (not a hand-copied re-implementation) and
+  // executes it via `new Function(...)`, mirroring the extraction pattern
+  // used for the needsInvoice/needsShip computation further below in this
+  // file — so this test tracks the actual arithmetic/branching and fails if
+  // the double-discount regression is reintroduced.
+  describe('ConfirmModal grandTotal numeric proof (ETP-5132 double-discount fix)', () => {
+    function extractTotalsBlock(source) {
+      const re = /const discountPct[\s\S]*?const grandTotal\s*=\s*grossBase;/;
+      const m = source.match(re);
+      assert.ok(m, 'could not locate the totals computation block (const discountPct … const grandTotal = grossBase;)');
+      return m[0];
+    }
+
+    function evaluate(d) {
+      const block = extractTotalsBlock(src);
+      // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+      const fn = new Function('d', `${block}\nreturn { discountFactor, totalLines, grandTotal };`);
+      return fn(d);
+    }
+
+    it('does not double-discount a Draft order whose grandTotalAmount is already GET-time-compensated (ETP-5132)', () => {
+      // grossBase simulates ETP-4029's GET-time compensation: the backend
+      // already applied the pending 10% total discount to grandTotalAmount
+      // (100 -> 90). netBase (summedLineAmount) simulates the raw,
+      // never-backend-compensated line total (100).
+      const { discountFactor, totalLines, grandTotal } = evaluate({
+        documentStatus: 'DR',
+        etgoTotalDiscount: 10,
+        grandTotalAmount: 90,
+        summedLineAmount: 100,
+      });
+      assert.equal(discountFactor, 0.9);
+      assert.equal(totalLines, 90, 'Subtotal row still applies the client-side factor to the raw netBase');
+      assert.equal(grandTotal, 90, 'Total row must equal grossBase as-is — not double-discounted');
+      // Regression guard: the superseded ETP-4017 formula would have produced
+      // 81 (90 + round2((90 - 100) * 0.9) = 90 - 9 = 81), silently discounting
+      // the already-compensated grossBase a second time.
+      assert.notEqual(grandTotal, 81);
     });
   });
 
@@ -390,23 +463,22 @@ describe('OrderCreateInvoice', () => {
     });
   });
 
-  // ETP-4717 (Pair 2 — P2): the Send button/modal must only be available once
-  // the order is Confirmed (CO), not while it is still Draft (DR). Grid and
-  // Form-view must agree on the same rule.
-  describe('Send button visibility gated by document status (ETP-4717)', () => {
-    it('does NOT show the Send button while the order is still Draft (DR)', () => {
-      assert.doesNotMatch(src, /\{\(isDraft \|\| isCompleted\) && <SendDocumentButton/);
+  // ETP-4717 (Pair 2 — P2), relocated by ETP-5260: the Send button itself
+  // (SendDocumentButton) moved to the topbarSecondary slot
+  // (OrderCreateInvoiceSecondaryActions, `showSend={isCompleted}` — CO only,
+  // never true while DR) — see
+  // artifacts/sales-order/custom/__tests__/OrderCreateInvoiceSecondaryActions.test.js.
+  // This component still owns the SendDocumentModal (PDF/documentType
+  // context), opened via the `sales-order:open-send-modal` window event and
+  // gated on isCompleted only, matching the button's own gate.
+  describe('SendDocumentModal integration (ETP-5260 — button moved out, modal stays)', () => {
+    it('no longer renders a SendDocumentButton at all', () => {
+      assert.doesNotMatch(src, /SendDocumentButton/);
     });
 
-    it('shows the Send button only when the order is Completed (CO)', () => {
-      assert.match(src, /\{isCompleted && <SendDocumentButton/);
-    });
-
-    it('does NOT gate the SendDocumentModal render on isDraft', () => {
-      assert.doesNotMatch(
-        src,
-        /\{\(isDraft \|\| isCompleted\) && showSend && createPortal\(\s*<SendDocumentModal/,
-      );
+    it('listens to the sales-order:open-send-modal custom event to open its own SendDocumentModal', () => {
+      assert.match(src, /window\.addEventListener\(['"]sales-order:open-send-modal['"]/);
+      assert.match(src, /window\.removeEventListener\(['"]sales-order:open-send-modal['"]/);
     });
 
     it('gates the SendDocumentModal render on isCompleted only', () => {
@@ -467,8 +539,12 @@ describe('OrderCreateInvoice', () => {
     function extractNeedsBlocks(source, needsVarName) {
       // ETP-4567: post-fix source compares against 0 with !== instead of the
       // clamp-dependent > 0 (which always failed for a floored-to-zero pending).
+      // ETP-5295 — ManageDocsLauncher's needsInvoice line now carries an extra
+      // `fetched != null && ` guard (hooks hoisted above the loading early-return, so
+      // the derivation must be null-safe); the main-component occurrence has no such
+      // guard. The optional non-capturing group matches both.
       const re = new RegExp(
-        `const ${needsVarName}[\\s\\S]*?const needsInvoice\\s*=\\s*totalPending !== 0 && !invoiceDraft;`,
+        `const ${needsVarName}[\\s\\S]*?const needsInvoice\\s*=\\s*(?:fetched != null && )?totalPending !== 0 && !invoiceDraft;`,
         'g',
       );
       return [...source.matchAll(re)].map(m => m[0]);
@@ -485,8 +561,11 @@ describe('OrderCreateInvoice', () => {
     function evaluate(siteIndex, { grandTotalAmount, invoicesComplete = [], shipmentsDraft = [], invoiceDraft = null }) {
       const body = `${compBlocks[siteIndex]}\n${needsBlocks[siteIndex]}\nreturn { qtyPending, totalPending, needsShip, needsInvoice };`;
       // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
-      const fn = new Function('data', 'orderLines', 'invoicesComplete', 'shipmentsDraft', 'invoiceDraft', body);
-      return fn({ grandTotalAmount }, [], invoicesComplete, shipmentsDraft, invoiceDraft);
+      // `fetched` is a free variable inside the ManageDocsLauncher occurrence's
+      // `fetched != null && ` guard (ETP-5295); pass it as always-loaded (`true`) since
+      // this test's concern is the pending arithmetic, not the loading state.
+      const fn = new Function('data', 'orderLines', 'invoicesComplete', 'shipmentsDraft', 'invoiceDraft', 'fetched', body);
+      return fn({ grandTotalAmount }, [], invoicesComplete, shipmentsDraft, invoiceDraft, true);
     }
 
     const sites = [
@@ -664,8 +743,12 @@ describe('OrderCreateInvoice', () => {
     describe('ConfirmModal.handleConfirm — Step 2 (createShipment)', () => {
       function resolveMessage(e, res) {
         const expr = extractCallExprAround(src, 'soOrderConfirmedShipmentError', 'throw new Error(');
-        const fn = new Function('e', 'res', 'ui', `return ${expr};`);
-        return fn(e, res, (k) => k);
+        // ETP-5276: the raw backend message now passes through translateBackendError(msg, ui)
+        // before being appended to the ui() prefix. Stub it as identity — the point of this
+        // test is that the RAW backend message survives end-to-end, not re-testing
+        // translateBackendError's own mapping table (covered by backendErrors.test.js).
+        const fn = new Function('e', 'res', 'ui', 'translateBackendError', `return ${expr};`);
+        return fn(e, res, (k) => k, (msg) => msg);
       }
 
       it('appends the real backend message after the ui() prefix for a flat 400 body', () => {
@@ -698,7 +781,11 @@ describe('OrderCreateInvoice', () => {
 
       function resolveMessage(e, res) {
         const expr = extractCallExprAfter(createDocsModalSrc, 'action/createShipment', 'throw new Error(');
-        return new Function('e', 'res', `return ${expr};`)(e, res);
+        // ETP-5276: the expression itself calls translateBackendError(msg, ui) — both must be
+        // in scope even though this call site has no ui() prefix of its own. Stub identity, same
+        // rationale as the ConfirmModal Step 2 block above.
+        return new Function('e', 'res', 'ui', 'translateBackendError', `return ${expr};`)(
+          e, res, (k) => k, (msg) => msg);
       }
 
       it('surfaces the real backend message for a flat {status,message} 400 body', () => {

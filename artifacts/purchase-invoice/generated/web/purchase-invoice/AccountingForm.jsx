@@ -9,7 +9,7 @@ const fields = [
   { key: 'account', column: 'Account_ID', type: 'search', label: 'Account', required: true, readOnly: true, section: 'other' },
   { key: 'debit', column: 'AmtAcctDr', type: 'number', label: 'Debit', required: true, readOnly: true, section: 'other' },
   { key: 'credit', column: 'AmtAcctCr', type: 'number', label: 'Credit', required: true, readOnly: true, section: 'other' },
-  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', readOnly: true, section: 'other' },
+  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', readOnly: true, section: 'other', maxLength: 255 },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'search', label: 'Business Partner', readOnly: true, section: 'other', reference: 'BPartner', inputMode: 'search' },
   { key: 'product', column: 'M_Product_ID', type: 'search', label: 'Product', readOnly: true, section: 'other', reference: 'Product', inputMode: 'search' },
   { key: 'project', column: 'C_Project_ID', type: 'selector', label: 'Project', readOnly: true, section: 'other', reference: 'Project', inputMode: 'selector' },

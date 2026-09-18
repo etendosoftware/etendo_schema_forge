@@ -236,6 +236,39 @@ All UI extensions are declared in `decisions.json → window.*` — the generato
 
 See `docs/window-templates.md` for layout types (kanban, calendar, custom), configuration, custom windows convention, and the registry/generator flow.
 
+## List Columns Must Be Real Columns (MANDATORY)
+
+**A list column whose value does not come from an AD column of the entity's table is a design bug, not a shortcut.** A synthetic `type: 'custom'` column with no `column` and no `backendFilterKey` is silently dropped from the advanced filter by `isFilterableColumn` (core `AdvancedFilterBuilder.jsx`) — no error, no warning, no log. The user simply never finds the field in "Filtro por condicionales", and nobody notices for months.
+
+Before writing a `type: 'custom'` column with a `render:` callback in any `*HeaderTable.jsx` / custom list component, walk this decision tree:
+
+1. **Is the value already an AD column of the table?** → declare it with `column: '<AD_ColumnName>'`. It filters and sorts for free. Examples: `aeatsiiEstado` (`EM_Aeatsii_Estado`), `etvfacInvoiceStatus` (`EM_Etvfac_Invoice_Status`).
+2. **Is it derived from another table or computed?** → create a **stored computed column** (`Computation_Mode = 'S'`, engine EPL-1807 — `{etendo_root}/modules/com.etendoerp.go/docs/STORED-COMPUTED-COLUMNS.md`). It becomes a physical AD column: filterable, sortable, and it cannot silently break. See **Computed Column Policy** below for `S` vs `V` and the refresh mode.
+3. **Does it just recompose values that are already columns?** → use the declarative `multiField` column (per-part sort + advanced-filter expansion), not hand-written JSX.
+4. **Only then** is `type: 'custom'` legitimate: purely presentational cells — action buttons, icons, an avatar composition. **Test: if a user could plausibly want to filter or sort by it, it is not presentational.**
+
+**Never inject a synthetic field into the NEO response from `afterHandle()` to feed a list column.** The field is invisible to the backend query, so it cannot be filtered or sorted, and an injector failure is undetectable from the UI — `TbaiSyncStatusInjector` was broken by a swallowed `MappingException` for months and every invoice showed "Pendiente" while real data existed in `tbai_syncinvoice` (ETP-4391). `afterHandle()` injection is for genuinely per-request, non-queryable data only, never for a column.
+
+If a column legitimately needs a `type: 'custom'` cell renderer AND must stay filterable, keep the AD column as the source and add `column:` (grid render and filter mode are resolved independently — see `transactionDocument` in `artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx`, which pairs a badge renderer with `column: 'C_DocTypeTarget_ID'` and `filterMode: 'identifier'`).
+
+
+### Computed Column Policy (MANDATORY)
+
+**Stored (`Computation_Mode = 'S'`) whenever possible; within stored, synchronous (`Refresh_Mode = 'S'`) whenever possible.**
+
+| Axis | Default | Fall back only when |
+|---|---|---|
+| `Computation_Mode` | **`S` stored** — a physical column: filterable, sortable, computed once | `V` (virtual/`SQLLogic`) only when the value genuinely cannot be stored (e.g. it depends on `now()`, see `docs/plans/stored-computed-columns-expirable-proposal.md`) |
+| `Refresh_Mode` | **`S` synchronous** — recomputed in the same transaction, always exact at read time | `Q` (queued) only for genuinely heavy or complex computations — the reference case is stock/`m_storage_detail`. `M` (manual) only for one-off operator-driven population |
+
+Do not reach for `V` because it looks lighter to implement, and do not reach for `Q` because the computation "might be slow" — `Q` is for the storage-detail class of problem, not for ordinary derived values. A cheap per-row function is exactly what `S`/`S` is for.
+
+One fact to design around before committing to `S`/`S` — not a reason to avoid it: a computation error in synchronous mode **rolls back the whole transaction**. Make the computation function total (no exceptions on missing/edge data) rather than downgrading to `Q`.
+
+The PostgreSQL-only caveat on synchronous refresh (deferred constraint triggers, which Oracle lacks) does **not** apply here: `com.etendoerp.go` targets PostgreSQL exclusively. Do not weaken a design for Oracle portability in this module.
+
+A computed column that reads a table from **another module** needs that module declared in `AD_MODULE_DEPENDENCY` — required for `S` (an `AD_COLUMN_COMP_DEPENDENCY` cannot point at an undeclared module's table), and equally real but invisible for `V`. Declare the dependency; do not hide a cross-module read inside raw SQL.
+
 ## Generated Files Policy
 
 **NEVER manually edit generated output files** (e.g., files in `artifacts/*/generated/`). All fixes must be made at the **pipeline level** — generators (`cli/src/generate-*.js`), extractors (`cli/src/extract-*.js`), or shared components (`tools/app-shell/src/`) — so they apply to ALL windows, not just the current one. Generated files are outputs, not sources.
@@ -301,9 +334,14 @@ Every process must declare >=3 edge cases. Every kept rule must have a behaviora
 - **Pre-commit:** `make install` activates `.githooks/pre-commit` — runs only on staged artifact/generator/registry files
 - **CI:** `.github/workflows/pipeline-validate.yml` runs `npx sf-validate-pipeline` in shadow mode (annotates, doesn't block) until P3 backfill lands
 
-**Bypass:** `git commit --no-verify` (WIP only — never on a PR targeting `develop`). Note that
-`git push --no-verify` is a different matter and is blocked for agents — see
-**Agent Guardrails** below.
+**Bypass:** none for agents. `git commit --no-verify` (and its short form `-n`) is
+**forbidden** — it does not skip the validation, it relocates it to a more expensive
+place: `.githooks/pre-commit` leaves an execution proof that `.githooks/commit-msg`
+stamps into the message, and an unstamped commit is rejected later by the push gate
+and by the CI hooks check (`.githooks/lib/hooks-proof.sh`). If a commit hook fails,
+fixing what it reports IS the task; if the hook itself is broken, say so and stop.
+`git push --no-verify` is blocked outright for agents — see **Agent Guardrails**
+below. A human can always run either bypass in their own terminal.
 
 ## Agent Guardrails (committed Claude hooks)
 
@@ -327,9 +365,12 @@ spans, drops `VAR=value` prefixes, then requires the segment to *start* with
 --no-verify` and `HUSKY=0 git push --no-verify` are caught, while a commit message
 or grep pattern that merely mentions the flag is not.
 
-Deliberately NOT blocked: `git commit --no-verify` (documented WIP escape hatch)
-and `git push -n` (that's `--dry-run`, not a bypass). The hook only constrains the
-Bash tool — a human can always run the bypass in their own terminal.
+Not blocked by this hook: `git commit --no-verify` and `git push -n` (that's
+`--dry-run`, not a bypass). Note the asymmetry — `git commit --no-verify` is
+forbidden by policy (see **Bypass** above and `.claude/agents/workflow.md`) even
+though no hook denies it, so an agent must not reach for it on the grounds that it
+went through. The hook only constrains the Bash tool — a human can always run the
+bypass in their own terminal.
 
 Adding a hook: drop an executable script in `.claude/hooks/`, register it in
 `.claude/settings.json`, and pipe-test it with a synthetic payload

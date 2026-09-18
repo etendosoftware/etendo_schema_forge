@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "generatedAt": "2026-08-01T00:36:50.964Z",
-  "updatedAt": "2026-08-24T17:57:19.569Z",
-  "checksum": "dbb58bbfc12c2fa7",
+  "updatedAt": "2026-09-09T14:13:00.578Z",
+  "checksum": "6ec56135b6cfbfba",
   "frontendContract": {
     "window": {
       "id": "110",
@@ -97,10 +97,6 @@
               "source": "CO"
             },
             "enumValues": [
-              {
-                "value": "AD",
-                "name": "Advisory"
-              },
               {
                 "value": "CO",
                 "name": "Company"
@@ -231,7 +227,8 @@
           }
         ],
         "searchableFields": [],
-        "computedFields": []
+        "computedFields": [],
+        "javaQualifier": "organization-information"
       },
       "actividadesDelIae": {
         "tableName": "EPIAE_OrgInfo_Epigraph",
@@ -862,7 +859,8 @@
             "visibility": "editable",
             "required": false
           }
-        ]
+        ],
+        "javaQualifier": "organization-information"
       },
       "actividadesDelIae": {
         "tableName": "EPIAE_OrgInfo_Epigraph",

@@ -21,10 +21,9 @@ import { ListSortPopover } from './ListSortPopover.jsx';
 import { ListProgressBar } from './ListProgressBar.jsx';
 import SelectionToolbar from './SelectionToolbar.jsx';
 import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
-import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
 import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-pane.jsx';
-import { useBatch } from '../copilot/ocr/ingest/useBatch.js';
-import { buildAdvancedFilterCriteria } from '@/lib/gridQuery';
+import { useWindowImportDialog } from './useWindowImportDialog.js';
+import { buildAdvancedFilterCriteria, extractQueryParamConditions } from '@/lib/gridQuery';
 import { useWindowFilterPresets } from '@/hooks/useWindowFilterPresets';
 import { trackSearchPerformed, trackWindowOpened } from '@/lib/productUsageTelemetry.js';
 import {
@@ -47,16 +46,6 @@ function toPrintableDocument(row) {
   const id = row?.id || row;
   const documentStatus = (row && typeof row === 'object') ? row.documentStatus : undefined;
   return documentStatus !== undefined ? { id, documentStatus } : id;
-}
-
-/**
- * Accent- and case-insensitive label comparison, matching how `mapColumns.normalizeHeader`
- * compares a CSV header — so two labels this calls equal are also two headers the import
- * treats as the same column.
- */
-function sameLabel(a, b) {
-  const norm = (s) => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
-  return norm(a) === norm(b);
 }
 
 function resolveQuickFilterIndicesFromPreset(quickFilters, preset, setActiveFilterIndices) {
@@ -462,7 +451,6 @@ export function ListView({
   const [tableColumns, setTableColumns] = useState(initialColumns ?? []);
 
   const [showImportDialog, setShowImportDialog] = useState(false);
-  const { runBatch } = useBatch({ apiBaseUrl, token });
   const apiFetch = useApiFetch(apiBaseUrl);
   const { locale } = useLocaleSwitch();
 
@@ -475,9 +463,17 @@ export function ListView({
   );
 
   const advancedFilterPart = useMemo(() => {
-    const criteria = buildAdvancedFilterCriteria(advancedFilter, filterColumns);
-    if (!criteria || criteria.length === 0) return null;
-    return `criteria=${encodeURIComponent(JSON.stringify(criteria))}`;
+    // ETP-5188 — a column can declare `toQueryParams` to opt its condition out of
+    // the generic `criteria=` builder entirely and translate it into raw backend
+    // query params instead (e.g. Users' "Rol" field → `RoleIds=`/`NoRole=`, whose
+    // condition targets an N:M role-assignment collection the HQL criteria layer
+    // cannot dot-path through). See `extractQueryParamConditions` in `gridQuery.js`.
+    const { conditions, extraParams } = extractQueryParamConditions(advancedFilter, filterColumns);
+    const criteria = buildAdvancedFilterCriteria(conditions, filterColumns);
+    const segments = [];
+    if (criteria && criteria.length > 0) segments.push(`criteria=${encodeURIComponent(JSON.stringify(criteria))}`);
+    if (extraParams) segments.push(extraParams);
+    return segments.length > 0 ? segments.join('&') : null;
   }, [advancedFilter, filterColumns]);
 
   const effectiveFilter = useMemo(() => {
@@ -585,7 +581,12 @@ export function ListView({
     resolveQuickFilterIndicesFromPreset(quickFilters, preset, setActiveFilterIndices);
   }, [filterPresets, subsetFilters, quickFilters]);
 
-  const saveCurrentAsPreset = useCallback((name) => {
+  // ETP-5007: the builder hands over the advanced filter it currently holds in
+  // its DRAFT. `advancedFilter` is only the last APPLIED value, so relying on it
+  // saved an empty preset when the user configured a filter without applying it,
+  // and a stale one when they edited an applied filter before saving. The
+  // fallback keeps callers that pass no draft (there are none today) working.
+  const saveCurrentAsPreset = useCallback((name, draftAdvancedFilter) => {
     const subsetLabel = (subsetFilters && activeSubsetIndex != null)
       ? (subsetFilters[activeSubsetIndex]?.label ?? null)
       : null;
@@ -596,7 +597,7 @@ export function ListView({
       : [];
     savePreset(name, {
       columnFilters,
-      advancedFilter,
+      advancedFilter: draftAdvancedFilter !== undefined ? draftAdvancedFilter : advancedFilter,
       subsetLabel,
       quickFilterLabels,
     });
@@ -629,6 +630,13 @@ export function ListView({
 
   const refreshRef = useRef(hook.refresh);
   refreshRef.current = hook.refresh;
+
+  // ETP-5302 — stable in-place refetch handed to the `bulkActions` slot, so a bulk
+  // action can reload just the rows instead of doing a full `window.location.reload()`
+  // (which threw away scroll position, active filters and the whole SPA boot). Reads
+  // through `refreshRef` rather than closing over `hook.refresh`, so the identity stays
+  // stable across renders even though `hook.refresh` does not.
+  const refreshList = useCallback(() => refreshRef.current?.(), []);
 
   useEffect(() => {
     if (!didInitialFetchRef.current) {
@@ -716,144 +724,12 @@ export function ListView({
   const t = useLabel(labelOverrides);
   const ui = useUI();
 
-  // ETP-4996 — the import dialog's two injected capabilities.
-  //
-  // `importFieldLabel` writes the downloaded CSV template's headers in the SESSION language.
-  //
-  // The base comes from the AD label dictionary (`t(column)`, which already applies the
-  // window's own `labelOverrides`) — those translations exist and are maintained, so the
-  // template should not carry a second copy of them. `labelKey` is the escape hatch for the
-  // handful of columns AD cannot serve: `EM_Etgo_Isperson` has no dictionary entry, and
-  // address/city/postal/region are C_Location columns the descriptor writes directly, so they
-  // are not entity fields and have no AD label at all.
-  //
-  // `headerScope` appends a localized qualifier naming the tab a column belongs to. A Contacts
-  // row is split across THREE records — the business partner, its contact person (AD_User) and
-  // its address (C_BPartner_Location + C_Location) — and the AD label for two of those halves is
-  // identical ("Correo electrónico" is the label of BOTH EM_Etgo_Email and Email). Without the
-  // qualifier the template writes the same header twice, which `parseDelimited` rejects
-  // outright — the file could not be uploaded at all.
-  //
-  // ETP-4997: the scope used to be a single "contact" value covering everything that is not on
-  // the header entity, so the five address columns were labelled "Dirección (Contacto)" —
-  // naming the wrong tab, and reported as confusing by a user reading an exported file. Address
-  // columns now carry their own scope. An unknown scope falls back to no qualifier rather than
-  // printing a raw key.
-  const importHeaderScopeLabels = useMemo(() => ({
-    contact: ui('importHeaderScopeContact'),
-    address: ui('importHeaderScopeAddress'),
-  }), [ui]);
-  const importFieldLabel = useCallback((field) => {
-    const base = (field.labelKey ? ui(field.labelKey) : null)
-      || (field.column ? t(field.column) : null)
-      || field.label || field.target;
-    const scope = importHeaderScopeLabels[field.headerScope];
-    // The address column's own label IS the scope word, so qualifying it would read
-    // "Dirección (Dirección)". Nothing else in the file carries that name, and
-    // `resolveTemplateHeaders` still disambiguates if a collision ever appears.
-    if (!scope || sameLabel(base, scope)) return base;
-    return `${base} (${scope})`;
-  }, [t, ui, importHeaderScopeLabels]);
-
-  // `importExistingKeys` answers "which of these rows already exist?" before the user
-  // confirms, so a re-imported file shows its rows as Saltada instead of surfacing them as
-  // post-send duplicates. Goes through the same `criteria=` list query the grid itself
-  // uses, so it inherits the window's org/client security filtering for free.
-  const importExistingKeys = useCallback(async (criteria, keyTargets) => {
-    const params = new URLSearchParams();
-    params.append('criteria', JSON.stringify(criteria));
-    params.append('_startRow', '0');
-    params.append('_endRow', '1000');
-    const res = await apiFetch(`/${importConfig.entity}?${params.toString()}`);
-    if (!res.ok) throw new Error(`existing-record lookup failed: ${res.status}`);
-    const json = await res.json().catch(() => null);
-    const data = json?.response?.data ?? json?.data ?? [];
-    // Only the key columns are read back; anything else the endpoint returns is ignored.
-    return (Array.isArray(data) ? data : []).map((record) => Object.fromEntries(
-      keyTargets.map((target) => [target, record[target]]),
-    ));
-  }, [apiFetch, importConfig?.entity]);
-
-  // ETP-4669: the import flow (ImportDialog + every child) previously rendered its hardcoded
-  // English DEFAULT_LABELS regardless of locale, because no `labels` was ever passed. Build
-  // the nested `labels` object ImportDialog forwards to each child (shape documented in
-  // app-shell-core's ImportDialog.jsx) and pass `translate={ui}` so the send pipeline
-  // localizes backend errors too. Templated strings (mappedSummary/{mapped}/{total},
-  // tooltips, bulkApply/{count}/{raw}/{value}) keep their {placeholders} — the child fills
-  // them at render time; the (n) => string labels interpolate here. `save`/`cancel`/`retry`/
-  // `close` reuse existing generic keys per the i18n guide's "reuse before adding" rule.
-  const importLabels = useMemo(() => ({
-    title: ui('importDialogTitle'),
-    revalidating: ui('importRevalidating'),
-    // `downloadTemplate` stays for back-compatibility (ImportDialog falls back to it for CSV
-    // when the per-format key is absent); the two per-format captions are what actually render
-    // now that a window can offer more than one template.
-    downloadTemplate: ui('importDownloadTemplate'),
-    downloadTemplateCsv: ui('importDownloadTemplateCsv'),
-    downloadTemplateXlsx: ui('importDownloadTemplateXlsx'),
-    importButton: (n) => ui('importButtonCount', { n }),
-    dropzone: {
-      dropHere: ui('importDropHere'),
-      // Carries a {formats} placeholder that ImportDropzone fills from the window's own
-      // `formats` declaration, so the hint can no longer name formats the input does not accept.
-      dropHint: ui('importDropHintFormats'),
-    },
-    progress: {
-      title: ui('importProgressTitle'),
-      subtitle: ui('importProgressSubtitle'),
-    },
-    mapping: {
-      notImported: ui('importNotImported'),
-      mappedSummary: ui('importMappedSummary'),
-      editMatch: ui('importEditMatch'),
-      editTitle: ui('importEditColumnTitle'),
-      save: ui('save'),
-      cancel: ui('cancel'),
-    },
-    confirm: {
-      title: ui('importConfirmTitle'),
-      willImport: (n) => ui('importWillImport', { n }),
-      willSkip: (n) => ui('importWillSkip', { n }),
-      cancel: ui('cancel'),
-      confirm: ui('importConfirmButton'),
-    },
-    fileError: {
-      title: ui('importFileErrorTitle'),
-      cancel: ui('cancel'),
-      retry: ui('retry'),
-    },
-    reviewQueue: {
-      filterAll: ui('importFilterAll'),
-      filterOk: ui('importFilterOk'),
-      filterError: ui('importFilterError'),
-      skip: ui('importSkip'),
-      skipped: ui('importSkipped'),
-      unskip: ui('importUnskip'),
-      downloadErrors: ui('importDownloadErrors'),
-      status: ui('importStatus'),
-      statusOk: ui('importStatusOk'),
-      statusError: ui('importStatusError'),
-      fieldErrorsTooltip: ui('importFieldErrorsTooltip'),
-      bulkApplyTitle: ui('importBulkApplyTitle'),
-      bulkApplyDescription: ui('importBulkApplyDescription'),
-      bulkApplyOnlyThis: ui('importBulkApplyOnlyThis'),
-      bulkApplyAll: ui('importBulkApplyAll'),
-      retry: ui('retry'),
-    },
-    systemError: {
-      title: ui('importSystemErrorTitle'),
-      subtitle: ui('importSystemErrorSubtitle'),
-      copy: ui('importSystemErrorCopy'),
-      copied: ui('importSystemErrorCopied'),
-      copyFailed: ui('importSystemErrorCopyFailed'),
-      close: ui('close'),
-      showReport: ui('importSystemErrorShowReport'),
-      hideReport: ui('importSystemErrorHideReport'),
-      rowData: ui('importSystemErrorRowData'),
-      requestSent: ui('importSystemErrorRequestSent'),
-      serverResponse: ui('importSystemErrorServerResponse'),
-    },
-  }), [ui]);
+  // ETP-5190 — the ImportDialog wiring (labels, field labels, existing-key lookup, batch
+  // poster) moved to `useWindowImportDialog` so the First Steps checklist can drive the very
+  // same import inline without a second copy of it.
+  const importDialogProps = useWindowImportDialog({
+    importConfig, apiBaseUrl, token, labelOverrides,
+  });
   const label = tMenu(entityLabel) || entityLabel || entity;
   const { toggleFavorite, isFavorite } = useFavorites();
   const favKey = windowName || entity || '';
@@ -902,6 +778,30 @@ export function ListView({
     setSelectedRows([]);
     setClearSelectionCounter((c) => c + 1);
   }, []);
+
+  // ETP-4972 QA finding (comment 145559) — changing which records are VISIBLE
+  // must drop any selection made under the previous view, so a destructive
+  // bulk action (e.g. "Eliminar") can never fire against rows the user is no
+  // longer looking at (Gmail/Drive-style behavior). Keyed on `columnFilters`,
+  // `effectiveFilter` (base + subset + quick filters) and `advancedFilterPart`
+  // (funnel) — i.e. everything that changes the visible row set, including
+  // `handleClearAllFilters` and `applyPreset` since both flow through these
+  // same state variables. Deliberately EXCLUDES `hook.sortColumn`/
+  // `hook.sortDirection`: reordering the same rows does not change which
+  // records are on screen, so a sort-only change must not clear selection —
+  // that would be a regression QA did not ask for.
+  // Uses `clearSelection()` (not a bare `setSelectedRows([])`) so DataTable's
+  // own internal checkbox `Set` is reset too via `clearSelectionCounter` —
+  // otherwise rows would stay visually checked while the floating toolbar
+  // disappears (see DataTable's `clearSelectionTrigger` effect).
+  const didInitialSelectionClearRef = useRef(false);
+  useEffect(() => {
+    if (!didInitialSelectionClearRef.current) {
+      didInitialSelectionClearRef.current = true;
+      return;
+    }
+    clearSelection();
+  }, [columnFilters, effectiveFilter, advancedFilterPart, clearSelection]);
 
   // ETP-4656 — shared outcome handler for ANY bulk-delete flow that reports back
   // (succeeded, failed) rows, per the standardized delete UX:
@@ -1162,7 +1062,7 @@ export function ListView({
                     <Trash2 className={iconSizeClass(selectionBarSize)} data-testid="Trash2__620cbc" />
                   </Button>
                 )}
-                {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api })}
+                {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api, refresh: refreshList })}
                 {selectionBarRightActions && selectionBarRightActions({
                   selectedRows,
                   clearSelection,
@@ -1221,6 +1121,22 @@ export function ListView({
                       </button>
                     ))}
                   </div>
+                )}
+                {/* ETP-5188 — a custom `Table` component may expose a companion
+                    toolbar-slot component via a static property (same convention
+                    `DetailView.jsx` uses for `formFooter.inlineInHeaderCard`), so it can
+                    render a quick-filter control right here — same toolbar row as
+                    "Filtros", left of it — with zero changes to the generated page,
+                    `decisions.json`, or the generator. See `UserHeaderTable.
+                    ToolbarQuickFilter` / `RoleQuickFilterToolbarSlot.jsx` for the
+                    reference implementation. */}
+                {Table?.ToolbarQuickFilter && (
+                  <Table.ToolbarQuickFilter
+                    entity={entity}
+                    windowName={windowName}
+                    token={token}
+                    apiBaseUrl={apiBaseUrl}
+                    data-testid="TableToolbarQuickFilter__620cbc" />
                 )}
                 <ListFilterBarSection
                   hideFilters={listViewOptions?.hideFilters}
@@ -1293,7 +1209,7 @@ export function ListView({
                 {importConfig?.enabled && (
                   <ListExportButton
                     importConfig={importConfig}
-                    importFieldLabel={importFieldLabel}
+                    importFieldLabel={importDialogProps.fieldLabelFn}
                     apiBaseUrl={apiBaseUrl}
                     buildListQuery={hook.buildListQuery}
                     data-testid="ListExportButton__620cbc" />
@@ -1424,13 +1340,7 @@ export function ListView({
             open={showImportDialog}
             onOpenChange={setShowImportDialog}
             config={importConfig}
-            token={token}
-            postBatch={runBatch}
-            simSearchFn={simSearch}
-            labels={importLabels}
-            translate={ui}
-            fieldLabelFn={importFieldLabel}
-            existingKeyFetchFn={importExistingKeys}
+            {...importDialogProps}
             onImported={({ failedCount }) => {
               // Refresh unconditionally — some rows may have committed even when others
               // failed. Only auto-close when there is nothing left to review: closing

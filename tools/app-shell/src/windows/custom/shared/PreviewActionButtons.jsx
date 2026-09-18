@@ -76,7 +76,7 @@ export function usePreviewSendModal() {
  * Conditionally renders the SendDocumentModal with the props common to all preview modals.
  * Eliminates the repeated {showSendModal && <SendDocumentModal .../>} block per window.
  */
-export function PreviewSendModal({ show, closing, documentType, documentNo, bpName, bPartnerId, apiBaseUrl, documentId, windowName, token, pdfBlobUrl, pdfBlobLoading, onClose }) {
+export function PreviewSendModal({ show, closing, documentType, documentNo, bpName, bPartnerId, apiBaseUrl, documentId, windowName, token, pdfBlobUrl, pdfBlobLoading, onClose, onSent }) {
   if (!show) return null;
   return (
     <SendDocumentModal
@@ -92,6 +92,7 @@ export function PreviewSendModal({ show, closing, documentType, documentNo, bpNa
       pdfBlobLoading={pdfBlobLoading}
       isClosing={closing}
       onClose={onClose}
+      onSent={onSent}
       data-testid="SendDocumentModal__9ccdc3" />
   );
 }
@@ -100,7 +101,7 @@ export function PreviewSendModal({ show, closing, documentType, documentNo, bpNa
  * Variant of PreviewSendModal that derives documentNo / bPartnerId / documentId
  * from a receipt/shipment record object, reducing repeated prop spreading.
  */
-export function ReceiptSendModal({ sendModal, documentType, receipt, partnerName, apiBaseUrl, token, windowName, pdfBlobUrl, pdfBlobLoading }) {
+export function ReceiptSendModal({ sendModal, documentType, receipt, partnerName, apiBaseUrl, token, windowName, pdfBlobUrl, pdfBlobLoading, onSent }) {
   return (
     <PreviewSendModal
       show={sendModal.showSendModal}
@@ -116,6 +117,7 @@ export function ReceiptSendModal({ sendModal, documentType, receipt, partnerName
       pdfBlobUrl={pdfBlobUrl}
       pdfBlobLoading={pdfBlobLoading}
       onClose={sendModal.closeEmailModal}
+      onSent={onSent}
       data-testid="PreviewSendModal__9ccdc3" />
   );
 }

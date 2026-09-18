@@ -9,11 +9,13 @@ import { useCreateContactModal } from '@/components/contract-ui/useCreateContact
 import GoodsShipmentPage from '@generated/goods-shipment/generated/web/goods-shipment/GoodsShipmentPage';
 import GoodsShipmentTable from '@generated/goods-shipment/generated/web/goods-shipment/GoodsShipmentTable';
 import BulkInvoiceFromShipment from '@generated/goods-shipment/custom/BulkInvoiceFromShipment';
-import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
+import GoodsShipmentSecondaryActions from '@generated/goods-shipment/custom/GoodsShipmentSecondaryActions';
+import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter, buildUnpostActions, unpostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
-import { useMenuLabel } from '@/i18n';
+import { useUI, useMenuLabel } from '@/i18n';
 import { useRowEmailModal } from '../shared/useRowEmailModal.jsx';
 import { SEND_VISIBLE_WHEN_CONFIRMED } from '../shared/sendActionVisibility.js';
+import { buildDocumentRowQuickActionsPostMenu } from '../shared/buildDocumentRowQuickActions.js';
 import { useShipmentPdf } from './useShipmentPdf';
 import GoodsShipmentPreview from './GoodsShipmentPreview';
 
@@ -44,14 +46,47 @@ function GoodsShipmentBulkActions(props) {
         {...props}
         entity="goodsShipment"
         buildActions={buildInOutActions}
-        labelKey="confirmBulk"
+        labelKey="process"
         data-testid="BulkDocumentAction__9851c7" />
+      {/* ETP-5209 — bulk Contabilizar (post), gated to processed & not-yet-posted rows */}
+      <BulkDocumentAction
+        {...props}
+        entity="goodsShipment"
+        actionMode="neoAction"
+        buildActions={buildPostActions}
+        rowFilter={postRowFilter}
+        labelKey="post"
+        data-testid="BulkDocumentActionPost__9851c7" />
+      {/* ETP-5302 — bulk Descontabilizar, the counterpart of the unpost entry this
+          window's detail kebab already offers. Its own button rather than a second
+          option inside "Contabilizar": that button would then be named after the
+          opposite of what it does. Only shows when a posted row is selected, so in
+          practice it and "Contabilizar" are rarely on screen together. */}
+      <BulkDocumentAction
+        {...props}
+        entity="goodsShipment"
+        actionMode="neoAction"
+        buildActions={buildUnpostActions}
+        rowFilter={unpostRowFilter}
+        labelKey="unpost"
+        data-testid="BulkDocumentActionUnpost__9851c7" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
         data-testid="CopyLinkButton__9851c7" />
     </>
   );
+}
+
+/**
+ * ETP-5265 QA follow-up — dispatches the confirm event and returns whatever promise the
+ * GoodsShipmentActions listener attached to `detail`. Undefined when that listener only
+ * opened the confirm modal, which is the unchanged pre-existing behaviour.
+ */
+function dispatchConfirmModalEvent() {
+  const detail = {};
+  window.dispatchEvent(new CustomEvent('goods-shipment:open-confirm-modal', { detail }));
+  return detail.promise;
 }
 
 export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, token, ...rest }) {
@@ -65,6 +100,7 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
 
   const [cloneTargets, setCloneTargets] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const ui = useUI();
   const tMenu = useMenuLabel();
 
   const { requestDelete, deleteDialog } = useRowDelete({
@@ -102,7 +138,13 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
     onClone: (row) => setCloneTargets([row]),
     onEmail: onRowEmail,
     onDelete: requestDelete,
-  }), [navigate, windowName, requestDelete, onRowEmail]);
+    // ETP-5209 — Post reachable from the row-hover kebab, mirroring the same
+    // posted/processed gate as the form-view kebab (GoodsShipmentPage's
+    // decisions-derived menuActions) and the bulk Post action. Extracted to
+    // shared/buildDocumentRowQuickActions.js (rejection-cycle fix — this block was
+    // duplicated verbatim in goods-receipt/index.jsx).
+    ...buildDocumentRowQuickActionsPostMenu({ ui, onRefresh: () => setRefreshKey(k => k + 1) }),
+  }), [navigate, windowName, requestDelete, onRowEmail, ui]);
 
   if (recordId) {
     return (
@@ -114,7 +156,12 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
           token={token}
           Table={CustomGoodsShipmentTable}
           processes={[]}
-          draftMode={{ enabled: true, label: 'Confirm', style: 'positive', onConfirm: () => window.dispatchEvent(new CustomEvent('goods-shipment:open-confirm-modal')) }}
+          // ETP-5265 QA follow-up — onConfirm hands the listener's in-flight promise back
+          // to the core through the event `detail`, so the Confirm button can await it and
+          // show its own spinner (see runDraftModeConfirm in saveActions.jsx). The
+          // not-fully-invoiced path only opens a modal and leaves `detail.promise`
+          // undefined, which the core treats exactly as the previous fire-and-forget call.
+          draftMode={{ enabled: true, label: 'Confirm', style: 'positive', onConfirm: () => dispatchConfirmModalEvent() }}
           hideMoreMenu={({ data }) => data?.documentStatus !== 'CO'}
           autoSaveOnBlur={true}
           // ETP-5058 — GoodsShipmentHeaderHandler.afterHandle only enriches linkedInvoices/
@@ -125,6 +172,7 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
           // actually changes. Mirrors sales-invoice/purchase-invoice, which hit the same gap.
           refetchAfterSave={true}
           {...rest}
+          topbarSecondary={GoodsShipmentSecondaryActions}
           data-testid="GoodsShipmentPage__9851c7" />
         {contactPortal}
       </CreateContactContext.Provider>

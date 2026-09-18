@@ -1,8 +1,9 @@
 import React from 'react';
-import { OnboardingFlow, coreSteps } from '@etendosoftware/etendo-go-core/onboarding';
+import { OnboardingFlow } from '@etendosoftware/etendo-go-core/onboarding';
 import { useUI } from '@etendosoftware/app-shell-core/i18n';
 import { checkSalesInvoiceReadiness } from './onboarding/onboardingReadiness.js';
 import { OnboardingDashboardBackdrop } from './onboarding/OnboardingDashboardBackdrop.jsx';
+import { onboardingSteps } from './onboarding/onboardingSteps.jsx';
 import { track } from '../lib/observability.js';
 import { buildObservabilityEvent } from '../lib/observability/events.js';
 import { trackSessionStarted } from '../lib/observability/health-events.js';
@@ -23,6 +24,9 @@ export default function OnboardingPage() {
     localeCodes: ['es_ES', 'en_US'],
     countryCodes: ['ES'],
     sectorCodes: ['technology', 'services', 'commerce', 'manufacturing'],
+    // 'advisory' (Asesoría) was retired from Etendo GO by ETP-5190 — the multi-client
+    // advisory profile is not a shape the product serves. The core ProfileStep falls back to
+    // ['company', 'freelancer', 'advisory'] when this key is absent, so it must stay explicit.
     businessTypeValues: ['company', 'freelancer'],
     defaultForm: {
       currency: 'EUR',
@@ -54,5 +58,7 @@ export default function OnboardingPage() {
     }),
   };
 
-  return <OnboardingFlow steps={coreSteps} config={ES_CONFIG} data-testid="OnboardingFlow__79cf84" />;
+  // `onboardingSteps`, not `coreSteps`: the company step is wrapped so a malformed NIF is
+  // reported before the wizard leaves the view (ETP-5190). Everything else is core, unchanged.
+  return <OnboardingFlow steps={onboardingSteps} config={ES_CONFIG} data-testid="OnboardingFlow__79cf84" />;
 }

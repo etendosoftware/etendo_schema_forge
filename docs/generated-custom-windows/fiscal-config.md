@@ -18,6 +18,12 @@ warning, information, neutral and destructive roles.
 - Guide new organizations through fiscal territory selection and system assignment via a 6-screen onboarding wizard.
 - Detect which fiscal records already exist and render only the applicable section(s): SII, TBAI, SII+TBAI (combined), or Verifactu.
 - Allow editing of operational fields for each system: fiscal year dates, TBAI certificate upload, and Verifactu editable fields only. (SII submission cadences — `plazoLmiteDeEnvoASII`, `cadenciaEnvoFacturasVentaASII`, `cadenciaEnvoFacturasCompraASII` — are stored in the DB but are no longer exposed in the SiiSection UI; they retain any value set outside the app.)
+- SII's "Authorization registration number" field (`authorizationno`, `SiiSection.jsx`) has `autoComplete="off"` — without it the browser autofilled the field with the logged-in user's saved email — plus a client-side `maxLength={15}` and a `validate()` guard rejecting values over 15 characters, matching the `authorizationno VARCHAR(15)` DB column; the error surfaces via the `fiscal.sii.err.authRegNoTooLong` i18n key (`en_US.json`/`es_ES.json`).
+- **Second occurrence of the same autofill bug class (ETP-5338 point 6).** After the fix above, a distinct trigger reappeared: uploading the digital certificate in `CertModal.jsx` and letting the browser save the certificate password caused it to pair `authorizationno` as the associated "username" for that saved credential — because `CertSection`/`CertModal` render inline (no portal) inside `SiiSection`'s DOM tree whenever the cert upload dialog is open, and the password `<input>` had no `name`/`id`/`autoComplete` at all. `autoComplete="off"` on `authorizationno` did not prevent this because modern Chromium/Firefox password-manager heuristics can deliberately ignore `autocomplete="off"` on a field they classify as password-related, and they pick the nearest visible text input as the "username" pairing when no explicit one exists near the password field. Fix applied in `CertModal.jsx`:
+  - The passphrase input now has `id`/`name="cert-passphrase"` and `autoComplete="new-password"` (the modern idiom browsers respect more reliably than `off` for password fields), and `authorizationno` now also carries an explicit non-generic `name`/`id="sii-authorization-number"` so the heuristic has a clearer signal even if it ever looked past the modal.
+  - The passphrase input is wrapped in its own `<form autoComplete="off" onSubmit={e => e.preventDefault()}>` (there is no other `<form>` anywhere in `fiscal-config`, so this does not nest inside an ancestor form) to further scope the browser's heuristic to just this field.
+  - A hidden dummy `<input type="text" name="username" autoComplete="username" ... style={{ display: 'none' }} />` was added immediately before the passphrase input as defense-in-depth — a documented browser workaround that gives the password-manager heuristic an explicit, harmless "username" to pair with the password instead of it wandering the page. This input's value is always `""`, is `readOnly`, `aria-hidden`, `tabIndex={-1}`, and is never read or included in any submitted payload (the real upload uses `FormData` built manually in `performUpload()`), so it has no visible text and no i18n implication.
+  - **Caveat:** this is fundamentally a browser-behavior bug. The attribute changes are structurally guaranteed and unit-testable (presence of `autoComplete`/`name`/`id`, presence and emptiness of the dummy field, that its value is never read), but whether a given browser version actually stops offering to save/autofill `authorizationno` after this fix depends on that browser's own heuristics and the user's saved-password history, and cannot be asserted by an automated test — **manual verification in an actual browser (upload a cert, accept a hypothetical save-password prompt, reload, and confirm `authorizationno` stays empty) is recommended before considering this closed.**
 - Prompt certificate upload (`.p12`/`.pfx`) for systems that require it (TBAI, SII+TBAI, Verifactu) at the end of onboarding.
 - Show a conflict warning when incompatible records coexist (e.g. Verifactu + SII).
 - Persist Verifactu tax type using the AD enum codes (`01` IVA, `03` IGIC, `02` IPSI), while showing the human-readable labels in the custom UI.
@@ -219,6 +225,171 @@ i18n keys used:
 
 Debug: the debug panel exposes a "Cert expiry" section with three toggle buttons (None / 45d warn / 20d crit) that inject a mock `daysLeft` value into the hook, bypassing the API entirely.
 
+## Forced test mode lock (ETP-5272)
+
+The window queries `GET /sws/neo/fiscal-test-mode` on mount (via `useFiscalTestMode.js`) to
+read whether the AD_Preference *"Fuerza SII/TicketBAI/VeriFactu a modo prueba"* is effectively
+active for the current client. The endpoint returns `{ "forceTestMode": true|false }`, is
+authenticated (`Authorization: Bearer <token>`, 401 on missing/invalid token), and is served by
+`com.etendoerp.go` (branch `feature/ETP-5272`, commit `87a9546e`).
+
+When `forceTestMode` is `true` the window becomes **read-only**:
+
+- The active section (`SiiSection`, `TbaiSection`, `VerifactuSection`) is rendered with a
+  `locked` prop that gates its own `set()` state updater and disables its input controls
+  (`Input`/`Switch`) — the SAME mechanism `VerifactuSection` already used for its `isReady`
+  lock (ETP-4785), OR'd together: `isLocked = isEtendoTrue(record?.isReady) || !!locked`.
+  `SiiSection` and `TbaiSection` gained the identical `locked` prop and guard so all three
+  sections lock the same way.
+- The page-level Save button is disabled (`disabled={saving || !orgId || forceTestMode}`).
+- The "Add SII"/"Add TBAI" complementary action (`canAddComplementary`) is hidden — creating
+  a new active fiscal system record is itself a kind of activation forced-test-mode must block.
+- A warning banner (`data-testid="FiscalConfigPage__testModeBanner"`, same testid on
+  `OnboardingWizard__testModeBanner` for the wizard) is shown above the section content.
+  **Restyled (ETP-5272 follow-up)** from a hand-rolled bordered-card `<div>` + inline
+  `AlertTriangle` (the pattern this section originally shared with the "Change SIF" permanence
+  notice, `ChangeSifDialog__notice`) to the shared `InfoBanner` component
+  (`@/components/InfoBanner.jsx`, `tone="warning"`, `icon={AlertTriangle}`) — a left-accented,
+  tone-driven strip already used elsewhere in the app. **`ChangeSifDialog__notice` itself was
+  NOT migrated** and still renders the original hand-rolled markup — the two banners have
+  deliberately diverged in implementation (though not in visual weight/color) since this fix;
+  do not assume `ChangeSifDialog.jsx` also uses `InfoBanner` when reading its source. Message
+  key unchanged: `fiscal.testModeLock.warning` — "You can only activate a fiscal system in a
+  production environment." / "Solo podrá activar un sistema fiscal en un entorno productivo."
+- The certificate upload flow (`CertSection`/`CertModal`) and "Change SIF" (deactivation only,
+  never an activation) are intentionally **not** locked — same precedent as the pre-existing
+  `isReady` lock, which never blocked "Change SIF" either.
+- **The onboarding/setup wizard (`unconfigured` profile) IS locked too** (`OnboardingWizard.jsx`,
+  `forceTestMode` prop forwarded from `FiscalConfigPage`). This closed a scope gap in the initial
+  ETP-5272 delivery: the wizard is the **only** path that performs a first-time fiscal-system
+  **activation** (the `createRecords()` POST to `sii-config`/`tbai-config`/`verifactu-config` on
+  the confirm step) — exactly the action the AD_Preference exists to block, with no carve-out for
+  "first-time setup" in the requirement. Concretely:
+  - The same `OnboardingWizard__testModeBanner` warning (`fiscal.testModeLock.warning`) is shown
+    above every wizard step while `forceTestMode` is true. Territory/system browsing stays usable
+    (nothing is written to the DB by picking options), but:
+  - The confirm screen's activate button (`OnboardingWizard__confirmActivateButton`) is disabled,
+    and `createRecords()` itself also short-circuits on `forceTestMode` (belt-and-suspenders next
+    to the network call, not just in the button's `disabled` prop) — so the wizard can never reach
+    the `detail`/`applied` steps while locked.
+  - The `detail` step's own Save button (`OnboardingWizard__detailSaveButton`) and its
+    `SiiSection`/`TbaiSection`/`VerifactuSection` instances also receive `locked={forceTestMode}`,
+    covering the edge case where the preference flips on mid-session after records already exist.
+  - `conflict` is **not** reached through this wizard at all and needed no locking decision here:
+    `detectProfile()` only resolves to `'unconfigured'` (which renders the wizard) when NONE of
+    the SII/TBAI/Verifactu records exist; `conflict` requires a Verifactu record **plus** a
+    SII-or-TBAI record to already be present (`verifactu && (sii || tbai)`), which is a
+    data-integrity anomaly between two already-created configs, not an activation step. Confirmed
+    separately: the `conflict` branch in `FiscalConfigPage.jsx` renders only a static warning card
+    (`fiscal.conflict.title`/`fiscal.conflict.body`) — no `SiiSection`/`TbaiSection`/
+    `VerifactuSection`, no Save action, nothing to lock — so its exemption from this check remains
+    correct and is unrelated to the wizard fix.
+
+**Fail-open on fetch error:** any network/HTTP/parse failure from `/fiscal-test-mode` leaves
+`forceTestMode` at `false` — the window stays fully usable — but the failure is always
+surfaced via `console.warn` (never a silent catch). See `useFiscalTestMode.js`.
+
+See items 13–14 of "Manual verification" below for the full checklist.
+
+## Territory→system restriction — SII does not support IPSI (ETP-5272 point 4)
+
+SII (`AEATSII_CONFIG.taxtype`) only accepts an `IVA`/`IGIC` taxpayer — confirmed against
+the live `AD_Ref_List` for that column (`ad_reference_id = AC024BD7E7B64B5BAC925EB7F0B4B16F`):
+only the values `IVA` and `IGIC` exist, there is no `IPSI` entry. Ceuta/Melilla taxpayers
+use **IPSI** (Impuesto sobre la Producción, los Servicios y la Importación), the local tax
+scheme of the two Autonomous Cities, which SII has no way to represent at all. Confirming
+SII for that territory previously reached the confirm/detail step and then failed
+server-side on `createRecords()`'s POST to `sii-config`, with the error quoted in the ticket.
+
+VERI*FACTU's own tax-type reference list (`AD_Ref_List` for
+`ETVFAC_VERIFACTU_CONFIG.TAX_Type`, `ad_reference_id = 3782E9C02E674127A50DA5441DF28C90`)
+defines all three (`01` IVA, `02` IPSI, `03` IGIC), so VERI*FACTU is unaffected and is the
+only valid system for Ceuta/Melilla.
+
+**Canarias (IGIC) is not affected** — IGIC is one of SII's two valid `taxtype` values, so
+Canarias keeps offering both SII and VERI*FACTU exactly as before; only Ceuta/Melilla (IPSI)
+is restricted.
+
+**TicketBAI was checked too, and needed no change.** TBAI's own territory reference list
+(`ETSG_SIF_Territory` — `AD_Ref_List` for `ad_reference_id = 93621A4C820041CEACB5AFF87FD0AC31`)
+enumerates `ARABA`, `BIZKAIA`, `GIPUZKOA`, `NAVARRA`, `AEAT`, `IGIC` — there is no
+Ceuta/Melilla value, and TicketBAI has always been offered only for the Basque territories
+(`alava`/`bizkaia`/`gipuzkoa`) in this wizard. TBAI was therefore never reachable for
+Ceuta/Melilla in the first place, unlike SII.
+
+### Fix — data/config-level, not a one-off `if`
+
+`getAllowedSystemsForTerritory(territory)` in `fiscalConfig.utils.js` is now backed by a
+single declarative table, `TERRITORY_ALLOWED_SYSTEMS`, instead of a switch that grouped
+`baleares`/`canarias`/`ceuta` together:
+
+| Territory | Allowed systems |
+|-----------|-----------------|
+| `navarra` | `['SII']` |
+| `alava` / `bizkaia` / `gipuzkoa` | `['TBAI', 'SII+TBAI']` |
+| `baleares` / `canarias` | `['SII', 'VERIFACTU']` |
+| `ceuta` | `['VERIFACTU']` |
+
+This table is consumed in three places, so the restriction can never be bypassed through
+an alternate path:
+
+1. **Manual system selection screen** (`ManualScreen` → `getAllowedSystemsForTerritory`) —
+   picking "Ceuta / Melilla" now renders only the VERI*FACTU card, not SII.
+2. **Automatic territory→system resolution** (`resolveSystem` in `fiscalConfig.utils.js`) —
+   now takes an optional `territory` argument; for the `siiver` regime, when
+   `getAllowedSystemsForTerritory(territory)` excludes `'SII'`, it returns `'VERIFACTU'`
+   unconditionally, regardless of the billing-volume sub-question answers. Backward
+   compatible: omitting `territory` preserves the old regime-only behavior.
+3. **The billing-volume sub-question itself is skipped for Ceuta/Melilla** —
+   `TERRITORY_META.ceuta.askVolume` is now `false` (was `true`). Since SII cannot apply to
+   this territory at all, asking "¿Cuál es su volumen de facturación anual?" would be moot
+   (the answer never changes the outcome), and the previous copy for the "high volume" path
+   explicitly said *"Gran Empresa · SII obligatorio... no aplica VERI*FACTU"* — legally wrong
+   for an IPSI taxpayer. The territory screen now routes Ceuta/Melilla straight from
+   territory selection to the confirm screen, same as `navarra`.
+
+**Belt-and-suspenders guards** against the same invalid combination reaching the backend
+through a different path: `buildOnboardingPayloads('SII', 'ceuta')` and
+`getTerritoryDefaults('ceuta', true)` (used by wizard confirmation and by the
+not-yet-wired "Add SII" complementary-action default builder, respectively) both now return
+`sii: null` instead of a `{ taxtype: 'IPSI', ... }` payload — those branches should be
+unreachable given the fixes above, but are guarded so a future regression fails safe
+instead of building a payload the server rejects.
+
+**Territory card badge**: the Ceuta/Melilla card in `TerritoryScreen`/`ManualTerrCard` used
+the shared `siiver`-regime badge text ("SII / VERI*FACTU"), which was also misleading. It
+now uses a dedicated `fiscal.territory.system.verifactu` i18n key ("VERI*FACTU") instead of
+sharing `fiscal.territory.system.siiver` with `baleares`/`canarias`.
+
+**Not changed / accepted as-is:** the `siiver` territory GROUP header shared by
+`baleares`/`canarias`/`ceuta` ("SII / VERI*FACTU" / *"Se preguntará según tu volumen de
+facturación"*) still describes the group as a whole rather than per-territory — restructuring
+the group itself (splitting Ceuta/Melilla into its own group row) is a larger structural/visual
+change than this fix warrants and was left out of scope; only the per-territory badge on the
+individual card was corrected.
+
+### Error-message bug — investigated, NOT fixed here (out of scope)
+
+The `CachedSet@6c917e9a` leak in the reported server error comes from
+`org.openbravo.base.model.domaintype.BaseEnumerateDomainType.checkIsValidValue()`
+(`etendo_core/src/org/openbravo/base/model/domaintype/BaseEnumerateDomainType.java:63-69`):
+it builds the `ValidationException` message with
+`"... it should be one of the following values: " + getEnumerateValues() + ...`, and
+`getEnumerateValues()` returns a `com.etendoerp.redis.interfaces.CachedSet`
+(`etendo_core/src/com/etendoerp/redis/interfaces/CachedSet.java`) that implements `Set<E>`
+but never overrides `toString()`, so string concatenation falls back to the default
+`Object.toString()` (`ClassName@hexHash`) instead of listing the enum values.
+
+**This is out of scope for a narrow fix and was deliberately left untouched**, per the
+task's own guidance: `BaseEnumerateDomainType` is core Openbravo domain-type validation
+machinery (`etendo_core/src/org/openbravo/base/model/domaintype/`), used for **every**
+enumerate/list-typed `AD_Column` validation across the entire application — not something
+owned by, or scoped to, `com.etendoerp.go` or this window. A fix at either candidate site
+(the message-building code in `BaseEnumerateDomainType`, or adding a `toString()` override
+to `CachedSet`) changes behavior platform-wide and belongs to a separate ticket/owner, not
+this Schema Forge window fix. Flagging it here for the human to decide whether to escalate
+it as its own core-platform ticket.
+
 ## `onGoHome` prop
 
 `OnboardingWizard` accepts an optional `onGoHome` prop. If provided, "Ir al inicio" (applied screen) and "Ir al inicio" (skipped screen) will call it instead of `onComplete`. This allows the host application to navigate to a dashboard or first-steps screen rather than staying in the fiscal-config window. When omitted, both buttons fall back to `onComplete`.
@@ -261,6 +432,9 @@ For `sii+tbai` both records must report production for the row to read "Producci
 10. Repeat with a `sii+tbai` org and confirm **both** the SII and TBAI rows are deactivated (two-step) and the wizard reappears.
 11. Open `/fiscal-config` with an org that has NO config, or one in a `conflict` state — confirm the "Change SIF" button is NOT shown.
 12. (Verifactu, `isReady=true`) Confirm the Verifactu section fields are locked for editing but the "Change SIF" button still works — the lock does not block the change.
+13. (ETP-5272) With the AD_Preference "Fuerza SII/TicketBAI/VeriFactu a modo prueba" active, open `/fiscal-config` for a configured org and confirm: the `FiscalConfigPage__testModeBanner` warning appears, all section inputs are disabled, the page Save button is disabled, and "Add SII"/"Add TBAI" is absent from the kebab menu — while "Change SIF" (if present) and certificate upload remain usable. Deactivate the preference and confirm the window returns to its normal editable state.
+14. (ETP-5272) Simulate a `/sws/neo/fiscal-test-mode` fetch failure (network block or 500 in devtools) and confirm the window stays fully editable — fail-open — while a `console.warn` is logged.
+15. (ETP-5272 follow-up — wizard lock) With the AD_Preference active, open `/fiscal-config` for a brand-new org (no SII/TBAI/Verifactu records) and confirm the onboarding wizard shows the `OnboardingWizard__testModeBanner` warning on every step. Pick a territory and reach the confirm screen — the activate button (`OnboardingWizard__confirmActivateButton`) must be disabled, and clicking it must not create any config record (check the DB / network tab). Deactivate the preference and confirm the same wizard flow now creates the record and reaches the detail/applied steps normally.
 
 ## Automated evidence
 
@@ -276,9 +450,17 @@ For `sii+tbai` both records must report production for the row to read "Producci
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/ChangeSifDialog.vitest.jsx` — dialog tests: notice selection per profile, deactivation PUT path, sii+tbai two-step, partial-failure message, INFORM-not-block posture.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/FiscalConfigPage.vitest.jsx` — page tests including `canChangeSif` visibility gating (`CONFIGURED_PROFILES`, no mock override) and dialog wiring.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/useFiscalConfig.activeRow.vitest.js` — active-row resolution: inactive trace rows dropped before `detectProfile`, `rows.find(isActiveRecord) ?? rows[0]` preference.
+- `tools/app-shell/src/windows/custom/fiscal-config/useFiscalTestMode.js` — ETP-5272: fetches `GET /sws/neo/fiscal-test-mode` via `useApiFetch`; fails open (`forceTestMode: false`) with a `console.warn` on any network/HTTP/parse error; never silently swallows a failure.
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/useFiscalTestMode.test.js` / `useFiscalTestMode.vitest.js` — source-guard + behavioral tests: endpoint call, strict `=== true` check, AbortController cleanup, and every fail-open path (non-ok, rejected fetch, malformed json) resolving to `false` with a `console.warn`.
+- `tools/app-shell/src/windows/custom/fiscal-config/FiscalConfigPage.jsx` — ETP-5272: wires `useFiscalTestMode`, renders the `FiscalConfigPage__testModeBanner` warning card, disables the page Save button, hides "Add complementary", and passes `locked={forceTestMode}` to `SiiSection`/`TbaiSection`/`VerifactuSection`.
+- `tools/app-shell/src/windows/custom/fiscal-config/SiiSection.jsx` / `TbaiSection.jsx` / `VerifactuSection.jsx` — ETP-5272: all three now accept a `locked` prop that gates their `set()` updater and disables their input controls; `VerifactuSection` ORs it into its existing `isReady`-derived `isLocked` (same mechanism, not a parallel one).
+- `tools/app-shell/src/windows/custom/fiscal-config/OnboardingWizard.jsx` — ETP-5272 follow-up: accepts a `forceTestMode` prop (default `false`); renders `OnboardingWizard__testModeBanner` above every step; `ConfirmScreen`'s activate button (`OnboardingWizard__confirmActivateButton`) and `createRecords()` itself are gated on it (no first-time record creation while locked); `DetailScreen`'s Save button (`OnboardingWizard__detailSaveButton`) and its `SiiSection`/`TbaiSection`/`VerifactuSection` also receive `locked={forceTestMode}` as defense-in-depth for the case where the preference flips on after the records already exist.
+- `tools/app-shell/src/windows/custom/fiscal-config/FiscalConfigPage.jsx` — ETP-5272 follow-up: forwards `forceTestMode` to `OnboardingWizard` (the `'unconfigured'`-profile early return renders the wizard before the page's own banner/lock branch, so the wizard owns its own equivalent banner/lock rather than inheriting the page's).
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/OnboardingWizard.vitest.jsx` — ETP-5272 follow-up: banner shown/hidden by `forceTestMode`; territory→confirm navigation unaffected (browsing is not blocked); confirm/activate button disabled when locked and enabled when not; `createRecords()` never calls the API when locked; default (`forceTestMode` omitted) behaves as unlocked.
+- `tools/app-shell/src/windows/custom/fiscal-config/__tests__/FiscalConfigPage.vitest.jsx` — ETP-5272 follow-up: `forceTestMode` is forwarded to `OnboardingWizard` as a prop (both `true` and `false`); the page's own `FiscalConfigPage__testModeBanner` correctly does NOT render in the `'unconfigured'` branch (that banner belongs to the configured-profile branch — the wizard renders its own).
 - DB triggers (com.etendoerp.go SIF modules) — `AEATSII_ONE_ACTIVE_CONFIG_TRG`, `TBAI_ONE_ACTIVE_CONFIG_TRG`, `ETVFAC_ONE_ACTIVE_CONFIG_TRG` enforce one *active* config per org (relaxed from one config per org).
 - `cli/test/fiscal-config.utils.test.js` — 92 regression tests covering profile detection, onboarding payloads, contract-specific ids, Verifactu save guards, SII field mapping, CertModal upload flow, and confirmNif flow (all passing).
-- `tools/app-shell/src/windows/custom/fiscal-config/useFiscalConfig.js` — parallel fetcher hook for the 3 config records; filters inactive trace rows (`activeOrNull`) before `detectProfile` so a "Change SIF" leftover never masks the live config.
+- `tools/app-shell/src/windows/custom/fiscal-config/useFiscalConfig.js` — parallel fetcher hook for the 3 config records; filters inactive trace rows (`activeOrNull`) before `detectProfile` so a "Change SIF" leftover never masks the live config. `fetchAllRows` and `earliestCutoverDate` (previously private) are now **exported** so other fiscal windows reuse the same "all config rows, earliest-ever cutover" mechanism instead of duplicating it — first reused by `fiscal-monitor/useFiscalMonitor.js` for the TBAI monitor's earliest-cutover gate (ETP-5229, item #13; see `fiscal-monitor.md`).
 - `cli/test/useFiscalConfig.test.js` — 16 tests covering source guards (named export, Promise.all, entity constants, detectProfile wiring), `fetchRecord` URL construction via `useApiFetch` (no manual Authorization header), response parsing (empty/missing data), and error handling.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/SiiSection.test.js` — 17 component source-guard tests: forwardRef/`useImperativeHandle`, navarra badge, form fields, PUT endpoint contract, hideSave/hideCert.
 - `tools/app-shell/src/windows/custom/fiscal-config/__tests__/TbaiSection.test.js` — 17 component source-guard tests: enroll date + invoice description validation, PUT endpoint, boolean serialization. Note: `TbaiSection` deliberately excludes `productionEnv`, `uSEAsproductDesc`, and `validatePreviousInvoice` from the PUT body — overriding those fields would silently revert any change the operator made in Etendo Classic (e.g. `productionEnv='N'` for testing). Only the fields owned by the Etendo GO form (enroll date and invoice description) are sent.

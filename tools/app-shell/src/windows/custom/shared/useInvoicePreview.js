@@ -27,7 +27,10 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
   // top-nav org selector — see resolveInvoiceOrgId.js. Falls back to
   // selectedOrg only if the record hasn't exposed adOrgId yet.
   const orgId = resolveInvoiceOrgId(invoiceData, selectedOrg?.id);
-  const { profile, siiRecord, tbaiRecord, verifactuRecord } = useFiscalConfig(orgId, apiBaseUrl);
+  const {
+    profile, siiRecord, tbaiRecord, verifactuRecord,
+    earliestSiiCutoverDate, earliestTbaiCutoverDate, earliestVerifactuCutoverDate,
+  } = useFiscalConfig(orgId, apiBaseUrl);
   const territory = tbaiRecord?.etsgSifTerritory ?? null;
   const neoBaseUrl = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const apiFetch = useApiFetch(apiBaseUrl);
@@ -174,9 +177,12 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
     status, badgeProps, statusLabel: label, partnerName, grandTotal,
     // fiscal status (needed by StatsPanel to render SII/TBai/Verifactu pills)
     orgId, profile, territory,
-    // ETP-5122: adoption-date records, needed to gate each fiscal status InfoRow
-    // by whether THIS invoice is dated on/after the org's adoption date.
+    // ETP-5122/ETP-5229: adoption-date records + earliest-ever cutover per system,
+    // needed to gate each fiscal status InfoRow by whether THIS invoice is dated
+    // on/after the system's earliest historical cutover for this org (not the
+    // currently active config's own, possibly later, cutover date).
     siiRecord, tbaiRecord, verifactuRecord,
+    earliestSiiCutoverDate, earliestTbaiCutoverDate, earliestVerifactuCutoverDate,
     // payment modal
     showPaymentModal, setShowPaymentModal,
     // email modal

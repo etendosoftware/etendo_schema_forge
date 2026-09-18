@@ -7,6 +7,7 @@ import { getInvoiceFiscalTargets, isSifEligibleByDate } from '@/windows/custom/s
 import { FiscalStatusBadge } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 
 const BASE_COLUMNS = [
+  { key: 'documentNo',        column: 'DocumentNo',                type: 'string', label: 'Document No.', required: true },
   { key: 'invoiceDate',       column: 'DateInvoiced',              type: 'date',   label: 'Invoice Date', required: true },
   { key: 'orderReference',    column: 'POReference',               type: 'string', label: 'Supplier Reference' },
   { key: 'businessPartner',   column: 'C_BPartner_ID',             type: 'string', label: 'Business Partner', required: true },
@@ -29,7 +30,7 @@ export default function InvoiceHeaderTable(props) {
 
   const { selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
-  const { profile, siiRecord } = useFiscalConfig(orgId, apiBaseUrl);
+  const { profile, earliestSiiCutoverDate } = useFiscalConfig(orgId, apiBaseUrl);
 
   const targets = useMemo(() => getInvoiceFiscalTargets('purchase-invoice', profile), [profile]);
 
@@ -37,22 +38,29 @@ export default function InvoiceHeaderTable(props) {
 
   const columns = useMemo(() => {
     const fiscalCols = [];
-    // ETP-5122: gate the cell (not just the column) by per-row date eligibility
-    // — SII books by accounting date, not invoice date (mirrors Classic's
-    // AEATSII_PreSII_Invoice auxiliary input, which compares DateAcct). A row
-    // dated before the org's SII adoption date renders no status at all.
+    // ETP-5229 (corrected): the status badge VALUE reads directly off the
+    // invoice's OWN persisted status field (see useFiscalStatus.js for the full
+    // root-cause writeup) — an invoice genuinely sent under a PREVIOUS,
+    // since-superseded config must keep showing its real status forever. But
+    // its ELIGIBILITY is gated on the EARLIEST-ever SII cutover across ALL of
+    // the org's config rows (active or deactivated), so a row dated before SII
+    // ever existed for this org shows a dash instead of a stray DB value.
+    // ETP-5229 item #17: eligible-but-not-yet-sent must render as "Pendiente"
+    // (SII's real `'PE'` AD code, the same code `UpdateInvoicesPreSii` writes
+    // once an invoice is queued), not as the same dash used for not-eligible —
+    // see `useFiscalStatus.js` for the full writeup.
     if (targets.showSii) {
       fiscalCols.push({
         key: '_siiStatus', type: 'custom', label: siiColLabel,
         render: (row) => (
-          isSifEligibleByDate(row.accountingDate, siiRecord?.fechaAcogidaSII)
-            ? <FiscalStatusBadge status={row.aeatsiiEstado ?? null} />
-            : null
+          <FiscalStatusBadge
+            status={isSifEligibleByDate(row.accountingDate, earliestSiiCutoverDate) ? (row.aeatsiiEstado ?? 'PE') : null}
+          />
         ),
       });
     }
     return [...BASE_COLUMNS, ...fiscalCols, ...TAIL_COLUMNS];
-  }, [targets, siiColLabel, siiRecord]);
+  }, [targets, siiColLabel, earliestSiiCutoverDate]);
 
   return <DataTable columns={columns} filters={FILTERS} {...props} />;
 }

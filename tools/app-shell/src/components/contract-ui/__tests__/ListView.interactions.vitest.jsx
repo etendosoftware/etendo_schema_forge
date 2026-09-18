@@ -95,11 +95,14 @@ vi.mock('@/hooks/useWindowFilterPresets', () => ({
   }),
 }));
 
+import { noOpExtractQueryParamConditions } from './testUtils/gridQueryMock.js';
+
 // Real implementation returns null for an empty funnel; here it must produce
 // criteria so the trailingFilter (advanced-filter) leg is actually exercised.
 vi.mock('@/lib/gridQuery', () => ({
   buildAdvancedFilterCriteria: (advancedFilter) =>
     advancedFilter ? [{ fieldName: 'advField', operator: 'equals', value: advancedFilter.token }] : null,
+  extractQueryParamConditions: noOpExtractQueryParamConditions,
 }));
 
 const trackSearchPerformedMock = vi.fn();
@@ -899,7 +902,165 @@ describe('ListView — selection bar actions', () => {
       token: 'fake-token',
       apiBaseUrl: 'http://localhost/api',
       windowName: 'test-entity',
+      // ETP-5302 — the slot ctx also carries an in-place refetch (see the two
+      // tests below for what it actually does).
+      refresh: expect.any(Function),
     }));
+  });
+
+  // ETP-5302 — `refresh` is what let BulkDocumentAction stop calling
+  // `window.location.reload()` after a bulk run: the full browser reload was never
+  // about the data, and it threw away scroll position, active filters and the whole
+  // SPA boot. Asserted through the captured slot ctx (and by actually invoking it)
+  // rather than on ListView internals, because that callback IS the public contract
+  // the bulk actions consume.
+  it('hands the bulkActions slot a refresh callback that refetches the list in place', () => {
+    const bulkActions = vi.fn(() => <button data-testid="host-bulk-action" />);
+    render(<ListView {...defaultProps} bulkActions={bulkActions} />);
+    selectRows();
+
+    const ctx = bulkActions.mock.calls.at(-1)[0];
+    expect(typeof ctx.refresh).toBe('function');
+
+    // Delta rather than "not called at all": mounting/selection must not refetch,
+    // but the assertion that matters is that invoking `refresh` does.
+    const before = refreshMock.mock.calls.length;
+    act(() => { ctx.refresh(); });
+
+    expect(refreshMock.mock.calls.length).toBe(before + 1);
+  });
+
+  it('keeps the refresh callback identity stable across re-renders', () => {
+    const bulkActions = vi.fn(() => <button data-testid="host-bulk-action" />);
+    const { rerender } = render(<ListView {...defaultProps} bulkActions={bulkActions} />);
+    selectRows();
+    const first = bulkActions.mock.calls.at(-1)[0].refresh;
+
+    rerender(<ListView {...defaultProps} bulkActions={bulkActions} entityLabel="Changed Label" />);
+    const second = bulkActions.mock.calls.at(-1)[0].refresh;
+
+    // The callback reads `hook.refresh` through a ref, so its own identity never
+    // changes even though `hook.refresh`'s does. A host that memoizes on it (or
+    // puts it in a dependency array) must not be re-run on every list render.
+    expect(second).toBe(first);
+    // Still wired to the live refetch after the re-render, not a stale closure.
+    const before = refreshMock.mock.calls.length;
+    act(() => { second(); });
+    expect(refreshMock.mock.calls.length).toBe(before + 1);
+  });
+});
+
+// ─── Selection clears on filter change (ETP-4972 QA fix) ───────────────────
+//
+// QA finding (comment 145559): selecting rows, then applying a filter that
+// changes the visible record set, left the old selection (and the floating
+// SelectionToolbar) active over rows no longer on screen — risking a
+// destructive bulk action firing blind. The fix is a useEffect keyed on
+// [columnFilters, effectiveFilter, advancedFilterPart, clearSelection] (see
+// ListView.jsx ~line 763) that calls clearSelection(), guarded by a
+// didInitialSelectionClearRef so mounting doesn't wipe a selection made in
+// the same tick. `clearSelection()` both empties `selectedRows` (hides the
+// toolbar, since it's gated by `selectedRows.length > 0`) and bumps
+// `clearSelectionTrigger` (forwarded to the table as
+// `tableProps.clearSelectionTrigger`), which is what actually resets
+// DataTable's own internal checkbox Set in the real app — asserting on it
+// here is the only way (short of un-mocking DataTable) to prove the "reset
+// the table's internal Set too" half of the fix, not just the toolbar half.
+describe('ListView — selection clears on filter change (ETP-4972)', () => {
+  function selectRows() {
+    act(() => { tableProps.onSelectionChange(SELECTED); });
+  }
+
+  it('does not bump clearSelectionTrigger on initial mount (initial-mount guard)', () => {
+    render(<ListView {...defaultProps} initialColumnFilters={{ status: { value: 'DR' } }} />);
+    expect(tableProps.clearSelectionTrigger).toBe(0);
+  });
+
+  it('clears the selection and hides the floating toolbar when a column filter changes', () => {
+    render(<ListView {...defaultProps} />);
+    selectRows();
+    expect(screen.getByTestId('selection-count')).toBeInTheDocument();
+
+    act(() => { tableProps.onFilterChange('name', { operator: 'contains', value: 'abc' }); });
+
+    expect(tableProps.selectedRows).toEqual([]);
+    expect(tableProps.clearSelectionTrigger).toBe(1);
+    expect(screen.queryByTestId('selection-count')).not.toBeInTheDocument();
+  });
+
+  it('clears the selection when a quick filter is toggled', async () => {
+    const user = userEvent.setup();
+    render(<ListView {...defaultProps} quickFilters={QUICK_FILTERS} />);
+    selectRows();
+
+    await user.click(screen.getByTestId('quick-filter-mine'));
+
+    expect(tableProps.selectedRows).toEqual([]);
+    expect(tableProps.clearSelectionTrigger).toBe(1);
+    expect(screen.queryByTestId('selection-count')).not.toBeInTheDocument();
+  });
+
+  it('clears the selection when the active subset filter changes', async () => {
+    const user = userEvent.setup();
+    render(<ListView {...defaultProps} subsetFilters={SUBSET_FILTERS} />);
+    selectRows();
+
+    await user.click(screen.getByTestId('filter-open'));
+
+    expect(tableProps.selectedRows).toEqual([]);
+    expect(screen.queryByTestId('selection-count')).not.toBeInTheDocument();
+  });
+
+  it('clears the selection when the advanced (funnel) filter changes', () => {
+    render(<ListView {...defaultProps} />);
+    selectRows();
+
+    act(() => { filterBarProps.onAdvancedFilterChange({ token: 'zz' }); });
+
+    expect(tableProps.selectedRows).toEqual([]);
+    expect(screen.queryByTestId('selection-count')).not.toBeInTheDocument();
+  });
+
+  it('clears the selection on "clear all filters" (handleClearAllFilters)', () => {
+    render(<ListView {...defaultProps} initialColumnFilters={{ status: { value: 'DR' } }} />);
+    selectRows();
+
+    act(() => { tableProps.onClearAllFilters(); });
+
+    expect(tableProps.selectedRows).toEqual([]);
+    expect(screen.queryByTestId('selection-count')).not.toBeInTheDocument();
+  });
+
+  it('clears the selection when a saved filter preset is applied (applyPreset)', () => {
+    mockPresets = {
+      P1: {
+        columnFilters: { name: { value: 'x' } },
+        advancedFilter: null,
+        subsetLabel: null,
+        quickFilterLabels: [],
+      },
+    };
+    render(<ListView {...defaultProps} />);
+    selectRows();
+
+    act(() => { filterBarProps.onApplyPreset('P1'); });
+
+    expect(tableProps.selectedRows).toEqual([]);
+    expect(screen.queryByTestId('selection-count')).not.toBeInTheDocument();
+  });
+
+  it('does NOT clear the selection (nor bump clearSelectionTrigger) when only the sort changes', () => {
+    render(<ListView {...defaultProps} />);
+    selectRows();
+    expect(screen.getByTestId('selection-count')).toBeInTheDocument();
+    const triggerBefore = tableProps.clearSelectionTrigger;
+
+    act(() => { tableProps.onSort('name'); });
+
+    expect(tableProps.sortColumn).toBe('name');
+    expect(tableProps.selectedRows).toEqual(SELECTED);
+    expect(tableProps.clearSelectionTrigger).toBe(triggerBefore);
+    expect(screen.getByTestId('selection-count')).toBeInTheDocument();
   });
 });
 

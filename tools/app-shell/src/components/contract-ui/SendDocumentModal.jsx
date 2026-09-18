@@ -12,6 +12,16 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 // the window's `decisions.json → window.sendDocument` override says otherwise.
 const DEFAULT_SEND_POLICY = { editableRecipients: true, cc: true, maxRecipients: 10 };
 
+// ETP-5293 — reasonCode → i18n key map for a VALIDATION_FAILED rejection of the
+// modal's own messageEdits form. Only the reachable-from-this-UI codes get
+// dedicated copy; MESSAGE_EDITS_INVALID_TYPE / MESSAGE_EDITS_UNKNOWN_FIELD only
+// happen on a malformed raw API call and fall back to sendModalValidationFailed.
+const VALIDATION_REASON_KEYS = {
+  MESSAGE_EDITS_MISSING_SUBJECT_OR_MESSAGE: 'sendModalErrorMissingSubjectOrMessage',
+  MESSAGE_EDITS_SUBJECT_TOO_LONG: 'sendModalErrorSubjectTooLong',
+  MESSAGE_EDITS_MESSAGE_TOO_LONG: 'sendModalErrorMessageTooLong',
+};
+
 function resolveEmailSendErrorMessage(ui, data, documentType) {
   if (data?.status === 'THROTTLED') {
     return ui('sendModalThrottled', { seconds: data.retryAfterSeconds ?? '' });
@@ -23,7 +33,16 @@ function resolveEmailSendErrorMessage(ui, data, documentType) {
     return ui('sendModalUnauthorized');
   }
   if (data?.status === 'VALIDATION_FAILED') {
-    return data.message || ui('sendModalValidationFailed');
+    // ETP-5293 — the raw backend `message` is English-only and must never reach
+    // the user; map the structured reasonCode to translated copy instead.
+    const key = data?.reasonCode && VALIDATION_REASON_KEYS[data.reasonCode];
+    if (key) {
+      return ui(key, {
+        maxSubjectLength: data.maxSubjectLength,
+        maxMessageLength: data.maxMessageLength,
+      });
+    }
+    return ui('sendModalValidationFailed');
   }
   if (data?.status === 'NO_RECIPIENT') {
     return ui('sendModalNoRecipient', { documentType });
@@ -126,7 +145,12 @@ async function renderPdfIntoIframe(node, reportId, documentId, apiFetch, setPdfL
 
 // ETP-4226 — editable-recipients To/CC block. The read-only branch below is
 // the `sendPolicy.editableRecipients: false` opt-out (legacy rendering).
-function RecipientFields({ editableRecipients, ccEnabled, toRecipients, ccRecipients, onToChange, onCcChange, onToValidityChange, onCcValidityChange, emailLoading, noToRecipient, overMaxRecipients, maxRecipients, ui }) {
+// ETP-5294 — `toTouched` gates the `noToRecipient` error so it never flashes
+// on open while the async business-partner-email fetch is still resolving
+// `toRecipients` from its initial `[]`. `sendDisabled` below still uses the
+// raw (untouched-agnostic) `noToRecipient`, so the Send button stays
+// correctly disabled the whole time — only the visible message is gated.
+function RecipientFields({ editableRecipients, ccEnabled, toRecipients, ccRecipients, onToChange, onCcChange, onToValidityChange, onCcValidityChange, emailLoading, noToRecipient, toTouched, overMaxRecipients, maxRecipients, ui }) {
   const [ccExpanded, setCcExpanded] = useState(false);
   if (!editableRecipients) {
     return (
@@ -155,7 +179,7 @@ function RecipientFields({ editableRecipients, ccEnabled, toRecipients, ccRecipi
       <RecipientChipEditor
         recipients={toRecipients}
         onChange={onToChange}
-        label={ui('sendModalTo')}
+        label={<>{ui('sendModalTo')}<span className="text-destructive ml-0.5">*</span></>}
         testIdPrefix="send-modal-to"
         onValidityChange={onToValidityChange}
         data-testid="RecipientChipEditor__afec0a" />
@@ -178,7 +202,7 @@ function RecipientFields({ editableRecipients, ccEnabled, toRecipients, ccRecipi
           onValidityChange={onCcValidityChange}
           data-testid="RecipientChipEditor__afec0a" />
       )}
-      {noToRecipient && (
+      {noToRecipient && toTouched && (
         <span role="alert" style={{ fontSize: 12, color: 'hsl(var(--destructive))' }}>{ui('sendModalNoToRecipient')}</span>
       )}
       {overMaxRecipients && (
@@ -188,18 +212,28 @@ function RecipientFields({ editableRecipients, ccEnabled, toRecipients, ccRecipi
   );
 }
 
-function EmailFormPanel({ recipientFieldsProps, subject, message, onSubjectChange, onMessageChange, ui }) {
+// ETP-5294 — `subjectTouched` gates `noSubject`'s error the same way
+// `toTouched` gates the To field's, so clearing the auto-filled default
+// behaves consistently with an empty To: no eager flash, but the message
+// appears once the operator actually interacts with the field. `onBlur`
+// also marks it touched so leaving the field empty without further typing
+// still surfaces the error.
+function EmailFormPanel({ recipientFieldsProps, subject, message, onSubjectChange, onSubjectBlur, noSubject, subjectTouched, onMessageChange, ui }) {
   return (
     <div style={{ width: '40%', padding: 16, display: 'flex', flexDirection: 'column', gap: 12, overflowY: 'auto' }}>
       <RecipientFields {...recipientFieldsProps} ui={ui} data-testid="RecipientFields__afec0a" />
       <div>
-        <label style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', display: 'block', marginBottom: 4 }}>{ui('sendModalSubject')}</label>
+        <label style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', display: 'block', marginBottom: 4 }}>{ui('sendModalSubject')}<span className="text-destructive ml-0.5">*</span></label>
         <input
           type="text"
           value={subject}
           onChange={e => onSubjectChange(e.target.value)}
-          style={{ width: '100%', fontSize: 13, padding: '8px 10px', border: '0.5px solid hsl(var(--border-subtle))', borderRadius: 6, outline: 'none', color: 'hsl(var(--foreground))', background: 'hsl(var(--card))', boxSizing: 'border-box' }}
+          onBlur={onSubjectBlur}
+          style={{ width: '100%', fontSize: 13, padding: '8px 10px', border: (noSubject && subjectTouched) ? '0.5px solid hsl(var(--destructive))' : '0.5px solid hsl(var(--border-subtle))', borderRadius: 6, outline: 'none', color: 'hsl(var(--foreground))', background: 'hsl(var(--card))', boxSizing: 'border-box' }}
         />
+        {noSubject && subjectTouched && (
+          <span role="alert" style={{ display: 'block', fontSize: 12, color: 'hsl(var(--destructive))', marginTop: 4 }}>{ui('sendModalNoSubject')}</span>
+        )}
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <label style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', display: 'block', marginBottom: 4 }}>{ui('sendModalMessage')}</label>
@@ -239,6 +273,14 @@ async function fetchAndDownloadPdf(reportId, documentId, windowName, documentNo,
 
 function resolveInitialEmail(bpEmail) {
   return bpEmail?.includes('@') ? bpEmail : '';
+}
+
+// ETP-5294 — Bug 2: an empty (or whitespace-only) Subject had no validation at
+// all, so it silently sent. Only meaningful when the email panel (and its
+// Subject field) is actually rendered. Extracted (rather than inlined in the
+// component body) to keep SendDocumentModal's cognitive complexity in check.
+function resolveNoSubject(allowEmail, subject) {
+  return allowEmail && !subject.trim();
 }
 
 function resolveContactsBaseUrl(apiBaseUrl) {
@@ -421,9 +463,19 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
     return () => { cancelled = true; };
   }, [hasEmail, bPartnerId, apiBaseUrl, token, apiFetch]);
 
+  // ETP-5294 — "touched" gates for the required-field error messages below.
+  // `toRecipients` starts empty and is only seeded once the async contact-email
+  // fetch resolves (or never, if there is none), so deriving the error straight
+  // from `toRecipients.length === 0` made it flash on every open. Both flags
+  // start false and are flipped only by a real user action — never by the fetch
+  // effect — mirroring the "touched" pattern already used by DataTable.
+  const [toTouched, setToTouched] = useState(false);
+  const [subjectTouched, setSubjectTouched] = useState(false);
+
   // Cross-channel precedence mirror (backend `to > cc`): an address present in
   // To is silently dropped from CC, and adding it to CC merges into To.
   const handleToChange = useCallback((next) => {
+    setToTouched(true);
     const normalized = normalizeRecipientList(next);
     const toKeys = new Set(normalized.map(address => address.toLowerCase()));
     setToRecipients(normalized);
@@ -438,6 +490,10 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
   }, [toRecipients]);
 
   const handleToValidityChange = useCallback((isValid) => {
+    // Only fires as a byproduct of real typing/blur/keydown inside
+    // RecipientChipEditor (never on mount), so it doubles as a touch signal —
+    // covers e.g. blurring an empty input without typing anything.
+    setToTouched(true);
     setInvalidDrafts(prev => ({ ...prev, to: !isValid }));
   }, []);
 
@@ -469,6 +525,11 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
     ui('sendModalDefaultMessage', { documentType, documentNo }),
   ].filter(Boolean).join('\n\n');
   const [subject, setSubject] = useState(defaultSubject);
+  const handleSubjectChange = useCallback((value) => {
+    setSubjectTouched(true);
+    setSubject(value);
+  }, []);
+  const handleSubjectBlur = useCallback(() => setSubjectTouched(true), []);
   const [message, setMessage] = useState(defaultMessage);
   const [sending, setSending] = useState(false);
   const [sendFeedback, setSendFeedback] = useState(null);
@@ -515,6 +576,12 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
   };
 
   const handleSend = async () => {
+    // ETP-5294 — a submit attempt (even one blocked by `sendDisabled`, e.g. a
+    // future keyboard-only flow that reaches this handler) always surfaces
+    // both required-field errors, matching the "or attempted to submit" half
+    // of the touched gate.
+    setToTouched(true);
+    setSubjectTouched(true);
     if (sending || !documentId) return;
     setSending(true);
     setSendFeedback(null);
@@ -570,7 +637,8 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
   const noToRecipient = editableRecipients && toRecipients.length === 0;
   const overMaxRecipients = editableRecipients
     && toRecipients.length + ccRecipients.length > policy.maxRecipients;
-  const sendDisabled = !documentId || sending || waitingForCacheablePreview
+  const noSubject = resolveNoSubject(allowEmail, subject);
+  const sendDisabled = !documentId || sending || waitingForCacheablePreview || noSubject
     || (editableRecipients && (hasInvalidDraft || noToRecipient || overMaxRecipients));
 
   return (
@@ -615,12 +683,16 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
                 onCcValidityChange: handleCcValidityChange,
                 emailLoading,
                 noToRecipient,
+                toTouched,
                 overMaxRecipients,
                 maxRecipients: policy.maxRecipients,
               }}
               subject={subject}
               message={message}
-              onSubjectChange={setSubject}
+              onSubjectChange={handleSubjectChange}
+              onSubjectBlur={handleSubjectBlur}
+              noSubject={noSubject}
+              subjectTouched={subjectTouched}
               onMessageChange={setMessage}
               ui={ui}
               data-testid="EmailFormPanel__afec0a" />

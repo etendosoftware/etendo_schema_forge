@@ -56,7 +56,7 @@ The Contacts window should let users maintain a shared business-partner master r
   - vendor billing fields appear only when the vendor flag is enabled;
   - the Customer and Vendor flags are rendered as inline checkboxes (label + checkbox on one row, no extra vertical padding) using a `[&_.pt-6]:pt-0` wrapper to remove EntityForm's default label-alignment offset;
   - "Bloqueo de cliente" and "Bloqueo de proveedor" are rendered as **No / Sí** radio groups (`YesNoRadio`) positioned next to the respective payment-terms selector in the same flex row, not as checkboxes;
-  - the billing fields per side are split into two rows: top row (Price List, Payment Method, Account on the customer side / Expense Account on the vendor side) rendered by EntityForm in default 3-column grid; bottom row rendered as a flex row with Condiciones de pago (EntityForm, 1 column) and the blocking radio group side-by-side. The third selector in the top row uses `FIN_Financial_Account_ID` for customer ("Cuenta" / "Account") and `PO_Financial_Account_ID` for vendor ("Cuenta contable de gastos" / "Expense Account") — both labels are declared in `decisions.json → window.labelOverrides`.
+  - the billing fields per side are split into two rows: top row (Price List, Payment Method, Account — on both the customer and the vendor side) rendered by EntityForm in default 3-column grid; bottom row rendered as a flex row with Condiciones de pago (EntityForm, 1 column) and the blocking radio group side-by-side. The third selector in the top row uses `FIN_Financial_Account_ID` for customer and `PO_Financial_Account_ID` for vendor. Both are labelled **"Cuenta" / "Account"** (ETP-5328 reverted ETP-4017's vendor-side rename to "Cuenta contable de gastos" / "Expense Account"). The two labels are declared independently in `decisions.json → window.labelOverrides` and happen to share copy — they are still two different AD columns, so changing one does not change the other.
 - Before the header is saved, the financial panel suppresses effective billing-preference editing and clears prefilled billing values from the unsaved draft so those values are not posted too early.
 - The discount selector (native `<select>`) is only visible after the header exists **and** there is at least one available discount option in the catalog. If the catalog returns no options the selector is not rendered, so the "Ninguno" empty state never appears without meaningful choices.
 - Customer-side and vendor-side account selectors are filtered by the selected payment method, mirroring Etendo Classic. The `selectorContext` passes `Fin_Paymentmethod_ID` (for customer) and `PO_Paymentmethod_ID` (for vendor) to the selector request, so the eligible financial account list is filtered in real time as the payment method changes. The filter is applied in NEO Headless by a dedicated selector policy (`FinancialAccountPaymentMethodSelectorPolicy` in `com.etendoerp.go`), which emits an HQL `EXISTS` over the `FinancialMgmtFinAccPaymentMethod` link table — the generic SQL→HQL validation-rule fallback cannot translate the Classic subquery rule, so it is handled by the policy instead.
@@ -96,7 +96,7 @@ The Contacts window should let users maintain a shared business-partner master r
 7. In the Financial tab, verify the Credit section shows as a horizontal row: descriptive text on the left, stepper on the right. Click + rapidly five times; confirm the UI updates immediately on each click but only **one PATCH request** is sent to the backend after you stop clicking (verify in the Network tab). Confirm − does not go below 0.
 8. Verify a horizontal separator line (`<hr>`) appears between the Credit section and the Billing Preferences section.
 9. In the Financial tab, verify the Customer and Vendor checkboxes are rendered inline (checkbox + label on a single row with no extra vertical spacing above).
-10. When Customer is enabled, verify billing fields appear in two rows: top row (Tarifa, Método de pago, Cuenta); bottom row (Condiciones de pago selector on the left, Bloqueo de cliente No/Sí radio on the right, side by side). When Vendor is enabled, verify the equivalent block shows: top row (Tarifa de compra, Método de pago, Cuenta contable de gastos); bottom row (Condiciones de pago, Bloqueo de proveedor No/Sí radio).
+10. When Customer is enabled, verify billing fields appear in two rows: top row (Tarifa, Método de pago, Cuenta); bottom row (Condiciones de pago selector on the left, Bloqueo de cliente No/Sí radio on the right, side by side). When Vendor is enabled, verify the equivalent block shows: top row (Tarifa de compra, Método de pago, Cuenta); bottom row (Condiciones de pago, Bloqueo de proveedor No/Sí radio).
 11. Verify "Bloqueo de cliente" and "Bloqueo de proveedor" show as **No** / **Sí** radio buttons, not checkboxes. Default selection is No.
 12. In the Financial tab, verify customer and vendor flags control the related billing-preference sections.
 13. Select a payment method in the financial section and confirm the eligible financial account selector is filtered to only accounts compatible with that payment method.
@@ -259,6 +259,41 @@ The import mapping exposes aliases for Spanish compact and spaced headers: `codi
 }
 ```
 `resolve-curated.js` forwards this to `contract.json → frontendContract.window.labelOverrides`, and the generated `BusinessPartnerPage.jsx` threads it through as the `labelOverrides` prop consumed by `useLabel()` in the form/detail components — resolution order: `labelOverrides[locale][C_BP_Group_ID]` → global AD dictionary label → raw `field.label`. The field's raw `label` in `decisions.json` was also updated from `"Business Partner Category"` to `"Contact Category"` so the (English) fallback matches if the override chain is ever bypassed. Renders as **"Categoría de contacto"** in es_ES and **"Contact Category"** in en_US; unaffected by the reorder fix above — the field now renders with this label at position 3 (right after Razón Social).
+
+## ETP-4564 — Shared cache lifecycle and invalidation (SEC T-01 3/3)
+
+**All Contacts reads now go through the shared `@etendosoftware/app-shell-core` cache.** This closes finding T-01 (no shared client-side cache): reopening a contact, returning to the list, or reopening a tab reuses previously loaded data instead of refetching. The cache is provided app-wide by `DataProvider` (composed in `AppShellRuntime`) and is memory-only — no business data is written to `localStorage`.
+
+**What is cached, and its freshness policy:**
+
+| Data | Where | Query key (isolating dimensions) | Freshness |
+| --- | --- | --- | --- |
+| List (page 0) | generic `useEntity` (ETP-4563) | scope + spec + entity + sort + filters | record (30s) |
+| Header record | `useEntity.fetchById` | scope + spec + entity + recordId | record (30s) |
+| 5 child collections | `useEntity.fetchChildren` | scope + spec + childEntity + parentId | record (30s) |
+| Finance KPIs `bp-stats` / `bp-trend` | `ContactsFinanceContext` | scope + spec `contacts` + entity `bp-stats`/`bp-trend` + recordId | record (30s) |
+| Attachments | `useAttachments` | scope + `attachments` + tableName + recordId | record (30s) |
+| Selector / catalog options | `SelectorInput` | scope + selectorUrl + normalized context + page offset | catalog (5min) |
+
+"scope" is `{ auth, client, role, org }` from the cache provider, so **cached Contacts data cannot leak across a session, role, or organization** — a role/org change produces distinct keys (and `DataProvider` also clears the cache on identity change).
+
+**Attachments are now truly lazy.** `useAttachments` no longer lists on mount; it fetches only once the Attachments tab becomes active (`isActive`), and reopening a fresh tab reuses the cache. Callers that don't pass `isActive` (e.g. `goods-receipt`) keep the previous eager behavior.
+
+**Invalidation.** Mutations that go through the generic `useEntity` (header save/delete, child add/update/delete) already invalidate their list/record/child queries. The Contacts-specific raw-fetch mutations that bypass `useEntity` invalidate explicitly via the `useContactsCacheInvalidation` helper (`windows/custom/contacts/contactsCacheInvalidation.js`):
+
+- inline table edit / row delete / bulk delete → invalidate `businessPartner` (list + record);
+- credit-limit save (`ContactsFinancialPanel`) → invalidate `businessPartner` + finance KPIs (`bp-stats`, `bp-trend`);
+- discount create/update/delete (`BillingPreferencesForm`) → invalidate finance KPIs + `businessPartner`;
+- attachment upload/remove/update-description → invalidate that record's attachment list.
+
+Explicit **Refresh** still forces a network revalidation (bypasses freshness).
+
+**Limitations.**
+
+- **Selection is not preserved across navigation** — that is T-05, tracked separately. T-01 only reduces request volume / improves reuse.
+- **No server-side / HTTP caching** — this is a client-side, in-memory cache only; a full page reload starts cold.
+- Selector option **pages beyond page 0** are cached per offset but the accumulated infinite-scroll list is not deduplicated across partial scroll positions.
+- **Before/after network trace:** the historical "~19 requests" figure has no committed source report (`docs/reports/contacts-test-report.md` is an external assessment doc, not in this repo); a reproducible current measurement is captured separately as delivery evidence rather than embedded here.
 
 ## ETP-4156 — Contact name/username derivation moved server-side
 

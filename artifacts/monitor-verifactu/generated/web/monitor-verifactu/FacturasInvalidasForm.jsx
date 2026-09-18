@@ -2,9 +2,9 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:facturasInválidas
 const fields = [
-  { key: 'issuerTaxID', column: 'Legal_Entity_Nif', type: 'text', label: 'NIF de Entidad Legal', section: 'principal' },
+  { key: 'issuerTaxID', column: 'Legal_Entity_Nif', type: 'text', label: 'NIF de Entidad Legal', section: 'principal', maxLength: 20 },
   { key: 'active', column: 'Isactive', type: 'checkbox', label: 'Activo', section: 'principal' },
-  { key: 'errorReason', column: 'Error_Reason', type: 'text', label: 'Descripción Error Registro', section: 'principal' },
+  { key: 'errorReason', column: 'Error_Reason', type: 'text', label: 'Descripción Error Registro', section: 'principal', maxLength: 500 },
   { key: 'typeOperation', column: 'Type_Operation', type: 'select', label: 'Tipo de Operación', section: 'principal', options: [{ value: 'AL', label: 'ALTA' }, { value: 'BA', label: 'BAJA' }] },
   { key: 'isSubsanation', column: 'Issubsanation', type: 'checkbox', label: 'Es Subsanación', section: 'other' },
   { key: 'invoice', column: 'C_Invoice_ID', type: 'selector', label: 'Factura', section: 'other', reference: 'Invoice', inputMode: 'selector' },

@@ -106,6 +106,7 @@ export const accounting = [
     "productExpense": "Laptop Pro 15",
     "productRevenue": "Laptop Pro 15",
     "productCOGS": "Laptop Pro 15",
+    "invoicePriceVariance": "Sample invoicePriceVariance",
     "productCategoryId": "mock-productCategory-001"
   },
   {
@@ -114,6 +115,7 @@ export const accounting = [
     "productExpense": "USB-C Cable",
     "productRevenue": "USB-C Cable",
     "productCOGS": "USB-C Cable",
+    "invoicePriceVariance": "Sample invoicePriceVariance",
     "productCategoryId": "mock-productCategory-002"
   },
   {
@@ -122,6 +124,7 @@ export const accounting = [
     "productExpense": "Wireless Mouse",
     "productRevenue": "Wireless Mouse",
     "productCOGS": "Wireless Mouse",
+    "invoicePriceVariance": "Sample invoicePriceVariance",
     "productCategoryId": "mock-productCategory-003"
   },
   {
@@ -130,6 +133,7 @@ export const accounting = [
     "productExpense": "Mechanical Keyboard",
     "productRevenue": "Mechanical Keyboard",
     "productCOGS": "Mechanical Keyboard",
+    "invoicePriceVariance": "Sample invoicePriceVariance",
     "productCategoryId": "mock-productCategory-004"
   },
   {
@@ -138,6 +142,7 @@ export const accounting = [
     "productExpense": "Monitor 27\"",
     "productRevenue": "Monitor 27\"",
     "productCOGS": "Monitor 27\"",
+    "invoicePriceVariance": "Sample invoicePriceVariance",
     "productCategoryId": "mock-productCategory-005"
   },
   {
@@ -146,6 +151,7 @@ export const accounting = [
     "productExpense": "Webcam HD",
     "productRevenue": "Webcam HD",
     "productCOGS": "Webcam HD",
+    "invoicePriceVariance": "Sample invoicePriceVariance",
     "productCategoryId": "mock-productCategory-006"
   },
   {
@@ -154,6 +160,7 @@ export const accounting = [
     "productExpense": "Headset Pro",
     "productRevenue": "Headset Pro",
     "productCOGS": "Headset Pro",
+    "invoicePriceVariance": "Sample invoicePriceVariance",
     "productCategoryId": "mock-productCategory-007"
   },
   {
@@ -162,6 +169,7 @@ export const accounting = [
     "productExpense": "Docking Station",
     "productRevenue": "Docking Station",
     "productCOGS": "Docking Station",
+    "invoicePriceVariance": "Sample invoicePriceVariance",
     "productCategoryId": "mock-productCategory-008"
   },
   {
@@ -170,6 +178,7 @@ export const accounting = [
     "productExpense": "SSD 1TB",
     "productRevenue": "SSD 1TB",
     "productCOGS": "SSD 1TB",
+    "invoicePriceVariance": "Sample invoicePriceVariance",
     "productCategoryId": "mock-productCategory-009"
   },
   {
@@ -178,6 +187,7 @@ export const accounting = [
     "productExpense": "RAM 16GB",
     "productRevenue": "RAM 16GB",
     "productCOGS": "RAM 16GB",
+    "invoicePriceVariance": "Sample invoicePriceVariance",
     "productCategoryId": "mock-productCategory-010"
   },
   {
@@ -186,6 +196,7 @@ export const accounting = [
     "productExpense": "Power Supply 750W",
     "productRevenue": "Power Supply 750W",
     "productCOGS": "Power Supply 750W",
+    "invoicePriceVariance": "Sample invoicePriceVariance",
     "productCategoryId": "mock-productCategory-011"
   },
   {
@@ -194,6 +205,7 @@ export const accounting = [
     "productExpense": "Network Switch",
     "productRevenue": "Network Switch",
     "productCOGS": "Network Switch",
+    "invoicePriceVariance": "Sample invoicePriceVariance",
     "productCategoryId": "mock-productCategory-012"
   }
 ];

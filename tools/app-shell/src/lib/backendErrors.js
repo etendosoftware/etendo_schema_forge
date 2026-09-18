@@ -8,6 +8,17 @@ const BACKEND_ERROR_MAP = {
     'backendError.staleRecord',
   'The record you are saving has already been changed by another user or process. Cancel your changes and refresh the data by clicking the refresh button.':
     'backendError.staleRecord',
+  // ETP-5245 — ProductCostingHandler. The Costing tab writes into M_Costing, the costing
+  // engine's own table, so the handler is what keeps a hand-entered row safe; these are the
+  // refusals it can return. English on purpose: the message crosses the wire as-is and is
+  // translated here, the pattern ChartOfAccountsSaveValidationSupport documents as correct.
+  'A cost line must belong to a product.': 'backendError.costingNoProduct',
+  'The cost is required.': 'backendError.costingCostRequired',
+  'The cost cannot be negative.': 'backendError.costingCostNegative',
+  'The expiry date must be later than the start date.': 'backendError.costingInvalidDateRange',
+  'This cost was calculated by the system and cannot be modified or deleted.':
+    'backendError.costingEngineRowLocked',
+  'The cost line could not be prepared. Try again.': 'backendError.costingPrepareFailed',
   'The start date field is mandatory': 'backendError.amortizationStartDateRequired',
   'Depreciation Amount field cannot be empty, zero or negative.': 'backendError.amortizationDepreciationAmountRequired',
   'Usable Life - Months field cannot be empty, zero or negative.': 'backendError.amortizationUsableLifeMonthsRequired',
@@ -58,6 +69,34 @@ const BACKEND_ERROR_MAP = {
   'Using the SWIFT Code for generating the Displayed Account requires to introduce a SWIFT Code and the Generic Account No.': 'backendError.swiftRequired',
   // Match-rule (MatchRuleHandler) validation messages
   'Name is required': 'backendError.matchRuleNameRequired',
+  // ETP-5190 — DocumentSequenceHandler. The Spanish invoice-series prefix rules, copied from
+  // com.smf.ticketbai's ProcessInvoiceTbaiHook and applied on write instead of at invoice
+  // completion. English in Java on purpose so both locales resolve here.
+  'The prefix cannot be longer than 20 characters.': 'backendError.sequencePrefixTooLong',
+  'The prefix cannot contain lowercase or accented letters.': 'backendError.sequencePrefixLowerOrAccent',
+  'The prefix cannot contain the letters I, O, Y, W or \u00d1.': 'backendError.sequencePrefixForbiddenLetters',
+  'The prefix can only contain uppercase letters, digits and hyphens.': 'backendError.sequencePrefixInvalidChars',
+  // ETP-5190 — SpanishTaxIdValidator, reached from BOTH places a tenant sets its fiscal
+  // identifier: the signup wizard (parseOnboardingRequest) and the Organización window
+  // (OrganizationInformationHandler). Mapped to the SAME keys the browser-side
+  // lib/taxIdValidation.js returns, so the wording does not change depending on which side
+  // caught it.
+  'The tax ID is not a valid NIF, CIF or NIE.': 'backendError.taxIdInvalidFormat',
+  'The tax ID check digit does not match. Review the number.': 'backendError.taxIdInvalidCheckDigit',
+  // ETP-5031 — BusinessPartnerHandler validates the Contacts `TaxID` server-side too, and there
+  // the document type can be a passport (EM_OBTIK_Tax_ID_Key = '3'), which the two rules above
+  // do not cover. Same principle as them: the wording must match what the browser-side
+  // contactsFieldValidation.js shows for the identical rejection.
+  'The passport ID is not valid. It must be up to 9 letters or digits.': 'backendError.taxIdInvalidPassport',
+  // ETP-5031 follow-up — BusinessPartnerHandler now also validates etgoEmail/etgoWeb/etgoPhone
+  // server-side (a direct API/MCP write previously bypassed the browser-only
+  // contactsFieldValidation.js / recipientEdits.js checks entirely). Same principle as the
+  // TaxID/passport entries above: the wording must match what those browser-side checks show
+  // for the identical rejection, so a value rejected in one place reads identically in the other.
+  'The email address is not valid.': 'sendModalInvalidEmail',
+  'The website is not a valid domain, e.g. domain.com.': 'websiteInsecureUrl',
+  'The phone number can only contain digits and the + ( ) - . characters, up to 15 characters.':
+    'phoneInvalidChars',
   'Name is too long': 'backendError.matchRuleNameTooLong',
   'Text condition must be Contains (C), Starts with (S) or Regex (R)': 'backendError.matchRuleTextConditionInvalid',
   'Pattern is required': 'backendError.matchRulePatternRequired',
@@ -177,6 +216,26 @@ const BACKEND_ERROR_MAP = {
   'You cannot deactivate your own user account': 'backendError.cannotDeactivateOwnAccount',
   'Cannot deactivate the last active administrator for this client':
     'backendError.cannotDeactivateLastAdmin',
+  // CreateGoodsReceiptHandler.createReceiptLines (com.etendoerp.go, ETP-5276) — the
+  // purchase-side sibling of 'No hay líneas pendientes de entrega en este pedido' above
+  // (backendError.noPendingLinesToDeliverOrder), hardcoded in ENGLISH instead of Spanish
+  // (an inconsistency that predates ETP-5276, not introduced by it). Previously unmapped:
+  // the goods-receipt path showed this raw, untranslated backend string. Kept at the end
+  // of the map rather than next to its sibling to stay clear of the pre-existing
+  // duplicate block Sonar flags across lines ~41-189 of this file.
+  'No pending lines to receive in this purchase order': 'backendError.noPendingLinesToReceiveOrder',
+  // UserRoleAssignmentHandler (com.etendoerp.go, ETP-5264) — the admin-facing "create user" form
+  // never shows a username field, so a raw DB username-unique-constraint message would confusingly
+  // name a field the user never typed. rejectDuplicateEmail() proactively rejects a duplicate
+  // email with this fixed English literal instead.
+  'A user with this email address already exists': 'backendError.duplicateUserEmail',
+  // UserRoleAssignmentHandler (com.etendoerp.go, ETP-5195 Bug 3) — hardcoded English literals,
+  // no AD_Message involvement, thrown when a DELETE targets the acting user's own record, the
+  // client's tenant owner (EM_ETGO_Is_Owner), or the client's last remaining active admin.
+  'You cannot delete your own user account': 'backendError.cannotDeleteOwnAccount',
+  'This user is the tenant owner and cannot be deleted': 'backendError.cannotDeleteOwner',
+  'Cannot delete the last active administrator for this client':
+    'backendError.cannotDeleteLastAdmin',
 };
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a
@@ -306,6 +365,29 @@ function matchInsufficientStockProcess(msg) {
   const details = rest.slice(midIdx + INSUFFICIENT_STOCK_PROCESS_MID.length);
   if (!products || !details) return null;
   return { products, details };
+}
+
+// GoodsMovementProcessGuard.java (com.etendoerp.go — ETP-5037), `ETGO_ZeroOrNegativeQtyProcess`
+// AD_MESSAGE — raised when "Procesar" would complete a Goods Movement with a line whose quantity
+// is zero or negative (mirrors classic core's M_MOVEMENT_POST condition: only blocks when the
+// source or destination locator disallows overissue). Before this guard existed, a zero/negative
+// line fell through to classic core's own check, which raises `GoodsMovementsWithNegativeQty`
+// naming only the raw line number (QA finding, Emilio Polliotti) — this message names the
+// product(s) instead, same convention as matchInsufficientStockProcess above.
+const ZERO_OR_NEGATIVE_QTY_PROCESS_PREFIX = 'This movement cannot be processed: the line(s) of ';
+const ZERO_OR_NEGATIVE_QTY_PROCESS_SUFFIX = ' have a zero or negative quantity.';
+
+function matchZeroOrNegativeQtyProcess(msg) {
+  if (!msg.startsWith(ZERO_OR_NEGATIVE_QTY_PROCESS_PREFIX)
+      || !msg.endsWith(ZERO_OR_NEGATIVE_QTY_PROCESS_SUFFIX)) {
+    return null;
+  }
+  const products = msg.slice(
+    ZERO_OR_NEGATIVE_QTY_PROCESS_PREFIX.length,
+    -ZERO_OR_NEGATIVE_QTY_PROCESS_SUFFIX.length,
+  );
+  if (!products) return null;
+  return { products };
 }
 
 // CreateDraftInvoiceHandler.java:606 (com.etendoerp.go) — "Order not found: " +
@@ -641,6 +723,7 @@ const PARAMETERIZED_MATCHERS = [
   [matchInvoiceLineAlreadyInvoiced, 'backendError.invoiceLineAlreadyInvoiced'],
   [matchInsufficientStockLine, 'backendError.insufficientStockLine'],
   [matchInsufficientStockProcess, 'backendError.insufficientStockProcess'],
+  [matchZeroOrNegativeQtyProcess, 'backendError.zeroOrNegativeQtyProcess'],
   [matchOrderNotFound, 'backendError.orderNotFound'],
   [matchShipmentNotFound, 'backendError.shipmentNotFound'],
   [matchAccountAlreadyExists, 'backendError.accountAlreadyExists'],
@@ -692,6 +775,23 @@ function translateParameterized(msg, t) {
   return (translated && translated !== match.key) ? translated : null;
 }
 
+// ETP-5323: JsonDataService's RPCREQUEST_STATUS_VALIDATION_ERROR shape (a per-property setter
+// failure caught during JSON-to-entity conversion, e.g. StringPropertyValidator rejecting a
+// "Description" value longer than its AD column) carries the message under response.errors, a
+// MAP keyed by property name — a sibling of response.error (singular), not a variant of it.
+// NeoCrudHandler now translates/sanitizes this server-side (see buildValidationErrorResponse),
+// so this is a defense-in-depth fallback for any deployment where that Java fix hasn't shipped
+// yet: without it, the caller falls back to the bare "Error <status>". Extracted out of
+// parseBackendErrorMessage to keep that function under the S3776 cognitive-complexity ceiling —
+// same pattern as PARAMETERIZED_MATCHERS above.
+function extractFirstResponseErrorsMessage(data) {
+  const errorsMap = data?.response?.errors;
+  if (!errorsMap || typeof errorsMap !== 'object') return undefined;
+  const firstKey = Object.keys(errorsMap)[0];
+  if (firstKey && typeof errorsMap[firstKey] === 'string') return errorsMap[firstKey];
+  return undefined;
+}
+
 export async function parseBackendErrorMessage(res) {
   let raw;
   try {
@@ -704,6 +804,7 @@ export async function parseBackendErrorMessage(res) {
       if (err?.message) raw = err.message;
       else if (typeof err === 'string') raw = err;
       else if (data?.message) raw = data.message;
+      else raw = extractFirstResponseErrorsMessage(data);
     }
   } catch {
     // Ignore non-JSON error bodies.

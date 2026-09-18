@@ -20,7 +20,7 @@ Automated coverage note: the current automated evidence is mostly source-shape, 
 | Area | Entry path | Current behavior | Evidence |
 |---|---|---|---|
 | Public access | `/onboarding`, `/login` | `/onboarding` is the only public entry page. `/login` redirects to `/onboarding`. | `tools/app-shell/src/App.jsx` |
-| Authenticated shell | `/dashboard`, `/first-steps`, `/sales`, `/inventory`, `/purchases`, `/accounting`, `/reports`, `/report-viewer`, `/crm`, `/hr`, `/projects`, `/smart-scan`, `/oauth2-clients`, `/roles`, `/authorize`, `/quick-sales-order`, `/quick-purchase-order`, `/preview`, `/artifacts`, `/artifacts/:windowName` | These routes render inside `AppLayout` and require `AuthGuard`. `/roles` (ETP-4513) is registered in `tools/app-shell/src/runtime-routes.jsx`, not `App.jsx`. | `tools/app-shell/src/App.jsx`, `tools/app-shell/src/runtime-routes.jsx`, `tools/app-shell/src/layout/AppLayout.jsx` |
+| Authenticated shell | `/dashboard`, `/first-steps`, `/sales`, `/inventory`, `/purchases`, `/accounting`, `/reports`, `/report-viewer`, `/crm`, `/hr`, `/projects`, `/smart-scan`, `/oauth2-clients`, `/api-keys`, `/roles`, `/authorize`, `/quick-sales-order`, `/quick-purchase-order`, `/preview`, `/artifacts`, `/artifacts/:windowName` | These routes render inside `AppLayout` and require `AuthGuard`. `/api-keys` is visible only when the backend returns `capabilities.publicApiKeyManagement=true`; `/roles` (ETP-4513) is registered in `tools/app-shell/src/runtime-routes.jsx`, not `App.jsx`. | `tools/app-shell/src/App.jsx`, `tools/app-shell/src/runtime-routes.jsx`, `tools/app-shell/src/layout/AppLayout.jsx` |
 | Generated/custom windows | `/:windowName`, `/:windowName/:recordId` | Loads the matching generated or custom window and optionally passes a record context. | `tools/app-shell/src/windows/WindowLoader.jsx`, `tools/app-shell/src/windows/registry.js` |
 | Menu-driven report links | `/report-viewer?category=purchases\|inventory\|finance` | Menu items can override the route with `item.path`, so report entries navigate to the shared report viewer instead of the generic window route. | `tools/app-shell/src/menu.json`, `tools/app-shell/src/components/layout/SideMenu/SideMenu.jsx` |
 
@@ -86,7 +86,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - `?embedded=1` removes shell chrome and left-margin spacing while still rendering the current route content.
   - Hidden groups/items from `menu.json` are filtered out of the visible menu.
   - The visible menu has three independent access axes: `AppLayout` passes `allowedIds` from `useRoleMenu()`, `capabilities` from `useCapabilitiesSafe()`, and `windowAccess` from `useWindowAccessSafe()` to `registry.js`'s `filterMenuGroupsByAccess()`. The latter two maps come from `SFWindowAccessMap` through the auth context. An item must pass every axis it declares; groups left empty are dropped except `Favorites`. Items declaring none of these gates (such as dashboard or ungated custom/SDK pages) stay visible.
-  - **Menu-tree axis:** `useRoleMenu()` (`tools/app-shell/src/hooks/useRoleMenu.js`) fetches `SFListMenu`'s role-pruned tree once per authenticated session and reduces it to an allowed-id `Set` via `collectAllowedIds()` (`tools/app-shell/src/lib/menuTree.js`). An item carrying `windowId`/`processId`/`obuiappProcessId` survives this axis if at least one of its declared IDs is in that set; an item carrying none is unaffected by this axis alone.
+  - **Menu-tree axis:** `useRoleMenu()` (`tools/app-shell/src/hooks/useRoleMenu.js`) fetches `SFListMenu`'s role-pruned tree once per authenticated session, on mount and whenever `authRevision` bumps, and reduces it to an allowed-id `Set` via `collectAllowedIds()` (`tools/app-shell/src/lib/menuTree.js`). An item carrying `windowId`/`processId`/`obuiappProcessId` survives this axis if at least one of its declared IDs is in that set; an item carrying none is unaffected by this axis alone. See section 7b for how a menu-tree-only grant/revocation (no window/capability change) now also bumps `authRevision` via the `menuAccess` diff, so this axis re-fetches promptly instead of only on a full reload.
   - **Capability axis:** an item declaring `capability` is hidden unless `capabilities[item.capability] === true`. For example, the Roles entry requires `isAdminOrClientAdmin`. A missing or not-yet-loaded capability fails closed.
   - **Permission-anchor axis (ETP-5240):** `accessWindowId` is separate from `windowId`: it checks `windowAccess[item.accessWindowId]`, not membership in the `SFListMenu` tree. `report-viewer-finance`, `report-viewer-inventory`, and `smart-scan` use it because their permission-anchor `AD_Window` records have grants but no active `AD_Menu` node. Putting those anchors in `windowId` would hide the entries for every role, including admins. For non-admins, a missing map or an `undefined` entry hides the item; both `full` and `read-only` permit visibility. The filter checks whether the value is defined, not its tier value; the backend represents denied access by omitting the key, not by returning a `none` entry.
   - **Admin/client-admin exemption:** a truthy `capabilities.isAdminOrClientAdmin` bypasses only the `accessWindowId` check, even when `windowAccess` is absent or lacks the anchor. It does not bypass a separate `capability` or menu-tree gate on the same item, hidden flags, or the shell's no-access blocking screen below. This sidebar exemption does not grant content access: the page's own `useWindowAccess()`/`WindowAccessGuard` still consumes the backend map. `SFWindowAccessMap` also includes permission anchors with active grants in its admin map (runtime `docs/neo-headless.md` section 8b); both protections are intentional.
@@ -255,7 +255,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   **Load-bearing side effect — this is a real functional change beyond the admin matrix.** `windows/registry.js`'s `filterMenuGroupsByAccess()` filters the actual sidebar menu using the exact same `windowId`/`obuiappProcessId`/`processId` fields on every `menu.json` item (see flow 2, "Authenticated shell and navigation chrome"). Before ETP-5071 these 3 items carried none of those fields, so `filterMenuGroupsByAccess()` never filtered them — they were always visible in the sidebar to every role, regardless of actual access. Now that they carry a real proxy id, the sidebar filters them exactly like any other AD-backed item: **a role without access to the proxy (SII Monitor / Tax Report / the proxy process) will no longer see "Fiscal Monitor" / "Fiscal Models" / "Not Posted Documents" in its sidebar at all.** If a support engineer or developer is asked "why did Fiscal Monitor disappear from this role's sidebar?", the answer is: check that role's access to the SII Monitor window — that access now directly gates sidebar visibility for the proxied item too, whereas previously the item was unconditionally shown.
 - **Row identity:** each row's React key and `data-testid` use `buildRowKey(category, windowId)` — the backend's real per-window `id`, not its translatable name — because the same window name (e.g. "Contactos") can legitimately appear in two different categories with different per-role access; keying by id sidesteps that collision instead of needing a composite name-based key.
 - **Translation:** both the category header and each row's window name go through `useMenuLabel()` against the same literal English strings `menu.json` already declares (`Commercial`/`Sales`/`Inventory`/...) — there are no separate i18n keys for the matrix itself.
-- **Relationship to `UserRolesTab` (no duplication — see `docs/generated-custom-windows/user.md`):** the User window's "Roles del usuario" tab (`tools/app-shell/src/windows/custom/user/UserRolesTab.jsx`) renders a visually similar category-grouped, tri-state permission matrix, but it is a **separate component with a separate contract**, not a reuse of `RolesAccessMatrix`: its columns come from the currently-selected `SFSystemRoleTemplates` roles (live, pre-save preview) rather than the 5 fixed overview cards, it still overlays 3 hardcoded always-✓ "General" rows (Inicio/Favoritos/Copilot) that `RolesAccessMatrix` deliberately dropped (see the JSDoc note in `RolesAccessMatrix.jsx`), and it swaps to a plain full-access message once the user holds the Admin role. Its full behavior, including its own ETP-5071 admin-promotion handling, is documented in `docs/generated-custom-windows/user.md` under "Stale role matrix after admin promotion (ETP-5071)" and "Reactive behavior and dependencies" — not duplicated here.
+- **Relationship to `UserRolesTab` (no duplication — see `docs/generated-custom-windows/user.md`):** the User window's "Roles del usuario" tab (`tools/app-shell/src/windows/custom/user/UserRolesTab.jsx`) renders a visually similar category-grouped, tri-state permission matrix, but it is a **separate component with a separate contract**, not a reuse of `RolesAccessMatrix`: its columns come from the currently-selected `SFSystemRoleTemplates` roles (live, pre-save preview) rather than the 5 fixed overview cards; it used to overlay 3 hardcoded always-✓ "General" rows (Inicio/Favoritos/Copilot) but that overlay was removed (ETP-5196), matching `RolesAccessMatrix`'s own earlier removal of the same overlay (ETP-5071 — see the JSDoc note in `RolesAccessMatrix.jsx`); and once the user holds the Admin role it renders a plain full-access message ABOVE a single-column admin-only version of the same matrix (ETP-5196; before that it replaced the matrix entirely). **Since ETP-5196 the two DO share one building block:** `UserRolesTab` now resolves its rows' category/label/order primarily through the same `buildMenuWindowIndex()` this page's `useRolesOverviewData.js` exports (imported verbatim, not re-implemented), so both matrices group windows identically off `menu.json` — it falls back to its own raw `SFListMenu` AD-tree walk only for a window `menu.json` doesn't index at all (e.g. "Roles"/"Usuario"), a case `RolesAccessMatrix` doesn't need to handle the same way since its own fallback keeps the backend's raw category/name instead. Its full behavior, including its own ETP-5071/ETP-5196 admin-promotion handling and the `menu.json` category-resolution mechanics, is documented in `docs/generated-custom-windows/user.md` under "Stale role matrix after admin promotion (ETP-5071, revised ETP-5196)", "Category grouping (ETP-5196)", and "Reactive behavior and dependencies" — not duplicated here.
 - **Automated evidence:** `tools/app-shell/src/pages/roles/__tests__/RolesAccessMatrix.vitest.jsx` covers category header rendering, same-window-name rows in two categories staying independently keyed and tiered, defaulting a missing access entry to `none`, an empty-but-present category rendering with zero rows, and the removal of the old hardcoded "General" overlay. `tools/app-shell/src/pages/roles/__tests__/useRolesOverviewData.vitest.js` covers `normalizeTier`, `resolveRoleKind`, `buildMenuWindowIndex` (including the hidden/visible duplicate-`windowId` tie-break), `buildRowKey`, `flattenMatrixRows`, `sortByRoleOrder`, and a dedicated `adaptMatrix (via useRolesOverviewData) — ETP-5071 menu.json resolution` suite proving the menu.json-vs-backend category/name resolution, the fallback-when-unmapped behavior, merging two backend categories into one resolved category, `groupOrder`-based category ordering, `itemOrder`-based row ordering (including a case where it disagrees with alphabetical order), the fallback-row-sorts-last behavior, and stable-sort behavior for equal `itemOrder` values.
 - **Manual verification path:**
   1. Open `/roles` and confirm the matrix renders below the 5 cards, with one column per card and category header rows above their grouped windows.
@@ -286,6 +286,32 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   2. Deploy or serve a newer build.
   3. Navigate to another route or refocus the tab and confirm the app reloads onto the new assets.
   4. Re-enter an environment from `/onboarding` and confirm the browser reaches `/dashboard` without serving stale cached shell assets.
+
+### 7b. Role/permission change notification (ETP-5189)
+
+- **User goal / entry point:** Learn that an administrator changed my role/permissions while I have an active session, and reload to apply them.
+- **Main path behavior:**
+  - `AuthContext.jsx` (`@etendosoftware/app-shell-core`, ETP-5195) already silently refreshes the session on mount, on tab focus/`visibilitychange`, and on a fixed 5-minute poll. Every refresh re-fetches `windowAccess`/`capabilities` (`SFWindowAccessMap`) through the host's `fetchWindowAccess` callback and diffs them; a real diff bumps `authRevision` and swaps the object references, which every consumer that reads them (`useWindowAccessSafe()`, `useCapabilitiesSafe()`, `useRoleMenu()` via `authRevision`) picks up live, with no reload — this already self-heals a template-role composition change or an Admin promote/demote for window/capability access.
+  - **ETP-5189 addition — `menuAccess`:** `fetchWindowAccess()` (`App.jsx`) now also calls `fetchMenuAccess()`, which flattens the role-filtered menu tree (`fetchMenuTree()` + `collectAllowedIds()`, `lib/menuTree.js` — the same `SFListMenu` source `useRoleMenu()` reads) into a `{id: true}` map and merges it into the payload as `menuAccess`. `AuthContext.jsx`'s diff now compares `menuAccess` the same way as the other two maps, so a menu-item-only or process-only grant/revocation (one that never touches a window/capability tier) also bumps `authRevision` — closing a gap where such a change previously left the sidebar permanently stale.
+  - `useRoleChangeNotice()` (`tools/app-shell/src/hooks/useRoleChangeNotice.js`) tracks the `windowAccess`/`capabilities`/`menuAccess` object references (not raw `authRevision`, which also bumps on a same-role pure token rotation) and flags `true` only on a genuine post-login change — the first settle after login/reload is captured as a silent baseline, never shown as a change.
+  - `RoleChangedBanner` (`tools/app-shell/src/components/RoleChangedBanner.jsx`) renders a fixed, top-of-viewport, non-dismissible `InfoBanner` (`tone: warning`) when that hook flags `true`, with a "Reload now" button (`window.location.reload()`). Mounted as a sibling of `ServiceWorkerManager`/`SurveyManager` inside `<AppShellRuntime>` (`App.jsx`) — i.e. inside the runtime's internal `AuthProvider` but outside `AppLayout`'s own layout box — so it is visible regardless of which window is open, and a fixed overlay rather than a document-flow element so it does not push `AppLayout`'s `h-screen`-style chrome down.
+  - The reload button is an explicit, user-triggered fallback/reassurance, not the only fix: the underlying access maps are already correct in the background (ETP-5195's own mechanism) by the time the banner is visible — reloading just makes every surface (menu labels, open forms) pick up the fresh state immediately instead of waiting for their own next re-render trigger.
+- **Failure or edge behavior:**
+  - A failed `SFWindowAccessMap` or `SFListMenu` fetch inside `fetchWindowAccess()` fails the whole call closed (returns `null`), resetting `windowAccess`/`capabilities`/`menuAccess` together rather than diffing a half-fetched result — this can look like a real access change (all three maps going to `{}`) and is a pre-existing tradeoff shared with ETP-5195's own `windowAccess`/`capabilities` handling, not a new regression.
+  - The banner is deliberately **not dismissible** without reloading (no close button) — the ticket's own acceptance criteria require that the user cannot keep silently navigating on stale permissions.
+  - A same-role token rotation (no metadata or access change) never shows the banner — the hook keys off object-reference changes to the three access maps, which a pure rotation does not touch.
+  - **Known gap, out of scope for this iteration:** a change that revokes access to a specific field-level or record-level rule (not a window/process/menu-tree grant) does not participate in this diff and will not trigger the banner.
+- **Automated evidence:**
+  - Core (`schema_forge_core`): `AuthContext.jsx`/`sessionController.js` `menuAccess` diff coverage lives alongside the existing ETP-5195 refresh-contract tests in `packages/app-shell-core/src/auth/__tests__/`.
+  - Functional: `tools/app-shell/src/__tests__/App.vitest.jsx` covers `fetchWindowAccess()`'s merged `menuAccess` payload and its fail-closed behavior; hook/component-level tests for `useRoleChangeNotice`/`RoleChangedBanner` live under `tools/app-shell/src/hooks/__tests__/` and `tools/app-shell/src/components/__tests__/`.
+- **Manual verification path:**
+  1. Sign in as user A with a template role that has Sales Order access; keep the session open on any page.
+  2. As an admin (different session), reassign user A's template-role composition to remove Sales Order access.
+  3. Within 5 minutes (or trigger sooner by refocusing user A's tab), confirm the banner appears with a "Reload now" button, and that the sidebar/`WindowAccessGuard` already reflect the reduced access even before clicking it.
+  4. Click "Reload now" and confirm Sales Order is no longer reachable.
+  5. Repeat steps 1-4 with an Admin promote/demote instead of a template-composition change.
+  6. As an admin, revoke a single process grant or menu-tree entry for user A without changing any window/capability tier; confirm the banner still appears (this is the `menuAccess` gap this ticket closes) and the sidebar entry disappears after reload.
+  7. Confirm that an unrelated silent refresh (e.g. a plain alt-tab with no role change) never shows the banner.
 
 ## DocumentTotalsPanel — real-time totals and discount breakdown
 
@@ -481,3 +507,58 @@ the padding rules change.
 Covered by `getTabStripBleedClassName` cases in
 `src/components/contract-ui/__tests__/DetailView.helpers.vitest.jsx` (one per row of the
 table above, plus a `formScrollPaddingX` override).
+
+## Bulk actions refetch the list in place — ETP-5302
+
+**Applies to every list with a selection toolbar.** Running a bulk action from the floating
+selection bar no longer reloads the browser page. The action ends with
+`clearSelection()` → result toast → `refresh()`, where `refresh` is the in-place refetch
+`ListView` now hands to its `bulkActions` slot.
+
+What a user sees change: scroll position, the active filters (column filters, subset/quick
+filters, the advanced-filter popover) and the SPA itself all survive the action, and the
+result toast appears immediately instead of after a full reboot.
+
+The reload was never about the data. It was the mechanism that let the toast survive: the
+result was written to `sessionStorage` under `bulkActionResult` and read back by
+`useBulkActionToast()`'s mount effect on the *next* mount. Showing the toast directly removes
+the only reason to reload. That persist-then-reload path is kept, but only as a fallback for
+a bulk host mounted outside `ListView`'s slot, so no caller can silently lose its result.
+
+Windows affected: every `BulkDocumentAction` mount (sales-invoice, purchase-invoice,
+goods-receipt, goods-shipment, sales-order, purchase-order, return-material-receipt,
+return-to-vendor-shipment, matched-purchase-invoices), the sales-order and purchase-order
+kebabs ("Crear facturas" / "Crear albaranes"), and goods-shipment's "Crear Factura" — that
+last one previously neither reloaded nor refreshed, so it left the rows it had just invoiced
+showing a stale invoicing status.
+
+In the same change, the bulk dialog's confirm button reads **Aceptar** / **Accept**
+(`accept`) instead of **Completado** (`done`). "Completado" is the name of a document
+*state* — the same lists show it in their "Estado doc." column — so the button read as
+though pressing it would mark the selected documents completed. `done` is unchanged;
+`RecordCreateModal.jsx` still uses it.
+
+Developer contract (the slot's context object, the mandatory fallback branch,
+`showBulkActionToast` vs `useBulkActionToast`): [`../ui-customization.md`](../ui-customization.md)
+§9e.
+
+## Reversing a posted document before reactivating it lives in one helper — ETP-5302
+
+**Applies to every window whose `decisions.json` carries `preUnpost: true` on a menu action**
+(today sales-invoice, purchase-invoice, amortization). The rule — *reactivating an
+already-posted record unposts it first* — is implemented exactly once, in
+`tools/app-shell/src/lib/preUnpost.js`, and both surfaces call it: the detail kebab
+(`DetailMoreActionsMenu.jsx`) and the list's bulk bar (`BulkDocumentAction.jsx`, via its
+`preUnpostActions` prop).
+
+This is a rule that was previously implemented in one surface only, and the divergence was
+invisible until a user hit it: reactivating a posted invoice from the form worked, while the
+very same invoice reactivated from the list's bulk bar failed with "Factura contabilizada",
+because the bulk path sent a bare `docAction: 'RE'` that Core's `C_INVOICE_POST` rejects.
+Two implementations of one rule is what let them diverge, so there is now one.
+
+It is **opt-in per window**, and deliberately so: orders do not carry `preUnpostActions`
+because `C_ORDER_POST1` has no posted-state guard on its `RE` branch, making an unpost there
+a gratuitous accounting reversal. Full reference, including the `isPosted` /
+`runPreUnpost` contracts and why the helper is a plain module rather than a hook:
+[`../ui-customization.md`](../ui-customization.md) §9e.

@@ -4,9 +4,9 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 // @sf-generated-start columns:transaction
 const columns = [
   { key: 'transactionDate', column: 'Statementdate', type: 'date', label: 'Transaction Date', required: true },
-  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Payment No.', required: true },
+  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Payment No.', required: true, maxLength: 30 },
   { key: 'businessPartner', column: 'C_Bpartner_ID', type: 'selector', label: 'Business Partner' },
-  { key: 'description', column: 'Description', type: 'string', label: 'Description' },
+  { key: 'description', column: 'Description', type: 'string', label: 'Description', maxLength: 255 },
   { key: 'status', column: 'Status', type: 'status', label: 'Status', enumLabels: { 'RPAP': 'statusRpap', 'RPAE': 'statusRpae', 'RPVOID': 'statusRpvoid', 'PPM': 'statusPpm', 'RPR': 'statusRpr', 'RDNC': 'statusRdnc', 'PWNC': 'statusPwnc', 'RPPC': 'statusRppc', 'ETGOERR': 'statusEtgoerr' }, required: true },
   { key: 'transactionType', column: 'Trxtype', type: 'enum', label: 'Transaction Type', enumLabels: { 'BPD': 'trxtypeBpd', 'BPW': 'trxtypeBpw', 'BF': 'trxtypeBf' }, required: true },
   { key: 'gLItem', column: 'C_Glitem_ID', type: 'selector', label: 'Accounting account' },

@@ -6,6 +6,7 @@ import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { shouldAnchorDropdownRight } from '@/lib/dropdownAnchor.js';
 import { SelectorChip } from './SelectorChip.jsx';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
+import { createQueryKey, useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
@@ -282,6 +283,10 @@ export function CreatableSearchSelect({
   placeholderOverride,
 }) {
   const ui = useUI();
+  // ETP-4564: shared cache for selector option pages (scope-isolated, catalog
+  // freshness). Null when no DataProvider is mounted → direct fetch (prior behavior).
+  const dataCache = useOptionalDataCache();
+  const cacheScope = dataCache?.scope;
   const apiFetch = useApiFetch();
   // `query` is PURE search text — it must never be prefilled with the selected value's
   // label (ETP-4600 Gap B). The chip's label comes from `displayValue` (caller-provided)
@@ -323,6 +328,12 @@ export function CreatableSearchSelect({
   const loadedForRef = useRef(null);
   // Debounce timer for serverSearch mode's typing-triggered fetch.
   const debounceRef = useRef(null);
+  // Timer for the onBlur close/reset delay below — tracked so it can be cleared on unmount,
+  // same as debounceRef. Without this, a blur that fires just before unmount (e.g. a test
+  // finishing, or the field leaving the DOM via navigation) leaves the timeout armed; it then
+  // fires after teardown and crashes calling setOpen/setEditingIntent on an unmounted component
+  // (in Vitest specifically: `window is not defined`, since jsdom's window is gone by then).
+  const blurTimeoutRef = useRef(null);
   // serverSearch mode only: mirrors `hasMore`/next-page offset in refs so the scroll handler
   // (which fires outside React's render cycle) always reads the latest value synchronously,
   // exactly like SelectorInput.jsx's hasMoreRef/offsetRef.
@@ -514,10 +525,26 @@ export function CreatableSearchSelect({
     const requestGeneration = searchGenerationRef.current;
     fetchInFlightRef.current = true;
     if (offset === 0) setLoading(true); else setLoadingMore(true);
-    fetchServerOptions({
+    const fetchPage = () => fetchServerOptions({
       apiFetch, selectorUrl, selectorContext, parentKey, parentValue, filterKey,
       query: searchQuery, offset, limit: SERVER_SEARCH_PAGE,
-    })
+    });
+    // ETP-4564: route the FIRST page through the shared cache so reopening the dropdown
+    // (same context + query) reuses it instead of refetching. Falls back to a direct fetch
+    // when no DataProvider is mounted (prior behavior). Load-more pages (offset>0) always
+    // fetch directly — only the initial page is the reuse-on-reopen case ETP-4564 targets.
+    const run = (offset === 0 && dataCache?.cache && cacheScope)
+      ? dataCache.cache.fetchQuery({
+        key: createQueryKey({
+          ...cacheScope, apiBase: selectorUrl, entity: 'selector',
+          filters: { ...(selectorContext ?? {}), ...(filterKey && parentValue ? { [filterKey]: parentValue } : {}) },
+          recordId: `q:${searchQuery ?? ''}`,
+        }),
+        fetcher: fetchPage,
+        staleTime: dataCache.catalogStaleTime,
+      })
+      : fetchPage();
+    run
       .then(({ items, hasMore: more }) => {
         if (searchGenerationRef.current !== requestGeneration) return;
         setServerOptions(prev => (offset === 0 ? items : [...(prev ?? []), ...items]));
@@ -537,10 +564,13 @@ export function CreatableSearchSelect({
       });
   // selectorContext intentionally omitted — see the fetch-once effect above for the same rationale.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverSearch, selectorUrl, token, parentKey, parentValue, filterKey, apiFetch]);
+  }, [serverSearch, selectorUrl, token, parentKey, parentValue, filterKey, apiFetch, dataCache, cacheScope]);
 
   useEffect(() => {
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+    };
   }, []);
 
   // serverSearch mode only: reset the cached page whenever the dependent parent changes (a
@@ -908,7 +938,8 @@ export function CreatableSearchSelect({
           onKeyDown={handleInputKeyDown}
           onBlur={() => {
             isEditingRef.current = false;
-            setTimeout(() => {
+            if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+            blurTimeoutRef.current = setTimeout(() => {
               setOpen(false);
               resetSearchState();
               // Revert to chip if the user blurred without picking another option

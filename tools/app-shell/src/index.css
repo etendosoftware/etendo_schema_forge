@@ -28,6 +28,19 @@
   --floating-toolbar-bg: 222 47% 11%;
   --floating-toolbar-fg: 210 20% 98%;
   --floating-toolbar-muted: 215 16% 72%;
+
+  /*
+   * ETP-5190 — the First Steps "step completed" badge: a solid green disc with a white check,
+   * taken from the design. `--status-success-*` cannot serve it: those are the surface trio for
+   * a success BANNER (a pale tint, a dark readable text colour and a border), and the design
+   * asks for a saturated fill with white on top — using `--status-success-fg` as a fill would
+   * also invert to a pale mint in dark theme and leave a white check unreadable on it.
+   *
+   * Theme-invariant on purpose, like the scrim and the floating toolbar above: a completion
+   * badge means the same thing in both themes and reads correctly on either surface.
+   */
+  --status-done-badge: 150 63% 41%;
+  --status-done-badge-fg: 0 0% 100%;
 }
 
 /*
