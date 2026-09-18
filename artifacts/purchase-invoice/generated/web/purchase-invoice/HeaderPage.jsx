@@ -23,7 +23,7 @@ const breadcrumb = 'Purchases / Purchase Invoice';
 
 // @sf-generated-start summary:header
 const summary = [
-
+  { key: 'documentNo', column: 'DocumentNo', type: 'string' },
 ];
 
 const statusField = 'documentStatus';
@@ -48,13 +48,14 @@ const draftMode = {
   "processValue": "CO",
   "label": "Confirm",
   "keepSaveWhenCompletedFields": [
-    "orderReference"
+    "orderReference",
+    "accountingDate"
   ]
 };
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['transactionDocument', 'invoiceDate', 'businessPartner', 'partnerAddress', 'priceList', 'accountingDate', 'paymentTerms', 'paymentMethod', 'currency'];
+const requiredHeaderFields = ['transactionDocument', 'documentNo', 'invoiceDate', 'businessPartner', 'partnerAddress', 'priceList', 'accountingDate', 'paymentTerms', 'paymentMethod', 'currency'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -248,6 +249,14 @@ export const api = {
   "selectors": [
     {
       "entity": "header",
+      "field": "adOrgId",
+      "column": "AD_Org_ID",
+      "reference": "Org",
+      "inputMode": "selector",
+      "url": "/sws/neo/purchase-invoice/header/selectors/adOrgId"
+    },
+    {
+      "entity": "header",
       "field": "transactionDocument",
       "column": "C_DocTypeTarget_ID",
       "reference": "DocumentType",
@@ -426,14 +435,6 @@ export const api = {
       "reference": "aeatsii_cause_exemption",
       "inputMode": "selector",
       "url": "/sws/neo/purchase-invoice/header/selectors/aeatsiiCauseExemption"
-    },
-    {
-      "entity": "header",
-      "field": "adOrgId",
-      "column": "AD_Org_ID",
-      "reference": "Org",
-      "inputMode": "selector",
-      "url": "/sws/neo/purchase-invoice/header/selectors/adOrgId"
     },
     {
       "entity": "lines",
@@ -833,6 +834,14 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "psd2GenerateBankPayment",
+      "column": "EM_Psd2_Generate_Bank_Payment",
+      "url": "/sws/neo/purchase-invoice/header/{id}/action/psd2GenerateBankPayment",
+      "processId": "0661406A983B4D8EA611F8596F114D52",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "header",
       "field": "aeatsiiSend",
       "column": "EM_Aeatsii_Send",
       "url": "/sws/neo/purchase-invoice/header/{id}/action/aeatsiiSend",
@@ -845,6 +854,22 @@ export const api = {
       "column": "EM_Aeatsii_Modif",
       "url": "/sws/neo/purchase-invoice/header/{id}/action/aeatsiiModif",
       "processId": "BAAECFDF9FF144E8A610E9F1EF3E5FBE",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "header",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/purchase-invoice/header/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "header",
+      "field": "eTPRRemovePayment",
+      "column": "EM_Etpr_Remove_Payment",
+      "url": "/sws/neo/purchase-invoice/header/{id}/action/eTPRRemovePayment",
+      "processId": "745FCF75B6F14024B96CC14429D8E952",
       "processType": "obuiapp"
     },
     {
@@ -895,14 +920,6 @@ export const api = {
     },
     {
       "entity": "header",
-      "field": "tBAIQRcode",
-      "column": "em_tbai_qrcode",
-      "url": "/sws/neo/purchase-invoice/header/{id}/action/tBAIQRcode",
-      "processId": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "header",
       "field": "tbaiVoidxmlgenerator",
       "column": "EM_Tbai_Voidxmlgenerator",
       "url": "/sws/neo/purchase-invoice/header/{id}/action/tbaiVoidxmlgenerator",
@@ -911,26 +928,10 @@ export const api = {
     },
     {
       "entity": "header",
-      "field": "psd2GenerateBankPayment",
-      "column": "EM_Psd2_Generate_Bank_Payment",
-      "url": "/sws/neo/purchase-invoice/header/{id}/action/psd2GenerateBankPayment",
-      "processId": "0661406A983B4D8EA611F8596F114D52",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "header",
-      "field": "eTPRRemovePayment",
-      "column": "EM_Etpr_Remove_Payment",
-      "url": "/sws/neo/purchase-invoice/header/{id}/action/eTPRRemovePayment",
-      "processId": "745FCF75B6F14024B96CC14429D8E952",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "header",
-      "field": "etblkpBulkposting",
-      "column": "EM_Etblkp_Bulkposting",
-      "url": "/sws/neo/purchase-invoice/header/{id}/action/etblkpBulkposting",
-      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "field": "tBAIQRcode",
+      "column": "em_tbai_qrcode",
+      "url": "/sws/neo/purchase-invoice/header/{id}/action/tBAIQRcode",
+      "processId": "12FECC9DF1F4418AB7DAA46D6A05FEC6",
       "processType": "obuiapp"
     },
     {
@@ -999,7 +1000,8 @@ export const api = {
       "C_DocTypeTarget_ID": "Tipo de documento",
       "PriceList": "Precio",
       "Foreign_Amount": "Importe en Moneda Objetivo",
-      "em_etgo_tbai_status": "Estado Batuz"
+      "em_etgo_tbai_status": "Estado Batuz",
+      "DocumentNo": "N° interno"
     },
     "en_US": {
       "POReference": "Document No.",
@@ -1008,7 +1010,8 @@ export const api = {
       "em_etgo_delivery_status": "Reception Status",
       "C_DocTypeTarget_ID": "Document Type",
       "Foreign_Amount": "Target Currency Amount",
-      "em_etgo_tbai_status": "Batuz Status"
+      "em_etgo_tbai_status": "Batuz Status",
+      "DocumentNo": "Internal No."
     },
     "es_AR": {
       "OutstandingAmt": "Saldo pendiente"

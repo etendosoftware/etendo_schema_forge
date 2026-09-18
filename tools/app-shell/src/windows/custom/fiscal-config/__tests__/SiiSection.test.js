@@ -107,6 +107,17 @@ describe('SiiSection — save button', () => {
   });
 });
 
+// ETP-5338 point 6: explicit name/id on the authorization number input so the
+// browser's password-manager heuristic does not mistake it for a username
+// field paired with CertModal's certificate passphrase.
+describe('SiiSection — anti-autofill hardening (ETP-5338)', () => {
+  it('authorization number input has explicit name and id alongside autoComplete off', () => {
+    assert.match(src, /name="sii-authorization-number"/);
+    assert.match(src, /id="sii-authorization-number"/);
+    assert.match(src, /autoComplete="off"/);
+  });
+});
+
 describe('SiiSection — PUT request', () => {
   it('calls the sii-config endpoint with the correct entity', () => {
     assert.match(src, /sii-config\//);

@@ -3244,3 +3244,71 @@ job fires between the fix and the next Tomcat restart, `ProcessMonitor` tries to
 the log. With the unschedule-only approach that same stray fire was a harmless no-op run. It is
 noise rather than corruption — nothing else is written, and the trigger is not re-armed after the
 restart — but it argues for running this fix close to a restart.
+
+---
+
+## ETP-5274 — "Reversed Sales/Purchase Invoice" doctypes selectable in the invoice doctype selector (R37)
+
+> **Scope note.** ETP-5274 closes both fronts, but NOT symmetrically. Preventive = the rows were
+> **deleted** from the bundled onboarding sampledata (`com.etendoerp.go/referencedata/sampledata/
+> GOClient/`: `C_DOCTYPE.xml`, `C_DOCTYPE_TRL.xml`, `C_POC_DOCTYPE_TEMPLATE.xml`,
+> `C_POC_EMAILDEFINITION.xml`, `AD_SEQUENCE.xml`, `AD_REF_DATA_LOADED.xml`). Corrective
+> (`20260916T120000Z__R37-deactivate-reversed-invoice-doctypes.sql`) only **deactivates**. The
+> asymmetry is deliberate and is the general rule for this framework: never delete rows from an
+> existing tenant when a hard FK (`C_Invoice.C_DocType_ID`) may already point at them.
+
+- **2026-09-16 — The discriminator for the two internal reversal invoice doctypes is
+  `isreturn='Y' AND docbasetype IN ('ARI','API')`, and nothing more.** Verified on
+  `etendo_go_new_2`: exactly 98 rows over 48 clients, and the only two names in the result are
+  "Reversed Purchase Invoice" (API, `issotrx='N'`) and "Reversed Sales Invoice" (ARI,
+  `issotrx='Y'`). This is the mirror image of the exclusion documented in
+  `20260911T120000Z__R35-verifactu-doctype-fields-corrected.sql` (whose `isreturn='N'` filter exists
+  precisely to keep "Reversed Sales Invoice" out of Verifactu seeding).
+  **Apply:** `docbasetype` alone is what excludes the other `isreturn='Y'` doctypes in the fleet —
+  "Return Material Sales Invoice" is `ARI_RM`, not `ARI` (plus already inactive since R17); the
+  others are `MMR`/`MMS`/`POO`/`SOO`.
+
+- **Adding a column that is constant across every matching row does not make a discriminator
+  "more explicit" — it makes it more fragile.** `issotrx`, `isreversal` and `isdefault` are all
+  constant over the 98 rows (and there is no ARI/API doctype anywhere in the DB with
+  `isreversal='Y'`), so each one would discriminate nothing while creating a way to MISS a
+  mis-seeded row on some tenant.
+  **Apply:** before narrowing a predicate "for safety", `GROUP BY` the candidate column over the
+  match set. Zero variance ⇒ zero discriminating power ⇒ leave it out and document why.
+
+- **An `ad_sequence` is NOT owned by the doctype that references it — deactivating it because one
+  referencing doctype is going away can break a doctype that stays alive.** Confirmed real case:
+  client "F&B International Group" (`23C59575B9CF467C9620760EB255B389`) has sequence
+  "ES Return Material Sales Invoice" (`5340EE6259034C45BA32A1933F4DD42E`) referenced by BOTH
+  "Reversed Sales Invoice" (ARI, deactivated by R37) and "ES Return Material Sales Invoice"
+  (`ARI_RM`, must stay active). For the record,
+  `20260730T180000Z__R17-rectificativa-doctype-sequence.sql` step 3 deactivates sequences with no
+  such guard — applied and immutable, not corrected.
+  **Apply:** implement the guard by ORDERING inside the single `@apply` transaction — flip the
+  doctypes first, then deactivate a sequence only when
+  `NOT EXISTS (… c_doctype d2 WHERE d2.docnosequence_id = s.ad_sequence_id AND d2.isactive='Y')`.
+  Post-step-1 live state answers the question with no hardcoded exception list. Surface what the
+  guard spared via `@report` (the R19 pattern), or the operator never learns what was skipped.
+
+- **Duplicated doctypes per tenant are real — never write one-row-per-client SQL.** That same F&B
+  tenant carries FOUR target doctypes: two "Reversed Purchase Invoice" (each with its OWN distinct
+  `ad_sequence` row, both named identically) and two "Reversed Sales Invoice" (one with its own
+  sequence, one sharing the ES Return Material one). Expected R37 outcome for it: 4 doctypes
+  deactivated, 3 sequences deactivated, 1 kept active and reported.
+
+- **`c_doctype` carries two ETSG triggers that fire on UPDATE, not just INSERT** —
+  `etsg_check_rectif_doc_type` and `etsg_doctype_modif_rectif_trg`. Both are gated on the client/org
+  having a SIF config (SII / TicketBAI / Verifactu, ETP-4548) and on
+  `em_etsg_isrectificative='Y'`. All 98 R37 targets are `em_etsg_isrectificative='N'` with
+  `isdocnocontrolled='Y'` and a sequence whose own `em_etsg_isrectificative` is also `'N'` (a
+  consistent pair), and R37 touches only `isactive` + the audit stamp, so neither trigger can raise.
+  Also confirmed: no `ad_sequence` row in the fleet links back to a target doctype via
+  `ad_sequence.c_doctype_id` (0 rows), so deactivating the sequence cannot disturb the trigger's
+  `V_Rectif_Seq_Status` lookup either.
+  **Apply:** before writing an `UPDATE` on `c_doctype`, dump `pg_get_functiondef` for its triggers
+  and check which columns they read. An `isactive`-only flip is not automatically safe there.
+
+- **Dry-run result (2026-09-16, `etendo_go_new_2`):** `--fix R37 --dry-run` over the full 56-tenant
+  universe → 48 `WOULD_APPLY`, 8 `SKIPPED_NOT_NEEDED`, which matches the 48 clients the
+  discriminator query returns. Guard verified read-only (no write transaction) by simulating the
+  post-step-1 state in a CTE.

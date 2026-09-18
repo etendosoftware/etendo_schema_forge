@@ -7,6 +7,7 @@ import { neoBase } from '@/components/related-documents/helpers.js';
 import { Loader2, TriangleAlert, OctagonAlert, CircleCheck, Download, Landmark } from 'lucide-react';
 import { formatAmount, formatPeriod, triggerBase64Download, applyIdentParams, IBAN_REQUIRED_TIPOS, DECLARATION_TYPE_INGRESO } from '../../fiscalModelsUtils.js';
 import { isLastPeriodOfYear } from './fm303Layouts.js';
+import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 
 // ── Pure helpers (exported for unit testing — no DOM/React involved) ──────────
 
@@ -423,10 +424,9 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
               </div>
 
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer', marginBottom: testMode ? 12 : 0 }}>
-                <input
-                  type="checkbox"
+                <CheckboxField
                   checked={testMode}
-                  onChange={e => setTestMode(e.target.checked)}
+                  onToggle={val => setTestMode(val)}
                   data-testid="AeatSubmitFlow__testMode" />
                 {t('fm.aeat.test_mode.label') ?? 'Validate without filing'}
               </label>

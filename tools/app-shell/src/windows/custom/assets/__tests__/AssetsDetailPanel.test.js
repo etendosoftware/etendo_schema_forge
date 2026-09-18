@@ -127,14 +127,18 @@ describe('AssetsDetailPanel — field definitions', () => {
     // ETP-4914 — corrected matrix: Centro de costo is also "Por config" for Activo
     // (Amortizaciones), not "Nunca" as ETP-4529 originally recorded — its raw AD
     // DisplayLogic is already correctly wired, same pattern as Proyecto's. Contacto
-    // remains dropped (still "Nunca"-equivalent in this pass; its own "Por config"
-    // fix is deferred pending an AD-metadata change). Producto is "Siempre" — it
+    // (businessPartner) is corrected in this same ETP-4914 pass and is now shown —
+    // but it is "Siempre" (gated only by `depreciate`), not a GL-config-gated
+    // dimension like Project/Cost Center, so it is deliberately NOT a candidate
+    // here; it renders as a plain field directly in group2Fields instead (see the
+    // dedicated businessPartner shape test below). Producto is "Siempre" too — it
     // lives in group1Fields as a plain always-visible field, never a dimension
     // candidate, so this array-scoped check doesn't need to mention it.
     const candidatesBlock = src.match(/dimensionFieldCandidates = \[[\s\S]*?\];/)[0];
     assert.match(candidatesBlock, /'C_Project_ID'/);
     assert.match(candidatesBlock, /'EM_Etadas_Costcenter_ID'/);
-    // Contacto is still not a candidate (deferred).
+    // Contacto is shown (see group2Fields), but not as a dimension candidate —
+    // it isn't GL-config-gated, only depreciate-gated.
     assert.doesNotMatch(candidatesBlock, /'C_BPartner_ID'/);
     // The 5 out-of-scope dimensions were removed from the panel.
     assert.doesNotMatch(candidatesBlock, /'EM_Etadas_User1_ID'/);
@@ -142,6 +146,23 @@ describe('AssetsDetailPanel — field definitions', () => {
     assert.doesNotMatch(candidatesBlock, /'EM_Etadas_Salesregion_ID'/);
     assert.doesNotMatch(candidatesBlock, /'EM_Etadas_C_Activity_ID'/);
     assert.doesNotMatch(candidatesBlock, /'EM_Etadas_Campaign_ID'/);
+  });
+
+  it('defines businessPartner (Contacto) as a plain group2Fields entry using a search-select, not the product lookup modal (ETP-4914)', () => {
+    // Contacto is "Siempre" for this Cabecera per the corrected matrix — rendered
+    // directly in group2Fields, gated only by `depreciate` (not a dimension
+    // candidate — see the test above). It must resolve to the plain
+    // SearchSelectField -> CreatableSearchSelect path (same as sales-order's own
+    // C_BPartner_ID field), so `lookup`/`popup` — which would route it to the
+    // product-search modal instead — must be absent.
+    const group2Block = src.match(/group2Fields = \[[\s\S]*?\];/)[0];
+    assert.match(group2Block, /'businessPartner'/);
+    const bpFieldMatch = group2Block.match(/\{ key: 'businessPartner'[^}]*\}/);
+    assert.ok(bpFieldMatch, 'businessPartner field definition not found in group2Fields');
+    const bpField = bpFieldMatch[0];
+    assert.match(bpField, /column: 'C_BPartner_ID'/);
+    assert.doesNotMatch(bpField, /lookup:\s*true/);
+    assert.doesNotMatch(bpField, /popup:\s*true/);
   });
 
   it('defines product as a plain, always-visible group1Fields entry (ETP-4529 — Siempre)', () => {
@@ -175,11 +196,16 @@ describe('AssetsDetailPanel — accounting dimensions section', () => {
     assert.match(src, /depreciate && \([\s\S]*?assetsGroupDimensionsTitle/);
   });
 
-  it('includes the kept dimension keys in the read-only field set', () => {
-    assert.match(src, /'eTADASCostCenter'/);
-    assert.match(src, /'businessPartner'/);
-    assert.match(src, /'product'/);
-    assert.doesNotMatch(src, /'eTADASSalesCampaign'/);
+  it('includes the kept dimension keys and businessPartner in the read-only field set', () => {
+    // readOnlyAll locks these fields when the panel is not in edit mode. Contacto
+    // (businessPartner) belongs here too — it's a depreciate-gated field (ETP-4914,
+    // shown per the corrected matrix), not a dimension, but it must still freeze
+    // like the rest of group2Fields/group1Fields when editing is off.
+    const readOnlyBlock = src.match(/readOnlyAll = [\s\S]*?\.map\(k => \[k, true\]\)\)/)[0];
+    assert.match(readOnlyBlock, /'eTADASCostCenter'/);
+    assert.match(readOnlyBlock, /'businessPartner'/);
+    assert.match(readOnlyBlock, /'product'/);
+    assert.doesNotMatch(readOnlyBlock, /'eTADASSalesCampaign'/);
   });
 });
 

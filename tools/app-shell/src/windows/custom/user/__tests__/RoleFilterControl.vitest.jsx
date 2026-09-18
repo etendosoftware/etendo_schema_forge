@@ -95,6 +95,25 @@ describe('RoleFilterControl', () => {
     expect(screen.getByTestId('codes').textContent).not.toContain('Broken');
   });
 
+  // ETP-5188 (Point 5) — "Sin rol" sentinel, always prepended ahead of the real roles.
+  describe('"Sin rol" sentinel (ETP-5188)', () => {
+    it('always includes the NO_ROLE_FILTER_VALUE sentinel as the first code, labeled "noRole"', () => {
+      render(<RoleFilterControl value={null} onChange={vi.fn()} roles={ROLES} />);
+      const items = screen.getByTestId('codes').textContent;
+      expect(items).toContain('__no_role__::noRole');
+    });
+
+    it('includes the sentinel even when roles is a non-empty array with no admin role', () => {
+      render(<RoleFilterControl value={null} onChange={vi.fn()} roles={[{ id: 'role-fin', name: 'Finance' }]} />);
+      expect(screen.getByTestId('codes').textContent).toContain('__no_role__::noRole');
+    });
+
+    it('selects the sentinel as the current value when passed explicitly', () => {
+      render(<RoleFilterControl value="__no_role__" onChange={vi.fn()} roles={ROLES} />);
+      expect(screen.getByTestId('current-value')).toHaveTextContent('__no_role__');
+    });
+  });
+
   // ETP-4906 — `data-testid` wrapper prop (was silently dropped: the component's
   // signature never accepted it). Defaults to `RoleFilterControl__toolbar`, applied
   // on the root wrapping element, additional to (never replacing) the internal,

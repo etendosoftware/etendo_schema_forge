@@ -51,41 +51,53 @@ vi.mock('@/components/ui/dialog', () => ({
 // Field primitives → lightweight stubs that expose the testids + callbacks.
 // ChipSelect resolves a deterministic { id, name } keyed off its `testId`, so
 // payload assertions can distinguish the GL item, the contact and each dimension.
-vi.mock('@/components/forms/fields', () => ({
-  Field: ({ label, children }) => (
-    <div>
-      <span>{label}</span>
-      {children}
-    </div>
-  ),
-  DateInput: ({ value, onChange, 'data-testid': dtid }) => (
-    <input data-testid={dtid} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
-  ),
-  AmountInput: ({ value, onChange, onBlur, currency, 'data-testid': dtid }) => (
-    <div>
-      <input data-testid={dtid} value={value ?? ''} onChange={onChange} onBlur={onBlur} />
-      <span data-testid={`${dtid}-currency`}>{currency}</span>
-    </div>
-  ),
-  ChipSelect: ({ value, onChange, testId }) => (
-    <div>
-      <span data-testid={`${testId}-value`}>{value?.id ?? ''}</span>
-      <button
-        type="button"
-        data-testid={`${testId}-pick`}
-        onClick={() => onChange({ id: `${testId}-id`, name: `${testId}-name` })}>
-        pick
-      </button>
-      <button
-        type="button"
-        data-testid={`${testId}-pick2`}
-        onClick={() => onChange({ id: `${testId}-id-2`, name: `${testId}-name-2` })}>
-        pick2
-      </button>
-      <button type="button" data-testid={`${testId}-clear`} onClick={() => onChange(null)}>clear</button>
-    </div>
-  ),
-}));
+//
+// ETP-5107 — partial mock (`importOriginal`) instead of a full replacement: the amount
+// field is now a `MaskedAmountInput`, and the REAL one is kept. Its masking is the
+// behaviour the amount cases below assert (a clean dot-decimal value reported outward,
+// the grouped/2-decimal idle display on blur), so stubbing it with a pass-through input
+// would delete that coverage rather than preserve it. The only thing wrapped around it is
+// the `${testid}-currency` span the two ETP-4314 cases read the ISO code from — the real
+// component renders the currency SYMBOL, not the code.
+vi.mock('@/components/forms/fields', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    Field: ({ label, children }) => (
+      <div>
+        <span>{label}</span>
+        {children}
+      </div>
+    ),
+    DateInput: ({ value, onChange, 'data-testid': dtid }) => (
+      <input data-testid={dtid} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
+    ),
+    MaskedAmountInput: (props) => (
+      <div>
+        <actual.MaskedAmountInput {...props} />
+        <span data-testid={`${props['data-testid']}-currency`}>{props.currency}</span>
+      </div>
+    ),
+    ChipSelect: ({ value, onChange, testId }) => (
+      <div>
+        <span data-testid={`${testId}-value`}>{value?.id ?? ''}</span>
+        <button
+          type="button"
+          data-testid={`${testId}-pick`}
+          onClick={() => onChange({ id: `${testId}-id`, name: `${testId}-name` })}>
+          pick
+        </button>
+        <button
+          type="button"
+          data-testid={`${testId}-pick2`}
+          onClick={() => onChange({ id: `${testId}-id-2`, name: `${testId}-name-2` })}>
+          pick2
+        </button>
+        <button type="button" data-testid={`${testId}-clear`} onClick={() => onChange(null)}>clear</button>
+      </div>
+    ),
+  };
+});
 
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
