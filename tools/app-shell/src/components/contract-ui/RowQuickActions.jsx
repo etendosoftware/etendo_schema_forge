@@ -253,6 +253,16 @@ export default function RowQuickActions({
       // sizes it to the enclosing <td>'s own full height instead of a
       // shorter fixed height floating inside it.
       //
+      // ETP-5268 follow-up — "las acciones no deberian estar en la columna,
+      // si no que siempre tiene que estar al hacer hover": the reserved
+      // column width/space stays (DataTable's own quickActionsColumnStyle is
+      // untouched), but the icons themselves are hover-only again —
+      // `opacity-0 group-hover/row:opacity-100`, no transition class, so the
+      // toggle is instant ("sacale la transicion... que sea 100% rapido").
+      // Independent of the cell's own `group-hover/row:sticky` (this div
+      // stays `position: absolute` either way, so hiding it at rest never
+      // reintroduces the row-height regression above).
+      //
       // ETP-5268 follow-up — "no forma parte de una columna ... va con la
       // pantalla": DataTable's quick-actions column used to be
       // UNCONDITIONALLY `sticky right-0`, floating over whatever real
@@ -289,7 +299,7 @@ export default function RowQuickActions({
         // espacio" (a `right-3` gap here read as an unexplained sliver of
         // the reserved column left uncovered at the true edge). `px-3`
         // keeps the icons themselves off the very edge as inner padding.
-        'absolute right-0 inset-y-0 h-full flex flex-row items-center justify-center gap-0.5 px-3 z-10 opacity-100',
+        'absolute right-0 inset-y-0 h-full flex flex-row items-center justify-center gap-0.5 px-3 z-10 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100',
       ].join(' ')}
       data-testid="row-quick-actions"
       onClick={stop}

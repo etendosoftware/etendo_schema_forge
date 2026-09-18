@@ -1,8 +1,8 @@
 {
-  "version": "0.12.1",
+  "version": "0.18.0",
   "generatedAt": "2026-04-27T19:18:32.198Z",
-  "updatedAt": "2026-08-03T18:55:28.096Z",
-  "contractChecksum": "a22af17a9ef70175",
+  "updatedAt": "2026-09-17T12:09:42.949Z",
+  "contractChecksum": "77e11269652413b7",
   "apiPrediction": {
     "specName": "tax-rate",
     "baseUrl": "/sws/neo/tax-rate",
@@ -17,7 +17,8 @@
         "listUrl": "/sws/neo/tax-rate/tax",
         "detailUrl": "/sws/neo/tax-rate/tax/{id}",
         "supportedFilters": [
-          "name"
+          "name",
+          "applicableTo"
         ]
       },
       "accounting": {
@@ -33,6 +34,14 @@
       }
     },
     "selectors": [
+      {
+        "entity": "tax",
+        "field": "taxCategory",
+        "column": "C_TaxCategory_ID",
+        "reference": "TaxCategory",
+        "inputMode": "selector",
+        "url": "/sws/neo/tax-rate/tax/selectors/taxCategory"
+      },
       {
         "entity": "accounting",
         "field": "taxDue",
@@ -73,14 +82,16 @@
         "Rate": "Índice",
         "SOPOType": "Tipo venta/compra",
         "ValidFrom": "Válido desde",
-        "Description": "Descripción"
+        "Description": "Descripción",
+        "C_TaxCategory_ID": "Categoría de impuesto"
       },
       "en_US": {
         "Name": "Name",
         "Rate": "Rate",
         "SOPOType": "Sales/Purchase Type",
         "ValidFrom": "Valid From",
-        "Description": "Description"
+        "Description": "Description",
+        "C_TaxCategory_ID": "Tax Category"
       }
     }
   },
@@ -94,6 +105,9 @@
           },
           "validFrom": {
             "readOnly": true,
+            "required": true
+          },
+          "taxCategory": {
             "required": true
           },
           "rate": {
@@ -152,11 +166,15 @@
       "Use for tax rate management."
     ],
     "minimumCreate": {
+      "headerFields": [
+        "taxCategory"
+      ],
       "lineFields": [
         "taxDue",
         "taxCredit"
       ],
       "recommendedOrder": [
+        "createHeader",
         "createLines"
       ]
     },
@@ -164,10 +182,18 @@
     "actions": [],
     "workflow": [],
     "edgeCases": [],
-    "examples": [],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "taxCategory"
+        ]
+      }
+    ],
     "warnings": [],
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "2b06b6b67fe2cb0e"
+  "checksum": "5966c2ffcc9338e5"
 }

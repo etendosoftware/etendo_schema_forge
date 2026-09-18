@@ -24,7 +24,11 @@ const groups = {
 const aliases = { calendar: 'fiscal-calendar', 'fiscal-monitor': 'sii-monitor', 'fiscal-config': 'sii-config' };
 const exceptions = {
   dashboard: {},
-  'first-steps': {},
+  // ETP-5395 — gated to the account Owner via the `isOwner` capability
+  // (menu.json). Distinct capability name from `isAdminOrClientAdmin` below,
+  // so it does not participate in the accessWindowId admin bypass or in the
+  // `roles`/`acct-process-monitor` capability-sibling set.
+  'first-steps': { capability: 'isOwner' },
   authorize: {},
   roles: { capability: 'isAdminOrClientAdmin' },
   'api-keys': { capability: 'isAdminOrClientAdmin', flag: 'public-api-keys' },

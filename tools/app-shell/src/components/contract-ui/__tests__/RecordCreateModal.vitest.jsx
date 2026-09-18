@@ -44,6 +44,11 @@ const mocks = vi.hoisted(() => ({
   setLocale: () => {},
   apiFetch: vi.fn(),
   localeProvider: { props: null },
+  // ETP-5332 — "Completado" must save the popup's own embedded window before re-reading the
+  // record. Mocked (not imported for real) because the ordering guarantee under test is the
+  // CALL to this function happening before the re-read, not the registry's own internals —
+  // those are covered by unsavedChanges.vitest.js.
+  saveEmbeddedUnsavedChanges: vi.fn(),
 }));
 mocks.localeSwitch = { locale: 'es_ES', setLocale: mocks.setLocale };
 
@@ -81,6 +86,29 @@ vi.mock('@/components/ui/dialog.jsx', () => ({
   DialogContent: ({ children, ...rest }) => <div {...rest}>{children}</div>,
   DialogHeader: ({ children }) => <div>{children}</div>,
   DialogTitle: ({ children }) => <h2 data-testid="record-create-title">{children}</h2>,
+}));
+
+vi.mock('@/lib/unsavedChanges.js', () => ({
+  saveEmbeddedUnsavedChanges: mocks.saveEmbeddedUnsavedChanges,
+}));
+
+// Window mode mounts a real application window via EmbeddedWindowRoute (its own memory
+// router, PageMetaProvider, EmbeddedWindowContext). None of that machinery is what these
+// tests exercise — only that `onRecordId` reaches `finishFromWindow` — so it is stubbed to a
+// thin shell exposing a button that fires it directly.
+vi.mock('../EmbeddedWindowRoute.jsx', () => ({
+  default: ({ children, onRecordId }) => (
+    <div data-testid="stub-embedded-window-route">
+      <button
+        type="button"
+        data-testid="stub-set-record-id"
+        onClick={() => onRecordId('rec-99')}
+      >
+        set-record-id
+      </button>
+      {children}
+    </div>
+  ),
 }));
 
 import RecordCreateModal, {
@@ -1151,6 +1179,106 @@ describe('RecordCreateModal — post-create phase', () => {
     expect(screen.getByTestId('record-create-submit')).toBeInTheDocument();
     expect(screen.getByTestId('record-create-cancel')).toBeInTheDocument();
     expect(props.onCreated).not.toHaveBeenCalled();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Window mode — "Completado" must save the embedded window's own pending edits
+// before re-reading and handing the record to the caller (ETP-5332).
+// ────────────────────────────────────────────────────────────────────────────
+
+function StubWindowApp() {
+  return <div data-testid="stub-window-app" />;
+}
+
+const WINDOW_TARGET = {
+  key: 'contact',
+  entity: 'contact',
+  titleKey: 'createContactTitle',
+  errorKey: 'createContactError',
+  windowHintKey: 'createContactHint',
+  apiBaseUrl: '/sws/neo/contact',
+  windowName: 'contacts',
+  loadWindow: () => Promise.resolve({ default: StubWindowApp }),
+  // Loaded unconditionally by the mount effect even in window mode (the fallback form is
+  // never rendered while `windowMode` is true) — resolving it keeps the effect from also
+  // surfacing an unrelated `target.errorKey` error.
+  loadForm: () => Promise.resolve({ default: StubForm }),
+};
+
+/** Routes `/contact/defaults` and a single-record GET independently, like `installApiFetch`. */
+function installWindowApiFetch({
+  reread = jsonResponse({ response: { data: [{ id: 'rec-99', name: 'Acme' }] } }),
+} = {}) {
+  mocks.apiFetch.mockImplementation((url, opts) => {
+    if (url === '/contact/defaults') return Promise.resolve(jsonResponse({ defaults: {} }));
+    if (/^\/contact\/[^/]+$/.test(url) && !opts) {
+      return typeof reread === 'function' ? reread(url) : Promise.resolve(reread);
+    }
+    throw new Error(`unexpected apiFetch call: ${url}`);
+  });
+}
+
+async function renderWindowModal(props) {
+  const utils = render(<RecordCreateModal {...props} />);
+  await screen.findByTestId('stub-embedded-window-route');
+  return utils;
+}
+
+describe('RecordCreateModal — window mode finish (ETP-5332)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.saveEmbeddedUnsavedChanges.mockReset().mockResolvedValue(true);
+  });
+
+  it('calls saveEmbeddedUnsavedChanges BEFORE re-reading the record and handing it to onCreated', async () => {
+    installWindowApiFetch();
+    const user = userEvent.setup();
+    const props = baseProps({ target: WINDOW_TARGET });
+    await renderWindowModal(props);
+
+    await user.click(screen.getByTestId('stub-set-record-id'));
+    await waitFor(() => expect(screen.getByTestId('record-create-finish')).toBeEnabled());
+
+    await user.click(screen.getByTestId('record-create-finish'));
+
+    await waitFor(() => expect(props.onCreated).toHaveBeenCalledWith({ id: 'rec-99', name: 'Acme' }));
+    expect(mocks.saveEmbeddedUnsavedChanges).toHaveBeenCalledTimes(1);
+
+    // The re-read must happen strictly AFTER the save call, not merely "also happen".
+    const rereadCallIndex = mocks.apiFetch.mock.calls.findIndex(([url]) => url === '/contact/rec-99');
+    expect(rereadCallIndex).toBeGreaterThanOrEqual(0);
+    const rereadOrder = mocks.apiFetch.mock.invocationCallOrder[rereadCallIndex];
+    const saveOrder = mocks.saveEmbeddedUnsavedChanges.mock.invocationCallOrder[0];
+    expect(saveOrder).toBeLessThan(rereadOrder);
+  });
+
+  it('does not call onCreated and keeps the dialog open when saveEmbeddedUnsavedChanges refuses', async () => {
+    installWindowApiFetch();
+    mocks.saveEmbeddedUnsavedChanges.mockResolvedValue(false);
+    const user = userEvent.setup();
+    const props = baseProps({ target: WINDOW_TARGET });
+    await renderWindowModal(props);
+
+    await user.click(screen.getByTestId('stub-set-record-id'));
+    await waitFor(() => expect(screen.getByTestId('record-create-finish')).toBeEnabled());
+
+    await user.click(screen.getByTestId('record-create-finish'));
+
+    // The refusal must stop right there: no re-read, no onCreated, and the popup stays open
+    // on the embedded window so the user can see whatever validation error it now shows.
+    await waitFor(() => expect(mocks.saveEmbeddedUnsavedChanges).toHaveBeenCalledTimes(1));
+    expect(props.onCreated).not.toHaveBeenCalled();
+    expect(mocks.apiFetch.mock.calls.some(([url]) => url === '/contact/rec-99')).toBe(false);
+    expect(screen.getByTestId('record-create-modal')).toBeInTheDocument();
+    expect(screen.getByTestId('record-create-window')).toBeInTheDocument();
+  });
+
+  it('does nothing when Completado is not clicked (no premature save)', async () => {
+    installWindowApiFetch();
+    await renderWindowModal(baseProps({ target: WINDOW_TARGET }));
+
+    expect(mocks.saveEmbeddedUnsavedChanges).not.toHaveBeenCalled();
   });
 });
 
