@@ -47,6 +47,43 @@ describe('buildDocumentRowQuickActions', () => {
     });
   });
 
+  // ETP-5378 — the two return windows need Descontabilizar in the same kebab, so the
+  // gate grew an opt-in `unpost` branch. It must stay OFF by default: goods-shipment and
+  // goods-receipt declare their own unpost elsewhere, and a window that declares none in
+  // decisions.json must not grow one in the grid only.
+  describe('buildPostMenuActions — includeUnpost (ETP-5378)', () => {
+    const UNPOST = {
+      key: 'unpost',
+      labelKey: 'unpost',
+      neoAction: 'unpost',
+      successKey: 'documentUnposted',
+      destructive: true,
+    };
+
+    it('offers unpost instead of post once the row is posted', () => {
+      assert.deepEqual(
+        buildPostMenuActions({ row: { processed: 'Y', posted: 'Y' }, includeUnpost: true }),
+        [UNPOST],
+      );
+    });
+
+    it('still offers post (and never unpost) while the row is not posted', () => {
+      assert.deepEqual(
+        buildPostMenuActions({ row: { processed: 'Y', posted: 'N' }, includeUnpost: true }),
+        [{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }],
+      );
+    });
+
+    it('offers nothing at all on a draft row, posted or not', () => {
+      assert.deepEqual(buildPostMenuActions({ row: { processed: false, posted: 'N' }, includeUnpost: true }), []);
+      assert.deepEqual(buildPostMenuActions({ row: { processed: false, posted: 'Y' }, includeUnpost: true }), []);
+    });
+
+    it('stays off by default — a posted row yields no unpost entry', () => {
+      assert.deepEqual(buildPostMenuActions({ row: { processed: 'Y', posted: 'Y' } }), []);
+    });
+  });
+
   describe('buildMenuActionExecutedHandler / onRefresh (ETP-5209)', () => {
     it('calls onRefresh when a neoAction menu action completes', () => {
       let refreshCalls = 0;
@@ -60,6 +97,15 @@ describe('buildDocumentRowQuickActions', () => {
       const handler = buildMenuActionExecutedHandler(fakeUi, () => { refreshCalls += 1; });
       handler({ key: 'someOtherAction' }, { success: true });
       assert.equal(refreshCalls, 0);
+    });
+
+    // ETP-5378 — the guard used to be `if (!action.neoAction) return`, which silently
+    // swallowed the toast and skipped the refresh for a documentAction row entry.
+    it('also handles a documentAction menu action (ETP-5378)', () => {
+      let refreshCalls = 0;
+      const handler = buildMenuActionExecutedHandler(fakeUi, () => { refreshCalls += 1; });
+      handler({ documentAction: 'RE', successKey: 'reactivated' }, { success: true });
+      assert.equal(refreshCalls, 1);
     });
 
     it('does not throw when onRefresh is not provided (optional chaining)', () => {
@@ -94,6 +140,17 @@ describe('buildDocumentRowQuickActions', () => {
 
     it('is usable with no arguments (defaults to an empty options object)', () => {
       assert.doesNotThrow(() => buildDocumentRowQuickActionsPostMenu());
+    });
+
+    // ETP-5378 — opting into unpost necessarily wraps the gate, so identity is traded for
+    // the knob; only windows that ask for it pay that price.
+    it('binds includeUnpost through to the menuActions gate', () => {
+      const slice = buildDocumentRowQuickActionsPostMenu({ ui: fakeUi, includeUnpost: true });
+      assert.notEqual(slice.menuActions, buildPostMenuActions);
+      assert.deepEqual(
+        slice.menuActions({ row: { processed: 'Y', posted: 'Y' } }),
+        [{ key: 'unpost', labelKey: 'unpost', neoAction: 'unpost', successKey: 'documentUnposted', destructive: true }],
+      );
     });
   });
 });

@@ -3,7 +3,7 @@ import ReturnToVendorShipmentPreview from './ReturnToVendorShipmentPreview';
 import ReturnToVendorShipmentSecondaryActions from './ReturnToVendorShipmentSecondaryActions.jsx';
 import ReturnWindowShell from '../shared/ReturnWindowShell';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
-import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 
 // ETP-4857 — bulk "Confirmar" for Borrador rows, at parity with Goods Shipment.
 // buildInOutActions only offers CO (confirm) when a draft is selected; it never
@@ -17,6 +17,16 @@ function ReturnToVendorShipmentBulkActions(props) {
         buildActions={buildInOutActions}
         labelKey="confirmBulk"
         data-testid="BulkDocumentAction__a5f79c" />
+      {/* ETP-5378 — bulk Contabilizar, at parity with Goods Shipment: gated on
+          processed & not-yet-posted rows. */}
+      <BulkDocumentAction
+        {...props}
+        entity="returnToVendorShipment"
+        actionMode="neoAction"
+        buildActions={buildPostActions}
+        rowFilter={postRowFilter}
+        labelKey="post"
+        data-testid="BulkDocumentActionPost__a5f79c" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}

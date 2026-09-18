@@ -214,4 +214,51 @@ describe('ReturnWindowShell', () => {
       expect(lastPageProps.rowQuickActions.onEmail).toBeUndefined();
     });
   });
+
+  // ETP-5378 — before this, the shell built rowQuickActions with no `menuActions` at all,
+  // so RowQuickActions never rendered its kebab and Contabilizar / Descontabilizar were
+  // unreachable from the grid on both return windows — the reported defect.
+  describe('row-hover Post/Unpost kebab (ETP-5378)', () => {
+    const POST = { key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' };
+    const UNPOST = {
+      key: 'unpost', labelKey: 'unpost', neoAction: 'unpost',
+      successKey: 'documentUnposted', destructive: true,
+    };
+
+    function renderList() {
+      render(
+        <ReturnWindowShell
+          windowName="return-to-vendor"
+          apiBaseUrl="/api"
+          token="tkn"
+          PageComponent={PageComponent}
+          entity="returnToVendor"
+          headerEntity="returnToVendor"
+          routePrefix="/return-to-vendor/"
+        />,
+      );
+      return lastPageProps.rowQuickActions;
+    }
+
+    it('offers Post on a confirmed, not-yet-posted row', () => {
+      expect(renderList().menuActions({ row: { processed: true, posted: 'N' } })).toEqual([POST]);
+    });
+
+    it('offers Unpost once the row is posted', () => {
+      expect(renderList().menuActions({ row: { processed: true, posted: 'Y' } })).toEqual([UNPOST]);
+    });
+
+    it('offers neither on a draft row, so no kebab renders at all', () => {
+      expect(renderList().menuActions({ row: { processed: false, posted: 'N' } })).toEqual([]);
+    });
+
+    it('refreshes the list after a completed action, so the Posted pill updates in place', () => {
+      const rqa = renderList();
+      expect(lastPageProps.refreshTrigger).toBe(0);
+      act(() => {
+        rqa.onMenuActionExecuted({ neoAction: 'post', successKey: 'documentPosted' }, { success: true });
+      });
+      expect(lastPageProps.refreshTrigger).toBe(1);
+    });
+  });
 });

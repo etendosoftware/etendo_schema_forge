@@ -51,7 +51,7 @@ describe('ReturnToVendorShipmentWindow custom wrapper', () => {
     it('imports BulkDocumentAction and buildInOutActions from @/components/contract-ui/BulkDocumentAction', () => {
       assert.match(
         src,
-        /import BulkDocumentAction,\s*\{\s*buildInOutActions\s*\}\s*from\s*['"]@\/components\/contract-ui\/BulkDocumentAction['"]/,
+        /import BulkDocumentAction,\s*\{[^}]*\bbuildInOutActions\b[^}]*\}\s*from\s*['"]@\/components\/contract-ui\/BulkDocumentAction['"]/,
       );
     });
 
@@ -84,6 +84,34 @@ describe('ReturnToVendorShipmentWindow custom wrapper', () => {
 
     it('passes ReturnToVendorShipmentBulkActions as bulkActions to ReturnWindowShell', () => {
       assert.match(src, /bulkActions=\{ReturnToVendorShipmentBulkActions\}/);
+    });
+  });
+
+  // ETP-5378 — bulk Contabilizar, at parity with Goods Shipment. The window previously
+  // offered no way to post from the list at all.
+  describe('ETP-5378 — bulk "Contabilizar" action', () => {
+    it('also imports buildPostActions and postRowFilter from BulkDocumentAction', () => {
+      assert.match(src, /import BulkDocumentAction,\s*\{[^}]*\bbuildPostActions\b[^}]*\}/);
+      assert.match(src, /import BulkDocumentAction,\s*\{[^}]*\bpostRowFilter\b[^}]*\}/);
+    });
+
+    it('renders a second BulkDocumentAction wired to the neoAction mode', () => {
+      assert.match(src, /actionMode="neoAction"/);
+      assert.match(src, /buildActions=\{buildPostActions\}/);
+      assert.match(src, /rowFilter=\{postRowFilter\}/);
+      assert.match(src, /labelKey="post"/);
+    });
+
+    it('targets the returnToVendorShipment entity, like the confirm button next to it', () => {
+      assert.match(
+        src,
+        /<BulkDocumentAction[\s\S]{0,300}actionMode="neoAction"[\s\S]{0,300}entity="returnToVendorShipment"|<BulkDocumentAction[\s\S]{0,300}entity="returnToVendorShipment"[\s\S]{0,300}actionMode="neoAction"/,
+      );
+    });
+
+    it('keeps the confirm button — Contabilizar is added, not a replacement', () => {
+      assert.match(src, /labelKey="confirmBulk"/);
+      assert.equal((src.match(/<BulkDocumentAction/g) || []).length, 2);
     });
   });
 });

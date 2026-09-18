@@ -5,6 +5,8 @@ import { useRowDelete } from '@/hooks/useRowDelete';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { useRowEmailModal } from './useRowEmailModal.jsx';
+import { buildDocumentRowQuickActionsPostMenu } from './buildDocumentRowQuickActions.js';
+import { useUI } from '@/i18n';
 
 import { buildHeaders } from '@/auth/api.js';
 export default function ReturnWindowShell({
@@ -26,6 +28,7 @@ export default function ReturnWindowShell({
   // before its window.location.reload(); without this the toast only shows up
   // the next time some other window that calls this hook happens to mount.
   useBulkActionToast();
+  const ui = useUI();
   const navigate = useNavigate();
   const [refreshKey, setRefreshKey] = useState(0);
   const [cloneTargets, setCloneTargets] = useState(null);
@@ -62,7 +65,17 @@ export default function ReturnWindowShell({
     onDelete: requestDelete,
     onClone: (row) => setCloneTargets([row]),
     onEmail: emailAction ? onRowEmail : undefined,
-  }), [navigate, windowName, requestDelete, duplicateAction, emailAction, onRowEmail]);
+    // ETP-5378 — both return windows had no `menuActions` at all, so RowQuickActions
+    // never rendered the kebab and Contabilizar/Descontabilizar were unreachable from
+    // the grid, unlike their goods-shipment/goods-receipt siblings. Same posted/processed
+    // gate as every other document window; `unpost` is opted in because both windows now
+    // declare it in their decisions.json too.
+    ...buildDocumentRowQuickActionsPostMenu({
+      ui,
+      onRefresh: () => setRefreshKey(k => k + 1),
+      includeUnpost: true,
+    }),
+  }), [navigate, windowName, requestDelete, duplicateAction, emailAction, onRowEmail, ui]);
 
   if (recordId) {
     return (

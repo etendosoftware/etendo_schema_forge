@@ -47,6 +47,15 @@
         "visibleWhenFieldFalse": "posted",
         "successKey": "documentPosted",
         "visibleWhenFieldTrue": "processed"
+      },
+      {
+        "key": "unpost",
+        "label": "Unpost",
+        "labelKey": "unpost",
+        "action": "unpost",
+        "visibleWhenFieldTrue": "posted",
+        "successKey": "documentUnposted",
+        "destructive": true
       }
     ],
     "statusPills": [

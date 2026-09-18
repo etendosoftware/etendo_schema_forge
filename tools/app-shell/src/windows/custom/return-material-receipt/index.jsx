@@ -5,7 +5,7 @@ import ReturnMaterialReceiptSecondaryActions from './ReturnMaterialReceiptSecond
 import ReturnWindowShell from '../shared/ReturnWindowShell';
 import { useMenuLabel } from '@/i18n';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
-import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 
 // ETP-4857 — bulk "Confirmar" for Borrador rows, at parity with Goods Shipment.
 // buildInOutActions only offers CO (confirm) when a draft is selected; it never
@@ -19,6 +19,16 @@ function ReturnMaterialReceiptBulkActions(props) {
         buildActions={buildInOutActions}
         labelKey="confirmBulk"
         data-testid="BulkDocumentAction__4e1c28" />
+      {/* ETP-5378 — bulk Contabilizar, at parity with Goods Shipment: gated on
+          processed & not-yet-posted rows. */}
+      <BulkDocumentAction
+        {...props}
+        entity="returnMaterialReceipt"
+        actionMode="neoAction"
+        buildActions={buildPostActions}
+        rowFilter={postRowFilter}
+        labelKey="post"
+        data-testid="BulkDocumentActionPost__4e1c28" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}

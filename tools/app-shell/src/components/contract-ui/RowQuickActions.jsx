@@ -5,6 +5,7 @@ import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { isDeleteVisibleForRecord, evalRowVisibleWhen } from '@/utils/recordActions.js';
+import { runPreUnpost } from '@/lib/preUnpost.js';
 
 /**
  * RowQuickActions — hover-revealed action icons overlaid at the end of a list row.
@@ -195,6 +196,21 @@ export default function RowQuickActions({
     setInFlight(prev => ({ ...prev, [key]: true }));
     try {
       if (action.documentAction) {
+        // ETP-5378 — same rule the detail kebab applies (DetailMoreActionsMenu's
+        // runDocumentAction): reactivating an already-posted document must reverse its
+        // accounting first, or the backend rejects the bare docAction with "Factura
+        // contabilizada". Shared with the detail kebab and the bulk bar via lib/preUnpost.js
+        // so the three surfaces cannot drift apart again.
+        const pre = await runPreUnpost({
+          recordId: row?.id,
+          record: row,
+          enabled: action.preUnpost,
+          execute: neoAction.execute,
+        });
+        if (!pre.success) {
+          onMenuActionExecuted?.(action, { success: false, message: pre.message });
+          return;
+        }
         const result = await docAction.execute(row?.id, action.documentAction);
         onMenuActionExecuted?.(action, result);
         return;
@@ -216,6 +232,11 @@ export default function RowQuickActions({
       // Surface failures via console; toast/snackbar is the host's responsibility.
       // eslint-disable-next-line no-console
       console.error('Quick action failed:', err);
+      // ETP-5378 — useDocumentAction THROWS on failure (useNeoAction resolves to
+      // {success:false} instead), so without this the host never heard about a failed
+      // documentAction row action and the user saw nothing at all. Hand it the same
+      // {success:false, message} shape the neoAction path already delivers.
+      onMenuActionExecuted?.(action, { success: false, message: err?.message });
     } finally {
       setInFlight(prev => {
         const next = { ...prev };
