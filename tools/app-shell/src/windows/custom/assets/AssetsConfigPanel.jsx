@@ -75,10 +75,10 @@ export default function AssetsConfigPanel({ data, token, apiBaseUrl, catalogs, a
   ];
 
   const amtFields = [
-    { key: 'assetValue', column: 'AssetValueAmt', type: 'number', label: ui('assetsAssetValueLabel'), section: 'other' },
-    { key: 'residualAssetValue', column: 'Residualassetvalueamt', type: 'number', label: ui('assetsResidualValueLabel'), section: 'other' },
-    { key: 'depreciationAmt', column: 'Amortizationvalueamt', type: 'number', label: ui('assetsDepreciationAmtLabel'), section: 'other' },
-    { key: 'previouslyDepreciatedAmt', column: 'Depreciatedpreviousamt', type: 'number', label: ui('assetsPrevDepreciatedLabel'), section: 'other', defaultValue: '0' },
+    { key: 'assetValue', column: 'AssetValueAmt', type: 'amount', label: ui('assetsAssetValueLabel'), section: 'other' },
+    { key: 'residualAssetValue', column: 'Residualassetvalueamt', type: 'amount', label: ui('assetsResidualValueLabel'), section: 'other' },
+    { key: 'depreciationAmt', column: 'Amortizationvalueamt', type: 'amount', label: ui('assetsDepreciationAmtLabel'), section: 'other' },
+    { key: 'previouslyDepreciatedAmt', column: 'Depreciatedpreviousamt', type: 'amount', label: ui('assetsPrevDepreciatedLabel'), section: 'other', defaultValue: '0' },
   ];
   const d = data ?? {};
   const depreciate = isDepreciate(d);

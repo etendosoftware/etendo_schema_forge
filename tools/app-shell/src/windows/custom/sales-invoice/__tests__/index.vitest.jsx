@@ -118,10 +118,16 @@ vi.mock('@/components/contract-ui/ListView.jsx', () => ({
   },
 }));
 
+// ETP-5302 — props are recorded (not just labelKey rendered) so the `preUnpostActions`
+// opt-in can be asserted on the instance that actually carries it.
+let bulkDocumentActionCalls = [];
 vi.mock('@/components/contract-ui/BulkDocumentAction', () => ({
-  default: ({ labelKey }) => (
-    <div data-testid={`bulk-document-action-${labelKey}`} data-label-key={labelKey} />
-  ),
+  default: (props) => {
+    bulkDocumentActionCalls.push(props);
+    return (
+      <div data-testid={`bulk-document-action-${props.labelKey}`} data-label-key={props.labelKey} />
+    );
+  },
   buildPostActions: vi.fn(() => []),
   postRowFilter: vi.fn(),
 }));
@@ -187,6 +193,7 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
     rowDeleteConfig = null;
     fiscalProfile = null;
     currentWindowAccessTier = 'full';
+    bulkDocumentActionCalls = [];
   });
 
   afterEach(() => {
@@ -465,10 +472,10 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
       expect(lastListViewProps.refreshTrigger).toBe(beforeRefresh + 1);
     });
 
-    it('renders both the confirmBulk and the post bulk BulkDocumentAction instances', () => {
+    it('renders both the process and the post bulk BulkDocumentAction instances', () => {
       render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
 
-      expect(screen.getByTestId('bulk-document-action-confirmBulk')).toBeInTheDocument();
+      expect(screen.getByTestId('bulk-document-action-process')).toBeInTheDocument();
       expect(screen.getByTestId('bulk-document-action-post')).toBeInTheDocument();
     });
 
@@ -494,6 +501,45 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
         apiBaseUrl: '/api',
         windowName: 'sales-invoice',
       })).not.toThrow();
+    });
+  });
+
+  // ── ETP-5302 — reactivating a POSTED invoice from the bulk bar ──────────────
+  // The bug: bulk RE on a Completada + Contabilizada invoice failed with
+  // "Factura contabilizada" while the form kebab succeeded, because the kebab
+  // chains unpost → RE (`preUnpost: true` in decisions.json) and the bulk bar sent
+  // a bare RE, which C_INVOICE_POST rejects while Posted='Y'.
+  describe('ETP-5302 — preUnpostActions on the bulk process button', () => {
+    const callFor = (labelKey) => bulkDocumentActionCalls.find((p) => p.labelKey === labelKey);
+
+    it("passes preUnpostActions={['RE']} to the process (reactivate) bulk instance", () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      expect(callFor('process').preUnpostActions).toEqual(['RE']);
+    });
+
+    // Scoped to RE on purpose: a confirm (CO) must never reverse accounting.
+    it('limits the opt-in to RE — no other action triggers the pre-unpost', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      expect(callFor('process').preUnpostActions).not.toContain('CO');
+      expect(callFor('process').preUnpostActions).toHaveLength(1);
+    });
+
+    it('does NOT opt the Post bulk instance into the pre-unpost chain', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      expect(callFor('post').preUnpostActions).toBeUndefined();
+    });
+
+    // PRODUCT RULE: on an invoice the accounting reversal is a step INSIDE
+    // Reactivar, never a standalone bulk action of its own (unlike goods-receipt /
+    // goods-shipment, which do mount a "Descontabilizar" button).
+    it('mounts NO standalone bulk unpost button', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      expect(screen.queryByTestId('bulk-document-action-unpost')).not.toBeInTheDocument();
+      expect(bulkDocumentActionCalls.map((p) => p.labelKey)).not.toContain('unpost');
     });
   });
 });

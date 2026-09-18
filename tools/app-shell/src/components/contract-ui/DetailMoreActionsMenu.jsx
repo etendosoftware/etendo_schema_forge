@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { resolveHideMoreMenu } from './DetailView.jsx';
 import { maybeSaveBeforeConfirm } from './detailViewHelpers.jsx';
+import { runPreUnpost } from '@/lib/preUnpost.js';
 
 /**
  * Kebab ("more actions") menu of the detail toolbar.
@@ -92,12 +93,12 @@ export function DetailMoreActionsMenu({
     if (!(await maybeSaveBeforeConfirm({ isDirty: hook.isDirtyHeader, handleSave: hook.handleSave }))) {
       return false;
     }
-    if (action.preUnpost && (data?.posted === 'Y' || data?.posted === true)) {
-      const unpostResult = await neoAction.execute(currentId, 'unpost');
-      if (!unpostResult.success) {
-        toast.error(translateBackendError(unpostResult.message, ui) || ui('actionFailed'));
-        return false;
-      }
+    const preUnpost = await runPreUnpost({
+      recordId: currentId, record: data, enabled: action.preUnpost, execute: neoAction.execute,
+    });
+    if (!preUnpost.success) {
+      toast.error(translateBackendError(preUnpost.message, ui) || ui('actionFailed'));
+      return false;
     }
     try {
       await docAction.execute(currentId, action.documentAction);
@@ -176,12 +177,12 @@ export function DetailMoreActionsMenu({
                   await runNeoMenuAction(action);
                   return;
                 }
-                if (action.preUnpost && (data?.posted === 'Y' || data?.posted === true)) {
-                  const unpostResult = await neoAction.execute(currentId, 'unpost');
-                  if (!unpostResult.success) {
-                    toast.error(translateBackendError(unpostResult.message, ui) || ui('actionFailed'));
-                    return;
-                  }
+                const preUnpost = await runPreUnpost({
+                  recordId: currentId, record: data, enabled: action.preUnpost, execute: neoAction.execute,
+                });
+                if (!preUnpost.success) {
+                  toast.error(translateBackendError(preUnpost.message, ui) || ui('actionFailed'));
+                  return;
                 }
                 if (action.columnName) {
                   hook.handleProcess?.({ columnName: action.columnName, name: action.key });

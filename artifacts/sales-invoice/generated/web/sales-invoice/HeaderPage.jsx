@@ -49,7 +49,10 @@ const draftMode = {
   "enabled": true,
   "processField": "documentAction",
   "processValue": "CO",
-  "label": "Confirm"
+  "label": "Confirm",
+  "keepSaveWhenCompletedFields": [
+    "accountingDate"
+  ]
 };
 // @sf-generated-end draftMode:header
 

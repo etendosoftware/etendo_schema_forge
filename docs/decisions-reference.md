@@ -260,6 +260,16 @@ window needs this section at launch**.
 }
 ```
 
+**Built-in required-field validation (ETP-5294, not configurable):** `SendDocumentModal`
+requires a non-empty "To" (when `editableRecipients` is not `false`) and a non-empty Subject
+before the Send button enables — the button has always been correctly disabled in these cases,
+but the inline error under each field only appears once the operator has interacted with that
+field (typed, blurred, or attempted to submit), never eagerly on open. This matters while the
+async business-partner-email lookup is still resolving the initial "To" value: without the
+touched-gate, the "add at least one recipient" error flashed on every modal open before the
+fetch had a chance to seed the field. This is shared-component behavior, not a per-window
+override — there is no `decisions.json` key for it.
+
 ### Status Bar (`window.statusBar`)
 
 Generates a `{WindowName}StatusBar` component inside `@sf-generated` markers. The component renders colored metric cards and an optional progress bar.

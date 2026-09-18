@@ -30,6 +30,31 @@ import { parseCalendarDate } from '@/lib/dateOnly';
  * Shared by the pre-sort and by `useClientSort`'s indicator seed, which must agree or the header
  * arrow would describe an order the rows are not in.
  */
+/**
+ * The date an imported statement is filtered by, as a comparable {@link Date}, or `null` when the
+ * value is missing or unparseable.
+ *
+ * <p>`importDate` is an INSTANT ("2026-09-17T01:46:00.000Z"), not a calendar date, so it has to be
+ * compared as one. `parseCalendarDate` takes the yyyy-MM-dd prefix — the UTC day — and rebuilds it
+ * in local time; under a NEGATIVE UTC offset that prefix is already TOMORROW late in the evening
+ * (22:46 in UTC-3 is 01:46 UTC of the next day). The statement the user just created then sorted
+ * past the range's `to` bound and disappeared from the default last-30-days view until the next
+ * morning. `getDateBounds` returns local Dates, so comparing the instant straight against them is
+ * correct and timezone-independent.
+ *
+ * <p>This is the over-application the date-only policy warns about: the helper is for values that
+ * really are date-only, and a genuine date-only `importDate` (no "T") still goes through it.
+ *
+ * <p>Lives out here, rather than inline in the filter callback, to keep that callback under the
+ * cognitive-complexity budget (javascript:S3776).
+ */
+function statementFilterDate(raw) {
+  const parsed = typeof raw === 'string' && raw.includes('T')
+    ? new Date(raw)
+    : parseCalendarDate(raw);
+  return parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+}
+
 const STATEMENTS_DEFAULT_SORT = Object.freeze({ key: 'documentNo', direction: 'desc' });
 import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
 
@@ -235,7 +260,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
     const base = statements.filter((s) => {
       if (status && s.status !== status) return false;
       if (from || to) {
-        const d = parseCalendarDate(s.importDate);
+        const d = statementFilterDate(s.importDate);
         if (from && d && d < from) return false;
         if (to && d && d > to) return false;
       }

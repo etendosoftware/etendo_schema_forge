@@ -175,9 +175,21 @@ it (accounting error / closed period) — that is engine behavior, not a wiring 
 
 ## Bulk posting from the list
 
-Selecting rows in the list surfaces **Confirmar** in the floating selection toolbar; it
+Selecting rows in the list surfaces **Procesar** in the floating selection toolbar; it
 opens the same modal `purchase-invoice` uses, whose dropdown offers **Contabilizar** and/or
 **Descontabilizar** depending on what is selected.
+
+> **ETP-5302 — why that button is called "Procesar" and not "Confirmar".** Until ETP-5302 the
+> shared selection-bar button was mounted with `labelKey="confirmBulk"` and read **Confirmar**
+> / **Confirm**. This window is precisely where that name broke down: it has no
+> `documentStatus` and no DocAction at all, so "Confirmar" named an action the dropdown never
+> offers — the only entries here are *Contabilizar* and *Descontabilizar*. The button is now
+> `labelKey="process"` ("Procesar" / "Process"), which reads correctly whatever the dropdown
+> holds, and the word "Confirmar" moved onto the `CO` entry of the DocAction windows
+> (`labelKey: 'confirm'`, previously `'book'`), where it does name a real action. The
+> `confirmBulk` key was deleted from `en_US.json`, `es_ES.json` and `es_AR.json`. Labels only:
+> `MatchedInvoiceBulkActions.jsx` still passes the same `buildPostActions`, `rowFilter` and
+> `actionMode="neoAction"`, and the modal, the per-row loop and the result toast are untouched.
 
 Declared with one `decisions.json` line — the window stays 100% pipeline-generated, no
 hand-written window wrapper:
@@ -201,6 +213,18 @@ button, modal, per-row loop and result toast are the shared
 - Only `posted === 'Y'` counts as posted — see the Fields caveat; `T/E/D/p/i` are all
   genuinely unposted and stay postable.
 
+> **Naming caveat (read before reusing anything here).** This window's
+> `buildPostActions` and `isPosted` are **local to `MatchedInvoiceBulkActions.jsx`** and are
+> not the same functions as the identically-named shared ones. The shared
+> `buildPostActions` (exported from `BulkDocumentAction.jsx`, used by the four
+> invoice/receipt/shipment windows) only ever emits `post`; this local one emits `post`
+> and/or `unpost`, which is why this window needs no separate *Descontabilizar* button.
+> ETP-5302 added a shared `buildUnpostActions`/`unpostRowFilter` pair and a shared
+> `isPosted` in `tools/app-shell/src/lib/preUnpost.js`, both applying the same
+> `'Y'`-only rule — so the same predicate is now spelled out in three places
+> (`preUnpost.js`, `BulkDocumentAction.jsx`'s `isRowPosted`, and this file). They agree
+> today; a change to the AD Posted-status rule must be applied to all three.
+
 **`actionMode: 'neoAction'` — new generic capability on the shared component.**
 `BulkDocumentAction` was DocAction-only: it always called
 `POST …/{id}/action/documentAction` with a `{docAction}` body. This window has no
@@ -216,16 +240,37 @@ detail kebab already uses. Full reference:
 > normalisation and every failed row is silently counted as a success — the toast would
 > report "N ok, 0 failed" while nothing got posted. There is a dedicated test for this.
 
-**Result toast.** After the run, `BulkDocumentAction` persists `{ok, failed}` to
-`sessionStorage` and reloads; `useBulkActionToast()` reads it on mount and shows
-`processExecuted` ("PROCESO EJECUTADO: {ok} registros procesados correctamente y {failed}
-registros fallidos") — success / warning / error depending on the mix. That hook used to be
-called per window inside each hand-written `windows/custom/<w>/index.jsx`, so a purely
-generated window like this one ran the bulk correctly and then **reported nothing**. It is
-now called once in the shared `ListView.jsx`, so every list gets it with no per-window
-wiring. It cannot double-fire for the windows whose wrapper still calls it: the hook removes
-the `sessionStorage` key *before* showing the toast, so whichever effect runs first consumes
-the result.
+**Result toast, and the list refetch (ETP-5302).** After the run, `BulkDocumentAction` calls
+`clearSelection()`, shows the toast directly via the exported
+`showBulkActionToast(ui, result)`, and then calls `refresh()` — the in-place refetch
+`ListView` hands to the `bulkActions` slot alongside `selectedRows`, `clearSelection`,
+`token`, `apiBaseUrl`, `windowName` and `api`. The toast reads `processExecuted` ("PROCESO
+EJECUTADO: {ok} registros procesados correctamente y {failed} registros fallidos") — success
+/ warning / error depending on the mix.
+
+Until ETP-5302 it instead persisted `{ok, omitted, failed}` to `sessionStorage` and did a
+full `window.location.reload()`. That reload was never about the data: it was the only way
+the toast survived, because `useBulkActionToast()`'s mount effect read the value back on the
+*next* mount. Showing the toast directly removes the reason to reload, so scroll position,
+active filters and the whole SPA boot are preserved. The persist-then-reload path survives
+only as a fallback for a host mounted **outside** `ListView`'s slot (where no `refresh`
+exists), so no caller can silently lose its result.
+
+`useBulkActionToast()` itself stays where ETP-5075 put it — called once in the shared
+`ListView.jsx`. It used to be called per window inside each hand-written
+`windows/custom/<w>/index.jsx`, so a purely generated window like this one ran the bulk
+correctly and then **reported nothing**. It cannot double-fire for the windows whose wrapper
+still calls it: the hook removes the `sessionStorage` key *before* showing the toast, so
+whichever effect runs first consumes the result. Note that the action itself deliberately
+calls the plain exported `showBulkActionToast(ui, result)` rather than mounting the hook —
+mounting it just to reach `showResult` would also install that draining effect, which would
+eat the caller's own persisted result before the fallback reload could hand it on.
+
+> **ETP-5302 — the modal's confirm button now says "Aceptar" / "Accept" (`accept`).** It used
+> to say `done` → "Completado", which is the name of a document *state*. On a dialog about
+> document actions, that read as though pressing it would mark the selected records
+> completed. `accept` is a new key in all three locale files; `done` was deliberately left
+> alone because `RecordCreateModal.jsx` still uses it.
 
 Bulk runs **one request per row** (`Promise.allSettled`), not a batched call. Etendo's own
 `com.smf.jobs.defaults.Post` *is* natively multi-record (it reads a `recordIds` array), but
