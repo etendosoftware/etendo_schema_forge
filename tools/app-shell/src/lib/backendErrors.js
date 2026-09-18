@@ -261,6 +261,13 @@ const BACKEND_ERROR_MAP = {
   'This user is the tenant owner and cannot be deleted': 'backendError.cannotDeleteOwner',
   'Cannot delete the last active administrator for this client':
     'backendError.cannotDeleteLastAdmin',
+  // UserRoleAssignmentHandler#rejectNonOwnerEditingOwner (com.etendoerp.go, ETP-4830 owner
+  // protection, previously unmapped — ETP-5411) — hardcoded English literal, no AD_Message
+  // involvement, thrown on a PUT/PATCH against the tenant owner's own record by anyone other
+  // than the owner. Unlike its siblings above (cannotDeactivateOwnAccount/cannotDeleteOwner),
+  // this one reaches the toast untranslated regardless of session locale.
+  'This user is the tenant owner — only the owner can modify this account':
+    'backendError.cannotModifyOwnerAccount',
 };
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a
