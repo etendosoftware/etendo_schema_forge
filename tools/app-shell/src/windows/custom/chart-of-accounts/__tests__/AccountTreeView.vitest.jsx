@@ -19,7 +19,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 // Stub NewAccountModal — AccountTreeView.jsx's own tree logic is what this
 // suite targets; NewAccountModal has its own dedicated test file.
-vi.mock('../NewAccountModal', () => ({
+vi.mock('@generated/chart-of-accounts/custom/NewAccountModal', () => ({
   default: ({ isOpen, onClose, onSaved, currentRecord }) =>
     isOpen ? (
       <div data-testid="new-account-modal-stub">
@@ -41,7 +41,7 @@ vi.mock('../NewAccountModal', () => ({
 import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { toast } from 'sonner';
-import AccountTreeView from '../AccountTreeView.jsx';
+import AccountTreeView from '@generated/chart-of-accounts/custom/AccountTreeView.jsx';
 
 // --- Fixtures ---
 

@@ -154,8 +154,8 @@ function buildTreeColumns(ui) {
  * rollout), it falls back to the previous 2-level grouping by its 4-digit `parentCode4`
  * so the tree still renders something sensible instead of dropping the record.
  *
- * Returns { tree: rootNodes[], indexById: Map<id, node> } where indexById only
- * contains real account nodes (not virtual folder headers).
+ * Returns { tree: rootNodes[], indexById: Map<id, node> }. The index contains real
+ * accounts and virtual folders from the unfiltered tree.
  */
 function buildGroupedTree(items) {
   const indexById = new Map();
@@ -187,6 +187,7 @@ function buildGroupedTree(items) {
             children: [],
           };
           folderIndex.set(pathKey, folder);
+          indexById.set(folder.id, folder);
           siblings.push(folder);
         }
         siblings = folder.children;
@@ -207,6 +208,7 @@ function buildGroupedTree(items) {
           children: [],
         };
         folderIndex.set(code, folder);
+        indexById.set(folder.id, folder);
         rootChildren.push(folder);
       }
       folder.children.push({ ...item, depth: 1 });
@@ -527,7 +529,7 @@ export default function AccountTreeView({
   // e.g. direct unit tests) — fall back to the `data` prop so behavior is unchanged.
   const effectiveData = fetchedData ?? data;
 
-  const { tree } = useMemo(() => buildGroupedTree(effectiveData), [effectiveData]);
+  const { tree, indexById } = useMemo(() => buildGroupedTree(effectiveData), [effectiveData]);
 
   const [expanded, setExpanded] = useState(loadPersistedExpanded);
 
@@ -594,6 +596,12 @@ export default function AccountTreeView({
   const selectedRecord = useMemo(
     () => (selectedId ? visibleRows.find((row) => row.id === selectedId) : null),
     [visibleRows, selectedId],
+  );
+
+  // Filtered virtual nodes have pruned children; modal resolution needs the full tree node.
+  const currentRecordForModal = useMemo(
+    () => (selectedRecord ? (indexById.get(selectedRecord.id) ?? selectedRecord) : null),
+    [selectedRecord, indexById],
   );
 
   const expandAll = useCallback(
@@ -745,7 +753,7 @@ export default function AccountTreeView({
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSaved={handleSaved}
-        currentRecord={selectedRecord}
+        currentRecord={currentRecordForModal}
         allAccounts={effectiveData}
         apiBaseUrl={apiBaseUrl}
         token={token}

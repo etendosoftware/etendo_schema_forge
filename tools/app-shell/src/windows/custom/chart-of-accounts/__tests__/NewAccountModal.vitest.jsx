@@ -21,25 +21,13 @@ vi.mock('@/components/ui/dialog.jsx', () => ({
   DialogFooter: ({ children, ...rest }) => <div {...rest}>{children}</div>,
 }));
 
-// Stub the generated AccountCodeField — expose a single input so tests can
-// drive onChange(fullCode) directly without depending on its own split-field logic.
-vi.mock('@generated/chart-of-accounts/custom/AccountCodeField', () => ({
-  default: ({ value, onChange }) => (
-    <input
-      data-testid="account-code-stub"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    />
-  ),
-}));
-
 // --- Import under test ---
 
 import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { toast } from 'sonner';
-import NewAccountModal from '../NewAccountModal.jsx';
+import NewAccountModal from '@generated/chart-of-accounts/custom/NewAccountModal.jsx';
 
 // Radix Popover + cmdk (used by AccountBadgeSelect) need a few DOM APIs jsdom
 // does not implement. The global src/test/setup.js only polyfills
@@ -96,7 +84,7 @@ describe('NewAccountModal', () => {
     expect(screen.getByText('newSubAccount')).toBeInTheDocument();
     expect(screen.getByTestId('new-account-modal-parent')).toBeInTheDocument();
     expect(screen.getByTestId('new-account-modal-name')).toBeInTheDocument();
-    expect(screen.getByTestId('account-code-stub')).toBeInTheDocument();
+    expect(screen.getByTestId('account-code-suffix-input')).toBeInTheDocument();
   });
 
   it('renders parent options sorted by code when open', async () => {
@@ -116,7 +104,7 @@ describe('NewAccountModal', () => {
     const root = screen.getByTestId('new-account-modal-parent');
     expect(within(root).getByText('4000')).toBeInTheDocument();
     expect(within(root).getByText('Sales')).toBeInTheDocument();
-    expect(screen.getByTestId('account-code-stub')).toHaveValue('4000');
+    expect(screen.getByTestId('account-code-prefix')).toHaveTextContent('4000');
   });
 
   it('auto-selects the matching 4-digit parent from the leaf account prefix', () => {
@@ -124,7 +112,7 @@ describe('NewAccountModal', () => {
     const root = screen.getByTestId('new-account-modal-parent');
     expect(within(root).getByText('5000')).toBeInTheDocument();
     expect(within(root).getByText('Purchases')).toBeInTheDocument();
-    expect(screen.getByTestId('account-code-stub')).toHaveValue('5000');
+    expect(screen.getByTestId('account-code-prefix')).toHaveTextContent('5000');
   });
 
   it('falls back to no parent selection when nothing matches', () => {
@@ -213,7 +201,7 @@ describe('NewAccountModal', () => {
     render(<NewAccountModal {...baseProps()} />);
     await user.click(within(screen.getByTestId('new-account-modal-parent')).getByRole('button'));
     await user.click(await screen.findByText('Purchases'));
-    expect(screen.getByTestId('account-code-stub')).toHaveValue('5000');
+    expect(screen.getByTestId('account-code-prefix')).toHaveTextContent('5000');
   });
 
   it('shows validation errors and does not submit when required fields are missing', () => {
@@ -248,7 +236,7 @@ describe('NewAccountModal', () => {
     await user.click(await screen.findByText('Purchases'));
 
     expect(within(screen.getByTestId('new-account-modal-parent')).getByText('5000')).toBeInTheDocument();
-    expect(screen.getByTestId('account-code-stub')).toHaveValue('5000');
+    expect(screen.getByTestId('account-code-prefix')).toHaveTextContent('5000');
     expect(within(screen.getByTestId('new-account-modal-parent')).queryByText('required')).not.toBeInTheDocument();
   });
 
@@ -258,7 +246,7 @@ describe('NewAccountModal', () => {
     render(<NewAccountModal {...baseProps({ onSaved, currentRecord: { id: 'acc-4000', searchKey: '4000', summaryLevel: 'Y' } })} />);
 
     fireEvent.change(screen.getByTestId('new-account-modal-name'), { target: { value: '  US Sales  ' } });
-    fireEvent.change(screen.getByTestId('account-code-stub'), { target: { value: '40001234' } });
+    fireEvent.change(screen.getByTestId('account-code-suffix-input'), { target: { value: '1234' } });
 
     await act(async () => {
       fireEvent.click(screen.getByTestId('new-account-modal-save'));
@@ -279,13 +267,13 @@ describe('NewAccountModal', () => {
     render(<NewAccountModal {...baseProps({ onSaved, currentRecord: { id: 'acc-4000', searchKey: '4000', summaryLevel: 'Y' } })} />);
 
     fireEvent.change(screen.getByTestId('new-account-modal-name'), { target: { value: 'US Sales' } });
-    fireEvent.change(screen.getByTestId('account-code-stub'), { target: { value: '40001234' } });
+    fireEvent.change(screen.getByTestId('account-code-suffix-input'), { target: { value: '1234' } });
 
     await act(async () => {
       fireEvent.click(screen.getByTestId('new-account-modal-save'));
     });
 
-    expect(toast.error).toHaveBeenCalledWith('newSubAccountError');
+    expect(toast.error).toHaveBeenCalledWith('Error 400');
     expect(onSaved).not.toHaveBeenCalled();
   });
 
@@ -294,13 +282,13 @@ describe('NewAccountModal', () => {
     render(<NewAccountModal {...baseProps({ currentRecord: { id: 'acc-4000', searchKey: '4000', summaryLevel: 'Y' } })} />);
 
     fireEvent.change(screen.getByTestId('new-account-modal-name'), { target: { value: 'US Sales' } });
-    fireEvent.change(screen.getByTestId('account-code-stub'), { target: { value: '40001234' } });
+    fireEvent.change(screen.getByTestId('account-code-suffix-input'), { target: { value: '1234' } });
 
     await act(async () => {
       fireEvent.click(screen.getByTestId('new-account-modal-save'));
     });
 
-    expect(toast.error).toHaveBeenCalledWith('newSubAccountError');
+    expect(toast.error).toHaveBeenCalledWith('offline');
   });
 
   it('calls onClose when the cancel button is clicked', () => {
@@ -438,7 +426,7 @@ describe('NewAccountModal', () => {
         summaryLevel: 'N',
         accountType: 'A',
         parentCode4: '430A', // legacy shallow prefix — must NOT be what the type match uses
-        insertionChildren: [{ id: 'group-4300A', value: '4300A', name: 'Provisiones a largo plazo', elementLevel: 'D' }],
+        insertionChildren: [{ id: 'group-4300A', value: '4300A', name: 'Clientes (euros) a largo plazo', elementLevel: 'D' }],
       },
       // Backs the '1603' parent option (single-child Breakdown drill-down case).
       {
@@ -470,7 +458,53 @@ describe('NewAccountModal', () => {
       render(<NewAccountModal {...baseProps({ allAccounts: structuralAccounts, currentRecord })} />);
 
       expect(within(screen.getByTestId('new-account-modal-parent')).getByText('selectAccount')).toBeInTheDocument();
-      expect(screen.getByTestId('account-code-stub')).toHaveValue('');
+      expect(screen.getByTestId('account-code-prefix')).toBeEmptyDOMElement();
+    });
+
+    it('selects structural parent 4300A and submits an 8-digit code with numeric prefix 4300', async () => {
+      const user = userEvent.setup();
+      const onSaved = vi.fn();
+      globalThis.fetch = vi.fn(() => Promise.resolve({ ok: true, json: async () => ({}) }));
+      const currentRecord = {
+        id: 'acc-430A',
+        searchKey: '430A',
+        elementLevel: 'C',
+        children: [
+          { id: 'acc-4300A', searchKey: '4300A', name: 'Clientes (euros) a largo plazo', elementLevel: 'D' },
+          { id: 'acc-4304A', searchKey: '4304A', name: 'Clientes a corto plazo A', elementLevel: 'D' },
+          { id: 'acc-4309A', searchKey: '4309A', name: 'Clientes a corto plazo B', elementLevel: 'D' },
+        ],
+      };
+      render(<NewAccountModal {...baseProps({ allAccounts: structuralAccounts, currentRecord, onSaved })} />);
+
+      await user.click(within(screen.getByTestId('new-account-modal-parent')).getByRole('button'));
+      await user.type(await screen.findByPlaceholderText('search'), 'clientes (euros) a largo');
+
+      expect(await screen.findByText('4300A')).toBeInTheDocument();
+      const candidateName = screen.getByText('Clientes (euros) a largo plazo');
+      expect(candidateName).toBeInTheDocument();
+      await user.click(candidateName);
+
+      const parent = screen.getByTestId('new-account-modal-parent');
+      expect(within(parent).getByText('4300A')).toBeInTheDocument();
+      expect(screen.getByTestId('account-code-prefix')).toHaveTextContent('4300');
+      expect(screen.getByTestId('account-code-suffix-input')).toHaveAttribute('maxLength', '4');
+
+      await user.type(screen.getByTestId('new-account-modal-name'), 'Customer provision');
+      await user.type(screen.getByTestId('account-code-suffix-input'), '1000');
+      expect(screen.getByTestId('account-code-suffix-input')).toHaveValue('1000');
+
+      await user.click(screen.getByTestId('new-account-modal-save'));
+
+      await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${BASE_URL}/elementValue`,
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Accept-Language': 'es_ES', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ searchKey: '43001000', name: 'Customer provision', accountType: 'A' }),
+        }),
+      ));
+      expect(onSaved).toHaveBeenCalled();
     });
 
     it('auto-selects the single candidate when a node has exactly one real child (drills down to the Breakdown level)', () => {
@@ -487,7 +521,7 @@ describe('NewAccountModal', () => {
       const root = screen.getByTestId('new-account-modal-parent');
       expect(within(root).getByText('1603')).toBeInTheDocument();
       expect(within(root).getByText('Fiscal deposits')).toBeInTheDocument();
-      expect(screen.getByTestId('account-code-stub')).toHaveValue('1603');
+      expect(screen.getByTestId('account-code-prefix')).toHaveTextContent('1603');
     });
 
     it('reuses a Subaccount-level leaf\'s own insertionChildren instead of walking local tree structure', () => {
@@ -501,7 +535,7 @@ describe('NewAccountModal', () => {
 
       const root = screen.getByTestId('new-account-modal-parent');
       expect(within(root).getByText('4300A')).toBeInTheDocument();
-      expect(screen.getByTestId('account-code-stub')).toHaveValue('4300A');
+      expect(screen.getByTestId('account-code-prefix')).toHaveTextContent('4300');
     });
 
     it('falls back to the node itself when it has zero real children (first-ever subaccount under a new branch)', () => {
@@ -515,7 +549,7 @@ describe('NewAccountModal', () => {
 
       const root = screen.getByTestId('new-account-modal-parent');
       expect(within(root).getByText('9100')).toBeInTheDocument();
-      expect(screen.getByTestId('account-code-stub')).toHaveValue('9100');
+      expect(screen.getByTestId('account-code-prefix')).toHaveTextContent('9100');
     });
 
     it('derives Account Type from a sibling\'s resolved insertionChildren value, not its legacy parentCode4', () => {
@@ -558,7 +592,7 @@ describe('NewAccountModal', () => {
 
       const root = screen.getByTestId('new-account-modal-parent');
       expect(within(root).getByText('9200')).toBeInTheDocument();
-      expect(screen.getByTestId('account-code-stub')).toHaveValue('9200');
+      expect(screen.getByTestId('account-code-prefix')).toHaveTextContent('9200');
     });
   });
 });
