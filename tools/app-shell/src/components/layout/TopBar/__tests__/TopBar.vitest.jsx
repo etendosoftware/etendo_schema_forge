@@ -15,6 +15,10 @@ vi.mock('@/components/CopilotContext', () => ({
   useCopilot: () => ({ toggle: vi.fn() }),
 }));
 
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
+}));
+
 vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
   useEnvironmentSwitch: () => ({
     currentClientId: 'demo-client',

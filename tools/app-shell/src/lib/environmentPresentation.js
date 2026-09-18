@@ -21,9 +21,10 @@ export function environmentTrialLabel(environment, ui) {
 /** Returns a commercial state label when the backend has evaluated access. */
 export function environmentCommercialLabel(environment, ui) {
   if (environment?.subscriptionStatus === 'CURRENT') {
-    return isProductiveEnvironment(environment)
-      ? ui('environmentSubscriptionActive')
-      : ui('environmentIncludedWithSubscription');
+    // The plan badge already identifies the environment. Keep the paid demo
+    // explicit with the commercial relationship, while productive stays simply
+    // "Productive" without repeating subscription terminology.
+    return isProductiveEnvironment(environment) ? null : ui('environmentIncludedWithSubscription');
   }
   if (environment?.subscriptionStatus === 'PAST_DUE') return ui('environmentPaymentGrace');
   if (environment?.accessState === 'SUBSCRIPTION_REQUIRED') return ui('environmentAccessSuspended');

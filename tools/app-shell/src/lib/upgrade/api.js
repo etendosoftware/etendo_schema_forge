@@ -132,7 +132,7 @@ export async function runPaidOnboarding(fetchImpl, baseUrl, token, input, onMess
       clientName: input.clientName,
       currency: input.currency || 'EUR',
       language: input.language || 'en_US',
-      countryCode: input.countryCode || 'AR',
+      ...(input.countryCode ? { countryCode: input.countryCode } : {}),
       paymentToken: input.paymentToken,
       upgradeAction: input.upgradeAction || 'create-productive',
     }),

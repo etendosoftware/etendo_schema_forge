@@ -21,7 +21,7 @@ test('shows subscription and membership state from backend metadata', () => {
   assert.equal(environmentCommercialLabel({ plan: 'free', subscriptionStatus: 'CURRENT' }, ui),
     'environmentIncludedWithSubscription');
   assert.equal(environmentCommercialLabel({ plan: 'productive', subscriptionStatus: 'CURRENT' }, ui),
-    'environmentSubscriptionActive');
+    null);
   assert.equal(environmentCommercialLabel({ accessState: 'SUBSCRIPTION_REQUIRED' }, ui),
     'environmentAccessSuspended');
   assert.equal(environmentCommercialLabel({ subscriptionStatus: 'PAST_DUE' }, ui),

@@ -169,6 +169,12 @@ function setupCheckoutReturn({
 async function renderUpgradePage() {
   render(<UpgradePage />);
   await waitFor(() => expect(screen.queryByTestId('upgrade-account-loading')).not.toBeInTheDocument());
+  if (screen.queryByTestId('upgrade-plan-continue')) {
+    screen.getByTestId('upgrade-plan-continue').click();
+    await waitFor(() => expect(screen.getByTestId('upgrade-addons-continue')).toBeInTheDocument());
+    screen.getByTestId('upgrade-addons-continue').click();
+    await waitFor(() => expect(screen.getByTestId('upgrade-submit')).toBeInTheDocument());
+  }
 }
 
 beforeEach(() => {
@@ -188,7 +194,7 @@ describe('UpgradePage — hosted checkout', () => {
     installFetch({ environments: [{ clientName: 'Acme Trial' }] });
     await renderUpgradePage();
 
-    expect(screen.getByTestId('upgrade-tenant-name')).toBeInTheDocument();
+    expect(await screen.findByTestId('upgrade-tenant-from-demo')).toBeInTheDocument();
     expect(screen.queryByTestId('upgrade-cardholder')).not.toBeInTheDocument();
     expect(screen.queryByTestId('upgrade-card-number')).not.toBeInTheDocument();
     expect(screen.queryByTestId('upgrade-expiry')).not.toBeInTheDocument();
@@ -200,7 +206,6 @@ describe('UpgradePage — hosted checkout', () => {
     const requests = installFetch({ environments: [{ clientName: 'Acme Trial' }] });
     await renderUpgradePage();
 
-    await user.type(screen.getByTestId('upgrade-tenant-name'), 'Acme Productive');
     await user.click(screen.getByTestId('upgrade-submit'));
 
     await waitFor(() => expect(assignMock).toHaveBeenCalledWith('https://checkout.stripe.test/session-1'));
@@ -208,23 +213,22 @@ describe('UpgradePage — hosted checkout', () => {
     expect(requests[0].url).toBe('/sws/go/billing/purchases');
     expect(requests[0].body).toEqual({
       action: 'productive-tenant',
-      clientName: 'Acme Productive',
+      clientName: 'Acme Trial',
       upgradeAction: 'create-productive',
       language: 'es_ES',
     });
     expect(JSON.stringify(requests[0].body)).not.toMatch(/card|paymentToken|mock-paid|priceId|amount/i);
   });
 
-  it('rejects an already-owned tenant before creating a checkout session', async () => {
+  it('uses the demo environment as the productive environment source', async () => {
     const user = userEvent.setup();
     const requests = installFetch({ environments: [{ clientName: 'Acme Trial' }] });
     await renderUpgradePage();
 
-    await user.type(screen.getByTestId('upgrade-tenant-name'), ' acme trial ');
     await user.click(screen.getByTestId('upgrade-submit'));
 
-    expect(await screen.findByTestId('upgrade-tenant-name-error')).toHaveTextContent('upgradeTenantNameTaken');
-    expect(requests).toHaveLength(0);
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(requests[0].body.clientName).toBe('Acme Trial');
   });
 
   it('keeps the first tenant on the free onboarding flow', async () => {
@@ -247,7 +251,6 @@ describe('UpgradePage — hosted checkout', () => {
     ));
     await renderUpgradePage();
 
-    await user.type(screen.getByTestId('upgrade-tenant-name'), 'Acme Productive');
     await user.click(screen.getByTestId('upgrade-submit'));
 
     expect(await screen.findByTestId('upgrade-error')).toHaveTextContent('upgradeCheckoutCreationFailed');
@@ -304,17 +307,15 @@ describe('UpgradePage — checkout funnel tracking', () => {
     expect(navigateMock).toHaveBeenCalledWith('/onboarding');
   });
 
-  it('tracks a tenant name the account already owns, without tracking a submission', async () => {
+  it('uses the demo name without asking for a second tenant name', async () => {
     const user = userEvent.setup();
     installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
     await renderUpgradePage();
 
-    await user.type(screen.getByTestId('upgrade-tenant-name'), EXISTING_TENANT);
     await user.click(screen.getByTestId('upgrade-submit'));
 
-    await screen.findByTestId('upgrade-tenant-name-error');
-    expect(trackedEvents('upgrade_existing_tenant_name_blocked')).toEqual([{}]);
-    expect(trackedEvents('upgrade_checkout_submitted')).toEqual([]);
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(trackedEvents('upgrade_checkout_submitted')).toEqual([{ upgradeAction: 'create-productive' }]);
   });
 
   it('tracks an expired session instead of a submission', async () => {
@@ -323,7 +324,6 @@ describe('UpgradePage — checkout funnel tracking', () => {
     installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
     await renderUpgradePage();
 
-    await user.type(screen.getByTestId('upgrade-tenant-name'), 'Acme Productive');
     await user.click(screen.getByTestId('upgrade-submit'));
 
     await screen.findByTestId('upgrade-error');
@@ -336,7 +336,6 @@ describe('UpgradePage — checkout funnel tracking', () => {
     installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
     await renderUpgradePage();
 
-    await user.type(screen.getByTestId('upgrade-tenant-name'), 'Acme Productive');
     await user.click(screen.getByTestId('upgrade-submit'));
 
     await waitFor(() => expect(assignMock).toHaveBeenCalledWith('https://checkout.stripe.test/session-1'));
@@ -348,7 +347,6 @@ describe('UpgradePage — checkout funnel tracking', () => {
     installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
     await renderUpgradePage();
 
-    await user.type(screen.getByTestId('upgrade-tenant-name'), 'Acme Productive');
     await user.click(screen.getByTestId('upgrade-submit'));
 
     await waitFor(() => expect(assignMock).toHaveBeenCalled());
@@ -367,7 +365,6 @@ describe('UpgradePage — checkout funnel tracking', () => {
     ));
     await renderUpgradePage();
 
-    await user.type(screen.getByTestId('upgrade-tenant-name'), 'Acme Productive');
     await user.click(screen.getByTestId('upgrade-submit'));
 
     await screen.findByTestId('upgrade-error');
@@ -381,6 +378,7 @@ describe('UpgradePage — checkout funnel tracking', () => {
   });
 
   it('resumes after the Stripe redirect and reports a successful provisioning with its duration', async () => {
+    const user = userEvent.setup();
     setupCheckoutReturn({ tenantName: 'Acme Productive', upgradeAction: 'create-productive' });
     installFetch({
       environments: [{ clientName: EXISTING_TENANT }],
@@ -389,6 +387,8 @@ describe('UpgradePage — checkout funnel tracking', () => {
     });
     await renderUpgradePage();
 
+    await screen.findByTestId('upgrade-migration-step');
+    await user.click(screen.getByTestId('upgrade-start-migration'));
     await screen.findByTestId('upgrade-success');
     const [succeeded] = trackedEvents('upgrade_tenant_provisioning_succeeded');
     expect(succeeded).toEqual({ upgradeAction: 'create-productive', durationMs: expect.any(Number) });
@@ -397,6 +397,7 @@ describe('UpgradePage — checkout funnel tracking', () => {
   });
 
   it('recovers the environment name from the durable purchase when session storage is empty', async () => {
+    const user = userEvent.setup();
     setupCheckoutReturn({ tenantName: '' });
     installFetch({
       environments: [{ clientName: EXISTING_TENANT }],
@@ -405,6 +406,8 @@ describe('UpgradePage — checkout funnel tracking', () => {
     });
     await renderUpgradePage();
 
+    await screen.findByTestId('upgrade-migration-step');
+    await user.click(screen.getByTestId('upgrade-start-migration'));
     await screen.findByTestId('upgrade-success');
     expect(globalThis.fetch).toHaveBeenCalledWith(
       '/sws/go/billing/purchases/upgrade-request-1',
@@ -422,6 +425,8 @@ describe('UpgradePage — checkout funnel tracking', () => {
     await renderUpgradePage();
 
     await user.click(screen.getByTestId('upgrade-resume-purchase-purchase-1'));
+    await screen.findByTestId('upgrade-migration-step');
+    await user.click(screen.getByTestId('upgrade-start-migration'));
     await screen.findByTestId('upgrade-success');
     expect(requests).toHaveLength(0);
     expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -430,6 +435,7 @@ describe('UpgradePage — checkout funnel tracking', () => {
   });
 
   it('resumes after the Stripe redirect and reports a failed onboarding stream', async () => {
+    const user = userEvent.setup();
     setupCheckoutReturn({ tenantName: 'Acme Productive' });
     installFetch({
       environments: [{ clientName: EXISTING_TENANT }],
@@ -439,6 +445,8 @@ describe('UpgradePage — checkout funnel tracking', () => {
     });
     await renderUpgradePage();
 
+    await screen.findByTestId('upgrade-migration-step');
+    await user.click(screen.getByTestId('upgrade-start-migration'));
     await screen.findByTestId('upgrade-error');
     const [failed] = trackedEvents('upgrade_tenant_provisioning_failed');
     expect(failed.errorCode).toBe('upgradeCheckoutCreationFailed');
@@ -473,7 +481,7 @@ describe('UpgradePage — checkout funnel tracking', () => {
     await renderUpgradePage();
     await screen.findByTestId('upgrade-success');
 
-    await user.click(screen.getByTestId('upgrade-success-continue'));
+    await user.click(screen.getByTestId('upgrade-enter-productive'));
 
     await screen.findByTestId('upgrade-enter-error');
     expect(trackedEvents('upgrade_enter_tenant_failed')).toEqual([{}]);

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useMenuLabel, useUI } from '@/i18n';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { isProductiveEnvironment } from '@/lib/environmentPresentation.js';
@@ -55,24 +56,24 @@ function resolveScopeLabel(scope, tMenu) {
 }
 
 function DemoTrialIndicator({ ui }) {
+  const navigate = useNavigate();
   const { environments, currentClientId } = useEnvironmentSwitch();
   const environment = environments.find(item => item.clientId === currentClientId);
   if (!environment) return null;
   const productive = isProductiveEnvironment(environment);
+  if (productive) return null;
   const hasTrial = Number.isInteger(environment.trialDaysRemaining);
-  if (!productive && !hasTrial) return null;
-  const expired = !productive && environment.trialDaysRemaining <= 0;
+  if (!hasTrial) return null;
+  const expired = environment.trialDaysRemaining <= 0;
   const start = Date.parse(environment.trialStartedAt);
   const end = Date.parse(environment.trialExpiresAt);
   const total = end - start;
   const remaining = Math.max(0, end - Date.now());
-  const progress = productive ? 100 : total > 0
+  const progress = total > 0
     ? Math.min(100, Math.max(0, (remaining / total) * 100)) : 0;
-  const label = productive
-    ? ui('environmentSubscriptionActive')
-    : expired
-      ? ui('environmentDemoExpired')
-      : ui('environmentTrialDaysRemaining', { days: environment.trialDaysRemaining });
+  const label = expired
+    ? ui('environmentDemoExpired')
+    : ui('environmentTrialDaysRemaining', { days: environment.trialDaysRemaining });
   return (
     <div
       className={cn(
@@ -92,7 +93,7 @@ function DemoTrialIndicator({ ui }) {
             ? 'border-status-danger-border bg-status-danger text-status-danger-foreground'
             : 'border-status-success-border bg-status-success text-status-success-foreground'
         )}>
-          {productive ? ui('environmentProductive') : ui('environmentDemo')}
+          {ui('environmentDemo')}
         </span>
         <span className="truncate font-semibold text-foreground">{label}</span>
       </div>
@@ -113,6 +114,14 @@ function DemoTrialIndicator({ ui }) {
           />
         </div>
       </div>
+      <button
+        type="button"
+        onClick={() => navigate('/upgrade')}
+        className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
+        data-testid="topbar-go-to-payment"
+      >
+        {ui('upgradeGoToPayment')}
+      </button>
     </div>
   );
 }

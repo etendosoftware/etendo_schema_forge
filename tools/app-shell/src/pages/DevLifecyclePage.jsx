@@ -11,7 +11,7 @@ function toInputDate(value) {
 
 export default function DevLifecyclePage() {
   const apiFetch = useApiFetch('');
-  const [state, setState] = useState(null);
+  const [state, setState] = useState({ environments: [], trialDays: 15, renewalGraceDays: 15 });
   const [selected, setSelected] = useState('');
   const [trialDays, setTrialDays] = useState('15');
   const [graceDays, setGraceDays] = useState('15');
@@ -24,9 +24,12 @@ export default function DevLifecyclePage() {
     const response = await apiFetch('/sws/go/dev/lifecycle');
     if (!response.ok) throw new Error('Development lifecycle tool is disabled');
     const data = await response.json();
-    setState(data);
-    setTrialDays(String(data.trialDays));
-    setGraceDays(String(data.renewalGraceDays));
+    const normalized = data && typeof data === 'object'
+      ? { environments: [], ...data }
+      : { environments: [], trialDays: 15, renewalGraceDays: 15 };
+    setState(normalized);
+    setTrialDays(String(normalized.trialDays));
+    setGraceDays(String(normalized.renewalGraceDays));
   }, [apiFetch]);
 
   useEffect(() => { load().catch(error => setMessage(error.message)); }, [load]);
@@ -43,7 +46,7 @@ export default function DevLifecyclePage() {
     event.preventDefault();
     setMessage('Saving...');
     try {
-      const environment = state.environments.find(item => item.clientId === selected);
+      const environment = state?.environments?.find(item => item.clientId === selected);
       const response = await apiFetch('/sws/go/dev/lifecycle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -60,7 +63,10 @@ export default function DevLifecyclePage() {
         }),
       });
       if (!response.ok) throw new Error('Could not update lifecycle state');
-      setState(await response.json());
+      const data = await response.json();
+      setState(data && typeof data === 'object'
+        ? { environments: [], ...data }
+        : { environments: [], trialDays: Number(trialDays), renewalGraceDays: Number(graceDays) });
       setMessage('Saved for this local backend process.');
     } catch (error) {
       setMessage(error.message);

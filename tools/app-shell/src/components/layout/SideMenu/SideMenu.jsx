@@ -78,7 +78,6 @@ import {
   environmentCommercialLabel,
   environmentPlanLabelKey,
   environmentRelationshipLabel,
-  environmentTrialLabel,
 } from '@/lib/environmentPresentation.js';
 import menuConfig from '@/menu.json';
 
@@ -624,14 +623,6 @@ export default function SideMenu({
                       {ui(environmentPlanLabelKey(currentEnvironment))}
                     </span>
                   )}
-                  {currentEnvironment && environmentTrialLabel(currentEnvironment, ui) && (
-                    <span
-                      className="shrink-0 text-[10px] text-muted-foreground"
-                      data-testid="current-environment-trial-status"
-                    >
-                      {environmentTrialLabel(currentEnvironment, ui)}
-                    </span>
-                  )}
                   {currentEnvironment && environmentCommercialLabel(currentEnvironment, ui) && (
                     <span className="shrink-0 text-[10px] text-muted-foreground">
                       {environmentCommercialLabel(currentEnvironment, ui)}
@@ -671,14 +662,6 @@ export default function SideMenu({
                         )}>
                           {ui(environmentPlanLabelKey(env))}
                         </span>
-                        {environmentTrialLabel(env, ui) && (
-                          <span
-                            className="ml-2 shrink-0 text-[10px] text-muted-foreground"
-                            data-testid={`environment-trial-status-${env.clientId}`}
-                          >
-                            {environmentTrialLabel(env, ui)}
-                          </span>
-                        )}
                         {environmentCommercialLabel(env, ui) && (
                           <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">
                             {environmentCommercialLabel(env, ui)}
