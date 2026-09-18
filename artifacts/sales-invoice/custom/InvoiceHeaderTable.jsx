@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, Plus } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { DataTable } from '@/components/contract-ui';
 import { useLocale, useLocaleSwitch, useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
@@ -11,7 +11,7 @@ import {
   getDueDateTextStyle,
 } from '@/lib/invoiceDueDate';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
-import { getInvoiceFiscalTargets, isSifEligibleByDate, isVerifactuEligibleByDate } from '@/windows/custom/shared/fiscalTargets.js';
+import { getInvoiceFiscalTargets, isSifEligibleByDate, isVerifactuEligibleByDate, isTbaiStatusNotApplicable } from '@/windows/custom/shared/fiscalTargets.js';
 import { FiscalStatusBadge, normalizeVerifactuStatus } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
@@ -53,7 +53,10 @@ export default function InvoiceHeaderTable(props) {
 
   const { selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
-  const { profile, siiRecord, tbaiRecord, verifactuRecord } = useFiscalConfig(orgId, apiBaseUrl);
+  const {
+    profile,
+    earliestSiiCutoverDate, earliestVerifactuCutoverDate,
+  } = useFiscalConfig(orgId, apiBaseUrl);
 
   const targets = useMemo(() => getInvoiceFiscalTargets('sales-invoice', profile), [profile]);
 
@@ -67,42 +70,103 @@ export default function InvoiceHeaderTable(props) {
   // ─── Custom columns ────────────────────────────────────────────
   const columns = useMemo(() => {
     const fiscalCols = [];
-    // ETP-5122: each cell is additionally gated by per-row date eligibility —
-    // an invoice dated before the org's adoption date for that system must not
-    // show a status at all (the invoice could never have been sent there). The
-    // column itself still exists whenever the profile enables the system
-    // (`targets.showX`), since OTHER rows in the same grid may well be eligible
-    // (dated on/after the adoption date); only the ineligible row's cell is blank.
+    // ETP-5229 (corrected): the status badge VALUE reads directly off the
+    // invoice's OWN persisted status field — no config-scoped lookup. Classic
+    // never links a sent invoice's status to any particular fiscal config row
+    // (see useFiscalStatus.js for the full root-cause writeup), so an invoice
+    // genuinely sent under a PREVIOUS, since-superseded config must keep
+    // showing its real status forever.
+    //
+    // But live user testing found that removing ALL date gating was wrong: a
+    // row dated BEFORE the system's earliest-ever cutover for this org (e.g. an
+    // invoice from before SII was ever configured) must show a dash, not a
+    // stray DB value. SII and Verifactu are gated per-row here, client-side, on
+    // isSifEligibleByDate/isVerifactuEligibleByDate against the EARLIEST
+    // cutover across ALL of the org's config rows (active or deactivated) —
+    // never the currently active config's own (possibly later) cutover date,
+    // which would incorrectly blank a real historical status. TBAI uses the
+    // SAME earliest-across-all-rows semantics but applies the gate INSIDE the
+    // stored function backing its column (see the `showTbai` block below) —
+    // TBAI has no equivalent client-side gate here since ETP-5216/ETP-5229. The
+    // column itself still only appears when the profile enables the system
+    // (`targets.showX`) — that check is org/territory-scoped, not date-scoped.
+    // ETP-5229 item #17: eligible-but-not-yet-sent is a DIFFERENT state from
+    // not-eligible-at-all, and collapsing both to `null`/dash reads as "does
+    // not apply" when it actually means "applies, just not sent yet". So each
+    // eligible-but-empty fallback below uses the system's own existing
+    // "pending" FiscalStatusBadge key — SII/Verifactu's raw `'PE'` code (the
+    // same code Classic itself writes once queued/generated: see
+    // `UpdateInvoicesPreSii.SII_STATUS` / `GenerateRF.SENDING_STATUS_PENDING`)
+    // and TBAI's synthetic `'Pendiente'` (TBAI has no persisted pending code).
+    // Not-eligible still returns `null` (dash), unchanged — see
+    // `useFiscalStatus.js` for the full writeup.
     if (targets.showSii) {
       fiscalCols.push({
         key: '_siiStatus', type: 'custom', label: siiColLabel,
         render: (row) => (
-          isSifEligibleByDate(row.accountingDate, siiRecord?.fechaAcogidaSII)
-            ? <FiscalStatusBadge status={row.aeatsiiEstado ?? null} />
-            : <span className="text-muted-foreground">—</span>
+          <FiscalStatusBadge
+            status={isSifEligibleByDate(row.accountingDate, earliestSiiCutoverDate) ? (row.aeatsiiEstado ?? 'PE') : null}
+          />
         ),
       });
     }
     if (targets.showTbai) {
       fiscalCols.push({
-        key: '_tbaiStatus', type: 'custom', label: tbaiColLabel,
+        // ETP-5216 (fixed under ETP-5229): backed by the stored computed AD
+        // column EM_ETGO_Tbai_Status. It used to be key '_tbaiStatus' with no
+        // `column`, fed by the response injector — which made isFilterableColumn
+        // drop it from the advanced filter in SILENCE, and hid a dead injector
+        // for months (ETP-4391). `type: 'custom'` still drives the badge cell;
+        // `column` + `filterMode` give the filter and the sort a real backend
+        // field to work with, the same pairing already used by
+        // `transactionDocument` below.
+        //
+        // The adoption-date gate that used to run here client-side
+        // (isSifEligibleByDate against earliestTbaiCutoverDate) now lives
+        // INSIDE the stored function (ETGO_GET_TBAI_STATUS), gated on the
+        // EARLIEST tbai_config cutover across ALL rows for the org — active or
+        // not — matching the semantics validated for SII/Verifactu below. This
+        // is TBAI-only: SII and Verifactu have no equivalent stored column and
+        // keep their client-side isSifEligibleByDate/isVerifactuEligibleByDate
+        // gating unchanged.
+        key: 'eTGOTbaiStatus', column: 'em_etgo_tbai_status', type: 'custom',
+        filterMode: 'enumLabel', label: tbaiColLabel,
+        // ETP-5216 follow-up: the stored function returns a CLOSED catalogue of
+        // six codes, so the filter is a picker, not free text. `filterMode:
+        // 'text'` sent iContains against codes the user never sees — the cell
+        // renders 'NoAplica' as a dash and every other code as a translated
+        // FiscalStatusBadge label, so there was nothing to type. 'enumLabel'
+        // also brings the isNull operator, which is the only way to reach rows
+        // whose stored value was never computed. Values are i18n keys;
+        // AdvancedFilterBuilder's labelFor() runs them through ui().
+        enumLabels: {
+          Pendiente: 'fiscalMonitor.tbai.status.Pendiente',
+          Recibido:  'fiscalMonitor.tbai.status.Recibido',
+          Enviada:   'fiscalMonitor.tbai.status.Enviada',
+          Rechazado: 'fiscalMonitor.tbai.status.Rechazado',
+          Error:     'fiscalMonitor.tbai.status.Error',
+          NoAplica:  'fiscalMonitor.tbai.status.NoAplica',
+        },
+        // The database answers 'Pendiente' for "no resolved submission", so the
+        // ?? is only a guard for a row fetched before the column was backfilled.
+        // 'NoAplica' means the invoice predates the organization's earliest-ever
+        // TBAI adoption date (or the organization never joined): it is not
+        // pending anything and never will be, so it gets a dash instead of a
+        // badge.
         render: (row) => (
-          isSifEligibleByDate(row.invoiceDate, tbaiRecord?.tbaisystemdate)
-            ? <FiscalStatusBadge status={row.tbaiSyncEstado ?? 'Pendiente'} />
-            : <span className="text-muted-foreground">—</span>
+          isTbaiStatusNotApplicable(row.eTGOTbaiStatus)
+            ? <span className="text-muted-foreground">—</span>
+            : <FiscalStatusBadge status={row.eTGOTbaiStatus ?? 'Pendiente'} />
         ),
       });
     }
     if (targets.showVerifactu) {
       fiscalCols.push({
         key: '_vfStatus', type: 'custom', label: vfColLabel,
-        render: (row) => (
-          // ETP-5122 follow-up: VERI*FACTU gates on the invoice's CREATION
-          // timestamp (`created`), not `invoiceDate` — see fiscalTargets.js.
-          isVerifactuEligibleByDate(row.created, verifactuRecord?.inVfactuSystem)
-            ? <FiscalStatusBadge status={normalizeVerifactuStatus(row.etvfacInvoiceStatus ?? null)} />
-            : <span className="text-muted-foreground">—</span>
-        ),
+        render: (row) => {
+          const eligible = isVerifactuEligibleByDate(row.created, earliestVerifactuCutoverDate);
+          return <FiscalStatusBadge status={eligible ? normalizeVerifactuStatus(row.etvfacInvoiceStatus ?? 'PE') : null} />;
+        },
       });
     }
 
@@ -120,6 +184,13 @@ export default function InvoiceHeaderTable(props) {
         filterMode: 'identifier',
         labels: { [locale]: t('documentType') },
         label: t('documentType'),
+        // `custom` has no width entry in linesColumnWidth.js (generic 120px
+        // fallback), but the widest label here ("Factura rectificativa") alone
+        // measures ~128px — with the cell's own overflow-hidden (ETP-5281), a
+        // too-narrow column clipped the pill mid-word with no ellipsis instead
+        // of showing the full label. See PurchaseInvoiceHeaderTable.jsx's
+        // identical fix (ETP-5268 follow-up).
+        minWidth: 160,
         render: (row) => {
           const sub = getArSubtype(row);
           const cfg = sub === 'RECTIFICATIVA'
@@ -180,6 +251,13 @@ export default function InvoiceHeaderTable(props) {
         // to text mode, which has no `greaterThan`, and the operator select
         // renders empty (ETP-4681).
         filterMode: 'numeric',
+        // `custom` has no width entry in linesColumnWidth.js, so it falls back
+        // to the generic 120px basis — 24px of cell padding leaves only 96px
+        // for the button, and the "pending" badge (dot + amount) alone already
+        // measures ~97px for a 3-digit amount, ~1px over that leaves the
+        // cell's own `text-overflow: ellipsis` kicking in on the whole button.
+        // See PurchaseInvoiceHeaderTable.jsx's identical fix (ETP-5268 follow-up).
+        minWidth: 160,
         render: (row) => {
           const currency = row['currency$_identifier'] || 'EUR';
           // ETP-4841: the badge follows the SIGN of the total, not the document type
@@ -206,7 +284,7 @@ export default function InvoiceHeaderTable(props) {
                 style={{...NOWRAP_FLEX,display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-info-bg)',border:'1px solid var(--status-info-border)',color:'hsl(var(--primary))',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
               >
                 <span style={{width:8,height:8,borderRadius:'50%',background:'hsl(var(--primary))',flexShrink:0,display:'inline-block'}}/>
-                {ui('cpFavorBadge')} · {fmtAmt(badge.amount, currency)}
+                {ui('cpFavorBadge')} {fmtAmt(badge.amount, currency)}
               </button>
             );
           }
@@ -226,14 +304,13 @@ export default function InvoiceHeaderTable(props) {
             >
               <span style={{width:8,height:8,borderRadius:'50%',background:'var(--status-warning-fg)',flexShrink:0,display:'inline-block'}}/>
               {fmtAmt(badge.amount, currency)}
-              <span style={{display:'inline-flex',alignItems:'center',color:'var(--status-warning-fg)'}}><Plus size={13}/></span>
             </button>
           );
         },
       },
       { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent' },
     ];
-  }, [gl, ui, locale, targets, siiColLabel, tbaiColLabel, vfColLabel, siiRecord, tbaiRecord, verifactuRecord]);
+  }, [gl, ui, locale, targets, siiColLabel, tbaiColLabel, vfColLabel, earliestSiiCutoverDate, earliestVerifactuCutoverDate]);
 
   return (
     <>

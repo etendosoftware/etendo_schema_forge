@@ -70,10 +70,9 @@ const BASE = {
       fields: [
         { id: 'nif',             labelKey: 'fm.ident.nif',             type: 'text',     readOnly: true  },
         { id: 'nombre',          labelKey: 'fm.ident.nombre',          type: 'text',     readOnly: true  },
-        { id: 'dep_aduanero',    labelKey: 'fm.ident.dep_aduanero',    type: 'checkbox', readOnly: false },
         { id: 'redeme',          labelKey: 'fm.ident.redeme',          type: 'checkbox', readOnly: false },
         { id: 'concurso',        labelKey: 'fm.ident.concurso',        type: 'checkbox', readOnly: false },
-        { id: 'fecha_concurso',  labelKey: 'fm.ident.fecha_concurso',  type: 'date',     readOnly: false, visibleWhen: { field: 'concurso', equals: true } },
+        { id: 'fecha_concurso',  labelKey: 'fm.ident.fecha_concurso',  type: 'date',     readOnly: false, required: true, visibleWhen: { field: 'concurso', equals: true } },
         { id: 'postconcursal',   labelKey: 'fm.ident.postconcursal',   type: 'checkbox', readOnly: false, visibleWhen: { field: 'concurso', equals: true } },
         TIPO_DECLARACION_FIELD,
       ],
@@ -188,7 +187,21 @@ const BASE = {
         { id: 'iva_importacion',         labelKey: 'fm.box.row.iva_importacion',          cells: [77], editable: true },
         { id: 'cuotas_compensar',        labelKey: 'fm.box.row.cuotas_compensar',         cells: [110], editable: true },
         { id: 'cuotas_compensar_aplic',  labelKey: 'fm.box.row.cuotas_compensar_aplic',  cells: [78], editable: true },
-        { id: 'cuotas_compensar_post',   labelKey: 'fm.box.row.cuotas_compensar_post',   cells: [87] },
+        // ETP-5338 pt.2: box 87 is display-only — AEAT computes and validates 110-78 on their
+        // side at submission time (the .303 file uploads correctly without this value), but the
+        // UI previously showed it blank because no box in `recomputeDerivedBoxes` ever populated
+        // it. `derivedValue` here mirrors `importe_devolucion`'s pattern below: box 110 minus box
+        // 78, floored at 0 (box 87 represents "cuotas pendientes de compensar", which by AEAT
+        // definition cannot be negative). This is purely a client-side rendering fallback (see
+        // FmBoxes303.jsx's `renderBoxCell`) — it does not touch `manualData`, `recomputeDerivedBoxes`,
+        // or anything sent in the submission payload.
+        //
+        // `treatMissingAsZero: true` — confirmed with the product owner (cycle 2, reversing the
+        // cycle-1 QA rejection which assumed the wrong AEAT semantics): a missing box110 or box78
+        // defaults to 0, EXCEPT when BOTH are missing, in which case the cell stays blank. This
+        // flag is scoped to this row only — `importe_devolucion` below keeps its original
+        // "missing operand blanks the result" behavior and must not be changed.
+        { id: 'cuotas_compensar_post',   labelKey: 'fm.box.row.cuotas_compensar_post',   cells: [87], derivedValue: { box: 110, subtractBox: 78, clampMin: 0, treatMissingAsZero: true } },
         { id: 'bicolumn_resultado', type: 'bicolumn',
           infoboxes: [
             { id: 'reg_anual',     labelKey: 'fm.box.row.reg_anual',     cells: [68],  editable: true },
@@ -243,10 +256,9 @@ const BASE = {
 const _2024_IDENTIFICACION_FIELDS = [
   { id: 'nif',           labelKey: 'fm.ident.nif',           type: 'text',     readOnly: true  },
   { id: 'nombre',        labelKey: 'fm.ident.nombre',        type: 'text',     readOnly: true  },
-  { id: 'dep_foral',     labelKey: 'fm.ident.dep_foral',     type: 'checkbox', readOnly: false },
   { id: 'redeme',        labelKey: 'fm.ident.redeme',        type: 'checkbox', readOnly: false },
   { id: 'concurso',      labelKey: 'fm.ident.concurso',      type: 'checkbox', readOnly: false },
-  { id: 'fecha_concurso', labelKey: 'fm.ident.fecha_concurso', type: 'date',   readOnly: false, visibleWhen: { field: 'concurso', equals: true } },
+  { id: 'fecha_concurso', labelKey: 'fm.ident.fecha_concurso', type: 'date',   readOnly: false, required: true, visibleWhen: { field: 'concurso', equals: true } },
   { id: 'postconcursal', labelKey: 'fm.ident.postconcursal', type: 'checkbox', readOnly: false, visibleWhen: { field: 'concurso', equals: true } },
   TIPO_DECLARACION_FIELD,
 ];
@@ -307,7 +319,6 @@ const _2024_COMPLEMENTARIA_OPS = [
 
 const PATCHES = {
   // 2021: rows 150/153/156 (fractional-rate sub-groups) and 165/168 not yet introduced.
-  //       identificacion: dep_foral replaces dep_aduanero (gasolinas).
   //       info_adicional: box 61 instead of 120/122/123/124 (OSS boxes introduced in later years).
   //       resultado_final bicolumn lacks boxes 108 (otros_ajustes), 109 (devoluciones_at), 111 (rectificacion_importe).
   //       Source: official AEAT Modelo 303 2021 form.
@@ -332,7 +343,6 @@ const PATCHES = {
   ],
 
   // 2022: rows 150/153/156 and 165/168 absent (same as 2021).
-  //       identificacion: dep_foral replaces dep_aduanero (gasolinas).
   //       info_adicional unchanged from BASE (120/122/123/124 present — unlike 2021 which uses box 61).
   //       resultado_final bicolumn lacks boxes 108, 109, 111 (same as 2021).
   //       Source: official AEAT Modelo 303 2022 form.
@@ -488,6 +498,59 @@ export function applyPatch(ops) {
  */
 export function isLastPeriodOfYear(period) {
   return period === 'T4' || period === '12' || period === 4 || period === 12 || period === '4';
+}
+
+// Evaluates a visibility condition object ({ field, in: [...] | equals: ... } or an
+// OR-of-conditions { anyOf: [...] }) against the current `identification` state. Single
+// source of truth for visibility matching — mirrored from FmBoxes303.jsx's own `matchesSvw`
+// (ETP-5187: extracted here so the required-field validation gate in FmModel303Page.jsx reads
+// the exact same visibility rules the asterisk/section rendering already uses, instead of
+// forking a second implementation). FmBoxes303.jsx re-exports its local `matchesSvw` as a thin
+// wrapper around this function — do not re-implement visibility matching anywhere else.
+export function matchesVisibility(svw, identification) {
+  if (Array.isArray(svw.anyOf)) return svw.anyOf.some(c => matchesVisibility(c, identification));
+  const val = identification?.[svw.field];
+  return svw.in ? svw.in.includes(val) : val === svw.equals;
+}
+
+// Section-level gate for getMissingRequiredFields below — split out purely to keep that
+// function's cognitive complexity down (javascript:S3776); no behavior change.
+function isSectionVisible(section, identification) {
+  return !section.sectionVisibleWhen || matchesVisibility(section.sectionVisibleWhen, identification);
+}
+
+// Field-level gate for getMissingRequiredFields below — same reasoning as isSectionVisible.
+function isRequiredFieldMissing(f, identification) {
+  if (!f.required) return false;
+  if (f.visibleWhen && !matchesVisibility(f.visibleWhen, identification)) return false;
+  const val = identification?.[f.id];
+  return val === undefined || val === null || val === '';
+}
+
+/**
+ * Returns the currently-visible `identificacion`-family fields (across `identificacion` and
+ * `datos_bancarios`/meta sections) marked `required: true` in the resolved layout whose value is
+ * empty in `identification` — e.g. `tipo_declaracion` (always visible) and `bank_iban` (only
+ * required while `datos_bancarios`'s section is visible, i.e. tipo U/D/X or rectificativa).
+ *
+ * ETP-5187: drives the "Generar fichero"/"Marcar como Presentado" pre-flight validation gate in
+ * FmModel303Page.jsx. Reads the SAME `field.required` flags FmBoxes303 already uses for the red
+ * asterisk (`f.required && <span className="fm-aeat-required-mark">`), so a third field marked
+ * `required: true` in a future year's patch is automatically covered — no gate-side change needed.
+ * A field/section gated by its own `visibleWhen`/`sectionVisibleWhen` only counts as "required
+ * right now" when that condition currently matches; a hidden required field is never reported.
+ */
+export function getMissingRequiredFields(year, period, identification) {
+  const layout = getLayout303(year, period);
+  const missing = [];
+  for (const section of layout.sections) {
+    if (!Array.isArray(section.fields)) continue;
+    if (!isSectionVisible(section, identification)) continue;
+    for (const f of section.fields) {
+      if (isRequiredFieldMissing(f, identification)) missing.push(f);
+    }
+  }
+  return missing;
 }
 
 export function getLayout303(year, period) {

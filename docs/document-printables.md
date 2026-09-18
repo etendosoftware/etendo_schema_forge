@@ -38,7 +38,7 @@ nothing about which of these five a user actually hits.
 |---|---|---|---|
 | 1 | **Preview panel** (side panel / modal) | `windows/custom/shared/XxxPreview.jsx` | `useXxxPdf(id, base, token, cacheConfig)` — **reads the attachment cache** |
 | 2 | **Download** inside the preview | same component, same blob | the blob from (1) |
-| 3 | **Email — detail view** (envelope in the topbar) | the window's `artifacts/<window>/custom/*Actions.jsx` / `*TopbarExtra.jsx` → `SendDocumentModal pdfBlobUrl=` | its own `useXxxPdf` (no cacheConfig → always fresh) |
+| 3 | **Email — detail view** (envelope in the topbar) | the **button** lives in `topbarSecondary` (`DocumentSecondaryActions`/its window adapter, ETP-5260); the **modal** stays in the window's `artifacts/<window>/custom/*Actions.jsx` / `*TopbarExtra.jsx` → `SendDocumentModal pdfBlobUrl=`, bridged by a `window` `CustomEvent` — see D18 | its own `useXxxPdf` (no cacheConfig → always fresh) |
 | 4 | **Email — grid row** (hover envelope) | each window's `index.jsx` → `useRowEmailModal({ usePdf })`, or `ReturnWindowShell`'s `emailAction.usePdf` | that hook; **without `usePdf` it silently falls back to `useNoPdf`** |
 | 5 | **Print** — detail button and multi-select in the list | `DetailView` → `DocumentPrintDrawer`, `ListView` → `printDocuments()` | `documentPdfRegistry.js` (no hooks; works for N records). List multi-select excludes Draft documents from the batch first — see D12 |
 
@@ -155,14 +155,20 @@ exactly as it did before ETP-4787 rather than silently switching itself off. The
 strict, and both timestamps are truncated to whole seconds on the wire, so an edit landing in the
 same second as the upload reads as fresh.
 
-**Three windows deliberately opt out** by passing no `recordUpdated`: purchase-invoice,
-goods-receipt and return-material-receipt. Their attachment slot holds the *counterparty's* own
-document (the OCR source, the supplier's delivery note, the customer's signed receipt), not a
-cache of something we rendered — no edit of ours can make it stale. They also pass no
-`sourceBlob`, so the write half cannot fire either: two independent guards, because the failure
-mode here is overwriting a real user file. **That opt-out is load-bearing for every future
-invalidation rule added to this module — keep new checks behind the `recordUpdated` guard, never
-above it.**
+**Two windows deliberately opt out** by passing no `recordUpdated`: purchase-invoice and
+goods-receipt. Their attachment slot holds the *counterparty's* own document (the OCR source, the
+supplier's delivery note), not a cache of something we rendered — no edit of ours can make it
+stale. They also pass no `sourceBlob`, so the write half cannot fire either: two independent
+guards, because the failure mode here is overwriting a real user file. **That opt-out is
+load-bearing for every future invalidation rule added to this module — keep new checks behind the
+`recordUpdated` guard, never above it.**
+
+return-material-receipt used to opt out here too, for the same stated reason (its attachment
+slot held the customer's signed return receipt via `attachmentConfig`). ETP-5124 removed that
+upload slot from the preview panel entirely — see D18 — so the reason no longer applies, but the
+window still passes no `cacheConfig`/`recordUpdated` today; the fix reverted the panel to render
+the system PDF fresh on every open, same as before ETP-4315 ever shipped, deliberately without
+adopting the caching layer its sibling `return-to-vendor-shipment` already has. See D18 for why.
 
 The bug this closes:
 
@@ -251,6 +257,9 @@ PDF becomes ready — decide it deliberately, do not slip it into an unrelated c
 | D15 | The commercial template's tax labels are **generic** ("Impuesto" / "Impuestos" / "Subtotal (sin impuestos)"), not "IVA" | ETP-5125 | The lines-table tax column prints the tax *name* (`tax$_identifier`, e.g. "IVA 21%"), so a `%` header was wrong; and non-IVA taxes exist. The on-screen `DocumentTotalsPanel` already said "Impuesto", so the PDF contradicted the screen |
 | D16 | The cache is invalidated by **bundle identity** too, not only by the record's `updated` | ETP-5125 | A PDF depends on the template/labels/helpers as much as on the data, and changing those moves no timestamp — a cached document served the old design forever. Deliberately over-invalidates (one cold cache per deploy): the same "re-rendering beats serving stale" trade this cache already takes for `updated` |
 | D17 | The invalidation marker is the **build instant**, not a hand-bumped constant nor a stored renderer fingerprint | ETP-5125 | A constant has to be remembered on every future template change (this repo has shipped the same formatting bug 3× for exactly that reason) and leaves a deploy-slip window. A fingerprint is exact but needs a metadata field the upload cannot carry, and the only free-text column that round-trips is user-editable in the Adjuntos tab |
+| D18 | return-material-receipt's preview left panel reverted to the system-generated PDF (`leftPanel` + `PreviewPdfPanel`); the ETP-4408 customer-upload `attachmentConfig` slot is removed outright, not just hidden | ETP-5124 | PM (Valeria, with Emilio Polliotti) confirmed the original requirement was the Etendo-issued PDF, matching every other document window; QA (Isaías) rejected the ETP-4408 behavior. The customer's own return document is attached only via the generic Attachments tab now — it was never meant to *replace* the Etendo document, per the ticket. Deliberately did **not** adopt the `pdfCacheConfig`/`attachmentConfig` caching layer `return-to-vendor-shipment` uses for the same movement template: any record opened under the ETP-4408 code (2026-07-06 onward) may already carry a customer file marked as the main `M_InOut` attachment, and enabling the read-side cache today would serve that stale file back as a "cached PDF" — the same class of bug, through the cache path instead of the panel wiring. Revisit once a data check confirms no such attachments remain |
+| D19 | rows 3 and 4 of the checklist above went **live** for return-material-receipt: a `return-material-receipt-send` backend contract was built (mirroring `goods-shipment-send`) and the frontend's `onEmail`/`ReceiptSendModal` wiring, which existed since ETP-4912 but pointed at a contract that didn't exist, now works. `EmailsCard` (ETP-5069) was also added to this window's preview, matching Invoice/Order/Quotation/Goods Shipment | ETP-5124 | PM (Valeria) confirmed Send is in scope, and that the backend gap (both sales and purchase return windows) is real engineering work, not a config flag. The summary-block resolver shows one row — `document.detail.movementDate` (reused, no new catalog key) — deliberately not a `sourceShipment` reference: that value is an `afterHandle()` GET-time enrichment (`ReturnShipmentUtils.fetchSourceDocuments`, package-private in a different package), not a real Hibernate property the resolver could read server-side without widening that utility's visibility. `return-to-vendor-shipment` (the purchase-side sibling) is unchanged and still has no working send contract — see its own updated comments in `index.jsx`/`ReturnToVendorShipmentPreview.jsx` |
+| D20 | The detail-view **Send button** moved to `topbarSecondary` (left of Save), but its `SendDocumentModal` did **not** move out of the window's `topbarRight` component; the two are bridged by a `window` `CustomEvent` (`'<window>:open-send-modal'`) | ETP-5260 | The button is a plain visibility/order concern (DF wants it left of Save), but the modal needs client-rendered PDF/`documentType` context (`pdfBlobUrl`, status-derived copy) that the generic, window-agnostic `DocumentSecondaryActions` does not carry and should not be taught per-window. Two windows (`purchase-order`, `goods-shipment`) already used the identical event-bridge pattern for their Confirm/action modals, so this reuses an established shape rather than inventing a second one. Affects `purchase-order`, `sales-order`, `sales-quotation`, `goods-shipment`, `sales-invoice` (5 of the 9 ETP-5260 windows — `purchase-invoice`/`goods-receipt` have no Send button, and the two return windows have neither Clone nor Send in `topbarSecondary`) |
 
 **Normative order for any conflict: the AEAT spec > the ticket's example images > classic's
 implementation.** Applied three times in ETP-4912 (quiet zone, font size, placement).

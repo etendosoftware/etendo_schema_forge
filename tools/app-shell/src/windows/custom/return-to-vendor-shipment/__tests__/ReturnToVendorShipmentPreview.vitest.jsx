@@ -1,20 +1,15 @@
 // Mocks must come before imports (Vitest hoisting)
 //
-// ETP-4717 — QA (Emilio Polliotti) rejected the ETP-4718 "Enviar" (send-email)
-// action on this window: the frontend derives the email contract name as
-// `${windowName}-send` (`return-to-vendor-shipment-send`), but the backend
-// only registers `ReturnToVendorSendEmailContract.NAME` =
-// `return-to-vendor-send`, so every click failed with "Unknown email
-// contract". QA explicitly asked to REMOVE the action from this window
-// rather than reconcile the contract name mismatch (that reconciliation is a
-// separate, deliberately out-of-scope backend concern). The previous
-// `isSendable` gate (documentStatus === 'CO') that used to decide whether
-// `onEmail` reached `buildReturnPreviewContent` no longer exists — `onEmail`
-// is never wired here, for any status. See the "ETP-4717 — Enviar action
-// removed (no onEmail wiring)" describe block below, and mirrors the
-// pre-existing convention from
-// return-material-receipt/__tests__/ReturnMaterialReceiptPreview.vitest.jsx
-// (which also never passes `onEmail`).
+// ETP-5124 — the backend now registers a correctly-named email contract
+// (`return-to-vendor-shipment-send`, via
+// `ReturnToVendorShipmentSendEmailContract`), fixing the contract-name
+// mismatch (`return-to-vendor-send`) that made QA (Emilio Polliotti) reject
+// the ETP-4718 "Enviar" (send-email) action under ETP-4717. The `isSendable`
+// gate (documentStatus === 'CO') now decides whether `onEmail` /
+// `emailsCard.onSend` reach `buildReturnPreviewContent`, mirroring
+// return-material-receipt/__tests__/ReturnMaterialReceiptPreview.vitest.jsx.
+// See the "ETP-5124 — email send wiring (return-to-vendor-shipment-send
+// contract)" describe block below.
 //
 // ETP-4789 — Download PDF gets its own status gate on this window (it has no
 // pre-existing isSendable to reuse for that purpose): only downloadable once
@@ -70,7 +65,17 @@ vi.mock('../../shared/PreviewActionButtons.jsx', () => ({
   }),
   ReceiptSendModal: (props) => {
     mockCapturedSendModalProps.current = props;
-    return <div data-testid="receipt-send-modal" data-pdf-url={props.pdfBlobUrl} />;
+    return (
+      <div data-testid="receipt-send-modal" data-pdf-url={props.pdfBlobUrl}>
+        {/* ETP-5124 — exposes a way to simulate the modal reporting a successful send,
+            mirroring ReturnMaterialReceiptPreview.vitest.jsx's send-modal-sent button. */}
+        {props.onSent && (
+          <button data-testid="receipt-send-modal-sent" onClick={() => props.onSent()}>
+            Simulate Sent
+          </button>
+        )}
+      </div>
+    );
   },
   PreviewPdfPanel: (props) => (
     <div data-testid="preview-pdf-panel" data-pdf-url={props.pdfUrl ?? ''} data-loading={String(props.pdfLoading)} />
@@ -98,7 +103,7 @@ vi.mock('../../shared/pdfUtils.js', () => ({
   downloadBlobAsFile: vi.fn(),
 }));
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import ReturnToVendorShipmentPreview from '../ReturnToVendorShipmentPreview.jsx';
 
 const defaultShipment = {
@@ -204,49 +209,89 @@ describe('ReturnToVendorShipmentPreview', () => {
     expect(screen.queryByTestId('modal-subtitle')).not.toBeInTheDocument();
   });
 
-  describe('ETP-4717 — Enviar action removed (no onEmail wiring)', () => {
-    // This is the behavior-changing case: before ETP-4717, documentStatus ===
-    // 'CO' wired onEmail to sendModal.openEmailModal (the ETP-4718 isSendable
-    // gate). QA rejected the whole action for this window (email contract
-    // name mismatch — see file header), so onEmail must now be undefined even
-    // when the shipment is Confirmado. Asserted against the OLD source, this
-    // exact expectation would have failed (old code passed openEmailModalMock
-    // for CO), which is what confirms this is a genuine regression test.
-    it('passes onEmail=undefined to buildReturnPreviewContent when documentStatus is CO', () => {
+  describe('ETP-5124 — email send wiring (return-to-vendor-shipment-send contract)', () => {
+    function lastBuildContentArgs() {
+      return mockBuildReturnPreviewContent.mock.calls.at(-1)?.[0];
+    }
+
+    // This is the behavior-changing case: before ETP-5124, onEmail was never
+    // wired regardless of status (ETP-4717 removal, email contract name
+    // mismatch). The backend now registers the correctly-named contract, so
+    // documentStatus === 'CO' must wire onEmail to sendModal.openEmailModal
+    // again, mirroring the isSendable gate in
+    // ReturnMaterialReceiptPreview.vitest.jsx.
+    it('passes onEmail as a function when the shipment is Confirmed (CO)', () => {
       renderPreview({ shipment: { ...defaultShipment, documentStatus: 'CO' } });
-      expect(mockBuildReturnPreviewContent).toHaveBeenCalledTimes(1);
-      const callArgs = mockBuildReturnPreviewContent.mock.calls[0][0];
-      expect(callArgs.onEmail).toBeUndefined();
+      expect(lastBuildContentArgs().onEmail).toBeInstanceOf(Function);
+      expect(lastBuildContentArgs().onEmail).toBe(openEmailModalMock);
     });
 
     it('passes onEmail=undefined to buildReturnPreviewContent when documentStatus is DR', () => {
       renderPreview({ shipment: { ...defaultShipment, documentStatus: 'DR' } });
-      expect(mockBuildReturnPreviewContent).toHaveBeenCalledTimes(1);
-      const callArgs = mockBuildReturnPreviewContent.mock.calls[0][0];
-      expect(callArgs.onEmail).toBeUndefined();
+      expect(lastBuildContentArgs().onEmail).toBeUndefined();
     });
 
     it('does not wire onEmail for any other status either', () => {
       renderPreview({ shipment: { ...defaultShipment, documentStatus: 'VO' } });
-      const callArgs = mockBuildReturnPreviewContent.mock.calls[0][0];
-      expect(callArgs.onEmail).toBeUndefined();
+      expect(lastBuildContentArgs().onEmail).toBeUndefined();
     });
 
     it('does not wire onEmail when documentStatus is undefined', () => {
       const shipmentWithoutStatus = { ...defaultShipment };
       delete shipmentWithoutStatus.documentStatus;
       renderPreview({ shipment: shipmentWithoutStatus });
-      const callArgs = mockBuildReturnPreviewContent.mock.calls[0][0];
-      expect(callArgs.onEmail).toBeUndefined();
+      expect(lastBuildContentArgs().onEmail).toBeUndefined();
     });
 
     it('does not wire onEmail when documentStatus is null', () => {
       renderPreview({ shipment: { ...defaultShipment, documentStatus: null } });
-      const callArgs = mockBuildReturnPreviewContent.mock.calls[0][0];
-      expect(callArgs.onEmail).toBeUndefined();
+      expect(lastBuildContentArgs().onEmail).toBeUndefined();
     });
 
-    it('renders ReceiptSendModal regardless of documentStatus (modal wiring stays mounted even though no trigger ever opens it)', () => {
+    it('builds emailsCard with the shipment id and the given apiBaseUrl', () => {
+      renderPreview();
+      const { emailsCard } = lastBuildContentArgs();
+      expect(emailsCard.documentId).toBe('rtvs-1');
+      expect(emailsCard.apiBaseUrl).toBe('/api/return-to-vendor-shipment');
+    });
+
+    it('builds emailsCard with a defined numeric refreshSignal', () => {
+      renderPreview();
+      expect(typeof lastBuildContentArgs().emailsCard.refreshSignal).toBe('number');
+    });
+
+    it('sets emailsCard.onSend to a function when the shipment is Confirmed (CO)', () => {
+      renderPreview();
+      expect(lastBuildContentArgs().emailsCard.onSend).toBeInstanceOf(Function);
+    });
+
+    it('leaves emailsCard.onSend undefined when the shipment is not Confirmed', () => {
+      renderPreview({ shipment: { ...defaultShipment, documentStatus: 'DR' } });
+      expect(lastBuildContentArgs().emailsCard.onSend).toBeUndefined();
+    });
+
+    it('passes pdfBlobLoading=true to ReceiptSendModal while the PDF is still generating', () => {
+      mockUseReturnToVendorPdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: true, error: null });
+      renderPreview();
+      expect(mockCapturedSendModalProps.current.pdfBlobLoading).toBe(true);
+    });
+
+    it('passes pdfBlobLoading=false to ReceiptSendModal once the PDF has resolved', () => {
+      mockUseReturnToVendorPdf.mockReturnValue({ pdfUrl: 'blob:fake-url', pdfBlob: new Blob(), loading: false, error: null });
+      renderPreview();
+      expect(mockCapturedSendModalProps.current.pdfBlobLoading).toBe(false);
+    });
+
+    it('bumps emailsCard.refreshSignal on a subsequent render when ReceiptSendModal reports a successful send', () => {
+      renderPreview();
+      const before = lastBuildContentArgs().emailsCard.refreshSignal;
+
+      fireEvent.click(screen.getByTestId('receipt-send-modal-sent'));
+
+      expect(lastBuildContentArgs().emailsCard.refreshSignal).not.toBe(before);
+    });
+
+    it('renders ReceiptSendModal regardless of documentStatus (modal wiring stays mounted even when onEmail is not wired)', () => {
       renderPreview({ shipment: { ...defaultShipment, documentStatus: 'DR' } });
       expect(screen.getByTestId('receipt-send-modal')).toBeInTheDocument();
     });

@@ -1,10 +1,11 @@
 // Vitest tests for FmModel303Page's ETP-4975 missing-default-IAE-activity
 // pre-flight guard in handleGenerate ("Generar fichero 303"). Mirrors the
-// identical guard already covered on AeatSubmitFlow's "Marcar como Presentado"
-// button — see AeatSubmitFlow.jsx's own handleSubmit and its docstring for the
-// full rationale (Classic's Modelo 303 code, reused via reflection, throws an
-// untranslated IndexOutOfBoundsException on the last period of the fiscal year
-// when the organization has no default IAE activity with a code).
+// identical guard already covered on AeatSubmitFlow's own submit button
+// (reached via PresentModal's "aeat_telematic" path) — see AeatSubmitFlow.jsx's
+// own handleSubmit and its docstring for the full rationale (Classic's Modelo
+// 303 code, reused via reflection, throws an untranslated
+// IndexOutOfBoundsException on the last period of the fiscal year when the
+// organization has no default IAE activity with a code).
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
@@ -79,7 +80,7 @@ vi.mock('@/components/attachments', () => ({
   useAttachments: () => ({ upload: vi.fn() }),
 }));
 vi.mock('lucide-react', () => ({
-  Download: () => null, OctagonAlert: () => null, TriangleAlert: () => null,
+  Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null, TriangleAlert: () => null,
   CircleCheck: () => null, Calculator: () => null, Loader2: () => null,
   TrendingUp: () => null, TrendingDown: () => null, ClipboardCheck: () => null,
   ReceiptText: () => null, FileCheck: () => null, Landmark: () => null,
@@ -92,6 +93,9 @@ const LAST_PERIOD_DECL = {
   id: '303-2026-T4', model: '303', year: 2026, period: 'T4', type: 'ord',
   status: 'draft', result: null, incidents: { blocking: 0, warning: 0 },
   _precomputed: null, boxes: null, sources: [], history: [],
+  // ETP-5187 required-field gate: tipo_declaracion must be set or "Generar fichero 303"
+  // never even opens FileGenModal303 — unrelated to this file's own IAE-activity guard.
+  identification: { tipo_declaracion: 'I' },
 };
 
 const NOT_LAST_PERIOD_DECL = { ...LAST_PERIOD_DECL, id: '303-2026-T2', period: 'T2' };

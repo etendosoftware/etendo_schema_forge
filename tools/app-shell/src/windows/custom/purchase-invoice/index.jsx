@@ -5,7 +5,7 @@ import { todayCalendarISO, tomorrowCalendarISO } from '@/lib/dateOnly.js';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { useUI, useMenuLabel } from '@/i18n';
-import BulkDocumentAction from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
@@ -13,6 +13,7 @@ import PurchaseInvoiceHeaderTable from './PurchaseInvoiceHeaderTable.jsx';
 import HeaderPage from '@generated/purchase-invoice/generated/web/purchase-invoice/HeaderPage';
 import InvoicePreview from '../shared/InvoicePreview.jsx';
 import PurchaseInvoiceTopbar from './PurchaseInvoiceTopbar.jsx';
+import PurchaseInvoiceSecondaryActions from '@generated/purchase-invoice/custom/PurchaseInvoiceSecondaryActions';
 import OcrSidePanel from '../shared/OcrSidePanel.jsx';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
@@ -70,6 +71,7 @@ const LIST_COLUMNS = [
 // before DataTable fires onColumnsReady.
 const OVERDUE_INITIAL_COLUMNS = [
   { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', required: true },
+  { key: 'documentNo', column: 'DocumentNo', type: 'string', required: true },
   { key: 'orderReference', column: 'POReference', type: 'string' },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', required: true },
   { key: 'documentStatus', column: 'DocStatus', type: 'status', required: true },
@@ -87,11 +89,13 @@ const LABEL_OVERRIDES = {
     POReference: 'Nº documento',
     OutstandingAmt: 'Saldo pendiente',
     em_etgo_delivery_status: 'Estado de recepción',
+    DocumentNo: 'N° interno',
   },
   en_US: {
     POReference: 'Document No.',
     OutstandingAmt: 'Outstanding Amount',
     em_etgo_delivery_status: 'Reception Status',
+    DocumentNo: 'Internal No.',
   },
   // ETP-5106: es_AR carried no overrides at all, so the grid fell through to the
   // raw AD label ("Total Pendiente"). Only OutstandingAmt is declared here — the
@@ -106,8 +110,20 @@ function PurchaseInvoiceBulkAction(props) {
     <>
       <BulkDocumentAction
         {...props}
-        labelKey="confirmBulk"
+        labelKey="process"
+        // ETP-5302 — Core's C_INVOICE_POST refuses RE while Posted='Y'. The detail kebab
+        // already unposts first (`preUnpost: true` in decisions.json); this makes the bulk
+        // bar run the same two steps instead of failing with "Factura contabilizada".
+        preUnpostActions={['RE']}
         data-testid="BulkDocumentAction__c20e53" />
+      {/* ETP-5209 — bulk Contabilizar (post), gated to processed & not-yet-posted rows */}
+      <BulkDocumentAction
+        {...props}
+        actionMode="neoAction"
+        buildActions={buildPostActions}
+        rowFilter={postRowFilter}
+        labelKey="post"
+        data-testid="BulkDocumentActionPost__c20e53" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
@@ -154,8 +170,12 @@ export default function PurchaseInvoiceWindow(props) {
   });
 
   const rowQuickActions = useMemo(
-    () => buildInvoiceRowQuickActions(navigate, windowName, setCloneTargets, null, requestDelete, { showEmail: false }),
-    [navigate, windowName, requestDelete],
+    () => buildInvoiceRowQuickActions(navigate, windowName, setCloneTargets, null, requestDelete, {
+      showEmail: false,
+      onRefresh: () => setRefreshKey(k => k + 1),
+      ui,
+    }),
+    [navigate, windowName, requestDelete, ui],
   );
 
   const summary = [
@@ -169,7 +189,12 @@ export default function PurchaseInvoiceWindow(props) {
   const effectiveRecord = savedRecord ?? location.state?.savedRecord ?? null;
 
   const clearSavedRecord = useClearSavedRecord(setSavedRecord, location, navigate);
-  const draftModeOverride = getInvoiceDraftMode(ui);
+  // MUST stay in sync with artifacts/purchase-invoice/decisions.json ->
+  // window.draftMode.keepSaveWhenCompletedFields. This override is what actually reaches
+  // DetailView: the generated HeaderPage sets draftMode from the contract but expands
+  // {...props} AFTER it, so this value wins and the contract's never applies here.
+  // draft-mode-allowlist-sync.test.js fails if the two drift apart.
+  const draftModeOverride = getInvoiceDraftMode(ui, { keepSaveWhenCompletedFields: ['orderReference', 'accountingDate'] });
 
   // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
   // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
@@ -196,6 +221,7 @@ export default function PurchaseInvoiceWindow(props) {
           summary={summary}
           extraBadges={[]}
           topbarRight={PurchaseInvoiceTopbar}
+          topbarSecondary={PurchaseInvoiceSecondaryActions}
           sidePanel={OcrSidePanel}
           sidePanelStyle={{ width: 360 }}
           notesField="description"

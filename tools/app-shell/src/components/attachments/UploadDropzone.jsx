@@ -3,34 +3,19 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { UploadIcon } from '@/components/ui/custom-icons';
-
-/**
- * Check whether a file's MIME type matches a list of allowed MIME patterns.
- * Supports wildcard patterns like "image/*".
- *
- * @param {File} file - The file to check.
- * @param {string[]} allowedMimeTypes - The allowed MIME patterns. When falsy or
- *                                       empty, every MIME type is accepted.
- * @returns {boolean} True when the file matches at least one allowed pattern.
- */
-function isMimeAllowed(file, allowedMimeTypes) {
-  if (!allowedMimeTypes || allowedMimeTypes.length === 0) return true;
-  const mime = (file.type || '').toLowerCase();
-  return allowedMimeTypes.some((pattern) => {
-    const p = pattern.toLowerCase();
-    if (p.endsWith('/*')) {
-      return mime.startsWith(p.slice(0, -1));
-    }
-    return mime === p;
-  });
-}
+import { buildAcceptAttribute, isFileTypeAllowed } from './attachmentPolicy';
 
 /**
  * Generic drag & drop area + "select a file" link to add files.
  *
+ * The type check is a convenience, not the barrier: the backend enforces the same policy
+ * on upload (extension + magic bytes + size, see `NeoAttachmentPolicy.java`), because a
+ * caller that is not this component decides its own `Content-Type` (ETP-5038).
+ *
  * Props:
  *   onFiles  - (file: File) => void. Called once per accepted file.
- *   config   - { maxSizeMB?: number, allowedMimeTypes?: string[], typesLabel?: string }
+ *   config   - { maxSizeMB?: number, allowedMimeTypes?: string[],
+ *                allowedExtensions?: string[], typesLabel?: string }
  *   disabled - boolean; suppresses interaction.
  */
 export default function UploadDropzone({ onFiles, config = {}, disabled = false }) {
@@ -38,7 +23,7 @@ export default function UploadDropzone({ onFiles, config = {}, disabled = false 
   const fileInputRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const { maxSizeMB, allowedMimeTypes, typesLabel } = config;
+  const { maxSizeMB, allowedMimeTypes, allowedExtensions, typesLabel } = config;
   const maxBytes = typeof maxSizeMB === 'number' ? maxSizeMB * 1024 * 1024 : Infinity;
 
   const validateAndCall = useCallback((fileList) => {
@@ -49,13 +34,13 @@ export default function UploadDropzone({ onFiles, config = {}, disabled = false 
         toast.error(ui('attachmentsFileTooLarge', { max: maxSizeMB }));
         return;
       }
-      if (!isMimeAllowed(file, allowedMimeTypes)) {
+      if (!isFileTypeAllowed(file, { allowedMimeTypes, allowedExtensions })) {
         toast.error(ui('attachmentsInvalidType'));
         return;
       }
       onFiles?.(file);
     });
-  }, [onFiles, maxBytes, allowedMimeTypes, ui]);
+  }, [onFiles, maxBytes, maxSizeMB, allowedMimeTypes, allowedExtensions, ui]);
 
   const handleDragEnter = useCallback((e) => {
     e.preventDefault();
@@ -141,7 +126,7 @@ export default function UploadDropzone({ onFiles, config = {}, disabled = false 
         multiple
         hidden
         data-testid="attachments-file-input"
-        accept={allowedMimeTypes?.join(',') ?? undefined}
+        accept={buildAcceptAttribute({ allowedMimeTypes, allowedExtensions })}
         onChange={handleInputChange}
         disabled={disabled}
       />

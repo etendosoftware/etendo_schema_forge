@@ -102,10 +102,13 @@ describe('EntityForm DeferredInput — commit-on-blur gate (ETP-4333)', () => {
       <EntityForm fields={[numberField]} data={{ assetValue: 1000 }} onChange={onChange} />,
     );
     const input = screen.getByTestId('field-assetValue');
-    expect(input).toHaveValue(1000);
+    // Values are asserted as STRINGS: since ETP-5107 the numeric field renders
+    // MaskedAmountInput (type="text"), not a native number input, so the DOM value is a
+    // string. The exact buffer content is the point of this test and stays exact.
+    expect(input).toHaveValue('1000');
     // Simulate a collateral/external write while the field is idle (not focused).
     rerender(<EntityForm fields={[numberField]} data={{ assetValue: 4000 }} onChange={onChange} />);
-    expect(screen.getByTestId('field-assetValue')).toHaveValue(4000);
+    expect(screen.getByTestId('field-assetValue')).toHaveValue('4000');
   });
 
   it('does NOT clobber the in-progress buffer with committedValue while FOCUSED', () => {
@@ -118,7 +121,8 @@ describe('EntityForm DeferredInput — commit-on-blur gate (ETP-4333)', () => {
     fireEvent.change(input, { target: { value: '777' } });
     // External write arrives mid-edit — must be ignored while focused.
     rerender(<EntityForm fields={[numberField]} data={{ assetValue: 4000 }} onChange={onChange} />);
-    expect(screen.getByTestId('field-assetValue')).toHaveValue(777);
+    // String for the same reason as above (ETP-5107 masked text input); still the exact buffer.
+    expect(screen.getByTestId('field-assetValue')).toHaveValue('777');
   });
 
   it('after an idle external write, the new value becomes the no-op baseline', () => {

@@ -1,8 +1,8 @@
 {
-  "version": "0.13.0",
+  "version": "0.14.0",
   "generatedAt": "2026-05-04T17:00:26.053Z",
-  "updatedAt": "2026-08-28T15:51:15.536Z",
-  "checksum": "f1b50ae3b6423490",
+  "updatedAt": "2026-09-08T16:46:10.413Z",
+  "checksum": "b6f7d62ba23fb99d",
   "frontendContract": {
     "window": {
       "id": "FEF76C3E0F104F06A89AAD15A4A4A35C",
@@ -6811,6 +6811,14 @@
             "type": "string",
             "visibility": "discarded",
             "required": false
+          },
+          {
+            "name": "eTGOTbaiStatus",
+            "apiKey": "eTGOTbaiStatus",
+            "column": "EM_ETGO_Tbai_Status",
+            "type": "string",
+            "visibility": "system",
+            "required": false
           }
         ]
       },
@@ -8272,6 +8280,14 @@
             "column": "EM_ETGO_Currency_Rate",
             "type": "string",
             "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "eTGOTbaiStatus",
+            "apiKey": "eTGOTbaiStatus",
+            "column": "EM_ETGO_Tbai_Status",
+            "type": "string",
+            "visibility": "system",
             "required": false
           }
         ]
@@ -10053,6 +10069,14 @@
             "type": "string",
             "visibility": "discarded",
             "required": false
+          },
+          {
+            "name": "eTGOTbaiStatus",
+            "apiKey": "eTGOTbaiStatus",
+            "column": "EM_ETGO_Tbai_Status",
+            "type": "string",
+            "visibility": "system",
+            "required": false
           }
         ]
       },
@@ -11514,6 +11538,14 @@
             "column": "EM_ETGO_Currency_Rate",
             "type": "string",
             "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "eTGOTbaiStatus",
+            "apiKey": "eTGOTbaiStatus",
+            "column": "EM_ETGO_Tbai_Status",
+            "type": "string",
+            "visibility": "system",
             "required": false
           }
         ]
@@ -19564,6 +19596,14 @@
         "description": "System field 'eTGODueDate' should exist in backend but not frontend for issuedInvoices"
       },
       {
+        "id": "t-system-field-issuedInvoices-eTGOTbaiStatus",
+        "category": "system-field",
+        "entity": "issuedInvoices",
+        "field": "eTGOTbaiStatus",
+        "runner": "node",
+        "description": "System field 'eTGOTbaiStatus' should exist in backend but not frontend for issuedInvoices"
+      },
+      {
         "id": "t-system-field-issuedInvoices-etgoTotalDiscount",
         "category": "system-field",
         "entity": "issuedInvoices",
@@ -20410,6 +20450,14 @@
         "field": "eTGODueDate",
         "runner": "node",
         "description": "System field 'eTGODueDate' should exist in backend but not frontend for issuedInvoices(previousPeriod)"
+      },
+      {
+        "id": "t-system-field-issuedInvoices-previousPeriod-eTGOTbaiStatus",
+        "category": "system-field",
+        "entity": "issuedInvoices(previousPeriod)",
+        "field": "eTGOTbaiStatus",
+        "runner": "node",
+        "description": "System field 'eTGOTbaiStatus' should exist in backend but not frontend for issuedInvoices(previousPeriod)"
       },
       {
         "id": "t-system-field-issuedInvoices-previousPeriod-etgoTotalDiscount",
@@ -22244,6 +22292,14 @@
         "description": "System field 'eTGODueDate' should exist in backend but not frontend for receivedInvoices"
       },
       {
+        "id": "t-system-field-receivedInvoices-eTGOTbaiStatus",
+        "category": "system-field",
+        "entity": "receivedInvoices",
+        "field": "eTGOTbaiStatus",
+        "runner": "node",
+        "description": "System field 'eTGOTbaiStatus' should exist in backend but not frontend for receivedInvoices"
+      },
+      {
         "id": "t-system-field-receivedInvoices-etgoTotalDiscount",
         "category": "system-field",
         "entity": "receivedInvoices",
@@ -23082,6 +23138,14 @@
         "field": "eTGODueDate",
         "runner": "node",
         "description": "System field 'eTGODueDate' should exist in backend but not frontend for receivedInvoices(previousPeriod)"
+      },
+      {
+        "id": "t-system-field-receivedInvoices-previousPeriod-eTGOTbaiStatus",
+        "category": "system-field",
+        "entity": "receivedInvoices(previousPeriod)",
+        "field": "eTGOTbaiStatus",
+        "runner": "node",
+        "description": "System field 'eTGOTbaiStatus' should exist in backend but not frontend for receivedInvoices(previousPeriod)"
       },
       {
         "id": "t-system-field-receivedInvoices-previousPeriod-etgoTotalDiscount",
@@ -24306,7 +24370,7 @@
       }
     ],
     "summary": {
-      "total": 1411,
+      "total": 1415,
       "byCategory": {
         "action-endpoint": 93,
         "crud-flags": 11,
@@ -24319,11 +24383,11 @@
         "readonlylogic-valid": 61,
         "rule-declared": 92,
         "selector-endpoint": 28,
-        "system-field": 641,
+        "system-field": 645,
         "visibility": 11
       },
       "byRunner": {
-        "node": 1411,
+        "node": 1415,
         "junit": 0
       }
     }

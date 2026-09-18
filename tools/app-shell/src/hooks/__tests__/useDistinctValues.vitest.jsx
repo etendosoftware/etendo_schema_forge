@@ -31,6 +31,13 @@ const wrapper = ({ children }) => (
   <AuthProvider initialSession={{ token: 'test-token' }}>{children}</AuthProvider>
 );
 
+// ETP-5195: AuthProvider fires a silent `GET /sws/neo/refreshtoken` on mount whenever it has a
+// token — legitimate and unrelated to the entity-specific fetch these hooks make. Filter it out
+// before asserting "no fetch happened", rather than asserting fetch was never called at all.
+function isAuthRefreshCall([url]) {
+  return typeof url === 'string' && url.endsWith('/refreshtoken');
+}
+
 describe('useDistinctValues', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -153,7 +160,7 @@ describe('useDistinctValues', () => {
       useDistinctValues('entity', 'field', { apiBaseUrl: '/api', enabled: false }),
       { wrapper },
     );
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fetchSpy.mock.calls.filter((call) => !isAuthRefreshCall(call))).toHaveLength(0);
   });
 
   it('does not fetch when entity is empty', () => {
@@ -165,7 +172,7 @@ describe('useDistinctValues', () => {
       useDistinctValues('', 'field', { apiBaseUrl: '/api' }),
       { wrapper },
     );
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fetchSpy.mock.calls.filter((call) => !isAuthRefreshCall(call))).toHaveLength(0);
   });
 
   it('does not fetch when field is empty', () => {
@@ -177,7 +184,7 @@ describe('useDistinctValues', () => {
       useDistinctValues('entity', '', { apiBaseUrl: '/api' }),
       { wrapper },
     );
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fetchSpy.mock.calls.filter((call) => !isAuthRefreshCall(call))).toHaveLength(0);
   });
 
   it('does not fetch when apiBaseUrl is empty', () => {
@@ -189,7 +196,7 @@ describe('useDistinctValues', () => {
       useDistinctValues('entity', 'field', { apiBaseUrl: '' }),
       { wrapper },
     );
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fetchSpy.mock.calls.filter((call) => !isAuthRefreshCall(call))).toHaveLength(0);
   });
 
   it('exposes search and setSearch', async () => {

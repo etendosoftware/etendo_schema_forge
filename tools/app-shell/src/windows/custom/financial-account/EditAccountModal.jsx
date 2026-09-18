@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Copy, RefreshCw, Unlink2, Archive, AlertTriangle, Plug, Settings2, Calculator, RotateCcw, ChevronDown, Trash2 } from 'lucide-react';
+import { Copy, RefreshCw, Unlink2, Archive, AlertTriangle, Info, Plug, Settings2, Calculator, RotateCcw, ChevronDown, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -199,6 +199,43 @@ function buildReauthMessage(status, locale, ui) {
   }
   return ui('financeAccountsBankConnectionReauthBanner', { days, date });
 }
+
+/**
+ * ETP-5181 QA CP-2. How urgent the re-auth banner should look.
+ *
+ * A PSD2 consent lasts 90 days and this banner is on screen for every single one of them, so the
+ * amber treatment it used to carry unconditionally was permanent — which is exactly what makes a
+ * warning stop being read, and what left the genuinely time-critical fetch-interval notice next to
+ * it competing with a wall of yellow. Below the threshold it is INFORMATION ("your consent renews
+ * on this date"); only inside the last week is it something the user has to act on.
+ *
+ * Follows the precedent set for the credit-limit notice in `contract-ui/BlockingBpBanner.jsx`
+ * (info/blue rather than warning/amber, confirmed with product there): same reasoning, same tokens.
+ *
+ * An expired consent (`daysUntilExpires <= 0`, the `…ReauthExpired` copy) is covered by the same
+ * comparison and stays amber — sync is already broken at that point.
+ *
+ * A non-numeric `daysUntilExpires` means the bridge did not publish a countdown; the banner still
+ * renders (`buildReauthMessage` falls through to the countdown copy) but there is nothing to call
+ * urgent, so it stays informational rather than guessing.
+ */
+const REAUTH_WARNING_DAYS = 7;
+
+function buildReauthTone(status) {
+  const days = status?.daysUntilExpires;
+  if (typeof days !== 'number') return 'info';
+  return days <= REAUTH_WARNING_DAYS ? 'warning' : 'info';
+}
+
+/**
+ * Background/foreground tokens for the two banners inside the bank connection panel. Spelled out as
+ * whole class strings rather than composed at runtime: Tailwind's scanner only sees literals, so a
+ * `bg-[var(--status-${tone}-bg)]` template would produce no CSS at all.
+ */
+const BANNER_TONE_CLASSES = {
+  warning: { bg: 'bg-[var(--status-warning-bg)]', fg: 'text-[var(--status-warning-fg)]' },
+  info: { bg: 'bg-[var(--status-info-bg)]', fg: 'text-[var(--status-info-fg)]' },
+};
 
 /** Maps the bridge sync result ({status, message}) to a toast. */
 function notifySyncResult(res, ui) {
@@ -1221,6 +1258,7 @@ export function EditAccountModal({
 
   const typeLabel = formatTypeLabel(account.type, ui);
   const reauthMessage = buildReauthMessage(bankConnection.status, locale, ui);
+  const reauthTone = buildReauthTone(bankConnection.status);
   const dirty = fields.nameDirty || fields.typeDirty || fields.ibanDirty || fields.currencyDirty
     || fields.countryDirty || fields.swiftDirty
     || bankConnection.settingsDirty || (!isCash && recon.dirty) || glItemDifference.dirty
@@ -1397,6 +1435,7 @@ export function EditAccountModal({
                     bankConnection={bankConnection}
                     busy={busy}
                     reauthMessage={reauthMessage}
+                    reauthTone={reauthTone}
                     onConnect={handleConnectClick}
                     onReconnect={bankConnection.handleReconnect}
                     connectEligible={canConnectToSaltEdge(account)}
@@ -1710,7 +1749,7 @@ function BankConnectionStatusBadge({ ui, connected, deactivated }) {
  *   reason, since this is the one surface where the Country field that causes it is on screen.
  */
 function BankConnectionSection({
-  ui, bankConnection, busy, reauthMessage, onConnect, onReconnect, connectEligible,
+  ui, bankConnection, busy, reauthMessage, reauthTone, onConnect, onReconnect, connectEligible,
 }) {
   // All three states come from the connection hook's live view, never from the account record the
   // modal was opened with — reconnecting from inside the modal changes the state under it.
@@ -1784,13 +1823,18 @@ function BankConnectionSection({
           bankConnection={bankConnection}
           busy={busy}
           reauthMessage={reauthMessage}
+          reauthTone={reauthTone}
           data-testid="BankConnectionPanel__73027d" />
       ) : null}
     </div>
   );
 }
 
-function BankConnectionPanel({ ui, bankConnection, busy, reauthMessage }) {
+function BankConnectionPanel({ ui, bankConnection, busy, reauthMessage, reauthTone = 'info' }) {
+  const reauthToneClasses = BANNER_TONE_CLASSES[reauthTone] ?? BANNER_TONE_CLASSES.info;
+  // `AlertTriangle` on a blue banner reads as a mismatch — same call BlockingBpBanner.jsx made when
+  // product moved the credit-limit notice to info: the icon follows the tone, not the component.
+  const ReauthIcon = reauthTone === 'warning' ? AlertTriangle : Info;
   return (
     <div className="flex flex-col gap-3 rounded-lg bg-[hsl(var(--muted))] p-3">
       <div className="flex items-center justify-between gap-2">
@@ -1808,28 +1852,6 @@ function BankConnectionPanel({ ui, bankConnection, busy, reauthMessage }) {
           {ui('financeAccountsMenuSyncNow')}
         </button>
       </div>
-
-      {/* ETP-5181. Deliberately a banner at the top of the panel, not small print under the grid:
-          as a one-line hint it sat right next to the far louder re-authorization banner and was
-          simply not read. Mirrors that banner's shape (same warning tokens, same AlertTriangle)
-          so the two register as the same class of notice — minus the action button, because
-          there is nothing to click: the fix is to edit the date right below, and the value is
-          saveable as it stands. */}
-      {bankConnection.fetchIntervalWarning ? (
-        <div
-          className="flex items-center gap-2 rounded-lg bg-[var(--status-warning-bg)] px-3 py-3"
-          data-testid="bank-connection-import-fetch-interval-warning"
-        >
-          <AlertTriangle
-            className="h-4 w-4 shrink-0 text-[var(--status-warning-fg)]"
-            data-testid="AlertTriangle__73027d" />
-          <span className="text-sm font-medium text-[var(--status-warning-fg)]">
-            {ui('financeAccountsBankConnectionImportBeyondFetchInterval', {
-              days: bankConnection.fetchIntervalWarning.days,
-            })}
-          </span>
-        </div>
-      ) : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <DateInput
@@ -1874,12 +1896,43 @@ function BankConnectionPanel({ ui, bankConnection, busy, reauthMessage }) {
         </p>
       ) : null}
 
+      {/* ETP-5181 QA CP-2. The panel's two standing notices are stacked here, at the foot of the
+          panel, rather than one above the grid and one below it. QA read the split as two unrelated
+          things; grouped, they read as one block of "what you should know about this connection",
+          and the fetch-interval notice inherits the position users already scan for the
+          re-authorization one. It still sits FIRST of the two: it is the one the date box directly
+          above it can fix, so it stays closest to its cause. */}
+      {bankConnection.fetchIntervalWarning ? (
+        <div
+          className={`flex items-center gap-2 rounded-lg px-3 py-3 ${BANNER_TONE_CLASSES.warning.bg}`}
+          data-testid="bank-connection-import-fetch-interval-warning"
+        >
+          <AlertTriangle
+            className={`h-4 w-4 shrink-0 ${BANNER_TONE_CLASSES.warning.fg}`}
+            data-testid="AlertTriangle__73027d" />
+          <span className={`text-sm font-medium ${BANNER_TONE_CLASSES.warning.fg}`}>
+            {ui('financeAccountsBankConnectionImportBeyondFetchInterval', {
+              days: bankConnection.fetchIntervalWarning.days,
+            })}
+          </span>
+        </div>
+      ) : null}
+
+      {/* Amber only inside the last week before the consent lapses (see `buildReauthTone`);
+          informational blue for the ~83 days before that, so the two banners above and below are
+          never both shouting and the amber one means something when it appears. */}
       {reauthMessage ? (
-        <div className="flex items-center justify-between gap-2 rounded-lg bg-[var(--status-warning-bg)] px-3 py-3" data-testid="bank-connection-edit-reauth-banner">
-          <span className="flex items-center gap-2 text-sm font-medium text-[var(--status-warning-fg)]">
-            <AlertTriangle
-              className="h-4 w-4 shrink-0 text-[var(--status-warning-fg)]"
-              data-testid="AlertTriangle__73027d" />
+        <div
+          className={`flex items-center justify-between gap-2 rounded-lg px-3 py-3 ${reauthToneClasses.bg}`}
+          data-testid="bank-connection-edit-reauth-banner"
+          data-tone={reauthTone}
+        >
+          <span className={`flex items-center gap-2 text-sm font-medium ${reauthToneClasses.fg}`}>
+            {/* Tone-neutral testid: this slot is an AlertTriangle or an Info depending on urgency,
+                so naming it after either one would go stale on the other. */}
+            <ReauthIcon
+              className={`h-4 w-4 shrink-0 ${reauthToneClasses.fg}`}
+              data-testid="bank-connection-edit-reauth-icon" />
             {reauthMessage}
           </span>
           <button
@@ -1887,7 +1940,7 @@ function BankConnectionPanel({ ui, bankConnection, busy, reauthMessage }) {
             disabled={busy}
             onClick={bankConnection.handleReconnect}
             data-testid="bank-connection-edit-reauth-link"
-            className="shrink-0 text-sm font-medium text-[var(--status-warning-fg)] underline disabled:opacity-50"
+            className={`shrink-0 text-sm font-medium underline disabled:opacity-50 ${reauthToneClasses.fg}`}
           >
             {ui('financeAccountsBankConnectionReauth')}
           </button>

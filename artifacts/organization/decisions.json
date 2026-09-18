@@ -180,6 +180,7 @@
       "exclude": true
     },
     "information": {
+      "javaQualifier": "organization-information",
       "fields": {
         "locationAddress": {
           "visibility": "editable",

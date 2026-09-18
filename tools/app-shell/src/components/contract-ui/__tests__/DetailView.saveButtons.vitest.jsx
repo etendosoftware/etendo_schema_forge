@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // Mirror DetailView.vitest.jsx mock setup so the component mounts in isolation.
 // This spec drives the footer Save / Confirm buttons by CLICKING them, which is
@@ -29,6 +29,11 @@ const mockHook = {
   saving: false,
   isSaving: false,
   isDirtyHeader: false,
+  // ETP-4839 — the array of header field keys that differ from the last-saved
+  // record (see useEntity's dirtyHeaderFieldKeys memo). This mock is fully
+  // stubbed (useEntity itself is mocked below), so tests set this directly
+  // rather than deriving it from selected/editing.
+  dirtyHeaderFieldKeys: [],
   error: null,
   children: [],
   childrenLoading: false,
@@ -91,6 +96,7 @@ vi.mock('@/lib/formatAmount.js', () => ({ formatAmount: (val) => (val != null ? 
 vi.mock('@/lib/utils.js', () => ({ cn: (...args) => args.filter(Boolean).join(' ') }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }));
 
+import { toast } from 'sonner';
 import { DetailView } from '../DetailView.jsx';
 
 const BASE_PROPS = {
@@ -119,6 +125,7 @@ function resetHook() {
   mockNavigate.mockClear();
   mockHook.isSaving = false;
   mockHook.isDirtyHeader = false;
+  mockHook.dirtyHeaderFieldKeys = [];
   mockHook.children = [];
   mockHook.childrenLoading = false;
   mockHook.handleSave = vi.fn(() => Promise.resolve({ id: '123' }));
@@ -198,6 +205,55 @@ describe('DetailView footer save buttons (onClick coverage)', () => {
     fireEvent.click(screen.getByTestId('action-save'));
     await waitFor(() => expect(onConfirm).toHaveBeenCalled());
     expect(mockHook.handleSaveAndProcess).not.toHaveBeenCalled();
+  });
+
+  // ETP-5265 QA follow-up — QA rejected the floating "processing" toast that
+  // goods-shipment/goods-receipt used while their custom onConfirm was in flight and
+  // asked for the spinner to be IN the Confirm button, "como al procesar una factura".
+  // The invoice windows get that for free from `hook.isSaving` on the native
+  // handleSaveAndProcess path; the onConfirm path had no busy flag at all, so
+  // runDraftModeConfirm now awaits onConfirm inside DraftModeConfirmButton's local
+  // `customConfirmBusy` state.
+  describe('draftMode with onConfirm: in-flight spinner in the Confirm button (ETP-5265)', () => {
+    it('an onConfirm that returns a pending promise makes Confirm spin and disables it until it settles', async () => {
+      let resolveConfirm;
+      const onConfirm = vi.fn(() => new Promise((resolve) => { resolveConfirm = resolve; }));
+      const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', onConfirm };
+      // additionalDirtyState=false so maybeSaveBeforeConfirm does not run a save first —
+      // this test is only about the busy state around onConfirm itself.
+      render(<DetailView {...BASE_PROPS} additionalDirtyState={false} draftMode={draftMode} />);
+      expect(screen.queryByTestId('Loader2__fa3275')).toBeNull();
+      expect(screen.getByTestId('Check__fa3275')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('action-save'));
+
+      await waitFor(() => expect(screen.getByTestId('Loader2__fa3275')).toBeInTheDocument());
+      expect(screen.queryByTestId('Check__fa3275')).toBeNull();
+      expect(screen.getByTestId('action-save')).toBeDisabled();
+
+      await act(async () => { resolveConfirm(); });
+
+      await waitFor(() => expect(screen.queryByTestId('Loader2__fa3275')).toBeNull());
+      expect(screen.getByTestId('Check__fa3275')).toBeInTheDocument();
+      expect(screen.getByTestId('action-save')).not.toBeDisabled();
+    });
+
+    // The additive half of the change: every window whose onConfirm just opens a modal
+    // and returns nothing (sales-order, purchase-order, sales-quotation, and the
+    // not-fully-invoiced goods-shipment/goods-receipt branch) must render exactly as
+    // before — no spinner, never disabled.
+    it('an onConfirm that returns undefined never puts the button in a busy state', async () => {
+      const onConfirm = vi.fn();
+      const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', onConfirm };
+      render(<DetailView {...BASE_PROPS} additionalDirtyState={false} draftMode={draftMode} />);
+
+      fireEvent.click(screen.getByTestId('action-save'));
+      await waitFor(() => expect(onConfirm).toHaveBeenCalled());
+
+      expect(screen.queryByTestId('Loader2__fa3275')).toBeNull();
+      expect(screen.getByTestId('Check__fa3275')).toBeInTheDocument();
+      expect(screen.getByTestId('action-save')).not.toBeDisabled();
+    });
   });
 
   // ETP-4940 — draftMode windows whose Confirm button uses a custom `onConfirm`
@@ -415,6 +471,130 @@ describe('DetailView toolbar order — saveActionsFirst', () => {
   });
 });
 
+// ETP-4839 — `draftMode.keepSaveWhenCompletedFields` (string[]) keeps the
+// footer "Save" (Guardar) button visible once the document reaches a
+// completed state, while "Confirm" stays hidden UNCONDITIONALLY — its handler
+// always sends processField, which some backends are not idempotent against
+// on an already-completed document (e.g. purchase-invoice re-confirm
+// duplicating discount lines). That part is unchanged from the original
+// boolean design.
+//
+// What's new: Save's own enabled/disabled state is a SEPARATE, fail-closed
+// per-field gate (see buildCompletedFieldsGate in saveActions.jsx). Once
+// completed, Save is enabled only when every DIRTY header field
+// (hook.dirtyHeaderFieldKeys) is named in keepSaveWhenCompletedFields — any
+// other dirty field disables Save with an explanatory title, even if it's
+// dirty ALONGSIDE an allowed field. Never a silent partial save of just the
+// allowed subset, never a silent save of everything.
+//
+// Without the flag (absent or an empty array), behavior is byte-identical to
+// the pre-ETP-4839 baseline: BOTH buttons hide together once completed.
+// purchase-invoice/decisions.json (`keepSaveWhenCompletedFields: ['orderReference']`,
+// "N° documento") is the first real consumer.
+describe('DetailView draftMode.keepSaveWhenCompletedFields (ETP-4839)', () => {
+  beforeEach(resetHook);
+
+  function completedRecord() {
+    // getDraftModeCompleted's default (no completedStatuses array) fallback is
+    // `isProcessed || documentStatus === 'CO'` — 'CO' alone is enough, no need
+    // to also flip `processed`.
+    return { id: '123', documentNo: 'PI-001', documentStatus: 'CO', processed: true };
+  }
+
+  it('regression — WITHOUT the flag, completing the document hides BOTH Save and Confirm (unchanged behavior)', () => {
+    mockHook.selected = completedRecord();
+    mockHook.editing = mockHook.selected;
+    const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', label: 'process' };
+    render(<DetailView {...BASE_PROPS} draftMode={draftMode} />);
+    expect(screen.queryByTestId('action-save-draft')).toBeNull();
+    expect(screen.queryByTestId('action-save')).toBeNull();
+  });
+
+  it('with the flag but NOT completed — both buttons render normally (flag is a no-op until completion)', () => {
+    // resetHook() already seeds documentStatus: 'DR' (not completed).
+    const draftMode = {
+      enabled: true, draftField: 'documentStatus', draftValue: 'DR', label: 'process',
+      keepSaveWhenCompletedFields: ['orderReference'],
+    };
+    render(<DetailView {...BASE_PROPS} draftMode={draftMode} />);
+    expect(screen.getByTestId('action-save-draft')).toBeInTheDocument();
+    expect(screen.getByTestId('action-save')).toBeInTheDocument();
+  });
+
+  describe('with the flag AND completed', () => {
+    const draftModeWithFields = () => ({
+      enabled: true, draftField: 'documentStatus', draftValue: 'DR', label: 'process',
+      keepSaveWhenCompletedFields: ['orderReference'],
+    });
+
+    it('Confirm is absent from the DOM — not merely disabled/hidden', () => {
+      mockHook.selected = completedRecord();
+      mockHook.editing = mockHook.selected;
+      render(<DetailView {...BASE_PROPS} draftMode={draftModeWithFields()} />);
+      expect(screen.getByTestId('action-save-draft')).toBeInTheDocument();
+      expect(screen.queryByTestId('action-save')).toBeNull();
+      // Not just the button — the Confirm label/icon must be gone too.
+      expect(screen.queryByText('process')).toBeNull();
+    });
+
+    it('no dirty header fields → Save renders (dirtyHeaderFieldKeys empty, per-field gate is a no-op)', () => {
+      mockHook.selected = completedRecord();
+      mockHook.editing = mockHook.selected;
+      mockHook.dirtyHeaderFieldKeys = [];
+      render(<DetailView {...BASE_PROPS} draftMode={draftModeWithFields()} />);
+      expect(screen.getByTestId('action-save-draft')).toBeInTheDocument();
+    });
+
+    it('the only dirty field IS in keepSaveWhenCompletedFields → Save is enabled', () => {
+      mockHook.selected = completedRecord();
+      mockHook.editing = mockHook.selected;
+      mockHook.dirtyHeaderFieldKeys = ['orderReference'];
+      render(<DetailView {...BASE_PROPS} draftMode={draftModeWithFields()} />);
+      const saveBtn = screen.getByTestId('action-save-draft');
+      expect(saveBtn).toBeInTheDocument();
+      // Other disabling conditions (isSaving, !isDirty, blockSaveForBalance) are
+      // all falsy here (BASE_PROPS.additionalDirtyState=true, no balanceFooter) —
+      // saveGate.blocked is the only variable under test.
+      expect(saveBtn).not.toBeDisabled();
+    });
+
+    it('a dirty field NOT in keepSaveWhenCompletedFields → Save is disabled with an explanatory reason (fail-closed)', () => {
+      mockHook.selected = completedRecord();
+      mockHook.editing = mockHook.selected;
+      mockHook.dirtyHeaderFieldKeys = ['businessPartner'];
+      render(<DetailView {...BASE_PROPS} draftMode={draftModeWithFields()} />);
+      const saveBtn = screen.getByTestId('action-save-draft');
+      expect(saveBtn).toBeDisabled();
+      expect(saveBtn.getAttribute('data-missing-required')).toContain('businessPartner');
+      // GateTooltip wraps a disabled button in a titled <span> — a `title` on a
+      // disabled element never fires natively (see saveActions.jsx).
+      expect(saveBtn.closest('[title]')?.getAttribute('title')).toBeTruthy();
+    });
+
+    it('a MIX of allowed and disallowed dirty fields still blocks Save (never a silent partial save)', () => {
+      mockHook.selected = completedRecord();
+      mockHook.editing = mockHook.selected;
+      mockHook.dirtyHeaderFieldKeys = ['orderReference', 'businessPartner'];
+      render(<DetailView {...BASE_PROPS} draftMode={draftModeWithFields()} />);
+      const saveBtn = screen.getByTestId('action-save-draft');
+      expect(saveBtn).toBeDisabled();
+      // Only the disallowed key is surfaced — the allowed one is not "missing".
+      expect(saveBtn.getAttribute('data-missing-required')).toBe('businessPartner');
+    });
+  });
+
+  it('a window without draftMode at all is unaffected by keepSaveWhenCompletedFields (dispatcher never reaches renderDraftModeSaveActions)', () => {
+    // Existing (non-new) record, completed status, NO draftMode prop — routes
+    // through renderExistingRecordSaveAction, which has no onlySaveButton
+    // concept at all. Save must render exactly as it always has.
+    mockHook.selected = completedRecord();
+    mockHook.editing = mockHook.selected;
+    render(<DetailView {...BASE_PROPS} />);
+    expect(screen.getByTestId('action-save')).toBeInTheDocument();
+    expect(screen.queryByTestId('action-save-draft')).toBeNull();
+  });
+});
+
 describe('DetailView draftMode processingModal (Verifactu-style loading modal)', () => {
   beforeEach(resetHook);
 
@@ -498,5 +678,77 @@ describe('DetailView draftMode processingModal (Verifactu-style loading modal)',
     // Clean up the pending promise so it doesn't leak into other tests.
     resolveSave({ id: '123' });
     await waitFor(() => expect(screen.queryByTestId('DialogContent__verifactu-processing')).toBeNull());
+  });
+});
+
+// Fallback/edge branches inside renderDraftModeSaveActions / renderNewRecordSaveActions
+// that the happy-path clicks above never reach: the new-record draft-Save redirect,
+// the draftMode Confirm onAfterSave list-redirect, and the "saved but no derivable
+// id" reportUnnavigableSave guard on both the draft Confirm and new-record Save.
+describe('DetailView footer save buttons — new-record and unnavigable-save branches', () => {
+  beforeEach(() => {
+    resetHook();
+    toast.error.mockClear();
+    toast.success.mockClear();
+  });
+
+  it('new record draftMode: Save Draft primes the record and redirects to /window/:id', async () => {
+    mockHook.handleSave = vi.fn(() => Promise.resolve({ id: 'draft-42' }));
+    const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', label: 'process' };
+    render(<DetailView {...BASE_PROPS} recordId="new" draftMode={draftMode} />);
+
+    fireEvent.click(screen.getByTestId('action-save-draft'));
+
+    await waitFor(() => expect(mockHook.handleSave).toHaveBeenCalled());
+    await waitFor(() => expect(mockHook.primeSaved).toHaveBeenCalledWith({ id: 'draft-42' }));
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith(
+        '/sales-order/draft-42',
+        { replace: true, state: { justSaved: { id: 'draft-42' } } },
+      ),
+    );
+  });
+
+  it('draftMode Confirm with onAfterSave: redirects to the list stashing the saved record', async () => {
+    mockHook.handleSaveAndProcess = vi.fn(() => Promise.resolve({ id: '123' }));
+    const onAfterSave = vi.fn();
+    const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', label: 'process' };
+    render(<DetailView {...BASE_PROPS} draftMode={draftMode} onAfterSave={onAfterSave} />);
+
+    fireEvent.click(screen.getByTestId('action-save'));
+
+    await waitFor(() => expect(mockHook.handleSaveAndProcess).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith(
+        '/sales-order',
+        { replace: true, state: { savedRecord: { id: '123' }, justSaved: { id: '123' } } },
+      ),
+    );
+    // onAfterSave redirect path must NOT fall through to the fetchById refetch.
+    expect(mockHook.fetchById).not.toHaveBeenCalledWith('123', { force: true });
+  });
+
+  it('new record draftMode Confirm: a save with no derivable id reports an unnavigable save', async () => {
+    mockHook.handleSaveAndProcess = vi.fn(() => Promise.resolve({}));
+    const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', label: 'process' };
+    render(<DetailView {...BASE_PROPS} recordId="new" draftMode={draftMode} />);
+
+    fireEvent.click(screen.getByTestId('action-save'));
+
+    await waitFor(() => expect(mockHook.handleSaveAndProcess).toHaveBeenCalled());
+    // No id and no navigation target → surfaced as an error toast, no redirect.
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(mockHook.primeSaved).not.toHaveBeenCalled();
+  });
+
+  it('new record Save: a save with no derivable id reports an unnavigable save', async () => {
+    mockHook.handleSave = vi.fn(() => Promise.resolve({}));
+    render(<DetailView {...BASE_PROPS} recordId="new" />);
+
+    fireEvent.click(screen.getByTestId('action-save'));
+
+    await waitFor(() => expect(mockHook.handleSave).toHaveBeenCalled());
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

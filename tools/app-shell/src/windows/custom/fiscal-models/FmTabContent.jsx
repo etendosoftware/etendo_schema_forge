@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   TriangleAlert, OctagonAlert, CircleCheck, ChevronRight,
 } from 'lucide-react';
@@ -67,10 +67,10 @@ export function SourcesTab({ decl, t }) {
             <thead>
               <tr>
                 <th>{t('fm.sources.col.date')}</th>
+                <th>{t('fm.sources.col.accountingDate')}</th>
                 <th>{t('fm.sources.col.ref')}</th>
                 <th>{t('fm.sources.col.type')}</th>
                 <th>{t('fm.sources.col.party')}</th>
-                <th>{t('fm.sources.col.regime')}</th>
                 <th className="num">{t('fm.sources.col.base')}</th>
                 <th className="num">{t('fm.sources.col.vat')}</th>
                 <th className="num">{t('fm.sources.col.total')}</th>
@@ -92,10 +92,10 @@ export function SourcesTab({ decl, t }) {
                 return (
                   <tr key={r.ref} className={rowClass}>
                     <td className="strong">{fmtDate(r.date)}</td>
+                    <td>{fmtDate(r.accountingDate)}</td>
                     <td>{r.ref}</td>
                     <td>{r.type}</td>
                     <td>{r.party}</td>
-                    <td><span className="fm-regime-pill">{r.regime || '—'}</span></td>
                     <td className="num strong">{formatAmount(r.base)}</td>
                     <td className="num">{r.vat != null ? formatAmount(r.vat) : '—'}</td>
                     <td className="num strong">{formatAmount(r.total)}</td>
@@ -126,6 +126,16 @@ export function SourcesTab({ decl, t }) {
 
 export function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
   const incidents = decl.incidents?.items ?? [];
+  // Per-session dismissal of the warning banner (no localStorage precedent found for
+  // this pattern — see CertExpiryBanner.jsx, which also uses a plain local useState).
+  // Reset whenever the blocking/warning count changes: if the user fixes an incident
+  // (count drops) or a NEW one appears (count rises, or a fixed one is replaced by a
+  // different one at the same count), the banner should re-surface rather than stay
+  // silenced by a stale dismissal of an earlier problem set.
+  const [dismissed, setDismissed] = useState(false);
+  useEffect(() => {
+    setDismissed(false);
+  }, [blocking, warning]);
 
   if (blocking === 0 && warning === 0) {
     return (
@@ -148,16 +158,23 @@ export function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
 
   return (
     <div style={{ flex: 1, overflow: 'auto', marginTop: '-8px' }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '12px 24px', marginBottom: 0,
-        background: 'var(--status-warning-bg)', borderTop: '1px solid var(--status-warning-border)',
-        fontSize: 14,
-      }}>
-        <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:18, height:18, borderRadius:'50%', background:'var(--status-warning-fg)', fontSize:11, fontWeight:700, color:'hsl(var(--card))', fontStyle:'normal', flexShrink:0 }}>i</span>
-        <span style={{ flex: 1, color: 'var(--status-warning-fg)' }}>{t('fm.incidents.block_sub') ?? 'Resuélvelas antes de generar el fichero'}</span>
-        <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--text-disabled))', fontSize: 18, padding: 0, lineHeight: 1 }}>×</button>
-      </div>
+      {!dismissed && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '12px 24px', marginBottom: 0,
+          background: 'var(--status-warning-bg)', borderTop: '1px solid var(--status-warning-border)',
+          fontSize: 14,
+        }}>
+          <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:18, height:18, borderRadius:'50%', background:'var(--status-warning-fg)', fontSize:11, fontWeight:700, color:'hsl(var(--card))', fontStyle:'normal', flexShrink:0 }}>i</span>
+          <span style={{ flex: 1, color: 'var(--status-warning-fg)' }}>{t('fm.incidents.block_sub') ?? 'Resuélvelas antes de generar el fichero'}</span>
+          <button
+            type="button"
+            onClick={() => setDismissed(true)}
+            aria-label={t('fm.action.close')}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--text-disabled))', fontSize: 18, padding: 0, lineHeight: 1 }}
+          >×</button>
+        </div>
+      )}
       {sorted.length > 0 ? (
         <div className="fm-table-wrap">
           <table className="fm-dtable fm-dtable--plain">

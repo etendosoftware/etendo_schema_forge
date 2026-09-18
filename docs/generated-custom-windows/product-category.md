@@ -10,7 +10,7 @@ Users should be able to:
 
 - browse product categories by Search Key and Name
 - open a category and maintain its header fields: Search Key, Name, Description, Default, and Active
-- view and edit accounting accounts (Asset, Expense, Revenue, COGS) for the category directly from the Accounting grid, using inline editing with pencil and trash icons on hover
+- view and edit accounting accounts (Asset, Expense, Revenue, COGS, Invoice Price Variance) for the category directly from the Accounting grid, using inline editing with pencil and trash icons on hover
 
 ## Interaction model
 
@@ -20,7 +20,7 @@ Users should be able to:
 - **Window shape:** master + inline-editable detail; `productCategory` is the header entity and `accounting` is the detail entity rendered as an inline-editable grid
 - **List behavior:** the category list shows Search Key and Name and supports filtering by those same fields
 - **Record behavior:** opening a category record renders a detail view with the category header form plus the **Accounting** tab with `linesLayout="inlineEditable"`
-- **Accounting tab behavior:** shows one row per accounting schema. Each row exposes four ValidCombination FK selectors (Product Asset, Product Expense, Product Revenue, Product COGS). Rows are edited inline — hovering a row reveals a pencil (edit) and a trash (delete) icon. All four selector columns share the available width equally via `grow: true`.
+- **Accounting tab behavior:** shows one row per accounting schema. Each row exposes five ValidCombination FK selectors (Product Asset, Product Expense, Product Revenue, Product COGS, Invoice Price Variance — the fifth added in ETP-5222, see below). Rows are edited inline — hovering a row reveals a pencil (edit) and a trash (delete) icon. All five selector columns share the available width equally via `grow: true`.
 - An **Attachments** tab is available in the detail tab strip.
 
 ## Layout configuration
@@ -73,11 +73,11 @@ Custom icons `SortIcon` and `RefreshIcon` from `packages/app-shell-core/src/comp
 4. Confirm the toolbar shows the custom Sort and Refresh icons.
 5. Confirm the **Accounting** tab is the active detail tab and shows one row per accounting schema.
 6. Hover over an accounting row and confirm the pencil and trash icons appear.
-7. Click the pencil icon and confirm all four selector fields become editable inline within their column boundaries.
+7. Click the pencil icon and confirm all five selector fields (including Invoice Price Variance) become editable inline within their column boundaries.
 8. In an editable selector, type `"35000"` and confirm records with that combination code appear.
 9. In an editable selector, type part of an account name (e.g. `"social"`) and confirm matching records appear (e.g. `"10000 - Capital social"`).
 10. Confirm no UUIDs appear as selector values.
-11. Confirm all four selector columns share the row width equally.
+11. Confirm all five selector columns share the row width equally.
 12. Open the **Attachments** tab and confirm file upload, download, and delete work as expected.
 
 ## Automated evidence
@@ -86,7 +86,7 @@ Custom icons `SortIcon` and `RefreshIcon` from `packages/app-shell-core/src/comp
 - `tools/app-shell/src/windows/registry.js` registers the `product-category` slug pointing to the custom wrapper at `tools/app-shell/src/windows/custom/product-category/index.jsx`.
 - `tools/app-shell/src/windows/custom/product-category/index.jsx` wraps the generated `ProductCategoryPage` with `Form={ProductCategoryCustomForm}`, `SortIconComponent={SortIcon}`, and `RefreshIconComponent={RefreshIcon}`.
 - `tools/app-shell/src/windows/custom/product-category/ProductCategoryCustomForm.jsx` renders the two-row header layout (Name + Search Key + checkboxes, then Description). Returns `null` for non-`"principal"` sections to hide the *Más detalles* collapsible and suppress the *Otros* probe.
-- `artifacts/product-category/contract.json` defines the window with `productCategory` as primary entity, `accounting` as detail entity with `linesLayout: "inlineEditable"`, and four ValidCombination selector fields.
+- `artifacts/product-category/contract.json` defines the window with `productCategory` as primary entity, `accounting` as detail entity with `linesLayout: "inlineEditable"`, and five ValidCombination selector fields (ETP-5222 added the fifth, Invoice Price Variance).
 - `artifacts/product-category/generated/web/product-category/ProductCategoryPage.jsx` renders `ListView` for the list route and `DetailView` with `linesLayout="inlineEditable"` and `DetailTable={AccountingTable}` for record routes.
 - `artifacts/product-category/generated/web/product-category/AccountingTable.jsx` renders `InlineLinesPanel` when `linesLayout === "inlineEditable"`, otherwise `DataTable`. The three non-first selector columns declare `grow: true` so all four share the row width equally.
 - `artifacts/product-category/generated/web/product-category/AccountingForm.jsx` is generated but not used in the current layout (inline editing replaces the side-panel form).
@@ -143,3 +143,18 @@ Regenerated on 2026-06-09 as part of feature/ETP-4192.
 ## ETP-4565 — Accounting tab: entity-level non-deletable
 
 **`entities.accounting.hideDelete: true`** added — the pre-existing `window.maxDetailLines: 1` already caps the Accounting tab at one record (unchanged, no ETP-4565 action needed there); this pass adds the matching entity-level delete guard so the row's delete capability is now also explicitly disabled at the API level (`apiPrediction.crud.accounting.delete: false`), on top of the count-based cap. Regenerated via `make regen ONLY=product-category`; `sf-validate-pipeline --scope=product-category` reports 0 violations. Regression test: `artifacts/__tests__/etp-4565-accounting-tab-restrictions.test.js`.
+
+## ETP-5222 — Invoice Price Variance exposed in the Accounting tab
+
+**`decisions.json → entities.accounting.fields.invoicePriceVariance`** flipped from
+`"visibility": "discarded"` to `"editable"` (`grid: true, grow: true, seq: 5`), joining `Product
+Asset`/`Product Expense`/`Product Revenue`/`Product COGS` as a fifth `ValidCombination` FK selector
+in the inline-editable Accounting grid. Label ("Invoice Price Variance") is AD_Field-sourced, same
+as its siblings — no new i18n keys needed.
+
+This makes visible a field that had a real, populated value all along on the backend once
+`OnboardingAccountingWiringService#backfillInvoicePriceVarianceDefault` started resolving a
+non-null default for it (see `com.etendoerp.go/docs/onboarding-flow.md` and this repo's
+`docs/etendo-ad/onboarding-gaps.md` → §A8/§A8b for the onboarding-wiring side of this ticket — no
+change to that wiring lives in this repo). Regenerated via `make regen ONLY=product-category`; no
+changes to the header form, default-uniqueness rule, or system-category filtering documented above.

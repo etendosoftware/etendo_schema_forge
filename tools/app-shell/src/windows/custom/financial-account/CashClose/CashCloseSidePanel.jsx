@@ -2,10 +2,10 @@ import { Lock } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { DateField } from '@/components/ui/date-field';
-import { Input } from '@/components/ui/input';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { getCurrencySymbol } from '@/lib/formatCurrency.js';
 import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
+import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { FieldRow } from '../formFields.jsx';
 
 /**
@@ -72,13 +72,12 @@ export function CashCloseSidePanel({
                   into freely — parsing happens once, in cashCloseMath.parseDeclaredAmount.
                   Same approach the tolerance fields use in EditAccountModal. */}
               <div className="relative">
-                <Input
+                <MaskedAmountInput
+                  bare
                   className={`bg-card ${rightSide ? 'pr-8' : 'pl-8'} text-right tabular-nums`}
-                  inputMode="decimal"
-                  // Shared key, so the decimal separator follows the locale (0,00 vs 0.00).
                   placeholder={ui('financeAccountAmountPlaceholder')}
                   value={declaredInput}
-                  onChange={(e) => onDeclaredInputChange(e.target.value)}
+                  onChange={(clean) => onDeclaredInputChange(clean)}
                   data-testid="cash-close-declared-balance" />
                 <span
                   className={`pointer-events-none absolute ${rightSide ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-[13px] font-medium text-muted-foreground`}>

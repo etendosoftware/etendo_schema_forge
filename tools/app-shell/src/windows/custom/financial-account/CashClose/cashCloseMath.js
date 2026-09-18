@@ -1,3 +1,4 @@
+import { parseLocaleNumber } from '../../../../lib/parseLocaleNumber.js';
 /**
  * Pure derivations for the cash-close screen (ETP-4795).
  *
@@ -19,32 +20,28 @@
 export const CASH_CLOSE_TOLERANCE = 0.005;
 
 /**
- * Parses an amount typed in es-ES notation (`"1.234,56"` → `1234.56`).
+ * Parses the CLEAN value produced by the declared-balance `MaskedAmountInput` (ETP-5107).
  *
- * Mirrors `parseEur` from `components/payment/paymentData.js` — thousands dots are dropped and
- * the comma is the decimal separator. A plain `"12.50"` (no comma, single dot with 1-2 trailing
- * digits) is also accepted as 12.5, so a user typing on a numeric keypad is not silently read as
- * 1250.
+ * The box used to be a raw input, so this function used to guess separators the way
+ * `parseEur` does — dropping dots as thousands grouping. It no longer may: the mask emits a
+ * clean value, so `"1.234"` unambiguously means 1.234 and the old grouping rule would have
+ * overstated it a thousandfold. A grouped display string like `"1.234,56"` carries two
+ * separators, cannot arrive from the mask, and is rejected (→ 0) rather than guessed at.
+ *
+ * `parseLocaleNumber` accepts either `,` or `.` as THE decimal separator (rejecting only a
+ * second one), so a plain `"12,50"` and `"12.50"` both read as 12.5.
  *
  * @param {string|number|null|undefined} raw
  * @returns {number} the parsed amount, or 0 when unparseable
  */
 export function parseDeclaredAmount(raw) {
   if (typeof raw === 'number') return Number.isFinite(raw) ? raw : 0;
-  if (raw == null) return 0;
-  const text = String(raw).trim();
-  if (text === '') return 0;
-
-  const hasComma = text.includes(',');
-  // Without a comma, a single dot followed by 1-2 digits is a decimal point, not a thousands
-  // separator ("12.50" → 12.5); anything else ("1.234") is thousands grouping.
-  const decimalDotOnly = !hasComma && /^-?\d+\.\d{1,2}$/.test(text);
-  const normalized = decimalDotOnly
-    ? text
-    : text.replace(/\./g, '').replace(',', '.');
-
-  const value = Number.parseFloat(normalized);
-  return Number.isFinite(value) ? value : 0;
+  // The declared-balance box is a MaskedAmountInput (ETP-5107), so what arrives here is already the
+  // component's CLEAN value: digits, an optional leading '-', at most one '.' as the decimal point.
+  // The separator guessing this function used to do is not just unnecessary now, it would be WRONG
+  // — a typed `1,500` arrives clean as `1.500` meaning one-and-a-half, which the old "a lone dot
+  // with 3 digits is grouping" rule read as 1500.
+  return parseLocaleNumber(raw).value ?? 0;
 }
 
 /** Inflow part of a signed movement amount (0 for an outflow). */

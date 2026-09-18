@@ -1,8 +1,8 @@
 {
-  "version": "0.1.1",
-  "generatedAt": "2026-07-31T19:26:42.054Z",
-  "updatedAt": "2026-09-07T16:05:38.276Z",
-  "checksum": "b60ba2f38cc700e9",
+  "version": "0.12.0",
+  "generatedAt": "2026-09-11T00:36:11.322Z",
+  "updatedAt": "2026-09-15T16:30:42.198Z",
+  "checksum": "f8449fb0215dd691",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -15,9 +15,22 @@
       "contentBg": "bg-card",
       "hideLink": true,
       "breadcrumb": "Inventory / Product",
+      "customComponents": {
+        "subHeader": "ProductCostBanner"
+      },
       "secondaryTabs": {
+        "costing": {
+          "tabOrder": 500,
+          "label": "Costing",
+          "requireSavedRecord": true,
+          "addLineFields": [
+            "cost",
+            "startingDate",
+            "endingDate"
+          ]
+        },
         "accounting": {
-          "tabOrder": 1000,
+          "tabOrder": 500,
           "label": "Accounting",
           "addLineFields": [
             "fixedAsset",
@@ -31,16 +44,26 @@
         }
       },
       "detailEntity": null,
-      "headerExtra": {},
+      "headerExtra": {
+        "customForm": "ProductStockDefaultsWatcher"
+      },
       "labelOverrides": {
         "en_US": {
           "M_Product_Category_ID": "Category",
-          "ProductType": "Type"
+          "ProductType": "Type",
+          "DateFrom": "Start Date",
+          "DateTo": "Expiry Date"
         },
         "es_ES": {
           "M_Product_Category_ID": "Categoría",
           "ProductType": "Tipo",
-          "Value": "Código"
+          "Value": "Código",
+          "DateFrom": "Fecha de inicio",
+          "DateTo": "Fecha de expiración"
+        },
+        "es_AR": {
+          "DateFrom": "Fecha de inicio",
+          "DateTo": "Fecha de expiración"
         }
       },
       "primaryTabs": [
@@ -70,7 +93,8 @@
         {
           "key": "pricing",
           "labelKey": "price",
-          "component": "ProductPriceBar"
+          "component": "ProductPriceBar",
+          "tabOrder": 100
         }
       ],
       "layoutType": "gallery",
@@ -236,6 +260,12 @@
             "validation": {
               "required": true,
               "maxLength": 40
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "searchKey",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -279,6 +309,12 @@
             "validation": {
               "required": true,
               "maxLength": 60
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "name",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -349,6 +385,12 @@
               "code": "Issummary='N'",
               "contextParams": [],
               "cascadeParams": []
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "category",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -434,6 +476,12 @@
             "explicitType": true,
             "validation": {
               "maxLength": 255
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "description",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -724,6 +772,12 @@
             },
             "validation": {
               "maxLength": 22
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "salePrice",
+              "type": "passthrough",
+              "handlerId": null
             }
           },
           {
@@ -744,6 +798,12 @@
             },
             "validation": {
               "maxLength": 22
+            },
+            "publicApi": {
+              "exposed": true,
+              "name": "stock",
+              "type": "passthrough",
+              "handlerId": null
             }
           }
         ],
@@ -1069,6 +1129,25 @@
             "validation": {
               "maxLength": 32
             }
+          },
+          {
+            "name": "invoicePriceVariance",
+            "apiKey": "invoicePriceVariance",
+            "column": "P_InvoicePriceVariance_Acct",
+            "label": "Invoice Price Variance",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 5,
+            "grow": true,
+            "validation": {
+              "maxLength": 32
+            }
           }
         ],
         "searchableFields": [],
@@ -1204,51 +1283,26 @@
         "uiPattern": "STD",
         "fields": [
           {
-            "name": "costType",
-            "apiKey": "costType",
-            "column": "Costtype",
-            "label": "Cost Type",
-            "type": "enum",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "enumValues": [
-              {
-                "value": "AVA",
-                "name": "Average",
-                "labels": {
-                  "es_ES": "Promedio"
-                }
-              },
-              {
-                "value": "STA",
-                "name": "Standard",
-                "labels": {
-                  "es_ES": "Estándar"
-                }
-              }
-            ],
-            "validation": {
-              "required": true,
-              "maxLength": 60
-            }
-          },
-          {
             "name": "cost",
             "apiKey": "cost",
             "column": "Cost",
             "label": "Cost",
             "type": "decimal",
             "tsType": "number",
-            "visibility": "readOnly",
-            "required": false,
+            "visibility": "editable",
+            "required": true,
             "grid": true,
             "form": true,
+            "columnType": "amount",
+            "summable": false,
+            "currencyField": "cCurrencyID",
             "validation": {
+              "required": true,
               "maxLength": 10
+            },
+            "readOnlyLogic": {
+              "js": "record.manual === false || record.manual === 'N'",
+              "evaluable": true
             }
           },
           {
@@ -1258,7 +1312,7 @@
             "label": "Starting Date",
             "type": "date",
             "tsType": "string",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true,
             "grid": true,
             "form": true,
@@ -1266,6 +1320,10 @@
             "validation": {
               "required": true,
               "maxLength": 10
+            },
+            "readOnlyLogic": {
+              "js": "record.manual === false || record.manual === 'N'",
+              "evaluable": true
             }
           },
           {
@@ -1275,98 +1333,33 @@
             "label": "Ending Date",
             "type": "date",
             "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "validation": {
-              "required": true,
-              "maxLength": 10
-            }
-          },
-          {
-            "name": "quantity",
-            "apiKey": "quantity",
-            "column": "Qty",
-            "label": "Quantity",
-            "type": "quantity",
-            "tsType": "number",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": false,
             "grid": true,
-            "form": true,
-            "validation": {
-              "maxLength": 10
-            }
-          },
-          {
-            "name": "warehouse",
-            "apiKey": "warehouse",
-            "column": "M_Warehouse_ID",
-            "label": "Warehouse",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": true,
-            "form": true,
-            "reference": "Warehouse",
-            "inputMode": "selector",
-            "validation": {
-              "maxLength": 32
-            }
-          },
-          {
-            "name": "cCurrencyID",
-            "apiKey": "cCurrencyID",
-            "column": "C_Currency_ID",
-            "label": "Currency",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": false,
             "form": true,
             "sourceRequired": true,
             "derivation": {
-              "type": "computed",
-              "source": "100"
+              "type": "fromConfig"
             },
-            "reference": "Currency",
-            "inputMode": "selector",
-            "defaultValue": "100",
             "validation": {
-              "required": true,
-              "maxLength": 32
-            }
-          },
-          {
-            "name": "originalCost",
-            "apiKey": "originalCost",
-            "column": "Originalcost",
-            "label": "Original Cost",
-            "type": "decimal",
-            "tsType": "number",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "validation": {
-              "maxLength": 12
+              "maxLength": 10
+            },
+            "readOnlyLogic": {
+              "js": "record.manual === false || record.manual === 'N'",
+              "evaluable": true
             }
           }
         ],
         "searchableFields": [],
         "computedFields": [
           {
-            "name": "cCurrencyID",
+            "name": "endingDate",
             "derivation": {
-              "type": "computed",
-              "source": "100"
+              "type": "fromConfig"
             }
           }
-        ]
+        ],
+        "javaQualifier": "productCostingHandler"
       },
       "transactionAdjustments": {
         "tableName": "M_Transaction_Cost",
@@ -2453,9 +2446,22 @@
       "contentBg": "bg-card",
       "hideLink": true,
       "breadcrumb": "Inventory / Product",
+      "customComponents": {
+        "subHeader": "ProductCostBanner"
+      },
       "secondaryTabs": {
+        "costing": {
+          "tabOrder": 500,
+          "label": "Costing",
+          "requireSavedRecord": true,
+          "addLineFields": [
+            "cost",
+            "startingDate",
+            "endingDate"
+          ]
+        },
         "accounting": {
-          "tabOrder": 1000,
+          "tabOrder": 500,
           "label": "Accounting",
           "addLineFields": [
             "fixedAsset",
@@ -2469,16 +2475,26 @@
         }
       },
       "detailEntity": null,
-      "headerExtra": {},
+      "headerExtra": {
+        "customForm": "ProductStockDefaultsWatcher"
+      },
       "labelOverrides": {
         "en_US": {
           "M_Product_Category_ID": "Category",
-          "ProductType": "Type"
+          "ProductType": "Type",
+          "DateFrom": "Start Date",
+          "DateTo": "Expiry Date"
         },
         "es_ES": {
           "M_Product_Category_ID": "Categoría",
           "ProductType": "Tipo",
-          "Value": "Código"
+          "Value": "Código",
+          "DateFrom": "Fecha de inicio",
+          "DateTo": "Fecha de expiración"
+        },
+        "es_AR": {
+          "DateFrom": "Fecha de inicio",
+          "DateTo": "Fecha de expiración"
         }
       },
       "primaryTabs": [
@@ -2508,7 +2524,8 @@
         {
           "key": "pricing",
           "labelKey": "price",
-          "component": "ProductPriceBar"
+          "component": "ProductPriceBar",
+          "tabOrder": 100
         }
       ],
       "layoutType": "gallery",
@@ -3964,7 +3981,7 @@
             "apiKey": "invoicePriceVariance",
             "column": "P_InvoicePriceVariance_Acct",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -4235,7 +4252,7 @@
             "apiKey": "costType",
             "column": "Costtype",
             "type": "enum",
-            "visibility": "readOnly",
+            "visibility": "system",
             "required": true
           },
           {
@@ -4243,15 +4260,15 @@
             "apiKey": "cost",
             "column": "Cost",
             "type": "decimal",
-            "visibility": "readOnly",
-            "required": false
+            "visibility": "editable",
+            "required": true
           },
           {
             "name": "startingDate",
             "apiKey": "startingDate",
             "column": "DateFrom",
             "type": "date",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -4259,15 +4276,15 @@
             "apiKey": "endingDate",
             "column": "DateTo",
             "type": "date",
-            "visibility": "readOnly",
-            "required": true
+            "visibility": "editable",
+            "required": false
           },
           {
             "name": "quantity",
             "apiKey": "quantity",
             "column": "Qty",
             "type": "quantity",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -4291,7 +4308,7 @@
             "apiKey": "manual",
             "column": "IsManual",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": true
           },
           {
@@ -4299,7 +4316,7 @@
             "apiKey": "permanent",
             "column": "Ispermanent",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": true
           },
           {
@@ -4307,7 +4324,7 @@
             "apiKey": "warehouse",
             "column": "M_Warehouse_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -4323,7 +4340,7 @@
             "apiKey": "production",
             "column": "Isproduction",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": false
           },
           {
@@ -4331,7 +4348,7 @@
             "apiKey": "cCurrencyID",
             "column": "C_Currency_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "system",
             "required": true
           },
           {
@@ -4339,7 +4356,7 @@
             "apiKey": "originalCost",
             "column": "Originalcost",
             "type": "decimal",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -4414,7 +4431,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "productCostingHandler"
       },
       "transactionAdjustments": {
         "tableName": "M_Transaction_Cost",
@@ -5850,17 +5868,13 @@
       "costing": {
         "get": true,
         "getById": true,
-        "post": false,
-        "put": false,
-        "patch": false,
-        "delete": false,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
         "listUrl": "/sws/neo/product/costing",
         "detailUrl": "/sws/neo/product/costing/{id}",
-        "supportedFilters": [],
-        "methods": [
-          "GET",
-          "GETBYID"
-        ]
+        "supportedFilters": []
       },
       "transactionAdjustments": {
         "get": true,
@@ -6043,28 +6057,20 @@
         "url": "/sws/neo/product/accounting/selectors/productCOGS"
       },
       {
+        "entity": "accounting",
+        "field": "invoicePriceVariance",
+        "column": "P_InvoicePriceVariance_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product/accounting/selectors/invoicePriceVariance"
+      },
+      {
         "entity": "billOfMaterials",
         "field": "bOMProduct",
         "column": "M_ProductBOM_ID",
         "reference": "Product",
         "inputMode": "search",
         "url": "/sws/neo/product/billOfMaterials/selectors/bOMProduct"
-      },
-      {
-        "entity": "costing",
-        "field": "warehouse",
-        "column": "M_Warehouse_ID",
-        "reference": "Warehouse",
-        "inputMode": "selector",
-        "url": "/sws/neo/product/costing/selectors/warehouse"
-      },
-      {
-        "entity": "costing",
-        "field": "cCurrencyID",
-        "column": "C_Currency_ID",
-        "reference": "Currency",
-        "inputMode": "selector",
-        "url": "/sws/neo/product/costing/selectors/cCurrencyID"
       },
       {
         "entity": "transactionAdjustments",
@@ -6248,12 +6254,20 @@
     "labelOverrides": {
       "en_US": {
         "M_Product_Category_ID": "Category",
-        "ProductType": "Type"
+        "ProductType": "Type",
+        "DateFrom": "Start Date",
+        "DateTo": "Expiry Date"
       },
       "es_ES": {
         "M_Product_Category_ID": "Categoría",
         "ProductType": "Tipo",
-        "Value": "Código"
+        "Value": "Código",
+        "DateFrom": "Fecha de inicio",
+        "DateTo": "Fecha de expiración"
+      },
+      "es_AR": {
+        "DateFrom": "Fecha de inicio",
+        "DateTo": "Fecha de expiración"
       }
     }
   },
@@ -6462,14 +6476,6 @@
         "field": "active",
         "runner": "node",
         "description": "Default value for 'active' in categoryPriceRuleVersion should be a string"
-      },
-      {
-        "id": "t-default-value-type-costing-cCurrencyID",
-        "category": "default-value-type",
-        "entity": "costing",
-        "field": "cCurrencyID",
-        "runner": "node",
-        "description": "Default value for 'cCurrencyID' in costing should be a string"
       },
       {
         "id": "t-default-value-type-price-cost",
@@ -6720,6 +6726,14 @@
         "description": "Field 'fixedAsset' should be present in accounting"
       },
       {
+        "id": "t-field-presence-accounting-invoicePriceVariance",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "invoicePriceVariance",
+        "runner": "node",
+        "description": "Field 'invoicePriceVariance' should be present in accounting"
+      },
+      {
         "id": "t-field-presence-accounting-productCOGS",
         "category": "field-presence",
         "entity": "accounting",
@@ -6856,28 +6870,12 @@
         "description": "Field 'validFromDate' should be present in categoryPriceRuleVersion"
       },
       {
-        "id": "t-field-presence-costing-cCurrencyID",
-        "category": "field-presence",
-        "entity": "costing",
-        "field": "cCurrencyID",
-        "runner": "node",
-        "description": "Field 'cCurrencyID' should be present in costing"
-      },
-      {
         "id": "t-field-presence-costing-cost",
         "category": "field-presence",
         "entity": "costing",
         "field": "cost",
         "runner": "node",
         "description": "Field 'cost' should be present in costing"
-      },
-      {
-        "id": "t-field-presence-costing-costType",
-        "category": "field-presence",
-        "entity": "costing",
-        "field": "costType",
-        "runner": "node",
-        "description": "Field 'costType' should be present in costing"
       },
       {
         "id": "t-field-presence-costing-endingDate",
@@ -6888,36 +6886,12 @@
         "description": "Field 'endingDate' should be present in costing"
       },
       {
-        "id": "t-field-presence-costing-originalCost",
-        "category": "field-presence",
-        "entity": "costing",
-        "field": "originalCost",
-        "runner": "node",
-        "description": "Field 'originalCost' should be present in costing"
-      },
-      {
-        "id": "t-field-presence-costing-quantity",
-        "category": "field-presence",
-        "entity": "costing",
-        "field": "quantity",
-        "runner": "node",
-        "description": "Field 'quantity' should be present in costing"
-      },
-      {
         "id": "t-field-presence-costing-startingDate",
         "category": "field-presence",
         "entity": "costing",
         "field": "startingDate",
         "runner": "node",
         "description": "Field 'startingDate' should be present in costing"
-      },
-      {
-        "id": "t-field-presence-costing-warehouse",
-        "category": "field-presence",
-        "entity": "costing",
-        "field": "warehouse",
-        "runner": "node",
-        "description": "Field 'warehouse' should be present in costing"
       },
       {
         "id": "t-field-presence-price-cost",
@@ -7384,6 +7358,14 @@
         "description": "Field 'fixedAsset' should have type 'string' in accounting"
       },
       {
+        "id": "t-field-type-accounting-invoicePriceVariance",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "invoicePriceVariance",
+        "runner": "node",
+        "description": "Field 'invoicePriceVariance' should have type 'string' in accounting"
+      },
+      {
         "id": "t-field-type-accounting-productCOGS",
         "category": "field-type",
         "entity": "accounting",
@@ -7520,28 +7502,12 @@
         "description": "Field 'validFromDate' should have type 'string' in categoryPriceRuleVersion"
       },
       {
-        "id": "t-field-type-costing-cCurrencyID",
-        "category": "field-type",
-        "entity": "costing",
-        "field": "cCurrencyID",
-        "runner": "node",
-        "description": "Field 'cCurrencyID' should have type 'string' in costing"
-      },
-      {
         "id": "t-field-type-costing-cost",
         "category": "field-type",
         "entity": "costing",
         "field": "cost",
         "runner": "node",
         "description": "Field 'cost' should have type 'number' in costing"
-      },
-      {
-        "id": "t-field-type-costing-costType",
-        "category": "field-type",
-        "entity": "costing",
-        "field": "costType",
-        "runner": "node",
-        "description": "Field 'costType' should have type 'string' in costing"
       },
       {
         "id": "t-field-type-costing-endingDate",
@@ -7552,36 +7518,12 @@
         "description": "Field 'endingDate' should have type 'string' in costing"
       },
       {
-        "id": "t-field-type-costing-originalCost",
-        "category": "field-type",
-        "entity": "costing",
-        "field": "originalCost",
-        "runner": "node",
-        "description": "Field 'originalCost' should have type 'number' in costing"
-      },
-      {
-        "id": "t-field-type-costing-quantity",
-        "category": "field-type",
-        "entity": "costing",
-        "field": "quantity",
-        "runner": "node",
-        "description": "Field 'quantity' should have type 'number' in costing"
-      },
-      {
         "id": "t-field-type-costing-startingDate",
         "category": "field-type",
         "entity": "costing",
         "field": "startingDate",
         "runner": "node",
         "description": "Field 'startingDate' should have type 'string' in costing"
-      },
-      {
-        "id": "t-field-type-costing-warehouse",
-        "category": "field-type",
-        "entity": "costing",
-        "field": "warehouse",
-        "runner": "node",
-        "description": "Field 'warehouse' should have type 'string' in costing"
       },
       {
         "id": "t-field-type-price-cost",
@@ -8048,6 +7990,30 @@
         "description": "Read-only logic for 'conversionRate' in alternateUom should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-costing-cost",
+        "category": "readonlylogic-evaluable",
+        "entity": "costing",
+        "field": "cost",
+        "runner": "node",
+        "description": "Read-only logic for 'cost' in costing should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-costing-endingDate",
+        "category": "readonlylogic-evaluable",
+        "entity": "costing",
+        "field": "endingDate",
+        "runner": "node",
+        "description": "Read-only logic for 'endingDate' in costing should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-costing-startingDate",
+        "category": "readonlylogic-evaluable",
+        "entity": "costing",
+        "field": "startingDate",
+        "runner": "node",
+        "description": "Read-only logic for 'startingDate' in costing should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-product-stocked",
         "category": "readonlylogic-evaluable",
         "entity": "product",
@@ -8062,6 +8028,30 @@
         "field": "conversionRate",
         "runner": "node",
         "description": "Read-only logic for 'conversionRate' in alternateUom should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-costing-cost",
+        "category": "readonlylogic-valid",
+        "entity": "costing",
+        "field": "cost",
+        "runner": "node",
+        "description": "Read-only logic for 'cost' in costing should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-costing-endingDate",
+        "category": "readonlylogic-valid",
+        "entity": "costing",
+        "field": "endingDate",
+        "runner": "node",
+        "description": "Read-only logic for 'endingDate' in costing should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-costing-startingDate",
+        "category": "readonlylogic-valid",
+        "entity": "costing",
+        "field": "startingDate",
+        "runner": "node",
+        "description": "Read-only logic for 'startingDate' in costing should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-product-stocked",
@@ -9114,6 +9104,14 @@
         "description": "Selector endpoint for 'fixedAsset' in accounting should exist"
       },
       {
+        "id": "t-selector-endpoint-accounting-invoicePriceVariance",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "invoicePriceVariance",
+        "runner": "node",
+        "description": "Selector endpoint for 'invoicePriceVariance' in accounting should exist"
+      },
+      {
         "id": "t-selector-endpoint-accounting-productCOGS",
         "category": "selector-endpoint",
         "entity": "accounting",
@@ -9160,22 +9158,6 @@
         "field": "servicePriceRule",
         "runner": "node",
         "description": "Selector endpoint for 'servicePriceRule' in categoryPriceRuleVersion should exist"
-      },
-      {
-        "id": "t-selector-endpoint-costing-cCurrencyID",
-        "category": "selector-endpoint",
-        "entity": "costing",
-        "field": "cCurrencyID",
-        "runner": "node",
-        "description": "Selector endpoint for 'cCurrencyID' in costing should exist"
-      },
-      {
-        "id": "t-selector-endpoint-costing-warehouse",
-        "category": "selector-endpoint",
-        "entity": "costing",
-        "field": "warehouse",
-        "runner": "node",
-        "description": "Selector endpoint for 'warehouse' in costing should exist"
       },
       {
         "id": "t-selector-endpoint-price-priceListVersion",
@@ -9368,14 +9350,6 @@
         "field": "id",
         "runner": "node",
         "description": "System field 'id' should exist in backend but not frontend for accounting"
-      },
-      {
-        "id": "t-system-field-accounting-invoicePriceVariance",
-        "category": "system-field",
-        "entity": "accounting",
-        "field": "invoicePriceVariance",
-        "runner": "node",
-        "description": "System field 'invoicePriceVariance' should exist in backend but not frontend for accounting"
       },
       {
         "id": "t-system-field-accounting-organization",
@@ -9706,12 +9680,28 @@
         "description": "System field 'active' should exist in backend but not frontend for costing"
       },
       {
+        "id": "t-system-field-costing-cCurrencyID",
+        "category": "system-field",
+        "entity": "costing",
+        "field": "cCurrencyID",
+        "runner": "node",
+        "description": "System field 'cCurrencyID' should exist in backend but not frontend for costing"
+      },
+      {
         "id": "t-system-field-costing-client",
         "category": "system-field",
         "entity": "costing",
         "field": "client",
         "runner": "node",
         "description": "System field 'client' should exist in backend but not frontend for costing"
+      },
+      {
+        "id": "t-system-field-costing-costType",
+        "category": "system-field",
+        "entity": "costing",
+        "field": "costType",
+        "runner": "node",
+        "description": "System field 'costType' should exist in backend but not frontend for costing"
       },
       {
         "id": "t-system-field-costing-createdBy",
@@ -9770,6 +9760,14 @@
         "description": "System field 'organization' should exist in backend but not frontend for costing"
       },
       {
+        "id": "t-system-field-costing-originalCost",
+        "category": "system-field",
+        "entity": "costing",
+        "field": "originalCost",
+        "runner": "node",
+        "description": "System field 'originalCost' should exist in backend but not frontend for costing"
+      },
+      {
         "id": "t-system-field-costing-permanent",
         "category": "system-field",
         "entity": "costing",
@@ -9802,6 +9800,14 @@
         "description": "System field 'production' should exist in backend but not frontend for costing"
       },
       {
+        "id": "t-system-field-costing-quantity",
+        "category": "system-field",
+        "entity": "costing",
+        "field": "quantity",
+        "runner": "node",
+        "description": "System field 'quantity' should exist in backend but not frontend for costing"
+      },
+      {
         "id": "t-system-field-costing-totalMovementQuantity",
         "category": "system-field",
         "entity": "costing",
@@ -9832,6 +9838,14 @@
         "field": "updatedBy",
         "runner": "node",
         "description": "System field 'updatedBy' should exist in backend but not frontend for costing"
+      },
+      {
+        "id": "t-system-field-costing-warehouse",
+        "category": "system-field",
+        "entity": "costing",
+        "field": "warehouse",
+        "runner": "node",
+        "description": "System field 'warehouse' should exist in backend but not frontend for costing"
       },
       {
         "id": "t-system-field-price-active",
@@ -11419,17 +11433,17 @@
       "byCategory": {
         "action-endpoint": 9,
         "crud-flags": 12,
-        "default-value-type": 27,
+        "default-value-type": 26,
         "displaylogic-evaluable": 5,
         "displaylogic-valid": 5,
-        "field-presence": 83,
-        "field-type": 83,
-        "readonlylogic-evaluable": 2,
-        "readonlylogic-valid": 2,
+        "field-presence": 79,
+        "field-type": 79,
+        "readonlylogic-evaluable": 5,
+        "readonlylogic-valid": 5,
         "rule-declared": 142,
         "searchable-filters": 5,
-        "selector-endpoint": 27,
-        "system-field": 251,
+        "selector-endpoint": 26,
+        "system-field": 255,
         "visibility": 12
       },
       "byRunner": {

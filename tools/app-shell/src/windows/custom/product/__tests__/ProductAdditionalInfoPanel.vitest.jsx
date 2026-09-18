@@ -30,11 +30,13 @@ const BASE_PROPS = {
 
 // ETP-4943 / ETP-5091 — Service, Expense ("Gasto") and Resource ("Recurso")
 // products have no physical existence: the Logistics section (weight, UOM for
-// weight, "Almacenable"/Returnable) does not apply to them and must be
-// hidden, and both stock-management flags must be forced to false so none of
-// them can ever be saved as stocked/returnable. Mirrors the precedent already
-// established for the stock sidebar (`ProductSidebar.jsx`, ETP-4606 /
-// ETP-5091: `['S', 'E', 'R'].includes(data?.productType)` → no stock UI at all).
+// weight, "Almacenable"/Returnable) does not apply to them and must be hidden.
+// Mirrors the precedent already established for the stock sidebar
+// (`ProductSidebar.jsx`, ETP-4606 / ETP-5091: `['S', 'E', 'R'].includes(data?.productType)`
+// → no stock UI at all).
+//
+// Forcing `stocked`/`returnable` to match `productType` is NOT this component's
+// job (ETP-5091 follow-up) — see `ProductStockDefaultsWatcher.vitest.jsx`.
 describe.each([
   ['Service', 'S'],
   ['Expense', 'E'],
@@ -45,44 +47,6 @@ describe.each([
     expect(screen.queryByText('logistics')).not.toBeInTheDocument();
     expect(screen.queryByTestId('field-stocked')).not.toBeInTheDocument();
     expect(screen.queryByTestId('field-returnable')).not.toBeInTheDocument();
-  });
-
-  it(`forces stocked/returnable to false as soon as the type is ${productType}`, () => {
-    const onChange = vi.fn();
-    render(
-      <ProductAdditionalInfoPanel
-        {...BASE_PROPS}
-        onChange={onChange}
-        data={{ productType, stocked: true, returnable: true }}
-      />,
-    );
-    expect(onChange).toHaveBeenCalledWith('stocked', false, 'IsStocked');
-    expect(onChange).toHaveBeenCalledWith('returnable', false, 'Returnable');
-  });
-
-  it(`does not call onChange when the flags are already false for a ${productType}-type product`, () => {
-    const onChange = vi.fn();
-    render(
-      <ProductAdditionalInfoPanel
-        {...BASE_PROPS}
-        onChange={onChange}
-        data={{ productType, stocked: false, returnable: false }}
-      />,
-    );
-    expect(onChange).not.toHaveBeenCalled();
-  });
-
-  it('does not force the flags while in read-only (view) mode', () => {
-    const onChange = vi.fn();
-    render(
-      <ProductAdditionalInfoPanel
-        {...BASE_PROPS}
-        editing={false}
-        onChange={onChange}
-        data={{ productType, stocked: true, returnable: true }}
-      />,
-    );
-    expect(onChange).not.toHaveBeenCalled();
   });
 
   it('shows the section again with its own values when the type switches back to Article', () => {

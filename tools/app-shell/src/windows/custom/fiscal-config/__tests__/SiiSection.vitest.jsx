@@ -106,6 +106,44 @@ describe('SiiSection — rendering', () => {
   });
 });
 
+// ETP-5272 — external `locked` prop (forceTestMode) disables editing regardless
+// of any other state.
+// ETP-5338 point 6: explicit name/id on the authorization number input avoids
+// the browser autofill heuristic pairing it with the cert passphrase field.
+describe('SiiSection — anti-autofill hardening (ETP-5338)', () => {
+  it('renders the authorization number input with the expected name and id', () => {
+    render(<SiiSection {...PROPS} />);
+    const input = screen.getByTestId('Input__fcb159');
+    expect(input).toHaveAttribute('name', 'sii-authorization-number');
+    expect(input).toHaveAttribute('id', 'sii-authorization-number');
+    expect(input).toHaveAttribute('autoComplete', 'off');
+  });
+});
+
+describe('SiiSection — locked prop (ETP-5272)', () => {
+  it('disables the authorization number input when locked=true', () => {
+    render(<SiiSection {...PROPS} locked />);
+    expect(screen.getByTestId('Input__fcb159')).toBeDisabled();
+  });
+
+  it('does not disable the authorization number input when locked=false', () => {
+    render(<SiiSection {...PROPS} locked={false} />);
+    expect(screen.getByTestId('Input__fcb159')).not.toBeDisabled();
+  });
+
+  it('ignores onChange when locked=true (set() is gated)', () => {
+    render(<SiiSection {...PROPS} locked />);
+    const input = screen.getByTestId('Input__fcb159');
+    fireEvent.change(input, { target: { value: 'AUTH-999' } });
+    expect(input.value).not.toBe('AUTH-999');
+  });
+
+  it('hides the save button when locked=true, even with hideSave=false', () => {
+    render(<SiiSection {...PROPS} locked hideSave={false} />);
+    expect(screen.queryByText('fiscal.save')).not.toBeInTheDocument();
+  });
+});
+
 // ETP-4783: The "Envíos" section (plazo/cadencia/postedInvoices) was removed from the UI.
 // The plazoLmiteDeEnvoASII validation is no longer enforced — save proceeds even when empty.
 describe('SiiSection — validation', () => {

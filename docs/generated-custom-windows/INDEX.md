@@ -99,6 +99,7 @@ This folder is the entry point for documentation that describes how generated an
 | File | Description |
 |------|-------------|
 | [organization.md](organization.md) | Custom organization-settings window (ETP-4749) — flattens the Classic Organization/Information AD tabs (window 110) into one tabless screen: identity, fiscal data, and contact details |
+| [document-sequence.md](document-sequence.md) | Document numbering window (ETP-5190, AD window 112) — prefix/suffix/next-number per sequence, with the Spanish localization prefix rules enforced on write; target of the First Steps invoicing step |
 | [price-list.md](price-list.md) | Custom price-list flow with product-price workspace |
 | [payment-term.md](payment-term.md) | Generated payment-term maintenance window |
 | [tax.md](tax.md) | Generated tax-rate maintenance window |
@@ -109,6 +110,7 @@ This folder is the entry point for documentation that describes how generated an
 | [fiscal-models.md](fiscal-models.md) | Custom fiscal models window — declaration list and per-model detail pages (303, 349) with auto-compute and file generation |
 | [fiscal-monitor.md](fiscal-monitor.md) | Custom fiscal monitor window — real-time invoice submission status for SII, TBAI, and Verifactu |
 | [not-posted-documents.md](not-posted-documents.md) | Custom cross-document posting window — aggregates all unposted documents, single-row and bulk Post actions |
+| [acct-process-monitor.md](acct-process-monitor.md) | Synthetic admin-only page (ETP-5269, flag `acct-process-monitor`) — status, next automatic run and execution history of the accounting server process, plus a manual run scoped to the caller's own company. No logs, by design |
 | [sii-monitor.md](sii-monitor.md) | API-only sub-window — SII invoice submission records consumed by FiscalMonitorPage |
 | [monitor-verifactu.md](monitor-verifactu.md) | API-only sub-window — Verifactu invoice submission records consumed by FiscalMonitorPage |
 | [tbai-facturas-enviadas.md](tbai-facturas-enviadas.md) | API-only sub-window — TBAI invoice submission records consumed by FiscalMonitorPage |

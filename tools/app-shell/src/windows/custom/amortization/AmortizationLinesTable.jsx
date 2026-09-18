@@ -8,6 +8,7 @@ import { useAccountingDimensionFields } from '@/hooks/useAccountingDimensionFiel
 import { extractErrorMessage } from '@/hooks/useEntity';
 import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 import { formatCurrency } from '@/lib/formatCurrency';
+import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import SelectorInput from '@/components/contract-ui/SelectorInput';
 import { AddLineButton } from '@/components/ui/add-line-button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -28,7 +29,35 @@ import SelectionToolbar from '@/components/contract-ui/SelectionToolbar';
 import { DimensionGrid } from '@/components/contract-ui/DimensionsPanel';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
 // ── field definitions ────────────────────────────────────────────────
+/**
+ * ETP-5107 — inline edit cell for an amortization amount/percentage.
+ *
+ * The raw cells this replaces were `<input type="number">`, which the BROWSER itself
+ * refuses the comma keystroke on under an es-ES locale — no amount of parsing could fix
+ * that, the element had to change. `MaskedAmountInput` is controlled, while the old cells
+ * were uncontrolled (`defaultValue` + `onBlur`), so local state seeded from the row keeps
+ * the previous "type freely, persist on blur/Enter" behaviour intact.
+ *
+ * `onCommit` hands back the CLEAN dot-decimal string, which is exactly what `saveField`
+ * already expected from `e.target.value` of a `type="number"` input.
+ */
+function EditAmountCell({ initial, onCommit, onEscape, grouping = true }) {
+  const [draft, setDraft] = useState(initial ?? '');
+  return (
+    <MaskedAmountInput
+      bare
+      grouping={grouping}
+      className="h-8 w-full rounded-lg border border-[hsl(var(--border-control))] bg-card px-2 text-sm text-right tabular-nums"
+      value={draft}
+      onChange={(clean) => setDraft(clean)}
+      onCommit={(_parsed, clean) => onCommit(clean)}
+      onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); } else if (e.key === 'Escape') { onEscape(); } }}
+      data-testid="field-number" />
+  );
+}
+
 const CORE_FIELDS = [
   { key: 'asset', column: 'A_Asset_ID', type: 'selector', reference: 'Asset', inputMode: 'selector', required: true, readOnlyLogic: (r) => r['posted'] === 'Y' },
   { key: 'amortizationPercentage', column: 'Amortization_Percentage', type: 'number', readOnlyLogic: (r) => r['processed'] === 'Y' },
@@ -173,16 +202,65 @@ export default function AmortizationLinesTable({
     setPendingEdits(prev => ({ ...prev, [lineId]: { ...(prev[lineId] ?? {}), [key]: value } }));
   }
 
-  // Per-field save on blur (like Sales Order inline editing)
-  async function saveField(lineId, line, fieldKey, value) {
-    if (String(line[fieldKey] ?? '') === String(value ?? '')) return;
+  /**
+   * The value the SERVER last confirmed, keyed `lineId:field` — what {@link saveField} compares
+   * against (ETP-5255).
+   *
+   * It cannot compare against the `line` prop: that prop only changes once `fetchLines()` has
+   * completed, so for the whole window between "PUT accepted" and "list refetched" it still holds
+   * the OLD value, and a second trigger for the same field saw a difference that was already
+   * persisted — and issued a duplicate write.
+   *
+   * Recorded on success and dropped on failure, so a refused write falls back to the prop rather
+   * than leaving an optimistic baseline that would make a retry of the same value a no-op.
+   */
+  const persistedRef = useRef({});
+
+  const writeField = useCallback(async ({ recordId, fieldKey, value }) => {
     try {
-      const res = await apiFetch(`/lines/${lineId}`, {
+      const res = await apiFetch(`/lines/${recordId}`, {
         method: 'PUT',
         body: JSON.stringify({ [fieldKey]: value }),
       });
-      if (res.ok) { fetchLines(); onRefresh?.(); }
-    } catch { /* silencioso */ }
+      if (!res.ok) {
+        // ETP-5255 — this used to be `if (res.ok)` with no else, wrapped in a bare
+        // `catch { /* silencioso */ }`. A refusal produced no toast and no error state: the edit
+        // simply reappeared with its old value after the next fetch, which reads to the user as
+        // "the app lost my change". Mirrors the ETP-4981 rule for DELETE, thirty lines below.
+        delete persistedRef.current[`${recordId}:${fieldKey}`];
+        toast.error(await extractErrorMessage(res, ui));
+        fetchLines();
+        // Discards anything queued behind this write: the refetch above is putting the row back to
+        // what the server holds, and replaying on top of it would fight that repair with a token
+        // the server just refused.
+        return false;
+      }
+      persistedRef.current[`${recordId}:${fieldKey}`] = String(value ?? '');
+      fetchLines();
+      onRefresh?.();
+    } catch (err) {
+      delete persistedRef.current[`${recordId}:${fieldKey}`];
+      toast.error(err?.message || ui('networkError'));
+      fetchLines();
+      return false;
+    }
+  }, [apiFetch, ui, fetchLines, onRefresh]);
+
+  // Serialises per LINE, not per field: `updated` is a per-record token, and this row has four
+  // independent triggers into saveField (the asset selector's onChange, both numeric onBlurs, and
+  // the dimensions panel's onFieldSave). Any two of them overlapping used to send the same token
+  // twice and have the second refused. See the hook's docstring for why the field is the wrong key.
+  const { persist } = useRecordWriteQueue({ write: writeField });
+
+  /**
+   * Per-field save on blur (like Sales Order inline editing). Reached from four triggers on one
+   * row; all of them funnel through the write queue, which keeps at most one PUT per line open.
+   */
+  function saveField(lineId, line, fieldKey, value) {
+    const key = `${lineId}:${fieldKey}`;
+    const baseline = persistedRef.current[key] ?? String(line[fieldKey] ?? '');
+    if (String(value ?? '') === baseline) return;
+    persist(lineId, fieldKey, value);
   }
 
   // Close edit mode when clicking outside the editing row
@@ -418,13 +496,12 @@ export default function AmortizationLinesTable({
                       {/* percentage */}
                       {isEditing ? (
                         <td className="py-1 px-2 align-middle" onClick={e => e.stopPropagation()}>
-                          <input
-                            type="number"
-                            className="h-8 w-full rounded-lg border border-[hsl(var(--border-control))] bg-card px-2 text-sm text-right tabular-nums"
-                            defaultValue={line.amortizationPercentage ?? ''}
-                            onBlur={e => saveField(line.id, line, 'amortizationPercentage', e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); } else if (e.key === 'Escape') { setEditingLineId(null); } }}
-                          />
+                          <EditAmountCell
+                            grouping={false}
+                            initial={line.amortizationPercentage ?? ''}
+                            onCommit={clean => saveField(line.id, line, 'amortizationPercentage', clean)}
+                            onEscape={() => setEditingLineId(null)}
+                            data-testid="EditAmountCell__fecdcf" />
                         </td>
                       ) : (
                         <td className="px-3 text-sm text-right tabular-nums text-muted-foreground align-middle">
@@ -435,13 +512,11 @@ export default function AmortizationLinesTable({
                       {/* amount */}
                       {isEditing ? (
                         <td className="py-1 px-2 align-middle" onClick={e => e.stopPropagation()}>
-                          <input
-                            type="number"
-                            className="h-8 w-full rounded-lg border border-[hsl(var(--border-control))] bg-card px-2 text-sm text-right tabular-nums"
-                            defaultValue={line.amortizationAmount ?? ''}
-                            onBlur={e => saveField(line.id, line, 'amortizationAmount', e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur(); } else if (e.key === 'Escape') { setEditingLineId(null); } }}
-                          />
+                          <EditAmountCell
+                            initial={line.amortizationAmount ?? ''}
+                            onCommit={clean => saveField(line.id, line, 'amortizationAmount', clean)}
+                            onEscape={() => setEditingLineId(null)}
+                            data-testid="EditAmountCell__fecdcf" />
                         </td>
                       ) : (
                         <td className="px-3 text-sm text-right tabular-nums font-semibold text-foreground align-middle">
@@ -552,26 +627,25 @@ export default function AmortizationLinesTable({
                       data-testid="SelectorInput__fecdcf" />
                   </td>
                   <td className="py-1 px-2 align-middle">
-                    <input
-                      type="number"
-                      inputMode="decimal"
+                    <MaskedAmountInput
+                      bare
+                      grouping={false}
                       placeholder={t('Amortization_Percentage')}
                       className="w-full h-8 text-sm rounded-md border border-input bg-card px-2 text-right tabular-nums focus:ring-2 focus:ring-primary focus:outline-none"
                       value={newLine.amortizationPercentage ?? ''}
-                      onChange={e => setNewLine(p => ({ ...p, amortizationPercentage: e.target.value }))}
+                      onChange={(clean) => setNewLine(p => ({ ...p, amortizationPercentage: clean }))}
                       onKeyDown={onDraftKeyDown}
-                    />
+                      data-testid="field-number" />
                   </td>
                   <td className="py-1 px-2 align-middle">
-                    <input
-                      type="number"
-                      inputMode="decimal"
+                    <MaskedAmountInput
+                      bare
                       placeholder={t('Amortizationamt')}
                       className="w-full h-8 text-sm rounded-md border border-input bg-card px-2 text-right tabular-nums focus:ring-2 focus:ring-primary focus:outline-none"
                       value={newLine.amortizationAmount ?? ''}
-                      onChange={e => setNewLine(p => ({ ...p, amortizationAmount: e.target.value }))}
+                      onChange={(clean) => setNewLine(p => ({ ...p, amortizationAmount: clean }))}
                       onKeyDown={onDraftKeyDown}
-                    />
+                      data-testid="field-number" />
                   </td>
                   <td className="px-2 text-center text-muted-foreground align-middle">
                     {saving === 'new' ? <Loader2 className="h-4 w-4 animate-spin inline" data-testid="Loader2__fecdcf" /> : '—'}

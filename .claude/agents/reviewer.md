@@ -193,6 +193,49 @@ Reject any PR that formats a monetary value with a hand-rolled `Intl.NumberForma
 
 This exact bug (dropped thousands separator, wrong decimal comma) shipped repeatedly across the codebase before ETP-4314 centralized it — treat a new duplicate formatter the same as any other regression, not a style nit.
 
+### Stored Computed Columns — a green build is not evidence (BLOCKER)
+
+When a PR adds or changes a stored computed column (`Computation_Mode = 'S'`), do NOT accept
+"update.database ran fine" as proof that it works. Every failure mode in this engine is silent:
+a rejected dependency is a `log.warn`, the build stays green, and the column renders, filters and
+sorts perfectly while never refreshing. ETP-5216 shipped exactly that and it took a day to find.
+
+Require, in the PR description or from the developer:
+
+1. **`TARGET_ID_RESOLVER_SQL` ends in `FROM dual`.** Without it the generator skips the dependency
+   for Oracle portability and no enqueue trigger is created. Readable straight from the
+   `AD_COLUMN_COMP_DEPENDENCY.xml` diff — check it there, it costs one grep.
+2. **Evidence the trigger exists**, not that the build passed:
+   `SELECT tgname FROM pg_trigger WHERE tgrelid='<source_table>'::regclass AND NOT tgisinternal;`
+   must list `ad_scd_<dependency_id>_trg`.
+3. **Evidence the value reacts** to a change in the source table. This is the only check that
+   proves the chain; the other two can pass on a broken column.
+4. **The computation function is total** and the target column is wide enough for the longest
+   possible value. With `Refresh_Mode = 'S'` the function runs inside the business transaction,
+   so an error there rolls back the user's save — it is not a cosmetic bug.
+
+### Fictitious List Columns (BLOCKER)
+Reject any PR that adds a list column with `type: 'custom'` and **no** backing `column:` (AD column)
+and no `backendFilterKey`, unless the cell is purely presentational (action buttons, icons, an avatar
+composition). Such a column is dropped from the advanced filter **in silence** by `isFilterableColumn`
+(core `AdvancedFilterBuilder.jsx`) and cannot be sorted — the user simply never finds the field in
+"Filtro por condicionales" and nobody notices.
+
+Test to apply: **could a user plausibly want to filter or sort by this column?** If yes, it is not
+presentational and needs a real backing field:
+- value already in AD → add `column: '<AD_ColumnName>'` (a custom renderer and a real column coexist;
+  add `filterMode:` if the default widget is wrong — see `transactionDocument` in
+  `artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx`);
+- value derived/computed → **stored computed column** (`Computation_Mode = 'S'`,
+  `{etendo_root}/modules/com.etendoerp.go/docs/STORED-COMPUTED-COLUMNS.md`), precedent
+  `em_etgo_delivery_status` on `c_invoice`;
+- visual recomposition of existing columns → the declarative `multiField` column type.
+
+Equally a BLOCKER: feeding a list column by injecting a synthetic field into the NEO response from a
+handler's `afterHandle()`. Unfilterable, unsortable, and silently fatal on failure —
+`TbaiSyncStatusInjector` was dead for months behind a swallowed `MappingException` while every invoice
+rendered a client-side `?? 'Pendiente'` fallback (ETP-4391).
+
 ### Decisions as Source of Truth (WARNING)
 Window-specific configuration (tab layout, secondary tabs, field overrides, entityLabel, detailEntity, etc.) must be declared in `decisions.json`, not hardcoded in generated components. Every configurable field must be documented in `docs/decisions-reference.md`.
 

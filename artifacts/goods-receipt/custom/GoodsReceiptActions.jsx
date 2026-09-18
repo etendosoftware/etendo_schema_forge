@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -8,8 +8,7 @@ import { ConfirmResultModal } from '@/components/contract-ui';
 import { useMainAttachment } from '@/windows/custom/shared/useMainAttachment.js';
 import PurchaseReturnWizard from './PurchaseReturnWizard';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
-import { formatCurrency } from '@/lib/formatCurrency.js';
-import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
+import { useDocumentAction } from '@/hooks/useDocumentAction';
 
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -19,11 +18,9 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
   const navigate = useNavigate();
   const [showConfirm, setShowConfirm] = useState(false);
   const [showInvoiceConfirm, setShowInvoiceConfirm] = useState(false);
-  const [showClone, setShowClone] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [returnLines, setReturnLines] = useState([]);
   const [returnedDoc, setReturnedDoc] = useState(null);
-  const [isCloneHovered, setIsCloneHovered] = useState(false);
   const [confirmedDocs, setConfirmedDocs] = useState(null);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
   const resultNavigatedRef = useRef(false);
@@ -47,17 +44,75 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
     'Content-Type': 'application/json',
   }), [token]);
 
-  useEffect(() => {
-    const handler = () => setShowConfirm(true);
-    window.addEventListener('goods-receipt:open-confirm-modal', handler);
-    return () => window.removeEventListener('goods-receipt:open-confirm-modal', handler);
-  }, []);
+  // ETP-5265 — when the receipt is already fully invoiced, Confirm skips the
+  // intermediate "already invoiced" popup entirely and calls the document-action
+  // endpoint directly, like any other direct action in the app. The non-fully-invoiced
+  // flow (ConfirmGoodsReceiptModal) is untouched.
+  //
+  // ETP-5265 QA follow-up (2) — in-flight feedback is the Confirm button's own spinner,
+  // never a floating toast. The listener below hands this promise back through the
+  // CustomEvent `detail` (see dispatchConfirmModalEvent in the window's index.jsx) and
+  // runDraftModeConfirm in saveActions.jsx awaits it, so whatever this function awaits
+  // is exactly how long the button stays busy. It therefore awaits the refetch too
+  // (`onRefresh`, which is `hook.fetchById(id, { force: true })` and became awaitable in
+  // useEntity.js): the first cut resolved on the POST alone (~150-300 ms locally) and the
+  // spinner was imperceptible, because the record refresh happened afterwards, out of
+  // band. Now the busy state runs unbroken from the click until the refreshed record is
+  // on screen.
+  //
+  // Two failure domains, deliberately separate: a failed POST is a failed confirmation
+  // (toast.error, no success toast, no refresh); a failed REFRESH is not — the document
+  // is confirmed, the screen is merely stale, and reporting it as an error would be a
+  // lie. Success-toast placement mirrors the native draftMode path exactly: useEntity's
+  // handleSaveAndProcess fires `toast.success` as soon as the action POST succeeds and
+  // only then refetches, so ours fires there too, not after the refresh.
+  //
+  // NOTE — this path no longer routes through `setConfirmedDocs({ invoice: null })`. That
+  // setter's effect (ETP-5063) both toasts AND refreshes, and it cannot be awaited, so it
+  // cannot hold the button busy. The effect is still live and still owns the
+  // ConfirmGoodsReceiptModal path, which is why the two look different here: only this
+  // branch needs a promise to hand back.
+  const confirmDocAction = useDocumentAction({ apiBaseUrl, entity: 'goodsReceipt', token });
+  const confirmingFullyInvoicedRef = useRef(false);
+  const handleConfirmFullyInvoiced = useCallback(async () => {
+    if (confirmingFullyInvoicedRef.current) return;
+    confirmingFullyInvoicedRef.current = true;
+    try {
+      try {
+        await confirmDocAction.execute(recordId, 'CO');
+      } catch (err) {
+        // Domain 1 — the confirmation itself failed. Nothing else must run.
+        toast.error(err.message || ui('networkError'));
+        return;
+      }
+      // The document IS confirmed from here on. Same moment the native path toasts.
+      toast.success(ui('goodsReceipt.confirmModal.confirmedTitle'));
+      // Domain 2 — a refetch failure must never read as a failed confirmation. Swallowed
+      // on purpose; the button simply stops spinning on stale (but correct) data.
+      await Promise.resolve(onRefresh?.()).catch(() => {});
+    } finally {
+      // Cleared only once BOTH the POST and the refresh have settled, so a second click
+      // cannot start while the first operation is still in flight.
+      confirmingFullyInvoicedRef.current = false;
+    }
+  }, [confirmDocAction.execute, recordId, ui, onRefresh]);
 
   useEffect(() => {
-    const handler = () => downloadLinkRef.current?.click();
-    window.addEventListener('goods-receipt:download-pdf', handler);
-    return () => window.removeEventListener('goods-receipt:download-pdf', handler);
-  }, []);
+    // ETP-5265 QA follow-up — `e.detail.promise` is how the in-flight documentAction
+    // call reaches the core's Confirm button (see dispatchConfirmModalEvent in the
+    // window's index.jsx). The modal branch deliberately leaves it unset: opening a
+    // modal is instantaneous, so the button must not spin for it.
+    const handler = (e) => {
+      if (isFullyInvoiced) {
+        if (e?.detail) e.detail.promise = handleConfirmFullyInvoiced();
+        else handleConfirmFullyInvoiced();
+      } else {
+        setShowConfirm(true);
+      }
+    };
+    window.addEventListener('goods-receipt:open-confirm-modal', handler);
+    return () => window.removeEventListener('goods-receipt:open-confirm-modal', handler);
+  }, [isFullyInvoiced, handleConfirmFullyInvoiced]);
 
   useEffect(() => {
     if (!wizardOpen || !recordId || !base) return;
@@ -106,6 +161,7 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
         throw new Error(err?.response?.message || err?.message || `Error (${res.status})`);
       }
       const invData = (await res.json())?.response?.data;
+      setShowInvoiceConfirm(false);
       setConfirmedDocs({ invoice: { id: invData?.id ?? null, documentNo: invData?.documentNo || '' } });
     } catch (err) {
       toast.error(err.message || ui('failedToCreateInvoice'));
@@ -119,19 +175,9 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setShowClone(true)}
-        title={ui('cloneOrderBtn')}
-        style={{ ...sqBtn, background: isCloneHovered ? 'hsl(var(--card))' : 'hsl(var(--card))' }}
-        onMouseEnter={() => setIsCloneHovered(true)}
-        onMouseLeave={() => setIsCloneHovered(false)}
-      >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-        </svg>
-      </button>
+      {/* ETP-5260 — Clone/Copy-link moved to the topbarSecondary slot
+          (GoodsReceiptSecondaryActions). This component now only renders the
+          PRIMARY flow buttons below and their modals. */}
 
       {isCompleted && !isFullyReturned && (
         <button
@@ -150,15 +196,17 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
         </button>
       )}
 
-      <CopyRecordLinkButton recordId={recordId} windowName="goods-receipt" />
-
       {isCompleted && !isFullyInvoiced && (
         <button
           type="button"
           onClick={() => setShowInvoiceConfirm(true)}
-          style={{ ...textBtn, border: '1px solid var(--status-info-border)', background: 'var(--status-info-fg)', color: 'hsl(var(--card))' }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'var(--status-info-fg)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'var(--status-info-fg)'; }}
+          // Fix (not part of ETP-5260): was `var(--status-info-fg)` — a badge-text token,
+          // not a button-background token — which rendered a saturated blue instead of
+          // the dark gray used by the real `Confirmar` button. Same pattern as ETP-4781.
+          style={{ ...textBtn, border: '1px solid var(--status-info-border)', background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
+          // Hover to match the shared Confirm button's `hover:bg-primary/90` (90% opacity).
+          onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--primary) / 0.9)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'hsl(var(--primary))'; }}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
@@ -170,29 +218,19 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
         </button>
       )}
 
-      {showConfirm && isFullyInvoiced
-        ? createPortal(
-            <ConfirmReceiptInvoicedModal
-              data={data}
-              base={base}
-              headers={headers}
-              recordId={recordId}
-              onConfirmed={(docs) => { setShowConfirm(false); setConfirmedDocs(docs); }}
-              onClose={() => setShowConfirm(false)}
-            />,
-            document.body,
-          )
-        : showConfirm && (
-            <ConfirmGoodsReceiptModal
-              data={data}
-              base={base}
-              headers={headers}
-              recordId={recordId}
-              onConfirmed={(docs) => { setShowConfirm(false); setConfirmedDocs(docs); }}
-              onClose={() => setShowConfirm(false)}
-            />
-          )
-      }
+      {/* ETP-5265 — the fully-invoiced case no longer opens a confirm popup here;
+          see handleConfirmFullyInvoiced above. This modal only ever renders now
+          for the normal (not-fully-invoiced) confirm flow. */}
+      {!isFullyInvoiced && showConfirm && (
+        <ConfirmGoodsReceiptModal
+          data={data}
+          base={base}
+          headers={headers}
+          recordId={recordId}
+          onConfirmed={(docs) => { setShowConfirm(false); setConfirmedDocs(docs); }}
+          onClose={() => setShowConfirm(false)}
+        />
+      )}
 
       {showInvoiceConfirm && (
         <CreateInvoiceConfirmModal
@@ -202,7 +240,7 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
           isSOTrx={false}
           apiBaseUrl={apiBaseUrl}
           token={token}
-          onConfirm={(priceListId) => { setShowInvoiceConfirm(false); handleCreateInvoice(priceListId); }}
+          onConfirm={handleCreateInvoice}
           onClose={() => setShowInvoiceConfirm(false)}
         />
       )}
@@ -277,170 +315,19 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
         onSuccess={(result) => { setWizardOpen(false); setReturnedDoc(result); }}
         onError={(msg) => toast.error(msg)}
       />
-
-      {showClone && createPortal(
-        <CloneReceiptModal
-          receiptId={recordId}
-          data={data}
-          base={base}
-          headers={headers}
-          onClose={() => setShowClone(false)}
-          onCloned={(newId) => { setShowClone(false); navigate(`/goods-receipt/${newId}`); }}
-        />,
-        document.body,
-      )}
     </>
   );
 }
 
-// ── ConfirmReceiptInvoicedModal (variant B — receipt already fully invoiced) ──
-
-function ConfirmReceiptInvoicedModal({ data, base, headers, recordId, onConfirmed, onClose }) {
-  const ui = useUI();
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const invoices = Array.isArray(data?.linkedInvoices) ? data.linkedInvoices : [];
-  const firstInvoice = invoices[0] || null;
-  const extraCount = invoices.length - 1;
-  const docNo = data?.documentNo || '';
-  const bpName = data?.['businessPartner$_identifier'] || '';
-
-  const fmtAmount = (v, currency) => {
-    if (v == null) return '';
-    return formatCurrency(currency, v);
-  };
-
-  const statusLabel = { CO: ui('orderStatusCompleted'), DR: ui('orderStatusDraft') };
-
-  const handleConfirm = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(
-        `${base}/goods-receipt/goodsReceipt/${recordId}/action/documentAction`,
-        { method: 'POST', headers, body: JSON.stringify({ docAction: 'CO' }) },
-      );
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.response?.message || body?.message || `Error (${res.status})`);
-      }
-      onConfirmed({ invoice: null });
-    } catch (err) {
-      setError(err.message);
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'hsl(var(--foreground) / .45)' }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 460, borderRadius: 14, background: 'hsl(var(--card))', boxShadow: '0 24px 60px -12px hsl(var(--foreground) / .35)', overflow: 'hidden' }}>
-
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px 14px' }}>
-          <span style={{ fontWeight: 600, fontSize: 15, color: 'hsl(var(--foreground))' }}>{ui('goodsReceipt.confirmModal.titleConfirm')}</span>
-          <button type="button" onClick={onClose} style={{ fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }}>&times;</button>
-        </div>
-
-        {/* Body */}
-        <div style={{ padding: '0 20px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-          {/* Identity row */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{docNo}</span>
-            {bpName && <><span style={{ color: 'hsl(var(--muted-foreground))', fontSize: 13 }}>·</span><span style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))' }}>{bpName}</span></>}
-          </div>
-
-          {/* First invoice card */}
-          {firstInvoice && (
-            <div style={{ border: '1px solid hsl(var(--foreground))', borderRadius: 11, padding: '13px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 38, height: 38, borderRadius: 9, background: 'var(--status-info-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--status-info-fg)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                  <polyline points="14 2 14 8 20 8"/>
-                  <line x1="16" y1="13" x2="8" y2="13"/>
-                  <line x1="16" y1="17" x2="8" y2="17"/>
-                </svg>
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{ui('goodsReceipt.confirmModal.invoiceRef')} {firstInvoice.documentNo}</span>
-                  <span style={{ fontSize: 11, fontWeight: 500, padding: '3px 9px', borderRadius: 6, background: 'var(--status-success-bg)', color: 'var(--status-success-fg)', whiteSpace: 'nowrap' }}>
-                    {statusLabel[firstInvoice.documentStatus] || firstInvoice.documentStatus}
-                  </span>
-                </div>
-                {firstInvoice.grandTotalAmount != null && (
-                  <div style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>
-                    {fmtAmount(firstInvoice.grandTotalAmount, firstInvoice['currency$_identifier'])}
-                  </div>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => { onClose(); navigate(`/purchase-invoice/${firstInvoice.id}`); }}
-                style={{ all: 'unset', fontSize: 13, fontWeight: 600, color: 'var(--status-info-border)', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
-                onMouseEnter={e => { e.currentTarget.style.color = 'var(--status-info-fg)'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = 'var(--status-info-border)'; }}
-              >
-                {ui('goodsReceipt.confirmModal.viewInvoice')}
-              </button>
-            </div>
-          )}
-
-          {/* +N more badge */}
-          {extraCount > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: 'var(--status-info-bg)', borderRadius: 9, border: '1px solid var(--status-info-border)' }}>
-              <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--status-info-fg)', background: 'hsl(var(--card))', borderRadius: 99, padding: '2px 9px', border: '1px solid var(--status-info-border)', flexShrink: 0 }}>+{extraCount}</span>
-              <span style={{ fontSize: 13, color: 'hsl(var(--muted))' }}>{ui('goodsReceipt.confirmModal.moreInvoices')}</span>
-            </div>
-          )}
-
-          {/* Microcopy */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--status-success-bg)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', lineHeight: 1.5, margin: 0 }}>
-              {ui('goodsReceipt.confirmModal.fullyInvoicedInfo')}{' '}
-              <strong style={{ color: 'hsl(var(--foreground))' }}>{ui('goodsReceipt.confirmModal.noNewInvoice')}</strong>
-            </p>
-          </div>
-
-          {error && (
-            <div style={{ fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', padding: '8px 12px', borderRadius: 6 }}>
-              {error}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 20px', background: 'hsl(var(--card))', borderTop: '1px solid hsl(var(--card))' }}>
-          <button type="button" onClick={onClose} disabled={loading} style={{ fontSize: 13, padding: '9px 16px', borderRadius: 9, border: '1px solid hsl(var(--card))', background: 'transparent', color: 'hsl(var(--muted))', cursor: 'pointer', opacity: loading ? 0.5 : 1 }}>
-            {ui('cancel')}
-          </button>
-          <button
-            type="button"
-            onClick={handleConfirm}
-            disabled={loading}
-            style={{ height: 40, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, padding: '0 18px', borderRadius: 9, border: 'none', background: loading ? 'var(--status-info-fg)' : 'var(--status-info-fg)', color: 'hsl(var(--card))', cursor: loading ? 'not-allowed' : 'pointer' }}
-            onMouseEnter={e => { if (!loading) e.currentTarget.style.background = 'var(--status-info-fg)'; }}
-            onMouseLeave={e => { if (!loading) e.currentTarget.style.background = 'var(--status-info-fg)'; }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            {loading ? ui('processing') : ui('goodsReceipt.confirmModal.confirmBtn')}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── CloneReceiptModal ─────────────────────────────────────────────────────────
+// ETP-5260 — exported: the Clone button/modal now live in the topbarSecondary
+// slot (GoodsReceiptSecondaryActions), which renders this modal via
+// `DocumentSecondaryActions`' `children` extension point (this window's clone
+// UX is bespoke — a self-contained fetch-lines-then-clone modal, not
+// CloneOrderModal — so it stays a window-owned child instead of being folded
+// into the shared component's generic `clone` config).
 
-function CloneReceiptModal({ receiptId, data, base, headers, onClose, onCloned }) {
+export function CloneReceiptModal({ receiptId, data, base, headers, onClose, onCloned }) {
   const ui = useUI();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);

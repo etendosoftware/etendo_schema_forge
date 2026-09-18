@@ -51,8 +51,11 @@ vi.mock('../DocumentPrintDrawer.jsx', () => ({
 vi.mock('../ListFilterBar.jsx', () => ({
   ListFilterBar: () => <div data-testid="list-filter-bar" />,
 }));
+import { noOpExtractQueryParamConditions } from './testUtils/gridQueryMock.js';
+
 vi.mock('@/lib/gridQuery', () => ({
   buildAdvancedFilterCriteria: () => null,
+  extractQueryParamConditions: noOpExtractQueryParamConditions,
 }));
 vi.mock('@/hooks/useWindowFilterPresets', () => ({
   useWindowFilterPresets: () => ({ presets: {}, savePreset: vi.fn(), deletePreset: vi.fn() }),

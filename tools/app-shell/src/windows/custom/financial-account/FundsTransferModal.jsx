@@ -9,6 +9,8 @@ import { SelectorChip } from '@/components/contract-ui/SelectorChip.jsx';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
 import { useUI } from '@/i18n';
 import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
+import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
+import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
 import { useFinancialAccounts } from '@/hooks/useFinancialAccounts.js';
 import { useFundsTransfer } from '@/hooks/useCreateMovement';
@@ -21,26 +23,17 @@ import { getApiBase } from '@/hooks/useNeoResource';
 import { todayCalendarISO } from '@/lib/dateOnly.js';
 import { useConversionRate } from '../shared/useConversionRate.js';
 
-/** Parses a user-typed amount ("1.234,56" or "1234.56") into a Number, or NaN. */
-function parseAmount(raw) {
-  if (raw == null || String(raw).trim() === '') return NaN;
-  const normalized = String(raw).replace(/\./g, '').replace(',', '.');
-  const n = Number(/[.,]/.test(String(raw)) ? normalized : raw);
-  return Number.isFinite(n) ? n : Number(raw);
-}
-
 /**
- * Normalizes a user-typed conversion rate to a dot-decimal string ("1,0850" → "1.0850",
- * "1.1" → "1.1"). Unlike {@link parseAmount}, the dot is the decimal separator here (a rate
- * never carries a thousands separator), and the string is kept verbatim to preserve precision.
+ * ETP-5107 — every amount/rate field below is a {@link MaskedAmountInput}, so the value held
+ * in state is ALREADY clean dot-decimal ("1234.56"), never locale-formatted. Parsing it with
+ * the structural parser would read the masked "75.50" as 7550, so `parseLocaleNumber` (which
+ * treats the dot as the decimal separator) is the only correct reader here. The former local
+ * `parseAmount`/`normalizeRate`/`sanitizeNumeric` helpers were deleted with the raw inputs
+ * they guarded — the mask now rejects letters and symbols at the keystroke.
  */
-function normalizeRate(raw) {
-  return String(raw ?? '').trim().replace(',', '.');
-}
-
-/** Keeps only digits and decimal/thousands separators so numeric fields reject letters/symbols. */
-function sanitizeNumeric(raw) {
-  return String(raw ?? '').replace(/[^\d.,]/g, '');
+function parseAmount(raw) {
+  const { value } = parseLocaleNumber(raw);
+  return value == null ? NaN : value;
 }
 
 /** Field label — 12/16 semibold, optional red required asterisk. */
@@ -264,12 +257,12 @@ function AmountField({ value, onChange, currencyIso, testId }) {
   const rightSide = isCurrencySymbolRightSide(currencyIso);
   return (
     <div className="relative">
-      <input
+      <MaskedAmountInput
+        bare
         className={`${PLAIN_FIELD_CLS} w-full bg-card ${rightSide ? 'pr-9 pl-3' : 'pl-9 pr-3'} text-right text-sm leading-5 tabular-nums text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))]`}
         placeholder={ui('financeAccountTransferAmountPlaceholder')}
-        inputMode="decimal"
         value={value}
-        onChange={(e) => onChange(sanitizeNumeric(e.target.value))}
+        onChange={(clean) => onChange(clean)}
         data-testid={testId}
       />
       <span
@@ -353,7 +346,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
   // Available balance is shown for context only — Classic allows transferring more than the
   // source balance (it never blocks on balance), so we deliberately do not gate on it.
   const available = Number(source?.currentBalance ?? 0);
-  const rateNum = Number(normalizeRate(conversionRate));
+  const rateNum = Number(conversionRate);
   // Read-only preview of what the destination account will receive, once amount and
   // rate are both valid — formatCurrency renders '—' for null (incomplete) inputs.
   const receiveAmount = Number.isFinite(amountNum) && amountNum > 0
@@ -397,7 +390,7 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
       bankFee,
     };
     if (glItem?.id) payload.glItemId = glItem.id;
-    if (multiCurrency) payload.conversionRate = normalizeRate(conversionRate);
+    if (multiCurrency) payload.conversionRate = String(conversionRate ?? '').trim();
     if (bankFee) {
       payload.bankFeeFrom = String(parseAmount(feeFrom) || 0);
       payload.bankFeeTo = String(parseAmount(feeTo) || 0);
@@ -514,12 +507,13 @@ export function FundsTransferModal({ sourceAccountId, onClose, onSuccess }) {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <input
+                  <MaskedAmountInput
+                    bare
+                    grouping={false}
                     className={`${PLAIN_FIELD_CLS} min-w-0 flex-1 bg-card px-3 text-right text-sm leading-5 tabular-nums text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--text-disabled))]`}
                     placeholder={ui('financeAccountTransferRatePlaceholder')}
-                    inputMode="decimal"
                     value={conversionRate}
-                    onChange={(e) => setConversionRate(sanitizeNumeric(e.target.value))}
+                    onChange={(clean) => setConversionRate(clean)}
                     data-testid="transfer-rate" />
                   <div
                     className={`flex ${FIELD_HEIGHT} min-w-0 flex-1 items-center gap-1 overflow-hidden rounded-lg border border-[hsl(var(--border-control))] bg-[hsl(var(--muted))] px-2.5 text-sm leading-5 tabular-nums text-[hsl(var(--foreground))]`}

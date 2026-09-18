@@ -305,6 +305,270 @@
           }
         ]
       }
+    },
+    {
+      "id": "acct-process-monitor",
+      "description": "Admin-only page to monitor the scheduled accounting server process and launch a run manually, without waiting for its next automatic execution.",
+      "owner": "sebastianbarrozo",
+      "jira": "ETP-5269",
+      "created": "2026-09-10",
+      "flag": {
+        "key": "acct-process-monitor",
+        "defaultValue": false,
+        "ttl": "2026-12-31",
+        "ttlNote": "Removal target once the manual trigger has been exercised against a real accounting backlog and the page is accepted as permanent.",
+        "symbols": [
+          "acct-process-monitor",
+          "ACCT_PROCESS_MONITOR",
+          "AcctProcessMonitorPage",
+          "acctProcessMonitorApi",
+          "useAcctProcessMonitor",
+          "SFAcctProcessMonitor",
+          "acctprocessmonitor",
+          "acctProcess"
+        ],
+        "$symbolsComment": "The page/hook/api/handler names are listed alongside the key because the shared toggle points reference the feature by those identifiers rather than by the flag key: runtime-routes.jsx registers AcctProcessMonitorPage, menu.json carries the acct-process-monitor item name, and NeoPseudoSpecDispatcher routes the lowercase acctprocessmonitor pseudo-spec to SFAcctProcessMonitor. A grep for the key alone would miss every one of them. `acctProcess` is the i18n prefix: all 43 genericLabels keys this feature adds to en_US, es_ES and es_AR start with it, and none of them contains the flag key, so without this symbol retiring the flag would leave every one of them orphaned in three locale files."
+      },
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/pages/AcctProcessMonitorPage.jsx",
+          "tools/app-shell/src/pages/acct-process-monitor/",
+          "tools/app-shell/src/lib/acctProcessMonitorApi.js"
+        ],
+        "backend": [
+          "src/com/etendoerp/go/schemaforge/webhooks/SFAcctProcessMonitor.java"
+        ]
+      },
+      "$pathsComment": "Owned code only. menu.json, runtime-routes.jsx, SideMenu.jsx, flag-keys.js, lib/flags/index.js and NeoPseudoSpecDispatcher.java are shared toggle points, not owned paths: each holds a single registration/gating line naming one of the symbols above, and no feature logic. Retiring the flag is deleting the owned paths plus removing what a grep for those symbols finds.",
+      "deferredItems": [
+        {
+          "id": "manual-trigger-runtime-verification",
+          "kind": "open",
+          "note": "The trigger mechanism is verified from core source and from existing DB evidence (OBScheduler.schedule(ProcessBundle) inserts a fresh request with null timing, TriggerProvider maps that to IMMEDIATE, ProcessMonitor writes the AD_PROCESS_RUN row for any Quartz job regardless of channel, and AcctServerProcess.doExecute processes a single client when the bundle context's client is not '0'), but no manual run has been executed against a deployed build yet — the Java was compile-checked only. QA must press the button on a real instance and confirm: a new AD_PROCESS_RUN row appears tagged with the CALLER's ad_client_id; only that client's documents were posted; AD_PROCESS_REQUEST 9B2B32C0BAF146F783A50C6F69251BC4 is unchanged apart from its scheduler-owned next_fire_time; and the run did NOT take the pinstance-dependent isDirect path (strOrg must stay '0').",
+          "refs": [
+            "org.openbravo.scheduling.OBScheduler#schedule(ProcessBundle)",
+            "org.openbravo.scheduling.trigger.TriggerProvider#getTimingOption",
+            "org.openbravo.scheduling.ProcessMonitor#jobToBeExecuted",
+            "org.openbravo.erpCommon.ad_process.AcctServerProcess#doExecute — the client-scope branch"
+          ]
+        }
+      ],
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/__tests__/AcctProcessMonitorPage.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/acct-process-monitor/__tests__/useAcctProcessMonitor.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/acct-process-monitor/__tests__/RunStatusPill.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/layout/SideMenu/__tests__/SideMenu.vitest.jsx",
+            "note": "Shared spec; carries the item-level flag-gate cases for this feature."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/webhooks/SFAcctProcessMonitorTest.java",
+            "note": "EXISTS on feature/ETP-5269 in the com.etendoerp.go worktree. The scorer resolves roots.backend to etendo_core/modules/com.etendoerp.go, which is the MAIN checkout and currently sits on a different branch, so it reports this file missing. Left scoring as-is on purpose: marking it expected:true would suppress a real 5 pts on every future run to paper over a local path artifact that disappears once the branches are co-located."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/schemaforge/NeoPseudoSpecDispatcherTest.java",
+            "note": "Shared dispatcher spec; carries the acctprocessmonitor routing case."
+          }
+        ],
+        "e2e": [
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/acct-process-monitor.mocked.spec.js"
+          }
+        ]
+      },
+      "$scopeChangeComment": "2026-09-10, human decision: a manual run must post ONLY the triggering client's accounting, not the instance-wide System scope the automatic cadence uses. Implemented by building the one-shot bundle from the CALLING session's client instead of the recurring row's stored ob_context; AcctServerProcess.doExecute already branches to a single-client path when the context client is not '0', so no change to core was needed. This closed the system-scope-of-a-tenant-triggered-run item, which is why it no longer appears above.",
+      "$defectFoundComment": "Reading AcctServerProcess for the scope change surfaced a defect in the first implementation: it used Channel.DIRECT, and AcctServerProcess sets isDirect from the channel and then loads its table/org/date parameters from AD_PINSTANCE_PARA. A scheduled one-shot has no pinstance, and those generated finders return \"\" rather than null, so strOrg would have been silently overwritten from \"0\" to \"\" and the run would have reported success while posting nothing. Now Channel.BACKGROUND, which keeps isDirect false and takes the same path as the automatic run. Trade-off accepted: a BACKGROUND one-shot interrupted between INSERT and firing is re-fired once after a restart (DIRECT rows are marked SYR and skipped) — harmless, since AcctServer only posts still-unposted documents.",
+      "$coverageComment": "The unit-and-e2e-coverage deferred item was CLOSED on 2026-09-10: it was written while DEV had shipped implementation only, and the branch now carries the frontend vitest specs and the two JUnit suites listed in testSpecs below. It was charging 3 pts of debt that no longer existed."
+    },
+    {
+      "id": "bp-self-service-portal",
+      "description": "Read-only self-service portal where a tenant's Business Partner opens a magic link and sees their completed invoices, outstanding balance and invoice PDFs. The portal surface, its three /sws/portal/* endpoints and the access table are UNCONDITIONAL; the flag gates only whether the sales-invoice email carries the link, and is targeted at the ETGO_ACCOUNT email of the user sending the invoice.",
+      "owner": "sebastianbarrozo",
+      "jira": "ETP-5267",
+      "created": "2026-09-10",
+      "flag": {
+        "key": "bp-portal-link",
+        "defaultValue": false,
+        "ttl": "2026-12-31",
+        "ttlNote": "PLACEHOLDER, not a commitment: removal target once the read-only MVP is validated with a first real tenant. Revisit the date when that tenant goes live rather than letting it drift.",
+        "symbols": [
+          "bp-portal-link",
+          "BP_PORTAL_LINK",
+          "ETGO_FLAG_BP_PORTAL_LINK",
+          "etendo.go.flags.bp-portal-link"
+        ],
+        "$symbolsComment": "Backend-only flag: no frontend symbol exists because nothing in the browser evaluates it and no key is declared in flag-keys.js. Deliberate -- see $gatingComment. The property and env-var spellings are listed because a grep for the bare key misses Openbravo.properties and the ECS task definition. Per-account enablement leaves NO grep trail in this repo at all: it is a targeting rule in the ConfigCat dashboard, so the registry is the only place that records where to look."
+      },
+      "$gatingComment": "ONE GATE: this flag, evaluated PER SENDING ACCOUNT. Default false -- no link goes out until a ConfigCat targeting rule names an ETGO_ACCOUNT email. That answers 'depende del usuario logueado' (the user's words) with the flag itself rather than a second mechanism. TARGETING IS A PLATFORM CAPABILITY, NOT PORTAL CODE: GoFeatureFlags.createProvider() installs the ConfigCat OpenFeature provider when etendo.go.configcat.sdkKey resolves and PropertiesFeatureProvider otherwise, so any future backend flag gets per-account targeting free -- the user asked for it on those terms ('nos sirve para otras funcionalidades'). The account email is published as BOTH the targeting key and the 'Email' attribute, because ConfigCat's ContextTransformer maps the key to its identifier and only a literal 'Email' attribute to the email, so a dashboard rule on either matches. Evaluation is an in-memory map lookup (autoPoll fetches in the background), an undefined flag resolves to the false code default, and a rule change is live within one poll interval with no restart. With no SDK key the flag degrades to a plain per-environment boolean: fine on a dev box (one user), but a shared environment needs ConfigCat configured before it is switched on for anyone. THE IDENTITY IS THE ETGO_ACCOUNT EMAIL, NOT AD_User.email: onboarding never writes AD_User.email (InitialSetupUtility only writes username, as EtendoGoJwtDalHelper documents), so targeting the AD user's email would read null for essentially every GO user and match nobody -- PortalLinkPolicy resolves the account via GoAccountResolver instead. No account, no email, or a failed lookup means no link, never allow. THREE shapes were tried and rejected on 2026-09-10 before this one: an environment flag ANDed with a per-sender AD_Preference (nothing worked until two unrelated things were configured), the AD_Preference alone with no flag, and an etendo.go.flags.<key>.emails property allowlist in PropertiesFeatureProvider (removed because it is inert wherever an SDK key is set -- a knob that silently does nothing is the ETP-4966 shape again). This does NOT reopen targeting-key-divergence on paid-second-tenant: that divergence needs two evaluators disagreeing, and this flag is backend-only with no frontend key -- none must ever be added. But note ConfigCat in the backend makes a SHARED flag newly possible, so that item must be closed before any flag is read on both ends (ETP-4966).",
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/pages/PortalPage.jsx",
+          "tools/app-shell/src/lib/portal/"
+        ],
+        "backend": [
+          "src/com/etendoerp/go/portal/"
+        ]
+      },
+      "$pathsComment": "Owned code = the portal feature itself, which is deleted only if the FEATURE is killed. It is NOT deleted when the flag retires: the flag gates one conditional in the email contract, so shipping it unwraps that conditional and leaves every path here in place (same shape as paid-second-tenant, which kept its paths after tenant-upgrade retired). Shared touch points, NOT owned: the sales-invoice email contract, runtime-routes.jsx, GoFeatureFlags, and PropertiesFeatureProvider -- the per-account targeting added there is a platform capability that outlives this flag and must not be removed with it.",
+      "deferredItems": [
+        {
+          "id": "flag-flip-requires-redeploy",
+          "kind": "cosmetic",
+          "note": "bp-portal-link AND its per-account allowlist are both resolved by the config-backed PropertiesFeatureProvider (JVM property, Openbravo.properties, or ETGO_FLAG_* env var), so changing either is a deploy/restart rather than a toggle. AND THEREFORE: the flag cannot be used to react quickly in production -- if a link has to stop working at short notice, the lever is per-BP revocation, which deliberately sits outside the gate and needs no restart. Recorded so nobody plans an incident response around flipping the flag or editing the allowlist. Not a defect: it is the documented behaviour of the only backend provider installed today, and it disappears if the hosted control plane ever lands.",
+          "refs": [
+            "com.etendoerp.go docs/feature-flags-and-tenant-upgrade.md -- section 'Per-account targeting'",
+            "docs/plans/2026-09-10-bp-self-service-portal.md -- section 'Changing it needs a restart, and revocation is the fast lever'"
+          ]
+        }
+      ],
+      "$deferredItemsComment": "Open items that are not test gaps. The per-tenant-enablement question raised during design is deliberately absent: with the gate keyed on the sending account, enabling a tenant means listing that tenant's senders, and no separate mechanism is planned -- closed, not deferred.",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/portal/PortalAccessServiceTest.java",
+            "expected": true
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/portal/PortalServletTest.java",
+            "expected": true
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/__tests__/PortalPage.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/portal/__tests__/portalInvoices.test.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/lib/portal/__tests__/portalApi.test.js"
+          }
+        ],
+        "e2e": [
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/bp-portal.mocked.spec.js",
+            "expected": true
+          }
+        ]
+      },
+      "$testSpecsComment": "expected:true means agreed but not yet written (pending Tester). Paths follow each suite's existing naming convention. The two load-bearing portal assertions, both named in the plan's Testing section: cross-BP isolation (neither token can reach the other's invoices or PDF under any endpoint), and no etgo_portal_access row is minted while the gate is closed -- asserted on the row count, not the email body. A THIRD load-bearing case belongs to the platform suite (PropertiesFeatureProviderTest / GoFeatureFlags) and not here: provider selection, where a blank or wrong ConfigCat SDK key must resolve every flag to false and never to true, and a provider that fails to install must leave flags false rather than propagate into an invoice send."
+    },
+    {
+      "id": "lookup-create-product",
+      "description": "Create a new product from the product selector of a document line, without leaving the document. A pinned row in the product lookup drawer opens a popup that MOUNTS THE PRODUCTS WINDOW ITSELF — its own form, tabs (Price, Cost, Accounting, Attachments) and save button — on a private memory router inside the host's React tree, with the app chrome dropped. Finishing selects the new product in the line.",
+      "owner": "Agustin-Calderon",
+      "jira": "ETP-5254",
+      "created": "2026-09-11",
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/components/contract-ui/lookupCreateTargets.js",
+          "tools/app-shell/src/components/contract-ui/RecordCreateModal.jsx",
+          "tools/app-shell/src/components/contract-ui/EmbeddedWindowRoute.jsx"
+        ],
+        "backend": []
+      },
+      "$pathsComment": "Only the two new files are owned. ProductDrawerShell.jsx and ProductSearchDrawer.jsx are touch points, not owned code: they host the affordance but exist for every product lookup. No runtime flag is declared — CREATE_PRODUCT_SPECS in lookupCreateTargets.js is the scope switch, compile-time and greppable in one place, which is stronger here than a remotely resolved key (see the tenant-upgrade incident recorded on paid-second-tenant).",
+      "$knownGapComment": "USABLE SLICE WITH ACCEPTED DEBT: the popup does not CREATE a cost line by itself, though the Products window's own Cost tab is reachable inside it, so a user can add one before finishing. The popup states nothing about cost: ETP-5245 owns that rule and enforces it with a blocking banner in the Products window, and restating it here would be a second copy free to drift.",
+      "deferredItems": [
+        {
+          "id": "product-created-without-cost",
+          "kind": "open",
+          "note": "The popup does not POST an M_Costing line by itself. Since the popup mounts the Products window, its Cost tab IS reachable once the product is saved, so the user can add the cost without leaving the document — but nothing forces them to, and a stockable product left without one is rejected by the costing engine on the first shipment or receipt. The rule is stated and enforced in one place only: ETP-5245's blocking banner in the Products window. Closing this means seeding a cost line automatically after the product is created.",
+          "refs": [
+            "ETP-5245 - Cost tab, blocking banner for stockable products without cost"
+          ]
+        },
+        {
+          "id": "line-price-zero-on-non-default-tariff",
+          "kind": "open",
+          "note": "A new product is seeded at price 0 only on the tenant's default sales and purchase tariffs (ETP-5245). A document on any other price list may not get the product back from the selector re-query, in which case the synthesized fallback row is used and the line enters at 0 with no aux pricing data. Expected behaviour today; revisit if per-tariff seeding lands.",
+          "refs": [
+            "tools/app-shell/src/components/contract-ui/ProductDrawerShell.jsx - handleCreated, synthesizeCreatedItem",
+            "docs/priceList-injection-origin.md"
+          ]
+        },
+        {
+          "id": "accounting-tab-not-in-popup",
+          "kind": "open",
+          "note": "RESOLVED IN PRACTICE by mounting the window itself: Accounting (and Cost) now appear in the popup, because they are the window's own secondaryTabs rendered by the window's own DetailView. The item is kept open for the dormant FALLBACK path — the two-phase generated form used when the window module fails to load — which still carries only Price and Attachments. Closing this means either dropping the fallback or extracting SecondaryTableTab's data layer.",
+          "refs": [
+            "tools/app-shell/src/components/contract-ui/EmbeddedWindowRoute.jsx - the in-tree mount that makes the real tabs available",
+            "tools/app-shell/src/components/contract-ui/lookupCreateTargets.js - loadPostCreateTabs (fallback only)",
+            "tools/app-shell/src/components/contract-ui/DetailView.jsx - SecondaryTableTab"
+          ]
+        },
+        {
+          "id": "entity-form-lookup-drawer-hardcode",
+          "kind": "precondition",
+          "note": "EntityForm.LookupFormField mounts ProductSearchDrawer directly instead of honouring field.lookupDrawer, so the goods-movements and internal-consumption line FORMS reach the default drawer even though their tables use the stock variant. The 7-spec allowlist compensates for this today; fixing the hardcode is a separate ticket and would let the drawer variant alone gate the affordance.",
+          "refs": [
+            "tools/app-shell/src/components/contract-ui/EntityForm.jsx - LookupFormField",
+            "tools/app-shell/src/components/contract-ui/lookupDrawers.js"
+          ]
+        },
+        {
+          "id": "e2e-evidence",
+          "kind": "open",
+          "note": "Unit coverage is complete (resolver, modal, shell, stock-variant opt-out, locale keys, and a regression pin for the invoice add-row control). Playwright coverage for the three acceptance cases is not written yet.",
+          "refs": [
+            "docs/e2e-testing-guide.md"
+          ]
+        }
+      ],
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/lookupCreateTargets.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/RecordCreateModal.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/ProductDrawerShell.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/ProductStockSearchDrawer.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/components/contract-ui/__tests__/DataTable.addRowProductLookup.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/locales/__tests__/lookup-create-keys.vitest.js"
+          }
+        ],
+        "e2e": [
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/create-product-from-line.mocked.spec.js",
+            "expected": true,
+            "note": "Pending: CP-1 the row opens the popup, CP-2 saving auto-selects the product in the line, CP-3 cancelling leaves the document untouched."
+          }
+        ]
+      }
     }
   ]
 }

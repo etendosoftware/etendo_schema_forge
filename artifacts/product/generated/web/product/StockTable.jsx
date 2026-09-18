@@ -4,7 +4,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 // @sf-generated-start columns:stock
 const columns = [
   { key: 'storageBin', column: 'M_Locator_ID', type: 'selector', label: 'Storage Bin', required: true },
-  { key: 'attributeSetValue', column: 'M_AttributeSetInstance_ID', type: 'string', label: 'Attribute Set Value' },
+  { key: 'attributeSetValue', column: 'M_AttributeSetInstance_ID', type: 'string', label: 'Attribute Set Value', maxLength: 12 },
   { key: 'uOM', column: 'C_UOM_ID', type: 'selector', label: 'UOM', required: true },
   { key: 'quantityOnHand', column: 'QtyOnHand', type: 'number', label: 'Quantity on Hand', required: true },
   { key: 'reservedQty', column: 'ReservedQty', type: 'number', label: 'Reserved Qty', required: true },

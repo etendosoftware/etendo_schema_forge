@@ -327,6 +327,32 @@ describe('report-trial-balance — template drill-down link vs accountLevel (ETP
     assert.doesNotMatch(dimRow, />4300</, 'the account code is not repeated on every dimension row');
   });
 
+  it('hides the flat-branch grand-Total row at accountLevel "E" (Heading)', () => {
+    const html = renderTemplate({ accountLevel: 'E', groupBy: '' });
+    assert.doesNotMatch(html, /<tr class="acct-total">/, 'the grand-Total row must not render at accountLevel E');
+  });
+
+  for (const level of ['S', 'D', 'C']) {
+    it(`still renders the flat-branch grand-Total row at accountLevel '${level}' (regression guard)`, () => {
+      const html = renderTemplate({ accountLevel: level, groupBy: '' });
+      assert.match(html, /<tr class="acct-total">/, `expected the grand-Total row at accountLevel ${level}`);
+      const start = html.indexOf('<tr class="acct-total">');
+      const totalRow = html.slice(start, html.indexOf('</tr>', start));
+      assert.match(totalRow, /colspan="2"/, 'expected the flat-branch Total label cell');
+    });
+  }
+
+  it('renders the grouped per-account acct-total rows regardless of accountLevel (unaffected by ETP-5128)', () => {
+    for (const level of ['S', 'D', 'C', 'E']) {
+      const html = renderTemplate({ accountLevel: level, groupBy: 'bpartner' });
+      assert.match(
+        html,
+        /<tr class="acct-total">/,
+        `expected the grouped per-account total row at accountLevel ${level}`,
+      );
+    }
+  });
+
   it('guards the drill-down in BOTH render branches (two ifCond guards in the source)', () => {
     const guards = TEMPLATE_SRC.match(/\{\{#ifCond @root\.meta\.params\.accountLevel '===' 'S'\}\}/g) || [];
     assert.equal(guards.length, 2, 'expected the accountLevel guard in both the grouped and flat branches');

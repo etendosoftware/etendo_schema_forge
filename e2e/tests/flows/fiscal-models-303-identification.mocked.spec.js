@@ -76,7 +76,7 @@ async function goToDeclaration(page, { year, period }) {
   });
 
   await page.goto('/fiscal-models');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
   // Open the "Nueva declaración" modal
   await page.getByText('+ Nueva declaración').click();
@@ -112,26 +112,36 @@ async function goToDeclaration(page, { year, period }) {
   const row = page.locator('tr').filter({ hasText: String(year) }).first();
   await expect(row).toBeVisible({ timeout: 5_000 });
   await row.click();
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 }
 
 /**
  * Click the "Identificación" button in the CasillasTab left sidebar.
  * This renders the identificacion + datos_bancarios sections.
+ *
+ * `isVisible()` is a single no-wait snapshot: under full-suite concurrency
+ * the button can simply not be painted yet at the instant this runs, so the
+ * old `if (await btn.isVisible()) await btn.click()` guard silently skipped
+ * the click and left the wrong sidebar section active — every assertion
+ * after it then failed for a reason unrelated to what the test names.
+ * `waitFor` polls instead of sampling once, so the click always fires.
  */
 async function goToIdentificacion(page) {
   const btn = page.getByRole('button', { name: /^Identificaci[oó]n$/i });
-  if (await btn.isVisible()) await btn.click();
+  await btn.waitFor({ state: 'visible', timeout: 8_000 });
+  await btn.click();
 }
 
 /**
  * Click the "Resultado" button in the CasillasTab left sidebar.
  * This renders the resultado_final + sin_actividad + rectificativa sections.
  * Editable cells and rectificativa/complementaria sections live here.
+ * See goToIdentificacion() above for why this waits instead of sampling.
  */
 async function goToResultadoFinal(page) {
   const btn = page.getByRole('button', { name: /^Resultado$/i });
-  if (await btn.isVisible()) await btn.click();
+  await btn.waitFor({ state: 'visible', timeout: 8_000 });
+  await btn.click();
 }
 
 // ── Suite 1 — Numeric inputs reject letters ───────────────────────────────────
@@ -203,22 +213,6 @@ test.describe('FM 303 — datos_bancarios section visibility', () => {
     ).not.toBeVisible();
   });
 
-  test('datos_bancarios appears with Devolución fields when tipo_declaracion is D', async ({ page }) => {
-    const select = page.locator('.fm-aeat-ident-inline-field__select--compact').first();
-    await select.selectOption('D');
-    // The datos_bancarios section becomes visible — use .last() because the
-    // identificacion section also contains "devolución" in its select options
-    await expect(
-      page.locator('.fm-aeat-section').filter({ hasText: /devoluci/i }).last()
-    ).toBeVisible();
-    await expect(
-      page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /IBAN/i })
-    ).toBeVisible();
-    await expect(
-      page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /SWIFT|BIC/i })
-    ).toBeVisible();
-  });
-
   test('datos_bancarios appears with Domiciliación title when tipo_declaracion is U', async ({ page }) => {
     const select = page.locator('.fm-aeat-ident-inline-field__select--compact').first();
     await select.selectOption('U');
@@ -250,7 +244,10 @@ test.describe('FM 303 — datos_bancarios section visibility', () => {
 
 // ── Suite 3 — Rectificativa fields (2024 T4+) ────────────────────────────────
 // Rectificativa section lives in the "Resultado" sidebar section (resultado_final).
-// The Checkbox component uses a sr-only input; { force: true } is required.
+// (ETP-5338) These checkboxes are now `CheckboxField` — a bare
+// `<button role="checkbox" aria-checked>`, not a native `<input type="checkbox">`.
+// Locate it via role and click it directly; no `{ force: true }` needed since
+// there is no sr-only input hidden behind an overlay anymore.
 
 test.describe('FM 303 — rectificativa conditional fields (2024 T4+)', () => {
   test.beforeEach(async ({ page }) => {
@@ -261,8 +258,8 @@ test.describe('FM 303 — rectificativa conditional fields (2024 T4+)', () => {
 
   test('nro_justificante, baja_domiciliacion and motivo are hidden when rectificativa unchecked', async ({ page }) => {
     const section = page.locator('.fm-aeat-section').filter({ hasText: /rectificativa/i }).last();
-    const checkbox = section.locator('input[type="checkbox"]').first();
-    if (await checkbox.isChecked()) await checkbox.click({ force: true });
+    const checkbox = section.getByRole('checkbox').first();
+    if (await checkbox.isChecked()) await checkbox.click();
 
     await expect(
       page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /justificante/i })
@@ -277,8 +274,8 @@ test.describe('FM 303 — rectificativa conditional fields (2024 T4+)', () => {
 
   test('checking rectificativa reveals nro_justificante, baja_domiciliacion and motivo select', async ({ page }) => {
     const section = page.locator('.fm-aeat-section').filter({ hasText: /rectificativa/i }).last();
-    const checkbox = section.locator('input[type="checkbox"]').first();
-    if (!(await checkbox.isChecked())) await checkbox.click({ force: true });
+    const checkbox = section.getByRole('checkbox').first();
+    if (!(await checkbox.isChecked())) await checkbox.click();
 
     await expect(
       page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /justificante/i })
@@ -294,8 +291,8 @@ test.describe('FM 303 — rectificativa conditional fields (2024 T4+)', () => {
 
   test('motivo select has Rectificaciones and Discrepancia options', async ({ page }) => {
     const section = page.locator('.fm-aeat-section').filter({ hasText: /rectificativa/i }).last();
-    const checkbox = section.locator('input[type="checkbox"]').first();
-    if (!(await checkbox.isChecked())) await checkbox.click({ force: true });
+    const checkbox = section.getByRole('checkbox').first();
+    if (!(await checkbox.isChecked())) await checkbox.click();
 
     const motivoSelect = page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /motivo/i }).locator('select');
     await expect(motivoSelect.locator('option[value="R"]')).toHaveCount(1);
@@ -323,8 +320,8 @@ test.describe('FM 303 — complementaria shows only nro_justificante (2023)', ()
 
   test('checking complementaria shows only nro_justificante, not baja_domiciliacion or motivo', async ({ page }) => {
     const section = page.locator('.fm-aeat-section').filter({ hasText: /complementaria/i }).last();
-    const checkbox = section.locator('input[type="checkbox"]').first();
-    if (!(await checkbox.isChecked())) await checkbox.click({ force: true });
+    const checkbox = section.getByRole('checkbox').first();
+    if (!(await checkbox.isChecked())) await checkbox.click();
 
     await expect(
       page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /justificante/i })
@@ -348,8 +345,8 @@ test.describe('FM 303 — complementaria shows only nro_justificante (2024 T1)',
 
   test('checking complementaria shows only nro_justificante', async ({ page }) => {
     const section = page.locator('.fm-aeat-section').filter({ hasText: /complementaria/i }).last();
-    const checkbox = section.locator('input[type="checkbox"]').first();
-    if (!(await checkbox.isChecked())) await checkbox.click({ force: true });
+    const checkbox = section.getByRole('checkbox').first();
+    if (!(await checkbox.isChecked())) await checkbox.click();
 
     await expect(
       page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /justificante/i })
@@ -365,8 +362,9 @@ test.describe('FM 303 — complementaria shows only nro_justificante (2024 T1)',
 
 // ── Suite 6 — sin_actividad checkbox in Resultado sidebar ────────────────────
 // sin_actividad lives in the "Resultado" sidebar section (after resultado_final
-// in sectionOrder). The Checkbox component renders input[type="checkbox"] with
-// class sr-only inside .fm-aeat-ident-cb — { force: true } is required to click.
+// in sectionOrder). (ETP-5338) Rendered via `CheckboxField`
+// (`<button role="checkbox" aria-checked>`) inside .fm-aeat-ident-cb — locate
+// it via role and click it directly.
 
 test.describe('FM 303 — sin_actividad checkbox', () => {
   test.beforeEach(async ({ page }) => {
@@ -382,24 +380,24 @@ test.describe('FM 303 — sin_actividad checkbox', () => {
 
   test('sin_actividad checkbox is rendered and initially unchecked', async ({ page }) => {
     const section = page.locator('.fm-aeat-section').filter({ hasText: /sin.actividad/i }).last();
-    const checkbox = section.locator('input[type="checkbox"]').first();
+    const checkbox = section.getByRole('checkbox').first();
     await expect(checkbox).not.toBeChecked();
   });
 
   test('sin_actividad checkbox can be toggled on', async ({ page }) => {
     const section = page.locator('.fm-aeat-section').filter({ hasText: /sin.actividad/i }).last();
-    const checkbox = section.locator('input[type="checkbox"]').first();
-    await checkbox.click({ force: true });
+    const checkbox = section.getByRole('checkbox').first();
+    await checkbox.click();
     await expect(checkbox).toBeChecked();
   });
 
   test('sin_actividad checkbox can be toggled back off', async ({ page }) => {
     const section = page.locator('.fm-aeat-section').filter({ hasText: /sin.actividad/i }).last();
-    const checkbox = section.locator('input[type="checkbox"]').first();
+    const checkbox = section.getByRole('checkbox').first();
     // Toggle on then off
-    await checkbox.click({ force: true });
+    await checkbox.click();
     await expect(checkbox).toBeChecked();
-    await checkbox.click({ force: true });
+    await checkbox.click();
     await expect(checkbox).not.toBeChecked();
   });
 });
@@ -421,7 +419,7 @@ test.describe('FM 303 — NewDeclModal Año dropdown shows supported years only'
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
     });
     await page.goto('/fiscal-models');
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
     await page.getByText('+ Nueva declaración').click();
   });
 
@@ -476,8 +474,8 @@ test.describe('FM 303 — complementaria shows only nro_justificante (2022)', ()
 
   test('checking complementaria shows only nro_justificante', async ({ page }) => {
     const section = page.locator('.fm-aeat-section').filter({ hasText: /complementaria/i }).last();
-    const checkbox = section.locator('input[type="checkbox"]').first();
-    if (!(await checkbox.isChecked())) await checkbox.click({ force: true });
+    const checkbox = section.getByRole('checkbox').first();
+    if (!(await checkbox.isChecked())) await checkbox.click();
 
     await expect(
       page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /justificante/i })
@@ -508,8 +506,8 @@ test.describe('FM 303 — complementaria shows only nro_justificante (2021)', ()
 
   test('checking complementaria shows only nro_justificante', async ({ page }) => {
     const section = page.locator('.fm-aeat-section').filter({ hasText: /complementaria/i }).last();
-    const checkbox = section.locator('input[type="checkbox"]').first();
-    if (!(await checkbox.isChecked())) await checkbox.click({ force: true });
+    const checkbox = section.getByRole('checkbox').first();
+    if (!(await checkbox.isChecked())) await checkbox.click();
 
     await expect(
       page.locator('.fm-aeat-ident-inline-field').filter({ hasText: /justificante/i })

@@ -72,10 +72,11 @@ import {
 import { cn } from '@/lib/utils.js';
 import { useMenuLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { useFavorites } from '@/components/layout/FavoritesContext';
-import { useFeatureFlag, PROOF_OF_CONCEPT_MENU } from '@/lib/flags';
+import { useFeatureFlag, PROOF_OF_CONCEPT_MENU, ACCT_PROCESS_MONITOR, PUBLIC_API_KEYS } from '@/lib/flags';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { environmentPlanLabelKey } from '@/lib/environmentPresentation.js';
 import menuConfig from '@/menu.json';
+import { useFirstStepsProgressOptional } from '@/pages/first-steps/FirstStepsContext.jsx';
 
 const ICON_MAP = {
   ClipboardCheck,
@@ -98,6 +99,20 @@ const ICON_MAP = {
   FileJson:       FileCode,
   Store:          Storefront,
 };
+
+/** `menu.json` group that carries the onboarding checklist. */
+const FIRST_STEPS_GROUP = 'First Steps';
+
+// Keep feature metadata on the menu entry itself. Favorites are persisted as a reduced `{name,
+// label}` shape, so this index lets an old favorite inherit the canonical gate without keeping a
+// second hand-maintained item-name map in the component.
+const MENU_ITEM_FEATURE_FLAGS = Object.freeze(
+  Object.fromEntries(
+    menuConfig.menu.flatMap(group => group.items || [])
+      .filter(item => item.featureFlag)
+      .map(item => [item.name, item.featureFlag])
+  )
+);
 
 function CollapsedGroupPopover({
   group,
@@ -252,6 +267,7 @@ function ExpandedDirectLink({ group, singleItem, Icon, showSectionLabel, section
           <span className={cn('flex-1 text-left truncate', !isActive && 'text-text-primary')}>
             {itemLabel}
           </span>
+          <FirstStepsCountBadge groupName={group.group} data-testid="FirstStepsCountBadge__247c75" />
         </GuardedNavLink>
       </div>
     </div>
@@ -348,6 +364,47 @@ function ExpandedGroupSection({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * ETP-5190 — `x/7` progress on the First Steps entry.
+ *
+ * Only ever an ADDITION to the label: the entry itself is never hidden and never disabled,
+ * whatever the count says, because the checklist has to stay reachable after the one-time
+ * dashboard redirect has been spent (and after every step is done, to un-tick one).
+ *
+ * Renders nothing while the state is loading, when it failed to load, or when the sidebar is
+ * rendered outside a `FirstStepsProvider` (bare component tests) — a badge that flashed `1/7`
+ * before the real count arrived would read as progress being lost.
+ */
+function FirstStepsCountBadge({ groupName, collapsed = false }) {
+  const progress = useFirstStepsProgressOptional();
+  if (groupName !== FIRST_STEPS_GROUP || !progress || progress.loading || progress.error) {
+    return null;
+  }
+  // Collapsed, the label is gone and `3/7` does not fit in the 40px tile, so only the
+  // outstanding count is shown — and nothing at all once there is none left to do.
+  if (collapsed) {
+    const remaining = progress.total - progress.completedCount;
+    if (remaining <= 0) return null;
+    return (
+      <span
+        className="absolute top-0.5 right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none ring-2 ring-background"
+        style={{ background: 'hsl(var(--primary))', color: 'hsl(var(--foreground))' }}
+        data-testid="menu-first-steps-progress-collapsed"
+      >
+        {remaining}
+      </span>
+    );
+  }
+  return (
+    <span
+      className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold leading-none text-muted-foreground"
+      data-testid="menu-first-steps-progress"
+    >
+      {progress.completedCount}/{progress.total}
+    </span>
   );
 }
 
@@ -513,6 +570,10 @@ export default function SideMenu({
   // This is visual gating only. The windows remain protected by normal AD role
   // filtering; the flag merely stops offering this internal menu section.
   const showProofOfConceptMenu = useFeatureFlag(PROOF_OF_CONCEPT_MENU);
+  // ETP-5269. Item-level flag gating, where Proof of Concept above gates a whole group. Visual
+  // only: the route is registered unconditionally and SFAcctProcessMonitor enforces admin access.
+  const showAcctProcessMonitor = useFeatureFlag(ACCT_PROCESS_MONITOR);
+  const showPublicApiKeys = useFeatureFlag(PUBLIC_API_KEYS);
   // Unconditional since ETP-4966: owning more than one environment is a shipped
   // capability, so the switcher is always available. The hook already returns an
   // empty list for a session that cannot list environments, which is what keeps
@@ -531,12 +592,28 @@ export default function SideMenu({
     return map;
   }, []);
 
-  const resolvedMenuGroups = menuGroups
+  const featureFlagValues = useMemo(() => ({
+    [ACCT_PROCESS_MONITOR]: showAcctProcessMonitor,
+    [PUBLIC_API_KEYS]: showPublicApiKeys,
+  }), [showAcctProcessMonitor, showPublicApiKeys]);
+
+  // Applied to Favorites TOO. Favorites are rebuilt from the user's own saved list rather than
+  // from menuGroups, so returning early for that group let a favourited flag-gated item stay
+  // visible with the flag off — the one hole through which a gated entry could still be reached.
+  // An explicitly declared but unknown flag fails closed; ordinary entries with no featureFlag
+  // remain visible.
+  const resolvedMenuGroups = useMemo(() => menuGroups
     .filter(g => g.group !== 'Proof of Concept' || showProofOfConceptMenu)
     .map((g) => {
-      if (g.group !== 'Favorites') return g;
-      return { ...g, items: favorites };
-    });
+      const items = g.group === 'Favorites' ? favorites : (g.items || []);
+      return {
+        ...g,
+        items: items.filter((item) => {
+          const flag = item.featureFlag || MENU_ITEM_FEATURE_FLAGS[item.name];
+          return flag == null || featureFlagValues[flag] === true;
+        }),
+      };
+    }), [menuGroups, favorites, showProofOfConceptMenu, featureFlagValues]);
 
   const activeGroup = findActiveGroup(resolvedMenuGroups, location.pathname, location.search);
   const tMenu = useMenuLabel();
@@ -742,7 +819,7 @@ export default function SideMenu({
                         <GuardedNavLink
                           to={`/${itemPath}`}
                           className={cn(
-                            'flex h-10 w-10 items-center justify-center rounded-lg transition-colors',
+                            'relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors',
                             isItemActive || isGroupActive
                               ? 'bg-accent-highlight text-accent-highlight-foreground'
                               : 'bg-page-bg text-muted-foreground hover:text-foreground'
@@ -752,6 +829,10 @@ export default function SideMenu({
                             weight={isItemActive || isGroupActive ? 'fill' : 'regular'}
                             className="h-5 w-5"
                             data-testid="Icon__247c75" />
+                          <FirstStepsCountBadge
+                            groupName={g.group}
+                            collapsed
+                            data-testid="FirstStepsCountBadge__247c75" />
                         </GuardedNavLink>
                       </TooltipTrigger>
                       <TooltipContent side="right" data-testid="TooltipContent__247c75">{tMenu(singleItem.label)}</TooltipContent>

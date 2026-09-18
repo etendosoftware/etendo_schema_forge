@@ -4489,7 +4489,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "e20fe6eef26262aada0cbbefaf1e28e622c2cc4ad28995ee391eda9c8f2d5f7e",
+      "checksum": "3fd87e439cbc8fd93e905c339ac2cb97d1c763621cff2a97fd6a011c039ac194",
       "params": [
         "183"
       ],
@@ -5288,7 +5288,7 @@
         },
         {
           "columnname": "EM_Tbai_Xmlgenerator",
-          "displaylogic": "@EM_Tbai_Issent@='N' & (@docstatus@='CO') & @TBAI_ExistConfigAndIsAvailable@",
+          "displaylogic": "@EM_Tbai_Issent@='N' & (@docstatus@='CO') & @TBAI_IsBizkaiaPurchaseEligible@=1",
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Registrar Factura en Batuz",
@@ -11415,6 +11415,86 @@
           "displaylogic_server": null,
           "displaylogicgrid": null,
           "name": "Price list based on cost",
+          "readonlylogic": null
+        }
+      ]
+    },
+    "d861dd664adc2a7f0d8b8d9364724120621ce74e3b8db5af805bc32c77f9fc9b": {
+      "checksum": "211003b160a2b577a8d172cceccb3e761acc1b67ddd9258bd007c205c32d1d7c",
+      "params": [
+        "112"
+      ],
+      "rows": [
+        {
+          "columnname": "CurrentNext",
+          "displaylogic": "@IsAutoSequence@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Next Assigned Number",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "CurrentNextSys",
+          "displaylogic": "@IsAutoSequence@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Current Next (System)",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "IncrementNo",
+          "displaylogic": "@IsAutoSequence@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Increment By",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "IsTableID",
+          "displaylogic": "@IsAutoSequence@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Used for Record ID",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Prefix",
+          "displaylogic": "@IsTableID@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Prefix",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "StartNewYear",
+          "displaylogic": "@IsAutoSequence@='Y' & @IsTableID@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Restart sequence every Year",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "StartNo",
+          "displaylogic": "@IsAutoSequence@='Y' & @IsTableID@='N' & @StartNewYear@='Y'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Starting No.",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "Suffix",
+          "displaylogic": "@IsTableID@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Suffix",
+          "readonlylogic": null
+        },
+        {
+          "columnname": "VFormat",
+          "displaylogic": "@IsAutoSequence@='N'",
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "name": "Value Format",
           "readonlylogic": null
         }
       ]
