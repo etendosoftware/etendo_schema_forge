@@ -238,6 +238,124 @@ describe('useRecordWriteQueue', () => {
     const write = vi.fn();
     const { result } = renderHook(() => useRecordWriteQueue({ write }));
 
-    expect(Object.keys(result.current)).toEqual(['persist']);
+    expect(Object.keys(result.current)).toEqual(['persist', 'waitUntilIdle']);
+  });
+
+  describe('waitUntilIdle (ETP-5338 review follow-up)', () => {
+    // The exact interleaving Alex's review flagged as fragile in `FmModel303Page.handleGoBack`:
+    // that handler used to capture ONE in-flight promise by value and await only it. If a
+    // caller's captured promise settles in the SAME tick the queue's own replay logic reassigns
+    // the tracked in-flight write to a NEW promise (arming the queued edit), awaiting only the
+    // old reference resumes the caller while the replay is still genuinely open — silently
+    // dropping whatever the caller does next as "safe to proceed" when it is not.
+    //
+    // `waitUntilIdle` must not be fooled by this: it re-reads the queue's own state after every
+    // await instead of trusting a promise captured once, so it keeps waiting across the replay.
+    it('keeps waiting when a queued replay is armed in the exact tick the awaited write settles', async () => {
+      const pending = [];
+      const write = vi.fn(() => {
+        const d = deferred();
+        pending.push(d);
+        return d.promise;
+      });
+      const { result } = renderHook(() => useRecordWriteQueue({ write }));
+
+      act(() => { result.current.persist('rec-1', 'a', 'FIRST-EDIT'); }); // write #1 opens
+      act(() => { result.current.persist('rec-1', 'b', 'SECOND-EDIT-WHILE-FIRST-IN-FLIGHT'); }); // queued behind #1
+      expect(write).toHaveBeenCalledTimes(1);
+
+      let idleResolved = false;
+      const idle = result.current.waitUntilIdle('rec-1').then(() => { idleResolved = true; });
+
+      // Settle write #1 — in the SAME tick, the queue's own `finally` block reassigns the
+      // tracked in-flight promise to write #2 (the replay for 'b'). A caller that captured write
+      // #1's promise before calling `waitUntilIdle` (the old `manualDataInFlight.current`
+      // pattern) would resume right here, before #2 ever starts.
+      pending[0].resolve();
+      // Let the settle-and-replay-arming microtasks run, but not write #2's own settlement.
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // The replay must have started...
+      expect(write).toHaveBeenCalledTimes(2);
+      expect(write).toHaveBeenNthCalledWith(
+        2, { recordId: 'rec-1', fieldKey: 'b', value: 'SECOND-EDIT-WHILE-FIRST-IN-FLIGHT' },
+      );
+      // ...but `waitUntilIdle` must NOT have resolved yet — the record is not idle, the replay
+      // is still open. This is the exact assertion that fails under a single-await
+      // implementation and passes under the loop.
+      expect(idleResolved).toBe(false);
+
+      pending[1].resolve();
+      await idle;
+      expect(idleResolved).toBe(true);
+    });
+
+    // The multi-field-key gap found in review of the fix above: `persist`'s replay `for` loop
+    // clears the record's `inFlightRef`/`queuedRef` BETWEEN replaying one queued field and
+    // arming the next one, even though the batch (queued while the ORIGINAL write was open) is
+    // not finished. A `waitUntilIdle` that only checked those two refs could resolve in exactly
+    // that window, before the later field(s) in the batch ever replay — this is why
+    // `replayInProgressRef` exists: armed once before the whole replay loop starts, cleared once
+    // after every queued field has replayed, not per entry.
+    it('waits for the entire queued batch, not just the first entry, when two field keys are queued behind one write', async () => {
+      const pending = [];
+      const write = vi.fn(() => {
+        const d = deferred();
+        pending.push(d);
+        return d.promise;
+      });
+      const { result } = renderHook(() => useRecordWriteQueue({ write }));
+
+      act(() => { result.current.persist('rec-1', 'a', 'a1'); }); // write #1 opens
+      act(() => { result.current.persist('rec-1', 'b', 'b1'); }); // queued — first field key
+      act(() => { result.current.persist('rec-1', 'c', 'c1'); }); // queued — second field key, same batch
+      expect(write).toHaveBeenCalledTimes(1);
+
+      let idleResolved = false;
+      const idle = result.current.waitUntilIdle('rec-1').then(() => { idleResolved = true; });
+
+      // Settle write #1 — the batch replay starts, 'b' fires first.
+      pending[0].resolve();
+      await waitFor(() => expect(write).toHaveBeenCalledTimes(2));
+      expect(write).toHaveBeenNthCalledWith(2, { recordId: 'rec-1', fieldKey: 'b', value: 'b1' });
+      expect(idleResolved).toBe(false);
+
+      // Settle write #2 ('b'). This is exactly the tick the fix targets: `inFlightRef`/
+      // `queuedRef` for the record go momentarily clear here, between replaying 'b' and arming
+      // 'c'. Before `replayInProgressRef`, `waitUntilIdle` was exposed to resolving right in
+      // this window even though the batch still has 'c' left to replay.
+      pending[1].resolve();
+      await waitFor(() => expect(write).toHaveBeenCalledTimes(3));
+      expect(write).toHaveBeenNthCalledWith(3, { recordId: 'rec-1', fieldKey: 'c', value: 'c1' });
+      // The whole point of this test: still not idle — 'c' is now the one in flight.
+      expect(idleResolved).toBe(false);
+
+      pending[2].resolve();
+      await idle;
+      expect(idleResolved).toBe(true);
+    });
+
+    it('resolves immediately for a record with nothing in flight and nothing queued', async () => {
+      const write = vi.fn().mockResolvedValue(undefined);
+      const { result } = renderHook(() => useRecordWriteQueue({ write }));
+
+      let resolved = false;
+      result.current.waitUntilIdle('rec-1').then(() => { resolved = true; });
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(resolved).toBe(true);
+      expect(write).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op for a null or empty record id', async () => {
+      const write = vi.fn();
+      const { result } = renderHook(() => useRecordWriteQueue({ write }));
+
+      await expect(result.current.waitUntilIdle(null)).resolves.toBeUndefined();
+      await expect(result.current.waitUntilIdle('')).resolves.toBeUndefined();
+      await expect(result.current.waitUntilIdle(undefined)).resolves.toBeUndefined();
+    });
   });
 });

@@ -73,6 +73,7 @@ The Assets window should let a finance user register fixed assets, define how ea
    - time path shows **Amortize** and usable-life inputs
 4a. **Product** is a plain, always-visible field in the first (Asset Info) section — confirm it appears next to Asset Group regardless of Depreciate state or GL Configuration, and that selecting a product, saving, and reopening the asset persists the value (see "Accounting dimension visibility per section — ETP-4529" below for why Product is not part of the dimensions group).
 4b. With **Depreciate** enabled, scroll to the last section and confirm the **Dimensiones contables** group appears **after Dates**, config-gated: it shows a **Project** and/or **Cost Center** selector, each independently, only when the client's accounting-dimension configuration enables that dimension for this org's ledger (ETP-4914 — Cost Center is now also "Por config", not "Nunca"), and disappears entirely when both resolve to not-visible. Open each visible selector and confirm it returns options; select a value, save and reopen the asset — the value persists. Disable **Depreciate** and confirm the dimensions section disappears.
+4c. With **Depreciate** enabled, scroll to the **Financiero** (Financial Info) section and confirm a **Contacto** (Business Partner) selector appears there, as the last field, after "Previously Depreciated Amount" — unlike Producto (4a), Contacto is NOT unconditionally visible: it appears and disappears together with the rest of the Financiero group as **Depreciate** is toggled on/off, per its raw AD `DisplayLogic: @IsDepreciated@='Y'` (ETP-4914). Unlike the Dimensiones contables group in 4b, Contacto is never hidden by the client's GL/accounting-dimension configuration — it is config-independent (matrix value: Siempre). Open the selector and confirm it returns Business Partner options; select a value, save and reopen the asset — the value persists.
 5. Save an asset with depreciation enabled and confirm the **Create Amortization** action is available.
 6. Trigger **Create Amortization** against a live backend and confirm the amortization plan tab refreshes and shows ordered schedule rows. Confirm that line status badges read "Pendiente" (not "Planificado") and "Confirmado" (not "Procesado").
 7. Review the right sidebar and confirm it shows four cards in order: Valor actual → Valor residual → Depreciación planificada → Depreciado %. Confirm that "Progreso de depreciación" is absent. Confirm that the sidebar ends above the tabs row — tabs (Plan de amortización, Adjuntos) span the full width below the form area.
@@ -494,7 +495,7 @@ This iteration adjusts the **Accounting dimensions** group (Group 5) in the Depr
 ### Product added to the dimensions panel
 
 - A **Product** selector (column `M_Product_ID`, `reference: 'Product'`) is added to the `dimensionFields` array in `AssetsDetailPanel.jsx` and now loads and selects product data correctly through the `/assets/selectors/M_Product_ID` endpoint.
-- In `decisions.json`, the `product` field is classified `visibility: "editable", form: false` so it is registered in the NEO spec (`ETGO_SF_FIELD`) — powering the selector endpoint — without being rendered by the standard form. `labelOverrides` maps `M_Product_ID` → "Producto" (es_ES) / "Product" (en_US).
+- In `decisions.json`, the `product` field was classified at this point as `visibility: "editable", form: false` so it was registered in the NEO spec (`ETGO_SF_FIELD`) — powering the selector endpoint — without being rendered by the standard form. `labelOverrides` maps `M_Product_ID` → "Producto" (es_ES) / "Product" (en_US). **(Stale — superseded by the "Producto corrected to Siempre" ETP-4529 pass below: current `decisions.json` has `product` as `visibility: "editable", section: "principal"` with no `form` flag at all; it is rendered directly by `AssetsDetailPanel`'s `group1Fields`, not gated behind a hidden-selector-only registration.)**
 
 ### Dimension set trimmed to four
 
@@ -565,11 +566,14 @@ pass against the 1-field (`project`-only), config-driven behavior.
 ### Producto corrected to Siempre (ETP-4529 follow-up)
 
 The accounting-dimension matrix source was corrected after the initial ETP-4529 pass above:
-`Activo (Amortizaciones) | Cabecera` now reads Contacto=**Nunca**, Producto=**Siempre**,
-Proyecto=**Por config**, Centro de costo=**Nunca** (Producto was previously, incorrectly,
-**Nunca**). Producto is a plain business field (which product this asset represents) and was
-never a GL-config-gated accounting dimension like Project/Cost Center/Business Partner, so it
-does not join the "Dimensiones contables" panel at all — it is now always shown.
+`Activo (Amortizaciones) | Cabecera` reads Contacto=**Siempre**, Producto=**Siempre**,
+Proyecto=**Por config**, Centro de costo=**Por config** (Producto was previously, incorrectly,
+**Nunca**; Contacto and Centro de costo were also previously, incorrectly, **Nunca** —
+corrected under ETP-4914, see the "Centro de costo corrected to Por config (ETP-4914)" and
+"ETP-4914 (Contacto fix)" sections below). Producto is a plain business field (which product
+this asset represents) and was never a GL-config-gated accounting dimension like Project/Cost
+Center/Business Partner, so it does not join the "Dimensiones contables" panel at all — it is
+now always shown.
 
 - `decisions.json`: `assets.product.visibility` changed from `discarded` to `editable`
   (`section: "principal"`), matching its natural raw-AD classification.
@@ -589,7 +593,9 @@ does not join the "Dimensiones contables" panel at all — it is now always show
 ### Centro de costo corrected to Por config (ETP-4914)
 
 The accounting-dimension matrix was corrected again: `Activo (Amortizaciones) | Cabecera`
-now reads Contacto=**Por config** (deferred, see below), Producto=**Siempre**, Proyecto=
+now reads Contacto=**Siempre** (further corrected later in this same pass — see "ETP-4914
+(Contacto fix)" below; an earlier iteration of this pass read it as "Por config", deferred
+pending an AD-metadata edit that turned out to be unnecessary), Producto=**Siempre**, Proyecto=
 **Por config**, Centro de costo=**Por config** (Centro de costo was previously, incorrectly,
 **Nunca** — the "Producto corrected to Siempre" section above and the original ETP-4529
 matrix both had it wrong). Direct DB verification confirmed `eTADASCostCenter`'s raw
@@ -608,12 +614,12 @@ fix, no AD metadata change needed.
   Center dimension is enabled for this org's ledger). Confirmed in the regenerated
   `AssetsForm.jsx`: `eTADASCostCenter` now carries `visibilitySource: 'server'` and
   `displayLogicReason: 'accounting-dimension'`, the same server-evaluated shape as `project`.
-- **Contacto remains out of scope for this pass**, even though the corrected matrix also
-  marks it "Por config": its raw `AD_Field.DisplayLogic` on the Assets tab is only
-  `@IsDepreciated@='Y'` — missing the `@$Element_BP@` dimension term that `project` and
-  `eTADASCostCenter` both carry — so fixing it properly requires an AD-level `DisplayLogic`
-  metadata edit first, tracked as a separate follow-up. `businessPartner` stays
-  `visibility: "discarded"` in `decisions.json` until that lands.
+- **Contacto was originally deferred from this pass**, on the premise that its raw
+  `AD_Field.DisplayLogic` on the Assets tab was missing the `@$Element_BP@` dimension term
+  that `project` and `eTADASCostCenter` carry, and that fixing it properly required an
+  AD-level `DisplayLogic` metadata edit first. **That premise was wrong** — see "ETP-4914
+  (Contacto fix)" below: Contacto was fixed later in this same ETP-4914 ticket, no AD change
+  was ever required, and `businessPartner` no longer stays `discarded`.
 - Regenerated via `make regen ONLY=assets`; the contract's auto-generated system-field test
   entry for `eTADASCostCenter` (previously "should exist in backend but not frontend")
   was replaced automatically by the standard editable-field test set (displaylogic-evaluable,
@@ -621,6 +627,51 @@ fix, no AD metadata change needed.
   authoring needed for the contract itself. `AssetsDetailPanel.vitest.jsx` and
   `AssetsDetailPanel.test.js` were updated to expect both `project` and `eTADASCostCenter`
   as independently-gated dimension candidates.
+
+### ETP-4914 (Contacto fix)
+
+**What was wrong.** The "Centro de costo corrected to Por config (ETP-4914)" pass above
+deferred Contacto on the premise that its raw `AD_Field.DisplayLogic` on the Assets tab was
+missing the `@$Element_BP@` GL-config term that `project` and `eTADASCostCenter` carry, and
+that showing it correctly required an AD-level metadata edit first. **That premise was
+false.** Direct verification against `schema-raw.json` confirmed Contacto's raw
+`AD_Field.DisplayLogic` was always exactly `@IsDepreciated@='Y'` — no missing dimension term,
+because Contacto was never meant to be a GL-config-gated accounting dimension like
+Project/Cost Center in the first place. No AD change was ever required; the field only needed
+to be reclassified in `decisions.json` and rendered in the custom panel — the corrected
+acceptance matrix (from the ETP-4914 ticket, confirmed by QA's own test report) settles it as
+Contacto=**Siempre** (not "Por config") for `Activo (Amortizaciones) | Cabecera`.
+
+**What changed.**
+- `decisions.json`: `assets.businessPartner.visibility` changed from `discarded` to `editable`
+  (`section: "principal"`), the same shape as Producto's ETP-4529 fix.
+- `AssetsDetailPanel.jsx`: `businessPartner` added as the last field in `group2Fields`
+  (Financial Info) — `{ key: 'businessPartner', column: 'C_BPartner_ID', type: 'search',
+  label: t('C_BPartner_ID') || 'Business Partner', reference: 'BPartner', inputMode: 'search',
+  section: 'principal' }`. Plain `type: 'search'` with neither `lookup` nor `popup` routes
+  through `SearchSelectField` → `CreatableSearchSelect` in `EntityForm.jsx` — the same path
+  sales-order's own `C_BPartner_ID` field uses.
+- `businessPartner` is deliberately **NOT** added to `dimensionFieldCandidates` — unlike
+  Project/Cost Center it carries no `@$Element_BP@` (or any other) GL-config term, so it needs
+  no `useAccountingDimensionFields` evaluator wiring; it is rendered directly, gated only by
+  the surrounding `depreciate` check, same as the rest of `group2Fields`.
+- `businessPartner` was already present in the `readOnlyAll` hardcoded field list from before
+  this fix, so it locks like every other field when the record is not in edit mode — no change
+  needed there.
+
+**Where it appears.** Contacto renders in the **Financiero** (Financial Info) section —
+Group 2, nested inside Group 3 (Depreciation Config) — as the last field, after "Previously
+Depreciated Amount" (`previouslyDepreciatedAmt`) and before the Depreciation Config fields
+(Depreciation Type, Calculate Type, etc.). Like the rest of that group, it is visible only
+while **Depreciate** is enabled — it appears and disappears together with Currency/Asset
+Value/Residual Value/Depreciation Amount/Previously Depreciated Amount. This differs from
+Producto, which is unconditionally visible in Group 1 (Asset Info) regardless of the
+Depreciate toggle: both fields are "Siempre" in the accounting-dimension-matrix sense (neither
+is GL-config-gated), but they sit in different groups with different base visibility rules
+inherited from their own raw AD `DisplayLogic` (`@IsDepreciated@='Y'` for Contacto vs.
+unconditional for Producto). Contacto is **not** part of the config-gated "Dimensiones
+contables" group described in the ETP-4529 section above — it never disappears due to the
+client's GL/accounting-dimension configuration.
 
 ## ETP-4542 — Generic declarative numeric validation (min + integer), applied to Usable Life
 

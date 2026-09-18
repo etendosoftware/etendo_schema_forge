@@ -17,7 +17,7 @@ function ReturnMaterialReceiptBulkActions(props) {
         {...props}
         entity="returnMaterialReceipt"
         buildActions={buildInOutActions}
-        labelKey="confirmBulk"
+        labelKey="process"
         data-testid="BulkDocumentAction__4e1c28" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
@@ -55,13 +55,19 @@ export default function ReturnMaterialReceiptWindow({ windowName, recordId, apiB
       // ConfirmWithCreditButton (topbarRight, hardcoded in the generated Page)
       // is untouched — see ReturnMaterialReceiptSecondaryActions' doc comment.
       topbarSecondary={ReturnMaterialReceiptSecondaryActions}
-      duplicateAction={{ show: true, visibleWhen: "@documentStatus@='CO'" }}
+      // ETP-5316 — Clone/duplicate is not a supported action for Customer Returns
+      // (grid row action was showing it for CO rows). Mirrors sibling
+      // return-to-vendor-shipment (duplicateAction={{ show: false }}), which
+      // already had this suppressed. Document view has never shown Clone
+      // (ReturnMaterialReceiptSecondaryActions already passes clone={false}).
+      duplicateAction={{ show: false }}
       hideLink
       bulkActions={ReturnMaterialReceiptBulkActions}
       // ETP-4912 — without `usePdf` the row-hover envelope falls back to useNoPdf, so the
       // modal had no client PDF and sent the print-* artifact instead of the document the
-      // preview shows. return-to-vendor-shipment has NO emailAction (removed under ETP-4717
-      // due to a backend contract-name mismatch) — this window keeps its own on purpose.
+      // preview shows. return-to-vendor-shipment now has its own `emailAction` too (ETP-5124,
+      // once its backend contract-name mismatch — ETP-4717 — was fixed); each window keeps
+      // its own `usePdf`/`documentType` wiring since the PDF hooks and labels differ.
       emailAction={{
         usePdf: useReturnReceiptPdf,
         documentType: tMenu('Return Material Receipt'),

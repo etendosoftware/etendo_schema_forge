@@ -50,6 +50,7 @@ const mockHook = {
   handleDelete: vi.fn().mockResolvedValue({}),
   handleDeleteChild: vi.fn(),
   handleSelect: vi.fn(),
+  invalidateChildrenCache: vi.fn(),
   handleUpdateChild: vi.fn(),
   handleAddChild: vi.fn(),
   handleProcess: vi.fn(),
@@ -158,6 +159,7 @@ function resetState() {
   mockHook.primeSaved.mockClear();
   mockHook.handleUpdateChild.mockClear();
   mockHook.handleSelect.mockClear();
+  mockHook.invalidateChildrenCache.mockClear();
 }
 
 describe('DetailView — headerExtra slotProps refresh (ETP-4563)', () => {
@@ -364,11 +366,23 @@ describe('DetailView — remaining mutation refresh surfaces (ETP-4563)', () => 
     });
 
     await user.click(screen.getByTestId('modal-parent-refresh'));
+    // The mount-time effect already synced every secondary hook with the parent —
+    // reset so the order assertion below reads the modal's own calls, not those.
+    mockHook.handleSelect.mockClear();
+    mockHook.invalidateChildrenCache.mockClear();
     await user.click(screen.getByTestId('modal-saved'));
     await user.click(screen.getByTestId('modal-close'));
 
     expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
     expect(mockHook.handleSelect).toHaveBeenCalledWith(mockHook.selected);
+    // ETP-5366: the modal persists the row with its own raw fetch, bypassing
+    // handleAddChild — so nothing marked the cached child collection stale and the
+    // non-forced fetchChildren inside handleSelect resolved from the cache with the
+    // very same array instance (a no-op setChildren). The tab must drop that entry
+    // FIRST, otherwise handleSelect's re-read never reaches the network.
+    expect(mockHook.invalidateChildrenCache).toHaveBeenCalledWith('123');
+    expect(mockHook.invalidateChildrenCache.mock.invocationCallOrder[0])
+      .toBeLessThan(mockHook.handleSelect.mock.invocationCallOrder[0]);
   });
 
   it('mounts secondary panels and accepts their count updates', async () => {
@@ -386,10 +400,14 @@ describe('DetailView — remaining mutation refresh surfaces (ETP-4563)', () => 
     const originalFetchChildren = mockHook.fetchChildren;
     const originalItems = mockHook.items;
     const originalEditing = mockHook.editing;
+    const originalInvalidateChildrenCache = mockHook.invalidateChildrenCache;
     mockHook.items = [mockHook.selected];
     mockHook.editing = { documentNo: mockHook.editing.documentNo };
     mockHook.fetchById = undefined;
     mockHook.fetchChildren = undefined;
+    // ETP-5366: the customAddModal onSaved reaches invalidateChildrenCache through
+    // an optional call, so a hook that predates it must not throw.
+    mockHook.invalidateChildrenCache = undefined;
     const CustomLines = ({ onRefresh, onCountChange }) => (
       <div>
         <button data-testid="optional-refresh" onClick={onRefresh}>refresh</button>
@@ -416,6 +434,7 @@ describe('DetailView — remaining mutation refresh surfaces (ETP-4563)', () => 
       mockHook.fetchChildren = originalFetchChildren;
       mockHook.items = originalItems;
       mockHook.editing = originalEditing;
+      mockHook.invalidateChildrenCache = originalInvalidateChildrenCache;
     }
   });
 

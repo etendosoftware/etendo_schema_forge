@@ -8,7 +8,11 @@ import { login } from '../helpers/auth.js';
  *   Case  2 — Confirm modal (DR → CO): ConfirmInOutModal lifecycle, cancel and confirm
  *   Case  5 — Create return invoice from CO detail: button gating, modal, result card
  *   Case  6 — Button visibility per document status (DR vs CO)
- *   Case  7 — Clone flow from list view: row-quick-action-clone → CloneOrderModal
+ *   Case  7 — Clone hidden from list view (ETP-5316): row-quick-action-clone must
+ *     NOT render for DR or CO rows (duplicateAction={{ show: false }} in index.jsx,
+ *     ETP-4717 — clone is not a supported action for this window), matching sibling
+ *     return-material-receipt. Previously the shared RowQuickActions component
+ *     silently ignored `show: false`, so Clone showed up on CO rows anyway.
  *   Case  8 — Import from receipt modal: opens, lists available receipts, lines loaded
  *   Case 10 — availableReceipts / availableReceiptLines request bodies verified
  *   Case 11 — List view columns: documentNo, businessPartner, movementDate, documentStatus
@@ -141,31 +145,10 @@ async function installReturnToVendorMocks(page, rows = ALL_ROWS) {
         return;
       }
 
-      // POST cloneRecord
-      if (method === 'POST' && url.includes('/action/cloneRecord')) {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            response: { data: { id: 'rtvs-cloned-001' } },
-          }),
-        });
-        return;
-      }
-
-      // GET cloned record (fetched after clone to populate done state)
-      if (method === 'GET' && url.includes('rtvs-cloned-001')) {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            response: {
-              data: [makeReturn({ id: 'rtvs-cloned-001', documentNo: 'RTVS-CLONE-001', documentStatus: 'DR' })],
-            },
-          }),
-        });
-        return;
-      }
+      // NOTE: cloneRecord / cloned-record mocks were removed — ETP-5316/ETP-4717
+      // made the row-quick-action-clone trigger unreachable for this window
+      // (duplicateAction={{ show: false }} in index.jsx), so there is no
+      // CloneOrderModal flow left to exercise here.
 
       // Detail GET — url matches /returnToVendorShipment/{id} with no further path segments
       if (method === 'GET' && /\/returnToVendorShipment\/[^/?]+(\?|$)/.test(url)) {
@@ -218,7 +201,7 @@ async function installReturnToVendorMocks(page, rows = ALL_ROWS) {
 
 // ---------------------------------------------------------------------------
 // Describe 1 — List view columns, quick-actions, and preview panel
-// Cases 11, 12, 7 (row clone)
+// Cases 11, 12, 7 (row clone hidden — ETP-5316)
 // ---------------------------------------------------------------------------
 
 test.describe('return-to-vendor-shipment — list view', () => {
@@ -230,11 +213,11 @@ test.describe('return-to-vendor-shipment — list view', () => {
   });
 
   /**
-   * Verifies list columns are rendered, row quick-action overlays work,
-   * preview panel opens and closes without navigation, and cloning from the
-   * list opens CloneOrderModal with the record listed inside.
+   * Verifies list columns are rendered, row quick-action overlays work
+   * (including Clone staying hidden for both DR and CO rows — ETP-5316), and
+   * the preview panel opens and closes without navigation.
    */
-  test('list columns, quick-action overlays, preview panel, and clone modal — full flow', async ({ page }) => {
+  test('list columns, quick-action overlays, and preview panel — full flow', async ({ page }) => {
     // ── List columns are visible ───────────────────────────────────────────
     // Case 11: documentNo, businessPartner, movementDate, documentStatus rendered
     const tbody = page.locator('tbody');
@@ -255,12 +238,20 @@ test.describe('return-to-vendor-shipment — list view', () => {
     // Delete visible for DR (hideDeleteWhenComplete does not apply to non-complete records)
     await expect(drRow.getByTestId('row-quick-action-delete')).toBeVisible();
 
+    // Clone/duplicate is not a supported action for this window — hidden for DR
+    // (index.jsx duplicateAction={{ show: false }} — ETP-5316/ETP-4717).
+    await expect(drRow.getByTestId('row-quick-action-clone')).toHaveCount(0);
+
     // ── CO row quick-actions ──────────────────────────────────────────────
     const coRow = page.locator('tbody tr').filter({ hasText: 'RTVS-CO-001' }).first();
     await coRow.hover();
 
     await expect(coRow.getByTestId('row-quick-action-edit')).toBeVisible();
-    await expect(coRow.getByTestId('row-quick-action-clone')).toBeVisible();
+    // ETP-5316: Clone (duplicate) used to show up for CO rows only
+    // (the shared RowQuickActions component silently ignored `show: false`); it
+    // must now be hidden for CO too, matching the DR row above and sibling
+    // return-material-receipt.
+    await expect(coRow.getByTestId('row-quick-action-clone')).toHaveCount(0);
     // Grid delete stays visible regardless of status (ETP-4656, commit 044edad45) —
     // see e2e/tests/flows/delete-visibility.mocked.spec.js for the dedicated regression guard.
     await expect(coRow.getByTestId('row-quick-action-delete')).toBeVisible();
@@ -283,27 +274,9 @@ test.describe('return-to-vendor-shipment — list view', () => {
     await previewModal.getByRole('button', { name: /cerrar|close/i }).click();
     await expect(previewModal).toBeHidden({ timeout: 5_000 });
 
-    // ── Clone from list row (Case 7) ──────────────────────────────────────
-    await coRow.hover();
-    const cloneQuickAction = coRow.getByTestId('row-quick-action-clone');
-    await expect(cloneQuickAction).toBeVisible();
-    await cloneQuickAction.click();
-
-    // CloneOrderModal opens — confirm phase shows the document number
-    await expect(page.getByText('RTVS-CO-001').first()).toBeVisible({ timeout: 5_000 });
-
-    // The modal has a clone button (data-testid="action-clone-record")
-    const modalCloneBtn = page.getByTestId('action-clone-record');
-    await expect(modalCloneBtn).toBeVisible({ timeout: 8_000 });
-
-    // Confirm the clone
-    await modalCloneBtn.click();
-
-    // Done phase shows the cloned document number (fetched from mock)
-    await expect(page.getByText('RTVS-CLONE-001')).toBeVisible({ timeout: 6_000 });
-
-    // Close the done modal using the × close button
-    await page.locator('[style*="background: none"]').filter({ hasText: '×' }).first().click();
+    // Case 7 (row clone) is now covered above: Clone is hidden for both DR and
+    // CO rows, so there is no CloneOrderModal flow to exercise from the list —
+    // ETP-5316/ETP-4717 removed the row-quick-action-clone trigger entirely.
   });
 });
 
@@ -321,8 +294,9 @@ test.describe('return-to-vendor-shipment — DR detail actions', () => {
   /**
    * For a DR record:
    *   - action-confirm-with-credit is visible
-   *   - action-clone is visible
    *   - action-create-return-invoice is NOT present
+   *   - Clone is a list-view row action, and it is hidden entirely for this
+   *     window (ETP-5316/ETP-4717), so it is not asserted here
    *
    * ConfirmInOutModal:
    *   - Opens on confirm button click
@@ -342,7 +316,9 @@ test.describe('return-to-vendor-shipment — DR detail actions', () => {
 
     // ── Case 6: DR button visibility ──────────────────────────────────────
     await expect(confirmBtn).toBeVisible();
-    // Clone is a list-view row action, not a detail-view button.
+    // Clone is a list-view row action, not a detail-view button, and it is
+    // hidden entirely for this window (ETP-5316/ETP-4717) — see the
+    // 'list view' describe block above for the row-quick-action-clone assertions.
 
     // action-create-return-invoice must NOT be present for DR
     await expect(page.getByTestId('action-create-return-invoice')).toHaveCount(0);
@@ -411,8 +387,9 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
   /**
    * For a CO record without an existing return invoice:
    *   - action-create-return-invoice is visible
-   *   - action-clone is visible
    *   - action-confirm-with-credit is NOT present
+   *   - Clone is a list-view row action, and it is hidden entirely for this
+   *     window (ETP-5316/ETP-4717), so it is not asserted here
    *
    * CreateInvoiceConfirmModal lifecycle:
    *   - Opens on button click
@@ -435,7 +412,9 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
 
     // ── Case 6: CO button visibility ──────────────────────────────────────
     await expect(createInvoiceBtn).toBeVisible();
-    // Clone is a list-view row action, not a detail-view button.
+    // Clone is a list-view row action, not a detail-view button, and it is
+    // hidden entirely for this window (ETP-5316/ETP-4717) — see the
+    // 'list view' describe block above for the row-quick-action-clone assertions.
 
     // ETP-4737: the post-confirm button's label was ALSO fixed today — it used to fall
     // back to the hardcoded, stale `createReturnInvoice` i18n key with no per-window

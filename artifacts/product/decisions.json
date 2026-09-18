@@ -112,7 +112,8 @@
           "grid": true,
           "searchable": true,
           "section": "principal",
-          "seq": 1
+          "seq": 1,
+          "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null }
         },
         "name": {
           "grid": true,
@@ -126,13 +127,15 @@
               { "field": "searchKey", "labels": { "en_US": "Identifier", "es_ES": "Identificador" } },
               { "field": "name", "labels": { "en_US": "Name", "es_ES": "Nombre" } }
             ]
-          }
+          },
+          "publicApi": { "exposed": true, "name": "name", "type": "passthrough", "handlerId": null }
         },
         "description": {
           "type": "textarea",
           "section": "principal",
           "seq": 7,
-          "span": 3
+          "span": 3,
+          "publicApi": { "exposed": true, "name": "description", "type": "passthrough", "handlerId": null }
         },
         "productType": {
           "grid": true,
@@ -154,7 +157,8 @@
           "searchable": true,
           "reference": "ProductCategory",
           "section": "principal",
-          "seq": 4
+          "seq": 4,
+          "publicApi": { "exposed": true, "name": "category", "type": "passthrough", "handlerId": null }
         },
         "uOM": {
           "grid": true,
@@ -197,7 +201,8 @@
           "visibility": "readOnly",
           "grid": true,
           "form": false,
-          "section": "other"
+          "section": "other",
+          "publicApi": { "exposed": true, "name": "salePrice", "type": "passthrough", "handlerId": null }
         },
         "eTGOPurchasePrice": {
           "visibility": "readOnly",
@@ -209,7 +214,8 @@
           "visibility": "readOnly",
           "grid": true,
           "form": false,
-          "section": "other"
+          "section": "other",
+          "publicApi": { "exposed": true, "name": "stock", "type": "passthrough", "handlerId": null }
         },
         "stocked": {
           "section": "other",
