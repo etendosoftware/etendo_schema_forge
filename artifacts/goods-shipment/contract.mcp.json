@@ -1,7 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.1",
   "generatedAt": "2026-08-13T11:56:58.444Z",
-  "contractChecksum": "714ce2765a9f7c09",
+  "updatedAt": "2026-09-18T12:14:59.616Z",
+  "contractChecksum": "f4a5c9548f699ecc",
   "apiPrediction": {
     "specName": "goods-shipment",
     "baseUrl": "/sws/neo/goods-shipment",
@@ -535,6 +536,12 @@
       },
       "goodsShipmentLine": {
         "fields": {
+          "lineNo": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@"
+          },
           "product": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y'"
@@ -673,5 +680,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "ada737dc47980d55"
+  "checksum": "ad6dc74a0fedb663"
 }

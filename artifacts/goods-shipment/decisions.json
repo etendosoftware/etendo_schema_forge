@@ -289,7 +289,12 @@
       "javaQualifier": "goodsShipmentLineHandler",
       "fields": {
         "lineNo": {
-          "visibility": "system"
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 1,
+          "gridReadOnly": true,
+          "inputMode": "number",
+          "section": "principal"
         },
         "product": {
           "grid": true,

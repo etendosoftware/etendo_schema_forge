@@ -234,6 +234,7 @@ export const goodsShipment = [
 export const goodsShipmentLine = [
   {
     "id": "mock-goodsShipmentLine-001",
+    "lineNo": 10,
     "product": "Laptop Pro 15",
     "movementQuantity": 402,
     "description": "Standard order for Q1 delivery",
@@ -244,6 +245,7 @@ export const goodsShipmentLine = [
   },
   {
     "id": "mock-goodsShipmentLine-002",
+    "lineNo": 20,
     "product": "USB-C Cable",
     "movementQuantity": 54,
     "description": "Rush order - priority shipping required",
@@ -254,6 +256,7 @@ export const goodsShipmentLine = [
   },
   {
     "id": "mock-goodsShipmentLine-003",
+    "lineNo": 30,
     "product": "Wireless Mouse",
     "movementQuantity": 150,
     "description": "Bulk purchase for warehouse restocking",
@@ -264,6 +267,7 @@ export const goodsShipmentLine = [
   },
   {
     "id": "mock-goodsShipmentLine-004",
+    "lineNo": 40,
     "product": "Mechanical Keyboard",
     "movementQuantity": 97,
     "description": "Sample order for client evaluation",
@@ -274,6 +278,7 @@ export const goodsShipmentLine = [
   },
   {
     "id": "mock-goodsShipmentLine-005",
+    "lineNo": 50,
     "product": "Monitor 27\"",
     "movementQuantity": 311,
     "description": "Recurring monthly supply order",
@@ -284,6 +289,7 @@ export const goodsShipmentLine = [
   },
   {
     "id": "mock-goodsShipmentLine-006",
+    "lineNo": 60,
     "product": "Webcam HD",
     "movementQuantity": 451,
     "description": "Special pricing agreement applies",
@@ -294,6 +300,7 @@ export const goodsShipmentLine = [
   },
   {
     "id": "mock-goodsShipmentLine-007",
+    "lineNo": 70,
     "product": "Headset Pro",
     "movementQuantity": 496,
     "description": "Consolidated order from multiple requests",
@@ -304,6 +311,7 @@ export const goodsShipmentLine = [
   },
   {
     "id": "mock-goodsShipmentLine-008",
+    "lineNo": 80,
     "product": "Docking Station",
     "movementQuantity": 284,
     "description": "Trial order for new product line",
@@ -314,6 +322,7 @@ export const goodsShipmentLine = [
   },
   {
     "id": "mock-goodsShipmentLine-009",
+    "lineNo": 90,
     "product": "SSD 1TB",
     "movementQuantity": 225,
     "description": "Replacement for damaged goods",
@@ -324,6 +333,7 @@ export const goodsShipmentLine = [
   },
   {
     "id": "mock-goodsShipmentLine-010",
+    "lineNo": 100,
     "product": "RAM 16GB",
     "movementQuantity": 479,
     "description": "Pre-season inventory build-up",
@@ -334,6 +344,7 @@ export const goodsShipmentLine = [
   },
   {
     "id": "mock-goodsShipmentLine-011",
+    "lineNo": 110,
     "product": "Power Supply 750W",
     "movementQuantity": 123,
     "description": "Customer-specific configuration",
@@ -344,6 +355,7 @@ export const goodsShipmentLine = [
   },
   {
     "id": "mock-goodsShipmentLine-012",
+    "lineNo": 120,
     "product": "Network Switch",
     "movementQuantity": 337,
     "description": "Government contract fulfillment",

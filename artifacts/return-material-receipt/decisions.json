@@ -363,13 +363,15 @@
       "javaQualifier": "returnMaterialReceiptLineHandler",
       "fields": {
         "lineNo": {
-          "grid": false,
+          "grid": true,
+          "gridOrder": 1,
+          "gridReadOnly": true,
           "inputMode": "number",
           "section": "principal"
         },
         "product": {
           "grid": true,
-          "gridOrder": 1,
+          "gridOrder": 2,
           "gridReadOnly": true,
           "searchable": true,
           "inputMode": "search",
@@ -379,7 +381,7 @@
         "movementQuantity": {
           "visibility": "editable",
           "grid": true,
-          "gridOrder": 2,
+          "gridOrder": 3,
           "inputMode": "number",
           "readOnlyLogic": null,
           "section": "principal"
@@ -393,7 +395,7 @@
         "orderQuantity": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 3,
+          "gridOrder": 4,
           "gridReadOnly": true,
           "section": "principal"
         },
