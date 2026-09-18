@@ -1215,3 +1215,76 @@ including *"blocks pointing two different fields at the same column"*.
 The ticket's code reference (`MappingGrid` renders `importFields.map(...)` as the select's
 options) describes the pre-ETP-4954 shape. The reverse direction — two FIELDS fed by one column —
 is still allowed, and deliberately so: that is one column and two fields, not a collision.
+
+## ETP-5350 — Three i18n leftovers in the import flow
+
+ETP-5223 translated the engine's error messages, the review grid's headers and the mapping
+editor's captions. These three lived elsewhere and were missed. All of them are engine-level, so
+Contacts gets them too (`contacts.md` → *ETP-5350*).
+
+### 1. The unresolved-foreign-key popover was English
+
+Four strings were written inline in `FkMismatchCell` — the search placeholder, `Use "{value}"`,
+`Searching…` and the empty-list message. It is exactly where a user lands to fix the row that
+failed, so it was the worst place left. They are labels now, resolved from the session locale.
+
+One translation note: **es_AR is voseo** across this app (`Guardá`, `Confirmá`, `Abrilo`). Only
+one of the four is imperative and it is the only one that differs between the two Spanish
+locales — *Escribe un valor arriba* (es_ES) vs *Escribí un valor arriba* (es_AR). Its own test
+pins that, so nobody copies one over the other.
+
+### 2. Recognition was asymmetric between languages — in two columns, not one
+
+The reported symptom: a Spanish session accepted a row whose unit said `Unit`, an English session
+refused the same file written as `Unidad`. A CSV was not portable between two users of the same
+client, which is the thing a shared import file most needs to be.
+
+The mechanism, from `simSearch.js`'s own comment plus the dictionary data: **the endpoint
+translates the search term out of the session language before matching it against the base rows,
+and the base rows are English.**
+
+| | base row | translations present |
+| --- | --- | --- |
+| `C_UOM` | `Unit` | es_ES only |
+| `C_COUNTRY` | `Spain` | es_ES only (243 rows) |
+
+So an English term matches the base row directly in any session and always worked; a Spanish term
+only worked when the session was Spanish and the translation step could rewrite it. The rule was
+never "the session language" — it was "English, plus the session language".
+
+`simSearchEveryLanguage` asks once per installed AD language (`IMPORT_MATCH_LANGUAGES`) and keeps
+each record's best score. Cost is one extra request per COLUMN — these calls are already batched
+across every row — and it is skipped when there is only one language to ask.
+
+Candidates merge on `id` rather than concatenating, and that is not a detail: the same record
+comes back from both languages, and a duplicate would become its own runner-up, collapsing the gap
+`classifyCandidates` requires and turning a clean match into "needs review". The merged entry also
+mirrors its best candidate, because callers read `result.id`/`result.name` directly.
+
+**`country` on Contacts had the identical defect and is not in the ticket.** Same table shape,
+same asymmetry, fixed by the same change.
+
+Worth recording, because it is the pattern the codebase had already chosen elsewhere: the CODED
+columns were never asymmetric. `PRODUCT_TYPE_VALUES`, `IS_PERSON_VALUES` and `TAX_ID_KEY_VALUES`
+are bilingual alias lists in the descriptor (`I: ['Articulo', 'Item', 'Producto', 'Bien']`), and
+`normalizeCodedInput` strips diacritics, so `Artículo` matches `Articulo`. Only the two columns
+that resolve against live AD data could drift.
+
+### 3. The template mixed languages
+
+Headers followed the session; the sample row under them did not. `decisions.json` now declares an
+`exampleKey` per field and `ImportDialog` resolves it through the dialog's own translator, falling
+back to `example`. The generator needed no change — `window.import.fields` is spread through, so
+the new key reached the contract for free.
+
+Which fields carry a key is a decision, and the locale test pins it rather than leaving it to
+memory:
+
+| | |
+| --- | --- |
+| **Keyed** (7 product, 6 contacts) | prose, coded and foreign-key values, and the prices — the decimal separator is part of the language, and an English template carrying `12,50` reads as twelve thousand fifty |
+| **Unkeyed, on purpose** | codes, emails, phones, the NIF, the postcode — identical in every language; person names (María, García, Lucía, Fernández) — proper nouns, translating them adds nothing; **city and region (Sevilla)** — matched against real AD records, so an English spelling would name a place the database does not have |
+
+The keyed coded/FK values are the point where parts 2 and 3 meet: an English template writes
+`Unit`, `Item` and `Spain`, and part 2 is what makes those resolve for a Spanish user who receives
+that file.

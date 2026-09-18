@@ -1201,3 +1201,20 @@ reason the new rule measures URL length instead of counting keys.
 The threshold was the same here as in Product, because the limit is Tomcat's and not the
 window's: above ~72 distinct NIFs the pre-check was refused with a 400 and every row showed as
 Correcta.
+
+## ETP-5350 — Three i18n leftovers in the import flow
+
+Engine-level work shared with Product, reported against Product Import. Full write-up in
+`product.md` → *ETP-5350*.
+
+Two things specific to this window:
+
+- **`country` carried the same language asymmetry as Product's unit of measure, and the ticket
+  does not mention it.** `C_COUNTRY` holds `Spain` on the base row and `España` only in its es_ES
+  translation, exactly like `C_UOM`, so a contacts file written with `España` resolved for a
+  Spanish session and was refused for an English one. Fixed by the same `simSearchEveryLanguage`
+  change; had the ticket been read literally, this window would have stayed broken.
+- Six example values now carry an `exampleKey`. `city` and `region` deliberately do NOT: both are
+  matched against real AD records, so writing `Seville` in an English template would name a place
+  the database does not have. Neither do the person names, which are proper nouns. `oBTIKTaxIDKey`
+  needs none either — `NIF` is the same word in both, and its alias list accepts several spellings.
