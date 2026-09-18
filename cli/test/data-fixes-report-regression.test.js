@@ -92,6 +92,15 @@ const FIXES_WITH_REPORT = new Set([
   // among N>1 active lists. Empty — `detail` null — on the healthy GO shape of exactly one active
   // list and one default per direction.
   '20260909T120000Z__R35-pricelist-isdefault',
+  // R37 (ETP-5046) backfills one open ETGO_SUBSCRIPTION row for every tenant still carrying only
+  // the legacy ETGO_TenantPlan='productive' marker. Its @report is a THIRD flavour: not "skipped
+  // work" (R19) and not "ambiguity" (R35) but an OPERATOR-ATTESTATION report — it pins, verbatim
+  // in the ledger, the manual pre-check that must hold for the backfill to be safe (production
+  // Stripe checkout still not live since 2026-08-27), plus one line per created subscription
+  // saying whether the Stripe ids were copied from a checkout request or deliberately left NULL.
+  // It is therefore the one @report in the catalog that is NEVER empty on an APPLIED row — the
+  // attestation branch is driven by ad_client, which always matches the target tenant.
+  '20260918T120000Z__R37-tenant-subscription-backfill',
 ]);
 
 async function loadCatalogFiles() {
