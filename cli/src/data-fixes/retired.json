@@ -45,12 +45,32 @@
     ]
   },
   {
+    "fixId": "20260813T120000Z__R23-verifactu-doctype-fields",
+    "checksum": "41f1e35483731a075940f7de70c1ae7a25f98d21df5fb03aa0831210f7d1ffce",
+    "checksumAlgorithm": "sha256",
+    "reason": "R23's rectificative-sales-invoice branch hardcoded em_etvfac_inv_type = 'R1'. Per the field's own AD_Ref_List, 'R1' is a specific rectification cause, not the catch-all generic reason -- the correct default is 'R4' ('Factura rectificativa: Resto.'), confirmed against the same catch-all semantics already used by SII and by TicketBAI (fixed the same day, ETP-5229, as a callout bug). R23's own @check (IS NULL guard) has no awareness it was superseded and would keep seeding NEW/untouched DocTypes with the wrong R1 forever if left active. R23's .sql file stays byte-for-byte untouched (may already be APPLIED against real tenants outside this local dev DB, immutable, checksum tracked here) -- this retirement list is the mechanism, not an edit to the fix. R35-verifactu-doctype-fields-corrected is a strict superset: reproduces R23's still-correct standard-invoice branch (F1/Ventas) unchanged, and replaces the rectificative branch with the corrected R4 value, with a widened guard (IS NULL OR = 'R1') that ALSO retroactively repairs any DocType R23 already mis-populated. em_etvfac_verifac_desc and em_etvfac_reverseinvtype for the rectificative case were not flagged as wrong and are carried over unchanged.",
+    "retiredBy": "ETP-5229",
+    "retiredUtc": "2026-09-11T12:00:00.000Z",
+    "supersededBy": [
+      "20260911T120000Z__R35-verifactu-doctype-fields-corrected"
+    ]
+  },
+  {
     "fixId": "20260616T130000Z__R4-default-customer-location",
     "checksum": "732f3b3a1278f34759b5be0369b98bba9cc9d4be8569b3ed8e7c8b9a881a22a8",
     "checksumAlgorithm": "sha256",
     "reason": "Obsoleted -- NOT superseded -- by ETP-5079, which removes the synthetic \"Default Customer\" business partner from onboarding entirely (OnboardingDefaultCustomerService and its call site in EtendoGoJwtServlet#ensureOnboardingDataset are deleted). R4 exists for the sole purpose of giving that BP (c_bpartner.value = 'ONBOARDING_DEFAULT_CUSTOMER') a currency, a C_Location/C_BPartner_Location address and a linked AD_User contact on tenants onboarded before that wiring existed. With the BP no longer provisioned for new tenants, and with the business decision on ETP-5079 being that existing tenants are NOT repaired, R4 has nothing left to accomplish: on a tenant that never had the BP its @check already returns 0 rows, and on a legacy tenant that still has one it would keep minting an address and a contact user for a partner the product has decided should not exist -- including exactly the \"Default Customer Contact\" AD_User that ETP-5079 stops creating. Retiring it prevents that contradiction. No replacement fix is shipped, so supersededBy is deliberately empty. R4's .sql file stays byte-for-byte untouched (already applied to real tenants, immutable, checksum tracked here) -- this retirement list is the mechanism, not an edit to the fix.",
     "retiredBy": "ETP-5079",
     "retiredUtc": "2026-09-01T12:00:00.000Z",
+    "supersededBy": []
+  },
+  {
+    "fixId": "20260910T120000Z__R36-costing-background-schedule",
+    "checksum": "2a9b9dbb6d00c6a2a773ee177e735fdd299f852d4141e543260a41a2611f48bb",
+    "checksumAlgorithm": "sha256",
+    "reason": "Obsoleted by ETP-5370, which lowers the CostingBackground cadence from every 5 minutes to every 30 seconds. R36's whole purpose is to INSERT a missing schedule, and it hardcodes the old cadence (frequency='2', minutely_interval=5) -- so every row it could still create would be born with the value the product has just moved away from. It is retired rather than edited because an already-processed .sql is immutable (sql/README.md rule 3), and rather than deleted because computeWatermark() iterates the catalog ON DISK: removing the file would stop its timestamp counting toward each tenant's watermark and could silently LOWER it, making older fixes eligible again. Retirement keeps the file as the record and makes the runner skip it outright, before the watermark and before @check. Nothing is lost in practice. On the shared dev DB all 8 tenants already recorded SKIPPED_NOT_NEEDED for R36, which is a PROCESSED status, so their watermark had already moved past it and it was never going to run for them again. A newly onboarded tenant is born with the schedule from onboarding step 8, so R36's @check returns 0 rows for it too. The only case R36 still covered was a legacy tenant carrying NO costing schedule at all, and the product decision on ETP-5370 is that every tenant already has at least one. The 30-second end state is guaranteed by com.etendoerp.go's CostingCadenceStartup, which on every application boot realigns each tenant's surviving request to frequency='1'/secondly_interval=30 and re-arms its Quartz trigger -- including any dormant row R36 inserted in the past and never armed. No replacement fix is shipped, so supersededBy is deliberately empty: this is not a cadence correction delivered in SQL (SQL cannot re-arm a live Quartz trigger), it is a creation fix whose remaining scenario no longer applies. R36's .sql stays byte-for-byte untouched -- this list is the mechanism, not an edit.",
+    "retiredBy": "ETP-5370",
+    "retiredUtc": "2026-09-16T12:00:00.000Z",
     "supersededBy": []
   }
 ]

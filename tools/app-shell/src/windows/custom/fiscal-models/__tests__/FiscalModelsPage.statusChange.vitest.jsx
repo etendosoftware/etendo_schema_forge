@@ -11,13 +11,21 @@ vi.mock('../fiscal-monitor/useDebugMode.js', () => ({
 }));
 
 vi.mock('../FmListPage.jsx', () => ({
-  default: ({ onSelect }) => (
-    <button
-      data-testid="select-303"
-      onClick={() => onSelect({ id: '303-2026-T2', model: '303', status: 'draft', year: 2026, period: 'T2' })}
-    >
-      select 303
-    </button>
+  // ETP-5338 CRITICAL FIX — surfaces `declStatusPatch` as text so a test can assert on it
+  // without reaching into FmListPage's own state; FmListPage.declStatusPatch.vitest.jsx
+  // already covers that FmListPage itself applies this patch correctly to its `decls`.
+  default: ({ onSelect, declStatusPatch }) => (
+    <>
+      <button
+        data-testid="select-303"
+        onClick={() => onSelect({ id: '303-2026-T2', model: '303', status: 'draft', year: 2026, period: 'T2' })}
+      >
+        select 303
+      </button>
+      <div data-testid="decl-status-patch">
+        {declStatusPatch ? JSON.stringify(declStatusPatch) : ''}
+      </div>
+    </>
   ),
 }));
 
@@ -77,5 +85,46 @@ describe('FiscalModelsPage — onStatusChange persistence (303)', () => {
     // The detail view for the 303 declaration must still be mounted — a
     // failed persist must not throw or unmount the page.
     expect(screen.getByTestId('present-303')).toBeInTheDocument();
+  });
+
+  // ETP-5338 CRITICAL FIX — regression for "presenting a declaration and going back to the
+  // always-mounted list shows it reverted to draft". Root cause: FmListPage's own `decls`
+  // state was never refreshed/patched after a status change made in the detail page, so the
+  // list kept showing the stale pre-submission status. See the long comment on
+  // `declStatusPatch` in both FiscalModelsPage.jsx and FmListPage.jsx.
+  it('pushes a declStatusPatch down to FmListPage after a successful status persist', async () => {
+    fetch.mockResolvedValueOnce({ ok: true });
+
+    render(<FiscalModelsPage token={TOKEN} apiBaseUrl={API_BASE} />);
+
+    // Before presenting, FmListPage has received no patch at all.
+    expect(screen.getByTestId('decl-status-patch').textContent).toBe('');
+
+    fireEvent.click(screen.getByTestId('select-303'));
+    fireEvent.click(screen.getByTestId('present-303'));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+
+    // Once the PUT succeeds, FmListPage must receive the SAME id/status that was just
+    // persisted, so its own `decls` cache — which never refetches on its own — can patch
+    // the row instead of showing what it fetched before the user ever opened the declaration.
+    await waitFor(() => {
+      const patch = JSON.parse(screen.getByTestId('decl-status-patch').textContent);
+      expect(patch).toEqual({ id: '303-2026-T2', patch: { status: 'submitted' } });
+    });
+  });
+
+  it('does NOT push a declStatusPatch when the status PUT fails', async () => {
+    fetch.mockResolvedValueOnce({ ok: false, status: 500 });
+
+    render(<FiscalModelsPage token={TOKEN} apiBaseUrl={API_BASE} />);
+
+    fireEvent.click(screen.getByTestId('select-303'));
+    fireEvent.click(screen.getByTestId('present-303'));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+
+    // A failed persist must never make the list LOOK like it succeeded.
+    expect(screen.getByTestId('decl-status-patch').textContent).toBe('');
   });
 });

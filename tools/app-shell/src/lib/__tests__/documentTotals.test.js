@@ -184,6 +184,60 @@ describe('computeDocumentTotals', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Negative-quantity discount sign (ETP-5132)
+//
+// computeDocumentTotals() itself was NOT changed by the ETP-5132 fix — only
+// what downstream callers (DocumentTotalsPanel.jsx, documentPdf.js) DISPLAY
+// changed (they now show the sign-flipped `-discountAmt`/`-totalDiscountAmt`
+// instead of clamping on a ">0" check). These tests lock the raw signed
+// values this fix's display-side sign-flip depends on, using the ticket's
+// own worked example (Agua, qty=-1, price=5.00€, 10% per-product discount),
+// verified live against go.experimental.etendo.cloud — see
+// docs/bug-reports/2026-09-08-etp5132-negative-quantity-discount.md.
+// ---------------------------------------------------------------------------
+
+describe('computeDocumentTotals — negative-quantity discount sign (ETP-5132)', () => {
+  it('CP-1: discountAmt comes back negative for a negative-qty discounted line, so -discountAmt is the correct positive display value', () => {
+    // qty=-1, price=5.00, disc=10% → grossSubtotal=-5.00, netSubtotal=-4.50
+    // discountAmt = grossSubtotal - netSubtotal = -5.00 - (-4.50) = -0.50
+    const result = computeDocumentTotals([line(-1, 5, 10, 0)], null, null, CONFIG);
+    assert.equal(result.grossSubtotal, -5);
+    assert.equal(result.netSubtotal, -4.5);
+    assert.equal(result.discountAmt, -0.5);
+    // The panel/PDF display -discountAmt — this must be the positive 0.50€
+    // the ticket expects, not the ticket's own (inconsistent) "-0,50" text —
+    // see the bug report's "Important correction to the ticket's own example
+    // text" section for why +0.50 is the value verified correct live.
+    assert.equal(-result.discountAmt, 0.5);
+  });
+
+  it('CP-2: consistency holds end-to-end — grossSubtotal + (-discountAmt) + (-totalDiscountAmt) equals the final net-of-both-discounts subtotal', () => {
+    // Same line, plus a 10% total discount also active (the ticket's second
+    // worked example): totalDiscountAmt = netSubtotal × pct/100
+    //   = -4.50 × 10/100 = -0.45  → displayed -totalDiscountAmt = +0.45
+    const result = computeDocumentTotals([line(-1, 5, 10, 0)], null, null, CONFIG, 10);
+    assert.equal(result.discountAmt, -0.5);
+    assert.equal(result.totalDiscountAmt, -0.45);
+
+    // "Subtotal" row (DocumentTotalsPanel.jsx) = netSubtotal - totalDiscountAmt
+    //   = -4.50 - (-0.45) = -4.05  — matches the ticket's expected final subtotal.
+    const netFinal = result.netSubtotal - result.totalDiscountAmt;
+    assert.ok(Math.abs(netFinal - -4.05) < 1e-9);
+
+    // The ticket's own CP-2 consistency check, using the sign-flipped display
+    // values: -5.00 + 0.50 + 0.45 = -4.05.
+    assert.ok(
+      Math.abs((result.grossSubtotal + -result.discountAmt + -result.totalDiscountAmt) - netFinal) < 1e-9,
+    );
+  });
+
+  // CP-3 (regression — positive-quantity line keeps returning a positive
+  // discountAmt, sign untouched by this fix) is already covered above by
+  // 'computes gross subtotal before discount and net subtotal after discount'
+  // and 'aggregates across multiple lines' — not duplicated here.
+});
+
+// ---------------------------------------------------------------------------
 // Rounding invariants (ETP-4017 follow-up)
 //
 // These tests lock the contract "displayed_subtotal + displayed_tax === total"

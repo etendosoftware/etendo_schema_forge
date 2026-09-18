@@ -24,16 +24,22 @@ function SectionRow({ label, children, labelExtra, noBorderTop, boldLabel }) {
   );
 }
 
-const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, onSave, variant, hideSave, hideCert }, ref) {
+const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, onSave, variant, hideSave, hideCert, locked }, ref) {
   const ui = useUI();
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
   const [form, setForm] = useState(mapSiiRecordToForm(record));
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState(null);
 
-  function set(field, value) { setForm(f => ({ ...f, [field]: value })); }
+  function set(field, value) {
+    if (locked) return;
+    setForm(f => ({ ...f, [field]: value }));
+  }
 
   function validate() {
+    if ((form.authorizationno ?? '').length > 15) {
+      return ui('fiscal.sii.err.authRegNoTooLong');
+    }
     return null;
   }
 
@@ -86,7 +92,12 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
             <Input
               value={form.authorizationno}
               onChange={e => set('authorizationno', e.target.value)}
+              disabled={locked}
               className="bg-card"
+              autoComplete="off"
+              name="sii-authorization-number"
+              id="sii-authorization-number"
+              maxLength={15}
               data-testid="Input__fcb159" />
           </div>
         </div>
@@ -108,6 +119,7 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
       <SectionSaveButton
         error={error}
         hideSave={hideSave}
+        locked={locked}
         save={save}
         saving={saving}
         ui={ui}

@@ -49,6 +49,11 @@ vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u 
 vi.mock('../useFiscalMonitor.js', () => ({
   TBAI_SPEC: 'tbai-monitor',
   TBAI_ENTITY: 'sincronizacion',
+  // ETP-5229 — this suite never passes earliestCutoverDate, so [] (no-op) is
+  // always the correct return value.
+  buildCutoverCriteria: (cutoverDate) => (cutoverDate
+    ? [{ fieldName: 'invoiceDate', operator: 'greaterOrEqual', value: cutoverDate.slice(0, 10) }]
+    : []),
 }));
 // FmPrimitives is stubbed the same way its sibling suites stub it — with ONE
 // difference that is the whole point of this file: `useFmSelection` is a real,

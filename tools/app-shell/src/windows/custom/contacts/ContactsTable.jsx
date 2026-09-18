@@ -3,11 +3,13 @@ import { toast } from 'sonner';
 import { DataTable } from '@/components/contract-ui';
 import { useLocale, useUI } from '@/i18n';
 import { Tag } from '@/components/ui/tag';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import { Button } from '@/components/ui/button.jsx';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog.jsx';
 import { extractApiErrorMessage } from '@/lib/apiError';
+import { useContactsCacheInvalidation } from './contactsCacheInvalidation';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const filters = ['searchKey', 'name', 'etgoFirstname', 'etgoLastname'];
@@ -36,6 +38,19 @@ function TypeBadge({ row, t }) {
   return '—';
 }
 
+// ETP-5268 follow-up — same "see the full value when it's cut off" tooltip the
+// generic `renderDefaultCell` gives every column, but these columns opt out of
+// it by defining their own `render` (needed for inline editing), which bypasses
+// CELL_RENDERERS entirely (see DataTable.jsx's `renderCellValue`).
+function TextCell({ value }) {
+  return (
+    <TruncatedText
+      text={value ?? '—'}
+      className="max-w-[200px]"
+      data-testid="TruncatedText__5c74a8" />
+  );
+}
+
 function EditableCell({ value, onChange, onKeyDown }) {
   return (
     <input
@@ -49,6 +64,7 @@ function EditableCell({ value, onChange, onKeyDown }) {
 }
 
 export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMutated, ...rest }) {
+  const { invalidateBusinessPartner } = useContactsCacheInvalidation();
   const dictionary = useLocale();
   const ui = useUI();
   const gl = dictionary?.genericLabels || {};
@@ -78,7 +94,8 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
     });
     if (!res.ok) throw new Error(`Error ${res.status}`);
     onDataMutated?.();
-  }, [editingRow, apiFetch, onDataMutated]);
+    invalidateBusinessPartner();
+  }, [editingRow, apiFetch, onDataMutated, invalidateBusinessPartner]);
 
   const handleEditRow = useCallback((row) => {
     const isPerson = isPersonRow(row);
@@ -109,7 +126,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
           onChange={(v) => handleEditChange('name', v)}
           onKeyDown={handleKeyDown}
           data-testid="EditableCell__5c74a8" />
-          : (row.name ?? '—'),
+          : <TextCell value={row.name} data-testid="TextCell__5c74a8" />,
       },
       {
         key: 'etgoFirstname', column: 'EM_Etgo_Firstname', type: 'string', label: t('firstNameColumn'),
@@ -119,7 +136,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
           onChange={(v) => handleEditChange('etgoFirstname', v)}
           onKeyDown={handleKeyDown}
           data-testid="EditableCell__5c74a8" />
-          : (row.etgoFirstname ?? '—'),
+          : <TextCell value={row.etgoFirstname} data-testid="TextCell__5c74a8" />,
       },
       {
         key: 'etgoLastname', column: 'EM_Etgo_Lastname', type: 'string', label: t('lastNameColumn'),
@@ -129,7 +146,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
           onChange={(v) => handleEditChange('etgoLastname', v)}
           onKeyDown={handleKeyDown}
           data-testid="EditableCell__5c74a8" />
-          : (row.etgoLastname ?? '—'),
+          : <TextCell value={row.etgoLastname} data-testid="TextCell__5c74a8" />,
       },
       {
         key: '__type', type: 'string', label: t('typeColumn'), sortable: false, filterable: false,
@@ -137,7 +154,29 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
       },
       {
         key: 'eTGOLocation', column: 'EM_Etgo_Location', type: 'string', label: t('locationColumn'),
-        render: (row) => row.eTGOLocation ?? '—',
+        // ETP-5060: the computed column now yields the C_Location id, not a
+        // pre-rendered address. The text lives in the companion identifier key,
+        // which the DAL resolves per request and therefore translates the country
+        // (a computed column has no access to the session language, so anything it
+        // renders as text is frozen in the base language).
+        //
+        // The column is now STORED (Computation_Mode 'S'), so it is a physical FK and
+        // the AD column has ALLOWSORTING/ALLOWFILTERING on. Both props below redirect
+        // the grid from the raw column (a UUID) to its resolved identifier.
+        //
+        // `filterMode` makes the advanced filter emit
+        //   {fieldName: 'eTGOLocation$_identifier', operator: 'iContains', ...}
+        // so typing "Madrid" matches the address text. Without it the same condition
+        // would run against the column, i.e. against UUIDs, and never match.
+        filterMode: 'identifier',
+        // `sortMode` does the same for ordering: inferSortMode() maps `type: 'string'`
+        // to 'raw', which sends `_sortBy=eTGOLocation` and orders by the UUID (this
+        // shipped broken once). 'identifier' makes resolveBackendSort send
+        // `eTGOLocation$_identifier`, and `-eTGOLocation$_identifier` for desc -- the
+        // minus prefix is required, a trailing ` desc` makes Openbravo miss the
+        // identifier path and answer 500.
+        sortMode: 'identifier',
+        render: (row) => <TextCell value={row['eTGOLocation$_identifier']} data-testid="TextCell__5c74a8" />,
       },
       {
         key: 'etgoWeb', column: 'EM_Etgo_Web', type: 'string', label: t('webColumn'),
@@ -147,7 +186,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
           onChange={(v) => handleEditChange('etgoWeb', v)}
           onKeyDown={handleKeyDown}
           data-testid="EditableCell__5c74a8" />
-          : (row.etgoWeb ?? '—'),
+          : <TextCell value={row.etgoWeb} data-testid="TextCell__5c74a8" />,
       },
       {
         key: 'etgoEmail', column: 'EM_Etgo_Email', type: 'string', label: t('emailColumn'),
@@ -157,7 +196,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
           onChange={(v) => handleEditChange('etgoEmail', v)}
           onKeyDown={handleKeyDown}
           data-testid="EditableCell__5c74a8" />
-          : (row.etgoEmail ?? '—'),
+          : <TextCell value={row.etgoEmail} data-testid="TextCell__5c74a8" />,
       },
       {
         key: 'etgoPhone', column: 'EM_Etgo_Phone', type: 'string', label: t('phoneColumn'),
@@ -167,7 +206,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
           onChange={(v) => handleEditChange('etgoPhone', v)}
           onKeyDown={handleKeyDown}
           data-testid="EditableCell__5c74a8" />
-          : (row.etgoPhone ?? '—'),
+          : <TextCell value={row.etgoPhone} data-testid="TextCell__5c74a8" />,
       },
       // Hidden virtual column — appears in conditional filter panel as "Tipo" with
       // "Cliente"/"Proveedor" options. buildCriteria maps each value to the real
@@ -214,13 +253,14 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
       } else {
         toast.success(ui('contactDeleteSuccess'));
         onDataMutated?.();
+        invalidateBusinessPartner();
       }
     } catch (err) {
       toast.error(err.message || 'Network error');
     } finally {
       resolve();
     }
-  }, [pendingDelete, apiFetch, onDataMutated]);
+  }, [pendingDelete, apiFetch, onDataMutated, invalidateBusinessPartner]);
 
   const cancelDelete = useCallback(() => {
     pendingDelete?.resolve();

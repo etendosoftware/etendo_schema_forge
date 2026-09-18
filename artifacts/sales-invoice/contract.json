@@ -1,8 +1,7 @@
 {
-  "version": "0.86.0",
-  "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-09-04T16:26:43.241Z",
-  "checksum": "1080513c5c7d8b89",
+  "version": "0.88.0",
+  "generatedAt": "2026-09-17T15:12:05.781Z",
+  "checksum": "70542a4b0abb5d3c",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -61,14 +60,16 @@
           "em_etgo_delivery_status": "Estado de entrega",
           "C_DocTypeTarget_ID": "Tipo de documento",
           "PriceList": "Precio",
-          "Foreign_Amount": "Importe en Moneda Objetivo"
+          "Foreign_Amount": "Importe en Moneda Objetivo",
+          "em_etgo_tbai_status": "Estado TicketBAI"
         },
         "en_US": {
           "OutstandingAmt": "Outstanding Amount",
           "EM_Etgo_Due_Date": "Due Date",
           "em_etgo_delivery_status": "Delivery Status",
           "C_DocTypeTarget_ID": "Document Type",
-          "Foreign_Amount": "Target Currency Amount"
+          "Foreign_Amount": "Target Currency Amount",
+          "em_etgo_tbai_status": "TicketBAI Status"
         },
         "es_AR": {
           "OutstandingAmt": "Saldo pendiente"
@@ -220,7 +221,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "!!record.id"
+              "js": "record['processed'] === true"
             }
           },
           {
@@ -756,6 +757,38 @@
               "raw": "@Processed@='Y'",
               "evaluable": true,
               "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "accountingDate",
+            "apiKey": "accountingDate",
+            "column": "DateAcct",
+            "label": "Accounting Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "@#Date@"
+            },
+            "defaultValue": "@#Date@",
+            "section": "principal",
+            "seq": 35,
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_TaxDate"
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -1585,31 +1618,6 @@
             }
           },
           {
-            "name": "aeatsiiFechaRegCont",
-            "apiKey": "aeatsiiFechaRegCont",
-            "column": "EM_Aeatsii_Fecha_Reg_Cont",
-            "label": "EM_Aeatsii_Fecha_Reg_Cont",
-            "type": "date",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": false,
-            "derivation": {
-              "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN null ELSE now() END FROM dual"
-            },
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN null ELSE now() END FROM dual",
-            "validation": {
-              "maxLength": 19
-            },
-            "readOnlyLogic": {
-              "raw": "@AEATSII_InSIIAndPostedInvoices@='Y'",
-              "evaluable": true,
-              "js": "record['aEATSII_InSIIAndPostedInvoices'] === 'Y'"
-            }
-          },
-          {
             "name": "eTGOCurrencyRate",
             "apiKey": "eTGOCurrencyRate",
             "column": "EM_ETGO_Currency_Rate",
@@ -1622,6 +1630,25 @@
             "form": false,
             "validation": {
               "maxLength": 22
+            }
+          },
+          {
+            "name": "eTGOTbaiStatus",
+            "apiKey": "eTGOTbaiStatus",
+            "column": "EM_ETGO_Tbai_Status",
+            "label": "EM_ETGO_Tbai_Status",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "computed": {
+              "mode": "stored",
+              "refresh": "synchronous"
+            },
+            "validation": {
+              "maxLength": 10
             }
           },
           {
@@ -1729,6 +1756,13 @@
             }
           },
           {
+            "name": "accountingDate",
+            "derivation": {
+              "type": "computed",
+              "source": "@#Date@"
+            }
+          },
+          {
             "name": "etsgDateOperation",
             "derivation": {
               "type": "fromConfig",
@@ -1790,13 +1824,6 @@
               "type": "computed",
               "source": "false"
             }
-          },
-          {
-            "name": "aeatsiiFechaRegCont",
-            "derivation": {
-              "type": "lookup",
-              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN null ELSE now() END FROM dual"
-            }
           }
         ],
         "javaQualifier": "salesInvoiceHeaderHandler",
@@ -1804,7 +1831,10 @@
           "enabled": true,
           "processField": "documentAction",
           "processValue": "CO",
-          "label": "Confirm"
+          "label": "Confirm",
+          "keepSaveWhenCompletedFields": [
+            "accountingDate"
+          ]
         }
       },
       "lines": {
@@ -2848,14 +2878,16 @@
           "em_etgo_delivery_status": "Estado de entrega",
           "C_DocTypeTarget_ID": "Tipo de documento",
           "PriceList": "Precio",
-          "Foreign_Amount": "Importe en Moneda Objetivo"
+          "Foreign_Amount": "Importe en Moneda Objetivo",
+          "em_etgo_tbai_status": "Estado TicketBAI"
         },
         "en_US": {
           "OutstandingAmt": "Outstanding Amount",
           "EM_Etgo_Due_Date": "Due Date",
           "em_etgo_delivery_status": "Delivery Status",
           "C_DocTypeTarget_ID": "Document Type",
-          "Foreign_Amount": "Target Currency Amount"
+          "Foreign_Amount": "Target Currency Amount",
+          "em_etgo_tbai_status": "TicketBAI Status"
         },
         "es_AR": {
           "OutstandingAmt": "Saldo pendiente"
@@ -3212,7 +3244,7 @@
             "apiKey": "accountingDate",
             "column": "DateAcct",
             "type": "date",
-            "visibility": "system",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -3956,7 +3988,7 @@
             "apiKey": "aeatsiiFechaRegCont",
             "column": "EM_Aeatsii_Fecha_Reg_Cont",
             "type": "date",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -4013,6 +4045,14 @@
             "column": "EM_ETGO_Currency_Rate",
             "type": "string",
             "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "eTGOTbaiStatus",
+            "apiKey": "eTGOTbaiStatus",
+            "column": "EM_ETGO_Tbai_Status",
+            "type": "string",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -5947,14 +5987,16 @@
         "em_etgo_delivery_status": "Estado de entrega",
         "C_DocTypeTarget_ID": "Tipo de documento",
         "PriceList": "Precio",
-        "Foreign_Amount": "Importe en Moneda Objetivo"
+        "Foreign_Amount": "Importe en Moneda Objetivo",
+        "em_etgo_tbai_status": "Estado TicketBAI"
       },
       "en_US": {
         "OutstandingAmt": "Outstanding Amount",
         "EM_Etgo_Due_Date": "Due Date",
         "em_etgo_delivery_status": "Delivery Status",
         "C_DocTypeTarget_ID": "Document Type",
-        "Foreign_Amount": "Target Currency Amount"
+        "Foreign_Amount": "Target Currency Amount",
+        "em_etgo_tbai_status": "TicketBAI Status"
       },
       "es_AR": {
         "OutstandingAmt": "Saldo pendiente"
@@ -6215,6 +6257,14 @@
         "description": "Default value for 'foreignAmount' in exchangeRates should be a string"
       },
       {
+        "id": "t-default-value-type-header-accountingDate",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Default value for 'accountingDate' in header should be a string"
+      },
+      {
         "id": "t-default-value-type-header-adOrgId",
         "category": "default-value-type",
         "entity": "header",
@@ -6253,14 +6303,6 @@
         "field": "aeatsiiEstado",
         "runner": "node",
         "description": "Default value for 'aeatsiiEstado' in header should be a string"
-      },
-      {
-        "id": "t-default-value-type-header-aeatsiiFechaRegCont",
-        "category": "default-value-type",
-        "entity": "header",
-        "field": "aeatsiiFechaRegCont",
-        "runner": "node",
-        "description": "Default value for 'aeatsiiFechaRegCont' in header should be a string"
       },
       {
         "id": "t-default-value-type-header-aeatsiiIsauthorization",
@@ -6959,6 +7001,14 @@
         "description": "Field 'toCurrency' should be present in exchangeRates"
       },
       {
+        "id": "t-field-presence-header-accountingDate",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Field 'accountingDate' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-adOrgId",
         "category": "field-presence",
         "entity": "header",
@@ -7029,14 +7079,6 @@
         "field": "aeatsiiEstado",
         "runner": "node",
         "description": "Field 'aeatsiiEstado' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-aeatsiiFechaRegCont",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "aeatsiiFechaRegCont",
-        "runner": "node",
-        "description": "Field 'aeatsiiFechaRegCont' should be present in header"
       },
       {
         "id": "t-field-presence-header-aeatsiiIsauthorization",
@@ -7141,6 +7183,14 @@
         "field": "eTGODueDate",
         "runner": "node",
         "description": "Field 'eTGODueDate' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-eTGOTbaiStatus",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "eTGOTbaiStatus",
+        "runner": "node",
+        "description": "Field 'eTGOTbaiStatus' should be present in header"
       },
       {
         "id": "t-field-presence-header-etgoTotalDiscount",
@@ -7583,6 +7633,14 @@
         "description": "Field 'toCurrency' should have type 'string' in exchangeRates"
       },
       {
+        "id": "t-field-type-header-accountingDate",
+        "category": "field-type",
+        "entity": "header",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Field 'accountingDate' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-adOrgId",
         "category": "field-type",
         "entity": "header",
@@ -7653,14 +7711,6 @@
         "field": "aeatsiiEstado",
         "runner": "node",
         "description": "Field 'aeatsiiEstado' should have type 'string' in header"
-      },
-      {
-        "id": "t-field-type-header-aeatsiiFechaRegCont",
-        "category": "field-type",
-        "entity": "header",
-        "field": "aeatsiiFechaRegCont",
-        "runner": "node",
-        "description": "Field 'aeatsiiFechaRegCont' should have type 'string' in header"
       },
       {
         "id": "t-field-type-header-aeatsiiIsauthorization",
@@ -7765,6 +7815,14 @@
         "field": "eTGODueDate",
         "runner": "node",
         "description": "Field 'eTGODueDate' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-eTGOTbaiStatus",
+        "category": "field-type",
+        "entity": "header",
+        "field": "eTGOTbaiStatus",
+        "runner": "node",
+        "description": "Field 'eTGOTbaiStatus' should have type 'string' in header"
       },
       {
         "id": "t-field-type-header-etgoTotalDiscount",
@@ -8207,6 +8265,14 @@
         "description": "Read-only logic for 'toCurrency' in exchangeRates should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-accountingDate",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Read-only logic for 'accountingDate' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-adOrgId",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -8269,14 +8335,6 @@
         "field": "aeatsiiEstado",
         "runner": "node",
         "description": "Read-only logic for 'aeatsiiEstado' in header should have evaluable flag"
-      },
-      {
-        "id": "t-readonlylogic-evaluable-header-aeatsiiFechaRegCont",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "aeatsiiFechaRegCont",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiFechaRegCont' in header should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-header-aeatsiiIssent",
@@ -8607,6 +8665,14 @@
         "description": "Read-only logic for 'toCurrency' in exchangeRates should be valid JS"
       },
       {
+        "id": "t-readonlylogic-valid-header-accountingDate",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Read-only logic for 'accountingDate' in header should be valid JS"
+      },
+      {
         "id": "t-readonlylogic-valid-header-adOrgId",
         "category": "readonlylogic-valid",
         "entity": "header",
@@ -8669,14 +8735,6 @@
         "field": "aeatsiiEstado",
         "runner": "node",
         "description": "Read-only logic for 'aeatsiiEstado' in header should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-header-aeatsiiFechaRegCont",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "aeatsiiFechaRegCont",
-        "runner": "node",
-        "description": "Read-only logic for 'aeatsiiFechaRegCont' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-aeatsiiIssent",
@@ -9365,14 +9423,6 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for exchangeRates"
       },
       {
-        "id": "t-system-field-header-accountingDate",
-        "category": "system-field",
-        "entity": "header",
-        "field": "accountingDate",
-        "runner": "node",
-        "description": "System field 'accountingDate' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-activity",
         "category": "system-field",
         "entity": "header",
@@ -9459,6 +9509,14 @@
         "field": "aeatsiiFechaOperacion",
         "runner": "node",
         "description": "System field 'aeatsiiFechaOperacion' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-aeatsiiFechaRegCont",
+        "category": "system-field",
+        "entity": "header",
+        "field": "aeatsiiFechaRegCont",
+        "runner": "node",
+        "description": "System field 'aeatsiiFechaRegCont' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-aeatsiiHash",
@@ -10937,15 +10995,15 @@
       }
     ],
     "summary": {
-      "total": 624,
+      "total": 626,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 5,
         "default-value-type": 26,
         "displaylogic-evaluable": 32,
         "displaylogic-valid": 32,
-        "field-presence": 78,
-        "field-type": 78,
+        "field-presence": 79,
+        "field-type": 79,
         "readonlylogic-evaluable": 50,
         "readonlylogic-valid": 50,
         "rule-declared": 10,
@@ -10955,7 +11013,7 @@
         "visibility": 5
       },
       "byRunner": {
-        "node": 624,
+        "node": 626,
         "junit": 0
       }
     }

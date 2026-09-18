@@ -1,4 +1,4 @@
-import { useCallback, useState, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useCallback, useEffect, useState, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { toast } from 'sonner';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { translateBackendError } from '@/lib/backendErrors.js';
@@ -15,6 +15,7 @@ import {
 import { ListSortPopover } from '@/components/contract-ui/ListSortPopover.jsx';
 import { ListProgressBar } from '@/components/contract-ui/ListProgressBar.jsx';
 import { useClientSort } from '@/hooks/useClientSort';
+import { sortRows } from '@/lib/clientSort.js';
 import { StatementLinesView } from './StatementLinesView';
 import { ImportStatementModal } from './ImportStatementModal';
 import { ManualStatementModal } from './ManualStatementModal';
@@ -22,6 +23,39 @@ import { StatementConfirmDialog } from './StatementConfirmDialog';
 import { applyAdvancedFilter } from './statementAdvancedFilter';
 import { getDateBounds } from '@/lib/dateRangeBounds';
 import { parseCalendarDate } from '@/lib/dateOnly';
+
+/**
+ * The list's default order: newest statement first.
+ *
+ * Shared by the pre-sort and by `useClientSort`'s indicator seed, which must agree or the header
+ * arrow would describe an order the rows are not in.
+ */
+/**
+ * The date an imported statement is filtered by, as a comparable {@link Date}, or `null` when the
+ * value is missing or unparseable.
+ *
+ * <p>`importDate` is an INSTANT ("2026-09-17T01:46:00.000Z"), not a calendar date, so it has to be
+ * compared as one. `parseCalendarDate` takes the yyyy-MM-dd prefix — the UTC day — and rebuilds it
+ * in local time; under a NEGATIVE UTC offset that prefix is already TOMORROW late in the evening
+ * (22:46 in UTC-3 is 01:46 UTC of the next day). The statement the user just created then sorted
+ * past the range's `to` bound and disappeared from the default last-30-days view until the next
+ * morning. `getDateBounds` returns local Dates, so comparing the instant straight against them is
+ * correct and timezone-independent.
+ *
+ * <p>This is the over-application the date-only policy warns about: the helper is for values that
+ * really are date-only, and a genuine date-only `importDate` (no "T") still goes through it.
+ *
+ * <p>Lives out here, rather than inline in the filter callback, to keep that callback under the
+ * cognitive-complexity budget (javascript:S3776).
+ */
+function statementFilterDate(raw) {
+  const parsed = typeof raw === 'string' && raw.includes('T')
+    ? new Date(raw)
+    : parseCalendarDate(raw);
+  return parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+}
+
+const STATEMENTS_DEFAULT_SORT = Object.freeze({ key: 'documentNo', direction: 'desc' });
 import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
 
 /**
@@ -95,6 +129,23 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   // deleteStatement(id) call the per-row hover quick-action already makes (see
   // StatementsTable).
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  // ETP-4972 QA finding (comment 145559) — applying/changing the search box,
+  // date range, status quick filter or the advanced filter must drop the
+  // current checkbox selection, so a bulk "Delete selected" can never fire
+  // against statements the user is no longer looking at (same generic rule
+  // applied to ListView; this tab keeps its own local filter + selection
+  // state instead of ListView's). Deliberately excludes `sortKey`/
+  // `sortDirection` (useClientSort below): reordering the same filtered rows
+  // doesn't change which ones are visible.
+  const didInitialSelectionClearRef = useRef(false);
+  useEffect(() => {
+    if (!didInitialSelectionClearRef.current) {
+      didInitialSelectionClearRef.current = true;
+      return;
+    }
+    clearSelection();
+  }, [search, dateRange, status, advancedFilter, clearSelection]);
 
   // ETP-4921 — `reload()` only refetches the statement HEADERS. The lines of an EXPANDED row come
   // from StatementLinesInline's own `useBankStatementLines(statementId)`, keyed solely on the id,
@@ -209,7 +260,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
     const base = statements.filter((s) => {
       if (status && s.status !== status) return false;
       if (from || to) {
-        const d = parseCalendarDate(s.importDate);
+        const d = statementFilterDate(s.importDate);
         if (from && d && d < from) return false;
         if (to && d && d > to) return false;
       }
@@ -229,10 +280,31 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   // list arrives whole from a handler that accepts no sort parameter — see lib/clientSort.js.
   const sortAccessors = useMemo(() => buildStatementSortAccessors(bcpLocale), [bcpLocale]);
   const sortColumns = useMemo(() => buildStatementSortColumns(ui), [ui]);
+  // Newest first by default. The handler returns the statements in no particular order, so a
+  // freshly created one — manual or imported — landed wherever it happened to fall and the user
+  // had to hunt for the row they had just made. DocumentNo is the only strictly increasing key
+  // the list has (the transaction date is the bank's, not the creation order), so the newest
+  // statement is always the highest one.
+  //
+  // Pre-sorted HERE rather than through `initialSort`, which only seeds the header indicator and
+  // deliberately does not reorder — see `useClientSort`'s doc. Both are needed: this call puts
+  // the rows in order, `initialSort` makes the arrow agree with what is on screen.
+  const defaultSortedStatements = useMemo(
+    () => sortRows(filteredStatements, {
+      key: 'documentNo',
+      direction: 'desc',
+      accessors: sortAccessors,
+      locale: bcpLocale,
+    }),
+    [filteredStatements, sortAccessors, bcpLocale],
+  );
   const {
     sorted: sortedStatements, sortKey, sortDirection, toggleSort, selectSort, clearSort,
     isDefaultSort,
-  } = useClientSort(filteredStatements, { accessors: sortAccessors });
+  } = useClientSort(defaultSortedStatements, {
+    accessors: sortAccessors,
+    initialSort: STATEMENTS_DEFAULT_SORT,
+  });
 
   // Latest filtered headers + current selection reachable via ref, so the
   // parent's Export button can read them on click without subscribing here.

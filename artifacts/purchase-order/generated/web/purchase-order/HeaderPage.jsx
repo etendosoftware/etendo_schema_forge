@@ -2,6 +2,7 @@ import { useMemo, useEffect } from 'react';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
+import { toast } from 'sonner';
 import HeaderTable from './HeaderTable';
 import HeaderForm from './HeaderForm';
 import LinesTable from './LinesTable';
@@ -790,6 +791,9 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         bottomSection={PurchaseOrderBottomPanel}
         topbarRight={PurchaseOrderActions}
         topbarExtra={PurchaseOrderDraftChips}
+        menuActions={({ data, status }) => [
+          { key: 'reactivate', label: 'Reactivate', visible: status === 'CO' && !(data?.hasLinkedDocuments === 'Y' || data?.hasLinkedDocuments === true), labelKey: 'reactivate', successKey: 'reactivated', documentAction: 'RE',  }
+        ]}
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
         documentDateField="orderDate"

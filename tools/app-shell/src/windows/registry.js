@@ -48,6 +48,7 @@ const windowLoaders = {
   'project': () => import('@generated/project/generated/web/project/index.jsx'),
   'time-tracking': () => import('@generated/time-tracking/generated/web/time-tracking/index.jsx'),
   'document': () => import('@generated/document/generated/web/document/index.jsx'),
+  'document-sequence': () => import('@generated/document-sequence/generated/web/document-sequence/index.jsx'),
   'recurring-invoice': () => import('@generated/recurring-invoice/generated/web/recurring-invoice/index.jsx'),
   'payment-in': () => import('@generated/payment-in/generated/web/payment-in/index.jsx'),
   'payment-out': () => import('@generated/payment-out/generated/web/payment-out/index.jsx'),

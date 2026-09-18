@@ -1,6 +1,18 @@
 {
   "menu": [
     {
+      "group": "First Steps",
+      "icon": "ClipboardCheck",
+      "section": "General",
+      "items": [
+        {
+          "name": "first-steps",
+          "label": "First Steps",
+          "favname": "First Steps"
+        }
+      ]
+    },
+    {
       "group": "Home",
       "icon": "Home",
       "section": "General",
@@ -408,6 +420,12 @@
           "windowId": "110"
         },
         {
+          "name": "document-sequence",
+          "label": "Document Sequence",
+          "favname": "Document Sequence",
+          "windowId": "112"
+        },
+        {
           "name": "price-list",
           "label": "Price List",
           "favname": "Price List",
@@ -438,10 +456,19 @@
           "capability": "isAdminOrClientAdmin"
         },
         {
+          "name": "acct-process-monitor",
+          "label": "Accounting Process",
+          "favname": "Accounting Process",
+          "icon": "Cog",
+          "featureFlag": "acct-process-monitor",
+          "capability": "isAdminOrClientAdmin"
+        },
+        {
           "name": "smart-scan",
           "label": "Smart Scan",
           "favname": "Smart Scan",
-          "accessWindowId": "33705E0F52874D91B0BB2FF8BB648B8E"
+          "accessWindowId": "33705E0F52874D91B0BB2FF8BB648B8E",
+          "hidden": true
         },
         {
           "name": "oauth2-clients",
@@ -449,6 +476,14 @@
           "favname": "OAuth2 Clients",
           "icon": "Shield",
           "hidden": true
+        },
+        {
+          "name": "api-keys",
+          "label": "Public API Keys",
+          "favname": "Public API Keys",
+          "icon": "KeyRound",
+          "featureFlag": "public-api-keys",
+          "capability": "isAdminOrClientAdmin"
         },
         {
           "name": "fiscal-config",

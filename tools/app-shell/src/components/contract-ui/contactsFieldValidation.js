@@ -12,6 +12,16 @@
 // `{ key, params } | null` — an i18n key + interpolation params, decoupled from
 // display. Empty values are always valid; emptiness is the `required` mechanism's job.
 
+// Relative, NOT the `@/lib/...` alias, deliberately: this module is imported by
+// a plain `node --test` suite (contract-ui/__tests__/contactsFieldValidation.test.js,
+// picked up by the root `npm test` glob), and the bare runner resolves no Vite
+// alias — an aliased import here fails the whole file with ERR_MODULE_NOT_FOUND.
+// Same documented exception as the request-policy rule in CLAUDE.md ("plain
+// module: … NEVER the `@/auth/api.js` barrel, which plain `node --test` cannot
+// load"): loadability by the plain runner wins over the `@/` house style.
+// Vite/browser consumers resolve this path identically, so nothing changes for them.
+import { getTaxIdError } from '../../lib/taxIdValidation.js';
+
 // field.key -> the AD column's real database length, read directly from
 // artifacts/contacts/contract.json (entities.businessPartner.fields / entities.contact.fields
 // → validation.maxLength) for every editable text-type field visible in
@@ -26,7 +36,11 @@ export const CONTACTS_TEXT_FIELD_LIMITS = {
   taxID: 20,
   etgoWeb: 60,
   etgoEmail: 60,
-  etgoPhone: 60,
+  // 15, not 60: ETP-5031 narrowed the AD column to the E.164 maximum at QA's
+  // request (artifacts/contacts/decisions.json -> etgoPhone.maxLength), so the
+  // client guard has to follow the column or it would wave through a value the
+  // database then truncates.
+  etgoPhone: 15,
   // contact entity
   firstName: 60,
   lastName: 60,
@@ -91,6 +105,90 @@ export function getContactsTextFieldError(windowName, field, value) {
   if (hasUnsafeChars(s)) {
     return { key: 'fieldInvalidCharacters', params: {} };
   }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// ETP-5031 (QA round) — tax identifier CONTENT validation for Contacts.
+//
+// The length/charset guard above never looked at what a "NIF" actually contains,
+// so `12345678Z`-shaped garbage saved cleanly. The real algorithm already exists
+// in `@/lib/taxIdValidation.js` (the browser mirror of the binding Java
+// `SpanishTaxIdValidator`), so it is IMPORTED here rather than re-implemented —
+// a second copy of the check-digit tables would drift from the backend silently.
+//
+// What is new here is the DISPATCH: on Contacts the document type is a sibling
+// field, so the same `TaxID` column means different things depending on
+// `EM_OBTIK_Tax_ID_Key` in the SAME record. That is why this validator takes the
+// whole record, unlike `getContactsTextFieldError(windowName, field, value)`.
+// ---------------------------------------------------------------------------
+
+/** `field.key` of the validated value (AD column `TaxID`). */
+export const CONTACTS_TAX_ID_FIELD = 'taxID';
+
+/** `field.key` of the sibling document-type selector (AD column `EM_OBTIK_Tax_ID_Key`). */
+export const CONTACTS_TAX_ID_KEY_FIELD = 'oBTIKTaxIDKey';
+
+/** `EM_OBTIK_Tax_ID_Key` value meaning the number is a Spanish NIF/CIF/NIE. */
+const TAX_ID_KEY_NIF = '1';
+
+/** `EM_OBTIK_Tax_ID_Key` value meaning the number is a passport. */
+const TAX_ID_KEY_PASSPORT = '3';
+
+// ICAO Doc 9303 machine-readable travel document number: up to 9 alphanumeric
+// characters, no check digit of its own (the MRZ carries its check digits
+// separately, and they are not part of what a user types here). Deliberately
+// permissive: passports are issued worldwide and their internal structure is
+// per-country, so anything stricter would reject legitimate documents.
+const PASSPORT_PATTERN = /^[A-Z0-9]{1,9}$/;
+
+export const TAX_ID_PASSPORT_ERROR_KEY = 'taxIdInvalidPassport';
+
+/**
+ * Returns the i18n error descriptor for the Contacts tax-identifier field, or
+ * null when valid. ALWAYS returns null for any window other than 'contacts'
+ * (same first-check gate as `getContactsTextFieldError`) and for any field other
+ * than `taxID`.
+ *
+ * Dispatch is driven by the sibling `oBTIKTaxIDKey` value in the SAME record:
+ *   - '1' (NIF)       -> the full Spanish NIF/CIF/NIE algorithm.
+ *   - '3' (Passport)  -> ICAO shape only, no check digit.
+ *   - anything else   -> not validated. Includes null/undefined/'': with no
+ *                        declared document type there is no rule to apply, and
+ *                        inventing one would reject values that were legal to
+ *                        enter before a type was chosen.
+ *
+ * An empty value is always valid — requiredness is the `required` mechanism's
+ * job, exactly as in `getTaxIdError`.
+ *
+ * @param {string} windowName - the current window's kebab-case spec name.
+ * @param {{ key?: string }} field - the field config.
+ * @param {*} value - the current value.
+ * @param {object} record - the full record being edited (needs the sibling type field).
+ * @returns {{ key: string, params: object }|null}
+ */
+export function getContactsTaxIdError(windowName, field, value, record) {
+  if (windowName !== 'contacts') return null;
+  if (field?.key !== CONTACTS_TAX_ID_FIELD) return null;
+
+  const raw = String(value ?? '').trim();
+  if (raw === '') return null;
+
+  const documentType = String(record?.[CONTACTS_TAX_ID_KEY_FIELD] ?? '');
+
+  if (documentType === TAX_ID_KEY_NIF) {
+    // Reuses the shared validator (and therefore its own i18n keys,
+    // `taxIdInvalidFormat` / `taxIdInvalidCheckDigit`) verbatim.
+    const errorKey = getTaxIdError(value);
+    return errorKey ? { key: errorKey, params: {} } : null;
+  }
+
+  if (documentType === TAX_ID_KEY_PASSPORT) {
+    return PASSPORT_PATTERN.test(raw.toUpperCase())
+      ? null
+      : { key: TAX_ID_PASSPORT_ERROR_KEY, params: {} };
+  }
+
   return null;
 }
 

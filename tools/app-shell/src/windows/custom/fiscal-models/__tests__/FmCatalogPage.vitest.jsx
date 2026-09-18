@@ -16,6 +16,10 @@ vi.mock('lucide-react', () => ({
 vi.mock('../FmOverlays.jsx', () => ({
   ConfigDrawer: () => null,
 }));
+// ETP-5187 (adjacent scope) — FmCatalogPage now calls useNavigate() (IAE-activity reminder
+// on 303 activation), which throws outside a <Router> ancestor. No test here exercises SPA
+// navigation itself, so a plain stub is enough — mirrors FmModel303Page.vitest.jsx's own mock.
+vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 
 import FmCatalogPage from '../FmCatalogPage.jsx';
 

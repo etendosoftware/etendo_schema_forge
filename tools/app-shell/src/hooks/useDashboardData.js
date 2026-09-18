@@ -336,6 +336,13 @@ function buildEmptyFallback() {
  */
 export function useDashboardData() {
   const { token } = useAuth();
+  // [ETP-5195 follow-up] Depend on WHETHER there is a token, never on its VALUE: the backend
+  // mints a fresh JWT (new iat/exp) on every silent refresh (mount, tab-focus, the 5-minute
+  // poll) even with zero role change, so `token` itself changes on every one of those — and
+  // `fetchData` below used to list the raw value, refetching all nine dashboard widgets on a
+  // plain alt-tab with nothing actually different. `apiFetch` (from `useApiFetch()`) already
+  // reads the token live at request time, so it does not need `token` repeated here either.
+  const hasToken = !!token;
   const { range } = useDashboardDateRange();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -349,7 +356,7 @@ export function useDashboardData() {
   const { isWidgetVisible, filterFeed, pendingAmountsVisibility } = access;
 
   const fetchData = useCallback(async () => {
-    if (!token) {
+    if (!hasToken) {
       setData(buildEmptyFallback());
       setLoading(false);
       return;
@@ -445,7 +452,7 @@ export function useDashboardData() {
     } finally {
       setLoading(false);
     }
-  }, [token, apiFetch, range, isWidgetVisible, filterFeed, pendingAmountsVisibility]);
+  }, [hasToken, apiFetch, range, isWidgetVisible, filterFeed, pendingAmountsVisibility]);
 
   useEffect(() => {
     fetchData();

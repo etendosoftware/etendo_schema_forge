@@ -43,6 +43,18 @@ describe('VerifactuSection — locked/unlocked state', () => {
   });
 });
 
+// ETP-5272 — accepts an external `locked` prop (forceTestMode) that OR's into the
+// same isLocked mechanism the isReady rule already drives, rather than a parallel lock.
+describe('VerifactuSection — external lock prop (ETP-5272)', () => {
+  it('accepts a `locked` prop in its signature', () => {
+    assert.match(src, /forwardRef\(function VerifactuSection\(\{[^}]*\blocked\b[^}]*\}, ref\)/);
+  });
+
+  it('ORs the external locked prop into isLocked (same mechanism, not a parallel one)', () => {
+    assert.match(src, /isEtendoTrue\(record\?\.isReady\)\s*\|\|\s*!!locked/);
+  });
+});
+
 describe('VerifactuSection — form fields', () => {
   it('renders a tax type select for unlocked records', () => {
     assert.match(src, /VERIFACTU_TAX_TYPE_OPTIONS/);

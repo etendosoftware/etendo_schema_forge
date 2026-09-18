@@ -1,0 +1,93 @@
+# Copy to config.toml (gitignored) and adjust.
+#
+# POLICY: secrets by reference, everything else by value.
+#   * Everything below is a LITERAL value, readable at a glance.
+#   * The API key is the ONLY thing kept in the environment, and this file
+#     stores only the NAME of the variable that holds it — never the key.
+#   * This file WINS over the environment. The only overrides are the visible
+#     CLI flags `--model` and `--max-steps`.
+
+[provider]
+# `openai` names the CLIENT, not the vendor: ChatOpenAI drives api.openai.com
+# and any OpenAI-compatible gateway alike. Only this client is wired today.
+name = "openai"
+
+# Verbatim gateway model id — route prefix and slash included, never translated
+# to a vendor-native id. A Gemini model behind an OpenAI-compatible API is what
+# satisfies D8 (the default is deliberately not Anthropic).
+# The route that runs end to end today. Not Anthropic, so D8 holds.
+model = "openai/gpt-5.2"
+
+# GEMINI IS A DEAD END ON THIS GATEWAY as of 2026-09-14 — verified against the
+# live endpoint under TWO different API keys, on different projects:
+#   * `vertex_ai/*` (incl. gemini-3.6-flash, gemini-5.8-flash): 403
+#     BILLING_DISABLED on project #etendo (aiplatform.googleapis.com). The
+#     second key did NOT unblock it, so it is a project-level billing gap, not
+#     a credential one.
+#   * `gemini/*` and the unprefixed `gemini-3.6-flash` (the only live spelling
+#     of 3.6 flash; `gemini/gemini-3.6-flash` has no healthy deployment):
+#     answer plain chat fine and handle structured output fine, but ALWAYS fail
+#     the multi-turn TOOL LOOP against this MCP with
+#       "The referenced name `BusinessPartner/<id>` in
+#        function_response.response does not match to a display_name in
+#        function_response.parts"
+#     — a LiteLLM -> Gemini translation defect on tool RESULTS, triggered by the
+#     `$ref` that neo_selectors returns. Auth is not the blocker.
+# To try it anyway, without editing this file:
+#     make mcp-test MODEL=gemini-3.6-flash
+
+# A hostname, not a secret, so it lives here by value.
+base_url = "https://llm.etendo.software/v1"
+
+# NEVER the key itself — only the name of the variable holding it.
+api_key_env = "OPENAI_API_KEY"
+
+temperature = 0
+
+[run]
+max_steps = 25
+
+# Per tool call, how much of the RESULT body is stored in the run file. Results
+# are recorded so a failure is diagnosable from runs/ alone; the cap exists
+# because one `neo_discover` answer is ~79 KB. The true size is always kept as
+# `resultBytes`, truncated or not.
+max_result_chars = 20000
+
+# --- targets -----------------------------------------------------------------
+# `bearer` and `oauth` (authorization code + PKCE) are implemented.
+# `oauth_client_credentials` is NOT: there is no IdP to test it against, and an
+# untested auth path is worse than an absent one — it raises rather than
+# degrading to something weaker.
+#
+# An `auth = "oauth"` target needs nothing but its url: the discovery pointer is
+# read off the server's own 401 challenge, the client registers itself
+# dynamically, and tokens are cached per target in .auth/<target>.json (0600,
+# gitignored, never copied into runs/).
+
+[targets.local]
+# The OAuth-aware address. Requires `make dev` (port 3100): the .well-known
+# documents come from the Vite dev server's mcpWellKnownPlugin, which also
+# proxies /mcp -> /etendo/sws/mcp. Tomcat on :8080 serves neither, so going
+# direct to it is what skips the mechanism.
+url  = "http://localhost:3100/mcp"
+auth = "oauth"
+
+[targets.experimental]
+url  = "https://go.experimental.etendo.cloud/mcp"
+auth = "oauth"
+# Optional. Defaults to the scopes the authorization server advertises.
+scopes = "neo:read neo:write"
+# Optional. The loopback redirect port, which is registered with the server and
+# must therefore be stable. Change it only if 8765 is taken.
+redirect_port = 8765
+
+[targets.staging]
+url  = "https://go.staging.etendo.cloud/mcp"
+auth = "oauth"
+
+# A target you already hold a token for. No credentials in config: the token
+# lives in the environment and only its variable name is written down.
+# [targets.some-bearer-target]
+# url  = "https://.../mcp"
+# auth = "bearer"
+# token_env = "MCP_TEST_TARGET_SOME_TOKEN"

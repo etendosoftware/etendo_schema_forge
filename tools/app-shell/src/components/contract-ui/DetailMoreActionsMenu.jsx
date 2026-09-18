@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { resolveHideMoreMenu } from './DetailView.jsx';
 import { maybeSaveBeforeConfirm } from './detailViewHelpers.jsx';
+import { runPreUnpost } from '@/lib/preUnpost.js';
 
 /**
  * Kebab ("more actions") menu of the detail toolbar.
@@ -92,18 +93,20 @@ export function DetailMoreActionsMenu({
     if (!(await maybeSaveBeforeConfirm({ isDirty: hook.isDirtyHeader, handleSave: hook.handleSave }))) {
       return false;
     }
-    if (action.preUnpost && (data?.posted === 'Y' || data?.posted === true)) {
-      const unpostResult = await neoAction.execute(currentId, 'unpost');
-      if (!unpostResult.success) {
-        toast.error(translateBackendError(unpostResult.message, ui) || ui('actionFailed'));
-        return false;
-      }
+    const preUnpost = await runPreUnpost({
+      recordId: currentId, record: data, enabled: action.preUnpost, execute: neoAction.execute,
+    });
+    if (!preUnpost.success) {
+      toast.error(translateBackendError(preUnpost.message, ui) || ui('actionFailed'));
+      return false;
     }
     try {
       await docAction.execute(currentId, action.documentAction);
       const msg = (action.successKey ? ui(action.successKey) : action.successMessage) || ui('actionCompleted');
       toast.success(msg);
-      hook.fetchById?.(currentId);
+      // ETP-4563 cache fix: post-action refresh must force a fresh network read
+      // so the shared cache does not serve the pre-mutation record.
+      hook.fetchById?.(currentId, { force: true });
       setDocsRefreshSignal(v => v + 1);
     } catch (err) {
       toast.error(err.message);
@@ -115,7 +118,9 @@ export function DetailMoreActionsMenu({
     const msg = (action.successKey ? ui(action.successKey) : action.successMessage) || ui('actionCompleted');
     if (result.success) {
       toast.success(msg);
-      hook.fetchById?.(currentId);
+      // ETP-4563 cache fix: post-action refresh must force a fresh network read
+      // so the shared cache does not serve the pre-mutation record.
+      hook.fetchById?.(currentId, { force: true });
       setDocsRefreshSignal(v => v + 1);
     } else {
       toast.error(translateBackendError(result.message, ui) || ui('actionFailed'));
@@ -172,12 +177,12 @@ export function DetailMoreActionsMenu({
                   await runNeoMenuAction(action);
                   return;
                 }
-                if (action.preUnpost && (data?.posted === 'Y' || data?.posted === true)) {
-                  const unpostResult = await neoAction.execute(currentId, 'unpost');
-                  if (!unpostResult.success) {
-                    toast.error(translateBackendError(unpostResult.message, ui) || ui('actionFailed'));
-                    return;
-                  }
+                const preUnpost = await runPreUnpost({
+                  recordId: currentId, record: data, enabled: action.preUnpost, execute: neoAction.execute,
+                });
+                if (!preUnpost.success) {
+                  toast.error(translateBackendError(preUnpost.message, ui) || ui('actionFailed'));
+                  return;
                 }
                 if (action.columnName) {
                   hook.handleProcess?.({ columnName: action.columnName, name: action.key });
@@ -212,7 +217,7 @@ export function DetailMoreActionsMenu({
               token={token}
               apiBaseUrl={apiBaseUrl}
               onClose={() => setShowMoreMenu(false)}
-              onRefresh={() => hook.fetchById?.(data?.id || recordId)}
+              onRefresh={() => hook.fetchById?.(data?.id || recordId, { force: true })}
               data-testid="CustomMenuContent__fa3275" />
           );
         })()}

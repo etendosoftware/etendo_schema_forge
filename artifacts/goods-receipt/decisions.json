@@ -32,7 +32,9 @@
       "enabled": true,
       "processField": "documentAction",
       "processValue": "CO",
-      "label": "Confirmar"
+      "label": "Confirmar",
+      "keepSaveWhenCompletedFields": ["orderReference"],
+      "_note": "ETP-4839: 'Confirmar' must NEVER reappear on a completed receipt (unified behavior across windows, per the human's design decision -- the earlier completedStatuses-based exception that relied on M_INOUT_POST.xml being idempotent was dropped in favor of this simpler, uniformly-safe mechanism). 'Guardar' stays visible once completed but is enabled ONLY while every dirty header field is in this list -- orderReference (POReference, 'Nº documento') is the vendor's own document reference and must remain editable/saveable after completion without reactivating; any other dirty field blocks Save with an explanatory tooltip. Same mechanism now used by purchase-invoice's orderReference (see docs/decisions-reference.md's keepSaveWhenCompletedFields entry)."
     },
     "noHeaderBorder": true,
     "linesLayout": "inlineEditable",
@@ -108,7 +110,8 @@
           "searchable": true,
           "section": "principal",
           "seq": 20,
-          "readOnlyLogic": "@Processed@='Y'"
+          "readOnlyLogic": null,
+          "_note": "ETP-4839: removed the Processed-based lock. This is the supplier's own document reference (POReference, 'Nº documento') -- it must stay editable and saveable on a completed receipt so users can correct it without reactivating, matching purchase-invoice's orderReference intent (see docs/generated-custom-windows/purchase-invoice.md). No SII-equivalent business gate exists for Goods Receipt today, so it now has no readOnlyLogic override at all (falls back to the AD raw value, which is none for this column)."
         },
         "warehouse": {
           "grid": true,

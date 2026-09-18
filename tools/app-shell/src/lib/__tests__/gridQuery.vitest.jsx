@@ -6,6 +6,7 @@ import {
   resolveFilterMode,
   buildAdvancedFilterCriteria,
   getFilteredKey,
+  extractQueryParamConditions,
 } from '../gridQuery.js';
 
 // ---------------------------------------------------------------------------
@@ -1575,5 +1576,107 @@ describe('parseUserFilter — invertEnumLabels edge cases', () => {
     const col = { key: 's', type: 'status', enumLabels: 'not-an-object' };
     // invertEnumLabels returns empty map → no matches → null
     expect(parseUserFilter(col, 'anything')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-5188 — extractQueryParamConditions
+// ---------------------------------------------------------------------------
+
+describe('extractQueryParamConditions', () => {
+  const roleFilterColumn = {
+    key: 'roleFilter',
+    type: 'custom',
+    toQueryParams: (row) => (row.operator === 'equals' ? `RoleIds=${row.value}` : null),
+  };
+  const nameColumn = { key: 'name', type: 'string' };
+
+  it('returns the original advancedFilter unchanged and null extraParams when advancedFilter has no conditions', () => {
+    expect(extractQueryParamConditions({ conditions: [] }, [roleFilterColumn]))
+      .toEqual({ conditions: { conditions: [] }, extraParams: null });
+    expect(extractQueryParamConditions(null, [roleFilterColumn]))
+      .toEqual({ conditions: null, extraParams: null });
+    expect(extractQueryParamConditions(undefined, [roleFilterColumn]))
+      .toEqual({ conditions: undefined, extraParams: null });
+  });
+
+  it('returns the original advancedFilter unchanged when columns is not an array', () => {
+    const filter = { conditions: [{ field: 'roleFilter', operator: 'equals', value: 'role-1' }] };
+    expect(extractQueryParamConditions(filter, null)).toEqual({ conditions: filter, extraParams: null });
+    expect(extractQueryParamConditions(filter, undefined)).toEqual({ conditions: filter, extraParams: null });
+  });
+
+  it('is a byte-identical no-op when no condition\'s column declares toQueryParams (e.g. Purchase Invoice)', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [
+        { field: 'name', operator: 'iContains', value: 'juan' },
+      ],
+    };
+    expect(extractQueryParamConditions(filter, [nameColumn])).toEqual({ conditions: filter, extraParams: null });
+  });
+
+  it('strips a toQueryParams condition out of `conditions` and returns its segment as extraParams', () => {
+    const filter = {
+      conditions: [{ field: 'roleFilter', operator: 'equals', value: 'role-1' }],
+    };
+    const result = extractQueryParamConditions(filter, [roleFilterColumn]);
+    expect(result.conditions.conditions).toEqual([]);
+    expect(result.extraParams).toBe('RoleIds=role-1');
+  });
+
+  it('splits mixed conditions correctly: keeps the generic one, strips and translates the toQueryParams one', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [
+        { field: 'name', operator: 'iContains', value: 'juan' },
+        { field: 'roleFilter', operator: 'equals', value: 'role-1' },
+      ],
+    };
+    const result = extractQueryParamConditions(filter, [nameColumn, roleFilterColumn]);
+    expect(result.conditions).toEqual({
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'iContains', value: 'juan' }],
+    });
+    expect(result.extraParams).toBe('RoleIds=role-1');
+  });
+
+  it('joins multiple toQueryParams segments with "&"', () => {
+    const secondRoleFilterLikeColumn = {
+      key: 'other',
+      toQueryParams: () => 'OtherParam=1',
+    };
+    const filter = {
+      conditions: [
+        { field: 'roleFilter', operator: 'equals', value: 'role-1' },
+        { field: 'other', operator: 'equals', value: 'x' },
+      ],
+    };
+    const result = extractQueryParamConditions(filter, [roleFilterColumn, secondRoleFilterLikeColumn]);
+    expect(result.extraParams).toBe('RoleIds=role-1&OtherParam=1');
+  });
+
+  it('still strips the row when the toQueryParams hook returns null for that operator (must not leak back into conditions)', () => {
+    // roleFilterColumn's hook above only translates 'equals' — every other operator
+    // returns null. The ETP-5188 fix requires the row to be stripped from `conditions`
+    // regardless, and `extraParams` to be null when NO intercepted row produced a segment.
+    const filter = {
+      conditions: [{ field: 'roleFilter', operator: 'notEqual', value: 'role-1' }],
+    };
+    const result = extractQueryParamConditions(filter, [roleFilterColumn]);
+    expect(result.conditions.conditions).toEqual([]);
+    expect(result.extraParams).toBeNull();
+  });
+
+  it('mixes a stripped-but-segment-less toQueryParams row with a kept generic row', () => {
+    const filter = {
+      conditions: [
+        { field: 'name', operator: 'iContains', value: 'juan' },
+        { field: 'roleFilter', operator: 'isNull', value: null },
+      ],
+    };
+    const result = extractQueryParamConditions(filter, [nameColumn, roleFilterColumn]);
+    expect(result.conditions.conditions).toEqual([{ field: 'name', operator: 'iContains', value: 'juan' }]);
+    expect(result.extraParams).toBeNull();
   });
 });

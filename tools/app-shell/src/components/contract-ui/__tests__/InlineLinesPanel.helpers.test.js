@@ -40,8 +40,10 @@ describe('InlineLinesPanel helpers (ETP-4005)', () => {
       assert.match(src, /col\.min === undefined \|\| value === '' \|\| value == null/);
     });
 
-    it('parses the value with parseFloat before comparing', () => {
-      assert.match(src, /parseFloat\(value\)/);
+    // ETP-5107 — comma-aware: parses via the canonical parseLocaleNumber(),
+    // not a bare parseFloat, so a locale-typed "10,5" compares correctly.
+    it('parses the value with parseLocaleNumber before comparing', () => {
+      assert.match(src, /parseLocaleNumber\(value\)/);
     });
 
     it('compares the parsed number against col.min', () => {

@@ -14,12 +14,23 @@ vi.mock('lucide-react', () => ({
   Star: () => null, Play: () => null, ArrowUpRight: () => null, Info: () => null,
   OctagonAlert: () => null, TriangleAlert: () => null, X: () => null,
   Check: () => null, ChevronDown: () => null, Search: () => null,
+  FileText: () => null, Landmark: () => null,
 }));
-vi.mock('@/components/ui/checkbox', () => ({
-  Checkbox: ({ checked, onChange }) => (
-    React.createElement('input', { type: 'checkbox', checked: !!checked, onChange: onChange ?? (() => {}) })
+vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
+  CheckboxField: ({ checked, disabled, onToggle, onClick }) => (
+    React.createElement('input', {
+      type: 'checkbox',
+      checked: !!checked,
+      disabled,
+      onClick,
+      onChange: e => onToggle?.(e.target.checked),
+    })
   ),
 }));
+// ETP-5187 (adjacent scope) — NewDeclModal now calls useNavigate() (IAE-activity reminder on
+// T4/12 period selection), which throws outside a <Router> ancestor. No test here exercises
+// SPA navigation itself, so a plain stub is enough — mirrors FmModel303Page.vitest.jsx's own mock.
+vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 
 import { PresentModal, FileGenModal, NewDeclModal } from '../FmOverlays.jsx';
 
@@ -128,6 +139,91 @@ describe('PresentModal', () => {
     const modalBody = container.querySelector('.fm-config-modal');
     fireEvent.click(modalBody);
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+// ── PresentModal — two-column redesign (ETP-5229 item #10) ─────────────────────
+
+describe('PresentModal — two-column layout', () => {
+  const decl = { id: '1', model: '303', year: 2026, period: 'T2' };
+
+  it('renders the "Registrar presentación" left column with both manual paths, regardless of showAeatPath', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(document.body.textContent).toContain('fm.present.register_section.title');
+    expect(document.body.textContent).toContain('fm.present.register_section.desc');
+    expect(document.body.textContent).toContain('fm.present.path.acuse');
+    expect(document.body.textContent).toContain('fm.present.path.sin_acuse');
+  });
+
+  it('renders the "Presentar a la AEAT" right column with the aeat_telematic card when showAeatPath is true', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} showAeatPath />);
+    expect(document.body.textContent).toContain('fm.present.aeat_section.title');
+    expect(document.body.textContent).toContain('fm.present.aeat_section.desc');
+    expect(document.body.textContent).toContain('fm.present.path.aeat');
+  });
+
+  it('does NOT render the "Presentar a la AEAT" column/heading when showAeatPath is falsy (349 case)', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(document.body.textContent).not.toContain('fm.present.aeat_section.title');
+    expect(document.body.textContent).not.toContain('fm.present.aeat_section.desc');
+    expect(document.body.textContent).not.toContain('fm.present.path.aeat');
+  });
+
+  it('does NOT render the AEAT column when showAeatPath is explicitly false either', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} showAeatPath={false} />);
+    expect(document.body.textContent).not.toContain('fm.present.aeat_section.title');
+  });
+
+  it('the aeat_telematic path can be selected and confirmed when the AEAT column is shown', () => {
+    const onConfirm = vi.fn();
+    const onClose = vi.fn();
+    render(<PresentModal decl={decl} onConfirm={onConfirm} onClose={onClose} showAeatPath />);
+    fireEvent.click(screen.getByText('fm.present.path.aeat'));
+    const confirmBtn = screen.getByText('fm.action.continue');
+    expect(confirmBtn.disabled).toBe(false);
+    fireEvent.click(confirmBtn);
+    expect(onConfirm).toHaveBeenCalledWith({ status: 'aeat_telematic', acuseFile: null });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('footer confirm label switches to fm.action.continue only while aeat_telematic is selected', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} showAeatPath />);
+    // Default label before any selection.
+    expect(screen.queryByText('fm.action.confirm_presentation')).toBeTruthy();
+    fireEvent.click(screen.getByText('fm.present.path.aeat'));
+    expect(screen.queryByText('fm.action.continue')).toBeTruthy();
+    expect(screen.queryByText('fm.action.confirm_presentation')).toBeNull();
+    // Switching back to a manual path restores the generic label.
+    fireEvent.click(screen.getByText('fm.present.path.sin_acuse'));
+    expect(screen.queryByText('fm.action.confirm_presentation')).toBeTruthy();
+  });
+
+  it('renders a vertical divider between columns only when the AEAT column is present', () => {
+    const { container: withAeat } = render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} showAeatPath />);
+    expect(withAeat.querySelector('[aria-hidden="true"]')).toBeTruthy();
+
+    const { container: withoutAeat } = render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(withoutAeat.querySelector('[aria-hidden="true"]')).toBeNull();
+  });
+
+  it('shows the dynamic "Modelo X · period year" subtitle when decl carries model/year/period', () => {
+    render(<PresentModal decl={{ id: '1', model: '303', year: 2026, period: 'T3' }} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    // Mocked i18n returns "key" for calls with no params and "key" is still
+    // returned for calls WITH params too (see mock at top of file) — but the
+    // real translation key used must be the preview one, not the generic subtitle.
+    expect(document.body.textContent).toContain('fm.new_decl.preview');
+    expect(document.body.textContent).not.toContain('fm.present.subtitle');
+  });
+
+  it('falls back to the old generic subtitle when decl has no model/year/period', () => {
+    render(<PresentModal decl={{ id: 'd1' }} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(document.body.textContent).toContain('fm.present.subtitle');
+    expect(document.body.textContent).not.toContain('fm.new_decl.preview');
+  });
+
+  it('falls back to the generic subtitle when decl is entirely missing', () => {
+    render(<PresentModal onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(document.body.textContent).toContain('fm.present.subtitle');
   });
 });
 
@@ -711,10 +807,14 @@ describe('NewDeclModal', () => {
   });
 
   describe('existingDeclarations', () => {
-    // The duplicate-declaration banner was removed entirely — an already-declared
-    // period is now communicated purely through the disabled button + dot,
-    // never through a message. See the dedicated "no banner" test below.
-    it('marks a period with an existing declaration for the selected model+year and disables it', () => {
+    // ETP-5187 — an already-declared period is now communicated purely as an
+    // informational marker (dot + hint) and remains fully selectable: a 2nd
+    // declaration for the same model+year+period is the rectificativa flow
+    // (the backend auto-assigns a free DECL_TYPE slot; the actual warning/gate
+    // for "mark this as rectificativa" lives on the created declaration's own
+    // detail page, not here). No banner, no disabling, no auto-jump. See the
+    // dedicated "no banner" test below.
+    it('marks a period with an existing declaration for the selected model+year but keeps it selectable', () => {
       const { container } = render(
         <NewDeclModal
           onConfirm={vi.fn()}
@@ -727,16 +827,22 @@ describe('NewDeclModal', () => {
       const t1 = getPeriodBtn(container, 'T1');
       expect(t1.className).toContain('fm-newdecl-period-btn--existing');
       expect(t1.querySelector('.fm-newdecl-period-btn__dot')).toBeTruthy();
-      // Real DOM `disabled` attribute — a screen reader / keyboard user cannot
-      // select an already-declared period, not just a visual/CSS cue.
-      expect(t1.hasAttribute('disabled')).toBe(true);
-      expect(t1.disabled).toBe(true);
+      // Updated behavior (ETP-5187): the period is NOT disabled — a real DOM
+      // `disabled` attribute would block the rectificativa flow entirely.
+      expect(t1.hasAttribute('disabled')).toBe(false);
+      expect(t1.disabled).toBe(false);
+      // The hint (mocked i18n echoes the key literally) surfaces on hover via title.
+      expect(t1.getAttribute('title')).toBe('fm.new_decl.period_existing_hint');
+      // Still fully clickable/selectable, unlike the old disabled behavior.
+      fireEvent.click(t1);
+      expect(t1.getAttribute('aria-pressed')).toBe('true');
 
-      // T2 has no existing declaration: no dot, not disabled, and remains
+      // T2 has no existing declaration: no dot, no hint title, and remains
       // selectable; T1 keeps carrying the existing-indicator regardless of the
       // current selection (existence is per-period, not tied to selection).
       const t2 = getPeriodBtn(container, 'T2');
       expect(t2.className).not.toContain('fm-newdecl-period-btn--existing');
+      expect(t2.getAttribute('title')).toBeNull();
       expect(t2.hasAttribute('disabled')).toBe(false);
       fireEvent.click(t2);
       expect(t2.getAttribute('aria-pressed')).toBe('true');
@@ -756,13 +862,12 @@ describe('NewDeclModal', () => {
       }
     });
 
-    it('clicking a disabled (already-declared) period button does not change the selection', () => {
+    it('clicking an already-declared period selects it — the rectificativa flow is never blocked', () => {
       const { container: probe } = render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} />);
       const defaultYear = Number(getYearTrigger(probe).textContent.trim());
 
-      // T3 (not the default T1) is already declared, so the initial selection
-      // stays on T1 — this isolates "clicking a disabled button" from the
-      // separate auto-jump-away-from-a-disabled-default behavior tested below.
+      // T3 (not the default T1) is already declared; the initial selection
+      // stays on T1 until T3 is explicitly clicked.
       const { container } = render(
         <NewDeclModal
           onConfirm={vi.fn()}
@@ -774,21 +879,21 @@ describe('NewDeclModal', () => {
       expect(getPeriodBtn(container, 'T1').getAttribute('aria-pressed')).toBe('true');
 
       const t3 = getPeriodBtn(container, 'T3');
-      expect(t3.hasAttribute('disabled')).toBe(true);
+      expect(t3.hasAttribute('disabled')).toBe(false);
       fireEvent.click(t3);
-      // Native disabled-button behavior: the click never reaches onClick, so
-      // the selection is unchanged.
-      expect(t3.getAttribute('aria-pressed')).toBe('false');
-      expect(getPeriodBtn(container, 'T1').getAttribute('aria-pressed')).toBe('true');
+      // Updated behavior (ETP-5187): the click DOES reach onClick — selecting an
+      // already-declared period is exactly the rectificativa use case.
+      expect(t3.getAttribute('aria-pressed')).toBe('true');
+      expect(getPeriodBtn(container, 'T1').getAttribute('aria-pressed')).toBe('false');
     });
 
-    it('opens with the default selection skipped away from an already-declared period', () => {
+    it('keeps the default period selected even when it already has a declaration (no auto-jump away)', () => {
       const { container: probe } = render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} />);
       const defaultYear = Number(getYearTrigger(probe).textContent.trim());
 
       // T1 (the modal's default period) is already declared for model 303 —
-      // the auto-jump effect should move the initial selection to T2 instead
-      // of opening on a disabled default.
+      // updated behavior (ETP-5187): there is no auto-jump-away effect anymore,
+      // so the default selection stays put, just carrying the existing-marker.
       const { container } = render(
         <NewDeclModal
           onConfirm={vi.fn()}
@@ -797,17 +902,21 @@ describe('NewDeclModal', () => {
           existingDeclarations={[{ model: '303', year: defaultYear, period: 'T1' }]}
         />
       );
-      expect(getPeriodBtn(container, 'T1').getAttribute('aria-pressed')).toBe('false');
-      expect(getPeriodBtn(container, 'T2').getAttribute('aria-pressed')).toBe('true');
+      const t1 = getPeriodBtn(container, 'T1');
+      expect(t1.getAttribute('aria-pressed')).toBe('true');
+      expect(t1.className).toContain('fm-newdecl-period-btn--existing');
+      expect(t1.querySelector('.fm-newdecl-period-btn__dot')).toBeTruthy();
+      expect(getPeriodBtn(container, 'T2').getAttribute('aria-pressed')).toBe('false');
     });
 
-    it('disables the Crear button and shows no message when every period of the current frequency is already declared', () => {
+    it('never disables the Crear button, even when every period of the current frequency is already declared', () => {
       const { container: probe } = render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} />);
       const defaultYear = Number(getYearTrigger(probe).textContent.trim());
 
+      const onConfirm = vi.fn();
       const { container } = render(
         <NewDeclModal
-          onConfirm={vi.fn()}
+          onConfirm={onConfirm}
           onClose={vi.fn()}
           activeModels={{ '303': true, '349': true }}
           existingDeclarations={['T1', 'T2', 'T3', 'T4'].map(period => (
@@ -816,12 +925,20 @@ describe('NewDeclModal', () => {
         />
       );
       const createBtn = getCreateBtn(container);
-      expect(createBtn.hasAttribute('disabled')).toBe(true);
-      expect(createBtn.disabled).toBe(true);
-      expect(createBtn.className).not.toContain('fm-btn--save-pill--active');
-      // Still no explanatory message for this case — the CTA just goes inert.
+      // Updated behavior (ETP-5187): "allPeriodsTaken" no longer gates the CTA —
+      // every period being already declared just means every one of them is a
+      // rectificativa candidate; the button stays active and clicking it still
+      // creates the (draft) declaration.
+      expect(createBtn.hasAttribute('disabled')).toBe(false);
+      expect(createBtn.disabled).toBe(false);
+      expect(createBtn.className).toContain('fm-btn--save-pill--active');
       expect(container.textContent).not.toContain('fm.new_decl.duplicate_warning');
       expect(container.textContent).not.toContain('fm.new_decl.no_active_models');
+
+      fireEvent.click(createBtn);
+      expect(onConfirm).toHaveBeenCalledWith(
+        expect.objectContaining({ model: '303', status: 'draft' })
+      );
     });
 
     it('never renders a duplicate-declaration banner, even when a period is already declared', () => {
@@ -837,6 +954,105 @@ describe('NewDeclModal', () => {
       expect(container.querySelector('.fm-banner--rich')).toBeNull();
       expect(container.querySelector('.fm-banner--warn')).toBeNull();
       expect(container.textContent).not.toContain('fm.new_decl.duplicate_warning');
+    });
+  });
+
+  // ETP-5272 — unlike the purely-informational `existingPeriods` marker above
+  // (any status, always selectable — the rectificativa case), a period that
+  // already carries a DRAFT declaration is actively blocked from selection: a
+  // draft is an unfinished, in-progress declaration, and spawning a 2nd one for
+  // it just fragments the user's work across two half-finished rows instead of
+  // completing (or deleting) the existing one first.
+  describe('draftPeriods — a draft declaration blocks its period from re-selection', () => {
+    it('disables the period button and shows the draft-blocked tooltip when the existing declaration for it is a draft', () => {
+      const { container } = render(
+        <NewDeclModal
+          onConfirm={vi.fn()}
+          onClose={vi.fn()}
+          activeModels={{ '303': true, '349': true }}
+          existingDeclarations={[{ model: '303', year: 2026, period: 'T1', status: 'draft' }]}
+        />
+      );
+      selectYear(container, 2026);
+      const t1 = getPeriodBtn(container, 'T1');
+      expect(t1.className).toContain('fm-newdecl-period-btn--draft-blocked');
+      expect(t1.hasAttribute('disabled')).toBe(true);
+      expect(t1.disabled).toBe(true);
+      // Distinct tooltip from the purely-informational existing-period hint, so
+      // the user understands WHY this one specifically can't be picked.
+      expect(t1.getAttribute('title')).toBe('fm.new_decl.period_draft_blocked_hint');
+    });
+
+    it('clicking a draft-blocked period does not select it', () => {
+      const { container } = render(
+        <NewDeclModal
+          onConfirm={vi.fn()}
+          onClose={vi.fn()}
+          activeModels={{ '303': true, '349': true }}
+          existingDeclarations={[{ model: '303', year: 2026, period: 'T1', status: 'draft' }]}
+        />
+      );
+      selectYear(container, 2026);
+      // T1 is the modal's own default selection, so first move off it onto a
+      // non-blocked period (T2) — a real assertion on "clicking T1 does nothing"
+      // needs the selection to start elsewhere.
+      const t2 = getPeriodBtn(container, 'T2');
+      fireEvent.click(t2);
+      expect(t2.getAttribute('aria-pressed')).toBe('true');
+
+      const t1 = getPeriodBtn(container, 'T1');
+      fireEvent.click(t1);
+      expect(t1.getAttribute('aria-pressed')).toBe('false');
+      expect(t2.getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('stays informational-only (existing, not draft-blocked) when the existing declaration for the period has any other status', () => {
+      const { container } = render(
+        <NewDeclModal
+          onConfirm={vi.fn()}
+          onClose={vi.fn()}
+          activeModels={{ '303': true, '349': true }}
+          existingDeclarations={[{ model: '303', year: 2026, period: 'T1', status: 'submitted' }]}
+        />
+      );
+      selectYear(container, 2026);
+      const t1 = getPeriodBtn(container, 'T1');
+      expect(t1.className).not.toContain('fm-newdecl-period-btn--draft-blocked');
+      expect(t1.className).toContain('fm-newdecl-period-btn--existing');
+      expect(t1.hasAttribute('disabled')).toBe(false);
+      expect(t1.getAttribute('title')).toBe('fm.new_decl.period_existing_hint');
+      fireEvent.click(t1);
+      expect(t1.getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('does not block a period when the draft declaration belongs to a different model or year', () => {
+      const { container } = render(
+        <NewDeclModal
+          onConfirm={vi.fn()}
+          onClose={vi.fn()}
+          activeModels={{ '303': true, '349': true }}
+          existingDeclarations={[
+            { model: '349', year: 2026, period: 'T1', status: 'draft' },
+            { model: '303', year: 2025, period: 'T1', status: 'draft' },
+          ]}
+        />
+      );
+      selectYear(container, 2026);
+      const t1 = getPeriodBtn(container, 'T1');
+      expect(t1.className).not.toContain('fm-newdecl-period-btn--draft-blocked');
+      expect(t1.hasAttribute('disabled')).toBe(false);
+    });
+
+    it('does not block any period when existingDeclarations is omitted', () => {
+      const { container } = render(
+        <NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} activeModels={{ '303': true, '349': true }} />
+      );
+      selectYear(container, 2026);
+      for (const p of ['T1', 'T2', 'T3', 'T4']) {
+        const btn = getPeriodBtn(container, p);
+        expect(btn.className).not.toContain('fm-newdecl-period-btn--draft-blocked');
+        expect(btn.hasAttribute('disabled')).toBe(false);
+      }
     });
   });
 });

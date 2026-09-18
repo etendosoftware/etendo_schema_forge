@@ -1,8 +1,7 @@
 {
-  "version": "0.5.0",
-  "generatedAt": "2026-08-13T11:56:58.624Z",
-  "updatedAt": "2026-09-03T11:42:08.724Z",
-  "checksum": "7431ce23e5ea9294",
+  "version": "0.5.1",
+  "generatedAt": "2026-09-16T11:53:10.457Z",
+  "checksum": "00429ca784ad3e1e",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -54,9 +53,6 @@
       },
       "dateFilterKey": "movementDate",
       "noHeaderBorder": true,
-      "sendDocument": {
-        "enabled": false
-      },
       "layoutType": "default",
       "linesLayout": "inlineEditable",
       "maxDetailLines": 0,
@@ -557,7 +553,7 @@
             "label": "Movement Quantity",
             "type": "quantity",
             "tsType": "number",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true,
             "grid": true,
             "form": true,
@@ -743,9 +739,6 @@
       },
       "dateFilterKey": "movementDate",
       "noHeaderBorder": true,
-      "sendDocument": {
-        "enabled": false
-      },
       "linesLayout": "inlineEditable",
       "maxDetailLines": 0,
       "statusPills": [
@@ -1400,7 +1393,7 @@
             "apiKey": "movementQuantity",
             "column": "MovementQty",
             "type": "quantity",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true
           },
           {

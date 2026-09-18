@@ -346,6 +346,14 @@ export const api = {
       "url": "/sws/neo/contacts/businessPartner/selectors/purchasePricelist"
     },
     {
+      "entity": "businessPartner",
+      "field": "eTGOLocation",
+      "column": "em_etgo_location",
+      "reference": "Location",
+      "inputMode": "search",
+      "url": "/sws/neo/contacts/businessPartner/selectors/eTGOLocation"
+    },
+    {
       "entity": "customer",
       "field": "priceList",
       "column": "M_PriceList_ID",
@@ -639,7 +647,7 @@ export const api = {
     "en_US": {
       "Name": "Legal Name",
       "FIN_Financial_Account_ID": "Account",
-      "PO_Financial_Account_ID": "Expense Account",
+      "PO_Financial_Account_ID": "Account",
       "EM_Etgo_Web": "Website",
       "EM_Etgo_Firstname": "First Name",
       "EM_Etgo_Lastname": "Last Name",
@@ -649,7 +657,7 @@ export const api = {
       "Name": "Razón Social",
       "EM_Etgo_Identifier": "Identificador",
       "FIN_Financial_Account_ID": "Cuenta",
-      "PO_Financial_Account_ID": "Cuenta contable de gastos",
+      "PO_Financial_Account_ID": "Cuenta",
       "EM_Etgo_Web": "Página web",
       "EM_Etgo_Firstname": "Nombre",
       "EM_Etgo_Lastname": "Apellidos",

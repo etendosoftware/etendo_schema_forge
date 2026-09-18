@@ -18,6 +18,31 @@ tools/app-shell/src/windows/custom/{window}/ (your hand-written components)
 - Add/change a key in `decisions.json` and re-run the generator, or
 - Write/update a component in `windows/custom/{window}/` that the generator already imports via a config key.
 
+### Gotcha — a hand-rolled `index.jsx` prop can silently shadow `decisions.json` (ETP-4839)
+
+Some windows have a hand-written `windows/custom/{window}/index.jsx` wrapper (not the pipeline-window
+`artifacts/{name}/custom/` convention) that renders `<HeaderPage>` itself and passes a prop it built by
+hand instead of the one the generator would have produced from `decisions.json`/`contract.json`. When
+that happens, **the hand-rolled prop wins completely** — the generated value is never even reached, and
+`decisions.json` looks correct while the running UI does something else entirely.
+
+Real example: `purchase-invoice/index.jsx` and `sales-invoice/index.jsx` both call the shared
+`getInvoiceDraftMode(ui, options)` helper (`windows/custom/shared/useInvoiceWindow.js`) and pass its
+return value as `draftMode={draftModeOverride}` to `<HeaderPage>`. This completely replaces the
+`draftMode` object the generator would otherwise have built from `decisions.json → window.draftMode`.
+Adding a new `draftMode` key in `decisions.json` (e.g. `keepSaveWhenCompletedFields`, see
+`docs/decisions-reference.md`) regenerates a perfectly correct `contract.json`/generated `HeaderPage.jsx`
+— and still does **nothing** in the browser for these two windows, because their `index.jsx` never reads
+the generated value at all. The fix has to be made by hand at the override site (here, by adding a new
+option to `getInvoiceDraftMode` and passing it from the one window that needs it), not by touching
+`decisions.json` again.
+
+**When adding/changing a `decisions.json → window.*` key, grep for a hand-rolled prop with the same
+name** (`grep -rn "draftMode={" tools/app-shell/src/windows/custom/`, or the equivalent for the prop
+you're changing) before assuming a `make regen` alone is enough. This is the same "custom files are
+never overwritten by the pipeline" guarantee working against you: it also means they are never
+auto-synced when a generated prop's shape changes.
+
 ---
 
 ## Customization options reference
@@ -111,6 +136,91 @@ assignment — multi-role composition" for the full mechanism.
 
 ---
 
+### 3b. `window.customComponents.topbarSecondary` — secondary/utility actions, left of Save (ETP-5260)
+
+Injects a component into the detail topbar, rendered **before** Save/Confirm — i.e. to their
+**left**. This is a second, narrower slot alongside `topbarRight` (§4): both share the exact
+same prop contract (`data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess`, `onRefresh`,
+`onSave`, `isDirty`, `saveGate`), rendered by `DetailView`'s shared `renderSlotAction` helper —
+the only difference between the two slots is **where** in the flex row each one is called.
+
+```json
+"window": {
+  "customComponents": {
+    "topbarSecondary": "PurchaseOrderSecondaryActions"
+  }
+}
+```
+
+**Read this before you add a button to either `topbarRight` or `topbarSecondary`.** The bug
+that created this slot (ETP-5260) was exactly this: Copy link / Clone / Send lived *inside*
+`topbarRight`, and no amount of reordering them within that slot could put them to the left of
+Save — **the position of a button inside a slot's JSX never determines its position relative to
+Save; only which slot it is in does.** `topbarRight` is one `{topbarRight && …}` block rendered
+as a whole, after Save; `topbarSecondary` is a different block, rendered as a whole, before Save.
+Moving a button from the front to the back of one slot's internal JSX changes nothing about
+which side of Save it lands on.
+
+**The classification rule — decide by what the button IS, not by habit or by copying the
+nearest window:**
+
+| Slot | Carries | Renders | Examples |
+|---|---|---|---|
+| `topbarSecondary` | **Secondary/utility actions** — actions that operate on the record but are not part of advancing its document flow | Left of Save/Confirm | Copy link, Clone, Send by email |
+| `topbarRight` | **Primary document-flow actions** and status indicators — the actions that move the document forward, plus badges | Right of Save/Confirm (unchanged since ETP-4933) | Confirm-with-credit, "Gestionar recepción y factura", "Crear factura", payment-status/SII badges |
+
+A quick test: if the action's own label reads as a step in completing or advancing the
+document (Confirm, Create Invoice, Manage Receipt), it is primary → `topbarRight`. If it reads
+as "do something *with* this record that doesn't change its status" (copy its link, duplicate
+it, send a copy by mail), it is secondary → `topbarSecondary`.
+
+**Use `DocumentSecondaryActions`, don't write your own.** For the three common secondary
+actions, do not hand-roll buttons — reach for the shared
+`tools/app-shell/src/windows/custom/shared/DocumentSecondaryActions.jsx`, which renders them in
+the DF-mandated order **Copy link → Clone → Send** and already carries the Clone modal. Before
+this component existed there were **three divergent copies** of the Clone button
+(`purchase-order`, `sales-order`, and a mostly-unused shared `CloneButton.jsx`) — that
+divergence is exactly how ETP-4781's clone-button styling bug happened. A new window wanting
+this group wraps `DocumentSecondaryActions` in a small per-window adapter (own gating, own
+Clone/Send wiring) rather than duplicating its buttons; see
+`artifacts/purchase-order/custom/PurchaseOrderSecondaryActions.jsx` for the reference adapter to
+copy. Key props: `windowName`, `clone` (`false` | `true` | an overrides object — see the
+component's own JSDoc for the full shape), `showSend` + `onSendClick`, `showCopyLink` (default
+`true`), and `children` for a window-specific secondary action that isn't Copy link/Clone/Send
+(e.g. a fiscal "send to SII/TBAI" button) but still belongs in the DF's "Enviar" position.
+
+**A `SendDocumentModal` needs client-rendered PDF context `DocumentSecondaryActions` does not
+have.** Nine migrated windows (see the table below) keep their existing `SendDocumentModal`
+inside their `topbarRight` component instead of duplicating it, and bridge the Send *button* in
+`topbarSecondary` to the existing modal via a `window` `CustomEvent`
+(`'<window>:open-send-modal'`, e.g. `'purchase-order:open-send-modal'`) — see
+`docs/document-printables.md` → "Where the printables are used", entry 3, for the full pattern
+and why the modal did not move.
+
+**Do not move `topbarRight` to the left of Save.** `DetailView.jsx` carries an explicit ETP-4933
+comment on this: two windows (`return-material-receipt`, `return-to-vendor-shipment`) render a
+PRIMARY `ConfirmWithCreditButtonBase` inside `topbarRight`, visible while the document is still
+in Draft. Moving `topbarRight` — or reintroducing its old pre-`topbarSecondary` behavior — puts
+that Confirm action to the left of Save again, which is the regression ETP-4933 fixed. The
+`topbarSecondary` slot exists specifically so this never has to be revisited: it is additive,
+`topbarRight` is untouched, and the two return windows migrated only their Copy-link button (no
+Clone/Send) into `topbarSecondary`, leaving `ConfirmWithCreditButtonBase` exactly where it was.
+
+**Windows migrated to `topbarSecondary` (ETP-5260):** `purchase-order`, `sales-order`,
+`sales-quotation`, `goods-receipt`, `goods-shipment`, `purchase-invoice`, `sales-invoice`,
+`return-material-receipt`, `return-to-vendor-shipment`. See each window's guide under
+`docs/generated-custom-windows/` for its exact button set and gating.
+
+**The kebab ("more actions") menu also moved (ETP-5260, global change).** `DetailMoreActionsMenu`
+now renders right after `topbarSecondary` and before Save — reasoning: the kebab is itself a
+container of secondary actions (`window.menuActions`, §5 below), so it belongs in the same visual
+group. This is a `DetailView.jsx`-level change, so it affects **every** window that declares
+`menuActions`, not only the 9 migrated above — including `amortization`, `chart-of-accounts`,
+`fiscal-calendar`, `goods-movements`, `matched-purchase-invoices`, `physical-inventory`, and
+`simple-g-l-journal`.
+
+---
+
 ### 4. `window.customComponents` — replace or inject structural components
 
 Injects custom components into specific structural slots of `DetailView`. Each key maps to a component name (file must exist at `windows/custom/{window}/{value}.jsx`).
@@ -121,6 +231,7 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 "window": {
   "customComponents": {
     "topbarRight":    "GoodsShipmentActions",
+    "subHeader":      "ProductCostBanner",
     "bottomSection":  "InvoiceBottomPanel",
     "sidePanel":      "PaymentActivityPanel",
     "sidePanelStyle": { "width": "40%", "minWidth": 260 },
@@ -131,17 +242,25 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 
 | Key | Prop emitted | Renders where | Props received |
 |-----|-------------|---------------|----------------|
-| `topbarRight` | `topbarRight={X}` | Right side of detail topbar (replaces status badge) | `data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess`, `onRefresh`, `onSave`, `isDirty` |
+| `topbarSecondary` | `topbarSecondary={X}` | Left side of detail topbar, before Save/Confirm — see §3b | `data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess`, `onRefresh`, `onSave`, `isDirty`, `saveGate` |
+| `topbarRight` | `topbarRight={X}` | Right side of detail topbar (replaces status badge), after Save/Confirm | `data`, `recordId`, `token`, `apiBaseUrl`, `api`, `onProcess`, `onRefresh`, `onSave`, `isDirty`, `saveGate` |
+| `subHeader` | `headerContent={(data) => <X data={data} />}` | Full-width strip between the toolbar and the form — the first child of the detail content container | `data` |
 | `bottomSection` | `bottomSection={X}` | Bottom of detail view (replaces totals + footer) | `recordId`, `data`, `token`, `apiBaseUrl`, `api`, `summary`, `notesField`, `onFieldChange`, `notesFocused`, `setNotesFocused` |
 | `sidePanel` | `sidePanel={X}` | Right-side panel alongside the detail form | `recordId`, `data`, `token`, `apiBaseUrl` |
 | `sidePanelStyle` | `sidePanelStyle={…}` | CSS style for the side panel container | — (style object, not a component) |
 | `headerTable` | replaces `{Entity}Table` import | List table in the master list view | Standard table props |
 
 **Real examples:**
+- `topbarSecondary`: see §3b — 9 windows, all wrapping the shared `DocumentSecondaryActions`
 - `topbarRight`: `goods-shipment` (`GoodsShipmentActions`), `sales-invoice` (`InvoiceTopbarExtra`)
+- `subHeader`: `product` (`ProductCostBanner`, ETP-5245 — the "this stocked product has no cost" warning, see `docs/generated-custom-windows/product.md`)
 - `bottomSection`: `payment-in` (`PaymentBottomPanel`), `sales-invoice` (`InvoiceBottomPanel`)
 - `sidePanel`: `payment-in` (`PaymentActivityPanel`)
 - `headerTable`: `sales-invoice` (`InvoiceHeaderTable`), `user` (`UserHeaderTable`, ETP-4906 — swaps in a role-chips cell + toolbar role filter, see `docs/generated-custom-windows/user.md`)
+
+**`subHeader` is the slot for a page-wide notice** (ETP-5245). Use it when the message belongs to the whole record rather than to one field: a blocking warning, a state explanation, a "this record is locked because…" strip. The generator emits it as `DetailView`'s `headerContent` prop, so it renders above the form, above the primary-tab content, and at full content width — the same place the built-in credit-limit / BP-on-hold banner (`BlockingBpBanner.jsx`) occupies. The component receives only `data` (the current record), so any other state it needs must be derived from the record or fetched by the component itself. Return `null` to render nothing — the slot has no visibility gate of its own. Pair it with the shared `InfoBanner` primitive (`@/components/InfoBanner`) rather than a bespoke box, and pick the tone deliberately: `info` (blue) for a notice, `warning` (amber) when the condition also blocks an action, `danger` for an error. If the notice must also **prevent saving**, keep the banner and the save gate reading one shared predicate (product puts it in `lib/productCostRequirement.js`, consumed by both `ProductCostBanner.jsx` and `useEntity.js`) so the two can never disagree.
+
+**Every `InfoBanner` is dismissible by default (ETP-5245).** The X is rendered unless the caller passes `dismissible={false}`, and with no `onDismiss` the banner hides itself — supplying `onDismiss` switches it to controlled mode, where the caller owns visibility (that is what `ListModalWindow` does). A banner that explains a **block** must not stay closed while the user keeps hitting that block: pass `reopenSignal={useSaveBlockSignal('<stable-toast-id>')}` (`@/hooks/useSaveBlockSignal.js`) and it re-opens itself every time `useEntity`'s save gate actually refuses a save for that reason. The id is the same stable toast id the gate already passes to `reportInvalidFormatField`, so the banner and the toast can never describe different refusals; a new blocking rule gets the behaviour just by passing a `toastId`. See `ProductCostBanner.jsx` for the reference wiring.
 
 **Save-before-confirm contract for `topbarRight` and `CustomLines` (ETP-4940 follow-up).** If a `topbarRight` component (e.g. `return-material-receipt`/`return-to-vendor-shipment`'s `ConfirmWithCreditButtonBase`) or a `CustomLines` component (e.g. `payment-in`'s `ApplyToInvoices.jsx`, whose "apply + process" flow fires its own `documentAction` request) triggers its own documentAction request, it MUST call `maybeSaveBeforeConfirm({ isDirty, handleSave: onSave })` (`@/components/contract-ui/detailViewHelpers.jsx`) before that request fires — otherwise a header edit made without clicking Save first is silently discarded, and the action runs against the last-persisted value. This mirrors the guard `DetailView.jsx`'s own draftMode Confirm button and `DetailMoreActionsMenu.jsx`'s kebab documentAction already apply; `topbarRight` and `CustomLines` were the two choke points that bypassed it until this fix. `onSave` and `isDirty` are always passed to every `topbarRight` component, and both are also passed into `CustomLines` alongside its existing `onSave` — a component that never fires its own documentAction (e.g. a payment-status badge) can ignore both.
 
@@ -650,6 +769,32 @@ a custom `headerTable` slot's *own* hand-built toolbar still unmounts while a
 selection is active, because that toolbar and the grid live in the same
 slot; see the corrected note there.)
 
+**A filter change MUST clear the selection (QA finding, ETP-4972).** Any
+component that combines its own filtering state with its own selection state
+(checkbox `Set`/array feeding a `SelectionToolbar`) must clear that selection
+— and, for `ListView`, bump `clearSelectionCounter` via `clearSelection()`
+rather than a bare `setSelectedRows([])`, so `DataTable`'s own internal
+checkbox `Set` resets too (see its `clearSelectionTrigger` effect) — whenever
+a filter changes the visible row set. Otherwise a destructive bulk action
+(e.g. "Eliminar") can fire against rows the user is no longer looking at,
+which is exactly the QA-reported risk: select rows, change a filter, the
+floating pill stays up over records that scrolled out of the filtered view.
+**A sort-only change must NOT clear the selection** — reordering the same
+rows doesn't change which ones are visible, so treat this as a bug if someone
+"fixes" it by folding sort state into the same effect. The fix lives in a
+`useEffect` keyed on the component's filter state (never its sort state),
+guarded by a "skip the first render" ref so mounting doesn't spuriously clear
+an initial selection. Implemented in:
+- `ListView.jsx` — keyed on `[columnFilters, effectiveFilter, advancedFilterPart]` (covers column filters, subset/quick filters, the advanced-filter popover, `handleClearAllFilters` and `applyPreset`, since all of them flow through those same state variables).
+- `windows/custom/financial-account/MovementsTab.jsx` — keyed on `[filters, advancedFilter]`.
+- `windows/custom/financial-account/ImportedStatementsTab.jsx` — keyed on `[search, dateRange, status, advancedFilter]`.
+
+A component whose selection is scoped to a sub-view that already unmounts on
+navigation needs no separate fix — e.g. `PeriodsExpandablePanel.jsx` already
+clears `selectedDocIds` inside `toggleExpand` because the visible documents
+are only ever the currently-expanded period's, and `AssetsAmortizationPanel.jsx`
+clears on `[lines]` because it has no filter UI of its own.
+
 **Composition — children, not a data-driven `actions[]` prop.**
 `SelectionToolbar` is deliberately a dumb positioning/chrome "shell": it owns
 the portal, the true fixed placement, the dark-pill visual chrome (radius,
@@ -686,7 +831,7 @@ size="sm">`, for bulk-toolbar action buttons.** `Button`'s `size="sm"` bakes
 in `text-xs` plus a `[&_svg]:size-4` descendant-selector icon rule; that
 selector's specificity beats a child icon's own `h-3.5 w-3.5` classes
 regardless of Tailwind/twMerge class order. Two text-bearing action buttons
-in this toolbar — `BulkDocumentAction.jsx`'s "Confirmar"/"Procesado masivo"
+in this toolbar — `BulkDocumentAction.jsx`'s "Procesar"/"Procesado masivo"
 and `BulkInvoiceFromShipment.jsx`'s "Crear factura" — hit exactly this: they
 rendered at visibly different icon/text sizes until both were rewritten as
 plain hand-rolled `<button>` elements with the same explicit classes,
@@ -715,11 +860,91 @@ usages), `AmortizationLinesTable.jsx`, `AssetsAmortizationPanel.jsx`,
 PeriodsExpandablePanel.jsx` (document bulk-open/close), `windows/custom/
 contacts/index.jsx`.
 
+#### The `bulkActions` slot contract — refetch in place, never reload the page (ETP-5302)
+
+`ListView`'s `bulkActions` prop is a **plain function**, not a component: it is
+invoked as `bulkActions({ ... })` inside the selection toolbar's JSX, so
+anything reached from it must stay hook-free (see the ETP-5209 note in
+`BulkDocumentAction.jsx` — a hook whose call count depends on whether the
+toolbar is mounted produces *"Rendered more hooks than during the previous
+render"* in production). The context object it receives:
+
+| Key | What it is |
+|---|---|
+| `selectedRows` | the checked rows, full row objects |
+| `clearSelection` | clears the checkbox `Set` *and* bumps `clearSelectionCounter` so `DataTable` resets too |
+| `token`, `apiBaseUrl`, `windowName` | wiring for the per-row calls |
+| `api` | the list's data hook, for callers that need more than a refetch |
+| `refresh` | **ETP-5302** — in-place refetch of the current page of rows. Identity is stable across renders (it reads `hook.refresh` through a ref), so it is safe in a dependency array |
+
+**The rule: a bulk action ends with `clearSelection()` → toast → `refresh()`.**
+It must not call `window.location.reload()`.
+
+Until ETP-5302 every bulk host did reload the whole browser page, which threw
+away scroll position, the active filters and the entire SPA boot. The reload was
+never about the data: it was the mechanism that let the result toast survive,
+because the result was written to `sessionStorage` under `bulkActionResult` and
+`useBulkActionToast()`'s mount effect read it back on the *next* mount. Showing
+the toast directly removes the only reason to reload.
+
+```jsx
+// inside a bulkActions slot function
+const result = await runMyBulkAction(...);   // → { ok, omitted, failed }
+if (refresh) {
+  clearSelection();
+  showBulkActionToast(ui, result);           // from '@/hooks/useBulkActionToast'
+  refresh();
+  return;
+}
+// Host mounted outside ListView's bulkActions slot: legacy persist-then-reload.
+persistBulkActionResult(result);
+setTimeout(() => { clearSelection(); window.location.reload(); }, 1500);
+```
+
+**Keep the fallback branch.** `refresh` only exists for a host mounted inside
+`ListView`'s slot; a bulk host mounted anywhere else still has to hand its result
+to the next mount, and dropping the branch would silently lose the toast instead
+of failing loudly.
+
+**Use the exported `showBulkActionToast(ui, result)`, not `useBulkActionToast()`,
+when you already hold a `useUI()` result.** The hook's real job is the mount
+effect that *drains* `sessionStorage`; mounting it just to reach `showResult`
+also installs that effect, and it re-runs whenever `ui` changes identity — so it
+consumes the caller's own persisted result before the fallback reload can hand it
+to the next mount. `useBulkActionToast()` belongs at the list level (it is called
+once in `ListView.jsx`, covering every window), not inside an action.
+
+A bulk action that produces a result and does *not* refetch is a bug of its own
+class, not merely a missed nicety: `BulkInvoiceFromShipment.jsx` ("Crear
+Factura") neither reloaded nor refreshed before ETP-5302, so the rows it had just
+invoiced kept rendering a stale invoicing status with nothing on screen hinting
+they were out of date.
+
+**Hosts on this contract:** `BulkDocumentAction.jsx` (all nine mounts),
+`artifacts/sales-order/custom/BulkOrderMoreMenu.jsx`,
+`artifacts/purchase-order/custom/BulkPurchaseOrderMoreMenu.jsx`,
+`artifacts/goods-shipment/custom/BulkInvoiceFromShipment.jsx`. The two
+`runBulk*Action` helpers behind the order kebabs now **return** `{ ok, failed }`
+instead of writing it to `sessionStorage` themselves — persisting is the caller's
+decision, and only on the fallback path.
+
 #### `BulkDocumentAction`'s `actionMode` — bulk actions that are not DocActions
 
-`BulkDocumentAction.jsx` provides the "Confirmar"/"Procesado masivo" button, its
+`BulkDocumentAction.jsx` provides the "Procesar"/"Procesado masivo" button, its
 modal, the action dropdown, the per-row `Promise.allSettled` loop and the
-ok/failed toast. It used to be **DocAction-only**: the per-row call was always
+ok/failed toast. The button text comes from the `labelKey` prop. The nine
+document-action mounts all pass `labelKey="process"` ("Procesar" / "Process");
+the accounting mounts pass `labelKey="post"` ("Contabilizar", four windows) and,
+since ETP-5302, `labelKey="unpost"` ("Descontabilizar", `goods-receipt` and
+`goods-shipment` — see the pair below). `"bulkCompletion"` ("Procesado masivo")
+is only the prop default, which no window currently relies on.
+Inside the dropdown, `CO` is labeled **Confirmar** /
+**Confirm** (`labelKey: 'confirm'`) and `RE` **Reactivar** / **Reactivate**.
+Until ETP-5302 the button read "Confirmar" (`labelKey="confirmBulk"`, a key that
+no longer exists) and the `CO` entry read "Procesar" (`labelKey: 'book'`) — the
+two were swapped because on a window like `matched-purchase-invoices`, whose
+dropdown only offers *Contabilizar*/*Descontabilizar*, "Confirmar" named an
+action that was never on offer. It used to be **DocAction-only**: the per-row call was always
 `POST …/{id}/action/documentAction` with a `{docAction}` body, so each
 `buildActions` value had to be a DocAction code (`CO`, `RE`, …).
 
@@ -750,6 +975,80 @@ Pair it with `rowFilter` when a selection can legitimately mix states: returning
 a string from `rowFilter(row, action)` pre-blocks that row with that message
 (shown in the failure list) instead of sending a request the backend will reject
 with an opaque error.
+
+**The dialog's confirm button says "Aceptar" / "Accept" (`accept`), not
+"Completado" (`done`) — ETP-5302.** `done` translates to *"Completado"*, which is
+the name of a document **state**: the very list behind the dialog has an "Estado
+doc." column showing it. On a dialog whose whole subject is document actions,
+that button read as if pressing it would mark the selected documents as
+completed. `accept` is a new key in all three locales; `done` was deliberately
+left alone because `RecordCreateModal.jsx` still uses it.
+
+#### `preUnpostActions` — replaying the detail kebab's "unpost first" rule in bulk
+
+Some document actions must **reverse the record's accounting before they run**.
+The rule is declared per window in `decisions.json` as `preUnpost: true` on a
+`menuActions` entry (today: `sales-invoice`, `purchase-invoice`, `amortization`),
+and it is implemented once, in `tools/app-shell/src/lib/preUnpost.js`:
+
+| Export | Contract |
+|---|---|
+| `isPosted(row)` | `true` only for `posted === 'Y'` / `true`. The AD *Posted status* domain also carries `T`, `E`, `D`, `p`, `i` — **none of which mean "posted"** |
+| `runPreUnpost({ recordId, record, enabled, execute })` | → `{ ran, success, message }`. `ran: false` means the step did not apply (not enabled, or the record was not posted) and callers treat that as success |
+
+It is a plain module, **deliberately not a hook**, because `BulkDocumentAction`
+is reached from the `bulkActions` slot, which `ListView` invokes as a flat
+function call (the ETP-5209 constraint above).
+
+Both call sites now go through it: `DetailMoreActionsMenu.jsx` (which had the
+rule inlined, and duplicated across its two branches — observable behaviour
+unchanged) and `BulkDocumentAction`'s new `preUnpostActions` prop:
+
+```jsx
+<BulkDocumentAction {...props} labelKey="process" preUnpostActions={['RE']} />
+```
+
+Each row then runs *unpost → document action*. A failed unpost **aborts that
+row** — a document still carrying its accounting entries is never reactivated —
+and the row is reported with the translated backend message like any other
+failure.
+
+**It is opt-in per window on purpose.** Invoices need it: Core's
+`C_INVOICE_POST` raises `@InvoiceDocumentPosted@` ("Factura contabilizada") if
+`RE` arrives while `Posted='Y'`. Orders must **not** have it: `C_ORDER_POST1` has
+no posted-state guard on its `RE` branch at all, so unposting there would be a
+gratuitous accounting reversal for no functional gain. Do not "harmonise" this by
+applying `preUnpostActions={['RE']}` to every window that offers `RE`.
+
+#### `buildUnpostActions` / `unpostRowFilter` — the bulk "Descontabilizar" pair
+
+A mirror of `buildPostActions`/`postRowFilter`, exported from the same file:
+
+| Export | Behaviour |
+|---|---|
+| `buildUnpostActions(rows)` | offers `{ value: 'unpost', labelKey: 'unpost' }` when **any** selected row is posted |
+| `unpostRowFilter(row, action, ui)` | blocks a not-posted row with `ui('bulkRowNotPosted')` |
+
+Mount it as a third `BulkDocumentAction` instance with
+`actionMode="neoAction"` and `labelKey="unpost"` — it hits
+`POST …/{id}/action/unpost` (`DocumentPostingService`), the same endpoint the
+detail kebab's *Descontabilizar* already used, so no backend or i18n work was
+needed.
+
+**Why a separate pair rather than teaching `buildPostActions` to also emit
+`unpost`:** `sales-invoice` and `purchase-invoice` mount the post pair too, and
+they must **not** offer a standalone unpost. On an invoice, reversing the
+accounting is a step *inside* Reactivate (`preUnpost`), never a user-facing
+action of its own. Only `goods-receipt` and `goods-shipment`, whose detail kebab
+already exposes *Descontabilizar*, mount the unpost pair.
+
+**Why its own button rather than a second option inside "Contabilizar":** the
+dropdown lives under a button whose label is the action — a window offering both
+would present *Descontabilizar* under a button reading "Contabilizar", named as
+the opposite of what it does. Since `buildUnpostActions` only yields an action
+when a posted row is selected and `buildPostActions` only when a
+processed-not-posted one is, the two buttons are rarely on screen together
+anyway.
 
 ---
 
@@ -1096,8 +1395,10 @@ Default: `"classic"`. Validator F12 enforces the enum (`"classic"` | `"inlineEdi
 **MVP scope (current iteration):**
 - Inline edit covers all column types: `string`, `number`, `amount`, `percent`, `date`, `selector` and `search`. Selector/search columns use `InlineSearchCombo` — a compact text input with server-side search (`?q=term`) and portal dropdown — so FK fields with many options (e.g., tax rates) are filterable by typing. Lookup/popup columns (e.g., product) continue to open `ProductSearchDrawer`.
 - Pencil and trash carry full logic. No other action icons are rendered in this iteration.
+- **Where the hover-action strip goes (ETP-5245):** the strip is always appended at the **end** of the row's flex container. When the **last** visible column is an `amount`, that cell is suppressed while the strip shows and the icons take its space (`trailingColumn`), so nothing reflows. In **every other** shape — no amount column at all (Cuenta Bancaria, Persona) *or* an amount that is not last (Product > Cost: `cost`, `startingDate`, `endingDate`) — `reserveActionSlot` reserves a permanent 160px slot on the header and on every row instead. Selecting the sacrificed cell by column *type* rather than by position was the ETP-5245 bug: on the Cost tab it suppressed the **first** cell, so hovering deleted the amount and slid the dates one slot left, out of alignment with the header. See `docs/feedback.md` and `InlineLinesPanel.trailingAmountColumn.vitest.jsx`.
 - **Delete icon gating (ETP-4565):** the trash icon only renders when the caller passes a real `onDeleteRow` handler — `InlineLinesPanel` derives `canDelete = onDeleteRow != null` and wraps the Trash2 button in it, mirroring `DataTable`'s pre-existing `{onDeleteRow && (...)}` gate on its own row-delete button. When an entity declares `hideDelete: true` (see `docs/decisions-reference.md`), `apiPrediction.crud.<entity>.delete` resolves to `false` and `DetailView` never passes `onDeleteRow` down — before this fix, the icon still rendered on `inlineEditable` tabs and silently no-opped on click (the frontend simply had no handler to call; nothing told the user why nothing happened). Purely additive: every caller that already passes `onDeleteRow` (the default for every window with a deletable lines entity) renders byte-for-byte the same as before. **Correction (ETP-4745):** the original write-up here claimed "the backend correctly rejected the delete" — that was inaccurate even at ETP-4565 time. `hideDelete` did not reach `ETGO_SF_ENTITY.ISDELETE` until ETP-4745; before that fix a raw API `DELETE` against this same entity (`userRoles` on the `user` window) would have succeeded server-side. The ETP-4565 fix genuinely removed the dead UI affordance, it just didn't (and couldn't, at the time) rely on any real backend rejection.
 - Designed for desktop. Tablet/mobile responsive support (a genuinely reflowed/stacked layout) is still out of scope for this iteration — but **ETP-5133** fixed the specific narrow-viewport failure mode: at laptop widths (e.g. 1366×768) with a wide column set, the table now scrolls horizontally within its own bounds instead of overflowing past the detail pane and overlapping the sidebar (and, on windows with a right-side panel, that panel too). See "How horizontal overflow is scoped" below.
+- **Date columns (ETP-5245):** a `type: 'date'` column renders the shared `DateField` (calendar trigger + locale-masked text input, emitting `yyyy-MM-dd`) in **all three** paths that can edit it — `EntityForm.renderDateField` (form mode), `DataTable.renderInlineAddFieldControl` (the add-line row) and `InlineLinesPanel.EditCell` (inline edit of an existing row). Each of those keeps its **own** field-type `if` chain, so a new field-type control has to be added to all three or it degrades silently into that path's fall-through renderer — which is exactly how add-row dates shipped as bare text boxes. Two accepted limits inside the add-row/inline-edit cells: `DateField` takes no `ref` (no `firstInputRef` autofocus if it is the first add-row field) and no `onKeyDown` (row-level Enter/Escape does not fire from inside it; `DateField` binds both itself).
 - **Add-line flow** keeps using the existing `DataTable` inline-add row (callouts, focus management, defaults from header context). The generated `<Window>LineTable.jsx` falls back to `<DataTable>` while `addRow.active` is true and returns to `<InlineLinesPanel>` once the new line is saved or cancelled. This avoids duplicating the heavyweight add-row machinery and keeps a single source of truth for line creation.
 - **Dynamic column visibility (ETP-4543):** `InlineLinesPanel` accepts a `hiddenColumns = []` prop (mirroring `DataTable`'s existing one) that hides columns whose key is in the list, on top of any static `col.hidden` flag. `DetailView.jsx` computes this list from `lineDisplayLogic.visibility` (the same live evaluate-display map already threaded into the secondary `DetailForm`) and passes it to the primary lines table — so a grid column whose field resolves to `visibility: false` (e.g. a config-gated accounting dimension behind `@ACCT_DIMENSION_DISPLAY@`) is hidden at runtime rather than always shown just because it exists as a column. This makes `grid: true` fields under `inlineEditable` layouts respect the same runtime visibility rules non-grid fields already got via `DetailForm` — see `docs/feedback.md` ("ETP-4543") and `docs/generated-custom-windows/sales-invoice.md` for the full write-up.
 
@@ -1258,9 +1559,17 @@ One more request precedes the paging: the selector **fails closed** (returns an 
 
 ---
 
-### 15. `window.balanceFooter` — debit/credit balance footer
+### 15. `window.balanceFooter` — debit/credit balance totals
 
-**What it does:** replaces the product/discount/tax totals panel with a `BalanceFooterPanel` for double-entry windows. It shows **Σ debit**, **Σ credit**, the **difference**, and a **balanced ✓ / unbalanced ✗** badge, and **disables the Save button** (with a tooltip) only when the entry is **unbalanced** (`Σ debit ≠ Σ credit`). An empty/zero entry is balanced and savable as a draft; the badge stays hidden until the lines carry amounts.
+**What it does:** replaces the product/discount/tax totals panel with debit/credit totals (**Σ debit**, **Σ credit**) for double-entry windows, and **disables the Save button** (with a tooltip) only when the entry is **unbalanced** (`Σ debit ≠ Σ credit`). An empty/zero entry is balanced and savable as a draft.
+
+**Where the totals render depends on `linesLayout` (ETP-5210):**
+- `linesLayout: "inlineEditable"` (the common case) — `InlineLinesPanel` renders the totals as a row **inside the lines grid itself**, pixel-aligned under the actual `debitField`/`creditField` columns (via the grid's own `columnFlex()` — no parallel width math, no drift). Every other column gets a blank cell. No Difference amount, no balanced ✓/✗ badge — display-only totals, trimmed since ETP-4917.
+- classic (`DataTable`) `linesLayout` — no window uses this combination yet. `renderTotalsBlock()` falls back to the older standalone `BalanceFooterPanel`, rendered **below** the grid (not column-aligned), which still shows only Σ debit/Σ credit for the same ETP-4917 reason.
+
+Either way the **save/complete gating logic is identical and unaffected** — both paths read `computeBalanceGate()`'s `balanceState` directly, never anything a renderer displays.
+
+**Add-row and `DataTable`'s generic footer-totals (ETP-5210):** for `inlineEditable` windows, when the add-row form is active `GLJournalLineTable` (and every generated `*LineTable.jsx` for this layout) renders `InlineLinesPanel` (existing lines + the balanceFooter row above) **alongside** a second, header/data-hidden `DataTable` instance used only to host the add-row form. `DataTable` has its own, unrelated, longstanding generic footer-totals feature (`showFooterTotals`, on by default whenever amount columns exist) — without a guard, that hidden instance would render a *second*, unformatted totals row directly under the add-row form, stacked below the properly `€`-formatted, column-aligned one from `InlineLinesPanel`. `DataTable` now accepts a `balanceFooter` prop (already threaded through via `{...props}` at the `*LineTable.jsx` call site) whose mere presence forces its own `showFooterTotals` to `false`, regardless of the `showFooterTotals` prop's own value — the specialized row already covers it. Windows without `window.balanceFooter` configured are unaffected: `balanceFooter` is `null`/absent for them, so `DataTable`'s generic footer-totals still renders exactly as before.
 
 **When to use:** manual journals and any double-entry document where lines carry separate debit and credit amount columns that must balance before saving.
 
@@ -1279,10 +1588,12 @@ Both `debitField` and `creditField` must be amount-typed fields on the **lines**
 - `cli/src/resolve-curated.js` — added to `WINDOW_TRUTHY_PROPS` (auto-passes through).
 - `cli/src/generate-contract.js` — copied into `frontendContract.window.balanceFooter`.
 - `cli/src/generate-frontend.js` — emits `balanceFooter={...}` on `<DetailView>` when present.
-- `tools/app-shell/src/components/contract-ui/DetailView.jsx` — renders `BalanceFooterPanel` instead of `DocumentTotalsPanel` and gates the Save buttons via `blockSaveForBalance`.
-- `tools/app-shell/src/lib/balanceTotals.js` / `BalanceFooterPanel.jsx` — pure aggregation + rendering.
+- `tools/app-shell/src/components/contract-ui/DetailView.jsx` — `computeBalanceGate()` produces `balanceState` (gates Save/Complete) and, for `inlineEditable` windows, `buildBalanceFooterGridTotals()` (in `detailViewHelpers.jsx`) formats it into the `balanceFooter` prop threaded into `<DetailTable>` → `InlineLinesPanel`. `renderTotalsBlock()` renders the classic-layout `BalanceFooterPanel` fallback instead of `DocumentTotalsPanel` only when `linesLayout !== "inlineEditable"`.
+- `tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx` — `renderBalanceFooterRow()` renders the column-aligned totals row for `inlineEditable` windows.
+- `tools/app-shell/src/lib/balanceTotals.js` / `BalanceFooterPanel.jsx` — pure aggregation + the classic-layout fallback renderer.
+- `tools/app-shell/src/components/contract-ui/DataTable.jsx` — accepts `balanceFooter` and, when truthy, suppresses its own generic per-amount-column footer-totals row (see "Add-row and `DataTable`'s generic footer-totals" above).
 
-**Real example:** `simple-g-l-journal` (Manual Journals — the first window to ship the balance footer).
+**Real example:** `simple-g-l-journal` (Manual Journals — the first and only window to ship the balance footer, on `inlineEditable` `linesLayout`).
 
 ---
 
@@ -1603,6 +1914,347 @@ window guide [`docs/generated-custom-windows/product.md`](generated-custom-windo
 
 ---
 
+### 19. Inline record creation from a lookup drawer (`lookupCreateTargets.js` + `RecordCreateModal`) — ETP-5254
+
+**What it does:** pins a **`+ Create product` / `+ Crear producto`** row at the top of the product
+lookup drawer opened from a document line. Clicking it opens a **two-phase** dialog that renders the
+**Products window's own chrome** — its generated `ProductForm.jsx`, its primary-tab strip, its field
+labels — collects the header fields and POSTs them (*phase 1*), then reveals the window's **own Price
+and Attachments panels** mounted against the record that was just saved (*phase 2*). The new product
+is selected into the line the user was editing when the popup is **closed**, through exactly the same
+path a hand-picked row takes.
+
+**Before this ticket:** the drawer offered search and nothing else. A user who discovered mid-document
+that the product did not exist had to abandon the line, navigate to the Products window, create the
+product there, set its price, and re-open the document.
+
+**Where it lives — and what it deliberately did NOT touch.** None of the three lookup *trigger*
+components changed: `DataTable`'s `LookupField`, `InlineLinesPanel`'s `LookupTrigger` and
+`EntityForm`'s `LookupFormField` are all untouched. Everything is resolved inside
+`ProductDrawerShell`, from the `selectorUrl` it already receives, because that URL encodes both the
+document's spec and the NEO root:
+
+```
+{neoBaseUrl}/{spec}/{entity}/selectors/{column}
+   e.g.  /sws/neo/sales-order/lines/selectors/product
+```
+
+`parseSelectorUrl()` splits it, and the created record is funnelled back through the shell's own
+`select()`, so every trigger receives it through its existing `onSelect` contract.
+
+**The registry shape** (`tools/app-shell/src/components/contract-ui/lookupCreateTargets.js` —
+a deliberate sibling of `lookupDrawers.js`, a plain map plus a resolver, so a second creatable entity
+is a new entry rather than new branching inside the drawer):
+
+```js
+// This Set IS the scope switch — greppable in exactly one place.
+export const CREATE_PRODUCT_SPECS = new Set([
+  'sales-quotation', 'sales-order', 'purchase-order',
+  'sales-invoice', 'purchase-invoice',
+  'goods-shipment', 'goods-receipt',
+]);
+
+export const LOOKUP_CREATE_TARGETS = {
+  product: {
+    key: 'product',
+    entity: 'product',            // NEO entity under the `product` spec: POST target + FK selector base
+    ctaKey: 'createProduct',      // i18n keys, resolved through useUI()
+    titleKey: 'createProductTitle',
+    errorKey: 'createProductError',
+    allowedSpecs: CREATE_PRODUCT_SPECS,
+    prefill: (query) => (query ? { name: query } : {}),  // seeds the name with what was typed
+
+    // ── Phase 1: the window's own form, tabs and labels ──
+    // Lazy: a document window must not pay for the Products form unless the popup is opened.
+    // ProductForm.jsx ONLY — never ProductPage.jsx, which would drag DetailView/ListView along.
+    loadForm:   () => import('@generated/product/generated/web/product/ProductForm.jsx'),
+    loadLabels: () => import('@generated/product/generated/web/product/labels.js'),
+    labelOverrides: { /* mirrors window.labelOverrides in decisions.json */ },
+    tabs: [                       // mirrors window.primaryTabs + the EntityForm section each renders
+      { key: 'general',        label: 'General',         section: 'principal' },
+      { key: 'additionalInfo', label: 'Additional Info', section: 'other' },
+    ],
+    tabsVariant: 'pill',          // mirrors window.primaryTabsVariant
+    cols: 3,                      // the window's own field-grid width
+
+    // ── Phase 2: the window's own panels, available only once the record exists ──
+    loadPostCreateTabs: () => Promise.all([
+      import('@/windows/custom/product/ProductPriceBar.jsx'),
+      import('@/components/attachments'),
+    ]).then(([price, attachments]) => ([
+      { key: 'pricing',     labelKey: 'price',       Component: price.default },
+      { key: 'attachments', labelKey: 'attachments', Component: attachments.AttachmentsTab,
+        props: { tableName: 'M_Product', config: {} } },
+    ])),
+  },
+};
+
+// → { ...target, apiBaseUrl } when the spec is allowlisted AND the caller opted in, else null.
+resolveLookupCreateTarget({ selectorUrl, createEnabled });
+```
+
+**The prop:** `ProductDrawerShell` takes `createEnabled` (default `false`). `ProductSearchDrawer`
+passes `createEnabled={!keepOpenOnSelect}`; `ProductStockSearchDrawer` deliberately does not pass it
+at all.
+
+- **Why an allowlist and not "every window using the default product drawer":** ~10 other specs share
+  that drawer (requisition, physical inventory, cost adjustment, return to vendor…), and the
+  goods-movements / internal-consumption **line forms** reach it too, because
+  `EntityForm.LookupFormField` hardcodes `ProductSearchDrawer` instead of honouring the window's
+  `lookupDrawer` (the key documented in [`docs/decisions-reference.md`](decisions-reference.md) →
+  *Lookup Drawer Override*). That inconsistency is a separate ticket; the allowlist keeps this feature
+  out of its blast radius in the meantime.
+- **The `product-stock` variant never shows the row.** Creating a stockless product inside a picker
+  that filters by stock returns an immediately empty result, so the stock drawer opts out simply by
+  not forwarding the flag. Multi-select pickers (`keepOpenOnSelect`, e.g. the report viewer) opt out
+  too — creation is a single-pick affordance.
+- **The create row is NOT part of the arrow-key navigation ring.** Each drawer variant's
+  `onNavKeyDown` indexes into `results` with its own arithmetic, and a virtual row would mean editing
+  every variant. It is reachable by **Tab and by pointer** only. Deliberate limitation, not an
+  oversight.
+- **The row is pinned at the top of the results list, not in the footer** — the footer is gated on
+  `hasResults`, i.e. hidden in exactly the "nothing found, I need to create it" moment the affordance
+  exists for.
+- **While the modal is open the drawer is hidden but stays mounted**, so `query` and `results` survive
+  a cancel untouched, and the shell suppresses the fetch hook's **document-level** Escape handler
+  (bound at document level, so a portalled sibling modal cannot stop it with `stopPropagation`) —
+  without that, Escape inside the modal would also tear down the drawer behind it.
+- **Purely additive.** A caller that does not pass `createEnabled` (every caller except
+  `ProductSearchDrawer`), and any spec outside `CREATE_PRODUCT_SPECS`, gets `resolveLookupCreateTarget`
+  → `null` and renders byte-for-byte the same drawer as before this slot existed.
+
+#### The popup IS the window — mounted in the host's own React tree
+
+The dialog does not render a form that resembles the Products window: it mounts **the Products window
+itself**, at its own `new` route, inside the dialog body (`data-testid="record-create-window"`). That
+is why the tab strip shows **Price, Cost, Accounting and Attachments** from the first paint, why the
+header stays editable after saving, and why a tab added to the window tomorrow appears here with no
+change to this code. Cost and Accounting can arrive no other way — their renderers are welded to
+`DetailView`'s per-tab hooks, so reusing them means reusing `DetailView`.
+
+`EmbeddedWindowRoute.jsx` is what makes an application window mountable inside another one:
+
+```jsx
+<LocationContext.Provider value={null}>          {/* satisfies the nested-router invariant */}
+  <RouteContext.Provider value={{ outlet: null, matches: [], isDataRoute: false }}>
+    <MemoryRouter initialEntries={[`/${windowName}/new?embedded=interactive`]}>
+      <PageMetaProvider>                          {/* the window's title/breadcrumb stop here */}
+        <Routes>
+          <Route path={`/${windowName}`}            element={element} />
+          <Route path={`/${windowName}/:recordId`}  element={element} />
+        </Routes>
+      </PageMetaProvider>
+    </MemoryRouter>
+  </RouteContext.Provider>
+</LocationContext.Provider>
+```
+
+- **React Router's "you cannot render a `<Router>` inside another `<Router>`" is narrower than it
+  reads.** The invariant is `!useInRouterContext()`, and `useInRouterContext()` only asks whether
+  `LocationContext` is non-null *at that point*. Re-providing `null` — the context's own default —
+  satisfies it. `RouteContext` is reset alongside it, or the inner routes would be matched relative to
+  the host's current match (`/sales-invoice/:id`) instead of from the root. These are `UNSAFE_`
+  exports: acceptable here because the version is pinned and the failure mode is a loud invariant
+  throw at mount, not silent wrongness.
+- **A memory router cannot move the host.** The window navigates when it saves — `/<spec>/new` →
+  `/<spec>/<id>` — and `createMemoryHistory` never touches `window.history`, so that navigation stays
+  inside the dialog. Watching it is how the popup learns the record id.
+- **The window is handed `recordId` as a PROP, not left to read the route.** Windows switch
+  list-vs-detail on the prop `WindowLoader` extracts from the route, so a child mounted without it
+  renders the product **list** inside the dialog however correct the inner URL is. `EmbeddedWindowRoute`
+  injects it from `useParams()`, which also makes the window flip to the saved record by itself.
+- **`PageMetaProvider` is not optional.** `ListView` and `DetailView` publish title, breadcrumb and
+  record count through `useSetPageMeta`, which the host's TopBar reads — without a nested provider the
+  dialog rewrites the *document's* header, turning an open invoice's breadcrumb into
+  *Inventario / Producto*.
+- **The chrome is dropped through a CONTEXT, never the URL.** `EmbeddedWindowContext`
+  (`lib/embeddedWindow.js`) is provided above the memory router and read by `useChromelessEmbed`, so
+  the sidebar, topbar, palette, widgets, the **stock side panel** and the window's own "cancel back to
+  the list" all disappear while the window stays usable. The flag lived on the URL twice and was lost
+  twice the same way — the window navigates to `/<spec>/<id>` when it saves and the query string does
+  not survive it, which put the stock panel back inside the dialog at the exact moment the product was
+  created. Re-applying it from an effect is a race the user sees. A context is set by the host and
+  nothing the window does to its own location can drop it. The URL form (`?embedded=1` /
+  `=interactive`) is still honoured for a preview opened directly by link, where there is no host
+  component above it — `embedded=1` additionally disables pointer events, which is why the two stay
+  apart.
+
+**Why in-tree and not an iframe.** The first implementation hosted the window in a same-origin iframe,
+on the reading that nesting routers was impossible. It worked, but it cost a second cold boot of the
+whole application — entry chunk, session refresh, window-access map, then the window: **~460 ms against
+~180 ms** for navigating to the same window in-app, and the gap was reported in a demo. Mounted
+in-tree the providers, the session and the already-parsed chunks are the host's, and the measured open
+time is **146–345 ms** — at parity with opening the window normally.
+
+**Escape ownership is the one thing the iframe gave away for free.** In a separate document a keypress
+inside the form could not reach the host; in-tree it can, and *both* the dialog and the selector's
+fetch hook listen for `keydown` on `document` in the same native dispatch. The dialog's listener runs
+first, React flushes its state update synchronously (keydown is a discrete event), and the hook's
+listener — still the same keypress — then reads an already-closed modal and tears the drawer down with
+the user's search inside it. Reading a `createOpen` flag is therefore not enough: `ProductDrawerShell`
+holds a ref that stays set for one macrotask **after** the modal closes, so one Escape closes exactly
+one layer. `RecordCreateModal` additionally stops the synthetic Escape at its `DialogContent`, which
+keeps it out of the host's inline add-row handler.
+
+If the window module fails to load, the modal falls back to the two-phase generated form described
+next; that path is otherwise dormant.
+
+#### Fallback: the two-phase generated form
+
+Used only when the window module cannot be loaded. `RecordCreateModal.jsx` declares no field list, no tab strip of its own and no labels. Every visible
+piece is the Products window's:
+
+- **The form.** `target.loadForm()` lazily imports the generated `<Entity>Form.jsx` through the
+  `@generated` vite alias and renders it as-is, so labels, types, options, requiredness, defaults,
+  references and compiled `readOnlyLogic` stay owned by `artifacts/product/decisions.json`: a
+  `make regen ONLY=product` propagates into the popup for free. This is deliberately unlike
+  `CreateContactModal` / `EntityCreationModal`, which hand-roll their field lists and have already
+  drifted from the window they mirror.
+- **The tab strip.** `renderPrimaryTabButtons(target.tabsVariant, tabs, …)` from
+  `detailViewHelpers.jsx` — the same helper and the same `'pill'` variant `ProductPage` passes to
+  `DetailView`, so the General / Additional Info strip is literally the same control. Captions run
+  through `useMenuLabel()`, and `target.tabs` mirrors `window.primaryTabs` in `decisions.json` (key
+  and label verbatim) plus the `EntityForm` `section` each tab renders. `cols: 3` keeps the field grid
+  the same width as the window's.
+- **Both tab panels stay MOUNTED** — the inactive one is only hidden. Unmounting it would fire
+  `EntityForm`'s `registerFields` cleanup and silently drop that tab's fields from validation:
+  `taxCategory` is required, lives in the `other` section and has no static default, so submitting
+  from the General tab would sail past the check into a backend 400. For the same reason, a failed
+  validation **switches to the offending tab** — an inline error on a hidden panel is no error at all.
+  That is also why the `other` tab cannot simply be dropped from the registry.
+- **The field labels.** `target.loadLabels()` loads the target window's own label slice and the modal
+  re-provides the merged dictionary for its subtree through `LocaleProvider`, exactly the way
+  `WindowLoader` does for a routed window. **This fixes a subtle bug that will recur if the slice is
+  ever dropped:** `WindowLoader` only loads the slice of the window being routed to, so inside a sales
+  invoice the dictionary holds the invoice's columns and none of the product-only ones —
+  `ProductType`, `C_UOM_ID`, `C_TaxCategory_ID`… fell back to the raw English AD label while `Name`
+  and `Description` happened to resolve, producing a half-translated form.
+- **The label overrides.** `target.labelOverrides` is a **copy** of `window.labelOverrides` in
+  `decisions.json`, which the generator emits only into `ProductPage.jsx` — a module that cannot be
+  imported here without dragging `DetailView`, `ListView`, the sidebar, the price bar and the gallery
+  into every document bundle. Without it the popup would say *Identificador* / *Categoría del
+  producto* / *Tipo de producto* where the window says *Código* / *Categoría* / *Tipo*.
+
+#### Two phases, and why it cannot be one
+
+A POST does **not** complete the popup. On success the modal keeps the created record, loads
+`target.loadPostCreateTabs()` and reveals a second tab strip carrying the Products window's **own**
+Price (`ProductPriceBar`) and Attachments (`AttachmentsTab`) panels — same components, same extra
+props `DetailView` hands its `customTabs`, mounted against the saved record. They persist themselves
+against `/price` and the attachment endpoints; the popup saves nothing on their behalf.
+
+**The header form stays editable in phase 2, and commits on blur.** This is not a choice the popup
+made: `artifacts/product/decisions.json` declares `autoSaveOnBlur: true`, so committing each field as
+the user leaves it is precisely what *behaves like the Products window* means here — the same
+derived-from-the-window principle as the tabs and the labels above. Mechanically, phase 2 passes
+`onFieldBlur` and `savingField` to the embedded forms (phase 1 passes neither, so nothing can commit
+before the record exists); an edited field is sent as `PATCH {apiBaseUrl}/{entity}/{id}` with
+`{ <key>: <value>, updated }`, a field the user never touched fires nothing — tabbing through the form
+is silent — and `savingField` drives `EntityForm`'s per-field spinner. The PATCH response **refreshes
+the record's `updated`**, which is what lets a second edit succeed: carrying the stale version instead
+would make it a 409. A failed PATCH surfaces the backend message and leaves the record unchanged.
+A drift test guards the premise, failing with *"the Products window no longer autosaves on blur —
+RecordCreateModal phase 2 still does"* if that decision is ever flipped.
+
+**Why two phases is structural, not a UX preference:** those panels cannot exist before the record is
+saved. `ProductPriceBar` derives its `recordId` from `data?.id` and reads `/price?parentId=<id>`, and
+an attachment needs a record to attach to. Splitting at the POST is the only way the window's real
+panels — rather than an imitation of them — can appear inside the popup at all. It is also what makes
+the price of a brand-new product actionable on the spot: the user sets the tariff price before the
+product ever reaches the line.
+
+**`onCreated` fires exactly once, at the end.** `Done`, the X, the overlay and Escape all route
+through `dismiss()`, which calls `finish()` once a record exists and `onCancel()` before that. So
+there is a single completion point, and it is the one that selects the product in the line.
+
+**Accounting is absent from the FALLBACK's phase 2** (the live window mode shows it, because it shows the window). Price and Attachments are self-contained custom
+panels; Accounting is a `secondaryTabs` entry whose renderer `SecondaryTableTab` takes `DetailView`'s
+`hook`, `secondaryHooks` and `addingSecondaryLine`, so reusing it means recreating that per-tab
+`useEntity` machinery, and imitating it would mean reimplementing a panel rather than reusing one. It
+is additionally gated behind the `showAccountingFields` capability, so most users never see it in the
+window either. Registered as debt: `accounting-tab-not-in-popup` in `flags-registry.json`.
+
+**Not replicated at all:** callouts (the Products window itself wires none — its `decisions.json`
+`rules` is empty and no callout is emitted into its generated form, so the popup is no worse than the
+window it embeds), optimistic-lock `updated` (a POST has no prior version), `evaluate-display` (these
+fields carry no `displayLogic`), and processes. `image` is excluded from the form because it
+needs the `/image` upload endpoint and a saved record.
+
+The `GET {apiBaseUrl}/{entity}/defaults` call made on open is not optional polish: `productCategory`'s
+`defaultValue` in the generated form is the literal macro `@SQL=SELECT MAX(...)`, which the client
+cannot evaluate — without the call that string would be POSTed as an FK value. The response is merged
+with `mergeDefaultsPreservingUserEdits` so a slow `/defaults` cannot clobber what was already typed,
+and the synthetic `id` it returns is deleted before merging.
+
+#### Drift guards — what keeps the copied config honest
+
+Three pieces of the registry are copies of the Products window's own configuration (`labelOverrides`,
+`tabs`/`tabsVariant`, and the post-create tab list). Tests read `artifacts/product/decisions.json` and
+the generated `ProductPage.jsx` and compare them against the registry, so a divergence fails the
+build with an explicit instruction: **fix `lookupCreateTargets.js`, never `decisions.json`.** The
+Accounting omission is asserted too, so dropping it stays a decision rather than an accident. See the
+`registry copies stay in sync with artifacts/product/decisions.json` and `post-create tabs mirror
+ProductPage customTabs` describe blocks in `lookupCreateTargets.vitest.js`.
+
+#### Why the created record is re-queried through the selector
+
+A freshly POSTed record is a plain CRUD row: no `label`, no `standardPrice`, and crucially no
+`_aux._PSTD/_PLIM/_UOM/_CURR`, which the line's pricing callout needs. When the popup completes,
+`handleCreated()` re-queries the **drawer's own** selector by the new record's `searchKey` and hands
+`select()` the canonical selector row, keeping `applyOnSelectMappings`, `mergeSelectorAuxFields` and
+the callout running exactly as for a hand-picked product. When that row does not come back — the
+selector is called with the **document's** `priceList`, and a product priced in phase 2 on a different
+tariff (or left unpriced) may legitimately not match — the exported `synthesizeCreatedItem()` fallback
+builds a minimal selector-shaped row (prices `0`, UoM carried in both shapes) so the line stays usable
+instead of silently losing the product.
+
+#### Known limitations — expected behaviour, not defects
+
+| Behaviour | Why it is expected |
+|---|---|
+| The popup does **not** create a cost line. | ETP-5245 owns the rule *a product is expected to have a defined cost* and surfaces it with a warning banner in the Products window. Restating it here would be a second copy of the same rule in a second place, free to drift — and the popup mounts that window, so the banner and the **Cost** tab both appear inside it and the user can add the line before finishing. That rule used to also REFUSE the save, which made a product created from a line unsavable the moment it existed; the block was removed by product decision and the banner is advisory now. |
+| **Accounting** and **Cost** are missing from the *fallback* form. | They are `secondaryTabs` entries driven by `DetailView`'s per-tab `useEntity` machinery. The live popup mounts the window itself and therefore shows both; only the dormant fallback lacks them. Tracked as `accounting-tab-not-in-popup`. |
+| Closing the popup after the product was created **completes**; it does not undo anything. | The record already exists — the POST happened at the end of phase 1. Cancelling is only possible *before* that: in phase 1 the `Cancel` button leaves the document untouched and nothing is written. In phase 2 there is no `Cancel`, only `Done`, and the X / overlay / Escape mean the same thing. |
+| The line can still arrive at **price 0**. | Phase 2 lets the user price the product immediately, which is the normal path. If they skip it — or price it on a tariff other than the document's — the selector re-query finds nothing and the synthesized fallback row is used. The user types the price on the line, exactly as for any product with no row in that tariff. |
+| No arrow-key access to the create row. | See the navigation-ring bullet above. |
+| No callouts inside the popup. | The Products window wires none either. |
+
+**Also fixed here (latent bug):** the drawer's "no results" state was gated on a non-empty query, so
+an empty search that legitimately returned nothing rendered a completely blank body — which reads as
+broken, doubly so with a create row sitting above it. It now renders `productSearchNoResults` when a
+query is present and `noProductsFound` when it is not.
+
+**i18n:** three keys were added to all three locale files (`en_US`, `es_ES`, `es_AR`) —
+`createProduct`, `createProductTitle` and `createProductError`; see
+[`docs/i18n-guide.md`](i18n-guide.md). The tab captions are **not** among them: phase 1's come from the
+menu dictionary through `useMenuLabel()` (which is what makes them read identically to the window's),
+and phase 2 reuses the existing `price`, `attachments` and `done` keys.
+`tools/app-shell/src/locales/__tests__/lookup-create-keys.vitest.js` fails the build if a locale is
+missing one.
+
+**Real example:** the affordance is live on the seven document specs in `CREATE_PRODUCT_SPECS` —
+`sales-quotation`, `sales-order`, `purchase-order`, `sales-invoice`, `purchase-invoice`,
+`goods-shipment`, `goods-receipt` — reached from the lines grid, the inline lines panel and the line
+form alike, since all three trigger the same shell. Regression coverage:
+`tools/app-shell/src/components/contract-ui/__tests__/lookupCreateTargets.vitest.js` (the scope switch,
+URL parsing and the drift guards above), `RecordCreateModal.vitest.jsx` (phase 1: defaults merge,
+cross-tab required-field validation, payload shaping, response unwrapping — plus a
+`— post-create phase` describe block for the phase-2 tabs, the read-only header and the
+close-means-done semantics), `ProductDrawerShell.vitest.jsx` (`— create affordance`,
+`— handleCreated`, `— empty state` and `synthesizeCreatedItem`),
+`ProductStockSearchDrawer.vitest.jsx` (asserts the stock variant opts **out**) and
+`DataTable.addRowProductLookup.vitest.jsx` (the create row inside a real add-row lookup).
+
+**Cross-references:**
+- [`docs/generated-custom-windows/product.md`](generated-custom-windows/product.md) — the Products
+  window whose form, tabs, labels and Price/Attachments panels this popup embeds.
+- The seven window guides in [`docs/generated-custom-windows/`](generated-custom-windows/) — the
+  per-window note on the affordance.
+- [`docs/request-policy.md`](request-policy.md) — the `useApiFetch`/`apiFetch` helper both the modal
+  and the selector re-query go through.
+
+---
+
 ## Decision tree: which option to use?
 
 ```
@@ -1636,6 +2288,9 @@ I need to customize the UI of a window
 │   │
 │   ├─ Replace the master list table
 │   │   └─ → window.customComponents.headerTable
+│   │
+│   ├─ Full-width notice/banner above the form (record-wide warning, locked state)
+│   │   └─ → window.customComponents.subHeader
 │   │
 │   ├─ Stack title + code + image into one sortable/filterable list column
 │   │   └─ → multiField decorator on the host grid field (decisions.json)
@@ -1684,6 +2339,125 @@ artifacts/contacts/generated/web/contacts/
 2. Add the appropriate key to `decisions.json → window.*`
 3. Run `node cli/src/generate-frontend.js {window}` (or full pipeline)
 4. The generated `*Page.jsx` now imports and wires your component automatically
+
+## Custom `headerTable` toolbar & column hooks (ETP-5188, not `decisions.json` options)
+
+Three generic mechanisms, introduced together for the Users window's list role filter and reusable
+by any other window's custom `headerTable` component. Unlike every numbered option above, none of
+these is a `decisions.json` key — they only apply to a window that already has a hand-written
+`window.customComponents.headerTable` component (§4), where the column list is a plain JS array
+declared by hand rather than derived from grid fields.
+
+### `Table.ToolbarQuickFilter` — companion toolbar-slot component
+
+**What it does:** lets a custom `headerTable` component expose a second component as a static
+property — `MyHeaderTable.ToolbarQuickFilter = SomeComponent` — that `ListView.jsx` renders inline
+in its OWN toolbar row, immediately left of the "Filtros" (advanced filter) trigger, alongside
+"Ordenar por"/"Actualizar"/subset filters/quick filters. Same convention `DetailView.jsx` already
+uses for `formFooter.inlineInHeaderCard` (§3) — a companion flag/property attached to a slot
+component so the generic shell can special-case how it renders.
+
+**Use when:** a custom `headerTable`'s own quick-filter control (built inside its own wrapper
+markup) needs to sit in the SAME toolbar row a built-in quick filter (e.g. Purchase/Sales
+Invoice's "Todos los estados") occupies, instead of a separate region above the table.
+
+**How to use it:** attach the component to the `Table` reference your window's
+`customComponents.headerTable` decision resolves to:
+
+```jsx
+// tools/app-shell/src/windows/custom/{window}/MyHeaderTable.jsx
+export default function MyHeaderTable(props) { /* ... */ }
+MyHeaderTable.ToolbarQuickFilter = MyToolbarQuickFilterSlot;
+```
+
+`ListView.jsx` checks `Table?.ToolbarQuickFilter` and, only when present, renders
+`<Table.ToolbarQuickFilter entity windowName token apiBaseUrl data-testid="TableToolbarQuickFilter__620cbc" />`.
+A slot component is free to ignore any/all of those four props and source its own state
+elsewhere — the reference implementation, `RoleQuickFilterToolbarSlot.jsx`, ignores all four and
+reads/writes the `role` URL search param directly via `useSearchParams()` instead, which is also
+how it stays in sync with `UserHeaderTable`'s own live read of that same param (both component
+instances mount under the same Router).
+
+**Real example:** `tools/app-shell/src/windows/custom/user/RoleQuickFilterToolbarSlot.jsx`, attached
+at the bottom of `UserHeaderTable.jsx` — moves the "Todos los roles" quick filter from its own
+wrapper div into the toolbar row. See `docs/generated-custom-windows/user.md` → "Users list role
+filter" for the full worked example.
+
+### `col.toQueryParams(row)` — per-column raw query-param hook
+
+**What it does:** opts one column's advanced-filter condition OUT of the generic `criteria=` JSON
+mechanism entirely, translating it instead into a raw `key=value[&key=value]` query-string segment
+appended to the list request. Declared as a `toQueryParams` function on the column metadata object
+(see the column-metadata shape documented at the top of `tools/app-shell/src/lib/gridQuery.js`).
+
+**When to use it instead of `col.buildCriteria`:** `buildCriteria` still produces SmartClient
+criteria JSON — an alternate shape within the same `criteria=` mechanism. `toQueryParams` is for a
+condition the generic criteria layer cannot express AT ALL — typically because the field targets a
+collection-valued relation (an N:M or backward FK) that needs a JOIN/subquery, not a dot-path
+property NEO's HQL criteria builder can resolve. Real trigger: Users' "Rol" field needed to filter
+by role composition (`AD_Role_Inheritance`), and a naive `criteria=` entry against that collection
+returned a live `500` from NEO Headless.
+
+**Contract:** `(row: {operator, value}) => string|null` — a URI-encoded `key=value` segment, or
+`null` when this operator/value combination has nothing to contribute. Returning `null` does **not**
+mean "let this condition fall through to `criteria=` instead" — see the next paragraph.
+
+**A condition is ALWAYS stripped once its column declares `toQueryParams`, regardless of what the
+hook returns for that row.** `extractQueryParamConditions()` (`gridQuery.js`) — called by
+`ListView.jsx`'s `advancedFilterPart` before `buildAdvancedFilterCriteria` runs on what remains —
+decides whether to strip a condition based on whether the column intercepted it, never on whether
+the hook actually produced a segment. (This was a real ETP-5188 bug during development: the
+early-return used to key off whether ANY segment was produced across the whole conditions array, so
+a hook legitimately returning `null` for one operator let that condition leak straight back into
+`criteria=` — exactly what this mechanism exists to prevent. Fixed before shipping; the regression
+is now pinned in `gridQuery.vitest.jsx`.)
+
+**Requires `filterable: true`** on the column — a `type: 'custom'` column with no
+`column`/`backendFilterKey` is otherwise silently dropped from the advanced-filter field list
+(`isFilterableColumn`, see this repo's top-level `CLAUDE.md` → "List Columns Must Be Real Columns").
+When the column must never render as an actual grid cell, also set `filterOnly: true` (next
+section).
+
+**No-op for every column/window that doesn't declare it** — confirmed byte-identical before/after
+against a window with no `toQueryParams` column (Purchase Invoice's own advanced filter).
+
+**Real example:** `buildRoleFilterQueryParams` (`tools/app-shell/src/windows/custom/user/RoleChipsCell.jsx`),
+assigned as `roleFilterColumn.toQueryParams` in `UserHeaderTable.jsx` — translates the "Rol" field's
+4 advanced-filter operators (Es/No es/Está vacío/No está vacío) into `RoleIds=`/`NoRole=`/
+`RoleFilterNegate=` query params, consumed server-side by `UserRoleAssignmentHandler#applyRoleFilter`
+(`com.etendoerp.go` — see that repo's `docs/neo-headless.md` §5.3).
+
+### `col.filterOnly: true` — advanced-filter-only synthetic column
+
+**What it does:** a generic, type-independent column flag that excludes a column from the actual
+rendered grid (no header, no cell) while still letting it flow through to the advanced-filter field
+list — i.e. the column exists purely so its field appears as an option in "Filtros avanzados",
+never as a real grid column.
+
+**Consumed by** `isLineGridColumn()` (`tools/app-shell/src/lib/linesColumnWidth.js`):
+`col.filterOnly !== true && !NON_GRID_COLUMN_TYPES.has(col.type)`. A `filterOnly: true` column still
+flows through `DataTable`'s raw `columns` prop into its `onColumnsReady` callback → `ListView`'s
+`filterColumns`, which is the only place it needs to exist.
+
+**Use when:** declaring a synthetic field with no backing AD column at all (no `column:` value) —
+most commonly paired with `toQueryParams` above, since a field with no real backend property has
+nothing for `criteria=` to filter on directly, but the field itself is still a legitimate thing
+users want to filter by.
+
+**Distinct from `NON_GRID_COLUMN_TYPES`** (e.g. `dimensionsPanel`, ETP-4610): that set opts an
+entire column TYPE out of ever rendering as a grid column, everywhere it's used. `filterOnly` is
+per-column and type-independent — any column type can opt out of grid rendering this way without
+hijacking an unrelated type's own semantics.
+
+**Real example:** `roleFilterColumn` in `UserHeaderTable.jsx` — `type: 'custom'`,
+`filterOnly: true`, `filterMode: 'enumLabel'`, no `column:` at all; it never renders as a 7th grid
+column, only as the "Rol" entry in the advanced-filter field list.
+
+**Cross-references:** `docs/generated-custom-windows/user.md` → "Users list role filter" for the
+full worked example combining all three mechanisms; `com.etendoerp.go`'s `docs/neo-headless.md`
+§5.3 for the backend half (`UserRoleAssignmentHandler#applyRoleFilter`).
+
+---
 
 ## FK click-through navigation (`fkNavigation.js`)
 

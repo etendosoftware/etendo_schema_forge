@@ -2,16 +2,16 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:user
 const fields = [
-  { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'principal' },
-  { key: 'password', column: 'Password', type: 'text', label: 'Password', section: 'security', displayLogic: (record) => !!record.id },
+  { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'principal', maxLength: 60 },
+  { key: 'password', column: 'Password', type: 'text', label: 'Password', section: 'security', maxLength: 255, displayLogic: (record) => !!record.id },
   { key: 'isPasswordExpired', column: 'Isexpiredpassword', type: 'checkbox', label: 'Expired Password', readOnly: true, section: 'security' },
-  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'details' },
+  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'details', maxLength: 255 },
   { key: 'active', column: 'IsActive', type: 'checkbox', label: 'Active', required: true, section: 'security' },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'search', label: 'Business Partner', section: 'details', reference: 'BusinessPartner', inputMode: 'search' },
-  { key: 'email', column: 'Email', type: 'text', label: 'Email', required: true, section: 'principal', readOnlyLogic: (record) => !!record.id },
+  { key: 'email', column: 'Email', type: 'text', label: 'Email', required: true, section: 'principal', maxLength: 255, readOnlyLogic: (record) => !!record.id },
   { key: 'locked', column: 'IsLocked', type: 'checkbox', label: 'Locked', required: true, readOnly: true, section: 'security' },
-  { key: 'position', column: 'Title', type: 'text', label: 'Position', section: 'details' },
-  { key: 'phone', column: 'Phone', type: 'text', label: 'Phone', section: 'details' },
+  { key: 'position', column: 'Title', type: 'text', label: 'Position', section: 'details', maxLength: 40 },
+  { key: 'phone', column: 'Phone', type: 'text', label: 'Phone', section: 'details', maxLength: 40 },
   { key: 'supervisor', column: 'Supervisor_ID', type: 'search', label: 'Supervisor', section: 'details', reference: 'User', inputMode: 'search' },
   { key: 'defaultLanguage', column: 'Default_Ad_Language', type: 'selector', label: 'Default Language', section: 'defaults', reference: 'Language', inputMode: 'selector' },
   { key: 'defaultClient', column: 'Default_Ad_Client_ID', type: 'dependent', label: 'Default Client', section: 'defaults', reference: 'Client', inputMode: 'dependent', dependsOn: { field: 'defaultRole', filterKey: 'Default_AD_Role_ID' } },

@@ -50,6 +50,7 @@ const requiredHeaderFields = ['documentNo', 'movementDate', 'businessPartner', '
 // @sf-generated-start addLineFields:returnMaterialReceiptLine
 const addLineFields = {
   entry: [
+    { key: 'movementQuantity', column: 'MovementQty', type: 'number', required: true, label: 'Movement Quantity', defaultValue: 0 },
     { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
   ],
   derived: [
@@ -325,7 +326,7 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
         requiredHeaderFields={requiredHeaderFields}
         addLineGuard={(_, children) => children.length < 0}
         labelOverrides={labelOverrides}
-        sendDocument={{"enabled":false}}
+        sendDocument
         {...props} window={effectiveWindow}
       />
       </>
@@ -343,7 +344,7 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
       dateFilterKey="movementDate"
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      sendDocument={{"enabled":false}}
+      sendDocument
       {...props} window={effectiveWindow}
     />
   );
