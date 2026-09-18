@@ -480,7 +480,7 @@ export default function PeriodsExpandablePanel({ parentId, apiBaseUrl }) {
                 Print/Clone/kebab elsewhere): Ale (design) confirmed
                 icon-only is fine only for universally-recognized actions —
                 this same checklist icon means something different in
-                BulkDocumentAction.jsx (Confirmar/Procesado masivo), so on
+                BulkDocumentAction.jsx (Procesar/Procesado masivo), so on
                 its own it isn't reliably meaningful. No "(count)" suffix —
                 the pill's own counter segment already shows it.
                 A floating, portaled toolbar (createPortal to document.body,

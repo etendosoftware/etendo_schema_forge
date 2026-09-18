@@ -26,11 +26,11 @@ vi.mock('lucide-react', () => ({
   TrendingDown: () => null,
   Pencil: () => null,
 }));
-vi.mock('@/components/ui/checkbox', () => ({
-  Checkbox: ({ checked, onChange }) =>
+vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
+  CheckboxField: ({ checked, onToggle }) =>
     React.createElement('input', {
       type: 'checkbox', checked: !!checked,
-      onChange: onChange ?? (() => {}),
+      onChange: e => onToggle?.(e.target.checked),
     }),
 }));
 

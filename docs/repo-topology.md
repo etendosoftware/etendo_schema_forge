@@ -93,6 +93,52 @@ on this repo's `artifacts/` and config — **core code over local data**.
 Override the core location with `SCHEMA_FORGE_CORE=/abs/path` if it is not the
 default sibling directory.
 
+**Gateway (`gateway/`, npm-linked local package):** the `gateway/` NestJS app
+(ETP-5345) consumes `@etendosoftware/api-gateway-core`, published from
+`schema_forge_core`, as a real npm dependency — not a CLI bin (so `sf-local`
+doesn't apply) and not bundler-resolved source (so the Vite alias doesn't apply
+either). For local iteration against the unpublished core source, `npm link` is
+the mechanism:
+
+```bash
+make gateway-link-local-core   # or: npm run gateway:link-local-core
+```
+
+This builds `packages/api-gateway-core` in the sibling `schema_forge_core` (its
+`package.json` `main`/`types` point at `./dist/*`, not TypeScript source, so a
+stale `dist/` after a source change is a silent bug, not a build failure — the
+target always rebuilds first) and `npm link`s the result into `gateway/`. Same
+opt-in posture as the other two mechanisms: it is never invoked automatically,
+so the default (published) path is unaffected. Requires `schema_forge_core`
+cloned as a sibling with its own deps installed, same prerequisite as the CLI
+profile above.
+
+**Two more things a linked NestJS-flavored package needs, or you get duplicate
+framework instances:**
+
+1. `packages/api-gateway-core`'s `@nestjs/*` (and `rxjs`) deps are
+   `peerDependencies` (with matching `devDependencies` so its own standalone
+   `npm test`/`npm run build` still work) — never plain `dependencies`. A
+   library meant to plug classes (guards, interceptors, exception types) into a
+   *host* NestJS app must not carry its own copy of the framework: two separate
+   installs of `@nestjs/common` mean two separate `HttpException` classes, and
+   an `instanceof` check across that boundary silently fails — an
+   `UnauthorizedException` thrown by a linked guard came back as an unhandled
+   500, not the 401 it should have been (confirmed via `require.resolve()` from
+   each side — two different physical paths).
+2. Even as peerDependencies, `npm link`'s symlink alone doesn't fix this: Node
+   resolves a symlinked package against its REAL (target) path, so
+   `api-gateway-core` still walks up `schema_forge_core`'s own node_modules
+   tree first, not `gateway`'s. Boot the gateway with
+   `NODE_OPTIONS=--preserve-symlinks` (wired into `make gateway-dev-local-core`)
+   so Node resolves as if the linked package physically lived at the symlink's
+   location in `gateway/node_modules` instead — this is what makes it actually
+   pick up gateway's own installed `@nestjs/common`.
+
+Neither of these is needed once the package is genuinely published: a normal
+`npm install` of a real registry dependency hoists/dedupes a single shared
+`@nestjs/common` on its own. Both are `npm link`-local-dev-only concerns.
+
 ## Where does my change go?
 
 | Change | Repo |
