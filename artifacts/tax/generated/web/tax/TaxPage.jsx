@@ -44,7 +44,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:tax
 
 // @sf-generated-start requiredHeaderFields:tax
-const requiredHeaderFields = ['name', 'validFrom', 'rate', 'applicableTo', 'docTaxAmount', 'baseAmount'];
+const requiredHeaderFields = ['name', 'validFrom', 'taxCategory', 'rate', 'applicableTo', 'docTaxAmount', 'baseAmount'];
 // @sf-generated-end requiredHeaderFields:tax
 
 // @sf-generated-start addLineFields:accounting
@@ -76,7 +76,8 @@ export const api = {
       "listUrl": "/sws/neo/tax-rate/tax",
       "detailUrl": "/sws/neo/tax-rate/tax/{id}",
       "supportedFilters": [
-        "name"
+        "name",
+        "applicableTo"
       ]
     },
     "accounting": {
@@ -92,6 +93,14 @@ export const api = {
     }
   },
   "selectors": [
+    {
+      "entity": "tax",
+      "field": "taxCategory",
+      "column": "C_TaxCategory_ID",
+      "reference": "TaxCategory",
+      "inputMode": "selector",
+      "url": "/sws/neo/tax-rate/tax/selectors/taxCategory"
+    },
     {
       "entity": "accounting",
       "field": "taxDue",
@@ -132,14 +141,16 @@ export const api = {
       "Rate": "Índice",
       "SOPOType": "Tipo venta/compra",
       "ValidFrom": "Válido desde",
-      "Description": "Descripción"
+      "Description": "Descripción",
+      "C_TaxCategory_ID": "Categoría de impuesto"
     },
     "en_US": {
       "Name": "Name",
       "Rate": "Rate",
       "SOPOType": "Sales/Purchase Type",
       "ValidFrom": "Valid From",
-      "Description": "Description"
+      "Description": "Description",
+      "C_TaxCategory_ID": "Tax Category"
     }
   }
 };

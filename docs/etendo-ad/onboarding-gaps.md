@@ -30,6 +30,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | I1 | Inventory / Warehouse | Locators born with inventory status "Undefined-OverIssue" (allows negative stock) | Onboarding sampledata XML (`M_LOCATOR.xml`) — dataset-only, no new service | ETP-4761 |
 | J1 | Costing | New tenants get ZERO `M_Costing_Rule` rows (not Average, NOTHING) — `M_Transaction.iscostcalculated` stuck `'N'` forever | `M_COSTING_RULE` added to `OnboardingDatasetDefinition.INCLUDED_TABLES`; sample row fixed to Standard algorithm | ETP-4760 |
 | K1 | Accounting dimension display | `AD_Client.Acctdim_Centrally_Maintained` hardcoded to `'Y'` for every new client, permanently routing dimension-field visibility through a fine-grained matrix Etendo GO has no screen for, making the "Dimensiones contables" screen a no-op | `OnboardingAcctdimCentrallyMaintainedService` — backfill `C_AcctSchema_Element.isactive` then flip the flag to `'N'` | ETP-4854 |
+| K2 | Accounting dimension display | Product decision: Contacto (BP) and Producto (PR) accounting-dimension elements must always be `active` and are never editable/visible through "Dimensiones contables" — DB-confirmed `isactive` was already `'Y'` fleet-wide (no-op, kept as a correctness guard) but `ismandatory` was `'N'` for every BP/PR row (196/196), never forced before | Both fronts closed: code-side lock (`GeneralLedgerConfigurationHandler.LOCKED_DIMENSION_TYPES`, already shipped) + preventive dataset-only fix (`C_ACCTSCHEMA_ELEMENT.xml` `ISMANDATORY` N→Y for BP/PR, no new service, no CUT bump — new tenant already born correct) + corrective data-fix (`R37-acctdim-bp-pr-locked-active`) forces both flags fleet-wide | ETP-4879 |
 | L1 | Tenant ownership | New `AD_User.EM_ETGO_Is_Owner` column (owner-lock enforcement) is only auto-set for tenants created AFTER ETP-4830 shipped — every pre-existing tenant has zero owner-flagged users, so the enforcement checks are silent no-ops for them | Preventive shipped (`OwnerSupport#markAsOwnerIfNoneExists`, wired into `EtendoGoJwtServlet#createClient`); corrective backfill (`R26-tenant-owner-and-personal-role-retrofit`) shipped 2026-08-26 — both fronts closed | ETP-4877 |
 | N1 | Tenant plan / fiscal test mode | A Demo/free tenant has no way to submit SII/TicketBAI/VeriFactu in test/sandbox mode without a manual `ETSG_ForceTestMode` edit in Classic — every self-registered free tenant defaults to real (production) fiscal submissions | Both fronts closed: `OnboardingForceTestModeService` (preventive, new step in `ensureOnboardingDataset`) + `R31-force-test-mode-demo-tenants` (corrective, also backfills already-existing SII/TicketBAI/VeriFactu config rows) | ETP-5117 |
 | N5 | Initial dataset configuration | No price list is flagged as default — the curated `M_PRICELIST.xml` shipped both tariffs with `ISDEFAULT='N'`, so the four consumers that disambiguate tariffs with `isdefault DESC` (the `ETGO_PRODUCT_SALE_PRICE`/`ETGO_PRODUCT_PURCHASE_PRICE` computed columns, `PriceListPicker.jsx`, `R33`'s standard-cost anchor, and ETP-5245's new default-tariff resolver) silently fall through to an arbitrary list | Both fronts closed: preventive is dataset-only (`ISDEFAULT` `N`→`Y` on both curated tariffs in `GOClient/M_PRICELIST.xml`, already in `INCLUDED_TABLES`); corrective data-fix (`R35`) marks one active list per trade direction on already-onboarded tenants. CUT deliberately NOT bumped — a newborn tenant is now born correct, so `R35`'s `@check` returns 0 rows for it | ETP-5245 |
@@ -1585,6 +1586,55 @@ also carries a `cli/src/data-fixes/sql/` directory per the repo-topology note, b
 checkout it is a stale mirror (tops out at `R8`, not kept in sync with `R9`–`R22` shipped after
 the repo split) and is not on a branch related to this ticket — no changes were made there. If it
 needs reconciling with the current fix catalog, that is a separate task.
+
+---
+
+### K2 — Contacto (BP) / Producto (PR) accounting dimensions must always be `active`, never toggleable (ETP-4879, 2026-09-17)
+
+**Symptom:** the "Dimensiones contables" screen let an operator toggle Contacto
+(Business Partner) and Producto (Product) off, but every window that actually renders these two
+dimensions (Assets, Financial Account, Amortization) already hardcodes them as always visible and
+never reads this config's `active` flag — the toggle was a no-op that only confused users.
+
+**Product decision (Santiago):** Contacto and Producto are no editable (y no visible) y siempre
+en true. Project (PJ) and Cost Center (CC) stay editable/optional, unchanged.
+
+**Code-side lock (already shipped, this branch, NOT part of this data-fix):**
+`GeneralLedgerConfigurationHandler.LOCKED_DIMENSION_TYPES = ["BP", "PR"]` — `buildDimensions()`
+excludes BP/PR rows from the GET response entirely; `applyDimensionChanges()` silently ignores any
+attempt to toggle their `active` flag, regardless of `mandatory`.
+
+**DB-state investigation (2026-09-17, this DB, confirmed by query before writing the fix):**
+
+- `C_AcctSchema_Element.isactive` was **already `'Y'` for every existing BP/PR row** (98/98 BP,
+  98/98 PR, across all 96 clients that have an accounting schema at all) — the AD-standard
+  default, same fact already recorded for K1/R23. The `IsActive` half of this fix is therefore a
+  **no-op on the current fleet**, shipped only as a correctness guard for any future/other write
+  path.
+- `ismandatory` was **`'N'` for every single BP/PR row** (196/196) — never forced anywhere before.
+  This is the real corrective content.
+- 2 client ids (throwaway Playwright "E2E User 1 ..." test tenants) have **zero** accounting-schema
+  rows at all (no `C_AcctSchema`, no `C_AcctSchema_Element` of any type) — unrelated pre-existing
+  A1/A2 "chart of accounts missing" gap, out of scope here; the fix's `@check` naturally returns 0
+  rows for them.
+
+**Safety of forcing `IsMandatory='Y'` (confirmed by reading every consumer, not assumed):**
+`applyDimensionChanges` reads `isMandatory()` only inside the `!LOCKED_DIMENSION_TYPES.contains(...)`
+branch — for BP/PR that branch is never entered, so the flag is dead code there. Classic core's
+legacy `AcctSchemaElement.getAcctSchemaElementList` (`src/org/openbravo/erpCommon/ad_forms/`) reads
+`ismandatory` only to emit a DEBUG log line, no exception, no posting effect. The actual
+posting/balancing engine (`Fact.java`/`FactLine.java`) reads only `isBalanced`, never `isMandatory`,
+off this element list. `COAUtility`/`InitialSetupUtility.insertAcctSchemaElement` (new-schema
+creation) hardcodes BP/PR to `isMandatory=false` BY DESIGN (only OO/AC are `true`) — a
+"posting requires an org and an account, not necessarily a partner/product" rule this fix does not
+contradict. Conclusion: forcing `IsMandatory='Y'` is safe defense-in-depth, not merely cosmetic.
+
+**Both fronts closed (2026-09-17):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260917T120000Z__R37-acctdim-bp-pr-locked-active.sql` — one guarded `UPDATE` forcing `isactive='Y'` AND `ismandatory='Y'` for `elementtype IN ('BP','PR')`, scoped to `:client_id`. Live-validated: dry-run + real run across the full fleet (98 clients) → 96 `APPLIED` (2 or 4 rows, per number of accounting schemas) / 2 `SKIPPED_NOT_NEEDED` (the schema-less E2E tenants); re-run → 98/98 `SKIPPED_NOT_NEEDED` (96 "kept prior success state" + the 2 schema-less clients), zero `APPLIED`/`FAILED`. DB re-query after the run: 0 BP/PR rows anywhere with `isactive != 'Y'` or `ismandatory != 'Y'`. |
+| **Preventive** | Dataset-only, no new onboarding service: `com.etendoerp.go/referencedata/sampledata/GOClient/C_ACCTSCHEMA_ELEMENT.xml` already shipped BP/PR with `ISACTIVE=Y`; its `ISMANDATORY=N` for both was corrected to `Y` in the same change. `ONBOARDING_PROVISIONED_THROUGH` deliberately **NOT bumped** — a new tenant is already born correct on both flags (same "dataset-only, no CUT bump" shape as A9/N4/N5 above), so R37's own `@check` converges to 0 rows for it, a clean `SKIPPED_NOT_NEEDED`. |
 
 ---
 

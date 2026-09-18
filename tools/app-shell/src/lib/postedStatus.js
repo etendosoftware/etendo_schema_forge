@@ -90,6 +90,12 @@ export function postedStatusLabel(status, ui) {
   return status.labelKey ? ui(status.labelKey) : status.rawLabel;
 }
 
+/** True when `column` belongs to the Posted-status domain (17 codes) above — used to
+ * scope a shared chip width to this column only, not every boolean badge. */
+export function isPostedStatusColumn(column) {
+  return POSTED_STATUS_COLUMNS.has(column);
+}
+
 /**
  * Resolves a `statusPills` entry (a generated `extraBadges` item) into
  * `DocumentStatusPill` props, applying the posting-status domain above first and the

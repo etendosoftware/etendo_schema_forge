@@ -38,9 +38,111 @@ export const CREATE_PRODUCT_SPECS = new Set([
   'goods-receipt',
 ]);
 
+/**
+ * Seed values for a new Business Partner created from a document's Contacto selector.
+ *
+ * The customer/vendor flag is not cosmetic and is the reason this seed exists at all: a
+ * contact created from a purchase invoice that is not flagged `vendor` never comes back in
+ * a purchase selector, so the user creates it, uses it once, and cannot find it again. The
+ * hand-rolled modal this replaced carried the same rule as its `documentType` prop.
+ *
+ * Keys are the NEO `businessPartner` field names, verified against the POST payload the old
+ * `CreateContactModal.handleSave` built — `name`, `customer`, `vendor`.
+ */
+export function buildContactSeed(query, { documentType } = {}) {
+  const name = String(query ?? '').trim();
+  return {
+    ...(name && { name }),
+    ...(documentType === 'purchase' && { vendor: true }),
+    ...(documentType === 'sale' && { customer: true }),
+  };
+}
+
+/**
+ * The caption a caller shows for the contact that was just created.
+ *
+ * `name` holds the razón social and is what a COMPANY carries. A PERSON is stored as
+ * `etgoFirstname`/`etgoLastname` and may have an empty `name`, so reading `name` alone would
+ * put a blank label in the document's Contacto field while the record itself is fine.
+ */
+export function resolveContactName(record) {
+  const parts = [record?.etgoFirstname, record?.etgoLastname].filter(Boolean).join(' ').trim();
+  return record?.name || parts || record?._identifier || '';
+}
+
 export const LOOKUP_CREATE_TARGETS = {
+  /**
+   * Contacts (ETP-5332). Unlike `product` below, this target is NOT resolved from a selector
+   * URL: the Contacto affordance predates the drawer pattern and is wired through
+   * `CreateContactContext` -> `EntityForm.SearchSelectField` -> `useCreateContactModal`, which
+   * already knows the contacts API base and the document's sale/purchase nature. So there is
+   * no `allowedSpecs` here and `resolveLookupCreateTarget` never returns it — the hook spreads
+   * it with its own `apiBaseUrl` instead.
+   */
+  contact: {
+    key: 'contacts',
+    // NEO entity under the `contacts` spec: the POST target and the base its FK selectors
+    // resolve against. The spec is `contacts`, the entity is `businessPartner` (C_BPartner).
+    entity: 'businessPartner',
+    ctaKey: 'createContact',
+    titleKey: 'newContact',
+    errorKey: 'createContactError',
+    windowHintKey: 'createContactWindowHint',
+    // The popup IS the Contacts window: same Persona/Empresa toggle, same General/Financiero
+    // tabs, same Persona / Cuenta Bancaria / Dirección / Contabilidad child tabs. Mounting it
+    // is what makes the drift this ticket removes structurally impossible to reintroduce.
+    windowName: 'contacts',
+    // The record is seconds old and only exists because the popup just created it — Cancel or
+    // the dialog's X already mean "discard it". `/contacts` itself is untouched: this prop is
+    // forwarded by RecordCreateModal only, never baked into the window's own decisions.json.
+    hideDeleteButton: true,
+    // 1152px instead of the 1280px default. Measured: 1280px reads as a comfortable 67% of an
+    // external monitor but ~87% of a laptop screen, and this form does not need the room —
+    // four header fields in two rows.
+    //
+    // 1152 and not less, established empirically: at 1024px the SECONDARY TAB STRIP wraps to
+    // two lines (Bank Account / Customer Accounting / Vendor Accounting each break), which
+    // costs more height than the narrower box saves. The tab strip binds before the field grid
+    // does — and the grid has its own floor anyway, being `grid-cols-2 md:grid-cols-4` against
+    // the VIEWPORT (no container queries in this repo), so narrowing never reflows 4 columns
+    // down to 2, it only squeezes them.
+    dialogMaxWidthClass: 'max-w-6xl',
+    // 8px, uniform, instead of the dialog's default 24px (p-6). Requested directly against a
+    // screenshot: with the tighter width above, 24px on all four edges read as wasted frame
+    // around a form that is already snug. This is the DIALOG's own outer frame — do not
+    // confuse it with `titlePaddingClass` below, a separate, narrower request scoped to just
+    // the title row.
+    dialogPaddingClass: 'p-2',
+    // 4px instead of the default 16px (mt-4) between the "Nuevo contacto" title and the
+    // embedded window below it — also requested directly against a screenshot.
+    windowTopMarginClass: 'mt-1',
+    // text-lg (18px) instead of the dialog's default text-xl (20px) — requested directly
+    // against a screenshot as too large now that the surrounding chrome has shrunk to match it.
+    titleSizeClass: 'text-lg',
+    // 8px left/right, 0 top/bottom on the DialogHeader specifically (the row holding just the
+    // title) — NOT the whole dialog's own padding above, which stays uniform. Applied here
+    // because `dialogPaddingClass` already gives the header 8px on every side from its parent;
+    // this sits on top of that, so `py-0` here does not zero out the header's actual distance
+    // from the dialog's top edge.
+    titlePaddingClass: 'px-2 py-0',
+    // mt-0 instead of the default mt-4 (16px) above the "Completado" footer row —
+    // also requested directly against a screenshot.
+    finishRowMarginClass: 'mt-0',
+    // 66vh instead of 72vh. Modest on purpose: at 60vh the child tab's "+ Add Person" button
+    // was clipped off the bottom. The real height win is not this number — it is dropping the
+    // period button and summary widget from the embedded window (see ContactsWindow), which
+    // are chrome a create popup has no use for.
+    windowHeight: '66vh',
+    loadWindow: () => import('@/windows/custom/contacts/index.jsx'),
+    // Dormant fallback, used only if the window module fails to load. Header fields only —
+    // it cannot create the address/person/bank rows the window's child tabs do.
+    loadForm: () => import('@generated/contacts/generated/web/contacts/BusinessPartnerForm.jsx'),
+    loadLabels: () => import('@generated/contacts/generated/web/contacts/labels.js'),
+    prefill: query => buildContactSeed(query),
+  },
   product: {
     key: 'product',
+    windowHintKey: 'createProductWindowHint',
     // NEO entity under the `product` spec — both the POST target and the base the
     // generated form's FK selectors resolve against.
     entity: 'product',

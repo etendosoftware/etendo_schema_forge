@@ -180,6 +180,25 @@ function NoAccessScreen() {
   );
 }
 
+// ETP-5395 Point 1 Fix B — while `allowedIds === undefined` (SFListMenu fetch
+// still in flight), `filterMenuGroupsByAccess`'s stand-in empty Set only hides
+// AD-backed menu items (see the comment above its call below) — an item with
+// NO windowId/processId/obuiappProcessId (e.g. menu.json's "first-steps" or
+// "dashboard" entries) is never filtered and renders immediately, making it
+// reachable via <Outlet> before the real Set (and the NoAccessScreen
+// size-check) ever gets a chance to act. This blank placeholder replaces the
+// whole routed/role-gated tree until the real Set arrives. No message: the
+// wait is normally sub-second, so no i18n key is worth adding for it — reuses
+// NoAccessScreen's own outer wrapper markup/styling with nothing inside.
+function AppLayoutLoading() {
+  return (
+    <div
+      className="flex min-h-screen flex-col items-center justify-center gap-2 p-8 text-center"
+      data-testid="AppLayoutLoading__488148"
+    />
+  );
+}
+
 function AppLayoutInner({ menuGroups, embedded }) {
   const location = useLocation();
   const { expanded, toggle } = useSidebar();
@@ -277,17 +296,24 @@ export default function AppLayout({ menuGroups }) {
   // returns `{}` before the map has loaded, which filterMenuGroupsByAccess
   // already treats as "hide" for any accessWindowId-gated item (fails closed).
   const windowAccess = useWindowAccessSafe();
-  // `undefined` = SFListMenu fetch still in flight — pass an empty Set so
-  // filterMenuGroupsByAccess() fails closed for AD-backed items (any item
-  // carrying a windowId/processId/obuiappProcessId is hidden until the real
-  // Set arrives); items with none of those ids (dashboard, custom pages,
-  // installed apps) and the Favorites group are never filtered and stay
-  // visible throughout. This avoids the AD-backed part of the menu rendering
-  // fully, then shrinking, once real data arrives (see useRoleMenu.js for the
-  // full undefined/null/Set contract).
+
+  // ETP-5395 Point 1 Fix B — must run BEFORE filterMenuGroupsByAccess and the
+  // NoAccessScreen size-check below: id-less menu items (no
+  // windowId/processId/obuiappProcessId — e.g. "first-steps", "dashboard")
+  // are never filtered by filterMenuGroupsByAccess regardless of the Set
+  // passed in, so gating only from the size-check below would still let
+  // <Outlet> mount and those routes become reachable while the real Set is
+  // in flight. See AppLayoutLoading's JSDoc above for the full story.
+  if (allowedIds === undefined) {
+    return <AppLayoutLoading data-testid="AppLayoutLoading__488148" />;
+  }
+
+  // allowedIds is now either a resolved Set or `null` (unauthenticated /
+  // fetch failure, fail-open per useRoleMenu.js) — never pass a stand-in
+  // Set to filterMenuGroupsByAccess() below.
   const filteredMenuGroups = filterMenuGroupsByAccess(
     menuGroups,
-    allowedIds === undefined ? new Set() : allowedIds,
+    allowedIds,
     capabilities,
     windowAccess
   );

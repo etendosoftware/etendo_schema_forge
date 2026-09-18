@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef } from 'react';
+import { useContext, useEffect, useId, useRef } from 'react';
 import { setUnsavedChanges, clearUnsavedChanges } from '@/lib/unsavedChanges.js';
+import { EmbeddedWindowContext } from '@/lib/embeddedWindow.js';
 
 /**
  * Publish a form's unsaved-changes state to the global registry (ETP-5022), so the locale
@@ -15,6 +16,12 @@ import { setUnsavedChanges, clearUnsavedChanges } from '@/lib/unsavedChanges.js'
  * discard") actually requires. Omitting it is still valid — the form blocks navigation and offers
  * Discard, which is the old behaviour plus the prompt.
  *
+ * ETP-5332: also tags the entry `embedded` when this instance is mounted inside a
+ * `RecordCreateModal` popup (`EmbeddedWindowContext`, already provided by `EmbeddedWindowRoute` —
+ * no new context, no DetailView.jsx change). That is what lets the popup's "Completado" call
+ * `saveEmbeddedUnsavedChanges()` and save only itself, never the document the popup was opened
+ * from — a *different* DetailView instance, outside that provider, whose entry stays untagged.
+ *
  * `save` is deliberately NOT in the dependency array: an inline arrow re-created every render
  * would re-register on every keystroke. The registry only ever calls the latest one it was
  * handed, and `isDirty` changing is what re-registers, so the saver cannot go stale in a way that
@@ -25,6 +32,7 @@ import { setUnsavedChanges, clearUnsavedChanges } from '@/lib/unsavedChanges.js'
  */
 export function useUnsavedChangesGuard(isDirty, save) {
   const key = useId();
+  const embedded = useContext(EmbeddedWindowContext);
   const saveRef = useRef(save);
   saveRef.current = save;
   useEffect(() => {
@@ -32,7 +40,8 @@ export function useUnsavedChangesGuard(isDirty, save) {
       key,
       Boolean(isDirty),
       saveRef.current ? () => saveRef.current?.() : undefined,
+      embedded,
     );
     return () => clearUnsavedChanges(key);
-  }, [key, isDirty]);
+  }, [key, isDirty, embedded]);
 }
