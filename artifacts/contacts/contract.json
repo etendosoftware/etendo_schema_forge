@@ -1,7 +1,8 @@
 {
   "version": "0.4.0",
   "generatedAt": "2026-09-18T18:02:08.296Z",
-  "checksum": "ef814252eaa73e47",
+  "updatedAt": "2026-09-18T19:15:12.502Z",
+  "checksum": "ca803d23b1d5c42d",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -273,7 +274,7 @@
               "página web"
             ],
             "label": "Website",
-            "example": "https://distribucionesgarcia.es",
+            "example": "distribucionesgarcia.es",
             "column": "EM_Etgo_Web",
             "required": false,
             "type": "string"
@@ -306,7 +307,7 @@
             ],
             "label": "NIF",
             "required": true,
-            "example": "B12345678",
+            "example": "B12345674",
             "column": "TaxID",
             "type": "string"
           },
@@ -5566,7 +5567,7 @@
               "página web"
             ],
             "label": "Website",
-            "example": "https://distribucionesgarcia.es",
+            "example": "distribucionesgarcia.es",
             "column": "EM_Etgo_Web",
             "required": false,
             "type": "string"
@@ -5599,7 +5600,7 @@
             ],
             "label": "NIF",
             "required": true,
-            "example": "B12345678",
+            "example": "B12345674",
             "column": "TaxID",
             "type": "string"
           },
