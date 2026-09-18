@@ -337,6 +337,58 @@ function useHorizontalScrollGeometry(visibleThresholdPx = 0) {
   return { stickyBottomPx, allowHoverSticky, containerRef, elRef, attachSeq };
 }
 
+/**
+ * ETP-5332 — the add-row companion table's own visible width, measured, kept in sync
+ * with its sibling InlineLinesPanel's scroll position. Two DataTable concerns that both
+ * need the same DOM node, so they are measured/wired by one callback ref — same shape as
+ * `useHorizontalScrollGeometry` above, and for the same reason: living outside `DataTable`
+ * keeps this hook's own branching off that component's cognitive-complexity budget.
+ *
+ * Width: its `<colgroup>` used to express each growing column as
+ * `calc((100% - Fixed) / N + Basis)`, on the assumption that a browser resolves that per
+ * column. Chrome does not: inside `table-layout: fixed` it ignores the differing `Basis`
+ * terms and splits the space equally, which is how Persona's five columns all came out
+ * 243px while their real bases are 224 / 224 / 320 / 224 / 224. Wrapping it in `max()`
+ * changed nothing — the whole expression is what it declines to honour per column.
+ * Literal pixels are the only thing it does honour, and computing them needs the one
+ * number CSS was being asked for: the container's width. Measured only in `hideHeader`
+ * mode — that table has no data rows (`hideDataRows`), so re-rendering it on resize costs
+ * nothing, unlike the row lists `useHorizontalScrollGeometry` deliberately stays out of.
+ *
+ * Sync: joins this table's scroll box to its sibling InlineLinesPanel's, so the "Add ..."
+ * row stays under the header strip once the columns are wider than the tab. See
+ * `@/lib/linesScrollSync.js`. Only the `hideHeader` companion takes part: every other
+ * DataTable mount either IS the whole tab or keeps the forced `overflow-visible` its
+ * caller applies, and has nothing to stay aligned with.
+ *
+ * Cleanup is tracked by hand rather than returned from the callback ref: React 18 ignores
+ * a callback ref's return value (that only became a cleanup in 19). Same shape as
+ * `useHorizontalScrollGeometry`'s own `cleanupRef` above, for the same reason.
+ */
+function useLinesAddRowScrollSync(entity, hideHeader) {
+  const [linesAvailableWidthPx, setLinesAvailableWidthPx] = useState(0);
+  const widthCleanupRef = useRef(null);
+  const syncCleanupRef = useRef(null);
+
+  const ref = useCallback((el) => {
+    widthCleanupRef.current?.();
+    widthCleanupRef.current = null;
+    syncCleanupRef.current?.();
+    syncCleanupRef.current = (el && hideHeader) ? registerLinesScroller(entity, el) : null;
+
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () => setLinesAvailableWidthPx((prev) => (
+      prev === el.clientWidth ? prev : el.clientWidth
+    ));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    widthCleanupRef.current = () => ro.disconnect();
+  }, [entity, hideHeader]);
+
+  return { linesAvailableWidthPx, ref };
+}
+
 // ETP-5268 follow-up — perf isolation: moving the thumb on scroll needs a
 // React state update every scroll frame (its `transform: translateX` has no
 // other way to track the real container's `scrollLeft`), but DataTable
@@ -1868,6 +1920,24 @@ export function getTableContainerStyle(minWidthPx = 0) {
     : { tableLayout: 'fixed', width: '100%' };
 }
 
+// ETP-5332 — the add-row companion table's own width demand: its columns hold their own
+// basis (see growColumnWidth), so it can be wider than the dialog it sits in. Every other
+// mount has no such budget to declare. Named and pulled out of DataTable's body — same
+// reasoning as `getTableContainerStyle` just above it — so this one condition does not add
+// to DataTable's own cognitive-complexity count.
+function linesMinWidthPx(hideHeader, fixedColsTotalPx, growColsBasisPx) {
+  return hideHeader ? fixedColsTotalPx + growColsBasisPx : 0;
+}
+
+// ETP-5332 — `hideHeader` is the add-row companion table, and it is the one case that DOES
+// run out of room (see `linesMinWidthPx` above): it needs the real scrolling wrapper for
+// that width to be reachable. Every other `inlineEditable` mount keeps the forced
+// `overflow-visible` DataTable already applied before this ticket. Same reasoning as
+// `linesMinWidthPx` for living outside DataTable's body.
+function usesInlineEditableOverflowVisible(linesLayout, hideHeader) {
+  return linesLayout === 'inlineEditable' && !hideHeader;
+}
+
 function renderRowActionHeaderCells(hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled) {
   return hoverRowActions ? (
     <>
@@ -3006,54 +3076,14 @@ export function DataTable({
     attachSeq: horizontalScrollAttachSeq,
   } = useHorizontalScrollGeometry(quickActionsColWidthPx);
 
-  // ETP-5332 — the add-row companion table's own visible width, measured.
-  //
-  // Its `<colgroup>` used to express each growing column as
-  // `calc((100% - Fixed) / N + Basis)`, on the assumption that a browser resolves that
-  // per column. Chrome does not: inside `table-layout: fixed` it ignores the differing
-  // `Basis` terms and splits the space equally, which is how Persona's five columns all
-  // came out 243px while their real bases are 224 / 224 / 320 / 224 / 224. Wrapping it in
-  // `max()` changed nothing — the whole expression is what it declines to honour per column.
-  //
-  // Literal pixels are the only thing it does honour, and computing them needs the one
-  // number CSS was being asked for: the container's width. Measured only in `hideHeader`
-  // mode — that table has no data rows (`hideDataRows`), so re-rendering it on resize costs
-  // nothing, unlike the row lists the two observers above deliberately stay out of.
-  const [linesAvailableWidthPx, setLinesAvailableWidthPx] = useState(0);
-  // Cleanup is tracked by hand rather than returned from the callback ref: React 18 ignores
-  // a callback ref's return value (that only became a cleanup in 19). Same shape as
-  // `useHorizontalScrollGeometry`'s own `cleanupRef` above, for the same reason.
-  const linesWidthCleanupRef = useRef(null);
-  const linesWidthRef = useCallback((el) => {
-    linesWidthCleanupRef.current?.();
-    linesWidthCleanupRef.current = null;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const measure = () => setLinesAvailableWidthPx((prev) => (
-      prev === el.clientWidth ? prev : el.clientWidth
-    ));
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    linesWidthCleanupRef.current = () => ro.disconnect();
-  }, []);
-  // ETP-5332 — join this table's scroll box to its sibling InlineLinesPanel's, so the
-  // "Add ..." row stays under the header strip once the columns are wider than the tab.
-  // See `@/lib/linesScrollSync.js`. Only the `hideHeader` companion takes part: every other
-  // DataTable mount either IS the whole tab or keeps the forced `overflow-visible` below,
-  // and has nothing to stay aligned with.
-  const linesSyncCleanupRef = useRef(null);
-  const linesSyncRef = useCallback((el) => {
-    linesSyncCleanupRef.current?.();
-    linesSyncCleanupRef.current = (el && hideHeader) ? registerLinesScroller(entity, el) : null;
-  }, [entity, hideHeader]);
-  // One node, three callback refs: the scroll geometry hook's, the width measurement above,
-  // and the sibling sync. Composed through a stable `useCallback` so the node is not
-  // detached and re-attached on every render, which would restart every observer.
+  const { linesAvailableWidthPx, ref: linesAddRowRef } = useLinesAddRowScrollSync(entity, hideHeader);
+  // One node, two callback refs: the scroll geometry hook's and the width+sync hook's.
+  // Composed through a stable `useCallback` so the node is not detached and re-attached on
+  // every render, which would restart every observer.
   const linesScrollAndWidthRef = useCallback((el) => {
     scrollContainerRef(el);
-    linesWidthRef(el);
-    linesSyncRef(el);
-  }, [scrollContainerRef, linesWidthRef, linesSyncRef]);
+    linesAddRowRef(el);
+  }, [scrollContainerRef, linesAddRowRef]);
 
   const totals = useMemo(() => {
     if (amountColumns.length === 0) return null;
@@ -3283,12 +3313,7 @@ export function DataTable({
       <div
         ref={linesScrollAndWidthRef}
         className={[
-          // ETP-5332 — `hideHeader` is the add-row companion table, and it is the one case
-          // that DOES run out of room: its columns now hold their own basis (see
-          // growColumnWidth) so the table can be wider than the dialog it sits in. It needs
-          // the real scrolling wrapper for that width to be reachable. Every other
-          // inlineEditable mount keeps the forced `overflow-visible` below.
-          linesLayout === 'inlineEditable' && !hideHeader
+          usesInlineEditableOverflowVisible(linesLayout, hideHeader)
             ? '[&>div]:!overflow-visible'
             // ETP-5268 follow-up — the hand-built thumb below is the ONLY
             // horizontal scrollbar this wrapper ever shows (see its own doc
@@ -3309,7 +3334,7 @@ export function DataTable({
           rowHoverStyle === 'elevated' ? 'pb-6' : '',
         ].filter(Boolean).join(' ')}
       >
-        <Table style={getTableContainerStyle(hideHeader ? fixedColsTotalPx + growColsBasisPx : 0)} data-testid="Table__eb5261">
+        <Table style={getTableContainerStyle(linesMinWidthPx(hideHeader, fixedColsTotalPx, growColsBasisPx))} data-testid="Table__eb5261">
           {/* When hideHeader is true (add-row-only mode), or the header just moved out to
               StickyHeaderRow above, a <colgroup> drives column widths instead of the (now
               absent-from-this-table, or hidden) header row's own cell widths. */}
