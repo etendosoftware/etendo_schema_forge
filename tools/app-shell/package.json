@@ -19,8 +19,8 @@
   "dependencies": {
     "@ai-sdk/react": "^4.0.96",
     "@configcat/sdk": "^1.1.0",
-    "@etendosoftware/app-shell-core": "0.3.54-preview.feature-ETP-4576.20260916185702.f7a78c7",
-    "@etendosoftware/etendo-go-core": "0.3.54-preview.feature-ETP-4576.20260916185702.f7a78c7",
+    "@etendosoftware/app-shell-core": "0.3.55-preview.feature-ETP-4576.20260917202319.8490a41",
+    "@etendosoftware/etendo-go-core": "0.3.55-preview.feature-ETP-4576.20260917202319.8490a41",
     "@iconicapp/iconic-react": "^1.1.4",
     "@openfeature/config-cat-web-provider": "^0.2.0",
     "@openfeature/core": "^1.11.0",
