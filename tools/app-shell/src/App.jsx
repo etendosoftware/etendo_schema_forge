@@ -32,6 +32,7 @@ import { useSurveyEngine } from './hooks/useSurveyEngine.js';
 import { apiFetch } from '@/auth/api.js';
 import { clearStoredDateRange } from '@/components/dashboard/DashboardDateRangeContext.jsx';
 import { clearAccountIdentity } from '@/lib/flags/bootstrap.js';
+import { detectBasePath, getNeoBaseUrl } from '@/lib/neoBaseUrl.js';
 // ETP-4300: the full locale dictionaries are no longer bundled eagerly. Only the
 // active locale's sliced "core" (the dict minus the per-window `fields` monolith)
 // is lazy-loaded below; per-window field labels ride each window's lazy chunk (see
@@ -39,31 +40,11 @@ import { clearAccountIdentity } from '@/lib/flags/bootstrap.js';
 // the slicer from @etendosoftware/schema-forge-cli (gitignored build artifacts).
 const coreLoaders = import.meta.glob('./locales/generated/core.*.json');
 
-function detectBasePath() {
-  const envBase = import.meta.env.VITE_API_BASE;
-  const path = window.location.pathname;
-  const webIdx = path.indexOf('/web/');
-
-  if (envBase) {
-    const routerBase = webIdx !== -1
-      ? `${path.substring(0, webIdx)}/${path.substring(webIdx + 1).split('/').slice(0, 2).join('/')}`
-      : '/';
-    return { apiBase: envBase, routerBase };
-  }
-
-  if (webIdx === -1) return { apiBase: '', routerBase: '/' };
-  const contextPath = path.substring(0, webIdx);
-  const moduleSegment = path.substring(webIdx + 1).split('/').slice(0, 2).join('/');
-  return {
-    apiBase: contextPath,
-    routerBase: `${contextPath}/${moduleSegment}`,
-  };
-}
-
+// ETP-5371 — `detectBasePath` and the NEO root moved to `@/lib/neoBaseUrl.js` so that surfaces
+// outside the `:windowName` route (the First Steps checklist) build the same URLs this file
+// hands `WindowLoader`, instead of approximating them from a different helper.
 const { apiBase, routerBase } = detectBasePath();
-const API_BASE_URL = import.meta.env.VITE_MOCK === 'true'
-  ? `${apiBase}/api`
-  : `${apiBase}/sws/neo`;
+const API_BASE_URL = getNeoBaseUrl();
 
 // ETP-4520 — resolves the per-window access tier + named capability flags for
 // the current session via the SFWindowAccessMap webhook. Passed into
