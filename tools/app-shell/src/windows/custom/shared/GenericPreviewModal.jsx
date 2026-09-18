@@ -345,7 +345,13 @@ const GenericPreviewModal = forwardRef(function GenericPreviewModal({
             </div>
 
             {/* Tab switcher */}
-            {tabs.length > 0 && (
+            {/* ETP-5304 — every document preview builds exactly one tab ('general'), so a
+                `> 0` guard drew a single pill that was already active: it looked pressable
+                and did nothing. The bar only earns its space once there is something to
+                switch to. `activeContent` below is unaffected — it resolves from
+                `activeTab`, which still defaults to `tabs[0].key`, so the single tab's
+                content keeps rendering with the bar hidden. */}
+            {tabs.length > 1 && (
               <div className="px-3 pt-3 pb-2 shrink-0">
                 <div
                   className="flex items-center gap-1 p-1 rounded-xl"

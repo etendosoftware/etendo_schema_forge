@@ -253,9 +253,15 @@ describe('InvoicePreviewModal', () => {
 
   // ETP-4855 — the Messages / History tabs were permanent placeholders and were
   // removed from every preview modal. General is the only tab left here.
-  it('renders only the General tab', () => {
+  // ETP-5304 — the invoice preview builds exactly one tab ('general'), so the tab
+  // bar used to draw a single pill that was already active: it looked pressable and
+  // switched nothing. The bar is now hidden below two tabs; the tab's CONTENT must
+  // still render (asserted here and by the 'shows the total section' test below).
+  it('ETP-5304: renders no tab bar for its single tab, yet still renders that tab content', () => {
     renderPreview();
-    expect(screen.getByText('invoicePreviewGeneral')).toBeInTheDocument();
+    expect(screen.queryByText('invoicePreviewGeneral')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'invoicePreviewGeneral' })).toBeNull();
+    expect(screen.getByText('previewCardTotal')).toBeInTheDocument();
     expect(screen.queryByText('invoicePreviewMessages')).toBeNull();
     expect(screen.queryByText('invoicePreviewHistory')).toBeNull();
   });
