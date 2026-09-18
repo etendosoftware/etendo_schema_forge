@@ -13,17 +13,39 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
   createCheckoutSession,
+  fetchPlans,
   getCheckoutToken,
   getCheckoutStatus,
   runPaidOnboarding,
   UPGRADE_ERROR_CODES,
 } from '@/lib/upgrade/api.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 
 /**
- * Display price until the backend plan catalog is exposed to the product UI.
+ * Shown on the marketing plan card only until the catalog lookup below resolves. Once it has,
+ * the card quotes the real catalog price, so this never contradicts what the checkout charges.
  */
-const PRODUCTIVE_MONTHLY_PRICE = '€49';
+const PRODUCTIVE_MONTHLY_PRICE_FALLBACK = '€49';
+
+/** Billing interval as the catalog spells it, mapped to the i18n key that phrases the price. */
+const PRICE_LABEL_KEYS = { month: 'upgradePlanPriceMonthly', year: 'upgradePlanPriceYearly' };
+
+/**
+ * Formats a catalog plan's price for display.
+ *
+ * `formatCurrency` is the canonical formatter (see CLAUDE.md § Currency & Amount Formatting): a
+ * hand-rolled `Intl.NumberFormat`/`toLocaleString` here would pin a locale and silently drop the
+ * thousands separator. The server sends the amount as a STRING so no float rounding happens in
+ * transit; `formatCurrency` coerces it.
+ */
+function formatPlanPrice(ui, plan) {
+  const amount = formatCurrency(plan?.currency, plan?.displayPrice);
+  const key = PRICE_LABEL_KEYS[plan?.billingInterval];
+  // An interval the catalog grows later renders as the bare amount rather than as a wrong
+  // "per month" — an unknown cadence must not be asserted.
+  return key ? ui(key, { amount }) : amount;
+}
 
 const FREE_FEATURES = ['upgradeFreeFeatureExplore', 'upgradeFreeFeatureSample', 'upgradeFreeFeatureSingle'];
 const PRODUCTIVE_FEATURES = [
@@ -153,6 +175,102 @@ function ProgressPanel({ steps, ui }) {
 }
 
 /**
+ * What the user is about to buy, and — only when the catalog offers a choice — which one.
+ *
+ * Deliberately plain: a single flat monthly subscription is the v1 catalog, so the one-plan case
+ * is a statement, not a picker. THIS COMPONENT IS THE SEAM ETP-5049 REPLACES — the real
+ * plan-selection UI (comparison, feature matrix, annual/monthly toggle) belongs there. Do not
+ * grow a pricing table here.
+ *
+ * The catalog is the ONLY source of a plan key. There is no hardcoded fallback key, because the
+ * server requires the key and has no default: a guess here would be a purchase nobody reviewed.
+ */
+function PlanSelector({ state, plans, selectedPlanKey, onSelect, onRetry, ui }) {
+  // Nothing to say about plans when there is no session to read them with: the submit reports
+  // the expired session, which is the accurate answer.
+  if (state === 'no-session') return null;
+
+  if (state === 'loading') {
+    return (
+      <p
+        className="flex items-center gap-2 text-sm text-muted-foreground"
+        data-testid="upgrade-plans-loading"
+      >
+        <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__58bad7" />
+        {ui('upgradePlansLoading')}
+      </p>
+    );
+  }
+
+  if (state === 'unavailable' || plans.length === 0) {
+    return (
+      <div
+        role="status"
+        className="flex items-start gap-2 rounded-md border p-3 text-sm"
+        // Semantic status tokens, not palette literals — see
+        // src/lib/__tests__/semanticThemeUsage.test.js.
+        style={{
+          background: 'var(--status-warning-bg)',
+          color: 'var(--status-warning-fg)',
+          borderColor: 'var(--status-warning-border)',
+        }}
+        data-testid="upgrade-plans-unavailable"
+      >
+        <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" data-testid="CircleAlert__58bad7" />
+        <div className="space-y-2">
+          <p>{ui(state === 'unavailable' ? 'upgradePlansUnavailable' : 'upgradePlansEmpty')}</p>
+          {state === 'unavailable' && (
+            <Button type="button" variant="outline" size="sm" onClick={onRetry} data-testid="upgrade-plans-retry">
+              {ui('upgradePlansRetry')}
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (plans.length === 1) {
+    const [plan] = plans;
+    return (
+      <div className="rounded-md border p-3 text-sm" data-testid="upgrade-plan-single">
+        <span className="block font-medium">{plan.name}</span>
+        {plan.description && (
+          <span className="block text-xs text-muted-foreground">{plan.description}</span>
+        )}
+        <span className="mt-1 block font-semibold" data-testid="upgrade-plan-single-price">
+          {formatPlanPrice(ui, plan)}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <fieldset className="space-y-3" data-testid="upgrade-plan-choice">
+      <legend className="text-sm font-medium">{ui('upgradePlanChoiceLabel')}</legend>
+      {plans.map(plan => (
+        <label key={plan.planKey} className="flex items-start gap-2 rounded-md border p-3">
+          <input
+            type="radio"
+            name="planKey"
+            value={plan.planKey}
+            checked={selectedPlanKey === plan.planKey}
+            onChange={() => onSelect(plan.planKey)}
+            data-testid={`upgrade-plan-option-${plan.planKey}`}
+          />
+          <span>
+            <span className="block text-sm font-medium">{plan.name}</span>
+            {plan.description && (
+              <span className="block text-xs text-muted-foreground">{plan.description}</span>
+            )}
+            <span className="mt-1 block text-sm font-semibold">{formatPlanPrice(ui, plan)}</span>
+          </span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+/**
  * An account's first tenant is always free, even with the flag on, so charging
  * for it would be wrong. Shown instead of the checkout when the account owns no
  * environments — reachable only by opening /upgrade directly, since the menu
@@ -223,6 +341,13 @@ export default function UpgradePage() {
   // Bumped by the retry button so the lookup effect re-runs. A failed lookup is recoverable —
   // the usual cause is a transient/auth error, not an account without environments.
   const [lookupAttempt, setLookupAttempt] = useState(0);
+  // 'loading' | 'ready' | 'unavailable' | 'no-session' — the plan catalog. Unlike the
+  // environments lookup, a failure here BLOCKS checkout: the server requires a plan key and has
+  // no default, so without the catalog there is nothing legitimate to send. Guessing a key is
+  // the one thing this flow must never do.
+  const [plansState, setPlansState] = useState('loading');
+  const [plans, setPlans] = useState([]);
+  const [selectedPlanKey, setSelectedPlanKey] = useState('');
   const { enterByClientName } = useEnvironmentSwitch({ enabled: false });
   const [entering, setEntering] = useState(false);
   const [enterError, setEnterError] = useState(false);
@@ -243,6 +368,41 @@ export default function UpgradePage() {
       })
       .catch(() => {
         if (!cancelled) setAccountState('unavailable');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [lookupAttempt]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const token = getCheckoutToken();
+    if (!token) {
+      // A missing session is not an empty or unreadable catalog, and saying so would be
+      // misleading. Kept distinct so the submit stays reachable and runUpgrade answers with the
+      // accurate "your session expired", exactly as it did before the catalog existed.
+      setPlansState('no-session');
+      return undefined;
+    }
+    setPlansState('loading');
+
+    fetchPlans(fetch, getUpgradeBaseUrl(), token)
+      .then(catalog => {
+        if (cancelled) return;
+        const available = Array.isArray(catalog) ? catalog.filter(plan => plan?.planKey) : [];
+        setPlans(available);
+        // Exactly one purchasable plan is the v1 case (a single flat monthly subscription), so
+        // there is nothing to choose: select it. With several, the user must pick — see
+        // PlanSelector, the seam ETP-5049 replaces.
+        setSelectedPlanKey(available.length === 1 ? available[0].planKey : '');
+        setPlansState('ready');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPlans([]);
+        setSelectedPlanKey('');
+        setPlansState('unavailable');
       });
 
     return () => {
@@ -353,6 +513,9 @@ export default function UpgradePage() {
           action: 'productive-tenant',
           clientName: form.tenantName.trim(),
           upgradeAction: form.upgradeAction,
+          // Required by the server, which has no default plan. Always a KEY from the catalog,
+          // never a price and never a literal written here.
+          planKey: selectedPlanKey,
           language: getStoredLocale(),
         }
       );
@@ -382,6 +545,10 @@ export default function UpgradePage() {
   const showAccountLoading = phase === 'form' && accountState === 'loading';
   const showFirstTenantFree = phase === 'form' && hasNoTenants;
   const showCheckout = phase === 'form' && accountState !== 'loading' && !hasNoTenants;
+  // Nothing purchasable, or the catalog could not be read: there is no plan key to send, so the
+  // submit is blocked rather than allowed to produce a guaranteed 400. A missing session is the
+  // exception — see the lookup above.
+  const canCheckout = plansState === 'no-session' || (plansState === 'ready' && plans.length > 0);
   const demoEnvironments = environments.filter(env => env?.plan !== 'productive');
   const currentDemo = demoEnvironments.find(env => env.clientId === localStorage.getItem('sf_auth_client_id'))
     || demoEnvironments[0];
@@ -423,6 +590,14 @@ export default function UpgradePage() {
     }
     setErrors({});
 
+    // The catalog is the only source of a plan key, so an unmade choice stops here rather than
+    // being papered over with a default. With no session there is no catalog to choose from and
+    // runUpgrade reports the expired session instead — the accurate answer.
+    if (plansState !== 'no-session' && !selectedPlanKey) {
+      setFormError('upgradePlanRequired');
+      return;
+    }
+
     // Not awaited: runUpgrade drives its own phase/error state and never rejects.
     runUpgrade();
   };
@@ -452,7 +627,11 @@ export default function UpgradePage() {
           testId="upgrade-plan-productive"
           name={ui('upgradePlanProductiveName')}
           tagline={ui('upgradePlanProductiveTagline')}
-          price={ui('upgradePlanProductivePrice', { amount: PRODUCTIVE_MONTHLY_PRICE })}
+          // Quotes the real catalog price once it is known, so this card can never advertise a
+          // different amount from the one the checkout charges.
+          price={plans.length > 0
+            ? formatPlanPrice(ui, plans.find(plan => plan.planKey === selectedPlanKey) || plans[0])
+            : ui('upgradePlanProductivePrice', { amount: PRODUCTIVE_MONTHLY_PRICE_FALLBACK })}
           features={PRODUCTIVE_FEATURES}
           highlighted
           ui={ui}
@@ -593,6 +772,15 @@ export default function UpgradePage() {
                 </fieldset>
               )}
 
+              <PlanSelector
+                state={plansState}
+                plans={plans}
+                selectedPlanKey={selectedPlanKey}
+                onSelect={setSelectedPlanKey}
+                onRetry={() => setLookupAttempt(attempt => attempt + 1)}
+                ui={ui}
+                data-testid="PlanSelector__58bad7" />
+
               {formError && (
                 <div
                   role="alert"
@@ -604,7 +792,11 @@ export default function UpgradePage() {
                 </div>
               )}
 
-              <Button type="submit" data-testid="upgrade-submit" disabled={phase === 'running'}>
+              <Button
+                type="submit"
+                data-testid="upgrade-submit"
+                disabled={phase === 'running' || !canCheckout}
+              >
                 {ui('upgradeSubmit')}
               </Button>
             </form>

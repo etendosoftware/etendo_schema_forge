@@ -5,6 +5,7 @@ import {
   getCheckoutToken,
   getPlatformToken,
   createCheckoutSession,
+  fetchPlans,
 } from '../upgrade/api.js';
 
 function jsonResponse(data, { ok = true, status = 200 } = {}) {
@@ -40,6 +41,63 @@ describe('getCheckoutToken', () => {
   });
 });
 
+describe('fetchPlans', () => {
+  const PLAN = {
+    planKey: 'productive-monthly',
+    name: 'Productive',
+    description: 'A second tenant for real work',
+    displayPrice: '49.00',
+    currency: 'EUR',
+    billingInterval: 'month',
+  };
+
+  it('reads the catalog with the session credential and no price field', async () => {
+    const fetchImpl = recordingFetch(jsonResponse({ plans: [PLAN] }));
+
+    assert.deepEqual(await fetchPlans(fetchImpl, 'https://api.test', 'platform-token'), [PLAN]);
+    assert.equal(fetchImpl.calls[0].url, 'https://api.test/sws/go/plans');
+    // The canonical builder, so Accept-Language rides along and the backend answers reference
+    // data in the UI locale rather than the account's AD language (ETP-5022).
+    assert.equal(fetchImpl.calls[0].init.headers.Authorization, 'Bearer platform-token');
+    assert.ok(fetchImpl.calls[0].init.headers['Accept-Language']);
+    assert.equal(fetchImpl.calls[0].init.body, undefined);
+  });
+
+  it('treats an empty catalog as an answer, not a failure', async () => {
+    const fetchImpl = recordingFetch(jsonResponse({ plans: [] }));
+
+    // "Nothing is on sale" is a state the page renders (checkout disabled), not an error it
+    // reports as a broken backend.
+    assert.deepEqual(await fetchPlans(fetchImpl, '', 'token'), []);
+  });
+
+  it('returns an empty list when the payload carries no plans array', async () => {
+    const fetchImpl = recordingFetch(jsonResponse({}));
+
+    assert.deepEqual(await fetchPlans(fetchImpl, '', 'token'), []);
+  });
+
+  it('raises a stable error the page can translate when the catalog cannot be read', async () => {
+    const fetchImpl = recordingFetch(jsonResponse({ message: 'boom' }, { ok: false, status: 503 }));
+
+    // It must REJECT rather than fall back to a guessed key: the server requires a plan key and
+    // has no default, so a guess would be a purchase nobody reviewed.
+    await assert.rejects(
+      () => fetchPlans(fetchImpl, '', 'token'),
+      error => error.code === UPGRADE_ERROR_CODES.plansUnavailable && error.status === 503
+    );
+  });
+
+  it('reports an expired session distinctly from an unreadable catalog', async () => {
+    const fetchImpl = recordingFetch(jsonResponse({}, { ok: false, status: 401 }));
+
+    await assert.rejects(
+      () => fetchPlans(fetchImpl, '', 'token'),
+      error => error.code === UPGRADE_ERROR_CODES.sessionExpired
+    );
+  });
+});
+
 describe('createCheckoutSession', () => {
   it('posts product intent without card or price fields', async () => {
     const fetchImpl = recordingFetch(jsonResponse({
@@ -50,6 +108,7 @@ describe('createCheckoutSession', () => {
       action: 'productive-tenant',
       clientName: 'Acme Productive',
       language: 'es_ES',
+      planKey: 'productive-monthly',
     });
 
     assert.deepEqual(result, {
@@ -60,10 +119,28 @@ describe('createCheckoutSession', () => {
     assert.deepEqual(JSON.parse(fetchImpl.calls[0].init.body), {
       action: 'productive-tenant',
       upgradeAction: 'create-productive',
+      planKey: 'productive-monthly',
       clientName: 'Acme Productive',
       language: 'es_ES',
     });
+    // A plan KEY, never a price. The server owns the Stripe Price ID; there is no request field
+    // for one and no code path that reads one.
     assert.doesNotMatch(fetchImpl.calls[0].init.body, /cardNumber|paymentToken|priceId|amount/);
+  });
+
+  it('omits planKey when the caller did not name a plan', async () => {
+    const fetchImpl = recordingFetch(jsonResponse({
+      requestId: 'req-2',
+      checkoutUrl: 'https://checkout.stripe.test/session-2',
+    }));
+
+    await createCheckoutSession(fetchImpl, 'https://api.test', 'platform-token', {
+      clientName: 'Acme Productive',
+    });
+
+    // The server requires the key and has no default plan, so a missing one is refused there
+    // rather than papered over here with a guess about what is for sale.
+    assert.equal('planKey' in JSON.parse(fetchImpl.calls[0].init.body), false);
   });
 
   it('raises a stable error when session creation fails', async () => {

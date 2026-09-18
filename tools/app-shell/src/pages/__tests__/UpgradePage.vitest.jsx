@@ -6,7 +6,10 @@ const assignMock = vi.fn();
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
 vi.mock('@/i18n', () => ({
-  useUI: () => key => key,
+  // Keys pass through untranslated, but INTERPOLATED values are appended, so a test can still
+  // assert on a formatted amount (`formatCurrency`'s output) without depending on the English
+  // copy around it.
+  useUI: () => (key, params) => (params ? `${key} ${Object.values(params).join(' ')}` : key),
   getStoredLocale: () => 'es_ES',
 }));
 vi.mock('@/auth/api.js', () => ({
@@ -39,6 +42,19 @@ const PENDING_CHECKOUT_ACTION = 'sf_pending_checkout_action';
 const PENDING_CHECKOUT_STARTED_AT = 'sf_pending_checkout_started_at';
 
 const PROVISIONING_STEPS = ['setup', 'client', 'organization', 'dataset', 'sequences', 'finalize'];
+
+/**
+ * The v1 catalog: one flat monthly subscription. Shaped exactly like GET /sws/go/plans answers —
+ * note there is no `providerPriceID`, and the server never sends one.
+ */
+const PRODUCTIVE_PLAN = {
+  planKey: 'productive-monthly',
+  name: 'Productive',
+  description: 'A second tenant for real work',
+  displayPrice: '49.00',
+  currency: 'EUR',
+  billingInterval: 'month',
+};
 
 function jsonResponse(data, { ok = true, status = 200 } = {}) {
   return { ok, status, json: async () => data };
@@ -87,13 +103,20 @@ function successStream({ success = true, clientName = 'Acme Productive' } = {}) 
  * poll attempt reject/error). `onboarding` feeds the NDJSON stream behind
  * `/sws/go/onboarding`, defaulting to a successful run.
  */
-function installFetch({ environments = [], checkout = {}, statuses = ['paid'], onboarding } = {}) {
+function installFetch({
+  environments = [], checkout = {}, statuses = ['paid'], onboarding, plans = [PRODUCTIVE_PLAN],
+} = {}) {
   const requests = [];
   let statusCallIndex = 0;
   globalThis.fetch = vi.fn(async (url, init = {}) => {
     const target = String(url);
     if (target.includes('/sws/go/environments')) {
       return typeof environments === 'function' ? environments() : jsonResponse({ environments });
+    }
+    // The plan catalog (ETP-5046). The checkout endpoint requires a plan key and has no default,
+    // so every test that reaches the submit needs this route to answer.
+    if (target.includes('/sws/go/plans')) {
+      return typeof plans === 'function' ? plans() : jsonResponse({ plans });
     }
     // Status polling hits `/checkout/sessions/:requestId` — checked before the
     // session-creation route below, since that path is a substring of this one.
@@ -103,6 +126,10 @@ function installFetch({ environments = [], checkout = {}, statuses = ['paid'], o
       return typeof entry === 'function' ? entry() : jsonResponse({ status: entry });
     }
     if (target.includes('/sws/go/checkout/sessions')) {
+      // A function lets a test fail THIS route specifically. Sequencing responses with
+      // mockImplementationOnce cannot: mount now fires two lookups (environments and the plan
+      // catalog) whose order is not guaranteed.
+      if (typeof checkout === 'function') return checkout();
       requests.push({ url, init, body: JSON.parse(init.body || '{}') });
       return jsonResponse({
         requestId: 'upgrade-request-1',
@@ -152,6 +179,9 @@ function setupCheckoutReturn({
 async function renderUpgradePage() {
   render(<UpgradePage />);
   await waitFor(() => expect(screen.queryByTestId('upgrade-account-loading')).not.toBeInTheDocument());
+  // The plan catalog settles independently of the environments lookup, and the submit stays
+  // disabled until it does — there is no plan key to send before then.
+  await waitFor(() => expect(screen.queryByTestId('upgrade-plans-loading')).not.toBeInTheDocument());
 }
 
 beforeEach(() => {
@@ -193,6 +223,8 @@ describe('UpgradePage — hosted checkout', () => {
       action: 'productive-tenant',
       clientName: 'Acme Productive',
       upgradeAction: 'create-productive',
+      // The key the catalog handed over — never a literal written in this page, and never a price.
+      planKey: 'productive-monthly',
       language: 'es_ES',
     });
     expect(JSON.stringify(requests[0].body)).not.toMatch(/card|paymentToken|mock-paid|priceId|amount/i);
@@ -220,12 +252,10 @@ describe('UpgradePage — hosted checkout', () => {
 
   it('surfaces a checkout creation failure without redirecting', async () => {
     const user = userEvent.setup();
-    const requests = installFetch({ environments: [{ clientName: 'Acme Trial' }] });
-    globalThis.fetch.mockImplementationOnce(async () => jsonResponse({ environments: [{ clientName: 'Acme Trial' }] }));
-    globalThis.fetch.mockImplementationOnce(async () => jsonResponse(
-      { message: 'Stripe unavailable' },
-      { ok: false, status: 503 }
-    ));
+    const requests = installFetch({
+      environments: [{ clientName: 'Acme Trial' }],
+      checkout: () => jsonResponse({ message: 'Stripe unavailable' }, { ok: false, status: 503 }),
+    });
     await renderUpgradePage();
 
     await user.type(screen.getByTestId('upgrade-tenant-name'), 'Acme Productive');
@@ -234,6 +264,113 @@ describe('UpgradePage — hosted checkout', () => {
     expect(await screen.findByTestId('upgrade-error')).toHaveTextContent('upgradeCheckoutCreationFailed');
     expect(assignMock).not.toHaveBeenCalled();
     expect(requests).toHaveLength(0);
+  });
+});
+
+/**
+ * The plan catalog (ETP-5046). The checkout endpoint REQUIRES a plan key and has no default, so
+ * the page cannot complete a purchase without asking the server what is for sale. These specs pin
+ * the three catalog shapes and, above all, that the page never invents a key.
+ */
+describe('UpgradePage — plan catalog', () => {
+  const SECOND_PLAN = {
+    planKey: 'productive-yearly',
+    name: 'Productive annual',
+    description: 'Twelve months up front',
+    displayPrice: '490.00',
+    currency: 'EUR',
+    billingInterval: 'year',
+  };
+
+  it('selects the only purchasable plan and shows what is being bought', async () => {
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
+    await renderUpgradePage();
+
+    expect(screen.getByTestId('upgrade-plan-single')).toHaveTextContent('Productive');
+    // Formatted through the canonical formatCurrency (es-ES separators, EUR symbol on the
+    // right), never a hand-rolled toFixed/Intl call.
+    expect(screen.getByTestId('upgrade-plan-single-price')).toHaveTextContent('49,00');
+    expect(screen.queryByTestId('upgrade-plan-choice')).not.toBeInTheDocument();
+  });
+
+  it('sends the catalog key and no price when there is a single plan', async () => {
+    const user = userEvent.setup();
+    const requests = installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
+    await renderUpgradePage();
+
+    await user.type(screen.getByTestId('upgrade-tenant-name'), 'Acme Productive');
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0].body.planKey).toBe('productive-monthly');
+    expect(JSON.stringify(requests[0].body)).not.toMatch(/price/i);
+  });
+
+  it('requires a choice when the catalog offers more than one plan', async () => {
+    const user = userEvent.setup();
+    const requests = installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      plans: [PRODUCTIVE_PLAN, SECOND_PLAN],
+    });
+    await renderUpgradePage();
+
+    expect(screen.getByTestId('upgrade-plan-choice')).toBeInTheDocument();
+    await user.type(screen.getByTestId('upgrade-tenant-name'), 'Acme Productive');
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    // No default is picked for the user: the server has none either, and choosing on their
+    // behalf would charge them for something they did not select.
+    expect(await screen.findByTestId('upgrade-error')).toHaveTextContent('upgradePlanRequired');
+    expect(requests).toHaveLength(0);
+
+    await user.click(screen.getByTestId('upgrade-plan-option-productive-yearly'));
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0].body.planKey).toBe('productive-yearly');
+  });
+
+  it('blocks checkout when nothing is purchasable', async () => {
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }], plans: [] });
+    await renderUpgradePage();
+
+    expect(screen.getByTestId('upgrade-plans-unavailable')).toHaveTextContent('upgradePlansEmpty');
+    expect(screen.getByTestId('upgrade-submit')).toBeDisabled();
+  });
+
+  it('blocks checkout and offers a retry when the catalog cannot be read', async () => {
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      plans: () => jsonResponse({ message: 'boom' }, { ok: false, status: 503 }),
+    });
+    await renderUpgradePage();
+
+    // Never a hardcoded fallback key: the unreviewed-purchase failure mode this design forbids
+    // is exactly what a guess here would reintroduce.
+    expect(screen.getByTestId('upgrade-plans-unavailable'))
+      .toHaveTextContent('upgradePlansUnavailable');
+    expect(screen.getByTestId('upgrade-submit')).toBeDisabled();
+    expect(screen.getByTestId('upgrade-plans-retry')).toBeInTheDocument();
+  });
+
+  it('recovers the catalog when the retry succeeds', async () => {
+    const user = userEvent.setup();
+    let attempt = 0;
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      plans: () => {
+        attempt += 1;
+        return attempt === 1
+          ? jsonResponse({ message: 'boom' }, { ok: false, status: 503 })
+          : jsonResponse({ plans: [PRODUCTIVE_PLAN] });
+      },
+    });
+    await renderUpgradePage();
+
+    await user.click(screen.getByTestId('upgrade-plans-retry'));
+
+    expect(await screen.findByTestId('upgrade-plan-single')).toBeInTheDocument();
+    expect(screen.getByTestId('upgrade-submit')).toBeEnabled();
   });
 });
 
@@ -338,12 +475,10 @@ describe('UpgradePage — checkout funnel tracking', () => {
 
   it('tracks a checkout-session creation failure without a duration, since provisioning never started', async () => {
     const user = userEvent.setup();
-    installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
-    globalThis.fetch.mockImplementationOnce(async () => jsonResponse({ environments: [{ clientName: EXISTING_TENANT }] }));
-    globalThis.fetch.mockImplementationOnce(async () => jsonResponse(
-      { message: 'Stripe unavailable' },
-      { ok: false, status: 503 }
-    ));
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      checkout: () => jsonResponse({ message: 'Stripe unavailable' }, { ok: false, status: 503 }),
+    });
     await renderUpgradePage();
 
     await user.type(screen.getByTestId('upgrade-tenant-name'), 'Acme Productive');

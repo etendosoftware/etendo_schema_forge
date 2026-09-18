@@ -4,9 +4,36 @@ import { buildAuthHeaders } from '@etendosoftware/etendo-go-core/onboarding/api'
 export const UPGRADE_ERROR_CODES = {
   checkoutUnavailable: 'upgradeCheckoutUnavailable',
   checkoutCreationFailed: 'upgradeCheckoutCreationFailed',
+  plansUnavailable: 'upgradePlansUnavailable',
   sessionExpired: 'upgradeSessionExpired',
   failed: 'upgradeGenericError',
 };
+
+/**
+ * Reads the server's plan catalog — the list of things that are actually purchasable.
+ *
+ * This exists because the checkout endpoint REQUIRES a plan key and has no default: without a
+ * catalog the browser has no way to learn one, so there is no client-side list of keys to fall
+ * back on. Guessing a key here would be exactly the unreviewed fallback the server-side design
+ * refuses, so a failed lookup raises instead, and the page disables checkout.
+ *
+ * The server never sends a provider price id, and this client never sends one either.
+ *
+ * @returns {Promise<Array<{planKey: string, name: string, description: string,
+ *   displayPrice: string, currency: string, billingInterval: string}>>} possibly empty — an
+ *   empty catalog is an answer, not a failure.
+ */
+export async function fetchPlans(fetchImpl, baseUrl, token) {
+  const response = await fetchImpl(`${baseUrl}/sws/go/plans`, {
+    headers: buildAuthHeaders(token),
+  });
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
+      : UPGRADE_ERROR_CODES.plansUnavailable, data?.error?.message || data?.message, response.status);
+  }
+  return Array.isArray(data?.plans) ? data.plans : [];
+}
 
 /**
  * Creates a provider-hosted checkout session for a known paid action.
@@ -14,6 +41,12 @@ export const UPGRADE_ERROR_CODES = {
  * The browser sends product intent only. Pricing, currency, Stripe Price IDs,
  * and payment confirmation are server-owned. The returned URL is safe to use
  * as a redirect target because it is issued by the authenticated backend.
+ *
+ * `planKey` names a row in the server's plan catalog — a KEY, never a price.
+ * The server resolves it to a Stripe Price ID; there is no request field for a
+ * price and no code path that reads one, so a price added to this body would be
+ * ignored rather than honoured. The server requires the key and has no default
+ * plan, which is why the module and this client ship together (ETP-5046).
  */
 export async function createCheckoutSession(fetchImpl, baseUrl, token, input = {}) {
   const response = await fetchImpl(`${baseUrl}/sws/go/checkout/sessions`, {
@@ -22,6 +55,7 @@ export async function createCheckoutSession(fetchImpl, baseUrl, token, input = {
     body: JSON.stringify({
       action: input.action || 'productive-tenant',
       upgradeAction: input.upgradeAction || 'create-productive',
+      ...(input.planKey ? { planKey: input.planKey } : {}),
       ...(input.clientName ? { clientName: input.clientName } : {}),
       ...(input.language ? { language: input.language } : {}),
       ...(input.countryCode ? { countryCode: input.countryCode } : {}),

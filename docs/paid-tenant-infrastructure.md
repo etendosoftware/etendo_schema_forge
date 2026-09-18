@@ -136,8 +136,8 @@ Labelling that case *Demo* would report a plan derived from a missing value.
 ## 1.5 Which token the account-scoped endpoints accept
 
 `GET /sws/go/environments` and its siblings — `/sws/go/me`, `/sws/go/login`,
-`/sws/go/checkout/sessions`, `/sws/go/onboarding/draft`, the company-invitation endpoints — are
-*account*-scoped, not tenant-scoped. They accept two different credentials and resolve both to one
+`/sws/go/checkout/sessions`, `/sws/go/plans`, `/sws/go/onboarding/draft`, the company-invitation
+endpoints — are *account*-scoped, not tenant-scoped. They accept two different credentials and resolve both to one
 `ETGO_ACCOUNT` (`EtendoGoJwtDalHelper.findActiveAccountByBearerToken`):
 
 1. the **account session token**, matched directly against `etgo_account.session_token`; and
