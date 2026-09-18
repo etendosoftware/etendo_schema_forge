@@ -122,7 +122,7 @@ function applyGenerateError(result, t) {
 const CASILLAS_SECTIONS = [
   { id: 'identificacion',  titleKey: 'fm.page.identificacion',  sections: ['identificacion', 'datos_bancarios'] },
   { id: 'liquidacion',     titleKey: 'fm.page.liquidacion',     sections: ['iva_devengado', 'iva_deducible', 'resultado'] },
-  { id: 'info_adicional',  titleKey: 'fm.page.info_adicional',  sections: ['info_adicional'] },
+  { id: 'info_adicional',  titleKey: 'fm.page.info_adicional',  sections: ['info_adicional', 'tributacion_territorial', 'info_adicional_ultimo_periodo'] },
   { id: 'resultado_final', titleKey: 'fm.page.resultado_final', sections: ['resultado_final', 'sin_actividad', 'rectificativa'] },
 ];
 
