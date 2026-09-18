@@ -1003,3 +1003,288 @@ them against that registry copy — when one fails, the fix belongs in `lookupCr
 Full mechanism, why nesting a router is legal here, the spec allowlist, the drift guards and the known
 limitations: [`docs/ui-customization.md`](../ui-customization.md) → *§19. Inline record creation from a
 lookup drawer*.
+
+## ETP-5348 — Import: the file is judged before the mapping step
+
+Engine-level work shared with Contacts; the whole section applies to both windows, since both
+declare `window.import` and both go through the same `ImportDialog`.
+
+Five ways an unusable file used to reach the mapping screen — or worse, be imported in part.
+All five are now refused up front, with a translated message and the existing "Reintentar"
+button that returns to the dropzone.
+
+**A file larger than the declared limit is refused instead of truncated in silence.** This was
+the serious one. `runImport` applied `limit.maxRows` as `rows.slice(0, maxRows)` *at send time*:
+the extra rows were never attempted, never counted and never mentioned in the result summary. A
+5001-row file imported 5000 and dropped the last one with no error, no warning and nothing in
+the UI to notice it by — the only way to find out was to count the records afterwards. The check
+now runs right after parsing, before validation and review.
+
+**And the declared limit was never read at all.** `ImportDialog` read `config.maxRows` and
+`config.concurrency`, but the contract nests both under `limit` (`window.import.limit` in
+`decisions.json`). Both were therefore always `undefined` and `runImport`'s own parameter
+defaults took over. Those defaults are 5000 and 4 — exactly what every window declares today —
+which is precisely why nothing ever looked wrong. A window that declared a different limit was
+being ignored in complete silence.
+
+**A file whose format the window does not declare is refused.** The dropzone's `accept`
+attribute only filters the OS picker's default view: drag-and-drop ignores it, and every file
+chooser offers an "All files" escape. Nothing downstream refused the file either —
+`decodeCsvBuffer` falls back to Windows-1252, an encoding that maps every possible byte and so
+cannot fail — so a `.docx` parsed into one garbage column that matched no field, and the user
+landed on a mapping screen with nothing mapped and nothing said. The new check reuses
+`formatNames(config.formats)` for its message, so the error and the dropzone hint cannot name
+different formats.
+
+**Duplicate headers are compared the way `mapColumns` compares them.** The guard tested raw
+header text against a `Set` while the matcher it protects normalizes (lower-case, accents
+stripped, inner whitespace collapsed), so `nombre,Nombre` and `codigo,código` walked straight
+through. Downstream `mapColumns` gives a field to the first claimant and leaves the second
+column unmapped, so one of the user's columns was silently discarded. The reported header is
+still the text as typed, not the normalized form — the message exists to help someone find the
+column in their own file.
+
+**A blank header is refused on its own.** Previously a lone blank was invisible; only a *second*
+blank tripped the duplicate check on `""`. The single blank became a row key of `''`, which is
+what broke the "Editar correspondencia" grid. Trailing blank header columns in an `.xlsx` are
+still dropped before this check, as documented in `parseXlsx.js` — those are an artifact of the
+sheet's used range, while a gap between two named columns is real structure.
+
+**A file with headers but no data rows says so.** It is not the empty-file case (there *is* a
+line, so that guard never fired), so it carries its own key rather than reusing
+`importErrorFileEmpty`: the columns are fine, the data is missing. Note this also means the
+downloadable template, re-uploaded unedited, is now rejected with that exact message — which is
+the intended answer, and what `buildTemplateXlsx.test.js` asserts.
+
+Both parsers share one `validateHeaders` (exported from `parseDelimited.js`) so the CSV and
+Excel paths cannot drift apart on these rules again — the drift is how they came to disagree in
+the first place. New locale keys: `importErrorEmptyHeader` (`{position}`), `importErrorNoDataRows`,
+`importErrorTooManyRows` (`{count}`, `{limit}` — the first import message with two placeholders),
+`importErrorUnsupportedFormat` (`{formats}`), guarded by
+`src/locales/__tests__/etp5348-file-rejection-keys.vitest.js`.
+
+## ETP-5374 — Duplicate detection died in silence above ~72 rows
+
+Engine-level work in the shared `existingRecordLookup.js` + `ImportDialog`, so Contacts gets all
+of it too (`contacts.md` → *ETP-5374* points here).
+
+Re-importing a file that was already imported showed every row in **Correctas** instead of
+**Omitidas**, with no error and no toast — the only trace was a `console.warn`. Below ~70 rows it
+worked perfectly, which is why it was never caught.
+
+### Root cause
+
+The lookup queried in batches of `LOOKUP_BATCH_SIZE = 200` keys, each batch travelling as an OR
+of 200 terms **in the query string**. The resulting URL was ~22.000 characters against Tomcat's
+default `maxHttpHeaderSize` of 8192 (`Connector port="8080"` does not override it), so Tomcat
+answered **400 before the request reached the servlet**. The code's own comment claimed the
+opposite — *"200 keeps each request comfortably inside a normal URL length"*.
+
+| Distinct keys | URL length | |
+| --- | --- | --- |
+| 50 | 5.758 | ok |
+| 71 | 8.110 | last one that fits |
+| **72** | **8.222** | **400** |
+
+From there: the fetcher threw on `!res.ok`, and `findExistingKeys` caught it and did
+`return new Set()` — **discarding the batches that had already answered correctly**.
+
+No data was ever lost: the server's unique index still rejected the duplicates on confirm and
+the final toast counted them. What was lost is the ETP-4996/ETP-5226 promise — *see which rows
+will be skipped before confirming* — precisely on the large files where it matters.
+
+### The fix, in three parts
+
+**1. Batch by URL length, not by key count.** No fixed count can be safe, because the cost of a
+key is not fixed: a composite `dedupe.key` multiplies the terms per row and a long value
+lengthens each one. `buildLookupBatches` accumulates until the *encoded* criteria would exceed
+`LOOKUP_CRITERIA_BUDGET` (4000 characters). The budget is well under 8192 on purpose — the rest
+has to hold the path, the other query params and, above all, the `Authorization: Bearer <JWT>`
+header, since `maxHttpHeaderSize` covers the request line *and* every header.
+
+The arithmetic is exact, not an estimate: a disjunction's encoded length is the empty envelope
+plus each term's own encoded length plus three characters per separating comma, and terms encode
+independently of position. A test asserts each batch is full — one more term would overflow.
+
+`LOOKUP_MAX_BATCH_SIZE = 200` survives for the other half of the original rationale, which was
+never wrong: a disjunction of thousands of terms is a query plan no index helps.
+
+Measured: 5000 product keys → 136 batches of ~37; a composite key → ~455 batches of ~11.
+
+**2. A failed batch no longer nullifies the others.** Each batch is isolated; a failure costs
+only its own keys. This matters even with part 1 fixed — any transient network error used to
+reproduce the same silent symptom.
+
+Because part 1 raises the request count sharply, the batches now run **4 at a time**
+(`LOOKUP_CONCURRENCY`, the same number `window.import.limit.concurrency` already declares for the
+send), through a worker pool over one cursor rather than `Promise.all` over waves. Otherwise the
+fix would have traded a silent failure for a review step that visibly stalls, on exactly the
+large files this ticket is about.
+
+**3. The lookup now reports whether it finished.** `findExistingKeys` returns
+`{ existing, complete, failedBatches, totalBatches }` instead of a bare `Set` — a breaking change
+to the published package, whose only consumer is `ImportDialog`. That is what makes the per-batch
+isolation above observable at all: without it, "found no duplicates" and "could not check" are
+the same empty answer, which is exactly how the original bug stayed invisible.
+
+`complete` has no reader in the UI. A row whose batch failed is still presented like one that was
+checked and found absent, so if a later change wants to say so on screen, the flag is already
+there and the tests already pin its behaviour.
+
+The fallback itself is unchanged and still right: a pre-flight check is a courtesy, not a gate,
+so a failed lookup never blocks an import the server would have accepted, and send-time
+duplicate handling remains the backstop.
+
+### One hardening that came out of testing this
+
+`existingKeyFetchFn` called `apiFetch` with no `on401`, and a 401 that is not ignored fires the
+ambient logout handler (`auth/api.js`). So the pre-flight check could end the session — and with
+it the open import dialog, mid-review, with nothing said. The lookup now passes `on401: 'ignore'`:
+a check whose whole contract is that failing must never block an import cannot be allowed to log
+the user out, and a genuinely expired session still logs out at the next real request, which is
+the one the user is actually waiting on. Guarded by
+`contract-ui/__tests__/etp5374-lookup-does-not-logout.vitest.js`.
+
+Length batching raises the stakes either way: the old code stopped at the first failure, so one
+request went out per file; now the whole file's batches do.
+
+**What prompted it is not proven.** While testing, the import dialog in First Steps closed when
+switching to the Errors tab, and stopped doing so once this option was added. That is a
+correlation, not a demonstrated mechanism — the dev server was restarted between the two runs,
+and the request statuses were never captured. Two later observations argue against the 401
+reading specifically: under the published core the oversized URL is refused by Tomcat with a
+**400**, which does not reach the logout handler at all; and under the local core the same
+lookup reports `complete: true`, so those batches answered **200**. Whatever closed the dialog,
+it has not been identified. This option is justified on its own terms, not as that fix.
+
+### Not to be confused with ETP-5371
+
+Same symptom, different cause. This one: any window, above ~72 rows, a well-formed URL that is
+too long → 400. ETP-5371: First Steps only, at any row count, a malformed URL
+(`/etendo/product` instead of `/etendo/sws/neo/product/product`) → 404. Both landed in the same
+`catch` that returned an empty Set, which is why they looked identical from the screen.
+
+## ETP-5349 — Download errors produced a file the screen disagreed with
+
+Engine-level work in the shared `ImportReviewQueue`, so every window with an import gets it —
+Contacts, Product, and the bank-statement import, which has its own Omitir button and carried the
+same defect (`financial-account.md` → *ETP-5349*).
+
+Skip two rows with the Omitir icon, open the **Errores** tab, see them listed, click **Descargar
+errores**: the file came out with its header line and nothing else. Skip every row and the file
+was empty. Nothing said so — the screen and the file simply disagreed.
+
+### Root cause: the question was asked in three places
+
+"Is this row under the Errores tag?" was written out three times, and the CSV's copy was the odd
+one out:
+
+| | |
+| --- | --- |
+| The tab filter | `entry.status === 'skipped' \|\| entry.errors.length > 0` |
+| The tab's count badge | the same |
+| `buildErrorsCsv` | `if (entry.errors.length === 0) continue;` |
+
+Skipping records no error — `handleSkipEntry` only sets `status: 'skipped'` — so the row passed
+the first two tests and failed the third.
+
+There is now one exported `needsAttention(entry)` and all three call it. Exported on purpose: a
+caller rendering its own queue asks the same question rather than writing a fourth copy.
+
+### The reason column
+
+A hand-skipped row is the only kind that has no reason of its own to print. Every other skip
+records one as an error at skip time — an in-file duplicate, a record that already exists — and
+the file repeats it unchanged. So `buildErrorsCsv` takes a fifth argument, the text for that one
+case, defaulting to English and supplied localized by both call sites
+(`importSkippedByUser`).
+
+That also fixed a second, unreported defect in the bank-statement import: it called
+`buildErrorsCsv` with no captions at all, so its reason column was headed `Error` in English
+regardless of session language. It now passes both.
+
+### The other half of the ticket was already fixed
+
+The ticket also reports that manual mapping lets two CSV columns target the same field, silently
+discarding one. **Not reproducible.** `6cfe5bef1` (ETP-4954) inverted the mapping editor to be
+field-first: each field has exactly one select, which chooses a column, so a field cannot have two
+sources by construction. Columns already claimed by another field are rendered `disabled` and
+labelled with the field holding them, and `ImportColumnMapping.test.jsx` already covers it —
+including *"blocks pointing two different fields at the same column"*.
+
+The ticket's code reference (`MappingGrid` renders `importFields.map(...)` as the select's
+options) describes the pre-ETP-4954 shape. The reverse direction — two FIELDS fed by one column —
+is still allowed, and deliberately so: that is one column and two fields, not a collision.
+
+## ETP-5350 — Three i18n leftovers in the import flow
+
+ETP-5223 translated the engine's error messages, the review grid's headers and the mapping
+editor's captions. These three lived elsewhere and were missed. All of them are engine-level, so
+Contacts gets them too (`contacts.md` → *ETP-5350*).
+
+### 1. The unresolved-foreign-key popover was English
+
+Four strings were written inline in `FkMismatchCell` — the search placeholder, `Use "{value}"`,
+`Searching…` and the empty-list message. It is exactly where a user lands to fix the row that
+failed, so it was the worst place left. They are labels now, resolved from the session locale.
+
+One translation note: **es_AR is voseo** across this app (`Guardá`, `Confirmá`, `Abrilo`). Only
+one of the four is imperative and it is the only one that differs between the two Spanish
+locales — *Escribe un valor arriba* (es_ES) vs *Escribí un valor arriba* (es_AR). Its own test
+pins that, so nobody copies one over the other.
+
+### 2. Recognition was asymmetric between languages — in two columns, not one
+
+The reported symptom: a Spanish session accepted a row whose unit said `Unit`, an English session
+refused the same file written as `Unidad`. A CSV was not portable between two users of the same
+client, which is the thing a shared import file most needs to be.
+
+The mechanism, from `simSearch.js`'s own comment plus the dictionary data: **the endpoint
+translates the search term out of the session language before matching it against the base rows,
+and the base rows are English.**
+
+| | base row | translations present |
+| --- | --- | --- |
+| `C_UOM` | `Unit` | es_ES only |
+| `C_COUNTRY` | `Spain` | es_ES only (243 rows) |
+
+So an English term matches the base row directly in any session and always worked; a Spanish term
+only worked when the session was Spanish and the translation step could rewrite it. The rule was
+never "the session language" — it was "English, plus the session language".
+
+`simSearchEveryLanguage` asks once per installed AD language (`IMPORT_MATCH_LANGUAGES`) and keeps
+each record's best score. Cost is one extra request per COLUMN — these calls are already batched
+across every row — and it is skipped when there is only one language to ask.
+
+Candidates merge on `id` rather than concatenating, and that is not a detail: the same record
+comes back from both languages, and a duplicate would become its own runner-up, collapsing the gap
+`classifyCandidates` requires and turning a clean match into "needs review". The merged entry also
+mirrors its best candidate, because callers read `result.id`/`result.name` directly.
+
+**`country` on Contacts had the identical defect and is not in the ticket.** Same table shape,
+same asymmetry, fixed by the same change.
+
+Worth recording, because it is the pattern the codebase had already chosen elsewhere: the CODED
+columns were never asymmetric. `PRODUCT_TYPE_VALUES`, `IS_PERSON_VALUES` and `TAX_ID_KEY_VALUES`
+are bilingual alias lists in the descriptor (`I: ['Articulo', 'Item', 'Producto', 'Bien']`), and
+`normalizeCodedInput` strips diacritics, so `Artículo` matches `Articulo`. Only the two columns
+that resolve against live AD data could drift.
+
+### 3. The template mixed languages
+
+Headers followed the session; the sample row under them did not. `decisions.json` now declares an
+`exampleKey` per field and `ImportDialog` resolves it through the dialog's own translator, falling
+back to `example`. The generator needed no change — `window.import.fields` is spread through, so
+the new key reached the contract for free.
+
+Which fields carry a key is a decision, and the locale test pins it rather than leaving it to
+memory:
+
+| | |
+| --- | --- |
+| **Keyed** (7 product, 6 contacts) | prose, coded and foreign-key values, and the prices — the decimal separator is part of the language, and an English template carrying `12,50` reads as twelve thousand fifty |
+| **Unkeyed, on purpose** | codes, emails, phones, the NIF, the postcode — identical in every language; person names (María, García, Lucía, Fernández) — proper nouns, translating them adds nothing; **city and region (Sevilla)** — matched against real AD records, so an English spelling would name a place the database does not have |
+
+The keyed coded/FK values are the point where parts 2 and 3 meet: an English template writes
+`Unit`, `Item` and `Spain`, and part 2 is what makes those resolve for a Spanish user who receives
+that file.

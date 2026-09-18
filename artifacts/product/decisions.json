@@ -92,13 +92,13 @@
       "dedupe": { "scope": "database", "key": ["searchKey"] },
       "fields": [
         { "target": "searchKey", "aliases": ["codigo", "código", "sku"], "label": "Search Key", "required": true, "example": "SKU-1001" },
-        { "target": "name", "aliases": ["nombre"], "label": "Name", "required": true, "example": "Tornillo hexagonal M8" },
-        { "target": "description", "aliases": ["descripcion", "descripción"], "example": "Tornillería inoxidable" },
-        { "target": "productType", "aliases": ["tipo", "tipo de producto"], "label": "Product Type", "required": false, "example": "Item" },
-        { "target": "uOM", "aliases": ["unidad de medida", "unidad", "um", "uom"], "label": "Unit of Measure", "matchEntity": "UOM", "required": false, "example": "Unidad" },
-        { "target": "salesPrice", "aliases": ["precio de venta", "precio venta", "precio", "pvp"], "label": "Sales Price", "isNumeric": true, "example": "12,50", "labelKey": "importHeaderSalesPrice" },
-        { "target": "purchasePrice", "aliases": ["precio de compra", "precio compra", "coste", "costo"], "label": "Purchase Price", "isNumeric": true, "example": "8,20", "labelKey": "importHeaderPurchasePrice" },
-        { "target": "category", "aliases": ["categoria", "categoría", "codigo categoria", "código categoría", "nombre categoria", "nombre categoría"], "label": "Category", "example": "Herramientas", "column": "M_Product_Category_ID" }
+        { "target": "name", "aliases": ["nombre"], "label": "Name", "required": true, "example": "Tornillo hexagonal M8", "exampleKey": "importExampleProductName" },
+        { "target": "description", "aliases": ["descripcion", "descripción"], "example": "Tornillería inoxidable", "exampleKey": "importExampleProductDescription" },
+        { "target": "productType", "aliases": ["tipo", "tipo de producto"], "label": "Product Type", "required": false, "example": "Item", "exampleKey": "importExampleProductType" },
+        { "target": "uOM", "aliases": ["unidad de medida", "unidad", "um", "uom"], "label": "Unit of Measure", "matchEntity": "UOM", "required": false, "example": "Unidad", "exampleKey": "importExampleProductUom" },
+        { "target": "salesPrice", "aliases": ["precio de venta", "precio venta", "precio", "pvp"], "label": "Sales Price", "isNumeric": true, "example": "12,50", "exampleKey": "importExampleProductSalesPrice", "labelKey": "importHeaderSalesPrice" },
+        { "target": "purchasePrice", "aliases": ["precio de compra", "precio compra", "coste", "costo"], "label": "Purchase Price", "isNumeric": true, "example": "8,20", "exampleKey": "importExampleProductPurchasePrice", "labelKey": "importHeaderPurchasePrice" },
+        { "target": "category", "aliases": ["categoria", "categoría", "codigo categoria", "código categoría", "nombre categoria", "nombre categoría"], "label": "Category", "example": "Herramientas", "exampleKey": "importExampleProductCategory", "column": "M_Product_Category_ID" }
       ]
     }
   },

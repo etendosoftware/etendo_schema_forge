@@ -3278,6 +3278,29 @@ entirely from `.xlsx`, and the reader behind `parseXlsx` only speaks OOXML. Rath
 reader's opaque failure, an `.xls` upload is caught on the extension before any parse is attempted
 and gets a message naming the one thing that fixes it — re-save as `.xlsx`.
 
+#### Which parse rejection gets which message (ETP-5348)
+
+`useStatementImportReview.loadFile` translates the shared parsers' complaints into this window's
+own copy, and the split is **by `ImportParseError.messageKey`**, not by whether the parse threw:
+
+| Core `messageKey` | Message shown | Why |
+|---|---|---|
+| `importErrorNoDataRows`, `importErrorFileEmpty` | `financeAccountStatementsImportErrorEmptyFile` — "El archivo no tiene ninguna línea de datos." | there is nothing to import |
+| `importErrorDuplicateHeader`, `importErrorEmptyHeader`, `importErrorMultipleSheets`, `importErrorUnreadableXlsx` | `financeAccountStatementsImportErrorUnreadable` — "Comprueba que tenga una fila de encabezados, sin columnas repetidas, y una sola hoja con datos." | the file's shape is wrong, and that sentence names exactly what to look at |
+| anything that is not an `ImportParseError` | the generic format copy | not a parser complaint, so not something the user can act on |
+
+**Why this needed saying.** ETP-5348 made `parseDelimited`/`parseXlsx` refuse a header-only file
+themselves, throwing `importErrorNoDataRows`. This window used to detect that case itself, *after*
+a successful parse (`rows.length === 0`), so the new throw silently took that branch out of reach
+and every rejection collapsed onto the generic unreadable copy — which told the user to check for a
+header row, duplicate columns and extra sheets, none of which was the problem. The `rows.length === 0`
+guard is still there and deliberately returns the same key, so the two paths cannot answer
+differently; that disagreement is what produced the wrong message in the first place.
+
+Covered by `__tests__/ImportStatementModal.vitest.jsx` — one test per row of that table, each
+asserting the OTHER message is absent, so flattening the branches again fails the suite in both
+directions.
+
 #### Unusable-amount lines and empty files (alignment with Classic, except negatives)
 
 `BankStatementLinePruner` ports the sanitising half of Classic's
@@ -4077,3 +4100,18 @@ mount normally and the fix should be fully effective — unlike the inlineEditab
 window also uses `window.layoutType: "custom"`, so verify against a live/dev environment that
 the generated `AccountPage.jsx`/`DetailView` flow (rather than a custom wrapper bypassing it) is
 actually what renders the transaction detail before relying on the config gating in production.
+
+## ETP-5349 — Download errors omitted the rows skipped by hand
+
+Engine-level work shared with Product and Contacts, reported against Product Import but landing in
+the shared `ImportReviewQueue`, so the statement import gets it too. Full write-up in
+`product.md` → *ETP-5349*.
+
+This window has its own Omitir button, so it carried the defect identically: a hand-skipped row
+appeared under **Errores** and was then missing from the downloaded file, because the CSV builder
+tested only `errors.length` and skipping records no error.
+
+One thing specific to this window, unreported and fixed in passing: `ImportStatementModal` called
+`buildErrorsCsv(entries, headers, mapping)` with no captions, so the reason column of the
+downloaded file was headed `Error` in English in a Spanish session, while the grid beside it was
+translated. It now passes both the column caption and the skipped-by-user reason.

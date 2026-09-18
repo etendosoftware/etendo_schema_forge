@@ -1,8 +1,8 @@
 {
   "version": "0.12.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-09-15T16:30:42.198Z",
-  "checksum": "f8449fb0215dd691",
+  "updatedAt": "2026-09-18T01:40:09.053Z",
+  "checksum": "a72569c3bdfb6db8",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -143,6 +143,7 @@
             "label": "Name",
             "required": true,
             "example": "Tornillo hexagonal M8",
+            "exampleKey": "importExampleProductName",
             "column": "Name",
             "type": "string"
           },
@@ -153,6 +154,7 @@
               "descripción"
             ],
             "example": "Tornillería inoxidable",
+            "exampleKey": "importExampleProductDescription",
             "label": "Description",
             "column": "Description",
             "required": false,
@@ -167,6 +169,7 @@
             "label": "Product Type",
             "required": false,
             "example": "Item",
+            "exampleKey": "importExampleProductType",
             "column": "ProductType",
             "type": "enum"
           },
@@ -182,6 +185,7 @@
             "matchEntity": "UOM",
             "required": false,
             "example": "Unidad",
+            "exampleKey": "importExampleProductUom",
             "column": "C_UOM_ID",
             "type": "foreignKey",
             "reference": "UOM"
@@ -199,6 +203,7 @@
             "label": "Sales Price",
             "isNumeric": true,
             "example": "12,50",
+            "exampleKey": "importExampleProductSalesPrice",
             "labelKey": "importHeaderSalesPrice"
           },
           {
@@ -214,6 +219,7 @@
             "label": "Purchase Price",
             "isNumeric": true,
             "example": "8,20",
+            "exampleKey": "importExampleProductPurchasePrice",
             "labelKey": "importHeaderPurchasePrice"
           },
           {
@@ -230,6 +236,7 @@
             ],
             "label": "Category",
             "example": "Herramientas",
+            "exampleKey": "importExampleProductCategory",
             "column": "M_Product_Category_ID"
           }
         ]
@@ -2574,6 +2581,7 @@
             "label": "Name",
             "required": true,
             "example": "Tornillo hexagonal M8",
+            "exampleKey": "importExampleProductName",
             "column": "Name",
             "type": "string"
           },
@@ -2584,6 +2592,7 @@
               "descripción"
             ],
             "example": "Tornillería inoxidable",
+            "exampleKey": "importExampleProductDescription",
             "label": "Description",
             "column": "Description",
             "required": false,
@@ -2598,6 +2607,7 @@
             "label": "Product Type",
             "required": false,
             "example": "Item",
+            "exampleKey": "importExampleProductType",
             "column": "ProductType",
             "type": "enum"
           },
@@ -2613,6 +2623,7 @@
             "matchEntity": "UOM",
             "required": false,
             "example": "Unidad",
+            "exampleKey": "importExampleProductUom",
             "column": "C_UOM_ID",
             "type": "foreignKey",
             "reference": "UOM"
@@ -2630,6 +2641,7 @@
             "label": "Sales Price",
             "isNumeric": true,
             "example": "12,50",
+            "exampleKey": "importExampleProductSalesPrice",
             "labelKey": "importHeaderSalesPrice"
           },
           {
@@ -2645,6 +2657,7 @@
             "label": "Purchase Price",
             "isNumeric": true,
             "example": "8,20",
+            "exampleKey": "importExampleProductPurchasePrice",
             "labelKey": "importHeaderPurchasePrice"
           },
           {
@@ -2661,6 +2674,7 @@
             ],
             "label": "Category",
             "example": "Herramientas",
+            "exampleKey": "importExampleProductCategory",
             "column": "M_Product_Category_ID"
           }
         ]

@@ -972,6 +972,11 @@ describe('ImportStatementModal', () => {
   // Parse failures — each one gets the message the user can act on
   // ───────────────────────────────────────────────────────────────────────────
 
+  // ETP-5348 moved WHERE this is detected: `parseDelimited` now throws `importErrorNoDataRows`
+  // before the hook can look at `rows.length`, so the message is only still right because the
+  // catch maps that key back. Flattening every ImportParseError to "unreadable" — which is what
+  // the hook did for a while — told the user to check for a header row, duplicate columns and
+  // extra sheets, all three of which are fine here.
   it('reports an empty file when the upload carries headers but no rows', async () => {
     const { container } = render(<ImportStatementModal {...defaultProps()} />);
     const user = mkUser();
@@ -984,7 +989,52 @@ describe('ImportStatementModal', () => {
         screen.getByText('financeAccountStatementsImportErrorEmptyFile'),
       ).toBeInTheDocument(),
     );
+    expect(screen.queryByText('financeAccountStatementsImportErrorUnreadable')).toBeNull();
     expect(createStatement).not.toHaveBeenCalled();
+  });
+
+  // The other "nothing to import" rejection: no lines at all, not even headers. It reaches the
+  // hook as `importErrorFileEmpty`, a different key from the case above, and deserves the same
+  // answer — the file is empty, which is not something checking the headers will reveal.
+  it('reports an empty file when the upload has no lines at all', async () => {
+    const file = new File([''], 'vacio.csv', { type: 'text/csv' });
+    const { container } = render(<ImportStatementModal {...defaultProps()} />);
+    const user = mkUser();
+    await pickFile(user, container, file);
+    await waitFor(() => expect(continueButton()).toBeEnabled());
+    await user.click(continueButton());
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('financeAccountStatementsImportErrorEmptyFile'),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByText('financeAccountStatementsImportErrorUnreadable')).toBeNull();
+    expect(createStatement).not.toHaveBeenCalled();
+  });
+
+  // The mirror of the two above: a malformed file must NOT be reported as empty. A blank header
+  // between two named columns is ETP-5348's other new rejection, and it is genuinely a shape
+  // problem — "el archivo no tiene ninguna línea de datos" would send the user looking for rows
+  // that are right there in front of them.
+  it('reports an unreadable file when a column header is blank', async () => {
+    const file = new File(
+      ['Fecha,,Importe\n01/05/2026,x,100'],
+      'sin-cabecera.csv',
+      { type: 'text/csv' },
+    );
+    const { container } = render(<ImportStatementModal {...defaultProps()} />);
+    const user = mkUser();
+    await pickFile(user, container, file);
+    await waitFor(() => expect(continueButton()).toBeEnabled());
+    await user.click(continueButton());
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('financeAccountStatementsImportErrorUnreadable'),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByText('financeAccountStatementsImportErrorEmptyFile')).toBeNull();
   });
 
   // `parseDelimited` rejects a duplicate header outright, since the two columns would be
