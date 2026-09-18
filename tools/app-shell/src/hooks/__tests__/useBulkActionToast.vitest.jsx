@@ -301,6 +301,81 @@ describe('useBulkActionToast', () => {
   });
 });
 
+// ================================================================
+// ETP-4994 — sessionStorage must never escalate to a broken render
+// ================================================================
+// This hook runs inside ListView's render tree. With site data blocked (strict
+// private mode, corporate policy) the accessor itself throws — an unguarded
+// access there unmounts the whole grid instead of losing one toast.
+describe('useBulkActionToast — storage unavailable', () => {
+  const realDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
+
+  const installSessionStorage = (descriptor) => {
+    Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, ...descriptor });
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (realDescriptor) {
+      Object.defineProperty(globalThis, 'sessionStorage', realDescriptor);
+    } else {
+      delete globalThis.sessionStorage;
+    }
+  });
+
+  it('mounts without throwing when reading the accessor throws', () => {
+    installSessionStorage({
+      get() { throw new DOMException('The operation is insecure.', 'SecurityError'); },
+    });
+
+    expect(() => renderHook(() => useBulkActionToast())).not.toThrow();
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.warning).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('mounts without throwing when getItem throws', () => {
+    installSessionStorage({
+      value: {
+        getItem: () => { throw new DOMException('denied', 'SecurityError'); },
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+      },
+      writable: true,
+    });
+
+    expect(() => renderHook(() => useBulkActionToast())).not.toThrow();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('still shows the toast when persisting hits the quota', () => {
+    installSessionStorage({
+      value: {
+        getItem: () => null,
+        setItem: () => { throw new DOMException('quota', 'QuotaExceededError'); },
+        removeItem: vi.fn(),
+      },
+      writable: true,
+    });
+
+    const { result } = renderHook(() => useBulkActionToast());
+    expect(() => {
+      act(() => {
+        result.current.showResult({ ok: 2, failed: [] }, { persist: true });
+      });
+    }).not.toThrow();
+    expect(toast.success).toHaveBeenCalledWith('2 processed, 0 failed');
+  });
+
+  it('persistBulkActionResult swallows a throwing accessor', () => {
+    installSessionStorage({
+      get() { throw new DOMException('The operation is insecure.', 'SecurityError'); },
+    });
+
+    expect(() => persistBulkActionResult({ ok: 1, failed: [] })).not.toThrow();
 // ETP-5302 — `showBulkActionToast` went from module-private to EXPORTED so a caller
 // that already holds a `useUI()` result can show the toast WITHOUT mounting the hook.
 // That matters because mounting the hook only to reach `showResult` also installs its
