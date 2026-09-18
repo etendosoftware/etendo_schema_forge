@@ -189,11 +189,12 @@ export function createReportHelpers({ numberFormat } = {}) {
   // split, since `IsReturn` has no equivalent code in ad_ref_list and can't
   // come from that JOIN. See RETURN_LABELS' docstring (report-i18n.js).
   function translateDocType(docbasetype, isreturn, translatedName, locale) {
+    if (isreturn === 'Y' && (docbasetype === 'MMR' || docbasetype === 'MMS')) {
+      var dict = RETURN_LABELS[locale] || RETURN_LABELS.en_US;
+      return dict[docbasetype + '_RETURN'] || translatedName;
+    }
     var overrides = DOC_TYPE_LABEL_OVERRIDES[locale] || DOC_TYPE_LABEL_OVERRIDES.en_US;
-    if (overrides[docbasetype]) return overrides[docbasetype];
-    if (isreturn !== 'Y' || (docbasetype !== 'MMR' && docbasetype !== 'MMS')) return translatedName;
-    var dict = RETURN_LABELS[locale] || RETURN_LABELS.en_US;
-    return dict[docbasetype + '_RETURN'] || translatedName;
+    return overrides[docbasetype] || translatedName;
   }
 
   return {
@@ -416,11 +417,12 @@ const JSREPORT_HELPER_SOURCES = {
   translateDocType: `function translateDocType(docbasetype, isreturn, translatedName, locale) {
   var RETURN_LABELS = ${JSON.stringify(RETURN_LABELS)};
   var DOC_TYPE_LABEL_OVERRIDES = ${JSON.stringify(DOC_TYPE_LABEL_OVERRIDES)};
+  if (isreturn === 'Y' && (docbasetype === 'MMR' || docbasetype === 'MMS')) {
+    var dict = RETURN_LABELS[locale] || RETURN_LABELS.en_US;
+    return dict[docbasetype + '_RETURN'] || translatedName;
+  }
   var overrides = DOC_TYPE_LABEL_OVERRIDES[locale] || DOC_TYPE_LABEL_OVERRIDES.en_US;
-  if (overrides[docbasetype]) return overrides[docbasetype];
-  if (isreturn !== 'Y' || (docbasetype !== 'MMR' && docbasetype !== 'MMS')) return translatedName;
-  var dict = RETURN_LABELS[locale] || RETURN_LABELS.en_US;
-  return dict[docbasetype + '_RETURN'] || translatedName;
+  return overrides[docbasetype] || translatedName;
 }`,
   // ETP-5032 — see createReportHelpers()'s csvField for why this exists and why
   // it must stay behaviourally identical to it. Being listed here also makes
