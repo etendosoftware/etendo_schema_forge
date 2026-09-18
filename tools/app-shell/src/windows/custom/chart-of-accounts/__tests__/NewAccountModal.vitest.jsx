@@ -416,4 +416,149 @@ describe('NewAccountModal', () => {
     // Account Type must re-derive to 'R' for the new parent — today it stays stuck at 'L'.
     expect(screen.getByTestId('new-account-modal-account-type')).toHaveValue('R');
   });
+
+  // ── ElementLevel-based structural resolution (ETP-5399) ────────────────────
+  //
+  // `resolveInsertionCandidates` / `deriveDefaultParentId` / `deriveDefaultAccountType`
+  // are not exported — driven here through `currentRecord` shapes that mirror what
+  // AccountTreeView's live tree (real leaf rows + virtual folder nodes carrying
+  // `elementLevel`/`children`/`insertionChildren`) actually hands to this modal.
+
+  describe('ElementLevel-based structural resolution (ETP-5399)', () => {
+    // Every fixture in this block needs its own `virtualParentOptions` entries —
+    // built from a LEAF's `insertionChildren[0]`, never from the folder node itself.
+    const structuralAccounts = [
+      // Backs the '4300A' parent option (letter-suffixed Breakdown, ETP-5399's exact
+      // regression target) — accountType 'A' (Asset), deliberately not the 'E' default,
+      // so the sibling-match test actually proves the derivation ran.
+      {
+        id: 'acc-43000001',
+        searchKey: '43000001',
+        name: 'Provision leaf',
+        summaryLevel: 'N',
+        accountType: 'A',
+        parentCode4: '430A', // legacy shallow prefix — must NOT be what the type match uses
+        insertionChildren: [{ id: 'group-4300A', value: '4300A', name: 'Provisiones a largo plazo', elementLevel: 'D' }],
+      },
+      // Backs the '1603' parent option (single-child Breakdown drill-down case).
+      {
+        id: 'acc-16030001',
+        searchKey: '16030001',
+        name: 'Fiscal deposit leaf',
+        summaryLevel: 'N',
+        accountType: 'L',
+        insertionChildren: [{ id: 'group-1603', value: '1603', name: 'Fiscal deposits', elementLevel: 'D' }],
+      },
+      // A plain 4-digit numeric summary — backs the zero-children self-fallback case.
+      { id: 'acc-9100', searchKey: '9100', name: 'New Branch', summaryLevel: 'Y' },
+    ];
+
+    it('does not guess a default parent when a node fans out into multiple real Breakdown children (the "430A" family)', () => {
+      // Structurally: '430A' itself is one level too shallow (elementLevel 'C', not
+      // 'D') and fans into 3 REAL Breakdown-level children — exactly the family this
+      // ticket targets. Clicking it must offer no silent single guess.
+      const currentRecord = {
+        id: 'acc-430A',
+        searchKey: '430A',
+        elementLevel: 'C',
+        children: [
+          { id: 'acc-4300A', searchKey: '4300A', name: 'Provisiones a largo plazo', elementLevel: 'D' },
+          { id: 'acc-4304A', searchKey: '4304A', name: 'Provisiones a corto plazo A', elementLevel: 'D' },
+          { id: 'acc-4309A', searchKey: '4309A', name: 'Provisiones a corto plazo B', elementLevel: 'D' },
+        ],
+      };
+      render(<NewAccountModal {...baseProps({ allAccounts: structuralAccounts, currentRecord })} />);
+
+      expect(within(screen.getByTestId('new-account-modal-parent')).getByText('selectAccount')).toBeInTheDocument();
+      expect(screen.getByTestId('account-code-stub')).toHaveValue('');
+    });
+
+    it('auto-selects the single candidate when a node has exactly one real child (drills down to the Breakdown level)', () => {
+      const currentRecord = {
+        id: 'acc-160B',
+        searchKey: '160B',
+        elementLevel: 'C',
+        children: [
+          { id: 'acc-1603', searchKey: '1603', name: 'Fiscal deposits', elementLevel: 'D' },
+        ],
+      };
+      render(<NewAccountModal {...baseProps({ allAccounts: structuralAccounts, currentRecord })} />);
+
+      const root = screen.getByTestId('new-account-modal-parent');
+      expect(within(root).getByText('1603')).toBeInTheDocument();
+      expect(within(root).getByText('Fiscal deposits')).toBeInTheDocument();
+      expect(screen.getByTestId('account-code-stub')).toHaveValue('1603');
+    });
+
+    it('reuses a Subaccount-level leaf\'s own insertionChildren instead of walking local tree structure', () => {
+      const currentRecord = {
+        id: 'acc-43000002',
+        searchKey: '43000002',
+        elementLevel: 'S',
+        insertionChildren: [{ id: 'group-4300A', value: '4300A', name: 'Provisiones a largo plazo' }],
+      };
+      render(<NewAccountModal {...baseProps({ allAccounts: structuralAccounts, currentRecord })} />);
+
+      const root = screen.getByTestId('new-account-modal-parent');
+      expect(within(root).getByText('4300A')).toBeInTheDocument();
+      expect(screen.getByTestId('account-code-stub')).toHaveValue('4300A');
+    });
+
+    it('falls back to the node itself when it has zero real children (first-ever subaccount under a new branch)', () => {
+      const currentRecord = {
+        id: 'acc-9100',
+        searchKey: '9100',
+        elementLevel: 'C',
+        children: [],
+      };
+      render(<NewAccountModal {...baseProps({ allAccounts: structuralAccounts, currentRecord })} />);
+
+      const root = screen.getByTestId('new-account-modal-parent');
+      expect(within(root).getByText('9100')).toBeInTheDocument();
+      expect(screen.getByTestId('account-code-stub')).toHaveValue('9100');
+    });
+
+    it('derives Account Type from a sibling\'s resolved insertionChildren value, not its legacy parentCode4', () => {
+      // The '4300A' Breakdown node itself (elementLevel 'D' -> single candidate: itself).
+      const currentRecord = {
+        id: 'group-4300A',
+        searchKey: '4300A',
+        elementLevel: 'D',
+        isVirtual: true,
+      };
+      render(<NewAccountModal {...baseProps({ allAccounts: structuralAccounts, currentRecord })} />);
+
+      // The only sibling leaf's legacy `parentCode4` is '430A' (one level too
+      // shallow) — matching against that would miss and fall back to the 'E'
+      // default. Matching against `insertionChildren[0].value` ('4300A') finds it.
+      expect(screen.getByTestId('new-account-modal-account-type')).toHaveValue('A');
+    });
+
+    it('legacy fallback: a bare {searchKey, summaryLevel} shape with a letter-suffixed 4-char code is no longer treated as a terminal parent', () => {
+      // No `elementLevel`, no `children` — forces the legacy heuristic path. The
+      // numeric-only guard (`/^\\d+$/`) must reject '430A' as a self-match, closing
+      // the original bug even for callers/fixtures that predate structural data.
+      const currentRecord = { id: 'acc-430A-legacy', searchKey: '430A', summaryLevel: 'Y' };
+      render(<NewAccountModal {...baseProps({ allAccounts: structuralAccounts, currentRecord })} />);
+
+      // No 4-digit summary named exactly '430A' exists among parentOptions either,
+      // so the prefix4 lookup also comes up empty — no default selection at all.
+      expect(within(screen.getByTestId('new-account-modal-parent')).getByText('selectAccount')).toBeInTheDocument();
+    });
+
+    it('legacy fallback: a bare numeric 4-digit summary record still self-selects as parent', () => {
+      // Positive control for the legacy path, using a code not present in ACCOUNTS
+      // (kept independent from the other describe block's fixtures).
+      const legacyAccounts = [
+        ...structuralAccounts,
+        { id: 'acc-9200', searchKey: '9200', name: 'Legacy Branch', summaryLevel: 'Y' },
+      ];
+      const currentRecord = { id: 'acc-9200', searchKey: '9200', summaryLevel: 'Y' };
+      render(<NewAccountModal {...baseProps({ allAccounts: legacyAccounts, currentRecord })} />);
+
+      const root = screen.getByTestId('new-account-modal-parent');
+      expect(within(root).getByText('9200')).toBeInTheDocument();
+      expect(screen.getByTestId('account-code-stub')).toHaveValue('9200');
+    });
+  });
 });

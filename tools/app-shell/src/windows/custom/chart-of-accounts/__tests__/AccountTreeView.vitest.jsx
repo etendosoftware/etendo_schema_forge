@@ -24,6 +24,12 @@ vi.mock('../NewAccountModal', () => ({
     isOpen ? (
       <div data-testid="new-account-modal-stub">
         <span data-testid="modal-current-record-id">{currentRecord?.id ?? 'none'}</span>
+        {/* ETP-5399: exposes currentRecord.children.length so tests can prove the
+            modal receives the UNFILTERED node (real children) rather than a
+            filterTree-pruned clone — see `currentRecordForModal` in AccountTreeView. */}
+        <span data-testid="modal-current-record-children-count">
+          {Array.isArray(currentRecord?.children) ? currentRecord.children.length : 'n/a'}
+        </span>
         <button type="button" data-testid="modal-close" onClick={onClose}>close</button>
         <button type="button" data-testid="modal-save" onClick={onSaved}>save</button>
       </div>
@@ -463,6 +469,66 @@ describe('AccountTreeView', () => {
       // the persisted manual `expanded` state.
       expect(screen.queryByTestId('account-tree-row-acc-20000001')).not.toBeInTheDocument();
       expect(screen.getByTestId('account-tree-row-group-A')).toBeInTheDocument();
+    });
+  });
+
+  // ── currentRecordForModal resolves against the UNFILTERED tree (ETP-5399) ──
+  //
+  // `filterTree` clones every surviving virtual folder node with a pruned
+  // `children` array (only the matching descendants survive). Before ETP-5399,
+  // `selectedRecord` (looked up from `visibleRows`, itself derived from the
+  // FILTERED tree) was handed straight to NewAccountModal — so selecting a
+  // folder while a filter was active fed the modal's parent/prefix resolution
+  // a node whose `children` did not reflect reality. `currentRecordForModal`
+  // now re-resolves the selected id against `indexById`, which is built from
+  // the unfiltered tree and (since this same commit) also indexes virtual
+  // folder nodes, not just leaves.
+  describe('currentRecordForModal resolves against the unfiltered tree (ETP-5399)', () => {
+    it('hands the modal the real (unfiltered) children of a selected folder while a filter is active', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+
+      // Matches only "20000001" ("Investigación aplicada.") — filterTree prunes
+      // the innermost "2000" folder's children down to that single leaf, while
+      // auto-expanding every ancestor folder (including "2000" itself) so it is
+      // visible and selectable without any manual toggle.
+      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
+        target: { value: 'aplicada' },
+      });
+      fireEvent.click(screen.getByTestId('account-tree-row-group-A|A.A|A.A.I|200|2000'));
+      fireEvent.click(screen.getByText('+ newSubAccount'));
+
+      expect(screen.getByTestId('modal-current-record-id'))
+        .toHaveTextContent('group-A|A.A|A.A.I|200|2000');
+      // The filtered clone would only carry 1 child (the matching leaf) — proving
+      // the modal actually received the UNFILTERED node, which carries both.
+      expect(screen.getByTestId('modal-current-record-children-count')).toHaveTextContent('2');
+    });
+
+    it('still resolves the correct node with no filter active (baseline, no regression)', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-A'));
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A'));
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A|A.A.I'));
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A|A.A.I|200'));
+      fireEvent.click(screen.getByTestId('account-tree-row-group-A|A.A|A.A.I|200|2000'));
+      fireEvent.click(screen.getByText('+ newSubAccount'));
+
+      expect(screen.getByTestId('modal-current-record-id'))
+        .toHaveTextContent('group-A|A.A|A.A.I|200|2000');
+      expect(screen.getByTestId('modal-current-record-children-count')).toHaveTextContent('2');
+    });
+
+    it('selecting a real leaf row while filtered still resolves that same leaf (leaves are never cloned)', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+
+      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
+        target: { value: 'aplicada' },
+      });
+      fireEvent.click(screen.getByTestId('account-tree-row-acc-20000001'));
+      fireEvent.click(screen.getByText('+ newSubAccount'));
+
+      expect(screen.getByTestId('modal-current-record-id')).toHaveTextContent('acc-20000001');
     });
   });
 
