@@ -122,15 +122,18 @@ export async function login(page, {
 } = {}) {
   captureApiCredentials(page);
   if (IS_MOCK_MODE) {
-    // Inject token before React boots so AuthContext.isAuthenticated = true.
+    // ETP-4576 — do not seed legacy `sf_auth_*` storage: AuthProvider restores
+    // this mocked session from GET /sws/go/session below, exactly like production.
+    // Seeding a token briefly starts a stale bearer refresh before that restore
+    // wins, which looks like a post-login permissions change to the shell.
     await page.addInitScript(() => {
-      localStorage.setItem('sf_auth_token', 'e2e-mock-token');
-      localStorage.setItem('sf_auth_user', 'admin');
-      // ETP-4520 — also seed a selected role: AuthProvider's hydration effect
-      // only fetches window access when `session.selectedRole` is present, so
-      // without this every generated window's WindowAccessGuard would fail
-      // closed to "none" and block rendering entirely (blank page).
-      localStorage.setItem('sf_auth_selected_role', JSON.stringify({ id: 'e2e-mock-role', name: 'Administrator' }));
+      // Permission-change UI is covered by its focused Vitest suite. Mocked E2E
+      // sessions use an in-browser access-map stand-in, so discard this unrelated
+      // notification before it can cover the fixed sidebar/topbar controls.
+      const dismissRoleChangedBanner = () => {
+        document.querySelector("[data-testid=RoleChangedBanner__ecaf3f] button")?.click();
+      };
+      new MutationObserver(dismissRoleChangedBanner).observe(document, { childList: true, subtree: true });
 
       // Stub the SFWindowAccessMap endpoint itself. It's reached via NEO
       // Headless's own `/sws/neo/windowaccessmap` bridge (ETP-4513 — moved off
@@ -145,6 +148,10 @@ export async function login(page, {
       // (rather than page.route) also sidesteps any LIFO route-registration
       // ordering concerns with the generic /sws/** catch-all below.
       const realFetch = window.fetch.bind(window);
+      // Stable identities are intentional: permissions do not change during a mocked
+      // test, and a new Proxy per refresh looks like a real role update to AuthContext.
+      const windowAccess = new Proxy({}, { get: () => "full" });
+      const capabilities = new Proxy({}, { get: () => true });
       window.fetch = (input, init) => {
         const url = typeof input === 'string' ? input : input?.url;
         if (url && url.includes('/sws/neo/windowaccessmap')) {
@@ -152,8 +159,8 @@ export async function login(page, {
             ok: true,
             status: 200,
             json: () => Promise.resolve({
-              windowAccess: new Proxy({}, { get: () => 'full' }),
-              capabilities: new Proxy({}, { get: () => true }),
+              windowAccess,
+              capabilities,
             }),
           });
         }
