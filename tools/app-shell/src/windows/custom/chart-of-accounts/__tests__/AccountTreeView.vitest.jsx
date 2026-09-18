@@ -42,6 +42,7 @@ import { render, screen, within, fireEvent, waitFor } from '@testing-library/rea
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { toast } from 'sonner';
 import AccountTreeView from '@generated/chart-of-accounts/custom/AccountTreeView.jsx';
+import { ELEMENT_LEVEL_UI_KEYS } from '@generated/chart-of-accounts/custom/accountTypeLabels';
 
 // --- Fixtures ---
 
@@ -312,6 +313,7 @@ describe('AccountTreeView', () => {
     expect(cols.map((c) => c.key)).toEqual([
       'searchKey',
       'name',
+      'elementLevel',
       'accountType',
       'active',
       'ytdDebit',
@@ -410,9 +412,82 @@ describe('AccountTreeView', () => {
     });
   });
 
+  // ── Element Level column (ETP-5399) ─────────────────────────────────────────
+
+  describe('Element Level column (ETP-5399)', () => {
+    it('shows the Element Level header in the column header row', () => {
+      render(<AccountTreeView {...defaultProps} />);
+      expect(screen.getByText('accountTreeFilterElementLevel')).toBeInTheDocument();
+    });
+
+    it('renders the Element Level label for a leaf row', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      expandFullAncestorChain();
+      // acc-20000000 has elementLevel: 'S' → elementLevelSubaccount.
+      const row = screen.getByTestId('account-tree-row-acc-20000000');
+      expect(within(row).getByText('elementLevelSubaccount')).toBeInTheDocument();
+    });
+
+    it('renders the Element Level label for a virtual folder/heading row', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      // Root folder "A" is visible without expanding; its ancestor entry carries elementLevel: 'E'.
+      const row = screen.getByTestId('account-tree-row-group-A');
+      expect(within(row).getByText('elementLevelHeading')).toBeInTheDocument();
+    });
+
+    it('falls back to the raw code when elementLevel has no mapped label', () => {
+      const data = [{ ...DATA[0], elementLevel: 'Z' }];
+      render(<AccountTreeView {...defaultProps} data={data} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+      const row = screen.getByTestId('account-tree-row-acc-40000001');
+      expect(within(row).getByText('Z')).toBeInTheDocument();
+    });
+
+    it('renders without crashing and shows no mapped label when elementLevel is missing', () => {
+      const data = [{ ...DATA[0], elementLevel: undefined }];
+      render(<AccountTreeView {...defaultProps} data={data} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+      const row = screen.getByTestId('account-tree-row-acc-40000001');
+      expect(row).toBeInTheDocument();
+      for (const uiKey of Object.values(ELEMENT_LEVEL_UI_KEYS)) {
+        expect(within(row).queryByText(uiKey)).not.toBeInTheDocument();
+      }
+    });
+  });
+
   // ── Tree-native filter (code/name/type/active) ─────────────────────────────
 
   describe('tree-native filter', () => {
+    it('shows a virtual folder when its code matches, including its descendant leaf', () => {
+      const data = [
+        ...HIERARCHY_DATA,
+        {
+          id: 'acc-43000001',
+          searchKey: '43000001',
+          name: 'Long-term provisions',
+          accountType: 'A',
+          summaryLevel: 'N',
+          ancestors: [
+            { value: '430A', name: 'Provisions', elementLevel: 'C' },
+            { value: '4300A', name: 'Long-term provisions', elementLevel: 'D' },
+          ],
+          hasChildren: false,
+        },
+      ];
+
+      render(<AccountTreeView {...defaultProps} apiBaseUrl={undefined} data={data} />);
+
+      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
+        target: { value: '430A' },
+      });
+
+      const matchingFolder = screen.getByTestId('account-tree-row-group-430A');
+      expect(within(matchingFolder).getByText('430A')).toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-acc-43000001')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-tree-row-group-A')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('account-tree-row-acc-20000000')).not.toBeInTheDocument();
+    });
+
     it('filters leaves by code or name and auto-expands their ancestors', () => {
       render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
 
@@ -615,6 +690,25 @@ describe('AccountTreeView', () => {
   // ── Shared table/button styling (ETP-4884 item 3, token-alignment slice) ──
 
   describe('shared table/button styling', () => {
+    it('keeps the controls sticky with all tree actions and filters, without local scrolling', () => {
+      render(<AccountTreeView {...defaultProps} />);
+      const controls = screen.getByTestId('account-tree-controls');
+
+      expect(controls.className).toContain('sticky');
+      expect(controls.className).toContain('top-0');
+      expect(controls.className).toContain('z-20');
+      expect(controls.className).toContain('bg-card');
+      expect(within(controls).getByTestId('account-tree-expand-button')).toHaveTextContent('expand');
+      expect(within(controls).getByTestId('account-tree-collapse-button')).toHaveTextContent('collapse');
+      expect(within(controls).getByTestId('account-tree-new-subaccount-button')).toHaveTextContent('newSubAccount');
+      expect(within(controls).getByTestId('account-tree-filter-text')).toBeInTheDocument();
+      expect(within(controls).getByTestId('account-tree-filter-type')).toBeInTheDocument();
+
+      const utilityClasses = Array.from(controls.querySelectorAll('[class]'))
+        .flatMap((element) => element.className.split(/\s+/));
+      expect(utilityClasses.some((className) => /^(?:overflow|overscroll)-|^max-h-/.test(className))).toBe(false);
+    });
+
     it('renders column headers in the standard sentence-case style, not an uppercase shaded band', () => {
       render(<AccountTreeView {...defaultProps} />);
       const codeHeader = screen.getByText('accountTreeCode');
