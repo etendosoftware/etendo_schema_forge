@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /**
  * moreMenuContent (kebab) for Internal Consumption.
@@ -8,6 +9,12 @@ import { useUI } from '@/i18n';
  * Only shown when the document is Completed ('CO') — voiding an open/draft document is not allowed.
  */
 export default function InternalConsumptionActions({ data, recordId, token, apiBaseUrl, onClose, onRefresh }) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
   const ui = useUI();
   const [processing, setProcessing] = useState(false);
 
@@ -18,9 +25,8 @@ export default function InternalConsumptionActions({ data, recordId, token, apiB
     if (processing) return;
     setProcessing(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/internalConsumption/${recordId}/action/processNow`, {
+      const res = await apiFetch(`${apiBaseUrl}/internalConsumption/${recordId}/action/processNow`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'VO' }),
       });
       if (!res.ok) {

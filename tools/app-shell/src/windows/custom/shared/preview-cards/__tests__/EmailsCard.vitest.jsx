@@ -158,13 +158,21 @@ describe('EmailsCard', () => {
       expect(historyCalls()[0][0]).toBe('/api/documentemailhistory?recordId=a%20b%2Fc%26d');
     });
 
-    it('sends the request through the session-authenticated helper (bearer + locale headers)', async () => {
+    it('sends the request through the session-authenticated helper, never its own headers', async () => {
       await renderCardWithRows([]);
       const [, init] = historyCalls()[0];
+      // ETP-4685 — the locale header has to travel, or the backend resolves *_Trl names in the
+      // AD language and the card shows English.
       expect(init.headers).toEqual(expect.objectContaining({
-        Authorization: 'Bearer test-token',
         'Accept-Language': expect.any(String),
       }));
+      // ETP-4576 — the credential is whatever the ACTIVE SCHEME supplies, and the session double
+      // above is a bearer one, so the bearer is what travels. This used to assert the header was
+      // absent, which read as "the cookie scheme sends none" but actually pinned the pre-merge
+      // wiring, where the host wrapper handed createApiFetch a CSRF token in the credential's
+      // slot. What the card must never do is build the header itself; that is the module-wide
+      // G1 invariant's job, and the value here has to come from the session and nowhere else.
+      expect(init.headers.Authorization).toBe('Bearer test-token');
     });
   });
 

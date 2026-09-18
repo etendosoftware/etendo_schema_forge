@@ -13,7 +13,6 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
   createCheckoutSession,
-  getCheckoutToken,
   getCheckoutStatus,
   runPaidOnboarding,
   UPGRADE_ERROR_CODES,
@@ -229,13 +228,7 @@ export default function UpgradePage() {
 
   useEffect(() => {
     let cancelled = false;
-    const token = getCheckoutToken();
-    if (!token) {
-      setAccountState('unavailable');
-      return undefined;
-    }
-
-    fetchEnvironments(fetch, getUpgradeBaseUrl(), token)
+    fetchEnvironments(fetch, getUpgradeBaseUrl())
       .then(list => {
         if (cancelled) return;
         setEnvironments(Array.isArray(list) ? list : []);
@@ -269,14 +262,13 @@ export default function UpgradePage() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('checkout') !== 'success') return undefined;
     const requestId = params.get('requestId');
-    const token = getCheckoutToken();
     const tenantName = sessionStorage.getItem(PENDING_CHECKOUT_NAME) || '';
     const upgradeAction = sessionStorage.getItem(PENDING_CHECKOUT_ACTION) || 'create-productive';
     // Persisted alongside the pending tenant name in runUpgrade, since a local
     // closure variable does not survive the full-page redirect to Stripe.
     const startedAtRaw = sessionStorage.getItem(PENDING_CHECKOUT_STARTED_AT);
     const startedAt = startedAtRaw ? Number(startedAtRaw) : null;
-    if (!requestId || !token || !tenantName) {
+    if (!requestId || !tenantName) {
       setFormError('upgradeCheckoutCreationFailed');
       return undefined;
     }
@@ -287,11 +279,11 @@ export default function UpgradePage() {
       try {
         let status = { status: 'pending' };
         for (let attempt = 0; attempt < 60 && status.status === 'pending'; attempt += 1) {
-          status = await getCheckoutStatus(fetch, getUpgradeBaseUrl(), token, requestId);
+          status = await getCheckoutStatus(getUpgradeBaseUrl(), requestId);
           if (status.status === 'pending') await new Promise(resolve => setTimeout(resolve, 1000));
         }
         if (status.status !== 'paid') throw new Error('Checkout payment is not confirmed');
-        await runPaidOnboarding(fetch, getUpgradeBaseUrl(), token, {
+        await runPaidOnboarding(getUpgradeBaseUrl(), {
           clientName: status.clientName || tenantName,
           paymentToken: requestId,
           upgradeAction,
@@ -330,13 +322,6 @@ export default function UpgradePage() {
   };
 
   const runUpgrade = async () => {
-    const token = getCheckoutToken();
-    if (!token) {
-      setFormError('upgradeSessionExpired');
-      emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_SESSION_EXPIRED);
-      return;
-    }
-
     setPhase('running');
     // Duration is measured from here to the terminal event in the resume
     // effect above, so it covers the full round trip through Stripe's hosted
@@ -346,9 +331,7 @@ export default function UpgradePage() {
 
     try {
       const session = await createCheckoutSession(
-        fetch,
         getUpgradeBaseUrl(),
-        token,
         {
           action: 'productive-tenant',
           clientName: form.tenantName.trim(),

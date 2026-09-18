@@ -64,6 +64,22 @@ vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
   useEnvironmentSwitch: () => useEnvironmentSwitchMock(),
 }));
 
+// ETP-4576 — NoAccessScreen's role list now comes from the session (`useAuthOptional()?.roleList`)
+// rather than from `sf_auth_rolelist` in localStorage. That key is in LEGACY_AUTH_KEYS, so
+// `purgeLegacyAuthStorage` deletes it and the read answered "[]" for every user: `hasRole` was
+// permanently false and the screen told everyone nobody had assigned them a role, including the
+// user whose role simply grants no window — the one distinction it exists to make.
+//
+// These tests mount no AuthProvider, so the optional hook answers `undefined` on its own; this
+// mock is what lets a case declare the session it is describing. `importOriginal` rather than a
+// bare object: this barrel also publishes `apiFetch` and the header builders, and replacing it
+// wholesale would take out every other module in the tree that reaches them.
+const useAuthOptionalMock = vi.fn(() => null);
+vi.mock('@etendosoftware/app-shell-core/auth', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useAuthOptional: () => useAuthOptionalMock(),
+}));
+
 // ETP-5240 — AppLayout now also calls useWindowAccessSafe() (alongside the
 // pre-existing useCapabilitiesSafe()) and threads its return value through to
 // filterMenuGroupsByAccess() as the 4th arg. Both are `vi.fn()`s (not plain
@@ -537,12 +553,18 @@ describe('AppLayout — no-access company switch (ETP-5202)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useRoleMenu).mockReturnValue(null);
+    // `clearAllMocks` clears calls, not implementations, so a `mockReturnValue` left by another
+    // describe would survive into these cases. Reset to "no session", which is what a tree with no
+    // AuthProvider really answers.
+    useAuthOptionalMock.mockReturnValue(null);
     withEnvironments([]);
   });
 
   it('lists the account companies, with the current one shown but not selectable', () => {
     blockAccess();
-    globalThis.localStorage.setItem('sf_auth_client_name', 'Current Corp');
+    // ETP-4576 — the trigger's "Current Corp" is read off the environment list below, matched on
+    // `currentClientId`. It used to be seeded here through `sf_auth_client_name`, a legacy key the
+    // purge deletes, so the trigger was really rendering the `yourCompany` fallback.
     withEnvironments([CURRENT, OTHER]);
 
     render(<AppLayout {...defaultProps} />);
@@ -704,29 +726,47 @@ describe('AppLayout — no-access company switch (ETP-5202)', () => {
  * window. Telling the first user "your role has no permissions" sends them to ask for the wrong
  * thing, and they have no way to tell that the screen guessed.
  *
- * The session's own role list is what tells the two apart, so these tests drive the branch
- * through `sf_auth_rolelist` exactly as the screen reads it.
+ * The session's own role list is what tells the two apart.
+ *
+ * ETP-4576 — it used to be read out of `sf_auth_rolelist`, and the company name out of
+ * `sf_auth_client_name`. Both are legacy auth keys that `purgeLegacyAuthStorage` deletes on mount,
+ * so the reads answered "[]" and "": `hasRole` was permanently false and EVERY user got the
+ * no-role sentence, which is the guess this screen exists not to make — and the company name was
+ * always the generic fallback. The screen now takes the role list from the session and the company
+ * name from the environment list `useEnvironmentSwitch` already loads, so these cases drive both
+ * through those, and one of them seeds the dead keys to prove they are ignored.
  */
-describe('AppLayout — no-access explanation (ETP-5202)', () => {
+describe('AppLayout — no-access explanation (ETP-5202, ETP-4576)', () => {
   const defaultProps = {
     menuGroups: [{ group: 'Sales', items: [{ name: 'sales-order', label: 'Sales Order', windowId: '800166' }] }],
   };
+
+  const ACME = { clientId: 'CLIENT-CURRENT', clientName: 'Acme Corp', orgName: 'Main Org' };
+
+  /** The session the screen reads its role list from. `null` is a tree with no AuthProvider. */
+  function withSession(session) {
+    useAuthOptionalMock.mockReturnValue(session);
+  }
+
+  function withEnvironments(environments) {
+    useEnvironmentSwitchMock.mockReturnValue({
+      environments,
+      switchTo: switchToMock,
+      switching: null,
+      currentClientId: 'CLIENT-CURRENT',
+    });
+  }
 
   beforeEach(() => {
     vi.clearAllMocks();
     globalThis.localStorage.clear();
     vi.mocked(useRoleMenu).mockReturnValue(new Set());
-    useEnvironmentSwitchMock.mockReturnValue({
-      environments: [],
-      switchTo: switchToMock,
-      switching: null,
-      currentClientId: 'CLIENT-CURRENT',
-    });
+    withSession(null);
+    withEnvironments([ACME]);
   });
 
   it('says the role grants nothing when the session holds a role', () => {
-    globalThis.localStorage.setItem('sf_auth_client_name', 'Acme Corp');
-    globalThis.localStorage.setItem('sf_auth_rolelist', JSON.stringify([{ id: 'ROLE-1', name: 'Sales' }]));
+    withSession({ roleList: [{ id: 'ROLE-1', name: 'Sales' }] });
 
     render(<AppLayout {...defaultProps} />);
 
@@ -741,7 +781,7 @@ describe('AppLayout — no-access explanation (ETP-5202)', () => {
   });
 
   it('says no role has been assigned when the session holds none', () => {
-    globalThis.localStorage.setItem('sf_auth_client_name', 'Acme Corp');
+    withSession({ roleList: undefined });
 
     render(<AppLayout {...defaultProps} />);
 
@@ -758,20 +798,18 @@ describe('AppLayout — no-access explanation (ETP-5202)', () => {
   });
 
   it('treats an empty role list as no role', () => {
-    globalThis.localStorage.setItem('sf_auth_client_name', 'Acme Corp');
-    globalThis.localStorage.setItem('sf_auth_rolelist', '[]');
+    withSession({ roleList: [] });
 
     render(<AppLayout {...defaultProps} />);
 
     expect(screen.getByTestId('no-access-title')).toHaveTextContent(LABELS.noAccessNoRoleTitle);
   });
 
-  // The role list is JSON that arrived from the network and has sat in storage since; a parse
-  // failure must degrade to the safer message, not take the whole screen down. This is the
-  // assertion that breaks first if somebody removes the try/catch as dead weight.
-  it('survives an unparseable role list and falls back to no role', () => {
-    globalThis.localStorage.setItem('sf_auth_client_name', 'Acme Corp');
-    globalThis.localStorage.setItem('sf_auth_rolelist', '{');
+  // The screen mounts in a tree that may have no AuthProvider above it, so the optional hook
+  // answers `undefined`. Reading `.roleList` off that without the guard throws and takes the whole
+  // blocking screen down — replacing "you have no access" with a blank page.
+  it('survives having no session at all and falls back to no role', () => {
+    withSession(null);
 
     expect(() => render(<AppLayout {...defaultProps} />)).not.toThrow();
 
@@ -779,19 +817,54 @@ describe('AppLayout — no-access explanation (ETP-5202)', () => {
     expect(screen.getByTestId('no-access-message')).toHaveTextContent('Acme Corp');
   });
 
-  // A role list that parses but is not an array (a bare object, `null`, a number) is just as
-  // unusable as one that does not parse.
-  it('falls back to no role when the stored role list is not an array', () => {
-    globalThis.localStorage.setItem('sf_auth_rolelist', JSON.stringify({ id: 'ROLE-1' }));
+  // A role list that is not an array (a bare object, a string, a number) is as unusable as none.
+  // The session is decoded from a JWT the backend sent, so its shape is not this screen's to trust.
+  it('falls back to no role when the session role list is not an array', () => {
+    withSession({ roleList: { id: 'ROLE-1' } });
 
     render(<AppLayout {...defaultProps} />);
 
     expect(screen.getByTestId('no-access-title')).toHaveTextContent(LABELS.noAccessNoRoleTitle);
   });
 
-  // Without a stored company name the sentence still has to read as a sentence.
-  it('falls back to the generic company wording when no company name is stored', () => {
-    globalThis.localStorage.setItem('sf_auth_rolelist', JSON.stringify([{ id: 'ROLE-1' }]));
+  // THE regression, stated directly: the dead keys are seeded with values that contradict the
+  // session, and the screen must follow the session. Before ETP-4576 this test would have read
+  // both of them and produced the no-role sentence for a user who holds a role.
+  it('ignores the legacy storage keys entirely, even when they say otherwise', () => {
+    globalThis.localStorage.setItem('sf_auth_client_name', 'Stale Corp');
+    globalThis.localStorage.setItem('sf_auth_rolelist', '[]');
+    withSession({ roleList: [{ id: 'ROLE-1', name: 'Sales' }] });
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.getByTestId('no-access-title')).toHaveTextContent(LABELS.noAccessRoleTitle);
+    const message = screen.getByTestId('no-access-message');
+    expect(message).toHaveTextContent('Acme Corp');
+    expect(message.textContent).not.toContain('Stale Corp');
+  });
+
+  // The company name is resolved by matching `currentClientId` against the list, not by taking the
+  // first entry: an account in several companies would otherwise be told it is stuck in whichever
+  // one the backend happened to return first.
+  it('names the company the session is actually in, not the first one listed', () => {
+    withEnvironments([
+      { clientId: 'CLIENT-OTHER', clientName: 'Other Corp', orgName: 'Main Org' },
+      ACME,
+    ]);
+    withSession({ roleList: [{ id: 'ROLE-1' }] });
+
+    render(<AppLayout {...defaultProps} />);
+
+    const message = screen.getByTestId('no-access-message');
+    expect(message).toHaveTextContent('Acme Corp');
+    expect(message.textContent).not.toContain('Other Corp');
+  });
+
+  // Without the list — the account cannot list environments, or the current client is not in it —
+  // the sentence still has to read as a sentence.
+  it('falls back to the generic company wording when the current company is not listed', () => {
+    withEnvironments([]);
+    withSession({ roleList: [{ id: 'ROLE-1' }] });
 
     render(<AppLayout {...defaultProps} />);
 

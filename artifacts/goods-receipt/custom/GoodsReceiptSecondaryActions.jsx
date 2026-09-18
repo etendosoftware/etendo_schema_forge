@@ -5,6 +5,7 @@ import { useUI } from '@/i18n';
 import DocumentSecondaryActions from '@/windows/custom/shared/DocumentSecondaryActions';
 import CloneButton from '@/windows/custom/shared/CloneButton.jsx';
 import { CloneReceiptModal } from '@generated/goods-receipt/custom/GoodsReceiptActions';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /**
  * Adapts the shared `DocumentSecondaryActions` group to goods-receipt (ETP-5260).
@@ -34,7 +35,13 @@ export default function GoodsReceiptSecondaryActions(props) {
   const [showClone, setShowClone] = useState(false);
 
   const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
   return (
     <DocumentSecondaryActions
@@ -51,7 +58,6 @@ export default function GoodsReceiptSecondaryActions(props) {
           receiptId={recordId}
           data={data}
           base={base}
-          headers={headers}
           onClose={() => setShowClone(false)}
           onCloned={(newId) => { setShowClone(false); navigate(`/goods-receipt/${newId}`); }}
           data-testid="CloneReceiptModal__GoodsReceiptSecondaryActions" />,

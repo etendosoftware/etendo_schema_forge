@@ -10,6 +10,7 @@ import { ConfirmResultModal } from '@/components/contract-ui';
 import { useShipmentPdf } from '@/windows/custom/goods-shipment/useShipmentPdf';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl, api, onRefresh }) {
   const ui = useUI();
@@ -29,10 +30,13 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
   const canCreateReturn = data?.canCreateReturn === true;
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
   // ETP-4372 — source the same client-rendered delivery-note PDF the
   // GoodsShipmentPreview panel uses so the form-view topbar Send modal shows the
@@ -125,11 +129,10 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `${base}/return-material-receipt/returnMaterialReceipt/_/action/availableShipmentLines`,
           {
             method: 'POST',
-            headers,
             body: JSON.stringify({ shipmentId: recordId }),
           },
         );
@@ -139,7 +142,7 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [wizardOpen, recordId, base, headers]);
+  }, [wizardOpen, recordId, base, apiFetch]);
 
   // ETP-5063 — when confirming the shipment created no related invoice, skip
   // the result modal and communicate success via an auto-dismissing toast
@@ -156,9 +159,9 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
     if (creatingInvoice) return;
     setCreatingInvoice(true);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${base}/goods-shipment/goodsShipment/${recordId}/action/createDraftInvoice`,
-        { method: 'POST', headers, body: JSON.stringify({ priceListId }) },
+        { method: 'POST', body: JSON.stringify({ priceListId }) },
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);
@@ -234,7 +237,6 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
       {!isCompleted && !isFullyInvoiced && showConfirmModal && (
         <GoodsShipmentConfirmModal
           base={base}
-          headers={headers}
           recordId={recordId}
           data={data}
           onConfirmed={({ invoice }) => {

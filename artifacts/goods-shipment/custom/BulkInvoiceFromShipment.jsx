@@ -4,12 +4,19 @@ import { toast } from 'sonner';
 import { FilePlus } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 // ETP-5302 — `refresh` comes from ListView's `bulkActions` slot context. Without it this
 // action used to close the modal and clear the selection but never refetch, so the rows
 // it had just invoiced kept showing a stale invoicing status with nothing on screen
 // hinting they were out of date.
 export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, token, apiBaseUrl, refresh }) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
   const ui = useUI();
   const [showModal, setShowModal] = useState(false);
 
@@ -115,10 +122,8 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
   const [dismissedWarning, setDismissedWarning] = useState(false);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const hdrs = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch('');
 
   useEffect(() => {
     let cancelled = false;
@@ -128,7 +133,7 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
         const [lineResults, pendingResults] = await Promise.all([
           Promise.all(
             shipments.map(async (s) => {
-              const res = await fetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${s.id}&_startRow=0&_endRow=200`, { headers: hdrs });
+              const res = await apiFetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${s.id}&_startRow=0&_endRow=200`);
               if (!res.ok) return { id: s.id, lines: [] };
               return { id: s.id, lines: (await res.json())?.response?.data || [] };
             }),
@@ -136,7 +141,7 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
           Promise.all(
             shipments.map(async (s) => {
               try {
-                const res = await fetch(`${base}/goods-shipment/goodsShipment/${s.id}/action/pendingInvoiceLines`, { headers: hdrs });
+                const res = await apiFetch(`${base}/goods-shipment/goodsShipment/${s.id}/action/pendingInvoiceLines`);
                 if (!res.ok) return {};
                 const data = (await res.json())?.response?.data || [];
                 const map = {};
@@ -173,7 +178,7 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
         const priceMap = {};
         await Promise.all(orderIds.map(async (orderId) => {
           try {
-            const res = await fetch(`${base}/sales-order/lines?parentId=${orderId}&_startRow=0&_endRow=200`, { headers: hdrs });
+            const res = await apiFetch(`${base}/sales-order/lines?parentId=${orderId}&_startRow=0&_endRow=200`);
             if (res.ok) {
               ((await res.json())?.response?.data || []).forEach(ol => { priceMap[ol.id] = ol; });
             }
@@ -182,9 +187,9 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
         if (!cancelled) setOrderLinePrices(priceMap);
 
         try {
-          const draftRes = await fetch(
+          const draftRes = await apiFetch(
             `${base}/goods-shipment/goodsShipment/${shipments[0].id}/action/checkDraftInvoice`,
-            { method: 'POST', headers: hdrs, body: JSON.stringify({ shipmentIds: shipments.map(s => s.id) }) },
+            { method: 'POST', body: JSON.stringify({ shipmentIds: shipments.map(s => s.id) }) },
           );
           if (draftRes.ok && !cancelled) {
             const draftData = (await draftRes.json())?.response?.data;
@@ -195,7 +200,7 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
       finally { if (!cancelled) setLoadingLines(false); }
     })();
     return () => { cancelled = true; };
-  }, [shipments, base, hdrs]);
+  }, [shipments, base, apiFetch]);
 
   const shipmentSummaries = useMemo(() =>
     shipments.map(s => {
@@ -248,9 +253,9 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
           if (l.isSelected) linesPayload.push({ shipmentLineId: l.id, quantity: String(l.currentQty) });
         });
       });
-      const res = await fetch(
+      const res = await apiFetch(
         `${base}/goods-shipment/goodsShipment/${shipments[0].id}/action/createDraftInvoice`,
-        { method: 'POST', headers: hdrs, body: JSON.stringify({ shipmentIds: shipments.map(s => s.id), lines: linesPayload }) },
+        { method: 'POST', body: JSON.stringify({ shipmentIds: shipments.map(s => s.id), lines: linesPayload }) },
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);

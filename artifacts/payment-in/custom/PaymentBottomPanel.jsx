@@ -3,6 +3,7 @@ import { useRecordRefreshSignal } from '@/windows/custom/shared/useRecordRefresh
 import { useUI } from '@/i18n';
 import { formatAmount } from '@/lib/formatAmount.js';
 import PaymentDraftBanner from './PaymentDraftBanner';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /* eslint-disable react/prop-types */
 
@@ -121,18 +122,22 @@ function DatosSection({ data, ui }) {
 const DET_COLS = '1.8fr 1fr 1fr';
 
 function LineasSection({ data, token, apiBaseUrl, ui }) {
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
   const [lines, setLines] = useState(null);
 
   const refreshSignal = useRecordRefreshSignal(data?.id);
 
   useEffect(() => {
-    if (!data?.id || !token || !apiBaseUrl) return;
+    if (!data?.id || !apiBaseUrl) return;
     const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-    const headers = { Authorization: `Bearer ${token}` };
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${base}/payment-in/finPaymentScheduleDetail?parentId=${data.id}&_startRow=0&_endRow=200`, { headers });
+        const res = await apiFetch(`${base}/payment-in/finPaymentScheduleDetail?parentId=${data.id}&_startRow=0&_endRow=200`);
         if (!res.ok || cancelled) { if (!cancelled) setLines([]); return; }
         const rows = (await res.json())?.response?.data || [];
         if (!cancelled) setLines(rows);
@@ -210,6 +215,8 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
 }
 
 export default function PaymentBottomPanel({ data, token, apiBaseUrl }) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  const apiFetch = useApiFetch('');
   const ui = useUI();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

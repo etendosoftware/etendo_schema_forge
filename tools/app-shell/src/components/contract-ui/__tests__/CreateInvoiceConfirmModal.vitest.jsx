@@ -45,6 +45,7 @@ vi.mock('@/components/ui/select', () => ({
 }));
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { setSessionCredentials, CREDENTIAL_MODES } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import * as formatCurrencyModule from '@/lib/formatCurrency.js';
@@ -86,6 +87,10 @@ function makePriceList(overrides = {}) {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('CreateInvoiceConfirmModal', () => {
+  // ETP-4576 — apiFetch takes the credential from the active scheme, not from an argument,
+  // so a test that expects an Authorization header has to declare the scheme first.
+  beforeEach(() => setSessionCredentials({ mode: CREDENTIAL_MODES.bearer, token: 'test-token' }));
+
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn(() =>
       Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) }),
