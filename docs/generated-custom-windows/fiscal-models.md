@@ -773,6 +773,51 @@ is no warning banner and no submission gate for this relationship.
   stays exactly as shipped) and does **not** add any submission-time gate — the invariant is
   enforced purely at the point of entry.
 
+### Manual box entry — no-op edit no longer wipes the saved value; 2-decimal rounding (ETP-5409)
+
+**Bug 1 — a no-op edit silently wiped the box's saved value.** Reported as: click the pencil to
+open a box's inline editor, don't type anything, click away (blur) or press Enter — the box's
+previously saved value disappeared. `renderCellInput`'s `onBlur`/`onKeyDown` handlers used to call
+`onBoxChange?.(boxNum, pendingValues[boxNum])` unconditionally on every commit attempt.
+`pendingValues` only ever gained an entry for `boxNum` if the user actually typed a keystroke
+(the input's `onChange`) — so an untouched box had no key there at all, and
+`pendingValues[boxNum]` evaluated to `undefined`. That flowed into `FmModel303Page.jsx`'s
+`parseBoxInput(undefined)` → `NaN` → `null`, which `applyBoxChange` treats as "remove this box
+entirely", silently deleting a previously saved value on a pure no-op edit.
+
+Fix, in `FmBoxes303.jsx`: a new `commitPendingEdit(boxNum)` helper calls `onBoxChange` **only**
+when `Object.prototype.hasOwnProperty.call(pendingValues, boxNum)` is true — a presence check, not
+a truthiness check, so it correctly distinguishes "never touched this edit session" (no key, skip
+the commit) from "user deliberately cleared the field back to `''`" (key present with an empty
+string, commits the clear). Both `onBlur` and Enter now route through `commitPendingEdit`; Escape
+routes through the sibling `clearPendingValue(boxNum)` instead (discards the draft without
+committing, same as before). The draft is always cleared after a commit attempt — successful or
+skipped — via `clearPendingValue`, so the next edit session for that box starts clean.
+
+**Bug 2 (found in review) — a stale draft could resurface and clobber a later external
+correction.** `pendingValues` used to persist across edit sessions for the same box: if a user
+committed "900" for a box, and an unrelated edit elsewhere (e.g. the box78/box110 reactive clamp —
+see "Box 78 auto-clamped" above) then corrected that same box's value to "500" via a prop update,
+reopening the pencil editor and blurring again with no keystroke would still see the old "900" key
+in `pendingValues` and resend it, clobbering the correct "500". Fix: `startEditingCell(boxNum)` —
+now wired to every pencil `onClick` — calls `clearPendingValue(boxNum)` before opening the editor,
+so each edit session always starts from a clean draft with no leftover key from a previous one.
+
+**Bug 3 — manual box entries had no decimal-place limit.** A manually typed value (e.g.
+`123.456789`) used to persist with full float precision, unlike computed/derived box values, which
+already round to 2 decimals by construction (`recomputeDerivedBoxes`'s own rounding). Fix:
+`fiscalModelsUtils.js`'s pre-existing `roundEur(n)` helper (`Math.round(n * 100) / 100`) is now
+exported and reused by `FmModel303Page.jsx`'s `parseBoxInput`, so every manually-typed box value is
+capped to 2 decimals at the same choke point that already parses the raw input string — no second
+rounding implementation.
+
+None of the three fixes touch `manualData`, `recomputeDerivedBoxes`, `applyOverrides`, the box78/
+box110 clamp, or anything sent in the `.303` submission payload — purely the inline-edit commit
+path in `FmBoxes303.jsx` and the input-parsing choke point in `FmModel303Page.jsx`. See
+`FmBoxes303.vitest.jsx` ("no-op edit" cases), `FmModel303Page.manualEntryRounding.vitest.jsx`, and
+the box78 clamp tests (`FmModel303Page.box78Clamp*.vitest.jsx`, unaffected but re-verified) for
+coverage.
+
 ### Organization identity
 
 A `GET /session` call on mount populates the NIF/nombre fields used in the generated `.txt` header when `token` and `apiBaseUrl` are provided.
