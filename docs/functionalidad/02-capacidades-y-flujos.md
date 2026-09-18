@@ -115,11 +115,15 @@ Nota de arquitectura previa a todo lo demás: la UI de onboarding (`OnboardingPa
   2. 0 entornos → restaura borrador de onboarding o va a `profile` (usuario nuevo).
   3. ≥1 entorno → auto-login al que coincida con `localStorage.sf_last_environment`, o al primero (`envs[0]`) — "el login nunca se detiene en un selector", comentario explícito en el código.
   4. `EnvSelectStep.jsx` existe como selector manual, pero **no es el camino por defecto**: solo se llega ahí si el auto-login al entorno recordado/primero falla.
-- **Variantes / errores observables:** `sf_last_environment` está deliberadamente excluido de las claves que se limpian en logout, para recordar la preferencia entre sesiones.
-- **Resultado esperado:** Usuario dentro de un tenant sin decisión manual, salvo que el auto-login falle.
+  5. Ya dentro del entorno, el aterrizaje es **siempre el home** (`DEFAULT_AUTH_RETURN_TO` = `/dashboard`). El login nunca devuelve al usuario a la ventana que tenía abierta cuando se cerró la sesión (ETP-5310).
+- **Variantes / errores observables:**
+  - `sf_last_environment` está deliberadamente excluido de las claves que se limpian en logout, para recordar la preferencia entre sesiones.
+  - **`returnTo` es solo para el handoff OAuth, no para restaurar la última ventana.** `resolveUnauthenticatedRedirect` (`lib/unauthenticatedRedirect.js`) solo conserva el `returnTo` cuando la ruta protegida es `/authorize` — ahí el consentimiento se completa en esa URL y en ninguna otra, así que perder el query abortaría la autorización del cliente externo. Cualquier otra ruta protegida redirige a `/onboarding` pelado.
+  - Antes de ETP-5310 se codificaba **toda** ruta protegida como `returnTo`, con dos consecuencias visibles: tras el logout la URL seguía nombrando la última ventana (`/onboarding?returnTo=/product`), y el siguiente login rebotaba de vuelta a ella — de modo que quien volvía a entrar con un rol **sin** acceso a esa ventana aterrizaba en la pantalla de "sin acceso" en lugar del home.
+- **Resultado esperado:** Usuario dentro de un tenant sin decisión manual, salvo que el auto-login falle, y siempre en el home.
 - **Reglas / permisos implicados:** Ninguno adicional.
 - **Datos / entidades tocadas:** Ninguno (solo lectura + localStorage).
-- **Evidencia:** `OnboardingFlow.jsx:125-198`; `EnvSelectStep.jsx`; `state.js:58-111`.
+- **Evidencia:** `OnboardingFlow.jsx:125-198`; `EnvSelectStep.jsx`; `state.js:58-111`; `lib/unauthenticatedRedirect.js` + `lib/__tests__/unauthenticatedRedirect.test.js` (ETP-5310).
 - **Huecos abiertos:** ninguno relevante.
 
 ## CAP-ONB-05 — Reanudar onboarding tras logout (persistencia de borrador)
