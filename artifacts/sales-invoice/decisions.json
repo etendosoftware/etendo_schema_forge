@@ -599,6 +599,7 @@
           "section": "principal",
           "inputMode": "search",
           "displayLogic": null,
+          "noTruncate": true,
           "forceCalloutFields": [
             "listPrice",
             "unitPrice",

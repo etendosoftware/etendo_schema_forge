@@ -26,6 +26,7 @@
  * Harness/mocks follow linesDateField.vitest.jsx, which renders the same two components.
  */
 import { render, screen } from '@testing-library/react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import React, { createRef } from 'react';
 import { DataTable } from '../DataTable.jsx';
 import InlineLinesPanel from '../InlineLinesPanel.jsx';
@@ -129,17 +130,35 @@ function readHeaderLayout() {
 
 /**
  * The same budget as the add-row table declares it: literal-px `<col>`s, plus the
- * `calc((100% - Fpx) / N + Bpx)` expression `growColumnWidth()` emits for grow columns
- * (F = every fixed px the table believes is spoken for, N = number of grow columns).
+ * `calc((100% - Fpx) / N + Bpx)` expression `growColumnWidth()` emits for
+ * grow columns when no live scroll host is measured (F = every fixed px the table
+ * believes is spoken for, N = number of grow columns).
+ *
+ * ETP-5133 BUG-1 follow-up — this MUST read from server-rendered markup, not a
+ * mounted `container`'s live DOM: jsdom's `cssstyle` cannot parse a `calc(...)`
+ * value (it appears whenever `growColumnWidth()` falls back to its unmeasured
+ * formula — see its own doc comment in DataTable.jsx) and silently drops the
+ * ENTIRE `style` attribute rather than the single unparseable declaration —
+ * verified live: `col.getAttribute('style')` comes back `null`, not merely
+ * missing `width`. `renderToStaticMarkup` serializes the literal style text
+ * React wrote without ever going through jsdom's CSSOM, so the calc()
+ * expression survives intact.
  */
-function readAddRowLayout(container) {
+function readAddRowLayout(columns) {
+  const html = renderToStaticMarkup(addRowElement(columns));
+  const colgroupHtml = /<colgroup>([\s\S]*?)<\/colgroup>/.exec(html)?.[1] ?? '';
+  const colTags = colgroupHtml.match(/<col\b[^>]*>/g) ?? [];
   let fixedPx = 0;
   const growBases = [];
   let calcFixedPx = null;
   let calcGrowCount = null;
-  for (const col of container.querySelectorAll('colgroup col')) {
-    const width = styleProp(col, 'width') ?? '';
-    if (!width.startsWith('calc(')) {
+  for (const tag of colTags) {
+    const style = /style="([^"]*)"/.exec(tag)?.[1] ?? '';
+    const width = /(?:^|;)\s*width:\s*([^;]+)/.exec(style)?.[1]?.trim() ?? '';
+    // Fixed columns render a bare pixel value ('80px'); grow columns render a
+    // `calc(...)` expression — so match on `calc(` anywhere rather than
+    // anchoring at the start.
+    if (!width.includes('calc(')) {
       fixedPx += parseInt(width, 10);
       continue;
     }
@@ -153,8 +172,13 @@ function readAddRowLayout(container) {
 
 /**
  * Reads back `growColumnWidth()`'s `calc((100% - Fpx) / N + Bpx)`. jsdom's CSS
- * serializer rewrites it — `calc(Bpx + 0.5 * (100% - Fpx))` for N=2 — so match the
- * three quantities wherever they landed instead of the literal source shape.
+ * serializer rewrites a live-mounted calc() — `calc(Bpx + 0.5 * (100% - Fpx))`
+ * for N=2 — so match the three quantities wherever they landed instead of the
+ * literal source shape; that tolerance also means this same regex-based
+ * reader keeps working when the text instead comes verbatim from
+ * server-rendered markup (see `readAddRowLayout` above), since the literal
+ * `calc(...)` string still contains all three of the same quantities the
+ * regex below looks for.
  */
 function parseGrowWidth(width) {
   const fixedPx = Number(/100%\s*-\s*(\d+)px/.exec(width)[1]);
@@ -182,8 +206,12 @@ function renderHeader(columns) {
   );
 }
 
-function renderAddRow(columns) {
-  return render(
+// Shared between `renderAddRow` (live mount — used for DOM assertions that
+// don't touch `<col>` widths, e.g. the `<td>` count) and `readAddRowLayout`
+// (server-rendered markup — the only reliable way to read a `<col>` width
+// that may contain `max(...)`, see its own doc comment).
+function addRowElement(columns) {
+  return (
     <DataTable
       columns={columns}
       data={[]}
@@ -203,8 +231,12 @@ function renderAddRow(columns) {
         onCancel: vi.fn(),
         catalogs: {},
       }}
-    />,
+    />
   );
+}
+
+function renderAddRow(columns) {
+  return render(addRowElement(columns));
 }
 
 /** Renders both renderers for the same columns and returns their width budgets. */
@@ -214,7 +246,7 @@ function layoutsFor(columns) {
   header.unmount();
 
   const addRow = renderAddRow(columns);
-  const addRowLayout = readAddRowLayout(addRow.container);
+  const addRowLayout = readAddRowLayout(columns);
   return { headerLayout, addRowLayout, addRow };
 }
 

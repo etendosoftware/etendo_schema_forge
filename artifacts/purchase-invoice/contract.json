@@ -1902,6 +1902,7 @@
             ],
             "section": "principal",
             "gridOrder": 1,
+            "noTruncate": true,
             "validation": {
               "maxLength": 60
             },

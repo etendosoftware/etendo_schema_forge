@@ -121,15 +121,54 @@ describe('DimensionGrid density (ETP-4610)', () => {
   it('renders the editable SelectorInput trigger at the compact h-8 height', () => {
     renderGrid();
     const trigger = screen.getByTestId('field-project');
-    expect(trigger.className).toBe('w-full h-8 text-sm bg-card focus:ring-2 focus:ring-primary');
+    // ETP-5133 — exact-string equality was replaced with `toContain` checks so
+    // this test still locks the compact-density classes (h-8/text-sm) AND now
+    // also asserts the truncation classes added for long dimension values
+    // (see the ellipsis-policy test group below), instead of silently
+    // tolerating either one drifting away unnoticed.
+    expect(trigger.className).toContain('h-8');
+    expect(trigger.className).toContain('text-sm');
+    expect(trigger.className).toContain('bg-card');
+    expect(trigger.className).toContain('truncate');
   });
 
   it('renders the read-only input at the compact h-8 height', () => {
     renderGrid({ readOnly: true, isCompleted: true, data: { project: 'Alpha' } });
     const input = screen.getByDisplayValue('Alpha');
-    expect(input.className).toBe(
-      'flex h-8 w-full rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-sm disabled:cursor-not-allowed disabled:opacity-50',
-    );
+    // ETP-5133 — same rationale as the trigger assertion above: keep locking
+    // the compact-density classes via `toContain` (not exact-string equality,
+    // which the added `truncate` class broke) while also asserting the
+    // truncation class is present.
+    expect(input.className).toContain('h-8');
+    expect(input.className).toContain('text-sm');
+    expect(input.className).toContain('rounded-lg');
+    expect(input.className).toContain('disabled:cursor-not-allowed');
+    expect(input.className).toContain('truncate');
     expect(input).toBeDisabled();
+  });
+});
+
+describe('DimensionGrid ellipsis + tooltip on long values (ETP-5133)', () => {
+  const LONG_VALUE = 'A Very Long Business Partner Or Project Identifier That Overflows The Column';
+
+  it('truncates the read-only input value and exposes the full text via title', () => {
+    renderGrid({ readOnly: true, isCompleted: true, data: { project: LONG_VALUE } });
+    const input = screen.getByDisplayValue(LONG_VALUE);
+    expect(input.className).toContain('truncate');
+    expect(input).toHaveAttribute('title', LONG_VALUE);
+  });
+
+  it('does not set a title on the read-only input when there is no value', () => {
+    renderGrid({ readOnly: true, isCompleted: true, data: {} });
+    const input = screen.getByDisplayValue('');
+    expect(input).not.toHaveAttribute('title');
+  });
+
+  it('wraps the editable SelectorInput trigger with a title showing the full display value', () => {
+    renderGrid({ data: { project: 'P1', 'project$_identifier': LONG_VALUE } });
+    const trigger = screen.getByTestId('field-project');
+    const titledAncestor = trigger.closest('[title]');
+    expect(titledAncestor).not.toBeNull();
+    expect(titledAncestor).toHaveAttribute('title', LONG_VALUE);
   });
 });

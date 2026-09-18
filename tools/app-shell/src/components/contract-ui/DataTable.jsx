@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -15,8 +15,9 @@ import { resolveRowCurrency } from '@/lib/rowCurrency.js';
 import { useCurrency } from '@/hooks/useCurrency.jsx';
 import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
 import { columnMinWidthPx, columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
-import { CHEVRON_COLUMN_WIDTH, renderBalanceFooterRow, buildLineCellStyle } from './InlineLinesPanel.jsx';
+import { CHEVRON_COLUMN_WIDTH, CHECKBOX_COLUMN_WIDTH, renderBalanceFooterRow, buildLineCellStyle } from './InlineLinesPanel.jsx';
 import { ACTION_SLOT_WIDTH_PX, reservesActionSlot } from '@/lib/linesActionSlot.js';
+import { useLinesScrollHost } from '@/lib/linesScrollHost.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DateField } from '@/components/ui/date-field';
 import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
@@ -463,23 +464,87 @@ function flexSpec(col, idx) {
 // rows always keep them a fixed 32px apart. This calc() expression restores
 // that per-column basis so both layouts match pixel-for-pixel.
 //
-// Deliberately a bare calc(), not wrapped in max(basisPx, ...): the ONE
-// caller (renderLinesColgroup, hideHeader mode — the InlineLinesPanel add-row
-// companion table) renders inside a wrapper that's forced `overflow-visible`
-// (never `overflow-x-auto` — see linesLayout === 'inlineEditable' in this
-// component's own render body), i.e. by design it's never expected to
-// genuinely run out of room, so the bare calc()'s leftover-space assumption
-// always holds here. (An earlier revision wrapped this in `max()` to guard a
-// DIFFERENT caller — the quick-actions column — against exactly that
-// scenario; that caller no longer uses this function at all, see
-// quickActionsColumnStyle, so the guard moved with it rather than staying
-// here as unneeded complexity jsdom's `cssstyle` can't even represent: it
-// doesn't implement the CSS `max()` function, silently no-oping the whole
-// `width` property when it's used — see linesAddRowColumnAlignment.vitest.jsx
-// and DataTable.etp4603Coverage.vitest.jsx for the read-back tests that rely
-// on this staying a plain calc().)
-export function growColumnWidth(basisPx, fixedTotalPx, growCount) {
+// ETP-5133 follow-up (BUG-1, QA reject cycle #1, pass 1 — SUPERSEDED) — that
+// pass wrapped this in `max(basisPx, calc(...))`, reasoning that `max()`
+// would reproduce flexbox's own floor the same way `flex-shrink: 0` does.
+// Verified LIVE (real Chromium via Playwright, not jsdom — see
+// linesScrollHost.js's own scroll host portaled into a real overflowing
+// container on purchase-invoice 10000008) that this does NOT work and BUG-1
+// is still reproducible with that fix in place: a real, non-synthetic click
+// on the Product search button landed on the adjacent quantity cell instead,
+// because the Product/Description `<td>`s were still 0px wide.
+//
+// Root cause of why `max()` didn't help: for a `<col>` inside a
+// `table-layout: fixed` table, when the specified `width` contains a
+// percentage token ANYWHERE (bare, inside `calc()`, or inside `max()`),
+// Chromium does not resolve the expression as a literal CSS length at all.
+// It instead distributes ONLY the leftover space (table width minus the sum
+// of the OTHER, purely-pixel columns) proportionally among the
+// percentage-bearing columns, using just the raw percentage ratio between
+// them — and silently DISCARDS every additive constant, including the
+// `max()` floor. Confirmed by overwriting a live `<col>`'s `style.width` in
+// the browser: `calc(50% - 240px)`, `max(192px, calc(50% - 240px))`, and
+// `calc(100% - 802px)` (a completely different additive constant) all
+// rendered at the IDENTICAL pixel width — only the leading percentage ratio
+// ever mattered. When the table's own box is narrower than or equal to the
+// sum of the pixel-only columns, that leftover is 0 and EVERY
+// percentage-bearing column renders at 0px, `max()` or not. This is a
+// `<colgroup>` column-sizing algorithm quirk, not a flexbox one — the
+// `flex-shrink: 0` mental model the first pass borrowed from simply doesn't
+// apply here.
+//
+// The fix that actually works: stop asking CSS to resolve a percentage
+// against a box it treats specially, and instead measure the one real number
+// flexbox itself would use — the shared scroll host's own `clientWidth` (see
+// `lib/linesScrollHost.js`; read via a `ResizeObserver` in DataTable's render
+// body, see `hostWidthPx` below) — and compute a literal PIXEL width per
+// column in JavaScript, reproducing flexbox's OWN algorithm exactly:
+//
+//   leftover    = hostWidthPx - fixedTotalPx - growBasisTotalPx
+//   perColumnPx = basisPx + max(0, leftover / growCount)
+//
+// `growBasisTotalPx` (the sum of every GROWING column's own basis) matters
+// in a way the old calc()-string formula never accounted for: `fixedTotalPx`
+// only ever sums the NON-growing columns (see `fixedColsBasisPx` in
+// DataTable's render body), so a naive "(100% - fixedTotalPx)/growCount +
+// basisPx" always overshoots the true leftover by exactly
+// `growBasisTotalPx` — double-counting each grow column's own basis once via
+// the per-column `+ basisPx` term and a second time by never subtracting it
+// from the shared pool the other grow columns divide up too. This was
+// invisible before ETP-5133 (the add-row's wrapper was `overflow-visible`,
+// so an overshoot just meant "the table is slightly wider than its
+// container, nothing clips"), but it would have kept silently overflowing
+// the new bounded host by that same amount even if the CSS percentage
+// mis-resolution above didn't already erase the columns first.
+//
+// Verified against the REAL flex header (`InlineLinesPanel`) at three
+// viewports on the same live document (purchase-invoice 10000008; product
+// basis 192, description basis 224, fixedTotalPx 864, growBasisTotalPx 416):
+// hostWidthPx 654 and 994 are both leftover-negative (654-864-416=-626,
+// 994-864-416=-286) → the real header renders both grow columns at their
+// bare basis, 192px/224px, exactly — table now matches to the pixel.
+// hostWidthPx 1754 → leftover positive (1754-864-416=474) → header renders
+// 429px/461px (192+474/2, 224+474/2) → table matches exactly.
+//
+// `measured` is omitted/`hostWidthPx` is non-finite whenever there is no
+// live scroll host to measure — every existing unit test that mounts this
+// component standalone (jsdom has no real layout engine to measure anyway),
+// and any non-`inlineEditable`/non-portaled caller. That path keeps the
+// original calc()-string formula completely unchanged — its own wrapper is
+// still `overflow-visible` and never needed measuring, and jsdom's
+// `cssstyle` still can't represent `max()` (silently drops the whole `width`
+// property — verified: `col.style.width = 'max(...)'` leaves `col.outerHTML`
+// with no `style` attribute at all), which is why THAT formula's own
+// coverage has to be a plain string-return unit test, not a DOM read-back —
+// see linesAddRowColumnAlignment.vitest.jsx and
+// DataTable.etp4603Coverage.vitest.jsx.
+export function growColumnWidth(basisPx, fixedTotalPx, growCount, measured) {
   if (!growCount) return undefined;
+  if (measured && Number.isFinite(measured.hostWidthPx)) {
+    const { hostWidthPx, growBasisTotalPx = 0 } = measured;
+    const leftover = hostWidthPx - fixedTotalPx - growBasisTotalPx;
+    return `${Math.round(basisPx + Math.max(0, leftover / growCount))}px`;
+  }
   return `calc((100% - ${fixedTotalPx}px) / ${growCount} + ${basisPx}px)`;
 }
 import { SelectorInput } from './SelectorInput.jsx';
@@ -1517,13 +1582,18 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
           so without this empty cell every cell after it (product, movementQuantity, …)
           renders one column-slot too far left relative to InlineLinesPanel's rows above. */}
       {hasDimensionsPanel && <TableCell aria-hidden="true" style={{ width: CHEVRON_COLUMN_WIDTH }} data-testid="TableCell__eb5261" />}
-      {/* Saving spinner — aligned with selection checkbox column (empty when idle). */}
+      {/* ETP-5133 — saving spinner, reusing the selection-checkbox column's
+          exact width (CHECKBOX_COLUMN_WIDTH, the SAME constant InlineLinesPanel's
+          own checkbox cell uses — no second, independently-maintained `w-10`
+          guess) instead of reserving new space: that slot renders no real
+          checkbox in the add-row (there's nothing to select yet), so it stays
+          empty until a save is actually in flight. */}
       {selectable && (
-        <TableCell className="w-10 px-1" data-testid="TableCell__eb5261">
+        <TableCell style={{ width: CHECKBOX_COLUMN_WIDTH }} className="px-1" data-testid="TableCell__eb5261">
           <div className="flex items-center justify-center h-7">
             {isSaving && <Loader2
               className="h-4 w-4 animate-spin text-muted-foreground"
-              aria-label="Saving line"
+              aria-label={ui('savingLineTooltip')}
               data-testid="Loader2__eb5261" />}
           </div>
         </TableCell>
@@ -1927,8 +1997,14 @@ export function renderLinesColgroup({
   // caller (none of which mount RowQuickActions in their companion table today)
   // keeps its old literal-pixel answer unchanged.
   quickActionsColWidthPx = 40,
+  // ETP-5133 follow-up (BUG-1, pass 2) — the real, measured width of the live
+  // scroll host (null when there isn't one) plus the combined basis of every
+  // grow column, forwarded straight into growColumnWidth() — see its own
+  // doc comment for why a `<col>` can't get this right from CSS alone.
+  hostWidthPx, growBasisTotalPx,
 }) {
   if (!hideHeader) return null;
+  const measured = { hostWidthPx, growBasisTotalPx };
   return (
     <colgroup>
       {hasDimensionsPanel && <col style={{ width: CHEVRON_COLUMN_WIDTH }} />}
@@ -1938,7 +2014,7 @@ export function renderLinesColgroup({
         const { grow, basis } = colFlexSpecs[colIdx];
         return grow === 0
           ? <col key={col.key} style={{ width: basis }} />
-          : <col key={col.key} style={{ width: growColumnWidth(basis, fixedColsTotalPx, growCount) }} />;
+          : <col key={col.key} style={{ width: growColumnWidth(basis, fixedColsTotalPx, growCount, measured) }} />;
       })}
       {/* In inlineEditable add-row mode (ilpTrailing), all row actions live
           inside InlineLinesPanel's 160px action slot — never add separate
@@ -2026,6 +2102,8 @@ function renderHeaderSection({
   hideHeader, linesLayout, hasDimensionsPanel, selectable, visibleColumns, colFlexSpecs,
   fixedColsTotalPx, growCount, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
   onCloneRow, quickActionsEnabled, ilpReservesActionSlot, quickActionsColWidthPx,
+  // ETP-5133 follow-up (BUG-1, pass 2) — see renderLinesColgroup/growColumnWidth.
+  hostWidthPx, growBasisTotalPx,
 }) {
   if (useOwnStickyHeader) {
     return {
@@ -2047,6 +2125,7 @@ function renderHeaderSection({
       hideHeader, selectable, visibleColumns, colFlexSpecs, fixedColsTotalPx, growCount,
       ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow,
       quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel, quickActionsColWidthPx,
+      hostWidthPx, growBasisTotalPx,
     }),
     inlineHeader: (
       <TableHeader
@@ -2837,9 +2916,23 @@ export function DataTable({
   // a real ~120px placeholder cell for it — both cluttering the row and, via
   // growColumnWidth()'s fixedColsTotalPx, shrinking the grow column ahead of it (e.g. product),
   // shifting every column after it (e.g. movementQuantity) out of alignment with the rows above.
-  const hasDimensionsPanel = useMemo(
-    () => (columns || []).some(c => c.type === 'dimensionsPanel'),
+  //
+  // ETP-5133 — a `dimensionsPanel` column existing in `columns` is NOT enough: InlineLinesPanel
+  // only reserves its leading chevron when at least one of that column's `dimensionFields` is
+  // actually visible (`visibleDimensionFields.length > 0`, filtered by the same `hiddenColumns`
+  // signal — see InlineLinesPanel's `rawDimensionsColumn`/`visibleDimensionFields`). On a tenant
+  // with every dimension field hidden (no GL dimensions configured), the column type is still
+  // declared but has zero visible fields — InlineLinesPanel correctly renders no chevron for the
+  // saved rows, but this used to keep reserving the 44px slot for the add-row anyway, permanently
+  // shifting the add-row's columns 44px right of the rows above it. Mirror InlineLinesPanel's
+  // check exactly so both renderers agree on whether the panel is "on" for this table.
+  const dimensionsPanelColumn = useMemo(
+    () => (columns || []).find(c => c.type === 'dimensionsPanel') ?? null,
     [columns]
+  );
+  const hasDimensionsPanel = useMemo(
+    () => (dimensionsPanelColumn?.dimensionFields ?? []).some(f => !hiddenColumns.includes(f.key)),
+    [dimensionsPanelColumn, hiddenColumns]
   );
 
   const visibleColumns = useMemo(() => {
@@ -3041,6 +3134,55 @@ export function DataTable({
     && reservesActionSlot(visibleColumns);
   const ilpTrailing = hideHeader && linesLayout === 'inlineEditable';
 
+  // ETP-5133 — when a sibling InlineLinesPanel for the SAME entity is live
+  // (the normal case: the generated *LineTable wrapper mounts both together
+  // whenever addRow.active), portal this add-row `<table>` into its scroll
+  // body instead of rendering a second, independently-scrolled one below it —
+  // see lib/linesScrollHost.js. Called unconditionally (rules of hooks); the
+  // key is null whenever this isn't the add-row-only companion table, or no
+  // sibling has registered a host yet (e.g. every standalone unit test that
+  // mounts DataTable in this mode alone), in which case the hook returns null
+  // and rendering falls through to the classic in-place `<table>` below,
+  // unchanged.
+  const addRowScrollHost = useLinesScrollHost(ilpTrailing && addRow?.active ? entity : null);
+
+  // ETP-5133 follow-up (BUG-1, pass 2) — the one real number growColumnWidth()
+  // needs and CSS can't give it: the scroll host's actual `clientWidth`,
+  // measured live and kept in sync with a ResizeObserver (side panel
+  // open/close, window resize, ...). `null` whenever there's no host to
+  // measure (see addRowScrollHost's own comment) — growColumnWidth() falls
+  // back to its original calc()-string formula in that case, unchanged.
+  //
+  // ETP-5133 (BUG-1, pass 3) — `useLayoutEffect`, not `useEffect`, and for
+  // the same reason `useLinesScrollHost` itself was moved to a layout effect
+  // (see lib/linesScrollHost.js): `addRowScrollHost` and `hostWidthPx` are
+  // two independently-updated pieces of state, resolved one effect-flush
+  // apart. With both on the passive `useEffect` queue, the render where
+  // `addRowScrollHost` first turns truthy commits (and can paint) BEFORE
+  // this effect gets a chance to run and measure it — so `growColumnWidth()`
+  // took the unmeasured fallback for that one frame while the add-row's
+  // content was already portaled into the real, possibly-narrow host.
+  // Putting both measurements on `useLayoutEffect` lets React fold the whole
+  // chain — host resolves → this effect measures its width → colgroup
+  // re-renders with the real number — into one synchronous pre-paint pass,
+  // exactly like a layout-effect-triggered state update always does; the
+  // browser only ever paints the settled result, never the intermediate
+  // null-width one.
+  const [hostWidthPx, setHostWidthPx] = useState(() => addRowScrollHost?.clientWidth ?? null);
+  useLayoutEffect(() => {
+    if (!addRowScrollHost) {
+      setHostWidthPx(null);
+      return undefined;
+    }
+    setHostWidthPx(addRowScrollHost.clientWidth);
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      setHostWidthPx(entry ? entry.contentRect.width : addRowScrollHost.clientWidth);
+    });
+    observer.observe(addRowScrollHost);
+    return () => observer.disconnect();
+  }, [addRowScrollHost]);
+
   // Precompute the flex specs once so the colgroup below can both build the
   // fixed/grow <col> widths AND feed growColumnWidth() the totals it needs
   // (sum of every fixed-width slot + count of growing columns) — see the
@@ -3048,6 +3190,11 @@ export function DataTable({
   const colFlexSpecs = hideHeader ? visibleColumns.map((col, colIdx) => flexSpec(col, colIdx)) : [];
   const growCount = colFlexSpecs.filter((s) => s.grow > 0).length;
   const fixedColsBasisPx = colFlexSpecs.filter((s) => s.grow === 0).reduce((sum, s) => sum + s.basis, 0);
+  // ETP-5133 follow-up (BUG-1, pass 2) — the combined basis of every GROWING
+  // column, fed to growColumnWidth() alongside hostWidthPx so it can subtract
+  // it from the leftover pool — see that function's own doc for why
+  // `fixedColsTotalPx` (NON-growing columns only) can't stand in for it.
+  const growBasisTotalPx = colFlexSpecs.filter((s) => s.grow > 0).reduce((sum, s) => sum + s.basis, 0);
   // ETP-5268 follow-up — the quick-actions slot's width is this window's own
   // button count (see quickActionsReservedWidthPx), always — see
   // quickActionsColumnStyle for why it's no longer ever narrower. Feeding
@@ -3109,9 +3256,15 @@ export function DataTable({
     hideHeader, linesLayout, hasDimensionsPanel, selectable, visibleColumns, colFlexSpecs,
     fixedColsTotalPx, growCount, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
     onCloneRow, quickActionsEnabled, ilpReservesActionSlot, quickActionsColWidthPx,
+    hostWidthPx, growBasisTotalPx,
   });
 
-  return (
+  // ETP-5133 — built as a plain element tree (not returned directly) so it can
+  // either render in place (classic / no live sibling host) or be relocated
+  // wholesale via createPortal into the sibling InlineLinesPanel's scroll body
+  // — see addRowScrollHost above and lib/linesScrollHost.js. Nothing below
+  // this point changes: same <Table>, same colgroup, same InlineAddRow.
+  const content = (
     <div className="space-y-0">
       {stickyHeader}
       {/*
@@ -3266,6 +3419,14 @@ export function DataTable({
       })}
     </div>
   );
+  // ETP-5133 — when a live sibling host is registered, this whole subtree
+  // mounts as a REAL child of InlineLinesPanel's own scrollable body instead
+  // of here: one native horizontal scrollbar, one column-width source, for
+  // the saved rows AND the add-row alike. Falls back to rendering `content`
+  // in place — byte-identical to before this fix — whenever no host is
+  // registered (standalone usage, e.g. every pre-existing unit test that
+  // mounts this component without its InlineLinesPanel sibling).
+  return addRowScrollHost ? createPortal(content, addRowScrollHost) : content;
 }
 function resolveCellDisplay(row, col, optimisticToggles, displayCatalogMaps) {
   const toggleKey = `${row.id}:${col.key}`;
