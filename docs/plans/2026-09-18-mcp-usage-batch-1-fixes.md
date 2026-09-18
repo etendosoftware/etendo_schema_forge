@@ -45,6 +45,12 @@ agent something the server does not do.
 
 ### C1 — `neo_action` does not forward the record ID to Classic processes
 
+**Not verified 18/09.** The blind run that exercised the action path completed a sales order with
+`documentAction`, which is a document action rather than a Classic process, so the condition this
+item describes was never reached. M2's run did hit a Classic process and failed earlier, at
+`"Process class is not a supported handler type"` — so on this build a Classic process may not be
+reachable far enough to observe C1 at all. Settle M2 first.
+
 **Evidence.** 5 `neo_action` rows on `financial-account/importedBankStatements`
 (`57b82d0d`, 16/09 13:05 → 13:40), `outcome = error`, `error_code` NULL, 106–315 ms.
 `fields_touched` shows the ID was sent three different ways:
@@ -62,6 +68,8 @@ layer. The agent already sends it under three keys; the handler reads none of th
 The user was sent to the UI.
 
 ### C2 — `_buttonValue` is never injected for OBUIAPP processes
+
+**Not verified 18/09.** No OBUIAPP process was exercised by the blind runs; still open.
 
 **Evidence.** `neo_action` on `financial-account/account` (`57b82d0d`, 16/09 15:17 →
 17/09 13:19), `error_code` NULL. One of the rows carries `_buttonValue` in
@@ -256,7 +264,12 @@ to close the cycle afterwards.
 `bankStatementLines` / `importedBankStatements` that performs the matching step after an
 assignment. Silently succeeding while doing nothing is the worst of the three options.
 
-### C5 — `neo_feedback` rejected one submission with `validation_error`
+### C5 — `neo_feedback` rejected one submission with `validation_error` — **NOT REPRODUCED**
+
+**NOT REPRODUCED — 18/09.** A context-free agent sent a full report (`outcome`, `summary`,
+`achieved`, `plannedApproach`, `howKnown`, four `wastedCalls`, two `frictions`, three `suggestions`)
+and it was accepted: `{"status":"ok","recorded":true}`. The original row may have been a
+malformed submission rather than a defect in the tool. Close unless it recurs.
 
 **Evidence.** Production, 16/09 13:06:42, `row_type = feedback`, `outcome = error`,
 `error_code = validation_error`, `payload` NULL. The same agent resubmitted 14 seconds
@@ -423,9 +436,100 @@ demanded from the caller. Pair it with M9 below.
 
 ---
 
+### C9 — `neo_action` reports success on a record that does not exist — **NEW 18/09**
+
+Found by a context-free agent probing the unreconciliation route with a placeholder id:
+
+```
+neo_action(payment-in, finPayment, id:"0", action:"EM_Etpr_Reactivate_Payment")
+→ processResult: "success"
+  "Proceso completado satisfactoriamente List of payments reactivated or removed"
+```
+
+There is no record with id `0`. Nothing was reactivated. The response is indistinguishable from one
+that did the work, so the agent has no way to tell "executed against a real record" from "executed
+against nothing". Its own words: *"no hay forma de distinguir, desde la respuesta, 'se ejecutó sobre
+un registro real' de 'se ejecutó sobre un id inventado y no hizo nada'."*
+
+This is the failure mode the codebase already treats as the worst one — `handleList`'s IMP-40 comment
+calls it *"a confident, wrong answer that reads exactly like a correct one. Worse than a refusal,
+because the caller then acts on rows belonging to records it never asked about."* The same reasoning
+applies here with more force: a write action that silently no-ops will be reported to a user as done.
+
+Two behaviours are inconsistent and both need fixing: resolve the record before invoking and 404
+when it does not exist, and do not report `success` for a process that acted on an empty set. Note
+`EM_APRM_ImportBankFile` on the same fake id validated its parameters first and never complained
+about the id either — the gap is in the shared action path, not in one handler.
+
+**Verify against real data before closing.** The instance where this was found has no payments at
+all, so "acted on nothing" and "record not found" could not be told apart from the outside.
+
+### C10 — A validation error does not say which field it is about — **NEW 18/09**
+
+Creating a customer with an invalid Spanish tax ID:
+
+```json
+{"detail": "The tax ID check digit does not match. Review the number.",
+ "error": "validation_error", "status": 400}
+```
+
+Correct, readable, and with no `field` key — the agent inferred `taxID` from the prose. Every other
+refusal in this API names the field it is about (`unknownFilterField`, `readOnlyField`,
+`fieldNotAllowed`, the `missingFields` array), so this one is the outlier. An agent that has to parse
+English prose to know which of its inputs to correct will eventually parse it wrong.
+
+### C11 — A rejected foreign key is reported against a field the caller never sent — **NEW 18/09**
+
+A context-free agent building a sales order passed the id of a `Location` where `partnerAddress`
+expects a `BusinessPartnerLocation`:
+
+```json
+{"status": 422, "error": "validation_error",
+ "detail": "One or more values were rejected by field validation",
+ "fieldErrors": {"id": "New object BusinessPartnerLocation(null) (name: .) (key: FD019BC7…_BusinessPartnerLocation) refered to but not present in the import set"},
+ "hint": "None of these fields were in your request: id — the server filled them in from an AD default, and that default value itself failed validation…"}
+```
+
+Three things are wrong at once. The error is attributed to `id`, a field the caller never sent; the
+offending field, `partnerAddress`, is not named anywhere; and the hint supplies a causal story — the
+server filled it from an AD default — that did not happen. A raw core DAL import-set message is
+being surfaced verbatim and then wrapped in a generic explanation that misfires on it.
+
+The agent recovered only by inference, and the surrounding confusion made that harder: the spec
+named `bp-location` serves rows whose `_entityName` is `Location`, so the ids most readily to hand
+are exactly the ones this field must not receive. `neo_schema` on `partnerAddress` says
+`"type": "foreignKey", "column": "C_BPartner_Location_ID"` and nothing about which entity supplies a
+valid value.
+
+Two fixes, independent of each other. Attribute the failure to the field that carried the rejected
+value and suppress the AD-default hint when the named field was not server-filled. And have a
+`foreignKey` field publish the entity its values come from, so the pairing is knowable before the
+call rather than after the refusal.
+
+### C12 — An empty `neo_selectors` result does not say why it is empty — **NEW 18/09**
+
+`neo_selectors(sales-order, header, partnerAddress, recordContext:{businessPartner:…})` returned zero
+for every business partner a context-free agent tried. The answer was correct — the tenant holds nine
+raw `Location` rows and not one `BusinessPartnerLocation` link — but a bare empty list does not
+separate *there is nothing to offer* from *you asked wrongly*, and the agent assumed the latter,
+which is the reasonable assumption. It spent roughly six calls probing: other partners, the DB column
+name in place of the field name, `neo_schema` with `view:"full"` on the single field.
+
+Same shape as C3: the result was not wrong, it was mute. A selector that resolves its context
+successfully and finds nothing knows the difference and can say it.
+
 ## METADATA
 
-### M1 — Action metadata does not publish the required parameters
+### M1 — Action metadata does not publish the required parameters — **ALREADY FIXED**
+
+**ALREADY FIXED — verified 18/09** by a context-free agent asked *"decime qué acciones puedo
+ejecutar sobre una factura de venta, y para cada una qué datos tengo que darte"*. It answered in
+**one call**. `neo_schema(view:"actions")` returned each invokable action with its parameter, its
+value list and an `agentPrompt` that goes well beyond the parameter names — it states the
+preconditions for `CO`, warns that completing does not post to the ledger, and names the values that
+come from the shared AD list and do not belong to this window's flow. The twenty non-invokable
+actions carry `notInvokableReason` instead of parameters, which is correct: they are outside the
+curated surface, so there is nothing to publish.
 
 **Evidence.** The single largest error bucket in this batch. `aPRMMatchTransactions`
 required `name`, `currency` and `Fin_Bankstatement_ID`; the agent found them one at a time
@@ -452,7 +556,24 @@ name, type, required, and the reference/selector where applicable. If the contra
 be derived for a given process type, say that explicitly rather than returning an action
 that looks callable with no arguments.
 
-### M2 — `aPRMImportBankFile` advertises itself as invokable and is not
+### M2 — `aPRMImportBankFile` advertises itself as invokable and is not — **CONFIRMED 18/09**
+
+**CONFIRMED 18/09**, with the cause. A context-free agent asked to import a bank statement
+found the route, filled the parameters one refusal at a time (`name` required → `currency` required
+→ invalid currency → resolved via `neo_selectors` to `102`) and only then hit:
+
+```
+processResult: "error"
+processMessage: "Process class is not a supported handler type:
+                 org.openbravo.advpaymentmngt.ad_actionbutton.ImportBankFile"
+```
+
+Fifteen calls to reach a wall that was there from the first one. It is a Classic process the NEO
+bridge cannot execute, and the refusal arrives as a business-level `processResult`, not a 4xx — so
+the action stays advertised as invokable through parameter validation and right up to execution.
+The fix is to decide invokability from whether the process class is a supported handler type, and
+say so at `neo_schema(view:"actions")` time via `notInvokableReason`, the way the twenty curated-out
+actions on `sales-invoice` already do.
 
 **Evidence.** Feedback 17/09 12:41:31. `neo_schema view:actions` returns it with
 `invokeVia: neo_action`; the server then rejects it at runtime:
@@ -467,7 +588,13 @@ the supported set — the check is static, so the metadata can be correct by con
 
 **Fix (real, later).** Support the handler, which needs M3 below.
 
-### M3 — No agent-accessible upload path for non-image files
+### M3 — No agent-accessible upload path for non-image files — **CONFIRMED 18/09**
+
+**CONFIRMED 18/09.** A context-free agent asked to attach a signed PDF to a customer record
+searched all 60 specs for an entity whose name contains `attach` (zero hits), read
+`contacts/businessPartner` in full (103 fields, no attachment field) and its actions (one:
+`setNewCurrency`). Its conclusion: the only upload mechanism is the organisation logo's `image`
+field, which is a single typed column, not a general attachment surface.
 
 **Evidence.** Same feedback. `neo_request_image_upload` / `neo_upload_image` accept PNG and
 JPEG only. CSV bank statement import — a core workflow — has no agent path at all.
@@ -535,7 +662,16 @@ carries the filterable names, caps the list and says so when it truncates. Live 
 
 **Fix.** Same shape as M5: return the accepted filter keys in the error.
 
-### M7 — Unreconciliation actions are all discarded
+### M7 — Unreconciliation actions are all discarded — **CONFIRMED 18/09**
+
+**CONFIRMED 18/09**, and the discoverability cost is the real finding. The two actions named
+for the job — `etprRemoveReconciliation` ("Remove Reconciliation") and `etprReactivateRecon`
+("Reactivate Reconciliation") on `financial-account/reconciliations` — are both
+`invokable: false, discarded`. The one that works lives in a different spec and entity
+(`payment-in/finPayment`), is called `EM_Etpr_Reactivate_Payment` and is labelled *"Advanced
+Reactivation"*, which does not suggest unreconciling anything. A context-free agent found it only by
+reading the long description. Either un-discard the obvious two, or have their
+`notInvokableReason` name the action that does the job.
 
 **Evidence.** Feedback 16/09 15:11:17. `aprmProcessRec` (Reactivate),
 `etprRemoveReconciliation` and `etprReactivateRecon` are all `invokable: false` on the
@@ -547,7 +683,21 @@ carries the filterable names, caps the list and says so when it truncates. Live 
 window's `decisions.json` / `ETGO_SF_*` config. Worth a deliberate call rather than a
 silent default — if it stays discarded, the reason belongs in `notInvokableReason`.
 
-### M8 — `serverDefaulted: true` on fields nothing ever fills
+### M8 — `serverDefaulted: true` on fields nothing ever fills — **CONFIRMED 18/09**
+
+**CONFIRMED 18/09**, and a context-free agent stated the defect better than this item did.
+Creating a customer, `neo_defaults` resolved `priceList`, `paymentTerms`, `purchasePricelist` and
+`pOPaymentTerms`; `neo_create` left all four `null` and the agent needed a second `neo_update` to
+set them. Those four are in `BusinessPartnerHandler.PRECREATE_BILLING_FIELDS`, stripped by
+`stripPreCreateBillingDefaults` before persist — cause confirmed, no further investigation needed.
+
+What sharpens the item is that `currency`, flagged identically, **did** fill itself without being
+sent. In the agent's words: *"`serverDefaulted: true` no garantiza que el AD complete el valor real
+en el create — para algunos campos sí hay un default a nivel de columna AD, para otros el valor solo
+existe como sugerencia de `neo_defaults` y no se aplica solo."* The bug is not the missing values,
+it is that **the flag does not predict the behaviour**, so an agent that trusts it is wrong roughly
+half the time. (The `currency` that filled itself is C7's fix running on the MCP path — a third
+independent confirmation, from an agent that did not know the subject existed.)
 
 **Evidence.** `neo_schema view:create` on `contacts/businessPartner` marks these foreign keys
 `serverDefaulted: true`, and `neo_defaults` returns a resolved value for every one of them. None
@@ -591,7 +741,13 @@ you send it explicitly in fields."* Decide which semantics is intended, then ali
 surfaces — the `serverDefaulted` flag, the `view:create` hint and the `neo_defaults` description.
 Today an agent cannot get this right by reading the tools.
 
-### M9 — `searchKey` is listed as required but is sequence-generated and discarded
+### M9 — `searchKey` is listed as required but is sequence-generated and discarded — **CONFIRMED 18/09**
+
+**CONFIRMED 18/09**, exactly as described. A context-free agent sent
+`searchKey: "TALLERESRIBERA"`; the stored record came back `searchKey: "1000011"`. No warning, not in
+`unknownFields`, nothing in the response to say the value had been replaced — *"me di cuenta solo
+comparando el payload enviado contra la respuesta"*. And the schema lists the field as **required**,
+so the agent is obliged to invent a value that is then discarded in silence.
 
 **Evidence.** `view:create` puts `searchKey` in `required` (2 of 2 required fields). The record
 always ends up with a sequence value: `ETP5284-RETEST` → `1000228`, `ETP5284-LOCAL` → `1000000`,
@@ -600,7 +756,13 @@ always ends up with a sequence value: `ETP5284-RETEST` → `1000228`, `ETP5284-L
 **Fix.** Remove it from `required`, or mark it read-only/server-owned. Requiring a value that is
 then thrown away teaches the agent something false about the entity. See C8 for the ordering half.
 
-### M10 — A field is named `currency` for writing and `bPCurrencyID` for reading
+### M10 — A field is named `currency` for writing and `bPCurrencyID` for reading — **CONFIRMED 18/09**
+
+**CONFIRMED 18/09.** A context-free agent reporting the stored record wrote the field as
+`currency (bPCurrencyID)` — it saw both names for one column and recorded both rather than choose.
+Note this is **not** closed by C7: C7 made the injected value arrive, M10 is the public contract
+still exposing two names for `BP_Currency_ID`. The per-path key selection in
+`BusinessPartnerHandler` collapses back to one constant when M10 is fixed.
 
 **Evidence.** `neo_create` accepts `currency` and persists it. `neo_get` with
 `fields:["currency"]` returns it under `unknownFields` and the record carries `bPCurrencyID`
@@ -629,7 +791,20 @@ cannot ever work. This cost a full test run before the cause was spotted.
 
 ## DOCS
 
-### D1 — No documentation on configuring the organisation logo for printed invoices
+### D1 — No documentation on configuring the organisation logo for printed invoices — **CONFIRMED 18/09**
+
+**CONFIRMED 18/09** — and the answer is now known, so this is writing, not research. A
+context-free agent asked *"¿cómo configuro el logo de mi empresa para que salga en las facturas
+impresas?"* got nothing from four `docs` calls and found it by brute force through
+`neo_discover` + `neo_schema`:
+
+* spec `organization`, entity `information` (table `AD_OrgInfo`, child of `organization`)
+* field **`yourCompanyDocumentImage`** (column `Your_Company_Document_Image`), type `image`
+* the field's own description already says *"La imagen que se muestra en los documentos impresos"*
+* to set it: `neo_request_image_upload` (or `neo_upload_image` under 256 KB) for an `imageId`, then
+  `neo_update` on `organization/information`
+
+But see D3 before scheduling this: documentation the agent cannot retrieve does not help it.
 
 **Evidence.** The only feedback row from experimental (16/09 16:07:25,
 `ai-sdk-mcp-client`, client TECFRAN IT SERVICES SLU), outcome `MIXED`, suggestion kind
@@ -657,7 +832,48 @@ Reference it from the `neo_action` tool description.
 
 ---
 
+### D3 — `docs` returns the same corpus whatever the topic — **NEW 18/09**
+
+**This precedes every other DOCS item.** Documentation an agent cannot retrieve does not help it, so
+writing D1 or D2 before fixing this buys nothing.
+
+A context-free agent made four `docs` calls on distinct topics (`company logo invoice printable`,
+`logo`, `attachment`, `upload file document business partner`) and got treasury and bank-reconciliation
+material every time. Confirmed directly afterwards with two deliberately opposite topics:
+
+| `topic` | what came back |
+|---|---|
+| `company logo printed invoice image` | treasury, receipts, sales orders, financial reports |
+| `kanban calendar layout` | **substantially the same** |
+
+Five blocks were identical across the two responses (*Link receipt to invoice or order*, *Link Receipt
+to Scheduled Payments*, *Render Financial Accounts Page*, *Create sales order header*, *Resolve line
+selectors and create line*). Neither response mentions logos, images, kanban or calendars.
+
+A second agent reported `docs` as *useful* in the same session — it had asked about bank statement
+imports and unreconciling payments, which is precisely the treasury slice that comes back regardless.
+It asked for the one subject the constant answer happens to cover, which looks like a working search
+and is not. Worth remembering when reading any single report of this tool behaving.
+
+Not a defect in this module: `Context7DocsClient.buildUri` URL-encodes the topic and sends it on the
+query string as documented. The degenerate ranking is on the Context7 index for
+`etendosoftware/etendo-go-docs` — either the corpus is too small to rank or the topic is not
+influencing retrieval. Investigate there first; if the index cannot be made to discriminate, the
+tool should say what it does not cover rather than answer every question with treasury.
+
 ## Telemetry quality notes (not fixes)
+
+**`session_key` identifies the connection, not the agent.** My own calls and a context-free
+subagent's shared `db36c857` throughout 18/09. Any analysis that treats a session key as one
+conversation, one agent or one task will merge unrelated work. This is the same gap C6 reports from
+the other end, and it means C6 cannot be fixed by populating the existing column — a separate
+per-conversation identifier is needed.
+
+**`fields_touched` is empty on `neo_list` validation errors.** 18 production rows in this batch are
+consequently undiagnosable: the row records that a list call was refused for a bad field, without
+recording which field. Everything needed to answer that is in hand at the throw site —
+`unknownFilterField` already carries the key and the available names.
+
 
 - **Latency.** Production p50 309 ms, p90 685 ms — healthy. The tail is 9 `neo_batch` calls
   between 13 s and 23.4 s (max 23372 ms) during the bulk contact load. Nothing is broken;
@@ -673,18 +889,52 @@ Reference it from the `neo_action` tool description.
 
 ## Suggested order
 
-1. **M1** — biggest error reduction per unit of work, and it unblocks the agent's own
-   discovery loop.
-2. **C1** and **C2** — each blocks a complete flow, both have full evidence including
-   the verbatim server error.
-3. ~~**M5 + M6 + M4**~~ — **already fixed**, verified live on 18/09. The 12 telemetry rows predate
-   the fix.
-4. **C3** — 8 rows, cheapest reproduction (`neo_schema` on `not-posted-documents/header`).
-5. ~~**C7** — ETP-5284~~ — **done 18/09.** The underlying naming split is untouched and belongs
-   with the API alignment work.
-6. **C8 + M9** — `searchKey` demanded and then discarded; understood, independent of C7.
-7. **M8 + M10 + M11** — the rest of the create-path metadata, starting by settling which
-   `serverDefaulted` semantics is the intended one.
-8. **M2 + M3**, **C4**, **M7** — the remaining reconciliation gaps.
-9. **C5 + C6** — telemetry integrity, so the next batch is cleaner than this one.
-10. **D1 + D2**.
+Rewritten 18/09 after each item was probed against the running build. Five are closed, three are new,
+and the ordering below is by what unblocks what — not by severity.
+
+**Closed, no work left**
+
+| | |
+|---|---|
+| C3, C7 | fixed 18/09, verified with context-free agents |
+| M1, M4, M5, M6 | were already live before this review was written |
+| C5 | could not be reproduced |
+
+**1 — errors that mislead: C9, C11, then C10 and C12.**
+C9 first — it is the only item that can make an agent tell a user something was done when nothing
+was. C11 next, because an error naming the wrong field sends the caller to correct an input that was
+never the problem. C10 and C12 are the quieter half of the same family: a refusal that does not name
+its field, and an empty result that does not say why it is empty. All four cost an agent calls it
+cannot get back, and three of them were found by agents that had no idea they were being measured.
+
+**On C9 specifically.**
+First because it is the only item that can make an agent tell a user something was done when nothing
+was. Everything else costs calls or clarity; this one costs correctness. Needs an instance with real
+payments to close.
+
+**2 — `docs` returns the same corpus whatever the topic (D3), then D1 + D2.**
+In this order and not the other: documentation an agent cannot retrieve is not documentation. D1's
+content is already known (`organization/information.yourCompanyDocumentImage`), so once retrieval
+works it is a short write-up.
+
+**3 — the create path: M9, C8, M8, M10.**
+One story, four rows. `searchKey` is demanded and discarded (M9), mandatory validation runs before
+the hook that fills the field (C8), `serverDefaulted` does not predict whether the value is applied
+(M8), and the same column answers to two names (M10). Settle the intended `serverDefaulted`
+semantics first; the rest follow from it. M10 also releases the per-path key selection C7 left in
+`BusinessPartnerHandler`.
+
+**4 — invokability that tells the truth: M2, M7.**
+Both are an action advertised as reachable that is not, and both cost an agent ten-plus calls to
+discover. M2 needs the process class checked when invokability is decided; M7 needs the discarded
+actions to name the one that does the job.
+
+**5 — the rest: C1, C2, C4, M3, M11, C6.**
+C1, C2 and C4 still have no verification against the current build. M3 is a genuine capability gap,
+not a defect. M11 and C6 could not be tested blind — an expired session cannot be forced on demand,
+and C6 is about production rows. C6 additionally cannot be closed by filling the existing column; see
+the telemetry note on `session_key`.
+
+**Read-path parity is not in this list.** The 80 tab-backed entities whose `afterHandle` runs over
+REST and not over MCP (recorded under C3) is a behaviour change across most of the API. It belongs to
+the API alignment plan, with tests and a staged rollout, not to this batch.
