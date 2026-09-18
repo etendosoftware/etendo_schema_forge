@@ -251,6 +251,37 @@ describe('DocumentTotalsPanel', () => {
       expect(screen.getByTestId('totals-row-total-value').textContent).toBe('97');
     });
 
+    it('ETP-5292 — an ALREADY-materialised discount whose persisted net is NOT an exact multiple of the factor must display verbatim, not re-derived via division', () => {
+      // The previous test's numbers (persistedNet=75, factor=0.75) happen to be an exact
+      // multiple, so `persistedNet / factor` used to recover exactly 100 with zero
+      // rounding residue — masking the real bug. Real per-tax-group server rounding
+      // (TotalDiscountService) essentially never lands on an exact multiple: these are
+      // the actual numbers from a live multi-tax repro (see
+      // docs/plans/2026-09-17-etp5292-total-discount-rounding-fix-plan.md §1).
+      const linesRaw = [{ id: 'L1', lineNetAmount: 593.10, lineGrossAmount: 717.65 }];
+      const persistedTotals = { grandTotal: 232.93, netSubtotal: 201.65 };
+      render(
+        <DocumentTotalsPanel
+          lines={linesRaw}
+          lineConfig={LINE_CONFIG}
+          formatAmount={(v) => `${v}`}
+          totalDiscountPct={66}
+          readOnly={false}
+          persistedTotals={persistedTotals}
+        />
+      );
+      // Before the fix this rendered '201.6422352941177' (201.65 / 0.34, then minus
+      // the freshly-recomputed totalDiscountAmt) instead of the persisted 201.65.
+      expect(screen.getByTestId('totals-row-subtotal-value').textContent).toBe('201.65');
+      expect(screen.getByTestId('totals-row-tax-value').textContent).toBe('31.28');
+      expect(screen.getByTestId('totals-row-total-value').textContent).toBe('232.93');
+      // Internal consistency: subtotal + tax must equal total, to the cent — the exact
+      // invariant the ticket reported as broken.
+      expect(Number(screen.getByTestId('totals-row-subtotal-value').textContent)
+        + Number(screen.getByTestId('totals-row-tax-value').textContent))
+        .toBeCloseTo(Number(screen.getByTestId('totals-row-total-value').textContent), 2);
+    });
+
     it('falls back to the live recompute while a line is actively pending/unsaved (no persisted number exists yet for it)', () => {
       // While the user is mid-edit on a new row, there is nothing wrong to
       // fix — this is the one state where computeDocumentTotals is still the
