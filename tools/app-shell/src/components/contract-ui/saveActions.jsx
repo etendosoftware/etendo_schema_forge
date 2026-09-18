@@ -11,6 +11,7 @@
  * Behaviour-preserving move — the only functional change is the `saveGate` prop,
  * which every primary button now honours.
  */
+import { useState } from 'react';
 import { Button } from '@/components/ui/button.jsx';
 import { Check, Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
@@ -94,13 +95,33 @@ function buildCompletedFieldsGate({ draftMode, isDraftModeCompleted, dirtyFieldK
  * saw a delete-vs-modify conflict with no common text. The logic below is
  * ETP-4940's verbatim.
  */
-async function runDraftModeConfirm({ flushPendingLines, draftMode, isDirty, hook, isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, ui, setShowProcessingModal }) {
+async function runDraftModeConfirm({ flushPendingLines, draftMode, isDirty, hook, isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, ui, setShowProcessingModal, setCustomConfirmBusy }) {
   if (!(await flushPendingLines())) return;
   if (typeof draftMode.onConfirm === 'function') {
     // onConfirm fully bypasses handleSaveAndProcess (below), which already
     // saves first. Persist any pending header edit before handing off.
     if (!(await maybeSaveBeforeConfirm({ isDirty, handleSave: hook.handleSave }))) return;
-    draftMode.onConfirm();
+    // ETP-5265 QA follow-up — in-flight feedback for a custom `onConfirm` belongs IN the
+    // Confirm button (spinner + disabled), exactly like the native handleSaveAndProcess
+    // path below that the invoice windows already take; QA rejected the floating
+    // "processing" toast that stood in for it while this branch was fire-and-forget.
+    // An onConfirm that really does async work now returns a promise for that work
+    // (goods-shipment / goods-receipt hand their documentAction call back through the
+    // CustomEvent `detail`), and awaiting it here is what drives the button's spinner.
+    //
+    // Behaviour-preserving for every other window: `await undefined` settles on the next
+    // microtask, so an onConfirm that merely opens a modal and returns nothing
+    // (sales-order, purchase-order, sales-quotation, and the not-fully-invoiced branch of
+    // the goods windows) flips the flag straight back with nothing visible in between.
+    // `setCustomConfirmBusy` is optional-called so a caller that never passes it behaves
+    // exactly as before. try/finally so a throwing or rejecting onConfirm can never leave
+    // the button stuck spinning and permanently disabled.
+    setCustomConfirmBusy?.(true);
+    try {
+      await draftMode.onConfirm();
+    } finally {
+      setCustomConfirmBusy?.(false);
+    }
     return;
   }
   const showProcessing = Boolean(draftMode.processingModal);
@@ -140,6 +161,40 @@ function GateTooltip({ title, children }) {
 }
 
 /**
+ * ETP-5265 QA follow-up — the draftMode "Confirm" button, lifted out of
+ * `renderDraftModeSaveActions` VERBATIM (same DOM, same testids, same gate expressions)
+ * for exactly one reason: it now needs a piece of local state.
+ *
+ * QA rejected the floating `toast.loading` that goods-shipment/goods-receipt used as
+ * in-flight feedback and asked for the spinner to be in the button, the way the invoice
+ * windows behave. Those get it for free because they use the native
+ * `processField`/`processValue` path, where `hook.isSaving` is the busy flag; a window
+ * that supplies its own `draftMode.onConfirm` bypasses the hook entirely and so had no
+ * busy flag at all. `customConfirmBusy` is that missing flag — the onConfirm-path twin of
+ * `hook.isSaving`, flipped by `runDraftModeConfirm` around the awaited onConfirm.
+ *
+ * The state lives HERE rather than in DetailView deliberately: DetailView is a God
+ * Component under a committed no-growth guardrail
+ * (.claude/hooks/check-detailview-growth.mjs), nothing outside this button reads the
+ * flag, and keeping it local means only this subtree re-renders when it flips.
+ *
+ * Behaviour-preserving for every window that does not opt in: the flag can only turn true
+ * while an awaited `onConfirm` is pending, and an onConfirm that returns undefined (every
+ * window except the fully-invoiced goods-shipment / goods-receipt path) resolves on the
+ * next microtask, so no other window ever renders different DOM than before.
+ */
+function DraftModeConfirmButton({ confirmParams, hook, ui, draftMode, saveBtnCls, saveGate, blockCompleteForBalance }) {
+  const [customConfirmBusy, setCustomConfirmBusy] = useState(false);
+  const busy = hook.isSaving || customConfirmBusy;
+  return (
+    <GateTooltip data-testid="GateTooltip__3b2291" title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || customConfirmBusy || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0) || saveGate.blocked} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title} onClick={() => runDraftModeConfirm({ ...confirmParams, setCustomConfirmBusy })}>
+      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
+      {ui(draftMode.label) || draftMode.label || ui('process')}
+    </Button></GateTooltip>
+  );
+}
+
+/**
  * Save / Confirm toolbar buttons for draftMode windows (Save Draft + Confirm).
  * All identifiers are destructured with the SAME names used inside DetailView
  * so closure-equivalent logic and the dirty-state regression substrings stay intact.
@@ -174,10 +229,15 @@ function renderDraftModeSaveActions({
          separate concern handled by `saveGate` (see buildCompletedFieldsGate). Does
          not change behaviour on any window without a non-empty array configured. */}
       {!onlySaveButton && (
-        <GateTooltip data-testid="GateTooltip__3b2291" title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title}><Button data-missing-required={saveGate.missingAttr} size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving || blockCompleteForBalance || (draftMode.disableWhenEmpty === true && !hook.childrenLoading && hook.children.length === 0) || saveGate.blocked} title={blockCompleteForBalance ? ui('journalUnbalancedCompleteBlocked') : saveGate.title} onClick={() => runDraftModeConfirm({ flushPendingLines, draftMode, isDirty, hook, isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, ui, setShowProcessingModal })}>
-          {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
-          {ui(draftMode.label) || draftMode.label || ui('process')}
-        </Button></GateTooltip>
+        <DraftModeConfirmButton
+          confirmParams={{ flushPendingLines, draftMode, isDirty, hook, isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, ui, setShowProcessingModal }}
+          hook={hook}
+          ui={ui}
+          draftMode={draftMode}
+          saveBtnCls={saveBtnCls}
+          saveGate={saveGate}
+          blockCompleteForBalance={blockCompleteForBalance}
+          data-testid="DraftModeConfirmButton__22ebc2" />
       )}
     </>
   );

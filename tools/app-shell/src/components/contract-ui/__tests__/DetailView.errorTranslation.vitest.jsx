@@ -224,6 +224,12 @@ describe('DetailView — deleteAction-backed header delete (ETP-4479/ETP-4706)',
 // .vitest.jsx: this one requires `action.documentAction` to be set so the click
 // handler dispatches into `runDocumentAction` (not `runNeoMenuAction`, which
 // requires `action.neoAction`, nor the inline `columnName` branch).
+//
+// ETP-5302 — both branches now delegate to the shared `runPreUnpost` helper
+// (`@/lib/preUnpost.js`, unit-tested in src/lib/__tests__/preUnpost.test.js), which
+// the bulk bar uses too. These tests are deliberately unchanged: they assert the
+// OBSERVABLE behaviour of this menu, which the extraction had to preserve, and they
+// are what proves the refactor did not alter the kebab path that already worked.
 const reactivateDocumentAction = {
   key: 'reactivate-doc',
   label: 'Reactivate',

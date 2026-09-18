@@ -101,6 +101,22 @@ function getTrashButton(container, rowId = 'line-1') {
   return lastTd.querySelector('[title="deleteRowTooltip"]');
 }
 
+/**
+ * The inline percentage/amount inputs of the row in edit mode, in DOM order:
+ * `amortizationPercentage` first, then `amortizationAmount`.
+ *
+ * ETP-5107 — these used to be selected as `input[type="number"]`. A native number input
+ * rejects the comma keystroke at BROWSER level under an es-ES locale, so the element had
+ * to become a `MaskedAmountInput`, which renders `type="text"` and that selector now
+ * matches nothing. Queried by the stable `data-testid` `MaskedAmountInput` emits by
+ * default (`field-number`) — the same retarget-to-the-testid approach ETP-5283 used for
+ * the price stepper's Playwright locator. Nothing else in this table renders that testid,
+ * so the presence/absence checks below still mean "edit mode is open/closed".
+ */
+function amountInputs(container) {
+  return container.querySelectorAll('input[data-testid="field-number"]');
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -112,16 +128,16 @@ describe('AmortizationLinesTable — inline edit mode Escape', () => {
     await waitFor(() => expect(screen.getByText('AS_Module')).toBeInTheDocument());
 
     fireEvent.click(getPencilButton(container));
-    await waitFor(() => expect(container.querySelector('input[type="number"]')).not.toBeNull());
+    await waitFor(() => expect((amountInputs(container)[0] ?? null)).not.toBeNull());
 
-    const percentageInput = container.querySelectorAll('input[type="number"]')[0];
+    const percentageInput = amountInputs(container)[0];
     fireEvent.change(percentageInput, { target: { value: '99' } });
 
     global.fetch.mockClear();
     fireEvent.keyDown(percentageInput, { key: 'Escape' });
 
     // Edit mode closes — the inline inputs are gone, the plain (non-editing) cell is back.
-    await waitFor(() => expect(container.querySelector('input[type="number"]')).toBeNull());
+    await waitFor(() => expect((amountInputs(container)[0] ?? null)).toBeNull());
 
     // Escape must never trigger a save: no PUT (or any fetch at all) was issued.
     expect(global.fetch).not.toHaveBeenCalled();

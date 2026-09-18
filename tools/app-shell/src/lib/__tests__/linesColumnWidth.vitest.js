@@ -34,4 +34,27 @@ describe('isLineGridColumn', () => {
       expect(isLineGridColumn({ type })).toBe(true);
     }
   });
+
+  // ETP-5188 — `filterOnly: true` is a generic, type-independent escape hatch (see
+  // `UserHeaderTable.jsx`'s `roleFilterColumn`): a column that exists only to appear in
+  // the advanced-filter field list, never as an actual grid cell/header.
+  describe('filterOnly (ETP-5188)', () => {
+    it('excludes a column explicitly marked filterOnly: true, regardless of type', () => {
+      expect(isLineGridColumn({ key: 'roleFilter', type: 'custom', filterOnly: true })).toBe(false);
+      expect(isLineGridColumn({ key: 'roleFilter', type: 'string', filterOnly: true })).toBe(false);
+    });
+
+    it('includes a column with filterOnly: false (explicit) same as if it were absent', () => {
+      expect(isLineGridColumn({ type: 'string', filterOnly: false })).toBe(true);
+    });
+
+    it('includes a column with no filterOnly key at all (default behavior unchanged)', () => {
+      expect(isLineGridColumn({ type: 'custom' })).toBe(true);
+    });
+
+    it('double-exclusion: filterOnly: true AND a NON_GRID_COLUMN_TYPES type still just excludes, does not throw', () => {
+      expect(() => isLineGridColumn({ type: 'dimensionsPanel', filterOnly: true })).not.toThrow();
+      expect(isLineGridColumn({ type: 'dimensionsPanel', filterOnly: true })).toBe(false);
+    });
+  });
 });

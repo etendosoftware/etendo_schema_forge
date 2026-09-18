@@ -92,6 +92,14 @@ const FIXES_WITH_REPORT = new Set([
   // among N>1 active lists. Empty — `detail` null — on the healthy GO shape of exactly one active
   // list and one default per direction.
   '20260909T120000Z__R35-pricelist-isdefault',
+  // R37 (ETP-5274) deactivates the internal "Reversed Sales/Purchase Invoice" doctypes and their
+  // numbering sequences, but the shared-sequence guard deliberately leaves a sequence ACTIVE when
+  // another doctype that stays active still uses it (confirmed real case: client "F&B
+  // International Group", sequence "ES Return Material Sales Invoice" shared between the
+  // deactivated "Reversed Sales Invoice" and the still-active "ES Return Material Sales
+  // Invoice"). Its @report lists every such sequence plus the doctype that kept it alive — same
+  // "flag, don't guess" pattern as R19.
+  '20260916T120000Z__R37-deactivate-reversed-invoice-doctypes',
 ]);
 
 async function loadCatalogFiles() {

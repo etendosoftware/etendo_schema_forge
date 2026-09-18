@@ -339,7 +339,7 @@ export function renderDefaultCell({ row, col, display, visibleColumns }) {
             `display` (e.g. an already-formatted node) skips it entirely —
             same as before, there was never a `title` for those either. */}
         {typeof display === 'string'
-          ? <TruncatedText text={display} className="min-w-0" />
+          ? <TruncatedText text={display} className="min-w-0" data-testid="TruncatedText__a91437" />
           : <span className="min-w-0 truncate">{display}</span>}
         {pillLabel && (
           <span className={`shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${pill.className || 'bg-muted text-muted-foreground border-border-subtle'}`} style={{ borderWidth: '0.5px' }}>
@@ -351,7 +351,7 @@ export function renderDefaultCell({ row, col, display, visibleColumns }) {
   }
   const val = display;
   if (typeof val === 'string' && val.length > 30) {
-    return <TruncatedText text={val} className="max-w-[200px]" />;
+    return <TruncatedText text={val} className="max-w-[200px]" data-testid="TruncatedText__a91437" />;
   }
   return val;
 }
