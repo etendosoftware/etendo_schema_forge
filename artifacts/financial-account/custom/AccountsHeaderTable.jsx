@@ -160,7 +160,11 @@ function buildColumns(ui, locale, handlers) {
       labels: { [locale]: '' },
       sortable: false,
       headClass: 'min-w-[90px]',
-      cellClass: 'min-w-[90px] px-2',
+      // ETP-5281 — `overflow-visible` overrides the shared TableCell's new default
+      // `overflow-hidden` (packages/app-shell-core ui/table.jsx): without it, the
+      // kebab trigger here got clipped by/hidden behind the neighboring
+      // `eTGOPendingCount` ("Por conciliar") cell.
+      cellClass: 'min-w-[90px] px-2 overflow-visible',
       render: (row) => (
         <span onClick={(e) => e.stopPropagation()} role="presentation" className="block">
           <AccountRowActions

@@ -25,6 +25,11 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
   // sidebar/"Adjuntos" tab), identified by `tableName`. The retired
   // ETGO_PREVIEW_FILE-backed `usePreviewAttachment` hook (specName-keyed) was
   // removed once every caller had migrated to this one (Phase 9).
+  // ETP-5358 Part 2 — in autoFetch mode nothing here renders this hook's own file view (see
+  // the autoFetch early return below), so there is no reason to eagerly download the attachment's
+  // bytes on every open: skipBlobFetch keeps this instance to a metadata-only GET, and whoever
+  // needs the bytes later (e.g. the caller's Download button, via onFileChange's fetchBlobUrl
+  // below) fetches them lazily, on demand.
   const attachment = useMainAttachment({
     documentId: cfg.documentId ?? null,
     tableName: cfg.tableName ?? null,
@@ -32,13 +37,25 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
     token: cfg.token ?? null,
     apiBaseUrl: cfg.apiBaseUrl ?? null,
     recordUpdated: cfg.recordUpdated ?? null,
+    skipBlobFetch: autoFetch,
   });
 
   // ETP-4787 — a stale stored file is reported as no file at all. Consumers use this to
   // decide whether to serve the cached bytes (InvoicePreview's Download does), and a
   // rendering older than the record must not win over the freshly rendered one.
+  //
+  // ETP-5358 Part 2 — the object handed to onFileChange also carries fetchBlobUrl, so a
+  // caller can lazily resolve the actual bytes (relevant only in autoFetch/skipBlobFetch
+  // mode, where storedFile.objectUrl starts out null) instead of assuming objectUrl is
+  // already populated. Drop-zone callers keep getting a fully-resolved storedFile as before —
+  // fetchBlobUrl just returns the already-known URL immediately for them.
   useEffect(() => {
-    cfg.onFileChange?.(attachment.storedFileIsStale ? null : attachment.storedFile);
+    // Sonar S3358 — nested ternary extracted into its own statement, not inlined.
+    let reportedFile = null;
+    if (!attachment.storedFileIsStale && attachment.storedFile) {
+      reportedFile = { ...attachment.storedFile, fetchBlobUrl: attachment.fetchBlobUrl };
+    }
+    cfg.onFileChange?.(reportedFile);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attachment.storedFile, attachment.storedFileIsStale]);
 
@@ -96,6 +113,21 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
     e.target.value = '';
   }, [attachment]);
 
+  // ETP-5358 — in autoFetch mode the panel is ALWAYS the caller's leftPanel, never this
+  // hook's own file view. Before this check moved above the `attachment.storedFile` branch
+  // below, two independent readers of the same marked attachment raced to own the panel:
+  // usePdfGenerator (via the caller's leftPanel, gated on the SAME cache since the ETP-4315
+  // 2026-08-18 follow-up) and this component's own useMainAttachment. Whichever resolved
+  // second replaced the other's <PdfViewer>, tearing down and remounting react-pdf with a
+  // new blob URL — the flicker reported in ETP-5358. useMainAttachment still runs above for
+  // its two real jobs in this mode: the auto-store effect (writes the fresh PDF as the
+  // marked attachment) and onFileChange (reports staleness to the caller, e.g. for the
+  // ETP-4789 Download-button gate) — it just never renders its own viewer here.
+  if (autoFetch) return leftPanel;
+
+  // Reached only when autoFetch is false (drop-zone windows: purchase-invoice,
+  // goods-receipt, return-material-receipt) — `!autoFetch` below is therefore always true
+  // in this branch; kept explicit rather than removed to keep this change a pure reorder.
   if (attachment.storedFile) {
     const { objectUrl, mimeType, fileName } = attachment.storedFile;
     return (
@@ -132,8 +164,6 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
       </div>
     );
   }
-
-  if (autoFetch) return leftPanel;
 
   if (attachment.isBusy) {
     return (

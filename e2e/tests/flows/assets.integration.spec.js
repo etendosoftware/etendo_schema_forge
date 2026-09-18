@@ -146,9 +146,15 @@ async function verifySidebarSync(page) {
   const sidebarValue = (label) =>
     cards.getByText(label, { exact: true }).locator('xpath=following-sibling::div[1]').innerText();
 
-  const formAsset = parseFloat((await page.getByTestId('field-assetValue').inputValue()) || '0');
+  // Both sides are read with parseCurrency because both are now LOCALIZED (ETP-5107): these two
+  // columns are AD `Amount` references, so the form input groups them exactly like the sidebar
+  // ("2.000,00"). A bare parseFloat stops at the group separator and reads that as 2, which is
+  // what made this assertion fail with "Expected: 2, Received: 2000" - the sidebar, the form and
+  // the database all agreed on 2000 and only the parser disagreed. Verified live: typing 2000
+  // shows "2.000,00" in both, saves 2000 to A_ASSET.assetvalueamt, and survives a reload.
+  const formAsset = parseCurrency(await page.getByTestId('field-assetValue').inputValue());
   expect(parseCurrency(await sidebarValue('Valor actual'))).toBeCloseTo(formAsset, 2);
-  const formResidual = parseFloat((await page.getByTestId('field-residualAssetValue').inputValue()) || '0');
+  const formResidual = parseCurrency(await page.getByTestId('field-residualAssetValue').inputValue());
   expect(parseCurrency(await sidebarValue('Valor residual del activo'))).toBeCloseTo(formResidual, 2);
 }
 

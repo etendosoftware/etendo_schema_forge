@@ -187,7 +187,21 @@ const BASE = {
         { id: 'iva_importacion',         labelKey: 'fm.box.row.iva_importacion',          cells: [77], editable: true },
         { id: 'cuotas_compensar',        labelKey: 'fm.box.row.cuotas_compensar',         cells: [110], editable: true },
         { id: 'cuotas_compensar_aplic',  labelKey: 'fm.box.row.cuotas_compensar_aplic',  cells: [78], editable: true },
-        { id: 'cuotas_compensar_post',   labelKey: 'fm.box.row.cuotas_compensar_post',   cells: [87] },
+        // ETP-5338 pt.2: box 87 is display-only — AEAT computes and validates 110-78 on their
+        // side at submission time (the .303 file uploads correctly without this value), but the
+        // UI previously showed it blank because no box in `recomputeDerivedBoxes` ever populated
+        // it. `derivedValue` here mirrors `importe_devolucion`'s pattern below: box 110 minus box
+        // 78, floored at 0 (box 87 represents "cuotas pendientes de compensar", which by AEAT
+        // definition cannot be negative). This is purely a client-side rendering fallback (see
+        // FmBoxes303.jsx's `renderBoxCell`) — it does not touch `manualData`, `recomputeDerivedBoxes`,
+        // or anything sent in the submission payload.
+        //
+        // `treatMissingAsZero: true` — confirmed with the product owner (cycle 2, reversing the
+        // cycle-1 QA rejection which assumed the wrong AEAT semantics): a missing box110 or box78
+        // defaults to 0, EXCEPT when BOTH are missing, in which case the cell stays blank. This
+        // flag is scoped to this row only — `importe_devolucion` below keeps its original
+        // "missing operand blanks the result" behavior and must not be changed.
+        { id: 'cuotas_compensar_post',   labelKey: 'fm.box.row.cuotas_compensar_post',   cells: [87], derivedValue: { box: 110, subtractBox: 78, clampMin: 0, treatMissingAsZero: true } },
         { id: 'bicolumn_resultado', type: 'bicolumn',
           infoboxes: [
             { id: 'reg_anual',     labelKey: 'fm.box.row.reg_anual',     cells: [68],  editable: true },

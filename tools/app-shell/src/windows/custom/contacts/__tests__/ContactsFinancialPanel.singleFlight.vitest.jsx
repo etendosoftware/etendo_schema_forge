@@ -35,7 +35,14 @@ import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import {
   neoResponse, bodyOf, writeCalls, resetRecordVersionsForTests, rememberRecordVersion,
 } from '@/test/realApiFetch.js';
+// Derived, never guessed: ETP-5328 moved the box to `MaskedAmountInput`, whose idle display
+// routes through the canonical `formatCurrency()`. Hardcoding "8.000,00" would bake this suite to
+// one instance's separator configuration.
+import { formatCurrency } from '@/lib/formatCurrency.js';
 import ContactsFinancialPanel from '../ContactsFinancialPanel.jsx';
+
+/** What the box SHOWS for a committed amount, once it is not being edited. */
+const idleDisplay = (amount) => formatCurrency(undefined, amount);
 
 const BP_ID = 'bp-1';
 const READ_TOKEN = 'TOKEN-FROM-READ';
@@ -54,8 +61,13 @@ const defaultProps = {
   onChange: vi.fn(),
 };
 
+/**
+ * ETP-5328 replaced the raw `<input type="number">` with `MaskedAmountInput`, which renders
+ * `type="text"` — the field no longer has the `spinbutton` role. Anchor on the testid the
+ * component forwards instead of on an input type this helper has already been bitten by once.
+ */
 function creditLimitInput() {
-  return screen.getAllByRole('spinbutton')[0];
+  return screen.getByTestId('CreditLimitStepperInput');
 }
 
 function plusButton() {
@@ -177,7 +189,7 @@ describe('ContactsFinancialPanel — single-flight credit-limit save (ETP-5255)'
 
     // And the value the user typed is still on screen: adopting the server's superseded 7000
     // would have silently reverted their edit.
-    expect(creditLimitInput()).toHaveValue(8000);
+    expect(creditLimitInput()).toHaveValue(idleDisplay(8000));
   });
 
   // The early return must compare against what the SERVER last confirmed, not against the
@@ -223,10 +235,13 @@ describe('ContactsFinancialPanel — single-flight credit-limit save (ETP-5255)'
     await waitFor(() => expect(writeCalls(globalThis.fetch)).toHaveLength(1));
 
     await waitFor(() => expect(creditLimitInput().closest('[aria-busy]')).toHaveAttribute('aria-busy', 'true'));
-    expect(creditLimitInput()).not.toHaveAttribute('readonly');
+    // `saving` must not lock the field — freezing it mid-save would drop a keystroke the user
+    // has already typed. ETP-5328 moved the lock from `readOnly` to `disabled`, so assert the
+    // property that now carries that meaning rather than the attribute that no longer exists.
+    expect(creditLimitInput()).not.toBeDisabled();
 
     fireEvent.change(creditLimitInput(), { target: { value: '8000' } });
-    expect(creditLimitInput()).toHaveValue(8000);
+    expect(creditLimitInput()).toHaveValue(idleDisplay(8000));
 
     await server.settleNext({ id: BP_ID, creditLimit: 7000 });
     await waitFor(() => expect(creditLimitInput().closest('[aria-busy]')).toHaveAttribute('aria-busy', 'false'));
@@ -243,7 +258,7 @@ describe('ContactsFinancialPanel — single-flight credit-limit save (ETP-5255)'
     fireEvent.blur(creditLimitInput());
     await waitFor(() => expect(writeCalls(globalThis.fetch)).toHaveLength(1));
 
-    await waitFor(() => expect(creditLimitInput()).toHaveValue(INITIAL_CREDIT_LIMIT));
+    await waitFor(() => expect(creditLimitInput()).toHaveValue(idleDisplay(INITIAL_CREDIT_LIMIT)));
     expect(writeCalls(globalThis.fetch)).toHaveLength(1);
   });
 });

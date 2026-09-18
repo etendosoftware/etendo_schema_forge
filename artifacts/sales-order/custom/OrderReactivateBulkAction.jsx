@@ -11,5 +11,5 @@ export default function OrderReactivateBulkAction(props) {
     return true;
   };
 
-  return <BulkDocumentAction {...props} rowFilter={rowFilter} labelKey="confirmBulk" />;
+  return <BulkDocumentAction {...props} rowFilter={rowFilter} labelKey="process" />;
 }

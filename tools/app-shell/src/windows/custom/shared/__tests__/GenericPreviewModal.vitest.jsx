@@ -2,16 +2,27 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
-vi.mock('../usePreviewAttachment.js', () => ({
-  usePreviewAttachment: vi.fn(() => ({
-    storedFile: null,
-    isBusy: false,
-    storeFailed: false,
-    storeFile: vi.fn(),
-    storeBlob: vi.fn(),
-    storeUrl: vi.fn(),
-    deleteFile: vi.fn(),
-  })),
+// ETP-5358 — `usePreviewAttachment.js` was retired by ETP-4315 Phase 9; this mock used to
+// target a module `GenericPreviewModal.jsx` no longer imports, so `ManagedLeftPanel`
+// (backed by `useMainAttachment.js`) went completely untested here. Mocking the real hook
+// lets the tests below exercise the autoFetch-vs-storedFile ordering directly.
+const mockUseMainAttachment = vi.fn(() => ({
+  storedFile: null,
+  storedFileIsStale: false,
+  isBusy: false,
+  storeFailed: false,
+  storeFile: vi.fn(),
+  storeBlob: vi.fn(),
+  storeUrl: vi.fn(),
+  markExisting: vi.fn(),
+  deleteFile: vi.fn(),
+}));
+
+vi.mock('../useMainAttachment.js', () => ({
+  useMainAttachment: (...args) => mockUseMainAttachment(...args),
+}));
+
+vi.mock('../attachmentFileTypes.js', () => ({
   ACCEPTED_TYPES: {},
   ACCEPT_ATTR: '.pdf,.png,.jpg',
 }));
@@ -218,5 +229,111 @@ describe('GenericPreviewModal tab bar (ETP-5304)', () => {
     expect(() => renderModal()).not.toThrow();
 
     expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+});
+
+// ── ManagedLeftPanel — autoFetch vs. storedFile ordering (ETP-5358) ───────────
+//
+// Two independent readers of the same marked attachment used to race for the left panel:
+// usePdfGenerator (via the caller's own `leftPanel`, gated on the cache since the ETP-4315
+// 2026-08-18 follow-up) and this component's own `useMainAttachment`. Whichever resolved
+// second replaced the other's <PdfViewer>, tearing react-pdf down and remounting it with a
+// new blob URL — the flicker reported in ETP-5358. The fix: `autoFetch` is checked BEFORE
+// `attachment.storedFile`, so in autoFetch mode the panel is always the caller's own
+// `leftPanel`, never this hook's file view — see docs/bug-reports/2026-09-16-etp5358-preview-double-viewer.md.
+
+describe('GenericPreviewModal — ManagedLeftPanel autoFetch ordering (ETP-5358)', () => {
+  const baseAttachmentConfig = {
+    documentId: 'INV-1',
+    tableName: 'C_Invoice',
+    storeCondition: true,
+    token: 'tok',
+    apiBaseUrl: 'https://example.test/sales-invoice',
+  };
+
+  it('keeps the caller leftPanel mounted when autoFetch=true, even once storedFile resolves', () => {
+    // The exact scenario that used to flicker: a marked attachment already exists (or the
+    // auto-store upload just completed) while the caller is in autoFetch mode.
+    mockUseMainAttachment.mockReturnValue({
+      storedFile: { attachmentId: 'att-1', fileName: 'invoice.pdf', mimeType: 'application/pdf', objectUrl: 'blob:cached' },
+      storedFileIsStale: false,
+      isBusy: false,
+      storeFailed: false,
+      storeFile: vi.fn(),
+      storeBlob: vi.fn(),
+      storeUrl: vi.fn(),
+      markExisting: vi.fn(),
+      deleteFile: vi.fn(),
+    });
+
+    render(
+      <GenericPreviewModal
+        title="Invoice"
+        onClose={vi.fn()}
+        leftPanel={<div data-testid="caller-left-panel">Live PDF viewer</div>}
+        attachmentConfig={{ ...baseAttachmentConfig, autoFetch: true, sourceBlob: new Blob(['x']) }}
+      />,
+    );
+
+    // The caller's own viewer must be the one rendered...
+    expect(screen.getByTestId('caller-left-panel')).toBeInTheDocument();
+    // ...and ManagedLeftPanel's own file view (the second reader that used to win the race
+    // and swap the panel) must never mount, regardless of storedFile.
+    expect(screen.queryByTestId('pdf-viewer')).not.toBeInTheDocument();
+  });
+
+  it('still shows its own file view (not the caller leftPanel) when autoFetch=false', () => {
+    // Drop-zone windows (purchase-invoice, goods-receipt, return-material-receipt) must be
+    // completely unaffected by the ETP-5358 fix — they never set autoFetch, so this branch
+    // is the one they still exercise.
+    mockUseMainAttachment.mockReturnValue({
+      storedFile: { attachmentId: 'att-2', fileName: 'supplier-doc.pdf', mimeType: 'application/pdf', objectUrl: 'blob:supplier' },
+      storedFileIsStale: false,
+      isBusy: false,
+      storeFailed: false,
+      storeFile: vi.fn(),
+      storeBlob: vi.fn(),
+      storeUrl: vi.fn(),
+      markExisting: vi.fn(),
+      deleteFile: vi.fn(),
+    });
+
+    render(
+      <GenericPreviewModal
+        title="Purchase Invoice"
+        onClose={vi.fn()}
+        leftPanel={<div data-testid="caller-left-panel">Should not be used</div>}
+        attachmentConfig={{ ...baseAttachmentConfig, autoFetch: false }}
+      />,
+    );
+
+    expect(screen.getByTestId('pdf-viewer')).toBeInTheDocument();
+    expect(screen.queryByTestId('caller-left-panel')).not.toBeInTheDocument();
+  });
+
+  it('shows the drop zone (not the caller leftPanel) when autoFetch=false and no file is stored yet', () => {
+    mockUseMainAttachment.mockReturnValue({
+      storedFile: null,
+      storedFileIsStale: false,
+      isBusy: false,
+      storeFailed: false,
+      storeFile: vi.fn(),
+      storeBlob: vi.fn(),
+      storeUrl: vi.fn(),
+      markExisting: vi.fn(),
+      deleteFile: vi.fn(),
+    });
+
+    render(
+      <GenericPreviewModal
+        title="Purchase Invoice"
+        onClose={vi.fn()}
+        leftPanel={<div data-testid="caller-left-panel">Should not be used</div>}
+        attachmentConfig={{ ...baseAttachmentConfig, autoFetch: false }}
+      />,
+    );
+
+    expect(screen.getByTestId('preview-drop-zone')).toBeInTheDocument();
+    expect(screen.queryByTestId('caller-left-panel')).not.toBeInTheDocument();
   });
 });
