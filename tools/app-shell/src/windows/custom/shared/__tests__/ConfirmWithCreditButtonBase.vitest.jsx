@@ -569,3 +569,101 @@ describe('ConfirmWithCreditButtonBase — save pending edits before confirm (ETP
     expect(onSave).not.toHaveBeenCalled();
   });
 });
+
+// ETP-5408 — the DR "Confirmar" button was a hand-rolled <button> with an inline
+// style object and NO icon: the only Confirmar in the product without the checkmark
+// that Facturas / Pedidos / Albaranes show. It now renders the shared Button
+// (@/components/ui/button.jsx) with a <Check> icon and classes derived from the same
+// getButtonClass/getSaveBtnCls helpers DetailView uses for a positive process button.
+//
+// These tests deliberately exercise the REAL Button and the REAL class helpers — the
+// mocks at the top of this file cover i18n, the router, sonner and the three modals,
+// and must keep leaving button.jsx / detailViewHelpers.jsx unmocked, otherwise the
+// assertions below stop proving anything about the shared component.
+const DR_DATA = { documentStatus: 'DR', linesCount: 2 };
+
+describe('ConfirmWithCreditButtonBase — DR confirm renders the shared positive button (ETP-5408)', () => {
+  it('renders a check icon inside the DR confirm button', () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} />);
+    const btn = screen.getByTestId('action-confirm-with-credit');
+    const icon = btn.querySelector('svg');
+    // The pre-fix hand-rolled button had no icon at all.
+    expect(icon).not.toBeNull();
+    expect(icon.getAttribute('class')).toContain('lucide-check');
+    expect(icon).toHaveClass('mr-1');
+  });
+
+  it('carries no inline style attribute (the hand-rolled styling is gone)', () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} />);
+    expect(screen.getByTestId('action-confirm-with-credit')).not.toHaveAttribute('style');
+  });
+
+  it('renders through the shared Button, carrying its variant classes and the helper-derived gap', () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} />);
+    const btn = screen.getByTestId('action-confirm-with-credit');
+    // Only the shared Button's cva recipe emits these; a bespoke <button> would not.
+    expect(btn).toHaveClass('disabled:pointer-events-none');
+    expect(btn).toHaveClass('bg-primary');
+    // getSaveBtnCls('sm') — proves the class string came from the shared helper and
+    // was merged in, not hardcoded next to a hand-rolled element.
+    expect(btn).toHaveClass('gap-1.5');
+  });
+
+  it('still renders the caller-provided label next to the icon', () => {
+    render(
+      <ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} confirmDrLabel="Confirmar" />
+    );
+    expect(screen.getByTestId('action-confirm-with-credit')).toHaveTextContent('Confirmar');
+  });
+});
+
+// ETP-4933 guard, re-armed by ETP-5408. A `title` on a DISABLED element never fires,
+// and the shared Button carries `disabled:pointer-events-none` — so migrating this
+// button to it would have silently killed the "why is Confirm blocked" explanation.
+// GateTooltip (imported from saveActions.jsx, not re-implemented) restores it: a
+// non-disabled <span title=...> wrapper that does receive the hover.
+describe('ConfirmWithCreditButtonBase — blocked DR confirm still explains itself (ETP-5408 / ETP-4933)', () => {
+  const GATE = { blocked: true, title: 'saveMissingRequired: Business Partner' };
+
+  it('wraps the disabled button in a non-disabled span carrying the gate title', () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} saveGate={GATE} />);
+    const btn = screen.getByTestId('action-confirm-with-credit');
+    expect(btn).toBeDisabled();
+
+    const wrapper = btn.parentElement;
+    expect(wrapper.tagName).toBe('SPAN');
+    expect(wrapper).toHaveAttribute('title', GATE.title);
+    // The wrapper is what the pointer can still reach; it must never be disabled itself.
+    expect(wrapper).not.toBeDisabled();
+  });
+
+  it('does not open the confirm modal while the gate blocks it', () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} saveGate={GATE} />);
+    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
+  });
+
+  // The invariant the five existing saveActions.jsx call sites rely on: when there is
+  // nothing to explain, GateTooltip adds NO element — the DOM is a bare Button, so no
+  // existing selector or layout is affected.
+  it('adds no wrapper element when the gate is not blocking', () => {
+    const { container } = render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={DR_DATA}
+        saveGate={{ blocked: false, title: 'saveMissingRequired: Business Partner' }}
+      />
+    );
+    const btn = screen.getByTestId('action-confirm-with-credit');
+    expect(btn).not.toBeDisabled();
+    expect(btn.parentElement).toBe(container);
+    expect(container.querySelector('span[title]')).toBeNull();
+  });
+
+  it('adds no wrapper element when no saveGate is supplied at all', () => {
+    const { container } = render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} />);
+    const btn = screen.getByTestId('action-confirm-with-credit');
+    expect(btn.parentElement).toBe(container);
+    expect(container.querySelector('span[title]')).toBeNull();
+  });
+});
