@@ -16581,6 +16581,7 @@
     "importFilterError": "Errors",
     "importSkip": "Skip",
     "importSkipped": "Skipped",
+    "importSkippedByUser": "Skipped by the user.",
     "importUnskip": "Edit again",
     "importDownloadErrors": "Download errors",
     "importStatus": "Status",

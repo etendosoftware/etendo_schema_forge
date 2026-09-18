@@ -153,6 +153,10 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
       filterError: ui('importFilterError'),
       skip: ui('importSkip'),
       skipped: ui('importSkipped'),
+      // ETP-5349. Not rendered in the grid — this is the reason written into the
+      // downloadable error file for a row the user skipped by hand, which is the only
+      // kind of skip that records no reason of its own.
+      skippedByUser: ui('importSkippedByUser'),
       unskip: ui('importUnskip'),
       downloadErrors: ui('importDownloadErrors'),
       status: ui('importStatus'),

@@ -1163,3 +1163,55 @@ Same symptom, different cause. This one: any window, above ~72 rows, a well-form
 too long → 400. ETP-5371: First Steps only, at any row count, a malformed URL
 (`/etendo/product` instead of `/etendo/sws/neo/product/product`) → 404. Both landed in the same
 `catch` that returned an empty Set, which is why they looked identical from the screen.
+
+## ETP-5349 — Download errors produced a file the screen disagreed with
+
+Engine-level work in the shared `ImportReviewQueue`, so every window with an import gets it —
+Contacts, Product, and the bank-statement import, which has its own Omitir button and carried the
+same defect (`financial-account.md` → *ETP-5349*).
+
+Skip two rows with the Omitir icon, open the **Errores** tab, see them listed, click **Descargar
+errores**: the file came out with its header line and nothing else. Skip every row and the file
+was empty. Nothing said so — the screen and the file simply disagreed.
+
+### Root cause: the question was asked in three places
+
+"Is this row under the Errores tag?" was written out three times, and the CSV's copy was the odd
+one out:
+
+| | |
+| --- | --- |
+| The tab filter | `entry.status === 'skipped' \|\| entry.errors.length > 0` |
+| The tab's count badge | the same |
+| `buildErrorsCsv` | `if (entry.errors.length === 0) continue;` |
+
+Skipping records no error — `handleSkipEntry` only sets `status: 'skipped'` — so the row passed
+the first two tests and failed the third.
+
+There is now one exported `needsAttention(entry)` and all three call it. Exported on purpose: a
+caller rendering its own queue asks the same question rather than writing a fourth copy.
+
+### The reason column
+
+A hand-skipped row is the only kind that has no reason of its own to print. Every other skip
+records one as an error at skip time — an in-file duplicate, a record that already exists — and
+the file repeats it unchanged. So `buildErrorsCsv` takes a fifth argument, the text for that one
+case, defaulting to English and supplied localized by both call sites
+(`importSkippedByUser`).
+
+That also fixed a second, unreported defect in the bank-statement import: it called
+`buildErrorsCsv` with no captions at all, so its reason column was headed `Error` in English
+regardless of session language. It now passes both.
+
+### The other half of the ticket was already fixed
+
+The ticket also reports that manual mapping lets two CSV columns target the same field, silently
+discarding one. **Not reproducible.** `6cfe5bef1` (ETP-4954) inverted the mapping editor to be
+field-first: each field has exactly one select, which chooses a column, so a field cannot have two
+sources by construction. Columns already claimed by another field are rendered `disabled` and
+labelled with the field holding them, and `ImportColumnMapping.test.jsx` already covers it —
+including *"blocks pointing two different fields at the same column"*.
+
+The ticket's code reference (`MappingGrid` renders `importFields.map(...)` as the select's
+options) describes the pre-ETP-4954 shape. The reverse direction — two FIELDS fed by one column —
+is still allowed, and deliberately so: that is one column and two fields, not a collision.

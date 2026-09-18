@@ -4100,3 +4100,18 @@ mount normally and the fix should be fully effective — unlike the inlineEditab
 window also uses `window.layoutType: "custom"`, so verify against a live/dev environment that
 the generated `AccountPage.jsx`/`DetailView` flow (rather than a custom wrapper bypassing it) is
 actually what renders the transaction detail before relying on the config gating in production.
+
+## ETP-5349 — Download errors omitted the rows skipped by hand
+
+Engine-level work shared with Product and Contacts, reported against Product Import but landing in
+the shared `ImportReviewQueue`, so the statement import gets it too. Full write-up in
+`product.md` → *ETP-5349*.
+
+This window has its own Omitir button, so it carried the defect identically: a hand-skipped row
+appeared under **Errores** and was then missing from the downloaded file, because the CSV builder
+tested only `errors.length` and skipping records no error.
+
+One thing specific to this window, unreported and fixed in passing: `ImportStatementModal` called
+`buildErrorsCsv(entries, headers, mapping)` with no captions, so the reason column of the
+downloaded file was headed `Error` in English in a Spanish session, while the grid beside it was
+translated. It now passes both the column caption and the skipped-by-user reason.

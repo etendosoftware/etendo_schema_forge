@@ -16782,6 +16782,7 @@
     "importFilterError": "Errores",
     "importSkip": "Omitir",
     "importSkipped": "Omitida",
+    "importSkippedByUser": "Omitida por el usuario.",
     "importUnskip": "Editar de nuevo",
     "importDownloadErrors": "Descargar errores",
     "importStatus": "Estado",
