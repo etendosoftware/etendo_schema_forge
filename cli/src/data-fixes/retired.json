@@ -63,5 +63,14 @@
     "retiredBy": "ETP-5079",
     "retiredUtc": "2026-09-01T12:00:00.000Z",
     "supersededBy": []
+  },
+  {
+    "fixId": "20260910T120000Z__R36-costing-background-schedule",
+    "checksum": "2a9b9dbb6d00c6a2a773ee177e735fdd299f852d4141e543260a41a2611f48bb",
+    "checksumAlgorithm": "sha256",
+    "reason": "Obsoleted by ETP-5370, which lowers the CostingBackground cadence from every 5 minutes to every 30 seconds. R36's whole purpose is to INSERT a missing schedule, and it hardcodes the old cadence (frequency='2', minutely_interval=5) -- so every row it could still create would be born with the value the product has just moved away from. It is retired rather than edited because an already-processed .sql is immutable (sql/README.md rule 3), and rather than deleted because computeWatermark() iterates the catalog ON DISK: removing the file would stop its timestamp counting toward each tenant's watermark and could silently LOWER it, making older fixes eligible again. Retirement keeps the file as the record and makes the runner skip it outright, before the watermark and before @check. Nothing is lost in practice. On the shared dev DB all 8 tenants already recorded SKIPPED_NOT_NEEDED for R36, which is a PROCESSED status, so their watermark had already moved past it and it was never going to run for them again. A newly onboarded tenant is born with the schedule from onboarding step 8, so R36's @check returns 0 rows for it too. The only case R36 still covered was a legacy tenant carrying NO costing schedule at all, and the product decision on ETP-5370 is that every tenant already has at least one. The 30-second end state is guaranteed by com.etendoerp.go's CostingCadenceStartup, which on every application boot realigns each tenant's surviving request to frequency='1'/secondly_interval=30 and re-arms its Quartz trigger -- including any dormant row R36 inserted in the past and never armed. No replacement fix is shipped, so supersededBy is deliberately empty: this is not a cadence correction delivered in SQL (SQL cannot re-arm a live Quartz trigger), it is a creation fix whose remaining scenario no longer applies. R36's .sql stays byte-for-byte untouched -- this list is the mechanism, not an edit.",
+    "retiredBy": "ETP-5370",
+    "retiredUtc": "2026-09-16T12:00:00.000Z",
+    "supersededBy": []
   }
 ]

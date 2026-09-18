@@ -9,7 +9,7 @@ const src = readFileSync(join(__dirname, '..', 'BulkDocumentAction.jsx'), 'utf8'
 
 function buildInOutActions(rows) {
   const hasDraft = rows.some((r) => (r.documentStatus || r.docStatus) === 'DR');
-  return hasDraft ? [{ value: 'CO', labelKey: 'book' }] : [];
+  return hasDraft ? [{ value: 'CO', labelKey: 'confirm' }] : [];
 }
 
 describe('BulkDocumentAction source', () => {
@@ -25,8 +25,13 @@ describe('BulkDocumentAction source', () => {
     assert.match(src, /entity\s*=\s*['"]header['"]/);
   });
 
-  it('persists result to sessionStorage before page reload', () => {
-    assert.match(src, /sessionStorage\.setItem/);
+  // ETP-5302 — this is the FALLBACK path (no `refresh` prop), not the main one.
+  // The raw `sessionStorage.setItem` write moved out of this component and into
+  // `persistBulkActionResult` (useBulkActionToast.js), so the storage key and the
+  // persisted shape live in exactly one place.
+  it('fallback path: persists the result through persistBulkActionResult before the reload', () => {
+    assert.match(src, /persistBulkActionResult\(result\)/);
+    assert.doesNotMatch(src, /sessionStorage\.setItem/);
   });
 
   it('returns null when no rows are selected', () => {
@@ -37,20 +42,89 @@ describe('BulkDocumentAction source', () => {
     assert.match(src, /actions\.length === 0/);
   });
 
+  // ETP-5302 — the local buildInOutActions above is a hand-kept copy, so it can
+  // never catch a drift in the real module on its own. These source assertions
+  // are the ones that actually fail if the CO option regresses to the `book`
+  // key (which renders "Procesar" in es_ES — the same word as the button that
+  // opens the dialog, since every call site now passes labelKey="process").
+  it('labels every CO (complete) action with the confirm key, never book', () => {
+    assert.doesNotMatch(src, /labelKey:\s*'book'/);
+    const coActions = src.match(/value:\s*'CO',\s*labelKey:\s*'confirm'/g) || [];
+    // Two producers: the exported buildInOutActions helper and the component's
+    // own built-in useMemo fallback (used when no buildActions prop is passed).
+    assert.equal(coActions.length, 2);
+  });
+
+  it('leaves the RE (reactivate) action on the reactivate key', () => {
+    assert.match(src, /value:\s*'RE',\s*labelKey:\s*'reactivate'/);
+  });
+
+  it('keeps bulkCompletion as the default labelKey for the trigger button', () => {
+    assert.match(src, /labelKey\s*=\s*'bulkCompletion'/);
+  });
+
   it('uses Promise.allSettled to process rows in parallel', () => {
     assert.match(src, /Promise\.allSettled/);
   });
 
-  it('calls clearSelection and reloads page after execution', () => {
+  // ETP-5302 — also the FALLBACK path. The full browser reload survives ONLY for a
+  // host that mounts this component outside ListView's `bulkActions` slot (and so
+  // cannot hand it a `refresh`); the primary path below never reloads.
+  it('fallback path: clears the selection and reloads the page after execution', () => {
     assert.match(src, /clearSelection\(\)/);
     assert.match(src, /window\.location\.reload/);
+  });
+});
+
+// ETP-5302 — the bug: running a bulk action did a FULL browser reload. The reload
+// was never about the data — it was how the result toast survived, since it was
+// persisted to sessionStorage and read back by `useBulkActionToast`'s mount effect.
+// With an in-place `refresh` from ListView's slot, the toast can be shown directly
+// and the reload (plus the lost scroll position, filters and SPA boot) disappears.
+describe('BulkDocumentAction — in-place refresh path (ETP-5302)', () => {
+  it('declares the refresh prop supplied by ListView bulkActions slot', () => {
+    assert.match(src, /export default function BulkDocumentAction\(\{[\s\S]*?\brefresh,[\s\S]*?\}\)/);
+  });
+
+  it('clears the selection, shows the toast and refetches when refresh is available', () => {
+    assert.match(
+      src,
+      /if \(refresh\) \{[\s\S]*?clearSelection\(\);[\s\S]*?showBulkActionToast\(ui, result\);[\s\S]*?refresh\(\);[\s\S]*?return;[\s\S]*?\}/,
+    );
+  });
+
+  it('returns before the legacy persist + reload branch', () => {
+    const refreshBranch = src.indexOf('if (refresh)');
+    const persist = src.indexOf('persistBulkActionResult(result)');
+    assert.ok(refreshBranch > -1 && persist > -1);
+    assert.ok(refreshBranch < persist, 'the refresh branch must short-circuit before the fallback');
+    // Nothing in the refresh branch may persist, defer or reload.
+    const branch = src.slice(refreshBranch, persist);
+    assert.doesNotMatch(branch, /sessionStorage/);
+    assert.doesNotMatch(branch, /setTimeout/);
+    assert.doesNotMatch(branch, /location\.reload/);
+  });
+
+  it('keeps exactly one reload call site (the fallback)', () => {
+    const reloads = src.match(/window\.location\.reload\(\)/g) || [];
+    assert.equal(reloads.length, 1);
+  });
+
+  // Regression guard for a fix that was tried and reverted: reaching `showResult`
+  // by mounting `useBulkActionToast()` inside this component also installs the
+  // hook's sessionStorage-DRAINING effect, which re-runs on every `ui` identity
+  // change and eats the component's own persisted result before the fallback
+  // reload can hand it to the next mount. The pure exported function has no effect.
+  it('imports the pure showBulkActionToast helper and never mounts the hook itself', () => {
+    assert.match(src, /import \{[^}]*showBulkActionToast[^}]*\} from '@\/hooks\/useBulkActionToast'/);
+    assert.doesNotMatch(src, /useBulkActionToast\(\)/);
   });
 });
 
 describe('buildInOutActions', () => {
   it('returns CO action when at least one row is DR', () => {
     const result = buildInOutActions([{ documentStatus: 'DR' }, { documentStatus: 'CO' }]);
-    assert.deepEqual(result, [{ value: 'CO', labelKey: 'book' }]);
+    assert.deepEqual(result, [{ value: 'CO', labelKey: 'confirm' }]);
   });
 
   it('returns empty array when no rows are DR', () => {
@@ -69,6 +143,172 @@ describe('buildInOutActions', () => {
   });
 
   it('single DR row triggers the action', () => {
-    assert.deepEqual(buildInOutActions([{ documentStatus: 'DR' }]), [{ value: 'CO', labelKey: 'book' }]);
+    assert.deepEqual(buildInOutActions([{ documentStatus: 'DR' }]), [{ value: 'CO', labelKey: 'confirm' }]);
+  });
+});
+
+// ── ETP-5302 — bulk "Descontabilizar" (unpost) ────────────────────────────────
+// A pair of exports SEPARATE from buildPostActions/postRowFilter, because the
+// windows that may offer a standalone unpost are not the ones that may offer a
+// post: goods-receipt/goods-shipment mount both, the invoice windows mount only
+// post (there, the accounting reversal is a step inside Reactivar).
+describe('BulkDocumentAction — unpost helpers (ETP-5302)', () => {
+  it('exports buildUnpostActions and unpostRowFilter as named exports', () => {
+    assert.match(src, /export const buildUnpostActions/);
+    assert.match(src, /export const unpostRowFilter/);
+  });
+
+  it('keeps them separate from the post pair (four distinct exported helpers)', () => {
+    assert.match(src, /export const buildPostActions/);
+    assert.match(src, /export const postRowFilter/);
+    // A single merged helper taking a direction argument would defeat the
+    // per-window opt-in this pair exists for.
+    assert.doesNotMatch(src, /export const buildPostOrUnpostActions/);
+  });
+
+  it('offers the unpost action only when a selected row is posted', () => {
+    assert.match(src, /buildUnpostActions\s*=\s*\(rows\)\s*=>[\s\S]*?rows\.some\(isRowPosted\)/);
+    assert.match(src, /value:\s*'unpost',\s*labelKey:\s*'unpost'/);
+  });
+
+  it('blocks a not-posted row with the bulkRowNotPosted message and gates on the action', () => {
+    assert.match(src, /unpostRowFilter\s*=\s*\(row,\s*action,\s*ui\)/);
+    assert.match(src, /action\s*!==\s*'unpost'[\s\S]*?return true/);
+    assert.match(src, /ui\('bulkRowNotPosted'\)/);
+  });
+});
+
+// ── ETP-5302 — preUnpostActions (the reactivate-a-posted-invoice bug) ─────────
+describe('BulkDocumentAction — preUnpostActions prop (ETP-5302)', () => {
+  it('declares preUnpostActions with an empty-array default (opt-in per window)', () => {
+    assert.match(src, /preUnpostActions\s*=\s*\[\]/);
+  });
+
+  it('delegates to the shared runPreUnpost helper instead of re-implementing the rule', () => {
+    assert.match(src, /import \{ runPreUnpost \} from '@\/lib\/preUnpost\.js'/);
+    assert.match(src, /runPreUnpost\(\{[\s\S]*?enabled: preUnpostActions\.includes\(selectedAction\)/);
+    // The posted check belongs to the helper — a second copy here is how the
+    // detail kebab and the bulk bar drifted apart in the first place.
+    assert.doesNotMatch(src, /enabled:[\s\S]{0,120}row\.posted/);
+  });
+
+  it('runs the unpost through the neoAction executor, whatever the actionMode is', () => {
+    assert.match(src, /runPreUnpost\(\{[\s\S]*?execute: neoAction\.execute/);
+  });
+
+  it('aborts the row with a translated message when the pre-unpost fails', () => {
+    assert.match(
+      src,
+      /if \(!pre\.success\) \{[\s\S]*?throw new Error\(translateBackendError\(pre\.message, ui\) \|\| ui\('actionFailed'\)\)/,
+    );
+    assert.match(src, /import \{ translateBackendError \} from '@\/lib\/backendErrors\.js'/);
+  });
+
+  it('awaits the pre-unpost BEFORE executing the document action', () => {
+    // Search for the closing `Promise.allSettled` FROM the start of runRow: the string
+    // also appears earlier in the ETP-5209 comment block, and anchoring at index 0
+    // sliced backwards and produced an empty body.
+    const start = src.indexOf('const runRow');
+    const runRow = src.slice(start, src.indexOf('Promise.allSettled', start));
+    const pre = runRow.indexOf('runPreUnpost');
+    const exec = runRow.indexOf('await execute(row.id, selectedAction)');
+    assert.ok(pre > -1 && exec > -1, 'runRow must contain both steps');
+    assert.ok(pre < exec, 'the pre-unpost must be awaited before the document action');
+  });
+});
+
+// ── ETP-5302 — per-window wiring, asserted at the call sites ──────────────────
+// `preUnpostActions` is opt-in ON PURPOSE. Invoices need it (C_INVOICE_POST raises
+// @InvoiceDocumentPosted@ on an RE while Posted='Y'); ORDERS MUST NOT HAVE IT —
+// C_ORDER_POST1's RE branch has no Posted guard, so unposting there would be a
+// gratuitous accounting reversal nobody asked for. Same for the shipment/receipt
+// windows. These guards are cheap and catch a copy-paste that would be invisible
+// in any per-window render test.
+describe('preUnpostActions call sites (ETP-5302)', () => {
+  const read = (...parts) => readFileSync(join(__dirname, '..', '..', '..', ...parts), 'utf8');
+  const readArtifact = (...parts) =>
+    readFileSync(join(__dirname, '..', '..', '..', '..', '..', '..', 'artifacts', ...parts), 'utf8');
+
+  const OPTED_IN = ['sales-invoice', 'purchase-invoice'];
+  const NOT_OPTED_IN = ['goods-shipment', 'goods-receipt', 'purchase-order'];
+
+  for (const window of OPTED_IN) {
+    it(`${window} passes preUnpostActions={['RE']} to its bulk process action`, () => {
+      assert.match(read('windows', 'custom', window, 'index.jsx'), /preUnpostActions=\{\['RE'\]\}/);
+    });
+  }
+
+  for (const window of NOT_OPTED_IN) {
+    it(`${window} does NOT pass preUnpostActions (no accounting reversal on its bulk actions)`, () => {
+      assert.doesNotMatch(read('windows', 'custom', window, 'index.jsx'), /preUnpostActions/);
+    });
+  }
+
+  it('the sales-order bulk reactivate does NOT pass preUnpostActions', () => {
+    // sales-order mounts BulkDocumentAction through this artifact wrapper, not its
+    // own index.jsx — C_ORDER_POST1 has no Posted guard on the RE branch.
+    assert.doesNotMatch(
+      readArtifact('sales-order', 'custom', 'OrderReactivateBulkAction.jsx'),
+      /preUnpostActions/,
+    );
+  });
+});
+
+// ── ETP-5302 — bulk unpost is mounted only where it is a legitimate action ────
+describe('bulk unpost call sites (ETP-5302)', () => {
+  const read = (window) =>
+    readFileSync(join(__dirname, '..', '..', '..', 'windows', 'custom', window, 'index.jsx'), 'utf8');
+
+  for (const window of ['goods-shipment', 'goods-receipt']) {
+    it(`${window} mounts a third BulkDocumentAction wired to the shared unpost helpers`, () => {
+      const source = read(window);
+      assert.match(source, /import BulkDocumentAction, \{[^}]*buildUnpostActions[^}]*unpostRowFilter[^}]*\}/);
+      assert.match(
+        source,
+        /<BulkDocumentAction[\s\S]*?actionMode="neoAction"[\s\S]*?buildActions=\{buildUnpostActions\}[\s\S]*?rowFilter=\{unpostRowFilter\}[\s\S]*?labelKey="unpost"/,
+      );
+    });
+  }
+
+  // PRODUCT RULE, not an implementation detail: on an invoice, reversing the
+  // accounting is a step INSIDE Reactivar (preUnpostActions above) and is never
+  // offered as an action of its own. A standalone "Descontabilizar" button would
+  // let a user unpost a completed invoice and leave it in a state Reactivar is
+  // supposed to own.
+  for (const window of ['sales-invoice', 'purchase-invoice']) {
+    it(`${window} mounts NO standalone bulk unpost button`, () => {
+      const source = read(window);
+      assert.doesNotMatch(source, /labelKey="unpost"/);
+      assert.doesNotMatch(source, /buildUnpostActions/);
+      assert.doesNotMatch(source, /unpostRowFilter/);
+    });
+  }
+});
+
+// ── ETP-5302 — the dialog's confirm button says "Aceptar", not "Completado" ───
+// `done` resolves to "Completado" in es_ES — the name of a document STATUS — so on a
+// dialog about document ACTIONS the button read as a promise to mark the selection
+// as completed. It now uses `accept` ("Aceptar" / "Accept"). `done` itself is NOT
+// retired: RecordCreateModal still uses it, which is why this guard is scoped to
+// this component's footer.
+describe('BulkDocumentAction — confirm button label (ETP-5302)', () => {
+  it('confirms with the accept key and no longer with done', () => {
+    assert.match(src, /\{ui\('accept'\)\}/);
+    assert.doesNotMatch(src, /\{ui\('done'\)\}/);
+  });
+
+  it('keeps the cancel button untouched alongside it', () => {
+    assert.match(src, /\{ui\('cancel'\)\}/);
+  });
+
+  it('ships the accept label in every locale, next to cancel', () => {
+    const localesDir = join(__dirname, '..', '..', '..', 'locales');
+    for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+      const labels = JSON.parse(readFileSync(join(localesDir, `${locale}.json`), 'utf8')).genericLabels;
+      assert.ok(labels.accept, `${locale} is missing genericLabels.accept`);
+      assert.ok(labels.cancel, `${locale} is missing genericLabels.cancel`);
+      // `done` must survive: RecordCreateModal still renders it.
+      assert.ok(labels.done, `${locale} lost genericLabels.done, still used by RecordCreateModal`);
+    }
   });
 });

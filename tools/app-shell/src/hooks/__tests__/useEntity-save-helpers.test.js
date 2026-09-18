@@ -105,6 +105,7 @@ const {
   extractErrorMessage,
   parseCriteriaInto,
   normalizeDefaultValue,
+  isSequencePlaceholder,
   shouldSkipPayloadField,
   getReadOnly,
   getVisible,
@@ -399,6 +400,42 @@ describe('normalizeDefaultValue', () => {
 // Payload field filtering
 // ---------------------------------------------------------------------------
 
+// ETP-5274 round 2: the placeholder rule is now a single named export, shared by
+// shouldSkipPayloadField (create path) and buildPatchPayload (update path). The
+// backend mirrors it in NeoCrudHandler#isSequencePlaceholder, so these cases are
+// also the cross-language contract for that helper.
+describe('isSequencePlaceholder', () => {
+  it('accepts numeric and alphanumeric-prefixed previews', () => {
+    assert.equal(isSequencePlaceholder('<10000000>'), true);
+    assert.equal(isSequencePlaceholder('<REC-1000008>'), true);
+    assert.equal(isSequencePlaceholder('<ABONO/2026/0001>'), true);
+    assert.equal(isSequencePlaceholder('<a>'), true);
+  });
+
+  it('rejects a bare value with no angle brackets', () => {
+    assert.equal(isSequencePlaceholder('REC-1000008'), false);
+    assert.equal(isSequencePlaceholder('10000003'), false);
+  });
+
+  it('rejects unbalanced, empty and nested-bracket shapes', () => {
+    assert.equal(isSequencePlaceholder('<'), false);
+    assert.equal(isSequencePlaceholder('>'), false);
+    assert.equal(isSequencePlaceholder('<>'), false);
+    assert.equal(isSequencePlaceholder('<10000000'), false);
+    assert.equal(isSequencePlaceholder('10000000>'), false);
+    assert.equal(isSequencePlaceholder('<a<b>>'), false);
+    assert.equal(isSequencePlaceholder('<a>b>'), false);
+    assert.equal(isSequencePlaceholder('<<a>>'), false);
+  });
+
+  it('rejects non-string values instead of throwing', () => {
+    assert.equal(isSequencePlaceholder(null), false);
+    assert.equal(isSequencePlaceholder(undefined), false);
+    assert.equal(isSequencePlaceholder(10000003), false);
+    assert.equal(isSequencePlaceholder({}), false);
+  });
+});
+
 describe('shouldSkipPayloadField', () => {
   const refs = (defaults = [], changed = []) => ({
     backendDefaultKeysRef: { current: new Set(defaults) },
@@ -438,6 +475,36 @@ describe('shouldSkipPayloadField', () => {
   it('skips NEO sequence placeholders', () => {
     assert.equal(call('documentNo', '<10000000>'), true);
     assert.equal(call('documentNo', 'SO-1'), false);
+  });
+
+  // ETP-5274: the placeholder matcher used to be `/^<\d+>$/`, so it only caught
+  // purely numeric previews. A doc-type whose sequence carries an alphanumeric
+  // prefix (e.g. "Factura rectificativa" → "<REC-1000008>") slipped through and
+  // was POSTed/PATCHed as a literal documentNo value.
+  it('skips a NEO sequence placeholder with a non-numeric prefix', () => {
+    assert.equal(call('documentNo', '<REC-1000008>'), true);
+    assert.equal(call('documentNo', '<ABONO/2026/0001>'), true);
+    assert.equal(call('documentNo', '<currentnext>'), true);
+  });
+
+  it('keeps a real document number that merely looks like a placeholder body', () => {
+    // No angle brackets at all — this is the value the user/backend persisted.
+    assert.equal(call('documentNo', 'REC-1000008'), false);
+  });
+
+  it('keeps a value with an unbalanced angle bracket', () => {
+    assert.equal(call('documentNo', '<10000000'), false);
+    assert.equal(call('documentNo', '10000000>'), false);
+    assert.equal(call('documentNo', '<REC-1000008'), false);
+  });
+
+  it('keeps values with nested or empty angle brackets (documented behavior of [^<>]+)', () => {
+    // `[^<>]+` deliberately forbids inner angle brackets and requires at least
+    // one character, so none of these are treated as sequence placeholders.
+    assert.equal(call('documentNo', '<a<b>>'), false);
+    assert.equal(call('documentNo', '<<a>>'), false);
+    assert.equal(call('documentNo', '<a>b>'), false);
+    assert.equal(call('documentNo', '<>'), false);
   });
 
   it('skips untouched short numeric backend defaults', () => {
@@ -698,6 +765,45 @@ describe('buildPatchPayload', () => {
 
   it('includes a field cleared to an empty string', () => {
     assert.deepEqual(buildPatchPayload({ id: '1', note: '' }, { id: '1', note: 'x' }), { note: '' });
+  });
+
+  // ETP-5274 round 2 — THE regression case. The create path filtered placeholders through
+  // shouldSkipPayloadField, but the PATCH path did not filter anything, so the form echoed
+  // `documentNo: '<REC-1000008>'` back. The backend then read it as "the caller chose this
+  // number" (clientSentDocumentNo=true) and skipped the re-numbering, while filterWriteRequest
+  // dropped it as read-only — leaving the OLD number persisted.
+  it('drops a sequence placeholder instead of patching it over the stored number', () => {
+    const payload = buildPatchPayload(
+      { id: '1', documentNo: '<REC-1000008>', transactionDocument: 'DOCTYPE_RECTIFICATIVE' },
+      { id: '1', documentNo: '10000003', transactionDocument: 'DOCTYPE_INVOICE' },
+    );
+    assert.ok(!('documentNo' in payload), 'documentNo must not reach the backend');
+    // The doc-type change that triggers the re-numbering still travels.
+    assert.deepEqual(payload, { transactionDocument: 'DOCTYPE_RECTIFICATIVE' });
+  });
+
+  it('drops a placeholder even when the stored value is also a placeholder', () => {
+    const payload = buildPatchPayload(
+      { id: '1', documentNo: '<REC-1000008>' },
+      { id: '1', documentNo: '<10000000>' },
+    );
+    assert.deepEqual(payload, {});
+  });
+
+  it('still sends a real user-authored document number', () => {
+    const payload = buildPatchPayload(
+      { id: '1', documentNo: 'MANUAL-42' },
+      { id: '1', documentNo: '10000003' },
+    );
+    assert.deepEqual(payload, { documentNo: 'MANUAL-42' });
+  });
+
+  it('does not mistake a value that merely contains angle brackets for a placeholder', () => {
+    const payload = buildPatchPayload(
+      { id: '1', note: '<a<b>>' },
+      { id: '1', note: 'old' },
+    );
+    assert.deepEqual(payload, { note: '<a<b>>' });
   });
 });
 

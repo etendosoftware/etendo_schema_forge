@@ -902,7 +902,51 @@ describe('ListView — selection bar actions', () => {
       token: 'fake-token',
       apiBaseUrl: 'http://localhost/api',
       windowName: 'test-entity',
+      // ETP-5302 — the slot ctx also carries an in-place refetch (see the two
+      // tests below for what it actually does).
+      refresh: expect.any(Function),
     }));
+  });
+
+  // ETP-5302 — `refresh` is what let BulkDocumentAction stop calling
+  // `window.location.reload()` after a bulk run: the full browser reload was never
+  // about the data, and it threw away scroll position, active filters and the whole
+  // SPA boot. Asserted through the captured slot ctx (and by actually invoking it)
+  // rather than on ListView internals, because that callback IS the public contract
+  // the bulk actions consume.
+  it('hands the bulkActions slot a refresh callback that refetches the list in place', () => {
+    const bulkActions = vi.fn(() => <button data-testid="host-bulk-action" />);
+    render(<ListView {...defaultProps} bulkActions={bulkActions} />);
+    selectRows();
+
+    const ctx = bulkActions.mock.calls.at(-1)[0];
+    expect(typeof ctx.refresh).toBe('function');
+
+    // Delta rather than "not called at all": mounting/selection must not refetch,
+    // but the assertion that matters is that invoking `refresh` does.
+    const before = refreshMock.mock.calls.length;
+    act(() => { ctx.refresh(); });
+
+    expect(refreshMock.mock.calls.length).toBe(before + 1);
+  });
+
+  it('keeps the refresh callback identity stable across re-renders', () => {
+    const bulkActions = vi.fn(() => <button data-testid="host-bulk-action" />);
+    const { rerender } = render(<ListView {...defaultProps} bulkActions={bulkActions} />);
+    selectRows();
+    const first = bulkActions.mock.calls.at(-1)[0].refresh;
+
+    rerender(<ListView {...defaultProps} bulkActions={bulkActions} entityLabel="Changed Label" />);
+    const second = bulkActions.mock.calls.at(-1)[0].refresh;
+
+    // The callback reads `hook.refresh` through a ref, so its own identity never
+    // changes even though `hook.refresh`'s does. A host that memoizes on it (or
+    // puts it in a dependency array) must not be re-run on every list render.
+    expect(second).toBe(first);
+    // Still wired to the live refetch after the re-render, not a stale closure.
+    const before = refreshMock.mock.calls.length;
+    act(() => { second(); });
+    expect(refreshMock.mock.calls.length).toBe(before + 1);
   });
 });
 
