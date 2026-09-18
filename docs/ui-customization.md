@@ -1415,7 +1415,13 @@ Default: `"classic"`. Validator F12 enforces the enum (`"classic"` | `"inlineEdi
 
 The fix could **not** simply wrap the header row + body rows together in one `overflow-x-auto` div — the header uses `position: sticky; top: 0` to stay pinned while the page scrolls, and that same CSS overflow-interdependence rule means any `overflow-x` wrapper placed between the sticky header and its real scrolling ancestor forces that wrapper's `overflow-y` to `auto` too, which silently breaks the header's stickiness (verified empirically before landing this shape — see the ETP-5133 comments in the component). The header strip and the body rows are therefore **two independently-scrolled wrappers**: the header's own inner div uses `overflow-x-hidden` and is driven programmatically (`scrollLeft`) by the body rows' `overflow-x-auto` wrapper's `onScroll` handler, so columns stay pixel-aligned while the header keeps its own (unaffected) sticky ancestor chain. `pb-6` on the rows wrapper mirrors the same bottom padding `DataTable`'s classic (non-inlineEditable) path already uses around its own `<Table>`, for the same reason: the forced `overflow-y: auto` would otherwise clip a hovered last row's shadow.
 
-**Known gap (not covered by ETP-5133):** the add-line form is rendered by a separate, header-hidden/data-hidden `<DataTable>` instance (see the generated `<Window>LineTable.jsx` — it mirrors `InlineLinesPanel`'s own flex column widths via a `<colgroup>`) that sits as a **sibling** below `InlineLinesPanel`, not inside it. That companion table's wrapper (`DataTable.jsx`, the `linesLayout === 'inlineEditable'` branch) intentionally opts out of any local overflow handling (`[&>div]:!overflow-visible`) to avoid the same sticky-header conflict, which means an active "Add line" row with a wide column set can still overflow past the pane at narrow viewports. This is a distinct, currently-unfixed instance of the same underlying pattern — flag it before extending this area further.
+**The add-row companion table (the ETP-5133 known gap, closed by ETP-5332):** the add-line form is rendered by a separate, header-hidden/data-hidden `<DataTable>` instance (see the generated `<Window>LineTable.jsx` — it mirrors `InlineLinesPanel`'s own flex column widths via a `<colgroup>`) that sits as a **sibling** below `InlineLinesPanel`, not inside it. ETP-5133 left it opted out of all local overflow handling (`[&>div]:!overflow-visible`), to avoid the same sticky-header conflict, so an active "Add line" row with a wide column set overflowed past the pane. The create-contact popup (§19b) made that unavoidable rather than merely narrow — Contacts' *Persona* tab needs 1464px of columns and *Cuenta Bancaria* 1968px against the dialog's ~1134px, so no configuration makes them fit and horizontal scroll is mandatory. Three things had to change together:
+
+1. **The colgroup now declares literal pixels, not `calc()`.** `growColumnWidth()` used to emit `calc((100% - Fixed) / N + Basis)` per growing column. **Chrome does not honour that inside `table-layout: fixed`** — it ignores the differing `Basis` terms and splits the space equally, which is why Persona's five columns (real bases 224/224/320/224/224) all measured an identical 243px. Wrapping it in `max()` changed nothing; the whole expression is what it declines to resolve per column. `DataTable` therefore measures its own container with a `ResizeObserver` and does flexbox's arithmetic in JS: `basis + max(0, leftover / growCount)`. Before the first measurement it returns the bare basis, so a column can never render narrower than its own width demand.
+2. **The companion table carries a `minWidth`.** `getTableContainerStyle(minWidthPx)` adds it, so `width: '100%'` can no longer squeeze columns below what the `<colgroup>` asked for; the excess becomes scroll instead. The `[&>div]:!overflow-visible` opt-out is now scoped to `!hideHeader`, so only this companion gets a real `overflow-x-auto` — every other `inlineEditable` mount keeps the original behaviour.
+3. **The two siblings share one scroll position.** ETP-5133's `scrollLeft` handoff runs *inside* `InlineLinesPanel` (its rows drive its sticky header) and cannot reach across the sibling boundary, so both now join a group keyed by entity in `tools/app-shell/src/lib/linesScrollSync.js`. A late joiner adopts the group's current offset, which matters because the add-row mounts only when the user clicks "Add …" — without it, it would appear at `scrollLeft` 0 beneath an already-scrolled header.
+
+**A caveat for anyone testing this area:** jsdom has no layout engine and no `ResizeObserver`, so a render-based test always exercises the pre-measurement branch and every grow column comes out at its bare basis. The distribution arithmetic is pinned by direct unit tests on `growColumnWidth()` in `linesAddRowColumnAlignment.vitest.jsx`, not through a render — and for the same reason `linesScrollSync.vitest.js` drives stub elements rather than real DOM nodes, whose `scrollLeft` always reads back 0 under jsdom and would make its assertions pass vacuously.
 
 ---
 
@@ -2107,9 +2113,9 @@ piece is the Products window's:
 - **The form.** `target.loadForm()` lazily imports the generated `<Entity>Form.jsx` through the
   `@generated` vite alias and renders it as-is, so labels, types, options, requiredness, defaults,
   references and compiled `readOnlyLogic` stay owned by `artifacts/product/decisions.json`: a
-  `make regen ONLY=product` propagates into the popup for free. This is deliberately unlike
-  `CreateContactModal` / `EntityCreationModal`, which hand-roll their field lists and have already
-  drifted from the window they mirror.
+  `make regen ONLY=product` propagates into the popup for free. This was deliberately unlike
+  `CreateContactModal` / `EntityCreationModal`, which hand-rolled their field lists and had drifted
+  from the Contacts window they mirrored — both deleted by ETP-5332 (see §19b).
 - **The tab strip.** `renderPrimaryTabButtons(target.tabsVariant, tabs, …)` from
   `detailViewHelpers.jsx` — the same helper and the same `'pill'` variant `ProductPage` passes to
   `DetailView`, so the General / Additional Info strip is literally the same control. Captions run
@@ -2252,6 +2258,77 @@ close-means-done semantics), `ProductDrawerShell.vitest.jsx` (`— create afford
   per-window note on the affordance.
 - [`docs/request-policy.md`](request-policy.md) — the `useApiFetch`/`apiFetch` helper both the modal
   and the selector re-query go through.
+
+### 19b. The second target: Contacts (`LOOKUP_CREATE_TARGETS.contact`) — ETP-5332
+
+**What it does:** the **"+ Crear contacto"** row in a document's `Contacto` selector now opens the
+**real Contacts window**, mounted at `/contacts/new` inside the dialog by the §19 machinery. It used
+to open `CreateContactModal`, a hand-rolled reimplementation of that window.
+
+**What was deleted** — ~1,972 lines: `CreateContactModal.jsx` (667), `EntityCreationModal.jsx` (737,
+whose only real importer was CreateContactModal), `AddressSection.jsx` (224), `FinancialSection.jsx`
+(263), `contactModalConfig.js` (81), plus their tests. `contactsFieldValidation.js` **stays** — it is
+shared by `EntityForm`, `DataTable`, `useEntity`, `InlineLinesPanel` and `OrganizationPage`.
+
+**What did NOT change, and why that is the point.** None of the six document windows
+(`sales-order`, `sales-quotation`, `sales-invoice`, `purchase-order`, `purchase-invoice`,
+`goods-shipment`) were touched. The trigger chain is untouched too — `CreateContactContext` →
+`EntityForm.SearchSelectField` → `CreatableSearchSelect.onCreateRequest`. The single change point is
+what `useCreateContactModal`'s `onOpen` renders, and `onSelect` still receives `{ id, name }`.
+
+**The affordance is NOT resolved from a selector URL.** Unlike `product`, the contact target never
+goes through `resolveLookupCreateTarget`: that function is the product *drawer's* resolver, keyed off
+`{neoBaseUrl}/{spec}/{entity}/selectors/{column}`. The Contacto affordance predates the drawer
+pattern and is context-wired, and `useCreateContactModal` already knows the contacts API base and the
+document's sale/purchase nature — so it spreads the registry entry with its own `apiBaseUrl`. There is
+no `allowedSpecs` on this entry.
+
+#### Seeding a new record — the `initialData` extension point
+
+Window mode mounts the window at its own `new` route, and the window runs **its own** `useEntity`.
+`target.prefill` only ever reached the *fallback* generated form, so in window mode there was no way
+to pre-fill anything. Three things depended on it:
+
+- the typed query filling Razón social,
+- the document's sale/purchase nature checking **Cliente** or **Proveedor** — not cosmetic: a contact
+  created from a purchase invoice that is not flagged `vendor` never comes back in a purchase
+  selector, so the user creates it, uses it once and cannot find it again,
+- the Copilot OCR flow's extracted values.
+
+`useEntity` therefore takes an `initialData` option, applied in `handleNew`:
+
+```js
+const seed = initialDataRef.current ?? {};
+userChangedKeysRef.current = new Set(Object.keys(seed));   // ← the whole trick
+setEditing({ ...seed });
+```
+
+**Marking the seeded keys as user-changed is the entire mechanism.** The pre-existing ETP-4741 guard
+`mergeDefaultsPreservingUserEdits` already refuses to overwrite a user-changed key, so the in-flight
+`GET /<entity>/defaults` response cannot clobber the seed — no new race handling was written. It also
+stops `shouldSkipPayloadField` from dropping a seeded legacy-looking numeric FK id out of the POST.
+
+- `initialData` is held in a **ref**, not in `handleNew`'s dependency array. `useNewRouteEditingReset`
+  (`detailViewHelpers.jsx`) has `handleNew` in its effect deps, so an unstable `handleNew` — which any
+  caller passing an object literal would cause — re-fires that effect.
+- `DetailView` forwards the prop into its `useEntity` call. From there it reaches the Contacts window
+  through the **existing** `{...props}` spreads (`ContactsWindow` → `BusinessPartnerPage` →
+  `DetailView`); no intermediate file needed changing.
+- **The caller must memoise `target`.** `RecordCreateModal`'s reset effect has `target` in its
+  dependency array: a fresh object per render reloads the window module and refetches `/defaults` on
+  every keystroke in the document behind the dialog.
+
+Seed keys are verified `businessPartner` field names — `name`, `customer`, `vendor` — built by the
+exported `buildContactSeed(query, { documentType })`.
+
+**Known gap.** `initialData` seeds the **header record only**. The Copilot OCR flow also extracts
+`address` / `postalCode` / `city` / `country`, which belong to the `locationAddress` **child tab**, so
+those are no longer pre-filled and the user types them. Seeding a child tab's new row is a different
+mechanism from `useEntity.handleNew`. Debt: `ocr-contact-address-prefill`.
+
+**Person vs company captions.** A company carries `name`; a PERSON is stored as
+`etgoFirstname`/`etgoLastname` and may have an empty `name`, so callers resolve the selector caption
+through the exported `resolveContactName(record)` rather than reading `name` directly.
 
 ---
 

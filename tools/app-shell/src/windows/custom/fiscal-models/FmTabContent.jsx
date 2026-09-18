@@ -90,7 +90,11 @@ export function SourcesTab({ decl, t }) {
                 if (hasBlock)     rowClass = 'fm-dtable__row--block';
                 else if (hasWarn) rowClass = 'fm-dtable__row--warn';
                 return (
-                  <tr key={r.ref} className={rowClass}>
+                  // ETP-5393 Bug A: key on the invoice's own id, not `ref` (documentno) —
+                  // AR/AP numbering sequences are independent and can legitimately collide
+                  // (e.g. two different invoices both numbered REC-1000000). Fall back to
+                  // `ref` only for rows from a backend that hasn't been redeployed yet.
+                  <tr key={r.id ?? r.ref} className={rowClass}>
                     <td className="strong">{fmtDate(r.date)}</td>
                     <td>{fmtDate(r.accountingDate)}</td>
                     <td>{r.ref}</td>
