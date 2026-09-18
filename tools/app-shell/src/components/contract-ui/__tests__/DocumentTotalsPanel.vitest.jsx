@@ -132,6 +132,35 @@ describe('DocumentTotalsPanel', () => {
     expect(screen.queryByText(/addTotalDiscount/)).not.toBeInTheDocument();
   });
 
+  // ETP-5321 — the total-discount % input used to do its own ad-hoc parsing
+  // (`e.target.value.replace(/[^\d.]/g, '')`), which silently dropped the
+  // comma decimal separator (es-ES locale default in this test env — see
+  // currencyFormatConfig.js's DEFAULT_SEPARATORS): typing "10,5" landed as
+  // "105", then the existing [0,100] clamp turned it into 100. Now routed
+  // through MaskedAmountInput/parseLocaleNumber (the same canonical path
+  // InlineLinesPanel's per-line discount cell already uses), so the comma
+  // is read as the decimal separator instead of being discarded.
+  describe('ETP-5321 — total discount % input accepts a comma decimal', () => {
+    it('commits 10.5, not 100 or 105, when the user types "10,5"', async () => {
+      const user = userEvent.setup();
+      const onTotalDiscountChange = vi.fn();
+      render(
+        <DocumentTotalsPanel
+          lines={LINES}
+          lineConfig={LINE_CONFIG}
+          formatAmount={(v) => `${v}`}
+          onTotalDiscountChange={onTotalDiscountChange}
+        />
+      );
+      await user.click(screen.getByText(/addTotalDiscount/));
+      const pctInput = screen.getByTestId('TotalDiscountInput');
+      await user.clear(pctInput);
+      await user.type(pctInput, '10,5');
+      await user.tab();
+      expect(onTotalDiscountChange).toHaveBeenLastCalledWith(10.5);
+    });
+  });
+
   // ETP-4777 — the Form summary panel must never show a client-recomputed
   // total that differs from the persisted backend value (the one the Grid
   // and the printed document show). Whenever nothing is actively being

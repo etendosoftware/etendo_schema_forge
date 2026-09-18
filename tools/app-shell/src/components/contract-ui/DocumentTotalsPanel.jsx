@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { computeDocumentTotals } from '@/lib/documentTotals';
 import { Checkbox } from '@/components/ui/checkbox';
+import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 
 /**
  * DocumentTotalsPanel — generic totals block for document detail views.
@@ -189,20 +190,19 @@ export default function DocumentTotalsPanel({
                     data-testid="Checkbox__2bc3fb" />
                   <span className="whitespace-nowrap">{ui('totalDiscount')}</span>
                 </div>
-                <input
-                  type="text"
-                  inputMode="numeric"
+                <MaskedAmountInput
+                  bare
+                  grouping={false}
+                  inputMode="decimal"
                   value={inputPct}
-                  onChange={e => {
-                    const raw = e.target.value.replace(/[^\d.]/g, '');
-                    setInputPct(raw === '' ? 0 : Number(raw));
-                  }}
-                  onBlur={e => {
-                    const v = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                  onChange={(clean, parsed) => setInputPct(parsed ?? 0)}
+                  onCommit={(parsed) => {
+                    const v = Math.max(0, Math.min(100, parsed ?? 0));
                     setInputPct(v);
                     onTotalDiscountChange?.(v);
                   }}
                   className="w-12 rounded border border-border-control px-1.5 py-0.5 text-xs focus:outline-none focus:ring-2 focus:ring-focus-ring"
+                  data-testid="TotalDiscountInput"
                 />
                 <span className="text-xs text-muted-foreground">%</span>
                 <span className="tabular-nums text-muted-foreground ml-auto whitespace-nowrap">
