@@ -22043,6 +22043,7 @@
     "fm.upcoming.title": "Próximos vencimientos",
     "fm.upcoming.empty": "Sin vencimientos próximos",
     "fm.page.identificacion": "Identificación",
+    "fm.box.error.negative_not_allowed": "La casilla {box} no admite valores negativos.",
     "fm.box.section.identificacion": "1 - Identificación",
     "fm.ident.nif": "NIF",
     "fm.ident.nombre": "Apellidos y Nombre o Razón Social",

@@ -602,6 +602,120 @@ describe('FmBoxes303 — editable cell input events', () => {
   });
 });
 
+// ── stale pending draft on re-open (ETP-5393 Bug C follow-up) ────────────────
+// Manual-QA regression: typing a negative value into box 111 (or 77) gets clamped to 0
+// by FmModel303Page's handleBoxChange on commit, and the read-only display correctly
+// shows 0,00 €. But re-opening the SAME cell's editor (pencil click) used to show the
+// original unclamped "-12" draft again, because `pendingValues[boxNum]` was never reset
+// on commit or on re-entering edit mode — it kept whatever the input last held, even
+// though the box's real/persisted value had since changed underneath it. This exercises
+// FmBoxes303 in isolation: after a commit, the parent re-renders with the corrected
+// (post-clamp) `boxes` value, and re-opening the editor must read from THAT, not from
+// a leftover draft.
+
+describe('FmBoxes303 — editable cell re-edit does not leak a stale pending draft (ETP-5393)', () => {
+  it('box 111: types -12, commits (blur), parent clamps to 0 — reopening the editor shows 0, not -12', () => {
+    const onBoxChange = vi.fn();
+    const { container, rerender } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 111: 0 }}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+
+    // Open the editor for box 111 and type the invalid negative value.
+    const findEditBtnFor111 = (c) => Array.from(c.querySelectorAll('.fm-aeat-cell')).find(
+      cell => cell.querySelector('.fm-aeat-cell__num')?.textContent === '111'
+    )?.querySelector('.fm-aeat-cell__edit-btn');
+
+    fireEvent.click(findEditBtnFor111(container));
+    let input = container.querySelector('.fm-aeat-cell__input');
+    expect(input).toBeTruthy();
+    fireEvent.change(input, { target: { value: '-12' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(111, '-12');
+    // Editor closed after commit.
+    expect(container.querySelector('.fm-aeat-cell__input')).toBeNull();
+
+    // Simulate the parent (FmModel303Page's handleBoxChange) clamping the negative
+    // commit to 0 and re-rendering this component with the corrected boxes prop —
+    // the read-only cell must show the clamped value.
+    rerender(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 111: 0 }}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+
+    // Reopen the editor for the same cell — it must start from the current
+    // persisted value (0), never the stale "-12" draft from the previous session.
+    fireEvent.click(findEditBtnFor111(container));
+    input = container.querySelector('.fm-aeat-cell__input');
+    expect(input).toBeTruthy();
+    expect(input.value).toBe('0');
+  });
+
+  it('non-clamped box (76): a committed draft does not leak into the next edit session either', () => {
+    const onBoxChange = vi.fn();
+    const { container, rerender } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 76: 100 }}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+
+    fireEvent.click(container.querySelector('.fm-aeat-cell__edit-btn'));
+    let input = container.querySelector('.fm-aeat-cell__input');
+    fireEvent.change(input, { target: { value: '250' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onBoxChange).toHaveBeenCalledWith(76, '250');
+    expect(container.querySelector('.fm-aeat-cell__input')).toBeNull();
+
+    // Parent commits the new value and re-renders with it.
+    rerender(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 76: 250 }}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+
+    fireEvent.click(container.querySelector('.fm-aeat-cell__edit-btn'));
+    input = container.querySelector('.fm-aeat-cell__input');
+    expect(input.value).toBe('250');
+  });
+
+  it('Escape clears the pending draft too — reopening does not resurrect the discarded value', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 76: 100 }}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+
+    fireEvent.click(container.querySelector('.fm-aeat-cell__edit-btn'));
+    let input = container.querySelector('.fm-aeat-cell__input');
+    fireEvent.change(input, { target: { value: '999' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(onBoxChange).not.toHaveBeenCalled();
+    expect(container.querySelector('.fm-aeat-cell__input')).toBeNull();
+
+    fireEvent.click(container.querySelector('.fm-aeat-cell__edit-btn'));
+    input = container.querySelector('.fm-aeat-cell__input');
+    expect(input.value).toBe('100');
+  });
+});
+
 // ── sin_actividad section ─────────────────────────────────────────────────────
 
 describe('FmBoxes303 — sin_actividad section', () => {
@@ -862,25 +976,25 @@ describe('FmBoxes303 — datos_bancarios × rectificativa visibility matrix (any
     expect(container.querySelector('.fm-aeat-section')).toBeNull();
   });
 
-  it('tipo I + rectificativa true → visible (the actual bug fix — rectificativa branch of anyOf)', () => {
+  it('tipo I + rectificativa true + box 111 non-zero → visible (the actual bug fix — rectificativa branch of anyOf)', () => {
     const { container } = render(
       <FmBoxes303
         {...BASE_PROPS}
         boxes={{}}
         sectionIds={['datos_bancarios']}
-        identification={{ tipo_declaracion: 'I', rectificativa: true }}
+        identification={{ tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true }}
       />
     );
     expect(container.querySelector('.fm-aeat-section')).toBeTruthy();
   });
 
-  it('tipo V + rectificativa true → visible (V is reachable again once rectificativa is checked)', () => {
+  it('tipo V + rectificativa true + box 111 non-zero → visible (V is reachable again once rectificativa is checked)', () => {
     const { container } = render(
       <FmBoxes303
         {...BASE_PROPS}
         boxes={{}}
         sectionIds={['datos_bancarios']}
-        identification={{ tipo_declaracion: 'V', rectificativa: true }}
+        identification={{ tipo_declaracion: 'V', rectificativa: true, _box111NonZero: true }}
       />
     );
     expect(container.querySelector('.fm-aeat-section')).toBeTruthy();
@@ -898,9 +1012,14 @@ describe('FmBoxes303 — datos_bancarios × rectificativa visibility matrix (any
 // must be unaffected by this specific change.
 
 describe('FmBoxes303 — datos_bancarios individual bank field visibility (ETP-4456 follow-up)', () => {
+  // ETP-5393 follow-up — all 7 bank fields now carry a `requiredWhen`, so several of the
+  // identification states already exercised here (e.g. tipo D) now render with a trailing
+  // red-asterisk required-mark ("fm.ident.bank.swift_bic*") on top of the label. These tests are
+  // about VISIBILITY, not requiredness, so the helper strips a trailing "*" before comparing —
+  // requiredness itself is covered separately below in "required-mark rendering".
   const bankFieldLabels = (container) =>
     Array.from(container.querySelectorAll('.fm-aeat-ident-inline-field__label'))
-      .map(el => el.textContent);
+      .map(el => el.textContent.replace(/\*$/, ''));
 
   it('tipo D + rectificativa false → bank_swift_bic visible (regression guard — pre-fix correct behavior preserved)', () => {
     const { container } = render(
@@ -929,13 +1048,17 @@ describe('FmBoxes303 — datos_bancarios individual bank field visibility (ETP-4
     expect(bankFieldLabels(container)).not.toContain('fm.ident.bank.swift_bic');
   });
 
-  it('tipo I + rectificativa true → bank_swift_bic visible (the actual bug fix — commit edb448754)', () => {
+  // ETP-5393 manual-QA fix — the rectificativa branch now also requires `_box111NonZero`,
+  // so this scenario must carry a non-zero box 111 to stay visible (see
+  // fm303Layouts.bankVisibilityReactivity.vitest.js for the box111==0/rectificativa-false
+  // hide-again coverage).
+  it('tipo I + rectificativa true + box 111 non-zero → bank_swift_bic visible (the actual bug fix — commit edb448754)', () => {
     const { container } = render(
       <FmBoxes303
         {...BASE_PROPS}
         boxes={{}}
         sectionIds={['datos_bancarios']}
-        identification={{ tipo_declaracion: 'I', rectificativa: true }}
+        identification={{ tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true }}
       />
     );
     expect(bankFieldLabels(container)).toContain('fm.ident.bank.swift_bic');
@@ -953,13 +1076,13 @@ describe('FmBoxes303 — datos_bancarios individual bank field visibility (ETP-4
     expect(bankFieldLabels(container)).toContain('fm.ident.bank.swift_bic');
   });
 
-  it('also covers bank_nombre, bank_direccion, bank_ciudad, bank_pais, bank_sepa for the bug-fix case (tipo I + rectificativa true)', () => {
+  it('also covers bank_nombre, bank_direccion, bank_ciudad, bank_pais, bank_sepa for the bug-fix case (tipo I + rectificativa true + box 111 non-zero)', () => {
     const { container } = render(
       <FmBoxes303
         {...BASE_PROPS}
         boxes={{}}
         sectionIds={['datos_bancarios']}
-        identification={{ tipo_declaracion: 'I', rectificativa: true }}
+        identification={{ tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true }}
       />
     );
     const labels = bankFieldLabels(container);
@@ -967,13 +1090,13 @@ describe('FmBoxes303 — datos_bancarios individual bank field visibility (ETP-4
       .forEach(key => expect(labels).toContain(key));
   });
 
-  it('bank_iban is unaffected by the field-level visibleWhen change — visible whenever the section is (tipo I + rectificativa true)', () => {
+  it('bank_iban is unaffected by the field-level visibleWhen change — visible whenever the section is (tipo I + rectificativa true + box 111 non-zero)', () => {
     const { container } = render(
       <FmBoxes303
         {...BASE_PROPS}
         boxes={{}}
         sectionIds={['datos_bancarios']}
-        identification={{ tipo_declaracion: 'I', rectificativa: true }}
+        identification={{ tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true }}
       />
     );
     // bank_iban has no field-level visibleWhen — it renders whenever the section
@@ -1044,6 +1167,105 @@ describe('FmBoxes303 — datos_bancarios individual bank field visibility (ETP-4
       />
     );
     expect(bankFieldLabels(container).some(t => t.startsWith('fm.ident.bank.iban'))).toBe(true);
+  });
+});
+
+// ── datos_bancarios required-mark rendering (ETP-5393 follow-up, manual-QA fix) ──────────────
+// bank_iban carries `_BANK_IBAN_REQUIRED_WHEN` (fm303Layouts.js): required for tipo U/D/X
+// unconditionally (condition A, AEAT EDID065 — a plain devolución/domiciliación), OR for any
+// tipo when rectificativa is checked AND box 111 is non-zero (condition B). The other 6 bank
+// fields (bank_swift_bic, bank_nombre, bank_direccion, bank_ciudad, bank_pais, bank_sepa)
+// carry the NARROWER `_BANK_FULL_BLOCK_REQUIRED_WHEN` — condition B ONLY. A plain tipo D/U/X
+// devolución therefore shows those 6 fields (via `_BANK_DVX_VW`) WITHOUT the required-mark;
+// only bank_iban gets the "*" in that case. FmBoxes303's label rendering appends the raw
+// `fm-aeat-required-mark` ("*") span via the shared `isFieldRequired(f, identification)` — the
+// SAME function `getMissingRequiredFields` uses — so no per-field rendering code was added here;
+// these tests only lock in the resulting DOM.
+describe('FmBoxes303 — datos_bancarios required-mark rendering (ETP-5393 follow-up)', () => {
+  const rawBankFieldLabels = (container) =>
+    Array.from(container.querySelectorAll('.fm-aeat-ident-inline-field__label')).map(el => el.textContent);
+
+  const ALL_BANK_LABEL_KEYS = [
+    'fm.ident.bank.iban', 'fm.ident.bank.swift_bic', 'fm.ident.bank.nombre',
+    'fm.ident.bank.direccion', 'fm.ident.bank.ciudad', 'fm.ident.bank.pais', 'fm.ident.bank.sepa',
+  ];
+  // bank_iban has no field-level visibleWhen; the other 6 require _BANK_DVX_VW (tipo D/V/X or
+  // rectificativa checked) to even render.
+  const DVX_GATED_LABEL_KEYS = ALL_BANK_LABEL_KEYS.filter(k => k !== 'fm.ident.bank.iban');
+
+  it('tipo D (plain devolución, condition A alone) → only bank_iban carries the required-mark ("*"); the other 6 render WITHOUT it', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'D', rectificativa: false }}
+      />
+    );
+    const labels = rawBankFieldLabels(container);
+    expect(labels).toContain('fm.ident.bank.iban*');
+    DVX_GATED_LABEL_KEYS.forEach(key => {
+      expect(labels).toContain(key);
+      expect(labels).not.toContain(`${key}*`);
+    });
+  });
+
+  it('tipo I + rectificativa false → no bank field renders at all (section hidden, nothing to mark)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'I', rectificativa: false }}
+      />
+    );
+    expect(rawBankFieldLabels(container)).toHaveLength(0);
+  });
+
+  // ETP-5393 manual-QA fix — this used to assert the DVX-gated fields stayed visible
+  // (just without the asterisk) when box 111 is 0. Manual QA confirmed a visible-but-
+  // unrequired bank block reads as a bug: the whole section (and these fields with it)
+  // must hide again once box 111 drops back to 0, not just lose its required-mark. See
+  // `_BANK_DVX_VW`/`sectionVisibleWhen` in fm303Layouts.js.
+  it('tipo I + rectificativa true + box 111 == 0 → section (and DVX-gated fields) hidden again, not just unrequired', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'I', rectificativa: true, _box111NonZero: false }}
+      />
+    );
+    expect(container.querySelector('.fm-aeat-section')).toBeNull();
+    const labels = rawBankFieldLabels(container);
+    DVX_GATED_LABEL_KEYS.forEach(key => expect(labels).not.toContain(key));
+    expect(labels).toHaveLength(0);
+  });
+
+  it('tipo I + rectificativa true + box 111 non-zero → visible DVX-gated fields render WITH the required-mark', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true }}
+      />
+    );
+    const labels = rawBankFieldLabels(container);
+    DVX_GATED_LABEL_KEYS.forEach(key => expect(labels).toContain(`${key}*`));
+  });
+
+  it('tipo U + rectificativa false → only bank_iban renders, and it carries the required-mark', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'U', rectificativa: false }}
+      />
+    );
+    const labels = rawBankFieldLabels(container);
+    expect(labels).toEqual(['fm.ident.bank.iban*']);
   });
 });
 

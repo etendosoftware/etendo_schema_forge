@@ -502,29 +502,41 @@ The top of the Boxes tab shows the declaration type selector and, conditionally,
 
 **`tipo_declaracion` options:** `C` (Compensación), `D` (Devolución), `I` (Ingreso), `U` (Domiciliación), `N` (Resultado cero), `V` (Devolución cta. corriente), `X` (Devolución transferencia extranjero).
 
-**`datos_bancarios` visibility** (`sectionVisibleWhen`, ETP-4456): shown when `tipo_declaracion ∈
-{U, D, X}` — the only types AEAT allows an IBAN for outside a rectificativa (error `EDID065`
-rejects the submission if IBAN is present for any other tipo) — **or** when `rectificativa` is
-checked, regardless of tipo. `sectionVisibleWhen` is an `anyOf` of those two conditions, not a
-flat tipo list. The `rectificativa` branch exists because Classic's backend
-(`checkBox111MandatoryParams`/`checkIsDeclarationRMandatoryParams` in `AEAT303Report2021`)
-requires the full bank-data block (BANK/IBAN/SWIFT/SEPA/ADDRESS/CITY/COUNTRY) for **any**
-rectificativa carrying a non-zero box 111, independently of `tipo_declaracion` — so a tipo-`I`
-(or `C`/`N`) rectificativa with a real box 111 amount still needs the section visible.
+**`datos_bancarios` visibility** (`sectionVisibleWhen`, ETP-4456, narrowed by the ETP-5393
+manual-QA fix): shown when `tipo_declaracion ∈ {U, D, X}` — the only types AEAT allows an IBAN
+for outside a rectificativa (error `EDID065` rejects the submission if IBAN is present for any
+other tipo) — **or** when `rectificativa` is checked **AND** box 111 (`_box111NonZero`, see
+"Manual box overrides") is non-zero, regardless of tipo. `sectionVisibleWhen` is an `anyOf` of
+`{tipo ∈ U,D,X}` and an `allOf` of `{rectificativa == true, _box111NonZero == true}` — not a flat
+tipo list, and not "rectificativa alone" any more. The `rectificativa` branch exists because
+Classic's backend (`checkBox111MandatoryParams`/`checkIsDeclarationRMandatoryParams` in
+`AEAT303Report2021`) requires the full bank-data block (BANK/IBAN/SWIFT/SEPA/ADDRESS/CITY/COUNTRY)
+for **any** rectificativa carrying a non-zero box 111, independently of `tipo_declaracion` — so a
+tipo-`I` (or `C`/`N`) rectificativa with a real box 111 amount still needs the section visible.
+**ETP-5393 manual-QA fix:** the original ETP-4456 follow-up gated visibility on "rectificativa
+checked" alone (any box 111 value), on the theory that this was a harmless UX-only over-show since
+the required-mark already tracked box 111 correctly. Manual QA confirmed that reads as a real bug
+from the user's seat: unchecking rectificativa, or clearing box 111 back to 0, left the whole
+bank-data block sitting on screen — just without the asterisk — instead of disappearing. Visibility
+now tracks the exact same condition as requiredness (see `_BANK_FULL_BLOCK_REQUIRED_WHEN` below),
+so the section (and its fields) hide/show together with the required-mark instead of drifting.
 
 **Section title** varies by tipo:
 - `D`, `X` → "Devolución"
 - `U` → "Domiciliación"
 
 **Field-level visibility (`_BANK_DVX_VW`)** — SWIFT/BIC, Bank name, address, city, and country
-share the same `anyOf` condition as the section itself (`tipo ∈ {D, V, X}` **or** `rectificativa`
-checked), so each is visible for exactly the cases the section is visible for, including a
-tipo-`I`/`C`/`N` rectificativa with a non-zero box 111. `tipo V` is no longer dead code: before
-this fix `V` could never reach the field gate because the section was hard-gated to `{U, D, X}`
-only; now, if `rectificativa` is checked, the section becomes visible for tipo `V` too, and the
-field-level `tipo ∈ {D, V, X}` clause is already satisfied — so these fields correctly render for
-a tipo-`V` rectificativa. `bank_iban` is the one exception: it has no field-level `visibleWhen`
-gate of its own, so its visibility is governed solely by the section-level `sectionVisibleWhen`.
+share the same `anyOf` condition as the section itself (`tipo ∈ {D, V, X}` **or**
+`rectificativa` checked **AND** box 111 non-zero), so each is visible for exactly the cases the
+section is visible for, including a tipo-`I`/`C`/`N` rectificativa with a non-zero box 111. `tipo
+V` is no longer dead code: before the ETP-4456 fix `V` could never reach the field gate because
+the section was hard-gated to `{U, D, X}` only; now, if `rectificativa` is checked and box 111 is
+non-zero, the section becomes visible for tipo `V` too, and the field-level `tipo ∈ {D, V, X}`
+clause is already satisfied — so these fields correctly render for a tipo-`V` rectificativa.
+`bank_iban` is the one exception: it has no field-level `visibleWhen` gate of its own, so its
+visibility is governed solely by the section-level `sectionVisibleWhen` — which is exactly why its
+`requiredWhen` (condition A OR B, see "Bug E" below) lines up one-to-one with when it can actually
+be seen and filled in.
 
 Both the section-level and field-level gates are evaluated by one shared `matchesSvw` function
 (`FmBoxes303.jsx`, unified as of `789547fde`). Before that commit, `FmBoxes303.jsx` carried a
@@ -692,6 +704,252 @@ so it is not silently reopened later:
   chain to `AEAT303Report2025` (see "Identification section" above, which already documents its
   bank-data visibility gating) — it does not feed into `recomputeDerivedBoxes`'s formula at all,
   by design, matching Classic's own handling. This is expected behavior, not a gap.
+
+### Six bugs found during live QA of a corrective-invoice period (ETP-5393)
+
+Found together while testing period 09/2026 with a sales corrective invoice and a purchase
+corrective invoice that happened to share a `documentno` — all four are independent root causes.
+
+**Bug A — Sources tab React key collision.** `FmTabContent.jsx`'s `SourcesTab` keyed each source
+row by `r.ref` (the invoice's `documentno`) alone. AR and AP invoice numbering sequences are
+independent, so a sales invoice and a purchase invoice can legitimately share the same
+`documentno` (confirmed live: two different invoices, one sales one purchase, both `REC-1000000`)
+— a genuine React duplicate-key collision, silently dropping one of the two rows from the DOM.
+`Fiscal303SourcesSupport.buildNewInvoiceRow` (com.etendoerp.go) already grouped rows internally by
+`inv.getId()` (correctly unique) but never put that id into the row map it returns, so the
+frontend had no collision-free identifier to key on. Fixed by adding `id: inv.getId()` to the row
+map (`Fiscal303BoxesHandler.buildResponse`'s generic per-field serialization loop picks it up
+automatically — no separate wiring needed there) and keying `SourcesTab`'s `<tr>` on `r.id ?? r.ref`
+(the `?? r.ref` fallback only matters transiently, for a frontend deployed ahead of the backend).
+This tab is shared with Modelo 349 (`FmModel349Page.jsx`), so the fix applies to both models, not
+just 303.
+
+**Bug B — "IVA deducible"/"Resultado" KPIs show "—" (NaN) instead of a computed value.** A JS
+type-coercion bug in the shared box-derivation helper, not a calculation error.
+`Fiscal303BoxesHandler.buildResponse` serializes every box value as a JSON **string**
+(`BigDecimal#toString`). `toBoxArray` (`fiscalModelsUtils.js`) passed that string straight through
+unchanged, so `recomputeDerivedBoxes`'s numeric accumulator did string concatenation the first
+time any of boxes `[29,31,33,35,37,39,41,42,43,44]` carried a non-zero string value (e.g.
+`0 + "-0.63"` → `"0-0.63"` → `Math.round(Number("0-0.63") * 100)` → `NaN`) — box 45 became `NaN`
+and cascaded through 46/64/66/69/71. It surfaced only now because this org's first purchase
+invoice with box-33-worthy VAT supplied the first non-zero string operand that triggers the path;
+every declaration before it had these boxes genuinely at `0` (a number, from the JS default, not
+yet a string). `getBoxValue`'s `??` in `applyComputeResult` does not catch `NaN` (only
+`null`/`undefined`), so the correct backend fallback (`res.summary?.deductible`) was never used
+either. Fixed by coercing `value` to `Number` inside `toBoxArray` itself (`fiscalModelsUtils.js`)
+— the single place both `FmModel303Page.jsx` and `FmListPage.jsx`'s own "Resultado" column consume
+box data — plus an explicit `Number.isFinite` guard in both `applyComputeResult`
+(`FmModel303Page.jsx`) and the equivalent list-row computation (`FmListPage.jsx`) so a future
+numeric regression can't again silently mask the correct backend value behind a plain-looking "—".
+
+**Bug C — no sign validation on editable boxes 111 and 77.** Classic's `AEAT303Report` engine
+hard-rejects a negative value for box 111 ("Rectificación – Importe",
+`AEAT303Report2024.java:276-278`, `@AEAT303_Negative_Not_Allowed_For_111@`) and box 77 ("IVA a la
+importación liquidado por la Aduana pendiente de ingreso", `AEAT303Report2015.java:149-162`,
+`@AEAT303_Negative_IVA_IMPORT_ADUANA@`) at file-generation time — these are the only two editable
+boxes with such a rule (confirmed by grepping the classic module for every `isNegative()`/`signum()`
+check). Go's previsualización had no equivalent check anywhere in the chain. Fixed on both ends:
+- **Frontend** (`FmModel303Page.jsx`'s `handleBoxChange`): a negative commit on box 111 or 77 is
+  clamped to `0` and surfaces `ui('fm.box.error.negative_not_allowed', { box })` as a toast error
+  — the same "make the invalid state structurally impossible" approach already used for the
+  box78/box110 clamp (ETP-5338 pt.2, see above). `FmBoxes303.jsx` also sets `min="0"` on these two
+  boxes' `<input type="number">` as a UX hint (not the actual enforcement — a browser `min` does
+  not block typing or blur).
+- **Backend** (`FiscalDeclCrudHandler.handleDeclPut`): a new `rejectNegativeManualBoxes` guard
+  inspects `manualData.manualOverrides` for boxes `"111"`/`"77"` and rejects the whole PUT with
+  400 if either is negative, leaving the declaration record completely untouched — unlike a
+  malformed `manualData` blob (tolerated elsewhere in this handler, see "Manual box overrides"
+  above), a negative value on either of these two boxes is a real business-rule violation, not
+  something to silently swallow.
+
+**Bug C follow-up — stale draft value reappeared on reopening a box's editor (`FmBoxes303.jsx`).**
+Manual QA of the box78 clamp surfaced a pre-existing, unrelated UX bug in the same inline box
+editor: type `-12` into an editable cell, let `handleBoxChange` clamp it to `0` on commit, then
+click the pencil icon to reopen that same cell — the editor showed the pre-clamp draft `-12`
+again instead of the persisted `0`. The cause is `pendingValues` (the editor's in-progress draft
+state, keyed by box number): the input's `onBlur`/Enter commit handler cleared `editingCell` but
+never deleted the box's own entry from `pendingValues`, so the next time that cell's editor
+opened, `renderCellInput`'s `value={pendingValues[boxNum] ?? ...}` preferred the stale leftover
+draft over the actual, already-committed value. Fixed with three small helpers threaded through
+both the "Boxes" grid and the identification-section box inputs: `clearPendingValue(boxNum)`
+deletes a single box's draft; `startEditingCell(boxNum)` calls it before opening the editor (so a
+reopen always starts from the current persisted/displayed value); `commitCellEdit(boxNum)` calls
+it right after the commit (so a fresh edit never inherits a previous session's draft either).
+`Escape` also now routes through `clearPendingValue` instead of leaving the draft in place. This
+is a pure input-hygiene fix — it does not change what value ends up persisted, only what the
+editor shows the next time it opens.
+
+**Bug D — deleting a draft declaration with incidents failed with a 500.**
+`FiscalDeclCrudHandler#handleDeclDelete` calls `OBDal.getInstance().remove(decl)` without first
+deleting the declaration's `ETGO_Fiscal_Decl_Incident` rows. The FK `ETGO_FDI_DECL_FK`
+(`etgo_fiscal_decl_incident.etgo_fiscal_decl_id → etgo_fiscal_decl.etgo_fiscal_decl_id`) had no
+`ON DELETE` behavior (`NO ACTION`), so Postgres rejected the header delete whenever the
+declaration had at least one incident row (e.g. after a failed AEAT submission attempt that
+reverted to draft) — the user saw an opaque 500 ("No se pudo eliminar la declaración."), and
+declarations with zero incidents deleted fine, which is why this went unnoticed. Fixed the same
+way as the identical class of bug in `ETGO_INVITATION_USER_FK` (ETP-4830): adding
+`onDelete="cascade"` directly to `ETGO_FDI_DECL_FK` in
+`src-db/database/model/tables/ETGO_FISCAL_DECL_INCIDENT.xml` — this is `update.database`'s actual
+source of truth (forward XML→DB only), so unlike a raw `ALTER TABLE` against the live DB, it is
+never reverted by a rebuild. No change was needed in `handleDeclDelete` itself: `OBDal.remove`
+issues the same DELETE either way, and Postgres now cascades it to the incident rows. Verified by
+running `update.database` locally and confirming `pg_constraint.confdeltype = 'c'` for
+`etgo_fdi_decl_fk`, then inserting a draft declaration + incident row and deleting the declaration
+directly — the incident row is removed automatically, no FK violation.
+
+**Bug E — `bank_iban` was required unconditionally whenever `datos_bancarios` was visible.**
+`fm303Layouts.js`'s `bank_iban` field carried a static `required: true` inside the
+`datos_bancarios` section, whose `sectionVisibleWhen` is an `anyOf` of "tipo U/D/X" OR
+"rectificativa checked". For tipo U/D/X, AEAT genuinely requires IBAN unconditionally (error
+EDID065) — that part was correct and is unchanged. But for a rectificativa filed under any OTHER
+tipo (e.g. `I`), Classic's `checkBox111MandatoryParams` only requires the bank fields
+(IBAN/BIC/bank/address/city/country/SEPA) when box 111 (Rectificación – Importe) is non-zero — a
+rectificativa with box 111 == 0 does not need bank data at all. The static flag ignored box 111
+entirely, blocking "Generar fichero"/"Marcar como Presentado" on IBAN even when AEAT itself
+wouldn't require it.
+
+Fixed by making `required` conditional:
+- `fm303Layouts.js` adds `requiredWhen` support (alongside the existing static `required`) via a
+  new `isFieldRequired(f, identification)` helper, and `matchesVisibility` gained `allOf`
+  (AND-of-conditions) support alongside its existing `anyOf`. `bank_iban` is now:
+  `requiredWhen: { anyOf: [{ tipo_declaracion in [U,D,X] }, { allOf: [rectificativa == true,
+  _box111NonZero == true] }] }`.
+- `_box111NonZero` is a synthetic key — box values live in `liveBoxes`, not the `identification`
+  object `matchesVisibility` reads. `fiscalModelsUtils.js`'s new `withBox111NonZeroFlag(identification,
+  liveBoxes)` merges it in; both `FmModel303Page.jsx`'s `getMissingRequiredFields` call site and
+  `CasillasTab`'s `identification` prop to `FmBoxes303` route through it, so the pre-flight gate
+  and the red-asterisk rendering (`FmBoxes303.jsx`, now calling `isFieldRequired` instead of
+  reading `f.required` directly) always agree.
+- No server-side duplicate of this specific validation exists in `com.etendoerp.go` today
+  (`Fiscal303SubmissionSupport`/`Fiscal303BoxesHandler`/`FiscalDeclCrudHandler` were checked) — the
+  backend forwards IBAN/BIC/etc. verbatim to the classic `OBTL_TaxReport_I` engine, which is the
+  actual point of AEAT-rule enforcement (rejects with EDID065-class errors at generation time).
+  This bug's fix is frontend-only pre-flight UX; no backend change was needed or made.
+
+**Bug E follow-up — SWIFT/BIC and the other bank fields were left out of the fix above.** The
+initial Bug E fix only added `requiredWhen` to `bank_iban`. A follow-up review confirmed
+`checkIsDeclarationRMandatoryParams`/`checkBox111MandatoryParams` (`AEAT303Report2021`/`2026`)
+require the **full** bank-data block — BANK/IBAN/SWIFT/SEPA/ADDRESS/CITY/COUNTRY — under the exact
+same condition, not just IBAN; the other 6 fields (`bank_swift_bic`, `bank_nombre`,
+`bank_direccion`, `bank_ciudad`, `bank_pais`, `bank_sepa`) had no requiredness at all (only the
+field-level `visibleWhen: _BANK_DVX_VW`), so they never got the red asterisk and were never
+enforced by `getMissingRequiredFields`, even though AEAT rejects the submission if any of them is
+blank under that condition.
+
+Fixed (initial version, since corrected below — see "Bug E follow-up, corrected") by extracting the
+shared condition into a single `requiredWhen` and assigning it to all 7 bank fields (`bank_iban`
+included, now reading from the same constant instead of its own inline literal). No changes were
+needed anywhere else in the chain: `isFieldRequired`/`getMissingRequiredFields` (`fm303Layouts.js`)
+and the red-asterisk rendering (`FmBoxes303.jsx`) are already generic over any field carrying
+`requiredWhen`, so declaring the condition on the field definition is the only change that was
+required — `FmModel303Page.jsx`'s pre-flight gate picks up all 7 fields automatically.
+
+**Bug E follow-up, corrected — the full block was wrongly required for a plain devolución too.**
+Manual QA on the fix above found it over-broad: for **condition A alone** (tipo `U`/`D`/`X`, no
+rectificativa — a plain devolución/domiciliación), AEAT error EDID065 only requires **IBAN**, not
+the full bank block. `checkIsDeclarationRMandatoryParams`/`checkBox111MandatoryParams`'s "full
+block" requirement is specific to **condition B** — a rectificativa carrying a non-zero box 111
+(`rectificacion_importe`) — independent of `tipo_declaracion`. The single shared
+`requiredWhen` (condition A OR B) applied to all 7 fields conflated the two, so a plain tipo `D`
+devolución incorrectly demanded SWIFT/BIC/bank name/address/city/country/SEPA in addition to IBAN.
+
+Fixed by splitting the condition into two constants in `fm303Layouts.js`:
+- `_BANK_IBAN_REQUIRED_WHEN` — condition A OR B (unchanged from the original Bug E fix) — assigned
+  only to `bank_iban`.
+- `_BANK_FULL_BLOCK_REQUIRED_WHEN` — condition B ONLY (`{ allOf: [rectificativa == true,
+  _box111NonZero == true] }`) — assigned to the other 6 fields (`bank_swift_bic`, `bank_nombre`,
+  `bank_direccion`, `bank_ciudad`, `bank_pais`, `bank_sepa`).
+
+Net effect: for a plain tipo `D`/`U`/`X` devolución/domiciliación, only `bank_iban` shows the
+required-mark and is enforced by `getMissingRequiredFields`; the other 6 render (still gated by
+`_BANK_DVX_VW`) without the asterisk and are not required. The full block becomes mandatory only
+once a rectificativa also carries a non-zero box 111 — exactly condition B. One asymmetry is
+intentional and unchanged: `bank_iban` has no field-level `visibleWhen` (only the section gate), so
+for tipo `U` (Domiciliación) it alone is visible/required — the other 6 stay hidden (and thus never
+reported as missing) because `_BANK_DVX_VW` excludes tipo `U` on purpose.
+
+**Bug E follow-up, manual-QA (ETP-5393) — the block stayed VISIBLE after reverting the very
+condition that had shown it.** The "corrected" fix above made *requiredness* track condition B
+exactly (`_BANK_FULL_BLOCK_REQUIRED_WHEN`), but *visibility* (`_BANK_DVX_VW`'s rectificativa
+branch and `datos_bancarios.sectionVisibleWhen`) still gated on "rectificativa checked" alone —
+deliberately, on the theory (recorded in the code comment at the time) that this was a "harmless
+UX-only over-show" since the asterisk already tracked box 111 correctly. Manual QA on a real
+declaration disproved that: check "Autoliquidación Rectificativa", enter a non-zero box 111 → the
+bank block appears, as expected. Then either clear box 111 back to 0 (rectificativa still checked)
+**or** uncheck rectificativa (tipo not U/D/X) → the required-mark correctly disappears, but the
+whole bank-data block stays sitting on screen. From the user's seat this reads exactly like the
+"sticky"/non-reactive bug it looks like, even though the underlying `matchesVisibility` evaluation
+is itself always freshly recomputed on every render (no memoization or stale caching was involved —
+confirmed by direct component-level and full-page RTL rerender tests before this fix).
+
+Fixed by widening the rectificativa branch of `_BANK_DVX_VW` and
+`datos_bancarios.sectionVisibleWhen` from `{ field: 'rectificativa', equals: true }` to
+`{ allOf: [{ field: 'rectificativa', equals: true }, { field: '_box111NonZero', equals: true }] }`
+— i.e. copying `_BANK_FULL_BLOCK_REQUIRED_WHEN`'s exact condition into the visibility gate too, so
+visibility and requiredness now hide/show in lockstep. `bank_iban` needed no direct change: it has
+no field-level `visibleWhen` of its own and inherits the section's `sectionVisibleWhen`, which after
+this fix is `{ anyOf: [{ tipo in U,D,X }, { allOf: [rectificativa, _box111NonZero] }] }` — exactly
+`_BANK_IBAN_REQUIRED_WHEN`'s own condition (A OR B), so it is visible in precisely the states it is
+required. Regression coverage:
+`fm303Layouts.bankVisibilityReactivity.vitest.jsx` drives the real `FmModel303Page` (not a mocked
+`FmBoxes303`) through the actual user flow — tab switch, checkbox click, editable-cell edit — to
+show the bank block, then revert box 111 to 0 (one test) or uncheck rectificativa (a second test),
+and assert the block disappears from the DOM in both cases, not just that the asterisk clears.
+
+**Fixed in this same pass (not pre-existing debt):** narrowing Bug E's visibility condition to
+require `_box111NonZero` (above) briefly desynchronized it from TWO IBAN pre-flight guards that
+still tested only the OLD, superseded "rectificativa alone" condition —
+`generate303File` (`fiscalModelsUtils.js`, the function behind the main "Generar fichero" button,
+`FmModel303Page.jsx:535`) and `AeatSubmitFlow.jsx`'s own pre-flight guard (the "Presentar" flow).
+Both were stricter than the field they were guarding: a rectificativa with box 111 == 0 correctly
+hides/un-requires the bank fields in the UI, but either guard would still demand an IBAN the user
+could no longer see or fill in — reachable today as tipo `I` + rectificativa checked + box 111 = 0.
+Both guards now call the single shared predicate `isBankIbanRequired(tipo,
+withBox111NonZeroFlag(identChecks, liveBoxes))` (`fiscalModelsUtils.js`) — the same condition
+`fm303Layouts.js`'s `_BANK_IBAN_REQUIRED_WHEN` uses for the field's own `requiredWhen`/visibility,
+so there is one source of truth instead of three independently-hand-copied checks.
+`generate303File` and `AeatSubmitFlow` (via a new `liveBoxes` prop threaded from
+`FmModel303Page.jsx`) both now have access to the live box 111 value, not just `manualOverrides`.
+Covered by `fm303Layouts.bankIbanRequiredWhen.vitest.js` and a regression case reproducing the
+exact broken state (tipo `I` + rectificativa + box111=0 no longer blocks generation).
+
+**Bug F — boxes [14][15], [25][26] and [40][41] always rendered blank instead of autocalculating.**
+`Fiscal303BoxesHandler.computeBoxes` never populated boxes 14/15 ("Modificación bases y cuotas"),
+25/26 ("Modificaciones bases y cuotas del recargo de equivalencia") or 40/41 ("Rectificación de
+deducciones") at all — they're absent from every `fillSalesBoxes`/`fillPurchaseBoxes` box-group
+call, so the corresponding `fm303Layouts.js` rows (`mod_bases`, `mod_recargo`, `regularizacion`)
+always showed empty cells. These rows carry no `editable`/`editableCells` flag, so they were never
+manually editable either — Classic (`org.openbravo.module.aeat303.es`) has always computed all
+three pairs from corrective/credit-memo invoices only (`InvoiceType.ONLY_MEMO_AND_CORRECTIVE`),
+over the SAME TaxRate sets Go already resolves for the "normal" boxes:
+- **[14][15]**: union of VAT_SALES_GENERAL ∪ VAT_SALES_EU ∪ VAT_SALES_ISP TaxRates —
+  `AEAT303Report2014.java#generateSalesLines`, ~lines 424-513 (`modificacionBICuotaTaxRates`
+  accumulator, comment `- Modificación bases y cuotas [14] [15]` at line 509).
+- **[25][26]**: the VAT_SALES_EC (recargo equivalencia) TaxRates — same method, ~lines 556-568
+  (comment `Modificaciones bases y cuotas del recargo de equivalencia [25] [26]` at line 564).
+- **[40][41]**: union of every VAT_PURCHASE group's TaxRates (Normal_Operations,
+  Investment_Goods, Import_Goods, Import_Investment_Goods, Intracommunity_Goods,
+  Intracommunity_Investments) — `AEAT303Report2014.java#generatePurchaseLines`, ~lines 618-689
+  (`rectificacionDeduccionesTaxes` accumulator, comment `Rectificación de deducciones [40] [41]`
+  at line 685).
+
+Fixed in `Fiscal303BoxesHandler.java` (`com.etendoerp.go`), server-side only (no data these
+formulas need was already missing from Go — every TaxRate list was already being resolved for
+other boxes, just not accumulated and re-queried with `ONLY_MEMO_AND_CORRECTIVE`):
+- `fillGroupBoxes` now returns the `TaxRate` list it resolved (previously `void`), so callers can
+  accumulate a UNION.
+- `fillSalesBoxes`/`fillPurchaseBoxes` accumulate `modificacionBases` (general+EU+ISP),
+  `ecTaxes`, and `rectificacionDeduccionesTaxes` (all six purchase groups) respectively, and hand
+  each union to a new shared helper `fillMemoCorrectiveBoxPair(b, helper, rates, baseBox, taxBox)`
+  which calls `helper.calculateAmountsMap(rates, InvoiceType.ONLY_MEMO_AND_CORRECTIVE)` — mirroring
+  the classic engine's `InvoiceType.ONLY_NORMAL`-vs-`ONLY_MEMO_AND_CORRECTIVE` split exactly.
+- `computeSummaryBoxes`'s `accruedBoxes` array gained `26` (cuota, mod. recargo): box 15 and 24
+  were already listed there — always contributing `0` since never populated — but box 26 was
+  missing entirely, which would have under-totaled box 27 as soon as it started being non-zero.
+  `deductibleBoxes` already listed `41`, so box 45's total needed no change.
+- `fm303Layouts.js`'s `mod_bases`/`mod_recargo`/`regularizacion` rows gained comments documenting
+  they are intentionally NOT `editable` (backend-computed) — no rendering change was needed since
+  they already lacked the `editable` flag.
 
 ### Box 87 display-only derivation (`derivedValue` fallback on a real box, ETP-5338 pt.2)
 

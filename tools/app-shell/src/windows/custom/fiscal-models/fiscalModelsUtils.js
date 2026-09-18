@@ -63,6 +63,23 @@ const IDENT_PARAM_MAP = [
 // same set before hitting the network.
 export const IBAN_REQUIRED_TIPOS = ['U', 'D', 'X'];
 
+// ETP-5393 [B1 re-review] — imperative mirror of fm303Layouts.js's `_BANK_IBAN_REQUIRED_WHEN`
+// (condition A: tipo U/D/X — OR — condition B: rectificativa checked AND box 111 non-zero).
+// `generate303File` below and `AeatSubmitFlow.jsx`'s pre-flight guard used to test only
+// `identChecks?.rectificativa === true` for condition B, ignoring box 111 entirely — so a
+// rectificativa filed under tipo 'I' with box 111 = 0 (bank block correctly HIDDEN per the
+// narrowed Bug E visibility) still hit `iban_required` from a field the user can't even see.
+// `identChecksWithBox111Flag` must already carry the synthetic `_box111NonZero` key — pass it
+// through `withBox111NonZeroFlag` first (same as `fm303Layouts.js`'s callers). Keep this in sync
+// with `_BANK_IBAN_REQUIRED_WHEN` by hand; it is intentionally not re-derived from it (the
+// declarative matcher lives in fm303Layouts.js, which has no imports and must stay dependency-free).
+export function isBankIbanRequired(tipo, identChecksWithBox111Flag) {
+  return (
+    IBAN_REQUIRED_TIPOS.includes(tipo) ||
+    (identChecksWithBox111Flag?.rectificativa === true && identChecksWithBox111Flag?._box111NonZero === true)
+  );
+}
+
 // Declaration type (tipo_declaracion) for which AEAT's NRC (Número de Referencia Completo)
 // field actually applies: Ingreso (I) only, per AEAT's own bundled Modelo 303 spec. The backend
 // already discards any NRC value for every other tipo before it reaches AEAT
@@ -73,6 +90,14 @@ export const IBAN_REQUIRED_TIPOS = ['U', 'D', 'X'];
 // "reconocimiento de deuda", lets you submit an Ingreso declaration without one), so this must
 // never be paired with a required/blocking validation.
 export const DECLARATION_TYPE_INGRESO = 'I';
+
+// ETP-5393 Bug C [W1 re-review] — boxes 111 (Rectificación – Importe) and 77 (IVA a la
+// importación liquidado por la Aduana pendiente de ingreso) are the only editable boxes the
+// classic AEAT303Report engine hard-rejects when negative (AEAT303Report2024.java:276-278 for
+// 111, AEAT303Report2015.java:149-162 for 77). Single source of truth, consolidated out of a
+// literal `new Set([111, 77])` duplicated in both `FmBoxes303.jsx` (the `min="0"` UX hint) and
+// `FmModel303Page.jsx` (`handleBoxChange`'s actual clamp + i18n error enforcement).
+export const NEGATIVE_NOT_ALLOWED_BOXES = new Set([111, 77]);
 
 // Maps editable box numbers (from manualOverrides / liveBoxes) to AEAT HTTP param names.
 // Only boxes that the AEAT module reads from inputParams (not computed from DB) are listed.
@@ -218,13 +243,15 @@ export function triggerBase64Download(base64, downloadName, mimeType = 'applicat
   triggerDownload(base64ToBlob(base64, mimeType), downloadName);
 }
 
-export async function generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, filename } = {}) {
+export async function generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, liveBoxes, filename } = {}) {
   if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
 
   const tipo = identChecks?.tipo_declaracion ?? decl.result?.kind ?? 'N';
 
+  // ETP-5393 [B1] — must match the final Bug E visibility (fm303Layouts.js's
+  // `_BANK_IBAN_REQUIRED_WHEN`), not just `rectificativa`. See `isBankIbanRequired`'s docstring.
   if (
-    (IBAN_REQUIRED_TIPOS.includes(tipo) || identChecks?.rectificativa === true) &&
+    isBankIbanRequired(tipo, withBox111NonZeroFlag(identChecks ?? {}, liveBoxes)) &&
     !identChecks?.bank_iban?.trim()
   ) {
     return { ok: false, error: 'iban_required' };
@@ -499,7 +526,14 @@ export function deriveResultKind(summary, { hasInvoices = false } = {}) {
 // form the other helpers below operate on.
 export function toBoxArray(src) {
   if (Array.isArray(src)) return src;
-  if (src && typeof src === 'object') return Object.entries(src).map(([n, v]) => ({ num: Number(n), value: v }));
+  if (src && typeof src === 'object') {
+    // ETP-5393 Bug B: Fiscal303BoxesHandler serializes every box value as a JSON STRING
+    // (BigDecimal#toString). Without this coercion, `recomputeDerivedBoxes`'s numeric
+    // accumulation (`s + get(n)`) silently does string concatenation the first time any
+    // of these boxes is a non-zero string (e.g. `0 + "-0.63"` -> `"0-0.63"`), which then
+    // becomes NaN and cascades through every derived box (45/46/64/66/69/71).
+    return Object.entries(src).map(([n, v]) => ({ num: Number(n), value: v == null ? v : Number(v) }));
+  }
   return [];
 }
 
@@ -545,6 +579,17 @@ export function recomputeDerivedBoxes(boxArr) {
 export function getBoxValue(liveBoxes, num) {
   const e = toBoxArray(liveBoxes).find(b => b.num === num);
   return e ? (e.value ?? 0) : null;
+}
+
+// ETP-5393 Bug E — fm303Layouts.js's `bank_iban.requiredWhen` needs to know whether box 111
+// (Rectificación - Importe) currently holds a non-zero value, but `matchesVisibility`/
+// `isFieldRequired` only ever read the `identification` object (checkboxes/selects), never the
+// separate `liveBoxes` array. Callers merge this synthetic `_box111NonZero` flag into
+// `identification` before handing it to `getMissingRequiredFields` or FmBoxes303's
+// `identification` prop, so both the pre-flight gate and the red-asterisk rendering agree.
+export function withBox111NonZeroFlag(identification, liveBoxes) {
+  const box111 = getBoxValue(liveBoxes, 111);
+  return { ...identification, _box111NonZero: box111 != null && Number(box111) !== 0 };
 }
 
 function roundEur(n) {

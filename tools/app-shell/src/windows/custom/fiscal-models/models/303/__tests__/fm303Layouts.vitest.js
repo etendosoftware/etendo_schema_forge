@@ -537,16 +537,52 @@ describe('getLayout303 — datos_bancarios section visibility (EDID065 + rectifi
   const layout = getLayout303(2026, 1);
   const sec = layout.sections.find(s => s.id === 'datos_bancarios');
 
-  it('sectionVisibleWhen is an anyOf of tipo_declaracion U/D/X OR rectificativa checked', () => {
+  // ETP-5393 manual-QA fix — the rectificativa branch now also requires `_box111NonZero`,
+  // matching `_BANK_FULL_BLOCK_REQUIRED_WHEN` exactly, so the section hides again as soon
+  // as either rectificativa is unchecked or box 111 goes back to 0 (previously it stayed
+  // visible on rectificativa alone — see fm303Layouts.bankVisibilityReactivity.vitest.js).
+  it('sectionVisibleWhen is an anyOf of tipo_declaracion U/D/X OR (rectificativa checked AND box 111 non-zero)', () => {
     expect(sec.sectionVisibleWhen).toEqual({ anyOf: [
       { field: 'tipo_declaracion', in: ['U', 'D', 'X'] },
-      { field: 'rectificativa', equals: true },
+      { allOf: [
+        { field: 'rectificativa', equals: true },
+        { field: '_box111NonZero', equals: true },
+      ] },
     ] });
   });
 
-  it('bank_iban stays required: true (Classic also requires IBAN for the rectificativa case)', () => {
+  // ETP-5393 Bug E — bank_iban is no longer a static `required: true`. It's now conditional
+  // via `requiredWhen`: always required for tipo U/D/X (unchanged, AEAT EDID065), and for a
+  // rectificativa filed under any other tipo ONLY when box 111 is non-zero — see
+  // fm303Layouts.bankIbanRequiredWhen.vitest.js for full requiredWhen coverage.
+  it('bank_iban has no static `required` flag — required is conditional via requiredWhen', () => {
     const iban = sec.fields.find(f => f.id === 'bank_iban');
-    expect(iban.required).toBe(true);
+    expect(iban.required).toBeUndefined();
+    expect(iban.requiredWhen).toEqual({ anyOf: [
+      { field: 'tipo_declaracion', in: ['U', 'D', 'X'] },
+      { allOf: [
+        { field: 'rectificativa', equals: true },
+        { field: '_box111NonZero', equals: true },
+      ] },
+    ] });
+  });
+
+  // ETP-5393 follow-up (manual-QA fix) — AEAT303Report requires the FULL bank block (not just
+  // IBAN) ONLY under condition B (rectificativa + non-zero box 111) — NOT under condition A
+  // (a plain tipo U/D/X devolución/domiciliación, which requires IBAN alone per AEAT EDID065).
+  // The other 6 bank fields therefore carry a NARROWER requiredWhen than bank_iban — no
+  // `tipo_declaracion in [U,D,X]` branch.
+  it('the other 6 bank fields require ONLY condition B (rectificativa + non-zero box 111), narrower than bank_iban', () => {
+    const expectedRequiredWhen = { allOf: [
+      { field: 'rectificativa', equals: true },
+      { field: '_box111NonZero', equals: true },
+    ] };
+    ['bank_swift_bic', 'bank_nombre', 'bank_direccion', 'bank_ciudad', 'bank_pais', 'bank_sepa']
+      .forEach((id) => {
+        const field = sec.fields.find(f => f.id === id);
+        expect(field.required).toBeUndefined();
+        expect(field.requiredWhen).toEqual(expectedRequiredWhen);
+      });
   });
 
   it('titleKeyMap only maps D, X (devolucion) and U (domiciliacion) — no G, I, V entries', () => {

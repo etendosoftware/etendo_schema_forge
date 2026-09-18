@@ -21805,6 +21805,7 @@
     "fm.box.row.entregas_bienes_inv_vol": "Supplies of capital goods",
     "fm.box.row.total_operaciones": "Total transaction volume (Art. 121 VAT Law)",
     "fm.page.identificacion": "Identification",
+    "fm.box.error.negative_not_allowed": "Box {box} does not accept negative values.",
     "fm.box.section.identificacion": "1 - Identification",
     "fm.ident.nif": "Tax ID (NIF)",
     "fm.ident.nombre": "Surname and First Name or Business Name",

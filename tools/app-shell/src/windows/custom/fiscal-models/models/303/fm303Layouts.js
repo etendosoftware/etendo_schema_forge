@@ -32,14 +32,51 @@ const IVA_DED_COLS = [
 // hidden for a rectificativa filed under any other tipo (e.g. 'I'), even though
 // AEAT303Report's checkIsDeclarationRMandatoryParams / checkBox111MandatoryParams
 // hard-require SWIFT_BIC/BANK/BANKADDRESS/BANKCITY/COUNTRYISO/SEPA whenever a
-// rectificativa has a non-zero box 111 amount, independent of tipo_declaracion. Widening
-// sectionVisibleWhen alone made the section appear but left these 6 fields still gated
-// on the old {D, V, X} set, so the exact submission-blocking bug remained reachable for
-// every field except bank_iban. Now these fields follow the same anyOf as the section:
-// visible when tipo_declaracion is D/V/X, OR whenever 'rectificativa' is checked.
+// rectificativa has a non-zero box 111 amount, independent of tipo_declaracion.
+//
+// ETP-5393 manual-QA fix (supersedes the ETP-4456 follow-up's "harmless UX-only
+// over-show" call): the rectificativa branch now ALSO requires `_box111NonZero`. The
+// earlier version showed these fields as soon as 'rectificativa' was checked, regardless
+// of box 111 — intentionally, on the theory that gating visibility on box 111 too was
+// unnecessary complexity since the required-mark already tracked it correctly. Manual QA
+// confirmed this reads as a real bug from the user's seat: unchecking rectificativa, or
+// clearing box 111 back to 0, left the whole bank block sitting on screen (just without
+// the asterisk) instead of disappearing — so visibility must track the exact same
+// condition as requiredness (`_BANK_FULL_BLOCK_REQUIRED_WHEN` below), not a looser one.
 const _BANK_DVX_VW = { anyOf: [
   { field: 'tipo_declaracion', in: ['D', 'V', 'X'] },
+  { allOf: [
+    { field: 'rectificativa', equals: true },
+    { field: '_box111NonZero', equals: true },
+  ] },
+] };
+
+// ETP-5393 Bug E — bank_iban's requiredness: mandatory unconditionally for tipo U/D/X
+// (AEAT error EDID065, "devolución"/"domiciliación" case — condition A), OR for a
+// rectificativa carrying a non-zero box 111 (rectificacion_importe) amount, independent of
+// tipo_declaracion (AEAT303Report's checkBox111MandatoryParams — condition B). `_box111NonZero`
+// is a synthetic key callers merge into `identification` via `withBox111NonZeroFlag`
+// (fiscalModelsUtils.js) before this is evaluated — it does not come from the form itself.
+const _BANK_IBAN_REQUIRED_WHEN = { anyOf: [
+  { field: 'tipo_declaracion', in: ['U', 'D', 'X'] },
+  { allOf: [
+    { field: 'rectificativa', equals: true },
+    { field: '_box111NonZero', equals: true },
+  ] },
+] };
+
+// ETP-5393 follow-up (manual-QA fix) — ONLY condition B (rectificativa + non-zero box 111)
+// requires the FULL bank block (BANK/SWIFT/SEPA/ADDRESS/CITY/COUNTRY). Condition A (tipo
+// U/D/X, i.e. a plain devolución/domiciliación) requires IBAN alone per AEAT error EDID065 —
+// AEAT303Report's checkIsDeclarationRMandatoryParams only escalates to the full block when the
+// declaration is ALSO a rectificativa with a non-zero box 111. An earlier version of this fix
+// applied `_BANK_IBAN_REQUIRED_WHEN` (condition A OR B) to all 7 fields, which wrongly forced
+// the full bank block on every plain devolución (manual QA caught this: only IBAN should be
+// required there). Do NOT fold this back into `_BANK_IBAN_REQUIRED_WHEN` — the two are
+// deliberately different in scope.
+const _BANK_FULL_BLOCK_REQUIRED_WHEN = { allOf: [
   { field: 'rectificativa', equals: true },
+  { field: '_box111NonZero', equals: true },
 ] };
 
 const TIPO_DECLARACION_FIELD = {
@@ -87,29 +124,51 @@ const BASE = {
       },
       // Only U (Domiciliación), D (Devolución) and X (Devolución transferencia
       // extranjero) may carry IBAN per AEAT error EDID065 — see IBAN_REQUIRED_TIPOS.
-      // ALSO shown whenever 'rectificativa' is checked, regardless of tipo_declaracion:
-      // AEAT303Report's checkIsDeclarationRMandatoryParams hard-requires the bank fields
+      // ALSO shown whenever 'rectificativa' is checked AND box 111 (rectificacion_importe)
+      // is non-zero, regardless of tipo_declaracion: AEAT303Report's
+      // checkIsDeclarationRMandatoryParams hard-requires the bank fields
       // (BANK/IBAN/SWIFT/SEPA/ADDRESS/CITY/COUNTRY) when a rectificativa carries a non-zero
-      // box 111 (rectificacion_importe) amount — a requirement that is independent of
-      // tipo_declaracion. Without this OR branch, e.g. tipo 'I' (Ingreso) rectificativas had
-      // no UI at all to enter the now-mandatory bank data, causing a submission-blocking
-      // backend hard-fail. Gating on "rectificativa checked" (rather than also checking the
-      // box 111 amount, which lives outside this identification map) is a deliberate,
-      // harmless UX-only over-show — see FmBoxes303's matchesSvw/anyOf support.
+      // box 111 amount — a requirement that is independent of tipo_declaracion. Without this
+      // OR branch, e.g. tipo 'I' (Ingreso) rectificativas had no UI at all to enter the
+      // now-mandatory bank data, causing a submission-blocking backend hard-fail.
+      //
+      // ETP-5393 manual-QA fix — this used to gate on "rectificativa checked" alone (any
+      // box 111 value), a deliberate UX-only over-show. Manual QA confirmed that reads as a
+      // real bug: unchecking rectificativa, or clearing box 111 back to 0, left the section
+      // visibly stuck on screen. It now requires `_box111NonZero` too, matching
+      // `_BANK_FULL_BLOCK_REQUIRED_WHEN` exactly, so visibility and requiredness hide/show
+      // together. See FmBoxes303's matchesSvw/anyOf+allOf support.
       sectionVisibleWhen: { anyOf: [
         { field: 'tipo_declaracion', in: ['U', 'D', 'X'] },
-        { field: 'rectificativa', equals: true },
+        { allOf: [
+          { field: 'rectificativa', equals: true },
+          { field: '_box111NonZero', equals: true },
+        ] },
       ] },
       fieldLayout: 'aligned',
       colHeaderKeys: [],
       fields: [
-        { id: 'bank_iban',      labelKey: 'fm.ident.bank.iban',      type: 'text', readOnly: false, required: true },
-        { id: 'bank_swift_bic', labelKey: 'fm.ident.bank.swift_bic', type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW },
-        { id: 'bank_nombre',    labelKey: 'fm.ident.bank.nombre',    type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW },
-        { id: 'bank_direccion', labelKey: 'fm.ident.bank.direccion', type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW },
-        { id: 'bank_ciudad',    labelKey: 'fm.ident.bank.ciudad',    type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW },
-        { id: 'bank_pais',      labelKey: 'fm.ident.bank.pais',      type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW },
-        { id: 'bank_sepa',      labelKey: 'fm.ident.bank.sepa',      type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW },
+        // ETP-5393 Bug E — bank_iban used to be `required: true` unconditionally within this
+        // section, which made it mandatory even for a rectificativa whose box 111
+        // (rectificacion_importe) is 0 — a case AEAT303Report's checkBox111MandatoryParams does
+        // NOT require bank data for. Split into: always required for tipo U/D/X (AEAT EDID065,
+        // unrelated to rectificativa), and — independently — required for ANY tipo when
+        // rectificativa is checked AND box 111 is non-zero. `_box111NonZero` is a synthetic key
+        // callers merge into `identification` via `withBox111NonZeroFlag` (fiscalModelsUtils.js)
+        // before this is evaluated; it does not come from the form itself.
+        // ETP-5393 follow-up (manual-QA fix) — the other 6 bank fields require the FULL block
+        // (`_BANK_FULL_BLOCK_REQUIRED_WHEN`), which is ONLY true for condition B (rectificativa +
+        // non-zero box 111). A plain devolución/domiciliación (tipo U/D/X, condition A) requires
+        // IBAN alone per AEAT error EDID065 — it must NOT force the full bank block. bank_iban
+        // keeps the wider `_BANK_IBAN_REQUIRED_WHEN` (A OR B); do not widen the other 6 to match.
+        { id: 'bank_iban', labelKey: 'fm.ident.bank.iban', type: 'text', readOnly: false,
+          requiredWhen: _BANK_IBAN_REQUIRED_WHEN },
+        { id: 'bank_swift_bic', labelKey: 'fm.ident.bank.swift_bic', type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
+        { id: 'bank_nombre',    labelKey: 'fm.ident.bank.nombre',    type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
+        { id: 'bank_direccion', labelKey: 'fm.ident.bank.direccion', type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
+        { id: 'bank_ciudad',    labelKey: 'fm.ident.bank.ciudad',    type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
+        { id: 'bank_pais',      labelKey: 'fm.ident.bank.pais',      type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
+        { id: 'bank_sepa',      labelKey: 'fm.ident.bank.sepa',      type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
       ],
       rows: [],
     },
@@ -126,12 +185,19 @@ const BASE = {
         { id: '7',               cells: [7,   8,   9  ], fixedValues: { 8:  21   }, group: true },
         { id: 'adq_intracom',    labelKey: 'fm.box.row.adq_intracom',     cells: [10,   null, 11  ] },
         { id: 'otras_inversion', labelKey: 'fm.box.row.otras_inversion',  cells: [12,   null, 13  ] },
+        // ETP-5393 Bug F — Modificación bases y cuotas [14][15]. No `editable`/`editableCells`
+        // flag on purpose: these are backend-computed from corrective/credit-memo invoices
+        // (see Fiscal303BoxesHandler#fillMemoCorrectiveBoxPair in com.etendoerp.go) — the row
+        // used to render blank because the backend never populated 14/15 at all, which read as
+        // "always empty", not as a deliberately editable cell. Do not add `editable: true` here.
         { id: 'mod_bases',       labelKey: 'fm.box.row.mod_bases',        cells: [14,   null, 15  ] },
         { id: '156',             cells: [156, 157, 158], fixedValues: { 157: 1.75 }, group: true },
         { id: '168',             cells: [168, 169, 170], fixedValues: { 169: 0.50 }, group: true },
         { id: 'recargo_equiv',   labelKey: 'fm.box.row.recargo_equiv',    cells: [16,   17,   18  ], fixedValues: { 17: 1.00 }, group: true },
         { id: '19',              cells: [19,  20,  21 ], fixedValues: { 20: 1.40 }, group: true },
         { id: '22',              cells: [22,  23,  24 ], fixedValues: { 23: 5.20 }, group: true },
+        // ETP-5393 Bug F — Modificaciones bases y cuotas del recargo de equivalencia [25][26].
+        // Same rationale as mod_bases above — backend-computed, no `editable` flag.
         { id: 'mod_recargo',     labelKey: 'fm.box.row.mod_recargo',      cells: [25,   null, 26  ] },
         { id: 'total_devengada', labelKey: 'fm.box.row.total_devengada',  cells: [null, null, 27  ], total: true },
       ],
@@ -146,6 +212,9 @@ const BASE = {
         { id: 'imp_bienes_inv',     labelKey: 'fm.box.row.imp_bienes_inv',      cells: [34,   35] },
         { id: 'adq_intracom_corr',  labelKey: 'fm.box.row.adq_intracom_corr',  cells: [36,   37] },
         { id: 'adq_intracom_inv',   labelKey: 'fm.box.row.adq_intracom_inv',   cells: [38,   39] },
+        // ETP-5393 Bug F — Rectificación de deducciones [40][41]. Backend-computed from
+        // corrective/credit-memo purchase invoices (Fiscal303BoxesHandler#
+        // fillMemoCorrectiveBoxPair); no `editable` flag, same rationale as mod_bases above.
         { id: 'regularizacion',     labelKey: 'fm.box.row.regularizacion',      cells: [40,   41] },
         { id: 'compensaciones_reag',labelKey: 'fm.box.row.compensaciones_reag', cells: [null, 42], editable: true },
         { id: 'reg_bienes_inv',     labelKey: 'fm.box.row.reg_bienes_inv',      cells: [null, 43], editable: true },
@@ -500,15 +569,19 @@ export function isLastPeriodOfYear(period) {
   return period === 'T4' || period === '12' || period === 4 || period === 12 || period === '4';
 }
 
-// Evaluates a visibility condition object ({ field, in: [...] | equals: ... } or an
-// OR-of-conditions { anyOf: [...] }) against the current `identification` state. Single
-// source of truth for visibility matching — mirrored from FmBoxes303.jsx's own `matchesSvw`
-// (ETP-5187: extracted here so the required-field validation gate in FmModel303Page.jsx reads
-// the exact same visibility rules the asterisk/section rendering already uses, instead of
-// forking a second implementation). FmBoxes303.jsx re-exports its local `matchesSvw` as a thin
-// wrapper around this function — do not re-implement visibility matching anywhere else.
+// Evaluates a visibility condition object ({ field, in: [...] | equals: ... }, an
+// OR-of-conditions { anyOf: [...] }, or an AND-of-conditions { allOf: [...] }) against the
+// current `identification` state. Single source of truth for visibility matching — mirrored
+// from FmBoxes303.jsx's own `matchesSvw` (ETP-5187: extracted here so the required-field
+// validation gate in FmModel303Page.jsx reads the exact same visibility rules the
+// asterisk/section rendering already uses, instead of forking a second implementation).
+// FmBoxes303.jsx re-exports its local `matchesSvw` as a thin wrapper around this function —
+// do not re-implement visibility matching anywhere else.
+// `allOf` was added for ETP-5393 Bug E (bank_iban is only required while a rectificativa
+// ALSO carries a non-zero box 111) — see `isFieldRequired` below.
 export function matchesVisibility(svw, identification) {
   if (Array.isArray(svw.anyOf)) return svw.anyOf.some(c => matchesVisibility(c, identification));
+  if (Array.isArray(svw.allOf)) return svw.allOf.every(c => matchesVisibility(c, identification));
   const val = identification?.[svw.field];
   return svw.in ? svw.in.includes(val) : val === svw.equals;
 }
@@ -519,9 +592,24 @@ function isSectionVisible(section, identification) {
   return !section.sectionVisibleWhen || matchesVisibility(section.sectionVisibleWhen, identification);
 }
 
+// Resolves whether a field is CURRENTLY required. Most fields use the static `required: true`
+// flag (always required whenever the field/section is visible). ETP-5393 Bug E introduced
+// `requiredWhen` for fields whose requiredness itself depends on OTHER state — e.g. `bank_iban`
+// is required unconditionally for tipo U/D/X (AEAT error EDID065), but for a rectificativa filed
+// under any other tipo it is only required when box 111 (Rectificación - Importe) is non-zero
+// (AEAT303Report's checkBox111MandatoryParams). Callers must merge a `_box111NonZero` boolean
+// into `identification` before calling this — see `withBox111NonZeroFlag` in
+// fiscalModelsUtils.js — since box values live outside the identification/checkbox state this
+// function otherwise reads. Shared by both `isRequiredFieldMissing` below and FmBoxes303.jsx's
+// red-asterisk rendering, so both stay in sync automatically.
+export function isFieldRequired(f, identification) {
+  if (f.requiredWhen) return matchesVisibility(f.requiredWhen, identification);
+  return Boolean(f.required);
+}
+
 // Field-level gate for getMissingRequiredFields below — same reasoning as isSectionVisible.
 function isRequiredFieldMissing(f, identification) {
-  if (!f.required) return false;
+  if (!isFieldRequired(f, identification)) return false;
   if (f.visibleWhen && !matchesVisibility(f.visibleWhen, identification)) return false;
   const val = identification?.[f.id];
   return val === undefined || val === null || val === '';
@@ -529,16 +617,19 @@ function isRequiredFieldMissing(f, identification) {
 
 /**
  * Returns the currently-visible `identificacion`-family fields (across `identificacion` and
- * `datos_bancarios`/meta sections) marked `required: true` in the resolved layout whose value is
- * empty in `identification` — e.g. `tipo_declaracion` (always visible) and `bank_iban` (only
- * required while `datos_bancarios`'s section is visible, i.e. tipo U/D/X or rectificativa).
+ * `datos_bancarios`/meta sections) currently required (see `isFieldRequired`) in the resolved
+ * layout whose value is empty in `identification` — e.g. `tipo_declaracion` (always visible) and
+ * `bank_iban` (required for tipo U/D/X, or for a rectificativa whose box 111 is non-zero — see
+ * `isFieldRequired`'s doc comment).
  *
  * ETP-5187: drives the "Generar fichero"/"Marcar como Presentado" pre-flight validation gate in
- * FmModel303Page.jsx. Reads the SAME `field.required` flags FmBoxes303 already uses for the red
- * asterisk (`f.required && <span className="fm-aeat-required-mark">`), so a third field marked
- * `required: true` in a future year's patch is automatically covered — no gate-side change needed.
- * A field/section gated by its own `visibleWhen`/`sectionVisibleWhen` only counts as "required
- * right now" when that condition currently matches; a hidden required field is never reported.
+ * FmModel303Page.jsx. Reads the SAME requiredness FmBoxes303 already uses for the red asterisk
+ * (`isFieldRequired(f, identification) && <span className="fm-aeat-required-mark">`), so a third
+ * field marked `required`/`requiredWhen` in a future year's patch is automatically covered — no
+ * gate-side change needed. A field/section gated by its own `visibleWhen`/`sectionVisibleWhen`
+ * only counts as "required right now" when that condition currently matches; a hidden required
+ * field is never reported. `identification` must already carry `_box111NonZero` when the layout
+ * has any `requiredWhen` referencing it (see `withBox111NonZeroFlag`).
  */
 export function getMissingRequiredFields(year, period, identification) {
   const layout = getLayout303(year, period);
