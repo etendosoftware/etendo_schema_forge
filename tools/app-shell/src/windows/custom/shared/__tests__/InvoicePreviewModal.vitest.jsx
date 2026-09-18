@@ -98,6 +98,18 @@ vi.mock('@/components/related-documents', () => ({
   fetchByCriteria: vi.fn(),
 }));
 
+// ETP-5304 — EmailsCard is stubbed here on purpose. Its recipients line now goes
+// through TruncatedText, and the tooltip mock below renders TooltipContent
+// unconditionally (it ignores open state, which is what the *other* tooltip
+// consumers in this tree need). With the real card, any history row would put the
+// same recipients string in the DOM twice — trigger + always-mounted tooltip body —
+// and every getByText on it would throw "found multiple elements". The card's own
+// behaviour, including the ETP-5304 reveal, is covered against the REAL tooltip in
+// preview-cards/__tests__/EmailsCard.vitest.jsx.
+vi.mock('@/windows/custom/shared/preview-cards/EmailsCard.jsx', () => ({
+  default: ({ documentId }) => <div data-testid="emails-card" data-doc-id={documentId} />,
+}));
+
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }) => children,
   TooltipContent: ({ children }) => children,
