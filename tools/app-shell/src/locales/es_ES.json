@@ -20639,6 +20639,7 @@
     "backendError.cannotDeleteOwnAccount": "No puede eliminar su propia cuenta de usuario.",
     "backendError.cannotDeleteOwner": "Este usuario es el propietario de la empresa y no puede eliminarse.",
     "backendError.cannotDeleteLastAdmin": "No se puede eliminar al último administrador activo de este cliente.",
+    "backendError.cannotModifyOwnerAccount": "Este usuario es el propietario de la empresa — solo el propietario puede modificar esta cuenta.",
     "backendError.fieldTooLong": "Este valor es demasiado largo. No puede superar los {maxLength} caracteres.",
     "uomTypeArea": "Área",
     "uomTypeLength": "Longitud",

@@ -1962,3 +1962,31 @@ describe('parseBackendErrorMessage — response.errors MAP fallback (ETP-5323)',
     assert.equal(raw, undefined);
   });
 });
+
+// ETP-5411 — UserRoleAssignmentHandler#rejectNonOwnerEditingOwner's owner-modification guard
+// (com.etendoerp.go, part of the ETP-4830 owner-protection concern) was previously unmapped,
+// unlike its siblings cannotDeactivateOwnAccount/cannotDeleteOwner — so it reached the toast
+// untranslated regardless of session locale. Suggested key: backendError.cannotModifyOwnerAccount.
+describe('"tenant owner — only the owner can modify" exact match (UserRoleAssignmentHandler)', () => {
+  const RAW = 'This user is the tenant owner — only the owner can modify this account';
+
+  it('translates the raw English literal to en_US', () => {
+    const t = (k) => (k === 'backendError.cannotModifyOwnerAccount'
+      ? 'This user is the tenant owner — only the owner can modify this account.'
+      : k);
+    assert.equal(
+      translateBackendError(RAW, t),
+      'This user is the tenant owner — only the owner can modify this account.',
+    );
+  });
+
+  it('translates the raw English literal to es_ES', () => {
+    const t = (k) => (k === 'backendError.cannotModifyOwnerAccount'
+      ? 'Este usuario es el propietario de la empresa — solo el propietario puede modificar esta cuenta.'
+      : k);
+    assert.equal(
+      translateBackendError(RAW, t),
+      'Este usuario es el propietario de la empresa — solo el propietario puede modificar esta cuenta.',
+    );
+  });
+});

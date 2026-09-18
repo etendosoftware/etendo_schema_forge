@@ -20403,6 +20403,7 @@
     "backendError.cannotDeleteOwnAccount": "You cannot delete your own user account.",
     "backendError.cannotDeleteOwner": "This user is the tenant owner and cannot be deleted.",
     "backendError.cannotDeleteLastAdmin": "Cannot delete the last active administrator for this client.",
+    "backendError.cannotModifyOwnerAccount": "This user is the tenant owner — only the owner can modify this account.",
     "backendError.fieldTooLong": "This value is too long. It must not exceed {maxLength} characters.",
     "uomTypeArea": "Area",
     "uomTypeLength": "Length",
