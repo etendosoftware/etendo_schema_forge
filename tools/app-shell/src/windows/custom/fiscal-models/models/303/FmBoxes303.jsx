@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { TrendingUp, TrendingDown, Pencil } from 'lucide-react';
-import { getLayout303, matchesVisibility } from './fm303Layouts.js';
-import { formatAmount, formatPercent } from '../../fiscalModelsUtils.js';
+import { getLayout303, matchesVisibility, isFieldRequired } from './fm303Layouts.js';
+import { formatAmount, formatPercent, NEGATIVE_NOT_ALLOWED_BOXES } from '../../fiscalModelsUtils.js';
 
 const SECTION_ICON = {
   iva_devengado: <TrendingUp
@@ -24,6 +24,11 @@ function formatCell(val, colType) {
 
 const COMPACT_SECTIONS = new Set(['iva_devengado', 'iva_deducible', 'resultado', 'info_adicional', 'resultado_final']);
 const TITLED_SECTIONS  = new Set(['iva_devengado', 'iva_deducible']);
+
+// ETP-5393 Bug C — `min="0"` here (driven by the shared `NEGATIVE_NOT_ALLOWED_BOXES`, see
+// fiscalModelsUtils.js) is a UX hint only — the actual enforcement (clamp + i18n error) lives
+// in FmModel303Page.jsx's handleBoxChange, since a browser `min` on <input type="number"> does
+// not block typing or blur.
 
 // Applies a derivedValue's `clampMin` (if any) to an already-computed display value.
 // A `null` display (nothing to compute) is left untouched — clamping never manufactures
@@ -83,15 +88,46 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
     ? layout.sections.filter(s => sectionIds.includes(s.id))
     : layout.sections;
 
+  // ETP-5393 Bug C follow-up — `pendingValues` is this input's in-progress draft, keyed by
+  // box number. It MUST be cleared once a box's edit is committed (blur/Enter) or newly
+  // (re)opened (pencil click) — otherwise a stale draft (e.g. the "-12" the user typed
+  // before it got clamped to 0 by FmModel303Page's handleBoxChange) keeps showing on
+  // every subsequent re-open of that same cell's editor, even though the persisted/
+  // displayed value is already the clamped 0. `clearPendingValue` is the single place
+  // that drops a box's draft; both the commit handlers below and `startEditingCell`
+  // route through it so the two call sites never drift out of sync.
+  const clearPendingValue = (boxNum) => {
+    setPendingValues(prev => {
+      if (!(boxNum in prev)) return prev;
+      const next = { ...prev };
+      delete next[boxNum];
+      return next;
+    });
+  };
+
+  // Opens the inline editor for a box, always starting from the current persisted/displayed
+  // value rather than whatever draft (if any) was left behind by a previous edit session.
+  const startEditingCell = (boxNum) => {
+    clearPendingValue(boxNum);
+    setEditingCell(boxNum);
+  };
+
+  const commitCellEdit = (boxNum) => {
+    onBoxChange?.(boxNum, pendingValues[boxNum]);
+    clearPendingValue(boxNum);
+    setEditingCell(null);
+  };
+
   const renderCellInput = (boxNum, val) => (
     <input
       type="number"
       step="any"
+      min={NEGATIVE_NOT_ALLOWED_BOXES.has(boxNum) ? 0 : undefined}
       className="fm-aeat-cell__input"
       value={pendingValues[boxNum] ?? (val != null ? String(val) : '')}
       onChange={e => setPendingValues(prev => ({ ...prev, [boxNum]: e.target.value }))}
-      onBlur={() => { onBoxChange?.(boxNum, pendingValues[boxNum]); setEditingCell(null); }}
-      onKeyDown={e => { if (e.key === 'Enter') { onBoxChange?.(boxNum, pendingValues[boxNum]); setEditingCell(null); e.target.blur(); } if (e.key === 'Escape') setEditingCell(null); }}
+      onBlur={() => commitCellEdit(boxNum)}
+      onKeyDown={e => { if (e.key === 'Enter') { commitCellEdit(boxNum); e.target.blur(); } if (e.key === 'Escape') { clearPendingValue(boxNum); setEditingCell(null); } }}
       autoFocus
       disabled={readOnly}
     />
@@ -100,7 +136,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
   const renderIdentSelectField = (f, compact = false) => (
     <div key={f.id} className="fm-aeat-ident-inline-field">
       <span className="fm-aeat-ident-inline-field__label">
-        {t(f.labelKey)}{f.required && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
+        {t(f.labelKey)}{isFieldRequired(f, identification) && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
       </span>
       <select
         className={`fm-aeat-ident-inline-field__select${compact ? ' fm-aeat-ident-inline-field__select--compact' : ''}`}
@@ -179,7 +215,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
             <span className="fm-aeat-cell__value">{val != null ? formatCell(val, colType) : ''}</span>
             {unit && <span className="fm-aeat-cell__unit">{unit}</span>}
             {isCellEditable && !readOnly && (
-              <button className="fm-aeat-cell__edit-btn" onClick={() => setEditingCell(boxNum)}>
+              <button className="fm-aeat-cell__edit-btn" onClick={() => startEditingCell(boxNum)}>
                 <Pencil size={12} strokeWidth={1.5} data-testid="Pencil__49d327" />
               </button>
             )}
@@ -242,7 +278,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                     return (
                       <div key={f.id} className="fm-aeat-ident-inline-field">
                         <span className="fm-aeat-ident-inline-field__label">
-                          {t(f.labelKey)}{f.required && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
+                          {t(f.labelKey)}{isFieldRequired(f, identification) && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
                         </span>
                         <input
                           type={f.type === 'date' ? 'date' : 'text'}
@@ -305,7 +341,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                   return (
                     <div key={f.id} className="fm-aeat-ident-inline-field">
                       <span className="fm-aeat-ident-inline-field__label">
-                        {t(f.labelKey)}{f.required && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
+                        {t(f.labelKey)}{isFieldRequired(f, identification) && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
                       </span>
                       <input
                         type={f.type === 'date' ? 'date' : 'text'}
@@ -392,7 +428,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                                     <>
                                       <span className="fm-aeat-cell__value">{val != null ? formatCell(val, 'amount') : ''}</span>
                                       {isCellEditable && !readOnly && (
-                                        <button className="fm-aeat-cell__edit-btn" onClick={() => setEditingCell(boxNum)}>
+                                        <button className="fm-aeat-cell__edit-btn" onClick={() => startEditingCell(boxNum)}>
                                           <Pencil size={12} strokeWidth={1.5} data-testid="Pencil__49d327" />
                                         </button>
                                       )}
