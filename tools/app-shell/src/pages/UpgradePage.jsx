@@ -91,6 +91,40 @@ async function waitForCheckoutPayment({ fetcher, baseUrl, token, requestId }) {
   return status;
 }
 
+async function handleExistingPurchaseError(error, {
+  fetcher,
+  baseUrl,
+  token,
+  setFormError,
+  resumePaidPurchase,
+  waitForExistingProvisioning,
+  setBillingPurchases,
+  setCheckoutStep,
+  setPhase,
+}) {
+  const purchase = error?.purchase;
+  if (error?.code !== UPGRADE_ERROR_CODES.purchaseAlreadyExists || !purchase) return false;
+
+  setFormError(null);
+  if (purchase.status === 'PAID') {
+    await resumePaidPurchase(purchase);
+    return true;
+  }
+  if (purchase.status === 'PROVISIONING' || purchase.status === 'PROVISIONED') {
+    await waitForExistingProvisioning(purchase);
+    return true;
+  }
+  try {
+    const overview = await getBillingOverview(fetcher, baseUrl, token);
+    setBillingPurchases(Array.isArray(overview?.purchases) ? overview.purchases : []);
+  } catch {
+    // The billing projection is recoverable; the purchase remains durable on the backend.
+  }
+  setCheckoutStep('payment');
+  setPhase('form');
+  return true;
+}
+
 async function resumeCheckoutProvisioning({
   fetcher,
   baseUrl,
@@ -690,26 +724,18 @@ export default function UpgradePage() {
       sessionStorage.setItem(PENDING_CHECKOUT_DATA_TRANSFER, JSON.stringify(dataTransfer));
       window.location.assign(session.checkoutUrl);
     } catch (error) {
-      if (error.code === UPGRADE_ERROR_CODES.purchaseAlreadyExists && error.purchase) {
-        setFormError(null);
-        if (error.purchase.status === 'PAID') {
-          await resumePaidPurchase(error.purchase);
-          return;
-        }
-        if (error.purchase.status === 'PROVISIONING' || error.purchase.status === 'PROVISIONED') {
-          await waitForExistingProvisioning(error.purchase);
-          return;
-        }
-        try {
-          const overview = await getBillingOverview(fetch, getUpgradeBaseUrl(), token);
-          setBillingPurchases(Array.isArray(overview?.purchases) ? overview.purchases : []);
-        } catch {
-          // The billing projection is recoverable; the purchase remains durable on the backend.
-        }
-        setCheckoutStep('payment');
-        setPhase('form');
-        return;
-      }
+      const existingPurchaseHandled = await handleExistingPurchaseError(error, {
+        fetcher: fetch,
+        baseUrl: getUpgradeBaseUrl(),
+        token,
+        setFormError,
+        resumePaidPurchase,
+        waitForExistingProvisioning,
+        setBillingPurchases,
+        setCheckoutStep,
+        setPhase,
+      });
+      if (existingPurchaseHandled) return;
       setPhase('form');
       setFormError(
         Object.values(UPGRADE_ERROR_CODES).includes(error.code) ? error.code : 'upgradeGenericError'
