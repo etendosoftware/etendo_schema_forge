@@ -69,8 +69,11 @@ vi.mock('@/components/forms/fields', async (importOriginal) => {
         {children}
       </div>
     ),
-    DateInput: ({ value, onChange, 'data-testid': dtid }) => (
-      <input data-testid={dtid} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
+    // `disabled` forwarded (ETP-4879): the real component now locks the date input while
+    // a movement is Processed, so the mock must forward the prop too — otherwise a test
+    // asserting the date lock would pass even if the real component stopped honoring it.
+    DateInput: ({ value, onChange, disabled, 'data-testid': dtid }) => (
+      <input data-testid={dtid} value={value ?? ''} onChange={(e) => onChange(e.target.value)} disabled={disabled} />
     ),
     MaskedAmountInput: (props) => (
       <div>
@@ -78,22 +81,27 @@ vi.mock('@/components/forms/fields', async (importOriginal) => {
         <span data-testid={`${props['data-testid']}-currency`}>{props.currency}</span>
       </div>
     ),
-    ChipSelect: ({ value, onChange, testId }) => (
+    // `disabled` forwarded (ETP-4879, defensive): none of the ChipSelect usages in the real
+    // component are currently locked while Processed, but forwarding it keeps the mock honest
+    // with the real component's prop surface instead of silently swallowing a future `disabled`.
+    ChipSelect: ({ value, onChange, testId, disabled }) => (
       <div>
         <span data-testid={`${testId}-value`}>{value?.id ?? ''}</span>
         <button
           type="button"
+          disabled={disabled}
           data-testid={`${testId}-pick`}
           onClick={() => onChange({ id: `${testId}-id`, name: `${testId}-name` })}>
           pick
         </button>
         <button
           type="button"
+          disabled={disabled}
           data-testid={`${testId}-pick2`}
           onClick={() => onChange({ id: `${testId}-id-2`, name: `${testId}-name-2` })}>
           pick2
         </button>
-        <button type="button" data-testid={`${testId}-clear`} onClick={() => onChange(null)}>clear</button>
+        <button type="button" disabled={disabled} data-testid={`${testId}-clear`} onClick={() => onChange(null)}>clear</button>
       </div>
     ),
   };
@@ -475,11 +483,25 @@ describe('NewTransactionModal — edit mode', () => {
     // Amount/type are read-only on a processed movement (Classic parity).
     expect(screen.getByTestId('tx-dir-in')).toBeDisabled();
     expect(screen.getByTestId('tx-dir-out')).toBeDisabled();
+    // The amount input itself must be locked too, not just the direction toggle — this was
+    // previously unasserted (the mock silently dropped the lock prop), so a regression here
+    // would have gone undetected (QA, ETP-4879).
+    expect(screen.getByTestId('tx-amount')).toBeDisabled();
     // Confirmar is gone (already processed); only Guardar remains.
     expect(screen.queryByTestId('tx-new-confirm')).not.toBeInTheDocument();
     expect(screen.getByTestId('tx-new-save')).toBeInTheDocument();
-    // The G/L item is still editable.
-    expect(screen.getByTestId('tx-glitem-pick')).toBeInTheDocument();
+  });
+
+  it('locks date, but keeps G/L item, description and dimensions editable, when editing a Processed movement (ETP-4879)', () => {
+    renderModal({ movement: { ...EDIT_MOVEMENT, processed: true }, dimensions: ['project'] });
+    // Backend only persists the 4 accounting dimensions + G/L item + description once Processed —
+    // date changes used to be sent but silently dropped, so the UI now locks it too.
+    expect(screen.getByTestId('tx-date')).toBeDisabled();
+    // G/L item, description and the accounting dimensions (Contacto + enabled optional dims) stay editable.
+    expect(screen.getByTestId('tx-glitem-pick')).not.toBeDisabled();
+    expect(screen.getByTestId('tx-description')).not.toBeDisabled();
+    expect(screen.getByTestId('tx-contact-pick')).not.toBeDisabled();
+    expect(screen.getByTestId('tx-dim-project-pick')).not.toBeDisabled();
   });
 });
 

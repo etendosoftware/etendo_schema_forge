@@ -435,6 +435,30 @@ describe('shouldSkipPayloadField', () => {
       false
     );
   });
+
+  // ETP-5332: handleNew's `initialData` seeding marks every seeded key as
+  // user-changed (userChangedKeysRef) BEFORE the async /defaults response can
+  // land. If that response happens to echo the same key back — landing it in
+  // backendDefaultKeysRef too — a legacy-looking numeric FK id seeded this way
+  // must still survive into the create payload, exactly like a value the user
+  // typed themselves. This is the same rule as the test above; pinned again
+  // here under the feature's own name so a regression in the seeding contract
+  // (e.g. someone "optimizing" handleNew to skip the userChangedKeys marking)
+  // is traceable straight back to ETP-5332.
+  it('returns false for a seeded legacy numeric FK id even when defaults echo the same key back', () => {
+    assert.equal(
+      shouldSkipPayloadField(
+        'businessPartner',
+        '12345',
+        refWith('businessPartner'), // defaults response also contains this key
+        refWith('businessPartner'), // handleNew marked it user-changed via initialData seeding
+        new Set(),
+        false,
+        {}
+      ),
+      false
+    );
+  });
 });
 
 describe('getReadOnly', () => {
