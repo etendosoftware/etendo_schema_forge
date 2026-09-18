@@ -5,6 +5,7 @@ import {
   hasUnsavedChanges,
   suppressNextUnloadPrompt,
   installUnloadGuard,
+  saveEmbeddedUnsavedChanges,
   resetUnsavedChangesForTests,
 } from '../unsavedChanges.js';
 
@@ -54,6 +55,88 @@ describe('unsavedChanges registry', () => {
     setUnsavedChanges('gone', true);
     clearUnsavedChanges('gone');
     expect(hasUnsavedChanges()).toBe(false);
+  });
+});
+
+describe('saveEmbeddedUnsavedChanges (ETP-5332)', () => {
+  // "Completado" in RecordCreateModal must save ONLY the popup's own embedded DetailView, never
+  // the document the popup was opened from — a separate `dirtyForms` entry with `embedded`
+  // unset. Saving that one too would be a worse bug than the one this function fixes: it would
+  // silently save-and-possibly-navigate the document behind the dialog.
+  beforeEach(() => resetUnsavedChangesForTests());
+
+  it('calls the saver of an entry registered as embedded', async () => {
+    const save = vi.fn().mockResolvedValue(true);
+    setUnsavedChanges('popup-form', true, save, true);
+
+    const result = await saveEmbeddedUnsavedChanges();
+
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(result).toBe(true);
+  });
+
+  it('does NOT call the saver of an entry that is not embedded (the scoping guard)', async () => {
+    // This is the critical regression test: a document editing session sitting behind the
+    // popup registers with `embedded` false/omitted. If this ever called its saver too, an
+    // edit on that document would be silently saved (and possibly navigated) by the popup's
+    // own "Completado" button.
+    const documentSave = vi.fn().mockResolvedValue(true);
+    const popupSave = vi.fn().mockResolvedValue(true);
+    setUnsavedChanges('document-behind-popup', true, documentSave, false);
+    setUnsavedChanges('popup-form', true, popupSave, true);
+
+    const result = await saveEmbeddedUnsavedChanges();
+
+    expect(popupSave).toHaveBeenCalledTimes(1);
+    expect(documentSave).not.toHaveBeenCalled();
+    expect(result).toBe(true);
+  });
+
+  it('also skips a non-embedded entry with no saver at all, without treating it as a refusal', async () => {
+    // `embedded` defaults to false when the 4th arg is omitted — the pre-ETP-5332 call shape
+    // every non-popup DetailView still uses. A missing saver on a SKIPPED entry must not be
+    // read as "cannot save this", or every ordinary window behind a popup would block finish.
+    setUnsavedChanges('document-behind-popup', true, undefined, false);
+    const popupSave = vi.fn().mockResolvedValue(true);
+    setUnsavedChanges('popup-form', true, popupSave, true);
+
+    const result = await saveEmbeddedUnsavedChanges();
+
+    expect(result).toBe(true);
+    expect(popupSave).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops at the first refusal among embedded entries, without calling a later one', async () => {
+    const firstSave = vi.fn().mockResolvedValue(false);
+    const secondSave = vi.fn().mockResolvedValue(true);
+    setUnsavedChanges('popup-form-1', true, firstSave, true);
+    setUnsavedChanges('popup-form-2', true, secondSave, true);
+
+    const result = await saveEmbeddedUnsavedChanges();
+
+    expect(result).toBe(false);
+    expect(firstSave).toHaveBeenCalledTimes(1);
+    expect(secondSave).not.toHaveBeenCalled();
+  });
+
+  it('resolves true with zero embedded entries, even when non-embedded entries are dirty', async () => {
+    // Must not error, or misreport, just because `dirtyForms` is non-empty — it is simply
+    // not this function's job to touch any of those entries.
+    setUnsavedChanges('document-behind-popup', true, vi.fn().mockResolvedValue(true), false);
+
+    const result = await saveEmbeddedUnsavedChanges();
+
+    expect(result).toBe(true);
+  });
+
+  it('resolves true with a totally empty registry', async () => {
+    const result = await saveEmbeddedUnsavedChanges();
+    expect(result).toBe(true);
+  });
+
+  it('an embedded entry still counts for hasUnsavedChanges (beforeunload/locale-switch guard)', () => {
+    setUnsavedChanges('popup-form', true, vi.fn(), true);
+    expect(hasUnsavedChanges()).toBe(true);
   });
 });
 

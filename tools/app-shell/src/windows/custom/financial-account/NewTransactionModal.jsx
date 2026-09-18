@@ -151,9 +151,12 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
   );
 
   const iso = accountCurrency?.iso || 'EUR';
-  // Editing an already-Processed movement: amount and direction are locked (Classic parity); only
-  // G/L item, dimensions, description and dates can change. Confirmar is hidden (already processed).
-  const lockAmountType = isEdit && Boolean(movement.processed);
+  // Editing an already-Processed movement: amount, direction and date are locked (ETP-4879 — the
+  // backend's applyEditableDimensions only persists the 4 accounting dimensions, the G/L item and
+  // the description once Processed; date changes used to be sent but silently dropped, which is
+  // confusing UX and was also the source of a DATEACCT-rollback bug). G/L item, dimensions and
+  // description stay editable. Confirmar is hidden (already processed).
+  const lockWhileProcessed = isEdit && Boolean(movement.processed);
   // `form.amount` is MaskedAmountInput's CLEAN value (dot-decimal, no grouping), so it parses
   // directly — no separator guessing needed now that the component owns the keystrokes.
   const amountValue = parseLocaleNumber(form.amount).value ?? 0;
@@ -251,10 +254,11 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
               required
               value={form.date}
               onChange={(v) => set({ date: v })}
+              disabled={lockWhileProcessed}
               name="tx-date"
               data-testid="tx-date" />
             <Field label={ui('financeAccountTxNewType')} required data-testid="tx-type-field">
-              <DirectionToggle value={form.dir} onChange={(dir) => set({ dir })} disabled={lockAmountType} data-testid="tx-dir" />
+              <DirectionToggle value={form.dir} onChange={(dir) => set({ dir })} disabled={lockWhileProcessed} data-testid="tx-dir" />
             </Field>
           </div>
 
@@ -271,7 +275,7 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
             <MaskedAmountInput
               label={ui('financeAccountTxNewAmount')}
               required
-              disabled={lockAmountType}
+              disabled={lockWhileProcessed}
               value={form.amount}
               currency={iso}
               placeholder={ui('financeAccountTxNewAmountPlaceholder')}
@@ -347,7 +351,7 @@ export function NewTransactionModal({ open, accountId, accountName = '', account
             <Save className="h-[14px] w-[14px]" data-testid="Save__tx" />
             {busy ? ui('financeAccountTxNewSaving') : ui('financeAccountTxNewSave')}
           </button>
-          {!lockAmountType && (
+          {!lockWhileProcessed && (
             <button
               type="button"
               className={BTN_PRIMARY}

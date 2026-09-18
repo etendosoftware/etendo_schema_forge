@@ -89,7 +89,14 @@ function makeDecl(identification, overrides = {}) {
 
 const DECL_MISSING_TIPO = makeDecl({});
 const DECL_MISSING_IBAN = makeDecl({ tipo_declaracion: 'D' });
-const DECL_MISSING_IBAN_VIA_RECTIFICATIVA = makeDecl({ tipo_declaracion: 'I', rectificativa: true });
+// ETP-5393 Bug E — bank_iban is only required via the rectificativa path when box 111
+// (Rectificación - Importe) is ALSO non-zero (fm303Layouts.js's requiredWhen). This
+// declaration seeds a non-zero box 111 via `_precomputed.boxes` so it stays a valid
+// "missing IBAN via rectificativa" scenario under the new conditional rule.
+const DECL_MISSING_IBAN_VIA_RECTIFICATIVA = makeDecl(
+  { tipo_declaracion: 'I', rectificativa: true },
+  { _precomputed: { boxes: { 111: 500 } } },
+);
 const DECL_COMPLETE = makeDecl({ tipo_declaracion: 'I' });
 
 const defaultProps = { onBack: vi.fn(), onStatusChange: vi.fn() };

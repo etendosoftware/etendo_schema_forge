@@ -13,8 +13,14 @@ import { login } from '../helpers/auth.js';
  *   4. Complementaria fields (pre-2024-T4): only nro_justificante appears
  *
  * Mock mode: routes are mocked to avoid hitting the real backend.
- * Navigation uses the real "+ Nueva declaración" button so the full creation
- * flow is exercised, not an internal shortcut.
+ * Navigation for the current filing year (2026) uses the real "+ Nueva
+ * declaración" button so the full creation flow is exercised, not an internal
+ * shortcut (goToDeclaration()). Historical years (ETP-5391 restricted
+ * "Nueva declaración" to SELECTABLE_YEARS = [2026], so they can no longer be
+ * created that way) are opened by seeding an existing declaration straight
+ * into the mocked declarations list and clicking its row instead
+ * (goToExistingDeclaration()) — SUPPORTED_YEARS (layout resolution) is
+ * unaffected by that restriction and still spans 2021-2026.
  *
  * CasillasTab has a left sidebar with 4 sections:
  *   - "Identificación" → renders identificacion + datos_bancarios
@@ -109,6 +115,66 @@ async function goToDeclaration(page, { year, period }) {
   await modal.getByRole('button', { name: 'Crear declaración', exact: true }).click();
 
   // Click the new row to open the declaration detail
+  const row = page.locator('tr').filter({ hasText: String(year) }).first();
+  await expect(row).toBeVisible({ timeout: 5_000 });
+  await row.click();
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+}
+
+/**
+ * Navigate directly to an EXISTING Modelo 303 declaration for a historical
+ * year, bypassing "Nueva declaración" entirely.
+ *
+ * ETP-5391 restricted the "Nueva declaración" Año dropdown to a single
+ * selectable year (`SELECTABLE_YEARS`, see fm303Layouts.js — currently just
+ * the current filing year, 2026), so the old "create it via the modal, then
+ * open it" path this file used for every year no longer works for a
+ * historical one. That restriction only applies to CREATING a new
+ * declaration though: `SUPPORTED_YEARS` (layout resolution for an EXISTING
+ * declaration) is unchanged and still spans 2021-2026, so the historical
+ * layout differences these tests actually cover (fm303Layouts.js PATCHES
+ * per year) are still fully in place and still worth testing.
+ *
+ * This seeds a declaration for the requested year/period straight into the
+ * mocked GET /fiscal303/declarations response — as if it already existed,
+ * which for a past year it always would in real usage — and opens it by
+ * clicking its row, exactly like goToDeclaration() does after creating one.
+ * The declaration shape mirrors the POST response goToDeclaration() mocks
+ * above so FmModel303Page hydrates identically either way.
+ */
+async function goToExistingDeclaration(page, { year, period, extra = {} }) {
+  await login(page);
+
+  // Same reasoning as goToDeclaration() above: must be registered after
+  // login() so it wins over the generic /sws/** catch-all.
+  await page.route('**/fiscal-models-catalog', (route) => {
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ '303': true, '349': false }) });
+  });
+
+  const declaration = {
+    id: `test-decl-${year}-${period}`,
+    model: '303',
+    year,
+    period,
+    status: 'draft',
+    type: 'ord',
+    incidents: { blocking: 0, warning: 0, items: [] },
+    ...extra,
+  };
+
+  await page.route('**/fiscal303/declarations', (route) => {
+    if (route.request().method() === 'GET') {
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([declaration]) });
+      return;
+    }
+    route.fallback();
+  });
+
+  await page.goto('/fiscal-models');
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+  // Click the seeded row to open the declaration detail — same mechanism
+  // goToDeclaration() uses after creating one, just skipping the modal.
   const row = page.locator('tr').filter({ hasText: String(year) }).first();
   await expect(row).toBeVisible({ timeout: 5_000 });
   await row.click();
@@ -251,8 +317,11 @@ test.describe('FM 303 — datos_bancarios section visibility', () => {
 
 test.describe('FM 303 — rectificativa conditional fields (2024 T4+)', () => {
   test.beforeEach(async ({ page }) => {
-    // 2024 T4 uses the BASE layout — full rectificativa section
-    await goToDeclaration(page, { year: 2024, period: 'T4' });
+    // 2024 T4 uses the BASE layout — full rectificativa section.
+    // (ETP-5391) 2024 is outside SELECTABLE_YEARS (creation-only restriction),
+    // so this opens a seeded existing declaration instead of creating a new
+    // one — see goToExistingDeclaration()'s docblock.
+    await goToExistingDeclaration(page, { year: 2024, period: 'T4' });
     await goToResultadoFinal(page);
   });
 
@@ -305,7 +374,8 @@ test.describe('FM 303 — rectificativa conditional fields (2024 T4+)', () => {
 
 test.describe('FM 303 — complementaria shows only nro_justificante (2023)', () => {
   test.beforeEach(async ({ page }) => {
-    await goToDeclaration(page, { year: 2023, period: 'T1' });
+    // (ETP-5391) 2023 is outside SELECTABLE_YEARS — see goToExistingDeclaration()'s docblock.
+    await goToExistingDeclaration(page, { year: 2023, period: 'T1' });
     await goToResultadoFinal(page);
   });
 
@@ -339,7 +409,8 @@ test.describe('FM 303 — complementaria shows only nro_justificante (2023)', ()
 
 test.describe('FM 303 — complementaria shows only nro_justificante (2024 T1)', () => {
   test.beforeEach(async ({ page }) => {
-    await goToDeclaration(page, { year: 2024, period: 'T1' });
+    // (ETP-5391) 2024 is outside SELECTABLE_YEARS — see goToExistingDeclaration()'s docblock.
+    await goToExistingDeclaration(page, { year: 2024, period: 'T1' });
     await goToResultadoFinal(page);
   });
 
@@ -402,12 +473,15 @@ test.describe('FM 303 — sin_actividad checkbox', () => {
   });
 });
 
-// ── Suite 7 — Año dropdown in NewDeclModal shows only supported years ───────
+// ── Suite 7 — Año dropdown in NewDeclModal shows only selectable years ──────
 // The Año selector is a trigger button (`.fm-newdecl-year-trigger`, not a
 // <select>) that opens a `role="listbox"` panel of `role="option"` rows, one
-// per SUPPORTED_YEARS value (2021–2026, from
-// tools/app-shell/src/windows/custom/fiscal-models/models/303/fm303Layouts.js
-// — keep this list in sync if PATCHES/BASE_YEAR ever change).
+// per SELECTABLE_YEARS value (from
+// tools/app-shell/src/windows/custom/fiscal-models/models/303/fm303Layouts.js).
+// (ETP-5391) SELECTABLE_YEARS is now restricted to a single current filing
+// year (2026) for CREATING a new declaration — a narrower, deliberately
+// unrelated list from SUPPORTED_YEARS (2021-2026), which still governs layout
+// resolution for EXISTING declarations (see goToExistingDeclaration() above).
 // This suite uses its own beforeEach that stops after opening the modal so it
 // doesn't depend on a complete declaration creation flow.
 
@@ -430,13 +504,21 @@ test.describe('FM 303 — NewDeclModal Año dropdown shows supported years only'
     await expect(modal.locator('select')).toHaveCount(0);
   });
 
-  test('Año dropdown lists an option for all supported years 2021 to 2026', async ({ page }) => {
+  test('Año dropdown lists exactly one option, the current filing year 2026, never a prior filing year', async ({ page }) => {
+    // (ETP-5391) Regression guard for the SELECTABLE_YEARS/SUPPORTED_YEARS split: a
+    // new declaration must only ever be created for the current filing year, even
+    // though SUPPORTED_YEARS (layout resolution for existing declarations) still
+    // spans back to 2021 — mirrors the equivalent Vitest guard in FmOverlays.vitest.jsx
+    // ("offers exactly one selectable year (SELECTABLE_YEARS), never a prior filing
+    // year like 2025").
     const modal = page.locator('.fm-config-modal.fm-newdecl-modal');
     await modal.locator('.fm-newdecl-year-trigger').click();
     const listbox = modal.getByRole('listbox');
     await expect(listbox).toBeVisible();
-    for (const year of [2021, 2022, 2023, 2024, 2025, 2026]) {
-      await expect(listbox.getByRole('option', { name: String(year), exact: true })).toHaveCount(1);
+    await expect(listbox.getByRole('option')).toHaveCount(1);
+    await expect(listbox.getByRole('option', { name: '2026', exact: true })).toHaveCount(1);
+    for (const priorYear of [2021, 2022, 2023, 2024, 2025]) {
+      await expect(listbox.getByRole('option', { name: String(priorYear), exact: true })).toHaveCount(0);
     }
   });
 
@@ -459,7 +541,8 @@ test.describe('FM 303 — NewDeclModal Año dropdown shows supported years only'
 
 test.describe('FM 303 — complementaria shows only nro_justificante (2022)', () => {
   test.beforeEach(async ({ page }) => {
-    await goToDeclaration(page, { year: 2022, period: 'T1' });
+    // (ETP-5391) 2022 is outside SELECTABLE_YEARS — see goToExistingDeclaration()'s docblock.
+    await goToExistingDeclaration(page, { year: 2022, period: 'T1' });
     await goToResultadoFinal(page);
   });
 
@@ -491,7 +574,8 @@ test.describe('FM 303 — complementaria shows only nro_justificante (2022)', ()
 
 test.describe('FM 303 — complementaria shows only nro_justificante (2021)', () => {
   test.beforeEach(async ({ page }) => {
-    await goToDeclaration(page, { year: 2021, period: 'T1' });
+    // (ETP-5391) 2021 is outside SELECTABLE_YEARS — see goToExistingDeclaration()'s docblock.
+    await goToExistingDeclaration(page, { year: 2021, period: 'T1' });
     await goToResultadoFinal(page);
   });
 

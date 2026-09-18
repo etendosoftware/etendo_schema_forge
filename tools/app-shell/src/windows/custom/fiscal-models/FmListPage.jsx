@@ -909,7 +909,10 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                 // the list and the detail page can never disagree on the same declaration's result.
                 const manualOverrides = decl.manualData?.manualOverrides ?? {};
                 const mergedBoxes = recomputeDerivedBoxes(applyOverrides(computed.boxes, manualOverrides));
-                const r = getBoxValue(mergedBoxes, 71) ?? computed.summary.result;
+                // ETP-5393 Bug B — `??` doesn't catch NaN; require a finite number before
+                // trusting the re-derived box 71 (same guard as FmModel303Page's applyComputeResult).
+                const box71Derived = getBoxValue(mergedBoxes, 71);
+                const r = Number.isFinite(box71Derived) ? box71Derived : computed.summary.result;
                 const hasInvoices = (computed.sources?.length ?? 0) > 0;
                 const kind = deriveResultKind({ ...computed.summary, result: r }, { hasInvoices });
                 displayResult = { kind, amount: Math.abs(r) };

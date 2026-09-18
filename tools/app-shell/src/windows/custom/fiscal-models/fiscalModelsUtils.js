@@ -63,6 +63,23 @@ const IDENT_PARAM_MAP = [
 // same set before hitting the network.
 export const IBAN_REQUIRED_TIPOS = ['U', 'D', 'X'];
 
+// ETP-5393 [B1 re-review] — imperative mirror of fm303Layouts.js's `_BANK_IBAN_REQUIRED_WHEN`
+// (condition A: tipo U/D/X — OR — condition B: rectificativa checked AND box 111 non-zero).
+// `generate303File` below and `AeatSubmitFlow.jsx`'s pre-flight guard used to test only
+// `identChecks?.rectificativa === true` for condition B, ignoring box 111 entirely — so a
+// rectificativa filed under tipo 'I' with box 111 = 0 (bank block correctly HIDDEN per the
+// narrowed Bug E visibility) still hit `iban_required` from a field the user can't even see.
+// `identChecksWithBox111Flag` must already carry the synthetic `_box111NonZero` key — pass it
+// through `withBox111NonZeroFlag` first (same as `fm303Layouts.js`'s callers). Keep this in sync
+// with `_BANK_IBAN_REQUIRED_WHEN` by hand; it is intentionally not re-derived from it (the
+// declarative matcher lives in fm303Layouts.js, which has no imports and must stay dependency-free).
+export function isBankIbanRequired(tipo, identChecksWithBox111Flag) {
+  return (
+    IBAN_REQUIRED_TIPOS.includes(tipo) ||
+    (identChecksWithBox111Flag?.rectificativa === true && identChecksWithBox111Flag?._box111NonZero === true)
+  );
+}
+
 // Declaration type (tipo_declaracion) for which AEAT's NRC (Número de Referencia Completo)
 // field actually applies: Ingreso (I) only, per AEAT's own bundled Modelo 303 spec. The backend
 // already discards any NRC value for every other tipo before it reaches AEAT
@@ -74,19 +91,48 @@ export const IBAN_REQUIRED_TIPOS = ['U', 'D', 'X'];
 // never be paired with a required/blocking validation.
 export const DECLARATION_TYPE_INGRESO = 'I';
 
+// ETP-5393 Bug C [W1 re-review] — boxes 111 (Rectificación – Importe) and 77 (IVA a la
+// importación liquidado por la Aduana pendiente de ingreso) are the only editable boxes the
+// classic AEAT303Report engine hard-rejects when negative (AEAT303Report2024.java:276-278 for
+// 111, AEAT303Report2015.java:149-162 for 77). Single source of truth, consolidated out of a
+// literal `new Set([111, 77])` duplicated in both `FmBoxes303.jsx` (the `min="0"` UX hint) and
+// `FmModel303Page.jsx` (`handleBoxChange`'s actual clamp + i18n error enforcement).
+export const NEGATIVE_NOT_ALLOWED_BOXES = new Set([111, 77]);
+
 // Maps editable box numbers (from manualOverrides / liveBoxes) to AEAT HTTP param names.
 // Only boxes that the AEAT module reads from inputParams (not computed from DB) are listed.
 const BOX_PARAM_MAP = {
   42:  'Special_Compensations',      // compensaciones régimen especial / agrario
   43:  'Investment_Adjustment',      // regularización bienes de inversión
   44:  'Adjustment_Final_Percentage',// prorrata definitiva
+  65:  'ToPublicTreasury',           // atribuible al Estado % (resultado_final/atribuible_estado).
+                                     // SAME AEAT param casilla 107 (territorio_comun) mirrors in the
+                                     // UI — see fm303Layouts.js's territorio_comun `derivedValue`.
+                                     // AEAT303Report2014.java:818 and AEAT303Report2018LastPeriod's
+                                     // commonTerritory() both read this one key off box 65, so 107 no
+                                     // longer needs its own BOX_PARAM_MAP entry (ETP-5391).
   68:  'AnnualRegularAmt',           // regularización anual prorrata (T4/12 only)
+  70:  'ComplementaryAmt',           // a_deducir — importe complementaria/rectificativa a deducir
+                                     // (AEAT303Report2014.java:946-958, gated by IsComplementary=Y)
+  76:  'REG_CUOTAS_ART80',           // regularización cuotas art. 80.cinco.5ª LIVA (last period only,
+                                     // AEAT303Report2014LastPeriod.java)
+  77:  'IVA_IMPORT_ADUANA',          // IVA importación liquidado por la Aduana pendiente de ingreso
+                                     // (last period only, AEAT303Report2014LastPeriod.java)
   78:  'PreviousPeriodAmtApplied',   // cuotas a compensar aplicadas en este período
+  89:  'ALAVA',                      // territorio Araba/Álava % (last period only, ETP-5391)
+  90:  'GUIPUZCOA',                  // territorio Gipuzkoa % (last period only, ETP-5391)
+  91:  'VIZCAYA',                    // territorio Bizkaia % (last period only, ETP-5391)
+  92:  'NAVARRA',                    // territorio Navarra % (last period only, ETP-5391)
+  95:  '303REAGYP',                  // régimen especial agricultura/ganadería/pesca (last period only, ETP-5391)
+  97:  '303USED_GOODS',              // bienes usados/objetos de arte/antigüedades (last period only, ETP-5391)
+  98:  '303TRAVEL_AGENCY',           // régimen especial agencias de viajes (last period only, ETP-5391)
   108: 'AdministrativeCriteriaDiscrepancy', // discrepancia criterio administrativo (2024+)
   109: 'ReturnsPendingSettlement',   // devoluciones en tramitación (2023+)
   110: 'PreviousPeriodAmt',          // cuotas a compensar pendientes de períodos anteriores
   111: 'RectifyingAmount',           // rectificación. importe (2024+ rectificativa)
   124: 'OSS_SujetaYAcogida',         // operaciones OSS sujetas y acogidas (2021+)
+  127: 'OPSUJETASCONOSS',            // operaciones sujetas y acogidas a la OSS (last period only, ETP-5391)
+  128: 'OPINTRAGRUPO',               // operaciones intragrupo, arts. 78/79 LIVA (last period only, ETP-5391)
 };
 
 /**
@@ -166,6 +212,12 @@ export function applyIdentParams(params, identChecks) {
   applyComplementariaParams(params, identChecks);
   // Rectificativa (2024+): IsComplementary=Y activates rectAssessment in the AEAT module.
   if (identChecks.rectificativa) applyRectificativaParams(params, identChecks);
+  // Modelo 347 exemption checkbox (last period only, ETP-5391). NOT forwarded via
+  // IDENT_PARAM_MAP: AEAT303Report2019.java checks inputParams.get('347TAX_FORM').equals('Y')
+  // literally (unlike Cancel_Modify_Debit's mere-presence check above), so this must send the
+  // exact string 'Y' rather than IDENT_PARAM_MAP's raw boolean forwarding (which would send the
+  // string 'true' and never match).
+  if (identChecks.declaracion_terceros === true) params.set('347TAX_FORM', 'Y');
 }
 
 function applyBoxParams(params, manualOverrides) {
@@ -218,13 +270,15 @@ export function triggerBase64Download(base64, downloadName, mimeType = 'applicat
   triggerDownload(base64ToBlob(base64, mimeType), downloadName);
 }
 
-export async function generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, filename } = {}) {
+export async function generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, liveBoxes, filename } = {}) {
   if (!apiBaseUrl) return { ok: false, error: 'no_token' };
 
   const tipo = identChecks?.tipo_declaracion ?? decl.result?.kind ?? 'N';
 
+  // ETP-5393 [B1] — must match the final Bug E visibility (fm303Layouts.js's
+  // `_BANK_IBAN_REQUIRED_WHEN`), not just `rectificativa`. See `isBankIbanRequired`'s docstring.
   if (
-    (IBAN_REQUIRED_TIPOS.includes(tipo) || identChecks?.rectificativa === true) &&
+    isBankIbanRequired(tipo, withBox111NonZeroFlag(identChecks ?? {}, liveBoxes)) &&
     !identChecks?.bank_iban?.trim()
   ) {
     return { ok: false, error: 'iban_required' };
@@ -502,7 +556,14 @@ export function deriveResultKind(summary, { hasInvoices = false } = {}) {
 // form the other helpers below operate on.
 export function toBoxArray(src) {
   if (Array.isArray(src)) return src;
-  if (src && typeof src === 'object') return Object.entries(src).map(([n, v]) => ({ num: Number(n), value: v }));
+  if (src && typeof src === 'object') {
+    // ETP-5393 Bug B: Fiscal303BoxesHandler serializes every box value as a JSON STRING
+    // (BigDecimal#toString). Without this coercion, `recomputeDerivedBoxes`'s numeric
+    // accumulation (`s + get(n)`) silently does string concatenation the first time any
+    // of these boxes is a non-zero string (e.g. `0 + "-0.63"` -> `"0-0.63"`), which then
+    // becomes NaN and cascades through every derived box (45/46/64/66/69/71).
+    return Object.entries(src).map(([n, v]) => ({ num: Number(n), value: v == null ? v : Number(v) }));
+  }
   return [];
 }
 
@@ -548,6 +609,17 @@ export function recomputeDerivedBoxes(boxArr) {
 export function getBoxValue(liveBoxes, num) {
   const e = toBoxArray(liveBoxes).find(b => b.num === num);
   return e ? (e.value ?? 0) : null;
+}
+
+// ETP-5393 Bug E — fm303Layouts.js's `bank_iban.requiredWhen` needs to know whether box 111
+// (Rectificación - Importe) currently holds a non-zero value, but `matchesVisibility`/
+// `isFieldRequired` only ever read the `identification` object (checkboxes/selects), never the
+// separate `liveBoxes` array. Callers merge this synthetic `_box111NonZero` flag into
+// `identification` before handing it to `getMissingRequiredFields` or FmBoxes303's
+// `identification` prop, so both the pre-flight gate and the red-asterisk rendering agree.
+export function withBox111NonZeroFlag(identification, liveBoxes) {
+  const box111 = getBoxValue(liveBoxes, 111);
+  return { ...identification, _box111NonZero: box111 != null && Number(box111) !== 0 };
 }
 
 function roundEur(n) {

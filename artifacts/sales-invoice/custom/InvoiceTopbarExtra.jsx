@@ -8,6 +8,7 @@ import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePayme
 import { getArSubtype } from './invoiceSubtype';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { TruncatedText } from '@/components/ui/truncated-text';
 
 function fmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
@@ -269,6 +270,8 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         </span>
       );
     }
+    // ETP-5268 follow-up — amount shown again, capped to ~6 digits via
+    // TruncatedText (tooltip only opens when it genuinely truncates).
     return (
       <>
         <button
@@ -279,7 +282,8 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-info-bg)', border: '1px solid var(--status-info-border)', color: 'hsl(var(--primary))', fontVariantNumeric: 'tabular-nums' }}
         >
           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--primary))' }} />
-          {ui('cpFavorBadge')} {fmt(outstandingAbs, currency)}
+          {ui('cpFavorBadge')}
+          <TruncatedText text={fmt(outstandingAbs, currency)} className="w-[72px] shrink-0 text-left" />
         </button>
         {showPaymentsModal && (
           <InvoicePaymentHistoryModal

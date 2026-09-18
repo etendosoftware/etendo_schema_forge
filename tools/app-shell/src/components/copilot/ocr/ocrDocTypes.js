@@ -34,11 +34,16 @@ export const OCR_DOC_TYPES = [
         preResolve: 'findBp',
         createComponent: 'CreateContactModal',
         createDocumentType: 'purchase',
-        // Keys are CreateContactModal form field ids, values are extracted
-        // payload keys. Everything declared here lands in the create-contact
-        // popup, so the user does not retype what the OCR already read
-        // (ETP-4855 Error 1). `country` is matched from its printed label
-        // against the country selector; the rest is free text.
+        // Values are extracted payload keys (ETP-4855 Error 1: the user should not
+        // retype what the OCR already read).
+        //
+        // ETP-5332 — the popup is now the real Contacts window, so only the keys that
+        // are `businessPartner` HEADER fields are actually seeded: `name`, `taxID`,
+        // `etgoEmail`, `etgoPhone` (see `buildOcrContactSeed` in
+        // CreateContactModalAdapter.jsx). `address`, `postalCode`, `city` and `country`
+        // belong to the `locationAddress` CHILD tab and are NOT seeded today — adding a
+        // key here does nothing unless it is a header field. Debt:
+        // `ocr-contact-address-prefill`.
         createPrefilledFrom: {
           name: 'vendor_name',
           taxID: 'tax_id',

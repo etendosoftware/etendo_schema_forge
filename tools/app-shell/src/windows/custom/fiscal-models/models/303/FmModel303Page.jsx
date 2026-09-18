@@ -19,7 +19,7 @@ import { useAuth } from '@/auth/AuthContext.jsx';
 import {
   formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents,
   persistManualData, deriveResultKind, toBoxArray, applyOverrides, recomputeDerivedBoxes, getBoxValue,
-  resolveResultColors,
+  resolveResultColors, withBox111NonZeroFlag, NEGATIVE_NOT_ALLOWED_BOXES,
 } from '../../fiscalModelsUtils.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
@@ -78,10 +78,16 @@ function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, 
   // Both are re-derived here from the override-aware `mergedBoxes` instead of the raw backend
   // value. `accrued` (box 27, IVA devengado) needs no such treatment — it has no manual-entry
   // inputs anywhere in its formula.
+  // ETP-5393 Bug B defensive guard: `??` does NOT catch NaN (only null/undefined), so a
+  // future numeric regression in the derivation chain could again silently mask the
+  // correct backend fallback with a NaN that only surfaces downstream as a plain '—'.
+  // Explicitly require a finite number before trusting the re-derived box value.
+  const deductibleDerived = getBoxValue(mergedBoxes, 45);
+  const resultDerived = getBoxValue(mergedBoxes, 71);
   setLiveSummary({
     ...res.summary,
-    deductible: getBoxValue(mergedBoxes, 45) ?? res.summary?.deductible ?? 0,
-    result: getBoxValue(mergedBoxes, 71) ?? res.summary?.result ?? 0,
+    deductible: Number.isFinite(deductibleDerived) ? deductibleDerived : (res.summary?.deductible ?? 0),
+    result: Number.isFinite(resultDerived) ? resultDerived : (res.summary?.result ?? 0),
   });
   if (res.sources) setLiveSources(res.sources);
 }
@@ -116,7 +122,7 @@ function applyGenerateError(result, t) {
 const CASILLAS_SECTIONS = [
   { id: 'identificacion',  titleKey: 'fm.page.identificacion',  sections: ['identificacion', 'datos_bancarios'] },
   { id: 'liquidacion',     titleKey: 'fm.page.liquidacion',     sections: ['iva_devengado', 'iva_deducible', 'resultado'] },
-  { id: 'info_adicional',  titleKey: 'fm.page.info_adicional',  sections: ['info_adicional'] },
+  { id: 'info_adicional',  titleKey: 'fm.page.info_adicional',  sections: ['info_adicional', 'tributacion_territorial', 'info_adicional_ultimo_periodo'] },
   { id: 'resultado_final', titleKey: 'fm.page.resultado_final', sections: ['resultado_final', 'sin_actividad', 'rectificativa'] },
 ];
 
@@ -163,7 +169,7 @@ function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, on
             year={decl.year}
             period={decl.period}
             sectionIds={section.sections}
-            identification={{ ...orgIdent, ...identChecks }}
+            identification={withBox111NonZeroFlag({ ...orgIdent, ...identChecks }, liveBoxes)}
             onIdentChange={onIdentChange}
             onBoxChange={onBoxChange}
             readOnly={isSubmitted}
@@ -331,7 +337,17 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
 
   function handleBoxChange(boxNum, rawValue) {
     hasPendingManualDataEditRef.current = true;
-    const value = parseBoxInput(rawValue);
+    let value = parseBoxInput(rawValue);
+    // ETP-5393 Bug C: boxes 111 (Rectificación – Importe) and 77 (IVA a la importación
+    // liquidado por la Aduana pendiente de ingreso) can never be negative — the classic
+    // AEAT303Report engine hard-rejects a negative value for either at file-generation
+    // time. Clamp to 0 here (same "make the invalid state structurally impossible"
+    // approach as the box78/box110 clamp below) instead of letting it reach submission.
+    if (value != null && value < 0 && NEGATIVE_NOT_ALLOWED_BOXES.has(boxNum)) {
+      value = 0;
+      toast.error(t('fm.box.error.negative_not_allowed', { box: boxNum }) ??
+        `La casilla ${boxNum} no admite valores negativos.`);
+    }
     const fallback = decl._precomputed?.boxes ?? decl.boxes;
 
     // ETP-5338 pt.2 (replaces the advisory-warning-only approach from the previous commit):
@@ -510,7 +526,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
         // fail open — see comment above.
       }
     }
-    const result = await generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, filename });
+    const result = await generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, liveBoxes, filename });
     setGenerating(false);
     if (!result.ok) applyGenerateError(result, t);
   }
@@ -721,7 +737,9 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // "Generar fichero 303" and "Marcar como Presentado" — see handleGenerate/handlePresent below
   // and their button pre-checks — because the backend silently defaulted a missing/blank
   // declaration type to "N" instead of rejecting it (Fiscal303BoxesHandler.resolveDeclType).
-  const missingRequiredFields = getMissingRequiredFields(decl?.year, decl?.period, identChecks);
+  const missingRequiredFields = getMissingRequiredFields(
+    decl?.year, decl?.period, withBox111NonZeroFlag(identChecks, liveBoxes),
+  );
   // Shared "'Label A', 'Label B'" rendering of missingRequiredFields, used by both the toast
   // helper below and the inline banner — a single non-nested template literal per field
   // (javascript:S4624 flags nesting one template literal's `${}` inside another's).
@@ -1137,6 +1155,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
           decl={decl}
           orgIdent={orgIdent}
           identChecks={identChecks}
+          liveBoxes={liveBoxes}
           summary={summary}
           token={token}
           apiBaseUrl={apiBaseUrl}

@@ -73,6 +73,24 @@ async function renderCardWithRows(rows, props = {}) {
   return view;
 }
 
+// ETP-5304 — jsdom reports scrollWidth === clientWidth === 0 for every element, so
+// the "is the line actually clipped?" gate inside TruncatedText can only be driven
+// by stubbing both measurements on the element. Same technique (and same helper
+// shape) as components/ui/__tests__/truncated-text.vitest.jsx, which is the unit
+// spec for that gate.
+function setMetrics(el, scrollWidth, clientWidth) {
+  Object.defineProperty(el, 'scrollWidth', { configurable: true, value: scrollWidth });
+  Object.defineProperty(el, 'clientWidth', { configurable: true, value: clientWidth });
+}
+
+const MANY_RECIPIENTS = ['alice@acme.com', 'bob@acme.com', 'carol@acme.com', 'dave@acme.com'];
+const MANY_RECIPIENTS_TEXT = MANY_RECIPIENTS.join(', ');
+
+async function renderOneRow(overrides = {}) {
+  await renderCardWithRows([{ ...SENT_ROW, ...overrides }]);
+  return screen.findByTestId('TruncatedText__emails');
+}
+
 describe('EmailsCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -310,6 +328,95 @@ describe('EmailsCard', () => {
       await screen.findByText('ops@acme.com');
       expect(screen.queryByText('emailHistoryError')).not.toBeInTheDocument();
       expect(screen.queryByText('SMTP 550 mailbox unavailable')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('ETP-5304 — the recipients line reveals the full list when clipped', () => {
+    it('reveals every recipient on focus when the line does not fit the preview column', async () => {
+      const line = await renderOneRow({ recipientsTo: MANY_RECIPIENTS });
+      setMetrics(line, 640, 320);
+
+      fireEvent.focus(line);
+
+      expect(screen.getByTestId('TruncatedText__emails-tooltip'))
+        .toHaveTextContent(MANY_RECIPIENTS_TEXT);
+    });
+
+    it('closes the reveal again once the pointer or focus leaves', async () => {
+      const line = await renderOneRow({ recipientsTo: MANY_RECIPIENTS });
+      setMetrics(line, 640, 320);
+
+      fireEvent.focus(line);
+      expect(screen.getByTestId('TruncatedText__emails-tooltip')).toBeInTheDocument();
+
+      fireEvent.blur(line);
+      expect(screen.queryByTestId('TruncatedText__emails-tooltip')).toBeNull();
+    });
+
+    it('stays silent when the recipients already fit — no redundant tooltip', async () => {
+      const line = await renderOneRow();
+      setMetrics(line, 120, 320);
+
+      fireEvent.focus(line);
+
+      expect(line).toHaveTextContent('client@acme.com');
+      expect(screen.queryByTestId('TruncatedText__emails-tooltip')).toBeNull();
+    });
+
+    it('keeps the no-recipients fallback visible and silent', async () => {
+      const line = await renderOneRow({ recipientsTo: [] });
+      setMetrics(line, 90, 320);
+
+      fireEvent.focus(line);
+
+      expect(line).toHaveTextContent('emailHistoryNoRecipients');
+      expect(screen.queryByTestId('TruncatedText__emails-tooltip')).toBeNull();
+    });
+
+    it('still clips the line with an ellipsis and can shrink inside the flex row', async () => {
+      const line = await renderOneRow({ recipientsTo: MANY_RECIPIENTS });
+
+      // `truncate` keeps the ellipsis; `min-w-0` lets the flex child shrink at all
+      // (a flex item defaults to content-based min-width, so without it the line
+      // would never truncate and the reveal would never trigger).
+      expect(line.className).toContain('truncate');
+      expect(line.className).toContain('min-w-0');
+    });
+
+    it('reveals only the To recipients — never CC, the body or the sender (ETP-5069)', async () => {
+      const line = await renderOneRow({ recipientsTo: MANY_RECIPIENTS });
+      setMetrics(line, 640, 320);
+
+      fireEvent.focus(line);
+
+      const tooltip = screen.getByTestId('TruncatedText__emails-tooltip');
+      expect(tooltip).toHaveTextContent(MANY_RECIPIENTS_TEXT);
+      expect(tooltip).not.toHaveTextContent('boss@acme.com');
+      expect(tooltip).not.toHaveTextContent('audit@acme.com');
+      expect(tooltip).not.toHaveTextContent('please find the invoice attached');
+      expect(tooltip).not.toHaveTextContent('Irina Urricelqui');
+      expect(screen.queryByText('emailHistoryCc')).not.toBeInTheDocument();
+      expect(screen.queryByText('emailHistoryMessage')).not.toBeInTheDocument();
+      expect(screen.queryByText('emailHistoryDownload')).not.toBeInTheDocument();
+    });
+
+    it('gives each history row its own reveal, and opens only the clipped one', async () => {
+      await renderCardWithRows([{ ...SENT_ROW, recipientsTo: MANY_RECIPIENTS }, FAILED_ROW]);
+      await waitFor(() => expect(screen.getAllByTestId('TruncatedText__emails')).toHaveLength(2));
+      const [newest, oldest] = screen.getAllByTestId('TruncatedText__emails');
+      expect(newest).toHaveTextContent(MANY_RECIPIENTS_TEXT);
+      expect(oldest).toHaveTextContent('ops@acme.com');
+
+      setMetrics(newest, 640, 320);
+      setMetrics(oldest, 100, 320);
+
+      fireEvent.focus(oldest);
+      expect(screen.queryByTestId('TruncatedText__emails-tooltip')).toBeNull();
+
+      fireEvent.focus(newest);
+      const tooltips = screen.getAllByTestId('TruncatedText__emails-tooltip');
+      expect(tooltips).toHaveLength(1);
+      expect(tooltips[0]).toHaveTextContent(MANY_RECIPIENTS_TEXT);
     });
   });
 
