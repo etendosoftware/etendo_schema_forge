@@ -48,6 +48,10 @@ tmp/
 sonar-results.md
 .scannerwork/
 
+# MCP usage telemetry dumps (scripts/mcp-usage-dump.sh) — data, never versioned
+/mcp-usage/*
+!/mcp-usage/README.md
+
 # Generated at runtime — not versioned
 coverage/
 sonar-reports/

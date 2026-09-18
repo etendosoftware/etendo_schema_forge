@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-stripe-local test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration test-e2e-purchase-sales test-e2e-last-failed email-stress-limits email-stress-limits-report email-stress-help ast-churn-ranking ast-churn-heatmap generate regen dev dev-local-core dev-mock ai-bff-install build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage flag-debt menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status ci-parity ci-parity-help mcp-test mcp-login mcp-ui
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-stripe-local test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration test-e2e-purchase-sales test-e2e-last-failed email-stress-limits email-stress-limits-report email-stress-help ast-churn-ranking ast-churn-heatmap generate regen dev dev-local-core dev-mock ai-bff-install build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage flag-debt menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help mcp-usage mcp-usage-help switch-to-es ensure-locale project-status ci-parity ci-parity-help mcp-test mcp-login mcp-ui
 
 export SF_ROOT := $(CURDIR)
 
@@ -469,6 +469,29 @@ LOCAL_PORT  ?=
 
 # Assemble scripts/db-tunnel.sh connection flags from whatever vars are set.
 TUNNEL_FLAGS = $(if $(PROFILE),--profile $(PROFILE)) $(if $(SSH_HOST),--ssh-host $(SSH_HOST)) $(if $(DB_HOST),--db-host $(DB_HOST)) $(if $(DB_PORT),--db-port $(DB_PORT)) $(if $(DB_NAME),--db-name $(DB_NAME)) $(if $(DB_USER),--db-user $(DB_USER)) $(if $(DB_PASSWORD),--db-password '$(DB_PASSWORD)') $(if $(LOCAL_PORT),--local-port $(LOCAL_PORT))
+
+# --- MCP usage telemetry export ---
+#
+# HOST is an SSH alias (etendo-go-experimental, etendo-go-production). The script
+# reads that host's own gradle.properties, so no credentials are passed here.
+# Dumps land in the gitignored mcp-usage/ folder. Run `make mcp-usage-help` for every option.
+
+HOST ?=
+
+mcp-usage: ## Export ETGO_MCP_USAGE from a deployed instance (HOST=<ssh-alias> [MARK_REVIEWED=1] [INCLUDE_REVIEWED=1] [ARGS='...'])
+	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s mcp-usage-help; exit 0; fi; \
+	if [ -z "$(HOST)" ]; then echo "HOST is required, e.g. make mcp-usage HOST=etendo-go-experimental"; exit 1; fi; \
+	scripts/mcp-usage-dump.sh $(HOST) \
+		$(if $(filter 1,$(MARK_REVIEWED)),--mark-reviewed) \
+		$(if $(filter 1,$(INCLUDE_REVIEWED)),--include-reviewed) \
+		$(if $(filter 1,$(COUNT)),--count) \
+		$(if $(SINCE),--since $(SINCE)) \
+		$(if $(LIMIT),--limit $(LIMIT)) \
+		$(if $(OUT),--out $(OUT)) \
+		$(ARGS)
+
+mcp-usage-help: ## Show usage and examples for `make mcp-usage`
+	@scripts/mcp-usage-dump.sh --help
 
 db-tunnel: ## Open a persistent SSH tunnel to a remote DB (connection vars or PROFILE=)
 	@scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) up
