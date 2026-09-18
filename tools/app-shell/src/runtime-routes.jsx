@@ -31,6 +31,8 @@ const AppStorePage = lazy(() => import('./pages/AppStorePage.jsx'));
 const UpgradePage = lazy(() => import('./pages/UpgradePage.jsx'));
 const AccountSettingsPage = lazy(() => import('./pages/AccountSettingsPage.jsx'));
 const InviteAcceptancePage = lazy(() => import('./pages/InviteAcceptancePage.jsx'));
+const DevLifecyclePage = import.meta.env.DEV
+  ? lazy(() => import('./pages/DevLifecyclePage.jsx')) : null;
 const PortalPage = lazy(() => import('./pages/PortalPage.jsx'));
 
 const LOADING_FALLBACK = <div className="p-8 text-muted-foreground">Loading...</div>;
@@ -125,5 +127,6 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
           apiBaseUrl={apiBaseUrl}
           data-testid="WindowLoader__e8c60d" />
       ) },
+    ...(DevLifecyclePage ? [lazyRoute('dev/lifecycle', DevLifecyclePage)] : []),
   ];
 }
