@@ -447,7 +447,7 @@ describe('UpgradePage — checkout funnel tracking', () => {
 
     await screen.findByTestId('upgrade-migration-step');
     await user.click(screen.getByTestId('upgrade-start-migration'));
-    await screen.findByTestId('upgrade-error');
+    await screen.findByTestId('upgrade-enter-error');
     const [failed] = trackedEvents('upgrade_tenant_provisioning_failed');
     expect(failed.errorCode).toBe('upgradeCheckoutCreationFailed');
     expect(failed.durationMs).toEqual(expect.any(Number));
@@ -479,6 +479,8 @@ describe('UpgradePage — checkout funnel tracking', () => {
       onboarding: () => successStream(),
     });
     await renderUpgradePage();
+    await screen.findByTestId('upgrade-migration-step');
+    await user.click(screen.getByTestId('upgrade-start-migration'));
     await screen.findByTestId('upgrade-success');
 
     await user.click(screen.getByTestId('upgrade-enter-productive'));

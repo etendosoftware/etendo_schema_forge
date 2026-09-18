@@ -411,6 +411,12 @@ export default function UpgradePage() {
       setEntering(false);
       setFormError(error?.code || 'upgradeCheckoutCreationFailed');
       setPhase('migration');
+      emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_TENANT_PROVISIONING_FAILED, {
+        errorCode: error?.code || 'generic',
+        ...(pendingProvisioning.startedAt
+          ? { durationMs: Date.now() - pendingProvisioning.startedAt }
+          : {}),
+      });
     }
   };
 
