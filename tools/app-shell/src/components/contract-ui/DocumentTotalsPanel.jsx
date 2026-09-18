@@ -135,9 +135,8 @@ export default function DocumentTotalsPanel({
   // "always subtract" expression — that mix-up is exactly what silently
   // undercounted the baseline Subtotal by 1 cent (see resolvePersistedTotals's
   // own comment above).
-  const displaySubtotal = useBaseline
-    ? netSubtotal
-    : (totalDiscountAmt != null ? netSubtotal - totalDiscountAmt : netSubtotal);
+  const liveSubtotal = totalDiscountAmt != null ? netSubtotal - totalDiscountAmt : netSubtotal;
+  const displaySubtotal = useBaseline ? netSubtotal : liveSubtotal;
 
   const fmt = (val) => {
     if (val == null) return '';
