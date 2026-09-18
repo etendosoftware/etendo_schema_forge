@@ -149,8 +149,12 @@ function buildTreeColumns(ui) {
  * rollout), it falls back to the previous 2-level grouping by its 4-digit `parentCode4`
  * so the tree still renders something sensible instead of dropping the record.
  *
- * Returns { tree: rootNodes[], indexById: Map<id, node> } where indexById only
- * contains real account nodes (not virtual folder headers).
+ * Returns { tree: rootNodes[], indexById: Map<id, node> }. `indexById` contains BOTH
+ * real leaf accounts and virtual folder headers, always pointing at the node from this
+ * UNFILTERED tree — see ETP-5399's use of it in `AccountTreeView` below, which looks a
+ * selected row back up here before handing it to `NewAccountModal` so parent/prefix
+ * resolution always sees a node's REAL children, never a subset narrowed by an active
+ * text/type filter (`filterTree` clones virtual nodes with a pruned `children` array).
  */
 function buildGroupedTree(items) {
   const indexById = new Map();
@@ -182,6 +186,7 @@ function buildGroupedTree(items) {
             children: [],
           };
           folderIndex.set(pathKey, folder);
+          indexById.set(folder.id, folder);
           siblings.push(folder);
         }
         siblings = folder.children;
@@ -202,6 +207,7 @@ function buildGroupedTree(items) {
           children: [],
         };
         folderIndex.set(code, folder);
+        indexById.set(folder.id, folder);
         rootChildren.push(folder);
       }
       folder.children.push({ ...item, depth: 1 });
@@ -521,7 +527,7 @@ export default function AccountTreeView({
   // e.g. direct unit tests) — fall back to the `data` prop so behavior is unchanged.
   const effectiveData = fetchedData ?? data;
 
-  const { tree } = useMemo(() => buildGroupedTree(effectiveData), [effectiveData]);
+  const { tree, indexById } = useMemo(() => buildGroupedTree(effectiveData), [effectiveData]);
 
   const [expanded, setExpanded] = useState(loadPersistedExpanded);
 
@@ -588,6 +594,18 @@ export default function AccountTreeView({
   const selectedRecord = useMemo(
     () => (selectedId ? visibleRows.find((row) => row.id === selectedId) : null),
     [visibleRows, selectedId],
+  );
+
+  // ETP-5399: hand NewAccountModal the node from the UNFILTERED tree (indexById),
+  // not `selectedRecord` directly — when a text/type filter is active, `filterTree`
+  // clones virtual folder nodes with a pruned `children` array, and the modal's
+  // parent/prefix resolution must always see a node's REAL children to resolve the
+  // correct insertion point. Real leaf rows are never cloned by filterTree, so this
+  // is a no-op for them; falls back to `selectedRecord` itself if the id is somehow
+  // not in the index (defensive, should not happen in practice).
+  const currentRecordForModal = useMemo(
+    () => (selectedRecord ? (indexById.get(selectedRecord.id) ?? selectedRecord) : null),
+    [selectedRecord, indexById],
   );
 
   const expandAll = useCallback(
@@ -739,7 +757,7 @@ export default function AccountTreeView({
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSaved={handleSaved}
-        currentRecord={selectedRecord}
+        currentRecord={currentRecordForModal}
         allAccounts={effectiveData}
         apiBaseUrl={apiBaseUrl}
         token={token}
