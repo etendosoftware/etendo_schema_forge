@@ -23,6 +23,8 @@
 | File | Description |
 |------|-------------|
 | [e2e-testing-guide.md](e2e-testing-guide.md) | E2E testing guide: discover with agent-browser, automate with Playwright |
+| [etp-5045-durable-payment-state.md](etp-5045-durable-payment-state.md) | **ETP-5045 as one summary** (both repos): why payment state moved out of process memory into `ETGO_CHECKOUT_REQUEST` and `ETGO_BILLING_EVENT`, the forward-only checkout lifecycle, the webhook claim and its at-most-once crash window, why check ordering is a security control, the two Stripe credentials, and the `smartbuild` sampledata gap |
+| [stripe-local-testing.md](stripe-local-testing.md) | Stripe hosted Checkout local testing: offline webhook simulator and session stub, Test Mode forwarding, durable checkout/billing-event state (`ETGO_CHECKOUT_REQUEST`, `ETGO_BILLING_EVENT`), restart replay matrix |
 
 ## Tooling
 
@@ -55,6 +57,8 @@
 | [PRD-anex.md](PRD-anex.md) | API versioning model (conceptual) |
 | [TDD.md](TDD.md) | Technical design, data models, validation rules, generator specs |
 | [TDD-anex.md](TDD-anex.md) | API versioning implementation details |
+| [plans/etp-5396-demo-to-pro-prd.md](plans/etp-5396-demo-to-pro-prd.md) | ETP-5396 — Demo-to-PRO product requirements, account billing, trial/grace policy and acceptance criteria; proposed, not implemented |
+| [plans/etp-5396-demo-to-pro-technical-design.md](plans/etp-5396-demo-to-pro-technical-design.md) | ETP-5396 — Final ETP-5045-2 baseline; modular boundaries for new billing/access logic and a thin legacy bridge, without refactoring existing Stripe coupling |
 | [conventions.md](conventions.md) | Edge case conventions (13 rules for extraction, validation, DB access) |
 | [decisions-versioning.md](decisions-versioning.md) | Decisions.json versioning system: writing migrations, batch upgrades, FAQ |
 
@@ -157,6 +161,7 @@ Plans follow a lifecycle: active in `plans/`, completed in `plans/completed/YYYY
 
 | File | Description |
 |------|-------------|
+| [plans/2026-08-27-recurring-billing-and-resource-limits-prd.md](plans/2026-08-27-recurring-billing-and-resource-limits-prd.md) | Recurring monthly billing, configurable resource limits and plan change (ETP-5045/5046/5047/5048/5049/5050/5051/5053) — supersedes the one-off checkout PRD for forward scope. **Draft for team validation** |
 | [plans/2026-08-03-etp-4315-attachment-preview-sync.md](plans/2026-08-03-etp-4315-attachment-preview-sync.md) | ETP-4315 — Purchase invoice/goods receipt attachment vs. preview sync: root cause, window inventory, reverse-plan rejection, forward-plan cost, open questions — **investigation in progress** |
 | [plans/completed/2026-03-12/process-and-report-pipeline.md](plans/completed/2026-03-12/process-and-report-pipeline.md) | Process & Report Pipeline — **All 4 phases complete** (processes, reports, form detection, unified entry point) |
 | [plans/neo-report-endpoint.md](plans/neo-report-endpoint.md) | NEO Headless Report Endpoint — **Implemented** (NeoReportService, binary responses, OpenAPI docs) |

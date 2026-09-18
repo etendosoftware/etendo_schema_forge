@@ -8,11 +8,12 @@ import { track } from '@/lib/observability.js';
 import { buildObservabilityEvent, OBSERVABILITY_EVENTS } from '@/lib/observability/events.js';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
-  createCheckoutSession,
+  createBillingPurchase,
+  getBillingOverview,
+  getBillingOffer,
+  getBillingPurchase,
   getCheckoutToken,
   getCheckoutStatus,
   runPaidOnboarding,
@@ -20,12 +21,6 @@ import {
 } from '@/lib/upgrade/api.js';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 
-/**
- * Display price until the backend plan catalog is exposed to the product UI.
- */
-const PRODUCTIVE_MONTHLY_PRICE = '€49';
-
-const FREE_FEATURES = ['upgradeFreeFeatureExplore', 'upgradeFreeFeatureSample', 'upgradeFreeFeatureSingle'];
 const PRODUCTIVE_FEATURES = [
   'upgradeProductiveFeatureSeparate',
   'upgradeProductiveFeatureContacts',
@@ -43,11 +38,13 @@ const STEP_LABELS = {
   finalize: 'upgradeStepFinalize',
 };
 
-const EMPTY_FORM = { tenantName: '', upgradeAction: 'create-productive', conversionClientId: '' };
+const EMPTY_FORM = { tenantName: '', upgradeAction: 'create-productive' };
 const PENDING_CHECKOUT_NAME = 'sf_pending_checkout_tenant_name';
 const PENDING_CHECKOUT_ACTION = 'sf_pending_checkout_action';
 /** Checkout-submitted timestamp, so durationMs survives the Stripe redirect. */
 const PENDING_CHECKOUT_STARTED_AT = 'sf_pending_checkout_started_at';
+const PENDING_CHECKOUT_DATA_TRANSFER = 'sf_pending_checkout_data_transfer';
+const DEFAULT_DATA_TRANSFER = { products: true, contacts: true };
 
 /** Checkout funnel telemetry — see docs/paid-tenant-infrastructure.md §3.6. */
 function emitUpgradeEvent(eventDefinition, properties) {
@@ -71,24 +68,142 @@ function getUpgradeBaseUrl() {
   return import.meta.env?.DEV ? '' : detectBaseUrl();
 }
 
-function PlanCard({ testId, name, tagline, price, features, current, highlighted, ui }) {
+function readPendingDataTransfer(storage) {
+  try {
+    return JSON.parse(storage.getItem(PENDING_CHECKOUT_DATA_TRANSFER) || '') || DEFAULT_DATA_TRANSFER;
+  } catch {
+    return DEFAULT_DATA_TRANSFER;
+  }
+}
+
+async function resolveCheckoutTenantName({ fetcher, baseUrl, token, requestId, storedTenantName }) {
+  if (storedTenantName) return storedTenantName;
+  const purchase = await getBillingPurchase(fetcher, baseUrl, token, requestId);
+  return purchase?.clientName || '';
+}
+
+async function waitForCheckoutPayment({ fetcher, baseUrl, token, requestId }) {
+  let status = { status: 'pending' };
+  for (let attempt = 0; attempt < 60 && status.status === 'pending'; attempt += 1) {
+    status = await getCheckoutStatus(fetcher, baseUrl, token, requestId);
+    if (status.status === 'pending') await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  return status;
+}
+
+async function handleExistingPurchaseError(error, {
+  fetcher,
+  baseUrl,
+  token,
+  setFormError,
+  resumePaidPurchase,
+  waitForExistingProvisioning,
+  setBillingPurchases,
+  setCheckoutStep,
+  setPhase,
+}) {
+  const purchase = error?.purchase;
+  if (error?.code !== UPGRADE_ERROR_CODES.purchaseAlreadyExists || !purchase) return false;
+
+  setFormError(null);
+  if (purchase.status === 'PAID') {
+    await resumePaidPurchase(purchase);
+    return true;
+  }
+  if (purchase.status === 'PROVISIONING' || purchase.status === 'PROVISIONED') {
+    await waitForExistingProvisioning(purchase);
+    return true;
+  }
+  try {
+    const overview = await getBillingOverview(fetcher, baseUrl, token);
+    setBillingPurchases(Array.isArray(overview?.purchases) ? overview.purchases : []);
+  } catch {
+    // The billing projection is recoverable; the purchase remains durable on the backend.
+  }
+  setCheckoutStep('payment');
+  setPhase('form');
+  return true;
+}
+
+async function resumeCheckoutProvisioning({
+  fetcher,
+  baseUrl,
+  token,
+  requestId,
+  storedTenantName,
+  upgradeAction,
+  startedAt,
+  storage,
+  isCancelled,
+  onTenantName,
+  onPendingProvisioning,
+  onDataTransfer,
+  onReady,
+}) {
+  const tenantName = await resolveCheckoutTenantName({
+    fetcher, baseUrl, token, requestId, storedTenantName,
+  });
+  if (!tenantName) throw new Error('Purchase has no environment name');
+  onTenantName(tenantName);
+
+  const status = await waitForCheckoutPayment({ fetcher, baseUrl, token, requestId });
+  if (status.status !== 'paid') throw new Error('Checkout payment is not confirmed');
+
+  const selectedTransfer = readPendingDataTransfer(storage);
+  onPendingProvisioning({
+    clientName: status.clientName || tenantName,
+    paymentToken: requestId,
+    upgradeAction,
+    language: getStoredLocale(),
+    dataTransfer: selectedTransfer,
+    startedAt,
+  });
+  if (isCancelled()) return;
+
+  storage.removeItem(PENDING_CHECKOUT_NAME);
+  storage.removeItem(PENDING_CHECKOUT_ACTION);
+  storage.removeItem(PENDING_CHECKOUT_STARTED_AT);
+  window.history.replaceState({}, '', '/upgrade');
+  onDataTransfer(selectedTransfer);
+  onReady();
+  storage.removeItem(PENDING_CHECKOUT_DATA_TRANSFER);
+}
+
+function PlanCard({ testId, name, tagline, price, features, current, highlighted, ui, className = '', onSelect }) {
   return (
     <Card
-      className={highlighted ? 'flex flex-col border-primary' : 'flex flex-col'}
+      className={`${highlighted
+        ? 'flex flex-col border-2 border-primary bg-card shadow-lg'
+        : 'flex flex-col border-border bg-card'} ${className}`}
       data-testid={testId}
     >
-      <CardHeader data-testid="CardHeader__58bad7">
+      <CardHeader className="space-y-4 p-6" data-testid="CardHeader__58bad7">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <CardTitle className="text-base" data-testid="CardTitle__58bad7">{name}</CardTitle>
-            <p className="mt-1 text-xs text-muted-foreground">{tagline}</p>
+            <CardTitle className="text-xl" data-testid="CardTitle__58bad7">{name}</CardTitle>
+            <p className="mt-2 text-sm text-muted-foreground">{tagline}</p>
           </div>
           {current && <Badge variant="secondary" data-testid="Badge__58bad7">{ui('upgradePlanCurrentBadge')}</Badge>}
         </div>
-        <p className="mt-3 text-lg font-semibold">{price}</p>
+        <div className="flex items-baseline gap-2">
+          <p className="text-3xl font-bold tracking-tight">{price}</p>
+          <span className="text-sm text-muted-foreground">/ {ui('upgradeCheckoutMonth')}</span>
+        </div>
+        {onSelect && (
+          <Button
+            type="button"
+            variant={highlighted ? 'default' : 'outline'}
+            className="w-full"
+            onClick={onSelect}
+            data-testid="upgrade-plan-select"
+          >
+            {ui('upgradeCheckoutSelectPlan')}
+            <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />
+          </Button>
+        )}
       </CardHeader>
-      <CardContent data-testid="CardContent__58bad7">
-        <ul className="space-y-2 text-sm">
+      <CardContent className="border-t p-6" data-testid="CardContent__58bad7">
+        <ul className="space-y-3 text-sm">
           {features.map(key => (
             <li key={key} className="flex items-start gap-2">
               <Check
@@ -103,19 +218,111 @@ function PlanCard({ testId, name, tagline, price, features, current, highlighted
   );
 }
 
-// `data-testid` is destructured rather than left in the spread so it lands on
-// the input itself and cannot be overwritten by a later spread, keeping each
-// field individually addressable.
-function Field({ id, label, error, ui, 'data-testid': testId, ...inputProps }) {
+function SkeletonPlanCard({ testId, className = '' }) {
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id} data-testid={`${testId}-label`}>{label}</Label>
-      <Input id={id} aria-invalid={Boolean(error)} data-testid={testId} {...inputProps} />
-      {error && (
-        <p className="text-xs text-destructive" data-testid={`${testId}-error`}>
-          {ui(error)}
-        </p>
-      )}
+    <Card className={`flex min-h-[280px] flex-col border-border bg-muted/20 ${className}`} data-testid={testId}>
+      <CardContent className="flex flex-1 flex-col gap-5 p-6" data-testid="CardContent__58bad7">
+        <div className="h-6 w-28 animate-pulse rounded bg-muted" />
+        <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
+        <div className="h-10 w-32 animate-pulse rounded bg-muted" />
+        <div className="mt-auto space-y-3">
+          {[1, 2, 3, 4].map(item => (
+            <div key={item} className="h-4 w-full animate-pulse rounded bg-muted" />
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CheckoutSteps({ ui, phase, checkoutStep }) {
+  const steps = [
+    { label: ui('upgradeCheckoutStepPlan'), active: checkoutStep === 'plan' },
+    { label: ui('upgradeCheckoutStepAddons'), active: checkoutStep === 'addons' },
+    { label: ui('upgradeCheckoutStepPayment'), active: checkoutStep === 'payment' || phase === 'running' },
+  ];
+  return (
+    <nav className="hidden items-center gap-3 md:flex" aria-label={ui('upgradeCheckoutSteps')}>
+      {steps.map((step, index) => (
+        <div key={step.label} className="flex items-center gap-3">
+          <span className={step.active
+            ? 'flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground'
+            : 'flex h-8 w-8 items-center justify-center rounded-full border border-border text-sm font-semibold text-muted-foreground'}>
+            {index + 1}
+          </span>
+          <span className={step.active ? 'text-sm font-semibold text-foreground' : 'text-sm text-muted-foreground'}>
+            {step.label}
+          </span>
+          {index < steps.length - 1 && <span className="h-px w-8 bg-border" aria-hidden="true" />}
+        </div>
+      ))}
+    </nav>
+  );
+}
+
+function AddonsStep({ ui, dataTransfer, onDataTransferChange, onContinue }) {
+  return (
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]" data-testid="upgrade-addons-step">
+      <section className="space-y-5">
+        <div>
+          <p className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">{ui('upgradeCheckoutStepAddons')}</p>
+          <h2 className="text-2xl font-bold tracking-tight">{ui('upgradeCheckoutAddonsTitle')}</h2>
+          <p className="mt-2 text-sm text-muted-foreground">{ui('upgradeCheckoutAddonsSubtitle')}</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card className="border-border bg-card" data-testid="upgrade-data-transfer">
+            <CardHeader>
+              <CardTitle className="text-base">{ui('upgradeDataTransferTitle')}</CardTitle>
+              <p className="text-sm text-muted-foreground">{ui('upgradeDataTransferBody')}</p>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-2">
+              {[
+                { key: 'products', labelKey: 'upgradeMigrateProducts' },
+                { key: 'contacts', labelKey: 'upgradeMigrateContacts' },
+              ].map(item => (
+                <label key={item.key} className="flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm hover:bg-muted/40">
+                  <input
+                    type="checkbox"
+                    checked={dataTransfer[item.key]}
+                    onChange={event => onDataTransferChange(item.key, event.target.checked)}
+                    data-testid={`upgrade-data-transfer-${item.key}`}
+                    className="h-4 w-4 accent-primary"
+                  />
+                  <span>{ui(item.labelKey)}</span>
+                </label>
+              ))}
+            </CardContent>
+          </Card>
+          {[1, 2, 3, 4].map(item => (
+            <Card key={item} className="min-h-[130px] border-border bg-muted/20" data-testid={`upgrade-addon-skeleton-${item}`}>
+              <CardContent className="flex h-full items-center gap-4 p-5">
+                <div className="h-12 w-12 shrink-0 animate-pulse rounded-xl bg-muted" />
+                <div className="flex-1 space-y-3">
+                  <div className="h-5 w-2/3 animate-pulse rounded bg-muted" />
+                  <div className="h-4 w-full animate-pulse rounded bg-muted" />
+                  <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
+      <Card className="h-fit border-border shadow-sm" data-testid="upgrade-checkout-summary">
+        <CardHeader data-testid="CardHeader__58bad7">
+          <CardTitle data-testid="CardTitle__58bad7">{ui('upgradeCheckoutSummary')}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5" data-testid="CardContent__58bad7">
+          <div className="flex items-center justify-between text-sm">
+            <span>{ui('upgradePlanProductiveName')}</span>
+            <span className="font-semibold">{ui('upgradeCheckoutIncluded')}</span>
+          </div>
+          <div className="border-t pt-4 text-sm text-muted-foreground">{ui('upgradeCheckoutNoAddons')}</div>
+          <Button className="w-full" onClick={onContinue} data-testid="upgrade-addons-continue">
+            {ui('upgradeCheckoutContinue')}
+            <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -193,17 +400,61 @@ function SuccessPanel({ ui, onContinue, entering, enterError }) {
             {ui('upgradeEnterFailed')}
           </p>
         )}
-        <Button onClick={onContinue} disabled={entering} data-testid="upgrade-success-continue">
-          {entering
-            ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__58bad7" />
-            : <>
-              {ui('upgradeSuccessAction')}
-              <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />
-            </>}
+        <Button className="w-full sm:w-auto" onClick={() => onContinue()} disabled={entering} data-testid="upgrade-enter-productive">
+          {entering ? <Loader2 className="h-4 w-4 animate-spin" /> : ui('upgradeMigrationContinue')}
+          {!entering && <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />}
         </Button>
       </CardContent>
     </Card>
   );
+}
+
+function BillingOverviewPanel({ purchases, onResume, resumingPurchaseId, ui }) {
+  if (!purchases.length) return null;
+  return (
+    <Card data-testid="upgrade-billing-overview">
+      <CardHeader data-testid="CardHeader__58bad7">
+        <CardTitle className="text-base">{ui('upgradeBillingOverviewTitle')}</CardTitle>
+        <p className="mt-1 text-sm text-muted-foreground">{ui('upgradeBillingOverviewBody')}</p>
+      </CardHeader>
+      <CardContent data-testid="CardContent__58bad7">
+        <ul className="space-y-2 text-sm">
+          {purchases.map(purchase => (
+            <li key={purchase.purchaseId} className="flex items-center justify-between gap-3">
+              <span className="truncate">{purchase.clientName || ui('upgradeUnnamedPurchase')}</span>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">{purchase.status}</Badge>
+                {purchase.status === 'PAID' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onResume(purchase)}
+                    disabled={Boolean(resumingPurchaseId)}
+                    data-testid={`upgrade-resume-purchase-${purchase.purchaseId}`}
+                  >
+                    {resumingPurchaseId === purchase.purchaseId
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : ui('upgradeResumePurchase')}
+                  </Button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
+  );
+}
+
+function formatOfferPrice(offer, locale) {
+  if (!offer || !Number.isFinite(Number(offer.amountMinor)) || !offer.currency) return null;
+  try {
+    return new Intl.NumberFormat(String(locale || 'en-US').replace('_', '-'), {
+      style: 'currency', currency: offer.currency,
+    }).format(Number(offer.amountMinor) / 100);
+  } catch {
+    return `${offer.currency} ${(Number(offer.amountMinor) / 100).toFixed(2)}`;
+  }
 }
 
 export default function UpgradePage() {
@@ -211,6 +462,7 @@ export default function UpgradePage() {
   const navigate = useNavigate();
 
   const [phase, setPhase] = useState('form'); // 'form' | 'running' | 'success'
+  const [checkoutStep, setCheckoutStep] = useState('plan'); // 'plan' | 'addons' | 'payment'
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState(null);
@@ -220,12 +472,115 @@ export default function UpgradePage() {
   // legitimate upgrade.
   const [accountState, setAccountState] = useState('loading');
   const [environments, setEnvironments] = useState([]);
+  const [billingPurchases, setBillingPurchases] = useState([]);
+  const [billingOffer, setBillingOffer] = useState(null);
+  const [resumingPurchaseId, setResumingPurchaseId] = useState(null);
   // Bumped by the retry button so the lookup effect re-runs. A failed lookup is recoverable —
   // the usual cause is a transient/auth error, not an account without environments.
   const [lookupAttempt, setLookupAttempt] = useState(0);
   const { enterByClientName } = useEnvironmentSwitch({ enabled: false });
   const [entering, setEntering] = useState(false);
   const [enterError, setEnterError] = useState(false);
+  const [pendingProvisioning, setPendingProvisioning] = useState(null);
+  const [dataTransfer, setDataTransfer] = useState(DEFAULT_DATA_TRANSFER);
+
+  const startProvisioning = async () => {
+    if (!pendingProvisioning) return;
+    const token = getCheckoutToken();
+    if (!token) {
+      setFormError('upgradeSessionExpired');
+      return;
+    }
+    setEntering(true);
+    try {
+      const { startedAt, ...onboardingInput } = pendingProvisioning;
+      await runPaidOnboarding(fetch, getUpgradeBaseUrl(), token, onboardingInput, message => {
+        setSteps(previous => applyProgressMessage(previous, message));
+      });
+      setPendingProvisioning(null);
+      setEntering(false);
+      setPhase('success');
+      emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_TENANT_PROVISIONING_SUCCEEDED, {
+        upgradeAction: onboardingInput.upgradeAction,
+        ...(startedAt ? { durationMs: Date.now() - startedAt } : {}),
+      });
+    } catch (error) {
+      setEntering(false);
+      setFormError(error?.code || 'upgradeCheckoutCreationFailed');
+      emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_TENANT_PROVISIONING_FAILED, {
+        errorCode: error?.code || 'generic',
+        ...(pendingProvisioning.startedAt
+          ? { durationMs: Date.now() - pendingProvisioning.startedAt }
+          : {}),
+      });
+      setPhase('form');
+    }
+  };
+
+  // A confirmed payment starts provisioning immediately. The transfer selection is part of the
+  // paid request; there is no second migration screen and no browser-side export/import step.
+  useEffect(() => {
+    if (phase === 'running' && pendingProvisioning && !entering) {
+      startProvisioning();
+    }
+  }, [phase, pendingProvisioning, entering]);
+
+  const resumePaidPurchase = async purchase => {
+    const token = getCheckoutToken();
+    if (!token || !purchase?.purchaseId || !purchase?.clientName) {
+      setFormError('upgradeCheckoutCreationFailed');
+      return;
+    }
+    setResumingPurchaseId(purchase.purchaseId);
+    setForm(previous => ({ ...previous, tenantName: purchase.clientName, upgradeAction: 'create-productive' }));
+    setFormError(null);
+    setPhase('running');
+    setPendingProvisioning({
+      clientName: purchase.clientName,
+      paymentToken: purchase.purchaseId,
+      upgradeAction: 'create-productive',
+      language: getStoredLocale(),
+      dataTransfer: dataTransfer,
+      startedAt: Date.now(),
+    });
+    setResumingPurchaseId(null);
+  };
+
+  const waitForExistingProvisioning = async purchase => {
+    const token = getCheckoutToken();
+    if (!token || !purchase?.purchaseId || !purchase?.clientName) {
+      setFormError('upgradeCheckoutCreationFailed');
+      return;
+    }
+    setForm(previous => ({ ...previous, tenantName: purchase.clientName, upgradeAction: 'create-productive' }));
+    setPhase('running');
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      try {
+        const current = await getBillingPurchase(fetch, getUpgradeBaseUrl(), token, purchase.purchaseId);
+        if (current?.status === 'PROVISIONED') {
+          setPhase('success');
+          return;
+        }
+        if (current?.status === 'PAID') {
+          await resumePaidPurchase(current);
+          return;
+        }
+        if (current?.status !== 'PROVISIONING') break;
+      } catch {
+        // Keep polling; the purchase remains durable and another request can recover it.
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    setPendingProvisioning({
+      clientName: purchase.clientName,
+      paymentToken: purchase.purchaseId,
+      upgradeAction: 'create-productive',
+      language: getStoredLocale(),
+      dataTransfer: dataTransfer,
+    });
+    setFormError(null);
+    setPhase('running');
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -238,11 +593,34 @@ export default function UpgradePage() {
     fetchEnvironments(fetch, getUpgradeBaseUrl(), token)
       .then(list => {
         if (cancelled) return;
-        setEnvironments(Array.isArray(list) ? list : []);
+        const nextEnvironments = Array.isArray(list) ? list : [];
+        setEnvironments(nextEnvironments);
+        const demo = nextEnvironments.find(environment => environment.plan !== 'productive');
+        if (demo?.clientName) {
+          setForm(previous => previous.tenantName
+            ? previous
+            : { ...previous, tenantName: demo.clientName });
+        }
         setAccountState('ready');
       })
       .catch(() => {
         if (!cancelled) setAccountState('unavailable');
+      });
+
+    getBillingOverview(fetch, getUpgradeBaseUrl(), token)
+      .then(overview => {
+        if (!cancelled) setBillingPurchases(Array.isArray(overview?.purchases) ? overview.purchases : []);
+      })
+      .catch(() => {
+        // Environment lookup remains the primary page state; billing is a recoverable projection.
+      });
+
+    getBillingOffer(fetch, getUpgradeBaseUrl(), token)
+      .then(offer => {
+        if (!cancelled) setBillingOffer(offer);
+      })
+      .catch(() => {
+        // The backend still validates the offer; the page only loses the price preview.
       });
 
     return () => {
@@ -270,64 +648,45 @@ export default function UpgradePage() {
     if (params.get('checkout') !== 'success') return undefined;
     const requestId = params.get('requestId');
     const token = getCheckoutToken();
-    const tenantName = sessionStorage.getItem(PENDING_CHECKOUT_NAME) || '';
+    const storedTenantName = sessionStorage.getItem(PENDING_CHECKOUT_NAME) || '';
     const upgradeAction = sessionStorage.getItem(PENDING_CHECKOUT_ACTION) || 'create-productive';
     // Persisted alongside the pending tenant name in runUpgrade, since a local
     // closure variable does not survive the full-page redirect to Stripe.
     const startedAtRaw = sessionStorage.getItem(PENDING_CHECKOUT_STARTED_AT);
     const startedAt = startedAtRaw ? Number(startedAtRaw) : null;
-    if (!requestId || !token || !tenantName) {
+    if (!requestId || !token) {
       setFormError('upgradeCheckoutCreationFailed');
       return undefined;
     }
     let cancelled = false;
-    setForm(previous => ({ ...previous, tenantName, upgradeAction }));
     setPhase('running');
-    (async () => {
-      try {
-        let status = { status: 'pending' };
-        for (let attempt = 0; attempt < 60 && status.status === 'pending'; attempt += 1) {
-          status = await getCheckoutStatus(fetch, getUpgradeBaseUrl(), token, requestId);
-          if (status.status === 'pending') await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-        if (status.status !== 'paid') throw new Error('Checkout payment is not confirmed');
-        await runPaidOnboarding(fetch, getUpgradeBaseUrl(), token, {
-          clientName: status.clientName || tenantName,
-          paymentToken: requestId,
-          upgradeAction,
-          language: getStoredLocale(),
-          countryCode: 'AR',
-        }, message => {
-          if (!cancelled) setSteps(previous => applyProgressMessage(previous, message));
-        });
-        if (cancelled) return;
-        sessionStorage.removeItem(PENDING_CHECKOUT_NAME);
-        sessionStorage.removeItem(PENDING_CHECKOUT_ACTION);
-        sessionStorage.removeItem(PENDING_CHECKOUT_STARTED_AT);
-        window.history.replaceState({}, '', '/upgrade');
-        setPhase('success');
-        emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_TENANT_PROVISIONING_SUCCEEDED, {
-          upgradeAction,
-          durationMs: startedAt ? Date.now() - startedAt : undefined,
-        });
-      } catch (error) {
-        if (!cancelled) {
-          setPhase('form');
-          setFormError(error?.code || 'upgradeCheckoutCreationFailed');
-          emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_TENANT_PROVISIONING_FAILED, {
-            errorCode: error?.code || 'generic',
-            durationMs: startedAt ? Date.now() - startedAt : undefined,
-          });
-        }
-      }
-    })();
+    resumeCheckoutProvisioning({
+      fetcher: fetch,
+      baseUrl: getUpgradeBaseUrl(),
+      token,
+      requestId,
+      storedTenantName,
+      upgradeAction,
+      startedAt,
+      storage: sessionStorage,
+      isCancelled: () => cancelled,
+      onTenantName: tenantName => {
+        setForm(previous => ({ ...previous, tenantName, upgradeAction }));
+      },
+      onPendingProvisioning: setPendingProvisioning,
+      onDataTransfer: setDataTransfer,
+      onReady: () => setPhase('running'),
+    }).catch(error => {
+      if (cancelled) return;
+      setPhase('form');
+      setFormError(error?.code || 'upgradeCheckoutCreationFailed');
+      emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_TENANT_PROVISIONING_FAILED, {
+        errorCode: error?.code || 'generic',
+        durationMs: startedAt ? Date.now() - startedAt : undefined,
+      });
+    });
     return () => { cancelled = true; };
   }, []);
-
-  const update = (field, value) => {
-    setForm(prev => ({ ...prev, [field]: value }));
-    setErrors(prev => (prev[field] ? { ...prev, [field]: undefined } : prev));
-  };
 
   const runUpgrade = async () => {
     const token = getCheckoutToken();
@@ -345,7 +704,7 @@ export default function UpgradePage() {
     emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_CHECKOUT_SUBMITTED, { upgradeAction: form.upgradeAction });
 
     try {
-      const session = await createCheckoutSession(
+      const session = await createBillingPurchase(
         fetch,
         getUpgradeBaseUrl(),
         token,
@@ -354,6 +713,7 @@ export default function UpgradePage() {
           clientName: form.tenantName.trim(),
           upgradeAction: form.upgradeAction,
           language: getStoredLocale(),
+          dataTransfer,
         }
       );
       // Payment and provisioning are confirmed by the backend/webhook. The
@@ -361,8 +721,21 @@ export default function UpgradePage() {
       sessionStorage.setItem(PENDING_CHECKOUT_NAME, form.tenantName.trim());
       sessionStorage.setItem(PENDING_CHECKOUT_ACTION, form.upgradeAction);
       sessionStorage.setItem(PENDING_CHECKOUT_STARTED_AT, String(Date.now()));
+      sessionStorage.setItem(PENDING_CHECKOUT_DATA_TRANSFER, JSON.stringify(dataTransfer));
       window.location.assign(session.checkoutUrl);
     } catch (error) {
+      const existingPurchaseHandled = await handleExistingPurchaseError(error, {
+        fetcher: fetch,
+        baseUrl: getUpgradeBaseUrl(),
+        token,
+        setFormError,
+        resumePaidPurchase,
+        waitForExistingProvisioning,
+        setBillingPurchases,
+        setCheckoutStep,
+        setPhase,
+      });
+      if (existingPurchaseHandled) return;
       setPhase('form');
       setFormError(
         Object.values(UPGRADE_ERROR_CODES).includes(error.code) ? error.code : 'upgradeGenericError'
@@ -382,40 +755,17 @@ export default function UpgradePage() {
   const showAccountLoading = phase === 'form' && accountState === 'loading';
   const showFirstTenantFree = phase === 'form' && hasNoTenants;
   const showCheckout = phase === 'form' && accountState !== 'loading' && !hasNoTenants;
-  const demoEnvironments = environments.filter(env => env?.plan !== 'productive');
-  const currentDemo = demoEnvironments.find(env => env.clientId === localStorage.getItem('sf_auth_client_id'))
-    || demoEnvironments[0];
-
-  useEffect(() => {
-    if (currentDemo && !form.conversionClientId) {
-      setForm(previous => ({
-        ...previous,
-        upgradeAction: 'convert-demo',
-        conversionClientId: currentDemo.clientId,
-        tenantName: currentDemo.clientName || previous.tenantName,
-      }));
-    }
-  }, [currentDemo?.clientId]);
-
+  const demoEnvironment = environments.find(environment => environment.plan !== 'productive');
+  const demoDays = demoEnvironment?.trialDaysRemaining;
   const handleSubmit = event => {
     event.preventDefault();
     setFormError(null);
 
-    const validation = {};
-    if (!form.tenantName.trim()) validation.tenantName = 'upgradeTenantNameRequired';
-
-    // Submitting a name the account already owns is treated by the backend as
-    // resuming that tenant, not creating a new one — no charge, but also no new
-    // tenant. Catch it here so the user renames instead of seeing a "success"
-    // that hands back their existing tenant.
-    const requested = form.tenantName.trim().toLowerCase();
-    const alreadyOwned = environments.some(
-      env => String(env?.clientName ?? '').trim().toLowerCase() === requested
-    );
-    if (form.upgradeAction === 'create-productive' && requested && alreadyOwned) {
-      validation.tenantName = 'upgradeTenantNameTaken';
-      emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_EXISTING_TENANT_NAME_BLOCKED);
+    const tenantName = form.tenantName.trim() || String(demoEnvironment?.clientName || '').trim();
+    if (tenantName && tenantName !== form.tenantName) {
+      setForm(previous => ({ ...previous, tenantName }));
     }
+    const validation = {};
 
     if (Object.keys(validation).length > 0) {
       setErrors(validation);
@@ -428,36 +778,65 @@ export default function UpgradePage() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10">
-          <Rocket className="h-5 w-5 text-primary" data-testid="Rocket__58bad7" />
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-foreground/40 p-4 md:p-8" data-testid="upgrade-page-shell">
+      <div className="mx-auto min-h-full max-w-[1440px] overflow-hidden rounded-xl bg-page-bg shadow-2xl">
+      <header className="sticky top-0 z-10 flex min-h-[76px] items-center justify-between gap-6 border-b bg-card px-6 py-4 shadow-sm md:px-8">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <Rocket className="h-5 w-5" data-testid="Rocket__58bad7" />
+          </div>
+          <span className="text-xl font-bold tracking-tight">{ui('brandEtendo')}</span>
         </div>
-        <div>
-          <h1 className="text-xl font-semibold">{ui('upgradeTitle')}</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{ui('upgradeSubtitle')}</p>
+        <CheckoutSteps ui={ui} phase={phase} checkoutStep={checkoutStep} />
+        <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label={ui('back')} data-testid="upgrade-close">
+          <span className="text-2xl leading-none" aria-hidden="true">×</span>
+        </Button>
+      </header>
+      <main className="mx-auto max-w-7xl space-y-8 px-6 py-8 md:px-8">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">{ui('upgradeCheckoutStepPlan')}</p>
+            <h1 className="text-3xl font-bold tracking-tight">{ui('upgradeTitle')}</h1>
+            <p className="mt-2 max-w-2xl text-base text-muted-foreground">{ui('upgradeSubtitle')}</p>
+          </div>
+          {Number.isInteger(demoDays) && (
+            <div className="rounded-full border border-status-warning-border bg-status-warning px-4 py-2 text-sm font-semibold text-status-warning-foreground" data-testid="upgrade-trial-pill">
+              {ui('environmentTrialDaysRemaining', { days: demoDays })}
+            </div>
+          )}
         </div>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <PlanCard
-          testId="upgrade-plan-free"
-          name={ui('upgradePlanFreeName')}
-          tagline={ui('upgradePlanFreeTagline')}
-          price={ui('upgradePlanFreePrice')}
-          features={FREE_FEATURES}
-          current
-          ui={ui}
-          data-testid="PlanCard__58bad7" />
+      {showCheckout && checkoutStep === 'plan' && <>
+      <div className="grid gap-5 md:grid-cols-3">
         <PlanCard
           testId="upgrade-plan-productive"
           name={ui('upgradePlanProductiveName')}
           tagline={ui('upgradePlanProductiveTagline')}
-          price={ui('upgradePlanProductivePrice', { amount: PRODUCTIVE_MONTHLY_PRICE })}
+          price={formatOfferPrice(billingOffer, getStoredLocale())
+            || ui('upgradePlanProductivePriceUnavailable')}
           features={PRODUCTIVE_FEATURES}
           highlighted
           ui={ui}
+          className="w-full"
+          onSelect={() => setCheckoutStep('addons')}
           data-testid="PlanCard__58bad7" />
+        <SkeletonPlanCard testId="upgrade-plan-coming-soon-1" className="w-full" />
+        <SkeletonPlanCard testId="upgrade-plan-coming-soon-2" className="w-full" />
       </div>
+      <div className="flex justify-end md:hidden">
+        <Button onClick={() => setCheckoutStep('addons')} data-testid="upgrade-plan-continue">
+          {ui('upgradeCheckoutContinue')}
+          <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />
+        </Button>
+      </div>
+      </>}
+      {showCheckout && checkoutStep === 'addons' && (
+        <AddonsStep
+          ui={ui}
+          dataTransfer={dataTransfer}
+          onDataTransferChange={(key, checked) => setDataTransfer(previous => ({ ...previous, [key]: checked }))}
+          onContinue={() => setCheckoutStep('payment')}
+        />
+      )}
       {phase === 'running' && <ProgressPanel steps={steps} ui={ui} data-testid="ProgressPanel__58bad7" />}
       {phase === 'success' && <SuccessPanel
         ui={ui}
@@ -497,8 +876,9 @@ export default function UpgradePage() {
           }}
           data-testid="FirstTenantFreePanel__58bad7" />
       )}
-      {showCheckout && (
-        <Card data-testid="upgrade-checkout">
+      {showCheckout && checkoutStep === 'payment' && (
+        <div className="mx-auto grid w-full max-w-5xl gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <Card className="w-full border-border shadow-sm" data-testid="upgrade-checkout">
           <CardHeader data-testid="CardHeader__58bad7">
             <div className="flex items-center gap-2">
               <CreditCard
@@ -509,16 +889,15 @@ export default function UpgradePage() {
           </CardHeader>
           <CardContent data-testid="CardContent__58bad7">
             <form className="space-y-5" onSubmit={handleSubmit} noValidate data-testid="upgrade-form">
-              <Field
-                id="upgrade-tenant-name"
-                data-testid="upgrade-tenant-name"
-                label={ui('upgradeTenantNameLabel')}
-                placeholder={ui('upgradeTenantNamePlaceholder')}
-                value={form.tenantName}
-                onChange={event => update('tenantName', event.target.value)}
-                error={errors.tenantName}
-                ui={ui}
-              />
+              <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm" data-testid="upgrade-tenant-from-demo">
+                <p className="text-muted-foreground">{ui('upgradeTenantFromDemo')}</p>
+                <p className="mt-1 font-semibold text-foreground">{form.tenantName || ui('upgradePlanProductiveName')}</p>
+              </div>
+              {errors.tenantName && (
+                <p className="text-xs text-destructive" data-testid="upgrade-tenant-name-error">
+                  {ui(errors.tenantName)}
+                </p>
+              )}
 
               {accountState === 'unavailable' && (
                 <div
@@ -536,9 +915,6 @@ export default function UpgradePage() {
                 >
                   <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" data-testid="CircleAlert__58bad7" />
                   <div className="space-y-2">
-                    {/* Without the environment list the convert-this-environment option cannot be
-                        offered, so the form silently collapses to "create a new tenant". Say so
-                        rather than letting the user pay for something they did not choose. */}
                     <p>{ui('upgradeEnvironmentsUnavailable')}</p>
                     <Button
                       type="button"
@@ -554,43 +930,6 @@ export default function UpgradePage() {
                     </Button>
                   </div>
                 </div>
-              )}
-
-              {demoEnvironments.length > 0 && (
-                <fieldset className="space-y-3" data-testid="upgrade-target-choice">
-                  <legend className="text-sm font-medium">{ui('upgradeTargetLabel')}</legend>
-                  <label className="flex items-start gap-2 rounded-md border p-3">
-                    <input
-                      type="radio"
-                      name="upgradeAction"
-                      value="convert-demo"
-                      checked={form.upgradeAction === 'convert-demo'}
-                      onChange={() => update('upgradeAction', 'convert-demo')}
-                      data-testid="upgrade-target-convert"
-                    />
-                    <span>
-                      <span className="block text-sm font-medium">{ui('upgradeConvertDemo')}</span>
-                      <span className="block text-xs text-muted-foreground">{ui('upgradeConvertDemoBody')}</span>
-                    </span>
-                  </label>
-                  <label className="flex items-start gap-2 rounded-md border p-3">
-                    <input
-                      type="radio"
-                      name="upgradeAction"
-                      value="create-productive"
-                      checked={form.upgradeAction === 'create-productive'}
-                      onChange={() => {
-                        update('upgradeAction', 'create-productive');
-                        update('tenantName', '');
-                      }}
-                      data-testid="upgrade-target-create"
-                    />
-                    <span>
-                      <span className="block text-sm font-medium">{ui('upgradeCreateNew')}</span>
-                      <span className="block text-xs text-muted-foreground">{ui('upgradeCreateNewBody')}</span>
-                    </span>
-                  </label>
-                </fieldset>
               )}
 
               {formError && (
@@ -610,7 +949,16 @@ export default function UpgradePage() {
             </form>
           </CardContent>
         </Card>
+        <BillingOverviewPanel
+          purchases={billingPurchases}
+          onResume={resumePaidPurchase}
+          resumingPurchaseId={resumingPurchaseId}
+          ui={ui}
+        />
+        </div>
       )}
+      </main>
+      </div>
     </div>
   );
 }
