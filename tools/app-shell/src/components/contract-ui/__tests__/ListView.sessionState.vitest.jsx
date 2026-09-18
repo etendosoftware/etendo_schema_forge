@@ -84,6 +84,10 @@ vi.mock('@/hooks/useWindowFilterPresets', () => ({
 vi.mock('@/lib/gridQuery', () => ({
   buildAdvancedFilterCriteria: (advancedFilter) =>
     advancedFilter ? [{ fieldName: 'advField', operator: 'equals', value: advancedFilter.token }] : null,
+  // ETP-5188 added this export; none of this file's fixtures declare a `toQueryParams`
+  // column hook, so a plain pass-through matches extractQueryParamConditions' own
+  // no-op branch (see gridQuery.js).
+  extractQueryParamConditions: (advancedFilter) => ({ conditions: advancedFilter, extraParams: null }),
 }));
 
 vi.mock('@/lib/productUsageTelemetry.js', () => ({
