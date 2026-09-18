@@ -83,6 +83,21 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
     ? layout.sections.filter(s => sectionIds.includes(s.id))
     : layout.sections;
 
+  // Commits the pending edit for `boxNum`, if there is one. `pendingValues` only gains a
+  // key for a box once the user actually types in it (see the input's onChange below) — so
+  // a box that was never touched this edit session (pencil clicked, then blur/Escape with no
+  // keystroke) has no key in `pendingValues` at all, distinct from a box the user deliberately
+  // cleared back to `''`. The presence check (not a truthiness check on the value) is what
+  // keeps those two cases apart: calling onBoxChange with `undefined` for the untouched case
+  // used to flow into parseBoxInput(undefined) -> NaN -> null -> "remove this box", silently
+  // wiping a previously saved value on a pure no-op edit.
+  const commitPendingEdit = (boxNum) => {
+    if (Object.prototype.hasOwnProperty.call(pendingValues, boxNum)) {
+      onBoxChange?.(boxNum, pendingValues[boxNum]);
+    }
+    setEditingCell(null);
+  };
+
   const renderCellInput = (boxNum, val) => (
     <input
       type="number"
@@ -90,8 +105,8 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
       className="fm-aeat-cell__input"
       value={pendingValues[boxNum] ?? (val != null ? String(val) : '')}
       onChange={e => setPendingValues(prev => ({ ...prev, [boxNum]: e.target.value }))}
-      onBlur={() => { onBoxChange?.(boxNum, pendingValues[boxNum]); setEditingCell(null); }}
-      onKeyDown={e => { if (e.key === 'Enter') { onBoxChange?.(boxNum, pendingValues[boxNum]); setEditingCell(null); e.target.blur(); } if (e.key === 'Escape') setEditingCell(null); }}
+      onBlur={() => commitPendingEdit(boxNum)}
+      onKeyDown={e => { if (e.key === 'Enter') { commitPendingEdit(boxNum); e.target.blur(); } if (e.key === 'Escape') setEditingCell(null); }}
       autoFocus
       disabled={readOnly}
     />

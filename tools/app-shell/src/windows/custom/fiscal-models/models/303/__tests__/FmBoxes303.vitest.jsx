@@ -602,6 +602,155 @@ describe('FmBoxes303 — editable cell input events', () => {
   });
 });
 
+// ── commitPendingEdit no-op guard (ETP-5409, bug 1) ───────────────────────────
+// Opening the pencil editor and blurring/Enter-ing WITHOUT typing anything must NOT
+// call onBoxChange at all — `pendingValues` never gained a key for that box this edit
+// session, so `commitPendingEdit`'s hasOwnProperty guard must skip the call entirely.
+// Before the fix, onBoxChange was always called (even with `undefined`), which flowed
+// into parseBoxInput(undefined) -> NaN -> null -> "remove this box", silently wiping a
+// previously saved value on a pure no-op edit. A deliberate clear-to-blank (type, then
+// delete back to '') is the legitimate case and must still call onBoxChange(boxNum, '').
+
+describe('FmBoxes303 — commitPendingEdit no-op guard (ETP-5409)', () => {
+  it('does NOT call onBoxChange on blur when the box has a saved value and nothing was typed', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 76: 42 }}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+    const editBtns = container.querySelectorAll('.fm-aeat-cell__edit-btn');
+    if (editBtns.length === 0) return;
+    fireEvent.click(editBtns[0]);
+    const input = container.querySelector('.fm-aeat-cell__input');
+    expect(input.value).toBe('42');
+    fireEvent.blur(input);
+    expect(onBoxChange).not.toHaveBeenCalled();
+  });
+
+  it('does NOT call onBoxChange on Enter when the box has a saved value and nothing was typed', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 76: 42 }}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+    const editBtns = container.querySelectorAll('.fm-aeat-cell__edit-btn');
+    if (editBtns.length === 0) return;
+    fireEvent.click(editBtns[0]);
+    const input = container.querySelector('.fm-aeat-cell__input');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onBoxChange).not.toHaveBeenCalled();
+    // Enter also closes the input, same as before.
+    expect(container.querySelector('.fm-aeat-cell__input')).toBeNull();
+  });
+
+  it('does NOT call onBoxChange on blur for a box with no saved value either (nothing typed)', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+    const editBtns = container.querySelectorAll('.fm-aeat-cell__edit-btn');
+    if (editBtns.length === 0) return;
+    fireEvent.click(editBtns[0]);
+    const input = container.querySelector('.fm-aeat-cell__input');
+    fireEvent.blur(input);
+    expect(onBoxChange).not.toHaveBeenCalled();
+  });
+
+  it('DOES call onBoxChange with the boxNum and empty string when the user types then clears the box (deliberate clear-to-blank, blur)', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 76: 42 }}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+    const editBtns = container.querySelectorAll('.fm-aeat-cell__edit-btn');
+    if (editBtns.length === 0) return;
+    fireEvent.click(editBtns[0]);
+    const input = container.querySelector('.fm-aeat-cell__input');
+    fireEvent.change(input, { target: { value: '100' } });
+    fireEvent.change(input, { target: { value: '' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(76, '');
+  });
+
+  it('DOES call onBoxChange with the boxNum and empty string when the user types then clears the box (deliberate clear-to-blank, Enter)', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 76: 42 }}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+    const editBtns = container.querySelectorAll('.fm-aeat-cell__edit-btn');
+    if (editBtns.length === 0) return;
+    fireEvent.click(editBtns[0]);
+    const input = container.querySelector('.fm-aeat-cell__input');
+    fireEvent.change(input, { target: { value: '100' } });
+    fireEvent.change(input, { target: { value: '' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onBoxChange).toHaveBeenCalledWith(76, '');
+  });
+
+  it('still calls onBoxChange with the typed value on blur when the user actually typed something (regression guard)', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 76: 42 }}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+    const editBtns = container.querySelectorAll('.fm-aeat-cell__edit-btn');
+    if (editBtns.length === 0) return;
+    fireEvent.click(editBtns[0]);
+    const input = container.querySelector('.fm-aeat-cell__input');
+    fireEvent.change(input, { target: { value: '250' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(76, '250');
+  });
+
+  it('no-op guard also applies to the bicolumn infobox cell path (reg_anual, box 68)', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 68: 50 }}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+    const infobox = Array.from(container.querySelectorAll('.fm-aeat-infobox'))
+      .find(el => el.textContent.includes('fm.box.row.reg_anual'));
+    expect(infobox).toBeTruthy();
+    const editBtn = infobox.querySelector('.fm-aeat-cell__edit-btn');
+    if (!editBtn) return;
+    fireEvent.click(editBtn);
+    const input = infobox.querySelector('.fm-aeat-cell__input');
+    expect(input.value).toBe('50');
+    fireEvent.blur(input);
+    expect(onBoxChange).not.toHaveBeenCalled();
+  });
+});
+
 // ── sin_actividad section ─────────────────────────────────────────────────────
 
 describe('FmBoxes303 — sin_actividad section', () => {
