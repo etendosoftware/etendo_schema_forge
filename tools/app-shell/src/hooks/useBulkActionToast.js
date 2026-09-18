@@ -27,7 +27,14 @@ function showBulkActionToast(ui, result) {
   // `omitted.length > 0` means more than one row was actually selected, so those
   // stay on the generic/mixed path below.
   if (failed.length === 1 && ok === 0 && omitted.length === 0) {
-    toast.error(translateBackendError(failed[0].message, ui) || ui('actionFailed'));
+    // `messageKeys` (ETP-5316) lets a core document-action failure be resolved by AD_MESSAGE key
+    // rather than by its text — the text carries AD line numbers (10, 20, 30…) that match no
+    // literal and point at nothing the user can find in the document. Absent against a backend
+    // that does not send them, in which case this is the pre-existing text-only translation.
+    toast.error(
+      translateBackendError(failed[0].message, ui, { messageKeys: failed[0].messageKeys })
+      || ui('actionFailed'),
+    );
     return;
   }
 

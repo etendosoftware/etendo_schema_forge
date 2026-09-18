@@ -66,7 +66,13 @@ export default function BulkDocumentAction({
   const execute = actionMode === 'neoAction'
     ? async (recordId, actionName) => {
       const result = await neoAction.execute(recordId, actionName);
-      if (!result?.success) throw new Error(result?.message || 'Unknown error');
+      if (!result?.success) {
+        const err = new Error(result?.message || 'Unknown error');
+        // ETP-5316 — carry the AD_MESSAGE keys across the resolve→throw normalisation too,
+        // otherwise this adapter would be the one path that loses them.
+        err.messageKeys = result?.messageKeys;
+        throw err;
+      }
       return result;
     }
     : docAction.execute;
@@ -123,6 +129,11 @@ export default function BulkDocumentAction({
       .map(({ o, row }) => ({
         documentNo: row.documentNo || row.id,
         message: o.reason?.message || 'Unknown error',
+        // ETP-5316 — the AD_MESSAGE keys behind `message`, so useBulkActionToast's single-record
+        // path can translate a core document-action failure by identity instead of by prose.
+        // Plain strings, so they survive the sessionStorage JSON round-trip below unchanged;
+        // `undefined` drops out of JSON.stringify by itself, leaving the pre-ETP-5316 shape.
+        messageKeys: o.reason?.messageKeys,
       }));
     const ok = rowsToProcess.length - failed.length;
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ ok, omitted, failed }));
