@@ -243,11 +243,13 @@ describe('AppLayout — normal mode', () => {
     expect(mainDiv.style.marginLeft).toBe('240px');
   });
 
-  it('filters menuGroups to empty (fail-closed) while useRoleMenu is loading (undefined), instead of the FOUC full-then-shrink behavior', () => {
-    // ETP-4598 regression test: while the SFListMenu fetch is in flight,
-    // useRoleMenu() returns undefined (not null). AppLayout must treat that
-    // as "filter to nothing yet" so SideMenu never briefly renders the full,
-    // unfiltered menu before the real allowed-id Set arrives.
+  it('renders AppLayoutLoading (not SideMenu/Outlet/menu groups) while useRoleMenu is loading (undefined), instead of the FOUC full-then-shrink behavior', () => {
+    // ETP-5395 regression test: while the SFListMenu fetch is in flight,
+    // useRoleMenu() returns undefined (not null). AppLayout must render the
+    // blank AppLayoutLoading placeholder instead of the sidebar/Outlet tree —
+    // filterMenuGroupsByAccess's stand-in empty Set only hides windowId-bearing
+    // items, so an id-less item (like "dashboard" below) would otherwise still
+    // slip through and become reachable before the real allowed-id Set arrives.
     vi.mocked(useRoleMenu).mockReturnValueOnce(undefined);
 
     const props = {
@@ -260,7 +262,7 @@ describe('AppLayout — normal mode', () => {
         {
           group: 'Tools',
           // No windowId/processId/obuiappProcessId — never filtered, per
-          // filterMenuGroupsByAccess's own contract.
+          // filterMenuGroupsByAccess's own contract, yet still must not render.
           items: [{ name: 'dashboard', label: 'Dashboard' }],
         },
       ],
@@ -268,18 +270,9 @@ describe('AppLayout — normal mode', () => {
 
     render(<AppLayout {...props} />);
 
-    const groups = JSON.parse(screen.getByTestId('side-menu-groups').textContent);
-
-    // Sales had a windowId-bearing item and no allowed ids yet -> emptied,
-    // and (being non-Favorites) dropped entirely.
-    expect(groups.find((g) => g.group === 'Sales')).toBeUndefined();
-    // Favorites always survives even while empty.
-    expect(groups.find((g) => g.group === 'Favorites')).toBeDefined();
-    // Tools has no windowId on its item, so it's never filtered out.
-    const tools = groups.find((g) => g.group === 'Tools');
-    expect(tools).toBeDefined();
-    expect(tools.items).toHaveLength(1);
-    expect(tools.items[0].name).toBe('dashboard');
+    expect(screen.getByTestId('AppLayoutLoading__488148')).toBeInTheDocument();
+    expect(screen.queryByTestId('side-menu')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('outlet')).not.toBeInTheDocument();
   });
 
   it('passes menuGroups through UNFILTERED when useRoleMenu resolves to null (fail-open contract, asserted explicitly rather than relying on the default mock value)', () => {
@@ -332,6 +325,27 @@ describe('AppLayout — normal mode', () => {
   });
 });
 
+describe('AppLayout — loading gate (ETP-5395)', () => {
+  const defaultProps = {
+    menuGroups: [{ group: 'Sales', items: [{ name: 'sales-order', label: 'Sales Order', windowId: '800166' }] }],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders AppLayoutLoading and does not mount SideMenu or Outlet while allowedIds is undefined', () => {
+    vi.mocked(useRoleMenu).mockReturnValueOnce(undefined);
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.getByTestId('AppLayoutLoading__488148')).toBeInTheDocument();
+    expect(screen.queryByTestId('side-menu')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('outlet')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
+  });
+});
+
 describe('AppLayout shipped permission-anchor menu (ETP-5240)', () => {
   const anchors = defaultNavigation.filter(entry => entry.accessWindowId).map(entry => [entry.name, entry.accessWindowId]);
 
@@ -359,12 +373,19 @@ describe('AppLayout shipped permission-anchor menu (ETP-5240)', () => {
   it.each(anchors)('%s follows loading, grant and revocation with the real menu', (name, id) => {
     const menuGroups = buildMenuGroups();
     const { rerender } = render(<AppLayout menuGroups={menuGroups} />);
-    expectSidebarAnchors([]);
+    // ETP-5395 — while allowedIds is undefined (SFListMenu in flight), AppLayout
+    // now renders AppLayoutLoading unconditionally and mounts nothing else, so
+    // no anchor can show yet regardless of the sidebar-groups check below.
+    expect(screen.getByTestId('AppLayoutLoading__488148')).toBeInTheDocument();
+    expect(screen.queryByTestId('side-menu')).not.toBeInTheDocument();
 
-    // The anchor map can resolve before SFListMenu: independent axes.
+    // The anchor map can resolve before SFListMenu (independent axes), but the
+    // loading gate still blocks rendering until allowedIds itself resolves —
+    // so the grant here is not yet visible.
     vi.mocked(useWindowAccessSafe).mockReturnValue({ [id]: 'read-only' });
     rerender(<AppLayout menuGroups={menuGroups} />);
-    expectSidebarAnchors([name]);
+    expect(screen.getByTestId('AppLayoutLoading__488148')).toBeInTheDocument();
+    expect(screen.queryByTestId('side-menu')).not.toBeInTheDocument();
 
     // User = 108 from committed core-maps/ad-menu-cache.json. Nonempty so
     // this checks sidebar permissions, not the shell-wide no-access screen.
@@ -426,14 +447,15 @@ describe('AppLayout — no-access guard (ETP-4514)', () => {
     expect(screen.queryByTestId('command-palette')).not.toBeInTheDocument();
   });
 
-  it('does NOT render the blocking screen while useRoleMenu is still loading (undefined)', () => {
+  it('renders AppLayoutLoading — neither the blocking screen nor the sidebar/Outlet — while useRoleMenu is still loading (undefined)', () => {
     vi.mocked(useRoleMenu).mockReturnValueOnce(undefined);
 
     render(<AppLayout {...defaultProps} />);
 
+    expect(screen.getByTestId('AppLayoutLoading__488148')).toBeInTheDocument();
     expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
-    expect(screen.getByTestId('outlet')).toBeInTheDocument();
-    expect(screen.getByTestId('side-menu')).toBeInTheDocument();
+    expect(screen.queryByTestId('outlet')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('side-menu')).not.toBeInTheDocument();
   });
 
   it('does NOT render the blocking screen when useRoleMenu resolves to null (unauthenticated / fail-open)', () => {
