@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
-import { Checkbox } from '@/components/ui/checkbox';
+import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { TrendingUp, TrendingDown, Pencil } from 'lucide-react';
 import { getLayout303, matchesVisibility } from './fm303Layouts.js';
 import { formatAmount, formatPercent } from '../../fiscalModelsUtils.js';
@@ -24,6 +24,45 @@ function formatCell(val, colType) {
 
 const COMPACT_SECTIONS = new Set(['iva_devengado', 'iva_deducible', 'resultado', 'info_adicional', 'resultado_final']);
 const TITLED_SECTIONS  = new Set(['iva_devengado', 'iva_deducible']);
+
+// Applies a derivedValue's `clampMin` (if any) to an already-computed display value.
+// A `null` display (nothing to compute) is left untouched — clamping never manufactures
+// a value out of "no value".
+function applyClampMin(value, clampMin) {
+  return value != null && clampMin != null ? Math.max(clampMin, value) : value;
+}
+
+// treatMissingAsZero branch of computeDerivedValue (box 87, box110-box78 only — AEAT
+// semantics confirmed by the product owner): a missing operand defaults to 0, EXCEPT
+// when BOTH operands are missing, in which case the cell stays blank.
+function computeDerivedValueZeroFill(dv, valueMap) {
+  const rawMinuend = valueMap[dv.box] ?? null;
+  const rawSubtrahend = dv.subtractBox != null ? (valueMap[dv.subtractBox] ?? null) : null;
+  if (rawMinuend == null && rawSubtrahend == null) return null;
+  let display = dv.abs ? Math.abs(rawMinuend ?? 0) : (rawMinuend ?? 0);
+  if (dv.subtractBox != null) display -= (rawSubtrahend ?? 0);
+  return applyClampMin(display, dv.clampMin);
+}
+
+// Default branch of computeDerivedValue (importe_devolucion, box71-box70; also casilla 107's
+// live mirror of box 65, ETP-5391): a missing operand blanks the whole result, UNLESS the
+// `derivedValue` declares its own `defaultValue` (e.g. box 107's `{ box: 65, defaultValue: 100 }`),
+// in which case that default is used instead of blanking. This was the original behavior for
+// importe_devolucion and was never disputed; `defaultValue` is additive and a no-op for any
+// `derivedValue` that doesn't declare one.
+function computeDerivedValueBlankOnMissing(dv, valueMap) {
+  const raw = valueMap[dv.box] ?? dv.defaultValue ?? null;
+  const absRaw = dv.abs ? Math.abs(raw) : raw;
+  let display = raw != null ? absRaw : null;
+  if (display != null && dv.subtractBox != null) {
+    const subtrahend = valueMap[dv.subtractBox] ?? null;
+    // Blank out (not "assume 0") when the subtrahend operand is missing — mirrors the
+    // minuend's own missing-value behavior above. A `?? 0` fallback here silently displayed
+    // the raw minuend as the result whenever the subtrahend box was empty (ETP-5338 QA cycle 1).
+    display = subtrahend != null ? display - subtrahend : null;
+  }
+  return applyClampMin(display, dv.clampMin);
+}
 
 
 export default function FmBoxes303({ boxes, year, period, sectionIds, identification, onIdentChange, onBoxChange, readOnly }) {
@@ -121,16 +160,29 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
     return conds.every(c => matchesSvw(c));
   };
 
+  // Single source of computation for `derivedValue` ({ box, abs?, subtractBox?, clampMin?,
+  // defaultValue?, treatMissingAsZero? }) — shared by renderDerivedCell (rows whose derivedValue
+  // does NOT opt into treatMissingAsZero, e.g. importe_devolucion and casilla 107's live mirror
+  // of box 65, ETP-5391) and renderBoxCell's fallback below (rows that DO have a real box number
+  // AND opt into treatMissingAsZero, e.g. box 87 — ETP-5338 pt.2). Client-side display only;
+  // never feeds `manualData`/submission. See renderRowCell below for how the two are routed.
+  //
+  // Two confirmed-with-the-user semantics coexist here (ETP-5338 pt.2, cycle 2) — see
+  // computeDerivedValueZeroFill / computeDerivedValueBlankOnMissing above for the detail of each.
+  const computeDerivedValue = (dv) =>
+    dv.treatMissingAsZero
+      ? computeDerivedValueZeroFill(dv, valueMap)
+      : computeDerivedValueBlankOnMissing(dv, valueMap);
+
   // `boxNum`/`colType`/`unit` are optional — passed by renderRowCell when the derived cell should
   // also carry its own AD box number (e.g. casilla 107 mirroring box 65, ETP-5391) and format per
   // the row's declared cellTypes/colTypes (reuses the same `formatCell` every other cell uses),
   // rather than always formatting as 'amount' regardless of what the underlying box actually is.
+  // Note this path always BLANKS a computed 0 (see the `display !== 0` check below) — that's the
+  // deliberate behavioral split from renderBoxCell's derivedValue fallback, which shows a computed
+  // 0. See renderRowCell for which rows go through which.
   const renderDerivedCell = (dv, ci, boxNum = null, colType = 'amount', unit = null) => {
-    const raw = valueMap[dv.box] ?? dv.defaultValue ?? null;
-    const absRaw = dv.abs ? Math.abs(raw) : raw;
-    let display = raw != null ? absRaw : null;
-    if (display != null && dv.subtractBox != null) display = display - (valueMap[dv.subtractBox] ?? 0);
-    if (display != null && dv.clampMin != null) display = Math.max(dv.clampMin, display);
+    const display = computeDerivedValue(dv);
     return (
       <div key={ci} className="fm-aeat-cell">
         {boxNum != null && <span className="fm-aeat-cell__num">{String(boxNum).padStart(2, '0')}</span>}
@@ -144,9 +196,14 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
     const isCellEditable = row.editable || row.editableCells?.includes(boxNum);
     const isFixed = !isCellEditable && row.fixedValues != null &&
       Object.prototype.hasOwnProperty.call(row.fixedValues, boxNum);
-    const val = isFixed
+    let val = isFixed
       ? row.fixedValues[boxNum]
       : (valueMap[boxNum] ?? row.defaultValues?.[boxNum] ?? null);
+    // Fallback for a real box that has no backend/manual value but declares a derivedValue
+    // formula (e.g. box 87 = box 110 - box 78, computed entirely client-side) — see
+    // computeDerivedValue above. Never overrides a real value; only fills the gap when the box
+    // is genuinely empty.
+    if (val == null && row.derivedValue) val = computeDerivedValue(row.derivedValue);
     const colType = row.cellTypes?.[ci] ?? section.colTypes?.[ci] ?? 'amount';
     const unit = row.cellUnits?.[ci];
     const isCellEditing = isCellEditable && editingCell === boxNum;
@@ -170,7 +227,15 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
 
   const renderRowCell = (row, section, ci) => {
     const boxNum = row.cells?.[ci] ?? null;
-    if (row.derivedValue) {
+    // Routing split (ETP-5391 + ETP-5338 pt.2 reconciled): a `derivedValue` row that does NOT
+    // opt into `treatMissingAsZero` (importe_devolucion, casilla 107) always renders through
+    // renderDerivedCell — even when it carries a real `boxNum` (107) — because that path blanks
+    // a computed 0 and never looks at a stray real value in valueMap. A `derivedValue` row that
+    // DOES opt into `treatMissingAsZero` (box 87) must instead go through renderBoxCell below, so
+    // a genuine non-null backend/manual value for that box wins over the derived formula, and a
+    // computed 0 still displays as "0,00" rather than blanking — see the tests in
+    // FmBoxes303.vitest.jsx for both rows for the exact contract.
+    if (row.derivedValue && !row.derivedValue.treatMissingAsZero) {
       const colType = row.cellTypes?.[ci] ?? section.colTypes?.[ci] ?? 'amount';
       const unit = row.cellUnits?.[ci];
       return renderDerivedCell(row.derivedValue, ci, boxNum, colType, unit);
@@ -212,11 +277,11 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                     if (f.type === 'checkbox') {
                       return (
                         <div key={f.id} className="fm-aeat-ident-cb">
-                          <Checkbox
+                          <CheckboxField
                             checked={identification?.[f.id] ?? false}
-                            onChange={() => onIdentChange?.(f.id, !(identification?.[f.id] ?? false))}
+                            onToggle={val => onIdentChange?.(f.id, val)}
                             disabled={readOnly}
-                            data-testid="Checkbox__49d327" />
+                            data-testid="CheckboxField__49d327" />
                           <span className="fm-aeat-ident-cb__label">{t(f.labelKey)}</span>
                         </div>
                       );
@@ -275,11 +340,11 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                     };
                     return (
                       <div key={f.id} className="fm-aeat-ident-cb">
-                        <Checkbox
+                        <CheckboxField
                           checked={identification?.[f.id] ?? false}
-                          onChange={handleChange}
+                          onToggle={handleChange}
                           disabled={readOnly}
-                          data-testid="Checkbox__49d327" />
+                          data-testid="CheckboxField__49d327" />
                         <span className="fm-aeat-ident-cb__label">{t(f.labelKey)}</span>
                       </div>
                     );
@@ -341,11 +406,11 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                   .filter(f => !f.visibleWhen || matchesSvw(f.visibleWhen))
                   .map(f => f.type === 'checkbox' && (
                     <div key={f.id} className="fm-aeat-ident-cb">
-                      <Checkbox
+                      <CheckboxField
                         checked={identification?.[f.id] ?? false}
-                        onChange={() => onIdentChange?.(f.id, !(identification?.[f.id] ?? false))}
+                        onToggle={val => onIdentChange?.(f.id, val)}
                         disabled={readOnly}
-                        data-testid="Checkbox__49d327" />
+                        data-testid="CheckboxField__49d327" />
                       <span className="fm-aeat-ident-cb__label">{t(f.labelKey)}</span>
                     </div>
                   ))}

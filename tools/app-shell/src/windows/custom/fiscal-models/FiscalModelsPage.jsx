@@ -9,6 +9,19 @@ import { persistDeclarationStatus } from './fiscalModelsUtils.js';
 export default function FiscalModelsPage({ token, apiBaseUrl }) {
   const [view, setView] = useState({ type: 'list' });
   const debugMode = useDebugMode();
+  // ETP-5338 CRITICAL FIX — see the long comment on `declStatusPatch` in FmListPage.jsx for
+  // the full root-cause explanation. In short: FmListPage never remounts (and so never
+  // refetches) when the user presents a declaration from the detail page and goes back, so a
+  // status change made here must be pushed into FmListPage's own `decls` state explicitly —
+  // it is otherwise invisible to it. A fresh object on every successful status change (not a
+  // toggle/counter) so FmListPage's effect always re-fires, even for a repeat status.
+  const [declStatusPatch, setDeclStatusPatch] = useState(null);
+  // ETP-5338 Bug A fix — same mechanism, for a successful manualData save (Guardar/Calcular)
+  // instead of a status change. Under the redesigned explicit-save-only model, "Guardar" is now
+  // the ONLY write path for identChecks/manualOverrides (no more debounce racing ahead of it),
+  // so this is the single place that needs to keep FmListPage's cache in sync — see
+  // `FmModel303Page.jsx`'s `persistEditableFields` for where this fires.
+  const [declManualDataPatch, setDeclManualDataPatch] = useState(null);
 
   const handleSelect = useCallback((decl) => {
     setView({ type: decl.model, decl });
@@ -38,6 +51,8 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
           token={token}
           apiBaseUrl={apiBaseUrl}
           onComputeUpdate={handleComputeUpdate}
+          declStatusPatch={declStatusPatch}
+          declManualDataPatch={declManualDataPatch}
           data-testid="FmListPage__ca1112" />
       </div>
       {view.type === '303' && (
@@ -50,7 +65,11 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
             const result = await persistDeclarationStatus(id, newStatus, { token, apiBaseUrl, submissionMethod });
             if (result.ok) {
               setView(v => v.type === '303' ? { ...v, decl: { ...v.decl, status: newStatus } } : v);
+              setDeclStatusPatch({ id, patch: { status: newStatus, ...(submissionMethod ? { submissionMethod } : {}) } });
             }
+          }}
+          onManualDataSaved={(id, manualData) => {
+            setDeclManualDataPatch({ id, patch: { manualData } });
           }}
           data-testid="FmModel303Page__ca1112" />
       )}
@@ -64,6 +83,7 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
             const result = await persistDeclarationStatus(id, newStatus, { token, apiBaseUrl, submissionMethod });
             if (result.ok) {
               setView(v => v.type === '349' ? { ...v, decl: { ...v.decl, status: newStatus } } : v);
+              setDeclStatusPatch({ id, patch: { status: newStatus, ...(submissionMethod ? { submissionMethod } : {}) } });
             }
           }}
           data-testid="FmModel349Page__ca1112" />

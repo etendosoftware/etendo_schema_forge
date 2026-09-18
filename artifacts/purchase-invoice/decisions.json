@@ -46,7 +46,7 @@
       "processField": "documentAction",
       "processValue": "CO",
       "label": "Confirm",
-      "keepSaveWhenCompletedFields": ["orderReference"]
+      "keepSaveWhenCompletedFields": ["orderReference", "accountingDate"]
     },
     "dateFilterKey": "invoiceDate",
     "subsetFilters": [
@@ -96,7 +96,8 @@
         "C_DocTypeTarget_ID": "Tipo de documento",
         "PriceList": "Precio",
         "Foreign_Amount": "Importe en Moneda Objetivo",
-        "em_etgo_tbai_status": "Estado Batuz"
+        "em_etgo_tbai_status": "Estado Batuz",
+        "DocumentNo": "N° interno"
       },
       "en_US": {
         "POReference": "Document No.",
@@ -105,7 +106,8 @@
         "em_etgo_delivery_status": "Reception Status",
         "C_DocTypeTarget_ID": "Document Type",
         "Foreign_Amount": "Target Currency Amount",
-        "em_etgo_tbai_status": "Batuz Status"
+        "em_etgo_tbai_status": "Batuz Status",
+        "DocumentNo": "Internal No."
       },
       "es_AR": {
         "OutstandingAmt": "Saldo pendiente"
@@ -156,11 +158,12 @@
         "documentNo": {
           "visibility": "readOnly",
           "section": "principal",
-          "grid": false,
-          "form": false,
+          "grid": true,
+          "gridOrder": 10,
+          "form": true,
           "searchable": true,
           "readOnlyLogic": null,
-          "seq": 20,
+          "seq": 17,
           "businessCritical": true
         },
         "transactionDocument": {
@@ -170,8 +173,8 @@
           "seq": 15,
           "reference": "DocumentType",
           "inputMode": "selector",
-          "readOnlyLogicJs": "!!record.id",
-          "readOnlyLogic": null
+          "readOnlyLogicJs": null,
+          "readOnlyLogic": "@Processed@='Y'"
         },
         "invoiceDate": {
           "grid": true,
@@ -1235,7 +1238,7 @@
       "type": "readOnlyLogic",
       "entity": "invoice",
       "decision": "Keep",
-      "description": "Most header fields become read-only when document is processed (Processed=Y). Covers: documentNo, invoiceDate, businessPartner, partnerAddress, currency, paymentTerms, paymentMethod, priceList. Note: transactionDocument uses readOnlyLogicJs (locks after first save via d=>!!d.id).",
+      "description": "Header fields become read-only when document is processed (Processed=Y). Covers: documentNo, invoiceDate, businessPartner, partnerAddress, currency, paymentTerms, paymentMethod, priceList, transactionDocument. ETP-5274: transactionDocument previously locked on first save (readOnlyLogicJs d=>!!d.id), now aligned to Processed=Y so it stays editable in Draft even with a saved header and lines.",
       "impactIfOmitted": "Users could edit fields on confirmed invoices, breaking data integrity."
     },
     "READONLY_Processed_Lines": {

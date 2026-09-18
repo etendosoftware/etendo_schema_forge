@@ -1,8 +1,7 @@
 {
-  "version": "0.89.0",
-  "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-09-14T18:30:38.298Z",
-  "contractChecksum": "7d1889e746ca5e40",
+  "version": "0.88.0",
+  "generatedAt": "2026-09-17T15:12:05.781Z",
+  "contractChecksum": "70542a4b0abb5d3c",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -1174,13 +1173,13 @@
             "readOnlyLogic": "true"
           },
           "eTGOCurrencyRate": {},
+          "eTGOTbaiStatus": {
+            "readOnly": true
+          },
           "eTGODeliveryStatus": {
             "readOnly": true
           },
           "eTGODueDate": {
-            "readOnly": true
-          },
-          "eTGOTbaiStatus": {
             "readOnly": true
           }
         }
@@ -1523,5 +1522,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "43dd0725bc46a98b"
+  "checksum": "ca732ac197129e44"
 }

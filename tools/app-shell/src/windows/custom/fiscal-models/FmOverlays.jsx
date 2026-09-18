@@ -4,7 +4,7 @@ import { useUI } from '@/i18n';
 import { SELECTABLE_YEARS } from './models/303/fm303Layouts';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { FileText, Landmark, OctagonAlert, TriangleAlert, X, Check, ChevronDown, Search } from 'lucide-react';
-import { Checkbox } from '@/components/ui/checkbox';
+import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { formatPeriod, showIaeActivityReminder } from './fiscalModelsUtils.js';
 import './fiscal-models.css';
 
@@ -312,10 +312,10 @@ export function FileGenModal({ decl, onConfirm, onClose }) {
           </div>
           <div style={{ marginBottom: 12 }}>
             <label style={checkboxRowSt}>
-              <Checkbox
+              <CheckboxField
                 checked={substitutive}
-                onChange={() => setSubstitutive(v => !v)}
-                data-testid="Checkbox__cda0bb" />
+                onToggle={val => setSubstitutive(val)}
+                data-testid="CheckboxField__cda0bb" />
               {t('fm.filegen.substitutive')}
             </label>
           </div>
@@ -333,19 +333,19 @@ export function FileGenModal({ decl, onConfirm, onClose }) {
           </div>
           <div style={{ marginBottom: 12 }}>
             <label style={checkboxRowSt}>
-              <Checkbox
+              <CheckboxField
                 checked={navarra}
-                onChange={() => setNavarra(v => !v)}
-                data-testid="Checkbox__cda0bb" />
+                onToggle={val => setNavarra(val)}
+                data-testid="CheckboxField__cda0bb" />
               {t('fm.filegen.navarra')}
             </label>
           </div>
           <div style={{ marginBottom: 12 }}>
             <label style={checkboxRowSt}>
-              <Checkbox
+              <CheckboxField
                 checked={guipuzcoa}
-                onChange={() => setGuipuzcoa(v => !v)}
-                data-testid="Checkbox__cda0bb" />
+                onToggle={val => setGuipuzcoa(val)}
+                data-testid="CheckboxField__cda0bb" />
               {t('fm.filegen.guipuzcoa')}
             </label>
           </div>
@@ -1053,17 +1053,17 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
                 </div>
                 <div style={{ display: 'flex', gap: 20 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer' }}>
-                    <Checkbox
+                    <CheckboxField
                       checked={redeme}
-                      onChange={() => { setRedeme(v => !v); setIsDirty(true); }}
-                      data-testid="Checkbox__cda0bb" />
+                      onToggle={val => { setRedeme(val); setIsDirty(true); }}
+                      data-testid="CheckboxField__cda0bb" />
                     {t('fm.config.m303.redeme') ?? 'Inscrito en REDEME'}
                   </label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer' }}>
-                    <Checkbox
+                    <CheckboxField
                       checked={recc}
-                      onChange={() => { setRecc(v => !v); setIsDirty(true); }}
-                      data-testid="Checkbox__cda0bb" />
+                      onToggle={val => { setRecc(val); setIsDirty(true); }}
+                      data-testid="CheckboxField__cda0bb" />
                     {t('fm.config.m303.recc') ?? 'Régimen RECC'}
                   </label>
                 </div>

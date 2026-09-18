@@ -16,9 +16,15 @@ vi.mock('lucide-react', () => ({
   Check: () => null, ChevronDown: () => null, Search: () => null,
   FileText: () => null, Landmark: () => null,
 }));
-vi.mock('@/components/ui/checkbox', () => ({
-  Checkbox: ({ checked, onChange }) => (
-    React.createElement('input', { type: 'checkbox', checked: !!checked, onChange: onChange ?? (() => {}) })
+vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
+  CheckboxField: ({ checked, disabled, onToggle, onClick }) => (
+    React.createElement('input', {
+      type: 'checkbox',
+      checked: !!checked,
+      disabled,
+      onClick,
+      onChange: e => onToggle?.(e.target.checked),
+    })
   ),
 }));
 // ETP-5187 (adjacent scope) — NewDeclModal now calls useNavigate() (IAE-activity reminder on

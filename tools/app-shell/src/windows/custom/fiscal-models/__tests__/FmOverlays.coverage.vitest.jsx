@@ -9,9 +9,9 @@ vi.mock('@/components/related-documents/helpers.js', () => ({
   neoBase: (apiBaseUrl) => apiBaseUrl.replace(/\/[^/]+$/, ''),
 }));
 
-vi.mock('@/components/ui/checkbox', () => ({
-  Checkbox: ({ checked, onChange }) => (
-    <input type="checkbox" checked={checked} onChange={onChange} readOnly={!onChange} />
+vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
+  CheckboxField: ({ checked, onToggle }) => (
+    <input type="checkbox" checked={checked} onChange={onToggle ? (e => onToggle(e.target.checked)) : undefined} readOnly={!onToggle} />
   ),
 }));
 // ETP-5187 (adjacent scope) — NewDeclModal now calls useNavigate() (IAE-activity reminder on

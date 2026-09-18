@@ -6,7 +6,7 @@ const columns = [
   { key: 'name', column: 'Name', type: 'string', label: 'Commercial Name', required: true, maxLength: 60 },
   { key: 'etgoWeb', column: 'EM_Etgo_Web', type: 'string', label: 'Web', maxLength: 60 },
   { key: 'etgoEmail', column: 'EM_Etgo_Email', type: 'string', label: 'Email', maxLength: 60 },
-  { key: 'etgoPhone', column: 'EM_Etgo_Phone', type: 'string', label: 'Phone', maxLength: 15 },
+  { key: 'etgoPhone', column: 'EM_Etgo_Phone', type: 'string', label: 'Phone', maxLength: 60 },
   { key: 'customer', column: 'IsCustomer', type: 'boolean', label: 'Customer', required: true },
   { key: 'vendor', column: 'IsVendor', type: 'boolean', label: 'Vendor', required: true },
 ];

@@ -58,6 +58,11 @@ vi.mock('../ListFilterBar.jsx', () => ({
 }));
 vi.mock('@/lib/gridQuery', () => ({
   buildAdvancedFilterCriteria: () => null,
+  // ETP-5188 — real no-op contract (see `extractQueryParamConditions` in
+  // `@/lib/gridQuery.js`): with no `toQueryParams`-declaring column intercepting any
+  // row (this suite's fixtures only use plain columns), it hands back the advancedFilter
+  // unchanged as `conditions` and no `extraParams`.
+  extractQueryParamConditions: (advancedFilter) => ({ conditions: advancedFilter, extraParams: null }),
 }));
 vi.mock('@/hooks/useWindowFilterPresets', () => ({
   useWindowFilterPresets: () => ({ presets: {}, savePreset: vi.fn(), deletePreset: vi.fn() }),

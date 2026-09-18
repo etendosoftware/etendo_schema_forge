@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { captureScreenshot } from '../helpers/captureScreenshot.js';
 import { login } from '../helpers/auth.js';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -441,8 +442,12 @@ test.describe('ETP-5133 — Lines overflow scoped to avoid sidebar overlap (mock
       await bodyWrapper.evaluate((el) => { el.scrollLeft = 0; });
       await page.waitForTimeout(100);
 
+      // Through the shared helper, so it honours E2E_CAPTURE_SCREENSHOTS like every other spec.
+      // Called directly, this wrote a new PNG into the repo on EVERY mocked run, leaving the tree
+      // dirty for whoever ran the suite next — the assertions above are what prove the fix; the
+      // screenshot is evidence, produced on request.
       const outPath = resolve(EVIDENCE_DIR, `ETP-5133-${win.slug}-lines-overlap-after.png`);
-      await page.screenshot({ path: outPath, fullPage: false });
+      await captureScreenshot(page, { path: outPath, fullPage: false });
     });
   }
 });
