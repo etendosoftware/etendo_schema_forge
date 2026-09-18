@@ -82,7 +82,17 @@ function selectorFlex(col, idx) {
  * Used by InlineLinesPanel's flex column layout.
  */
 export function columnFlex(col, idx) {
-  if (col.minWidth) return `1 1 ${col.minWidth}px`;
+  // ETP-5332 — closes the gap ETP-5133's own review (linesColumnWidth.test.js's
+  // "KNOWN GAP" case) flagged and left unfixed because no window declared `col.minWidth`
+  // yet: `1 1` (shrinkable) let THIS one column collapse toward zero at a narrow
+  // viewport while every other branch below is `shrink: 0`, so it alone absorbed all the
+  // missing space — and with no `overflow: hidden` on the cell, its text visually bled
+  // into the next column instead of the row triggering horizontal scroll like it does for
+  // every other column type. `contacts/ContactTable.jsx`'s Email (`minWidth: 320`) inside
+  // the narrower create-contact popup is the "future window" that reintroduced it.
+  // `1 0` matches every other branch: minWidth still WINS as the basis (ETP-5210's
+  // override contract is unchanged), it just can no longer shrink below it.
+  if (col.minWidth) return `1 0 ${col.minWidth}px`;
   if (col.type === 'boolean' && col.badge) return `0 0 ${BOOLEAN_BADGE_BASIS_PX}px`;
   if (SELECTOR_TYPES.has(col.type)) return selectorFlex(col, idx);
   const elasticPx = ELASTIC_BASIS_PX[col.type];

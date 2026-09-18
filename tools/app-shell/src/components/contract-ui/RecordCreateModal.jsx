@@ -379,7 +379,20 @@ export default function RecordCreateModal({
         // drawer's document-level handler is already neutralised while the modal is open
         // (see `onClose: createOpen ? NOOP : onClose` in ProductDrawerShell).
         onKeyDown={(e) => { if (e.key === 'Escape') e.stopPropagation(); }}
-        className="w-[95vw] max-w-7xl max-h-[92vh] overflow-y-auto gap-0 rounded-lg bg-card p-6"
+        /*
+          Width is per-target (ETP-5332). `max-w-7xl` (1280px) is what actually binds on a
+          normal desktop — `95vw` only takes over below ~1350px of viewport — so on a laptop
+          the dialog ate ~87% of the screen while the same 1280px is a comfortable 67% on an
+          external monitor. Contacts opts down to a narrower box; Products keeps 1280px, where
+          its 3-column form plus Price/Cost/Accounting tabs genuinely use the room.
+
+          There is a floor on how far this can go and it is not stylistic: the embedded window's
+          field grid is `grid-cols-2 md:grid-cols-4`, and Tailwind's `md:` keys off the VIEWPORT,
+          not the container (this codebase has no container queries). So narrowing the dialog
+          never reflows 4 columns down to 2 — it only squeezes them. Roughly 1000px is where
+          the four header fields stop being comfortable.
+        */
+        className={`w-[95vw] ${target.dialogMaxWidthClass ?? 'max-w-7xl'} max-h-[92vh] overflow-y-auto gap-0 rounded-lg bg-card ${target.dialogPaddingClass ?? 'p-6'}`}
       >
       {/*
         Re-provide the locale for the modal subtree with the TARGET window's field labels
@@ -387,8 +400,8 @@ export default function RecordCreateModal({
         contain the product columns.
       */}
       <LocaleProvider dictionaries={modalDictionaries} locale={locale} setLocale={setLocale}>
-        <DialogHeader data-testid="DialogHeader__928459">
-          <DialogTitle className="text-xl" data-testid="DialogTitle__928459">{ui(target.titleKey)}</DialogTitle>
+        <DialogHeader className={target.titlePaddingClass} data-testid="DialogHeader__928459">
+          <DialogTitle className={target.titleSizeClass ?? 'text-xl'} data-testid="DialogTitle__928459">{ui(target.titleKey)}</DialogTitle>
         </DialogHeader>
 
         {windowMode && (
@@ -409,11 +422,16 @@ export default function RecordCreateModal({
               spinner, then the window's own skeleton, then the form — and a
               content-sized box resizes at each one, so the dialog visibly jumps twice
               before settling. Reserving the final height up front makes the stages
-              happen inside a box that never moves.
+              happen inside a box that never moves. Per-target since ETP-5332, but it must
+              stay a fixed height whatever the value: switching to `max-height` to "fit the
+              content" is what reintroduces the jump.
+
+              72vh put the whole dialog at ~88% of the viewport on every screen size, and most
+              of that was dead space under a child tab's empty state rather than content.
             */}
             <div
-              className="mt-4 overflow-y-auto"
-              style={{ height: '72vh' }}
+              className={`${target.windowTopMarginClass ?? 'mt-4'} overflow-y-auto`}
+              style={{ height: target.windowHeight ?? '72vh' }}
               data-testid="record-create-window"
             >
               {WindowApp ? (
@@ -451,7 +469,7 @@ export default function RecordCreateModal({
               popup read as a pile of buttons. This one exists for the single job the window
               cannot do: hand the saved record back to the document line.
             */}
-            <div className="mt-4 flex items-center justify-end gap-3">
+            <div className={`${target.finishRowMarginClass ?? 'mt-4'} flex items-center justify-end gap-3`}>
               <p className="text-xs text-muted-foreground">{ui(target.windowHintKey)}</p>
               <button
                 type="button"

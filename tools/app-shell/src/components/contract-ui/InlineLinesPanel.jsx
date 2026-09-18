@@ -26,6 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { resolveLookupDrawer } from './lookupDrawers.js';
 import { columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
 import { ACTION_SLOT_WIDTH_PX, resolveTrailingColumn } from '@/lib/linesActionSlot.js';
+import { registerLinesScroller } from '@/lib/linesScrollSync.js';
 import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
 import { getContactsTextFieldError } from './contactsFieldValidation.js';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
@@ -992,6 +993,17 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   const handleBodyScroll = useCallback((e) => {
     if (headerScrollRef.current) headerScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
   }, []);
+  // ETP-5332 — the same alignment problem one level out: when the add-row is open the
+  // "Add ..." row is drawn by a SIBLING `<DataTable hideHeader hideDataRows>` with its own
+  // scroll box, which `handleBodyScroll` above cannot reach. Both join a group keyed by
+  // entity instead; see `@/lib/linesScrollSync.js`. Cleanup is tracked by hand because
+  // React 18 ignores a callback ref's return value (that only became a cleanup in 19).
+  const bodySyncCleanupRef = useRef(null);
+  const attachBodyScroll = useCallback((el) => {
+    bodyScrollRef.current = el;
+    bodySyncCleanupRef.current?.();
+    bodySyncCleanupRef.current = el ? registerLinesScroller(entity, el) : null;
+  }, [entity]);
 
   // Close edit mode when the user clicks outside the editing row. Defers the state
   // update to the next tick so any focused input fires its onBlur first — that triggers
@@ -1425,7 +1437,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           elevated hover shadow to protect from the overflow-y:auto clipping
           DataTable's `pb-6` compensates for (ETP-5216), so no bottom padding
           is added here. */}
-      <div ref={bodyScrollRef} className="overflow-x-auto" onScroll={handleBodyScroll}>
+      <div ref={attachBodyScroll} className="overflow-x-auto" onScroll={handleBodyScroll}>
       {selectableRows.map((row) => {
         const isEditing = editingRowId === row.id;
         const isHovered = hoveredRowId === row.id;

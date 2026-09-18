@@ -17,6 +17,7 @@ import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
 import { columnMinWidthPx, columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
 import { CHEVRON_COLUMN_WIDTH, renderBalanceFooterRow, buildLineCellStyle } from './InlineLinesPanel.jsx';
 import { ACTION_SLOT_WIDTH_PX, reservesActionSlot } from '@/lib/linesActionSlot.js';
+import { registerLinesScroller } from '@/lib/linesScrollSync.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DateField } from '@/components/ui/date-field';
 import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
@@ -478,9 +479,25 @@ function flexSpec(col, idx) {
 // `width` property when it's used — see linesAddRowColumnAlignment.vitest.jsx
 // and DataTable.etp4603Coverage.vitest.jsx for the read-back tests that rely
 // on this staying a plain calc().)
-export function growColumnWidth(basisPx, fixedTotalPx, growCount) {
+export function growColumnWidth(basisPx, fixedTotalPx, growCount, growBasisTotalPx = 0, availableWidthPx = 0) {
   if (!growCount) return undefined;
-  return `calc((100% - ${fixedTotalPx}px) / ${growCount} + ${basisPx}px)`;
+  // A LITERAL pixel width whenever the container has been measured. Chrome honours those per
+  // column inside `table-layout: fixed`; it does not honour `calc()`/`max()` there, splitting
+  // the space equally instead and flattening every column to the same width regardless of its
+  // own basis (measured: Persona's 224/224/320/224/224 all rendering at 243px).
+  //
+  // This is flexbox's own arithmetic, done here instead of asked of CSS: each column keeps its
+  // basis and they share only what is genuinely left over, never less than the basis itself —
+  // the deficit case (Cuenta Bancaria wants 1968px) then overflows into the wrapper's
+  // horizontal scroll rather than squeezing.
+  if (availableWidthPx > 0) {
+    const leftover = availableWidthPx - fixedTotalPx - growBasisTotalPx;
+    return basisPx + Math.max(0, leftover / growCount);
+  }
+  // Pre-measurement (first paint, or no ResizeObserver): the basis alone. The table's own
+  // `minWidth` already reserves the same total, so this never renders narrower than the
+  // header — it just cannot distribute surplus until the measurement lands one frame later.
+  return basisPx;
 }
 import { SelectorInput } from './SelectorInput.jsx';
 import { InlineSearchCombo } from './InlineSearchCombo.jsx';
@@ -1828,8 +1845,17 @@ function oneIfTrue(bool) {
 // ONCE, and does not recompute them from body content afterward, so applying
 // it unconditionally (not just when hideHeader) stops the resize in both
 // modes. Exported so `DataTable.helpers.vitest.jsx` can assert this directly.
-export function getTableContainerStyle() {
-  return { tableLayout: 'fixed', width: '100%' };
+export function getTableContainerStyle(minWidthPx = 0) {
+  // ETP-5332 — `minWidthPx` is the sum of every column's own width demand. Without it,
+  // `width: '100%'` lets a fixed-layout table squeeze columns below the widths its own
+  // `<colgroup>` asked for the moment they stop fitting, which is how Contacts' Persona tab
+  // rendered five different columns at an identical 177px. With it the table grows past its
+  // container instead, and the wrapper's `overflow-x-auto` turns that into a scrollbar —
+  // the same trade the list view has always made. 0 keeps the previous behaviour verbatim
+  // for every caller that has no per-column budget to declare.
+  return minWidthPx > 0
+    ? { tableLayout: 'fixed', width: '100%', minWidth: minWidthPx }
+    : { tableLayout: 'fixed', width: '100%' };
 }
 
 function renderRowActionHeaderCells(hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled) {
@@ -1985,6 +2011,7 @@ function computeActionColsWidthPx({
  */
 export function renderLinesColgroup({
   hideHeader, selectable, visibleColumns, colFlexSpecs, fixedColsTotalPx, growCount,
+  growColsBasisPx = 0, linesAvailableWidthPx = 0,
   ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow,
   quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel,
   // ETP-5268 follow-up — see computeActionColsWidthPx's own doc: the
@@ -2004,7 +2031,7 @@ export function renderLinesColgroup({
         const { grow, basis } = colFlexSpecs[colIdx];
         return grow === 0
           ? <col key={col.key} style={{ width: basis }} />
-          : <col key={col.key} style={{ width: growColumnWidth(basis, fixedColsTotalPx, growCount) }} />;
+          : <col key={col.key} style={{ width: growColumnWidth(basis, fixedColsTotalPx, growCount, growColsBasisPx, linesAvailableWidthPx) }} />;
       })}
       {/* In inlineEditable add-row mode (ilpTrailing), all row actions live
           inside InlineLinesPanel's 160px action slot — never add separate
@@ -2090,7 +2117,7 @@ function renderMainColgroup({
 function renderHeaderSection({
   useOwnStickyHeader, headerRowContent, horizontalScrollElRef, horizontalScrollAttachSeq,
   hideHeader, linesLayout, hasDimensionsPanel, selectable, visibleColumns, colFlexSpecs,
-  fixedColsTotalPx, growCount, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
+  fixedColsTotalPx, growCount, growColsBasisPx, linesAvailableWidthPx, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
   onCloneRow, quickActionsEnabled, ilpReservesActionSlot, quickActionsColWidthPx,
 }) {
   if (useOwnStickyHeader) {
@@ -2113,8 +2140,8 @@ function renderHeaderSection({
   return {
     stickyHeader: null,
     colgroup: renderLinesColgroup({
-      hideHeader, selectable, visibleColumns, colFlexSpecs, fixedColsTotalPx, growCount,
-      ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow,
+      hideHeader, selectable, visibleColumns, colFlexSpecs, fixedColsTotalPx, growCount, growColsBasisPx,
+      linesAvailableWidthPx, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow,
       quickActionsEnabled, ilpReservesActionSlot, hasDimensionsPanel, quickActionsColWidthPx,
     }),
     inlineHeader: (
@@ -2969,6 +2996,55 @@ export function DataTable({
     attachSeq: horizontalScrollAttachSeq,
   } = useHorizontalScrollGeometry(quickActionsColWidthPx);
 
+  // ETP-5332 — the add-row companion table's own visible width, measured.
+  //
+  // Its `<colgroup>` used to express each growing column as
+  // `calc((100% - Fixed) / N + Basis)`, on the assumption that a browser resolves that
+  // per column. Chrome does not: inside `table-layout: fixed` it ignores the differing
+  // `Basis` terms and splits the space equally, which is how Persona's five columns all
+  // came out 243px while their real bases are 224 / 224 / 320 / 224 / 224. Wrapping it in
+  // `max()` changed nothing — the whole expression is what it declines to honour per column.
+  //
+  // Literal pixels are the only thing it does honour, and computing them needs the one
+  // number CSS was being asked for: the container's width. Measured only in `hideHeader`
+  // mode — that table has no data rows (`hideDataRows`), so re-rendering it on resize costs
+  // nothing, unlike the row lists the two observers above deliberately stay out of.
+  const [linesAvailableWidthPx, setLinesAvailableWidthPx] = useState(0);
+  // Cleanup is tracked by hand rather than returned from the callback ref: React 18 ignores
+  // a callback ref's return value (that only became a cleanup in 19). Same shape as
+  // `useHorizontalScrollGeometry`'s own `cleanupRef` above, for the same reason.
+  const linesWidthCleanupRef = useRef(null);
+  const linesWidthRef = useCallback((el) => {
+    linesWidthCleanupRef.current?.();
+    linesWidthCleanupRef.current = null;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () => setLinesAvailableWidthPx((prev) => (
+      prev === el.clientWidth ? prev : el.clientWidth
+    ));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    linesWidthCleanupRef.current = () => ro.disconnect();
+  }, []);
+  // ETP-5332 — join this table's scroll box to its sibling InlineLinesPanel's, so the
+  // "Add ..." row stays under the header strip once the columns are wider than the tab.
+  // See `@/lib/linesScrollSync.js`. Only the `hideHeader` companion takes part: every other
+  // DataTable mount either IS the whole tab or keeps the forced `overflow-visible` below,
+  // and has nothing to stay aligned with.
+  const linesSyncCleanupRef = useRef(null);
+  const linesSyncRef = useCallback((el) => {
+    linesSyncCleanupRef.current?.();
+    linesSyncCleanupRef.current = (el && hideHeader) ? registerLinesScroller(entity, el) : null;
+  }, [entity, hideHeader]);
+  // One node, three callback refs: the scroll geometry hook's, the width measurement above,
+  // and the sibling sync. Composed through a stable `useCallback` so the node is not
+  // detached and re-attached on every render, which would restart every observer.
+  const linesScrollAndWidthRef = useCallback((el) => {
+    scrollContainerRef(el);
+    linesWidthRef(el);
+    linesSyncRef(el);
+  }, [scrollContainerRef, linesWidthRef, linesSyncRef]);
+
   const totals = useMemo(() => {
     if (amountColumns.length === 0) return null;
     const sums = {};
@@ -3117,6 +3193,9 @@ export function DataTable({
   const colFlexSpecs = hideHeader ? visibleColumns.map((col, colIdx) => flexSpec(col, colIdx)) : [];
   const growCount = colFlexSpecs.filter((s) => s.grow > 0).length;
   const fixedColsBasisPx = colFlexSpecs.filter((s) => s.grow === 0).reduce((sum, s) => sum + s.basis, 0);
+  // ETP-5332 — growColumnWidth() needs this to reproduce flexbox's real arithmetic; see its
+  // own doc comment. Kept next to the other two totals it is passed alongside.
+  const growColsBasisPx = colFlexSpecs.filter((s) => s.grow > 0).reduce((sum, s) => sum + s.basis, 0);
   // ETP-5268 follow-up — the quick-actions slot's width is this window's own
   // button count (see quickActionsReservedWidthPx), always — see
   // quickActionsColumnStyle for why it's no longer ever narrower. Feeding
@@ -3176,7 +3255,7 @@ export function DataTable({
   const { stickyHeader, colgroup: tableColgroup, inlineHeader } = renderHeaderSection({
     useOwnStickyHeader, headerRowContent, horizontalScrollElRef, horizontalScrollAttachSeq,
     hideHeader, linesLayout, hasDimensionsPanel, selectable, visibleColumns, colFlexSpecs,
-    fixedColsTotalPx, growCount, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
+    fixedColsTotalPx, growCount, growColsBasisPx, linesAvailableWidthPx, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
     onCloneRow, quickActionsEnabled, ilpReservesActionSlot, quickActionsColWidthPx,
   });
 
@@ -3192,9 +3271,14 @@ export function DataTable({
         so 24px of bottom padding gives the shadow room inside the visible area.
       */}
       <div
-        ref={scrollContainerRef}
+        ref={linesScrollAndWidthRef}
         className={[
-          linesLayout === 'inlineEditable'
+          // ETP-5332 — `hideHeader` is the add-row companion table, and it is the one case
+          // that DOES run out of room: its columns now hold their own basis (see
+          // growColumnWidth) so the table can be wider than the dialog it sits in. It needs
+          // the real scrolling wrapper for that width to be reachable. Every other
+          // inlineEditable mount keeps the forced `overflow-visible` below.
+          linesLayout === 'inlineEditable' && !hideHeader
             ? '[&>div]:!overflow-visible'
             // ETP-5268 follow-up — the hand-built thumb below is the ONLY
             // horizontal scrollbar this wrapper ever shows (see its own doc
@@ -3215,7 +3299,7 @@ export function DataTable({
           rowHoverStyle === 'elevated' ? 'pb-6' : '',
         ].filter(Boolean).join(' ')}
       >
-        <Table style={getTableContainerStyle()} data-testid="Table__eb5261">
+        <Table style={getTableContainerStyle(hideHeader ? fixedColsTotalPx + growColsBasisPx : 0)} data-testid="Table__eb5261">
           {/* When hideHeader is true (add-row-only mode), or the header just moved out to
               StickyHeaderRow above, a <colgroup> drives column widths instead of the (now
               absent-from-this-table, or hidden) header row's own cell widths. */}

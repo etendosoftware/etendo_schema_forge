@@ -219,77 +219,6 @@ async function fillNewContactForm(page, { name, email }) {
   }
 }
 
-/**
- * Fill the "NIF" field in the "Nuevo contacto" modal (CreateContactModal.jsx /
- * EntityCreationModal.jsx — renamed from "CIF/NIF", ETP-4992).
- *
- * Anchored to a <label> and matched exactly so it does not also match the
- * "NIF" <option> inside the sibling "Clave NIF país residencia" select. The
- * field is required, so EntityCreationModal.jsx appends a trailing "*" span
- * to the label's own textContent ("NIF*", no space) — tolerate that (and
- * incidental whitespace) without loosening the anchor enough to match "NIF"
- * inside unrelated longer labels.
- */
-async function fillNifField(page, value) {
-  const taxIdLabel = page.locator('label', { hasText: /^nif\s*\*?$/i });
-  const taxIdInput = taxIdLabel.locator('xpath=following::input[1]');
-  await taxIdInput.fill(value);
-}
-
-/**
- * Fill the Dirección tab of the "Nuevo contacto" modal — the section rendered by
- * AddressSection.jsx, shared by the company and Persona flows below.
- *
- * Also the ETP-5103 checkpoints for this popup: País opens preselected with
- * Spain (CP-1) and stays changeable through the picker (CP-2), and "Primera
- * línea" is mandatory, so Guardar cannot enable until it is filled (CP-3/CP-4).
- *
- * The `\*?` in both label regexes is required: since ETP-5103 the label renders
- * a mandatory asterisk inside the same element and Playwright matches getByText
- * against the full textContent. Do not "clean up" the `\*?`.
- */
-async function fillNewContactAddress(page, addressLine) {
-  const primeraLabel = page.getByText(/^primera l[ií]nea\s*\*?$/i);
-  await primeraLabel.locator('xpath=following::input[1]').fill(addressLine);
-
-  // Unlike the Contacts window's own address modal (LocationEditorModal.jsx),
-  // this picker button carries no aria-haspopup — it is just the button in the field.
-  const paisButton = page.getByText(/^pa[ií]s\s*\*?$/i).locator('..').locator('button');
-
-  // CP-1. The catalog is paged through in full before the default can resolve,
-  // so give it room on a real backend.
-  await expect(paisButton).toHaveText(/espa[nñ]a|spain/i, { timeout: 20_000 });
-
-  // CP-2 — the preselection does not lock the field. The option MUST be scoped
-  // to the picker overlay: now that the FIELD button also reads "España", an
-  // unscoped locator resolves to it instead of the option row, and since the
-  // field sits behind the overlay the click burns its timeout on intercepted
-  // pointer events (the same failure ETP-5103 already fixed for the other modal
-  // above).
-  //
-  // Two guards, because each alone is ambiguous. `div.fixed.inset-0` is not
-  // enough: EntityCreationModal's own overlay carries that exact class pair
-  // (z-50, EntityCreationModal.jsx:565) and, being an ANCESTOR of the picker,
-  // it satisfies a `has: <search box>` filter too — both resolve, and `.first()`
-  // takes the outer one, which is where the field button lives. `z-[60]` alone
-  // is not enough either: other full-screen overlays share that tier
-  // (RowQuickActions, InvoicePaymentHistoryModal). Only the intersection —
-  // the z-[60] overlay that CONTAINS the country search box — is the picker.
-  await paisButton.click();
-  const countryPicker = page
-    .locator('div[class*="z-[60]"]')
-    .filter({ has: page.getByPlaceholder(/buscar pa[ií]s/i) });
-  const countrySearch = countryPicker.getByPlaceholder(/buscar pa[ií]s/i);
-  await expect(countrySearch).toBeVisible({ timeout: 5_000 });
-  await countrySearch.fill(COUNTRY_SEARCH_TERM);
-
-  const countryOption = countryPicker.getByRole('button', { name: /^espa[nñ]a$/i })
-    .or(countryPicker.getByRole('button', { name: /^spain$/i }));
-  await expect(countryOption.first()).toBeVisible({ timeout: 5_000 });
-  await countryOption.first().click();
-}
-
-
 test.describe('Contacts Integration — Full journey', () => {
   test.skip(!RUN_INTEGRATION, 'Requires real Etendo backend (E2E_USE_MOCK=0 + E2E_PASSWORD)');
   test.setTimeout(180_000);
@@ -927,8 +856,11 @@ test.describe('Contacts Integration — Full journey', () => {
   // selector must succeed. Root cause was a backend defaults/coercion bug
   // (BusinessPartner.invoiceGrouping, a List-reference column, was mangled
   // to "0" instead of its real AD_Ref_List code) — unrelated to anything the
-  // frontend sends, but this modal (via CreateContactModal.jsx) is the exact
-  // entry point that surfaced it, so the regression test lives here too.
+  // frontend sends, but the popup that has replaced this affordance (the real
+  // Contacts window, mounted via `RecordCreateModal` — ETP-5332 deleted the
+  // hand-rolled `CreateContactModal`/`EntityCreationModal` that used to sit
+  // here) is still the exact entry point that surfaced it, so the regression
+  // test stays anchored to that entry point.
   // ═══════════════════════════════════════════════════════════════════════
   test('ETP-4700 — create contact from Sales Order "Contacto" selector modal', async ({ page }) => {
     const ts = Date.now();
@@ -957,49 +889,50 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(createContactBtn).toBeVisible({ timeout: 10_000 });
     await createContactBtn.click();
 
-    // "Nuevo contacto" modal
+    // "Nuevo contacto" modal — now `RecordCreateModal` mounting the REAL Contacts
+    // window (`EmbeddedWindowRoute`), not the deleted hand-rolled modal.
+    const dialog = page.getByTestId('record-create-modal');
     await expect(page.getByRole('heading', { name: /^nuevo contacto$/i })).toBeVisible({ timeout: 10_000 });
+    await expect(dialog.getByTestId('record-create-window')).toBeVisible({ timeout: 15_000 });
 
-    // Razón social (plain text field — label and input are siblings, no htmlFor)
-    const razonSocialLabel = page.getByText(/^raz[oó]n social/i);
-    const razonSocialInput = razonSocialLabel.locator('xpath=following::input[1]');
+    // Razón social — direct data-testid on the input (EntityForm's default text
+    // renderer), field key `name` (decisions.json).
+    const razonSocialInput = dialog.getByTestId('field-name');
+    await expect(razonSocialInput).toBeVisible({ timeout: 10_000 });
     await razonSocialInput.fill(CONTACT_NAME);
 
-    // Categoría de contacto (required dynamic select). DynamicSelect never
-    // forwards its data-testid prop to the underlying <select> (EntityCreationModal.jsx),
-    // so locate it via the label like the plain text fields above.
-    const categoryLabel = page.getByText(/^categor[ií]a de contacto/i);
-    const categorySelect = categoryLabel.locator('xpath=following::select[1]');
-    await expect(categorySelect).toBeVisible({ timeout: 5_000 });
-    await categorySelect.selectOption({ index: 1 });
+    // Categoría de contacto (`businessPartnerCategory`) is deliberately left
+    // untouched: it carries a SQL-macro `defaultValue` in decisions.json and
+    // resolves from the backend's `/businessPartner/defaults` response, exactly
+    // like `fillNewContactForm` above (used by the already-passing first test
+    // in this file) already relies on for the same field.
+    await ensureTaxIdKeySelected(page);
 
-    // Clave NIF país residencia (required dynamic select — not listed by the
-    // reporter but enforced by requiredFields in CreateContactModal.jsx)
-    const taxIdTypeLabel = page.getByText(/^clave nif pa[ií]s residencia/i);
-    const taxIdTypeSelect = taxIdTypeLabel.locator('xpath=following::select[1]');
-    await expect(taxIdTypeSelect).toBeVisible({ timeout: 5_000 });
-    await taxIdTypeSelect.selectOption({ index: 1 });
+    // NIF — direct data-testid, field key `taxID`.
+    const taxIdInput = dialog.getByTestId('field-taxID');
+    await expect(taxIdInput).toBeVisible({ timeout: 5_000 });
+    await taxIdInput.fill(TAX_ID);
 
-    // NIF (see fillNifField's own doc comment for the anchoring rationale)
-    await fillNifField(page, TAX_ID);
-
-    // Dirección tab (active by default) — Primera línea and País are both
-    // mandatory here, so Guardar cannot enable until this runs.
-    const saveContactBtn = page.getByRole('button', { name: /^guardar contacto$/i });
-    await expect(saveContactBtn).toBeDisabled();
-    await fillNewContactAddress(page, `E2E Address ${ts}`);
-
-    // Guardar contacto
-    await expect(saveContactBtn).toBeEnabled({ timeout: 5_000 });
+    // Save the embedded window itself (its own "Guardar", `action-save`).
+    // Scoped to the dialog: the Sales Order page behind it stays mounted with
+    // its OWN `action-save` button, so an unscoped locator would be ambiguous.
+    const embeddedSaveBtn = dialog.getByTestId('action-save');
+    await expect(embeddedSaveBtn).toBeEnabled({ timeout: 10_000 });
     const createBpResponse = page.waitForResponse(
       (resp) => resp.url().includes('/businessPartner') && resp.request().method() === 'POST',
       { timeout: 15_000 },
     );
-    await saveContactBtn.click();
-    const bpResponse = await createBpResponse;
+    const [bpResponse] = await Promise.all([createBpResponse, embeddedSaveBtn.click()]);
 
     // The core regression check: creation must succeed (2xx), not 400
     expect(bpResponse.status(), await bpResponse.text().catch(() => '')).toBeLessThan(300);
+
+    // "Completado" stays disabled until the embedded window has actually saved
+    // and navigated from /contacts/new to a real id — that state change is the
+    // real signal the create landed, not just the POST response above.
+    const finishBtn = dialog.getByTestId('record-create-finish');
+    await expect(finishBtn).toBeEnabled({ timeout: 15_000 });
+    await finishBtn.click();
 
     // No inline error banner, modal closes, and the new contact is now selected
     await expect(page.getByRole('heading', { name: /^nuevo contacto$/i })).toBeHidden({ timeout: 10_000 });
@@ -1009,10 +942,9 @@ test.describe('Contacts Integration — Full journey', () => {
   });
 
   // Same regression as above, but for contactType='person' — Nombre/Apellido
-  // replace Razón social, and the header grid gains a 4th required field
-  // (see CreateContactModal.jsx requiredFields for 'person'). The underlying
-  // bug is backend-side and type-agnostic, but this exercises the other field
-  // set end to end instead of assuming it behaves the same untested.
+  // replace Razón social. The underlying bug is backend-side and type-agnostic,
+  // but this exercises the other field set end to end instead of assuming it
+  // behaves the same untested.
   test('ETP-4700 — create Persona contact from Sales Order "Contacto" selector modal', async ({ page }) => {
     const ts = Date.now();
     // Kept short: BusinessPartner.searchKey (auto-derived server-side from
@@ -1043,65 +975,52 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(createContactBtn).toBeVisible({ timeout: 10_000 });
     await createContactBtn.click();
 
+    const dialog = page.getByTestId('record-create-modal');
     await expect(page.getByRole('heading', { name: /^nuevo contacto$/i })).toBeVisible({ timeout: 10_000 });
+    await expect(dialog.getByTestId('record-create-window')).toBeVisible({ timeout: 15_000 });
 
-    // Switch to Persona mode (the toggle button — not the "Persona" tab further
-    // down the modal, which shares the same visible text; the toggle renders
-    // first in the modal, hence .first()).
-    const personaToggle = page.getByRole('button', { name: /^persona$/i }).first();
+    // Switch to Persona mode. `ContactTypeToggle` renders a real <input
+    // type="radio"> inside a <label> — not a <button> — so this must be matched
+    // by text, same proven locator the already-passing first test in this file
+    // uses against this exact component (scoped to the dialog here since the
+    // Sales Order page behind it renders no such text).
+    const personaToggle = dialog.getByText(/^persona$/i).first();
     await personaToggle.click();
 
     // Nombre / Apellido replace Razón social in Persona mode. The toggle
-    // remounts the header field grid (different field ids per contactType),
-    // so wait for the new field to actually be visible before acting on it —
-    // combining click + immediate fill() raced the remount in practice.
-    //
-    // All tabs stay mounted in the DOM at all times (hidden via display:none,
-    // never unmounted — see EntityCreationModal.jsx's tab-content render), so
-    // a loose "starts with Nombre" match also hits "Nombre del banco" (Cuenta
-    // bancaria tab) and the unmarked "Nombre" column header (Persona de
-    // contacto tab). Only the required header field carries the trailing "*"
-    // in its own label text, so match that exactly to stay unique.
-    const firstNameLabel = page.getByText('Nombre*', { exact: true });
-    const firstNameInput = firstNameLabel.locator('xpath=following::input[1]');
+    // remounts the header field grid, so wait for the new fields to actually be
+    // visible before acting on them.
+    const firstNameInput = dialog.getByTestId('field-etgoFirstname');
     await expect(firstNameInput).toBeVisible({ timeout: 10_000 });
     await firstNameInput.fill(FIRST_NAME);
 
-    const lastNameLabel = page.getByText('Apellido*', { exact: true });
-    const lastNameInput = lastNameLabel.locator('xpath=following::input[1]');
+    const lastNameInput = dialog.getByTestId('field-etgoLastname');
     await expect(lastNameInput).toBeVisible({ timeout: 5_000 });
     await lastNameInput.fill(LAST_NAME);
 
-    // Categoría de contacto
-    const categoryLabel = page.getByText(/^categor[ií]a de contacto/i);
-    const categorySelect = categoryLabel.locator('xpath=following::select[1]');
-    await expect(categorySelect).toBeVisible({ timeout: 5_000 });
-    await categorySelect.selectOption({ index: 1 });
+    // Categoría de contacto — left to the backend default, same as the company
+    // flow above.
+    await ensureTaxIdKeySelected(page);
 
-    // Clave NIF país residencia
-    const taxIdTypeLabel = page.getByText(/^clave nif pa[ií]s residencia/i);
-    const taxIdTypeSelect = taxIdTypeLabel.locator('xpath=following::select[1]');
-    await expect(taxIdTypeSelect).toBeVisible({ timeout: 5_000 });
-    await taxIdTypeSelect.selectOption({ index: 1 });
+    // NIF
+    const taxIdInput = dialog.getByTestId('field-taxID');
+    await expect(taxIdInput).toBeVisible({ timeout: 5_000 });
+    await taxIdInput.fill(TAX_ID);
 
-    // NIF (see fillNifField's own doc comment for the anchoring rationale)
-    await fillNifField(page, TAX_ID);
-
-    // Dirección tab — same mandatory pair as the company flow above.
-    const saveContactBtn = page.getByRole('button', { name: /^guardar contacto$/i });
-    await expect(saveContactBtn).toBeDisabled();
-    await fillNewContactAddress(page, `E2E Address ${ts}`);
-
-    // Guardar contacto
-    await expect(saveContactBtn).toBeEnabled({ timeout: 5_000 });
+    // Save the embedded window, scoped to the dialog for the same reason as above.
+    const embeddedSaveBtn = dialog.getByTestId('action-save');
+    await expect(embeddedSaveBtn).toBeEnabled({ timeout: 10_000 });
     const createBpResponse = page.waitForResponse(
       (resp) => resp.url().includes('/businessPartner') && resp.request().method() === 'POST',
       { timeout: 15_000 },
     );
-    await saveContactBtn.click();
-    const bpResponse = await createBpResponse;
+    const [bpResponse] = await Promise.all([createBpResponse, embeddedSaveBtn.click()]);
 
     expect(bpResponse.status(), await bpResponse.text().catch(() => '')).toBeLessThan(300);
+
+    const finishBtn = dialog.getByTestId('record-create-finish');
+    await expect(finishBtn).toBeEnabled({ timeout: 15_000 });
+    await finishBtn.click();
 
     await expect(page.getByRole('heading', { name: /^nuevo contacto$/i })).toBeHidden({ timeout: 10_000 });
     await expect(page.locator('.bg-destructive').filter({ hasText: /error/i })).toHaveCount(0);
