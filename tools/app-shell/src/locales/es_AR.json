@@ -19820,6 +19820,7 @@
     "vendorBlockField": "Bloquear",
     "saveContact": "Guardar contacto",
     "createContactError": "Error al crear el contacto",
+    "createContactWindowHint": "Guardá el contacto en la ventana de arriba y después finalizá.",
     "contactPersonNameRequired": "Nombre o apellido es obligatorio para persona",
     "noFinancialData": "Sin datos financieros",
     "customerBlockField": "Bloquear",

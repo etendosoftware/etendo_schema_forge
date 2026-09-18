@@ -20454,6 +20454,7 @@
     "saveContact": "Save contact",
     "contactDeleteSuccess": "Contact deleted successfully",
     "createContactError": "Error creating contact",
+    "createContactWindowHint": "Save the contact in the window above, then finish.",
     "contactPersonNameRequired": "First name or last name is required for person",
     "noFinancialData": "No financial data",
     "customerBlockField": "Block",
