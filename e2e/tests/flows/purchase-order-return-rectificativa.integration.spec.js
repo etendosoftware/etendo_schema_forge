@@ -306,11 +306,23 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       await slow(page);
 
       // Verify: doc type reads as rectificativa. "Tipo de documento" (transactionDocument)
-      // renders as a disabled <input> (EntityForm's renderReadOnlyFk), so its value must be
-      // read via toHaveValue — getByText only matches rendered text content, never an
-      // input's value, so it can never see this field regardless of backend correctness.
-      await expect(page.getByTestId('field-transactionDocument').locator('input'))
-        .toHaveValue(/rectificativ/i, { timeout: 15_000 });
+      // is a DocumentType-reference FK, so EntityForm renders it two different ways
+      // depending on readOnlyLogic: a disabled <input> (renderReadOnlyFk) when the
+      // record is locked, or a Radix SelectTrigger <button> with the label as rendered
+      // text (SelectorInput's `field-${key}` testid, ETP-4600) when it's editable. Since
+      // ETP-5274 this field's readOnlyLogic is `@Processed@='Y'`, and the invoice created
+      // here is left in Borrador (not processed), so it renders editable — but read the
+      // value generically instead of assuming either shape, since a future readOnlyLogic
+      // change (or a differently-processed fixture) could flip it back.
+      const docTypeField = page.getByTestId('field-transactionDocument');
+      await expect(docTypeField).toBeVisible({ timeout: 15_000 });
+      await expect(async () => {
+        const input = docTypeField.locator('input');
+        const displayedValue = (await input.count()) > 0
+          ? await input.inputValue()
+          : await docTypeField.innerText();
+        expect(displayedValue).toMatch(/rectificativ/i);
+      }).toPass({ timeout: 15_000 });
 
       // Verify: line quantity is NEGATIVE (ETP-4737 sign-asymmetry regression). This
       // window's line grid is not a semantic <table> — rows render as

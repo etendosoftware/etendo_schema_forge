@@ -7,6 +7,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 
 // Paths below are relative to THIS test file (__tests__/).
@@ -63,7 +64,7 @@ vi.mock('../../../FmTabContent.jsx', () => ({
 }));
 
 vi.mock('lucide-react', () => ({
-  ArrowLeft: () => null,
+  Save: () => null,
   Download: () => null,
   FileDown: () => null,
   Play: () => null,
@@ -273,6 +274,31 @@ describe('Bug 2 — liveOperators syncs when decl._precomputed changes', () => {
     // KpiWidget index 0 = operators count; with 1 fallback operator → "1"
     const kpiValues = document.querySelectorAll('.test-kpi-value');
     expect(kpiValues[0].textContent).toBe('1');
+  });
+});
+
+// ── Toolbar actions (ETP-5338) ───────────────────────────────────────────────
+//
+// 349's final toolbar has exactly two actions: "Cancelar" on the left (delegates
+// straight to onBack) and "Guardar" on the right (a deliberate no-op confirmation,
+// see FmModel349Page.render.vitest.jsx for its dedicated coverage). The go-back
+// icon button that used to sit next to Cancelar was removed — it was functionally
+// identical to Cancelar and became redundant once Guardar was added.
+describe('FmModel349Page — toolbar actions (ETP-5338)', () => {
+  it('renders no go-back button', () => {
+    const decl = makeDecl();
+    render(<FmModel349Page decl={decl} {...defaultProps} />);
+    expect(document.querySelector('[data-testid="FmModel349Page__goBack"]')).toBeNull();
+  });
+
+  it('calls onBack when Cancelar is clicked', () => {
+    const onBack = vi.fn();
+    const decl = makeDecl();
+    render(<FmModel349Page decl={decl} {...defaultProps} onBack={onBack} />);
+    const cancelBtn = Array.from(document.querySelectorAll('button'))
+      .find(b => b.textContent.includes('fm.action.cancel'));
+    fireEvent.click(cancelBtn);
+    expect(onBack).toHaveBeenCalledTimes(1);
   });
 });
 

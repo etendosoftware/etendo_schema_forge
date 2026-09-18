@@ -283,10 +283,11 @@ function PaymentHistoryBody({
   handleRetryClick,
   isCreditInstrument,
   currency,
+  bodyMinHeight,
 }) {
   if (loading) {
     return (
-      <div data-testid="InvoicePaymentHistoryModal__skeleton">
+      <div data-testid="InvoicePaymentHistoryModal__skeleton" style={{ minHeight: bodyMinHeight, boxSizing: 'border-box' }}>
         <div style={{ display: 'grid', gridTemplateColumns: grid, gap: 12, padding: '8px 24px', borderBottom: '1px solid hsl(var(--border-subtle))' }}>
           <div style={headerCellStyle}>{ui('documentNo')}</div>
           <div style={headerCellStyle}>{ui('date')}</div>
@@ -317,7 +318,7 @@ function PaymentHistoryBody({
   if (payments.length === 0) {
     return (
       <div
-        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '36px 20px', gap: 10 }}
+        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '36px 20px', gap: 10, minHeight: bodyMinHeight, boxSizing: 'border-box' }}
         data-testid="InvoicePaymentHistoryModal__empty"
       >
         <div style={{ width: 48, height: 48, borderRadius: 8, background: 'hsl(var(--muted))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--text-disabled))', flexShrink: 0 }}>
@@ -336,7 +337,7 @@ function PaymentHistoryBody({
   }
 
   return (
-    <div>
+    <div style={{ minHeight: bodyMinHeight, boxSizing: 'border-box' }}>
       <div style={{ display: 'grid', gridTemplateColumns: grid, gap: 12, padding: '8px 24px', borderBottom: '1px solid hsl(var(--border-subtle))' }}>
         <div style={headerCellStyle}>{ui('documentNo')}</div>
         <div style={headerCellStyle}>{ui('date')}</div>
@@ -628,6 +629,15 @@ export default function InvoicePaymentHistoryModal({
   const GRID = 'minmax(120px, 1fr) 110px 170px 150px 110px 56px';
   const HCELL = { fontSize: 12, lineHeight: '16px', fontWeight: 600, color: 'hsl(var(--foreground))', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
 
+  // Stable floor for the payment-history body area (ETP-5253). The tallest of the three "small"
+  // states is the loading skeleton: header row (~16px content + 16px vertical padding + 1px border
+  // ≈ 33px) plus 3 skeleton rows (~24px content + 22px vertical padding + 1px border ≈ 47px each
+  // ≈ 141px) — about 174px total. Rounded up with a small buffer so the empty state and a populated
+  // list with few rows never render shorter than the loading state, which is what made the modal
+  // visibly resize between them. It is only a floor, not a fixed height: a populated list with many
+  // rows still grows past it and scrolls via the `overflow-y-auto` wrapper in the parent.
+  const BODY_MIN_HEIGHT = 200;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30"
@@ -712,6 +722,7 @@ export default function InvoicePaymentHistoryModal({
             handleRetryClick={handleRetryClick}
             isCreditInstrument={isCreditInstrument}
             currency={currency}
+            bodyMinHeight={BODY_MIN_HEIGHT}
             data-testid="PaymentHistoryBody__b82d4f" />
         </div>
 

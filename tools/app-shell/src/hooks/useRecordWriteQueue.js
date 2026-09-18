@@ -45,7 +45,16 @@ import { useCallback, useEffect, useRef } from 'react';
  *    caller has also usually put the field back to a known value by then (a rollback or a
  *    refetch), and writing on top of that would undo its own repair. Return nothing (or anything
  *    other than `false`) to flush normally.
- * 4. **The replay is abandoned on unmount**, so a queued write cannot fire into a torn-down tree.
+ * 4. **No write starts after unmount**, so nothing can fire into a torn-down tree — whether it
+ *    is a queued replay armed from inside `persist`'s own `finally` block, or a fully independent
+ *    call to `persist` arriving later from the caller's own code (ETP-5338: a caller like
+ *    `FmModel303Page.persistEditableFields` that awaits `waitUntilIdle` before building and
+ *    flushing its own snapshot resumes that await AFTER unmount when the write it was waiting on
+ *    settles post-unmount — `persist` is called again from that resumed code, and it is not a
+ *    replay the hook armed itself, so the finally-block's own `mountedRef.current` check does not
+ *    cover it. Checking `mountedRef.current` at `persist`'s own entry point closes this for that
+ *    call AND for every other caller shaped the same way, without each caller having to guard it
+ *    itself).
  *
  * What it does NOT do, because these differ legitimately between panels and folding them in would
  * make it fit one caller and bend the other three:
@@ -71,6 +80,25 @@ export function useRecordWriteQueue({ write }) {
    * replays only its latest value.
    */
   const queuedRef = useRef({});
+  /**
+   * Per record, the promise of whichever write call is CURRENTLY open — the original one, or,
+   * once a replay starts, the replay's own promise. Reassigned every time `persist` actually
+   * invokes `writeRef.current`, including from inside its own `finally` block when it replays a
+   * queued edit. This is what `waitUntilIdle` below re-reads on every loop iteration instead of
+   * closing over one promise reference, which is what let a caller (`FmModel303Page`) observe a
+   * stale promise across the exact tick a replay starts (see `waitUntilIdle`'s comment).
+   */
+  const inFlightPromiseRef = useRef({});
+  /**
+   * Per record, true while a QUEUED BATCH (one or more field keys coalesced during the previous
+   * write) is being replayed. Set once, before the replay `for` loop below starts, and cleared
+   * once, after the ENTIRE loop exits — never per entry. `persist`'s own finally clears
+   * `inFlightRef`/`queuedRef` for each individual replayed field between iterations, so between
+   * replaying field N and starting field N+1 there is a real tick where both of those are falsy
+   * even though the batch is not done. This ref is the marker that stays true across that tick,
+   * and it is what closes the multi-field-key gap in `waitUntilIdle` below (ETP-5338).
+   */
+  const replayInProgressRef = useRef({});
   const mountedRef = useRef(true);
   const writeRef = useRef(write);
 
@@ -81,6 +109,13 @@ export function useRecordWriteQueue({ write }) {
 
   const persist = useCallback(async function persist(recordId, fieldKey, value) {
     if (recordId == null || recordId === '') return;
+    // ETP-5338 — the owning component has already unmounted. Refuse to START a new write at all,
+    // whether this call is a fresh request from the caller's own code (see point 4 above) or a
+    // queued replay reaching this point from the `finally` block below. An ALREADY-open write
+    // (one that got past this check before unmount) is left alone — it is too late to stop the
+    // request that is already in flight, and the `finally` block's own `mountedRef.current` check
+    // still stops IT from replaying anything queued behind it.
+    if (!mountedRef.current) return;
     const key = String(recordId);
 
     if (inFlightRef.current[key]) {
@@ -89,9 +124,14 @@ export function useRecordWriteQueue({ write }) {
     }
 
     inFlightRef.current[key] = true;
+    // Recorded synchronously, before the await below yields, so a concurrent `waitUntilIdle`
+    // reading `inFlightPromiseRef.current[key]` always sees the promise that matches the
+    // `inFlightRef` flag it just observed as true.
+    const writePromise = writeRef.current({ recordId, fieldKey, value });
+    inFlightPromiseRef.current[key] = writePromise;
     let discardQueued = false;
     try {
-      discardQueued = (await writeRef.current({ recordId, fieldKey, value })) === false;
+      discardQueued = (await writePromise) === false;
     } catch (err) {
       // An exception says nothing survived that we can reason about, so the queue goes with it —
       // and the throw is re-raised, because swallowing it here is how the original bug stayed
@@ -107,17 +147,74 @@ export function useRecordWriteQueue({ write }) {
       delete queuedRef.current[key];
       if (queued && !discardQueued && mountedRef.current) {
         const entries = Object.entries(queued);
-        // Sequential: each awaits the previous, so the replay can never overlap. `.catch` because
-        // there is no call site left to surface a rejection to (a 401 throws out of `apiFetch`)
-        // and an unhandled rejection here is reported as an app error.
-        for (const [queuedField, queuedValue] of entries) {
-          await persist(recordId, queuedField, queuedValue).catch(() => {});
+        // Only the call that ARMS the batch marker is allowed to clear it. A recursive `persist`
+        // call made from inside this same loop (replaying `queuedField`) can itself land back in
+        // this exact `finally` block if a further edit was coalesced while it was writing — that
+        // nested call must not clear the marker out from under the batch it belongs to.
+        const ownsBatch = !replayInProgressRef.current[key];
+        if (ownsBatch) replayInProgressRef.current[key] = true;
+        try {
+          // Sequential: each awaits the previous, so the replay can never overlap. `.catch`
+          // because there is no call site left to surface a rejection to (a 401 throws out of
+          // `apiFetch`) and an unhandled rejection here is reported as an app error.
+          for (const [queuedField, queuedValue] of entries) {
+            await persist(recordId, queuedField, queuedValue).catch(() => {});
+          }
+        } finally {
+          if (ownsBatch) delete replayInProgressRef.current[key];
         }
       }
     }
   }, []);
 
-  return { persist };
+  /**
+   * Resolves once a record has NO write in flight and NOTHING queued behind it — i.e. truly
+   * idle, not just "the write I happened to capture a reference to has settled".
+   *
+   * ## Why a loop, and not a single `await` of the current in-flight promise
+   *
+   * `persist`'s own replay logic (in its `finally` block, above) can reassign
+   * `inFlightPromiseRef.current[key]` to a NEW promise in the exact same microtask turn that the
+   * PREVIOUS promise for that key settles — that's precisely what happens when a queued edit
+   * starts replaying. A caller that captured the old promise by value before awaiting it (as
+   * `FmModel303Page`'s `handleGoBack` used to, via its own `manualDataInFlight` ref) can resume
+   * from that await in a tick where the record looks free but a replay has already been armed
+   * under a promise it never saw. Whether that interleaving is actually reachable from a real
+   * click depends on unwritten assumptions about microtask scheduling order — this bug class has
+   * shipped twice on this exact file (ETP-5338), so this hook now closes it structurally instead
+   * of relying on that.
+   *
+   * The fix is to never trust a promise reference captured before the loop body starts: re-read
+   * `inFlightRef`/`queuedRef` AFTER every await, and keep looping until both are clear. Any
+   * replay armed mid-wait is picked up on the next iteration because it is read fresh, not
+   * because of the order two continuations happen to run in.
+   *
+   * That closes the single-key case, but a SECOND gap exists when the queue holds more than one
+   * field key for the record (e.g. a caller like `ProductPriceBar` persisting `standardPrice` and
+   * `listPrice` on the same row): `persist`'s replay `for` loop clears `inFlightRef`/`queuedRef`
+   * for the whole record in between replaying entry N and starting entry N+1, even though entry
+   * N+1 is already queued to fire. Checking only `inFlightRef`/`queuedRef` would let this loop
+   * exit in exactly that tick, before the batch is actually done. `replayInProgressRef` (armed
+   * once before the replay loop starts, cleared once after the whole loop exits — see `persist`'s
+   * `finally` block) stays true across that tick, so it is included below as a third condition.
+   */
+  const waitUntilIdle = useCallback(async function waitUntilIdle(recordId) {
+    if (recordId == null || recordId === '') return;
+    const key = String(recordId);
+    while (inFlightRef.current[key] || queuedRef.current[key] || replayInProgressRef.current[key]) {
+      const promise = inFlightPromiseRef.current[key];
+      if (promise) {
+        await promise.catch(() => {});
+      } else {
+        // Something is queued but the write that will replay it hasn't been armed yet (still
+        // inside the owning `persist()` call's synchronous continuation) — yield one microtask
+        // and re-check rather than busy-looping past it.
+        await Promise.resolve();
+      }
+    }
+  }, []);
+
+  return { persist, waitUntilIdle };
 }
 
 export default useRecordWriteQueue;

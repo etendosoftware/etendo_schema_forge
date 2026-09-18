@@ -28,6 +28,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { inspectAdCache, formatCacheHealth } from './lib/ad-cache-health.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -730,6 +731,24 @@ export function classifyModules({ profile, dirEntries, probes, unpinnedPolicy })
   };
 }
 
+/**
+ * Find the newest preserved checkout for a module parked by a previous align
+ * run. Parking names are intentionally opaque to the parity logic: the
+ * module name is the stable part and everything after the first dot is a
+ * version/run suffix. This keeps old and new parking formats usable.
+ *
+ * @param {string} moduleName
+ * @param {string[]} parkedEntries immediate directory names under .modules-disabled
+ * @returns {string|null} the selected parked directory name
+ */
+export function findParkedModule(moduleName, parkedEntries = []) {
+  const prefix = `${moduleName}.`;
+  const candidates = parkedEntries
+    .filter((entry) => entry === moduleName || entry.startsWith(prefix))
+    .sort((a, b) => b.localeCompare(a));
+  return candidates[0] || null;
+}
+
 // ---------------------------------------------------------------------------
 // PURE: gradle.properties handling
 // ---------------------------------------------------------------------------
@@ -914,7 +933,7 @@ export function assertSidGuard({ targetSid, localSid, allowLocalSid }) {
  *   blocked?: boolean, reason?: string}>}
  */
 export function buildAlignPlan({
-  rows, profile, coreDir, gitBranch, branchPolicy, timestamp,
+  rows, profile, coreDir, gitBranch, branchPolicy, timestamp, parkedEntries = [],
 }) {
   const steps = [];
   const modulesDir = path.join(coreDir, 'modules');
@@ -1013,6 +1032,17 @@ export function buildAlignPlan({
     if (row.status === 'MISSING') {
       const mod = requiredByName.get(row.name);
       const ungrounded = mod.branchPolicySource === 'ungrounded';
+      const parked = findParkedModule(row.name, parkedEntries);
+      if (parked) {
+        steps.push({
+          kind: 'restore',
+          description: `RESTORE ${row.name} from previous parking (${parked})`,
+          commands: [`mv ${path.join(parkDir, parked)} ${path.join(modulesDir, row.name)}`],
+          cwd: coreDir,
+          reason: `${row.reason} A preserved checkout was found; restore it instead of cloning.`,
+        });
+        continue;
+      }
       steps.push({
         kind: 'clone',
         description: ungrounded
@@ -1428,6 +1458,7 @@ export function parseArgs(argv) {
     dryRun: process.env.DRY_RUN !== '0',
     allowLocalSid: process.env.ALLOW_LOCAL_SID === '1',
     noFetch: process.env.NO_FETCH === '1',
+    checkCache: process.env.CHECK_CACHE === '1',
     json: process.env.JSON === '1',
     help: false,
   };
@@ -1439,6 +1470,7 @@ export function parseArgs(argv) {
     else if (a === '--dry-run') args.dryRun = argv[++i] !== '0';
     else if (a === '--allow-local-sid') args.allowLocalSid = true;
     else if (a === '--no-fetch') args.noFetch = true;
+    else if (a === '--check-cache') args.checkCache = true;
     else if (a === '--json') args.json = true;
     else if (a === '--help' || a === '-h') args.help = true;
     else throw new Error(`Unknown argument: ${a}`);
@@ -1471,6 +1503,7 @@ Options:
   --dry-run 0         ACTUALLY EXECUTE. Dry run is the default.
   --allow-local-sid   Permit a target sid equal to your local dev sid (destroys it)
   --no-fetch          Use cached remote refs; freshness may be stale (NO_FETCH=1)
+  --check-cache       Fail if the committed AD cache is missing or invalid
   --json              Machine-readable report (secrets redacted)
   -h, --help          This text
 
@@ -1488,6 +1521,12 @@ function listModuleDirs(modulesDir) {
     .filter((n) => !n.startsWith('.') && statSync(path.join(modulesDir, n)).isDirectory());
 }
 
+function listParkedEntries(parkDir) {
+  if (!existsSync(parkDir)) return [];
+  return readdirSync(parkDir)
+    .filter((n) => statSync(path.join(parkDir, n)).isDirectory());
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
@@ -1498,6 +1537,8 @@ function main() {
   const { config, configPath } = loadConfig();
   const { coreDir, layout } = resolveCoreDir(REPO_ROOT);
   const modulesDir = path.join(coreDir, 'modules');
+  const parkDir = path.join(coreDir, '.modules-disabled');
+  const parkedEntries = listParkedEntries(parkDir);
   const branchPolicy = config.branchPolicy;
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const logDir = path.join(REPO_ROOT, 'tmp', 'ci-parity', timestamp);
@@ -1606,11 +1647,18 @@ function main() {
   const localSid = props.get('bbdd.sid');
   const guard = assertSidGuard({ targetSid: args.sid, localSid, allowLocalSid: args.allowLocalSid });
 
+  // Cache health is reported alongside module parity so an offline drift
+  // result is never interpreted without knowing whether its AD snapshot is
+  // structurally usable. This is read-only; only --check-cache makes it a
+  // blocking precondition for this command.
+  const cachePath = process.env.SF_CACHE_PATH || path.join(REPO_ROOT, 'cli', 'cache', 'ad-snapshot');
+  const cache = inspectAdCache(cachePath);
+
   // --- plans ---------------------------------------------------------------
   const wants = (p) => args.phases.includes(p);
   const alignPlan = wants('align')
     ? buildAlignPlan({
-      rows: classification.rows, profile, coreDir, gitBranch, branchPolicy, timestamp,
+      rows: classification.rows, profile, coreDir, gitBranch, branchPolicy, timestamp, parkedEntries,
     })
     : [];
   const parity = buildParityGradleProperties(propsText, { sid: args.sid });
@@ -1618,7 +1666,9 @@ function main() {
   const installPlan = wants('install') && guard.ok ? buildInstallPlan({ coreDir, logDir }) : [];
 
   const needsGuard = wants('db') || wants('install');
-  const exitCode = (classification.blockers.length ? 1 : 0) || (needsGuard && !guard.ok ? 1 : 0);
+  const exitCode = (classification.blockers.length ? 1 : 0)
+    || (needsGuard && !guard.ok ? 1 : 0)
+    || (args.checkCache && !cache.trustworthy ? 1 : 0);
 
   // --- JSON output ---------------------------------------------------------
   if (args.json) {
@@ -1643,6 +1693,11 @@ function main() {
       counts: classification.counts,
       blockers: classification.blockers.map((b) => ({ name: b.name, status: b.status, reason: b.reason })),
       database: { target: args.sid, ...dbConfig, guard },
+      cache: {
+        ...cache,
+        required: args.checkCache,
+        actionRequired: !cache.trustworthy,
+      },
       phases: args.phases,
       plan: {
         align: alignPlan,
@@ -1676,6 +1731,11 @@ function main() {
     + (args.sidNormalized ? `  (normalized from "${args.sidRaw}" — PostgreSQL folds unquoted identifiers)` : '')
     + (String(localSid).toLowerCase() === args.sid ? '  <-- SAME AS LOCAL DEV SID' : ''));
   W(`  config      : ${path.relative(REPO_ROOT, configPath)}`);
+  W('');
+
+  W('-- AD CACHE ------------------------------------------------------------');
+  W(formatCacheHealth(cache));
+  if (args.checkCache && !cache.trustworthy) W('  [FAIL] --check-cache makes cache health a required precondition.');
   W('');
 
   W('-- HOST REPOS -----------------------------------------------------------');

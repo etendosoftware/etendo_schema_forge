@@ -77,7 +77,7 @@ vi.mock('../../../FmOverlays.jsx', () => ({
   ),
 }));
 vi.mock('lucide-react', () => ({
-  Settings: () => null, Download: () => null, OctagonAlert: () => null,
+  Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
   TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
   TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,
@@ -222,6 +222,64 @@ describe('FmModel303Page — action bar', () => {
     expect(computeBtn).toBeUndefined();
     expect(cancelBtn).toBeTruthy();
     expect(genBtn).toBeTruthy();
+  });
+});
+
+// ── Guardar button (ETP-5338 PIVOT) ─────────────────────────────────────────
+//
+// "Guardar" replaced the earlier "Volver" (go-back) button, which used to live next to
+// Cancelar on the left. Guardar itself lives in the right-aligned primary-action group
+// instead (leftmost of it, before "Calcular"/"Generar fichero 303"/"Registrar-Presentar"
+// — matching `saveActions.jsx`'s Save-before-Confirm convention), and unlike go-back it
+// does NOT unmount/navigate — it persists the pending manualData edit (via
+// `persistEditableFields`) and stays on the page. See FmModel303Page.jsx's `handleSave`
+// for the full rationale. These tests assert the button renders in the right-aligned
+// group (only while the declaration is not yet submitted — there is nothing left to save
+// once filed) and that clicking Cancelar still goes through `handleCancel` with no flush
+// at all — under the ETP-5338 redesign there is no more background autosave for it to
+// race against, so "no flush" plus unmounting on `onBack` IS the discard (Bug B fix); see
+// the dedicated Cancelar-discard test file for the full PUT-count assertion. The actual
+// Guardar/Calcular flush/feedback behavior (PUT fires with the latest value,
+// success/error toast) is covered end-to-end in FmModel303Page.save.vitest.jsx and
+// FmModel303Page.explicitSaveSingleFlight.vitest.jsx, which control the fetch double
+// needed to observe the PUT ordering.
+
+describe('FmModel303Page — Guardar button (ETP-5338 pivot)', () => {
+  it('renders Guardar in the right-aligned group, before Calcular', () => {
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    expect(screen.getByTestId('FmModel303Page__save')).toBeTruthy();
+    const btns = Array.from(document.querySelectorAll('button'));
+    expect(btns.some(b => b.textContent.includes('fm.action.cancel'))).toBe(true);
+    // Order in the DOM matches visual left-to-right order in this flex toolbar: Guardar
+    // must come before Calcular, not after — and Cancelar (unrelated, on the left) must
+    // still precede both.
+    const cancelIdx = btns.findIndex(b => b.textContent.includes('fm.action.cancel'));
+    const saveIdx = btns.findIndex(b => b.getAttribute('data-testid') === 'FmModel303Page__save');
+    const computeIdx = btns.findIndex(b => b.textContent.includes('fm.action.compute'));
+    expect(cancelIdx).toBeGreaterThanOrEqual(0);
+    expect(saveIdx).toBeGreaterThan(cancelIdx);
+    expect(computeIdx).toBeGreaterThan(saveIdx);
+  });
+
+  it('clicking Cancelar calls onBack via handleCancel, with no flush wiring added to it', () => {
+    const onBack = vi.fn();
+    render(<FmModel303Page decl={BASE_DECL} onBack={onBack} onStatusChange={vi.fn()} />);
+    const btns = Array.from(document.querySelectorAll('button'));
+    const cancelBtn = btns.find(b => b.textContent.includes('fm.action.cancel'));
+    fireEvent.click(cancelBtn);
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('is present for a draft declaration but not rendered for an already-submitted one', () => {
+    // `status` is component state seeded once from `decl.status` at mount (`useState`), so this
+    // asserts against two separately-mounted instances rather than a `rerender` — a rerender
+    // with a new `decl` prop does not re-seed that state, which would make this assertion pass
+    // for the wrong reason.
+    const { unmount } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    expect(screen.getByTestId('FmModel303Page__save')).toBeTruthy();
+    unmount();
+    render(<FmModel303Page decl={{ ...BASE_DECL, status: 'submitted' }} {...defaultProps} />);
+    expect(screen.queryByTestId('FmModel303Page__save')).toBeNull();
   });
 });
 

@@ -409,9 +409,15 @@ test.describe('Cash close (real backend)', () => {
       await expect(page.getByTestId('cash-close-unbalanced-note')).toBeVisible({ timeout: 10_000 });
     }
 
-    // `parseDeclaredAmount` reads "-47.96" as a decimal point (a single dot + 1-2 digits), so a
-    // plain toFixed(2) is locale-independent here.
-    await declaredInput.fill(calculated.toFixed(2));
+    // Typed in the UI locale (es-ES), which is what a real user enters and what the field now
+    // accepts. ETP-5107 made this a MaskedAmountInput, and its keystroke filter DROPS a typed
+    // '.' because mid-typing it cannot tell a decimal point from a thousands separator - the
+    // configured decimal separator is the only safe reading. A dot-decimal string therefore
+    // arrives as digits only: filling "-207636.00" showed "-20.763.600" and the drawer never
+    // balanced, which is exactly how this assertion failed. Verified live in the cash-close
+    // panel: with the comma form the declared balance matches the calculated one, the
+    // difference reads 0,00 EUR and the balanced pill appears.
+    await declaredInput.fill(calculated.toFixed(2).replace('.', ','));
 
     // The summary recomputes on every keystroke: declaring exactly the calculated balance zeroes
     // the difference and flips the panel to its balanced state.

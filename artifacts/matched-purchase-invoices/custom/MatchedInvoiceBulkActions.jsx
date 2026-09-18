@@ -4,7 +4,7 @@ import { useUI } from '@/i18n';
 /**
  * ETP-5075 — bulk accounting post/unpost from the Receipt-Invoice Link list view.
  *
- * Thin wrapper: all the UI (floating-bar button, "Confirmar" modal, the action dropdown,
+ * Thin wrapper: all the UI (floating-bar button, "Procesar" modal, the action dropdown,
  * the per-row `Promise.allSettled` loop and the ok/failed toast) is the shared
  * `BulkDocumentAction`. This file only supplies WHICH actions to offer and WHICH rows each
  * one may touch.
@@ -54,7 +54,7 @@ export default function MatchedInvoiceBulkActions(props) {
       actionMode="neoAction"
       buildActions={buildPostActions}
       rowFilter={rowFilter}
-      labelKey="confirmBulk"
+      labelKey="process"
     />
   );
 }

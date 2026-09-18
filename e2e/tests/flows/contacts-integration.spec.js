@@ -60,6 +60,20 @@ const RUN_INTEGRATION = process.env.E2E_USE_MOCK === '0' && !!(process.env.E2E_P
 const COUNTRY_SEARCH_TERM = 'spa';
 
 /** Wait for detail view fully loaded (spinner gone, data fetched). */
+/**
+ * Digits of an amount, separators stripped — the only shape that is comparable across instances.
+ *
+ * ETP-5328's `MaskedAmountInput` shows a GROUPED, 2-decimal string ("12.345,00"), so the old
+ * `Number(inputValue())` returns NaN, and the thousands/decimal characters themselves come from
+ * the instance's own currency-format config and cannot be hardcoded in a spec. Normalising both
+ * sides to bare digits compares the amount without asserting anything about separators. It does
+ * assume the idle display carries 2 decimals, which is what `formatCurrency()` guarantees.
+ */
+function digitsOf(amount) {
+  const raw = typeof amount === 'number' ? amount.toFixed(2) : String(amount);
+  return raw.replace(/\D/g, '');
+}
+
 async function waitForDetailReady(page) {
   await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
   // Only wait for spinner to disappear if it's actually visible
@@ -458,7 +472,11 @@ test.describe('Contacts Integration — Full journey', () => {
     await expect(financialTab).toBeVisible({ timeout: 5_000 });
     await financialTab.click();
 
-    const creditInput = page.locator('input[type="number"]').first();
+    // ETP-5328 moved this box to `MaskedAmountInput` (`type="text"` + `inputMode="decimal"`), so
+    // the old `input[type="number"]` selector matches NOTHING. That mattered more than a normal
+    // broken locator here: `creditVisible` would silently fall to `false` and the else-branch
+    // below would let this part pass without asserting anything at all.
+    const creditInput = page.getByTestId('CreditLimitStepperInput').first();
     const creditVisible = await creditInput.isVisible({ timeout: 3_000 }).catch(() => false);
 
     if (creditVisible) {
@@ -475,7 +493,7 @@ test.describe('Contacts Integration — Full journey', () => {
       await saveCreditP;
 
       await expect(async () => {
-        expect(Number(await creditInput.inputValue())).toBe(newCreditValue);
+        expect(digitsOf(await creditInput.inputValue())).toBe(digitsOf(newCreditValue));
       }).toPass({ timeout: 5_000 });
 
       // Reload and verify persistence
@@ -485,10 +503,10 @@ test.describe('Contacts Integration — Full journey', () => {
       const financialTabReload = page.getByRole('button', { name: /financiero|financial/i });
       await financialTabReload.click();
 
-      const reloadedCredit = page.locator('input[type="number"]').first();
+      const reloadedCredit = page.getByTestId('CreditLimitStepperInput').first();
       await expect(reloadedCredit).toBeVisible({ timeout: 5_000 });
       await expect(async () => {
-        expect(Number(await reloadedCredit.inputValue())).toBe(newCreditValue);
+        expect(digitsOf(await reloadedCredit.inputValue())).toBe(digitsOf(newCreditValue));
       }).toPass({ timeout: 5_000 });
     } else {
       // At least verify the Financial tab rendered content
