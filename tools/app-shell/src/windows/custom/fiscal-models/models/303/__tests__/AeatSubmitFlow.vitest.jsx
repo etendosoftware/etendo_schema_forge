@@ -334,17 +334,37 @@ describe('AeatSubmitFlow — IBAN pre-flight guard (ETP-4456, submit-flow parity
     expect(screen.queryByText('fm.aeat.error.ibanRequired')).not.toBeInTheDocument();
   });
 
-  it('blocks tipo=I when rectificativa is checked and bank_iban is empty (ETP-4456 follow-up fix)', async () => {
+  it('blocks tipo=I when rectificativa is checked, box 111 is non-zero and bank_iban is empty (ETP-4456 follow-up fix, narrowed by ETP-5393 Bug E)', async () => {
     // tipo I alone is not IBAN-required (EDID065 fix, see above), but a
-    // rectificativa filed under tipo I still shows the bank section (per
-    // fm303Layouts.js's datos_bancarios anyOf) — the pre-flight guard must
-    // widen to cover that case too, or an empty IBAN would round-trip to
-    // the backend for an untranslated 500 instead of failing fast here.
-    renderFlow({ identChecks: { tipo_declaracion: 'I', bank_iban: '', rectificativa: true } });
+    // rectificativa filed under tipo I with a non-zero box 111 still shows the
+    // bank section (per fm303Layouts.js's `_BANK_IBAN_REQUIRED_WHEN`) — the
+    // pre-flight guard must widen to cover that case too, or an empty IBAN
+    // would round-trip to the backend for an untranslated 500 instead of
+    // failing fast here.
+    renderFlow({
+      identChecks: { tipo_declaracion: 'I', bank_iban: '', rectificativa: true },
+      liveBoxes: [{ num: 111, value: 500 }],
+    });
     fireEvent.click(screen.getByText('fm.aeat.action.submit'));
 
     await waitFor(() => expect(screen.getByText('fm.aeat.error.ibanRequired')).toBeInTheDocument());
     expect(stableApiFetch).not.toHaveBeenCalled();
+  });
+
+  // ETP-5393 [B1 re-review] — reproduces the exact state Alex's rejection reported: the old
+  // guard tested only `identChecks?.rectificativa === true`, so a rectificativa with box 111
+  // === 0 (bank block correctly HIDDEN per the narrowed Bug E visibility) still blocked
+  // "Presentar" demanding an IBAN the user cannot even see. Must now proceed to submit.
+  it('does NOT block tipo=I when rectificativa is checked but box 111 is 0 (ETP-5393 [B1] regression)', async () => {
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'SUCCESS' }));
+    renderFlow({
+      identChecks: { tipo_declaracion: 'I', bank_iban: '', rectificativa: true },
+      liveBoxes: [{ num: 111, value: 0 }],
+    });
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+
+    await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('fm.aeat.error.ibanRequired')).not.toBeInTheDocument();
   });
 
   it('still does not block tipo=I when rectificativa is absent/false, even with an empty IBAN', async () => {

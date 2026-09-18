@@ -773,15 +773,18 @@ describe('NewDeclModal', () => {
       expect(selectedOption.getAttribute('aria-selected')).toBe('true');
     });
 
-    it('clicking a year option updates the trigger, closes the dropdown, and clicking outside also closes it', () => {
+    it('clicking the (sole) year option keeps it selected, closes the dropdown, and clicking outside also closes it', () => {
+      // ETP-5391: SELECTABLE_YEARS is now restricted to a single filing year, so there
+      // is no "other year" to switch to from the new-declaration dropdown anymore —
+      // this only re-selects the same option, which must still close the panel.
       const { container } = render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} />);
       openYearMenu(container);
       const options = getYearOptions(container);
-      const otherYear = options.find(o => !o.className.includes('fm-newdecl-year-option--selected'));
-      expect(otherYear).toBeTruthy();
-      const otherYearValue = otherYear.textContent.trim();
-      fireEvent.click(otherYear);
-      expect(getYearTrigger(container).textContent.trim()).toBe(otherYearValue);
+      const onlyYear = options.find(o => o.className.includes('fm-newdecl-year-option--selected'));
+      expect(onlyYear).toBeTruthy();
+      const onlyYearValue = onlyYear.textContent.trim();
+      fireEvent.click(onlyYear);
+      expect(getYearTrigger(container).textContent.trim()).toBe(onlyYearValue);
       expect(container.querySelector('.fm-newdecl-year-panel')).toBeNull();
 
       openYearMenu(container);
@@ -790,19 +793,32 @@ describe('NewDeclModal', () => {
       expect(container.querySelector('.fm-newdecl-year-panel')).toBeNull();
     });
 
-    it('selecting a different year is reflected in the footer preview and the onConfirm payload', () => {
+    it('selecting the sole available year is reflected in the footer preview and the onConfirm payload', () => {
       const onConfirm = vi.fn();
       const { container } = render(<NewDeclModal onConfirm={onConfirm} onClose={vi.fn()} />);
       openYearMenu(container);
       const options = getYearOptions(container);
-      const otherYear = Number(options.find(o => !o.className.includes('fm-newdecl-year-option--selected')).textContent.trim());
-      fireEvent.click(getYearOption(container, otherYear));
+      const theYear = Number(options[0].textContent.trim());
+      fireEvent.click(getYearOption(container, theYear));
 
       expect(document.body.textContent).toContain(`fm.new_decl.preview`);
       fireEvent.click(getCreateBtn(container));
       expect(onConfirm).toHaveBeenCalledWith(
-        expect.objectContaining({ year: otherYear, status: 'draft' })
+        expect.objectContaining({ year: theYear, status: 'draft' })
       );
+    });
+
+    it('offers exactly one selectable year (SELECTABLE_YEARS), never a prior filing year like 2025', () => {
+      // Regression guard for ETP-5391's SELECTABLE_YEARS/SUPPORTED_YEARS split: a new
+      // declaration must only ever be created for the current filing year, even though
+      // SUPPORTED_YEARS (layout resolution for existing declarations) still spans back
+      // to 2021.
+      const { container } = render(<NewDeclModal onConfirm={vi.fn()} onClose={vi.fn()} />);
+      openYearMenu(container);
+      const options = getYearOptions(container);
+      expect(options).toHaveLength(1);
+      expect(options[0].textContent.trim()).toBe('2026');
+      expect(options.map(o => o.textContent.trim())).not.toContain('2025');
     });
   });
 
