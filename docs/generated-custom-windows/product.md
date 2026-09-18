@@ -1003,3 +1003,163 @@ them against that registry copy — when one fails, the fix belongs in `lookupCr
 Full mechanism, why nesting a router is legal here, the spec allowlist, the drift guards and the known
 limitations: [`docs/ui-customization.md`](../ui-customization.md) → *§19. Inline record creation from a
 lookup drawer*.
+
+## ETP-5348 — Import: the file is judged before the mapping step
+
+Engine-level work shared with Contacts; the whole section applies to both windows, since both
+declare `window.import` and both go through the same `ImportDialog`.
+
+Five ways an unusable file used to reach the mapping screen — or worse, be imported in part.
+All five are now refused up front, with a translated message and the existing "Reintentar"
+button that returns to the dropzone.
+
+**A file larger than the declared limit is refused instead of truncated in silence.** This was
+the serious one. `runImport` applied `limit.maxRows` as `rows.slice(0, maxRows)` *at send time*:
+the extra rows were never attempted, never counted and never mentioned in the result summary. A
+5001-row file imported 5000 and dropped the last one with no error, no warning and nothing in
+the UI to notice it by — the only way to find out was to count the records afterwards. The check
+now runs right after parsing, before validation and review.
+
+**And the declared limit was never read at all.** `ImportDialog` read `config.maxRows` and
+`config.concurrency`, but the contract nests both under `limit` (`window.import.limit` in
+`decisions.json`). Both were therefore always `undefined` and `runImport`'s own parameter
+defaults took over. Those defaults are 5000 and 4 — exactly what every window declares today —
+which is precisely why nothing ever looked wrong. A window that declared a different limit was
+being ignored in complete silence.
+
+**A file whose format the window does not declare is refused.** The dropzone's `accept`
+attribute only filters the OS picker's default view: drag-and-drop ignores it, and every file
+chooser offers an "All files" escape. Nothing downstream refused the file either —
+`decodeCsvBuffer` falls back to Windows-1252, an encoding that maps every possible byte and so
+cannot fail — so a `.docx` parsed into one garbage column that matched no field, and the user
+landed on a mapping screen with nothing mapped and nothing said. The new check reuses
+`formatNames(config.formats)` for its message, so the error and the dropzone hint cannot name
+different formats.
+
+**Duplicate headers are compared the way `mapColumns` compares them.** The guard tested raw
+header text against a `Set` while the matcher it protects normalizes (lower-case, accents
+stripped, inner whitespace collapsed), so `nombre,Nombre` and `codigo,código` walked straight
+through. Downstream `mapColumns` gives a field to the first claimant and leaves the second
+column unmapped, so one of the user's columns was silently discarded. The reported header is
+still the text as typed, not the normalized form — the message exists to help someone find the
+column in their own file.
+
+**A blank header is refused on its own.** Previously a lone blank was invisible; only a *second*
+blank tripped the duplicate check on `""`. The single blank became a row key of `''`, which is
+what broke the "Editar correspondencia" grid. Trailing blank header columns in an `.xlsx` are
+still dropped before this check, as documented in `parseXlsx.js` — those are an artifact of the
+sheet's used range, while a gap between two named columns is real structure.
+
+**A file with headers but no data rows says so.** It is not the empty-file case (there *is* a
+line, so that guard never fired), so it carries its own key rather than reusing
+`importErrorFileEmpty`: the columns are fine, the data is missing. Note this also means the
+downloadable template, re-uploaded unedited, is now rejected with that exact message — which is
+the intended answer, and what `buildTemplateXlsx.test.js` asserts.
+
+Both parsers share one `validateHeaders` (exported from `parseDelimited.js`) so the CSV and
+Excel paths cannot drift apart on these rules again — the drift is how they came to disagree in
+the first place. New locale keys: `importErrorEmptyHeader` (`{position}`), `importErrorNoDataRows`,
+`importErrorTooManyRows` (`{count}`, `{limit}` — the first import message with two placeholders),
+`importErrorUnsupportedFormat` (`{formats}`), guarded by
+`src/locales/__tests__/etp5348-file-rejection-keys.vitest.js`.
+
+## ETP-5374 — Duplicate detection died in silence above ~72 rows
+
+Engine-level work in the shared `existingRecordLookup.js` + `ImportDialog`, so Contacts gets all
+of it too (`contacts.md` → *ETP-5374* points here).
+
+Re-importing a file that was already imported showed every row in **Correctas** instead of
+**Omitidas**, with no error and no toast — the only trace was a `console.warn`. Below ~70 rows it
+worked perfectly, which is why it was never caught.
+
+### Root cause
+
+The lookup queried in batches of `LOOKUP_BATCH_SIZE = 200` keys, each batch travelling as an OR
+of 200 terms **in the query string**. The resulting URL was ~22.000 characters against Tomcat's
+default `maxHttpHeaderSize` of 8192 (`Connector port="8080"` does not override it), so Tomcat
+answered **400 before the request reached the servlet**. The code's own comment claimed the
+opposite — *"200 keeps each request comfortably inside a normal URL length"*.
+
+| Distinct keys | URL length | |
+| --- | --- | --- |
+| 50 | 5.758 | ok |
+| 71 | 8.110 | last one that fits |
+| **72** | **8.222** | **400** |
+
+From there: the fetcher threw on `!res.ok`, and `findExistingKeys` caught it and did
+`return new Set()` — **discarding the batches that had already answered correctly**.
+
+No data was ever lost: the server's unique index still rejected the duplicates on confirm and
+the final toast counted them. What was lost is the ETP-4996/ETP-5226 promise — *see which rows
+will be skipped before confirming* — precisely on the large files where it matters.
+
+### The fix, in three parts
+
+**1. Batch by URL length, not by key count.** No fixed count can be safe, because the cost of a
+key is not fixed: a composite `dedupe.key` multiplies the terms per row and a long value
+lengthens each one. `buildLookupBatches` accumulates until the *encoded* criteria would exceed
+`LOOKUP_CRITERIA_BUDGET` (4000 characters). The budget is well under 8192 on purpose — the rest
+has to hold the path, the other query params and, above all, the `Authorization: Bearer <JWT>`
+header, since `maxHttpHeaderSize` covers the request line *and* every header.
+
+The arithmetic is exact, not an estimate: a disjunction's encoded length is the empty envelope
+plus each term's own encoded length plus three characters per separating comma, and terms encode
+independently of position. A test asserts each batch is full — one more term would overflow.
+
+`LOOKUP_MAX_BATCH_SIZE = 200` survives for the other half of the original rationale, which was
+never wrong: a disjunction of thousands of terms is a query plan no index helps.
+
+Measured: 5000 product keys → 136 batches of ~37; a composite key → ~455 batches of ~11.
+
+**2. A failed batch no longer nullifies the others.** Each batch is isolated; a failure costs
+only its own keys. This matters even with part 1 fixed — any transient network error used to
+reproduce the same silent symptom.
+
+Because part 1 raises the request count sharply, the batches now run **4 at a time**
+(`LOOKUP_CONCURRENCY`, the same number `window.import.limit.concurrency` already declares for the
+send), through a worker pool over one cursor rather than `Promise.all` over waves. Otherwise the
+fix would have traded a silent failure for a review step that visibly stalls, on exactly the
+large files this ticket is about.
+
+**3. The lookup now reports whether it finished.** `findExistingKeys` returns
+`{ existing, complete, failedBatches, totalBatches }` instead of a bare `Set` — a breaking change
+to the published package, whose only consumer is `ImportDialog`. That is what makes the per-batch
+isolation above observable at all: without it, "found no duplicates" and "could not check" are
+the same empty answer, which is exactly how the original bug stayed invisible.
+
+`complete` has no reader in the UI. A row whose batch failed is still presented like one that was
+checked and found absent, so if a later change wants to say so on screen, the flag is already
+there and the tests already pin its behaviour.
+
+The fallback itself is unchanged and still right: a pre-flight check is a courtesy, not a gate,
+so a failed lookup never blocks an import the server would have accepted, and send-time
+duplicate handling remains the backstop.
+
+### One hardening that came out of testing this
+
+`existingKeyFetchFn` called `apiFetch` with no `on401`, and a 401 that is not ignored fires the
+ambient logout handler (`auth/api.js`). So the pre-flight check could end the session — and with
+it the open import dialog, mid-review, with nothing said. The lookup now passes `on401: 'ignore'`:
+a check whose whole contract is that failing must never block an import cannot be allowed to log
+the user out, and a genuinely expired session still logs out at the next real request, which is
+the one the user is actually waiting on. Guarded by
+`contract-ui/__tests__/etp5374-lookup-does-not-logout.vitest.js`.
+
+Length batching raises the stakes either way: the old code stopped at the first failure, so one
+request went out per file; now the whole file's batches do.
+
+**What prompted it is not proven.** While testing, the import dialog in First Steps closed when
+switching to the Errors tab, and stopped doing so once this option was added. That is a
+correlation, not a demonstrated mechanism — the dev server was restarted between the two runs,
+and the request statuses were never captured. Two later observations argue against the 401
+reading specifically: under the published core the oversized URL is refused by Tomcat with a
+**400**, which does not reach the logout handler at all; and under the local core the same
+lookup reports `complete: true`, so those batches answered **200**. Whatever closed the dialog,
+it has not been identified. This option is justified on its own terms, not as that fix.
+
+### Not to be confused with ETP-5371
+
+Same symptom, different cause. This one: any window, above ~72 rows, a well-formed URL that is
+too long → 400. ETP-5371: First Steps only, at any row count, a malformed URL
+(`/etendo/product` instead of `/etendo/sws/neo/product/product`) → 404. Both landed in the same
+`catch` that returned an empty Set, which is why they looked identical from the screen.

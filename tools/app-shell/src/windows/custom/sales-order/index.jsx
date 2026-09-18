@@ -88,7 +88,6 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
   } = useOrderWindow({
     windowName, token, apiBaseUrl,
     specName: 'sales-order',
-    deliveryKey: 'deliveryStatus',
     manageLabelKeys: SO_MANAGE_LABELS,
     confirmLabelKey: 'soConfirmBtn',
     confirmedTitleKey: 'soConfirmedTitle',
