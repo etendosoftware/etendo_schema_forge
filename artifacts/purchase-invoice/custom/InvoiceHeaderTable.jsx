@@ -7,6 +7,7 @@ import { getInvoiceFiscalTargets, isSifEligibleByDate } from '@/windows/custom/s
 import { FiscalStatusBadge } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 
 const BASE_COLUMNS = [
+  { key: 'documentNo',        column: 'DocumentNo',                type: 'string', label: 'Document No.', required: true },
   { key: 'invoiceDate',       column: 'DateInvoiced',              type: 'date',   label: 'Invoice Date', required: true },
   { key: 'orderReference',    column: 'POReference',               type: 'string', label: 'Supplier Reference' },
   { key: 'businessPartner',   column: 'C_BPartner_ID',             type: 'string', label: 'Business Partner', required: true },

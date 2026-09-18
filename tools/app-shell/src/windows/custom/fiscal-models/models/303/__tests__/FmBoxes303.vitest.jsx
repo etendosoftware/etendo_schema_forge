@@ -11,14 +11,14 @@ vi.mock('lucide-react', () => ({
   TrendingDown: () => null,
   Pencil: () => null,
 }));
-vi.mock('@/components/ui/checkbox', () => ({
-  // Forwards `disabled` straight through, matching the real Checkbox
-  // component's contract (node_modules/@etendosoftware/app-shell-core/src/
-  // components/ui/checkbox.jsx passes `disabled` to the native input as-is).
-  Checkbox: ({ checked, disabled, onChange }) =>
+vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
+  // Forwards `disabled` straight through, matching the real CheckboxField
+  // component's contract (tools/app-shell/src/windows/custom/shared/
+  // CheckboxField.jsx forwards `disabled` to the underlying <button> as-is).
+  CheckboxField: ({ checked, disabled, onToggle }) =>
     React.createElement('input', {
       type: 'checkbox', checked: !!checked, disabled,
-      onChange: onChange ?? (() => {}),
+      onChange: e => onToggle?.(e.target.checked),
     }),
 }));
 
@@ -299,6 +299,208 @@ describe('FmBoxes303 — renderDerivedCell', () => {
     // abs(50) - 200 = -150, clamp(0, -150) = 0 → display = 0 → '' (condition display !== 0)
     // Row label still appears (rowVisibleWhen passes), but derived cell value is empty
     expect(document.body.textContent).toContain('fm.box.row.importe_devolucion');
+  });
+
+  it('box 71 present, box 70 (subtractBox) missing → derived cell stays blank (QA cycle 1 regression)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 71: 500 }}
+        identification={{ tipo_declaracion: 'D' }}
+        sectionIds={['resultado_final']}
+      />
+    );
+    // Before the fix: `valueMap[70] ?? 0` fell back to 0 → display = abs(500) - 0 = 500 (wrong).
+    // After the fix: the subtrahend is missing → display stays null → cell renders empty.
+    // (box 71 itself is also rendered elsewhere as a plain box with value 500 — scope the
+    // assertion to the importe_devolucion row specifically, not the whole document.)
+    const importeRow = Array.from(container.querySelectorAll('.fm-aeat-row')).find(
+      row => row.textContent.includes('fm.box.row.importe_devolucion')
+    );
+    expect(importeRow).toBeTruthy();
+    const value = importeRow.querySelector('.fm-aeat-cell__value').textContent;
+    expect(value).toBe('');
+  });
+
+  it('box 71 negative (abs applied), box 70 missing → still blank, not the abs()ed minuend (abs + missing-subtrahend interaction)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 71: -500 }}
+        identification={{ tipo_declaracion: 'D' }}
+        sectionIds={['resultado_final']}
+      />
+    );
+    // dv.abs applies to the minuend BEFORE the subtractBox check runs (absRaw = Math.abs(raw)),
+    // so a negative box 71 becomes 500 first. If the missing-subtrahend guard were somehow
+    // bypassed by the abs step, this would wrongly render 500 instead of blank.
+    const importeRow = Array.from(container.querySelectorAll('.fm-aeat-row')).find(
+      row => row.textContent.includes('fm.box.row.importe_devolucion')
+    );
+    expect(importeRow).toBeTruthy();
+    const value = importeRow.querySelector('.fm-aeat-cell__value').textContent;
+    expect(value).toBe('');
+  });
+});
+
+// ── renderBoxCell derivedValue fallback (box 87 = box 110 - box 78, ETP-5338 pt.2) ──
+// cuotas_compensar_post (box 87) has a real AD box number but is never populated from
+// valueMap/backend data — renderBoxCell now falls back to computeDerivedValue only when
+// the real value for box 87 is null. Must never override a genuine non-null value.
+
+describe('FmBoxes303 — renderBoxCell derivedValue fallback (box 87)', () => {
+  const findCellByNum = (container, num) => {
+    const padded = String(num).padStart(2, '0');
+    return Array.from(container.querySelectorAll('.fm-aeat-cell')).find(
+      cell => cell.querySelector('.fm-aeat-cell__num')?.textContent === padded
+    );
+  };
+
+  it('box110=500, box78=200 → casilla 87 shows 300', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 110: 500, 78: 200 }}
+        sectionIds={['resultado_final']}
+      />
+    );
+    const cell87 = findCellByNum(container, 87);
+    expect(cell87).toBeTruthy();
+    const value = cell87.querySelector('.fm-aeat-cell__value').textContent;
+    expect(value).toContain('300');
+  });
+
+  it('box110=200, box78=500 → casilla 87 shows 0 (clamped, not negative)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 110: 200, 78: 500 }}
+        sectionIds={['resultado_final']}
+      />
+    );
+    const cell87 = findCellByNum(container, 87);
+    expect(cell87).toBeTruthy();
+    // val = 0 → renderBoxCell's `val != null` check is true for 0, so it IS rendered (unlike
+    // renderDerivedCell, which special-cases `display !== 0` to blank it out).
+    const value = cell87.querySelector('.fm-aeat-cell__value').textContent;
+    expect(value).toContain('0');
+    expect(value).not.toContain('-');
+  });
+
+  it('box110=0, box78=0 → casilla 87 shows 0', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 110: 0, 78: 0 }}
+        sectionIds={['resultado_final']}
+      />
+    );
+    const cell87 = findCellByNum(container, 87);
+    expect(cell87).toBeTruthy();
+    const value = cell87.querySelector('.fm-aeat-cell__value').textContent;
+    expect(value).toContain('0');
+  });
+
+  // NOTE (ETP-5338 pt.2, cycle 2): the two tests below were CORRECTED, not weakened. Cycle 1's QA
+  // rejection (BUG-1) assumed AEAT semantics that were never confirmed with the product owner.
+  // The confirmed rule (`treatMissingAsZero` on box 87's derivedValue, see FmBoxes303.jsx /
+  // fm303Layouts.js): a missing box110 or box78 defaults to 0, EXCEPT when BOTH are missing.
+  // `importe_devolucion`'s own tests (below/elsewhere) are untouched — its "missing operand
+  // blanks the result" semantics were never disputed and remain the default behavior.
+
+  it('box110 missing, box78=200 → casilla 87 shows 0 (missing box110 treated as 0, then clamped)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 78: 200 }}
+        sectionIds={['resultado_final']}
+      />
+    );
+    const cell87 = findCellByNum(container, 87);
+    expect(cell87).toBeTruthy();
+    // treatMissingAsZero: box110 missing → treated as 0 → display = 0 - 200 = -200 → clamped to 0.
+    const value = cell87.querySelector('.fm-aeat-cell__value').textContent;
+    expect(value).toContain('0');
+    expect(value).not.toContain('-');
+  });
+
+  it('box110=500, box78 missing → casilla 87 shows 500 (missing box78 treated as 0)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 110: 500 }}
+        sectionIds={['resultado_final']}
+      />
+    );
+    const cell87 = findCellByNum(container, 87);
+    expect(cell87).toBeTruthy();
+    // treatMissingAsZero: box78 missing → treated as 0 → display = 500 - 0 = 500.
+    const value = cell87.querySelector('.fm-aeat-cell__value').textContent;
+    expect(value).toContain('500');
+  });
+
+  it('box110 AND box78 both missing → casilla 87 stays blank (the only blank case)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['resultado_final']}
+      />
+    );
+    const cell87 = findCellByNum(container, 87);
+    expect(cell87).toBeTruthy();
+    const value = cell87.querySelector('.fm-aeat-cell__value').textContent;
+    expect(value).toBe('');
+  });
+
+  it('box110=500, box78=0 (present, not missing) → casilla 87 shows 500, not blank (0 subtrahend must NOT be confused with a missing one)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 110: 500, 78: 0 }}
+        sectionIds={['resultado_final']}
+      />
+    );
+    const cell87 = findCellByNum(container, 87);
+    expect(cell87).toBeTruthy();
+    // valueMap[78] is 0, which is NOT nullish — `0 ?? null` evaluates to 0, so the subtraction
+    // proceeds normally (500 - 0 = 500). Only undefined/null box78 should blank the cell; a
+    // present 0 must behave like any other real subtrahend.
+    const value = cell87.querySelector('.fm-aeat-cell__value').textContent;
+    expect(value).toContain('500');
+  });
+
+  it('a genuine non-null value already present for box 87 is NOT overridden by the derived fallback', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 87: 999, 110: 500, 78: 200 }}
+        sectionIds={['resultado_final']}
+      />
+    );
+    const cell87 = findCellByNum(container, 87);
+    expect(cell87).toBeTruthy();
+    // Real value (999) must win over the derived formula's result (300).
+    const value = cell87.querySelector('.fm-aeat-cell__value').textContent;
+    expect(value).toContain('999');
+    expect(value).not.toContain('300');
+  });
+
+  it('a genuine 0 value already present for box 87 is NOT overridden (0 is not null)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 87: 0, 110: 500, 78: 200 }}
+        sectionIds={['resultado_final']}
+      />
+    );
+    const cell87 = findCellByNum(container, 87);
+    expect(cell87).toBeTruthy();
+    // val = 0 (from valueMap) → `val == null` is false → derivedValue fallback never runs.
+    // If it wrongly ran, display would be 300 instead of 0.
+    const value = cell87.querySelector('.fm-aeat-cell__value').textContent;
+    expect(value).toContain('0');
+    expect(value).not.toContain('300');
   });
 });
 

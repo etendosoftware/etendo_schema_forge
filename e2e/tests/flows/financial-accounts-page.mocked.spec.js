@@ -302,6 +302,30 @@ test.describe('Financial Accounts list — Cuentas', () => {
     await expect(offline.getByTestId('account-row-refresh-acc-3')).toHaveCount(0);
   });
 
+  // ETP-5281 coverage gap: the `overflow-visible` escape on `_rowActions` (commit 23343b3c2,
+  // PR #1496) needs to hold for pending-count cell variants beyond the plain numeric badge
+  // already exercised above — the "Conciliado" pill (acc-4, eTGOPendingCount = 0, likely
+  // narrower than a numeric badge) and an archived row's extra badges (acc-5, only visible
+  // under the "Inactivas" filter).
+  test('the row kebab opens on a zero-pending ("Conciliado") row and on an archived row', async ({ page }) => {
+    const zeroPendingRow = page.getByTestId('row-acc-4');
+    await expect(zeroPendingRow).toBeVisible();
+    await zeroPendingRow.hover();
+    await zeroPendingRow.getByTestId('account-row-menu-trigger-acc-4').click();
+    await expect(page.getByTestId('account-row-menu-archive-acc-4')).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    // Switch to the "Inactivas" filter to reveal the archived row.
+    await page.getByTestId('account-type-filter-trigger').click();
+    await page.getByTestId('account-type-filter-option-inactive').click();
+
+    const archivedRow = page.getByTestId('row-acc-5');
+    await expect(archivedRow).toBeVisible();
+    await archivedRow.hover();
+    await archivedRow.getByTestId('account-row-menu-trigger-acc-5').click();
+    await expect(page.getByTestId('account-row-menu-unarchive-acc-5')).toBeVisible();
+  });
+
   // KNOWN BUG — AccountsHeaderTable overrides ListView's row handler with
   // `onNavigate={(id) => navigate(`/financial-account/${id}`)}`, but DataTable invokes it
   // with the WHOLE ROW (`else if (onNavigate) onNavigate(row);`, DataTable.jsx ~1902), so a
@@ -328,11 +352,11 @@ test.describe('Financial Accounts list — Cuentas', () => {
   // kebab, leaving "Abrir / Nuevo movimiento / Transferir / Desconectar / Archivar"
   // unreachable. This test guards both halves — the overlay is absent AND the slot's actions
   // are genuinely operable.
-  // Skipped — the row kebab trigger (account-row-menu-trigger-*) is reproducibly obscured by
-  // the eTGOPendingCount cell (Playwright reports "element intercepts pointer events"), same
-  // known issue hitting financial-account-delete.mocked.spec.js and
-  // financial-account-detail.mocked.spec.js. Re-enable once the layout bug is fixed.
-  test.skip('the slot owns the row actions — no generic quick-actions overlay', async ({ page }) => {
+  // The row kebab trigger (account-row-menu-trigger-*) used to be reproducibly obscured by the
+  // eTGOPendingCount cell (Playwright reported "element intercepts pointer events"), same known
+  // issue hitting financial-account-delete.mocked.spec.js and financial-account-detail.mocked.spec.js.
+  // Confirmed live and fixed (commit 23343b3c2, PR #1496).
+  test('the slot owns the row actions — no generic quick-actions overlay', async ({ page }) => {
     const row = page.getByTestId('row-acc-1');
     await row.hover();
 

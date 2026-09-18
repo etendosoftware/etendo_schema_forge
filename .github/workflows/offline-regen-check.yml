@@ -126,7 +126,7 @@ jobs:
           # schema_forge MUST stay clean after regen-check: contract.json,
           # artifacts/*/generated/*.jsx, mockData.js, etc. are committed and
           # should match what the offline pipeline produces from decisions.json
-          # + ad-snapshot.json.
+          # + the grouped cli/cache/ad-snapshot/ files.
           if [ -n "$(git status --porcelain)" ]; then
             echo "::error::UI drift: committed contract.json / generated files do not match offline pipeline output"
             git status

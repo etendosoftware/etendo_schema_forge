@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // Mirror DetailView.vitest.jsx mock setup so the component mounts in isolation.
 // This spec drives the footer Save / Confirm buttons by CLICKING them, which is
@@ -205,6 +205,55 @@ describe('DetailView footer save buttons (onClick coverage)', () => {
     fireEvent.click(screen.getByTestId('action-save'));
     await waitFor(() => expect(onConfirm).toHaveBeenCalled());
     expect(mockHook.handleSaveAndProcess).not.toHaveBeenCalled();
+  });
+
+  // ETP-5265 QA follow-up — QA rejected the floating "processing" toast that
+  // goods-shipment/goods-receipt used while their custom onConfirm was in flight and
+  // asked for the spinner to be IN the Confirm button, "como al procesar una factura".
+  // The invoice windows get that for free from `hook.isSaving` on the native
+  // handleSaveAndProcess path; the onConfirm path had no busy flag at all, so
+  // runDraftModeConfirm now awaits onConfirm inside DraftModeConfirmButton's local
+  // `customConfirmBusy` state.
+  describe('draftMode with onConfirm: in-flight spinner in the Confirm button (ETP-5265)', () => {
+    it('an onConfirm that returns a pending promise makes Confirm spin and disables it until it settles', async () => {
+      let resolveConfirm;
+      const onConfirm = vi.fn(() => new Promise((resolve) => { resolveConfirm = resolve; }));
+      const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', onConfirm };
+      // additionalDirtyState=false so maybeSaveBeforeConfirm does not run a save first —
+      // this test is only about the busy state around onConfirm itself.
+      render(<DetailView {...BASE_PROPS} additionalDirtyState={false} draftMode={draftMode} />);
+      expect(screen.queryByTestId('Loader2__fa3275')).toBeNull();
+      expect(screen.getByTestId('Check__fa3275')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('action-save'));
+
+      await waitFor(() => expect(screen.getByTestId('Loader2__fa3275')).toBeInTheDocument());
+      expect(screen.queryByTestId('Check__fa3275')).toBeNull();
+      expect(screen.getByTestId('action-save')).toBeDisabled();
+
+      await act(async () => { resolveConfirm(); });
+
+      await waitFor(() => expect(screen.queryByTestId('Loader2__fa3275')).toBeNull());
+      expect(screen.getByTestId('Check__fa3275')).toBeInTheDocument();
+      expect(screen.getByTestId('action-save')).not.toBeDisabled();
+    });
+
+    // The additive half of the change: every window whose onConfirm just opens a modal
+    // and returns nothing (sales-order, purchase-order, sales-quotation, and the
+    // not-fully-invoiced goods-shipment/goods-receipt branch) must render exactly as
+    // before — no spinner, never disabled.
+    it('an onConfirm that returns undefined never puts the button in a busy state', async () => {
+      const onConfirm = vi.fn();
+      const draftMode = { enabled: true, draftField: 'documentStatus', draftValue: 'DR', onConfirm };
+      render(<DetailView {...BASE_PROPS} additionalDirtyState={false} draftMode={draftMode} />);
+
+      fireEvent.click(screen.getByTestId('action-save'));
+      await waitFor(() => expect(onConfirm).toHaveBeenCalled());
+
+      expect(screen.queryByTestId('Loader2__fa3275')).toBeNull();
+      expect(screen.getByTestId('Check__fa3275')).toBeInTheDocument();
+      expect(screen.getByTestId('action-save')).not.toBeDisabled();
+    });
   });
 
   // ETP-4940 — draftMode windows whose Confirm button uses a custom `onConfirm`

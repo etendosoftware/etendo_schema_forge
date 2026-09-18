@@ -30,11 +30,15 @@ export const PAGE_HELP_SUGGESTIONS = 'page-help-suggestions';
  */
 export const ACCT_PROCESS_MONITOR = 'acct-process-monitor';
 
+/** Enables the admin-only public API key management entry point (ETP-5345). */
+export const PUBLIC_API_KEYS = 'public-api-keys';
+
 export const FLAG_DEFAULTS = Object.freeze({
   [PROOF_OF_CONCEPT_MENU]: false,
   [WEBMCP_AGENT_CHAT]: false,
   [PAGE_HELP_SUGGESTIONS]: false,
   [ACCT_PROCESS_MONITOR]: false,
+  [PUBLIC_API_KEYS]: false,
 });
 
 /**

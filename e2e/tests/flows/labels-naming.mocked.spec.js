@@ -2,11 +2,11 @@ import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
 
 /**
- * Labels & naming — mocked smoke (ETP-4017).
+ * Labels & naming — mocked smoke (ETP-4017, JO-06 revised by ETP-5328).
  *
  * Validates the three label/naming fixes:
  *   JB-06  accounting report titles (es_ES)
- *   JO-06  "Cuenta contable de gastos" for vendor block in contacts
+ *   JO-06  "Cuenta" for BOTH the customer and the vendor account selectors in contacts
  *   IV-08  "Fecha de presupuesto" for sales-quotation DateOrdered
  *
  * Mock mode only. login() seeds a fake token + generic /sws/** mock; this
@@ -93,7 +93,7 @@ test.describe('JB-06 — accounting reports use the new Spanish names', () => {
   });
 });
 
-// ─── JO-06 — Vendor account label in contacts ───────────────────────────────
+// ─── JO-06 — Account labels in contacts (ETP-5328) ──────────────────────────
 
 const CONTACT_RECORD = {
   id: 'bp-jo06',
@@ -133,7 +133,7 @@ test.describe('JO-06 — contacts vendor account label', () => {
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
-  test('Financial tab shows "Cuenta contable de gastos" for the vendor block', async ({ page }) => {
+  test('Financial tab shows "Cuenta" for both the customer and the vendor block', async ({ page }) => {
     const financialTab = page.getByRole('button', { name: 'Financiero', exact: true });
     await expect(financialTab).toBeVisible();
     await financialTab.click();
@@ -143,17 +143,27 @@ test.describe('JO-06 — contacts vendor account label', () => {
     // (rendered by EntityForm itself) surfaces the field's LABEL text; the chip
     // (`field-pOFinancialAccount-chip`) or combobox input show the VALUE, not the
     // label. Assert against the label element directly, same pattern as IV-08 below.
+    //
+    // ETP-5328 reverted ETP-4017's rename: the vendor selector is "Cuenta" again, the
+    // same copy as the customer one. Asserting both sides in one test is deliberate —
+    // they are two DIFFERENT AD columns (PO_Financial_Account_ID / FIN_Financial_Account_ID)
+    // that now share a label, so a regression on either override is only visible when both
+    // are checked together.
     const vendorLabel = page.locator('label[for="pOFinancialAccount"]');
+    // `toContainText`, not `toHaveText`: EntityForm appends `labelMarker()` (a required `*` or an
+    // "opcional" suffix) INSIDE the same <Label>, so the accessible text is not the bare override.
+    // The retired-literal assertion below is what makes this strict — on its own, "contains
+    // Cuenta" would still pass for "Cuenta contable de gastos".
     await expect(vendorLabel).toBeVisible();
-    await expect(vendorLabel).toContainText('Cuenta contable de gastos');
+    await expect(vendorLabel).toContainText('Cuenta');
 
-    // Customer block should still read "Cuenta" (not "Account" — locale es_ES).
     const customerLabel = page.locator('label[for="account"]');
     await expect(customerLabel).toBeVisible();
     await expect(customerLabel).toContainText('Cuenta');
-    // And specifically not the new vendor label, to guard against a copy/paste
-    // of the override into the customer block.
-    await expect(customerLabel).not.toContainText('Cuenta contable de gastos');
+
+    // The retired literal must not survive anywhere on the tab — a stale copy left in
+    // decisions.json, the contract or the generated page would surface right here.
+    await expect(page.getByText('Cuenta contable de gastos')).toHaveCount(0);
   });
 });
 

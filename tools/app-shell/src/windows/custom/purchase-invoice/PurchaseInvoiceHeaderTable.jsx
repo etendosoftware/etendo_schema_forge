@@ -184,6 +184,12 @@ export default function PurchaseInvoiceHeaderTable(props) {
 
     return [
       { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', dot: false, required: true },
+      // ETP-5274: internal AD document number, distinct from `orderReference`
+      // (POReference, the supplier's own reference, relabeled "Document No." /
+      // "Nº documento" below). No explicit `label` — resolves via
+      // `window.labelOverrides.DocumentNo` ("N° interno" / "Internal No."),
+      // same mechanism `orderReference` already relies on.
+      { key: 'documentNo', column: 'DocumentNo', type: 'string', required: true },
       {
         key: 'transactionDocument',
         column: 'C_DocTypeTarget_ID',

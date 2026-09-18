@@ -23,6 +23,18 @@
  *   backendFilterKey: string,  // explicit backend field for filtering (e.g. 'bp$_identifier')
  *   enumLabels: { [rawCode]: displayLabel },
  *   badgeLabels: { true: string, false: string },
+ *   buildCriteria: (row) => criteria[] | null,
+ *     // Per-column override of buildRowCriteria's default field-based criteria —
+ *     // return null to drop the condition from the criteria array entirely.
+ *   toQueryParams: (row) => string | null,
+ *     // ETP-5188 — opts a column's condition OUT of `criteria=` altogether (see
+ *     // `extractQueryParamConditions` below), translating it into a raw
+ *     // `key=value` query-string segment instead — for a synthetic field with no
+ *     // backend property the generic criteria layer can resolve against (e.g.
+ *     // Users' "Rol" field → `RoleIds=`/`NoRole=`). Also requires
+ *     // `filterable: true` (`isFilterableColumn`'s `type: 'custom'` opt-in) and,
+ *     // when the column must not render as an actual grid cell,
+ *     // `filterOnly: true` (see `isLineGridColumn`, `linesColumnWidth.js`).
  *
  *   // Sort config
  *   sortMode: 'raw' | 'identifier' | 'enumLabel' | 'booleanLabel',
@@ -488,6 +500,74 @@ export function buildAdvancedFilterCriteria(advancedFilter, columns) {
     return [{ _constructor: 'AdvancedCriteria', operator: 'or', criteria: items }];
   }
   return items;
+}
+
+/**
+ * ETP-5188 — splits an advanced-filter draft into (a) the conditions that
+ * still flow through the generic `buildAdvancedFilterCriteria` path and
+ * (b) a raw query-string segment built from any condition whose column
+ * declares `col.toQueryParams` — a per-column hook symmetric to the
+ * existing `col.buildCriteria` override above (see `buildRowCriteria`),
+ * for a field that must never reach `criteria=` at all because it has no
+ * backing AD column the backend HQL layer can resolve (e.g. Users' "Rol"
+ * field, `UserHeaderTable.jsx`'s `roleFilterColumn`, which the backend
+ * instead expects as dedicated `RoleIds=`/`NoRole=` params — see that
+ * column's own `toQueryParams`, `buildRoleFilterQueryParams` in
+ * `RoleChipsCell.jsx`).
+ *
+ * A condition whose column declares `toQueryParams` is ALWAYS stripped out
+ * of the returned `conditions`, regardless of what (or whether) the hook
+ * returns — the "never reaches the generic criteria array" guarantee does
+ * not depend on the hook producing a usable param string for every
+ * operator/value combination. (This was actually violated until ETP-5188's
+ * fix: the "nothing to add" early-return used to key off whether any segment
+ * was produced rather than off whether any row was intercepted, so a hook
+ * returning `null` for a given operator silently let its condition back into
+ * `conditions` instead of staying stripped.)
+ *
+ * @param {{rowOperator?: string, conditions?: Array<{field: string, operator: string, value: unknown}>}} advancedFilter
+ * @param {Array<object>} columns - same shape `buildAdvancedFilterCriteria` takes
+ * @returns {{conditions: object, extraParams: string|null}} `conditions` is
+ *   safe to pass straight into `buildAdvancedFilterCriteria`; `extraParams`
+ *   is `null` or a `key=value[&key=value]` string (already URI-encoded) —
+ *   see `extractCriteriaFromFilter` in `useEntity.js`, which forwards any
+ *   non-`criteria` segment of a filter string as a raw query param.
+ */
+export function extractQueryParamConditions(advancedFilter, columns) {
+  if (!advancedFilter?.conditions?.length || !Array.isArray(columns)) {
+    return { conditions: advancedFilter, extraParams: null };
+  }
+  const colByKey = Object.fromEntries(columns.map((c) => [c.key, c]));
+  const kept = [];
+  const paramSegments = [];
+  // Tracks whether ANY row was actually intercepted by a `toQueryParams` hook —
+  // NOT whether that hook produced a usable segment. A hook is allowed to
+  // return `null` for a given operator/value combination (e.g. `notEqual`/
+  // `isNull` had no translation before RoleFilterNegate existed, and `isNull`
+  // still legitimately has nothing to translate for other future columns) —
+  // the row must still be stripped from `kept` in that case. Gating the
+  // early-return below on `paramSegments.length` instead of on this flag was
+  // the ETP-5188 bug: whenever the hook returned falsy for every intercepted
+  // row, this function discarded the correctly-built `kept` array and handed
+  // back the original, UNSTRIPPED `advancedFilter` — leaking the condition
+  // straight into `buildAdvancedFilterCriteria` for exactly the operators
+  // whose hook had no segment to offer.
+  let anyIntercepted = false;
+  for (const row of advancedFilter.conditions) {
+    const col = colByKey[row.field];
+    if (col && typeof col.toQueryParams === 'function') {
+      anyIntercepted = true;
+      const segment = col.toQueryParams(row);
+      if (segment) paramSegments.push(segment);
+      continue;
+    }
+    kept.push(row);
+  }
+  if (!anyIntercepted) return { conditions: advancedFilter, extraParams: null };
+  return {
+    conditions: { ...advancedFilter, conditions: kept },
+    extraParams: paramSegments.length > 0 ? paramSegments.join('&') : null,
+  };
 }
 
 const TEXTUAL_IDENTIFIER_OPS = new Set([

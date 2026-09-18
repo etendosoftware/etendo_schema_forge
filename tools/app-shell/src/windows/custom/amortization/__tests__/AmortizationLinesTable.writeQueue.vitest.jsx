@@ -132,6 +132,23 @@ function getPencilButton(container) {
   return lastTd.querySelector('[title="editLineTooltip"]');
 }
 
+/**
+ * The inline percentage/amount inputs of the row in edit mode, in DOM order:
+ * `amortizationPercentage` first, then `amortizationAmount`.
+ *
+ * ETP-5107 — these used to be selected as `input[type="number"]`. A native number input
+ * rejects the comma keystroke at BROWSER level under an es-ES locale, so the element had
+ * to become a `MaskedAmountInput`, which renders `type="text"` and that selector now
+ * matches nothing. Queried by the stable `data-testid` `MaskedAmountInput` emits by
+ * default (`field-number`, from its `name ? field-number-${name} : 'field-number'` rule) —
+ * the same retarget-to-the-testid approach ETP-5283 used for the price stepper's
+ * Playwright locator. Nothing else in this table renders that testid, and the DOM order
+ * is unchanged, so the `[0]`/`[1]` indices keep their original meaning.
+ */
+function amountInputs(container) {
+  return container.querySelectorAll('input[data-testid="field-number"]');
+}
+
 beforeEach(() => {
   toast.success.mockClear();
   toast.error.mockClear();
@@ -150,14 +167,14 @@ describe('AmortizationLinesTable — single-flight write queue per line (ETP-525
     await waitFor(() => expect(screen.getByText('AS_Module')).toBeInTheDocument());
 
     fireEvent.click(getPencilButton(container));
-    await waitFor(() => expect(container.querySelector('input[type="number"]')).not.toBeNull());
+    await waitFor(() => expect(amountInputs(container)[0] ?? null).not.toBeNull());
 
     // Trigger 1 — the asset selector's onChange fires saveField immediately.
     fireEvent.click(screen.getByTestId('selector-asset'));
     await waitFor(() => expect(putCallCount(fetchMock)).toBe(1));
 
     // Trigger 2 — a DIFFERENT field of the SAME line, while trigger 1's PUT is still open.
-    const percentageInput = container.querySelectorAll('input[type="number"]')[0];
+    const percentageInput = amountInputs(container)[0];
     fireEvent.change(percentageInput, { target: { value: '99' } });
     fireEvent.blur(percentageInput);
 
@@ -187,14 +204,19 @@ describe('AmortizationLinesTable — single-flight write queue per line (ETP-525
 
     // Also enter inline edit mode for the amount field.
     fireEvent.click(getPencilButton(container));
-    await waitFor(() => expect(container.querySelectorAll('input[type="number"]').length).toBeGreaterThan(0));
+    await waitFor(() => expect(amountInputs(container).length).toBeGreaterThan(0));
 
     // Trigger 1 — a dimension selector's onChange (onFieldSave).
     fireEvent.click(screen.getByTestId('selector-costcenter'));
     await waitFor(() => expect(putCallCount(fetchMock)).toBe(1));
 
     // Trigger 2 — the amount input's onBlur, a completely different field, while trigger 1 is open.
-    const amountInput = container.querySelectorAll('input[type="number"]')[1];
+    // ETP-5107 — the focus event is now part of the interaction, not decoration: MaskedAmountInput
+    // only keeps the typed buffer while the field is focused, and re-renders the idle (grouped,
+    // 2-decimal) display otherwise. A change fired at a field the test never focused is not a
+    // user-reachable state, and it made the commit read back '777.00' instead of '777'.
+    const amountInput = amountInputs(container)[1];
+    fireEvent.focus(amountInput);
     fireEvent.change(amountInput, { target: { value: '777' } });
     fireEvent.blur(amountInput);
 
@@ -221,10 +243,10 @@ describe('AmortizationLinesTable — single-flight write queue per line (ETP-525
     await waitFor(() => expect(screen.getByText('AS_Module')).toBeInTheDocument());
 
     fireEvent.click(getPencilButton(container));
-    await waitFor(() => expect(container.querySelector('input[type="number"]')).not.toBeNull());
+    await waitFor(() => expect(amountInputs(container)[0] ?? null).not.toBeNull());
 
     fetchMock.mockClear();
-    const percentageInput = container.querySelectorAll('input[type="number"]')[0];
+    const percentageInput = amountInputs(container)[0];
     fireEvent.change(percentageInput, { target: { value: '15' } });
     fireEvent.blur(percentageInput);
 
@@ -246,10 +268,10 @@ describe('AmortizationLinesTable — single-flight write queue per line (ETP-525
     await waitFor(() => expect(screen.getByText('AS_Module')).toBeInTheDocument());
 
     fireEvent.click(getPencilButton(container));
-    await waitFor(() => expect(container.querySelector('input[type="number"]')).not.toBeNull());
+    await waitFor(() => expect(amountInputs(container)[0] ?? null).not.toBeNull());
 
     fetchMock.mockClear();
-    const percentageInput = container.querySelectorAll('input[type="number"]')[0];
+    const percentageInput = amountInputs(container)[0];
     // Blur without ever changing the value away from its defaultValue (27.42).
     fireEvent.blur(percentageInput);
 
