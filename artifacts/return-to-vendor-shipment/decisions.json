@@ -367,15 +367,13 @@
       "javaQualifier": "returnToVendorShipmentLineHandler",
       "fields": {
         "lineNo": {
-          "grid": true,
-          "gridOrder": 1,
-          "gridReadOnly": true,
+          "grid": false,
           "inputMode": "number",
           "section": "principal"
         },
         "product": {
           "grid": true,
-          "gridOrder": 2,
+          "gridOrder": 1,
           "gridReadOnly": true,
           "searchable": true,
           "inputMode": "search",
@@ -385,7 +383,7 @@
         "movementQuantity": {
           "visibility": "editable",
           "grid": true,
-          "gridOrder": 3,
+          "gridOrder": 2,
           "inputMode": "number",
           "section": "principal",
           "grow": true,
@@ -401,7 +399,7 @@
           "visibility": "readOnly",
           "gridReadOnly": true,
           "grid": true,
-          "gridOrder": 4,
+          "gridOrder": 3,
           "section": "principal",
           "grow": true,
           "labels": { "es_ES": "Cant. recibida orig.", "en_US": "Original Received Qty" }

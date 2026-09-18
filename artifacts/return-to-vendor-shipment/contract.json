@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.3.0",
   "generatedAt": "2026-08-13T11:56:58.791Z",
-  "updatedAt": "2026-09-18T12:14:31.782Z",
-  "checksum": "ac23e1e65fb6226e",
+  "updatedAt": "2026-08-31T12:35:28.419Z",
+  "checksum": "36b470c83755c550",
   "frontendContract": {
     "window": {
       "id": "273673D2ED914C399A6C51DB758BE0F9",
@@ -499,7 +499,7 @@
             "tsType": "number",
             "visibility": "readOnly",
             "required": true,
-            "grid": true,
+            "grid": false,
             "form": true,
             "sourceRequired": true,
             "derivation": {
@@ -508,8 +508,6 @@
             },
             "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@",
             "section": "principal",
-            "gridOrder": 1,
-            "gridReadOnly": true,
             "validation": {
               "required": true,
               "maxLength": 10
@@ -534,7 +532,7 @@
             "reference": "Product",
             "inputMode": "search",
             "section": "principal",
-            "gridOrder": 2,
+            "gridOrder": 1,
             "gridReadOnly": true,
             "validation": {
               "maxLength": 60
@@ -570,7 +568,7 @@
               "es_ES": "Cant. a devolver",
               "en_US": "Return Qty"
             },
-            "gridOrder": 3,
+            "gridOrder": 2,
             "grow": true,
             "validation": {
               "required": true,
@@ -639,7 +637,7 @@
               "es_ES": "Cant. recibida orig.",
               "en_US": "Original Received Qty"
             },
-            "gridOrder": 4,
+            "gridOrder": 3,
             "grow": true,
             "gridReadOnly": true,
             "validation": {

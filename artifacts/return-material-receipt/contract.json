@@ -1,8 +1,7 @@
 {
-  "version": "0.6.0",
+  "version": "0.5.1",
   "generatedAt": "2026-09-16T11:53:10.457Z",
-  "updatedAt": "2026-09-18T12:14:31.626Z",
-  "checksum": "b9d78180c9153c36",
+  "checksum": "00429ca784ad3e1e",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -500,7 +499,7 @@
             "tsType": "number",
             "visibility": "readOnly",
             "required": true,
-            "grid": true,
+            "grid": false,
             "form": true,
             "sourceRequired": true,
             "derivation": {
@@ -509,8 +508,6 @@
             },
             "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@",
             "section": "principal",
-            "gridOrder": 1,
-            "gridReadOnly": true,
             "validation": {
               "required": true,
               "maxLength": 10
@@ -535,7 +532,7 @@
             "reference": "Product",
             "inputMode": "search",
             "section": "principal",
-            "gridOrder": 2,
+            "gridOrder": 1,
             "gridReadOnly": true,
             "validation": {
               "maxLength": 60
@@ -567,7 +564,7 @@
             },
             "defaultValue": "0",
             "section": "principal",
-            "gridOrder": 3,
+            "gridOrder": 2,
             "validation": {
               "required": true,
               "maxLength": 10
@@ -649,7 +646,7 @@
             "grid": true,
             "form": true,
             "section": "principal",
-            "gridOrder": 4,
+            "gridOrder": 3,
             "gridReadOnly": true,
             "validation": {
               "maxLength": 10

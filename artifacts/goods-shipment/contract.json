@@ -1,8 +1,8 @@
 {
-  "version": "0.2.1",
+  "version": "0.1.0",
   "generatedAt": "2026-08-13T11:56:58.444Z",
-  "updatedAt": "2026-09-18T12:14:59.616Z",
-  "checksum": "f4a5c9548f699ecc",
+  "updatedAt": "2026-09-14T12:02:33.050Z",
+  "checksum": "714ce2765a9f7c09",
   "frontendContract": {
     "window": {
       "id": "169",
@@ -797,36 +797,6 @@
         "uiPattern": "STD",
         "fields": [
           {
-            "name": "lineNo",
-            "apiKey": "lineNo",
-            "column": "Line",
-            "label": "Line No.",
-            "type": "integer",
-            "tsType": "number",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "lookup",
-              "source": "SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@"
-            },
-            "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@",
-            "section": "principal",
-            "gridOrder": 1,
-            "gridReadOnly": true,
-            "validation": {
-              "required": true,
-              "maxLength": 10
-            },
-            "readOnlyLogic": {
-              "raw": "@Processed@='Y'",
-              "evaluable": true,
-              "js": "record['processed'] === true"
-            }
-          },
-          {
             "name": "product",
             "apiKey": "product",
             "column": "M_Product_ID",
@@ -993,13 +963,6 @@
           "product"
         ],
         "computedFields": [
-          {
-            "name": "lineNo",
-            "derivation": {
-              "type": "lookup",
-              "source": "SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@"
-            }
-          },
           {
             "name": "movementQuantity",
             "derivation": {
@@ -1672,7 +1635,7 @@
             "apiKey": "lineNo",
             "column": "Line",
             "type": "integer",
-            "visibility": "readOnly",
+            "visibility": "system",
             "required": true
           },
           {
@@ -2436,14 +2399,6 @@
         "description": "Default value for 'posted' in goodsShipment should be a string"
       },
       {
-        "id": "t-default-value-type-goodsShipmentLine-lineNo",
-        "category": "default-value-type",
-        "entity": "goodsShipmentLine",
-        "field": "lineNo",
-        "runner": "node",
-        "description": "Default value for 'lineNo' in goodsShipmentLine should be a string"
-      },
-      {
         "id": "t-default-value-type-goodsShipmentLine-movementQuantity",
         "category": "default-value-type",
         "entity": "goodsShipmentLine",
@@ -2708,14 +2663,6 @@
         "description": "Field 'description' should be present in goodsShipmentLine"
       },
       {
-        "id": "t-field-presence-goodsShipmentLine-lineNo",
-        "category": "field-presence",
-        "entity": "goodsShipmentLine",
-        "field": "lineNo",
-        "runner": "node",
-        "description": "Field 'lineNo' should be present in goodsShipmentLine"
-      },
-      {
         "id": "t-field-presence-goodsShipmentLine-movementQuantity",
         "category": "field-presence",
         "entity": "goodsShipmentLine",
@@ -2892,14 +2839,6 @@
         "description": "Field 'description' should have type 'string' in goodsShipmentLine"
       },
       {
-        "id": "t-field-type-goodsShipmentLine-lineNo",
-        "category": "field-type",
-        "entity": "goodsShipmentLine",
-        "field": "lineNo",
-        "runner": "node",
-        "description": "Field 'lineNo' should have type 'number' in goodsShipmentLine"
-      },
-      {
         "id": "t-field-type-goodsShipmentLine-movementQuantity",
         "category": "field-type",
         "entity": "goodsShipmentLine",
@@ -3004,14 +2943,6 @@
         "description": "Read-only logic for 'costcenter' in goodsShipmentLine should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-goodsShipmentLine-lineNo",
-        "category": "readonlylogic-evaluable",
-        "entity": "goodsShipmentLine",
-        "field": "lineNo",
-        "runner": "node",
-        "description": "Read-only logic for 'lineNo' in goodsShipmentLine should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-goodsShipmentLine-movementQuantity",
         "category": "readonlylogic-evaluable",
         "entity": "goodsShipmentLine",
@@ -3114,14 +3045,6 @@
         "field": "costcenter",
         "runner": "node",
         "description": "Read-only logic for 'costcenter' in goodsShipmentLine should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-goodsShipmentLine-lineNo",
-        "category": "readonlylogic-valid",
-        "entity": "goodsShipmentLine",
-        "field": "lineNo",
-        "runner": "node",
-        "description": "Read-only logic for 'lineNo' in goodsShipmentLine should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-goodsShipmentLine-movementQuantity",
@@ -3855,6 +3778,14 @@
         "description": "System field 'invoiceQuantity' should exist in backend but not frontend for goodsShipmentLine"
       },
       {
+        "id": "t-system-field-goodsShipmentLine-lineNo",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "System field 'lineNo' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
         "id": "t-system-field-goodsShipmentLine-managePrereservation",
         "category": "system-field",
         "entity": "goodsShipmentLine",
@@ -3990,25 +3921,25 @@
       }
     ],
     "summary": {
-      "total": 215,
+      "total": 211,
       "byCategory": {
         "action-endpoint": 12,
         "crud-flags": 2,
-        "default-value-type": 8,
+        "default-value-type": 7,
         "displaylogic-evaluable": 7,
         "displaylogic-valid": 7,
-        "field-presence": 23,
-        "field-type": 23,
-        "readonlylogic-evaluable": 14,
-        "readonlylogic-valid": 14,
+        "field-presence": 22,
+        "field-type": 22,
+        "readonlylogic-evaluable": 13,
+        "readonlylogic-valid": 13,
         "rule-declared": 5,
         "searchable-filters": 6,
         "selector-endpoint": 9,
-        "system-field": 83,
+        "system-field": 84,
         "visibility": 2
       },
       "byRunner": {
-        "node": 215,
+        "node": 211,
         "junit": 0
       }
     }
