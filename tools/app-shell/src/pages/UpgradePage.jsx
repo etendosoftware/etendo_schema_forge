@@ -281,8 +281,8 @@ function SuccessPanel({ ui, onContinue, entering, enterError, migrationRequired 
             <p className="mt-1 text-sm text-muted-foreground">{ui('upgradeMigrationBody')}</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {[
-                { key: 'products', label: 'upgradeMigrateProducts' },
-                { key: 'contacts', label: 'upgradeMigrateContacts' },
+                { key: 'products', labelKey: 'upgradeMigrateProducts' },
+                { key: 'contacts', labelKey: 'upgradeMigrateContacts' },
               ].map(item => (
                 <label key={item.key} className="flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm hover:bg-muted/40">
                   <input
@@ -292,7 +292,7 @@ function SuccessPanel({ ui, onContinue, entering, enterError, migrationRequired 
                     data-testid={`upgrade-migration-${item.key}`}
                     className="h-4 w-4 accent-primary"
                   />
-                  <span>{ui(item.label)}</span>
+                  <span>{ui(item.labelKey)}</span>
                 </label>
               ))}
             </div>
@@ -698,7 +698,7 @@ export default function UpgradePage() {
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <Rocket className="h-5 w-5" data-testid="Rocket__58bad7" />
           </div>
-          <span className="text-xl font-bold tracking-tight">Etendo</span>
+          <span className="text-xl font-bold tracking-tight">{ui('brandEtendo')}</span>
         </div>
         <CheckoutSteps ui={ui} phase={phase} checkoutStep={checkoutStep} />
         <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label={ui('back')} data-testid="upgrade-close">

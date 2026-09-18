@@ -4,12 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useUI } from '@/i18n';
 
 function toInputDate(value) {
   return value ? new Date(value).toISOString().slice(0, 16) : '';
 }
 
 export default function DevLifecyclePage() {
+  const ui = useUI();
   const apiFetch = useApiFetch('');
   const [state, setState] = useState({ environments: [], trialDays: 15, renewalGraceDays: 15 });
   const [selected, setSelected] = useState('');
@@ -22,7 +24,7 @@ export default function DevLifecyclePage() {
 
   const load = useCallback(async () => {
     const response = await apiFetch('/sws/go/dev/lifecycle');
-    if (!response.ok) throw new Error('Development lifecycle tool is disabled');
+    if (!response.ok) throw new Error(ui('devLifecycleDisabled'));
     const data = await response.json();
     const normalized = data && typeof data === 'object'
       ? { environments: [], ...data }
@@ -62,12 +64,12 @@ export default function DevLifecyclePage() {
           } : {}),
         }),
       });
-      if (!response.ok) throw new Error('Could not update lifecycle state');
+      if (!response.ok) throw new Error(ui('devLifecycleUpdateFailed'));
       const data = await response.json();
       setState(data && typeof data === 'object'
         ? { environments: [], ...data }
         : { environments: [], trialDays: Number(trialDays), renewalGraceDays: Number(graceDays) });
-      setMessage('Saved for this local backend process.');
+      setMessage(ui('devLifecycleSaved'));
     } catch (error) {
       setMessage(error.message);
     }
@@ -76,48 +78,48 @@ export default function DevLifecyclePage() {
   return (
     <main className="mx-auto max-w-4xl space-y-6 p-6" data-testid="DevLifecyclePage">
       <Card data-testid="Card__91748c">
-        <CardHeader data-testid="CardHeader__91748c"><CardTitle data-testid="CardTitle__91748c">Development lifecycle controls</CardTitle></CardHeader>
+        <CardHeader data-testid="CardHeader__91748c"><CardTitle data-testid="CardTitle__91748c">{ui('devLifecycleTitle')}</CardTitle></CardHeader>
         <CardContent className="space-y-4" data-testid="CardContent__91748c">
           <p className="text-sm text-muted-foreground">
-            Local QA tool for ETP-5396. Runtime day settings reset when the backend restarts.
+            {ui('devLifecycleDescription')}
           </p>
           <form onSubmit={save} className="grid gap-4 md:grid-cols-2">
-            <div><Label htmlFor="trial-days" data-testid="Label__91748c">Demo trial days</Label><Input
+            <div><Label htmlFor="trial-days" data-testid="Label__91748c">{ui('devLifecycleTrialDays')}</Label><Input
               id="trial-days"
               type="number"
               min="1"
               value={trialDays}
               onChange={e => setTrialDays(e.target.value)}
               data-testid="Input__91748c" /></div>
-            <div><Label htmlFor="grace-days" data-testid="Label__91748c">Renewal grace days</Label><Input
+            <div><Label htmlFor="grace-days" data-testid="Label__91748c">{ui('devLifecycleGraceDays')}</Label><Input
               id="grace-days"
               type="number"
               min="0"
               value={graceDays}
               onChange={e => setGraceDays(e.target.value)}
               data-testid="Input__91748c" /></div>
-            <div className="md:col-span-2"><Label htmlFor="environment" data-testid="Label__91748c">Owned environment</Label><select id="environment" className="mt-1 w-full rounded-md border bg-background p-2" value={selected} onChange={e => choose(e.target.value)}><option value="">Only change global settings</option>{state?.environments?.map(item => <option key={item.clientId} value={item.clientId}>{item.clientName} ({item.environmentType || item.plan})</option>)}</select></div>
+            <div className="md:col-span-2"><Label htmlFor="environment" data-testid="Label__91748c">{ui('devLifecycleOwnedEnvironment')}</Label><select id="environment" className="mt-1 w-full rounded-md border bg-background p-2" value={selected} onChange={e => choose(e.target.value)}><option value="">{ui('devLifecycleGlobalSettings')}</option>{state?.environments?.map(item => <option key={item.clientId} value={item.clientId}>{item.clientName} ({item.environmentType || item.plan})</option>)}</select></div>
             {selected && <>
-              <div><Label htmlFor="trial-start" data-testid="Label__91748c">Trial started at (UTC)</Label><Input
+              <div><Label htmlFor="trial-start" data-testid="Label__91748c">{ui('devLifecycleTrialStartedAt')}</Label><Input
                 id="trial-start"
                 type="datetime-local"
                 value={trialStartedAt}
                 onChange={e => setTrialStartedAt(e.target.value)}
                 data-testid="Input__91748c" /></div>
-              <div><Label htmlFor="subscription" data-testid="Label__91748c">Subscription status</Label><select id="subscription" className="mt-1 w-full rounded-md border bg-background p-2" value={subscriptionStatus} onChange={e => setSubscriptionStatus(e.target.value)}><option>NONE</option><option>CURRENT</option><option>PAST_DUE</option><option>EXPIRED</option></select></div>
-              <div><Label htmlFor="renewal-due" data-testid="Label__91748c">Renewal due at (UTC)</Label><Input
+              <div><Label htmlFor="subscription" data-testid="Label__91748c">{ui('devLifecycleSubscriptionStatus')}</Label><select id="subscription" className="mt-1 w-full rounded-md border bg-background p-2" value={subscriptionStatus} onChange={e => setSubscriptionStatus(e.target.value)}><option value="NONE">{ui('subscriptionNone')}</option><option value="CURRENT">{ui('subscriptionCurrent')}</option><option value="PAST_DUE">{ui('subscriptionPastDue')}</option><option value="EXPIRED">{ui('subscriptionExpired')}</option></select></div>
+              <div><Label htmlFor="renewal-due" data-testid="Label__91748c">{ui('devLifecycleRenewalDueAt')}</Label><Input
                 id="renewal-due"
                 type="datetime-local"
                 value={renewalDueAt}
                 onChange={e => setRenewalDueAt(e.target.value)}
                 data-testid="Input__91748c" /></div>
             </>}
-            <Button type="submit" className="md:col-span-2" data-testid="Button__91748c">Save local test state</Button>
+            <Button type="submit" className="md:col-span-2" data-testid="Button__91748c">{ui('devLifecycleSave')}</Button>
           </form>
           {message && <p className="text-sm" role="status">{message}</p>}
         </CardContent>
       </Card>
-      <Card data-testid="Card__91748c"><CardHeader data-testid="CardHeader__91748c"><CardTitle data-testid="CardTitle__91748c">Current server projection</CardTitle></CardHeader><CardContent data-testid="CardContent__91748c"><pre className="overflow-auto text-xs">{JSON.stringify(state, null, 2)}</pre></CardContent></Card>
+      <Card data-testid="Card__91748c"><CardHeader data-testid="CardHeader__91748c"><CardTitle data-testid="CardTitle__91748c">{ui('devLifecycleServerProjection')}</CardTitle></CardHeader><CardContent data-testid="CardContent__91748c"><pre className="overflow-auto text-xs">{JSON.stringify(state, null, 2)}</pre></CardContent></Card>
     </main>
   );
 }
