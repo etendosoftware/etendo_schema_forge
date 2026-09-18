@@ -151,6 +151,134 @@ describe('ReportDrawer', () => {
   });
 });
 
+describe('ReportDrawer — ETP-5300 preview re-render regression', () => {
+  // This describe manages its own fetch mock per-test (mockFetchWithJsreport),
+  // so calls must not accumulate across tests — the top-level describe's
+  // beforeEach does not apply here (sibling describe block).
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // Distinct fetch mock from the top-level describe's beforeEach: jsreport must
+  // be reachable (ping ok) AND the render POST ('/jsreport/api/report') must be
+  // separately mocked so it doesn't fall through to the generic "data fetch"
+  // branch, which returns .json() but not .text()/.blob().
+  function mockFetchWithJsreport({ jsreportOk = true } = {}) {
+    mockFetch.mockImplementation((url) => {
+      if (typeof url === 'string' && url.includes('/jsreport/api/ping')) {
+        return Promise.resolve({ ok: jsreportOk });
+      }
+      if (typeof url === 'string' && url.includes('/jsreport/api/report')) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve('<html><body>report</body></html>'),
+          blob: () => Promise.resolve(new Blob(['<html></html>'])),
+        });
+      }
+      // Entity data fetch (fetchAllRecords via apiFetch)
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          response: { data: [{ id: '1', documentNo: 'SO-001', grandTotal: 100 }] },
+        }),
+      });
+    });
+  }
+
+  // Number of render/export calls sent to jsreport so far. We assert on this
+  // observable side effect rather than iframe DOM content — jsdom's
+  // iframe.onload / contentDocument.write behavior is unreliable in tests (see
+  // ReportDrawer.jsx's iframeShowingBlobRef comment for why the real browser
+  // needs that branch at all).
+  function renderCallCount() {
+    return mockFetch.mock.calls.filter(
+      ([url]) => typeof url === 'string' && url.includes('/jsreport/api/report')
+    ).length;
+  }
+
+  it('re-clicking the preview button re-renders the report on every click', async () => {
+    const user = userEvent.setup();
+    mockFetchWithJsreport();
+
+    render(<ReportDrawer {...BASE_PROPS} />);
+
+    // Wait past the initial automatic preview render. jsreportAvailable starts
+    // as null (before the ping resolves), so the very first render pass may
+    // take the local-HTML fallback branch; the effect re-runs once
+    // jsreportAvailable flips to true and only then hits jsreport.
+    await waitFor(() => expect(renderCallCount()).toBeGreaterThanOrEqual(1));
+
+    const previewButton = screen.getByText('preview');
+
+    // Snapshot the count right before each click rather than asserting a fixed
+    // absolute total, since the exact number of pre-click renders depends on
+    // effect-rerun timing (jsreportAvailable/reportRows resolution order).
+    const before1 = renderCallCount();
+    await user.click(previewButton);
+    await waitFor(() => expect(renderCallCount()).toBeGreaterThan(before1));
+
+    const before2 = renderCallCount();
+    await user.click(previewButton);
+    await waitFor(() => expect(renderCallCount()).toBeGreaterThan(before2));
+  });
+
+  it('clicking preview when it is already the active format still triggers a re-render', async () => {
+    const user = userEvent.setup();
+    mockFetchWithJsreport();
+
+    render(<ReportDrawer {...BASE_PROPS} />);
+    await waitFor(() => expect(renderCallCount()).toBeGreaterThanOrEqual(1));
+
+    // activeFormat is already 'preview' (the component's initial state) — this
+    // click produces NO activeFormat value transition. The fix must not rely
+    // on such a transition to re-fire the render effect (that's what
+    // previewNonce is for).
+    const previewButton = screen.getByText('preview');
+    const before = renderCallCount();
+    await user.click(previewButton);
+    await waitFor(() => expect(renderCallCount()).toBeGreaterThan(before));
+  });
+
+  it('PDF then preview still redisplays the report (iframeShowingBlobRef branch)', async () => {
+    const user = userEvent.setup();
+    mockFetchWithJsreport();
+    URL.createObjectURL = vi.fn(() => 'blob:generated');
+    URL.revokeObjectURL = vi.fn();
+
+    render(<ReportDrawer {...BASE_PROPS} />);
+    await waitFor(() => expect(renderCallCount()).toBeGreaterThanOrEqual(1));
+
+    const pdfButton = screen.getByText('pdf');
+    await waitFor(() => expect(pdfButton).not.toBeDisabled());
+
+    const beforePdf = renderCallCount();
+    await user.click(pdfButton);
+    await waitFor(() => expect(renderCallCount()).toBeGreaterThan(beforePdf));
+
+    const previewButton = screen.getByText('preview');
+    const beforePreview = renderCallCount();
+    await user.click(previewButton);
+    await waitFor(() => expect(renderCallCount()).toBeGreaterThan(beforePreview));
+  });
+
+  it('clicking preview does not call jsreport when jsreport is unavailable (local HTML fallback)', async () => {
+    const user = userEvent.setup();
+    mockFetchWithJsreport({ jsreportOk: false });
+
+    render(<ReportDrawer {...BASE_PROPS} />);
+    await waitFor(() => {
+      expect(screen.getByText('jsreportNotAvailableBanner')).toBeInTheDocument();
+    });
+
+    const previewButton = screen.getByText('preview');
+    await waitFor(() => expect(previewButton).not.toBeDisabled());
+
+    await user.click(previewButton);
+
+    expect(renderCallCount()).toBe(0);
+  });
+});
+
 describe('ReportDrawer — embedded jsreport HELPERS_CODE formatCurrency', () => {
   // HELPERS_CODE is a self-contained Handlebars-helpers string sent directly to
   // jsreport (same cross-process constraint as templates/reports/helpers — see
