@@ -602,6 +602,120 @@ describe('FmBoxes303 — editable cell input events', () => {
   });
 });
 
+// ── stale pending draft on re-open (ETP-5393 Bug C follow-up) ────────────────
+// Manual-QA regression: typing a negative value into box 111 (or 77) gets clamped to 0
+// by FmModel303Page's handleBoxChange on commit, and the read-only display correctly
+// shows 0,00 €. But re-opening the SAME cell's editor (pencil click) used to show the
+// original unclamped "-12" draft again, because `pendingValues[boxNum]` was never reset
+// on commit or on re-entering edit mode — it kept whatever the input last held, even
+// though the box's real/persisted value had since changed underneath it. This exercises
+// FmBoxes303 in isolation: after a commit, the parent re-renders with the corrected
+// (post-clamp) `boxes` value, and re-opening the editor must read from THAT, not from
+// a leftover draft.
+
+describe('FmBoxes303 — editable cell re-edit does not leak a stale pending draft (ETP-5393)', () => {
+  it('box 111: types -12, commits (blur), parent clamps to 0 — reopening the editor shows 0, not -12', () => {
+    const onBoxChange = vi.fn();
+    const { container, rerender } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 111: 0 }}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+
+    // Open the editor for box 111 and type the invalid negative value.
+    const findEditBtnFor111 = (c) => Array.from(c.querySelectorAll('.fm-aeat-cell')).find(
+      cell => cell.querySelector('.fm-aeat-cell__num')?.textContent === '111'
+    )?.querySelector('.fm-aeat-cell__edit-btn');
+
+    fireEvent.click(findEditBtnFor111(container));
+    let input = container.querySelector('.fm-aeat-cell__input');
+    expect(input).toBeTruthy();
+    fireEvent.change(input, { target: { value: '-12' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(111, '-12');
+    // Editor closed after commit.
+    expect(container.querySelector('.fm-aeat-cell__input')).toBeNull();
+
+    // Simulate the parent (FmModel303Page's handleBoxChange) clamping the negative
+    // commit to 0 and re-rendering this component with the corrected boxes prop —
+    // the read-only cell must show the clamped value.
+    rerender(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 111: 0 }}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+
+    // Reopen the editor for the same cell — it must start from the current
+    // persisted value (0), never the stale "-12" draft from the previous session.
+    fireEvent.click(findEditBtnFor111(container));
+    input = container.querySelector('.fm-aeat-cell__input');
+    expect(input).toBeTruthy();
+    expect(input.value).toBe('0');
+  });
+
+  it('non-clamped box (76): a committed draft does not leak into the next edit session either', () => {
+    const onBoxChange = vi.fn();
+    const { container, rerender } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 76: 100 }}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+
+    fireEvent.click(container.querySelector('.fm-aeat-cell__edit-btn'));
+    let input = container.querySelector('.fm-aeat-cell__input');
+    fireEvent.change(input, { target: { value: '250' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onBoxChange).toHaveBeenCalledWith(76, '250');
+    expect(container.querySelector('.fm-aeat-cell__input')).toBeNull();
+
+    // Parent commits the new value and re-renders with it.
+    rerender(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 76: 250 }}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+
+    fireEvent.click(container.querySelector('.fm-aeat-cell__edit-btn'));
+    input = container.querySelector('.fm-aeat-cell__input');
+    expect(input.value).toBe('250');
+  });
+
+  it('Escape clears the pending draft too — reopening does not resurrect the discarded value', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{ 76: 100 }}
+        sectionIds={['resultado_final']}
+        onBoxChange={onBoxChange}
+      />
+    );
+
+    fireEvent.click(container.querySelector('.fm-aeat-cell__edit-btn'));
+    let input = container.querySelector('.fm-aeat-cell__input');
+    fireEvent.change(input, { target: { value: '999' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(onBoxChange).not.toHaveBeenCalled();
+    expect(container.querySelector('.fm-aeat-cell__input')).toBeNull();
+
+    fireEvent.click(container.querySelector('.fm-aeat-cell__edit-btn'));
+    input = container.querySelector('.fm-aeat-cell__input');
+    expect(input.value).toBe('100');
+  });
+});
+
 // ── sin_actividad section ─────────────────────────────────────────────────────
 
 describe('FmBoxes303 — sin_actividad section', () => {
@@ -862,25 +976,25 @@ describe('FmBoxes303 — datos_bancarios × rectificativa visibility matrix (any
     expect(container.querySelector('.fm-aeat-section')).toBeNull();
   });
 
-  it('tipo I + rectificativa true → visible (the actual bug fix — rectificativa branch of anyOf)', () => {
+  it('tipo I + rectificativa true + box 111 non-zero → visible (the actual bug fix — rectificativa branch of anyOf)', () => {
     const { container } = render(
       <FmBoxes303
         {...BASE_PROPS}
         boxes={{}}
         sectionIds={['datos_bancarios']}
-        identification={{ tipo_declaracion: 'I', rectificativa: true }}
+        identification={{ tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true }}
       />
     );
     expect(container.querySelector('.fm-aeat-section')).toBeTruthy();
   });
 
-  it('tipo V + rectificativa true → visible (V is reachable again once rectificativa is checked)', () => {
+  it('tipo V + rectificativa true + box 111 non-zero → visible (V is reachable again once rectificativa is checked)', () => {
     const { container } = render(
       <FmBoxes303
         {...BASE_PROPS}
         boxes={{}}
         sectionIds={['datos_bancarios']}
-        identification={{ tipo_declaracion: 'V', rectificativa: true }}
+        identification={{ tipo_declaracion: 'V', rectificativa: true, _box111NonZero: true }}
       />
     );
     expect(container.querySelector('.fm-aeat-section')).toBeTruthy();
@@ -898,9 +1012,14 @@ describe('FmBoxes303 — datos_bancarios × rectificativa visibility matrix (any
 // must be unaffected by this specific change.
 
 describe('FmBoxes303 — datos_bancarios individual bank field visibility (ETP-4456 follow-up)', () => {
+  // ETP-5393 follow-up — all 7 bank fields now carry a `requiredWhen`, so several of the
+  // identification states already exercised here (e.g. tipo D) now render with a trailing
+  // red-asterisk required-mark ("fm.ident.bank.swift_bic*") on top of the label. These tests are
+  // about VISIBILITY, not requiredness, so the helper strips a trailing "*" before comparing —
+  // requiredness itself is covered separately below in "required-mark rendering".
   const bankFieldLabels = (container) =>
     Array.from(container.querySelectorAll('.fm-aeat-ident-inline-field__label'))
-      .map(el => el.textContent);
+      .map(el => el.textContent.replace(/\*$/, ''));
 
   it('tipo D + rectificativa false → bank_swift_bic visible (regression guard — pre-fix correct behavior preserved)', () => {
     const { container } = render(
@@ -929,13 +1048,17 @@ describe('FmBoxes303 — datos_bancarios individual bank field visibility (ETP-4
     expect(bankFieldLabels(container)).not.toContain('fm.ident.bank.swift_bic');
   });
 
-  it('tipo I + rectificativa true → bank_swift_bic visible (the actual bug fix — commit edb448754)', () => {
+  // ETP-5393 manual-QA fix — the rectificativa branch now also requires `_box111NonZero`,
+  // so this scenario must carry a non-zero box 111 to stay visible (see
+  // fm303Layouts.bankVisibilityReactivity.vitest.js for the box111==0/rectificativa-false
+  // hide-again coverage).
+  it('tipo I + rectificativa true + box 111 non-zero → bank_swift_bic visible (the actual bug fix — commit edb448754)', () => {
     const { container } = render(
       <FmBoxes303
         {...BASE_PROPS}
         boxes={{}}
         sectionIds={['datos_bancarios']}
-        identification={{ tipo_declaracion: 'I', rectificativa: true }}
+        identification={{ tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true }}
       />
     );
     expect(bankFieldLabels(container)).toContain('fm.ident.bank.swift_bic');
@@ -953,13 +1076,13 @@ describe('FmBoxes303 — datos_bancarios individual bank field visibility (ETP-4
     expect(bankFieldLabels(container)).toContain('fm.ident.bank.swift_bic');
   });
 
-  it('also covers bank_nombre, bank_direccion, bank_ciudad, bank_pais, bank_sepa for the bug-fix case (tipo I + rectificativa true)', () => {
+  it('also covers bank_nombre, bank_direccion, bank_ciudad, bank_pais, bank_sepa for the bug-fix case (tipo I + rectificativa true + box 111 non-zero)', () => {
     const { container } = render(
       <FmBoxes303
         {...BASE_PROPS}
         boxes={{}}
         sectionIds={['datos_bancarios']}
-        identification={{ tipo_declaracion: 'I', rectificativa: true }}
+        identification={{ tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true }}
       />
     );
     const labels = bankFieldLabels(container);
@@ -967,13 +1090,13 @@ describe('FmBoxes303 — datos_bancarios individual bank field visibility (ETP-4
       .forEach(key => expect(labels).toContain(key));
   });
 
-  it('bank_iban is unaffected by the field-level visibleWhen change — visible whenever the section is (tipo I + rectificativa true)', () => {
+  it('bank_iban is unaffected by the field-level visibleWhen change — visible whenever the section is (tipo I + rectificativa true + box 111 non-zero)', () => {
     const { container } = render(
       <FmBoxes303
         {...BASE_PROPS}
         boxes={{}}
         sectionIds={['datos_bancarios']}
-        identification={{ tipo_declaracion: 'I', rectificativa: true }}
+        identification={{ tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true }}
       />
     );
     // bank_iban has no field-level visibleWhen — it renders whenever the section
@@ -1044,6 +1167,105 @@ describe('FmBoxes303 — datos_bancarios individual bank field visibility (ETP-4
       />
     );
     expect(bankFieldLabels(container).some(t => t.startsWith('fm.ident.bank.iban'))).toBe(true);
+  });
+});
+
+// ── datos_bancarios required-mark rendering (ETP-5393 follow-up, manual-QA fix) ──────────────
+// bank_iban carries `_BANK_IBAN_REQUIRED_WHEN` (fm303Layouts.js): required for tipo U/D/X
+// unconditionally (condition A, AEAT EDID065 — a plain devolución/domiciliación), OR for any
+// tipo when rectificativa is checked AND box 111 is non-zero (condition B). The other 6 bank
+// fields (bank_swift_bic, bank_nombre, bank_direccion, bank_ciudad, bank_pais, bank_sepa)
+// carry the NARROWER `_BANK_FULL_BLOCK_REQUIRED_WHEN` — condition B ONLY. A plain tipo D/U/X
+// devolución therefore shows those 6 fields (via `_BANK_DVX_VW`) WITHOUT the required-mark;
+// only bank_iban gets the "*" in that case. FmBoxes303's label rendering appends the raw
+// `fm-aeat-required-mark` ("*") span via the shared `isFieldRequired(f, identification)` — the
+// SAME function `getMissingRequiredFields` uses — so no per-field rendering code was added here;
+// these tests only lock in the resulting DOM.
+describe('FmBoxes303 — datos_bancarios required-mark rendering (ETP-5393 follow-up)', () => {
+  const rawBankFieldLabels = (container) =>
+    Array.from(container.querySelectorAll('.fm-aeat-ident-inline-field__label')).map(el => el.textContent);
+
+  const ALL_BANK_LABEL_KEYS = [
+    'fm.ident.bank.iban', 'fm.ident.bank.swift_bic', 'fm.ident.bank.nombre',
+    'fm.ident.bank.direccion', 'fm.ident.bank.ciudad', 'fm.ident.bank.pais', 'fm.ident.bank.sepa',
+  ];
+  // bank_iban has no field-level visibleWhen; the other 6 require _BANK_DVX_VW (tipo D/V/X or
+  // rectificativa checked) to even render.
+  const DVX_GATED_LABEL_KEYS = ALL_BANK_LABEL_KEYS.filter(k => k !== 'fm.ident.bank.iban');
+
+  it('tipo D (plain devolución, condition A alone) → only bank_iban carries the required-mark ("*"); the other 6 render WITHOUT it', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'D', rectificativa: false }}
+      />
+    );
+    const labels = rawBankFieldLabels(container);
+    expect(labels).toContain('fm.ident.bank.iban*');
+    DVX_GATED_LABEL_KEYS.forEach(key => {
+      expect(labels).toContain(key);
+      expect(labels).not.toContain(`${key}*`);
+    });
+  });
+
+  it('tipo I + rectificativa false → no bank field renders at all (section hidden, nothing to mark)', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'I', rectificativa: false }}
+      />
+    );
+    expect(rawBankFieldLabels(container)).toHaveLength(0);
+  });
+
+  // ETP-5393 manual-QA fix — this used to assert the DVX-gated fields stayed visible
+  // (just without the asterisk) when box 111 is 0. Manual QA confirmed a visible-but-
+  // unrequired bank block reads as a bug: the whole section (and these fields with it)
+  // must hide again once box 111 drops back to 0, not just lose its required-mark. See
+  // `_BANK_DVX_VW`/`sectionVisibleWhen` in fm303Layouts.js.
+  it('tipo I + rectificativa true + box 111 == 0 → section (and DVX-gated fields) hidden again, not just unrequired', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'I', rectificativa: true, _box111NonZero: false }}
+      />
+    );
+    expect(container.querySelector('.fm-aeat-section')).toBeNull();
+    const labels = rawBankFieldLabels(container);
+    DVX_GATED_LABEL_KEYS.forEach(key => expect(labels).not.toContain(key));
+    expect(labels).toHaveLength(0);
+  });
+
+  it('tipo I + rectificativa true + box 111 non-zero → visible DVX-gated fields render WITH the required-mark', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true }}
+      />
+    );
+    const labels = rawBankFieldLabels(container);
+    DVX_GATED_LABEL_KEYS.forEach(key => expect(labels).toContain(`${key}*`));
+  });
+
+  it('tipo U + rectificativa false → only bank_iban renders, and it carries the required-mark', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'U', rectificativa: false }}
+      />
+    );
+    const labels = rawBankFieldLabels(container);
+    expect(labels).toEqual(['fm.ident.bank.iban*']);
   });
 });
 
@@ -1128,6 +1350,148 @@ describe('FmBoxes303 — identificacion visibleWhen conditions', () => {
 // checkboxes and inline text/date inputs — must become non-interactive, and
 // the edit-pencil buttons must be entirely absent (not just disabled), since
 // they are the only way to enter cell-edit mode.
+
+// ── Percent cell clamping/rounding (ETP-5391) ────────────────────────────────
+// Percent boxes (89/90/91/92 in tributacion_territorial — last-period-only,
+// so year/period must resolve to the last period for the section to exist at
+// all) follow the AEAT rule "los porcentajes se expresarán con dos decimales":
+// never above 100, never negative, at most 2 decimal places.
+
+describe('FmBoxes303 — percent cell input attributes (colType="percent")', () => {
+  const PERCENT_PROPS = { year: 2026, period: 'T4', sectionIds: ['tributacion_territorial'] };
+
+  function openFirstEditor(container) {
+    const editBtns = container.querySelectorAll('.fm-aeat-cell__edit-btn');
+    expect(editBtns.length).toBeGreaterThan(0);
+    fireEvent.click(editBtns[0]);
+    return container.querySelector('.fm-aeat-cell__input');
+  }
+
+  it('renders max=100 and min=0 on a percent cell input (box 89 — Álava)', () => {
+    const { container } = render(<FmBoxes303 {...PERCENT_PROPS} boxes={{ 89: 50 }} />);
+    const input = openFirstEditor(container);
+    expect(input.getAttribute('max')).toBe('100');
+    expect(input.getAttribute('min')).toBe('0');
+  });
+
+  it('does NOT render max/min on an amount cell input (box 76, resultado_final)', () => {
+    const { container } = render(
+      <FmBoxes303 year={2026} period="T2" boxes={{ 76: 100 }} sectionIds={['resultado_final']} />
+    );
+    const editBtns = container.querySelectorAll('.fm-aeat-cell__edit-btn');
+    fireEvent.click(editBtns[0]);
+    const input = container.querySelector('.fm-aeat-cell__input');
+    expect(input.hasAttribute('max')).toBe(false);
+    expect(input.hasAttribute('min')).toBe(false);
+  });
+
+  it('clamps a value above 100 down to "100" on blur', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(<FmBoxes303 {...PERCENT_PROPS} boxes={{ 89: 50 }} onBoxChange={onBoxChange} />);
+    const input = openFirstEditor(container);
+    fireEvent.change(input, { target: { value: '150' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(89, '100');
+  });
+
+  it('clamps a negative value up to "0" on Enter', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(<FmBoxes303 {...PERCENT_PROPS} boxes={{ 89: 50 }} onBoxChange={onBoxChange} />);
+    const input = openFirstEditor(container);
+    fireEvent.change(input, { target: { value: '-5' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onBoxChange).toHaveBeenCalledWith(89, '0');
+  });
+
+  it('rounds a value with more than 2 decimals to 2 decimals', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(<FmBoxes303 {...PERCENT_PROPS} boxes={{ 89: 50 }} onBoxChange={onBoxChange} />);
+    const input = openFirstEditor(container);
+    fireEvent.change(input, { target: { value: '33.456' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(89, '33.46');
+  });
+
+  it('leaves an in-range, already-2-decimal value untouched (no spurious rounding)', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(<FmBoxes303 {...PERCENT_PROPS} boxes={{ 89: 50 }} onBoxChange={onBoxChange} />);
+    const input = openFirstEditor(container);
+    fireEvent.change(input, { target: { value: '50.5' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(89, '50.5');
+  });
+
+  it('preserves an empty value as-is ("clear the field"), does not coerce it to a number', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(<FmBoxes303 {...PERCENT_PROPS} boxes={{ 89: 50 }} onBoxChange={onBoxChange} />);
+    const input = openFirstEditor(container);
+    fireEvent.change(input, { target: { value: '' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(89, '');
+  });
+
+  it('a value of exactly 100 is left unclamped', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(<FmBoxes303 {...PERCENT_PROPS} boxes={{ 89: 50 }} onBoxChange={onBoxChange} />);
+    const input = openFirstEditor(container);
+    fireEvent.change(input, { target: { value: '100' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(89, '100');
+  });
+
+  it('an amount-type cell (box 76) is NOT clamped/rounded — raw string forwarded verbatim', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303 year={2026} period="T2" boxes={{ 76: 100 }} sectionIds={['resultado_final']} onBoxChange={onBoxChange} />
+    );
+    const editBtns = container.querySelectorAll('.fm-aeat-cell__edit-btn');
+    fireEvent.click(editBtns[0]);
+    const input = container.querySelector('.fm-aeat-cell__input');
+    fireEvent.change(input, { target: { value: '999.999999' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(76, '999.999999');
+  });
+});
+
+// ── Casilla 107 (territorio_comun) mirrors box 65 live (ETP-5391) ───────────
+// 107 is a read-only derivedValue row — it must never carry its own edit
+// affordance, must reflect the live box 65 value (not a snapshot), and must
+// default to 100 when box 65 hasn't been entered yet.
+
+describe('FmBoxes303 — casilla 107 (territorio_comun) mirrors box 65', () => {
+  const TERR_PROPS = { year: 2026, period: 'T4', sectionIds: ['tributacion_territorial'] };
+
+  it('renders box number 107 with the live value of box 65, formatted as a percent', () => {
+    const { container } = render(<FmBoxes303 {...TERR_PROPS} boxes={{ 65: 42.5 }} />);
+    const nums = Array.from(container.querySelectorAll('.fm-aeat-cell__num')).map(n => n.textContent);
+    expect(nums).toContain('107');
+    expect(container.textContent).toContain('42,50');
+  });
+
+  it('defaults to 100 (dv.defaultValue) when box 65 is absent from boxes', () => {
+    const { container } = render(<FmBoxes303 {...TERR_PROPS} boxes={{}} />);
+    expect(container.textContent).toContain('100,00');
+  });
+
+  it('tracks a live update to box 65 across a rerender (not a frozen snapshot)', () => {
+    const { container, rerender } = render(<FmBoxes303 {...TERR_PROPS} boxes={{ 65: 30 }} />);
+    expect(container.textContent).toContain('30,00');
+    rerender(<FmBoxes303 {...TERR_PROPS} boxes={{ 65: 77 }} />);
+    expect(container.textContent).toContain('77,00');
+    expect(container.textContent).not.toContain('30,00');
+  });
+
+  it('renders empty (not "0,00") when the mirrored box-65 value is exactly 0', () => {
+    const { container } = render(<FmBoxes303 {...TERR_PROPS} boxes={{ 65: 0 }} />);
+    expect(container.textContent).not.toContain('0,00');
+  });
+
+  it('carries no edit-pencil button (read-only mirror, unlike the 4 editable territorial percent rows)', () => {
+    const { container } = render(<FmBoxes303 {...TERR_PROPS} boxes={{ 65: 42, 89: 10, 90: 20, 91: 30, 92: 40 }} />);
+    // Exactly 4 editable rows in this section (89/90/91/92) — territorio_comun (107) must not add a 5th.
+    expect(container.querySelectorAll('.fm-aeat-cell__edit-btn').length).toBe(4);
+  });
+});
 
 describe('FmBoxes303 — readOnly prop', () => {
   describe('renderIdentSelectField select', () => {

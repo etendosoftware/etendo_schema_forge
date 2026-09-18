@@ -92,7 +92,9 @@ const DEFAULT_TAX_ID_KEY = '1';
 // identificacion expedido por el pais, 5=Certificado de residencia fiscal, 6=Otro documento
 // probatorio, 7=No Censado. Before ETP-4995 the column accepted ONLY the raw code, so a user
 // who typed the label they see in the UI ("NIF") had the row rejected by the list reference.
-const TAX_ID_KEY_VALUES = {
+// Exported since ETP-5373 so the template test can dispatch the tax-id example on the SAME
+// label table the import itself resolves with, instead of restating which labels mean NIF.
+export const TAX_ID_KEY_VALUES = {
   // 'CIF' is not an AD_Ref_List name, but it is what people actually type: CIF was the
   // Spanish company tax ID until it was folded into NIF in 2008, and this window's own
   // tax-id column was labelled "CIF/NIF" until ETP-4992 renamed it to "NIF" (CIF no longer

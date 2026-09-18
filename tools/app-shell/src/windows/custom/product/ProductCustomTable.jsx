@@ -17,6 +17,13 @@ const columns = [
     title: 'name',
     subtitle: 'searchKey',
     media: { field: 'image', kind: 'neoImage', fallback: 'box' },
+    // `grow: true` — this is the one column that should absorb a sparse list's
+    // leftover space (renderMainColgroup/renderColumnHeaderCell in DataTable.jsx)
+    // instead of every column stretching proportionally under table-layout:
+    // fixed. Mirrors the generator's own emission for this same decisions.json
+    // "grow": true flag — kept manually here since this file predates and
+    // supersedes the generated columns array (see the doc comment above).
+    grow: true,
     parts: [
       { key: 'searchKey', column: 'Value', type: 'string', required: true, labels: { en_US: 'Identifier', es_ES: 'Identificador' } },
       { key: 'name', column: 'Name', type: 'string', required: true, labels: { en_US: 'Name', es_ES: 'Nombre' } },

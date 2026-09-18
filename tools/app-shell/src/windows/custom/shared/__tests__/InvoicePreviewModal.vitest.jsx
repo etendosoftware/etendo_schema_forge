@@ -98,6 +98,18 @@ vi.mock('@/components/related-documents', () => ({
   fetchByCriteria: vi.fn(),
 }));
 
+// ETP-5304 — EmailsCard is stubbed here on purpose. Its recipients line now goes
+// through TruncatedText, and the tooltip mock below renders TooltipContent
+// unconditionally (it ignores open state, which is what the *other* tooltip
+// consumers in this tree need). With the real card, any history row would put the
+// same recipients string in the DOM twice — trigger + always-mounted tooltip body —
+// and every getByText on it would throw "found multiple elements". The card's own
+// behaviour, including the ETP-5304 reveal, is covered against the REAL tooltip in
+// preview-cards/__tests__/EmailsCard.vitest.jsx.
+vi.mock('@/windows/custom/shared/preview-cards/EmailsCard.jsx', () => ({
+  default: ({ documentId }) => <div data-testid="emails-card" data-doc-id={documentId} />,
+}));
+
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }) => children,
   TooltipContent: ({ children }) => children,
@@ -241,9 +253,15 @@ describe('InvoicePreviewModal', () => {
 
   // ETP-4855 — the Messages / History tabs were permanent placeholders and were
   // removed from every preview modal. General is the only tab left here.
-  it('renders only the General tab', () => {
+  // ETP-5304 — the invoice preview builds exactly one tab ('general'), so the tab
+  // bar used to draw a single pill that was already active: it looked pressable and
+  // switched nothing. The bar is now hidden below two tabs; the tab's CONTENT must
+  // still render (asserted here and by the 'shows the total section' test below).
+  it('ETP-5304: renders no tab bar for its single tab, yet still renders that tab content', () => {
     renderPreview();
-    expect(screen.getByText('invoicePreviewGeneral')).toBeInTheDocument();
+    expect(screen.queryByText('invoicePreviewGeneral')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'invoicePreviewGeneral' })).toBeNull();
+    expect(screen.getByText('previewCardTotal')).toBeInTheDocument();
     expect(screen.queryByText('invoicePreviewMessages')).toBeNull();
     expect(screen.queryByText('invoicePreviewHistory')).toBeNull();
   });
