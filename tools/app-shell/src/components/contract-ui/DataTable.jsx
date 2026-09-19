@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -2084,6 +2084,24 @@ function computeActionColsWidthPx({
     + oneIfTrue(ilpTrailing) * 48;
 }
 
+// ETP-5133 follow-up (Sonar S3776) — bundles the row-action-column bookkeeping
+// (whether the quick-actions column and/or the legacy delete/clone columns are
+// showing, and the resulting colSpan for the empty-state/footer rows) into one
+// call, mirroring computeActionColsWidthPx's shape above (same flags) but
+// returning column PRESENCE/COUNTS instead of pixel widths. Extracted from
+// DataTable's render body so this mix of `&&`/`||`/ternary doesn't add flat
+// complexity to the caller.
+function computeRowActionColumnState({ rowQuickActions, onDeleteRow, hoverRowActions, onCloneRow, visibleColumns, selectable }) {
+  const quickActionsEnabled = isQuickActionsEnabled(rowQuickActions);
+  const legacyDeleteEnabled = !!onDeleteRow && (hoverRowActions || !quickActionsEnabled);
+  const deleteCol = oneIfTrue(legacyDeleteEnabled);
+  const cloneCol = oneIfTrue(onCloneRow && !quickActionsEnabled);
+  const quickActionsCol = oneIfTrue(quickActionsEnabled);
+  const actionCols = hoverRowActions ? 1 + deleteCol : deleteCol + cloneCol;
+  const colSpan = visibleColumns.length + oneIfTrue(selectable) + actionCols + quickActionsCol;
+  return { quickActionsEnabled, legacyDeleteEnabled, colSpan };
+}
+
 /**
  * Renders the <colgroup> that drives column widths in add-row-only mode
  * (hideHeader=true), mirroring InlineLinesPanel's flex layout with fixed
@@ -3279,13 +3297,9 @@ export function DataTable({
     });
   };
 
-  const quickActionsEnabled = isQuickActionsEnabled(rowQuickActions);
-  const legacyDeleteEnabled = !!onDeleteRow && (hoverRowActions || !quickActionsEnabled);
-  const deleteCol = oneIfTrue(legacyDeleteEnabled);
-  const cloneCol = oneIfTrue(onCloneRow && !quickActionsEnabled);
-  const quickActionsCol = oneIfTrue(quickActionsEnabled);
-  const actionCols = hoverRowActions ? 1 + deleteCol : deleteCol + cloneCol;
-  const colSpan = visibleColumns.length + oneIfTrue(selectable) + actionCols + quickActionsCol;
+  const { quickActionsEnabled, legacyDeleteEnabled, colSpan } = computeRowActionColumnState({
+    rowQuickActions, onDeleteRow, hoverRowActions, onCloneRow, visibleColumns, selectable,
+  });
   // ETP-5030 — InlineLinesPanel's `computeRowClassName` mirrors the `bg-primary/5` literal for tab grids; keep the two in sync.
   const selectedRowBg = hoverRowActions ? 'bg-[hsl(var(--muted))]' : 'bg-primary/5';
 
