@@ -16,7 +16,7 @@ import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
 import { columnMinWidthPx, columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
 import { CHEVRON_COLUMN_WIDTH, CHECKBOX_COLUMN_WIDTH, renderBalanceFooterRow, buildLineCellStyle } from './InlineLinesPanel.jsx';
 import { ACTION_SLOT_WIDTH_PX, reservesActionSlot } from '@/lib/linesActionSlot.js';
-import { useLinesScrollHost } from '@/lib/linesScrollHost.js';
+import { useLinesScrollHost, useAddRowScrollHostWidth } from '@/lib/linesScrollHost.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DateField } from '@/components/ui/date-field';
 import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
@@ -418,6 +418,44 @@ function HorizontalScrollThumb({ elRef, attachSeq, bottomOffsetPx }) {
 function flexSpec(col, idx) {
   const [g, , b] = columnFlex(col, idx).split(' ');
   return { grow: parseInt(g, 10), basis: parseInt(b, 10) };
+}
+
+// Precomputes the flex specs for hideHeader (add-row-only) mode's colgroup,
+// plus the totals growColumnWidth() needs: how many columns grow, the summed
+// basis of every FIXED (non-growing) slot, and the summed basis of every
+// GROWING slot (see growColumnWidth()'s own doc for why fixedColsBasisPx and
+// growBasisTotalPx are two different sums, not one). Extracted out of
+// DataTable's render body — same reasoning as computeActionColsWidthPx
+// above: each filter/reduce chain scores against this function, not the
+// caller's. Plain-list mode (hideHeader false) never uses a colgroup, so it
+// returns the empty/zero shape untouched.
+function computeColFlexTotals(visibleColumns, hideHeader) {
+  const colFlexSpecs = hideHeader ? visibleColumns.map((col, colIdx) => flexSpec(col, colIdx)) : [];
+  const growSpecs = colFlexSpecs.filter((s) => s.grow > 0);
+  const fixedSpecs = colFlexSpecs.filter((s) => s.grow === 0);
+  return {
+    colFlexSpecs,
+    growCount: growSpecs.length,
+    fixedColsBasisPx: fixedSpecs.reduce((sum, s) => sum + s.basis, 0),
+    growBasisTotalPx: growSpecs.reduce((sum, s) => sum + s.basis, 0),
+  };
+}
+
+// ETP-4735 — a `dimensionsPanel` column is never a real grid column:
+// InlineLinesPanel excludes it too and instead renders its own leading
+// expand-chevron + sub-row UX. Extracted so the `.find` scores against its
+// own function, not DataTable's — see the two useMemo call sites below for
+// the full ETP-4735/ETP-5133 history of why both checks exist.
+function findDimensionsPanelColumn(columns) {
+  return (columns || []).find(c => c.type === 'dimensionsPanel') ?? null;
+}
+
+// ETP-5133 — a `dimensionsPanel` column existing in `columns` is NOT enough:
+// the chevron only reserves space when at least one of its `dimensionFields`
+// is actually visible (not in `hiddenColumns`). Extracted so the `.some`
+// check scores against its own function, not DataTable's.
+function hasVisibleDimensionFields(dimensionsPanelColumn, hiddenColumns) {
+  return (dimensionsPanelColumn?.dimensionFields ?? []).some(f => !hiddenColumns.includes(f.key));
 }
 
 // Reproduces flexbox's exact width formula for `flex-grow: 1` columns when
@@ -3029,11 +3067,11 @@ export function DataTable({
   // shifting the add-row's columns 44px right of the rows above it. Mirror InlineLinesPanel's
   // check exactly so both renderers agree on whether the panel is "on" for this table.
   const dimensionsPanelColumn = useMemo(
-    () => (columns || []).find(c => c.type === 'dimensionsPanel') ?? null,
+    () => findDimensionsPanelColumn(columns),
     [columns]
   );
   const hasDimensionsPanel = useMemo(
-    () => (dimensionsPanelColumn?.dimensionFields ?? []).some(f => !hiddenColumns.includes(f.key)),
+    () => hasVisibleDimensionFields(dimensionsPanelColumn, hiddenColumns),
     [dimensionsPanelColumn, hiddenColumns]
   );
 
@@ -3173,6 +3211,39 @@ export function DataTable({
     else onRowSelect?.(row);
   }, [entity, specName, hasActiveFilter, hasColumnFilter, onRowClick, onNavigate, onRowSelect]);
 
+  // In inlineEditable add-row mode (hideHeader=true), the DataTable only renders
+  // the new-line form while InlineLinesPanel owns the existing rows. InlineLinesPanel
+  // always appends a 48px right spacer, plus an ACTION_SLOT_WIDTH_PX action slot when
+  // no column can be swapped for the hover action strip. Mirror those here so flexible
+  // columns grow to the same width in both.
+  //
+  // ETP-5245 — this MUST be `reservesActionSlot()`, the same predicate
+  // InlineLinesPanel uses, not a local "is there any amount column?" guess: the panel
+  // only ever swaps the LAST column, so a tab whose amount sits earlier (Producto >
+  // Costo: `cost`, `startingDate`, `endingDate`) reserves the slot there while this
+  // table did not — handing those 160px to `growColumnWidth()`'s grow columns and
+  // pushing every add-row input right of its header.
+  const ilpReservesActionSlot = hideHeader && linesLayout === 'inlineEditable'
+    && reservesActionSlot(visibleColumns);
+  const ilpTrailing = hideHeader && linesLayout === 'inlineEditable';
+
+  // ETP-5133 — when a sibling InlineLinesPanel for the SAME entity is live
+  // (the normal case: the generated *LineTable wrapper mounts both together
+  // whenever addRow.active), portal this add-row `<table>` into its scroll
+  // body instead of rendering a second, independently-scrolled one below it —
+  // see lib/linesScrollHost.js. Called unconditionally (rules of hooks) and
+  // BEFORE the `loading` early return below — the key is null whenever this
+  // isn't the add-row-only companion table, or no sibling has registered a
+  // host yet (e.g. every standalone unit test that mounts DataTable in this
+  // mode alone), in which case the hook returns null and rendering falls
+  // through to the classic in-place `<table>` below, unchanged.
+  const addRowScrollHost = useLinesScrollHost(ilpTrailing && addRow?.active ? entity : null);
+  // ETP-5133 follow-up (BUG-1) — live `clientWidth` of that host, kept in sync
+  // via a ResizeObserver; see useAddRowScrollHostWidth's own doc for why it
+  // measures on a layout effect. Also called unconditionally, also before the
+  // `loading` early return — see lib/linesScrollHost.js.
+  const hostWidthPx = useAddRowScrollHostWidth(addRowScrollHost);
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -3218,83 +3289,17 @@ export function DataTable({
   // ETP-5030 — InlineLinesPanel's `computeRowClassName` mirrors the `bg-primary/5` literal for tab grids; keep the two in sync.
   const selectedRowBg = hoverRowActions ? 'bg-[hsl(var(--muted))]' : 'bg-primary/5';
 
-  // In inlineEditable add-row mode (hideHeader=true), the DataTable only renders
-  // the new-line form while InlineLinesPanel owns the existing rows. InlineLinesPanel
-  // always appends a 48px right spacer, plus an ACTION_SLOT_WIDTH_PX action slot when
-  // no column can be swapped for the hover action strip. Mirror those here so flexible
-  // columns grow to the same width in both.
-  //
-  // ETP-5245 — this MUST be `reservesActionSlot()`, the same predicate
-  // InlineLinesPanel uses, not a local "is there any amount column?" guess: the panel
-  // only ever swaps the LAST column, so a tab whose amount sits earlier (Producto >
-  // Costo: `cost`, `startingDate`, `endingDate`) reserves the slot there while this
-  // table did not — handing those 160px to `growColumnWidth()`'s grow columns and
-  // pushing every add-row input right of its header.
-  const ilpReservesActionSlot = hideHeader && linesLayout === 'inlineEditable'
-    && reservesActionSlot(visibleColumns);
-  const ilpTrailing = hideHeader && linesLayout === 'inlineEditable';
-
-  // ETP-5133 — when a sibling InlineLinesPanel for the SAME entity is live
-  // (the normal case: the generated *LineTable wrapper mounts both together
-  // whenever addRow.active), portal this add-row `<table>` into its scroll
-  // body instead of rendering a second, independently-scrolled one below it —
-  // see lib/linesScrollHost.js. Called unconditionally (rules of hooks); the
-  // key is null whenever this isn't the add-row-only companion table, or no
-  // sibling has registered a host yet (e.g. every standalone unit test that
-  // mounts DataTable in this mode alone), in which case the hook returns null
-  // and rendering falls through to the classic in-place `<table>` below,
-  // unchanged.
-  const addRowScrollHost = useLinesScrollHost(ilpTrailing && addRow?.active ? entity : null);
-
-  // ETP-5133 follow-up (BUG-1, pass 2) — the one real number growColumnWidth()
-  // needs and CSS can't give it: the scroll host's actual `clientWidth`,
-  // measured live and kept in sync with a ResizeObserver (side panel
-  // open/close, window resize, ...). `null` whenever there's no host to
-  // measure (see addRowScrollHost's own comment) — growColumnWidth() falls
-  // back to its original calc()-string formula in that case, unchanged.
-  //
-  // ETP-5133 (BUG-1, pass 3) — `useLayoutEffect`, not `useEffect`, and for
-  // the same reason `useLinesScrollHost` itself was moved to a layout effect
-  // (see lib/linesScrollHost.js): `addRowScrollHost` and `hostWidthPx` are
-  // two independently-updated pieces of state, resolved one effect-flush
-  // apart. With both on the passive `useEffect` queue, the render where
-  // `addRowScrollHost` first turns truthy commits (and can paint) BEFORE
-  // this effect gets a chance to run and measure it — so `growColumnWidth()`
-  // took the unmeasured fallback for that one frame while the add-row's
-  // content was already portaled into the real, possibly-narrow host.
-  // Putting both measurements on `useLayoutEffect` lets React fold the whole
-  // chain — host resolves → this effect measures its width → colgroup
-  // re-renders with the real number — into one synchronous pre-paint pass,
-  // exactly like a layout-effect-triggered state update always does; the
-  // browser only ever paints the settled result, never the intermediate
-  // null-width one.
-  const [hostWidthPx, setHostWidthPx] = useState(() => addRowScrollHost?.clientWidth ?? null);
-  useLayoutEffect(() => {
-    if (!addRowScrollHost) {
-      setHostWidthPx(null);
-      return undefined;
-    }
-    setHostWidthPx(addRowScrollHost.clientWidth);
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      setHostWidthPx(entry ? entry.contentRect.width : addRowScrollHost.clientWidth);
-    });
-    observer.observe(addRowScrollHost);
-    return () => observer.disconnect();
-  }, [addRowScrollHost]);
-
   // Precompute the flex specs once so the colgroup below can both build the
   // fixed/grow <col> widths AND feed growColumnWidth() the totals it needs
   // (sum of every fixed-width slot + count of growing columns) — see the
   // colgroup comment for why growing columns can't just be left width-less.
-  const colFlexSpecs = hideHeader ? visibleColumns.map((col, colIdx) => flexSpec(col, colIdx)) : [];
-  const growCount = colFlexSpecs.filter((s) => s.grow > 0).length;
-  const fixedColsBasisPx = colFlexSpecs.filter((s) => s.grow === 0).reduce((sum, s) => sum + s.basis, 0);
-  // ETP-5133 follow-up (BUG-1, pass 2) — the combined basis of every GROWING
-  // column, fed to growColumnWidth() alongside hostWidthPx so it can subtract
-  // it from the leftover pool — see that function's own doc for why
-  // `fixedColsTotalPx` (NON-growing columns only) can't stand in for it.
-  const growBasisTotalPx = colFlexSpecs.filter((s) => s.grow > 0).reduce((sum, s) => sum + s.basis, 0);
+  // ETP-5133 follow-up (BUG-1, pass 2) — growBasisTotalPx (the combined basis
+  // of every GROWING column) is fed to growColumnWidth() alongside
+  // hostWidthPx so it can subtract it from the leftover pool — see that
+  // function's own doc for why `fixedColsTotalPx` (NON-growing columns only)
+  // can't stand in for it.
+  const { colFlexSpecs, growCount, fixedColsBasisPx, growBasisTotalPx } =
+    computeColFlexTotals(visibleColumns, hideHeader);
   // ETP-5268 follow-up — the quick-actions slot's width is this window's own
   // button count (see quickActionsReservedWidthPx), always — see
   // quickActionsColumnStyle for why it's no longer ever narrower. Feeding

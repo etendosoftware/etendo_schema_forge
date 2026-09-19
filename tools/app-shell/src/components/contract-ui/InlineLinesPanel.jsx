@@ -433,6 +433,33 @@ export function renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimen
  * grid column at all (see `hasDimensionsPanel` / the hover action + expand chevron it
  * replaced the column with).
  */
+// ETP-5133 — ellipsis policy is per-column, not a blanket default: most
+// columns (e.g. description) should ellipsize with a hover tooltip, but a
+// column can opt out via `noTruncate` (e.g. product) to show the FULL text
+// instead, scrolling horizontally within its own cell when it overflows
+// rather than being cut off. `overflowX: 'auto'` on the cell is what makes
+// that scroll possible; ReadCell and LookupTrigger (below) are what stop
+// clipping the text with `truncate` in the first place.
+//
+// When a cell is in edit mode, the input/trigger has its own px-2 (8px)
+// + 1px border = 9px of internal padding. Reducing the cell's outer
+// padding to 3px compensates: the input's CONTENT lands exactly where
+// read-mode text lands (cell_left + 12px), so values don't visually
+// jump when toggling between view and edit modes.
+//
+// Extracted out of renderLineCell so the truncate/numeric-alignment policy
+// scores against its own function, not the base cell renderer's.
+function computeLineCellStyle({ editable, isNumeric, noTruncate, col, idx }) {
+  return {
+    padding: editable ? '0 3px' : `0 ${TOKENS.cellPaddingX}px`,
+    flex: columnFlex(col, idx),
+    justifyContent: isNumeric ? 'flex-end' : 'flex-start',
+    textAlign: isNumeric ? 'right' : 'left',
+    minWidth: 0,
+    ...(noTruncate ? { overflowX: 'auto' } : null),
+  };
+}
+
 function renderLineCell({
   col, idx, row, isEditing, showActions, trailingColumn, isDocumentReadOnly,
   visibleColumns, hasRowClick,
@@ -446,27 +473,8 @@ function renderLineCell({
 
   const isNumeric = NUMERIC_TYPES.has(col.type);
   const editable = isEditing && isCellEditable(col);
-  // ETP-5133 — ellipsis policy is per-column, not a blanket default: most
-  // columns (e.g. description) should ellipsize with a hover tooltip, but a
-  // column can opt out via `noTruncate` (e.g. product) to show the FULL text
-  // instead, scrolling horizontally within its own cell when it overflows
-  // rather than being cut off. `overflowX: 'auto'` on the cell is what makes
-  // that scroll possible; ReadCell and LookupTrigger (below) are what stop
-  // clipping the text with `truncate` in the first place.
   const noTruncate = col.noTruncate === true;
-  // When a cell is in edit mode, the input/trigger has its own px-2 (8px)
-  // + 1px border = 9px of internal padding. Reducing the cell's outer
-  // padding to 3px compensates: the input's CONTENT lands exactly where
-  // read-mode text lands (cell_left + 12px), so values don't visually
-  // jump when toggling between view and edit modes.
-  const baseStyle = {
-    padding: editable ? '0 3px' : `0 ${TOKENS.cellPaddingX}px`,
-    flex: columnFlex(col, idx),
-    justifyContent: isNumeric ? 'flex-end' : 'flex-start',
-    textAlign: isNumeric ? 'right' : 'left',
-    minWidth: 0,
-    ...(noTruncate ? { overflowX: 'auto' } : null),
-  };
+  const baseStyle = computeLineCellStyle({ editable, isNumeric, noTruncate, col, idx });
 
   const cellClickable = !isEditing && !hasRowClick && !isDocumentReadOnly;
   const cellContent = editable ? (
@@ -509,6 +517,7 @@ function renderLineCell({
   // and every caller that doesn't pass `cellBadges` at all, renders byte-for-byte
   // the same single-child markup as before this slot existed.
   const badge = cellBadges?.[col.key]?.(row) ?? null;
+  const badgedContentClassName = `min-w-0 flex-1${noTruncate ? '' : ' truncate'}`;
 
   return (
     <div
@@ -520,7 +529,7 @@ function renderLineCell({
     >
       {badge ? (
         <div className="flex w-full min-w-0 items-center gap-1.5">
-          <div className={`min-w-0 flex-1${noTruncate ? '' : ' truncate'}`}>{cellContent}</div>
+          <div className={badgedContentClassName}>{cellContent}</div>
           {badge}
         </div>
       ) : cellContent}
@@ -615,57 +624,79 @@ function renderDateCell(raw, locale) {
   }
 }
 
+// Line-level `amount` cells show no currency symbol by default — the currency belongs to the
+// document and is shown at header level, so repeating it on every line is noise.
+//
+// ETP-5245 makes that opt-in per column: a column that declares `currencyField` in
+// decisions.json is saying "these rows do NOT share one currency", which is true of any grid
+// that is not a single document's lines. Product > Costing is the first: M_Costing rows carry
+// their own currency and a real tenant holds 1663 USD rows next to 1545 EUR ones, so an
+// unlabelled number there is ambiguous rather than tidy. Columns that declare nothing keep
+// rendering exactly as before — this must stay opt-in, since it is shared by every
+// inline-lines grid in the app. Extracted out of ReadCell so this branch's own ternary scores
+// against its own function, not the type-dispatcher's.
+function renderAmountReadCell(row, col) {
+  const isoCode = col.currencyField ? resolveRowCurrency(row, col, undefined) : undefined;
+  return <span className="tabular-nums">{formatCurrency(isoCode, row[col.key])}</span>;
+}
+
+function renderPercentReadCell(row, col) {
+  const val = Number(row[col.key]);
+  return <span className="tabular-nums">{Number.isFinite(val) ? `${val}%` : '—'}</span>;
+}
+
+function renderSignedDeltaReadCell(row, col) {
+  const { text, tone } = formatSignedDelta(row[col.key]);
+  return (
+    <span
+      className="block text-right tabular-nums"
+      style={{ fontWeight: 600, color: SIGNED_DELTA_TONE_COLOR[tone] }}
+    >
+      {text}
+    </span>
+  );
+}
+
+function isEnumLikeType(type) {
+  return type === 'enum' || type === 'select' || type === 'status';
+}
+
+// ETP-4685 — enumLabels values are i18n keys (buildEnumLabelKey), not raw display text; resolve
+// through ui() like EditCell already does. Returns null when the row's raw value has no
+// enumLabels entry, signaling ReadCell to fall through to the generic identifier-based
+// rendering below (untranslated) instead of returning here.
+function renderEnumReadCell(row, col, ui) {
+  const raw = row[col.key];
+  const key = col.enumLabels?.[raw];
+  if (key == null) return null;
+  const label = ui?.(key) ?? key;
+  return <span className="block truncate" title={label || undefined}>{label}</span>;
+}
+
+// ETP-5133 — per-column ellipsis policy (see `noTruncate` in renderLineCell): most columns
+// ellipsize with a hover tooltip, but a column can opt out (e.g. product) to show the full
+// value instead — the cell itself scrolls horizontally when it overflows (see the
+// `overflowX: 'auto'` on renderLineCell's wrapper), so no `truncate` and no tooltip needed
+// here (the text is already fully visible/reachable). Extracted out of ReadCell so this
+// branch's own nested check scores against its own function, not the type-dispatcher's.
+function renderStringReadCell(display, col) {
+  if (col.noTruncate) {
+    return <span className="block whitespace-nowrap">{display}</span>;
+  }
+  return <span className="block truncate" title={display || undefined}>{display}</span>;
+}
+
 function ReadCell({ row, col, locale, t, ui }) {
   if (typeof col.render === 'function') {
     return col.render(row, {});
   }
-  if (col.type === 'amount') {
-    // Line-level cells show no currency symbol by default — the currency belongs to the document
-    // and is shown at header level, so repeating it on every line is noise.
-    //
-    // ETP-5245 makes that opt-in per column: a column that declares `currencyField` in
-    // decisions.json is saying "these rows do NOT share one currency", which is true of any grid
-    // that is not a single document's lines. Product > Costing is the first: M_Costing rows carry
-    // their own currency and a real tenant holds 1663 USD rows next to 1545 EUR ones, so an
-    // unlabelled number there is ambiguous rather than tidy. Columns that declare nothing keep
-    // rendering exactly as before — this must stay opt-in, since it is shared by every
-    // inline-lines grid in the app.
-    const isoCode = col.currencyField ? resolveRowCurrency(row, col, undefined) : undefined;
-    return <span className="tabular-nums">{formatCurrency(isoCode, row[col.key])}</span>;
-  }
-  if (col.type === 'percent') {
-    const val = Number(row[col.key]);
-    return <span className="tabular-nums">{Number.isFinite(val) ? `${val}%` : '—'}</span>;
-  }
-  if (col.type === 'signedDelta') {
-    const { text, tone } = formatSignedDelta(row[col.key]);
-    return (
-      <span
-        className="block text-right tabular-nums"
-        style={{ fontWeight: 600, color: SIGNED_DELTA_TONE_COLOR[tone] }}
-      >
-        {text}
-      </span>
-    );
-  }
-  if (col.type === 'boolean') {
-    return renderBooleanCell(row[col.key], ui);
-  }
-  if (col.type === 'date') {
-    return renderDateCell(row[col.key], locale);
-  }
-  // ETP-4685 — enumLabels values are i18n keys (buildEnumLabelKey), not raw
-  // display text; resolve through ui() like EditCell already does, or the
-  // read-only cell (what the user sees before ever clicking to edit it)
-  // falls through to the raw backend identifier below, untranslated.
-  if (col.type === 'enum' || col.type === 'select' || col.type === 'status') {
-    const raw = row[col.key];
-    const key = col.enumLabels?.[raw];
-    if (key != null) {
-      const label = ui?.(key) ?? key;
-      return <span className="block truncate" title={label || undefined}>{label}</span>;
-    }
-  }
+  if (col.type === 'amount') return renderAmountReadCell(row, col);
+  if (col.type === 'percent') return renderPercentReadCell(row, col);
+  if (col.type === 'signedDelta') return renderSignedDeltaReadCell(row, col);
+  if (col.type === 'boolean') return renderBooleanCell(row[col.key], ui);
+  if (col.type === 'date') return renderDateCell(row[col.key], locale);
+  const enumRendered = isEnumLikeType(col.type) ? renderEnumReadCell(row, col, ui) : null;
+  if (enumRendered) return enumRendered;
   const display = resolveIdentifier(row, col.key);
   // ETP-5107 (reopened) — a numeric column that is NOT amount/price-shaped (number, decimal,
   // integer, quantity) reaches here, and rendering it bare printed JS's own '.' next to a
@@ -676,16 +707,7 @@ function ReadCell({ row, col, locale, t, ui }) {
     return <span className="tabular-nums">{formatPlainDecimal(display)}</span>;
   }
   if (typeof display === 'string') {
-    // ETP-5133 — per-column ellipsis policy (see `noTruncate` in
-    // renderLineCell): most columns ellipsize with a hover tooltip, but a
-    // column can opt out (e.g. product) to show the full value instead —
-    // the cell itself scrolls horizontally when it overflows (see the
-    // `overflowX: 'auto'` on renderLineCell's wrapper), so no `truncate`
-    // and no tooltip needed here (the text is already fully visible/reachable).
-    if (col.noTruncate) {
-      return <span className="block whitespace-nowrap">{display}</span>;
-    }
-    return <span className="block truncate" title={display || undefined}>{display}</span>;
+    return renderStringReadCell(display, col);
   }
   return <span>{display ?? ''}</span>;
 }

@@ -115,3 +115,49 @@ export function useLinesScrollHost(key) {
   }, [key]);
   return node;
 }
+
+/**
+ * ETP-5133 follow-up (BUG-1, pass 2) — the one real number growColumnWidth()
+ * needs and CSS can't give it: the scroll host's actual `clientWidth`,
+ * measured live and kept in sync with a ResizeObserver (side panel
+ * open/close, window resize, ...). `host` is the node returned by
+ * `useLinesScrollHost` above — pass it straight through. Returns `null`
+ * whenever there's no host to measure (see that hook's own comment) —
+ * growColumnWidth() falls back to its original calc()-string formula in that
+ * case, unchanged.
+ *
+ * ETP-5133 (BUG-1, pass 3) — `useLayoutEffect`, not `useEffect`, for the
+ * same reason `useLinesScrollHost` itself uses one: `host` and this hook's
+ * own width state are two independently-updated pieces of state, resolved
+ * one effect-flush apart. With both on the passive `useEffect` queue, the
+ * render where `host` first turns truthy commits (and can paint) BEFORE
+ * this effect gets a chance to run and measure it — so `growColumnWidth()`
+ * took the unmeasured fallback for that one frame while the add-row's
+ * content was already portaled into the real, possibly-narrow host.
+ * Putting both measurements on `useLayoutEffect` lets React fold the whole
+ * chain — host resolves → this effect measures its width → colgroup
+ * re-renders with the real number — into one synchronous pre-paint pass,
+ * exactly like a layout-effect-triggered state update always does; the
+ * browser only ever paints the settled result, never the intermediate
+ * null-width one.
+ *
+ * Called unconditionally by its caller (rules of hooks) — `host` is the
+ * conditional part, not the hook call itself.
+ */
+export function useAddRowScrollHostWidth(host) {
+  const [widthPx, setWidthPx] = useState(() => host?.clientWidth ?? null);
+  useLayoutEffect(() => {
+    if (!host) {
+      setWidthPx(null);
+      return undefined;
+    }
+    setWidthPx(host.clientWidth);
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      setWidthPx(entry ? entry.contentRect.width : host.clientWidth);
+    });
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [host]);
+  return widthPx;
+}
