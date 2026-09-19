@@ -34,6 +34,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | L1 | Tenant ownership | New `AD_User.EM_ETGO_Is_Owner` column (owner-lock enforcement) is only auto-set for tenants created AFTER ETP-4830 shipped — every pre-existing tenant has zero owner-flagged users, so the enforcement checks are silent no-ops for them | Preventive shipped (`OwnerSupport#markAsOwnerIfNoneExists`, wired into `EtendoGoJwtServlet#createClient`); corrective backfill (`R26-tenant-owner-and-personal-role-retrofit`) shipped 2026-08-26 — both fronts closed | ETP-4877 |
 | N1 | Tenant plan / fiscal test mode | A Demo/free tenant has no way to submit SII/TicketBAI/VeriFactu in test/sandbox mode without a manual `ETSG_ForceTestMode` edit in Classic — every self-registered free tenant defaults to real (production) fiscal submissions | Both fronts closed: `OnboardingForceTestModeService` (preventive, new step in `ensureOnboardingDataset`) + `R31-force-test-mode-demo-tenants` (corrective, also backfills already-existing SII/TicketBAI/VeriFactu config rows) | ETP-5117 |
 | N5 | Initial dataset configuration | No price list is flagged as default — the curated `M_PRICELIST.xml` shipped both tariffs with `ISDEFAULT='N'`, so the four consumers that disambiguate tariffs with `isdefault DESC` (the `ETGO_PRODUCT_SALE_PRICE`/`ETGO_PRODUCT_PURCHASE_PRICE` computed columns, `PriceListPicker.jsx`, `R33`'s standard-cost anchor, and ETP-5245's new default-tariff resolver) silently fall through to an arbitrary list | Both fronts closed: preventive is dataset-only (`ISDEFAULT` `N`→`Y` on both curated tariffs in `GOClient/M_PRICELIST.xml`, already in `INCLUDED_TABLES`); corrective data-fix (`R35`) marks one active list per trade direction on already-onboarded tenants. CUT deliberately NOT bumped — a newborn tenant is now born correct, so `R35`'s `@check` returns 0 rows for it | ETP-5245 |
+| N6 | Initial dataset configuration | The curated `AD_SEQUENCE.xml` ships the tenant's document series with NO prefix at all (`Purchase Order`, `Standard Order`, `AR Invoice`) or with ETP-4737's interim `REC-` (both rectificativas), and `AR Invoice` starts at 10000000 instead of 1000000 — so a tenant's invoices and orders are numbered `1000000`, indistinguishable from each other, instead of the product's `PC`/`PV`/`FV`/`FVR`/`FCR` series | Both fronts closed: preventive is dataset-only (`GOClient/AD_SEQUENCE.xml` sets the five prefixes and drops `AR Invoice` to 1000000); corrective data-fix (`R38-document-sequence-series-prefixes`) applies the same to already-onboarded tenants. CUT deliberately NOT bumped — a newborn tenant is now born correct, so `R38`'s `@check` returns 0 rows for it. The sixth series the ticket names, `FC` (Factura de compra), is NOT covered: `AP Invoice` is `IsDocNoControlled='N'` with no sequence in 76/76 doctypes, so giving it a series is a product decision, tracked separately | ETP-5285 |
 | P1 | Scheduled processes | A GO-onboarded tenant has NO scheduled "Costing Background process" (`AD_PROCESS_REQUEST`, `CostingBackground`), so product costs are never calculated automatically — `M_Transaction.iscostcalculated` stays `'N'` forever unless an operator launches the process by hand. NOT the same as J1 (which was the missing `M_Costing_Rule`): here the rule exists and is validated, the engine that consumes it is simply never scheduled | **Split across two PRs.** Corrective only in ETP-5245: data-fix (`R36`) backfills already-onboarded tenants. The preventive half (an onboarding service; the `AD_PROCESS_REQUEST` dataset table is and must stay excluded) is closed by a **separate PR authored by someone else** — ETP-5245 touches `com.etendoerp.go` not at all. CUT deliberately NOT bumped: with no preventive front in this PR a newborn tenant is still born broken and must keep seeing `R36`; once the other PR lands, `R36`'s `@check` self-heals to 0 | ETP-5245 (corrective) + a separate PR (preventive) |
 | P2 | Scheduled processes | The costing schedule created by P1 runs every **5 minutes**, so a freshly onboarded user waits up to 5 minutes before their movements are costed; and some tenants carry more than one active `SCH` row for the process, so it fires twice. Target invariant: **exactly one active scheduled `CostingBackground` request per client, every 30 seconds** | Both fronts closed. Preventive: `OnboardingCostingScheduleService` builds the row as `frequency='1'` + `SECONDLY_INTERVAL=30` (the shape GOClient has run by hand since 2026-04-08). Corrective: **NOT a `.sql`** — a SQL `UPDATE` cannot change a live Quartz trigger, so it is `OnboardingCostingScheduleService#realignCadence`, run over every tenant by `CostingCadenceStartup` on application boot (the module's own deploy provides that boot, so no operator action is needed), plus the `SFCostingCadence` webhook as a per-tenant escape hatch. Re-arms the survivor with `OBScheduler.reschedule(...)`, unschedules the extras | ETP-5370 |
 
@@ -2388,6 +2389,70 @@ sales untouched, so `@check` returned only one row. Worst case 59 ms for the who
 check → apply → report → re-check cycle.
 
 ---
+
+### N6 — The curated dataset ships the document series with no prefix (ETP-5285, 2026-09-19)
+
+**Symptom.** On every tenant, a sales invoice and a purchase order are both numbered `1000000`.
+`SELECT name, prefix, startno, currentnext FROM ad_sequence WHERE name IN (...)` returns:
+
+| `AD_Sequence.Name` | Series | shipped `PREFIX` | shipped `STARTNO` |
+|---|---|---|---|
+| `Purchase Order` | Pedido de compra | *(null)* | 1000000 |
+| `Standard Order` | Pedido de venta | *(null)* | 1000000 |
+| `AR Invoice` | Factura de venta | *(null)* | **10000000** |
+| `Factura Rectificativa (Ventas)` | Factura de venta rectificativa | `REC-` | 1000000 |
+| `Factura Rectificativa (Compras)` | Factura de compra rectificativa | `REC-` | 1000000 |
+
+`AD_SEQUENCE` **is** in `OnboardingDatasetDefinition.INCLUDED_TABLES`, so that XML is what a new
+tenant actually gets — a defect in the dataset's *content*, which is what the `N` series is for
+(see §N4), not a missing provisioning step. The `REC-` on the two rectificativas is ETP-4737's
+interim value, never revisited; the two order sequences and `AR Invoice` never had a prefix.
+
+**Why it matters.** The prefix is what makes a document number identify its series. Without it a
+tenant cannot tell an order from an invoice by its number, and the two rectificativas share one
+prefix with each other. `AR Invoice`'s extra digit is a separate, older inconsistency — R31
+(ETP-5079) aligned its `STARTNO` and `CURRENTNEXT` with each other at 10000000 but left the
+magnitude alone; ETP-5285 sets the product value, 1000000.
+
+**Scope: five series, not six.** ETP-5285 names six. `Factura de compra` (`FC`) has no
+`AD_Sequence` to point at — `AP Invoice` carries `IsDocNoControlled='N'` and no sequence in 76 of
+76 doctypes across all 75 clients, because a purchase invoice is numbered by the supplier (stock
+Openbravo semantics). Its proposed number comes from the shared, per-tenant-duplicated
+`DocumentNo_C_Invoice` fallback. Giving `FC` a series means creating a sequence AND flipping
+`C_DocType.IsDocNoControlled` to `'Y'` for `AP Invoice` — a change to how purchase invoices are
+numbered, i.e. a product decision, deliberately out of scope.
+
+**Both fronts.**
+
+| Front | Deliverable |
+|---|---|
+| Preventive | Dataset-only, no new service — `GOClient/AD_SEQUENCE.xml` sets `PC` / `PV` / `FV` / `FVR` / `FCR` and drops `AR Invoice` to `STARTNO`/`CURRENTNEXT` 1000000. `ONBOARDING_PROVISIONED_THROUGH` deliberately **NOT bumped**: a newborn tenant is now born correct, so `R38`'s `@check` returns 0 rows for it and the runner records a clean `SKIPPED_NOT_NEEDED` — the case that constant's contract excludes from a bump (same shape as A9/N4/N5) |
+| Corrective | `cli/src/data-fixes/sql/20260919T120000Z__R38-document-sequence-series-prefixes.sql` — three guarded `UPDATE`s (STARTNO, CURRENTNEXT, PREFIX), matched by `AD_Sequence.NAME`, scoped by `ad_client_id`, each self-guarded by `IS DISTINCT FROM` |
+
+**R38 does not fight R31.** R31 (`20260902T120000Z__R31-document-sequence-startno`) also targets
+`AR Invoice`, `Standard Order` and `Purchase Order`, and pins `AR Invoice` at the old 10000000.
+Fixes run in lexical filename order so R31 always runs first, and a fix already in a `PROCESSED`
+state is never re-run — a tenant needing both ends at R38's values. **Do not edit R31's `VALUES`
+to agree with R38**: tenants have already applied it as written, and rewriting an applied fix
+makes the ledger describe something that never ran.
+
+**Live validation (2026-09-19, read-only `--dry-run`).** 94 tenants `WOULD_APPLY`, 19
+`SKIPPED_NOT_NEEDED`, 0 failures. Cross-checked against the DB rather than trusted: the 19 skips
+are exactly the 19 tenants that own none of the five sequences at all (partial/legacy onboarding),
+so no tenant holding an in-scope row is skipped. 461 in-scope rows fleet-wide, none of which
+already carries any of `PC`/`PV`/`FV`/`FVR`/`FCR`.
+
+**Fiscal premise, inherited from R31 and still load-bearing.** R38 lowers `CURRENTNEXT` in either
+direction AND sets a prefix on a series that may already have issued documents — either one splits
+or duplicates a legal series on a tenant with real invoices. It rests on the premise a human
+accepted on 2026-09-02: there are no production environments yet. R38's header carries the exact
+guards to restore for the day that stops being true.
+
+**Window side (not a gap, same ticket).** ETP-5285 also cut the Document Sequence window to five
+fields and narrowed `DocumentSequenceHandler.VISIBLE_SEQUENCE_NAMES` from seven names to these
+five. See `docs/generated-custom-windows/document-sequence.md`. The ticket's "delete all other
+records" is not executable — the other ~235 rows are record-ID counters `ad_sequence_doc` depends
+on — so hiding them from the window is the reading that shipped.
 
 ## P — Scheduled Processes
 

@@ -24904,7 +24904,12 @@
     "recordNotFoundBody": "This record does not exist, or your role does not have access to it. Check the link, or go back to the list.",
     "recordLoadFailedTitle": "The record could not be loaded",
     "recordLoadFailedBody": "There was a problem contacting the server. Try again, or go back to the list.",
-    "backToList": "Back to the list"
+    "backToList": "Back to the list",
+    "documentSequencePurchaseOrder": "Purchase Order",
+    "documentSequenceSalesOrder": "Sales Order",
+    "documentSequenceSalesInvoice": "Sales Invoice",
+    "documentSequenceSalesCorrectiveInvoice": "Corrective Sales Invoice",
+    "documentSequencePurchaseCorrectiveInvoice": "Corrective Purchase Invoice"
   },
   "menus": {
     "Currency": {

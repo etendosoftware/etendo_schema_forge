@@ -25142,7 +25142,12 @@
     "recordNotFoundBody": "Este registro no existe o tu rol no tiene acceso a él. Comprueba el enlace o vuelve al listado.",
     "recordLoadFailedTitle": "No se ha podido cargar el registro",
     "recordLoadFailedBody": "Ha habido un problema al contactar con el servidor. Inténtalo de nuevo o vuelve al listado.",
-    "backToList": "Volver al listado"
+    "backToList": "Volver al listado",
+    "documentSequencePurchaseOrder": "Pedido de compra",
+    "documentSequenceSalesOrder": "Pedido de venta",
+    "documentSequenceSalesInvoice": "Factura de venta",
+    "documentSequenceSalesCorrectiveInvoice": "Factura de venta rectificativa",
+    "documentSequencePurchaseCorrectiveInvoice": "Factura de compra rectificativa"
   },
   "menus": {
     "Goods Movement": {

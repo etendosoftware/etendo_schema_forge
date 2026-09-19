@@ -3,20 +3,25 @@
 ## Intent
 
 Document Sequence (ETP-5190) lets a tenant define how its documents are numbered: the prefix, the
-suffix, the number the next document takes, and whether the count restarts each year. It is the
-target of the **"Personaliza tus facturas"** First Steps step, which is the reason it exists —
-before it, invoice numbering was the one thing on the onboarding checklist a tenant could not
-reach from Etendo GO at all.
+starting number and the number the next document takes. It is the target of the
+**"Personaliza tus facturas"** First Steps step, which is the reason it exists — before it,
+invoice numbering was the one thing on the onboarding checklist a tenant could not reach from
+Etendo GO at all.
+
+**ETP-5285 narrowed it to the product's own document series.** The window used to show seven
+sequences and eleven fields; it now shows **five sequences and five fields**. Everything the
+ticket asked for that is not here has a reason stated below — read "Which sequences the list
+shows" and "The sixth series" before adding anything back.
 
 ## What this window should allow
 
 Users should be able to:
 
-- browse the sequences of their tenant by name
-- open a sequence and edit its **prefix**, **suffix**, **next assigned number**, **starting
-  number**, **increment**, and whether it **restarts every year**
-- set the numbering mask / value format for the sequences that use one
-- see, and not accidentally change, the internal fields Etendo maintains itself
+- browse their tenant's five document series by name
+- open a series and edit its **description**, **prefix**, **starting number** and **next assigned
+  number**
+- see, and not accidentally change, the series' identity or the internal fields Etendo maintains
+  itself
 
 ## Interaction model
 
@@ -27,9 +32,12 @@ Users should be able to:
   generated entry point; there is no custom wrapper
 - **Window shape:** header-only. `AD_Sequence` is a single AD tab (tab `146`) with no children,
   so there is no detail tab strip and no lines
-- **List behavior:** sorted by name (`listSortBy: "name asc"`); the grid shows Name, Prefix,
-  Suffix, Next Assigned Number, Starting No. and Restart every year. **The list is scoped** —
-  see below; a tenant has 242 sequences and the window shows seven of them
+- **List behavior:** sorted by name (`listSortBy: "name asc"`); the grid shows Name, Description,
+  Prefix, Starting No. and Next Assigned Number — the five fields ETP-5285 specified, and no
+  others. **The list is scoped** — see below; a tenant has 242 sequences and the window shows
+  five of them
+- **The set of series is fixed: no create, no delete** — see below. The window reads and edits
+  the five rows the onboarding dataset provisions; it cannot add a sixth or remove one
 - **Reachability:** also linked from `/first-steps` — the checklist's numbering step navigates
   here rather than editing the values inline (see the "Why the step navigates" note below).
   It is **step 6 of 7**, after the product and contact imports and before the team
@@ -43,23 +51,77 @@ Users should be able to:
 
 ## Field mapping
 
+ETP-5285 fixed the visible set at exactly five, in both grid and form.
+
 | Field | AD column | Classification |
 |---|---|---|
-| Name | `Name` | editable, grid 1 |
-| Prefix | `Prefix` | editable, grid 2 — **validated**, see below |
-| Suffix | `Suffix` | editable, grid 3 |
-| Next Assigned Number | `CurrentNext` | editable (integer), grid 4 |
-| Starting No. | `StartNo` | editable (integer), grid 5 |
-| Restart sequence every Year | `StartNewYear` | editable, grid 6 |
-| Increment By | `IncrementNo` | editable (integer), form only |
-| Auto Numbering | `IsAutoSequence` | editable, form only |
-| Description | `Description` | editable, form only |
-| Mask / Value Format | `Mask`, `VFormat` | editable, form only |
-| Document Type | `C_Doctype_ID` | **discarded** — the real link runs the other way (`C_DocType.DocNoSequence_ID`), so exposing this column invites edits that change nothing |
+| Name | `Name` | **readOnly**, grid 1 — rendered as a translated series name, see below |
+| Description | `Description` | editable, grid 2 |
+| Prefix | `Prefix` | editable, grid 3 — **validated**, see below |
+| Starting No. | `StartNo` | editable (integer), grid 4 |
+| Next Assigned Number | `CurrentNext` | editable (integer), grid 5 |
+| Suffix | `Suffix` | **discarded** (ETP-5285) — not part of the product's series definition |
+| Increment By | `IncrementNo` | discarded (ETP-5285) — always 1; AD requires it on insert, which is why `hideCreate` is set |
+| Auto Numbering | `IsAutoSequence` | discarded (ETP-5285) |
+| Restart sequence every Year | `StartNewYear` | discarded (ETP-5285) |
+| Mask / Value Format | `Mask`, `VFormat` | discarded (ETP-5285) |
+| Document Type | `C_Doctype_ID` | discarded — the real link runs the other way (`C_DocType.DocNoSequence_ID`), so exposing this column invites edits that change nothing |
 | Current Next (System) | `CurrentNextSys` | discarded — Etendo's own counter for system-owned records |
 | Used for Record ID, Table, Column | `IsTableID`, `AD_Table_ID`, `AD_Column_ID` | discarded — only meaningful for record-ID sequences, which are not document numbering |
 | `EM_Etsg_Isrectificative`, `EM_Etask_Task_Type_ID` | — | discarded via `discardPatterns: ["EM_*"]` |
 | Client, Organization, Active, audit columns | — | discarded |
+
+### Why the window cannot create or delete a series
+
+`entities.sequence.methods: ["GET", "GETBYID", "PUT", "PATCH"]` in `decisions.json`. That is an
+**API-level** refusal, not a hidden button: it becomes `apiPrediction.crud.sequence.post: false` /
+`delete: false` in `contract.json`, which `push-to-neo` writes as `ETGO_SF_ENTITY.ISPOST='N'` /
+`ISDELETE='N'`, which `NeoCrudHandler` reads through `NeoMethodPolicy.isMethodEnabled` to answer
+**`405 Method Not Allowed`**. The same flags are honoured by the MCP write path
+(`McpToolRouterSupport`) and by `BatchService`, so all three write paths refuse together.
+
+`window.hideCreate`, `window.hideDeleteButton` and `entities.sequence.hideDelete` remove the
+buttons. They are the affordance half and are **not** the guard — on their own they would leave
+`POST /sws/neo/document-sequence/sequence` wide open.
+
+Why both are refused:
+
+- **Create.** A sequence created here would carry a name outside `VISIBLE_SEQUENCE_NAMES` and
+  vanish from the list on the next load. `AD_Sequence.IncrementNo` is also `required` with no DB
+  default and is no longer on the form, so the insert could not succeed anyway. The five series
+  are provisioned by the onboarding dataset (`GOClient/AD_SEQUENCE.xml`); adding a sixth is a
+  product change that goes through the dataset and the allowlist, not through the UI.
+- **Delete.** Each of the five is pointed at by a `C_DocType.DocNoSequence_ID`. Deleting one
+  orphans that reference and breaks the numbering of every document of that type.
+
+**This needs `push-to-neo` + `./gradlew export.database` to take effect.** Until the
+`ETGO_SF_ENTITY` rows are updated the buttons are gone but the endpoints still answer — the
+contract alone enforces nothing at runtime.
+
+### Why Name is read-only, and why it is displayed translated
+
+`AD_Sequence` has **no `_TRL` table**, so a Spanish series name can only come from the stored
+`Name` — and `Name` is the key the window's own allowlist matches on. Renaming a row from the
+window would therefore drop it out of `VISIBLE_SEQUENCE_NAMES` and make it unreachable, silently
+and permanently. So the stored name stays the canonical English one and the **display** is done
+in the frontend:
+
+`decisions.json` declares `enumValues` on `name`, mapping each canonical value to a
+`genericLabels` i18n key. The generator turns that into `enumLabels` on the grid column
+(`renderEnumCell` → `tMenu` → `genericLabels`) and into a read-only `select` on the form, whose
+read-only branch renders the option's label. One declaration, both surfaces, no custom component.
+
+| `AD_Sequence.Name` | i18n key | es_ES | en_US |
+|---|---|---|---|
+| `Purchase Order` | `documentSequencePurchaseOrder` | Pedido de compra | Purchase Order |
+| `Standard Order` | `documentSequenceSalesOrder` | Pedido de venta | Sales Order |
+| `AR Invoice` | `documentSequenceSalesInvoice` | Factura de venta | Sales Invoice |
+| `Factura Rectificativa (Ventas)` | `documentSequenceSalesCorrectiveInvoice` | Factura de venta rectificativa | Corrective Sales Invoice |
+| `Factura Rectificativa (Compras)` | `documentSequencePurchaseCorrectiveInvoice` | Factura de compra rectificativa | Corrective Purchase Invoice |
+
+The keys live in `tools/app-shell/src/locales/{en_US,es_ES,es_AR}.json` under `genericLabels`.
+Adding a series means adding its name to `VISIBLE_SEQUENCE_NAMES`, to `enumValues`, and to all
+three locale files — miss the last and the grid renders the raw English name, with no error.
 
 ## Which sequences the list shows
 
@@ -69,21 +131,40 @@ touch, so a 242-row list would have been no shorter a path to the invoice series
 Classic window was.
 
 `DocumentSequenceHandler.applyListScope` narrows a list GET to the caller's own client and to
-these seven, by name:
+these five, by name (ETP-5285 — previously seven):
 
-| | |
-|---|---|
-| `AR Invoice` | sales invoice |
-| `AP Payment` | supplier payment |
-| `AR Receipt` | customer receipt |
-| `MM Shipment` | goods shipment |
-| `Standard Order` | sales order |
-| `Purchase Order` | purchase order |
-| `Secuencia TICKETBAI` | TicketBAI chaining counter |
+| `AD_Sequence.Name` | Series | Prefix | Start |
+|---|---|---|---|
+| `Purchase Order` | Pedido de compra | `PC` | 1000000 |
+| `Standard Order` | Pedido de venta | `PV` | 1000000 |
+| `AR Invoice` | Factura de venta | `FV` | 1000000 |
+| `Factura Rectificativa (Ventas)` | Factura de venta rectificativa | `FVR` | 1000000 |
+| `Factura Rectificativa (Compras)` | Factura de compra rectificativa | `FCR` | 1000000 |
 
 The allowlist is a **product decision** and lives in `VISIBLE_SEQUENCE_NAMES`; adding a sequence
-to the product means adding its name there. Every one of the seven was verified to exist, by
-this exact name, **exactly once per organization**, in a provisioned client.
+to the product means adding its name there. Every one was verified to exist, by this exact name,
+**exactly once per organization**, in a provisioned client.
+
+**Four names were dropped by ETP-5285** — `AP Payment`, `AR Receipt`, `MM Shipment` and
+`Secuencia TICKETBAI`. They are not document series a tenant defines on this screen. Dropping a
+name only hides the row: nothing is deleted and the numbering those sequences drive is unchanged.
+`DocumentSequenceHandlerTest.allowlistExcludesTheNamesEtp5285Dropped` fails if one reappears.
+
+**The ticket's "delete every other record" cannot be taken literally.** The other ~235 rows are
+record-ID counters `ad_sequence_doc` and the DAL depend on; deleting them breaks the ERP. Hiding
+them from this window — which is what the allowlist does — is the executable reading of that
+requirement.
+
+### The sixth series: "Factura de compra" (`FC`) is not here
+
+ETP-5285 lists six series. Five are above. `FC` has no `AD_Sequence` to point at: `AP Invoice`
+carries `IsDocNoControlled='N'` and no sequence in **76 of 76 doctypes across all 75 clients**,
+because a purchase invoice is numbered by the supplier — stock Openbravo semantics. Its proposed
+number comes from the shared `DocumentNo_C_Invoice` fallback counter, which is itself duplicated
+per tenant (below). Giving `FC` a real series means **creating a sequence and flipping
+`C_DocType.IsDocNoControlled` to `'Y'` for `AP Invoice`**, which changes how purchase invoices are
+numbered. That is a product decision and is tracked separately; it is deliberately out of scope
+here.
 
 ### Why no `DocumentNo_*` sequence is listed
 
@@ -201,32 +282,48 @@ two code paths writing the same rows. See
   ticket rather than a silent assumption.
 - **Every `DocumentNo_*` sequence is duplicated per tenant**, which is why none of them is
   listed any more — see "Why no `DocumentNo_*` sequence is listed" above for the measurements,
-  the cause and the pending data-fix. The seven names the window does show have exactly one row
+  the cause and the pending data-fix. The five names the window does show have exactly one row
   per organization.
 - No callouts. `rules-raw.json` reports 4 validation rules and 9 display-logic rows on the AD tab
   and no callout rows.
 
 ## Manual verification
 
-1. Open `/document-sequence` from the Configuración menu and confirm the list shows **only the
-   seven allowlisted sequences**, each exactly ONCE, NOT the tenant's full 242 — sorted by name
-   and with Prefix, Suffix and the two number columns.
-2. Confirm no row whose name starts with `DocumentNo_` appears. A duplicate pair in that list is
-   the regression this window was changed to avoid; see the section on it above.
-3. Type something into the list's own filter and confirm it narrows further rather than
-   revealing sequences outside the allowlist.
-4. Open a sequence and confirm the form exposes Increment By, Auto Numbering, Description, Mask
-   and Value Format in addition to the grid fields.
-5. Confirm `Document Type`, `Current Next (System)`, `Used for Record ID`, `Table` and `Column`
+1. Open `/document-sequence` from the Configuración menu and confirm the list shows **exactly
+   five rows**, each ONCE, NOT the tenant's full 242 — and that the columns are exactly Nombre,
+   Descripción, Prefijo, Número inicial, Próximo número.
+2. In Spanish, confirm the Nombre column reads *Pedido de compra*, *Pedido de venta*, *Factura de
+   venta*, *Factura de venta rectificativa*, *Factura de compra rectificativa* — not the stored
+   English names. Switch to English and confirm the same rows read *Purchase Order*, *Sales
+   Order*, *Sales Invoice*, *Corrective Sales Invoice*, *Corrective Purchase Invoice*. A raw
+   English name in Spanish means a missing `genericLabels` key (or a stale Vite locale slice).
+3. Confirm `AP Payment`, `AR Receipt`, `MM Shipment` and `Secuencia TICKETBAI` are **gone**, and
+   that no row whose name starts with `DocumentNo_` appears.
+4. Confirm there is **no Create/New button** in the list toolbar and no delete (trash) action on
+   a row or in the detail toolbar.
+   Then confirm the refusal is real, not cosmetic — with a valid NEO token:
+   `POST /sws/neo/document-sequence/sequence` and
+   `DELETE /sws/neo/document-sequence/sequence/<id>` must both answer **405**. A `200`/`201`
+   means `push-to-neo` + `export.database` have not been run yet.
+5. Type something into the list's own filter and confirm it narrows further rather than
+   revealing sequences outside the allowlist. Open "Filtro por condicionales" on Nombre and
+   confirm the value dropdown offers the five translated names.
+6. Open a series and confirm the form shows those same five fields and nothing else — in
+   particular no Suffix, Increment By, Auto Numbering, Mask, Value Format or Restart every year —
+   and that **Nombre is read-only** and translated.
+7. Confirm `Document Type`, `Current Next (System)`, `Used for Record ID`, `Table` and `Column`
    do **not** appear anywhere in the UI.
-6. On a Spanish tenant, set the prefix to `fv-` and confirm the save is refused with the
+8. On a Spanish tenant, set the prefix to `fv-` and confirm the save is refused with the
    lowercase/accents message, translated.
-7. Repeat with `FI-` (reserved letter), `FV_` (character set) and a 21-character prefix, and
+9. Repeat with `FI-` (reserved letter), `FV_` (character set) and a 21-character prefix, and
    confirm each reports its own message rather than a generic one.
-8. Set the prefix to `FV-` and confirm it saves.
-9. Clear the prefix entirely and confirm that saves too.
-10. Open `/first-steps`, expand "Personaliza tus facturas" and confirm **Configurar** navigates
+10. Set the prefix to `FV-` and confirm it saves.
+11. Clear the prefix entirely and confirm that saves too.
+12. Open `/first-steps`, expand "Personaliza tus facturas" and confirm **Configurar** navigates
    here.
+13. On a **freshly provisioned** tenant, confirm the five rows already carry `PC` / `PV` / `FV` /
+   `FVR` / `FCR` with Número inicial and Próximo número both at 1000000 — that is the onboarding
+   dataset, not the data-fix.
 
 ## Automated evidence
 
@@ -236,13 +333,21 @@ two code paths writing the same rows. See
 - `cli/config/regen-windows.json` registers the window (`windowId: "112"`,
   `menuName: "Document Sequence"`) — required before `make regen ONLY=document-sequence` will
   process it.
-- `artifacts/document-sequence/decisions.json` classifies the 26 extracted fields and sets
-  `entities.sequence.javaQualifier: "document-sequence"`.
+- `artifacts/document-sequence/decisions.json` classifies the 26 extracted fields (five visible
+  after ETP-5285), declares `entities.sequence.methods: ["GET","GETBYID","PUT","PATCH"]` (no POST,
+  no DELETE), sets `window.hideCreate` / `window.hideDeleteButton` /
+  `entities.sequence.hideDelete`, and sets `entities.sequence.javaQualifier: "document-sequence"`.
+- `cli/test/document-sequence.contract.test.js` pins all of it: the method allowlist, the
+  `post: false` / `delete: false` contract flags, the five visible fields and their grid order,
+  the read-only translated `name`, and the presence of the five `genericLabels` keys in all three
+  locale files.
 - `artifacts/document-sequence/contract.json` carries that qualifier through to both the frontend
   and backend entity sections; the pipeline generated 70 contract tests, all passing at
   onboarding time.
 - `DocumentSequenceHandlerTest` (`com.etendoerp.go`) covers the four prefix rules, their order,
-  and the guards that stop the handler before the country lookup.
+  the guards that stop the handler before the country lookup, and — since ETP-5285 — the exact
+  five-name allowlist, the four names that must stay out of it, and the absence of a
+  purchase-invoice series.
 
 ## Onboarding — ETP-5190
 
@@ -255,3 +360,38 @@ Window onboarded from scratch:
 - Pushed to NEO at onboarding time (spec `A57F181BD15A458596F55A66084D6B29`). **`./gradlew
   export.database` is required** — without it the `ETGO_SF_*` rows only live in the DB and do not
   survive a rebuild.
+
+## ETP-5285 — series cleanup
+
+Three fronts, one ticket.
+
+**The window** (`schema_forge`). `decisions.json` cut the visible set to the five fields the
+ticket names, in both grid and form; fixed the set of series with
+`entities.sequence.methods: ["GET","GETBYID","PUT","PATCH"]` plus the matching
+`hideCreate`/`hideDeleteButton`/`hideDelete` affordance flags; made `name` read-only and gave it
+the `enumValues` display map; and `make regen ONLY=document-sequence` regenerated
+`contract.json` (0.1.0 → 0.2.0, breaking) and the components. The five `genericLabels` keys went
+into all three locale files.
+
+**The allowlist** (`com.etendoerp.go`). `VISIBLE_SEQUENCE_NAMES` went from seven names to five.
+
+**The data** (`com.etendoerp.go` + `schema_forge`), on both fronts as usual:
+
+- *Preventive*: `referencedata/sampledata/GOClient/AD_SEQUENCE.xml` now ships `PC` / `PV` / `FV` /
+  `FVR` / `FCR`, and `AR Invoice` moved from `STARTNO`/`CURRENTNEXT` 10000000 down to 1000000. The
+  two rectificativas' interim `REC-` prefix (ETP-4737) was replaced. A new tenant is born correct.
+- *Corrective*: `cli/src/data-fixes/sql/20260919T120000Z__R38-document-sequence-series-prefixes.sql`
+  (gap `N6`) applies the same five prefixes and numbers to already-provisioned tenants.
+
+`ONBOARDING_PROVISIONED_THROUGH` is deliberately **not** bumped — a newborn tenant is already
+correct, so R38's `@check` returns 0 rows for it and the runner records `SKIPPED_NOT_NEEDED`.
+
+**R38 and R31 do not fight.** R31 (`20260902T120000Z`) also pins `AR Invoice`, at the old
+10000000. Fixes run in lexical filename order, so R31 always runs first, and a fix that already
+reached a `PROCESSED` state is never re-run — so a tenant needing both ends at R38's values. Do
+not edit R31's `VALUES` to "agree": tenants have already applied it as written.
+
+**Both R38 and R31 lower `CURRENTNEXT` in either direction, and R38 also sets a prefix on a series
+that may already have issued documents.** Both rest on the same premise a human accepted on
+2026-09-02: there are no production tenants yet. R38's header carries the restore instructions for
+the day that stops being true — read them before running it anywhere real.

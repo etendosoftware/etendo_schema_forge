@@ -100,6 +100,16 @@ const FIXES_WITH_REPORT = new Set([
   // Invoice"). Its @report lists every such sequence plus the doctype that kept it alive — same
   // "flag, don't guess" pattern as R19.
   '20260916T120000Z__R37-deactivate-reversed-invoice-doctypes',
+  // R38 (ETP-5285) sets the product-defined PREFIX and aligns STARTNO/CURRENTNEXT at 1000000 on
+  // the five document series Etendo GO configures. Like its sibling R31-document-sequence-startno
+  // above — and unlike the "flag, don't guess" entries — its @report is a pure POST-CONDITION: it
+  // lists any in-scope series still off target AFTER the apply. All three UPDATEs are
+  // unconditional within their IS DISTINCT FROM guard, so there is no legitimate "left off target"
+  // case and it should always come back empty, leaving `detail` null on the APPLIED ledger row. A
+  // non-empty detail means a row was skipped or something raced the update. Verified empty on the
+  // dev fleet: 94 applied, 461 rows, 0 left off target.
+  // See cli/test/data-fixes-r38-document-sequence-series-prefixes.test.js.
+  '20260919T120000Z__R38-document-sequence-series-prefixes',
 ]);
 
 async function loadCatalogFiles() {
