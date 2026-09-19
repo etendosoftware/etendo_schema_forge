@@ -209,6 +209,87 @@ Custom windows may hydrate default filter state from the URL so that menu links 
 
 `decisions.json`-driven windows do not have a URL-param hook today — if you need one, declare the filter in the custom window file instead.
 
+## State persistence across List -> Form -> List (ETP-4994)
+
+Grid state survives leaving the list for a record and coming back. It is restored on ALL
+three return paths — breadcrumb, the form's Cancel button, and the browser Back button —
+because every one of them remounts `ListView`.
+
+**What is restored:** column filters, the advanced (conditional) filter, the active subset
+filter, the active quick filters, and the sort column + direction.
+
+**Where it lives:** `sessionStorage`, one key per window — `listState:<windowName || entity>` —
+written and read by `tools/app-shell/src/lib/listViewSession.js`.
+
+Why sessionStorage rather than the URL or a router-level context:
+
+| Option | Breadcrumb | Cancel | Browser Back | Refresh |
+|---|---|---|---|---|
+| Query params | needs the link rebuilt | needs the link rebuilt | yes | yes |
+| Context above the Outlet | yes | yes | yes | no |
+| **sessionStorage (chosen)** | yes | yes | yes | yes |
+
+It is a per-viewer convenience — nothing else reads it back — which is the case browser
+storage is allowed for. Scoped to the tab, so a second tab on the same window keeps its own
+view, and it never outlives the session. Every access is `try`/`catch` guarded: a private
+window or blocked site data degrades to "no saved state", never to a thrown render.
+
+**Invariant — an untouched list stores NOTHING.** `persistListState` compares the live state
+against the window's declared defaults and *removes* the key instead of writing a default
+snapshot. A window that was never filtered behaves exactly as it did before this existed, and
+clearing the filters cleans the key up rather than pinning a stale default.
+
+**Not persisted:** scroll position / page. The grid pages in through `loadMore` (infinite
+scroll), so restoring a deep scroll offset would mean replaying every page before the first
+paint, against a row set that may have changed meanwhile. Explicitly out of scope.
+
+**Not persisted (no feature to persist):** user column *order*. There is no column-reorder
+affordance in the grid today — `DataTable`'s `onColumnsReady` only echoes the column array it
+was given. If drag-to-reorder is ever added, its order belongs in this same snapshot.
+
+To clear the saved state programmatically, call `clearListState(scope)`.
+
+### Precedence: a URL deep-link beats the saved state (ETP-5009)
+
+```
+deep-link (URL) > sessionStorage snapshot > the window's declared default
+```
+
+A dashboard shortcut such as `/sales-invoice?filter=overdue` is an explicit intent for THAT
+navigation and must win over whatever the user had filtered on their previous visit.
+`ListView` cannot tell a URL-derived `initialAdvancedFilter` / `initialColumnFilters` from a
+filter the window simply declares as its own default — the props are identical — so the window
+states it explicitly:
+
+```jsx
+<ListView
+  initialColumnFilters={initialColumnFilters}
+  initialAdvancedFilter={initialAdvancedFilter}
+  initialFiltersFromUrl={isInvoiceFilter || Boolean(docStatus)}  // <- the signal
+/>
+```
+
+When `initialFiltersFromUrl` is true the snapshot is **not read at all**: the advanced filter,
+the column filters, the subset index, the quick filters and the sort all come from the props.
+It is deliberately all-or-nothing — restoring only some of them would leave the grid half
+deep-linked and half restored.
+
+The previous snapshot is then **discarded**, not kept — and it is *replaced*, not merely removed:
+on a deep-linked mount the persistence effect measures "is the grid still at its default?" against
+the EMPTY grid rather than against the URL-derived props, so the deep-linked view is what gets
+written to the key. That matters because the breadcrumb and Cancel both navigate to the bare
+`/<window>`, dropping the query string: with the key simply removed, returning from a record would
+land on a completely unfiltered list.
+
+For the user: after arriving from a dashboard card, opening a record and coming back, the
+DEEP-LINKED view is restored — and the filter they had typed before going to the dashboard is gone
+for good. That is the intended trade-off: the newest explicit intent wins, and no stale filter can
+silently resurface one navigation later.
+
+Windows that read filter params from the URL must pass this prop. Today: `sales-invoice`,
+`purchase-invoice`, `goods-shipment`, `goods-receipt`, and anything built on
+`windows/custom/shared/pendingDeliveryFilter.js` (which returns the flag ready to spread).
+
 ## Choosing the right surface
 
 | Need | Surface |
@@ -229,3 +310,4 @@ All four toolbar surfaces use the same size tokens (`h-9`, `px-3`, `text-xs`) so
 - Source files:
   - `tools/app-shell/src/components/contract-ui/ListView.jsx` — filter state + toolbar layout.
   - `tools/app-shell/src/components/contract-ui/ListFilterBar.jsx` — document-type filters + advanced filter popover.
+  - `tools/app-shell/src/lib/listViewSession.js` — session snapshot of the grid state (ETP-4994).

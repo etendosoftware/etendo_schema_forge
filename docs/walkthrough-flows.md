@@ -583,6 +583,17 @@ The JSON stores **keys, never sentences**. Two rules:
    `walkthroughMissingText` sentence (warning once per key in the console).
    `findMissingFlowLabelKeys(flows, dictionary)` is the pure counterpart a test
    uses to *fail* when a key is missing from a shipped locale.
+3. **A step's title is the NAME OF THE FIELD IT HIGHLIGHTS**, worded exactly as
+   that locale renders it on screen — not a paraphrase and not the concept the
+   body talks about. The title is how the user matches the card to the control,
+   so a mismatch reads as the tour pointing at the wrong field. ETP-5355 is the
+   worked example: `create-contact`'s tax step highlighted
+   `field-oBTIKTaxIDKey` (*Clave NIF País Residencia* — a document-type
+   dropdown) while its title and body described `field-taxID` (*CIF/NIF*), and
+   there was no step for the actual tax number at all. The fix was two steps,
+   each titled after its own field. When the same window renders two
+   similarly-named fields, give each its own step rather than one that glosses
+   both.
 
 Interpolation uses `useUI`'s `{name}` convention — e.g.
 `walkthroughStepCounter` is `"Step {current} of {total}"`.

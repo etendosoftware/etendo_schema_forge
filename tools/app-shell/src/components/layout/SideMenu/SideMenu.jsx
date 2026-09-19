@@ -74,7 +74,11 @@ import { useMenuLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import { useFeatureFlag, PROOF_OF_CONCEPT_MENU, ACCT_PROCESS_MONITOR, PUBLIC_API_KEYS } from '@/lib/flags';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
-import { environmentPlanLabelKey } from '@/lib/environmentPresentation.js';
+import {
+  environmentCommercialLabel,
+  environmentPlanLabelKey,
+  environmentRelationshipLabel,
+} from '@/lib/environmentPresentation.js';
 import menuConfig from '@/menu.json';
 import { useFirstStepsProgressOptional } from '@/pages/first-steps/FirstStepsContext.jsx';
 
@@ -696,6 +700,11 @@ export default function SideMenu({
                       {ui(environmentPlanLabelKey(currentEnvironment))}
                     </span>
                   )}
+                  {currentEnvironment && environmentCommercialLabel(currentEnvironment, ui) && (
+                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                      {environmentCommercialLabel(currentEnvironment, ui)}
+                    </span>
+                  )}
                   <ChevronDown
                     className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
                     data-testid="ChevronDown__247c75" />
@@ -730,6 +739,16 @@ export default function SideMenu({
                         )}>
                           {ui(environmentPlanLabelKey(env))}
                         </span>
+                        {environmentCommercialLabel(env, ui) && (
+                          <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">
+                            {environmentCommercialLabel(env, ui)}
+                          </span>
+                        )}
+                        {environmentRelationshipLabel(env, ui) && (
+                          <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">
+                            {environmentRelationshipLabel(env, ui)}
+                          </span>
+                        )}
                         {switching === env.clientId && (
                           <Loader2
                             className="h-3.5 w-3.5 ml-2 shrink-0 animate-spin"
