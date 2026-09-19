@@ -2332,12 +2332,15 @@ function StickyHeaderRow({ elRef, attachSeq, children }) {
  * cycle as any other column via `onSort(part.key)`. The direction arrow shows
  * only on the currently active part (single active part at a time).
  */
-function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, locale, t, headStyle }) {
+function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, locale, t, headStyle, hideHeader }) {
   const separator = col.partSeparator ?? ' & ';
   return (
     <TableHead
       key={col.key}
-      data-testid={`column-header-${col.key}`}
+      // ETP-5281 follow-up — see renderColumnHeaderCell's matching comment:
+      // this hidden twin must not carry the same testid as the real, visible
+      // multiField header it mirrors.
+      data-testid={hideHeader ? undefined : `column-header-${col.key}`}
       // `col.headClass` is honoured here for the same reason the single-label branch below
       // honours it: a window that pins column widths (financial-account's Figma layout) must
       // keep them when the header gains segments. Dropping it silently collapsed the column
@@ -2425,10 +2428,23 @@ function renderHeaderLabelContent(colLabel, col, isSorted, sortDirection, sortAr
  * arrow. Extracted from the `visibleColumns.map(...)` callback in DataTable's
  * header row so its onSort/isSorted branching lives in its own function.
  */
-function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort, locale, t }) {
+function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort, locale, t, hideHeader }) {
   const colLabel = resolveColumnLabel(col, locale, t);
   const isSorted = sortColumn === col.key;
   const isSortable = col.sortable !== false;
+  // ETP-5281 follow-up — a `hideHeader` header cell is a real DOM node (kept
+  // for colgroup/column-width measurement, see renderHeaderSection) but is
+  // never meant to be found, clicked or asserted on: it's already `aria-hidden`
+  // + `display:none`. Carrying the SAME `column-header-<key>` testid as the
+  // real, visible header it mirrors made the two ambiguous the moment this
+  // hidden table could land as a DOM descendant of the visible header's own
+  // container (e.g. InlineLinesPanel's add-row companion table after the
+  // ETP-5133 scroll-host createPortal fix) — a Playwright strict-mode
+  // violation on `getByTestId('inline-lines-panel').getByTestId('column-header-product')`
+  // resolving to both the real header cell and this hidden twin. Omitting the
+  // testid here (nothing legitimately needs to locate this hidden cell) removes
+  // the collision outright, regardless of DOM nesting.
+  const columnHeaderTestId = hideHeader ? undefined : `column-header-${col.key}`;
   // Hoisted once (was repeated inline 4x below): a plain lookup, not a branch,
   // just avoids recomputing `NUMERIC_FIELD_TYPES.has(col.type)` at every call
   // site and keeps the ternaries that use it readable.
@@ -2472,7 +2488,7 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
   // sort on its own NEO field key. Non-multiField columns keep the single-label
   // branch below untouched.
   if (Array.isArray(col.parts) && col.parts.length > 0) {
-    return renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, locale, t, headStyle });
+    return renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, locale, t, headStyle, hideHeader });
   }
   const sortArrowClass = isNumeric
     ? 'left-0 -translate-x-full pr-0.5'
@@ -2480,7 +2496,7 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
   return (
     <TableHead
       key={col.key}
-      data-testid={`column-header-${col.key}`}
+      data-testid={columnHeaderTestId}
       className={[
         'align-middle',
         isNumeric ? 'text-right' : '',
@@ -3358,7 +3374,7 @@ export function DataTable({
             data-testid="Checkbox__eb5261" />
         </TableHead>
       )}
-      {visibleColumns.map((col, colIdx) => renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort, linesLayout, locale, t }))}
+      {visibleColumns.map((col, colIdx) => renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort, linesLayout, locale, t, hideHeader }))}
       {renderRowActionHeaderCells(hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled)}
       {quickActionsEnabled && (
         <TableHead
