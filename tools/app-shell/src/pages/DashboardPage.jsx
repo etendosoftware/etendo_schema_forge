@@ -30,6 +30,7 @@ import { FinancialTrendChart } from '@/components/dashboard/FinancialTrendChart'
 import { BestProductsList } from '@/components/dashboard/BestProductsList';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
 import { useFirstStepsState } from '@/pages/first-steps/FirstStepsContext.jsx';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 
 /* ------------------------------------------------------------------
  * Icon lookup
@@ -261,21 +262,28 @@ function DashboardContent({ apiBaseUrl }) {
  * device, a cleared browser or a second session must not replay the redirect, and a user who
  * has already been sent there must never be bounced again.
  *
- * Three states deliberately do NOT redirect:
+ * Four states deliberately do NOT redirect:
  *   - still loading — redirecting on the default `seen: false` would flash the dashboard away
  *     from every user on every visit before the real state arrives;
  *   - the GET failed — `seen` is then unknown, and assuming "not seen" would bounce a user who
  *     had already dismissed the page;
- *   - `seen` is true — the normal steady state.
+ *   - `seen` is true — the normal steady state;
+ *   - ETP-5395 — the current user is not the account Owner (`capabilities.isOwner !== true`,
+ *     fail-closed like every other capability read through `useCapabilitiesSafe()`): "Primeros
+ *     pasos" is Owner-only, so a non-owner must never be sent there, and `seen` stays
+ *     meaningless for them — `markSeen()` (below) is gated on the same `mustRedirect` and so
+ *     never fires for a non-owner either.
  */
 function useFirstStepsRedirect() {
   const { seen, loading, error, markSeen } = useFirstStepsState();
+  const capabilities = useCapabilitiesSafe();
+  const isOwner = capabilities.isOwner === true;
   // Latched, because `markSeen` optimistically flips `seen` to true in the very same commit
   // that renders the <Navigate>: without the latch this hook would answer "no redirect" again
   // one render later, and whether the user still ended up on /first-steps would come down to
   // effect ordering. Once the decision is taken it stays taken until this page unmounts.
   const [redirecting, setRedirecting] = useState(false);
-  const mustRedirect = !loading && !error && !seen;
+  const mustRedirect = isOwner && !loading && !error && !seen;
   useEffect(() => {
     if (!mustRedirect || redirecting) return;
     setRedirecting(true);

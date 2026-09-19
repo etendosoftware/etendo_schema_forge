@@ -302,6 +302,11 @@ describe('DataTable — ETP-4603 coverage top-up', () => {
     // subtracting those same 44px from its fixedTotalPx term (so the row's
     // total literal-pixel width — chevron + fixed cols — stays accounted for
     // instead of overflowing the table by 44px under table-layout: fixed).
+    // (ETP-5332 added a literal-px `measured` branch to growColumnWidth() for
+    // a LIVE scroll host — not exercised here: this suite mounts DataTable
+    // standalone with no ResizeObserver mock, so `hostWidthPx` never resolves
+    // and growColumnWidth() keeps taking its original calc()-string branch,
+    // unchanged — see growColumnWidth()'s own doc comment in DataTable.jsx.)
     expect(colsWith[0]).toBe('44px');
     expect(colsWith[2]).toBe(colsWithout[1]); // the 'Fixed' column is untouched
     expect(colsWithout[1]).toBe('80px');

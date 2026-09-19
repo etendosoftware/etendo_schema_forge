@@ -21,6 +21,7 @@ import { extractErrorMessage } from '@/hooks/useEntity';
 import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useChromelessEmbed } from '@/lib/embeddedWindow.js';
 /* eslint-disable react/prop-types */
 
 const CONTACTS_WRAPPER = 'flex-1 min-h-0 flex flex-col [&_tr[data-empty-state]]:hidden [&_button[role=checkbox]]:h-full contacts-rows';
@@ -52,6 +53,20 @@ function renderContactsHeaderSummary(data) {
 
 export default function ContactsWindow(props) {
   const ui = useUI();
+  /*
+   * ETP-5332 — this window is also mounted inside the "Nuevo contacto" create popup
+   * (`RecordCreateModal` → `EmbeddedWindowRoute`). Two of the props below are analytics chrome
+   * that only make sense for a contact that already exists and has history: the period picker
+   * (`tabsBarAfter`) and the balance/income/expense summary (`headerContent`). On a record being
+   * created seconds ago they are guaranteed-empty noise, and inside a dialog they are noise that
+   * costs scarce vertical space — ~45px plus the widget, several times what shrinking the field
+   * controls could ever recover.
+   *
+   * `useChromelessEmbed` is the same signal DetailView already uses to drop the sidebar and the
+   * window's own Cancel button in this exact situation, so this reuses that decision rather than
+   * inventing a second notion of "am I in a popup". `/contacts` itself is unaffected.
+   */
+  const chromeless = useChromelessEmbed();
   const apiFetch = useApiFetch(props.apiBaseUrl);
   const [pendingBulkDelete, setPendingBulkDelete] = useState(null);
   const { invalidateBusinessPartner } = useContactsCacheInvalidation();
@@ -135,8 +150,8 @@ export default function ContactsWindow(props) {
            // generated defaults ever change.
            listViewOptions={{ hidePrint: true, hideCounter: true, hideLink: true, hideBulkDelete: true }}
            enableSecondaryRowDelete={true}
-           tabsBarAfter={ContactsPeriodButton}
-           headerContent={renderContactsHeaderSummary}
+           tabsBarAfter={chromeless ? undefined : ContactsPeriodButton}
+           headerContent={chromeless ? undefined : renderContactsHeaderSummary}
            noHeaderBorder={true}
            toolbarBorderBottom={true}
            toolbarPaddingX="px-2"

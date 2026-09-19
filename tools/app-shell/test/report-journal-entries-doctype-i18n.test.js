@@ -24,12 +24,18 @@ import { RETURN_LABELS, DOC_TYPE_LABEL_OVERRIDES } from '@etendosoftware/schema-
 // does in Java — same principle, applied here to the shared `source: sql`
 // report engine via the `__REPORT_LOCALE__` placeholder (`report-sql.js`).
 // `document_type` now arrives from SQL ALREADY translated from Etendo's own
-// source of truth. The only piece that remains hand-maintained is the
-// MMR/MMS return-variant split (`RETURN_LABELS`, report-i18n.js): `IsReturn`
-// has no equivalent code in `ad_ref_list`, so it can't come from the JOIN.
-// `translateDocType()` in report-html-helpers.js now ONLY applies that
-// override — for every other case it must return the incoming
-// `translatedName` completely untouched.
+// source of truth. `translateDocType()` in report-html-helpers.js then
+// applies two layers of hand-maintained overrides on top of that SQL value,
+// checked in this order:
+//   1. RETURN_LABELS (report-i18n.js) — the MMR/MMS return-variant split:
+//      `IsReturn` has no equivalent code in `ad_ref_list`, so it can't come
+//      from the JOIN. Wins for MMR/MMS with isreturn='Y'.
+//   2. DOC_TYPE_LABEL_OVERRIDES (ETP-5356, report-i18n.js) — an unconditional
+//      per-docbasetype relabel (currently ARI, API, MMR, MMS, MMI, APP, GLJ,
+//      ARR, MXI), applied whenever rule 1 above did not already match —
+//      including MMR/MMS themselves when isreturn is NOT 'Y'.
+// For every docbasetype in NEITHER dictionary, `translateDocType()` must
+// return the incoming `translatedName` completely untouched.
 //
 // Every assertion here reads the REAL artifact source from disk (contract
 // SQL, all three templates, mock-data.json) and renders through the REAL
@@ -186,6 +192,12 @@ const CASES = [
   ['MXI', null, 'Match Invoice', DOC_TYPE_LABEL_OVERRIDES.en_US.MXI, DOC_TYPE_LABEL_OVERRIDES.es_ES.MXI],
   // MMI: ETP-5356 added this to DOC_TYPE_LABEL_OVERRIDES too.
   ['MMI', null, 'Material Physical Inventory', DOC_TYPE_LABEL_OVERRIDES.en_US.MMI, DOC_TYPE_LABEL_OVERRIDES.es_ES.MMI],
+  // ETP-5356 new overrides: APP, GLJ, ARR — none of these are return-eligible
+  // (only MMR/MMS carry IsReturn semantics), so a single non-return case is
+  // enough to prove the override applies through every render path.
+  ['APP', null, 'AP Payment', DOC_TYPE_LABEL_OVERRIDES.en_US.APP, DOC_TYPE_LABEL_OVERRIDES.es_ES.APP],
+  ['GLJ', null, 'GL Journal', DOC_TYPE_LABEL_OVERRIDES.en_US.GLJ, DOC_TYPE_LABEL_OVERRIDES.es_ES.GLJ],
+  ['ARR', null, 'AR Receipt', DOC_TYPE_LABEL_OVERRIDES.en_US.ARR, DOC_TYPE_LABEL_OVERRIDES.es_ES.ARR],
   ['AMZ', null, 'Amortization', 'Amortization', 'Amortization'],
   [null, null, 'Journal', 'Journal', 'Journal'],
 ];
@@ -249,8 +261,8 @@ function renderCsv(rows, locale) {
   return hb.compile(TEMPLATE_CSV_SRC)({ meta: baseMeta(locale), rows });
 }
 
-describe('report-journal-entries — translateDocType: MMR/MMS return split PLUS the unconditional DOC_TYPE_LABEL_OVERRIDES relabel (ETP-5013 + ETP-5356)', () => {
-  it('a regular (isreturn=N) MMR row is relabeled via DOC_TYPE_LABEL_OVERRIDES, discarding the SQL-supplied name, in both locales (ETP-5356)', () => {
+describe('report-journal-entries — translateDocType applies RETURN_LABELS (MMR/MMS isreturn=Y) then DOC_TYPE_LABEL_OVERRIDES; everything else passes through untouched (ETP-5013 / ETP-5356)', () => {
+  it('a regular (isreturn=N) MMR row is overridden by DOC_TYPE_LABEL_OVERRIDES.MMR, not the SQL-supplied name, in both locales (ETP-5356)', () => {
     for (const locale of ['en_US', 'es_ES']) {
       const row = makeRow(0, ['MMR', 'N', 'Material Receipt']);
       const html = renderHtmlLike(TEMPLATE_HTML_SRC, [row], locale);
@@ -260,26 +272,28 @@ describe('report-journal-entries — translateDocType: MMR/MMS return split PLUS
     }
   });
 
-  it('an MMR row with isreturn=Y is overridden to RETURN_LABELS.MMR_RETURN, discarding the SQL-supplied name, in both locales', () => {
+  it('an MMR row with isreturn=Y is overridden to RETURN_LABELS.MMR_RETURN — RETURN_LABELS wins over DOC_TYPE_LABEL_OVERRIDES.MMR, in both locales', () => {
     for (const locale of ['en_US', 'es_ES']) {
       const row = makeRow(0, ['MMR', 'Y', 'Material Receipt']);
       const html = renderHtmlLike(TEMPLATE_HTML_SRC, [row], locale);
       const cells = [...html.matchAll(/<td class="entry-detail"[^>]*>([\s\S]*?)<\/td>/g)].map((m) => m[1]);
       assert.equal(cells[0], RETURN_LABELS[locale].MMR_RETURN);
       assert.notEqual(cells[0], 'Material Receipt');
+      assert.notEqual(cells[0], DOC_TYPE_LABEL_OVERRIDES[locale].MMR);
     }
   });
 
-  it('an MMS row with isreturn=Y is overridden to RETURN_LABELS.MMS_RETURN, in both locales', () => {
+  it('an MMS row with isreturn=Y is overridden to RETURN_LABELS.MMS_RETURN — RETURN_LABELS wins over DOC_TYPE_LABEL_OVERRIDES.MMS, in both locales', () => {
     for (const locale of ['en_US', 'es_ES']) {
       const row = makeRow(0, ['MMS', 'Y', 'Material Shipment']);
       const html = renderHtmlLike(TEMPLATE_HTML_SRC, [row], locale);
       const cells = [...html.matchAll(/<td class="entry-detail"[^>]*>([\s\S]*?)<\/td>/g)].map((m) => m[1]);
       assert.equal(cells[0], RETURN_LABELS[locale].MMS_RETURN);
+      assert.notEqual(cells[0], DOC_TYPE_LABEL_OVERRIDES[locale].MMS);
     }
   });
 
-  it('an MMS row with isreturn=N is relabeled via DOC_TYPE_LABEL_OVERRIDES, not passed through (ETP-5356)', () => {
+  it('an MMS row with isreturn=N is overridden by DOC_TYPE_LABEL_OVERRIDES.MMS, not the SQL-supplied name (ETP-5356)', () => {
     const row = makeRow(0, ['MMS', 'N', 'Material Shipment']);
     const html = renderHtmlLike(TEMPLATE_HTML_SRC, [row], 'en_US');
     const cells = [...html.matchAll(/<td class="entry-detail"[^>]*>([\s\S]*?)<\/td>/g)].map((m) => m[1]);
@@ -412,10 +426,10 @@ describe('report-journal-entries — template-csv.hbs document-type field render
     });
   }
 
-  it('never emits a comma-quoted document-type field — no value in RETURN_LABELS currently contains a comma', () => {
-    for (const dict of Object.values(RETURN_LABELS)) {
+  it('never emits a comma-quoted document-type field — no value in RETURN_LABELS or DOC_TYPE_LABEL_OVERRIDES currently contains a comma', () => {
+    for (const dict of [...Object.values(RETURN_LABELS), ...Object.values(DOC_TYPE_LABEL_OVERRIDES)]) {
       for (const value of Object.values(dict)) {
-        assert.doesNotMatch(value, /,/, `unexpected comma in RETURN_LABELS value "${value}" — add a quoting sub-case if this ever changes`);
+        assert.doesNotMatch(value, /,/, `unexpected comma in label value "${value}" — add a quoting sub-case if this ever changes`);
       }
     }
   });
@@ -477,7 +491,7 @@ describe('report-journal-entries — mock-data.json docbasetype/isreturn coverag
     }
   });
 
-  it('renders the Journal row verbatim, but relabels the ARI/API mock rows via DOC_TYPE_LABEL_OVERRIDES (ETP-5356) — no MMR/MMS rows in this fixture, so RETURN_LABELS never applies here', () => {
+  it('renders the mock AR/AP Invoice rows through DOC_TYPE_LABEL_OVERRIDES (ETP-5356), discarding their raw SQL-supplied names, and leaves the Journal row verbatim (no MMR/MMS rows in this fixture, so RETURN_LABELS never applies)', () => {
     assert.ok(
       MOCK.every((r) => r.docbasetype !== 'MMR' && r.docbasetype !== 'MMS'),
       'mock-data.json now contains an MMR/MMS row — extend this test to also cover the return-override case',
@@ -498,9 +512,15 @@ describe('report-journal-entries — mock-data.json docbasetype/isreturn coverag
       const journalCellIdx = groupOrder.indexOf(MOCK[journalIdx].fact_acct_group_id);
       const arCellIdx = groupOrder.indexOf(MOCK[arIdx].fact_acct_group_id);
       const apCellIdx = groupOrder.indexOf(MOCK[apIdx].fact_acct_group_id);
+      // Journal has no docbasetype at all, so it is genuinely absent from
+      // DOC_TYPE_LABEL_OVERRIDES and must still pass through verbatim.
       assert.equal(cells[journalCellIdx], 'Journal');
+      // AR/AP Invoice now have a DOC_TYPE_LABEL_OVERRIDES entry (ETP-5356) —
+      // the raw SQL-supplied 'AR Invoice'/'AP Invoice' is discarded.
       assert.equal(cells[arCellIdx], DOC_TYPE_LABEL_OVERRIDES[locale].ARI);
       assert.equal(cells[apCellIdx], DOC_TYPE_LABEL_OVERRIDES[locale].API);
+      assert.notEqual(cells[arCellIdx], 'AR Invoice');
+      assert.notEqual(cells[apCellIdx], 'AP Invoice');
     }
   });
 });

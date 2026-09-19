@@ -1039,7 +1039,6 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   const handleBodyScroll = useCallback((e) => {
     if (headerScrollRef.current) headerScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
   }, []);
-
   // ETP-5133 — while the sibling add-row form is active (`lineFormActive`, the
   // un-stripped twin of DataTable's own `addRow.active` — see that prop's own
   // doc comment), reserve a real DOM anchor INSIDE this scroll body and hand it

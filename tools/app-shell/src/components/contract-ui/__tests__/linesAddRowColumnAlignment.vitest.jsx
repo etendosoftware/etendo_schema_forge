@@ -28,7 +28,7 @@
 import { render, screen } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import React, { createRef } from 'react';
-import { DataTable } from '../DataTable.jsx';
+import { DataTable, growColumnWidth, getTableContainerStyle } from '../DataTable.jsx';
 import InlineLinesPanel from '../InlineLinesPanel.jsx';
 
 vi.mock('sonner', () => ({
@@ -300,5 +300,90 @@ describe('the reserved action slot itself (ETP-5245)', () => {
     // checkbox 40 + quantity 152 + amount 172 + right spacer 48 — no 160px slot.
     expect(headerLayout.fixedPx).toBe(412);
     expect(addRowLayout.calcFixedPx).toBe(412);
+  });
+});
+
+// ── growColumnWidth() — direct unit coverage ─────────────────────────────────────
+// Everything above only ever exercises the UNMEASURED branch (no live scroll host —
+// jsdom has no ResizeObserver, see readAddRowLayout's own doc comment): it always gets
+// back a calc() expression to decode. The MEASURED branch — the actual literal-pixel
+// arithmetic added by ETP-5133's BUG-1 fix (pass 2, see growColumnWidth()'s own doc
+// comment in DataTable.jsx) to reproduce flexbox's leftover-distribution against a real,
+// live scroll host — is never reached by mounting DataTable standalone, so it is
+// covered directly here with a synthetic `measured` object instead.
+describe('growColumnWidth()', () => {
+  it('without a measured host, returns the calc() expression restoring the column basis', () => {
+    expect(growColumnWidth(224, 992, 3)).toBe('calc((100% - 992px) / 3 + 224px)');
+    // A `measured` object whose hostWidthPx isn't finite yet (host not measured, or no
+    // live scroll host at all) also falls back to the calc() branch instead of throwing.
+    expect(growColumnWidth(130, 420, 2, { hostWidthPx: NaN, growBasisTotalPx: 260 }))
+      .toBe('calc((100% - 420px) / 2 + 130px)');
+  });
+
+  it('with a measured host and surplus, splits the leftover evenly on top of each basis', () => {
+    const basisPx = 130;
+    const fixedTotalPx = 420;
+    const growCount = 2;
+    const growBasisTotalPx = 260; // 2 * 130
+    const hostWidthPx = 900;
+
+    const width = growColumnWidth(basisPx, fixedTotalPx, growCount, { hostWidthPx, growBasisTotalPx });
+    const expectedLeftoverPerColumn = (hostWidthPx - fixedTotalPx - growBasisTotalPx) / growCount;
+
+    expect(width).toBe(`${basisPx + expectedLeftoverPerColumn}px`);
+    // The property that actually makes this "correct": fixed budget + every grow
+    // column's resolved width must sum exactly to what the container measured.
+    expect(fixedTotalPx + growCount * parseInt(width, 10)).toBe(hostWidthPx);
+  });
+
+  it('keeps columns with different bases at different widths — the Persona regression (bases 224/224/320/224/224)', () => {
+    // This is the exact case that broke in Chrome: a per-column calc() was ignored and
+    // every column rendered at an identical width regardless of its own basis. The
+    // measured branch reproduces flexbox's own arithmetic in JS instead of relying on
+    // the browser to resolve a percentage per <col>.
+    const bases = [224, 224, 320, 224, 224];
+    const growCount = bases.length;
+    const growBasisTotalPx = bases.reduce((sum, b) => sum + b, 0);
+    const fixedTotalPx = 40; // checkbox only
+    const hostWidthPx = 1600; // comfortably fits
+
+    const widths = bases.map((basisPx) =>
+      growColumnWidth(basisPx, fixedTotalPx, growCount, { hostWidthPx, growBasisTotalPx }),
+    );
+
+    expect(new Set(widths).size).toBeGreaterThan(1);
+    expect(widths[0]).toBe(widths[1]); // same basis -> same resolved width
+    expect(parseInt(widths[2], 10)).toBeGreaterThan(parseInt(widths[0], 10)); // wider basis (320) stays widest
+  });
+
+  it('clamps leftover at 0 under a deficit — columns keep their basis and overflow instead of shrinking', () => {
+    // Cuenta Bancaria-shaped deficit: the row demands ~1968px of real content in a
+    // ~1134px measured host.
+    const basisPx = 224;
+    const growCount = 5;
+    const growBasisTotalPx = basisPx * growCount; // 1120
+    const fixedTotalPx = 848; // total demand: 848 + 1120 = 1968
+    const hostWidthPx = 1134;
+
+    const widths = Array.from({ length: growCount }, () =>
+      growColumnWidth(basisPx, fixedTotalPx, growCount, { hostWidthPx, growBasisTotalPx }),
+    );
+
+    for (const w of widths) {
+      expect(w).toBe(`${basisPx}px`); // never squeezed below its own basis
+    }
+    // The row's real content demand still exceeds the measured host — that excess
+    // overflows (horizontal scroll); it never squeezes a column below its own basis.
+    expect(fixedTotalPx + growCount * basisPx).toBeGreaterThan(hostWidthPx);
+  });
+
+  it('returns undefined when there are no growing columns', () => {
+    expect(growColumnWidth(100, 500, 0)).toBeUndefined();
+  });
+});
+
+describe('getTableContainerStyle()', () => {
+  it('always returns the fixed table-layout, 100%-width style object', () => {
+    expect(getTableContainerStyle()).toEqual({ tableLayout: 'fixed', width: '100%' });
   });
 });

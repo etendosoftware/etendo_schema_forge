@@ -1,34 +1,84 @@
 /**
- * Tests for useBatch — covers batchUrl derivation and the runBatch POST flow
- * (success, non-ok with body, non-ok without body, fetch rejection) with mocked fetch.
+ * Tests for useBatch — covers where the batch endpoint resolves to (ETP-5371) and the runBatch
+ * POST flow (success, non-ok with body, non-ok without body, fetch rejection) with mocked fetch.
  */
 
 import { renderHook, act } from '@testing-library/react';
 import { useBatch } from '../useBatch.js';
 
 describe('useBatch — batchUrl', () => {
-  it('defaults to /sws/neo/batch when no apiBaseUrl is provided', () => {
-    const { result } = renderHook(() => useBatch({ token: 'tok' }));
-    // Indirectly verified through the fetch URL in runBatch tests; here just smoke.
-    expect(typeof result.current.runBatch).toBe('function');
+  const originalLocation = window.location;
+
+  function setPathname(pathname) {
+    Object.defineProperty(window, 'location', { value: { pathname }, writable: true, configurable: true });
+  }
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', { value: originalLocation, writable: true, configurable: true });
+    delete import.meta.env.VITE_API_BASE;
+    vi.restoreAllMocks();
   });
 
-  it('strips the trailing spec segment from apiBaseUrl', async () => {
+  function mockOkFetch() {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       text: async () => '{"committed":true}',
     });
-    const { result } = renderHook(() =>
-      useBatch({ apiBaseUrl: '/sws/neo/purchase-invoice', token: 'tok' }),
-    );
+  }
+
+  it('posts to /batch at the NEO root', async () => {
+    mockOkFetch();
+    const { result } = renderHook(() => useBatch({ token: 'tok' }));
 
     await act(async () => {
       await result.current.runBatch([]);
     });
 
     expect(globalThis.fetch.mock.calls[0][0]).toBe('/sws/neo/batch');
-    vi.restoreAllMocks();
+  });
+
+  /**
+   * ETP-5371 — this hook used to derive the NEO root by stripping the last segment off the
+   * caller's own `apiBaseUrl`, which worked only because `ListView` happens to be handed a
+   * spec URL. The First Steps checklist passed the deployment prefix (`/etendo`), the chop
+   * produced `''`, and the POST went to `/batch` — outside the backend entirely, where
+   * CloudFront answered 403 and the failure read like an infrastructure outage.
+   *
+   * The hook no longer accepts `apiBaseUrl` at all, so the test passes one anyway: whatever a
+   * caller hands it, the batch URL must keep the deployment's context path.
+   */
+  it('regression: keeps the deployment context path no matter what the caller passes', async () => {
+    import.meta.env.VITE_API_BASE = '/etendo';
+    setPathname('/first-steps');
+    mockOkFetch();
+
+    const { result } = renderHook(() => useBatch({ apiBaseUrl: '/etendo', token: 'tok' }));
+
+    await act(async () => {
+      await result.current.runBatch([]);
+    });
+
+    expect(globalThis.fetch.mock.calls[0][0]).toBe('/etendo/sws/neo/batch');
+  });
+
+  it('sends the Products window and the First Steps checklist to the same endpoint', async () => {
+    import.meta.env.VITE_API_BASE = '/etendo';
+    setPathname('/first-steps');
+    mockOkFetch();
+
+    // The two shapes the two entry points used to pass in.
+    const fromListView = renderHook(() => useBatch({ apiBaseUrl: '/etendo/sws/neo/product', token: 'tok' }));
+    const fromFirstSteps = renderHook(() => useBatch({ apiBaseUrl: '/etendo', token: 'tok' }));
+
+    await act(async () => {
+      await fromListView.result.current.runBatch([]);
+      await fromFirstSteps.result.current.runBatch([]);
+    });
+
+    const [listViewUrl] = globalThis.fetch.mock.calls[0];
+    const [firstStepsUrl] = globalThis.fetch.mock.calls[1];
+    expect(firstStepsUrl).toBe(listViewUrl);
   });
 });
 
@@ -72,9 +122,7 @@ describe('useBatch — runBatch', () => {
       status: 200,
       text: async () => '{}',
     });
-    const { result } = renderHook(() =>
-      useBatch({ apiBaseUrl: '/sws/neo/purchase-invoice', token: 'my-token' }),
-    );
+    const { result } = renderHook(() => useBatch({ token: 'my-token' }));
 
     const ops = [{ id: 'op1', spec: 'product' }];
     await act(async () => {
