@@ -4,16 +4,21 @@ import { login } from '../helpers/auth.js';
 /**
  * Contacts — Razón Social (name) pre-fill on Person → Company switch (mocked).
  *
- * Behavior under test (ContactTypeToggle.handleSelect):
- *   Person → Company: pre-fills the Razón Social (`name`) field with the trimmed
- *   "First Last" — but ONLY if `name` is auto-owned (blank, or still equal to the
- *   last value we auto-wrote). If `name` holds a user/persisted value it is left
- *   untouched. It THEN clears the person fields `etgoFirstname`/`etgoLastname`
- *   (a company has no personal name; they are hidden in company mode).
- *   Company → Person: clears the Razón Social (`name`) — the backend rebuilds
- *   Name from first+last on save, so a company name would be stale — and resets
- *   the auto-fill tracker. All writes go into the DetailView editing state and
- *   are persisted only on Save.
+ * Behavior under test (ContactTypeToggle.handleSelect). ETP-5350 made the toggle
+ * DRAFT-PRESERVING: each type banks the other type's fields locally, so a round trip
+ * before Save cannot destroy them.
+ *   Person → Company: banks first/last and clears them from the active state (a
+ *   company has no personal name, and they must not be sent). `name` is then filled
+ *   from the banked company draft when the user owns it, or derived from the trimmed
+ *   "First Last" when that draft is empty or was itself auto-derived.
+ *   Company → Person: banks `name` and clears it from the active state — the backend
+ *   rebuilds Name from first+last for a person — then restores the banked first/last.
+ *   A derivation with nothing to derive from never erases a bank, which is what makes
+ *   re-selecting the already-active Empresa a no-op rather than a silent erase.
+ *   A record stored as a PERSON has no company bank: its `name` is the backend-derived
+ *   "First Last", not a user-owned legal name, so it is re-derived rather than
+ *   preserved. The preservation guarantee is asserted on a company record.
+ *   All writes go into the DetailView editing state and are persisted only on Save.
  *
  * Mock mode only: installs a contacts businessPartner list/detail route on top
  * of the generic /sws/** mock that login() seeds, so it needs no backend.
@@ -163,23 +168,32 @@ test.describe('Contacts — Razón Social pre-fill on Person → Company switch'
     await expect(nameInput(page)).toHaveValue('Ada Lovelace');
   });
 
-  test('does NOT overwrite name when it already has a value', async ({ page }) => {
-    await openDetail(page, 'contact-named');
+  test('does NOT overwrite an existing company legal name on a Persona round trip', async ({ page }) => {
+    // The record has to be stored as a COMPANY for `name` to be a legal name the user owns;
+    // see the file docblock for why a person record is re-derived instead. This one is served
+    // with `etgoIsperson: 'N'`.
+    await openDetail(page, 'contact-company-n-shape');
+    await expect(nameInput(page)).toHaveValue('ACME Raw Shape SL');
 
+    // Company → Person banks the legal name and clears it from the active payload.
+    await switchToPersona(page);
     const first = page.getByTestId('field-etgoFirstname');
     const last = page.getByTestId('field-etgoLastname');
+    await expect(first).toBeVisible();
+    await expect(last).toBeVisible();
     await first.fill('Ada');
     await last.fill('Lovelace');
     await last.blur();
 
     await switchToCompany(page);
 
-    // name was pre-populated → must remain untouched.
+    // The bank was never auto-derived, so it wins over the "Ada Lovelace" the person fields
+    // would otherwise produce: a persisted legal name is never silently replaced.
     await expect(nameInput(page)).toBeVisible();
-    await expect(nameInput(page)).toHaveValue('ACME Existing SL');
+    await expect(nameInput(page)).toHaveValue('ACME Raw Shape SL');
   });
 
-  test('re-syncs while auto-owned, clears person fields on each direction, and respects a manual edit', async ({ page }) => {
+  test('re-syncs an auto-derived name, restores the banked drafts, and respects a manual edit', async ({ page }) => {
     await openDetail(page, 'contact-blank');
 
     const first = page.getByTestId('field-etgoFirstname');
@@ -195,16 +209,14 @@ test.describe('Contacts — Razón Social pre-fill on Person → Company switch'
     await expect(nameInput(page)).toBeVisible();
     await expect(nameInput(page)).toHaveValue('Ada Lovelace');
 
-    // 2) Back to Persona. The previous Person → Company switch CLEARED the person
-    //    fields, so first/last are now empty. Re-type them, then switch to Empresa
-    //    again: `name` was cleared by the Company → Person switch, so it is
-    //    auto-owned (blank) and re-syncs to the new "Ada Byron".
+    // 2) Back to Persona. The switch RESTORES the person fields the previous one banked, so
+    //    first/last come back as "Ada"/"Lovelace" instead of empty. Correct only the surname:
+    //    the company draft is still auto-derived, so it re-syncs to "Ada Byron".
     await switchToPersona(page);
     await expect(first).toBeVisible();
     await expect(last).toBeVisible();
-    await expect(first).toHaveValue('');
-    await expect(last).toHaveValue('');
-    await first.fill('Ada');
+    await expect(first).toHaveValue('Ada');
+    await expect(last).toHaveValue('Lovelace');
     await last.fill('Byron');
     await last.blur();
     await switchToCompany(page);
@@ -221,13 +233,14 @@ test.describe('Contacts — Razón Social pre-fill on Person → Company switch'
     await switchToCompany(page);
     await expect(nameInput(page)).toHaveValue('ACME SL');
 
-    // 4) Company → Person clears the Razón Social: go to Persona, then back to
-    //    Empresa with blank first/last → `name` is empty (the person switch wiped
-    //    the manual "ACME SL", and there is no first/last to derive a new value).
+    // 4) Company → Person → Company KEEPS the manual "ACME SL". Going to Persona clears it
+    //    from the active payload but banks it, and because it differs from the last
+    //    auto-derived value the bank is user-owned, so the return trip restores it verbatim
+    //    instead of re-deriving. Losing it here was the pre-ETP-5350 behavior.
     await switchToPersona(page);
     await switchToCompany(page);
     await expect(nameInput(page)).toBeVisible();
-    await expect(nameInput(page)).toHaveValue('');
+    await expect(nameInput(page)).toHaveValue('ACME SL');
   });
 });
 

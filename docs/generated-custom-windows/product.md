@@ -465,12 +465,50 @@ time, exactly like Contacts does for `country`.
 `standardPrice`/`listPrice`/`priceLimit` against the sales price list version only — a
 purchase price could not be imported at all. `price` is replaced by `salesPrice`
 (aliases `precio de venta`, `precio venta`, `precio`, `pvp`) and `purchasePrice`
-(`precio de compra`, `precio compra`, `coste`, `costo`); each produces its own
+(`precio de compra`, `precio compra`; ⚠️ **`coste`/`costo` moved to the new `cost` column in
+ETP-5350** — see below); each produces its own
 `parentRef`-linked `price` op (ids `salesPrice` / `purchasePrice`) against its own price list
 version, resolved once per run and cached per direction. An **unflagged** price list version
 still counts as a sales list (a human sees those in the Sales tab) but is never assumed to be
 a purchase one — a purchase price requires an explicitly purchase-flagged version, or the row
 fails rather than silently filing the cost against a sales list.
+
+**Standard cost and its starting date (ETP-5350).** The import writes `M_Costing` as well:
+`cost` (aliases `costo`, `coste`, `coste estandar`/`costo estandar` with and without the accent,
+`standard cost`) and `costStartingDate` (`fecha de inicio`, `fecha inicio`, `vigente desde`,
+`fecha de inicio del coste`, `starting date`). Together they produce one `parentRef`-linked op on
+the **`costing`** entity, which `decisions.json` wires to `productCostingHandler` — so an imported
+cost takes exactly the path the Costing tab takes, because `/batch` runs handler hooks for any
+entity declaring a `Java_Qualifier`.
+
+⚠️ **`coste`/`costo` no longer mean purchase price.** They were `purchasePrice` aliases until
+ETP-5350. A hand-made CSV with a single "Costo" column now writes a standard cost instead of a
+purchase price, silently — the value does not fail, it lands in a different table. Downloaded
+templates are unaffected (that header has always been "Precio de compra"), and a file carrying
+both columns already mapped correctly either way, since `mapColumns` claims the first *unclaimed*
+field.
+
+Four rules this import depends on, each of which has a test:
+
+- The op body carries **only** `cost` and `startingDate`. `costType='STA'`, `manual`/`permanent`/
+  `production`, the organisation and **its** currency (not the AD default, which is USD), and
+  `endingDate` (`CostingUtils.getLastDate()` → 31-12-9999) all come from the handler. Sending
+  `endingDate` **at all, even empty, stops that inference from running.**
+- A blank cost emits **no op**. `/batch` is all-or-nothing per row and the handler rejects a blank
+  cost, so one empty cell would lose the whole product rather than just its cost.
+- A starting date with **no** cost fails the row during review. A date alone cannot create an
+  `M_Costing` row, so it would otherwise be dropped in silence.
+- A blank date defaults to `todayCalendarISO()` — the local calendar day. Never
+  `new Date().toISOString().slice(0, 10)`, which is UTC and backdates the cost for most of the
+  evening under `America/Argentina/…`. It is also NOT taken from `/defaults`, which prefills the
+  field with the *product's creation date*: identical during an import, divergent the moment this
+  runs against existing products.
+
+The date cell is parsed by `@/lib/importDateCell.js` (`dd/MM/yyyy`, `dd-MM-yyyy`, `dd.MM.yyyy`,
+ISO — day-first for every separated form, in every locale), promoted there from the bank-statement
+import rather than copied. `31/02/2026` fails its row; `-5` fails as a negative cost before the
+handler can 400 on it. Neither column is read back from the list — the product list row exposes no
+cost — so an exported template leaves both blank.
 
 **Category columns 3 → 1.** `categoryCode`/`categoryName`/`category` collapse into `category`;
 the cell is probed against existing category codes first and treated as a name otherwise

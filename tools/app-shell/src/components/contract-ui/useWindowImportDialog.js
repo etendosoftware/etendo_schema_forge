@@ -92,7 +92,17 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
     // actually waiting on. The 401 is handed back as a normal `!res.ok` and the review screen
     // reports the check as incomplete.
     const res = await apiFetch(`/${entity}?${params.toString()}`, { on401: 'ignore' });
-    if (!res.ok) throw new Error(`existing-record lookup failed: ${res.status}`);
+    // ETP-5350 — `messageKey`/`params` alongside the English text, the contract
+    // `ImportDialog.localizeError` (and now `sendRow`) reads: a plain module has no
+    // translator, so it declares the key and lets the dialog resolve it. Without this the
+    // developer-facing sentence below WAS the message the user read, in English, in the
+    // middle of a Spanish flow.
+    if (!res.ok) {
+      throw Object.assign(
+        new Error(`existing-record lookup failed: ${res.status}`),
+        { messageKey: 'importErrorLookupFailed', params: { status: res.status } },
+      );
+    }
     const json = await res.json().catch(() => null);
     const data = json?.response?.data ?? json?.data ?? [];
     // Only the key columns are read back; anything else the endpoint returns is ignored.

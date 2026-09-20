@@ -1,8 +1,8 @@
 {
   "version": "0.12.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-09-18T01:40:09.053Z",
-  "checksum": "a72569c3bdfb6db8",
+  "updatedAt": "2026-09-20T21:04:03.898Z",
+  "checksum": "0304819bc3c591e7",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -151,7 +151,8 @@
             "target": "description",
             "aliases": [
               "descripcion",
-              "descripción"
+              "descripción",
+              "description"
             ],
             "example": "Tornillería inoxidable",
             "exampleKey": "importExampleProductDescription",
@@ -212,15 +213,49 @@
             "target": "purchasePrice",
             "aliases": [
               "precio de compra",
-              "precio compra",
-              "coste",
-              "costo"
+              "precio compra"
             ],
             "label": "Purchase Price",
             "isNumeric": true,
             "example": "8,20",
             "exampleKey": "importExampleProductPurchasePrice",
             "labelKey": "importHeaderPurchasePrice"
+          },
+          {
+            "target": "cost",
+            "aliases": [
+              "costo",
+              "coste",
+              "coste estandar",
+              "coste estándar",
+              "costo estandar",
+              "costo estándar",
+              "standard cost"
+            ],
+            "label": "Cost",
+            "required": false,
+            "isNumeric": true,
+            "example": "7,40",
+            "exampleKey": "importExampleProductCost",
+            "labelKey": "importHeaderCost",
+            "column": "Cost",
+            "type": "string"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "costStartingDate",
+            "aliases": [
+              "fecha de inicio",
+              "fecha inicio",
+              "vigente desde",
+              "fecha de inicio del coste",
+              "starting date"
+            ],
+            "label": "Cost Starting Date",
+            "example": "01/01/2026",
+            "exampleKey": "importExampleProductCostStartingDate",
+            "labelKey": "importHeaderCostStartingDate"
           },
           {
             "required": false,
@@ -2589,7 +2624,8 @@
             "target": "description",
             "aliases": [
               "descripcion",
-              "descripción"
+              "descripción",
+              "description"
             ],
             "example": "Tornillería inoxidable",
             "exampleKey": "importExampleProductDescription",
@@ -2650,15 +2686,49 @@
             "target": "purchasePrice",
             "aliases": [
               "precio de compra",
-              "precio compra",
-              "coste",
-              "costo"
+              "precio compra"
             ],
             "label": "Purchase Price",
             "isNumeric": true,
             "example": "8,20",
             "exampleKey": "importExampleProductPurchasePrice",
             "labelKey": "importHeaderPurchasePrice"
+          },
+          {
+            "target": "cost",
+            "aliases": [
+              "costo",
+              "coste",
+              "coste estandar",
+              "coste estándar",
+              "costo estandar",
+              "costo estándar",
+              "standard cost"
+            ],
+            "label": "Cost",
+            "required": false,
+            "isNumeric": true,
+            "example": "7,40",
+            "exampleKey": "importExampleProductCost",
+            "labelKey": "importHeaderCost",
+            "column": "Cost",
+            "type": "string"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "costStartingDate",
+            "aliases": [
+              "fecha de inicio",
+              "fecha inicio",
+              "vigente desde",
+              "fecha de inicio del coste",
+              "starting date"
+            ],
+            "label": "Cost Starting Date",
+            "example": "01/01/2026",
+            "exampleKey": "importExampleProductCostStartingDate",
+            "labelKey": "importHeaderCostStartingDate"
           },
           {
             "required": false,
