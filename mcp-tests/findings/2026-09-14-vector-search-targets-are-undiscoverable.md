@@ -50,12 +50,31 @@ forbidden), not the denial itself.
 
 ## Not verified
 
-- **Whether DB Extended is installed or has any search target configured in this tenant.** Not
-  checked; it may be entirely legitimate that no target exists here, in which case the denial is
-  correct and only the *message* and the *undiscoverability* are the defect.
-- Whether a correctly-named key succeeds for this role. No valid key was ever found, precisely
-  because there is no way to find one.
-- Whether the 403 is emitted by the MCP layer or propagated from DB Extended.
+- ~~**Whether DB Extended is installed or has any search target configured in this tenant.**~~
+  **CHECKED 2026-09-15. Yes to both.** `com.etendoerp.db.extended` ("Extended Database Utilities")
+  v1.3.7 is installed and active, and `ETARC_VECTOR_SEARCH_TARGET` carries active targets at
+  `AD_Client_ID = 0`. So the denial was **not** the legitimate "nothing is configured" case, and the
+  finding survives the check.
+- ~~Whether a correctly-named key succeeds for this role.~~ **Moot: valid keys now known.** As of
+  2026-09-15 the configured keys are `contact`, `product`, `purchase-invoice`, `sales-invoice`.
+  Note `contact` and `product` were **added by the user on 2026-09-15**, after this run — so at the
+  time of measurement the probes' `product` guess was genuinely unknown, and the 403 was
+  the "key does not exist" case, exactly as claimed.
+- Whether the 403 is emitted by the MCP layer or propagated from DB Extended. **Answered by reading
+  the code:** it is emitted by Go, in `NeoVectorSearchEndpoint.handle`, not propagated.
+
+### Correction to this finding's own wording (2026-09-15)
+
+> *"A DB Extended search-target key is not a spec name"*
+
+**That is wrong, and it matters because it misdirects the fix.** Three of the four configured keys —
+`product`, `purchase-invoice`, `sales-invoice` — **are** spec names; they simply are not *guaranteed*
+to be, and nothing states the relationship either way. The probes' strategy of guessing spec names
+was therefore closer to right than this finding gave it credit for: it failed on the keys that did
+not exist yet, not because spec names are the wrong shape of guess.
+
+The defect is unchanged and is entirely about the contract: the keys are not published anywhere, and
+an absent key is reported as a permission denial.
 
 Both possibilities lead to the same recommendation, which is why the finding stands without
 resolving them: an unknown target should not be reported as a permission denial, and the valid keys

@@ -1,7 +1,7 @@
 {
   "id": "create-contact",
   "schemaVersion": 1,
-  "revision": 1,
+  "revision": 2,
   "titleKey": "walkthroughContactTitle",
   "descriptionKey": "walkthroughContactDescription",
   "icon": "UserPlus",
@@ -84,8 +84,18 @@
       }
     },
     {
-      "id": "tax-id",
+      "id": "tax-id-key",
       "targetTestId": "field-oBTIKTaxIDKey",
+      "titleKey": "walkthroughContactStepTaxIdKeyTitle",
+      "bodyKey": "walkthroughContactStepTaxIdKeyBody",
+      "placement": "right",
+      "advance": {
+        "on": "manual"
+      }
+    },
+    {
+      "id": "tax-id",
+      "targetTestId": "field-taxID",
       "titleKey": "walkthroughContactStepTaxIdTitle",
       "bodyKey": "walkthroughContactStepTaxIdBody",
       "placement": "right",
