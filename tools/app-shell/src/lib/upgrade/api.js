@@ -4,6 +4,7 @@ import { buildAuthHeaders } from '@etendosoftware/etendo-go-core/onboarding/api'
 export const UPGRADE_ERROR_CODES = {
   checkoutUnavailable: 'upgradeCheckoutUnavailable',
   checkoutCreationFailed: 'upgradeCheckoutCreationFailed',
+  purchaseAlreadyExists: 'upgradePurchaseAlreadyExists',
   sessionExpired: 'upgradeSessionExpired',
   failed: 'upgradeGenericError',
 };
@@ -25,11 +26,43 @@ export async function createCheckoutSession(fetchImpl, baseUrl, token, input = {
       ...(input.clientName ? { clientName: input.clientName } : {}),
       ...(input.language ? { language: input.language } : {}),
       ...(input.countryCode ? { countryCode: input.countryCode } : {}),
+      ...(input.dataTransfer ? { dataTransfer: input.dataTransfer } : {}),
     }),
   });
 
   const data = await readJsonSafely(response);
   if (!response.ok) {
+    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
+      : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message || data?.message, response.status);
+  }
+  if (!data?.checkoutUrl || !data?.requestId) {
+    throw buildError(UPGRADE_ERROR_CODES.checkoutUnavailable);
+  }
+  return { checkoutUrl: data.checkoutUrl, requestId: data.requestId, expiresAt: data.expiresAt || null };
+}
+
+/** Starts a new account-level purchase through the provider-neutral billing boundary. */
+export async function createBillingPurchase(fetchImpl, baseUrl, token, input = {}) {
+  const response = await fetchImpl(`${baseUrl}/sws/go/billing/purchases`, {
+    method: 'POST',
+    headers: buildAuthHeaders(token),
+    body: JSON.stringify({
+      action: input.action || 'productive-tenant',
+      upgradeAction: input.upgradeAction || 'create-productive',
+      ...(input.clientName ? { clientName: input.clientName } : {}),
+      ...(input.language ? { language: input.language } : {}),
+      ...(input.countryCode ? { countryCode: input.countryCode } : {}),
+      ...(input.dataTransfer ? { dataTransfer: input.dataTransfer } : {}),
+    }),
+  });
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    if (response.status === 409 && data?.purchaseId) {
+      const error = buildError(UPGRADE_ERROR_CODES.purchaseAlreadyExists,
+        data.status || 'Purchase already exists', response.status);
+      error.purchase = data;
+      throw error;
+    }
     throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
       : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message || data?.message, response.status);
   }
@@ -52,6 +85,46 @@ export async function getCheckoutStatus(fetchImpl, baseUrl, token, requestId) {
   return data || { status: 'pending' };
 }
 
+/** Reads the authenticated account-level billing projection. */
+export async function getBillingOverview(fetchImpl, baseUrl, token) {
+  const response = await fetchImpl(`${baseUrl}/sws/go/billing/overview`, {
+    headers: buildAuthHeaders(token),
+  });
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
+      : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message, response.status);
+  }
+  return data || { purchases: [] };
+}
+
+/** Reads the server-owned productive offer used to render purchase terms. */
+export async function getBillingOffer(fetchImpl, baseUrl, token) {
+  const response = await fetchImpl(`${baseUrl}/sws/go/billing/offers`, {
+    headers: buildAuthHeaders(token),
+  });
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
+      : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message, response.status);
+  }
+  return data;
+}
+
+/** Reads one account-scoped purchase without exposing provider identifiers. */
+export async function getBillingPurchase(fetchImpl, baseUrl, token, purchaseId) {
+  const response = await fetchImpl(
+    `${baseUrl}/sws/go/billing/purchases/${encodeURIComponent(purchaseId)}`,
+    { headers: buildAuthHeaders(token) }
+  );
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
+      : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message, response.status);
+  }
+  return data;
+}
+
 /** Starts the existing idempotent onboarding chain after the webhook authorizes the request. */
 export async function runPaidOnboarding(fetchImpl, baseUrl, token, input, onMessage) {
   const response = await fetchImpl(`${baseUrl}/sws/go/onboarding`, {
@@ -61,9 +134,10 @@ export async function runPaidOnboarding(fetchImpl, baseUrl, token, input, onMess
       clientName: input.clientName,
       currency: input.currency || 'EUR',
       language: input.language || 'en_US',
-      countryCode: input.countryCode || 'AR',
+      ...(input.countryCode ? { countryCode: input.countryCode } : {}),
       paymentToken: input.paymentToken,
       upgradeAction: input.upgradeAction || 'create-productive',
+      ...(input.dataTransfer ? { dataTransfer: input.dataTransfer } : {}),
     }),
   });
   if (response.status === 401) throw buildError(UPGRADE_ERROR_CODES.sessionExpired, null, 401);
