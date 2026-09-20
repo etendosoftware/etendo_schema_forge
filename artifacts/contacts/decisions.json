@@ -5,7 +5,7 @@
     "category": "contact",
     "name": "Contacts",
     "vectorSearch": {
-      "target": "business-partner"
+      "target": "contacts"
     },
     "entityLabel": "Contact",
     "sidebarLayout": false,
@@ -156,9 +156,9 @@
         { "target": "etgoLastname", "aliases": ["apellido", "apellidos"], "label": "Last Name", "required": false, "example": "García" },
         { "target": "etgoEmail", "aliases": ["email", "correo", "e-mail"], "isEmail": true, "label": "Email", "example": "info@distribucionesgarcia.es" },
         { "target": "etgoPhone", "aliases": ["telefono", "teléfono"], "label": "Phone", "example": "910 000 001" },
-        { "target": "etgoWeb", "aliases": ["web", "website", "sitio web", "pagina web", "página web"], "label": "Website", "example": "https://distribucionesgarcia.es" },
+        { "target": "etgoWeb", "aliases": ["web", "website", "sitio web", "pagina web", "página web"], "label": "Website", "example": "distribucionesgarcia.es" },
         { "target": "oBTIKTaxIDKey", "aliases": ["clave nif pais residencia", "clave nif país residencia", "tipo identificacion fiscal", "tipo identificación fiscal", "tax id type"], "label": "Tax ID Type", "required": false, "example": "NIF" },
-        { "target": "taxID", "aliases": ["cif/nif", "cif", "nif", "tax id", "taxid", "identificacion fiscal", "identificación fiscal"], "label": "NIF", "required": true, "example": "B12345678" },
+        { "target": "taxID", "aliases": ["cif/nif", "cif", "nif", "tax id", "taxid", "identificacion fiscal", "identificación fiscal"], "label": "NIF", "required": true, "example": "B12345674" },
         { "target": "email", "aliases": ["email de contacto"], "isEmail": true, "label": "Email (Contact)", "example": "compras@distribucionesgarcia.es", "headerScope": "contact" },
         { "target": "firstName", "aliases": ["nombre de contacto"], "label": "First Name (Contact)", "example": "Lucía", "headerScope": "contact" },
         { "target": "lastName", "aliases": ["apellido de contacto"], "label": "Last Name (Contact)", "example": "Fernández", "headerScope": "contact" },

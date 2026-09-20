@@ -80,14 +80,14 @@ export function Select({ label, required, value, onChange, options, placeholder,
 }
 
 /** Date field. `value` is an ISO date (yyyy-mm-dd); `onChange` emits the same. */
-export function DateInput({ label, required, value, onChange, className, name }) {
+export function DateInput({ label, required, value, onChange, className, name, disabled }) {
   return (
     <Field
       label={label}
       required={required}
       className={className}
       data-testid="Field__7183e9">
-      <DateField value={value} onChange={onChange} data-testid={name ? `field-date-${name}` : 'DateField__7183e9'} />
+      <DateField value={value} onChange={onChange} disabled={disabled} data-testid={name ? `field-date-${name}` : 'DateField__7183e9'} />
     </Field>
   );
 }
@@ -595,7 +595,7 @@ export function LookupPicker({ value, onChange, useLookup, placeholder = 'Buscar
  * @param {string} [placeholder]
  * @param {string} [testId] - base for the field's data-testids
  */
-export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscarâ€¦', testId = 'chip-select' }) {
+export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscarâ€¦', testId = 'chip-select', disabled = false }) {
   const ui = useUI();
   const inputRef = useRef(null);
   const dropdownRef = useRef(null);
@@ -670,7 +670,7 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscarâ€
   // Radix Popover portals the list to the body and auto-flips on collision, so it is never
   // clipped by an ancestor's overflow (e.g. the modal body) â€” unlike an inline dropdown.
   return (
-    <Popover open={open} onOpenChange={(v) => (v ? setOpen(true) : close())} data-testid="Popover__chip">
+    <Popover open={!disabled && open} onOpenChange={(v) => { if (!disabled) (v ? setOpen(true) : close()); }} data-testid="Popover__chip">
       <PopoverAnchor asChild data-testid="PopoverAnchor__chip">
         <div
           // `group` is load-bearing, not decoration: SelectorChip's clear (X) is
@@ -687,8 +687,8 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscarâ€
           // rounded than the plain `Input` sitting right next to it in the same modal row (Importe),
           // let alone than the equivalent field in every generated window. Height, radius and focus
           // belong to the density tokens, not to this component.
-          className={`group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-2 shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] hover:bg-[hsl(var(--muted))] focus-within:ring-2 focus-within:ring-primary`}
-          onClick={showChip ? startEditing : undefined}
+          className={`group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] px-2 shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] focus-within:ring-2 focus-within:ring-primary ${disabled ? 'bg-[hsl(var(--muted))] opacity-70' : 'bg-card hover:bg-[hsl(var(--muted))]'}`}
+          onClick={!disabled && showChip ? startEditing : undefined}
         >
           {showChip ? (
             <SelectorChip
@@ -697,6 +697,7 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscarâ€
               onClear={() => { onChange(null); close(); }}
               clearAriaLabel={ui('clear')}
               testId={`${testId}-chip`}
+              disabled={disabled}
               data-testid={`${testId}-chip`} />
           ) : (
             <input
@@ -707,8 +708,9 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscarâ€
               className="h-full min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap border-0 bg-transparent px-1 text-sm outline-none placeholder:text-[hsl(var(--muted-foreground))]"
               value={query}
               placeholder={placeholder}
+              disabled={disabled}
               onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
-              onFocus={() => setOpen(true)}
+              onFocus={() => !disabled && setOpen(true)}
               onKeyDown={handleInputKeyDown}
               role="combobox"
               aria-expanded={open}

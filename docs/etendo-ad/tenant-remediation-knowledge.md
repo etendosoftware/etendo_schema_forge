@@ -3245,6 +3245,47 @@ the log. With the unschedule-only approach that same stray fire was a harmless n
 noise rather than corruption — nothing else is written, and the trigger is not re-armed after the
 restart — but it argues for running this fix close to a restart.
 
+## ETP-4879 — K2: BP/PR accounting-dimension elements forced always-active/always-mandatory (2026-09-17)
+
+- **2026-09-17 — On this DB, `C_AcctSchema_Element.isactive` was ALREADY `'Y'` for 100% of BP/PR
+  rows (98/98 each, 96 distinct clients) before any fix ran — the corrective `.sql`'s `IsActive`
+  half is a pure no-op today, shipped only as a correctness guard.** Don't assume every gap
+  described by a product ticket implies broken current DB state — query first. The genuinely
+  broken flag here was `ismandatory` (`'N'` for 196/196 BP/PR rows, never forced anywhere before).
+- **2026-09-17 — `C_AcctSchema_Element.ismandatory`/`isMandatory()` is DEAD CODE for BP/PR type
+  rows in every consumer checked, confirmed by reading each one (not assumed):**
+  `GeneralLedgerConfigurationHandler.applyDimensionChanges` only reads `isMandatory()` inside the
+  `!LOCKED_DIMENSION_TYPES.contains(type)` branch, which BP/PR never enter; classic core's legacy
+  `AcctSchemaElement.getAcctSchemaElementList` (`src/org/openbravo/erpCommon/ad_forms/`) reads it
+  only to emit a DEBUG log line, no exception, no posting effect; the real posting/balancing
+  engine (`Fact.java`/`FactLine.java`) reads only `isBalanced` off the element list, never
+  `isMandatory`. **Apply:** before treating a boolean AD flag as risky to flip, grep every
+  read site across BOTH classic core (`src/`, not `src-core/` — that path is empty in this
+  checkout; classic core Java lives directly under `src/org/openbravo/...`) and `com.etendoerp.go`
+  — a flag with zero live readers for the affected row-type is safe defense-in-depth, not a
+  functional change.
+- **2026-09-17 — `COAUtility`/`InitialSetupUtility.insertAcctSchemaElement` (classic new-schema
+  creation, called from the "Initial Organization Setup" backoffice process) hardcodes BP/PR to
+  `isMandatory=false` BY DESIGN** — only OO (org) and AC (account) are `true`. This is intentional
+  classic business logic ("posting requires an org and an account, not necessarily a
+  partner/product") and is orthogonal to Etendo GO's own "always visible" UX decision — forcing
+  `ismandatory='Y'` for GO's purposes does not contradict or need to touch this classic rule
+  (confirmed no posting code path enforces `AcctSchemaElement.IsMandatory`).
+- **2026-09-17 — Etendo GO's own new-tenant seed (`com.etendoerp.go/referencedata/sampledata/
+  GOClient/C_ACCTSCHEMA_ELEMENT.xml`, imported via `OnboardingDatasetDefinition.INCLUDED_TABLES`)
+  already ships BP/PR with `ISACTIVE=Y`** — matches the fleet-wide DB finding above, confirming a
+  new GO tenant is NOT the classic-COAUtility path and is already born correct on that flag. Its
+  `ISMANDATORY=N` for BP/PR was the one value actually corrected (dataset-only edit, no new
+  onboarding Java service, no `ONBOARDING_PROVISIONED_THROUGH` bump — same "dataset-only, no CUT
+  bump" shape as A9/N4/N5).
+- **2026-09-17 — 2 client ids on this DB (`64DEB67F5B4B42EF80332F3FBB38A4E9`,
+  `6474E31657E24D8E9E8D8DDA7A2222A8`, both throwaway "E2E User 1 ..." Playwright test tenants)
+  have ZERO `C_AcctSchema`/`C_AcctSchema_Element` rows of ANY type, not just missing BP/PR.**
+  A fix whose `@check`/`@apply` join through `c_acctschema_element` naturally and correctly
+  reports `SKIPPED_NOT_NEEDED` for such a client — no special-casing needed. Don't confuse this
+  with a real gap in THIS fix's scope; it's the pre-existing A1/A2 "chart of accounts missing"
+  territory.
+
 ---
 
 ## ETP-5274 — "Reversed Sales/Purchase Invoice" doctypes selectable in the invoice doctype selector (R37)

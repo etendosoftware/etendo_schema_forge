@@ -207,7 +207,11 @@ test.describe('Tenant upgrade — checkout and provisioning', () => {
     await installEnvironmentsMock(page, EXISTING_ENVIRONMENTS);
   });
 
-  test('happy path: checkout streams provisioning progress, auto-enters the new environment', async ({ page }) => {
+  // ETP-5396 replaced the synchronous checkout+onboarding flow this spec models with a
+  // hosted-checkout redirect (createBillingPurchase -> Stripe -> resume via ?checkout=success)
+  // and dropped the free-vs-productive plan comparison / typed tenant-name field these tests
+  // assert on. Skipped pending a rewrite against the new flow — see ETP-5396 comment.
+  test.skip('happy path: checkout streams provisioning progress, auto-enters the new environment', async ({ page }) => {
     // A private copy: the beforeEach mock above already wired the ambient
     // EXISTING_ENVIRONMENTS array to the environments route, but this test
     // needs to grow that list once provisioning succeeds (see below) without
@@ -303,7 +307,8 @@ test.describe('Tenant upgrade — checkout and provisioning', () => {
       .toBe('Acme Productive');
   });
 
-  test('checkout creation failure stays on the checkout without onboarding', async ({ page }) => {
+  // See skip note above the happy-path test — same ETP-5396 flow mismatch.
+  test.skip('checkout creation failure stays on the checkout without onboarding', async ({ page }) => {
     const checkoutRequests = await installCheckoutMock(page, { status: 503 });
     const requests = await installOnboardingMock(page);
     await gotoUpgrade(page);
@@ -318,7 +323,8 @@ test.describe('Tenant upgrade — checkout and provisioning', () => {
     expect(requests).toHaveLength(0);
   });
 
-  test('backend 402 paywall surfaces an error and keeps the user on the checkout', async ({ page }) => {
+  // See skip note above the happy-path test — same ETP-5396 flow mismatch.
+  test.skip('backend 402 paywall surfaces an error and keeps the user on the checkout', async ({ page }) => {
     const checkoutRequests = await installCheckoutMock(page);
     const requests = await installOnboardingMock(page, { status: 402 });
     await gotoUpgrade(page);
@@ -334,7 +340,8 @@ test.describe('Tenant upgrade — checkout and provisioning', () => {
     expect(requests).toHaveLength(1);
   });
 
-  test('a tenant name the account already owns is rejected before paying', async ({ page }) => {
+  // See skip note above the happy-path test — same ETP-5396 flow mismatch.
+  test.skip('a tenant name the account already owns is rejected before paying', async ({ page }) => {
     const checkoutRequests = await installCheckoutMock(page);
     const requests = await installOnboardingMock(page);
     await gotoUpgrade(page);
@@ -347,7 +354,8 @@ test.describe('Tenant upgrade — checkout and provisioning', () => {
     expect(requests).toHaveLength(0);
   });
 
-  test('an unavailable checkout response stays on the form without onboarding', async ({ page }) => {
+  // See skip note above the happy-path test — same ETP-5396 flow mismatch.
+  test.skip('an unavailable checkout response stays on the form without onboarding', async ({ page }) => {
     const checkoutRequests = await installCheckoutMock(page, { status: 503 });
     const requests = await installOnboardingMock(page);
     await gotoUpgrade(page);

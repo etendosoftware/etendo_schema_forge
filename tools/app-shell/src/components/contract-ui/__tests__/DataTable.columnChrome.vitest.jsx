@@ -217,6 +217,19 @@ describe('DataTable — generic minWidth floor', () => {
     expect(th.style.width).toBe('');
     expect(td.style.minWidth).toBe('');
   });
+
+  // ETP follow-up (Tax window) — `col.grow` is the sanctioned way to let one
+  // column absorb 100% of a sparse window's leftover space: omitting `width`
+  // entirely on the header cell (not a calc()/percentage, which the doc
+  // comment above already found resolves to 0px — see getTableContainerStyle
+  // in DataTable.jsx) is a plain, non-circular case table-layout: fixed
+  // handles natively.
+  it('also skips the header width floor when col.grow is set, independent of headClass', () => {
+    render(<DataTable columns={[{ ...STRING_COL, grow: true }]} data={DATA} />);
+
+    const th = screen.getByTestId('column-header-name');
+    expect(th.style.width).toBe('');
+  });
 });
 
 /**

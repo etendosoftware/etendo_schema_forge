@@ -18,6 +18,12 @@ import OrgLogoField from './OrgLogoField.jsx';
 import BusinessTypeCards from './BusinessTypeCards.jsx';
 import { getCountryFlag } from './countryFlag.js';
 import ActividadesIaeSection from './ActividadesIaeSection.jsx';
+// ETP-5391 — reused as-is from fiscal-config (NOT forked): the backend
+// (`GET/POST/DELETE /sws/neo/certificate?orgId=...`, NeoCertificateHelper.java) is
+// already organization-scoped, not per fiscal system, so the same component that
+// SiiSection/VerifactuSection/TbaiSection each mount surfaces the org's one real
+// certificate here too, at the org level, instead of only inside each fiscal tab.
+import CertSection from '../fiscal-config/CertSection.jsx';
 
 // The AD_OrgInfo "Location / Address" identifier is a composed string
 // (e.g. "Santa Fe - 446 - 5800 - Rio Cuarto - España") — the country is the
@@ -476,6 +482,25 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
               </div>
             </div>
           </div>
+        </SectionRow>
+
+        {/* Certificado digital (ETP-5391) — org-scoped, not per fiscal system (see
+            NeoCertificateHelper.java). Reuses fiscal-config's SiiSection/VerifactuSection/
+            TbaiSection cert title+hint keys directly (no new key pair needed — they already
+            read as generic org-level copy, not SII/Verifactu/TBAI-specific text). `context`
+            is intentionally omitted: CertModal's CONTEXT_SUBTITLE only has entries for
+            tbai/sii/verifactu, so an unmatched/undefined context already falls back to
+            ui('fiscal.cert.subtitle.default') — which is itself worded at the org level,
+            not any one fiscal system. */}
+        <SectionRow
+          titleKey="fiscal.cert.section.legend"
+          descKey="fiscal.cert.section.hint"
+          testId="OrganizationPage__section-certificate"
+          data-testid="SectionRow__a5f503">
+          <CertSection
+            orgId={orgId}
+            apiBaseUrl={apiBaseUrl}
+            data-testid="CertSection__a5f503" />
         </SectionRow>
 
         {/* Datos de contacto */}
