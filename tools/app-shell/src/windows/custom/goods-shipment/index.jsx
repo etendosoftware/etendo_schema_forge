@@ -119,7 +119,17 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
     // decisions-derived menuActions) and the bulk Post action. Extracted to
     // shared/buildDocumentRowQuickActions.js (rejection-cycle fix — this block was
     // duplicated verbatim in goods-receipt/index.jsx).
-    ...buildDocumentRowQuickActionsPostMenu({ ui, onRefresh: () => setRefreshKey(k => k + 1) }),
+    //
+    // ETP-5378 — includeUnpost: the window already declares `unpost` in its
+    // decisions.json menuActions, so the FORM kebab has always offered
+    // Descontabilizar while the grid row went silent the moment the document was
+    // posted — the kebab disappeared entirely, since Post was its only entry. The
+    // grid now mirrors the form: Post while unposted, Unpost once posted.
+    ...buildDocumentRowQuickActionsPostMenu({
+      ui,
+      onRefresh: () => setRefreshKey(k => k + 1),
+      includeUnpost: true,
+    }),
   }), [navigate, windowName, requestDelete, onRowEmail, ui]);
 
   if (recordId) {
