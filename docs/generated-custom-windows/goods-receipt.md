@@ -17,13 +17,13 @@ A user should be able to:
 - review received-line essentials such as product, received quantity, UOM, storage bin, and invoiced quantity
 - confirm the receipt from draft so the document moves out of intake mode
 - open linked purchasing documents to understand where the receipt came from and whether invoices already exist for the same order
+- create a purchase invoice from one completed receipt or from multiple completed receipts at once, directly from the list selection bar (`BulkInvoiceFromReceipt`, new — see "Bulk invoice creation from the list" below). Since ETP-5381 that invoice is created **and confirmed** in one step — it is never left in Borrador.
 - complete multiple draft receipts at once from the list selection bar using the bulk action (labeled "Procesar" / i18n key `process`), whose dialog offers a single document action — **Confirmar** / **Confirm** (`CO`) — processing each receipt through the standard `documentAction=CO` endpoint
 - post ("Contabilizar") or unpost a completed receipt from the detail-view kebab menu, gated on document status/posted state
 - post ("Contabilizar") a completed, not-yet-posted receipt directly from the list — via the row-hover kebab menu for a single record, or via the dedicated "Contabilizar" bulk action in the list selection bar for multiple selected records — without needing to open the record in form view first (ETP-5209)
 - unpost ("Descontabilizar") posted receipts in bulk from the list selection bar, via a dedicated button that appears only when at least one selected row is posted (ETP-5302) — the list counterpart of the *Descontabilizar* entry this window's detail kebab already offered
 - run any of those bulk actions without losing the page: the list **refetches in place** instead of reloading the browser, so scroll position and active filters survive (ETP-5302)
-- preview a completed receipt by selecting a row, and create a purchase invoice directly from that preview panel (the row hover eye quick-action was removed — see ETP-4729 note below)
-- preview a completed receipt from the list row quick-action or by selecting a row, and create a purchase invoice directly from that preview panel
+- preview a completed receipt by selecting a row — the preview panel itself only offers Edit (no invoice-creation trigger of its own; see the corrected "Preview panel" note below); the row hover "eye" quick-action was removed (ETP-4729), so the preview is reachable only by selecting/opening the row
 - copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved
 
 ## Interaction model
@@ -35,9 +35,8 @@ A user should be able to:
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
 - Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. When the add-row form is open, existing rows stay in `InlineLinesPanel` so column widths remain stable; the form renders in a header-hidden `DataTable` below that handles callouts, selectors, and focus. Clicking "Añadir línea" while a form is already open saves the current line and opens a fresh form scrolled into view. See `docs/ui-customization.md` section 13 for the full reference.
 - **Create a product from the line's product selector (ETP-5254):** the product lookup drawer opened from a line shows a pinned `+ Crear producto` row at the top. It opens a popup that **mounts the Products window itself** — its own form, its own primary tabs and its own **Precio / Costo / Contabilidad / Adjuntos** strip — on a private memory router inside this page, with the app chrome dropped. Nothing is reimplemented, so a tab or field added to the Products window appears here with no change. Saving happens with the window's own `Guardar`; `Completado` then closes the popup and selects the new product in the line. Cancelling before saving leaves the receipt untouched, and Escape closes only the popup — the drawer comes back with the search intact. The line still arrives at **price 0** unless a price is set for the document's tariff, in which case the user types it on the line. The popup creates no cost line: that rule belongs to the Products window, which states and enforces it there (ETP-5245), so a stockable product created here still needs its cost set. The create row is reachable by pointer and Tab, not through the arrow-key ring. Full mechanism, why nesting a router is legal, the seven in-scope specs and the known limitations: `docs/ui-customization.md` section 19.
-- **Preview panel** (`GoodsReceiptPreview.jsx`): rendered via `renderPreview` prop on the generated app. Opens from row selection. Shows document header, a General tab with receipt stats (BP, warehouse, PO link, invoice %, date), a Messages tab, and a History tab. Completed receipts show a Create Invoice action that opens `ReceiptInvoicePreview`. The PO identifier in the stats panel is a clickable link that closes the preview and navigates to `/purchase-order/:id`. This window does **not** expose any document-email / "send by email" access — the send-document feature is intentionally disabled (`window.sendDocument.enabled = false` in `decisions.json`), so no email action appears on rows, in the preview panel, or in the form action bar (ETP-4372).
+- **Preview panel** (`GoodsReceiptPreview.jsx`): rendered via `renderPreview` prop on the generated app. Opens from row selection. Shows document header, a General tab with receipt stats (BP, warehouse, PO link, invoice %, date), a Messages tab, and a History tab, plus an `invoicePreviewEdit` button that opens the record for editing. **Corrected (2026-09):** this doc previously claimed the preview exposed a "Create Invoice" action opening a `ReceiptInvoicePreview` component — that component does not exist in `tools/app-shell/src/windows/custom/goods-receipt/`. The preview panel has no invoice-creation trigger of its own; `Create Invoice` lives on the form-view topbar (`GoodsReceiptActions.jsx`, see below) and, since 2026-09, on the list selection bar (`BulkInvoiceFromReceipt.jsx` — see "Bulk invoice creation from the list"). The PO identifier in the stats panel is a clickable link that closes the preview and navigates to `/purchase-order/:id`. This window does **not** expose any document-email / "send by email" access — the send-document feature is intentionally disabled (`window.sendDocument.enabled = false` in `decisions.json`), so no email action appears on rows, in the preview panel, or in the form action bar (ETP-4372).
 - **ETP-4729 — Eye row quick-action removed**: `tools/app-shell/src/windows/custom/goods-receipt/index.jsx` sets `hideEyeCount` on the list wrapper, so the preview no longer opens from a hover "eye" icon on the row. Goods Receipt is out of scope for the ETP-4729 unified printable-documents work, so its preview remains reachable only by selecting/opening the row, not via that quick-action icon.
-- **Invoice preview before creation** (`ReceiptInvoicePreview`, built inside `GoodsReceiptPreview.jsx`): when the user clicks "Create Invoice" from a completed receipt preview, a confirmation/preview modal appears showing the receipt summary and a "Confirm" button that calls the purchase-invoice creation endpoint and then displays the result via `ConfirmResultModal`.
 - **Topbar invoice-status pill** (`GoodsReceiptTopbar.jsx`): renders an `InvoiceStatusPill` in the form topbar for completed receipts, showing the invoice percentage with color coding (gray = 0%, amber = partial, green = 100%). Hidden for draft receipts.
 - **Button order (ETP-5260) — the "worst case" of the migration:** Copy link → Clone render to the LEFT of Save/Confirm via `GoodsReceiptSecondaryActions.jsx` (wired as `topbarSecondary`); `GoodsReceiptActions.jsx` (`topbarRight`) keeps only the PRIMARY "Crear devolución"/"Crear factura" actions, to the RIGHT of Save/Confirm — before this fix the two classes were fully INTERCALATED inside `GoodsReceiptActions.jsx`. No Send button in either slot (this window never had one — send-document is disabled for goods-receipt, ETP-4372). Clone is **not** delegated to `DocumentSecondaryActions`' generic `clone` config: goods-receipt clones through its own bespoke `CloneReceiptModal` (fetches receipt lines, then POSTs `cloneRecord` — a different shape than the generic `CloneOrderModal`), now exported from `GoodsReceiptActions.jsx` and rendered inside `GoodsReceiptSecondaryActions.jsx` via `DocumentSecondaryActions`' `children` extension point. See `docs/ui-customization.md` §3b for the general slot-classification rule.
 - **Draft status chips** (`GoodsReceiptDraftChips.jsx`): custom chip set shown in the draft-mode banner, providing at-a-glance receipt progress indicators while the document is in draft.
@@ -63,7 +62,7 @@ Observed reactive behavior:
 - Related-document behavior is custom rather than contract-declared: the window adds a **Related Documents** tab that links back to the purchase order from the header and forward to purchase invoices fetched by that order reference.
 - **Currency (ETP-4028)**: header field `etgoCurrency` (`M_InOut.EM_Etgo_Currency_ID`, mandatory). Defaults to the organization's currency (`defaultExpr: "@C_Currency_ID@"`), editable while the receipt is in draft, and becomes read-only once the receipt is processed (`readOnlyLogic: "@Processed@='Y'"`). Changing the currency after lines already exist does **not** recalculate those existing lines' prices — only new lines are affected. A receipt created from a purchase order inherits that order's currency; return receipts inherit the currency of the original receipt being returned. As with Goods Shipment, no total/amount conversion display was implemented — `M_InOutLine` has no monetary columns, so there is no reliable receipt "total" to convert (scoped out of ETP-4028, open question left on the ticket).
 - Currency filter on line import (ETP-4028): the receipt's own `etgoCurrency` value determines which source documents appear in **Import from Purchase Order** / **Import from Purchase Invoice**. Each modal self-fetches the current receipt header to read its currency and filters candidates to matching-currency documents only, showing a dedicated empty-state message (`noPurchaseOrdersMatchReceiptCurrency` / `noPurchaseInvoicesMatchReceiptCurrency`) when nothing matches.
-- Invoice creation from a completed receipt (via `ReceiptInvoicePreview`, action `createPurchaseInvoice`) now presents the same `CreateInvoiceConfirmModal` price-list picker used by Goods Shipment: Currency shown read-only (inherited from the receipt), Tarifa (price list) required and user-selectable. `CreatePurchaseInvoiceHandler.java` applies the chosen `priceListId` to the invoice (both the linked-PO path and the no-PO fallback path, which otherwise defaults to the vendor's purchase price list) before invoice lines are priced. Since ETP-5381 that same request also **completes** the invoice, so this flow no longer produces a draft — see "Invoice is created and confirmed in one step, and guards P3a/P3b — ETP-5381" below.
+- Invoice creation from a completed receipt (the "Crear Factura" button in `GoodsReceiptActions.jsx`'s form-view topbar, action `createPurchaseInvoice` — not the preview panel, which has no invoice trigger, see the corrected "Preview panel" note above) now presents the same `CreateInvoiceConfirmModal` price-list picker used by Goods Shipment: Currency shown read-only (inherited from the receipt), Tarifa (price list) required and user-selectable. `CreatePurchaseInvoiceHandler.java` applies the chosen `priceListId` to the invoice (both the linked-PO path and the no-PO fallback path, which otherwise defaults to the vendor's purchase price list) before invoice lines are priced. Since ETP-5381 that same request also **completes** the invoice, so this flow no longer produces a draft — see "Invoice is created and confirmed in one step" below. **Since 2026-09**, `GoodsReceiptActions.jsx` also passes `pendingQtyUrl` to this modal (it previously did not), so the subtitle now reads "N unidades pendientes de facturar" instead of the generic fallback copy — parity with the equivalent Goods Shipment popup.
 - **`orderReference` (`M_InOut.POReference`, "Nº documento") — editable and saveable regardless of document status (ETP-4839).** See the dedicated section below.
 
 No current evidence shows:
@@ -137,6 +136,7 @@ Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears 
   - `artifacts/goods-receipt/custom/GoodsReceiptTopbar.jsx`
   - `artifacts/goods-receipt/custom/GoodsReceiptDraftChips.jsx`
   - `artifacts/goods-receipt/custom/PurchaseReturnWizard.jsx`
+  - `artifacts/goods-receipt/custom/BulkInvoiceFromReceipt.jsx` — list selection-bar bulk invoice creation, new (2026-09)
   - `tools/app-shell/src/components/contract-ui/ConfirmResultModal.jsx` — shared result modal used after invoice creation from receipt
 - The generated `GoodsReceiptPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `M_InOut` AD table.
 - **ETP-3995 — Related Documents tab i18n**: The generated page file now uses `labelKey: 'relatedDocuments'` in the `customTabs` prop instead of a hardcoded `label: 'Related Documents'` string, so the tab title renders via the active UI language (e.g. "Documentos relacionados" in Spanish) regardless of the browser locale.
@@ -456,33 +456,34 @@ draft and no burned document number
 
 Making the invoice real made a pre-existing defect unsafe, so it was fixed in the
 same ticket. `resolveReceiptLineQty`
-(`CreatePurchaseInvoiceHandler.java:576-581`) falls back to the line's **full
+(`CreatePurchaseInvoiceHandler.java`) falls back to the line's **full
 `movementQuantity`** whenever the caller sends no explicit per-line quantities —
 and the UI *never* sends them, it posts only `priceListId`. Its own javadoc
 already promised the map came from `computePendingQtyPerLine`; that was simply
 never wired up. The result: every invoicing run billed the entire receipt again,
 from scratch.
 
-The caller now seeds the map before calling it
-(`CreatePurchaseInvoiceHandler.java:434-439`):
+The caller now seeds the map before calling it:
 
 - **P3a** — when `parseLineOverrides(body)` is empty, `qtyOverrides` is filled
   from `NeoInvoiceSupport.computePendingQtyPerLineOrThrow(receiptId, true)`, so
   only lines with something pending are invoiced, and only for their pending
   quantity. `includeDrafts=true` counts pre-existing drafts.
-- **P3b** — if that map is *also* empty, there is genuinely nothing left, which
-  means a duplicate request: `AlreadyInvoicedException` with the literal
-  **"This goods receipt has already been fully invoiced."**, surfaced as
-  **HTTP 409** by the catch at `CreatePurchaseInvoiceHandler.java:138-140`.
+- **P3b — REMOVED (superseded, 2026-09).** An earlier revision additionally threw
+  a dedicated `AlreadyInvoicedException` (HTTP 409, literal "This goods receipt
+  has already been fully invoiced.") when the seeded map was *also* empty. **Both
+  the guard and the exception class were removed two days later** — once the
+  invoice is confirmed on creation, Core's own `C_Invoice_Post` raises
+  `qtyinvoiced` in the same transaction, and the pre-existing pending-quantity
+  check already rejects a genuine duplicate on its own; see the identical
+  reasoning under `goods-shipment.md`'s "Guard P2 — REMOVED". **There is no 409 in
+  this flow any more; do not reintroduce one.** A fully-invoiced receipt simply
+  contributes no lines to the request.
 
-The *throwing* variant is used deliberately so a DB failure surfaces as a 500
-rather than being mistaken for "fully invoiced".
-
-`backendErrors.js` maps the literal to `backendError.receiptAlreadyInvoiced`
-("Este albarán de compra ya está totalmente facturado." / "This goods receipt has
-already been fully invoiced."). Note the HTTP-status convention this ticket
-establishes: **409 means "already invoiced" (a duplicate); 400 means "nothing to
-invoice" or a missing datum** — the pre-existing price-list 400 is unaffected.
+The *throwing* variant of the pending computation (`computePendingQtyPerLineOrThrow`)
+is used deliberately so a DB failure surfaces as a 500 rather than being mistaken
+for "fully invoiced" — and, on the bulk path below, rather than silently degrading
+into "no cap at all" (which would re-invoice the full quantity instead of failing).
 
 **To modify a generated invoice**, the user reactivates it: `purchase-invoice`
 exposes a `reactivate` menu action (`documentAction: 'RE'`, `preUnpost: true`,
@@ -493,10 +494,9 @@ visible at `DocStatus='CO'`), now the only route back to `DR`.
 1. On a completed receipt that has never been invoiced, use `Create Invoice` from
    the preview panel and verify the resulting invoice opens in **Confirmado**, and
    that the topbar `InvoiceStatusPill` turns green (100%) instead of staying gray.
-2. Trigger `Create Invoice` again on that receipt and verify it is rejected with
-   the translated 409 ("Este albarán de compra ya está totalmente facturado.") and
-   that no second invoice is created. **This is the regression this ticket fixes**
-   — before it, the second run silently produced a full duplicate invoice.
+2. Trigger `Create Invoice` again on that receipt (or attempt it directly against
+   the API) and verify Core's own pending-quantity check rejects it — there is no
+   longer a dedicated 409 for this case; the request simply has nothing to invoice.
 3. On a **partially** invoiced receipt (invoice one PO line, leave another
    pending), run `Create Invoice` again and verify the new invoice carries only
    the pending quantities, not the full `movementQuantity` of every line.
@@ -508,6 +508,130 @@ visible at `DocStatus='CO'`), now the only route back to `DR`.
 ### Automated evidence
 
 - `{etendo_root}/modules/com.etendoerp.go/src-test/src/com/etendoerp/go/schemaforge/InvoiceCompletionServiceTest.java` (new) covers the extracted completion path.
-- `CreatePurchaseInvoiceHandlerTest.java` was extended for the create-and-confirm flow and for guards P3a/P3b, including the pending-quantity seeding that replaces the `movementQuantity` fallback.
+- `CreatePurchaseInvoiceHandlerTest.java` was extended for the create-and-confirm flow and for the P3a pending-quantity seeding that replaces the `movementQuantity` fallback.
 - `NeoInvoiceSupportTest.java` covers `computePendingQtyPerLineOrThrow`, whose throwing behavior is what keeps a DB failure from being read as "fully invoiced".
-- No frontend test covers the preview panel's handling of the new `documentStatus` field in the response.
+
+## Bulk invoice creation from the list (2026-09)
+
+`artifacts/goods-receipt/custom/BulkInvoiceFromReceipt.jsx` (new) mirrors
+`goods-shipment`'s `BulkInvoiceFromShipment.jsx`: a toolbar button in the list
+selection bar that opens the same shared `CreateInvoiceConfirmModal` ("Gestionar
+documentos") the single-receipt "Crear Factura" flow uses (`isSOTrx={false}`,
+purchase price lists). This is the same shared modal across both windows and
+both entry points — see `goods-shipment.md`'s equivalent section for the full
+rationale of using the shared modal (no per-line selection from the grid; the
+backend's own pending-quantity cap still prevents double-invoicing).
+
+**Guards, same shape as goods-shipment:** `documentStatus === 'CO'` and
+`invoiceStatus < 100` (not the backend-only `completelyInvoiced` field, which
+has `visibility: "system"` and never reaches a grid row), same Business Partner
+across the selection, and same currency (`etgoCurrency`) across the selection —
+mixed selections disable the button with an explanatory tooltip
+(`selectReceiptsSameVendor` / `selectReceiptsSameCurrency`).
+
+**Backend — `CreatePurchaseInvoiceHandler.java`:**
+- New `receiptIds` request-body array (mirrors `shipmentIds` on the sales side).
+  A request with no `receiptIds` (every existing single-receipt caller) falls
+  back to `[recordId]`, so `receiptIds.size() == 1` routes to the **untouched**
+  `createFromReceipt` — zero behaviour change for the existing single-receipt
+  flow. `receiptIds.size() >= 2` routes to the new `createFromReceipts`.
+- `createFromReceipts` validates the receipts (existence + same Business
+  Partner — the one cross-document invariant a combined invoice cannot relax,
+  since `C_Invoice.C_BPartner_ID` is a single column), seeds pending quantities
+  per receipt (same `computePendingQtyPerLineOrThrow` pattern as P3a above,
+  merged across receipts — line ids are globally unique so a flat merge is
+  safe), builds the header via `createInvoiceHeaderFromReceipts`, and delegates
+  line creation to Core's `CreateInvoiceLinesFromProcess` with
+  **`ShipmentInOutLine.class`** — never `OrderLine.class`: Core's order-line
+  path re-derives quantities from every completed receipt of that order line,
+  ignoring which receipts were actually selected.
+- `createInvoiceHeaderFromReceipts` follows a PO-preferred, Business-Partner-
+  default fallback: when every selected receipt resolves to the **same**
+  purchase order, that order's tariff/terms/payment method are used (mirroring
+  the single-receipt-with-PO flow); otherwise (different POs, a mix of
+  with/without PO, or none at all) the Business Partner's own purchase defaults
+  are used, exactly like the existing no-PO fallback (`createFromReceiptNoPo`).
+  A selection spanning different purchase orders is **never rejected** — Core's
+  own `UpdateInvoiceLineInformation` sets `C_Invoice.C_Order_ID` from the lines
+  only when they all resolve to one order, leaving it null otherwise, which is
+  the correct state for a combined invoice.
+- New `pendingInvoiceLines` GET action (`/goods-receipt/goodsReceipt/{id}/action/pendingInvoiceLines`),
+  mirroring the sales side, gated to the `goods-receipt` spec specifically —
+  this handler is also injected into `PurchaseOrderHeaderHandler`'s dispatch
+  chain (for `createFromOrder`), so an ungated GET action would shadow
+  `currencyOptionsHandler` there.
+- `ensurePriceListResolved` (new): fails with a clear 400 when no price list
+  resolves (no common order, no BP default, no `priceListId` override) — the
+  multi-receipt path can legitimately reach this where the single-receipt path
+  could not, since it has no BP-default guard of its own to fall back on first.
+- **Deliberately NOT carried over** on the bulk path, unlike `createFromReceipt`:
+  `copyLineDiscountsFromOrder` / `applyOrderDiscountToInvoice` /
+  `propagateOrderRateToInvoice`. All three are scoped to ONE source order and
+  would be meaningless (or wrong) when receipts span several orders or none. A
+  bulk invoice therefore does not carry per-line "% Descuento" nor a header
+  total-discount from the source order(s) — a known, accepted gap relative to
+  the single-receipt flow, not an oversight. It does not apply here anyway,
+  since the invoice is built from the receipt(s) and the chosen Tarifa, not
+  from the order.
+- `parseDocumentIds`/`loadAndValidateSameBusinessPartner`/`resolveInOutLineQty`/
+  `buildInOutLineSelection` are shared with the sales side via the new
+  `MultiDocumentInvoiceSupport.java` (not `NeoInvoiceSupport.java`, which stays
+  a single-concern pending-quantity SQL helper) — `CreateDraftInvoiceHandler`'s
+  `parseShipmentIds`/`loadAndValidateShipments`/`resolveShipmentLineQty` now
+  delegate to it with their `protected` signatures unchanged, so its existing
+  subclass-override test seams keep working.
+
+**The card shows a real quote, not a "N albaranes" count (2026-09 follow-up).**
+`BulkInvoiceFromReceipt.jsx` computes it per line, mirroring
+`BulkInvoiceFromShipment.jsx` exactly — for a line with a linked purchase order
+line, the **order line's own `unitPrice`** (`GET /purchase-order/lines/{orderLineId}`),
+never the chosen Tarifa; for a line with no linked order, the **selected
+Tarifa's price** for that product (`GET
+/purchase-invoice/lines/selectors/M_Product_ID?priceList=…`). This mirrors
+Core's own `UpdatePricesAndAmounts.java` exactly — an order-related line is
+always priced at the order's own `unitPrice`, the invoice's price list is only
+consulted for unlinked lines — so the number is not an estimate: it is the
+real amount the created invoice will carry, and only the order-unlinked
+portion reacts to the Tarifa dropdown. Falls back to the plain "N albaranes"
+count while the quote hasn't resolved yet.
+
+**Known gaps, same as the sales side:** no per-line selection or quantity
+editing from the grid (full pending quantity of every selected receipt's
+lines); no "existing draft invoice" warning banner (there is no longer a draft
+state to warn about); `N=1` and `N>=2` take genuinely different Core paths
+(`OrderLine.class` via `createFromReceipt`'s linked-PO branch vs
+`ShipmentInOutLine.class` for the bulk path) and can therefore price/derive
+quantities differently for the same receipt depending on how many are selected
+— intentional, and the multi-receipt path is the more faithful one to "the
+invoice is built from the receipt(s), not the order".
+
+### Manual verification
+
+1. Select 2-3 completed goods receipts from the same vendor, same currency, none
+   fully invoiced, and confirm the "Crear factura" button in the selection bar
+   is enabled.
+2. Open it and confirm the shared "Gestionar documentos" modal appears with the
+   card reading "N albaranes" until a Tarifa is chosen, then a real currency
+   amount once resolved, a required **Tarifa** selector (purchase price lists
+   only), and a pending-units subtitle summed across the selection. "Crear →"
+   stays disabled until a Tarifa is chosen.
+3. Confirm and verify **one** purchase invoice is created, already in
+   **Confirmado**, containing lines from all the selected receipts; the result
+   modal offers "Ver factura" to `/purchase-invoice/{id}`.
+4. After closing the result (or navigating away), confirm the grid **refetches
+   in place** — no full page reload — and the invoiced receipts' `%
+   facturación` reflects the change.
+5. Select receipts from different vendors and confirm the button is disabled
+   with a same-vendor tooltip; repeat with mixed currencies for the same-currency
+   tooltip.
+6. Select receipts linked to different purchase orders (same vendor) and confirm
+   the button stays enabled and the invoice is still created successfully (with
+   `C_Order_ID` left blank on the header — not a bug).
+7. Confirm the single-receipt "Crear Factura" flow (preview panel) is completely
+   unaffected by this change.
+
+### Automated evidence
+
+- `artifacts/goods-receipt/custom/BulkInvoiceFromReceipt.jsx` (new) + `artifacts/goods-receipt/custom/__tests__/BulkInvoiceFromReceipt.test.js` (new, source-shape coverage mirroring `BulkInvoiceFromShipment.test.js`, including the same `quote — real price per line, not an estimate` block: receipt-line + `pendingInvoiceLines` fetches, the purchase-order-line price fetch independent of `selectedPriceListId`, the Tarifa-price fetch scoped to unlinked lines via `purchase-invoice/lines/selectors/M_Product_ID`, and the order-price-over-tariff-price precedence).
+- `tools/app-shell/src/windows/custom/goods-receipt/index.jsx` registers it as the first child of `GoodsReceiptBulkAction`; `GoodsReceiptWindow.vitest.jsx` mocks it (the generated-app test double renders every `bulkActions` child with no props, so the real hook-using component must not run for real in that suite) and asserts it renders inside the `bulk-actions-slot`.
+- `{etendo_root}/modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/MultiDocumentInvoiceSupport.java` (new) and `CreatePurchaseInvoiceHandler.java`'s `receiptIds`/`createFromReceipts`/`createInvoiceHeaderFromReceipts`/`pendingInvoiceLines` additions, covered by new cases in `CreatePurchaseInvoiceHandlerTest.java`: `receiptIds` parsing (incl. malformed array), same-BP validation (incl. a null-BusinessPartner hardening the sales original lacked), the size-1-falls-back-to-`createFromReceipt` compatibility guard, `ShipmentInOutLine.class` passed to the native process, empty-selection-throws-before-saving, and the common-order-vs-BP-default header financial ladder.
