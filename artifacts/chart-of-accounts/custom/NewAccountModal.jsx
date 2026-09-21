@@ -28,11 +28,10 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  *   apiBaseUrl    — NEO base URL, e.g. "/sws/neo/chart-of-accounts"
  *   token         — JWT for Authorization header
  *
- * Parent auto-selection:
- *   - If `currentRecord.summaryLevel === 'Y'` and its code is 4 digits → use it as parent.
- *   - Otherwise, look at `currentRecord.searchKey.substring(0, 4)` and find the matching
- *     4-digit summary account in the available parent options.
- *   - Falls back to empty selection if nothing matches.
+ * Parent auto-selection (ETP-5399):
+ *   - Records with tree structure resolve their real Breakdown-level insertion point.
+ *   - A single candidate is selected; ambiguous candidates require a manual choice.
+ *   - Legacy records without structural data retain the numeric 4-digit heuristic.
  *
  * POST body: { searchKey: <8-digit code>, name, accountType }
  *   accountType — required (C_ElementValue.AccountType is mandatory in AD),
@@ -48,16 +47,69 @@ const SELECT_CLS =
 const FIELD_LABEL_CLS = 'block text-sm font-medium text-[hsl(var(--foreground))] mb-1.5';
 const ERROR_CLS = 'mt-1 text-xs text-destructive';
 
+const LEVEL_BREAKDOWN = 'D';
+const LEVEL_SUBACCOUNT = 'S';
+const MAX_RESOLUTION_DEPTH = 50;
+const POSTING_PREFIX_LENGTH = 4;
+
+function derivePostingPrefix(parentCode) {
+  const code = String(parentCode ?? '');
+  const prefix = code.slice(0, POSTING_PREFIX_LENGTH);
+  return /^\d{4}$/.test(prefix) ? prefix : '';
+}
+
+function toCandidate(node) {
+  return {
+    id: node.id,
+    value: node.searchKey,
+    name: node.name,
+    elementLevel: node.elementLevel ?? null,
+  };
+}
+
 /**
- * Derive the nearest 4-digit summary-account parent from the selected record.
- * Returns the parent account id string, or '' if none found.
+ * Resolves real insertion points from the local tree, mirroring the backend's
+ * ChartOfAccountsTreeMath.resolveInsertionChildren behavior.
+ */
+function resolveInsertionCandidates(node, depth = 0) {
+  if (!node) return [];
+  if (node.elementLevel === LEVEL_BREAKDOWN) {
+    return [toCandidate(node)];
+  }
+  if (node.elementLevel === LEVEL_SUBACCOUNT) {
+    return Array.isArray(node.insertionChildren) ? node.insertionChildren : [];
+  }
+
+  const children = Array.isArray(node.children) ? node.children : [];
+  if (children.length === 0 || depth >= MAX_RESOLUTION_DEPTH) {
+    return [toCandidate(node)];
+  }
+  if (children.length === 1) {
+    return resolveInsertionCandidates(children[0], depth + 1);
+  }
+  return children.map(toCandidate);
+}
+
+/**
+ * Derive the structural insertion parent, or '' when none can be selected safely.
  */
 function deriveDefaultParentId(currentRecord, parentOptions) {
   if (!currentRecord) return '';
   const code = currentRecord.searchKey ?? '';
 
-  // The current record IS a 4-digit summary — use it directly
-  if (currentRecord.summaryLevel === 'Y' && code.length === 4) {
+  if (currentRecord.elementLevel != null || Array.isArray(currentRecord.children)) {
+    const candidates = resolveInsertionCandidates(currentRecord);
+    if (candidates.length === 1) {
+      const match = parentOptions.find(
+        (p) => String(p.searchKey) === String(candidates[0].value),
+      );
+      if (match) return match.id;
+    }
+    return '';
+  }
+
+  // Legacy fallback for records without structural fields.
+  if (currentRecord.summaryLevel === 'Y' && code.length === 4 && /^\d+$/.test(code)) {
     return currentRecord.id;
   }
 
@@ -81,9 +133,12 @@ function deriveDefaultAccountType(currentRecord, parentPrefix, accountRows) {
   if (currentRecord && !currentRecord.isVirtual && currentRecord.accountType) {
     return currentRecord.accountType;
   }
-  const sibling = accountRows.find(
-    (a) => !a.isVirtual && String(a.parentCode4 ?? '') === parentPrefix && a.accountType,
-  );
+  const sibling = accountRows.find((a) => {
+    if (a.isVirtual || !a.accountType) return false;
+    const resolved = Array.isArray(a.insertionChildren) ? a.insertionChildren[0]?.value : null;
+    const ownPrefix = resolved != null ? String(resolved) : String(a.parentCode4 ?? '');
+    return ownPrefix === parentPrefix;
+  });
   return sibling ? sibling.accountType : DEFAULT_ACCOUNT_TYPE;
 }
 
@@ -126,12 +181,15 @@ export default function NewAccountModal({
   const virtualParentOptions = useMemo(() => {
     const byCode = new Map();
     for (const account of accountRows) {
-      const code = String(account.parentCode4 ?? '');
-      if (code.length !== 4 || byCode.has(code)) continue;
+      const resolved = Array.isArray(account.insertionChildren) ? account.insertionChildren[0] : null;
+      const code = resolved ? String(resolved.value ?? '') : String(account.parentCode4 ?? '');
+      if (!code || byCode.has(code)) continue;
+      if (!resolved && code.length !== 4) continue;
+      const name = resolved ? (resolved.name ?? code) : (account.parentCode4Name ?? code);
       byCode.set(code, {
         id: `group-${code}`,
         searchKey: code,
-        name: account.parentCode4Name ?? code,
+        name,
         summaryLevel: 'Y',
         isVirtual: true,
       });
@@ -155,10 +213,15 @@ export default function NewAccountModal({
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
-  const selectedParentCodePrefix = useMemo(() => {
+  const selectedStructuralParentCode = useMemo(() => {
     const parent = parentOptions.find((p) => p.id === form.parentAccountId);
     return parent ? String(parent.searchKey) : '';
   }, [form.parentAccountId, parentOptions]);
+
+  const selectedPostingPrefix = useMemo(
+    () => derivePostingPrefix(selectedStructuralParentCode),
+    [selectedStructuralParentCode],
+  );
 
   // ETP-5101 — hint the next available 4-digit suffix under the selected prefix (highest
   // existing suffix + 1), so the user isn't guessing which numbers are already taken AND
@@ -167,17 +230,17 @@ export default function NewAccountModal({
   // to AccountCodeField's own default ("0000") when nothing exists yet under the prefix, and
   // clamps at "9999" (never rolls over into a 5th digit) if the prefix is already exhausted.
   const lastUsedSuffix = useMemo(() => {
-    if (!selectedParentCodePrefix) return undefined;
+    if (!selectedPostingPrefix) return undefined;
     let max = -1;
     for (const a of accountRows) {
       const code = String(a.searchKey ?? '');
-      if (code.length !== 8 || !code.startsWith(selectedParentCodePrefix)) continue;
-      const suffix = Number(code.slice(4));
+      if (code.length !== 8 || !code.startsWith(selectedPostingPrefix)) continue;
+      const suffix = Number(code.slice(POSTING_PREFIX_LENGTH));
       if (Number.isFinite(suffix) && suffix > max) max = suffix;
     }
     if (max < 0) return undefined;
     return String(Math.min(max + 1, 9999)).padStart(4, '0');
-  }, [accountRows, selectedParentCodePrefix]);
+  }, [accountRows, selectedPostingPrefix]);
 
   // Re-initialise once per open/currentRecord cycle. `initDoneRef` resets on
   // open so a fresh session always recomputes, but once initialization has
@@ -198,9 +261,14 @@ export default function NewAccountModal({
 
     const defaultParentId = deriveDefaultParentId(currentRecord, parentOptions);
     const defaultParent = parentOptions.find((p) => p.id === defaultParentId);
-    const prefix = defaultParent ? String(defaultParent.searchKey) : '';
-    const defaultAccountType = deriveDefaultAccountType(currentRecord, prefix, accountRows);
-    setForm({ parentAccountId: defaultParentId, name: '', searchKey: prefix, accountType: defaultAccountType });
+    const parentCode = defaultParent ? String(defaultParent.searchKey) : '';
+    const defaultAccountType = deriveDefaultAccountType(currentRecord, parentCode, accountRows);
+    setForm({
+      parentAccountId: defaultParentId,
+      name: '',
+      searchKey: derivePostingPrefix(parentCode),
+      accountType: defaultAccountType,
+    });
     setErrors({});
     initDoneRef.current = true;
   }, [isOpen, currentRecord, parentOptions, allAccounts.length, accountsFetched, apiBaseUrl, accountRows]);
@@ -210,9 +278,14 @@ export default function NewAccountModal({
     (e) => {
       const newId = e.target.value;
       const parent = parentOptions.find((p) => p.id === newId);
-      const prefix = parent ? String(parent.searchKey) : '';
-      const accountType = deriveDefaultAccountType(null, prefix, accountRows);
-      setForm((prev) => ({ ...prev, parentAccountId: newId, searchKey: prefix, accountType }));
+      const parentCode = parent ? String(parent.searchKey) : '';
+      const accountType = deriveDefaultAccountType(null, parentCode, accountRows);
+      setForm((prev) => ({
+        ...prev,
+        parentAccountId: newId,
+        searchKey: derivePostingPrefix(parentCode),
+        accountType,
+      }));
       setErrors((prev) => ({ ...prev, parentAccountId: undefined }));
     },
     [parentOptions, accountRows],
@@ -237,15 +310,15 @@ export default function NewAccountModal({
   const accountCodeRecord = useMemo(() => {
     return {
       summaryLevel: 'N', // always leaf for a new account
-      codePrefix: selectedParentCodePrefix,
+      codePrefix: selectedPostingPrefix,
     };
-  }, [selectedParentCodePrefix]);
+  }, [selectedPostingPrefix]);
 
   const validate = useCallback(() => {
     const next = {};
     if (!form.parentAccountId) next.parentAccountId = ui('required');
     if (!form.name.trim()) next.name = ui('required');
-    if (String(form.searchKey).length !== 8) next.searchKey = ui('codeExact8Digits');
+    if (!/^\d{8}$/.test(String(form.searchKey))) next.searchKey = ui('codeExact8Digits');
     if (!form.accountType) next.accountType = ui('required');
     setErrors(next);
     return Object.keys(next).length === 0;
