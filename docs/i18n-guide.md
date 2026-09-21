@@ -315,8 +315,8 @@ Two matching mechanisms coexist — know both before adding a new backend-error 
    ReDoS/DoS hotspot (`javascript:S5852`); linear-time slicing has no backtracking surface at all.
    `t(key, { param: captured })` then re-interpolates the extracted parts through the frontend's own
    i18n, the same way `ui('linkedToInvoice', { number })` would. See `matchAccountNotFound` (ETP-4706,
-   Account-not-found enrichment), `matchInvoiceLineAlreadyInvoiced` (ETP-4831,
-   `ETGO_InvoiceLineAlreadyInvoiced`), and `matchFieldTooLong` (ETP-4984, the Hibernate
+   Account-not-found enrichment), `matchInsufficientStockLine` (ETP-5037, the stock-availability
+   message carrying a product code and a warehouse name), and `matchFieldTooLong` (ETP-4984, the Hibernate
    `StringPropertyValidator` "Value too long" message → `backendError.fieldTooLong`) in
    `backendErrors.js` for the pattern: order matters — try the more specific matcher before the more
    general one, and add a code comment linking the matcher back to the server-side `AD_MESSAGE` entry
