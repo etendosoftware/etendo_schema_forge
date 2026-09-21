@@ -1280,16 +1280,16 @@ Passed directly as a JSX prop on `GeneratedApp` from the custom window wrapper �
 // Static — always hide:
 <GeneratedApp {...props} hideMoreMenu={true} />
 
-// Data-driven — hide when record is new or already processed:
+// Data-driven — hide until the record is persisted and completed:
 function hideMenu({ data }) {
-  return !data?.id || data?.processed === true || data?.processed === 'Y';
+  return !data?.id || data?.documentStatus !== 'CO';
 }
 <GeneratedApp {...props} hideMoreMenu={hideMenu} />
 ```
 
-Use this when menu actions are only valid for persisted, non-completed records (e.g. count-list generation on a Physical Inventory, actions that would produce invalid API calls with `recordId = 'new'`).
+Use this when menu actions are only valid for persisted records, or when the whole kebab is only meaningful once the document reaches a given status. **Do not** also hide the kebab on the status a `menuAction` needs in order to become visible (e.g. `visibleWhenFieldTrue: "processed"`) — `DetailMoreActionsMenu.jsx` checks `hideMoreMenu` *before* evaluating `menuActions`, so a predicate that hides on that same status blocks the action from ever rendering. This exact mistake shipped on `physical-inventory` (hid on `data?.processed === true`, the very state the `post` action required) until ETP-5360; see `docs/generated-custom-windows/physical-inventory.md` § Design changes — ETP-5360.
 
-**Real examples:** `physical-inventory` (hides ⋮ when `!data.id` or `data.processed`).
+**Real examples:** `goods-shipment`/`goods-receipt` (hide ⋮ unless `data?.documentStatus === 'CO'`); `physical-inventory` (hides ⋮ only when `!data?.id`).
 
 ---
 

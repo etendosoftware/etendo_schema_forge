@@ -229,9 +229,9 @@ Posted Documents" window as the only way to post it manually. Fixed on all three
   editable header field lost its `readOnlyLogic`, and in the generated `InventoryPage.jsx` that
   `menuActions` now emits both `post` and `unpost` entries with the expected `visible` guards.
 
-**Known pre-existing test to update (flagged for QA/Tester, not fixed here per the test
-delegation rule):** `tools/app-shell/src/windows/custom/physical-inventory/__tests__/index.test.js`
-has a test named "hideMenuActions hides menu when processed" that asserts the now-removed
-`data?.processed === true` / `data?.processed === 'Y'` checks are present in the source — that
-assertion encodes the bug this change fixes and needs to be replaced with a test for the new
-`!data?.id`-only predicate.
+The pre-existing test that asserted the now-removed `data?.processed === true` /
+`data?.processed === 'Y'` checks (which encoded the bug this change fixes) was replaced with a
+`hideMenuActions behavior (ETP-5360 regression)` suite in
+`tools/app-shell/src/windows/custom/physical-inventory/__tests__/index.test.js` that evaluates the
+real `!data?.id`-only predicate against boolean `true`, ADempiere string `'Y'`, draft, and
+no-id/no-data cases.
