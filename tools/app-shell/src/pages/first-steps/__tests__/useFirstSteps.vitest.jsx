@@ -5,6 +5,10 @@
  * process. The hook reads its session through `useApiFetch`, which reads it with the
  * core's `useAuthOptional` — so per `docs/request-policy.md` the test supplies a SESSION
  * (a stable object from the mocked core module), never a `token` prop.
+ *
+ * ETP-5364 added `dismissed` to the stored object. Every POST here replaces the whole state,
+ * so a body assertion that omits it is asserting a state the hook cannot send — which is why
+ * the pre-existing `toggleStep`/`markSeen` expectations below carry `dismissed: false`.
  */
 import { renderHook, act, waitFor } from '@testing-library/react';
 
@@ -247,7 +251,7 @@ describe('useFirstSteps — toggleStep', () => {
     expect(outcome).toBe(true);
     expect(result.current.completed).toEqual(['products']);
     expect(postBodies()).toEqual([
-      { v: FIRST_STEPS_STATE_VERSION, seen: false, completed: ['products'] },
+      { v: FIRST_STEPS_STATE_VERSION, seen: false, dismissed: false, completed: ['products'] },
     ]);
   });
 
@@ -282,7 +286,7 @@ describe('useFirstSteps — toggleStep', () => {
     await act(async () => { await result.current.toggleStep('contacts'); });
 
     expect(postBodies().at(-1)).toEqual({
-      v: FIRST_STEPS_STATE_VERSION, seen: true, completed: ['contacts'],
+      v: FIRST_STEPS_STATE_VERSION, seen: true, dismissed: false, completed: ['contacts'],
     });
   });
 
@@ -384,7 +388,7 @@ describe('useFirstSteps — markSeen', () => {
     expect(outcome).toBe(true);
     expect(result.current.seen).toBe(true);
     expect(postBodies()).toEqual([
-      { v: FIRST_STEPS_STATE_VERSION, seen: true, completed: [] },
+      { v: FIRST_STEPS_STATE_VERSION, seen: true, dismissed: false, completed: [] },
     ]);
   });
 
@@ -450,7 +454,7 @@ describe('useFirstSteps — markSeen', () => {
     await act(async () => { await result.current.markSeen(); });
 
     expect(postBodies().at(-1)).toEqual({
-      v: FIRST_STEPS_STATE_VERSION, seen: true, completed: ['products'],
+      v: FIRST_STEPS_STATE_VERSION, seen: true, dismissed: false, completed: ['products'],
     });
   });
 });

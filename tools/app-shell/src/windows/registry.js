@@ -104,14 +104,6 @@ const windowLoaders = {
  * known. It bypasses neither the other menu axes nor the page's content gate,
  * which still consumes the backend access map.
  *
- * @param {Array} groups — output of buildMenuGroups.
- * @param {Set<string>|null} allowedIds — from useRoleMenu(). `null` disables
- *   the windowId/processId/obuiappProcessId filtering axis.
- * @param {Record<string, boolean>|null} [capabilities] — from `useAuth()`/
- *   `useCapabilitiesSafe()`. `null`/omitted fails closed for capability-gated
- *   items. When `allowedIds`, `capabilities` and `windowAccess` are all falsy,
- *   `groups` is returned unchanged (matches this function's pre-ETP-4513
- *   behavior).
  * A fourth axis (ETP-5364) lets an item declare `"hideWhenFirstStepsDismissed": true`
  * so the user can put the onboarding checklist away for good. It is a user
  * PREFERENCE, not an access rule — but it belongs here rather than in

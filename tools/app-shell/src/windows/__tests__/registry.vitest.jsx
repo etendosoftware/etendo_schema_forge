@@ -404,6 +404,12 @@ describe('registry', () => {
   });
 
   describe('shipped navigation catalog (ETP-5240)', () => {
+    // ETP-5364 — the fifth axis is a user PREFERENCE, not a grant. These specs measure the
+    // permission boundary, so they hold the checklist at "not dismissed" throughout and let the
+    // `capability` axis decide `first-steps` on its own. Omitting the argument would fail closed
+    // and drop the entry from every profile below, which is that axis's job, not this block's;
+    // its own on/off behaviour lives in the dedicated describe above.
+    const NOT_DISMISSED = false;
     const gated = defaultNavigation.filter(entry => entry.windowId || entry.processId || entry.obuiappProcessId || entry.accessWindowId || entry.capability);
     const ungated = defaultNavigation.filter(entry => !gated.includes(entry));
     const proof = optionalNavigation.filter(entry => entry.proof);
@@ -441,7 +447,7 @@ describe('registry', () => {
     it.each(navigationProfiles)('admin catalog: $label', profile => {
       const { allowedIds, capabilities, windowAccess } = navigationPermissions();
       const groups = filterMenuGroupsByAccess(
-        buildMenuGroups(profile.apps, { appStoreUnlocked: profile.marketplace }), allowedIds, capabilities, windowAccess,
+        buildMenuGroups(profile.apps, { appStoreUnlocked: profile.marketplace }), allowedIds, capabilities, windowAccess, NOT_DISMISSED,
       );
       // Proof visibility belongs to SideMenu, not the registry. Its real flag
       // behavior is exercised in SideMenu.vitest.jsx using these same profiles.
@@ -450,14 +456,14 @@ describe('registry', () => {
 
     it.each(navigationProfiles)('ungated optional navigation without role grants: $label', profile => {
       const groups = filterMenuGroupsByAccess(
-        buildMenuGroups(profile.apps, { appStoreUnlocked: profile.marketplace }), new Set(), {}, {},
+        buildMenuGroups(profile.apps, { appStoreUnlocked: profile.marketplace }), new Set(), {}, {}, NOT_DISMISSED,
       );
       expectNavigation(groups, expectedNavigation({ ...profile, proof: true }).filter(entry => !gated.includes(entry)));
     });
 
     it.each(gated)('single grant: $name', entry => {
       const { allowedIds, capabilities, windowAccess } = navigationPermissions([entry]);
-      const groups = filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess);
+      const groups = filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess, NOT_DISMISSED);
       const bypassedAnchors = entry.capability === 'isAdminOrClientAdmin'
         ? defaultNavigation.filter(candidate => candidate.accessWindowId) : [];
       // A capability is a NAMED BOOLEAN, not a per-entry grant: switching one on reveals every
@@ -476,7 +482,7 @@ describe('registry', () => {
       // Non-admin exercises anchor denial rather than its admin bypass.
       const remaining = defaultNavigation.filter(candidate => candidate !== entry && !candidate.capability);
       const { allowedIds, capabilities, windowAccess } = navigationPermissions(remaining);
-      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess), [...remaining, ...proof]);
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess, NOT_DISMISSED), [...remaining, ...proof]);
     });
 
     // ETP-5395 — `isOwner` is a distinct capability name from
@@ -488,7 +494,7 @@ describe('registry', () => {
     // leak into admin-gated siblings like `roles`.
     it('first-steps requires its own isOwner grant — an admin/client-admin capability does not imply it', () => {
       const names = filterMenuGroupsByAccess(
-        buildMenuGroups(), new Set(), { isAdminOrClientAdmin: true, isOwner: false }, {},
+        buildMenuGroups(), new Set(), { isAdminOrClientAdmin: true, isOwner: false }, {}, NOT_DISMISSED,
       ).flatMap(group => group.items.map(item => item.name));
       expect(names).not.toContain('first-steps');
       expect(names).toContain('roles');
@@ -496,23 +502,23 @@ describe('registry', () => {
 
     it.each(defaultNavigation.filter(entry => entry.accessWindowId))('read-only anchor grant: $name', entry => {
       const { allowedIds, capabilities, windowAccess } = navigationPermissions([entry], 'read-only');
-      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess), [...ungated, ...proof, entry]);
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess, NOT_DISMISSED), [...ungated, ...proof, entry]);
     });
 
     it.each([{}, null])('admin bypass with window map %j preserves the entire catalog', windowAccess => {
       const { allowedIds, capabilities } = navigationPermissions();
-      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess), [...defaultNavigation, ...proof]);
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess, NOT_DISMISSED), [...defaultNavigation, ...proof]);
     });
 
     it.each([
       { label: 'denied', allowedIds: new Set(), capabilities: {}, windowAccess: {} },
       { label: 'maps loading', allowedIds: new Set(), capabilities: null, windowAccess: null },
     ])('$label exposes only ungated entries', ({ allowedIds, capabilities, windowAccess }) => {
-      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess), [...ungated, ...proof]);
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess, NOT_DISMISSED), [...ungated, ...proof]);
     });
 
     it('null role-menu fallback opens only the membership axis, not capabilities or anchors', () => {
-      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), null, {}, {}), [
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), null, {}, {}, NOT_DISMISSED), [
         ...defaultNavigation.filter(entry => !entry.accessWindowId && !entry.capability), ...proof,
       ]);
     });
