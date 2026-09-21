@@ -336,7 +336,7 @@ a permanently stuck draft.
 
 New NEO action on the return header, `POST .../action/rectifiableInvoices`
 (`ReturnToVendorShipmentHeaderHandler.java:75`, handler at `:288-308`), delegating
-to the shared `ReturnShipmentUtils.buildRectifiableInvoicesResponse`.
+to the shared `RectifiableInvoiceUtils.buildRectifiableInvoicesResponse`.
 
 It lists the confirmed purchase invoices this return shipment may rectify. There
 is no header-level link between a return and its original document, so the query
@@ -374,7 +374,7 @@ it."* — before anything is written.
 `ReturnToVendorShipmentHeaderHandler.java:327-330` throws
 `AlreadyInvoicedException` with **"A rectificative invoice already exists for this
 return document."** — **HTTP 409** (`:364-366`) — when
-`ReturnShipmentUtils.hasNonVoidedReturnInvoice` finds any invoice for this
+`RectifiableInvoiceUtils.hasNonVoidedReturnInvoice` finds any invoice for this
 shipment with `DocStatus != 'VO'`. The check runs before any write.
 
 That predicate is deliberately the same one behind the `hasReturnInvoice` flag the

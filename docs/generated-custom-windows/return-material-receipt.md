@@ -384,7 +384,7 @@ javadoc at `:599-612`), and restated as a general rule for creation handlers in
 New NEO action on the return header, `POST .../action/rectifiableInvoices`
 (`ReturnMaterialReceiptHeaderHandler.java:74`, dispatched at `:107-109`), shared
 with `return-to-vendor-shipment` through
-`ReturnShipmentUtils.buildRectifiableInvoicesResponse` (`:711-724`).
+`RectifiableInvoiceUtils.buildRectifiableInvoicesResponse` (`:73-86`).
 
 It lists the confirmed invoices this return document is allowed to rectify. There
 is no header-level link between a return and its original document, so it has to
@@ -449,7 +449,7 @@ invoice including a draft, and a draft cannot be rectified.
 
 ### Guard P5 — 409 on a return document that is already invoiced
 
-`ReturnShipmentUtils.hasNonVoidedReturnInvoice` (`:734-755`) joins
+`RectifiableInvoiceUtils.hasNonVoidedReturnInvoice` (`:199-220`) joins
 `M_InOutLine → C_InvoiceLine → C_Invoice` for this return and looks for any
 invoice with `DocStatus != 'VO'`. When one exists,
 `ReturnMaterialReceiptHeaderHandler.java:322-325` throws
