@@ -26243,23 +26243,17 @@
     "Stock Report": {
       "label": "Stock Report"
     },
-    "Bank Statements": {
-      "label": "Bank Statements"
+    "Balance Sheet": {
+      "label": "Balance Sheet"
     },
-    "Bank Reconciliation": {
-      "label": "Bank Reconciliation"
+    "Profit & Loss": {
+      "label": "Profit & Loss"
     },
-    "Cash Close": {
-      "label": "Cash Close"
+    "General Ledger": {
+      "label": "General Ledger"
     },
-    "Account Transactions": {
-      "label": "Account Transactions"
-    },
-    "Bank Connections": {
-      "label": "Bank Connections"
-    },
-    "Financial Accounts": {
-      "label": "Financial Accounts"
+    "Journal Entries": {
+      "label": "Journal Entries"
     }
   },
   "statuses": {

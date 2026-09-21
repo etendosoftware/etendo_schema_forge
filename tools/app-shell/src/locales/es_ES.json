@@ -26541,23 +26541,17 @@
     "Stock Report": {
       "label": "Informe de Stock"
     },
-    "Bank Statements": {
-      "label": "Extractos Bancarios"
+    "Balance Sheet": {
+      "label": "Balance de Situación"
     },
-    "Bank Reconciliation": {
-      "label": "Conciliación Bancaria"
+    "Profit & Loss": {
+      "label": "Pérdidas y Ganancias"
     },
-    "Cash Close": {
-      "label": "Cierre de Caja"
+    "General Ledger": {
+      "label": "Libro Mayor"
     },
-    "Account Transactions": {
-      "label": "Movimientos de Cuenta"
-    },
-    "Bank Connections": {
-      "label": "Conexiones Bancarias"
-    },
-    "Financial Accounts": {
-      "label": "Cuentas Financieras"
+    "Journal Entries": {
+      "label": "Diario de Asientos"
     }
   },
   "statuses": {

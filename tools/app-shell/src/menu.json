@@ -424,46 +424,39 @@
           "reportId": "aging-payable"
         },
         {
-          "name": "bank-statements",
-          "label": "Bank Statements",
-          "favname": "Bank Statements",
+          "name": "balance-sheet",
+          "label": "Balance Sheet",
+          "favname": "Balance Sheet",
           "hidden": true,
-          "reportId": "bank-statements"
+          "reportId": "balance-sheet"
         },
         {
-          "name": "bank-reconciliation",
-          "label": "Bank Reconciliation",
-          "favname": "Bank Reconciliation",
+          "name": "profit-loss",
+          "label": "Profit & Loss",
+          "favname": "Profit & Loss",
           "hidden": true,
-          "reportId": "bank-reconciliation"
+          "reportId": "profit-loss"
         },
         {
-          "name": "cash-close",
-          "label": "Cash Close",
-          "favname": "Cash Close",
+          "name": "report-general-ledger",
+          "label": "General Ledger",
+          "favname": "General Ledger",
           "hidden": true,
-          "reportId": "cash-close"
+          "reportId": "report-general-ledger"
         },
         {
-          "name": "financial-account-transactions",
-          "label": "Account Transactions",
-          "favname": "Account Transactions",
+          "name": "report-journal-entries",
+          "label": "Journal Entries",
+          "favname": "Journal Entries",
           "hidden": true,
-          "reportId": "financial-account-transactions"
+          "reportId": "report-journal-entries"
         },
         {
-          "name": "financial-account-bank-connection",
-          "label": "Bank Connections",
-          "favname": "Bank Connections",
+          "name": "report-trial-balance",
+          "label": "Trial Balance",
+          "favname": "Trial Balance",
           "hidden": true,
-          "reportId": "financial-account-bank-connection"
-        },
-        {
-          "name": "financial-accounts-page",
-          "label": "Financial Accounts",
-          "favname": "Financial Accounts",
-          "hidden": true,
-          "reportId": "financial-accounts-page"
+          "reportId": "report-trial-balance"
         }
       ]
     },
