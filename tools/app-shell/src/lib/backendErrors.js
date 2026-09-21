@@ -195,6 +195,16 @@ const BACKEND_ERROR_MAP = {
   // AD_Message/i18n involvement, so it always renders in Spanish regardless of session
   // locale (ETP-4831 case 2, inverse symptom of the invoice-line skeleton below).
   'No hay líneas a facturar en este pedido': 'backendError.noLinesToInvoice',
+  // ETP-5381: the only remaining server-side duplicate guard. The order, shipment, receipt and
+  // quotation paths need none — now that the invoice is confirmed on creation, the core's own
+  // pending-quantity logic sees the invoiced amounts and rejects the second attempt by itself.
+  // A return document has no such native cap: its rectificative takes the lines whole.
+  'A rectificative invoice already exists for this return document.':
+    'backendError.returnInvoiceAlreadyExists',
+  // ETP-5381 — a rectificative invoice cannot be confirmed without declaring which invoice it
+  // rectifies (ETSG_CHECK_RECTIF_INV_DOC), so the request is rejected before anything is written.
+  'Select at least one invoice to rectify: a rectificative invoice cannot be confirmed without it.':
+    'backendError.rectifiedInvoiceRequired',
   // CreateDraftInvoiceHandler (com.etendoerp.go) — same hardcoded-Spanish-literal bug
   // as above, but from the shipment-invoicing flow. Two throw sites emit this exact
   // string: capShipmentLineOverrides (~L952) and the line-selection loop inside
@@ -289,6 +299,72 @@ const BACKEND_ERROR_MAP = {
     'backendError.cannotModifyOwnerAccount',
 };
 
+// ETP-5316 — MATCHING BY AD_MESSAGE KEY, the third mechanism (the other two are the exact-match
+// map above and the parameterized matchers below). Use it when the backend message is a core
+// PL/SQL document-action failure: those are assembled from AD_MESSAGE tokens plus run-time data
+// (`@Inline@ 10, 20, 30, @ProductNotNullAndMovementQtyZero@`), so by the time the sentence reaches
+// us it is both untranslatable-by-text — the embedded values differ per document — and unhelpful:
+// the numbers are AD line numbers (10, 20, 30…), NOT the row positions the user sees, so nobody
+// can act on them. Product decided the line reference is dropped entirely and the message is
+// reduced to what the user can actually do something about: "there are lines without a quantity".
+//
+// Etendo GO now returns the keys it extracted BEFORE translating (NeoProcessService
+// `messageKeys`), so the mapping is by stable identity rather than by prose — the same principle
+// as the "prefer a structured code" rule in docs/i18n-guide.md, applied to a core message we do
+// not own. A key not listed here is inert: translateBackendError falls through to the text
+// mechanisms and finally to the backend's own sentence, exactly as before.
+//
+// Keys are AD_MESSAGE search keys, verbatim from core (note `lockedProduct` /
+// `productWithoutAttributeSet` are lowercase-initial in the catalog — do not "normalize" them).
+// Sources: M_INOUT_POST for all eight; `productWithoutAttributeSet` is raised with the same key by
+// M_MOVEMENT_POST, M_INVENTORY_POST and M_INTERNAL_CONSUMPTION_POST1, so stock movements,
+// physical inventory and internal consumption get it for free.
+const BACKEND_ERROR_KEY_MAP = {
+  ProductNotNullAndMovementQtyZero: 'backendError.docLinesWithoutQuantity',
+  InoutLineWithoutLocator: 'backendError.docLinesWithoutLocator',
+  LocatorWithNotAvailableStatus: 'backendError.docLinesLocatorNotAvailable',
+  InActiveProducts: 'backendError.docLinesInactiveProduct',
+  lockedProduct: 'backendError.docLinesLockedProduct',
+  productWithoutAttributeSet: 'backendError.docLinesAttributeRequired',
+  InoutLineNotExploded: 'backendError.docLinesNotExploded',
+  MovementQtyCheck: 'backendError.docLinesQtyExceedsOrdered',
+};
+
+/**
+ * Reads the `messageKeys` array out of a parsed NEO error body, whatever envelope it arrived in.
+ *
+ * The ONE place that knows the wire field name, so the hooks and modals that plumb it through to
+ * `translateBackendError` do not each re-derive the shape. Returns `undefined` — never throws and
+ * never invents an empty array — when the field is absent, which is exactly what a frontend
+ * deployed ahead of the backend sees. The two repos ship separately, so that is the normal steady
+ * state for a while, not an edge case: with no keys, `translateBackendError` behaves as it always
+ * has and the user reads the backend's own sentence.
+ *
+ * @param {object|null|undefined} payload parsed JSON error body
+ * @returns {string[]|undefined} the message keys, or undefined when the body carries none
+ */
+export function extractBackendMessageKeys(payload) {
+  const keys = payload?.messageKeys ?? payload?.response?.messageKeys ?? payload?.error?.messageKeys;
+  if (!Array.isArray(keys)) return undefined;
+  const clean = keys.filter((k) => typeof k === 'string' && k.length > 0);
+  return clean.length > 0 ? clean : undefined;
+}
+
+// Resolves the FIRST key we recognise, so a message that mixes a structural token with a real
+// failure (`@Inline@` + `@lockedProduct@`) lands on the failure. Returns null when no key is
+// known, or when the mapped locale entry is missing — an untranslated result is indistinguishable
+// from no result for the caller, same convention as translateSingleMessage.
+function translateByMessageKey(messageKeys, t) {
+  if (!Array.isArray(messageKeys)) return null;
+  for (const raw of messageKeys) {
+    const key = BACKEND_ERROR_KEY_MAP[raw];
+    if (!key) continue;
+    const translated = t(key);
+    if (translated && translated !== key) return translated;
+  }
+  return null;
+}
+
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a
 // Business Partner name) instead of being a single fixed exact string, so they can't
 // live in BACKEND_ERROR_MAP's exact-match lookup.
@@ -326,35 +402,6 @@ function matchAccountNotFound(msg) {
   const group = inner.slice(delimIdx + BP_GROUP_DELIM.length);
   if (!bp || !group) return null;
   return { bp, group };
-}
-
-// This skeleton comes from com.etendoerp.go's own `ETGO_InvoiceLineAlreadyInvoiced`
-// AD_MESSAGE ("The shipment @docNo@ cannot be invoiced: quantity to invoice
-// (@invoiced@) exceeds pending quantity (@pending@). The shipment may already be
-// invoiced in another document.") — en_US only, same no-translation-pack root cause
-// as the ACCOUNT_NOT_FOUND_PREFIX skeleton above (ETP-4831, sibling of ETP-4706).
-//
-// Same plain-string-slicing rationale as matchAccountNotFound: docNo/invoiced/pending
-// are free-form/user-influenced data, so no regex — linear-time slicing around fixed
-// delimiters instead of a backtracking-prone pattern (SonarQube javascript:S5852).
-const INVOICE_LINE_PREFIX = 'The shipment ';
-const INVOICE_LINE_MID1 = ' cannot be invoiced: quantity to invoice (';
-const INVOICE_LINE_MID2 = ') exceeds pending quantity (';
-const INVOICE_LINE_SUFFIX = '). The shipment may already be invoiced in another document.';
-
-function matchInvoiceLineAlreadyInvoiced(msg) {
-  if (!msg.startsWith(INVOICE_LINE_PREFIX) || !msg.endsWith(INVOICE_LINE_SUFFIX)) return null;
-  const middle = msg.slice(INVOICE_LINE_PREFIX.length, -INVOICE_LINE_SUFFIX.length);
-  const mid1Idx = middle.indexOf(INVOICE_LINE_MID1);
-  if (mid1Idx === -1) return null;
-  const docNo = middle.slice(0, mid1Idx);
-  const afterMid1 = middle.slice(mid1Idx + INVOICE_LINE_MID1.length);
-  const mid2Idx = afterMid1.indexOf(INVOICE_LINE_MID2);
-  if (mid2Idx === -1) return null;
-  const invoiced = afterMid1.slice(0, mid2Idx);
-  const pending = afterMid1.slice(mid2Idx + INVOICE_LINE_MID2.length);
-  if (!docNo || !invoiced || !pending) return null;
-  return { docNo, invoiced, pending };
 }
 
 // StockAvailabilityGuard.java (com.etendoerp.go — ETP-5037), `ETGO_InsufficientStockLine`
@@ -771,7 +818,6 @@ function matchIbanCountryLengthMismatch(msg) {
  * to two different keys, and omits a param, depending on what it found.
  */
 const PARAMETERIZED_MATCHERS = [
-  [matchInvoiceLineAlreadyInvoiced, 'backendError.invoiceLineAlreadyInvoiced'],
   [matchInsufficientStockLine, 'backendError.insufficientStockLine'],
   [matchInsufficientStockProcess, 'backendError.insufficientStockProcess'],
   [matchZeroOrNegativeQtyProcess, 'backendError.zeroOrNegativeQtyProcess'],
@@ -894,8 +940,26 @@ function translateSingleMessage(trimmed, t) {
   return translateAccountDeleteBlocked(trimmed, t);
 }
 
-export function translateBackendError(msg, t) {
-  if (!msg || typeof t !== 'function') return msg;
+/**
+ * Translates ONE backend error message into the active locale.
+ *
+ * @param {string} msg the backend message (already-translated prose, as it crossed the wire)
+ * @param {function} t the `ui` function from `useUI()`
+ * @param {{messageKeys?: string[]}} [options] ETP-5316 — the AD_MESSAGE search keys behind `msg`,
+ *   when the backend sent them (see `extractBackendMessageKeys`). Tried FIRST, because a key is a
+ *   stable identity while the prose it produced may embed per-document values. Omitting them is
+ *   the pre-ETP-5316 behavior and stays fully supported.
+ * @returns {string} the translated message, or `msg` untouched when nothing matched
+ */
+export function translateBackendError(msg, t, options = {}) {
+  if (typeof t !== 'function') return msg;
+
+  // Key route first: it is the only one that can resolve a message whose text is unmatchable by
+  // construction. Runs even when `msg` is empty — the keys alone carry enough to say what failed.
+  const byKey = translateByMessageKey(options.messageKeys, t);
+  if (byKey !== null) return byKey;
+
+  if (!msg) return msg;
   const trimmed = msg.trim();
 
   const single = translateSingleMessage(trimmed, t);
