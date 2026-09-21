@@ -215,13 +215,21 @@
           "label": "Reports",
           "favname": "Inventory Reports",
           "path": "report-viewer?category=inventory",
-          "accessWindowId": "6346B88619F948F9A42224BDB0B239FA"
+          "accessWindowId": "6346B88619F948F9A42224BDB0B239FA",
+          "windowId": "6346B88619F948F9A42224BDB0B239FA"
         },
         {
           "name": "warehouse-storage-bins",
           "label": "Storage Bin",
           "favname": "Storage Bin",
           "hidden": true
+        },
+        {
+          "name": "inventory-stock-report",
+          "label": "Stock Report",
+          "favname": "Inventory Stock Report",
+          "hidden": true,
+          "reportId": "inventory-stock-report"
         }
       ]
     },
@@ -394,6 +402,69 @@
           "favname": "Finance Reports",
           "path": "report-viewer?category=finance",
           "accessWindowId": "D647D118F5014D00AF47A636B2CD0DD3"
+        },
+        {
+          "name": "tax-report",
+          "label": "Tax Report",
+          "favname": "Tax Report",
+          "hidden": true,
+          "reportId": "tax-report"
+        },
+        {
+          "name": "aging-receivable",
+          "label": "Aging Report (Receivables)",
+          "favname": "Aging Report (Receivables)",
+          "hidden": true,
+          "reportId": "aging-receivable"
+        },
+        {
+          "name": "aging-payable",
+          "label": "Aging Report (Payables)",
+          "favname": "Aging Report (Payables)",
+          "hidden": true,
+          "reportId": "aging-payable"
+        },
+        {
+          "name": "bank-statements",
+          "label": "Bank Statements",
+          "favname": "Bank Statements",
+          "hidden": true,
+          "reportId": "bank-statements"
+        },
+        {
+          "name": "bank-reconciliation",
+          "label": "Bank Reconciliation",
+          "favname": "Bank Reconciliation",
+          "hidden": true,
+          "reportId": "bank-reconciliation"
+        },
+        {
+          "name": "cash-close",
+          "label": "Cash Close",
+          "favname": "Cash Close",
+          "hidden": true,
+          "reportId": "cash-close"
+        },
+        {
+          "name": "financial-account-transactions",
+          "label": "Account Transactions",
+          "favname": "Account Transactions",
+          "hidden": true,
+          "reportId": "financial-account-transactions"
+        },
+        {
+          "name": "financial-account-bank-connection",
+          "label": "Bank Connections",
+          "favname": "Bank Connections",
+          "hidden": true,
+          "reportId": "financial-account-bank-connection"
+        },
+        {
+          "name": "financial-accounts-page",
+          "label": "Financial Accounts",
+          "favname": "Financial Accounts",
+          "hidden": true,
+          "reportId": "financial-accounts-page"
         }
       ]
     },

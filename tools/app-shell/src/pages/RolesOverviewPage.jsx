@@ -12,7 +12,9 @@ import RolesAccessMatrix from './roles/RolesAccessMatrix.jsx';
  * "Configuración > Roles" overview page (ETP-4513, redesigned by ETP-4907 to match
  * a new reference layout): 5 role summary cards (icon, name, user-count badge, window
  * count) followed by a full window x role access matrix grouped by category, each cell
- * tri-state (full access / read-only / no access). Data comes from
+ * tri-state (full access / read-only / no access). ETP-5402 adds an "Informes" (reports)
+ * subsection nested inside each relevant category's block of `RolesAccessMatrix` — see
+ * that component's own JSDoc. Data comes from
  * `useRolesOverviewData()` (`./roles/useRolesOverviewData.js`), which calls the real
  * `GET /sws/neo/rolesoverview` (`lib/rolesApi.js`'s `fetchRolesOverview()`, unchanged
  * since ETP-4513) and adapts its response into this page's card/matrix shape. This is a
@@ -28,7 +30,7 @@ import RolesAccessMatrix from './roles/RolesAccessMatrix.jsx';
 export default function RolesOverviewPage() {
   const ui = useUI();
   const tMenu = useMenuLabel();
-  const { loading, error, cards, matrix, reload } = useRolesOverviewData();
+  const { loading, error, cards, matrix, reportsMatrix, reload } = useRolesOverviewData();
 
   useSetPageMeta({
     title: ui('rolesPageTitle'),
@@ -92,6 +94,7 @@ export default function RolesOverviewPage() {
             <RolesAccessMatrix
               cards={cards}
               matrix={matrix}
+              reportsMatrix={reportsMatrix}
               iconFor={(role) => ROLE_ICONS[resolveRoleKind(role)]}
               data-testid="RolesAccessMatrix__67e3bc" />
           </div>

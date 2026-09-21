@@ -41,6 +41,20 @@ import menuConfig from '../../menu.json' with { type: 'json' };
  * windowCount, userCount}]`, `matrix: [{category, rows: [{windowId,
  * windowName, access: {[roleId]: 'full'|'readOnly'|'none'}}]}]`.
  *
+ * **ETP-5402 — `reports`/`reportCount`/`reportsMatrix` (Informes subsection).**
+ * A PARALLEL set of fields alongside `windows`/`windowCount`/`matrix` (never
+ * merged into them — see `SFRolesOverview.java`'s own Informes design note):
+ * `roles[].reports` (same `{id, name, tier}` shape as `windows[]`) and
+ * `reportsMatrix.categories[].reports[]` (same shape as `matrix.categories[]
+ * .windows[]`, just nested under a `reports` key instead of `windows`).
+ * `adaptReportsMatrix` below reuses `adaptMatrix`'s exact bucketing/sorting
+ * machinery (`bucketRowsByResolvedCategory` now takes an `itemsKey` so it can
+ * read either `category.windows` or `category.reports`) — the row shape
+ * itself (`{windowId, windowName, access}`, field names kept AS-IS even for a
+ * report row, see `resolveMatrixRow`) needs no change at all, since a report
+ * row and a window row already carry the exact same `{id, name, access}`
+ * wire shape.
+ *
  * **Tier normalization (picked once, here — not left floating as two
  * spellings across the codebase):** the backend uses hyphenated
  * `'read-only'` (matching `roles[].windows[].tier`'s pre-existing ETP-4513
@@ -211,13 +225,24 @@ function adaptCards(roles) {
  * so the User window's "Roles del usuario" tab groups windows identically to this page's
  * `RolesAccessMatrix` — see that file's `resolveCategoryRow` JSDoc for its own fallback
  * chain (AD-menu-tree walk, then an "Other" bucket) for a window this index doesn't cover.
+ *
+ * **ETP-5402 — `item.reportId` (4th identity key).** A report row's backend id (`tax-report`,
+ * `bank-statements`, ...) lives in an entirely different id-space than `windowId`/
+ * `obuiappProcessId`/`processId` — it is the stable Informes row id, not the classic AD
+ * anchor (window/process) id that access is actually resolved against server-side. Using an
+ * anchor id as the join key here would collide for the 6 financial-family report rows, which
+ * all share the SAME `AD_Window_ID` (Financial Account) as their access anchor but must
+ * resolve to 6 DISTINCT category/label rows — a `windowId`-keyed index can only ever hold one
+ * candidate per key. `reportId` sidesteps this entirely: it is never an AD id (no collision
+ * risk with the other 3 branches) and is always unique per Informes row, so one shared `Map`
+ * keeps working unchanged for both id-spaces.
  */
 export function buildMenuWindowIndex() {
   const index = new Map();
   const groups = menuConfig?.menu ?? [];
   groups.forEach((group, groupOrder) => {
     group.items?.forEach((item, itemOrder) => {
-      const rawId = item?.windowId ?? item?.obuiappProcessId ?? item?.processId;
+      const rawId = item?.windowId ?? item?.obuiappProcessId ?? item?.processId ?? item?.reportId;
       if (rawId == null) return;
       const windowId = String(rawId);
       const candidate = { group: group.group, label: item.label, groupOrder, itemOrder, hidden: !!item.hidden };
@@ -302,7 +327,8 @@ function trackBestGroupOrder(groupOrderByCategory, resolvedCategory, groupOrder)
 }
 
 /**
- * Flattens `matrix.categories[].windows[]` and buckets rows by their RESOLVED category
+ * Flattens `matrix.categories[].windows[]` (or, ETP-5402, `reportsMatrix.categories[]
+ * .reports[]` when `itemsKey` is `'reports'`) and buckets rows by their RESOLVED category
  * (see `resolveMatrixRow`) — since two different backend `category.name` buckets can map
  * to the same menu.json `group` (or vice versa), every window is flattened across all
  * backend categories first, then re-bucketed by its resolved category string. Windows
@@ -310,12 +336,12 @@ function trackBestGroupOrder(groupOrderByCategory, resolvedCategory, groupOrder)
  * tracks, per resolved category, the smallest `groupOrder` seen among its windows via
  * `trackBestGroupOrder`.
  */
-function bucketRowsByResolvedCategory(categories, menuIndex) {
+function bucketRowsByResolvedCategory(categories, menuIndex, itemsKey = 'windows') {
   const rowsByCategory = new Map();
   const groupOrderByCategory = new Map();
 
   for (const category of categories) {
-    for (const w of category.windows ?? []) {
+    for (const w of category[itemsKey] ?? []) {
       const resolved = resolveMatrixRow(w, category, menuIndex);
       if (!resolved) continue;
       const { resolvedCategory, row, groupOrder } = resolved;
@@ -354,15 +380,19 @@ function compareRowsByItemOrder(a, b) {
 }
 
 /**
- * Adapts the backend's `matrix.categories[]` into this page's category-grouped row
- * shape, normalizing every cell's tier (see `normalizeTier`). Delegates: bucketing +
- * category/name resolution + hidden-window exclusion to `bucketRowsByResolvedCategory`,
- * category ordering to `compareCategoriesByOrder`, and row ordering within each category
- * to `compareRowsByItemOrder`. See those functions' JSDoc for the full ETP-5071 rules.
+ * Adapts a `{categories: [{name, windows|reports: [...]}]}`-shaped backend payload into
+ * this page's category-grouped row shape, normalizing every cell's tier (see
+ * `normalizeTier`). Delegates: bucketing + category/name resolution + hidden-row
+ * exclusion to `bucketRowsByResolvedCategory`, category ordering to
+ * `compareCategoriesByOrder`, and row ordering within each category to
+ * `compareRowsByItemOrder`. See those functions' JSDoc for the full ETP-5071 rules.
+ * Shared by `adaptMatrix` (`itemsKey: 'windows'`) and (ETP-5402) `adaptReportsMatrix`
+ * (`itemsKey: 'reports'`) — the row shape itself needs no adaptation between the two,
+ * see `resolveMatrixRow`'s JSDoc.
  */
-function adaptMatrix(matrix, menuIndex) {
-  const categories = matrix?.categories ?? [];
-  const { rowsByCategory, groupOrderByCategory } = bucketRowsByResolvedCategory(categories, menuIndex);
+function adaptCategoryMatrix(payload, menuIndex, itemsKey) {
+  const categories = payload?.categories ?? [];
+  const { rowsByCategory, groupOrderByCategory } = bucketRowsByResolvedCategory(categories, menuIndex, itemsKey);
 
   const categoryNames = [...rowsByCategory.keys()].sort((a, b) =>
     compareCategoriesByOrder(a, b, groupOrderByCategory)
@@ -377,13 +407,28 @@ function adaptMatrix(matrix, menuIndex) {
   });
 }
 
+/** Adapts the backend's `matrix` (real windows) — see `adaptCategoryMatrix`. */
+function adaptMatrix(matrix, menuIndex) {
+  return adaptCategoryMatrix(matrix, menuIndex, 'windows');
+}
+
 /**
- * Fetches + exposes the Roles-overview cards and access matrix, with
- * loading/error state and a `reload()` escape hatch. `cards` is always
- * returned pre-sorted into `ROLE_ORDER`.
+ * ETP-5402 — adapts the backend's `reportsMatrix` (the Informes subsection) — see
+ * `adaptCategoryMatrix`. Exported so `RolesOverviewPage.jsx` can merge this into the
+ * per-category "Informes" sub-block alongside the real-window rows from `adaptMatrix`.
+ */
+export function adaptReportsMatrix(reportsMatrix, menuIndex) {
+  return adaptCategoryMatrix(reportsMatrix, menuIndex, 'reports');
+}
+
+/**
+ * Fetches + exposes the Roles-overview cards, window access matrix, and
+ * (ETP-5402) the Informes `reportsMatrix`, with loading/error state and a
+ * `reload()` escape hatch. `cards` is always returned pre-sorted into
+ * `ROLE_ORDER`.
  */
 export function useRolesOverviewData() {
-  const [state, setState] = useState({ loading: true, error: null, cards: [], matrix: [] });
+  const [state, setState] = useState({ loading: true, error: null, cards: [], matrix: [], reportsMatrix: [] });
 
   const load = useCallback(() => {
     setState((s) => ({ ...s, loading: true, error: null }));
@@ -394,6 +439,7 @@ export function useRolesOverviewData() {
           error: null,
           cards: sortByRoleOrder(adaptCards(data?.roles)),
           matrix: adaptMatrix(data?.matrix, MENU_WINDOW_INDEX),
+          reportsMatrix: adaptReportsMatrix(data?.reportsMatrix, MENU_WINDOW_INDEX),
         });
       })
       .catch((err) => {

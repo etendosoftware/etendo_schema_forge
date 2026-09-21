@@ -17626,6 +17626,7 @@
     "accessTierReadOnly": "Read-only",
     "rolesWindowCount": "{count} Windows",
     "rolesMatrixWindowColumn": "Window",
+    "rolesMatrixInformesHeader": "Informes",
     "rolesUserCount": "{count} Users",
     "rolesSummaryCardNavigateAria": "View users with the {role} role",
     "userRolesTabLabel": "User roles",
@@ -26229,6 +26230,36 @@
     },
     "Receipt-Invoice Link": {
       "label": "Receipt-Invoice Link"
+    },
+    "Tax Report": {
+      "label": "Tax Report"
+    },
+    "Aging Report (Receivables)": {
+      "label": "Aging Report (Receivables)"
+    },
+    "Aging Report (Payables)": {
+      "label": "Aging Report (Payables)"
+    },
+    "Stock Report": {
+      "label": "Stock Report"
+    },
+    "Bank Statements": {
+      "label": "Bank Statements"
+    },
+    "Bank Reconciliation": {
+      "label": "Bank Reconciliation"
+    },
+    "Cash Close": {
+      "label": "Cash Close"
+    },
+    "Account Transactions": {
+      "label": "Account Transactions"
+    },
+    "Bank Connections": {
+      "label": "Bank Connections"
+    },
+    "Financial Accounts": {
+      "label": "Financial Accounts"
     }
   },
   "statuses": {

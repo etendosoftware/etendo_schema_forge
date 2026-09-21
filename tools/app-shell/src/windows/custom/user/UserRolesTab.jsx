@@ -379,11 +379,22 @@ export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
   // those classic-only rows without a new backend call. Deliberately still sourced from
   // `overviewRoles`, not `allTemplateRoles` — the client-admin row it carries is what makes
   // this union cover windows granted to none of the 4 templates (e.g. "Roles", "Usuario").
+  //
+  // ETP-5402 — also folds in `role.reports[]` ids (the Informes subsection: Tax Report,
+  // both aging reports, the 6 financial-family reports, ...). Unlike a real windowId, a
+  // report id has NO `SFListMenu`/AD-tree counterpart at all — `flattenWindowRows` below
+  // only ever walks classic AD windows — so a report id can ONLY ever resolve through
+  // `menuIndex` (see `resolveCategoryRow` below and this file's own `menu.json` entries,
+  // each carrying a `reportId` key). Below it falls into the same `remainingIds` bucket a
+  // menuIndex-only window id already falls into, so no other code here needed to change.
   const activeWindowIds = useMemo(() => {
     const ids = new Set();
     for (const role of overviewRoles) {
       for (const w of role.windows ?? []) {
         if (w?.id != null) ids.add(String(w.id));
+      }
+      for (const r of role.reports ?? []) {
+        if (r?.id != null) ids.add(String(r.id));
       }
     }
     return ids;
@@ -541,10 +552,15 @@ export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
   // Returns both the display text AND the tier ('full' | 'readonly' | null for no access)
   // so the caller can wrap it in a colored `TierPill` — 'null' means render plain text,
   // no pill (ETP-4906 Manual QA Feedback Round 6, DEV wave 11).
+  //
+  // ETP-5402 — `row.windowId` also carries a report row's own id ("tax-report", ...) for a
+  // row sourced from `role.reports` rather than `role.windows`; the two id-spaces never
+  // overlap, so checking both arrays for a match is safe and needs no row-kind flag.
   const cellValue = (row, role) => {
-    const windowEntry = (role.windows ?? []).find((w) => String(w.id) === row.windowId);
-    if (!windowEntry) return { tier: null, text: '—' };
-    return windowEntry.tier === 'full'
+    const entry = (role.windows ?? []).find((w) => String(w.id) === row.windowId)
+      ?? (role.reports ?? []).find((r) => String(r.id) === row.windowId);
+    if (!entry) return { tier: null, text: '—' };
+    return entry.tier === 'full'
       ? { tier: 'full', text: '✓' }
       : { tier: 'readonly', text: ui('accessTierReadOnly') };
   };
