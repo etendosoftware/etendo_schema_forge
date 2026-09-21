@@ -75,3 +75,21 @@ describe('GeneralTab — backed editable fields', () => {
     expect(setGeneralField).toHaveBeenCalledWith('name', expect.stringContaining('X'));
   });
 });
+
+describe('GeneralTab — accrual is hidden and internally fixed to Devengo (ETP-5372)', () => {
+  it('does not render a "Criterio contable" field regardless of the accrual value', () => {
+    renderTab({ general: { accrual: true } });
+    expect(screen.queryByTestId('glc-field-accrual')).not.toBeInTheDocument();
+
+    renderTab({ general: { accrual: false } });
+    expect(screen.queryByTestId('glc-field-accrual')).not.toBeInTheDocument();
+  });
+
+  it('never calls setGeneralField with "accrual"', async () => {
+    const user = userEvent.setup();
+    const { setGeneralField } = renderTab();
+    const nameInput = within(screen.getByTestId('glc-field-name')).getByRole('textbox');
+    await user.type(nameInput, 'X');
+    expect(setGeneralField).not.toHaveBeenCalledWith('accrual', expect.anything());
+  });
+});

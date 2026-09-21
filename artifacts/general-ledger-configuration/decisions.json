@@ -29,8 +29,7 @@
           "section": "identity"
         },
         "accrual": {
-          "visibility": "editable",
-          "section": "identity"
+          "visibility": "system"
         },
         "description": {
           "visibility": "editable",

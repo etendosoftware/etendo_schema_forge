@@ -8,8 +8,7 @@ export const General = [
     "description": "Standard order for Q1 delivery",
     "gAAP": "Sample gAAP",
     "currency": "USD",
-    "allowNegative": "Sample allowNegative",
-    "accrual": "Sample accrual"
+    "allowNegative": "Sample allowNegative"
   },
   {
     "id": "mock-General-002",
@@ -18,8 +17,7 @@ export const General = [
     "description": "Rush order - priority shipping required",
     "gAAP": "Sample gAAP",
     "currency": "EUR",
-    "allowNegative": "Sample allowNegative",
-    "accrual": "Sample accrual"
+    "allowNegative": "Sample allowNegative"
   },
   {
     "id": "mock-General-003",
@@ -28,8 +26,7 @@ export const General = [
     "description": "Bulk purchase for warehouse restocking",
     "gAAP": "Sample gAAP",
     "currency": "GBP",
-    "allowNegative": "Sample allowNegative",
-    "accrual": "Sample accrual"
+    "allowNegative": "Sample allowNegative"
   },
   {
     "id": "mock-General-004",
@@ -38,8 +35,7 @@ export const General = [
     "description": "Sample order for client evaluation",
     "gAAP": "Sample gAAP",
     "currency": "USD",
-    "allowNegative": "Sample allowNegative",
-    "accrual": "Sample accrual"
+    "allowNegative": "Sample allowNegative"
   },
   {
     "id": "mock-General-005",
@@ -48,8 +44,7 @@ export const General = [
     "description": "Recurring monthly supply order",
     "gAAP": "Sample gAAP",
     "currency": "EUR",
-    "allowNegative": "Sample allowNegative",
-    "accrual": "Sample accrual"
+    "allowNegative": "Sample allowNegative"
   },
   {
     "id": "mock-General-006",
@@ -58,8 +53,7 @@ export const General = [
     "description": "Special pricing agreement applies",
     "gAAP": "Sample gAAP",
     "currency": "GBP",
-    "allowNegative": "Sample allowNegative",
-    "accrual": "Sample accrual"
+    "allowNegative": "Sample allowNegative"
   },
   {
     "id": "mock-General-007",
@@ -68,8 +62,7 @@ export const General = [
     "description": "Consolidated order from multiple requests",
     "gAAP": "Sample gAAP",
     "currency": "USD",
-    "allowNegative": "Sample allowNegative",
-    "accrual": "Sample accrual"
+    "allowNegative": "Sample allowNegative"
   },
   {
     "id": "mock-General-008",
@@ -78,8 +71,7 @@ export const General = [
     "description": "Trial order for new product line",
     "gAAP": "Sample gAAP",
     "currency": "EUR",
-    "allowNegative": "Sample allowNegative",
-    "accrual": "Sample accrual"
+    "allowNegative": "Sample allowNegative"
   },
   {
     "id": "mock-General-009",
@@ -88,8 +80,7 @@ export const General = [
     "description": "Replacement for damaged goods",
     "gAAP": "Sample gAAP",
     "currency": "GBP",
-    "allowNegative": "Sample allowNegative",
-    "accrual": "Sample accrual"
+    "allowNegative": "Sample allowNegative"
   },
   {
     "id": "mock-General-010",
@@ -98,8 +89,7 @@ export const General = [
     "description": "Pre-season inventory build-up",
     "gAAP": "Sample gAAP",
     "currency": "USD",
-    "allowNegative": "Sample allowNegative",
-    "accrual": "Sample accrual"
+    "allowNegative": "Sample allowNegative"
   },
   {
     "id": "mock-General-011",
@@ -108,8 +98,7 @@ export const General = [
     "description": "Customer-specific configuration",
     "gAAP": "Sample gAAP",
     "currency": "EUR",
-    "allowNegative": "Sample allowNegative",
-    "accrual": "Sample accrual"
+    "allowNegative": "Sample allowNegative"
   },
   {
     "id": "mock-General-012",
@@ -118,8 +107,7 @@ export const General = [
     "description": "Government contract fulfillment",
     "gAAP": "Sample gAAP",
     "currency": "GBP",
-    "allowNegative": "Sample allowNegative",
-    "accrual": "Sample accrual"
+    "allowNegative": "Sample allowNegative"
   }
 ];
 
