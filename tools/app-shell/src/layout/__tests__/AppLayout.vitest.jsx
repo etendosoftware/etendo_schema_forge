@@ -87,6 +87,15 @@ vi.mock('@/lib/flags/useAccountIdentity.js', () => ({
   useAccountIdentity: vi.fn(),
 }));
 
+// ETP-5402 QA follow-up — AppLayout now fires its own fetchMyReportAccess() call (not routed
+// through useAuth()/AuthContext, unlike capabilities/windowAccess above) to feed
+// filterMenuGroupsByAccess's report-access fallback. Left unmocked, the real (unmocked) fetch
+// runs against jsdom's absent network and its rejection can surface as an unhandled rejection on
+// a LATER test in this file — mocking it keeps every test in this file deterministic.
+vi.mock('@/lib/rolesApi.js', () => ({
+  fetchMyReportAccess: vi.fn(() => Promise.resolve({ reportAccess: {} })),
+}));
+
 // Mock layout components. menuGroups is rendered (serialized) so tests can
 // assert on what AppLayout actually passed down after filtering, not just
 // that SideMenu rendered.

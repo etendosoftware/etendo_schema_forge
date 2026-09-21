@@ -104,32 +104,54 @@ const windowLoaders = {
  * known. It bypasses neither the other menu axes nor the page's content gate,
  * which still consumes the backend access map.
  *
+ * A fourth, independent fallback on the SAME `accessWindowId` check (ETP-5402 QA follow-up):
+ * an `accessWindowId` item ALSO passes when its own menu.json GROUP has at least one sibling
+ * `reportId` entry the caller has real report-level access to (`reportAccess`) — even without
+ * the coarse window grant. This closes the gap where a role holds a genuine per-report grant
+ * (e.g. Sales on `aging-receivable`, via `ReportAccessCatalog`/`SFMyReportAccess`) but not the
+ * category's own permission-anchor window (only Finance holds `D647D118…`): before this, such a
+ * role had no way to even see the "Informes" sidebar link, so the report was unreachable despite
+ * the Roles/Users matrix showing it as granted. Derived purely from each group's own `reportId`
+ * siblings already in menu.json — no new per-item field needed, and it generalizes to any future
+ * `accessWindowId` item sharing a group with report entries.
+ *
  * @param {Array} groups — output of buildMenuGroups.
  * @param {Set<string>|null} allowedIds — from useRoleMenu(). `null` disables
  *   the windowId/processId/obuiappProcessId filtering axis.
  * @param {Record<string, boolean>|null} [capabilities] — from `useAuth()`/
  *   `useCapabilitiesSafe()`. `null`/omitted fails closed for capability-gated
- *   items. When `allowedIds`, `capabilities` and `windowAccess` are all falsy,
- *   `groups` is returned unchanged (matches this function's pre-ETP-4513
- *   behavior).
+ *   items. When `allowedIds`, `capabilities`, `windowAccess` and `reportAccess`
+ *   are all falsy, `groups` is returned unchanged (matches this function's
+ *   pre-ETP-4513 behavior).
  * @param {Record<string, string>|null} [windowAccess] — from `useAuth()`/
  *   `useWindowAccessSafe()`. `null`/omitted fails closed for accessWindowId
- *   items unless the admin exemption or all-falsy passthrough above applies.
+ *   items unless the admin exemption or a report-access fallback applies.
+ * @param {Record<string, string>|null} [reportAccess] — id -> tier, from
+ *   `fetchMyReportAccess()` (ETP-5402 QA follow-up). `null`/omitted disables
+ *   only the report-access fallback above; the other axes are unaffected.
  */
-export function filterMenuGroupsByAccess(groups, allowedIds, capabilities = null, windowAccess = null) {
-  if (!allowedIds && !capabilities && !windowAccess) return groups;
+export function filterMenuGroupsByAccess(groups, allowedIds, capabilities = null, windowAccess = null, reportAccess = null) {
+  if (!allowedIds && !capabilities && !windowAccess && !reportAccess) return groups;
   const itemIds = item => [item.windowId, item.processId, item.obuiappProcessId].filter(Boolean);
   return groups
-    .map(group => ({
-      ...group,
-      items: group.items.filter(item => {
-        if (item.capability && capabilities?.[item.capability] !== true) return false;
-        if (item.accessWindowId && !capabilities?.isAdminOrClientAdmin && (!windowAccess || windowAccess[item.accessWindowId] === undefined)) return false;
-        if (!allowedIds) return true;
-        const ids = itemIds(item);
-        return ids.length === 0 || ids.some(id => allowedIds.has(String(id)));
-      }),
-    }))
+    .map(group => {
+      const reportIdsInGroup = group.items.filter(i => i.reportId).map(i => i.reportId);
+      const groupHasAccessibleReport = Boolean(reportAccess)
+        && reportIdsInGroup.some(id => reportAccess[id] !== undefined);
+      return {
+        ...group,
+        items: group.items.filter(item => {
+          if (item.capability && capabilities?.[item.capability] !== true) return false;
+          if (item.accessWindowId && !capabilities?.isAdminOrClientAdmin) {
+            const hasWindowAccess = windowAccess && windowAccess[item.accessWindowId] !== undefined;
+            if (!hasWindowAccess && !groupHasAccessibleReport) return false;
+          }
+          if (!allowedIds) return true;
+          const ids = itemIds(item);
+          return ids.length === 0 || ids.some(id => allowedIds.has(String(id)));
+        }),
+      };
+    })
     .filter(group => group.group === 'Favorites' || group.items.length > 0);
 }
 

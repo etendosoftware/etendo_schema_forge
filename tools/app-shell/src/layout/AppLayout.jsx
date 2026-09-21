@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { isChromelessEmbed } from '@/lib/embeddedWindow.js';
 import { Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import { Building2, ChevronDown, Loader2, LogOut } from 'lucide-react';
@@ -30,6 +30,7 @@ import { useLogout } from '@/auth/useLogout.js';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { useUI } from '@/i18n';
 import { fetchCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
+import { fetchMyReportAccess } from '@/lib/rolesApi.js';
 import { WalkthroughProvider } from '@etendosoftware/app-shell-core/walkthrough';
 import { WALKTHROUGH_FLOWS } from '@/walkthrough/flows';
 import { handleWalkthroughFinish } from '@/lib/walkthrough/walkthrough-events.js';
@@ -297,6 +298,27 @@ export default function AppLayout({ menuGroups }) {
   // already treats as "hide" for any accessWindowId-gated item (fails closed).
   const windowAccess = useWindowAccessSafe();
 
+  // ETP-5402 QA follow-up — the caller's own Informes-subsection report access
+  // (`fetchMyReportAccess()`), used only as a FALLBACK inside `filterMenuGroupsByAccess`'s
+  // `accessWindowId` check (see that function's own JSDoc): a role with a real per-report grant
+  // but not the category's coarse permission-anchor window (e.g. Sales on `aging-receivable`,
+  // not the Financial Reports window) still needs to see the "Informes" sidebar link. Unlike
+  // `capabilities`/`windowAccess` above, this is NOT sourced from `useAuth()` (core-managed state
+  // this repo cannot extend) — it is this repo's own fetch, fired once per mount. `{}` before it
+  // resolves fails closed the same way the other two maps already do.
+  const [reportAccess, setReportAccess] = useState({});
+  useEffect(() => {
+    // Skip entirely once allowedIds confirms zero window/process access (ETP-4514's blocking
+    // screen is about to render) — there is no menu left to apply the report-access fallback to,
+    // so this fetch would be pure waste on exactly the request path a locked-out caller hits.
+    if (allowedIds && allowedIds.size === 0) return undefined;
+    let cancelled = false;
+    fetchMyReportAccess()
+      .then((res) => { if (!cancelled) setReportAccess(res?.reportAccess ?? {}); })
+      .catch(() => { if (!cancelled) setReportAccess({}); });
+    return () => { cancelled = true; };
+  }, [allowedIds]);
+
   // ETP-5395 Point 1 Fix B — must run BEFORE filterMenuGroupsByAccess and the
   // NoAccessScreen size-check below: id-less menu items (no
   // windowId/processId/obuiappProcessId — e.g. "first-steps", "dashboard")
@@ -315,7 +337,8 @@ export default function AppLayout({ menuGroups }) {
     menuGroups,
     allowedIds,
     capabilities,
-    windowAccess
+    windowAccess,
+    reportAccess
   );
 
   // ETP-4514: a confirmed (not loading, not fail-open-null) empty Set means
