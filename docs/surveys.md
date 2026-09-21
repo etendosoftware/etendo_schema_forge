@@ -81,9 +81,15 @@ via `Active` — see [Disabling a Survey](#disabling-a-survey).
 [localStorage Schema](#localstorage-schema)), a field that didn't exist during Phase 1
 (ETP-4352). Users whose `onboardingCompleted` flipped to `true` back then have
 `onboardingCompletedAt: null` forever — `markOnboardingCompleted()` only fires once, so it will
-never backfill. Since there's no completion timestamp to measure 24h against, `csatOnboardingIsEligible`
-treats a missing `onboardingCompletedAt` as immediately eligible rather than permanently blocked,
-so that legacy cohort isn't locked out of the survey indefinitely.
+never backfill. Since there's no completion timestamp to measure any delay against, `csatOnboardingIsEligible`
+returns `true` for a missing `onboardingCompletedAt` **before** it even reads the configured
+delay (`getSurveyTypeConfig('csat_onboarding')`) — see the `if (!state.onboardingCompletedAt)
+return true;` short-circuit in `surveys.js`. So the legacy cohort is immediately eligible
+**regardless of whatever delay ops configures** on the `csat_onboarding` row (1 day, 7 days, or
+anything else) — this is not limited to the pre-Phase-2 24h default. **Confirmed intentional
+during ETP-4353 QA** (not an oversight): the alternative — permanently blocking a user with no
+completion timestamp — was judged worse than letting this one cohort skip the delay, and there is
+no plan to backfill `onboardingCompletedAt` for it.
 
 ---
 
@@ -502,6 +508,15 @@ first: if the backoffice has rows for that survey + language, their `text` (and 
 directly (already locale-specific, no `ui()` lookup); otherwise it falls back to the hardcoded
 `survey.canned` locale-key list in `surveys.js`. This now applies to `nps` as well as the two CSAT
 document surveys — the servlet's queries were never survey-key-specific.
+
+**Fallback is per-language, never blended across languages.** `getRemoteCannedResponses` is a
+straight `canned[surveyId][language]` lookup (`survey-config.js`) — there is no merge or
+inheritance between languages. If a survey has configured `en_US` rows but no `es_ES` rows (or
+vice versa), the unconfigured language does not borrow or translate the other language's phrases;
+it falls straight through to the hardcoded `survey.canned` fallback for that render, same as if
+neither language were configured. **Confirmed intentional during ETP-4353 QA:** this is pre-existing
+CSAT behavior from Phase 1 (ETP-4352), carried over unchanged to NPS by this ticket, not a gap
+introduced here — a partial/blended result across languages was explicitly considered and rejected.
 
 ### Global parameters — `ETGO_Survey_Config` / `VITE_SURVEY_*`
 
