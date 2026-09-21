@@ -1017,13 +1017,52 @@ work. Switching marca 3 → 1 → 3 (by mistake, or to compare options) must bri
 address, city and country back exactly as they were. Hiding achieves the same outcome without
 the loss — the user does not see them and cannot fill them in by mistake.
 
-**The marca restriction is scoped to the Nota 3 branch only.** It sits *inside*
-`_BANK_RECTIFICATIVA_BRANCH` (as `_BANK_NOTA3_NEEDS_SWIFT` / `_BANK_NOTA3_NEEDS_FOREIGN_DETAILS`),
-never as a sibling of the tipo `U`/`D`/`X` branch — `_BANK_SWIFT_VW` is
-`anyOf: [_TIPO_IS_DVX, _BANK_NOTA3_NEEDS_SWIFT]`. A plain `D`/`V`/`X` refund with no box 111
-therefore behaves **exactly as before**: nothing is narrowed by the marca. That matches the
-backend, whose blanking is scoped the same way — hiding a field there would send a value the user
-can no longer see, since `AEAT303Report2021` (untouched by this ticket) still writes it.
+**The marca restriction is scoped to the Nota 3 branch only — and the tipo branch steps aside
+inside it.** `_BANK_SWIFT_VW` is `anyOf: [_TIPO_DVX_OUTSIDE_NOTA3, _BANK_NOTA3_NEEDS_SWIFT]`, and
+the two branches are mutually exclusive by construction. A plain `D`/`V`/`X` refund with no box
+111 behaves **exactly as before** (nothing narrowed by the marca), because
+`AEAT303Report2021#generatePage3` — untouched by this ticket — still writes its whole bank block,
+so hiding a field there would send a value the user can no longer see. But a tipo `D` that *is*
+in the Nota 3 case falls through to the marca gate instead of being shown unconditionally by its
+tipo, because there the backend **does** blank. An earlier revision of this fix kept the tipo
+branch un-narrowed (`anyOf: [_TIPO_IS_DVX, …]`) and so only got half the problem right: tipo `D`
++ rectificativa + box 111 ≠ 0 + marca 1 showed SWIFT-BIC and the four foreign-bank fields on
+screen while the file blanked those very positions.
+
+Closing that needed "tipo D **and not** condition B", which looks like it requires a `not`
+operator the matcher does not have. It does not: **De Morgan**. `NOT (a AND b AND c)` is
+`(NOT a) OR (NOT b) OR (NOT c)`, and each negated clause is enumerable with the existing `in`
+operator — the same technique `_BANK_NOT_WAIVED` already used. Hence `_NOT_NOTA3`:
+
+```js
+const _NOT_NOTA3 = { anyOf: [
+  { field: 'rectificativa',      in: [false, undefined, null, '', 'N'] },
+  { field: '_box111NonZero',     in: [false, undefined, null] },
+  { field: 'baja_domiciliacion', in: [true, 'Y'] },   // positive: the waiver IS marked
+] };
+```
+
+The third clause is the exact complement of `_BANK_NOT_WAIVED` and enumerates the same two shapes
+`isCancelModifyDebitRequested` accepts. **No engine change was needed, and none was made.**
+
+Resulting matrix (`V` visible, `V*` visible and required, `—` hidden), verified end to end:
+
+| tipo | rectificativa | box 111 | flag | marca | IBAN | marca SEPA | SWIFT | Banco/Dir/Ciudad/País |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| D | no | — | — | any | `V*` | `V` | `V` | `V` |
+| D | sí | 0 | — | any | `V*` | `V` | `V` | `V` |
+| D | sí | ≠0 | marcado | any | `V*` | `V` | `V` | `V` |
+| D | sí | ≠0 | no | 1 | `V*` | `V*` | — | — |
+| D | sí | ≠0 | no | 2 | `V*` | `V*` | `V*` | — |
+| D | sí | ≠0 | no | 3 | `V*` | `V*` | `V*` | `V*` |
+| C | sí | ≠0 | no | 1/2/3 | `V*` | `V*` | per marca | per marca |
+| U | no | — | — | any | `V*` | — | — | — |
+| I | no | — | — | any | section hidden | | | |
+
+The `flag marcado` row keeps the section visible for tipo `D`: the waiver removes the
+*box-111-driven* obligation, not tipo `D`'s own need for an account to be refunded into. The
+backend agrees — `correctBankSectionIfBox111HasValues` returns early there, leaving the block the
+tipo gates wrote. Hiding it would strand a refund with no way to enter its IBAN.
 
 Classic mirrors the same table in `AEAT303Report2024`'s `sepaMarkRequiresSwiftBic` /
 `sepaMarkRequiresForeignBankDetails`, used by both the writer and the validators so screen and file
@@ -1041,6 +1080,14 @@ never fire. `baja_domiciliacion` is now out of `IDENT_PARAM_MAP` and goes throug
 Y-flag convention the other checkboxes already use (`sin_actividad`, `redeme`, `concurso`), via
 `isCancelModifyDebitRequested` — which also accepts the literal `'Y'` so any value already
 persisted in that shape keeps working. `_BANK_NOT_WAIVED` accepts `'N'`/`''` for the same reason.
+
+This fix covers **both** Java readers, not just the Nota 3 guard. `generatePage3` writes the mark
+itself at position 440 of page 3, and it was reading the same never-matching value, so the mark
+was never written either — a declaration that requested the cancellation reached AEAT with
+position 440 blank. Both readers now go through `isCancelOrModifyDebitRequested`
+(`generatePage3` used to read `inputParams` directly while the guard resolves constant parameters
+too, so a constant-valued `Cancel_Modify_Debit` would have skipped the bank block while leaving
+the mark blank — a file stating the opposite of what it does).
 
 **Bug F — boxes [14][15], [25][26] and [40][41] always rendered blank instead of autocalculating.**
 `Fiscal303BoxesHandler.computeBoxes` never populated boxes 14/15 ("Modificación bases y cuotas"),

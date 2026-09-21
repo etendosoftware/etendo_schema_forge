@@ -85,6 +85,34 @@ const _BANK_NOTA3_NEEDS_FOREIGN_DETAILS = { allOf: [
 
 const _TIPO_IS_DVX = { field: 'tipo_declaracion', in: ['D', 'V', 'X'] };
 
+// ETP-5431 — the logical negation of `_BANK_RECTIFICATIVA_BRANCH`, by De Morgan: NOT (a AND b AND
+// c) is (NOT a) OR (NOT b) OR (NOT c). Each negated clause is enumerated with the existing `in`
+// operator, the same technique `_BANK_NOT_WAIVED` uses, so the matcher still needs no `not`.
+//
+// Why it exists: without it, the tipo U/D/X branch of a bank field's `visibleWhen` stays true
+// even while the declaration IS in the Nota 3 case, so a tipo D rectificativa with a non-zero
+// box 111 and marca 1 showed SWIFT-BIC and the four foreign-bank fields on screen while
+// `AEAT303Report2024#patchBankSection` blanked those very positions in the file. ANDing the tipo
+// branch with this makes the tipo branch step aside exactly when the marca gate takes over, so
+// screen and file agree on BOTH sides of the scope boundary, not just one.
+//
+// The enumerations mirror how each field is actually stored. `rectificativa` is a checkbox
+// (strict boolean, JSON-round-tripped) and `_box111NonZero` is synthetic — always a strict
+// boolean from `withBox111NonZeroFlag`, `undefined` only if a caller forgot to merge it. The
+// third clause is the POSITIVE test for the waiver, so it enumerates the same two shapes
+// `isCancelModifyDebitRequested` (fiscalModelsUtils.js) accepts: the boolean the checkbox writes
+// today, and the legacy `'Y'` string. It is the exact complement of `_BANK_NOT_WAIVED`.
+const _NOT_NOTA3 = { anyOf: [
+  { field: 'rectificativa', in: [false, undefined, null, '', 'N'] },
+  { field: '_box111NonZero', in: [false, undefined, null] },
+  { field: 'baja_domiciliacion', in: [true, 'Y'] },
+] };
+
+// The plain-refund branch: tipo D/V/X *and not* in the Nota 3 case. Unrestricted by the marca,
+// exactly as before this ticket — `AEAT303Report2021#generatePage3` still writes the whole bank
+// block for these, so hiding a field here would send a value the user can no longer see.
+const _TIPO_DVX_OUTSIDE_NOTA3 = { allOf: [_TIPO_IS_DVX, _NOT_NOTA3] };
+
 // visibleWhen shared by 6 of the 7 bank fields (all but bank_iban, which has no
 // field-level gate of its own and relies solely on sectionVisibleWhen below).
 // NOTE: widened the same way and for the same reason as datos_bancarios.sectionVisibleWhen
@@ -113,9 +141,13 @@ const _BANK_DVX_VW = { anyOf: [
 
 // ETP-5431 — inside the Nota 3 branch, a field the marca SEPA does not call for is HIDDEN, not
 // merely un-required, so the user cannot leave a stray value on screen in a block whose unused
-// positions the file must carry blank (AEAT303Report2024#patchBankSection blanks them). Note the
-// shape: the tipo U/D/X branch is kept intact and un-narrowed, exactly as `_BANK_DVX_VW` has it
-// - only the rectificativa branch carries the marca gate.
+// positions the file must carry blank (AEAT303Report2024#patchBankSection blanks them).
+//
+// Read the shape as "plain refund, unrestricted — OR — Nota 3 case, per the marca". The two
+// branches are mutually exclusive by construction (`_TIPO_DVX_OUTSIDE_NOTA3` carries
+// `_NOT_NOTA3`), so a tipo D that IS in the Nota 3 case falls through to the marca gate instead
+// of being shown unconditionally by its tipo. That mutual exclusivity is the whole point: it is
+// what makes the frontend agree with the backend on both sides of the scope boundary.
 //
 // `bank_sepa` and `bank_iban` are never gated this way: the marca selector must stay reachable,
 // and the position-23 field carries a value under every marca.
@@ -124,8 +156,10 @@ const _BANK_DVX_VW = { anyOf: [
 // the file is correct, so clearing would only destroy typed work. Switching marca 3 → 1 → 3 must
 // bring the bank name/address/city/country back exactly as they were, and there is deliberately
 // no dependent-field-clearing callout for these fields anywhere.
-const _BANK_SWIFT_VW = { anyOf: [_TIPO_IS_DVX, _BANK_NOTA3_NEEDS_SWIFT] };
-const _BANK_FOREIGN_DETAILS_VW = { anyOf: [_TIPO_IS_DVX, _BANK_NOTA3_NEEDS_FOREIGN_DETAILS] };
+const _BANK_SWIFT_VW = { anyOf: [_TIPO_DVX_OUTSIDE_NOTA3, _BANK_NOTA3_NEEDS_SWIFT] };
+const _BANK_FOREIGN_DETAILS_VW = {
+  anyOf: [_TIPO_DVX_OUTSIDE_NOTA3, _BANK_NOTA3_NEEDS_FOREIGN_DETAILS],
+};
 
 // ETP-5393 Bug E — bank_iban's requiredness: mandatory unconditionally for tipo U/D/X
 // (AEAT error EDID065, "devolución"/"domiciliación" case — condition A), OR for a
