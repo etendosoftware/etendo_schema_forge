@@ -102,16 +102,26 @@ function VerifactuBadge({ status, sent, ui, size = 'md' }) {
   );
 }
 
+// ETP-5432: same purchase/sales split `sifSending.js`'s `getSifBodyKey` already
+// applies to the "Enviar a SIF" popup — for a PURCHASE invoice, TBAI eligibility is
+// always Batuz specifically (gated to Bizkaia territory, ETP-5087/ETP-5027), never
+// the generic TicketBAI scheme sales invoices use. The rail button and panel header
+// inside this shared SIF tab named it "TicketBAI" unconditionally for both invoice
+// directions; `tbaiPurchase` keys give the purchase side the "Batuz" wording instead.
 const RAIL_META = {
   sii: { labelKey: 'sifDataTabs.tab.sii', subtitleKey: 'sifDataTabs.rail.sii.subtitle' },
   verifactu: { labelKey: 'sifDataTabs.tab.verifactu', subtitleKey: 'sifDataTabs.rail.verifactu.subtitle' },
   tbai: { labelKey: 'sifDataTabs.tab.tbai', subtitleKey: 'sifDataTabs.rail.tbai.subtitle' },
+  tbaiPurchase: { labelKey: 'sifDataTabs.tab.tbaiPurchase', subtitleKey: 'sifDataTabs.rail.tbaiPurchase.subtitle' },
 };
 
 const PANEL_META = {
   sii: { titleKey: 'sifDataTabs.panel.sii.title', subtitleKey: 'sifDataTabs.panel.sii.subtitle' },
   verifactu: { titleKey: 'sifDataTabs.panel.verifactu.title', subtitleKey: 'sifDataTabs.panel.verifactu.subtitle' },
   tbai: { titleKey: 'sifDataTabs.panel.tbai.title', subtitleKey: 'sifDataTabs.panel.tbai.subtitle' },
+  // Subtitle ("Basque Tax Authorities" / "Hacienda Foral Vasca") is generic to the
+  // regime itself, not the wording split — reused as-is for the purchase variant.
+  tbaiPurchase: { titleKey: 'sifDataTabs.panel.tbaiPurchase.title', subtitleKey: 'sifDataTabs.panel.tbai.subtitle' },
 };
 
 function resolveDefaultTab(showSii, showVerifactu) {
@@ -299,6 +309,7 @@ function applyCalloutMessages(messages) {
 export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, onVisibilityChange }) {
   const {
     ui,
+    specName,
     siiTypeField,
     siiTypeOptions,
     showSii,
@@ -462,10 +473,17 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
 
   const effectiveTab = resolveEffectiveTab(activeTab, showSii, showVerifactu, showTbai, defaultTab);
 
+  // ETP-5432: same `specName === 'purchase-invoice'` check `sifSending.js` uses for the
+  // "Enviar a SIF" popup wording — a purchase invoice's TBAI is always Batuz, never the
+  // generic TicketBAI sales invoices show. Sales invoices are unaffected.
+  const isPurchase = specName === 'purchase-invoice';
+  const tbaiRailMeta = isPurchase ? RAIL_META.tbaiPurchase : RAIL_META.tbai;
+  const tbaiPanelMeta = isPurchase ? PANEL_META.tbaiPurchase : PANEL_META.tbai;
+
   const railItems = [
     showSii && { key: 'sii', ...RAIL_META.sii },
     showVerifactu && { key: 'verifactu', ...RAIL_META.verifactu },
-    showTbai && { key: 'tbai', ...RAIL_META.tbai },
+    showTbai && { key: 'tbai', ...tbaiRailMeta },
   ].filter(Boolean);
 
   return (
@@ -718,8 +736,8 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
 
         {effectiveTab === 'tbai' && showTbai && (
           <Panel
-            titleKey={PANEL_META.tbai.titleKey}
-            subtitleKey={PANEL_META.tbai.subtitleKey}
+            titleKey={tbaiPanelMeta.titleKey}
+            subtitleKey={tbaiPanelMeta.subtitleKey}
             ui={ui}
             data-testid="Panel__b99c8b">
             {/* ETP-4783: "Código de Factura Rectificativa" — only visible when the
