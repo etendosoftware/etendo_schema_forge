@@ -26,7 +26,14 @@
  * can only throw work away is a worse version of the silent loss it replaces. The saver is
  * optional: a form that registers without one still blocks navigation and still offers Discard.
  *
- * @type {Map<string, { dirty: boolean, save?: () => Promise<unknown> }>}
+ * ETP-5332 adds `embedded`: true for a `DetailView` mounted inside `RecordCreateModal`'s dialog
+ * (`useUnsavedChangesGuard` tags it by reading the pre-existing `EmbeddedWindowContext`). It still
+ * counts as dirty for `hasUnsavedChanges`/`beforeunload` — an unsaved edit inside the popup is lost
+ * on F5 same as any other — but {@link saveEmbeddedUnsavedChanges} lets a popup save ONLY its own
+ * embedded window before closing, never the document behind it, which is a different `dirtyForms`
+ * entry with `embedded` unset.
+ *
+ * @type {Map<string, { dirty: boolean, save?: () => Promise<unknown>, embedded?: boolean }>}
  */
 const dirtyForms = new Map();
 
@@ -42,10 +49,11 @@ let unloadPromptSuppressed = false;
  *
  * @param {string} key   stable id for the form instance
  * @param {boolean} dirty whether that form currently holds unsaved changes
+ * @param {boolean} [embedded] whether this form is mounted inside a `RecordCreateModal` popup
  */
-export function setUnsavedChanges(key, dirty, save) {
+export function setUnsavedChanges(key, dirty, save, embedded = false) {
   if (dirty) {
-    dirtyForms.set(key, { dirty: true, save });
+    dirtyForms.set(key, { dirty: true, save, embedded });
   } else {
     dirtyForms.delete(key);
   }
@@ -87,6 +95,30 @@ export function canSaveUnsavedChanges() {
  */
 export async function saveUnsavedChanges() {
   for (const entry of [...dirtyForms.values()]) {
+    if (typeof entry.save !== 'function') return false;
+    // eslint-disable-next-line no-await-in-loop -- deliberate: a failure must stop the rest.
+    const saved = await entry.save();
+    if (!saved) return false;
+  }
+  return true;
+}
+
+/**
+ * Save every dirty EMBEDDED form (a `DetailView` mounted inside a `RecordCreateModal` popup),
+ * and nothing else — in particular never the document the popup was opened from, which is a
+ * separate `dirtyForms` entry with `embedded` unset.
+ *
+ * ETP-5332: "Completado" used to re-read the record without saving first, so an edit made after
+ * the window's own last Save (e.g. ticking Proveedor and filling its billing fields) was silently
+ * discarded. This is the scoped counterpart of {@link saveUnsavedChanges} the popup can call
+ * instead — same "stop at the first refusal" semantics, so a validation error surfaces instead of
+ * closing over lost work. No dirty embedded entries is a no-op success.
+ *
+ * @returns {Promise<boolean>} whether every dirty embedded form was saved
+ */
+export async function saveEmbeddedUnsavedChanges() {
+  for (const entry of [...dirtyForms.values()]) {
+    if (!entry.embedded) continue;
     if (typeof entry.save !== 'function') return false;
     // eslint-disable-next-line no-await-in-loop -- deliberate: a failure must stop the rest.
     const saved = await entry.save();

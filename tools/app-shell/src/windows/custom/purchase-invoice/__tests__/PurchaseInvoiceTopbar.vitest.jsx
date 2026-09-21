@@ -390,7 +390,6 @@ describe('PurchaseInvoiceTopbar — sign-driven payment badge (ETP-4841)', () =>
   it('shows the credit badge for a NEGATIVE Factura Rectificativa with a remaining balance', () => {
     render(<PurchaseInvoiceTopbar {...props} data={NEGATIVE_RECTIFICATIVA_DATA} />);
     expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
-    expect(screen.getByText('EUR:15')).toBeInTheDocument();
     expect(screen.queryByText('statusPending')).toBeNull();
   });
 
@@ -434,7 +433,6 @@ describe('PurchaseInvoiceTopbar — sign-driven payment badge (ETP-4841)', () =>
   it('case B: an ordinary Factura with a NEGATIVE total shows the credit badge, never "pagada"', () => {
     render(<PurchaseInvoiceTopbar {...props} data={NEGATIVE_ORDINARY_DATA} />);
     expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
-    expect(screen.getByText('EUR:750')).toBeInTheDocument();
     expect(screen.queryByText('statusPaid')).toBeNull();
   });
 
@@ -555,7 +553,7 @@ describe('PurchaseInvoiceTopbar — branch/fallback coverage (ETP-4738)', () => 
 
   // ── currency fallbacks in the credit and paid badges (lines 111/126) ───────
 
-  it('credit badge falls back to USD when the invoice carries no currency', () => {
+  it('credit badge shows no amount regardless of currency (ETP-5268)', () => {
     render(
       <PurchaseInvoiceTopbar
         {...props}
@@ -569,7 +567,6 @@ describe('PurchaseInvoiceTopbar — branch/fallback coverage (ETP-4738)', () => 
       />,
     );
     expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
-    expect(screen.getByText('USD:20')).toBeInTheDocument();
   });
 
   it('paid badge falls back to USD when the invoice carries no currency', () => {
@@ -584,7 +581,7 @@ describe('PurchaseInvoiceTopbar — branch/fallback coverage (ETP-4738)', () => 
     expect(screen.getByText('USD:500')).toBeInTheDocument();
   });
 
-  it('credit badge uses the invoice currency when present', () => {
+  it('credit badge shows no amount when the invoice currency is present (ETP-5268)', () => {
     render(
       <PurchaseInvoiceTopbar
         {...props}
@@ -597,7 +594,6 @@ describe('PurchaseInvoiceTopbar — branch/fallback coverage (ETP-4738)', () => 
       />,
     );
     expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
-    expect(screen.getByText('EUR:20')).toBeInTheDocument();
   });
 
   // ── no badge at all (and therefore no modal) on a draft invoice ────────────

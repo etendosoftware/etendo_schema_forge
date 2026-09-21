@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Upload } from 'lucide-react';
 import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
 import { useAuthOptional } from '@etendosoftware/app-shell-core/auth';
-import { getApiBase } from '@/hooks/useNeoResource.js';
+import { getSpecBaseUrl } from '@/lib/neoBaseUrl.js';
 import { useWindowImportDialog } from '@/components/contract-ui/useWindowImportDialog.js';
 import { loadImportConfig } from '@/pages/first-steps/firstStepsImport.js';
 
@@ -21,7 +21,11 @@ import { loadImportConfig } from '@/pages/first-steps/firstStepsImport.js';
 export default function FirstStepsImportButton({ step, ui, disabled = false }) {
   const [open, setOpen] = useState(false);
   const token = useAuthOptional()?.token ?? null;
-  const apiBaseUrl = getApiBase();
+  // ETP-5371 — the SPEC's URL, not the deployment prefix. `useWindowImportDialog` is written
+  // against what `WindowLoader` hands `ListView` (`/etendo/sws/neo/product`); handing it
+  // `getApiBase()` (`/etendo`) instead left both of its consumers building URLs that pointed
+  // nowhere, and neither failed in a way that named this line — see `@/lib/neoBaseUrl.js`.
+  const apiBaseUrl = useMemo(() => getSpecBaseUrl(step.importSpec), [step.importSpec]);
   // `undefined` = still loading, `null` = this window declares no import. The contract and the
   // descriptor are pulled in on demand so they stay out of the entry chunk; this component only
   // renders once its row is expanded, so the fetch starts when the user opens the step.

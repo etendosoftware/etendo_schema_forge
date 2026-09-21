@@ -9,6 +9,19 @@ import {
 } from './bankStatementImportPipeline.js';
 
 /**
+ * ETP-5348 — the two core rejections that mean "there is nothing to import", as opposed to
+ * "this file is malformed".
+ *
+ * `importErrorNoDataRows` is new: `parseDelimited`/`parseXlsx` now refuse a header-only file
+ * up front, which is where this window used to detect it itself (`rows.length === 0` below).
+ * Without this split every rejection collapsed onto the generic unreadable copy, which asks
+ * the user to check for a header row, duplicate columns and extra sheets — three things that
+ * are perfectly fine in both of these cases. `importErrorFileEmpty` (a file with no lines at
+ * all) is included for the same reason; it used to land on the generic copy too.
+ */
+const NO_DATA_MESSAGE_KEYS = new Set(['importErrorFileEmpty', 'importErrorNoDataRows']);
+
+/**
  * Mapping + review state for the bank-statement import (ETP-4954).
  *
  * Extracted from `ImportStatementModal` rather than inlined: the modal already carries the
@@ -49,12 +62,18 @@ export function useStatementImportReview(ui) {
    * Parse, auto-map and validate an uploaded file.
    *
    * @returns {Promise<{ ok: true, rowCount: number } | { ok: false, errorKey: string|null }>}
-   *   `errorKey` names the i18n message for a file the parsers rejected (empty, duplicate
-   *   headers, several populated sheets); `null` falls back to the generic format message.
+   *   `errorKey` names the i18n message for a file the parsers rejected — `...EmptyFile` when
+   *   there is nothing to import, `...Unreadable` when the file's shape is wrong (duplicate or
+   *   blank headers, several populated sheets, an unreadable workbook). `null` falls back to
+   *   the generic format message, for a failure that is not a parser complaint at all.
    */
   const loadFile = useCallback(async (file) => {
     try {
       const { headers: parsedHeaders, rows } = await parseStatementFile(file);
+      // Since ETP-5348 both parsers reject a header-only file themselves, so this is reached
+      // only if that guard ever moves. Kept, and deliberately returning the SAME key as the
+      // `importErrorNoDataRows` branch below, so the two paths cannot answer differently —
+      // them disagreeing is exactly how this window came to report the wrong message.
       if (rows.length === 0) {
         return { ok: false, errorKey: 'financeAccountStatementsImportErrorEmptyFile' };
       }
@@ -67,14 +86,16 @@ export function useStatementImportReview(ui) {
       setStatusFilter('all');
       return { ok: true, rowCount: rows.length };
     } catch (error) {
-      // A parser's own complaint (empty file, duplicate headers, multi-sheet workbook) is
-      // specific and worth showing; anything else is not something the user can act on, so it
-      // falls through to the generic "unsupported format" copy.
+      // A parser's own complaint is specific and worth showing; anything else is not something
+      // the user can act on, so it falls through to the generic "unsupported format" copy.
+      if (!(error instanceof ImportParseError)) return { ok: false, errorKey: null };
+      // Which complaint it is decides WHICH message: "no rows to import" and "this file is
+      // malformed" send the user to look at completely different things.
       return {
         ok: false,
-        errorKey: error instanceof ImportParseError
-          ? 'financeAccountStatementsImportErrorUnreadable'
-          : null,
+        errorKey: NO_DATA_MESSAGE_KEYS.has(error.messageKey)
+          ? 'financeAccountStatementsImportErrorEmptyFile'
+          : 'financeAccountStatementsImportErrorUnreadable',
       };
     }
   }, [translate]);

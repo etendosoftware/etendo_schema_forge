@@ -94,7 +94,9 @@
             "field": "businessPartner",
             "filterKey": "C_BPartner_ID"
           },
-          "form": false,
+          "section": "principal",
+          "seq": 50,
+          "grid": true,
           "readOnlyLogic": "@Processed@='Y'"
         },
         "movementDate": {

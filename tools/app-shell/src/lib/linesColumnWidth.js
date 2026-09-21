@@ -6,6 +6,8 @@
  * regardless of which is mounted.
  */
 
+import { isPostedStatusColumn } from './postedStatus.js';
+
 // Fixed-basis column types share one baseline per type (grow flag only affects
 // the flex-grow term, not the basis). Kept as a lookup — rather than a chain of
 // `if` statements — to stay under the cognitive-complexity budget as the type
@@ -52,6 +54,21 @@ const SELECTOR_TYPES = new Set(['selector', 'search', 'foreignKey']);
 // one, leaving comfortable slack for longer locales.
 const BOOLEAN_BADGE_BASIS_PX = 152;
 
+// The Posted-status column (`postedStatus.js`) is a `boolean`+`badge` column
+// too, but its pill can also show one of 15 non-Y/N reason codes instead of
+// the plain true/false label — up to "Sin pedido de compra relacionado" (33
+// chars, the longest across en_US/es_ES/es_AR), far past what 152px holds.
+// Without this wider basis the pill gets clipped by the cell's own `overflow:
+// hidden` mid-word (e.g. "Sin pedido de compra" — the trailing "relacionado"
+// silently disappears). Scoped to this one column, not a general bump to
+// BOOLEAN_BADGE_BASIS_PX, since every other boolean-badge column in the app
+// only ever shows the short true/false pair.
+const POSTED_STATUS_BADGE_BASIS_PX = 240;
+
+function booleanBadgeBasisPx(col) {
+  return isPostedStatusColumn(col.column) ? POSTED_STATUS_BADGE_BASIS_PX : BOOLEAN_BADGE_BASIS_PX;
+}
+
 // Column types that never render as a fixed grid column in EITHER lines
 // renderer — InlineLinesPanel (flex layout, saved rows) or DataTable's
 // inline-add row (HTML table layout, hideHeader mode). `dimensionsPanel`
@@ -95,8 +112,18 @@ function selectorFlex(col, idx) {
  * Used by InlineLinesPanel's flex column layout.
  */
 export function columnFlex(col, idx) {
-  if (col.minWidth) return `1 1 ${col.minWidth}px`;
-  if (col.type === 'boolean' && col.badge) return `0 0 ${BOOLEAN_BADGE_BASIS_PX}px`;
+  // ETP-5332 — closes the gap ETP-5133's own review (linesColumnWidth.test.js's
+  // "KNOWN GAP" case) flagged and left unfixed because no window declared `col.minWidth`
+  // yet: `1 1` (shrinkable) let THIS one column collapse toward zero at a narrow
+  // viewport while every other branch below is `shrink: 0`, so it alone absorbed all the
+  // missing space — and with no `overflow: hidden` on the cell, its text visually bled
+  // into the next column instead of the row triggering horizontal scroll like it does for
+  // every other column type. `contacts/ContactTable.jsx`'s Email (`minWidth: 320`) inside
+  // the narrower create-contact popup is the "future window" that reintroduced it.
+  // `1 0` matches every other branch: minWidth still WINS as the basis (ETP-5210's
+  // override contract is unchanged), it just can no longer shrink below it.
+  if (col.minWidth) return `1 0 ${col.minWidth}px`;
+  if (col.type === 'boolean' && col.badge) return `0 0 ${booleanBadgeBasisPx(col)}px`;
   if (SELECTOR_TYPES.has(col.type)) return selectorFlex(col, idx);
   const elasticPx = ELASTIC_BASIS_PX[col.type];
   if (elasticPx !== undefined) return `1 0 ${elasticPx}px`;
@@ -113,7 +140,7 @@ export function columnFlex(col, idx) {
  */
 export function columnMinWidthPx(col) {
   if (col.minWidth) return col.minWidth;
-  if (col.type === 'boolean' && col.badge) return BOOLEAN_BADGE_BASIS_PX;
+  if (col.type === 'boolean' && col.badge) return booleanBadgeBasisPx(col);
   if (SELECTOR_TYPES.has(col.type)) return 192;
   return ELASTIC_BASIS_PX[col.type] ?? FIXED_BASIS_PX[col.type] ?? 120;
 }

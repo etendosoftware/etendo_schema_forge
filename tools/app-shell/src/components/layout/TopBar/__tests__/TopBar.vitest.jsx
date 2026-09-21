@@ -15,6 +15,23 @@ vi.mock('@/components/CopilotContext', () => ({
   useCopilot: () => ({ toggle: vi.fn() }),
 }));
 
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
+}));
+
+vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
+  useEnvironmentSwitch: () => ({
+    currentClientId: 'demo-client',
+    environments: [{
+      clientId: 'demo-client',
+      plan: 'free',
+      trialStartedAt: '2026-09-10T00:00:00Z',
+      trialExpiresAt: '2026-09-24T00:00:00Z',
+      trialDaysRemaining: 7,
+    }],
+  }),
+}));
+
 // The real hook dynamic-imports EVERY generated contract.json (`import.meta.glob`) and only then
 // resolves the scope targets. Under the full suite that resolution routinely overran waitFor's 1s
 // default, so this file failed for machine load rather than for behaviour. What the pill actually
@@ -45,6 +62,15 @@ import TopBar from '../TopBar.jsx';
 const LONG_NAME = 'Banco Santander S.A (Sandbox) - PT50018000354378591102009';
 
 describe('TopBar title', () => {
+  it('shows the active demo trial prominently above the global header', () => {
+    render(<TopBar title="Inicio" />);
+    const indicator = screen.getByTestId('topbar-demo-trial-indicator');
+    expect(indicator).toBeInTheDocument();
+    expect(indicator).toHaveTextContent('environmentDemo');
+    expect(indicator).toHaveTextContent('environmentTrialDaysRemaining');
+    expect(indicator.querySelector('[style*="width"]')).toBeTruthy();
+  });
+
   it('truncates a long title instead of letting it overflow the header', () => {
     render(<TopBar title={LONG_NAME} />);
     const title = screen.getByText(LONG_NAME);
