@@ -22,3 +22,21 @@ export function accountTypeLabel(ui, code) {
   const key = ACCOUNT_TYPE_UI_KEYS[code];
   return key ? ui(key) : (code ?? '');
 }
+
+/**
+ * C_ElementValue.ElementLevel (AD_Ref_List) code → i18n label key map — the
+ * node's tree position (ETP-5399: Heading/Account/Breakdown/Subaccount),
+ * already resolved by the chart-of-accounts NeoHandler for every leaf and
+ * virtual folder (see buildGroupedTree in AccountTreeView.jsx).
+ */
+export const ELEMENT_LEVEL_UI_KEYS = {
+  E: 'elementLevelHeading',
+  C: 'elementLevelAccount',
+  D: 'elementLevelBreakdown',
+  S: 'elementLevelSubaccount',
+};
+
+export function elementLevelLabel(ui, code) {
+  const key = ELEMENT_LEVEL_UI_KEYS[code];
+  return key ? ui(key) : (code ?? '');
+}

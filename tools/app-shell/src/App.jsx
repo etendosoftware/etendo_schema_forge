@@ -32,6 +32,7 @@ import { useSurveyEngine } from './hooks/useSurveyEngine.js';
 import { apiFetch } from '@/auth/api.js';
 import { clearStoredDateRange } from '@/components/dashboard/DashboardDateRangeContext.jsx';
 import { clearAccountIdentity } from '@/lib/flags/bootstrap.js';
+import { detectBasePath, getNeoBaseUrl } from '@/lib/neoBaseUrl.js';
 // ETP-4300: the full locale dictionaries are no longer bundled eagerly. Only the
 // active locale's sliced "core" (the dict minus the per-window `fields` monolith)
 // is lazy-loaded below; per-window field labels ride each window's lazy chunk (see
@@ -39,31 +40,11 @@ import { clearAccountIdentity } from '@/lib/flags/bootstrap.js';
 // the slicer from @etendosoftware/schema-forge-cli (gitignored build artifacts).
 const coreLoaders = import.meta.glob('./locales/generated/core.*.json');
 
-function detectBasePath() {
-  const envBase = import.meta.env.VITE_API_BASE;
-  const path = window.location.pathname;
-  const webIdx = path.indexOf('/web/');
-
-  if (envBase) {
-    const routerBase = webIdx !== -1
-      ? `${path.substring(0, webIdx)}/${path.substring(webIdx + 1).split('/').slice(0, 2).join('/')}`
-      : '/';
-    return { apiBase: envBase, routerBase };
-  }
-
-  if (webIdx === -1) return { apiBase: '', routerBase: '/' };
-  const contextPath = path.substring(0, webIdx);
-  const moduleSegment = path.substring(webIdx + 1).split('/').slice(0, 2).join('/');
-  return {
-    apiBase: contextPath,
-    routerBase: `${contextPath}/${moduleSegment}`,
-  };
-}
-
+// ETP-5371 — `detectBasePath` and the NEO root moved to `@/lib/neoBaseUrl.js` so that surfaces
+// outside the `:windowName` route (the First Steps checklist) build the same URLs this file
+// hands `WindowLoader`, instead of approximating them from a different helper.
 const { apiBase, routerBase } = detectBasePath();
-const API_BASE_URL = import.meta.env.VITE_MOCK === 'true'
-  ? `${apiBase}/api`
-  : `${apiBase}/sws/neo`;
+const API_BASE_URL = getNeoBaseUrl();
 
 // ETP-4520 — resolves the per-window access tier + named capability flags for
 // the current session via the SFWindowAccessMap webhook. Passed into
@@ -98,16 +79,27 @@ function looksLikeWindowAccessPayload(value) {
 // cost — even though the request is small and often just an aborted mock in tests —
 // compounded across concurrently-running tests badly enough to roughly DOUBLE both the
 // suite's wall-clock time and its (pre-existing, worker-contention-driven) failure rate
-// for interaction-heavy specs. A 60s cache is the same order of magnitude as this app's
-// own query-cache default staleness (`DEFAULT_STALE_TIME` in the core's queryCache.js)
-// and far short of the 5-minute poll this whole mechanism is already built to tolerate
-// as a worst case — so it costs negligible real-world responsiveness while absorbing
-// exactly the rapid-refresh-burst case that caused the regression. The FAILURE case is
-// cached too (as `{ [MENU_ACCESS_UNREACHABLE]: true }`, matching the fail-open default —
-// see menuTree.js's own comment on that sentinel for why it is NOT just `{}`) — an
+// for interaction-heavy specs. The FAILURE case is cached too (as
+// `{ [MENU_ACCESS_UNREACHABLE]: true }`, matching the fail-open default — see
+// menuTree.js's own comment on that sentinel for why it is NOT just `{}`) — an
 // aborted/unreachable SFListMenu is exactly the repeated, wasted round trip this is meant
 // to collapse.
-const MENU_ACCESS_CACHE_TTL_MS = 60_000;
+//
+// [ETP-5395] TTL sized to the burst it absorbs, NOT to an unrelated cache's default
+// staleness — that "same order of magnitude as the query cache" reasoning is exactly
+// what produced a 60s TTL here, and 60s is long enough to serve a stale menu across an
+// entire real permission change: an admin edits a role's access, the affected user's tab
+// does a routine focus/visibility/poll refresh a few seconds later, `windowAccess`/
+// `capabilities` (uncached) come back fresh so the "Tus permisos fueron actualizados"
+// banner correctly fires, but `menuAccess` — still within its 60s window from an earlier,
+// unrelated refresh — serves the OLD menu underneath it. The burst this cache exists to
+// collapse is refresh cycles a FEW HUNDRED MS apart (rapid focus/blur from several
+// dialogs/tabs opening in quick succession); the next genuinely distinct refresh trigger
+// (a separate focus event, a visibility change, or the 5-min poll) is always
+// seconds-to-minutes away in practice. 3s gives the burst case an order of magnitude of
+// headroom (10x+ over "a few hundred ms") while being far too short to meaningfully
+// outlive a real permission change relative to how far apart real triggers actually fire.
+const MENU_ACCESS_CACHE_TTL_MS = 3_000;
 // SFListMenu is optional for the window-access decision. A hung/aborted menu
 // request must not hold AuthContext bootstrap behind the global 60s test timeout.
 const MENU_ACCESS_FETCH_TIMEOUT_MS = 1_000;

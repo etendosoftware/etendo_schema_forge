@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { todayCalendarISO } from '@/lib/dateOnly.js';
 
 /**
  * ETP-4954 — the statement list's DEFAULT ORDER.
@@ -85,11 +86,18 @@ import { ImportedStatementsTab } from '../ImportedStatementsTab.jsx';
 
 const ACCOUNT = { id: 'acc-1', currencyIso: 'EUR' };
 
-/** Recent enough to stay inside the tab's default last-30-days window. */
+/**
+ * Recent enough to stay inside the tab's default last-30-days window. Returns a
+ * date-only `yyyy-MM-dd` string — the shape NEO actually sends for `importDate`
+ * (see ImportedStatementsTab.tz-bug.vitest.jsx) — built from LOCAL calendar
+ * getters, not `toISOString()`: that UTC-converts the instant first, which
+ * rolls the date to the next day for any host west of UTC (e.g.
+ * America/Argentina/Buenos_Aires) once local time is late enough in the day.
+ */
 function recentIso(daysAgo = 1) {
   const d = new Date();
   d.setDate(d.getDate() - daysAgo);
-  return d.toISOString();
+  return todayCalendarISO(d);
 }
 
 function statement(id, documentNo, daysAgo = 1) {

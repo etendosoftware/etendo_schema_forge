@@ -70,7 +70,7 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `category` | string | Inferred | `"sales"`, `"purchases"`, `"inventory"`, `"finance"`, `"accounting"`, `"master"`, `"project"`, `"general"` | UI routing and navigation grouping. |
 | `name` | string | From AD | — | Display name for breadcrumbs and titles. |
 | `agentPrompt` | string | `null` | Free text | Spec-level guidance for AI agents that consume the NEO Headless MCP server. Surfaced in `agentProfile.agentPrompt` (contract) and persisted to `ETGO_SF_SPEC.AGENT_PROMPT`, from where `neo_discover` returns it per spec. Empty or whitespace-only values clear the persisted prompt and are omitted from the MCP response. |
-| `vectorSearch` | object | _absent_ (does not participate) | `{ "target": "product" }` | Opts this window into the global semantic search. The generator copies the descriptor to `frontendContract.window.vectorSearch`; the app aggregates only declared targets. Do not add `enabled: false` to every other window: omission is the default. The target must match an active DB Extended Search Target and use `[A-Za-z][A-Za-z0-9_.-]{0,127}`. |
+| `vectorSearch` | object | _absent_ (does not participate) | `{ "target": "product" }` | Opts this window into the global semantic search. The generator copies the descriptor to `frontendContract.window.vectorSearch`; the app aggregates only declared targets. Do not add `enabled: false` to every other window: omission is the default. The target must match an active DB Extended Search Target and use `[A-Za-z][A-Za-z0-9_.-]{0,127}`. **It must also equal this window's spec name** (ETP-5335): a vector match carries no pointer to where its record lives, so the target key is the only clue a caller has, and making it the spec name is what turns a match into a readable record (`neo_get(spec:<target>, id:<match.id>)`). The same key is declared independently in `ETARC_VECTOR_SEARCH_TARGET.SEARCH_KEY` for the server and the MCP; nothing validates the two against each other yet, and a one-sided change makes the SPA search a key the server does not know — which it renders as *no results*, not as an error. |
 | `searchSuggestions` | array | _absent_ | `[{ "label": "overdueSalesInvoices", "path": "/sales-invoice?filter=overdue" }]` | Window-owned global-search navigation shortcuts. `label` is an i18n key and `path` must be a local route for that window. Suggestions are displayed only while their window is within the selected search scope. |
 | `showInMcp` | boolean | `true` | `false` | **Opt-out** MCP visibility. Persisted to `ETGO_SF_SPEC.SHOWINMCP` by `push-to-neo`. Only an explicit `false` hides the spec from the NEO Headless **MCP** (both `neo_discover`/tools listing and resource reads) — absent or `true` keeps it visible, so the ~50 existing decisions files need no edit. **MCP-only**: `isactive` is untouched, so the spec keeps serving the REST/OpenAPI API and every other consumer. Backed by the `Show in MCP` checkbox on the *Schema Forge Configuration* window (Spec tab). Added ETP-4278. |
 | `layoutType` | string | `"default"` | `"default"`, `"kanban"`, `"calendar"`, `"list-modal"`, `"custom"` | Frontend rendering mode. See `docs/window-templates.md`. |
@@ -985,6 +985,71 @@ Applied to fields with `grid: true` to control how the list cell renders.
 | `visibleWhenCapability` | string | `null` | Names a capability key (e.g. `"showAccountingFields"`) from the `capabilities` map returned by the `GET /sws/neo/windowaccessmap` webhook (NEO pseudo-spec bridge — see `com.etendoerp.go/docs/neo-headless.md` §4.10). Opt-in — absent means always visible. Gates both the grid column and any `window.statusPills` entry referencing this field; the field is omitted entirely (not disabled) when the capability resolves `false`. Full mechanics (generator wiring, fail-closed behavior): `schema_forge_core`'s `docs/decisions-reference.md`. Shipped example: `posted` on `sales-invoice`/`purchase-invoice` — see those windows' `docs/generated-custom-windows/*.md` guides. |
 | `summable` | boolean | _absent_ | **Tri-state, not a flag.** Controls whether an `amount` column feeds the grid's footer TOTAL row. `false` opts the column out while keeping every bit of its money formatting; `true` is the explicit opt-in; **absent means "sums"** — the historical default ~99 existing amount columns rely on. See below. |
 | `currencyField` | string | _absent_ | Names the sibling field carrying THIS column's currency, for grids whose rows are not all in the same currency. Value is the contract field name (`"cCurrencyID"`), not the AD column (`C_Currency_ID`) — the renderer appends `$_identifier` to it. See below. |
+| `backendFilterKey` | string | _absent_ | Entity property the grid's **filter** criteria is built against. **Required** whenever `name` renames a `grid: true` field. See below. |
+| `backendSortKey` | string | _absent_ | Entity property the grid's **sort** parameter is built against. **Required** whenever `name` renames a `grid: true` field — and for a foreign key the value must carry the `$_identifier` suffix. See below. |
+
+#### Renaming a field (`name`) and the backend query keys — ETP-5382
+
+**Renaming a `grid: true` field is a two-part change. If you write only `name`, you have
+shipped a broken filter and a broken sort, and nothing will tell you.**
+
+A field renamed with `name` is exposed to the frontend under the new key, but the backend
+still only knows the field by its real OBDal/Hibernate property — the one derived from
+`AD_Column.Name` by Etendo's own `NamingUtil.getPropertyMappingName()`. Etendo Classic's
+`AdvancedQueryBuilder` / `JsonUtils.getPropertiesOnPath()` resolves every filter and sort
+parameter against that property, and **when it cannot match one it drops the filter
+criterion in total silence** — the list simply comes back unfiltered, with no error, no
+warning and no log. (Sorting is louder: the unresolvable path usually 500s.) This is the
+bug reported on Tax Rate's *Applicable To* (AD column `SOPOType`, property
+`salesPurchaseType`, exposed as `applicableTo`): the filter did nothing and looked like it
+had matched everything.
+
+Nothing in the pipeline infers these keys. Declare both, by hand, in the **same**
+`decisions.json` field entry as the `name` override:
+
+```json
+"salesPurchaseType": {
+  "name": "applicableTo",
+  "grid": true,
+  "searchable": true,
+  "backendFilterKey": "salesPurchaseType",
+  "backendSortKey": "salesPurchaseType",
+  "cellType": "taxScope"
+}
+```
+
+The decisions key (`salesPurchaseType` above) is the field's raw AD-derived name, which is
+normally the exact value both backend keys need. **Normally, not always** — read the raw
+`schema-raw.json` entry rather than assuming, because `deduplicateFieldNames()` appends a
+counter to the raw name when two AD fields of the same tab resolve to the same property
+(`payment-out` lines carry `documentNo` and `documentNo2`, both really `documentNo`). A
+suffixed `documentNo2` is not a Hibernate property and would be dropped exactly like the
+unresolvable rename it was meant to fix.
+
+| Case | `backendFilterKey` | `backendSortKey` |
+|---|---|---|
+| Field **not** renamed | _(omit — the contract key already IS the property)_ | _(omit)_ |
+| Renamed scalar field (`salesPurchaseType` → `applicableTo`) | `salesPurchaseType` | `salesPurchaseType` |
+| Renamed **FK** field (`finPaymentmethodID` → `paymentMethod`) | `finPaymentmethodID` | `finPaymentmethodID$_identifier` |
+| Renamed but `grid: false` | _(omit — never reaches the grid query)_ | _(omit)_ |
+| Synthetic `virtualFields` entry | _(omit — there is no backend property)_ | _(omit)_ |
+
+**The FK row is the easy one to get wrong.** An unrenamed FK renders a `selector` column,
+and `resolveBackendSort()` (app-shell-core's `gridQuery.js`) infers `sortMode: 'identifier'`
+for it, sorting on `<property>$_identifier` — by label. Declaring `backendSortKey` at all
+flips `isIdentifierSort` true and routes the column down the identifier branch with your
+value taken **verbatim**: the suffix is no longer appended for you. So a renamed FK must
+spell out `finPaymentmethodID$_identifier` itself, or the column orders by the join column's
+UUID — visually random, and silent. The **filter** key stays unsuffixed, matching what an
+unrenamed FK column does.
+
+Only two things make these keys differ from the field's raw name: the FK suffix above, and
+the rare column filtered against a joined entity's property rather than its own.
+
+> Hand-written custom list components (`artifacts/<window>/custom/*HeaderTable.jsx`,
+> `tools/app-shell/src/windows/custom/**`) are **outside** this pipeline — the generator
+> never touches their column literals, so they declare `backendFilterKey` /
+> `backendSortKey` directly in the column object. See [`list-filters.md`](list-filters.md).
 
 #### Boolean badge rendering (`badge`, `badgeLabels`, `badgeVariants`)
 
@@ -1465,7 +1530,7 @@ that already has values stored with the scheme included.
 
 | Property | Type | Default | Purpose |
 |----------|------|---------|---------|
-| `name` | string | Raw field name | Override field's public API name. |
+| `name` | string | Raw field name | Override field's public API name. The grid's backend filter/sort keys are derived automatically from the real property whenever this differs from the raw name — see [Renaming a field (`name`) and the backend query keys](#renaming-a-field-name-and-the-backend-query-keys--etp-5382) under Grid cell flags. |
 | `required` | boolean | From AD mandatory | Force field as required. |
 | `min` | number | `undefined` | Minimum allowed value for numeric fields. In **grid / inline rows** (DataTable) the UI autocorrects values below this limit to `min` on blur. In **detail forms** (EntityForm) a value below `min` raises a `fieldMinValueError` toast on blur and blocks the save (via `getNumericFieldViolation` in `useEntity`). The toast interpolates the declared threshold — "Value must be at least `{min}`" — so a `0` on a `min: 1` field is reported accurately (never as "negative"). Travels through the full pipeline (`decisions.json` → `resolve-curated` → contract → generated FieldDefs). |
 | `max` | number | `undefined` | Maximum allowed value for numeric fields. On blur the grid UI autocorrects values above this limit to `max`. Travels through the full pipeline (`decisions.json` → contract → generated FieldDefs). Example: `"max": 100` on a discount (%) field prevents values above 100. |

@@ -18,8 +18,18 @@ describe('useBulkActionToast source', () => {
     assert.match(src, /['"]bulkActionResult['"]/);
   });
 
-  it('removes the key from sessionStorage after reading', () => {
-    assert.match(src, /sessionStorage\.removeItem/);
+  it('removes the key from storage after reading', () => {
+    assert.match(src, /\.removeItem\(STORAGE_KEY\)/);
+  });
+
+  // ETP-4994 — reading the `sessionStorage` ACCESSOR throws (not just its
+  // methods) when site data is blocked, and this hook runs inside ListView's
+  // render tree, so an unguarded access takes the whole grid down. Every access
+  // must go through the `session()` helper, which is the only place allowed to
+  // name `globalThis.sessionStorage`.
+  it('reaches storage only through the guarded session() helper', () => {
+    assert.match(src, /function session\(\)[\s\S]*?globalThis\.sessionStorage/);
+    assert.doesNotMatch(src, /(?<!globalThis\.)\bsessionStorage\.(getItem|setItem|removeItem)/);
   });
 
   it('calls toast.success on full success', () => {
