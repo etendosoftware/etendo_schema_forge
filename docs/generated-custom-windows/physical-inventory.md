@@ -16,7 +16,7 @@ Physical Inventory should let a warehouse user create an inventory count session
 ## Interaction model
 - Route: `/physical-inventory` for the list and `/physical-inventory/:recordId` for a specific count session.
 - Visibility: visible from the Inventory menu as `Physical Inventory`.
-- Implementation type: custom window wrapper at `tools/app-shell/src/windows/custom/physical-inventory/index.jsx`, registered in `customLoaders` in `tools/app-shell/src/windows/registry.js`. The wrapper supplies an explicit `COLUMNS` array to `InventoryTable` (`dot: false` on `movementDate`; `enumLabels` for `processed`), passes a `CustomInventoryTable` and a `hideMoreMenu` function to `GeneratedApp`, and injects `SortIconComponent={SortIcon}` and `RefreshIconComponent={RefreshIcon}` (same icons used by goods-movements).
+- Implementation type: custom window wrapper at `tools/app-shell/src/windows/custom/physical-inventory/index.jsx`, registered in `customLoaders` in `tools/app-shell/src/windows/registry.js`. The wrapper supplies an explicit `COLUMNS` array to `InventoryTable` (`dot: false` on `movementDate`; `enumLabels` for `processed`), passes a `CustomInventoryTable` and a `hideMoreMenu` function to `GeneratedApp`, and injects `SortIconComponent={SortIcon}` and `RefreshIconComponent={RefreshIcon}` (same icons used by goods-movements). It also wires `bulkActions` (grid multi-select Post/Unpost) and `rowQuickActions` (row-hover kebab Post) — see **Design changes — ETP-5360** below.
 - Window shape: master-child. The header entity is `inventory`, and the detail entity is `inventoryLine`.
 - Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. When the add-row form is open, existing rows stay in `InlineLinesPanel` so column widths remain stable; the form renders in a header-hidden `DataTable` below that handles callouts, selectors, and focus. Clicking "Añadir línea" while a form is already open saves the current line and opens a fresh form scrolled into view. See `docs/ui-customization.md` section 13 for the full reference.
 - List/detail behavior: the list page opens inventory headers; the record page shows the header form plus the child line table and line form. The list toolbar omits the status filter dropdown (`hideStatusFilter`), the Link button (`hideLink`), and the Print button (`hidePrint`). The `Inventory Type` column is not shown in the list; it remains searchable via filters but not as a visible table column. The sort and refresh toolbar icons use the shared custom set (`SortIcon`, `RefreshIcon`) from `@/components/ui/custom-icons`. The header form has no border (`noHeaderBorder`). The "Others" tab is removed — Description, Inventory Type, and Project are all `form: false`.
@@ -43,7 +43,7 @@ Physical Inventory should let a warehouse user create an inventory count session
 - The business intent implies reconciliation between user count and system count, but the current evidence only proves that both values are present and that system counts can be refreshed. It does not clearly show any explicit variance field, reconciliation formula, or review workflow in the UI.
 - Processing semantics: `draftMode` (`processField: processNow`) handles the Confirm action. The Confirm button is hidden once `isProcessed = true` and the locked alert appears. Downstream accounting or stock-adjustment effects remain backend behavior — not proven in the UI.
 - The modal receives `warehouseId` from the more-menu component, but the current modal implementation does not include it in the frontend request payload. If warehouse scoping is required during list generation, that dependency is not explicit in the current UI code.
-- The ⋮ button and its custom actions are now hidden by the frontend in two cases: when the header has not yet been saved (`!data?.id`) and when `processed = true`. Enforced at two levels — the `hideMoreMenu` function in the custom wrapper hides the button entirely; `InventoryMenuContent` also returns `null` as a secondary guard.
+- The ⋮ button and its custom actions are hidden by the frontend only when the header has not yet been saved (`!data?.id`) — see **ETP-5360** below, which removed the additional `processed === true` gate (that state is exactly when the `post` menuAction becomes eligible, so the old predicate blocked Post from ever appearing). `InventoryMenuContent`'s own `data?.processed` guard is unrelated and unchanged: it hides its two custom items (Create Inventory Count List / Update List System Count) once processed, independently of whether the kebab itself is shown — the kebab now stays visible when processed so the decisions-driven Post/Unpost menu items can render.
 - There is still no browser-level automated evidence for the full create-list -> update system count -> process lifecycle; current proof is source-level and component-test level.
 
 ## Manual verification
@@ -62,11 +62,14 @@ Physical Inventory should let a warehouse user create an inventory count session
 13. **(ETP-5052)** Given a saved header with no lines yet, when it is opened, then `Warehouse` is editable.
 14. **(ETP-5052)** Given a saved header with no lines, when the first count line is added (manually or via "Generate lines automatically"), then `Warehouse` becomes read-only.
 15. **(ETP-5052)** Given a header with at least one line and a locked `Warehouse`, when the last remaining line is removed, then `Warehouse` becomes editable again.
+16. **(ETP-5360)** Process a header (Confirm), so `processed = true` and `posted = false`. Confirm the ⋮ button is now visible (not hidden as before) and offers **Post**. Click it and confirm the record shows as posted and the kebab now offers **Unpost** instead.
+17. **(ETP-5360)** From the list, hover a processed-but-unposted row and confirm the row-hover kebab offers **Post**; run it and confirm the row updates without a full page reload.
+18. **(ETP-5360)** From the list, multi-select one or more processed-but-unposted rows and confirm the grid toolbar shows a **Post** bulk button; select one or more posted rows and confirm an **Unpost** bulk button appears instead. Run each and confirm the result toast and in-place refresh.
 
 ## Automated evidence
 - `docs/generated-custom-windows/app-shell-functional-flows.md` documents the shared generated-window routing model for `/:windowName` and `/:windowName/:recordId`.
 - `tools/app-shell/src/menu.json` includes the visible Inventory menu entry for `physical-inventory`.
-- `tools/app-shell/src/windows/registry.js` maps `physical-inventory` in `customLoaders` to `tools/app-shell/src/windows/custom/physical-inventory/index.jsx`, which wraps `InventoryTable` with a custom `COLUMNS` array (movementDate `dot: false`; processed with `enumLabels`), passes `hideMoreMenu`, `SortIconComponent`, and `RefreshIconComponent` before forwarding to the generated `GeneratedApp`. The list hides the status filter, Link, and Print controls via `decisions.json` → `listViewOptions.hideStatusFilter`, `hideLink`, `hidePrint`.
+- `tools/app-shell/src/windows/registry.js` maps `physical-inventory` in `customLoaders` to `tools/app-shell/src/windows/custom/physical-inventory/index.jsx`, which wraps `InventoryTable` with a custom `COLUMNS` array (movementDate `dot: false`; processed with `enumLabels`), passes `hideMoreMenu`, `SortIconComponent`, `RefreshIconComponent`, `bulkActions` (grid Post/Unpost), and `rowQuickActions` (row-hover Post) before forwarding to the generated `GeneratedApp`. The list hides the status filter, Link, and Print controls via `decisions.json` → `listViewOptions.hideStatusFilter`, `hideLink`, `hidePrint`.
 - `tools/app-shell/src/components/contract-ui/DetailView.jsx` saves new headers before opening line entry, injects `selectorContextByEntity[detailEntity]` into child selectors/forms/tables, filters process buttons with `requiresLines`, and locks the document when `processed === true`.
 - `artifacts/physical-inventory/contract.json` defines the master-child contract, `processed` status field, `processNow` line requirement, header defaults, line fields including `QtyCount` and `QtyBook`, and action endpoints for `generateList`, `updateQuantities`, and `processNow`.
 - `artifacts/physical-inventory/generated/web/physical-inventory/InventoryPage.jsx` binds `inventory` + `inventoryLine`, wires `draftMode` (Save draft + Confirm), injects `lockedAlert` (shown when processed), and passes `labelOverrides`, `statusEnumLabels`, `noHeaderBorder`, and the custom more-menu content.
@@ -184,3 +187,51 @@ numeric operators are offered. Full reference:
 
 The inventory-list dialog and top-bar controls use structural surface, border, and
 foreground roles. The Generate action remains the standard high-contrast action.
+
+## Design changes — ETP-5360
+
+Physical Inventory was missing Contabilizar/Descontabilizar (Post/Unpost) in all three usual
+spots — row hover, grid multi-select, and the detail form kebab — leaving the separate "Not
+Posted Documents" window as the only way to post it manually. Fixed on all three fronts:
+
+- **Detail form kebab was silently blocked.** `decisions.json` already declared a `post`
+  menuAction (mirroring `sales-invoice`), correctly generated into `InventoryPage.jsx`'s
+  `menuActions` prop — but `hideMenuActions` in the custom wrapper
+  (`tools/app-shell/src/windows/custom/physical-inventory/index.jsx`) hid the **entire kebab**
+  whenever `processed === true`, which is exactly the state `post` requires
+  (`visibleWhenFieldTrue: "processed"`) to become visible. `DetailMoreActionsMenu.jsx` checks
+  `hideMoreMenu` *before* evaluating `menuActions` at all (line 63: `if
+  (resolveHideMoreMenu(hideMoreMenu, data)) return null;`), so Post could never render. Fixed by
+  narrowing `hideMenuActions` to only hide the kebab when there is no record yet (`!data?.id`);
+  `InventoryMenuContent`'s own `data?.processed` guard (unrelated, gates only its two custom
+  items) already keeps the "no eligible action" case from showing an empty popover.
+- **`unpost` menuAction was missing from `decisions.json`.** Added the matching entry
+  (`visibleWhenFieldTrue: "posted"`, `destructive: true`, `successKey: "documentUnposted"`),
+  mirroring `artifacts/goods-movements/decisions.json`'s existing `post`/`unpost` pair.
+- **Row hover and grid bulk-select had no wiring at all** — `InventoryPage.jsx` generated
+  `rowQuickActions={{}}` and the custom wrapper did not supply `bulkActions`. Added, mirroring
+  `goods-shipment`/`goods-receipt` (the closest analogous inventory-type documents):
+  - `rowQuickActions` — spreads `buildDocumentRowQuickActionsPostMenu({ ui, onRefresh })` from
+    `tools/app-shell/src/windows/custom/shared/buildDocumentRowQuickActions.js`. **Post only**,
+    not Unpost — same precedent as goods-shipment/goods-receipt: Unpost stays reachable from the
+    detail kebab and the bulk toolbar.
+  - `bulkActions` — two `BulkDocumentAction` instances (`entity="inventory"`,
+    `actionMode="neoAction"`), one with `buildPostActions`/`postRowFilter` (labelKey `post`), one
+    with `buildUnpostActions`/`unpostRowFilter` (labelKey `unpost`), both from
+    `tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx`.
+  - A `refreshKey` state + `refreshTrigger` prop was added so a row-hover Post triggers an
+    in-place list refetch (no full page reload) — the bulk actions already get in-place refresh
+    for free via `ListView`'s own `refresh: refreshList` handed to the `bulkActions` slot.
+- No new i18n keys were needed — `post`, `unpost`, `documentPosted`, `documentUnposted`,
+  `bulkRowNotPosted`, `bulkRowAlreadyPosted`, and `bulkRowNotCompleted` already exist in
+  `en_US.json`/`es_ES.json` from `goods-shipment`/`goods-receipt`.
+- Regenerated via `make regen ONLY=physical-inventory`; confirmed in `contract.json` that no
+  editable header field lost its `readOnlyLogic`, and in the generated `InventoryPage.jsx` that
+  `menuActions` now emits both `post` and `unpost` entries with the expected `visible` guards.
+
+**Known pre-existing test to update (flagged for QA/Tester, not fixed here per the test
+delegation rule):** `tools/app-shell/src/windows/custom/physical-inventory/__tests__/index.test.js`
+has a test named "hideMenuActions hides menu when processed" that asserts the now-removed
+`data?.processed === true` / `data?.processed === 'Y'` checks are present in the source — that
+assertion encodes the bug this change fixes and needs to be replaced with a test for the new
+`!data?.id`-only predicate.
