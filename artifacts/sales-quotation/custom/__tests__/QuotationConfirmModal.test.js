@@ -58,6 +58,66 @@ describe('QuotationConfirmModal', () => {
     });
   });
 
+  // ── ETP-5381 — the created invoice is confirmed in the same step ───────────────
+  // The invoice branch used to hardcode `status: 'Draft'`, which was true while the
+  // backend only ever returned a draft. Now it returns a completed document, and the
+  // hardcoded literal would paint a "Borrador" badge over a confirmed invoice.
+  describe('created-document status badge (ETP-5381)', () => {
+    const invoiceBlock = src.match(/setCreatedDoc\(\{\s*type: 'invoice',[\s\S]*?\n\s*\}\);/);
+
+    it('derives the invoice status from the backend documentStatus, never a hardcoded Draft', () => {
+      assert.ok(invoiceBlock, 'expected the invoice-branch setCreatedDoc call');
+      assert.doesNotMatch(invoiceBlock[0], /status:\s*'Draft'/);
+    });
+
+    it("maps documentStatus 'CO' to the Completed badge state", () => {
+      assert.match(
+        invoiceBlock[0],
+        /status:\s*doc\?\.documentStatus === 'CO'\s*\?\s*'Completed'\s*:\s*\(doc\?\.documentStatus \?\? 'Draft'\)/,
+      );
+    });
+
+    it('falls back to Draft only when the backend sends no status at all (older backend)', () => {
+      assert.match(invoiceBlock[0], /doc\?\.documentStatus \?\? 'Draft'/);
+    });
+
+    it('reads the status off the response payload, not off the request or the quotation', () => {
+      assert.match(invoiceBlock[0], /doc\?\.documentStatus/);
+      assert.doesNotMatch(invoiceBlock[0], /d\.documentStatus/);
+    });
+
+    it('drives the badge from createdDoc.status', () => {
+      assert.match(src, /const isDraft = createdDoc\.status === 'Draft';/);
+    });
+
+    it('labels the badge statusCompleted (not statusDraft) whenever the document is not a draft', () => {
+      assert.match(
+        src,
+        /const badgeLabel = isDraft \? ui\('statusDraft'\) : ui\('statusCompleted'\);/,
+      );
+    });
+
+    it('colours the badge warning for a draft and success otherwise', () => {
+      assert.match(
+        src,
+        /const badgeColor = isDraft \?\s*\{ bg: 'var\(--status-warning-bg\)', text: 'var\(--status-warning-fg\)' \}\s*:\s*\{ bg: 'var\(--status-success-bg\)', text: 'var\(--status-success-fg\)' \};/,
+      );
+    });
+
+    it('never hardcodes the badge copy — both states go through ui()', () => {
+      // Comments legitimately quote the Spanish copy when explaining the bug, so strip
+      // them before asserting on what the component actually renders.
+      const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      assert.doesNotMatch(code, /['"`]\s*Borrador\s*['"`]/);
+      assert.doesNotMatch(code, /['"`]\s*Completada\s*['"`]/);
+      assert.doesNotMatch(code, /badgeLabel\s*=\s*['"`]/);
+    });
+
+    it('leaves the order branch reactivation mapping untouched (RE -> DR -> Draft)', () => {
+      assert.match(src, /const status = finalStatus === 'DR' \? 'Draft' : 'Completed';/);
+    });
+  });
+
   describe('i18n', () => {
     it('uses the useUI() hook for translations', () => {
       assert.match(src, /from\s+['"]@\/i18n['"]/);

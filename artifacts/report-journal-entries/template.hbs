@@ -3,7 +3,7 @@
 <html><head><meta charset="UTF-8">
 <style>
 {{{css}}}
-.entry-header td { background: #f8fafc; border-top: 2px solid #cbd5e1; border-bottom: none !important; padding: 2mm 3mm; }
+.entry-header td { border-top: 2px solid #cbd5e1; border-bottom: 1px solid #f1f5f9 !important; padding: 2mm 3mm; }
 .entry-no { font-weight: 700; color: #0f172a; font-size: 9pt; }
 .entry-date { font-weight: 700; color: #0f172a; font-size: 9pt; }
 .entry-detail { color: #475569; font-size: 8.5pt; }
@@ -65,9 +65,22 @@
         <tr class="entry-header">
           <td class="entry-no">{{#if (lookup this 'doc_window')}}<span class="entry-link" onclick="window.parent.postMessage({type:'navigate-invoice',invoiceId:'{{lookup this 'doc_record_id'}}',docWindow:'{{lookup this 'doc_window'}}',docQueryKey:'{{lookup this 'doc_query_key'}}',docQueryValue:'{{lookup this 'doc_query_value'}}'},'*')">{{lookup this 'entry_no'}}</span>{{else}}{{lookup this 'entry_no'}}{{/if}}</td>
           <td class="entry-date">{{formatDate (lookup this 'dateacct')}}</td>
-          <td class="entry-detail" colspan="{{#ifCond @root.meta.params.showDimensions '===' 'true'}}{{#ifCond @root.meta.params.showEntryDescription '===' 'true'}}10{{else}}9{{/ifCond}}{{else}}{{#ifCond @root.meta.params.showEntryDescription '===' 'true'}}6{{else}}5{{/ifCond}}{{/ifCond}}">{{translateDocType (lookup this 'docbasetype') (lookup this 'isreturn') (lookup this 'document_type') @root.meta.locale}}</td>
+          <td class="entry-detail">{{translateDocType (lookup this 'docbasetype') (lookup this 'isreturn') (lookup this 'document_type') @root.meta.locale}}</td>
+          <td>{{lookup this 'account_no'}}</td>
+          <td>{{lookup this 'account_name'}}</td>
+          <td class="cell-amount">{{#ifCond (formatCurrency (lookup this 'amtacctdr')) '!==' (formatCurrency 0)}}{{formatCurrency (lookup this 'amtacctdr')}}{{/ifCond}}</td>
+          <td class="cell-amount">{{#ifCond (formatCurrency (lookup this 'amtacctcr')) '!==' (formatCurrency 0)}}{{formatCurrency (lookup this 'amtacctcr')}}{{/ifCond}}</td>
+          {{#ifCond @root.meta.params.showDimensions '===' 'true'}}
+          <td>{{lookup this 'bpname'}}</td>
+          <td>{{lookup this 'productname'}}</td>
+          <td>{{lookup this 'projectname'}}</td>
+          <td>{{lookup this 'costcentername'}}</td>
+          {{/ifCond}}
+          {{#ifCond @root.meta.params.showEntryDescription '===' 'true'}}
+          <td>{{lookup this 'entry_description'}}</td>
+          {{/ifCond}}
         </tr>
-        {{/if}}
+        {{else}}
         <tr class="entry-line">
           <td></td>
           <td></td>
@@ -86,6 +99,7 @@
           <td>{{lookup this 'entry_description'}}</td>
           {{/ifCond}}
         </tr>
+        {{/if}}
       {{/each}}
     </tbody>
   </table>

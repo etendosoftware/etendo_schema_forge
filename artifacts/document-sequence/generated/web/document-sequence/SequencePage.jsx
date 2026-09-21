@@ -13,7 +13,7 @@ const breadcrumb = 'Settings / Document Sequence';
 
 // @sf-generated-start summary:sequence
 const summary = [
-
+  { key: 'name', column: 'Name', type: 'enum' },
 ];
 
 const statusField = null;
@@ -36,7 +36,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:sequence
 
 // @sf-generated-start requiredHeaderFields:sequence
-const requiredHeaderFields = ['name', 'autoNumbering', 'incrementBy', 'nextAssignedNumber', 'startingNo'];
+const requiredHeaderFields = ['name', 'nextAssignedNumber', 'startingNo'];
 // @sf-generated-end requiredHeaderFields:sequence
 
 
@@ -48,13 +48,19 @@ export const api = {
     "sequence": {
       "get": true,
       "getById": true,
-      "post": true,
+      "post": false,
       "put": true,
       "patch": true,
-      "delete": true,
+      "delete": false,
       "listUrl": "/sws/neo/document-sequence/sequence",
       "detailUrl": "/sws/neo/document-sequence/sequence/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID",
+        "PUT",
+        "PATCH"
+      ]
     }
   },
   "selectors": [],
@@ -78,14 +84,10 @@ export const api = {
   "labelOverrides": {
     "es_ES": {
       "Name": "Nombre",
+      "Description": "Descripción",
       "Prefix": "Prefijo",
-      "Suffix": "Sufijo",
       "StartNo": "Número inicial",
-      "CurrentNext": "Próximo número",
-      "IncrementNo": "Incremento",
-      "StartNewYear": "Reiniciar cada año",
-      "IsAutoSequence": "Numeración automática",
-      "Description": "Descripción"
+      "CurrentNext": "Próximo número"
     }
   }
 };
@@ -117,6 +119,7 @@ export default function SequencePage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        hideDeleteButton
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "AD_Sequence", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
@@ -134,8 +137,9 @@ export default function SequencePage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      hideCreate
       labelOverrides={labelOverrides}
-      rowQuickActions={{}}
+      rowQuickActions={{"hideDeleteButton":true}}
       listSortBy="name asc"
       {...props} window={effectiveWindow}
     />

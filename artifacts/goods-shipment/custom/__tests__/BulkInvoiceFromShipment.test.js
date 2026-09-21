@@ -67,6 +67,51 @@ describe('BulkInvoiceFromShipment', () => {
     assert.match(src, /collapsed/);
   });
 
+  // ── ETP-5381 — the bulk invoice is confirmed in the same request ───────────────
+  // The success toast used to state unconditionally that a draft had been created and
+  // to tell the user to go review it. Both halves are now conditional on the status the
+  // backend actually returned, so the copy can never assert something untrue.
+  describe('success toast copy follows the returned documentStatus (ETP-5381)', () => {
+    it("derives `confirmed` from the response documentStatus === 'CO'", () => {
+      assert.match(
+        src,
+        /const confirmed = json\?\.response\?\.data\?\.documentStatus === 'CO';/,
+      );
+    });
+
+    it('reads the status from the create response, not from the selected shipment rows', () => {
+      assert.doesNotMatch(src, /const confirmed = .*selectedRows/);
+      assert.doesNotMatch(src, /const confirmed = .*shipments\[0\]/);
+    });
+
+    it('switches the headline between invoiceCreatedAndConfirmed and createdAsDraft', () => {
+      assert.match(
+        src,
+        /confirmed \? ui\('invoiceCreatedAndConfirmed'\) : ui\('createdAsDraft'\)/,
+      );
+    });
+
+    it('hides the reviewBeforeConfirming subtitle once the invoice is confirmed', () => {
+      assert.match(
+        src,
+        /\{!confirmed && \(\s*<div[^>]*>\{ui\('reviewBeforeConfirming'\)\}<\/div>\s*\)\}/,
+      );
+    });
+
+    it('never renders reviewBeforeConfirming unconditionally', () => {
+      const occurrences = [...src.matchAll(/ui\('reviewBeforeConfirming'\)/g)];
+      assert.equal(occurrences.length, 1, 'expected exactly one reviewBeforeConfirming call site');
+      const guardIdx = src.lastIndexOf('{!confirmed && (', occurrences[0].index);
+      assert.ok(guardIdx >= 0, 'expected the subtitle to sit inside a !confirmed guard');
+    });
+
+    it('keeps both toast strings translated — no hardcoded Draft/Borrador copy', () => {
+      assert.doesNotMatch(src, /['"`]created as Draft['"`]/);
+      assert.doesNotMatch(src, /['"`]creada como Borrador['"`]/);
+      assert.doesNotMatch(src, /['"`]Review before confirming['"`]/);
+    });
+  });
+
   // ETP-5302 — this action used to close the modal and clear the selection but never
   // refetch (and never reload either), so the shipments it had just invoiced kept
   // showing a stale invoicing status with nothing on screen hinting they were out of

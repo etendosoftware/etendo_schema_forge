@@ -3,6 +3,8 @@ name: aggregate-contracts
 description: Use when creating or modifying overview/dashboard pages, adding KPIs, kanban boards, alert panels, or activity feeds to module landing pages. Triggers - aggregate-contract.json, overview page, module dashboard, KPI header data.
 ---
 
+<!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/skills/aggregate-contracts/SKILL.md - Regenerate: make sync-agents -->
+
 # Aggregate Contracts
 
 ## Overview
