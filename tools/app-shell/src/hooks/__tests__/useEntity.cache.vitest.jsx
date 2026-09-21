@@ -17,6 +17,7 @@ import { DataProvider } from '@etendosoftware/app-shell-core/data';
 import { createQueryCache } from '@etendosoftware/app-shell-core/data';
 import { toast } from 'sonner';
 import { useEntity } from '../useEntity';
+import { buildCustomAddModalOnSaved } from '../../components/contract-ui/detailViewHelpers.jsx';
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
@@ -556,6 +557,51 @@ describe('useEntity — shared cache integration (ETP-4563)', () => {
     expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ entity: 'header' }));
     a.unmount();
 
+    const b = renderHook(() => useEntity('header', 'lines', opts()), { wrapper });
+    await waitFor(() => expect(b.result.current.items.length).toBe(1));
+    expect(counts.list).toBe(2);
+  });
+
+  // --- ETP-5366 follow-up: the customAddModal onSaved path (Contacts' address form)
+  // never goes through handleAddChild/handleUpdateChild at all — it persists via its
+  // own raw fetch and invalidates through buildCustomAddModalOnSaved instead. This
+  // mirrors test 18 (children-collection side) but goes through the REAL secondary
+  // hook instance and buildCustomAddModalOnSaved itself, proving the PARENT entity's
+  // list cache is also actually dropped end-to-end — not just that the pure function
+  // calls the right mock, as the unit tests in detailViewHelpers.vitest.js already do.
+  it('22. buildCustomAddModalOnSaved invalidates the parent entity list cache through a real useEntity instance', async () => {
+    const { fetchMock, counts } = makeFetch();
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts()), { wrapper });
+    await waitFor(() => expect(a.result.current.items.length).toBe(1));
+    expect(counts.list).toBe(1);
+
+    // `secondaryHooks[idx]` is the same useEntity instance as the main `hook` — per
+    // buildCustomAddModalOnSaved's own doc comment, this is how a Contacts-style
+    // window actually wires it.
+    await act(async () => { a.result.current.handleSelect({ id: '1', name: 'Item 1' }); });
+    const parent = a.result.current.selected;
+    expect(parent?.id).toBe('1');
+
+    const invalidateSpy = vi.spyOn(cache, 'invalidate');
+    const setCustomModalState = vi.fn();
+    const onSaved = buildCustomAddModalOnSaved({
+      secondaryHooks: [a.result.current],
+      idx: 0,
+      hook: a.result.current,
+      setCustomModalState,
+    });
+    await act(async () => { onSaved(); });
+
+    // The parent entity ('header') cache was marked stale by the modal's onSaved,
+    // exactly as the direct handleAddChild/handleUpdateChild/handleDeleteChild paths do.
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ entity: 'header' }));
+    expect(setCustomModalState).toHaveBeenCalledWith({ key: null, rowId: null });
+    a.unmount();
+
+    // Behavioral proof: returning to the grid (a fresh mount) refetches instead of
+    // serving the pre-save cached page.
     const b = renderHook(() => useEntity('header', 'lines', opts()), { wrapper });
     await waitFor(() => expect(b.result.current.items.length).toBe(1));
     expect(counts.list).toBe(2);
