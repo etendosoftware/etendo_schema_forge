@@ -67,58 +67,72 @@ export default function RolesAccessMatrix({ cards, matrix, reportsMatrix, iconFo
     ...[...reportGroupsByCategory.keys()].filter((category) => !windowGroupsByCategory.has(category)),
   ];
 
+  // ETP-5402 QA follow-up (round 4) — shared column widths for the two SEPARATE <table>s below
+  // (header table + body table). Rounds 1-3 all tried to keep the header row INSIDE the same
+  // scrolling <table> as the body (sticky on <thead>, then on overflow-wrapper tuning, then on
+  // each <th>) and all three failed live: `position: sticky` on table row-groups/cells is a
+  // well-known cross-browser table-layout gotcha — confirmed via a screen recording AND a
+  // DevTools inspection showing the "stuck" header's own box genuinely overlapping a body row
+  // two rows down, a real layout miscomputation, not a paint/HMR artifact. The only reliable fix
+  // is to stop asking the SAME table to both scroll its body and pin its header — this renders
+  // the header as its own table with no <tbody>, sticky-positioned as a plain <div> (no table
+  // row-group involved in the sticky calculation at all), stacked directly above a second,
+  // non-sticky table for the body. `table-layout: fixed` + an identical <colgroup> on both
+  // tables is what keeps their columns pixel-aligned despite being two separate elements.
+  const roleColumnWidth = cards.length > 0 ? `${70 / cards.length}%` : '0%';
+  const renderColGroup = () => (
+    <colgroup>
+      <col style={{ width: '30%' }} />
+      {cards.map((role) => (
+        <col key={role.id} style={{ width: roleColumnWidth }} />
+      ))}
+    </colgroup>
+  );
+
   return (
-    // ETP-5402 QA follow-up (round 2) — NO overflow class on this wrapper, matching
-    // UserRolesTab.jsx's own table exactly. The previous `overflow-x-auto overflow-y-visible`
-    // attempt was based on a misreading of the CSS overflow spec: per spec, an explicitly
-    // authored `overflow-y: visible` does NOT opt out of the auto-correction that fires the
-    // moment the OTHER axis is non-`visible` — the browser forces the COMPUTED value to `auto`
-    // regardless of what was authored, specifically to prevent this exact "one clipped, one
-    // not" state. So `overflow-x-auto overflow-y-visible` computed to the exact same thing as
-    // `overflow-x-auto` alone, and the wrapper was STILL its own (content-sized, never
-    // independently scrolling) sticky containing block — confirmed still broken live
-    // (2026-09-22, second QA round). There is no CSS-only way to keep `overflow-x-auto` on this
-    // element while making `sticky top-0` below resolve against RolesOverviewPage's outer
-    // `overflow-y-auto` instead: dropping horizontal overflow handling here entirely is the
-    // only fix that actually works, at the cost of the matrix overflowing the PAGE horizontally
-    // on a very narrow viewport with many role columns — the same tradeoff UserRolesTab.jsx's
-    // own table already accepts.
     <div data-testid="RolesAccessMatrix">
-      <table className="w-full text-sm">
-        {/* ETP-5402 QA follow-up (round 3) — sticky moved from the <thead> itself down onto
-            EACH <th> cell. Putting `position: sticky` on a <thead> (display: table-header-group)
-            is a well-known cross-browser table-layout gotcha: several engines handle sticky
-            positioning on table row-groups inconsistently, which reproduced live here as the
-            header row visually reordering itself BELOW the first body row during/after scroll
-            (confirmed via a live recording: correct at rest on top, broken during and after any
-            scroll). `<th>` computes to `display: table-cell`, where `position: sticky` is
-            reliably supported everywhere — the standard, broadly-used workaround for exactly
-            this glitch. `bg-card`/`z-10` move down onto each cell too, since a sticky table CELL
-            (unlike a sticky row-group) doesn't paint an opaque background for the whole row on
-            its own. */}
-        <thead>
-          <tr className="border-b border-border/50">
-            <th className="sticky top-0 z-10 bg-card py-2.5 pr-4 text-left text-sm font-semibold text-foreground">
-              {ui('rolesMatrixWindowColumn')}
-            </th>
-            {cards.map((role) => {
-              const Icon = iconFor?.(role);
-              const displayName = role.isClientAdmin
-                ? ui(ADMIN_NAME_I18N_KEY)
-                : resolveRoleDisplayName(ui, role.name);
-              return (
-                <th key={role.id} className="sticky top-0 z-10 bg-card py-2.5 px-3 text-center text-sm font-semibold text-foreground">
-                  <span className="inline-flex items-center justify-center gap-1.5">
-                    {Icon && (
-                      <Icon className="h-3.5 w-3.5" data-testid={`RolesAccessMatrix__headerIcon-${role.id}`} />
-                    )}
-                    {displayName}
-                  </span>
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
+      {/* ETP-5402 QA follow-up (round 5) — `will-change: transform` promotes this sticky element
+          to its OWN GPU compositing layer. Confirmed via a decisive test: the exact same
+          overlap/ghosting does NOT happen on UserRolesTab.jsx's own sticky <thead> (same
+          AppLayout.jsx scroll chrome, so that shared ancestor is ruled out) — the one concrete
+          structural difference is RolesOverviewPage's summary-cards CSS Grid sitting, as a
+          sibling, directly above this sticky element inside the SAME scroll container, which
+          UserRolesTab has no equivalent of. "Sticky content overlapping/ghosting body rows
+          during scroll" is a well-known compositing-layer invalidation bug in this class of
+          layout (grid sibling + sticky descendant under one scroll root) — forcing a dedicated
+          layer is the standard, targeted remedy, not a structural rewrite. */}
+      <div
+        className="sticky top-0 z-10 bg-card will-change-transform"
+        data-testid="RolesAccessMatrix__headerWrapper">
+        <table className="w-full table-fixed text-sm">
+          {renderColGroup()}
+          <thead>
+            <tr className="border-b border-border/50">
+              <th className="py-2.5 pr-4 text-left text-sm font-semibold text-foreground">
+                {ui('rolesMatrixWindowColumn')}
+              </th>
+              {cards.map((role) => {
+                const Icon = iconFor?.(role);
+                const displayName = role.isClientAdmin
+                  ? ui(ADMIN_NAME_I18N_KEY)
+                  : resolveRoleDisplayName(ui, role.name);
+                return (
+                  <th key={role.id} className="py-2.5 px-3 text-center text-sm font-semibold text-foreground">
+                    <span className="inline-flex items-center justify-center gap-1.5">
+                      {Icon && (
+                        <Icon className="h-3.5 w-3.5" data-testid={`RolesAccessMatrix__headerIcon-${role.id}`} />
+                      )}
+                      {displayName}
+                    </span>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+        </table>
+      </div>
+      <table className="w-full table-fixed text-sm">
+        {renderColGroup()}
         <tbody className="divide-y divide-border/50">
           {categories.map((category) => {
             const windowRows = windowGroupsByCategory.get(category)?.rows ?? [];
