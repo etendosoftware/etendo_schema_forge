@@ -66,6 +66,19 @@ const windowLoaders = {
 };
 
 /**
+ * ETP-5402 QA follow-up — group name -> its `reportId` entries, read straight from
+ * `menuConfig.menu` (the raw, unfiltered source), computed once at module load. MUST NOT be
+ * derived from a `groups` array that has already been through `buildMenuGroups()`'s own
+ * `item.hidden` strip — every `reportId` entry is also `hidden: true`, so a `groups`-derived
+ * version always finds zero report ids per group (see `filterMenuGroupsByAccess`'s own JSDoc for
+ * the live bug this caused: Compras' `aging-payable` never showing in the sidebar despite
+ * `reportAccess` correctly containing it).
+ */
+const REPORT_IDS_BY_GROUP = new Map(
+  menuConfig.menu.map(g => [g.group, (g.items || []).filter(i => i.reportId).map(i => i.reportId)])
+);
+
+/**
  * Filters an already-built menuGroups array (see buildMenuGroups) down to what
  * the current role can reach, per SFListMenu (com.etendoerp.go docs/neo-headless.md
  * §8). Items carrying no windowId/processId/obuiappProcessId (dashboard, custom
@@ -111,9 +124,18 @@ const windowLoaders = {
  * (e.g. Sales on `aging-receivable`, via `ReportAccessCatalog`/`SFMyReportAccess`) but not the
  * category's own permission-anchor window (only Finance holds `D647D118…`): before this, such a
  * role had no way to even see the "Informes" sidebar link, so the report was unreachable despite
- * the Roles/Users matrix showing it as granted. Derived purely from each group's own `reportId`
- * siblings already in menu.json — no new per-item field needed, and it generalizes to any future
- * `accessWindowId` item sharing a group with report entries.
+ * the Roles/Users matrix showing it as granted.
+ *
+ * Deliberately read from `REPORT_IDS_BY_GROUP` (derived straight from `menuConfig.menu`, the raw
+ * unfiltered source), NOT from the `group.items` this function receives — confirmed live
+ * (2026-09-22): every `reportId` entry is ALSO `hidden: true` in menu.json (an unrelated
+ * convention — a report never gets its own sidebar link), and `buildMenuGroups()` already strips
+ * every `item.hidden` entry OUT of `group.items` before this function ever runs. Reading
+ * `group.items` here found zero `reportId` siblings every time, so the fallback silently never
+ * fired for ANY category (Compras' aging-payable confirmed missing from the sidebar despite
+ * `reportAccess` correctly containing it) — the exact same "hidden strips a report row from code
+ * that still needs to read it" mistake the ETP-5402 matrix fix already made once, recurring here
+ * in a different call site.
  *
  * @param {Array} groups — output of buildMenuGroups.
  * @param {Set<string>|null} allowedIds — from useRoleMenu(). `null` disables
@@ -135,7 +157,7 @@ export function filterMenuGroupsByAccess(groups, allowedIds, capabilities = null
   const itemIds = item => [item.windowId, item.processId, item.obuiappProcessId].filter(Boolean);
   return groups
     .map(group => {
-      const reportIdsInGroup = group.items.filter(i => i.reportId).map(i => i.reportId);
+      const reportIdsInGroup = REPORT_IDS_BY_GROUP.get(group.group) ?? [];
       const groupHasAccessibleReport = Boolean(reportAccess)
         && reportIdsInGroup.some(id => reportAccess[id] !== undefined);
       return {
