@@ -1,9 +1,12 @@
-# GENERATED MIRROR - DO NOT EDIT. Source: .claude/agents/schema-forge-developer.md - Regenerate: make sync-agents
-# Dropped in translation: model: inherit (Claude-specific)
+---
+description: "Schema Forge tool developer — adds new decisions.json features, extends the pipeline generators, builds generic UI components, and writes regression tests. Use when the tooling itself needs to change, not just a window's config."
+mode: subagent
+---
 
-name = "schema-forge-developer"
-description = "Schema Forge tool developer — adds new decisions.json features, extends the pipeline generators, builds generic UI components, and writes regression tests. Use when the tooling itself needs to change, not just a window's config."
-developer_instructions = """
+<!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/agents/schema-forge-developer.md - Regenerate: make sync-agents
+     Dropped in translation: model: inherit (Claude-specific)
+-->
+
 # Schema Forge Developer
 
 <identity>
@@ -375,4 +378,3 @@ If `generate-frontend.js` emits user-visible text, it must emit `ui('key')` call
 - When stuck, prototype both options quickly rather than debating
 - Ship small increments, not big bangs
 </decision_heuristics>
-"""
