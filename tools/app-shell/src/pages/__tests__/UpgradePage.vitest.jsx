@@ -175,9 +175,34 @@ function installFetch({ environments = [], purchases = [], checkout = {}, status
 function headersFor(fragment) {
   const call = globalThis.fetch.mock.calls.find(([url]) => String(url).includes(fragment));
   expect(call, `no request matched ${fragment}`).toBeTruthy();
+  return headersOf(call[1]);
+}
+
+/** A request's headers with the keys lowercased, so a case change cannot pass an assertion. */
+function headersOf(init) {
   return Object.fromEntries(
-    Object.entries(call[1]?.headers ?? {}).map(([k, v]) => [k.toLowerCase(), v]),
+    Object.entries(init?.headers ?? {}).map(([k, v]) => [k.toLowerCase(), v]),
   );
+}
+
+/**
+ * The checkout write. `develop` moved it off `/sws/go/checkout/sessions` onto the
+ * provider-neutral billing boundary (`createBillingPurchase`, lib/upgrade/api.js), so the proof
+ * has to be asserted there — the old path is still mocked by `installFetch`, and asserting on it
+ * would silently assert nothing.
+ *
+ * Matched on the exact URL AND the method, not a fragment: `/sws/go/billing/purchases/<id>` is a
+ * READ on the same prefix, and a fragment match that drifted onto it would look green while the
+ * write went out bare.
+ */
+const CHECKOUT_POST_URL = '/sws/go/billing/purchases';
+
+function checkoutPostCall() {
+  const call = globalThis.fetch.mock.calls.find(
+    ([url, init]) => String(url) === CHECKOUT_POST_URL && init?.method === 'POST',
+  );
+  expect(call, `no POST matched ${CHECKOUT_POST_URL}`).toBeTruthy();
+  return call;
 }
 
 /** The properties of every tracked event carrying this name, in order. */
@@ -322,13 +347,26 @@ describe('UpgradePage — hosted checkout', () => {
  * Both schemes are driven, because the preference promises ONE switch and TWO working schemes: a
  * call site that hardcodes one scheme's header sends nothing under the other, and only a suite
  * that runs it twice can see that.
+ *
+ * What `develop` changed underneath, and what it did NOT change: the write moved to
+ * `/sws/go/billing/purchases` and the tenant name is no longer typed — it is derived from the demo
+ * environment and rendered read-only. Neither touches what this block is about, which is what the
+ * requests CARRY.
  */
 describe('UpgradePage — what the checkout requests carry (ETP-4576)', () => {
+  /**
+   * Drives the flow to the point where the checkout write has gone out.
+   *
+   * There is no tenant name to type: `develop` removed the input, so the name comes from the demo
+   * environment. It is asserted on screen here rather than assumed, because a blank name would
+   * still produce a POST and every header assertion below would pass on a request that means
+   * nothing.
+   */
   async function submitCheckout() {
     const user = userEvent.setup();
     installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
     await renderUpgradePage();
-    await user.type(screen.getByTestId('upgrade-tenant-name'), 'Acme Productive');
+    expect(screen.getByTestId('upgrade-tenant-from-demo')).toHaveTextContent(EXISTING_TENANT);
     await user.click(screen.getByTestId('upgrade-submit'));
     await waitFor(() => expect(assignMock).toHaveBeenCalled());
   }
@@ -336,7 +374,7 @@ describe('UpgradePage — what the checkout requests carry (ETP-4576)', () => {
   it('sends the write proof on the checkout POST under the cookie scheme', async () => {
     await submitCheckout();
 
-    expect(headersFor('/sws/go/checkout/sessions')['x-go-csrf']).toBe(TEST_CSRF_TOKEN);
+    expect(headersOf(checkoutPostCall()[1])['x-go-csrf']).toBe(TEST_CSRF_TOKEN);
     // Not just on this one: no request in the whole flow may carry a bearer token.
     expectNoAuthorizationHeader();
   });
@@ -344,8 +382,7 @@ describe('UpgradePage — what the checkout requests carry (ETP-4576)', () => {
   it('lets the session cookie travel on the checkout POST', async () => {
     await submitCheckout();
 
-    const [, init] = globalThis.fetch.mock.calls
-      .find(([url]) => String(url).includes('/sws/go/checkout/sessions'));
+    const [, init] = checkoutPostCall();
     // Absent, this is only broken cross-origin — which is the dev setup (:3100 -> :8080) and any
     // split-origin deploy, i.e. exactly where it is hardest to notice.
     expect(init.credentials).toBe('include');
@@ -381,7 +418,7 @@ describe('UpgradePage — what the checkout requests carry (ETP-4576)', () => {
     declareBearerSession();
     await submitCheckout();
 
-    const headers = headersFor('/sws/go/checkout/sessions');
+    const headers = headersOf(checkoutPostCall()[1]);
     expect(headers.authorization).toBe(`Bearer ${TEST_BEARER_TOKEN}`);
     expect(headers['x-go-csrf']).toBe(TEST_CSRF_TOKEN);
   });

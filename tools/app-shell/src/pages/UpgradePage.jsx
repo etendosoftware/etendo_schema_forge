@@ -682,7 +682,6 @@ export default function UpgradePage() {
 
     try {
       const session = await createBillingPurchase(
-        fetch,
         getUpgradeBaseUrl(),
         {
           action: 'productive-tenant',
