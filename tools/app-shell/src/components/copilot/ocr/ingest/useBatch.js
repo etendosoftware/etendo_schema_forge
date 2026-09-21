@@ -56,6 +56,13 @@ export function useBatch({ token }) {
         // `.raw` lets the import UI show it instead of just a bare "Batch failed (500)".
         const err = new Error(`Batch failed (${res.status})`);
         err.raw = text;
+        // ETP-5350 — the sentence above is a developer-facing diagnostic, and until the
+        // import engine started classifying rejections it was ALSO what the user read, in
+        // English, in the review queue and in the blocking system-error dialog. The engine
+        // can now recover the status by parsing it back out of the prose, but declaring the
+        // key here means it never has to: the throw site knows the status, so it says so.
+        err.messageKey = 'importErrorServerFailure';
+        err.params = { status: res.status };
         throw err;
       }
       return json;

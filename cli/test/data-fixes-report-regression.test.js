@@ -109,6 +109,24 @@ const FIXES_WITH_REPORT = new Set([
   // It is therefore the one @report in the catalog that is NEVER empty on an APPLIED row — the
   // attestation branch is driven by ad_client, which always matches the target tenant.
   '20260918T120000Z__R37-tenant-subscription-backfill',
+  // R38 (ETP-5352) backfills AD_ORG.AD_LEGALENTITY_ORG_ID, but only on organizations that
+  // finished provisioning (isready='Y'). Its @report lists the legal-entity orgs left
+  // untouched because isready='N' — an org whose alta never completed is missing far more
+  // than this one column (no accounting schema, no business partners, no products), so
+  // filling it would mask a half-created tenant rather than fix it. Same "flag, don't guess"
+  // pattern as R19/R28/R35: the fix declines part of its own scope and says so instead of
+  // silently doing nothing. Empty — `detail` null — on any tenant whose orgs are all ready.
+  '20260918T120000Z__R38-org-legalentity-pointer',
+  // R38 (ETP-5285) sets the product-defined PREFIX and aligns STARTNO/CURRENTNEXT at 1000000 on
+  // the five document series Etendo GO configures. Like its sibling R31-document-sequence-startno
+  // above — and unlike the "flag, don't guess" entries — its @report is a pure POST-CONDITION: it
+  // lists any in-scope series still off target AFTER the apply. All three UPDATEs are
+  // unconditional within their IS DISTINCT FROM guard, so there is no legitimate "left off target"
+  // case and it should always come back empty, leaving `detail` null on the APPLIED ledger row. A
+  // non-empty detail means a row was skipped or something raced the update. Verified empty on the
+  // dev fleet: 94 applied, 461 rows, 0 left off target.
+  // See cli/test/data-fixes-r38-document-sequence-series-prefixes.test.js.
+  '20260919T120000Z__R38-document-sequence-series-prefixes',
 ]);
 
 async function loadCatalogFiles() {

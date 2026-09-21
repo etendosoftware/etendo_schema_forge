@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
-  "generatedAt": "2026-09-18T18:02:08.296Z",
-  "updatedAt": "2026-09-18T19:15:12.502Z",
-  "checksum": "ca803d23b1d5c42d",
+  "version": "0.1.0",
+  "generatedAt": "2026-09-20T18:16:41.258Z",
+  "updatedAt": "2026-09-20T23:00:15.408Z",
+  "checksum": "e2ce710fa2d4d214",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -176,8 +176,9 @@
               "razón social"
             ],
             "label": "Commercial Name",
-            "required": true,
+            "required": false,
             "example": "Distribuciones García S.L.",
+            "exampleKey": "importExampleContactName",
             "column": "Name",
             "type": "string"
           },
@@ -187,11 +188,13 @@
               "tipo",
               "tipo de contacto",
               "persona o empresa",
-              "tipo cliente"
+              "tipo cliente",
+              "type"
             ],
             "label": "Contact Type (Person / Company)",
             "required": false,
             "example": "Empresa",
+            "exampleKey": "importExampleContactType",
             "labelKey": "importHeaderType",
             "column": "EM_Etgo_Isperson",
             "type": "boolean"
@@ -212,6 +215,7 @@
             ],
             "label": "Contact Category",
             "example": "Clientes",
+            "exampleKey": "importExampleContactCategory",
             "column": "C_BP_Group_ID"
           },
           {
@@ -223,6 +227,7 @@
             "label": "First Name",
             "required": false,
             "example": "María",
+            "labelKey": "importHeaderFirstName",
             "column": "EM_Etgo_Firstname",
             "type": "string"
           },
@@ -286,6 +291,8 @@
               "clave nif país residencia",
               "tipo identificacion fiscal",
               "tipo identificación fiscal",
+              "tipo de identificacion fiscal",
+              "tipo de identificación fiscal",
               "tax id type"
             ],
             "label": "Tax ID Type",
@@ -317,7 +324,7 @@
               "email de contacto"
             ],
             "isEmail": true,
-            "label": "Email (Contact)",
+            "label": "Email",
             "example": "compras@distribucionesgarcia.es",
             "headerScope": "contact",
             "column": "Email",
@@ -329,9 +336,10 @@
             "aliases": [
               "nombre de contacto"
             ],
-            "label": "First Name (Contact)",
+            "label": "First Name",
             "example": "Lucía",
             "headerScope": "contact",
+            "labelKey": "importHeaderFirstName",
             "column": "Firstname",
             "required": false,
             "type": "string"
@@ -341,7 +349,7 @@
             "aliases": [
               "apellido de contacto"
             ],
-            "label": "Last Name (Contact)",
+            "label": "Last Name",
             "example": "Fernández",
             "headerScope": "contact",
             "column": "Lastname",
@@ -353,7 +361,7 @@
             "aliases": [
               "telefono de contacto"
             ],
-            "label": "Phone (Contact)",
+            "label": "Phone",
             "example": "610 000 002",
             "headerScope": "contact",
             "column": "Phone",
@@ -367,6 +375,7 @@
             ],
             "label": "Position",
             "example": "Responsable de compras",
+            "exampleKey": "importExampleContactPosition",
             "headerScope": "contact",
             "column": "Title",
             "required": false,
@@ -382,6 +391,7 @@
             ],
             "label": "Address",
             "example": "Calle Mayor 12",
+            "exampleKey": "importExampleContactAddress",
             "labelKey": "importHeaderAddress",
             "headerScope": "address"
           },
@@ -420,6 +430,7 @@
             "label": "Country",
             "matchEntity": "Country",
             "example": "España",
+            "exampleKey": "importExampleContactCountry",
             "headerScope": "address",
             "labelKey": "importHeaderCountry",
             "column": "C_Country_ID",
@@ -5469,8 +5480,9 @@
               "razón social"
             ],
             "label": "Commercial Name",
-            "required": true,
+            "required": false,
             "example": "Distribuciones García S.L.",
+            "exampleKey": "importExampleContactName",
             "column": "Name",
             "type": "string"
           },
@@ -5480,11 +5492,13 @@
               "tipo",
               "tipo de contacto",
               "persona o empresa",
-              "tipo cliente"
+              "tipo cliente",
+              "type"
             ],
             "label": "Contact Type (Person / Company)",
             "required": false,
             "example": "Empresa",
+            "exampleKey": "importExampleContactType",
             "labelKey": "importHeaderType",
             "column": "EM_Etgo_Isperson",
             "type": "boolean"
@@ -5505,6 +5519,7 @@
             ],
             "label": "Contact Category",
             "example": "Clientes",
+            "exampleKey": "importExampleContactCategory",
             "column": "C_BP_Group_ID"
           },
           {
@@ -5516,6 +5531,7 @@
             "label": "First Name",
             "required": false,
             "example": "María",
+            "labelKey": "importHeaderFirstName",
             "column": "EM_Etgo_Firstname",
             "type": "string"
           },
@@ -5579,6 +5595,8 @@
               "clave nif país residencia",
               "tipo identificacion fiscal",
               "tipo identificación fiscal",
+              "tipo de identificacion fiscal",
+              "tipo de identificación fiscal",
               "tax id type"
             ],
             "label": "Tax ID Type",
@@ -5610,7 +5628,7 @@
               "email de contacto"
             ],
             "isEmail": true,
-            "label": "Email (Contact)",
+            "label": "Email",
             "example": "compras@distribucionesgarcia.es",
             "headerScope": "contact",
             "column": "Email",
@@ -5622,9 +5640,10 @@
             "aliases": [
               "nombre de contacto"
             ],
-            "label": "First Name (Contact)",
+            "label": "First Name",
             "example": "Lucía",
             "headerScope": "contact",
+            "labelKey": "importHeaderFirstName",
             "column": "Firstname",
             "required": false,
             "type": "string"
@@ -5634,7 +5653,7 @@
             "aliases": [
               "apellido de contacto"
             ],
-            "label": "Last Name (Contact)",
+            "label": "Last Name",
             "example": "Fernández",
             "headerScope": "contact",
             "column": "Lastname",
@@ -5646,7 +5665,7 @@
             "aliases": [
               "telefono de contacto"
             ],
-            "label": "Phone (Contact)",
+            "label": "Phone",
             "example": "610 000 002",
             "headerScope": "contact",
             "column": "Phone",
@@ -5660,6 +5679,7 @@
             ],
             "label": "Position",
             "example": "Responsable de compras",
+            "exampleKey": "importExampleContactPosition",
             "headerScope": "contact",
             "column": "Title",
             "required": false,
@@ -5675,6 +5695,7 @@
             ],
             "label": "Address",
             "example": "Calle Mayor 12",
+            "exampleKey": "importExampleContactAddress",
             "labelKey": "importHeaderAddress",
             "headerScope": "address"
           },
@@ -5713,6 +5734,7 @@
             "label": "Country",
             "matchEntity": "Country",
             "example": "España",
+            "exampleKey": "importExampleContactCountry",
             "headerScope": "address",
             "labelKey": "importHeaderCountry",
             "column": "C_Country_ID",

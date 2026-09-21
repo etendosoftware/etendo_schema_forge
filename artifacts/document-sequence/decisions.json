@@ -7,88 +7,108 @@
     "detailEntity": null,
     "hideDetailForm": false,
     "listSortBy": "name asc",
-    "discardPatterns": ["EM_*"],
+    "hideCreate": true,
+    "discardPatterns": [
+      "EM_*"
+    ],
     "labelOverrides": {
       "es_ES": {
         "Name": "Nombre",
+        "Description": "Descripción",
         "Prefix": "Prefijo",
-        "Suffix": "Sufijo",
         "StartNo": "Número inicial",
-        "CurrentNext": "Próximo número",
-        "IncrementNo": "Incremento",
-        "StartNewYear": "Reiniciar cada año",
-        "IsAutoSequence": "Numeración automática",
-        "Description": "Descripción"
+        "CurrentNext": "Próximo número"
       }
-    }
+    },
+    "hideDeleteButton": true
   },
   "entities": {
     "sequence": {
       "javaQualifier": "document-sequence",
+      "methods": [
+        "GET",
+        "GETBYID",
+        "PUT",
+        "PATCH"
+      ],
+      "hideDelete": true,
       "fields": {
         "name": {
           "grid": true,
           "form": true,
+          "visibility": "readOnly",
+          "gridOrder": 1,
+          "enumValues": [
+            {
+              "value": "Purchase Order",
+              "name": "documentSequencePurchaseOrder"
+            },
+            {
+              "value": "Standard Order",
+              "name": "documentSequenceSalesOrder"
+            },
+            {
+              "value": "AR Invoice",
+              "name": "documentSequenceSalesInvoice"
+            },
+            {
+              "value": "Factura Rectificativa (Ventas)",
+              "name": "documentSequenceSalesCorrectiveInvoice"
+            },
+            {
+              "value": "Factura Rectificativa (Compras)",
+              "name": "documentSequencePurchaseCorrectiveInvoice"
+            }
+          ],
+          "section": "principal"
+        },
+        "description": {
+          "grid": true,
+          "form": true,
           "visibility": "editable",
-          "gridOrder": 1
+          "gridOrder": 2,
+          "section": "principal"
         },
         "prefix": {
           "grid": true,
           "form": true,
           "visibility": "editable",
-          "gridOrder": 2
-        },
-        "suffix": {
-          "grid": true,
-          "form": true,
-          "visibility": "editable",
-          "gridOrder": 3
-        },
-        "nextAssignedNumber": {
-          "grid": true,
-          "form": true,
-          "visibility": "editable",
-          "integer": true,
-          "gridOrder": 4
+          "gridOrder": 3,
+          "section": "principal"
         },
         "startingNo": {
           "grid": true,
           "form": true,
           "visibility": "editable",
           "integer": true,
-          "gridOrder": 5
+          "gridOrder": 4,
+          "section": "principal"
         },
-        "incrementBy": {
-          "grid": false,
-          "form": true,
-          "visibility": "editable",
-          "integer": true
-        },
-        "restartSequenceEveryYear": {
+        "nextAssignedNumber": {
           "grid": true,
           "form": true,
           "visibility": "editable",
-          "gridOrder": 6
+          "integer": true,
+          "gridOrder": 5,
+          "section": "principal"
+        },
+        "suffix": {
+          "visibility": "discarded"
+        },
+        "incrementBy": {
+          "visibility": "discarded"
+        },
+        "restartSequenceEveryYear": {
+          "visibility": "discarded"
         },
         "autoNumbering": {
-          "grid": false,
-          "form": true,
-          "visibility": "editable"
-        },
-        "description": {
-          "grid": false,
-          "form": true,
-          "visibility": "editable"
+          "visibility": "discarded"
         },
         "mask": {
-          "grid": false,
-          "form": true,
-          "visibility": "editable"
+          "visibility": "discarded"
         },
         "valueFormat": {
-          "grid": false,
-          "form": true,
-          "visibility": "editable"
+          "visibility": "discarded"
         },
         "documentType": {
           "visibility": "discarded"

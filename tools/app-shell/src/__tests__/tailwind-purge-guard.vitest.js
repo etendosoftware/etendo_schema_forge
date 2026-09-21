@@ -153,7 +153,12 @@ beforeAll(async () => {
   ]).process(entryCss, { from: resolve(appShellRoot, 'src/index.css') });
 
   css = result.css;
-}, 60_000);
+  // The hook is a real Tailwind compile over the whole `content` glob. Measured on its own it
+  // takes ~25s, but this file runs inside a 971-file parallel vitest run, where CPU contention
+  // pushed it past the old 60s ceiling and failed the SUITE (ETP-5350 pre-push) — a timeout,
+  // never an assertion. 3 minutes keeps the guard honest while leaving room for a loaded
+  // machine; if this ever times out again, the compile itself has regressed.
+}, 180_000);
 
 describe('Tailwind purge guard (ETP-4083)', () => {
   it('scans the guarded workspace-packages source glob in the live config', () => {
