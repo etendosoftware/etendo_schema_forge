@@ -264,7 +264,6 @@ export default function ConfirmInOutModal({
               invoices={rectify.invoices}
               selectedIds={rectify.selectedIds}
               onToggle={rectify.toggle}
-
               onApply={rectify.setSelectedIds}
               loading={rectify.loading}
               isEmpty={rectify.isEmpty}
@@ -275,7 +274,8 @@ export default function ConfirmInOutModal({
               loadingMore={rectify.loadingMore}
               loadError={rectify.loadError}
               onRetry={rectify.retry}
-              idPrefix="confirm-modal-rectify" />
+              idPrefix="confirm-modal-rectify"
+              data-testid="RectifiableInvoiceField__3b3aca" />
           )}
 
           {error && (

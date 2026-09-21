@@ -219,7 +219,7 @@ function InvoicePickerModal({ apiBaseUrl, token, currentId, bpId, multiple, sele
       onSearchChange={setSearch}
       onReachBottom={loadMore}
       loadingMore={loadingMore}
-    />
+      data-testid="SharedInvoicePickerModal__4395d6" />
   );
 }
 

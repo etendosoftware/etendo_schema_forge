@@ -406,7 +406,7 @@ export function RectifiableInvoiceField({
           onSearchChange={onSearchChange}
           onReachBottom={onReachBottom}
           loadingMore={loadingMore}
-        />
+          data-testid="RectifiableInvoicePickerModal__43f26f" />
       )}
     </div>
   );
@@ -454,7 +454,7 @@ export function RectifiableInvoicePickerModal({
       // Above the host modal (the app's modal tier is 50) but below the walkthrough overlay at 70,
       // which ETP-5108 established must stay on top.
       zIndex={60}
-    />,
+      data-testid="InvoicePickerModal__43f26f" />,
     document.body,
   );
 }

@@ -173,7 +173,7 @@ export default function InvoicePickerModal({
             onClick={e => e.stopPropagation()}
             onChange={() => toggleDraft(inv.id)}
             className="shrink-0"
-          />
+            data-testid="Checkbox__fba652" />
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>

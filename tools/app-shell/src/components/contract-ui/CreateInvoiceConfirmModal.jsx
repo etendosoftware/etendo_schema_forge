@@ -176,7 +176,8 @@ export default function CreateInvoiceConfirmModal({
               loadingMore={rectify.loadingMore}
               loadError={rectify.loadError}
               onRetry={rectify.retry}
-              idPrefix="invoice-confirm-rectify" />
+              idPrefix="invoice-confirm-rectify"
+              data-testid="RectifiableInvoiceField__e6fb8b" />
           </div>
         )}
 
