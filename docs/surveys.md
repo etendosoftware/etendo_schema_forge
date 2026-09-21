@@ -58,18 +58,24 @@ At login, the same hook runs `selectNextSurvey({ source: 'login' })` after a 2.5
 
 | ID | Type | Trigger source | Scale | Eligibility rule |
 |----|------|---------------|-------|-----------------|
-| `csat_onboarding` | csat | `login` | 1–5 stars | Admin user AND onboarding checklist 100% complete AND >= 24h since completion; shown once per user, never repeated |
+| `csat_onboarding` | csat | `login` | 1–5 stars | Admin user AND onboarding checklist 100% complete AND >= configurable delay since completion (default 24h); shown once per user, never repeated |
 | `nps` | nps | `login` | 0–10 | First login >= 60 days ago AND last login <= 14 days ago |
 | `csat_invoicing` | csat | `trigger` | 1–5 stars | >= 5 invoices confirmed; re-eligible after 30 more invoices AND 90 days |
 | `csat_order` | csat | `trigger` | 1–5 stars | >= 5 orders confirmed; re-eligible after 30 more orders AND 90 days |
 
 The `SURVEYS` array in `surveys.js` is evaluated in order. The first survey that passes all guards is shown. No two surveys are shown in the same pass.
 
-**`csat_onboarding`'s 24h delay is hardcoded, not a backoffice tunable.** Unlike the per-survey
-timing parameters in [Configuration](#configuration) below (which read from `ETGO_Survey_Type` via
-`getSurveyTypeConfig`), `csatOnboardingIsEligible`'s 24h gate is a fixed `CSAT_ONBOARDING_DELAY_MS`
-constant in `surveys.js`, by design — do not go looking for it as a row/column on
-`ETGO_Survey_Type`; it isn't there.
+**`csat_onboarding`'s delay is now a backoffice tunable (ETP-4353 Phase 2), reusing `minAccountAgeDays`.**
+Before this change it was a fixed `CSAT_ONBOARDING_DELAY_MS` constant in `surveys.js`. It now reads
+through the same `getSurveyTypeConfig('csat_onboarding')` call the other per-survey timing parameters
+use — see [Configuration](#configuration) below — but with its own defaulting: since
+`ETGO_Survey_Type.min_account_age_days` is shared with `nps`, `getSurveyTypeConfig` picks a
+different env var (`VITE_SURVEY_ONBOARDING_DELAY_DAYS`) and default (`DEFAULT_SURVEY_ONBOARDING_DELAY_DAYS = 1` day)
+when the survey key is `csat_onboarding`, so a tenant with no `csat_onboarding` row in
+`ETGO_Survey_Type` yet still gets the original 24h behavior instead of inheriting NPS's 60-day
+default. Add a `csat_onboarding` row to the "Surveys" tab (using the `csat_onboarding` value newly
+added to the `ETGO Survey Key` reference list) to tune the delay, or to disable the survey entirely
+via `Active` — see [Disabling a Survey](#disabling-a-survey).
 
 **Legacy-cohort exception:** the gate is measured from `onboardingCompletedAt` (see
 [localStorage Schema](#localstorage-schema)), a field that didn't exist during Phase 1
@@ -81,38 +87,54 @@ so that legacy cohort isn't locked out of the survey indefinitely.
 
 ---
 
-## CSAT Predefined Responses
+## CSAT / NPS Predefined Responses
 
 When a CSAT survey's score is <= 3, `SurveyModal` shows a `CannedResponseGrid` above the free-text
-textarea — a 2-column grid of phrases, each with a decorative icon. `resolveCannedOptions(survey,
-locale, ui, score)` prefers backend-configured responses (`getRemoteCannedResponses`) over a
-hardcoded per-survey fallback list in `surveys.js`.
+textarea — a 2-column grid of phrases, each with a decorative icon. NPS shows the same backend-
+configured responses as a `ChipGroup` instead (a wrapping row of plain-text, multi-select pills, tag
+state) in its `followup` phase, regardless of score — **no icons**, since `ChipGroup` renders plain
+strings, not `{icon, label}` objects. `resolveCannedOptions(survey, locale, ui, score)` is shared by
+both: it prefers backend-configured responses (`getRemoteCannedResponses`) over a hardcoded
+per-survey fallback list in `surveys.js`, and is the single place that resolves and score-filters
+canned/chip content for every survey type. `NPSSurveyContent` calls it and then strips the result
+down to plain label strings (`.map(({ label }) => label)`) before handing them to `ChipGroup`, since
+`CannedResponseGrid` and `ChipGroup` take different prop shapes.
 
-**Score ranges (backend-configured responses only):** each backoffice-configured response declares a
-`minScore`/`maxScore` band (e.g. 1–2 vs 3), and `resolveCannedOptions` filters to the entries whose
-range contains the score the user actually picked — so a 1-star and a 3-star CSAT can surface
-different phrases. This only applies to responses coming from the "Survey Configuration" backoffice
-window (`ETGO_Survey_Canned_Resp`, see [Configuration](#configuration)); the hardcoded fallback list
-in `surveys.js` has no ranges and keeps showing unconditionally within the followup phase — it's an
-offline-degradation path only, not expected to need this granularity.
+**Score ranges:** each backend-configured response declares a `minScore`/`maxScore` band (e.g. 1–2 vs
+3 for CSAT, 8–10 for NPS's promoter-only chip), and `resolveCannedOptions` filters to the entries
+whose range contains the score the user actually picked — so e.g. a 1-star and a 3-star CSAT, or a
+detractor and a promoter NPS response, can surface different phrases/chips. This applies uniformly to
+both the backend-configured responses (`ETGO_Survey_Canned_Resp`, see [Configuration](#configuration))
+and the hardcoded `surveys.js` fallback list — an entry with no `minScore`/`maxScore` always matches
+(the CSAT fallback list has never declared a range and keeps showing unconditionally, same as
+before); NPS's fallback list declares a range only on its one score-gated entry (`surveyChipAI`,
+`minScore: 8, maxScore: 10`, mirroring the promoter-only chip the old inline logic used to build).
 
 | Survey | Locale keys (fallback) | Topics |
 |---|---|---|
 | `csat_invoicing` | `surveyInvoicingCanned1..6` | Speed, usability, templates, VAT/tax handling, sending to the client, bugs |
 | `csat_order` | `surveyOrderCanned1..6` | Speed, usability, product search, order lines, confirmation, bugs |
+| `nps` | `surveyChipSpeed/Design/Features/Support/Price/Docs` (all scores), `surveyChipAI` (promoter only, 8–10) | Same UI topics as before ETP-4353 Phase 2 — now sourced from the backoffice window (`getRemoteCannedResponses('nps', locale)`) with this list as the offline fallback |
 
-Icons are decorative only (`aria-hidden`), never in the translated strings — clicking a card calls
-`setFeedback(label)` with the plain text only (no icon), prefilling the textarea; the text remains
-fully editable afterward — same "click to fill, keep editing" pattern as `ConversationView`'s
-support-chat quick replies. This is presentation-only: no new state, no Mixpanel event of its own (a
-canned pick still surfaces via the `feedback` property on `survey_responded` once submitted).
+Icons are decorative only (`aria-hidden`), never in the translated strings, and only rendered by
+`CannedResponseGrid` (CSAT) — `ChipGroup` (NPS) drops the icon entirely. Clicking a CSAT card calls
+`setFeedback(label)` with the plain text only, prefilling the textarea (text remains fully editable
+afterward — same "click to fill, keep editing" pattern as `ConversationView`'s support-chat quick
+replies); clicking an NPS chip toggles it in/out of the `tags` array (`ChipGroup`'s existing
+multi-select `value`/`onChange` contract, unchanged by this work). Both are presentation-only: no new
+state beyond what already existed, no Mixpanel event of their own (a canned pick still surfaces via
+the `feedback`/`tags` properties on `survey_responded` once submitted).
 
 **Adding a canned option:** in the backoffice, add a row to the "Canned Responses" child tab under
-the survey's row in the "Surveys" tab, with its score range. For the offline fallback, add a locale
-key to both `en_US.json`/`es_ES.json`, then append `{ icon: '…', key: '…' }` to that survey's
-`canned` array in `surveys.js`. Keep phrases tied to concrete pain points in that specific flow —
-avoid generic complaints unrelated to the process being rated (e.g. pricing complaints do not
-belong in a workflow-usability survey).
+the survey's row in the "Surveys" tab, with its score range — this now works for `nps` too, since
+`SurveyConfigServlet`'s queries were already generic (no survey-key allowlist) before this change.
+For the offline fallback, add a locale
+key to both `en_US.json`/`es_ES.json`, then append `{ icon: '…', key: '…' }` (CSAT) or
+`{ key: '…', minScore, maxScore }` (NPS — no `icon`, since `ChipGroup` never renders one; add a
+score band only if the chip should not show at every score) to that survey's `canned` array in
+`surveys.js`. Keep phrases tied to concrete pain points in that specific flow — avoid generic
+complaints unrelated to the process being rated (e.g. pricing complaints do not belong in a
+workflow-usability survey).
 
 ---
 
@@ -474,11 +496,12 @@ Survey tuning is layered, in this precedence order (highest wins):
 window has no menu-driven customer visibility expectations; access is governed by normal Etendo
 role/window security, same as any other backoffice window.
 
-Canned CSAT responses (see [CSAT Predefined Responses](#csat-predefined-responses) above) follow
-the same precedence: `SurveyModal` calls `getRemoteCannedResponses(surveyId, locale)` first: if the
-backoffice has rows for that survey + language, their `text` (and score range) is used directly
-(already locale-specific, no `ui()` lookup); otherwise it falls back to the hardcoded `survey.canned`
-locale-key list in `surveys.js`.
+Canned CSAT/NPS responses (see [CSAT / NPS Predefined Responses](#csat--nps-predefined-responses)
+above) follow the same precedence: `SurveyModal` calls `getRemoteCannedResponses(surveyId, locale)`
+first: if the backoffice has rows for that survey + language, their `text` (and score range) is used
+directly (already locale-specific, no `ui()` lookup); otherwise it falls back to the hardcoded
+`survey.canned` locale-key list in `surveys.js`. This now applies to `nps` as well as the two CSAT
+document surveys — the servlet's queries were never survey-key-specific.
 
 ### Global parameters — `ETGO_Survey_Config` / `VITE_SURVEY_*`
 
@@ -496,20 +519,28 @@ any others.
 ### Per-survey parameters — `ETGO_Survey_Type` / `VITE_SURVEY_*`
 
 Read via `getSurveyTypeConfig(surveyKey)` in `survey-config.js` — pass the survey's `id` (`nps`,
-`csat_invoicing`, `csat_order`). Time-based fields (Min Account Age, Inactivity Guard) only apply to
-login-triggered surveys like NPS; document-based fields (Min Documents, Document Gap) only apply to
-trigger-based surveys like CSAT — a row leaves the fields its survey doesn't use empty.
+`csat_invoicing`, `csat_order`, `csat_onboarding`). Time-based fields (Min Account Age, Inactivity
+Guard) only apply to login-triggered surveys like NPS and `csat_onboarding`; document-based fields
+(Min Documents, Document Gap) only apply to trigger-based surveys like `csat_invoicing`/`csat_order`
+— a row leaves the fields its survey doesn't use empty.
 
 | Window field (`ETGO_Survey_Type`) | Env var fallback | Default | Resolves to |
 |---|---|---|---|
-| Min Account Age (days) | `VITE_SURVEY_NPS_MIN_AGE_DAYS` | `60` | `minAccountAgeMs` — minimum account age before this survey is eligible |
-| Inactivity Guard (days) | `VITE_SURVEY_NPS_INACTIVITY_DAYS` | `14` | `inactivityGuardMs` — skip if the user has been inactive longer than this |
+| Min Account Age (days) | `VITE_SURVEY_NPS_MIN_AGE_DAYS` (`nps`) / `VITE_SURVEY_ONBOARDING_DELAY_DAYS` (`csat_onboarding`) | `60` (`nps`) / `1` (`csat_onboarding`) | `minAccountAgeMs` — dual-purpose: minimum account age before `nps` is eligible, OR minimum time since onboarding completion before `csat_onboarding` is eligible (same underlying `min_account_age_days` column, different triggering timestamp per survey — see `csatOnboardingIsEligible`/`npsIsEligible` in `surveys.js`) |
+| Inactivity Guard (days) | `VITE_SURVEY_NPS_INACTIVITY_DAYS` | `14` | `inactivityGuardMs` — skip if the user has been inactive longer than this (NPS only) |
 | Min Documents | `VITE_SURVEY_CSAT_MIN_DOCS` | `5` | `minDocuments` — minimum confirmed documents before this survey is eligible |
 | Document Gap | `VITE_SURVEY_CSAT_DOC_GAP` | `30` | `documentGap` — additional documents required before eligible again |
 | Response Cooldown (days) | `VITE_SURVEY_RESPONSE_COOLDOWN_DAYS` | `90` | `responseCooldownMs` — re-eligibility window after a response |
 
 `csat_invoicing` and `csat_order` each have their own row, so their Min Documents/Document Gap/
 Response Cooldown can now differ independently (previously one shared value for both).
+
+**`csat_onboarding` needs a new `ETGO_Survey_Type` row to become configurable** — its `csat_onboarding`
+value on the `ETGO Survey Key` reference list (`AD_REFERENCE_ID = CAEF9503906A40ECA458EADB4C3BF87B`)
+was added in ETP-4353 Phase 2 (it previously only had `csat_invoicing`/`csat_order`/`nps`). Until an
+admin creates that row, `getSurveyTypeConfig('csat_onboarding')` falls straight through to the
+`VITE_SURVEY_ONBOARDING_DELAY_DAYS` env var / `DEFAULT_SURVEY_ONBOARDING_DELAY_DAYS` (1 day),
+preserving the original hardcoded 24h behavior.
 
 All day-based values are converted to milliseconds internally; `minDocuments`/`documentGap` are
 plain counts. Invalid values (non-numeric, zero, negative — from either the window or the env var)
