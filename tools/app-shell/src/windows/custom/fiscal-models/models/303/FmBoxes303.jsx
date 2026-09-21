@@ -92,25 +92,28 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
     ? layout.sections.filter(s => sectionIds.includes(s.id))
     : layout.sections;
 
-  // ETP-5393 Bug C follow-up — `pendingValues` is this input's in-progress draft, keyed by
-  // box number. It MUST be cleared once a box's edit is committed (blur/Enter) or newly
-  // (re)opened (pencil click) — otherwise a stale draft (e.g. the "-12" the user typed
-  // before it got clamped to 0 by FmModel303Page's handleBoxChange) keeps showing on
-  // every subsequent re-open of that same cell's editor, even though the persisted/
-  // displayed value is already the clamped 0. `clearPendingValue` is the single place
-  // that drops a box's draft; both the commit handlers below and `startEditingCell`
-  // route through it so the two call sites never drift out of sync.
+  // Drops `boxNum`'s draft out of `pendingValues` entirely (deletes the key, not just sets
+  // it to something falsy) — so `hasOwnProperty` genuinely reflects "no draft for this box
+  // right now" afterward. Shared by commitCellEdit, Escape, and startEditingCell below so
+  // the three spots that must reset a draft can't drift out of sync with each other. Also
+  // fixes the ETP-5393 Bug C follow-up case: a stale draft (e.g. the "-12" the user typed
+  // before it got clamped to 0 by FmModel303Page's handleBoxChange) must not keep showing on
+  // every subsequent re-open of that same cell's editor once the persisted/displayed value has
+  // moved on.
   const clearPendingValue = (boxNum) => {
     setPendingValues(prev => {
-      if (!(boxNum in prev)) return prev;
+      if (!Object.prototype.hasOwnProperty.call(prev, boxNum)) return prev;
       const next = { ...prev };
       delete next[boxNum];
       return next;
     });
   };
 
-  // Opens the inline editor for a box, always starting from the current persisted/displayed
-  // value rather than whatever draft (if any) was left behind by a previous edit session.
+  // Opens the inline editor for `boxNum`. Always starts from a clean draft: without this, a
+  // stale key left over from a PREVIOUS edit session of the same box (e.g. one that committed
+  // "900", after which an external prop update — a reactive box78/box110 clamp on another box —
+  // corrected `boxes` to "500") would still satisfy commitCellEdit's hasOwnProperty check on
+  // reopen-and-blur-without-typing, silently resending the stale "900" over the current "500".
   const startEditingCell = (boxNum) => {
     clearPendingValue(boxNum);
     setEditingCell(boxNum);
@@ -128,9 +131,21 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
     return String(Math.round(clamped * 100) / 100);
   };
 
+  // Commits the pending edit for `boxNum`, if there is one. `pendingValues` only gains a
+  // key for a box once the user actually types in it (see the input's onChange below) — so
+  // a box that was never touched this edit session (pencil clicked, then blur/Escape with no
+  // keystroke) has no key in `pendingValues` at all, distinct from a box the user deliberately
+  // cleared back to `''`. The presence check (not a truthiness check on the value) is what
+  // keeps those two cases apart: calling onBoxChange with `undefined` for the untouched case
+  // used to flow into parseBoxInput(undefined) -> NaN -> null -> "remove this box", silently
+  // wiping a previously saved value on a pure no-op edit. The draft is always cleared after a
+  // commit attempt (whether it fired or not) so the NEXT edit session for this box starts clean
+  // too — see startEditingCell/clearPendingValue above.
   const commitCellEdit = (boxNum, isPercent = false) => {
-    const raw = pendingValues[boxNum];
-    onBoxChange?.(boxNum, isPercent ? clampPercentValue(raw) : raw);
+    if (Object.prototype.hasOwnProperty.call(pendingValues, boxNum)) {
+      const raw = pendingValues[boxNum];
+      onBoxChange?.(boxNum, isPercent ? clampPercentValue(raw) : raw);
+    }
     clearPendingValue(boxNum);
     setEditingCell(null);
   };

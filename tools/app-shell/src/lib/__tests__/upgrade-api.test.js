@@ -8,7 +8,11 @@ import {
 import * as upgradeApi from '../upgrade/api.js';
 import {
   UPGRADE_ERROR_CODES,
+  createBillingPurchase,
   createCheckoutSession,
+  getBillingOffer,
+  getBillingOverview,
+  getBillingPurchase,
   getCheckoutStatus,
   runPaidOnboarding,
 } from '../upgrade/api.js';
@@ -16,13 +20,17 @@ import {
 /**
  * ETP-4576 — the checkout client's REQUEST contract, not just its parsing.
  *
- * The bug this file now guards was silent by construction. These three calls used to take a
- * `fetchImpl` plus a `token`, and the token went to `buildAuthHeaders`, which puts whatever it
+ * The bug this file now guards was silent by construction. Every call in this module used to take
+ * a `fetchImpl` plus a `token`, and the token went to `buildAuthHeaders`, which puts whatever it
  * receives into `X-Go-CSRF`. The token was read from `sf_auth_token`/`sf_platform_token`, keys
- * `purgeLegacyAuthStorage` deletes, so the argument was null: the two POSTs left with no proof of
- * intent and were refused, while the GET beside them kept working — the browser attaches the
+ * `purgeLegacyAuthStorage` deletes, so the argument was null: the POSTs left with no proof of
+ * intent and were refused, while the GETs beside them kept working — the browser attaches the
  * session cookie on its own and a read needs no proof. Nothing in the old suite could see that,
  * because it asserted on a fetch double it injected itself and never on what went on the wire.
+ *
+ * The develop merge that brought the billing calls in reintroduced that exact shape, which is why
+ * the module-surface guard and the per-call header assertions below cover all of them, not only
+ * the three that were migrated first.
  *
  * So every case here drives the REAL `apiFetch` with `globalThis.fetch` stubbed underneath, and
  * asserts the header that must be present and the one that must be absent. An implementation that
@@ -121,16 +129,24 @@ afterEach(() => {
 describe('the module surface', () => {
   // The two deleted readers are the bug itself, not an implementation detail: both took their
   // credential out of `sf_auth_token`/`sf_platform_token`. Asserting their absence is what stops a
-  // legacy-key reader being reintroduced by a merge.
+  // legacy-key reader being reintroduced by a merge — which is exactly what the develop merge that
+  // brought the billing calls in tried to do: they arrived built on `buildAuthHeaders(token)` with
+  // the token read from those same purged keys.
   it('exposes no token reader — the credential comes from the active scheme', () => {
     assert.equal(upgradeApi.getPlatformToken, undefined);
     assert.equal(upgradeApi.getCheckoutToken, undefined);
   });
 
-  it('exports only the three calls and the error table', () => {
+  // Pinned exactly, so a call added by a future merge cannot slip in without being routed through
+  // `apiFetch` and covered below.
+  it('exports only the documented calls and the error table', () => {
     assert.deepEqual(Object.keys(upgradeApi).sort(), [
       'UPGRADE_ERROR_CODES',
+      'createBillingPurchase',
       'createCheckoutSession',
+      'getBillingOffer',
+      'getBillingOverview',
+      'getBillingPurchase',
       'getCheckoutStatus',
       'runPaidOnboarding',
     ]);
@@ -305,7 +321,7 @@ describe('runPaidOnboarding', () => {
 
     const result = await runPaidOnboarding(
       'https://api.test',
-      { clientName: 'Acme Productive', paymentToken: 'req-1' },
+      { clientName: 'Acme Productive', paymentToken: 'req-1', countryCode: 'AR' },
       (message) => messages.push(message),
     );
 
@@ -375,4 +391,224 @@ describe('runPaidOnboarding', () => {
 
     assert.deepEqual(storageWrites, []);
   });
+});
+
+/*
+ * The four calls below arrived with the develop merge. They were written against the shape this
+ * module no longer has — an injected `fetchImpl` plus a `token` fed to `buildAuthHeaders` — so they
+ * are retargeted here onto the migrated signatures and, like every case above, driven through the
+ * REAL `apiFetch` with `globalThis.fetch` stubbed underneath. That is the only way the assertions
+ * can see the bug: a suite that inspects a double it injected itself would report
+ * `Authorization: Bearer <purged key>` as a pass while the wire carried no proof of intent at all.
+ */
+describe('createBillingPurchase', () => {
+  it('posts product intent to the billing boundary, with no card or price fields', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({
+      requestId: 'req-2',
+      checkoutUrl: 'https://checkout.example/session-2',
+    }));
+
+    const result = await createBillingPurchase('https://api.test', {
+      clientName: 'Acme Productive',
+      language: 'es_ES',
+    });
+
+    assert.deepEqual(result, {
+      requestId: 'req-2',
+      checkoutUrl: 'https://checkout.example/session-2',
+      expiresAt: null,
+    });
+    assert.equal(calls[0][0], 'https://api.test/sws/go/billing/purchases');
+    assert.deepEqual(JSON.parse(calls[0][1].body), {
+      action: 'productive-tenant',
+      upgradeAction: 'create-productive',
+      clientName: 'Acme Productive',
+      language: 'es_ES',
+    });
+    assert.doesNotMatch(calls[0][1].body, /cardNumber|paymentToken|priceId|amount/);
+  });
+
+  // THE regression, on the call the merge introduced: it arrived with the exact shape that made the
+  // original bug invisible, so the same assertion has to hold for it.
+  it('carries the write proof and no bearer token under the cookie scheme', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ requestId: 'req-2', checkoutUrl: 'https://c.test/s2' }));
+
+    await createBillingPurchase('https://api.test', {});
+
+    assert.equal(calls[0][1].method, 'POST');
+    assert.equal(headersOf()['x-go-csrf'], CSRF);
+    assert.equal(headersOf().authorization, undefined);
+    assert.equal(calls[0][1].credentials, 'include');
+  });
+
+  it('carries the bearer token, and the proof too, under the bearer scheme', async () => {
+    declareBearerSession();
+    installFetch(jsonResponse({ requestId: 'req-2', checkoutUrl: 'https://c.test/s2' }));
+
+    await createBillingPurchase('https://api.test', {});
+
+    assert.equal(headersOf().authorization, `Bearer ${BEARER}`);
+    assert.equal(headersOf()['x-go-csrf'], CSRF);
+  });
+
+  it('writes no credential into storage', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ requestId: 'req-2', checkoutUrl: 'https://c.test/s2' }));
+
+    await createBillingPurchase('https://api.test', {});
+
+    assert.deepEqual(storageWrites, []);
+  });
+
+  // A duplicate is a domain answer, not a failure: the page reopens the purchase it is told about,
+  // so the payload has to survive on the error object.
+  it('raises purchaseAlreadyExists with the purchase attached on a 409', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse(
+      { purchaseId: 'req-1', status: 'CREATED' }, { ok: false, status: 409 },
+    ));
+
+    await assert.rejects(
+      () => createBillingPurchase('', { clientName: 'Acme' }),
+      (error) => error.code === UPGRADE_ERROR_CODES.purchaseAlreadyExists
+        && error.status === 409
+        && error.purchase.purchaseId === 'req-1'
+        && error.purchase.status === 'CREATED',
+    );
+  });
+
+  // A 409 that names no purchase is not a duplicate the page can reopen, and must not be reported
+  // as one — the screen would navigate to a purchase nobody named.
+  it('falls back to the generic failure on a 409 that names no purchase', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ message: 'conflict' }, { ok: false, status: 409 }));
+
+    await assert.rejects(
+      () => createBillingPurchase('', {}),
+      (error) => error.code === UPGRADE_ERROR_CODES.checkoutCreationFailed
+        && error.purchase === undefined,
+    );
+  });
+
+  it('maps a 401 onto sessionExpired rather than logging the user out mid-checkout', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ error: { message: 'expired' } }, { ok: false, status: 401 }));
+
+    await assert.rejects(
+      () => createBillingPurchase('', {}),
+      (error) => error.code === UPGRADE_ERROR_CODES.sessionExpired && error.status === 401,
+    );
+  });
+
+  it('rejects a response without a hosted URL or request id', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ ok: true }));
+
+    await assert.rejects(
+      () => createBillingPurchase('', {}),
+      (error) => error.code === UPGRADE_ERROR_CODES.checkoutUnavailable,
+    );
+  });
+});
+
+describe('the account billing reads', () => {
+  it('reads the overview projection', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ canManageBilling: true, purchases: [] }));
+
+    const result = await getBillingOverview('https://api.test');
+
+    assert.deepEqual(result, { canManageBilling: true, purchases: [] });
+    assert.equal(calls[0][0], 'https://api.test/sws/go/billing/overview');
+  });
+
+  it('falls back to an empty projection when the body is empty', async () => {
+    declareCookieSession();
+    installFetch({ ok: true, status: 200, json: async () => null });
+
+    assert.deepEqual(await getBillingOverview(''), { purchases: [] });
+  });
+
+  it('reads the server-owned billing offer', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ amountMinor: 4900, currency: 'EUR', interval: 'month' }));
+
+    const result = await getBillingOffer('https://api.test');
+
+    assert.equal(result.amountMinor, 4900);
+    assert.equal(calls[0][0], 'https://api.test/sws/go/billing/offers');
+  });
+
+  it('escapes the purchase id into the path', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ purchaseId: 'purchase/1', status: 'CREATED' }));
+
+    const purchase = await getBillingPurchase('https://api.test', 'purchase/1');
+
+    assert.equal(purchase.status, 'CREATED');
+    assert.equal(calls[0][0], 'https://api.test/sws/go/billing/purchases/purchase%2F1');
+  });
+
+  it('raises a stable error for an unavailable purchase', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ message: 'missing' }, { ok: false, status: 404 }));
+
+    await assert.rejects(
+      () => getBillingPurchase('', 'purchase-1'),
+      (error) => error.code === UPGRADE_ERROR_CODES.checkoutCreationFailed && error.status === 404,
+    );
+  });
+
+  // The asymmetry that made the original bug invisible: a read needs no proof of intent, so these
+  // three kept working while the POSTs beside them were refused. Pinned on all three so the
+  // asymmetry stays deliberate, and so a future "just send the header everywhere" has to argue
+  // with a test.
+  for (const [name, call] of [
+    ['getBillingOverview', () => getBillingOverview('https://api.test')],
+    ['getBillingOffer', () => getBillingOffer('https://api.test')],
+    ['getBillingPurchase', () => getBillingPurchase('https://api.test', 'purchase-1')],
+  ]) {
+    it(`${name} sends neither credential header, and still lets the cookie travel`, async () => {
+      declareCookieSession();
+      installFetch(jsonResponse({}));
+
+      await call();
+
+      assert.equal(calls[0][1].method ?? 'GET', 'GET');
+      assert.equal(headersOf()['x-go-csrf'], undefined);
+      assert.equal(headersOf().authorization, undefined);
+      assert.equal(calls[0][1].credentials, 'include');
+    });
+
+    it(`${name} carries the bearer token under the bearer scheme`, async () => {
+      declareBearerSession();
+      installFetch(jsonResponse({}));
+
+      await call();
+
+      assert.equal(headersOf().authorization, `Bearer ${BEARER}`);
+      assert.equal(headersOf()['x-go-csrf'], undefined);
+    });
+
+    it(`${name} writes no credential into storage`, async () => {
+      declareCookieSession();
+      installFetch(jsonResponse({}));
+
+      await call();
+
+      assert.deepEqual(storageWrites, []);
+    });
+
+    it(`${name} maps a 401 onto sessionExpired`, async () => {
+      declareCookieSession();
+      installFetch(jsonResponse({ error: { message: 'expired' } }, { ok: false, status: 401 }));
+
+      await assert.rejects(
+        call,
+        (error) => error.code === UPGRADE_ERROR_CODES.sessionExpired && error.status === 401,
+      );
+    });
+  }
 });

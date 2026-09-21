@@ -5,6 +5,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 const columns = [
   { key: 'warehouse', column: 'M_Warehouse_ID', type: 'selector', label: 'Warehouse', required: true },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner', required: true },
+  { key: 'partnerAddress', column: 'C_BPartner_Location_ID', type: 'selector', label: 'Partner Address', required: true },
   { key: 'movementDate', column: 'MovementDate', type: 'date', label: 'Movement Date', required: true },
   { key: 'orderReference', column: 'POReference', type: 'string', label: 'Order Reference', maxLength: 20 },
   { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', enumLabels: { 'CL': 'docStatusCl', 'CO': 'docStatusCo', 'DR': 'docStatusDr', 'NA': 'docStatusNa', 'WP': 'docStatusWp', 'RE': 'docStatusRe', 'TEMP': 'docStatusTemp', 'IP': 'docStatusIp', '??': 'docStatus', 'VO': 'docStatusVo' }, required: true },

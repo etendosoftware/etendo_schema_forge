@@ -622,7 +622,9 @@ export function withBox111NonZeroFlag(identification, liveBoxes) {
   return { ...identification, _box111NonZero: box111 != null && Number(box111) !== 0 };
 }
 
-function roundEur(n) {
+// Exported (ETP-5409) so FmModel303Page.jsx's parseBoxInput can reuse the same 2-decimal
+// rounding used everywhere else in this file for box values, instead of a second copy.
+export function roundEur(n) {
   return Math.round(n * 100) / 100;
 }
 

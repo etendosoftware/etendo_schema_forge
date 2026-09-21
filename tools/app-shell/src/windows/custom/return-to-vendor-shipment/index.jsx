@@ -6,6 +6,8 @@ import ReturnWindowShell from '../shared/ReturnWindowShell';
 import { useMenuLabel } from '@/i18n';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
+import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
+import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 
 // ETP-4857 — bulk "Confirmar" for Borrador rows, at parity with Goods Shipment.
 // buildInOutActions only offers CO (confirm) when a draft is selected; it never
@@ -29,46 +31,51 @@ function ReturnToVendorShipmentBulkActions(props) {
 
 export default function ReturnToVendorShipmentWindow({ windowName, recordId, apiBaseUrl, token, ...rest }) {
   const tMenu = useMenuLabel();
+  const { createContactCtxValue, contactPortal } =
+    useCreateContactModal({ apiBaseUrl, token, documentType: 'purchase' });
   return (
-    <ReturnWindowShell
-      windowName={windowName}
-      recordId={recordId}
-      apiBaseUrl={apiBaseUrl}
-      token={token}
-      PageComponent={ReturnToVendorShipmentPage}
-      renderPreview={({ row, onClose, onEdit }) => (
-        <ReturnToVendorShipmentPreview
-          shipment={row}
-          token={token}
-          apiBaseUrl={apiBaseUrl}
-          windowName={windowName}
-          onClose={onClose}
-          onEdit={onEdit}
-          data-testid="ReturnToVendorShipmentPreview__a5f79c" />
-      )}
-      entity="returnToVendorShipment"
-      headerEntity="returnToVendorShipment"
-      routePrefix="/return-to-vendor-shipment/"
-      // ETP-5260 defect fix — forwarded through ReturnWindowShell's `...pageProps`
-      // and the generated ReturnToVendorShipmentPage's own `{...props}` spread
-      // straight to DetailView; renders Copy link to the LEFT of Save/Confirm.
-      // ConfirmWithCreditButton (topbarRight, hardcoded in the generated Page)
-      // is untouched — see ReturnToVendorShipmentSecondaryActions' doc comment.
-      topbarSecondary={ReturnToVendorShipmentSecondaryActions}
-      duplicateAction={{ show: false }}
-      hideLink
-      bulkActions={ReturnToVendorShipmentBulkActions}
-      // ETP-5124 — re-added `emailAction` now that the backend registers a correctly
-      // named contract (`return-to-vendor-shipment-send`, matching this window's
-      // `${windowName}-send` derivation) via `ReturnToVendorShipmentSendEmailContract`.
-      // The prior ETP-4717 removal (contract-name mismatch — see docs/feedback.md) no
-      // longer applies.
-      emailAction={{
-        usePdf: useReturnToVendorPdf,
-        documentType: tMenu('Return to Vendor Shipment'),
-        visibleWhen: "@documentStatus@='CO'",
-      }}
-      {...rest}
-      data-testid="ReturnWindowShell__a5f79c" />
+    <CreateContactContext.Provider value={createContactCtxValue}>
+      <ReturnWindowShell
+        windowName={windowName}
+        recordId={recordId}
+        apiBaseUrl={apiBaseUrl}
+        token={token}
+        PageComponent={ReturnToVendorShipmentPage}
+        renderPreview={({ row, onClose, onEdit }) => (
+          <ReturnToVendorShipmentPreview
+            shipment={row}
+            token={token}
+            apiBaseUrl={apiBaseUrl}
+            windowName={windowName}
+            onClose={onClose}
+            onEdit={onEdit}
+            data-testid="ReturnToVendorShipmentPreview__a5f79c" />
+        )}
+        entity="returnToVendorShipment"
+        headerEntity="returnToVendorShipment"
+        routePrefix="/return-to-vendor-shipment/"
+        // ETP-5260 defect fix — forwarded through ReturnWindowShell's `...pageProps`
+        // and the generated ReturnToVendorShipmentPage's own `{...props}` spread
+        // straight to DetailView; renders Copy link to the LEFT of Save/Confirm.
+        // ConfirmWithCreditButton (topbarRight, hardcoded in the generated Page)
+        // is untouched — see ReturnToVendorShipmentSecondaryActions' doc comment.
+        topbarSecondary={ReturnToVendorShipmentSecondaryActions}
+        duplicateAction={{ show: false }}
+        hideLink
+        bulkActions={ReturnToVendorShipmentBulkActions}
+        // ETP-5124 — re-added `emailAction` now that the backend registers a correctly
+        // named contract (`return-to-vendor-shipment-send`, matching this window's
+        // `${windowName}-send` derivation) via `ReturnToVendorShipmentSendEmailContract`.
+        // The prior ETP-4717 removal (contract-name mismatch — see docs/feedback.md) no
+        // longer applies.
+        emailAction={{
+          usePdf: useReturnToVendorPdf,
+          documentType: tMenu('Return to Vendor Shipment'),
+          visibleWhen: "@documentStatus@='CO'",
+        }}
+        {...rest}
+        data-testid="ReturnWindowShell__a5f79c" />
+      {contactPortal}
+    </CreateContactContext.Provider>
   );
 }
