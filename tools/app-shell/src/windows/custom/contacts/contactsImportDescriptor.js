@@ -321,10 +321,32 @@ function taxIdCellError(raw, translate) {
   const fallback = key === TAX_ID_CHECK_DIGIT_ERROR_KEY
     ? 'The check digit does not match. Review the number.'
     : 'Enter a valid NIF, CIF or NIE.';
-  if (typeof translate !== 'function') return { target: 'taxID', message: fallback };
+  return { target: 'taxID', message: translatedOrFallback(key, fallback, translate) };
+}
+
+/**
+ * The translated text for `key`, or `fallback` when there is no dictionary or the dictionary
+ * echoes the key back — the standing posture of this import: an echoed key is a miss, not a
+ * translation. Extracted because the same four-line dance sat at three call sites and carried
+ * most of `contactIdentityErrors`'s cognitive complexity (S3776).
+ */
+function translatedOrFallback(key, fallback, translate) {
+  if (typeof translate !== 'function') return fallback;
   const translated = translate(key);
-  // Same posture as the rest of the import: a dictionary that echoes the key back is a miss.
-  return { target: 'taxID', message: translated && translated !== key ? translated : fallback };
+  return translated && translated !== key ? translated : fallback;
+}
+
+/**
+ * A person contact is identified by first AND last name, so a missing half fails the row on
+ * that very cell. Split out of `contactIdentityErrors` for S3776.
+ */
+function personNameErrors(firstName, lastName, translate) {
+  const message = translatedOrFallback('importErrorPersonNameRequired',
+    'A person contact requires both first name and last name.', translate);
+  return [
+    ...(!firstName ? [{ target: 'etgoFirstname', message }] : []),
+    ...(!lastName ? [{ target: 'etgoLastname', message }] : []),
+  ];
 }
 
 function contactIdentityErrors(row, translate) {
@@ -344,20 +366,12 @@ function contactIdentityErrors(row, translate) {
   const firstName = String(row.etgoFirstname ?? '').trim();
   const lastName = String(row.etgoLastname ?? '').trim();
   if (type === 'Y') {
-    const translated = typeof translate === 'function' && translate('importErrorPersonNameRequired');
-    const message = translated && translated !== 'importErrorPersonNameRequired'
-      ? translated
-      : 'A person contact requires both first name and last name.';
-    return [
-      ...(!firstName ? [{ target: 'etgoFirstname', message }] : []),
-      ...(!lastName ? [{ target: 'etgoLastname', message }] : []),
-    ];
+    return personNameErrors(firstName, lastName, translate);
   }
   if (!String(row.name ?? '').trim() && !(firstName && lastName)) {
-    const translated = typeof translate === 'function' && translate('importErrorMissingContactName');
-    const message = translated && translated !== 'importErrorMissingContactName'
-      ? translated
-      : 'This row has no commercial name and no first/last name, so the contact cannot be created.';
+    const message = translatedOrFallback('importErrorMissingContactName',
+      'This row has no commercial name and no first/last name, so the contact cannot be created.',
+      translate);
     return [{ target: 'name', message }];
   }
   return [];
