@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import LocationModalField from '@/components/contract-ui/LocationModalField.jsx';
 import PrefixedInput from '@/components/contract-ui/PrefixedInput.jsx';
 import { getEmailFieldError, getWebsiteFieldError, getPhoneFieldError } from '@/components/contract-ui/recipientEdits.js';
+import { getTaxIdError } from '@/lib/taxIdValidation.js';
 import { filterPhoneCharacters } from '@/components/contract-ui/contactsFieldValidation.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useOrganizationData } from './useOrganizationData.js';
@@ -17,6 +18,12 @@ import OrgLogoField from './OrgLogoField.jsx';
 import BusinessTypeCards from './BusinessTypeCards.jsx';
 import { getCountryFlag } from './countryFlag.js';
 import ActividadesIaeSection from './ActividadesIaeSection.jsx';
+// ETP-5391 — reused as-is from fiscal-config (NOT forked): the backend
+// (`GET/POST/DELETE /sws/neo/certificate?orgId=...`, NeoCertificateHelper.java) is
+// already organization-scoped, not per fiscal system, so the same component that
+// SiiSection/VerifactuSection/TbaiSection each mount surfaces the org's one real
+// certificate here too, at the org level, instead of only inside each fiscal tab.
+import CertSection from '../fiscal-config/CertSection.jsx';
 
 // The AD_OrgInfo "Location / Address" identifier is a composed string
 // (e.g. "Santa Fe - 446 - 5800 - Rio Cuarto - España") — the country is the
@@ -78,6 +85,19 @@ function getMissingRequiredFields(form) {
 // page hand-rolling that reconstruction itself. Checked in the same order
 // useEntity.js checks them (email, website, phone), stopping at the first failure —
 // one toast, not a stack of them, same UX as Contacts.
+// ETP-5190 — the NIF is validated apart from the three optional contact fields above, for two
+// reasons: it is REQUIRED on this window (so it is already in getMissingRequiredFields), and it
+// is one of only two places a tenant sets its fiscal identifier, which makes a wrong value
+// expensive — it surfaces as a failure to invoice, weeks later. It therefore gets the inline
+// FieldError treatment the required checks get, not just a toast.
+//
+// The same rules run server-side in `SpanishTaxIdValidator` (Etendo GO), which is the binding
+// check; this is the one that answers before the round trip. Nothing in classic Etendo
+// validates AD_OrgInfo.TaxID at all.
+function getTaxIdErrorKey(form) {
+  return getTaxIdError(form.taxID);
+}
+
 const EMAIL_FIELD_DESCRIPTOR = { key: 'email' };
 const WEBSITE_FIELD_DESCRIPTOR = { key: 'web', inputPrefix: 'https://' };
 const PHONE_FIELD_DESCRIPTOR = { key: 'phone' };
@@ -213,6 +233,12 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
     // useEntity.js), reused directly rather than duplicated. Toast-only, no inline
     // FieldError, matching Contacts' UX exactly (unlike BUG-1's required-field errors,
     // which do get an inline message under the field).
+    const taxIdErrorKey = getTaxIdErrorKey(form);
+    if (taxIdErrorKey) {
+      setFieldErrors({ taxID: ui(taxIdErrorKey) });
+      toast.error(ui(taxIdErrorKey));
+      return;
+    }
     const formatErrorKey = getInvalidFormatErrorKey(form);
     if (formatErrorKey) {
       toast.error(ui(formatErrorKey));
@@ -456,6 +482,25 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
               </div>
             </div>
           </div>
+        </SectionRow>
+
+        {/* Certificado digital (ETP-5391) — org-scoped, not per fiscal system (see
+            NeoCertificateHelper.java). Reuses fiscal-config's SiiSection/VerifactuSection/
+            TbaiSection cert title+hint keys directly (no new key pair needed — they already
+            read as generic org-level copy, not SII/Verifactu/TBAI-specific text). `context`
+            is intentionally omitted: CertModal's CONTEXT_SUBTITLE only has entries for
+            tbai/sii/verifactu, so an unmatched/undefined context already falls back to
+            ui('fiscal.cert.subtitle.default') — which is itself worded at the org level,
+            not any one fiscal system. */}
+        <SectionRow
+          titleKey="fiscal.cert.section.legend"
+          descKey="fiscal.cert.section.hint"
+          testId="OrganizationPage__section-certificate"
+          data-testid="SectionRow__a5f503">
+          <CertSection
+            orgId={orgId}
+            apiBaseUrl={apiBaseUrl}
+            data-testid="CertSection__a5f503" />
         </SectionRow>
 
         {/* Datos de contacto */}

@@ -141,6 +141,7 @@ const {
   handleSaveErrorResponse,
   getNumericFieldViolation,
   getContactsTextFieldViolation,
+  getContactsTaxIdViolation,
   reportInvalidFormatField,
   extractErrorMessage,
 } = await import('../useEntity.js');
@@ -150,6 +151,17 @@ const {
 // without a module mock — no ESM mock loader is wired up for third-party
 // packages in this file (only `@/` workspace specifiers are intercepted).
 const { toast } = await import('sonner');
+
+// ETP-5031 — the declared AD column limits and the tax-id field keys the save
+// gate dispatches on. Imported (rather than duplicated as literals) so a change
+// to the column limit or a field-key rename shows up here as a failure instead
+// of as a fixture that quietly stopped meaning what it says.
+const {
+  CONTACTS_TEXT_FIELD_LIMITS,
+  CONTACTS_TAX_ID_FIELD,
+  CONTACTS_TAX_ID_KEY_FIELD,
+  TAX_ID_PASSPORT_ERROR_KEY,
+} = await import('../../components/contract-ui/contactsFieldValidation.js');
 
 describe('pickMessage', () => {
   it('returns the trimmed string for a string input', () => {
@@ -416,6 +428,30 @@ describe('shouldSkipPayloadField', () => {
         '12345',
         refWith('businessPartner'),
         refWith('businessPartner'),
+        new Set(),
+        false,
+        {}
+      ),
+      false
+    );
+  });
+
+  // ETP-5332: handleNew's `initialData` seeding marks every seeded key as
+  // user-changed (userChangedKeysRef) BEFORE the async /defaults response can
+  // land. If that response happens to echo the same key back — landing it in
+  // backendDefaultKeysRef too — a legacy-looking numeric FK id seeded this way
+  // must still survive into the create payload, exactly like a value the user
+  // typed themselves. This is the same rule as the test above; pinned again
+  // here under the feature's own name so a regression in the seeding contract
+  // (e.g. someone "optimizing" handleNew to skip the userChangedKeys marking)
+  // is traceable straight back to ETP-5332.
+  it('returns false for a seeded legacy numeric FK id even when defaults echo the same key back', () => {
+    assert.equal(
+      shouldSkipPayloadField(
+        'businessPartner',
+        '12345',
+        refWith('businessPartner'), // defaults response also contains this key
+        refWith('businessPartner'), // handleNew marked it user-changed via initialData seeding
         new Set(),
         false,
         {}
@@ -794,12 +830,183 @@ describe('getContactsTextFieldViolation (ETP-5031 — Contacts-only save-block w
   });
 
   it('allows save when every field is valid', () => {
-    const editing = { name: 'Acme Corp.', etgoPhone: '+54 11 5555-1234', email: 'user@example.com' };
+    // etgoPhone kept within the E.164 limit the AD column now declares (15) —
+    // the previous fixture was 16 characters, valid only under the old 60.
+    // Kept as a realistic literal (the point of the fixture is a phone number a
+    // user would actually type) but asserted against the declared limit, so a
+    // future narrowing of the column fails HERE with an explanatory message
+    // instead of silently turning this "happy path" test into a red one whose
+    // cause is not obvious.
+    const editing = { name: 'Acme Corp.', etgoPhone: '+541155551234', email: 'user@example.com' };
+    assert.ok(
+      editing.etgoPhone.length <= CONTACTS_TEXT_FIELD_LIMITS.etgoPhone,
+      `fixture phone (${editing.etgoPhone.length} chars) exceeds the declared etgoPhone limit `
+      + `(${CONTACTS_TEXT_FIELD_LIMITS.etgoPhone}) — shorten the fixture, it is meant to be valid`,
+    );
     assert.equal(getContactsTextFieldViolation('contacts', FIELDS, editing), null);
   });
 
   it('is a no-op on an empty fields array (e.g. no field was touched this session)', () => {
     assert.equal(getContactsTextFieldViolation('contacts', [], {}), null);
+  });
+});
+
+describe('getContactsTaxIdViolation (ETP-5031 QA round — tax-id save-block + legacy-data policy)', () => {
+  // This gate takes ALL registered form fields plus the set of keys the user
+  // touched THIS session, because its scoping spans TWO fields: the number
+  // (`taxID`) and its document type (`oBTIKTaxIDKey`). That is the behaviour
+  // under test here — the pure per-value dispatch lives in
+  // contract-ui/__tests__/contactsFieldValidation.test.js.
+  const FIELDS = [
+    { key: 'name' },
+    { key: CONTACTS_TAX_ID_FIELD },
+    { key: CONTACTS_TAX_ID_KEY_FIELD },
+    { key: 'etgoPhone' },
+  ];
+
+  // Check-digit-correct fixtures, the same ones lib/__tests__/taxIdValidation.test.js
+  // uses (mirrored from the binding Java SpanishTaxIdValidatorTest).
+  const VALID_DNI = '12345678Z';
+  const INVALID_DNI = '12345678A'; // right shape, wrong control letter
+  const GARBAGE_NIF = 'not a nif';
+
+  const touched = (...keys) => new Set(keys);
+
+  // --- Policy 1: legacy data is never blocked --------------------------------
+  it('does NOT validate a legacy invalid tax id when the user touched neither the number nor the type', () => {
+    // THE case this feature had to get right: existing customers carry dirty
+    // fiscal data. Editing an unrelated field (the phone) on such a record must
+    // still save — the invalid tax id is not this edit's problem.
+    const editing = {
+      [CONTACTS_TAX_ID_FIELD]: INVALID_DNI,
+      [CONTACTS_TAX_ID_KEY_FIELD]: '1',
+      etgoPhone: '+541155551234',
+    };
+    assert.equal(getContactsTaxIdViolation('contacts', FIELDS, editing, touched('etgoPhone')), null);
+  });
+
+  it('does NOT validate when the user touched nothing at all', () => {
+    const editing = { [CONTACTS_TAX_ID_FIELD]: GARBAGE_NIF, [CONTACTS_TAX_ID_KEY_FIELD]: '1' };
+    for (const changed of [new Set(), undefined, null]) {
+      assert.equal(getContactsTaxIdViolation('contacts', FIELDS, editing, changed), null);
+    }
+  });
+
+  // --- Policy 2: changing the TYPE alone re-declares the number --------------
+  it('DOES validate when only the document type changed (passport -> NIF re-declares what the number is)', () => {
+    // The number's characters did not change, but what they are supposed to BE
+    // did. A passport number left behind after switching the type to NIF must
+    // now satisfy the NIF rules.
+    const editing = {
+      [CONTACTS_TAX_ID_FIELD]: 'AB123456', // fine as a passport, not a NIF
+      [CONTACTS_TAX_ID_KEY_FIELD]: '1',
+    };
+    assert.deepEqual(
+      getContactsTaxIdViolation('contacts', FIELDS, editing, touched(CONTACTS_TAX_ID_KEY_FIELD)),
+      { key: CONTACTS_TAX_ID_FIELD, errorKey: 'taxIdInvalidFormat', errorParams: {} },
+    );
+  });
+
+  it('allows the reverse type change when the existing number is valid under the NEW type', () => {
+    // NIF -> passport: a DNI is also a well-shaped passport number, so switching
+    // the type must not invent a failure.
+    const editing = { [CONTACTS_TAX_ID_FIELD]: VALID_DNI, [CONTACTS_TAX_ID_KEY_FIELD]: '3' };
+    assert.equal(
+      getContactsTaxIdViolation('contacts', FIELDS, editing, touched(CONTACTS_TAX_ID_KEY_FIELD)),
+      null,
+    );
+  });
+
+  // --- Policy 3: touching the number validates it ---------------------------
+  it('DOES validate when the number itself changed, flagging a wrong check digit', () => {
+    const editing = { [CONTACTS_TAX_ID_FIELD]: INVALID_DNI, [CONTACTS_TAX_ID_KEY_FIELD]: '1' };
+    assert.deepEqual(
+      getContactsTaxIdViolation('contacts', FIELDS, editing, touched(CONTACTS_TAX_ID_FIELD)),
+      { key: CONTACTS_TAX_ID_FIELD, errorKey: 'taxIdInvalidCheckDigit', errorParams: {} },
+    );
+  });
+
+  it('separates a wrong shape from a wrong check digit when the number changed', () => {
+    const editing = { [CONTACTS_TAX_ID_FIELD]: GARBAGE_NIF, [CONTACTS_TAX_ID_KEY_FIELD]: '1' };
+    assert.deepEqual(
+      getContactsTaxIdViolation('contacts', FIELDS, editing, touched(CONTACTS_TAX_ID_FIELD)),
+      { key: CONTACTS_TAX_ID_FIELD, errorKey: 'taxIdInvalidFormat', errorParams: {} },
+    );
+  });
+
+  it('blocks an over-length passport with taxIdInvalidPassport when the number changed', () => {
+    const editing = { [CONTACTS_TAX_ID_FIELD]: 'AB12345678', [CONTACTS_TAX_ID_KEY_FIELD]: '3' };
+    assert.deepEqual(
+      getContactsTaxIdViolation('contacts', FIELDS, editing, touched(CONTACTS_TAX_ID_FIELD)),
+      { key: CONTACTS_TAX_ID_FIELD, errorKey: TAX_ID_PASSPORT_ERROR_KEY, errorParams: {} },
+    );
+  });
+
+  it('allows save when the changed number is valid', () => {
+    const editing = { [CONTACTS_TAX_ID_FIELD]: VALID_DNI, [CONTACTS_TAX_ID_KEY_FIELD]: '1' };
+    assert.equal(
+      getContactsTaxIdViolation('contacts', FIELDS, editing, touched(CONTACTS_TAX_ID_FIELD, CONTACTS_TAX_ID_KEY_FIELD)),
+      null,
+    );
+  });
+
+  it('does not validate when the declared document type is neither NIF (1) nor passport (3)', () => {
+    // Even with the number explicitly touched: with no rule declared for that
+    // type there is nothing to check.
+    const editing = { [CONTACTS_TAX_ID_FIELD]: GARBAGE_NIF, [CONTACTS_TAX_ID_KEY_FIELD]: '2' };
+    assert.equal(
+      getContactsTaxIdViolation('contacts', FIELDS, editing, touched(CONTACTS_TAX_ID_FIELD)),
+      null,
+    );
+  });
+
+  // --- Wiring guarantees shared with the sibling gates ----------------------
+  it('is a no-op for any window other than "contacts" — the critical scoping guarantee', () => {
+    const editing = { [CONTACTS_TAX_ID_FIELD]: GARBAGE_NIF, [CONTACTS_TAX_ID_KEY_FIELD]: '1' };
+    const changed = touched(CONTACTS_TAX_ID_FIELD, CONTACTS_TAX_ID_KEY_FIELD);
+    for (const windowName of ['sales-order', 'purchase-order', 'organization', null]) {
+      assert.equal(getContactsTaxIdViolation(windowName, FIELDS, editing, changed), null, String(windowName));
+    }
+  });
+
+  it('does NOT block on a read-only taxID field, even in contacts', () => {
+    const fields = [{ key: CONTACTS_TAX_ID_FIELD, readOnlyLogic: () => true }];
+    const editing = { [CONTACTS_TAX_ID_FIELD]: GARBAGE_NIF, [CONTACTS_TAX_ID_KEY_FIELD]: '1' };
+    assert.equal(
+      getContactsTaxIdViolation('contacts', fields, editing, touched(CONTACTS_TAX_ID_FIELD)),
+      null,
+    );
+  });
+
+  it('does NOT block on a taxID field hidden by displayLogic, even in contacts', () => {
+    const fields = [{ key: CONTACTS_TAX_ID_FIELD, displayLogic: () => false }];
+    const editing = { [CONTACTS_TAX_ID_FIELD]: GARBAGE_NIF, [CONTACTS_TAX_ID_KEY_FIELD]: '1' };
+    assert.equal(
+      getContactsTaxIdViolation('contacts', fields, editing, touched(CONTACTS_TAX_ID_FIELD)),
+      null,
+    );
+  });
+
+  it('is a no-op on an empty fields array', () => {
+    assert.equal(
+      getContactsTaxIdViolation('contacts', [], {}, touched(CONTACTS_TAX_ID_FIELD)),
+      null,
+    );
+  });
+
+  it('ignores every field other than taxID while scanning the full field list', () => {
+    // The gate receives ALL form fields (not just changed ones), so an unrelated
+    // field holding a value that would be an invalid NIF must never be flagged.
+    const editing = {
+      name: GARBAGE_NIF,
+      etgoPhone: GARBAGE_NIF,
+      [CONTACTS_TAX_ID_FIELD]: VALID_DNI,
+      [CONTACTS_TAX_ID_KEY_FIELD]: '1',
+    };
+    assert.equal(
+      getContactsTaxIdViolation('contacts', FIELDS, editing, touched(CONTACTS_TAX_ID_FIELD)),
+      null,
+    );
   });
 });
 

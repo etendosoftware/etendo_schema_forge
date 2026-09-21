@@ -49,12 +49,15 @@ const draftMode = {
   "enabled": true,
   "processField": "documentAction",
   "processValue": "CO",
-  "label": "Confirm"
+  "label": "Confirm",
+  "keepSaveWhenCompletedFields": [
+    "accountingDate"
+  ]
 };
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['transactionDocument', 'documentNo', 'invoiceDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'paymentMethod', 'grandTotalAmount', 'summedLineAmount', 'currency', 'priceList'];
+const requiredHeaderFields = ['transactionDocument', 'documentNo', 'invoiceDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'paymentMethod', 'grandTotalAmount', 'summedLineAmount', 'currency', 'priceList', 'accountingDate'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -612,14 +615,16 @@ export const api = {
       "em_etgo_delivery_status": "Estado de entrega",
       "C_DocTypeTarget_ID": "Tipo de documento",
       "PriceList": "Precio",
-      "Foreign_Amount": "Importe en Moneda Objetivo"
+      "Foreign_Amount": "Importe en Moneda Objetivo",
+      "em_etgo_tbai_status": "Estado TicketBAI"
     },
     "en_US": {
       "OutstandingAmt": "Outstanding Amount",
       "EM_Etgo_Due_Date": "Due Date",
       "em_etgo_delivery_status": "Delivery Status",
       "C_DocTypeTarget_ID": "Document Type",
-      "Foreign_Amount": "Target Currency Amount"
+      "Foreign_Amount": "Target Currency Amount",
+      "em_etgo_tbai_status": "TicketBAI Status"
     },
     "es_AR": {
       "OutstandingAmt": "Saldo pendiente"

@@ -312,6 +312,56 @@ describe('generate303File — success path with identChecks and manualOverrides'
     assert.doesNotMatch(capturedUrl, /ConcursoType/);
   });
 
+  // ETP-5272 pt.7 — AEAT303Report2023+ throws
+  // @AEAT303_Bad_Bankruptcy_Statement_Date_Format@ when ConcursoDate is
+  // missing/blank while concurso=Y; 2021/2022 ship 8 blank spaces into that
+  // field slot otherwise. formatAeatConcursoDate converts the date-only
+  // `fecha_concurso` (`yyyy-MM-dd`) into AEAT's strict `ddMMyyyy` digit format.
+  it('forwards ConcursoDate in ddMMyyyy format when concurso is checked and fecha_concurso is set', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T1' },
+      {
+        token: 'tok',
+        apiBaseUrl: '/x',
+        identChecks: { tipo_declaracion: 'N', concurso: true, fecha_concurso: '2026-03-05' },
+      }
+    );
+    assert.match(capturedUrl, /ConcursoDate=05032026/);
+  });
+
+  it('does not set ConcursoDate when fecha_concurso is empty, even though concurso is checked (no crash)', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T1' },
+      { token: 'tok', apiBaseUrl: '/x', identChecks: { tipo_declaracion: 'N', concurso: true } }
+    );
+    assert.doesNotMatch(capturedUrl, /ConcursoDate/);
+    // IsConcurso itself must still go through — only the date is conditionally omitted.
+    assert.match(capturedUrl, /IsConcurso=Y/);
+  });
+
+  it('does not set ConcursoDate when concurso is falsy, even if fecha_concurso is (stale) set', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T1' },
+      { token: 'tok', apiBaseUrl: '/x', identChecks: { tipo_declaracion: 'N', concurso: false, fecha_concurso: '2026-03-05' } }
+    );
+    assert.doesNotMatch(capturedUrl, /ConcursoDate/);
+  });
+
   it('falls back to decl.result.kind and then N when tipo_declaracion is absent', async () => {
     globalThis.fetch = async () => ({ ok: true, blob: async () => new Blob(['x']) });
     const result = await generate303File(
@@ -865,4 +915,128 @@ describe('computeUpcomingDeadlines — 303 vs 349 quarterly parity', () => {
       assert.equal(d303.getTime(), d349.getTime());
     });
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BOX_PARAM_MAP — ETP-5391 additions (65/70/76/77/89/90/91/92/95/97/98/127/128)
+// ═══════════════════════════════════════════════════════════════════════════
+// BOX_PARAM_MAP itself is a private module constant — exercised indirectly via
+// generate303File's manualOverrides → applyBoxParams path, the same mechanism
+// every other BOX_PARAM_MAP entry already goes through (see the pre-existing
+// 42/108 coverage above). Each new key's AEAT param name is asserted 1:1.
+
+describe('generate303File — BOX_PARAM_MAP additions (ETP-5391)', () => {
+  const NEW_BOX_PARAMS = {
+    65: 'ToPublicTreasury',
+    70: 'ComplementaryAmt',
+    76: 'REG_CUOTAS_ART80',
+    77: 'IVA_IMPORT_ADUANA',
+    89: 'ALAVA',
+    90: 'GUIPUZCOA',
+    91: 'VIZCAYA',
+    92: 'NAVARRA',
+    95: '303REAGYP',
+    97: '303USED_GOODS',
+    98: '303TRAVEL_AGENCY',
+    127: 'OPSUJETASCONOSS',
+    128: 'OPINTRAGRUPO',
+  };
+
+  for (const [box, paramName] of Object.entries(NEW_BOX_PARAMS)) {
+    it(`forwards box ${box} as ${paramName}=<value> when present in manualOverrides`, async () => {
+      let capturedUrl;
+      globalThis.fetch = async (url) => {
+        capturedUrl = url;
+        return { ok: true, blob: async () => new Blob(['x']) };
+      };
+      await generate303File(
+        { year: 2026, period: 'T4' },
+        {
+          token: 'tok',
+          apiBaseUrl: '/x',
+          identChecks: { tipo_declaracion: 'N' },
+          manualOverrides: { [box]: 12.5 },
+        }
+      );
+      assert.match(capturedUrl, new RegExp(`${paramName}=12\\.5`));
+    });
+  }
+
+  it('does not set any of the new AEAT params when their box is absent from manualOverrides', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T4' },
+      { token: 'tok', apiBaseUrl: '/x', identChecks: { tipo_declaracion: 'N' }, manualOverrides: {} }
+    );
+    for (const paramName of Object.values(NEW_BOX_PARAMS)) {
+      assert.doesNotMatch(capturedUrl, new RegExp(`${paramName}=`));
+    }
+  });
+
+  it('box 65 (ToPublicTreasury) is the sole AEAT param for the territorio_comun mirror — no separate "107" param name exists', async () => {
+    // Casilla 107 is a UI-only derivedValue (fm303Layouts.js) that mirrors box 65 — it must
+    // never appear in BOX_PARAM_MAP itself, since AEAT's own module reads only box 65's value.
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T4' },
+      {
+        token: 'tok',
+        apiBaseUrl: '/x',
+        identChecks: { tipo_declaracion: 'N' },
+        manualOverrides: { 65: 88, 107: 100 },
+      }
+    );
+    assert.match(capturedUrl, /ToPublicTreasury=88/);
+    // 107 has no mapped AEAT param name, so it must not leak into the querystring under any key.
+    assert.doesNotMatch(capturedUrl, /107=/);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// applyIdentParams — declaracion_terceros → 347TAX_FORM (ETP-5391)
+// ═══════════════════════════════════════════════════════════════════════════
+// NOT forwarded via IDENT_PARAM_MAP's raw boolean passthrough: AEAT303Report2019.java checks
+// inputParams.get('347TAX_FORM').equals('Y') literally, so the literal string 'Y' must be sent,
+// never IDENT_PARAM_MAP's would-be 'true'.
+
+describe('generate303File — declaracion_terceros forwards 347TAX_FORM=Y literally (ETP-5391)', () => {
+  it('sets 347TAX_FORM=Y when declaracion_terceros is true', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T4' },
+      {
+        token: 'tok',
+        apiBaseUrl: '/x',
+        identChecks: { tipo_declaracion: 'N', declaracion_terceros: true },
+      }
+    );
+    assert.match(capturedUrl, /347TAX_FORM=Y/);
+    // Never the boolean's own string form — that would never match AEAT's literal 'Y' check.
+    assert.doesNotMatch(capturedUrl, /347TAX_FORM=true/);
+  });
+
+  it('does not set 347TAX_FORM when declaracion_terceros is false/absent', async () => {
+    let capturedUrl;
+    globalThis.fetch = async (url) => {
+      capturedUrl = url;
+      return { ok: true, blob: async () => new Blob(['x']) };
+    };
+    await generate303File(
+      { year: 2026, period: 'T4' },
+      { token: 'tok', apiBaseUrl: '/x', identChecks: { tipo_declaracion: 'N' } }
+    );
+    assert.doesNotMatch(capturedUrl, /347TAX_FORM/);
+  });
 });

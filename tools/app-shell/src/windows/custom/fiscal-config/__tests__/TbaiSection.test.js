@@ -90,6 +90,26 @@ describe('TbaiSection — PUT request', () => {
   });
 });
 
+// ETP-5272 — accepts an external `locked` prop (forceTestMode) that gates set()
+// and disables the auto-send switch, mirroring VerifactuSection's isReady lock.
+describe('TbaiSection — external lock prop (ETP-5272)', () => {
+  it('accepts a `locked` prop in its signature', () => {
+    assert.match(src, /forwardRef\(function TbaiSection\(\{[^}]*\blocked\b[^}]*\}, ref\)/);
+  });
+
+  it('does not allow form changes when locked (set() guard)', () => {
+    assert.match(src, /function set\(field, value\) \{\s*if \(locked\) return;/);
+  });
+
+  it('disables the auto-send Switch when locked', () => {
+    assert.match(src, /disabled=\{locked\}/);
+  });
+
+  it('passes the locked prop through to SectionSaveButton', () => {
+    assert.match(src, /locked=\{locked\}/);
+  });
+});
+
 describe('TbaiSection — save button', () => {
   it('delegates save button rendering to SectionSaveButton', () => {
     assert.match(src, /SectionSaveButton/);

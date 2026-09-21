@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useUI, useMenuLabel } from '@/i18n';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
-import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
+import SendDocumentModal from '@/components/contract-ui/SendDocumentModal';
 import SendToSifButton from './SendToSifButton';
 import { useInvoicePdf } from '@/windows/custom/shared/useInvoicePdf.js';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
 import { getArSubtype } from './invoiceSubtype';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { TruncatedText } from '@/components/ui/truncated-text';
 
 function fmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
@@ -44,7 +45,7 @@ const BADGE_STYLES = {
  *
  * The badge is the ONLY entry point. Clicking it opens the payments modal.
  */
-export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, api }) {
+export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, api, onSave, isDirty }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const [showPaymentsModal, setShowPaymentsModal] = useState(false);
@@ -118,6 +119,18 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     };
     window.addEventListener('neo:processSuccess', handler);
     return () => window.removeEventListener('neo:processSuccess', handler);
+  }, []);
+
+  // ETP-5260 defect fix — the Send button used to render inline here (topbarRight),
+  // landing to the RIGHT of Save/Confirm against the DF. It now lives in
+  // SalesInvoiceSecondaryActions (topbarSecondary, left of Save/Confirm) and
+  // reaches this component's existing SendDocumentModal/PDF context via this
+  // event bridge, the same pattern purchase-order uses for
+  // 'purchase-order:open-send-modal'.
+  useEffect(() => {
+    const openSendModal = () => setShowSendModal(true);
+    window.addEventListener('sales-invoice:open-send-modal', openSendModal);
+    return () => window.removeEventListener('sales-invoice:open-send-modal', openSendModal);
   }, []);
 
   // After the record re-fetches as CO, open queued modals in order.
@@ -254,6 +267,8 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         </span>
       );
     }
+    // ETP-5268 follow-up — amount shown again, capped to ~6 digits via
+    // TruncatedText (tooltip only opens when it genuinely truncates).
     return (
       <>
         <button
@@ -264,7 +279,8 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-info-bg)', border: '1px solid var(--status-info-border)', color: 'hsl(var(--primary))', fontVariantNumeric: 'tabular-nums' }}
         >
           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--primary))' }} />
-          {ui('cpFavorBadge')} · {fmt(outstandingAbs, currency)}
+          {ui('cpFavorBadge')}
+          <TruncatedText text={fmt(outstandingAbs, currency)} className="w-[72px] shrink-0 text-left" />
         </button>
         {showPaymentsModal && (
           <InvoicePaymentHistoryModal
@@ -358,14 +374,9 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         token={token}
         apiBaseUrl={apiBaseUrl}
         status={data?.documentStatus}
+        onSave={onSave}
+        isDirty={isDirty}
       />
-
-      {/* ETP-4717 — explicit Completed gate, matching the grid row
-          quick-action's status rule (this branch is only reached once
-          installments exist, which in practice already implies CO). */}
-      {isCompleted && <SendDocumentButton onClick={() => setShowSendModal(true)} />}
-
-
 
       {/* View payments modal — installment breakdown */}
       {showPaymentsModal && (

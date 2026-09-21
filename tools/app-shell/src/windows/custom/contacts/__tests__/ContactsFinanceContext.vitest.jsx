@@ -172,7 +172,7 @@ describe('ContactsFinanceProvider', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('does not fetch when token is missing', async () => {
+  it('still fetches KPIs when the bearer token is empty (ETP-4576 cookie mode)', async () => {
     globalThis.fetch.mockResolvedValue({
       ok: true,
       json: async () => ({ response: { data: [] } }),
@@ -185,7 +185,10 @@ describe('ContactsFinanceProvider', () => {
     await act(async () => {
       screen.getByText('setRecordId').click();
     });
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    // Under the cookie credential mode the bearer is empty by design; apiFetch
+    // still carries auth via the session cookie, so the KPI load must NOT be
+    // gated on the token. bp-stats + bp-trend = 2 requests.
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
   });
 });
 

@@ -14,7 +14,10 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 
-vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+vi.mock('@/i18n', () => ({
+  useUI: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
+}));
 vi.mock('../../../fiscalModelsUtils.js', () => ({
   formatAmount: (n) => (n == null ? '—' : String(n)),
   compute349Operators: vi.fn().mockResolvedValue(null),
@@ -40,6 +43,7 @@ vi.mock('../../../FmTabContent.jsx', () => ({
 }));
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('lucide-react', () => ({
+  ArrowLeft: () => null, Save: () => null,
   Download: () => null, CircleCheck: () => null, Search: () => null, Loader2: () => null,
   Globe: () => null, MoreVertical: () => null, ChevronDown: () => null, Users: () => null,
   FileEdit: () => null, TriangleAlert: () => null, Folder: () => null, ReceiptText: () => null,

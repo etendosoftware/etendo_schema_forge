@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AuthShell, LoginStep, RegisterStep } from '@etendosoftware/etendo-go-core/onboarding';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useLogout } from '@/auth/useLogout.js';
+import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 /**
  * Public Company Invitation Acceptance Page (ETP-4894).
  *
@@ -16,6 +18,30 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  * 3. Idempotent accepted confirmation.
  * 4. Safe non-enumerating error states for expired/revoked/invalid tokens.
  */
+/**
+ * ETP-5202 — states of the "someone else is signed in" guard.
+ *
+ * CHECKING is the initial state on purpose: until the active session's identity is known, the
+ * page must not render LoginStep/RegisterStep, or the invitee would start typing credentials
+ * into a tab where another person's session is still live.
+ */
+const SESSION_GUARD = {
+  CHECKING: 'checking',
+  CLEAR: 'clear',
+  CONFLICT: 'conflict',
+  DEFERRED: 'deferred',
+};
+
+const ACTIONABLE_BRANCHES = new Set(['existing_account', 'registration_required']);
+
+function readStoredValue(key) {
+  try {
+    return globalThis.localStorage?.getItem(key) || '';
+  } catch {
+    return '';
+  }
+}
+
 export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_API_BASE || '' }) { // NOSONAR -- intentional finite invitation state machine.
   const ui = useUI();
   const navigate = useNavigate();
@@ -34,6 +60,22 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [existingAuthenticated, setExistingAuthenticated] = useState(false);
+
+  // ETP-5202 — the invitation link is routinely opened on a shared computer while somebody
+  // else's session is still open. `sessionGuard` decides whether this page may proceed
+  // straight to the acceptance flow, and `activeAccountEmail` names the person currently
+  // signed in so the conflict prompt can say who is about to be signed out.
+  const [sessionGuard, setSessionGuard] = useState(SESSION_GUARD.CHECKING);
+  const [activeAccountEmail, setActiveAccountEmail] = useState(null);
+  const logout = useLogout();
+
+  // ETP-5202 phase 2 — reaching the tenant that invited you. `enabled: false` keeps the hook
+  // from listing environments on mount: this page only ever needs the one-shot
+  // `enterByClientName`, which re-fetches the list itself (the newly joined tenant cannot be in
+  // a list loaded before the invitation was accepted).
+  const { enterByClientName } = useEnvironmentSwitch({ enabled: false });
+  const [entering, setEntering] = useState(false);
+  const [enterError, setEnterError] = useState(false);
 
   const clearTokenFromUrl = () => {
     try {
@@ -96,6 +138,140 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     };
   }, [token, apiFetch]);
 
+  // ETP-5202 — resolves who is signed in RIGHT NOW, and blocks the acceptance flow when that is
+  // somebody other than the invitee.
+  //
+  // The check is deliberately "is the open session a different person?", not "is a session
+  // open?": being signed in with your OWN account in another tenant and accepting an invitation
+  // to a second one is a legitimate, and soon routine, multi-tenant flow — prompting there would
+  // be pure noise. The identity comes from GET /sws/neo/session, which resolves the platform
+  // account (ETGO_ACCOUNT) behind the authenticated user and therefore works with the tenant JWT;
+  // the platform token is the fallback for a session whose tenant JWT has expired, mirroring
+  // `refreshAccountIdentity`.
+  //
+  // Fail SAFE, not open: if a session exists but its identity cannot be resolved, prompt. A
+  // needless prompt costs one click; skipping it silently merges two identities in one browser.
+  useEffect(() => {
+    const branch = invitationData?.branch;
+    if (!ACTIONABLE_BRANCHES.has(branch)) {
+      setSessionGuard(SESSION_GUARD.CLEAR);
+      return undefined;
+    }
+
+    const authToken = readStoredValue('sf_auth_token');
+    const platformToken = readStoredValue('sf_platform_token');
+    if (!authToken && !platformToken) {
+      setSessionGuard(SESSION_GUARD.CLEAR);
+      return undefined;
+    }
+
+    // Back to CHECKING before the identity request goes out. This is NOT redundant with the
+    // initial useState: the effect runs once with `invitationData === null`, takes the
+    // not-actionable path above and settles on CLEAR long before the branch is known. Without
+    // this line the guard stays CLEAR for the whole duration of the fetch, LoginStep/RegisterStep
+    // render underneath it, and the invitee can start typing credentials in a tab where the other
+    // person's session is still live — the precise thing this guard exists to prevent.
+    setSessionGuard(SESSION_GUARD.CHECKING);
+
+    let isMounted = true;
+
+    const readAccountEmail = async (bearer) => {
+      if (!bearer) return null;
+      try {
+        const res = await apiFetch('/sws/neo/session', { token: bearer, on401: 'ignore' });
+        if (!res.ok) return null;
+        const data = await res.json().catch(() => null);
+        return data?.accountEmail || null;
+      } catch {
+        return null;
+      }
+    };
+
+    (async () => {
+      // The fallback is skipped when both keys hold the same value, which happens for a session
+      // that never went through the environment switch — one answer, one request.
+      const email = (await readAccountEmail(authToken))
+        || (platformToken === authToken ? null : await readAccountEmail(platformToken));
+      if (!isMounted) return;
+
+      const invitedEmail = invitationData?.email || '';
+      if (email && invitedEmail && email.trim().toLowerCase() === invitedEmail.trim().toLowerCase()) {
+        // Same person, another tenant — nothing to close, nothing to warn about.
+        //
+        // And nothing to sign in to either: asking for the password of the account you are
+        // ALREADY signed in with is the other half of "do not get in the way" (the
+        // `existing_account` branch was written assuming the visitor arrives with no session).
+        // Only skip it when there is a platform token to accept WITH, since that is what
+        // `handleAcceptExisting` sends; if that token turns out to be stale the accept call
+        // falls back to the login step rather than dead-ending on an error.
+        if (branch === 'existing_account' && platformToken) {
+          setExistingAuthenticated(true);
+        }
+        setSessionGuard(SESSION_GUARD.CLEAR);
+        return;
+      }
+
+      setActiveAccountEmail(email || null);
+      setSessionGuard(SESSION_GUARD.CONFLICT);
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [invitationData, apiFetch]);
+
+  // ETP-5202 — signing the previous user out happens BEFORE the invitee is asked for any
+  // credential, never after accepting: a logout at the end would still pass through the state
+  // where `sf_platform_token` is already the invitee's while `sf_auth_*` still points at the
+  // previous tenant — exactly the mix this ticket is about.
+  //
+  // `useLogout` (not a hand-rolled localStorage wipe) is the single exit path: it clears the
+  // dashboard period filter and delegates to the core logout, which is the only thing that
+  // clears BOTH identity layers (`sf_auth_*` and `sf_platform_token`).
+  //
+  // The hard reload afterwards is not cosmetic. `logout()` empties storage but leaves every
+  // per-tenant cache alive in memory — the very reason `useEnvironmentSwitch.switchTo()` does a
+  // full page load instead of a state update. On a shared computer the whole point is that the
+  // next person sees nothing of the previous one. Reloading back into /invite with the token
+  // still in the query string also keeps the invitation resolvable: `clearTokenFromUrl()` must
+  // never run on this path, or the invitee would land on a "missing token" error with the other
+  // person's session already destroyed.
+  const handleCloseSessionAndContinue = () => {
+    logout();
+    const location = globalThis.location;
+    const path = location?.pathname || '/invite';
+    const target = `${path}?token=${encodeURIComponent(token.trim())}`;
+    // The session is already destroyed by the time we get here, so leaving the user on this
+    // screen is not an option: fall back to an assignment if `replace` is unavailable.
+    if (typeof location?.replace === 'function') {
+      location.replace(target);
+    } else if (location) {
+      location.href = target;
+    }
+  };
+
+  // ETP-5202 phase 2 — "Go to app" used to mean `navigate('/')`, which lands wherever the
+  // browser was already pointing: the tenant you were in before, or the onboarding redirect when
+  // there was no tenant session at all. Neither is the company you just joined, and nothing on
+  // screen said so. This enters the inviting tenant instead.
+  //
+  // A failure is never a dead end: `enterByClientName` answers false both when the environment
+  // cannot be reached and when the invited user has no role yet in it (see the roleList guard in
+  // useEnvironmentSwitch), and either way an escape route to the app is offered below.
+  const handleEnterCompany = async () => {
+    if (!companyName) {
+      navigate('/');
+      return;
+    }
+    setEnterError(false);
+    setEntering(true);
+    const entered = await enterByClientName(companyName);
+    if (!entered) {
+      setEntering(false);
+      setEnterError(true);
+    }
+  };
+
   const handleExistingAuthenticated = async () => {
     setActionError(null);
     setExistingAuthenticated(true);
@@ -117,6 +293,16 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.error) {
+        // The accept was attempted with a platform token this page never verified (it is read
+        // straight from storage). When that token is the problem, dropping back to the login
+        // step is recoverable; showing the error alone would dead-end a user who skipped the
+        // login precisely because they were already signed in.
+        if (res.status === 401 || data.code === 'AUTHENTICATION_REQUIRED') {
+          setExistingAuthenticated(false);
+          setActionError(null);
+          setSubmitting(false);
+          return;
+        }
         setActionError(data.message || ui('invitePageInvalidDescription'));
         setSubmitting(false);
         return;
@@ -218,6 +404,29 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   };
 
   const companyName = invitationData?.clientName || successData?.clientName || 'Etendo Go';
+  const invitedEmail = invitationData?.email || invitationData?.maskedEmail || '';
+  // Whether there is a tenant to stay in — read from storage on every render rather than
+  // remembered by the guard effect, because the guard only runs on the actionable branches: an
+  // already-accepted invitation reopened from the email skipped it entirely and silently lost
+  // the "stay where you are" option, even though the situation is identical to the screen shown
+  // right after accepting.
+  const currentClientName = readStoredValue('sf_auth_client_name');
+  const canStayInCurrent = Boolean(readStoredValue('sf_auth_token') && currentClientName);
+
+  // The marketing shell is identical on every full-page state; the pre-existing states below
+  // spell it out inline, the ETP-5202 states share this bag rather than copying it three times.
+  const shellProps = {
+    brandLabel: 'Etendo Go',
+    marketingTitle: ui('onboardingMarketingTitle'),
+    marketingDescription: ui('onboardingMarketingDescription'),
+    featureLabels: [
+      ui('onboardingAuthFeatureNoCard'),
+      ui('onboardingAuthFeatureTrial'),
+      ui('onboardingAuthFeatureInstantAccess'),
+    ],
+  };
+  const guardApplies = !loading && !errorState && !successData
+    && ACTIONABLE_BRANCHES.has(invitationData?.branch);
 
   if (loading) {
     return (
@@ -241,10 +450,89 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     );
   }
 
+  // ETP-5202 — identity check in flight. Renders instead of the login/registration surface so
+  // the invitee cannot start typing before it is known whose session is open.
+  if (guardApplies && sessionGuard === SESSION_GUARD.CHECKING) {
+    return (
+      <AuthShell {...shellProps} data-testid="AuthShell__fa3cd9">
+        <div className="flex flex-col items-center justify-center py-12 text-center" data-testid="invite-session-checking">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" data-testid="Loader2__fa3cd9" />
+          <p className="mt-4 text-base text-muted-foreground">{ui('inviteSessionCheckLoading')}</p>
+        </div>
+      </AuthShell>
+    );
+  }
+
+  // ETP-5202 — a different person is signed in on this browser.
+  if (guardApplies && sessionGuard === SESSION_GUARD.CONFLICT) {
+    return (
+      <AuthShell {...shellProps} data-testid="AuthShell__fa3cd9">
+        <div className="text-center" data-testid="invite-session-conflict">
+          <div className="mx-auto mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-destructive/10 text-destructive">
+            <AlertCircle className="h-8 w-8" data-testid="invite-session-conflict-icon" />
+          </div>
+          <h1 className="text-3xl font-semibold tracking-[-0.06em] text-foreground sm:text-[2.7rem] sm:leading-[1.04]">
+            {ui('inviteSessionConflictTitle')}
+          </h1>
+          <p className="mt-3 text-base text-muted-foreground sm:text-xl">
+            {activeAccountEmail
+              ? ui('inviteSessionConflictDescription')
+                .replace('{currentUser}', activeAccountEmail)
+                .replace('{invitedEmail}', invitedEmail)
+              : ui('inviteSessionConflictDescriptionUnknown').replace('{invitedEmail}', invitedEmail)}
+          </p>
+          <Button
+            className="mt-6 h-12 w-full gap-2 rounded-lg bg-primary text-base font-medium text-primary-foreground hover:bg-accent-highlight hover:text-accent-highlight-foreground"
+            onClick={handleCloseSessionAndContinue}
+            data-testid="action-close-session"
+          >
+            <span>
+              {activeAccountEmail
+                ? ui('inviteSessionConflictLogout').replace('{currentUser}', activeAccountEmail)
+                : ui('inviteSessionConflictLogoutUnknown')}
+            </span>
+            <ArrowRight className="h-4 w-4" data-testid="ArrowRight__fa3cd9" />
+          </Button>
+          {/* Signing out is not reversible from here and it reaches every tab, so it is
+              spelled out next to the button rather than discovered afterwards. */}
+          <p className="mt-2 text-xs text-muted-foreground">{ui('inviteSessionConflictLogoutWarning')}</p>
+          <Button
+            variant="outline"
+            className="mt-4 h-12 w-full rounded-lg text-base font-medium"
+            onClick={() => setSessionGuard(SESSION_GUARD.DEFERRED)}
+            data-testid="action-defer-invitation"
+          >
+            {ui('inviteSessionConflictDefer')}
+          </Button>
+        </div>
+      </AuthShell>
+    );
+  }
+
+  // ETP-5202 — "I will accept later": a terminal state that writes nothing and clears nothing.
+  if (guardApplies && sessionGuard === SESSION_GUARD.DEFERRED) {
+    return (
+      <AuthShell {...shellProps} data-testid="AuthShell__fa3cd9">
+        <div className="text-center" data-testid="invite-session-deferred">
+          <div className="mx-auto mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Mail className="h-8 w-8" data-testid="invite-session-deferred-icon" />
+          </div>
+          <h1 className="text-3xl font-semibold tracking-[-0.06em] text-foreground sm:text-[2.7rem] sm:leading-[1.04]">
+            {ui('inviteSessionDeferredTitle')}
+          </h1>
+          <p className="mt-3 text-base text-muted-foreground sm:text-xl">
+            {ui('inviteSessionDeferredDescription').replace('{invitedEmail}', invitedEmail)}
+          </p>
+        </div>
+      </AuthShell>
+    );
+  }
+
   // Reuse the canonical Etendo Go authentication surface for existing accounts.
   // The invitation page resumes after LoginStep calls onAuthenticated; it never
   // starts the company onboarding flow.
-  if (!loading && !errorState && !successData && invitationData?.branch === 'existing_account' && !existingAuthenticated) {
+  if (!loading && !errorState && !successData && sessionGuard === SESSION_GUARD.CLEAR
+      && invitationData?.branch === 'existing_account' && !existingAuthenticated) {
     return (
       <div data-testid="invite-shared-login">
         <LoginStep
@@ -262,7 +550,8 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     );
   }
 
-  if (!loading && !errorState && !successData && invitationData?.branch === 'registration_required') {
+  if (!loading && !errorState && !successData && sessionGuard === SESSION_GUARD.CLEAR
+      && invitationData?.branch === 'registration_required') {
     return (
       <div data-testid="invite-new-account">
         <RegisterStep
@@ -342,14 +631,59 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
               ? ui('invitePageAlreadyAcceptedDescription').replace('{companyName}', companyName)
               : ui('invitePageSuccessDescription')}
           </p>
+          {enterError && (
+            <div
+              className="mt-4 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive"
+              data-testid="invite-enter-error"
+            >
+              {ui('invitePageEnterFailed')}
+            </div>
+          )}
           <Button
             className="mt-6 h-12 w-full gap-2 rounded-lg bg-primary text-base font-medium text-primary-foreground hover:bg-accent-highlight hover:text-accent-highlight-foreground"
-            onClick={() => navigate('/')}
+            onClick={handleEnterCompany}
+            disabled={entering}
             data-testid="action-go-to-app"
           >
-            <span>{ui('invitePageGoToApp')}</span>
-            <ArrowRight className="h-4 w-4" data-testid="ArrowRight__fa3cd9" />
+            {entering
+              ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__fa3cd9" />
+              : (
+                <>
+                  <span>
+                    {companyName
+                      ? ui('invitePageEnterCompany').replace('{companyName}', companyName)
+                      : ui('invitePageGoToApp')}
+                  </span>
+                  <ArrowRight className="h-4 w-4" data-testid="ArrowRight__fa3cd9" />
+                </>
+              )}
           </Button>
+          {/* Naming the tenant you are currently in is the whole point of this second button:
+              without it, joining a company from an open session is silent — you press "go to
+              app" and land back where you were, with nothing saying you now belong somewhere
+              else. Switching is a hard reload that discards every per-tenant cache, so staying
+              has to remain an explicit, equally reachable choice for someone who was in the
+              middle of something. */}
+          {canStayInCurrent && (
+            <Button
+              variant="outline"
+              className="mt-3 h-12 w-full rounded-lg text-base font-medium"
+              onClick={() => navigate('/')}
+              data-testid="action-stay-in-current"
+            >
+              {ui('invitePageStayInCompany').replace('{companyName}', currentClientName)}
+            </Button>
+          )}
+          {enterError && !canStayInCurrent && (
+            <Button
+              variant="outline"
+              className="mt-3 h-12 w-full rounded-lg text-base font-medium"
+              onClick={() => navigate('/')}
+              data-testid="action-go-to-app-fallback"
+            >
+              {ui('invitePageGoToApp')}
+            </Button>
+          )}
         </div>
       </AuthShell>
     );

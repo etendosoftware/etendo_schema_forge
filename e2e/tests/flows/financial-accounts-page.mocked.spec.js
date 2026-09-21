@@ -108,18 +108,51 @@ const SUMMARY = {
 };
 
 /**
+ * Install the DETAIL mock — the bespoke `financial-accounts-page` R spec, which is still what
+ * `useFinancialAccount` reads (it fetches the whole list and filters by id client-side; see the
+ * "T4 shortcut" note in `hooks/useFinancialAccount.js`). Same payload shape as
+ * `financial-account-detail.mocked.spec.js`: `response.data.accounts`.
+ *
+ * This is NOT optional for any test that lands on `/financial-account/{id}`. Before ETP-5034
+ * a detail whose account never loaded still rendered the tab shell, so a spec could get away
+ * with letting this request fall through to login()'s generic `/sws/**` stub — that stub answers
+ * `{ data: [], totalRows: 0 }` with no `response` envelope, which `useNeoResource` rejects as an
+ * unexpected shape, i.e. `error`, not just "no account". ETP-5034 added an early return in
+ * `windows/custom/financial-account/index.jsx` that renders `RecordUnavailable` in that case, so
+ * the whole detail (tabs, toolbar, automatch) disappears and every assertion below it fails.
+ *
+ * The R spec kept the flat `pendingCount` key; the W spec's generic CRUD derives its key from the
+ * AD column and serves the same value as `eTGOPendingCount`. The shared ACCOUNTS fixture carries
+ * the W key, so it is mapped here rather than duplicated.
+ */
+async function installAccountDetailMock(page, getRows = () => ACCOUNTS) {
+  await page.route('**/sws/neo/financial-accounts-page', async (route) => {
+    const accounts = getRows().map(({ eTGOPendingCount, ...rest }) => ({
+      ...rest, pendingCount: eTGOPendingCount,
+    }));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ response: { data: { accounts, summary: SUMMARY } } }),
+    });
+  });
+}
+
+/**
  * Install the `account` entity mock of the financial-account W spec. Must run AFTER login()
  * so this specific handler wins over the generic /sws/** stub. The list GET answers with the
- * rows plus the `summary` sibling; every other verb/shape (detail GET, DELETE) falls through,
- * so the detail view keeps using its own hooks and a mutation route registered EARLIER in the
- * same test still gets its turn (Playwright resolves `route.fallback()` towards the handler
- * registered before this one).
+ * rows plus the `summary` sibling; every other verb/shape (per-id GET, DELETE) falls through, so
+ * a mutation route registered EARLIER in the same test still gets its turn (Playwright resolves
+ * `route.fallback()` towards the handler registered before this one). The detail view reads a
+ * different endpoint entirely — see `installAccountDetailMock`, which this installs too so every
+ * test that navigates into `/financial-account/{id}` gets a loadable record.
  *
  * `getRows` is a callback, not an array, so a suite that mutates server state between
  * requests (bulk delete: the archived ids) re-reads it on every fetch and a refetch really
  * reflects the mutation.
  */
 async function installAccountsMock(page, getRows = () => ACCOUNTS) {
+  await installAccountDetailMock(page, getRows);
   await page.route('**/sws/neo/financial-account/account{/**,}**', async (route) => {
     const req = route.request();
     if (req.method() === 'GET' && !/\/account\/[^/?]+/.test(req.url())) {
@@ -269,6 +302,30 @@ test.describe('Financial Accounts list — Cuentas', () => {
     await expect(offline.getByTestId('account-row-refresh-acc-3')).toHaveCount(0);
   });
 
+  // ETP-5281 coverage gap: the `overflow-visible` escape on `_rowActions` (commit 23343b3c2,
+  // PR #1496) needs to hold for pending-count cell variants beyond the plain numeric badge
+  // already exercised above — the "Conciliado" pill (acc-4, eTGOPendingCount = 0, likely
+  // narrower than a numeric badge) and an archived row's extra badges (acc-5, only visible
+  // under the "Inactivas" filter).
+  test('the row kebab opens on a zero-pending ("Conciliado") row and on an archived row', async ({ page }) => {
+    const zeroPendingRow = page.getByTestId('row-acc-4');
+    await expect(zeroPendingRow).toBeVisible();
+    await zeroPendingRow.hover();
+    await zeroPendingRow.getByTestId('account-row-menu-trigger-acc-4').click();
+    await expect(page.getByTestId('account-row-menu-archive-acc-4')).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    // Switch to the "Inactivas" filter to reveal the archived row.
+    await page.getByTestId('account-type-filter-trigger').click();
+    await page.getByTestId('account-type-filter-option-inactive').click();
+
+    const archivedRow = page.getByTestId('row-acc-5');
+    await expect(archivedRow).toBeVisible();
+    await archivedRow.hover();
+    await archivedRow.getByTestId('account-row-menu-trigger-acc-5').click();
+    await expect(page.getByTestId('account-row-menu-unarchive-acc-5')).toBeVisible();
+  });
+
   // KNOWN BUG — AccountsHeaderTable overrides ListView's row handler with
   // `onNavigate={(id) => navigate(`/financial-account/${id}`)}`, but DataTable invokes it
   // with the WHOLE ROW (`else if (onNavigate) onNavigate(row);`, DataTable.jsx ~1902), so a
@@ -295,6 +352,10 @@ test.describe('Financial Accounts list — Cuentas', () => {
   // kebab, leaving "Abrir / Nuevo movimiento / Transferir / Desconectar / Archivar"
   // unreachable. This test guards both halves — the overlay is absent AND the slot's actions
   // are genuinely operable.
+  // The row kebab trigger (account-row-menu-trigger-*) used to be reproducibly obscured by the
+  // eTGOPendingCount cell (Playwright reported "element intercepts pointer events"), same known
+  // issue hitting financial-account-delete.mocked.spec.js and financial-account-detail.mocked.spec.js.
+  // Confirmed live and fixed (commit 23343b3c2, PR #1496).
   test('the slot owns the row actions — no generic quick-actions overlay', async ({ page }) => {
     const row = page.getByTestId('row-acc-1');
     await row.hover();

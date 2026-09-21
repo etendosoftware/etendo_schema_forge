@@ -86,8 +86,12 @@ module.exports = function transformer(file, api) {
   //     renders no DOM node and doesn't forward unrecognized props, so any testid added
   //     is silently inert. Matched by name suffix since these are almost always plain
   //     re-exports of `Context.Provider`/`Context.Consumer`, not real components.
+  //   - `Navigate` (react-router) — it renders `null` and performs the navigation from an
+  //     effect on mount, discarding unrecognized props, so a testid on it never reaches the
+  //     DOM. A wrapper marker does not help either: the redirect fires immediately, so the
+  //     tree is gone before anything could assert on it. Observe the resulting URL instead.
   const isUntestableComponentName = (name) =>
-    name === "Fragment" || /(?:Provider|Consumer)$/.test(name);
+    name === "Fragment" || name === "Navigate" || /(?:Provider|Consumer)$/.test(name);
 
   const elements = root.find(j.JSXOpeningElement).filter(path => {
     const n = path.node.name;

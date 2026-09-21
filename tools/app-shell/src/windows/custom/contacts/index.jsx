@@ -2,9 +2,11 @@ import { useState, useCallback } from 'react';
 import './contacts.css';
 import './contactsFkResolvers.js';
 import './contactsImportDescriptor.js';
+import './recordVersionAliases.js';
 import BusinessPartnerPage from '@generated/contacts/generated/web/contacts/BusinessPartnerPage';
 import { ContactsProvider } from './ContactsContext';
 import { ContactsFinanceProvider } from './ContactsFinanceContext';
+import { useContactsCacheInvalidation } from './contactsCacheInvalidation';
 import ContactsBusinessPartnerForm from './ContactsBusinessPartnerForm';
 import ContactsPeriodButton from './ContactsPeriodButton';
 import ContactsSummaryWidget from './ContactsSummaryWidget';
@@ -19,9 +21,19 @@ import { extractErrorMessage } from '@/hooks/useEntity';
 import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useChromelessEmbed } from '@/lib/embeddedWindow.js';
 /* eslint-disable react/prop-types */
 
 const CONTACTS_WRAPPER = 'flex-1 min-h-0 flex flex-col [&_tr[data-empty-state]]:hidden [&_button[role=checkbox]]:h-full contacts-rows';
+
+/*
+ * Read `./recordVersionAliases.js` (imported above for its side effect) before adding a tab that
+ * WRITES the `C_BPartner` row through a second entity name — `customer`, `vendorCreditor` or
+ * `employee` — or through `intrastatAdquisitions`. It declares which of this window's entity names
+ * share one table so the optimistic-locking version cache keeps them in one bucket; without that
+ * declaration the second save of a sitting goes out with a token the first already consumed
+ * (ETP-5263).
+ */
 
 const isPerson = (r) => r.etgoIsperson === true || r.etgoIsperson === 'Y';
 
@@ -41,8 +53,23 @@ function renderContactsHeaderSummary(data) {
 
 export default function ContactsWindow(props) {
   const ui = useUI();
+  /*
+   * ETP-5332 — this window is also mounted inside the "Nuevo contacto" create popup
+   * (`RecordCreateModal` → `EmbeddedWindowRoute`). Two of the props below are analytics chrome
+   * that only make sense for a contact that already exists and has history: the period picker
+   * (`tabsBarAfter`) and the balance/income/expense summary (`headerContent`). On a record being
+   * created seconds ago they are guaranteed-empty noise, and inside a dialog they are noise that
+   * costs scarce vertical space — ~45px plus the widget, several times what shrinking the field
+   * controls could ever recover.
+   *
+   * `useChromelessEmbed` is the same signal DetailView already uses to drop the sidebar and the
+   * window's own Cancel button in this exact situation, so this reuses that decision rather than
+   * inventing a second notion of "am I in a popup". `/contacts` itself is unaffected.
+   */
+  const chromeless = useChromelessEmbed();
   const apiFetch = useApiFetch(props.apiBaseUrl);
   const [pendingBulkDelete, setPendingBulkDelete] = useState(null);
+  const { invalidateBusinessPartner } = useContactsCacheInvalidation();
 
   const handleBulkDeleteConfirm = useCallback(async () => {
     if (!pendingBulkDelete) return;
@@ -71,7 +98,9 @@ export default function ContactsWindow(props) {
     // deselect the succeeded ones — same outcome handling the generic
     // "Delete selected" toolbar button gets for free via useBulkRowDelete.
     reselectFailed(succeeded, failed);
-  }, [pendingBulkDelete, ui, apiFetch]);
+    // ETP-4564: the cached BP list is now stale for other/future readers.
+    invalidateBusinessPartner();
+  }, [pendingBulkDelete, ui, invalidateBusinessPartner, apiFetch]);
 
   const handleBulkDeleteCancel = useCallback(() => {
     setPendingBulkDelete(null);
@@ -121,8 +150,8 @@ export default function ContactsWindow(props) {
            // generated defaults ever change.
            listViewOptions={{ hidePrint: true, hideCounter: true, hideLink: true, hideBulkDelete: true }}
            enableSecondaryRowDelete={true}
-           tabsBarAfter={ContactsPeriodButton}
-           headerContent={renderContactsHeaderSummary}
+           tabsBarAfter={chromeless ? undefined : ContactsPeriodButton}
+           headerContent={chromeless ? undefined : renderContactsHeaderSummary}
            noHeaderBorder={true}
            toolbarBorderBottom={true}
            toolbarPaddingX="px-2"

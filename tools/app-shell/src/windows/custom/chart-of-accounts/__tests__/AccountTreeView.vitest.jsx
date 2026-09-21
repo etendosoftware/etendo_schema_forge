@@ -6,7 +6,10 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
-vi.mock('lucide-react', () => ({
+// The three icons below carry testids this file asserts on; every other export falls back
+// to an inert stub so a growing import graph cannot fail the whole file to load.
+import { allIconsAs } from '@/test/lucideIconMock.js';
+vi.mock('lucide-react', async (importOriginal) => allIconsAs(() => null, importOriginal, {
   ChevronRight: (props) => <span data-testid="chevron-right" {...props} />,
   ChevronDown: (props) => <span data-testid="chevron-down" {...props} />,
   Lock: (props) => <span data-testid="lock-icon" {...props} />,
@@ -16,11 +19,17 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 // Stub NewAccountModal — AccountTreeView.jsx's own tree logic is what this
 // suite targets; NewAccountModal has its own dedicated test file.
-vi.mock('../NewAccountModal', () => ({
+vi.mock('@generated/chart-of-accounts/custom/NewAccountModal', () => ({
   default: ({ isOpen, onClose, onSaved, currentRecord }) =>
     isOpen ? (
       <div data-testid="new-account-modal-stub">
         <span data-testid="modal-current-record-id">{currentRecord?.id ?? 'none'}</span>
+        {/* ETP-5399: exposes currentRecord.children.length so tests can prove the
+            modal receives the UNFILTERED node (real children) rather than a
+            filterTree-pruned clone — see `currentRecordForModal` in AccountTreeView. */}
+        <span data-testid="modal-current-record-children-count">
+          {Array.isArray(currentRecord?.children) ? currentRecord.children.length : 'n/a'}
+        </span>
         <button type="button" data-testid="modal-close" onClick={onClose}>close</button>
         <button type="button" data-testid="modal-save" onClick={onSaved}>save</button>
       </div>
@@ -32,7 +41,8 @@ vi.mock('../NewAccountModal', () => ({
 import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { toast } from 'sonner';
-import AccountTreeView from '../AccountTreeView.jsx';
+import AccountTreeView from '@generated/chart-of-accounts/custom/AccountTreeView.jsx';
+import { ELEMENT_LEVEL_UI_KEYS } from '@generated/chart-of-accounts/custom/accountTypeLabels';
 
 // --- Fixtures ---
 
@@ -303,6 +313,7 @@ describe('AccountTreeView', () => {
     expect(cols.map((c) => c.key)).toEqual([
       'searchKey',
       'name',
+      'elementLevel',
       'accountType',
       'active',
       'ytdDebit',
@@ -401,9 +412,82 @@ describe('AccountTreeView', () => {
     });
   });
 
+  // ── Element Level column (ETP-5399) ─────────────────────────────────────────
+
+  describe('Element Level column (ETP-5399)', () => {
+    it('shows the Element Level header in the column header row', () => {
+      render(<AccountTreeView {...defaultProps} />);
+      expect(screen.getByText('accountTreeFilterElementLevel')).toBeInTheDocument();
+    });
+
+    it('renders the Element Level label for a leaf row', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      expandFullAncestorChain();
+      // acc-20000000 has elementLevel: 'S' → elementLevelSubaccount.
+      const row = screen.getByTestId('account-tree-row-acc-20000000');
+      expect(within(row).getByText('elementLevelSubaccount')).toBeInTheDocument();
+    });
+
+    it('renders the Element Level label for a virtual folder/heading row', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      // Root folder "A" is visible without expanding; its ancestor entry carries elementLevel: 'E'.
+      const row = screen.getByTestId('account-tree-row-group-A');
+      expect(within(row).getByText('elementLevelHeading')).toBeInTheDocument();
+    });
+
+    it('falls back to the raw code when elementLevel has no mapped label', () => {
+      const data = [{ ...DATA[0], elementLevel: 'Z' }];
+      render(<AccountTreeView {...defaultProps} data={data} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+      const row = screen.getByTestId('account-tree-row-acc-40000001');
+      expect(within(row).getByText('Z')).toBeInTheDocument();
+    });
+
+    it('renders without crashing and shows no mapped label when elementLevel is missing', () => {
+      const data = [{ ...DATA[0], elementLevel: undefined }];
+      render(<AccountTreeView {...defaultProps} data={data} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+      const row = screen.getByTestId('account-tree-row-acc-40000001');
+      expect(row).toBeInTheDocument();
+      for (const uiKey of Object.values(ELEMENT_LEVEL_UI_KEYS)) {
+        expect(within(row).queryByText(uiKey)).not.toBeInTheDocument();
+      }
+    });
+  });
+
   // ── Tree-native filter (code/name/type/active) ─────────────────────────────
 
   describe('tree-native filter', () => {
+    it('shows a virtual folder when its code matches, including its descendant leaf', () => {
+      const data = [
+        ...HIERARCHY_DATA,
+        {
+          id: 'acc-43000001',
+          searchKey: '43000001',
+          name: 'Long-term provisions',
+          accountType: 'A',
+          summaryLevel: 'N',
+          ancestors: [
+            { value: '430A', name: 'Provisions', elementLevel: 'C' },
+            { value: '4300A', name: 'Long-term provisions', elementLevel: 'D' },
+          ],
+          hasChildren: false,
+        },
+      ];
+
+      render(<AccountTreeView {...defaultProps} apiBaseUrl={undefined} data={data} />);
+
+      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
+        target: { value: '430A' },
+      });
+
+      const matchingFolder = screen.getByTestId('account-tree-row-group-430A');
+      expect(within(matchingFolder).getByText('430A')).toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-acc-43000001')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-tree-row-group-A')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('account-tree-row-acc-20000000')).not.toBeInTheDocument();
+    });
+
     it('filters leaves by code or name and auto-expands their ancestors', () => {
       render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
 
@@ -460,6 +544,66 @@ describe('AccountTreeView', () => {
       // the persisted manual `expanded` state.
       expect(screen.queryByTestId('account-tree-row-acc-20000001')).not.toBeInTheDocument();
       expect(screen.getByTestId('account-tree-row-group-A')).toBeInTheDocument();
+    });
+  });
+
+  // ── currentRecordForModal resolves against the UNFILTERED tree (ETP-5399) ──
+  //
+  // `filterTree` clones every surviving virtual folder node with a pruned
+  // `children` array (only the matching descendants survive). Before ETP-5399,
+  // `selectedRecord` (looked up from `visibleRows`, itself derived from the
+  // FILTERED tree) was handed straight to NewAccountModal — so selecting a
+  // folder while a filter was active fed the modal's parent/prefix resolution
+  // a node whose `children` did not reflect reality. `currentRecordForModal`
+  // now re-resolves the selected id against `indexById`, which is built from
+  // the unfiltered tree and (since this same commit) also indexes virtual
+  // folder nodes, not just leaves.
+  describe('currentRecordForModal resolves against the unfiltered tree (ETP-5399)', () => {
+    it('hands the modal the real (unfiltered) children of a selected folder while a filter is active', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+
+      // Matches only "20000001" ("Investigación aplicada.") — filterTree prunes
+      // the innermost "2000" folder's children down to that single leaf, while
+      // auto-expanding every ancestor folder (including "2000" itself) so it is
+      // visible and selectable without any manual toggle.
+      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
+        target: { value: 'aplicada' },
+      });
+      fireEvent.click(screen.getByTestId('account-tree-row-group-A|A.A|A.A.I|200|2000'));
+      fireEvent.click(screen.getByText('+ newSubAccount'));
+
+      expect(screen.getByTestId('modal-current-record-id'))
+        .toHaveTextContent('group-A|A.A|A.A.I|200|2000');
+      // The filtered clone would only carry 1 child (the matching leaf) — proving
+      // the modal actually received the UNFILTERED node, which carries both.
+      expect(screen.getByTestId('modal-current-record-children-count')).toHaveTextContent('2');
+    });
+
+    it('still resolves the correct node with no filter active (baseline, no regression)', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-A'));
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A'));
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A|A.A.I'));
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A|A.A.I|200'));
+      fireEvent.click(screen.getByTestId('account-tree-row-group-A|A.A|A.A.I|200|2000'));
+      fireEvent.click(screen.getByText('+ newSubAccount'));
+
+      expect(screen.getByTestId('modal-current-record-id'))
+        .toHaveTextContent('group-A|A.A|A.A.I|200|2000');
+      expect(screen.getByTestId('modal-current-record-children-count')).toHaveTextContent('2');
+    });
+
+    it('selecting a real leaf row while filtered still resolves that same leaf (leaves are never cloned)', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+
+      fireEvent.change(screen.getByTestId('account-tree-filter-text'), {
+        target: { value: 'aplicada' },
+      });
+      fireEvent.click(screen.getByTestId('account-tree-row-acc-20000001'));
+      fireEvent.click(screen.getByText('+ newSubAccount'));
+
+      expect(screen.getByTestId('modal-current-record-id')).toHaveTextContent('acc-20000001');
     });
   });
 
@@ -546,6 +690,25 @@ describe('AccountTreeView', () => {
   // ── Shared table/button styling (ETP-4884 item 3, token-alignment slice) ──
 
   describe('shared table/button styling', () => {
+    it('keeps the controls sticky with all tree actions and filters, without local scrolling', () => {
+      render(<AccountTreeView {...defaultProps} />);
+      const controls = screen.getByTestId('account-tree-controls');
+
+      expect(controls.className).toContain('sticky');
+      expect(controls.className).toContain('top-0');
+      expect(controls.className).toContain('z-20');
+      expect(controls.className).toContain('bg-card');
+      expect(within(controls).getByTestId('account-tree-expand-button')).toHaveTextContent('expand');
+      expect(within(controls).getByTestId('account-tree-collapse-button')).toHaveTextContent('collapse');
+      expect(within(controls).getByTestId('account-tree-new-subaccount-button')).toHaveTextContent('newSubAccount');
+      expect(within(controls).getByTestId('account-tree-filter-text')).toBeInTheDocument();
+      expect(within(controls).getByTestId('account-tree-filter-type')).toBeInTheDocument();
+
+      const utilityClasses = Array.from(controls.querySelectorAll('[class]'))
+        .flatMap((element) => element.className.split(/\s+/));
+      expect(utilityClasses.some((className) => /^(?:overflow|overscroll)-|^max-h-/.test(className))).toBe(false);
+    });
+
     it('renders column headers in the standard sentence-case style, not an uppercase shaded band', () => {
       render(<AccountTreeView {...defaultProps} />);
       const codeHeader = screen.getByText('accountTreeCode');

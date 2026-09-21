@@ -14,7 +14,9 @@ import { useUI } from '@/i18n';
 import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { openCenteredPopup } from '@/lib/popupWindow.js';
-import { usePaymentBalance, formatPlain, round2 } from './usePaymentBalance.js';
+import { usePaymentBalance, formatPlain, parseMaskedAmount, round2 } from './usePaymentBalance.js';
+import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
+import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
 import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
 import { useConversionRate } from './useConversionRate.js';
@@ -541,6 +543,31 @@ function Field({ label, required = false, children }) {
   );
 }
 
+/** Height of one inline validation line (12px/16px Inter). Reserved permanently so the modal
+ *  keeps its height when a message appears or clears — see ControlWithError (ETP-5177). */
+const FIELD_ERROR_LINE_HEIGHT = 16;
+const fieldErrorStyle = { font: '400 12px/16px Inter', color: RED_FG };
+
+/**
+ * Wraps a form control with a line that is ALWAYS reserved for its inline validation message.
+ * Only the <p> is conditional — the gap exists with and without an error — so mounting or
+ * unmounting the message never resizes the modal, which has a fixed width but an automatic
+ * height and is vertically centred in its overlay (QA of ETP-5177).
+ *
+ * The control and its message are grouped into a single child of Field so the wrapper does not
+ * inherit Field's `gap: 8`, which would otherwise apply between them.
+ */
+function ControlWithError({ error, testid, children }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {children}
+      <div style={{ minHeight: FIELD_ERROR_LINE_HEIGHT, marginTop: 4 }} data-testid={`${testid}-slot`}>
+        {error && <p role="alert" style={fieldErrorStyle} data-testid={testid}>{error}</p>}
+      </div>
+    </div>
+  );
+}
+
 /**
  * The rate + converted-amount pair, shown only when the invoice currency differs from the selected
  * account's (ETP-4504). Its own component for the same reason as PisTransferSection below: it is a
@@ -556,45 +583,52 @@ function ConversionFields({
   const invalid = rateMissing || rateIsOne;
   const errorText = ui(rateIsOne ? 'cpConversionRateInvalid' : 'cpConversionRateRequired');
   const boxStyle = { display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 };
-  const inputStyle = { flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' };
-  const errorStyle = { font: '400 12px/16px Inter', color: RED_FG, marginTop: 4 };
+  // Both fields share the same error, so they light up and clear together; the reserved line
+  // keeps the pair (and the modal) at a constant height either way (ETP-5177).
+  const errorMessage = invalid ? errorText : null;
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '0 20px' }} data-testid="cp-conversion-fields">
       <Field label={ui('cpConversionRate')} required data-testid="Field__conversion-rate">
-        <div style={boxStyle}>
-          <input
-            type="text" inputMode="decimal" value={rateStr}
-            onChange={onRateChange}
-            data-testid="cp-conversion-rate-input"
-            style={inputStyle}
-          />
-        </div>
-        {invalid && (
-          <p style={errorStyle} data-testid="cp-conversion-rate-error">{errorText}</p>
-        )}
+        <ControlWithError error={errorMessage} testid="cp-conversion-rate-error" data-testid="ControlWithError__conversion-rate">
+          <div style={boxStyle}>
+            <MaskedAmountInput
+              bare
+              grouping={false}
+              value={rateStr}
+              onChange={(clean) => onRateChange({ target: { value: clean } })}
+              data-testid="cp-conversion-rate-input"
+              className="w-full border-0 bg-transparent p-0 outline-none focus-visible:ring-0 tabular-nums"
+            />
+          </div>
+        </ControlWithError>
       </Field>
       {/* Editable, like the rate field — changing either recomputes the other (Classic parity). */}
       <Field label={ui('cpAmountInAccount')} required data-testid="Field__amount-in-account">
-        <div style={boxStyle}>
-          {(() => {
-            // ETP-4314: the currency symbol sits on whichever side the instance-wide
-            // currency format declares — never hardcoded after the amount.
-            const amountInput = (
-              <input
-                type="text" inputMode="decimal" value={amountStr}
-                onChange={onAmountChange}
-                data-testid="cp-amount-in-account-input"
-                style={inputStyle}
-              />
-            );
-            const amountSuffix = <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(accountCurrency)}</span>;
-            return isCurrencySymbolRightSide(accountCurrency) ? <>{amountInput}{amountSuffix}</> : <>{amountSuffix}{amountInput}</>;
-          })()}
-        </div>
-        {invalid && (
-          <p style={errorStyle} data-testid="cp-amount-in-account-error">{errorText}</p>
-        )}
+        <ControlWithError error={errorMessage} testid="cp-amount-in-account-error" data-testid="ControlWithError__amount-in-account">
+          <div style={boxStyle}>
+            {(() => {
+              // ETP-4314: the currency symbol sits on whichever side the instance-wide
+              // currency format declares — never hardcoded after the amount.
+              const amountInput = (
+                <MaskedAmountInput
+                  bare
+                  // `amountStr` holds EITHER shape: a formatPlain display string while it is seeded
+                  // from the rate, or the mask's own CLEAN value while the user types. parseMaskedAmount
+                  // reads both — it tries the canonical parser first and only falls back to the
+                  // structural one for a string carrying two separators, which a clean value never has.
+                  // (`rateStr` above needs no conversion: it already holds a clean dot-decimal rate.)
+                  value={parseMaskedAmount(amountStr) ?? ''}
+                  onChange={(clean) => onAmountChange({ target: { value: clean } })}
+                  data-testid="cp-amount-in-account-input"
+                  className="w-full border-0 bg-transparent p-0 outline-none focus-visible:ring-0 tabular-nums"
+                />
+              );
+              const amountSuffix = <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(accountCurrency)}</span>;
+              return isCurrencySymbolRightSide(accountCurrency) ? <>{amountInput}{amountSuffix}</> : <>{amountSuffix}{amountInput}</>;
+            })()}
+          </div>
+        </ControlWithError>
       </Field>
     </div>
   );
@@ -638,12 +672,14 @@ function CreditRow({ l, currency, ui, onToggle, onUseChange, onUseBlur }) {
               // ETP-4314 follow-up: symbol side read from C_CURRENCY.ISSYMBOLRIGHTSIDE — this
               // flex row renders input-then-symbol for EUR/right-side, symbol-then-input for USD/left-side.
               const amountInput = (
-                <input
-                  type="text" inputMode="decimal" value={l.useStr}
-                  onChange={e => onUseChange(e.target.value)}
-                  onBlur={onUseBlur}
+                <MaskedAmountInput
+                  bare
+                  // Numeric twin of `useStr` — see the note on the main amount field above.
+                  value={l.use}
+                  onChange={(clean) => onUseChange(clean)}
+                  onCommit={() => onUseBlur()}
                   data-testid={`cp-credit-use-${l.id}`}
-                  style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
+                  className="flex-1 min-w-0 border-0 bg-transparent p-0 text-right outline-none focus-visible:ring-0 tabular-nums"
                 />
               );
               const amountSuffix = <span style={{ font: '400 14px/24px Inter', color: FG3, flexShrink: 0 }}>{curSuffix(currency)}</span>;
@@ -768,6 +804,11 @@ function Psd2InactiveWarning({ ui, accountId }) {
     <InfoBanner
       tone="warning"
       icon={AlertTriangle}
+      // ETP-5245 — the documented exception to banners being dismissible by default: this one
+      // does not accompany the form, it REPLACES it (`{psd2Blocked && <Psd2InactiveWarning/>}`
+      // against `{!psd2Blocked && (<>…form…</>)}` below). Dismissing it would leave the modal
+      // body empty — no warning, no form, and no "reconnect" link, which is the only way out.
+      dismissible={false}
       data-testid="cp-psd2-inactive-warning"
     >
       <span>{ui('cpPsd2InactiveBody')}</span>
@@ -874,6 +915,10 @@ function PisTransferSection({
         {show.iban && (
           <div style={{ flex: '1 1 45%', minWidth: 0 }}>
             <Field label={ui('cpPisIbanLabel')} required data-testid="Field__pis-iban">
+              <ControlWithError
+                error={ibanInvalid ? ui('financeAccountsNewIbanInvalid') : null}
+                testid="cp-pis-iban-error"
+                data-testid="ControlWithError__pis-iban">
               {/* White wrapper — see the template select above. */}
               <div style={{ background: 'hsl(var(--card))', borderRadius: 8 }}>
               <CreatableSearchSelect
@@ -896,11 +941,7 @@ function PisTransferSection({
                 }}
                 data-testid="cp-pis-iban-select" />
               </div>
-              {ibanInvalid && (
-                <p style={{ font: '400 12px/16px Inter', color: RED_FG, marginTop: 4 }} data-testid="cp-pis-iban-error">
-                  {ui('financeAccountsNewIbanInvalid')}
-                </p>
-              )}
+              </ControlWithError>
             </Field>
           </div>
         )}
@@ -1290,7 +1331,10 @@ export default function NewPaymentEntryModal({
   // input with the seeded amount instead (ETP-4876).
   useEffect(() => {
     const seedAmountFrom = (rawRate) => {
-      const n = parseFloat(String(rawRate).replace(',', '.'));
+      // A rate, not a display amount: it arrives canonical (dot-decimal) from the backend or the
+      // draft, so it goes through parseLocaleNumber directly — parsePlain would strip that '.' as
+      // a thousands separator under es-ES and read "0.92" as 92.
+      const n = parseLocaleNumber(rawRate).value;
       setAmountStr(Number.isFinite(n) && n > 0 ? formatPlain(round2(balance.amount * n)) : '');
     };
     if (!isForeign) {
@@ -1319,8 +1363,10 @@ export default function NewPaymentEntryModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isForeign, accountCurrency, conversion.rate, persistedRateApplies, persistedRate]);
   // Parse the typed rate (accepts "0.92" or "0,92"); null when blank/invalid/non-positive.
+  // A rate is never grouped and is seeded canonical from the backend, so it parses directly with
+  // parseLocaleNumber (which accepts both separators as decimal) rather than through parsePlain.
   const rate = useMemo(() => {
-    const n = parseFloat(String(rateStr).replace(',', '.'));
+    const n = parseLocaleNumber(rateStr).value;
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [rateStr]);
   // What will actually leave the bank (ETP-5084): a PIS transfer is instructed in the ACCOUNT's
@@ -1355,7 +1401,11 @@ export default function NewPaymentEntryModal({
   const onAmountChange = useCallback((e) => {
     const raw = e.target.value;
     setAmountStr(raw);
-    const n = parseFloat(String(raw).replace(',', '.'));
+    // `raw` is the mask's CLEAN value (ETP-5107). Reading it with the structural parsePlain made
+    // a typed `329,225` arrive as "329.225" and be read as 329225 — which then derived an exchange
+    // rate of 680,28722 out of thin air. parseMaskedAmount still handles the formatPlain-seeded
+    // shape ("5.050,00" → 5050), which a bare parseFloat used to turn into 5.05.
+    const n = parseMaskedAmount(raw);
     if (Number.isFinite(n) && n > 0 && balance.amount > 0) {
       skipAmountRecomputeRef.current = true;
       setRateStr(deriveRateFromAmount(n, balance.amount));
@@ -1783,12 +1833,18 @@ export default function NewPaymentEntryModal({
               <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
                 {(() => {
                   const amountInput = (
-                    <input
-                      type="text" inputMode="decimal" value={balance.amountStr}
-                      onChange={e => balance.onAmountChange(e.target.value)}
-                      onBlur={balance.onAmountBlur}
+                    <MaskedAmountInput
+                      bare
+                      // ETP-5107 — the NUMERIC twin, never `amountStr`. `amountStr` is a DISPLAY
+                      // string from formatPlain ("139,15"); MaskedAmountInput formats the value
+                      // itself and so needs a clean one. Feeding it the display string made
+                      // formatCurrency see NaN, render '—', and leave the field EMPTY — silently
+                      // killing the prefill of the outstanding total.
+                      value={balance.amount}
+                      onChange={(clean) => balance.onAmountChange(clean)}
+                      onCommit={() => balance.onAmountBlur()}
                       data-testid="cp-amount-input"
-                      style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
+                      className="flex-1 min-w-0 border-0 bg-transparent p-0 text-right outline-none focus-visible:ring-0 tabular-nums"
                     />
                   );
                   const amountSuffix = <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(currency)}</span>;

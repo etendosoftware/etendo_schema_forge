@@ -129,6 +129,21 @@ function getTrashButton(container, rowId) {
   return lastTd.querySelector('[title="deleteRowTooltip"]');
 }
 
+/**
+ * The inline percentage/amount inputs of the row in edit mode, in DOM order:
+ * `amortizationPercentage` first, then `amortizationAmount`.
+ *
+ * ETP-5107 — these used to be selected as `input[type="number"]`. A native number input
+ * rejects the comma keystroke at BROWSER level under an es-ES locale, so the element had
+ * to become a `MaskedAmountInput`, which renders `type="text"` and that selector now
+ * matches nothing. Queried by the stable `data-testid` `MaskedAmountInput` emits by
+ * default (`field-number`) — the same retarget-to-the-testid approach ETP-5283 used for
+ * the price stepper's Playwright locator. Nothing else in this table renders that testid.
+ */
+function amountInputs(container) {
+  return container.querySelectorAll('input[data-testid="field-number"]');
+}
+
 // ETP-4610 — the "Edit dimensions" hover action replacing the old fixed
 // DimSummary grid column.
 function getDimensionsButton(container, rowId) {
@@ -351,7 +366,7 @@ describe('AmortizationLinesTable — inline editing', () => {
 
     // Inline editing renders number inputs for percentage/amount.
     await waitFor(() =>
-      expect(container.querySelectorAll('input[type="number"]').length).toBeGreaterThan(0),
+      expect(amountInputs(container).length).toBeGreaterThan(0),
     );
   });
 
@@ -361,10 +376,10 @@ describe('AmortizationLinesTable — inline editing', () => {
 
     fireEvent.click(getPencilButton(container, 'line-1'));
     await waitFor(() =>
-      expect(container.querySelector('input[type="number"]')).not.toBeNull(),
+      expect((amountInputs(container)[0] ?? null)).not.toBeNull(),
     );
 
-    const numberInput = container.querySelector('input[type="number"]');
+    const numberInput = (amountInputs(container)[0] ?? null);
     fireEvent.change(numberInput, { target: { value: '99' } });
     global.fetch.mockClear();
     fireEvent.blur(numberInput);

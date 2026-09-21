@@ -270,6 +270,10 @@
 - **2026-07-01 — `C_BP_Group_Acct`'s (and `C_AcctSchema_Default`'s) `*_acct` columns are FKs to `C_VALIDCOMBINATION`, NOT directly to `C_ElementValue`.** Wrong assumption made mid-investigation on ETP-4402: joining `c_bp_group_acct.v_liability_acct`/`notinvoicedreceipts_acct`/etc. straight against `c_elementvalue.c_elementvalue_id` always resolved to NULL for every column, on every tenant checked — this looked exactly like a systemic "every account pointer in the environment is dangling" bug, but it was purely the wrong join target. Confirmed via `pg_constraint`: e.g. `c_bp_group_acct_v_liability_ac` -> `c_validcombination(c_validcombination_id)`. **Apply:** the correct resolution path is `c_bp_group_acct.<col> -> c_validcombination.c_validcombination_id -> c_validcombination.account_id -> c_elementvalue.c_elementvalue_id`. This applies to every `*_acct` column on `C_BP_Group_Acct`, `C_BP_Customer_Acct`, `C_BP_Vendor_Acct`, `M_Product_Acct`, `M_Product_Category_Acct`, `C_Tax_Acct`, and `C_AcctSchema_Default` -- none of them point at `C_ElementValue` directly. `C_ValidCombination` has one row per (posting account x accounting schema) already provisioned by the chart-of-accounts import (658 rows for GOClient, matching its 656-per-tree posting-account count + 2 extra); a fix needing "the combination for account X" should join `c_elementvalue` (by `value`) -> `c_validcombination` (by `account_id` + `c_acctschema_id`), never assume one needs to be minted.
 - **2026-07-01 — `C_BP_Group` has a standard core AD trigger, `c_bp_group_trg()` (`C_BP_Group_Trg.sql`, Compiere/Openbravo native), that auto-creates the matching `C_BP_Group_Acct` row(s) on `INSERT`.** It loops every `C_AcctSchema_Default` row applicable to the org and inserts a full `C_BP_Group_Acct` row copying all its defaults -- the exact same defaulting behavior `OnboardingAccountingWiringService.BP_GROUP_ACCT_SQL` / R1 step 11 replicate manually (for tenants where the manual path is needed, e.g. bulk `INSERT ... SELECT` with `ad_disable_triggers()` active, or historical rows created before the trigger/table existed). **Apply:** any fix that does `INSERT INTO c_bp_group (...)` via plain SQL (triggers enabled) does NOT also need to manually `INSERT INTO c_bp_group_acct` -- the trigger already did it in the same statement/transaction. A fix that needs to override specific accounts on that row (rather than accepting the schema defaults) should `UPDATE` the trigger-created row, not attempt an `INSERT ... WHERE NOT EXISTS` (which will always find the row already present and silently no-op, not fail -- a subtle idempotency trap if you don't realize the trigger got there first).
 - **2026-07-01 — `C_BP_Group` has NO `iscustomer`/`isvendor` columns.** It is a plain generic grouping/accounting-defaults table (`value`, `name`, `isdefault`), not a customer/vendor-flagged table -- those flags live on `C_BPartner`. `OnboardingDefaultCustomerService.resolveBusinessPartnerGroup` picks the default customer's group by `ORDER BY name ASC LIMIT 1` (alphabetically first), which is a landmine: adding any new `C_BP_Group` row whose name sorts before the tenant's intended default (e.g. adding "Acreedor" when the default group was previously alphabetically first) silently reassigns the seeded default customer to the wrong category. **Apply:** before adding any new default `C_BP_Group` row in a fix or the onboarding dataset, check whether its name would win alphabetically against the existing groups for every tenant shape in the fleet, and if so, guard `resolveBusinessPartnerGroup` to prefer `ISDEFAULT='Y'` first (column already exists, unused before ETP-4402) rather than relying on alphabetical luck.
+- **2026-09-09 — ETP-5247: `C_BP_Group_Acct.v_liability_acct` and `.writeoff_acct` are `NOT NULL`** (confirmed via `information_schema.columns`) — every other `*_acct` column on that table is nullable. **Apply:** a fix that inserts a brand-new `C_BP_Group_Acct` row (rather than updating an existing one) must `INNER JOIN` to resolve these two before it can insert at all; the other `*_acct` columns can stay `LEFT JOIN`/`NULL` when unresolvable. Don't assume every `*_acct` column on this table is nullable just because most are.
+- **2026-09-09 — `c_elementvalue_trg()`'s `C_VALIDCOMBINATION` INSERT sets `ALIAS`/`COMBINATION` = the account's raw, UNTRIMMED `value`** (confirmed via `pg_get_functiondef`, e.g. inserting for account `41700000` yields `alias='41700000'`, not `'41700'`). The 5-digit trimmed aliases seen on most live rows (`41000000` -> alias `'41000'`) come from an unrelated historical reindex/migration process, NOT the trigger. **Apply:** when a corrective fix manually inserts a missing `C_VALIDCOMBINATION` row (mirroring the trigger for an account that already exists but lacks a combination), set `ALIAS`/`COMBINATION` to the raw value — that IS the trigger's own real behavior, don't "fix" it to match the trimmed pattern seen elsewhere.
+- **2026-09-09 — The runner's optional `@report` section (`cli/src/data-fixes/run.js`, `formatReportDetail`) is the correct mechanism for "report a gap, never invent, never omit silently."** It's a read-only SELECT that runs in the SAME transaction right after `@apply`; its rows become the ledger's `detail` column. R19-locator-inventory-status introduced it; R35-acreedor-bp-group-acct-accounts (ETP-5247) is the second user — it lists exactly which (schema, target account code) pairs are still unresolved because the code genuinely doesn't exist in the tenant's own chart, rather than silently leaving them unfixed. **Apply:** reach for `@report`, not `RAISE NOTICE` or a bespoke log table, whenever a fix can only partially resolve a tenant and the gap must stay visible in Data-Fix History.
+- **2026-09-09 — Validating a corrective fix with no naturally-broken live tenant available: corrupt-then-rollback in a scratch script.** Local dev DB only has GOClient/F&B/QA Testing, and GOClient's own "Acreedor" row was already correct (fixed by hand alongside the sampledata change) — no real broken tenant to test R35 against. Pattern used: a scratch node script extracts `@check`/`@apply`/`@report` from the `.sql` file by regex, opens one `BEGIN`, deliberately corrupts the target row (wrong FK, NULLed column, deleted combination, or a temporarily-renamed `c_elementvalue.value` to simulate a genuinely-missing chart account), runs check→apply→report→check-again inline to prove convergence and correct reporting, then `ROLLBACK`s — zero permanent DB changes, full behavioral proof. Reuse this pattern whenever the live fleet has no naturally-occurring instance of the gap being fixed.
 - **2026-07-01 — ETP-4402 final approach: rename "Consumidor Final" -> "Cliente" IN PLACE, not add a separate row.** Initial drafts added a brand-new "Cliente" `C_BP_Group` row alongside the existing "Consumidor Final" one; the product decision (confirmed: no code anywhere hardcodes the literal string "Consumidor Final") was instead to `UPDATE` the existing row's `value`/`name` to "Cliente" and set `isdefault='Y'`, keeping the same `C_BP_GROUP_ID`. **Apply:** because only the label changes (not the PK), every Business Partner already pointing at that row's ID is automatically relabeled with no separate `C_BPartner` update needed -- 8 BPs on GOClient at the time of writing kept their FK unchanged and now show "Cliente". A fallback `INSERT ... WHERE NOT EXISTS` handles tenants that never had a "Consumidor Final" row to rename.
 
 ## Idempotency gotchas
@@ -538,6 +542,7 @@
 - **2026-07-30 — "AP Credit Memo" does not exist under that literal name anywhere in this dev DB — the real row is named "AP CreditMemo" (no space), `docbasetype='APC'`, and (unlike its AR sibling) has `docnosequence_id=NULL` — no dedicated sequence to retire.** A retirement fix targeting the exact ticket-given name would silently match 0 rows. **Apply:** match old-type retirement by a name list covering BOTH spellings (`'AP CreditMemo', 'AP Credit Memo'`), and never assume every old doc type has its own sequence — guard the sequence-deactivation `UPDATE` on `docnosequence_id IS NOT NULL`.
 - **2026-07-30 — `C_DOCTYPE`/`AD_SEQUENCE` are already in `OnboardingDatasetDefinition.INCLUDED_TABLES`, so this gap's preventive front is DATASET-ONLY — no new `Onboarding*Service` needed** (same pattern as ETP-4341 payment methods / A3 / A3b). Confirmed the dataset importer (`OnboardingDatasetNormalizer.buildDatasetXml`) reads `referencedata/sampledata/GOClient/*.xml` files **sorted alphabetically by filename** (`Files.list(...).sorted(Comparator.comparing(path -> path.getFileName().toString()))`), so `AD_SEQUENCE.xml` (A) is always imported before `C_DOCTYPE.xml` (C) — satisfying `ETSG_CHECK_RECTIF_DOC_TYPE`'s "sequence must already exist" requirement for brand-new tenants too, with zero extra Java. No row-level `ISACTIVE` filtering exists in the normalizer, so shipping the 3 old doc-type/sequence rows pre-set to `ISACTIVE='N'` in the XML correctly gives new tenants the retired history without any active old type.
 - **2026-07-30 — Session recovery: a computer crash mid-session had already produced 2 throwaway "dev test" doc-type/sequence rows directly on GOClient's live DB** (`description` literally said "ETP-4737 dev test", `createdby='100'`/Admin, created ~1h earlier, zero ledger rows, zero `C_Invoice`/`C_Order` references) with the WRONG `docbasetype` (`ARC`/`APC` from a first-pass reading of the ticket, before it was corrected to `ARI`/`API`). Verified zero references before deleting (`c_invoice`, `c_order`, FK scan via `information_schema` on `c_doctype`/`ad_sequence`) — safe to hard-delete since nothing downstream depended on them and they were never tracked by the data-fixes ledger.
+- **2026-09-10 — ETP-4799 supersedes the 2026-07-30 "GL Category naming diverges" note above: some tenants have ZERO `gl_category` rows at all, not just a missing "ES "-prefixed name.** Running R17 live in Experimental, 13/82 tenants failed with `null value in column "gl_category_id" of relation "c_doctype" violates not-null constraint` because the `COALESCE('ES AR/AP Invoice', 'AR/AP Invoice')` lookup found NOTHING — confirmed against the DB, total absence of the table's content for those tenants, not a naming mismatch. **Apply:** the `COALESCE` fallback alone is not sufficient; a fix whose `c_doctype`/`fact_acct`/`gl_journal*` insert depends on `gl_category_id` must also auto-create the fallback category first when neither name resolves. `gl_category`'s columns: `gl_category_id, ad_client_id, ad_org_id, isactive, created, createdby, updated, updatedby, name, description, categorytype, isdefault, docbasetype` — `categorytype='D'` means "Document" (auto-derived doc-type categories like `AR Invoice`/`AP Invoice`; the other value seen, `'M'`, is "Manual", e.g. `Standard`/`Manual`/`None`). Healthy tenants (confirmed on GOClient and 20+ others) carry the plain `AR Invoice`/`AP Invoice` pair at `ad_org_id='0'`, `isdefault='N'`, `description`/`docbasetype` both `NULL` — that shape is the safe default to seed when auto-creating. UNIQUE constraint is `(ad_client_id, ad_org_id, name)`, so guard the auto-create `INSERT` with the same `NOT EXISTS (... name IN ('ES ...', '...') AND isactive='Y')` the `COALESCE` itself uses, run it BEFORE the dependent insert (see `20260730T180000Z__R17-rectificativa-doctype-sequence.sql` steps 0a/0b). Since the gap surfaced as `FAILED` (not `APPLIED`) for the 13 affected tenants, and `FAILED` is excluded from the runner's watermark, the correct remediation is an in-place edit of the SAME already-partially-shipped `.sql` file — NOT a new dated fix — so the 13 retry automatically on the next run while the 69 already-`APPLIED` tenants are untouched (watermark skip, no re-check).
 
 ## ETP-4706 — "Account could not be found" on Goods Receipt posting (A2b, 2026-07-29)
 
@@ -2792,3 +2797,559 @@ cash-close *difference* postings (GL-item `BPD`/`BPW`) and bank-fee (`BF`) lines
 ledger — silently, via the same gate. That is what ETP-5207 asked for, but it is broader than
 "reconciliations are not posted", so it needs a functional sign-off rather than being treated as an
 implementation detail.
+
+
+## ETP-5245 — `M_PriceList.IsDefault` never set by the onboarding dataset (N5 / R35, 2026-09-09)
+
+- **`m_pricelist` has an `ad_org_id`, but the default flag is a CLIENT-level × DIRECTION-level
+  singleton, not an org-level one.** Wrong assumption to avoid: "one default per org". Nothing in
+  the model enforces either reading — the only UNIQUE constraint is
+  `m_pricelist_name (name, ad_org_id, ad_client_id)`, and there is no check constraint or trigger on
+  `isdefault` at all. What settles it is the CONSUMERS: `ETGO_PRODUCT_SALE_PRICE.xml` /
+  `ETGO_PRODUCT_PURCHASE_PRICE.xml` (line 15, `ORDER BY (pl.isdefault = 'Y') DESC`) filter only on
+  `issopricelist`, and `PriceListPicker.jsx:70` filters only on `active`/`salesPriceList`. Neither
+  has an org filter, so one-default-per-org would hand them several flagged rows per direction on a
+  multi-org tenant — exactly the arbitrary tie-breaking the flag exists to prevent.
+  **Apply:** any fix or resolver touching this flag must maintain *at most one active default per
+  `(ad_client_id, issopricelist)`*, and must read it back the same way (no org filter).
+
+- **Only core trigger on `m_pricelist` is `m_pricelist_trg` (AFTER UPDATE), and it guards
+  `istaxincluded` only** — it raises `@IsTaxIncludedFlagWithDocuments@` when that flag changes on a
+  list already referenced by a `C_Order`/`C_Invoice`/`M_Requisition`/`M_RequisitionLine`. Verified
+  by reading the live `pg_proc` body. **Apply:** an `UPDATE` that writes only
+  `isdefault`/`updated`/`updatedby` cannot trip it, so no per-row guard is needed for trigger safety
+  (unlike `FIN_FINANCIAL_ACCOUNT_ACCT`, where `APRM_FIN_FINACC_ACCT_CHECK_TRG` fires on UPDATE and
+  can abort a whole tenant's transaction — see the A9/R34 entry).
+
+- **`created` is NOT a sufficient tie-break on sample-data-derived tenants.** F&B International
+  Group's eight purchase tariffs were all created within the same *millisecond*
+  (`2013-07-05T02:45:43.5xx`), and QA Testing has three at an identical `2013-07-05T02:38:16.000`.
+  **Apply:** any `row_number()`/`LIMIT 1` pick over master data seeded by a dataset import needs a
+  final `<pk> ASC` key, or the fix is not reproducible between runs. `_ID` columns are VARCHAR, so
+  that is a plain textual ordering.
+
+- **"Most referenced by `c_order` + `c_invoice`" is a cheap, defensible first ranking key for
+  picking a default among legacy master-data rows.** It answers "which one does this tenant actually
+  use", degrades to a no-op on a GO tenant (one candidate per direction) and on a brand-new tenant
+  (all zero), and measured 59 ms for the full check → apply → report → re-check cycle on the largest
+  tenant (10 candidate lists against ~1 200 documents). **Apply:** prefer it over a purely
+  structural pick when the fix must choose one row out of many on tenants that already transact.
+
+- **DB facts confirmed by query (2026-09-09, shared dev DB).** 5 of the non-System clients own price
+  lists; every GO-provisioned tenant (GOClient, both E2E tenants) has exactly ONE active list per
+  direction — the two dataset rows `782B468DCC3948D69BC2AE5B68C3F4A4` (sales) and
+  `F888E6AAB93E44E88433C21A8F3C0161` (purchase) — both `isdefault='N'`. Fleet-wide, the ONLY
+  pre-existing default anywhere is QA Testing's sales list "Customer A"
+  (`4028E6C72959682B01295B03CE480243`), which is F&B-derived and never ran the GO dataset.
+  **Apply:** a fix in this area is effectively a no-op-shaped one-row-per-direction UPDATE on GO
+  tenants and only becomes a real choice on the two legacy demo tenants.
+
+## ETP-5245 — No scheduled "Costing Background process" reaches a new tenant (P1, R36, 2026-09-10)
+
+> **Scope note.** ETP-5245 shipped the CORRECTIVE half only (`R36`). The preventive/onboarding half
+> is closed by a **separate PR authored by someone else**, so ETP-5245 touches `com.etendoerp.go`
+> not at all. Everything below about *why* the fix must be code rather than dataset is written for
+> whoever implements that preventive half.
+
+- **2026-09-10 — CORRECTED MISINTERPRETATION: `AD_PROCESS_REQUEST` is NOT in `INCLUDED_TABLES`.**
+  Wrong assumption carried into this investigation: *"`AD_PROCESS_REQUEST` is in
+  `OnboardingDatasetDefinition` line 37 of `INCLUDED_TABLES`, so something must be filtering its
+  rows during import."* It is on line 37 of **`EXCLUDED_TABLES`** — that literal spans lines 28-47,
+  and `INCLUDED_TABLES` only starts at line 49. `shouldIncludeTable()` requires
+  `INCLUDED_TABLES.contains(t) && !EXCLUDED_TABLES.contains(t)`, so **zero** of the 24 rows in
+  `GOClient/AD_PROCESS_REQUEST.xml` are ever imported. There is no row filter to find. **Apply:**
+  when a table "partially arrives", check WHICH `Set.of(...)` literal the name sits in before
+  hunting for a filter — the two sets are adjacent and both are plain string lists.
+
+- **2026-09-10 — "2 of 24 arrive" was a false framing: the dataset contributes ZERO.** Both
+  `AD_PROCESS_REQUEST` rows a GO tenant has are created by onboarding **code**, not by the import:
+  `Get Bank Statements` (`SCH`) by `OnboardingBankConnectionSyncService`, and `Set as Ready` (`COM`)
+  as the residue of `OnboardingMarkOrgReadyService` running the `AD_Org_Ready` process. **Apply:**
+  before theorising about import filters, check whether the surviving rows are even produced by the
+  importer — a programmatic creator explains a "suspiciously small subset" far more often.
+
+- **2026-09-10 — The 22 "lost" rows are worthless; only ONE matters.** Of the 24 XML rows, **23 are
+  `STATUS='COM'`** — completed one-shot executions (Process Order ×13, Process Inventory Count ×3,
+  Set as Ready ×3, Create Periods, Create Price List, Generate Invoice from Receipt, Post
+  Amortization, Process Movements, Calculate Standard Costs, Update Quantity). That is GOClient's
+  execution *history*, not scheduled jobs. Exactly **one** row is `STATUS='SCH'`:
+  `AD_PROCESS_ID=3F2B4AAC707B4CE7B98D2005CF7310B5` (`CostingBackground`). **Apply:** when auditing a
+  missing `AD_PROCESS_REQUEST` set, split by `STATUS` first — `COM` rows are audit trail and must
+  never be copied between tenants.
+
+- **2026-09-10 — Keeping `AD_PROCESS_REQUEST` excluded is correct, and un-excluding it would plant
+  dangling FKs.** Every XML row carries `AD_USER_ID` = GOClient's own `GOAdmin`
+  (`47EAF009B7BB42BBB663C7BA1792D958`) and an `OB_CONTEXT` JSON blob naming GOClient's user, role,
+  client and org. `OnboardingDatasetNormalizer` remaps **`AD_ORG_ID` only**
+  (`OnboardingDatasetNormalizer.java:209`) — it never touches `AD_USER_ID`, `AD_ROLE_ID` or
+  `OB_CONTEXT`, and `AD_USER`/`AD_ROLE` are themselves excluded tables. **Apply — the single most useful
+  takeaway for the preventive PR:** the fix for a missing per-tenant scheduled job MUST be code,
+  never dataset. Adding `AD_PROCESS_REQUEST` to `INCLUDED_TABLES` is the obvious-looking one-line
+  change and it is wrong twice over — it imports 23 rows of another tenant's audit trail, AND it
+  plants a user/role/context that does not exist in the new tenant. Write a programmatic `*Service`
+  on the `OnboardingBankConnectionSyncService` model instead: resolve the process by search key,
+  build the `ProcessRequest` from the tenant's OWN client/org/admin-user/admin-role, save it inside
+  the onboarding transaction, and activate it in Quartz only AFTER the commit (the scheduler's
+  connection cannot see uncommitted rows).
+
+- **2026-09-10 — `CostingBackground` is strictly CLIENT-scoped; no system-level run covers a
+  tenant.** `src/org/openbravo/costing/CostingBackground.java:90-95` selects the organizations to
+  process with `ad_isorgincluded(o.id, :orgId, :clientId) <> -1`, binding
+  `bundle.getContext().getClient()`. So a per-tenant `AD_PROCESS_REQUEST` is genuinely required.
+  **Contrast — these ARE covered once at System level** (`ad_client_id='0'`) and are *not* per-tenant
+  gaps: Alert Process, Acct Server Process, Payment Monitor, Log Clean Up Process, Analytics Sync
+  Process, Refresh Pending Payments, Stored Computed Column Queue Processor. **Apply:** before
+  filing a "missing scheduled process" gap, check whether a System-level `AD_PROCESS_REQUEST`
+  already exists for it — most background processes are global.
+
+- **2026-09-10 — J1 fixed the rule, not the engine.** `M_COSTING_RULE` **is** in `INCLUDED_TABLES`
+  (ETP-4760/J1), so a new tenant gets a validated Standard-Algorithm costing rule. Live proof that
+  this is not sufficient: "E2E User 1 5b33eb60" has 20 `M_TRANSACTION` rows, **all 20** with
+  `iscostcalculated='N'`, alongside that valid rule. **Apply:** "costs are not calculated" has two
+  independent causes — no rule (J1) and no schedule (P1). Check both.
+
+- **2026-09-10 — "Already scheduled" must be judged on `status='SCH'`, never on row existence.**
+  QA Testing has an `AD_PROCESS_REQUEST` for `CostingBackground` — but `STATUS='COM'`, a completed
+  manual run. A `findExistingRequest`/`@check` that only matches on (client, process, isactive)
+  would treat that as provisioned and leave the tenant permanently unscheduled. R36's `@check` adds
+  `status = 'SCH'`. **Apply:** any idempotency probe over `AD_PROCESS_REQUEST` must filter `status`
+  — including the `findExistingRequest`-style guard the separate preventive PR will need.
+
+- **2026-09-10 — Column quirks confirmed on `ad_process_request` / `ad_user`.**
+  `ad_user` has **no** `ad_language` column — the user's language lives in
+  `ad_user.default_ad_language` and it stores the **code** directly (`'es_ES'`), not an
+  `AD_Language` FK. `ad_client.ad_language` is populated **only on System** (`'0'`); every tenant
+  client has it NULL, so a language fallback chain must end in a literal
+  (`COALESCE(u.default_ad_language, c.ad_language, 'en_US')`). Frequency is an `AD_Ref_List` code,
+  not a number: `'1'`=every n seconds, `'2'`=every n minutes, `'3'`=hourly, `'4'`=daily,
+  `'5'`=weekly, `'6'`=monthly, `'7'`=cron. Each code has its OWN interval column
+  (`secondly_interval` / `minutely_interval` / `hourly_interval` / `daily_interval` …); the
+  scheduler switches on `frequency` and reads only the matching one, so columns belonging to other
+  modes are inert rather than contradictory.
+
+- **2026-09-10 — Resolving "the tenant admin" for a security context needs a two-tier chain.**
+  R26's pattern (active user whose `default_ad_role_id` is a ' CO' role they hold) resolves every
+  GO-onboarded tenant to exactly the user its bank-sync row already uses — but returns NOTHING for
+  F&B and QA Testing, whose named admin users are all `isactive='N'`. Tier 2 is the System `Admin`
+  user `'100'` paired with the client's own ' CO' role, which is precisely the shape of F&B's
+  working core-sampledata row. **Order tier 2 by widest org access, not by creation date:** QA
+  Testing has four ' CO' roles with a `'0'` `AD_ROLE_ORGACCESS` grant, and oldest-first picks
+  "QA Testing USA Admin" while widest-first picks the correct "QA Testing Admin" (grants on USA,
+  Main, Spain and `*`). **Apply:** for any `isrolesecurity='Y'` row, pick the role by org reach.
+
+- **2026-09-10 — CADENCE for `CostingBackground` is every 5 MINUTES, not daily — and Classic
+  leaves the other modes' columns populated.** The product owner's chosen shape, configured by hand
+  in Classic's Process Request window and verified live on two independent rows (F&B International
+  Group, and a new GOClient row created 2026-09-10): `timing_option='S'`, `frequency='2'`,
+  `minutely_interval=5`, `minutely_repetitions=NULL`, `status='SCH'`, `isrolesecurity='Y'`,
+  `isgroup='N'`, `channel='Process Scheduler'`. Costing is a near-real-time queue drain, not a
+  nightly batch — a document posted at 10:00 must not wait until the small hours to become
+  costable. **Do not copy the bank-sync cadence by analogy:** `OnboardingBankConnectionSyncService`
+  uses `frequency='4'` (daily) because a bank API should be hit once a night; an early draft of R36
+  inherited that and was wrong. **Two traps in the row shape:** (a) both working rows ALSO carry
+  `daily_interval=1` + `daily_option='N'`, because the Classic window writes the daily block's
+  defaults whatever frequency is selected — reproduce them rather than "cleaning" them, so the row
+  is byte-identical to a hand-made one; (b) `start_date`/`start_time` are the trigger's start
+  boundary, not a run slot — Classic stores the date truncated to midnight and the time-of-day at
+  whole-second precision. **Corollary:** a per-tenant `start_time` stagger (sensible for a daily
+  job, to spread fleet load) is pointless at a 5-minute cadence — it only shifts the first fire and
+  then every tenant converges on the same steady state anyway. R36 dropped its hash-based stagger
+  for exactly this reason.
+
+  Also note GOClient now has **two** active `SCH` rows for this process (the legacy
+  `frequency='1'` + `secondly_interval=30` sampledata row, plus the new 5-minute one). Any
+  `findExistingRequest`/`@check` over this table must therefore tolerate multiple matches — R36's
+  `NOT EXISTS` does, and an OBCriteria `uniqueResult()` only does when it is preceded by
+  `setMaxResults(1)` (as `OnboardingBankConnectionSyncService#findExistingRequest` is); without
+  that guard it throws on a tenant like GOClient.
+
+  > **SUPERSEDED 2026-09-16 (ETP-5370): the cadence is now every 30 SECONDS**, not 5 minutes —
+  > `frequency='1'` + `secondly_interval=30` + `minutely_interval=NULL`. Everything else in this
+  > entry still holds (the inert daily columns, the start-boundary semantics, the multiple-matches
+  > warning). Note the irony: the "legacy" GOClient sampledata row this entry flags as an oddity was
+  > already the correct shape, and is now the reference row for the whole fleet.
+
+- **2026-09-16 — A scheduled process's cadence CANNOT be changed with SQL. Not on a running
+  instance, not by UPDATE, not by DELETE.** This is the most reusable fact in this file about
+  `AD_PROCESS_REQUEST`, and it invalidates the obvious data-fix for any "reprogram the job" ticket.
+  `OBScheduler.initialize()` (`src/org/openbravo/scheduling/OBScheduler.java:296-318`) reads the
+  table **exactly once, at Quartz startup**. After that the trigger lives in Quartz's own JobStore
+  and `DefaultJob.execute` (`DefaultJob.java:51-53`) rebuilds its bundle from the `JobDataMap` — it
+  never re-reads the row. So:
+  - an `UPDATE` of the interval columns is **invisible** until the scheduler re-initializes;
+  - `isactive='N'` does **not** stop the job either — nothing reads that column at fire time;
+  - even a `DELETE` does not: the PSD2 schedule-removal fix
+    (`20260910T120000Z__R36-psd2-bank-statement-schedule-removal.sql:81-86`) documents that the job
+    keeps firing and starts failing with an FK violation against the deleted row.
+
+  Two independent confirmations already in the codebase, both reached from source rather than by
+  experiment: the fix above, and `SFAcctProcessMonitor`'s class javadoc (ETP-5269), which rejected
+  "update `start_date`/`start_time` on the recurring row" with *"Refuted from source"* for exactly
+  this reason and chose to insert a separate one-shot request instead.
+
+  **Apply:** if the ticket is "change/stop/re-point an existing schedule", the fix is Java calling
+  `OBScheduler` inside the live JVM, exposed as a remediation webhook — the escape hatch
+  `tenant-fixer.md` § "How to choose the fix mechanism" already reserves for work too stateful for
+  hand SQL. ETP-5370 is the worked example: `OnboardingCostingScheduleService#realignCadence` +
+  the `SFCostingCadence` webhook. Three more traps found while writing it:
+  - `OBScheduler.schedule(requestId, bundle)` is a **no-op when the Quartz job already exists**
+    (`OBScheduler.java:173-175`). Use `reschedule(...)`, which unschedules + deletes first.
+  - **Commit before re-arming.** `TriggerProvider` reads the timing columns through the scheduler's
+    OWN JDBC connection, which cannot see an uncommitted DAL row.
+  - **Do not gate the re-arm on the row's current values.** A row reading `1`/30 proves nothing
+    about the live trigger — that is the whole premise. Re-arm unconditionally; it is idempotent.
+  - **NULL `NEXT_FIRE_TIME` before re-arming, or the new cadence is correct but DORMANT.** The one
+    trap that only a live run exposes. `ScheduledTriggerGenerator#getBuilder` starts a rebuilt
+    trigger AT the row's `nextFireTime` when it has one, and only falls back to
+    `START_DATE`/`START_TIME` when it is empty — and that column still holds the OLD trigger's next
+    fire. Measured on ETP-5370: webhook at 19:55:02, row read `1|30` instantly, **zero executions
+    until 19:58:55** (the stale next fire), 30 s exactly from then on. A 5-minute old cadence makes
+    this a ≤5-minute delay; a daily one would hide the fix for a day. The column is deliberately NOT
+    mapped on the `ProcessRequest` entity (scheduler bookkeeping, written by `ProcessMonitor` via
+    `ProcessRequestData` XSQL), so clearing it needs native SQL, after the DAL flush and before the
+    commit. Restate `START_DATE`/`START_TIME` at the same time.
+
+  And a caveat that would silently invalidate a "successful" run: on a node under the no-execute
+  background policy Quartz sits in standby, where `schedule`/`reschedule` **silently no-op**. Check
+  `OBScheduler.isSchedulingAllowed()` first and report the refusal instead of a false success.
+
+- **2026-09-10 — METHOD FAILURE, catalog-wide: hand-substituting placeholders in `psql` does NOT
+  validate an `@apply`.** R36 was reported "validated, converges" twice on the strength of a
+  `check → apply → apply → check` cycle run through `psql` in a rolled-back transaction. It then
+  failed on every tenant the moment the real runner touched it. The cycle was real; the SQL was
+  not. The harness substituted `@uuid_COSTING_REQUEST@` with `get_uuid()` — semantically what was
+  meant, syntactically nothing like what the runner produces. **Two independent defects hid behind
+  that one shortcut**, described in the fix's own header: the token must be written QUOTED
+  (`'@uuid_KEY@'`) because `inlineFreshUuids` emits a bare id, and the KEY must be ALPHANUMERIC
+  because `UUID_TOKEN` is `/@uuid_([0-9A-Za-z]+)@/g` — an underscore makes the regex miss and the
+  placeholder text is written verbatim as the primary key (no error on the first tenant, duplicate
+  PK on every one after).
+  **Apply — the rule for every fix in this catalog, not just R36:**
+  1. `--dry-run` proves NOTHING about `@apply`. It runs `@check` only. A green dry-run on an
+     `@apply` that cannot even parse is the expected outcome, not a contradiction.
+  2. Never hand-roll placeholder substitution. Either run
+     `node cli/src/data-fixes/run.js --fix <id> [--client <id>]` for real, or — if a rollback is
+     required — build the statement with the runner's OWN `inlineParams` + `inlineClientName` +
+     `inlineFreshUuids` from `parse-fix.js` and only then send it to the DB. Anything else tests a
+     different string than the one that will run.
+  3. Report a fix as validated only after the runner has printed `APPLIED (n rows)`. "It converges
+     in psql" is not a validation, and saying so consumes someone else's debugging time.
+  4. **Read `cli/src/data-fixes/sql/README.md` before authoring.** Both defects were already
+     documented there, in the placeholder table: *"Same `KEY` (any `[0-9A-Za-z]+` ...)"* and
+     *"Write your own quotes: `'@uuid_...@'`"*. The rules existed; they were not read. Skipping the
+     authoring reference and then "validating" around the runner is how a fix reaches an operator
+     broken twice over.
+
+- **2026-09-10 — An `AD_PROCESS_REQUEST` row with `status='SCH'` CANNOT be deleted.** Core's
+  `ad_process_request_trg()` raises `@20630@` ("Unable to delete Process Request whilst still
+  scheduled") on `DELETE` when `OLD.STATUS` is `'SCH'` or `'MIS'`. To remove one (e.g. to clean up
+  a bad row a data-fix created), **unschedule first**: `UPDATE ... SET status='COM'` and then
+  `DELETE`. **Apply:** any fix that inserts a scheduled request is not trivially reversible — get
+  it right before running it fleet-wide, and remember this two-step when cleaning up.
+
+- **2026-09-10 — A directly-INSERTed `SCH` request does not fire until the scheduler
+  re-initializes.** Rows created by this fix carry `next_fire_time = NULL`, unlike rows created
+  through Classic's Process Request window (which registers them with Quartz on the spot).
+  `status='SCH'` is what makes Etendo's scheduler adopt them at its next initialization, typically
+  a Tomcat restart, so no further action is needed — but costs do not start calculating the minute
+  the fix runs. **Apply:** this is precisely why `OnboardingBankConnectionSyncService` calls
+  `OBScheduler.getInstance().schedule(...)` explicitly AFTER its commit; a SQL data-fix has no
+  equivalent hook and must accept the delay. Tell the operator, or they will report the fix as
+  not working.
+
+- **2026-09-10 — R36 uses client root `'0'` as the request org; a preventive service may use the
+  business org, and that is NOT drift.** `CostingBackground` only processes the orgs *included in*
+  the request's org, and a legacy tenant can be multi-org (QA Testing has validated costing rules on
+  both "USA" and "Spain"), so a business-org pick would silently leave siblings uncosted — `'0'`
+  covers them all and is what F&B's own working core-sampledata row uses. A newborn GO tenant has
+  exactly one business org, so the two choices are equivalent there. **Apply:** R36's `@check` keys
+  on the CLIENT, not the org, so either shape satisfies it — a reviewer comparing this fix against
+  the separate preventive PR should not read the difference as divergence.
+
+- **2026-09-10 — The CUT reasoning INVERTS when the preventive front ships in a different PR.**
+  `R34-fin-account-cleared-payment-accounts` established "do not bump
+  `ONBOARDING_PROVISIONED_THROUGH` when the newborn tenant is already correct, because the `@check`
+  self-heals to 0". That precedent does NOT transfer to a corrective fix shipped alone: with no
+  preventive front merged, a tenant onboarded today is still born broken and genuinely needs the
+  fix, so the CUT must stay BELOW the fix's timestamp to keep it reachable. Bumping it would be
+  precisely the "CUT bump without its preventive front" failure mode the constant's own contract
+  warns about. **Apply:** the same conclusion ("don't bump") can be right for two OPPOSITE reasons —
+  record which one applies in the `.sql` header, because six months later that difference decides
+  whether a bump is owed when the sibling PR finally lands. For P1 the answer is: no bump is ever
+  owed — once the other PR merges the `@check` self-heals on its own — and R36 must NOT be retired,
+  because legacy tenants still need it.
+
+---
+
+## 2026-09-09 — ETP-5222: how `referencedata/sampledata/GOClient/*.xml` actually becomes a new tenant's chart of accounts (traced end-to-end)
+
+- **This is the LIVE source of a brand-new tenant's `C_AcctSchema`/`C_AcctSchema_Default`/chart of
+  accounts — not a separate "new client wizard."** Chain, file:line: `EtendoGoJwtServlet.
+  handleOnboarding` → `importOnboardingDataset` (`EtendoGoJwtServlet.java:2442,2515-2528`) →
+  `OnboardingDatasetImportService#importDataset` (`OnboardingDatasetImportService.java:69-99`) →
+  `normalizer.buildDatasetXml(orgId)` → `DataImportService.getInstance().importDataFromXML(...)`
+  (core's OWN generic reference-data importer, `OnboardingDatasetImportService.java:119-126`). The
+  normalizer's source files are the classpath resource root `com/etendoerp/go/onboarding/sampledata/
+  GOClient` (`OnboardingSourceFiles.java:37-40`), which is STAGED (Gradle task
+  `prepareOnboardingSampledata`, `com.etendoerp.go/tasks.gradle:4-9,18-57`, wired via `dependsOn`
+  onto `smartbuild`/`war`/`antWar`) by copying `modules/com.etendoerp.go/referencedata/sampledata/
+  GOClient/*.xml` VERBATIM — i.e. editing a file under that directory directly changes what a new
+  tenant is provisioned with. `OnboardingDatasetDefinition.INCLUDED_TABLES` decides which tables
+  ride along — `C_ACCTSCHEMA`, `C_ACCTSCHEMA_DEFAULT`, `C_ACCTSCHEMA_ELEMENT`, `C_ELEMENTVALUE`,
+  `C_VALIDCOMBINATION` are ALL included, so the whole chart-of-accounts graph is one import batch.
+- **Every id in this bundle is REGENERATED per tenant, never reused verbatim — confirmed at the
+  source-code level, not just by trusting the doc.** `DataImportService#saveUpdateConvertedObjects`
+  (`DataImportService.java:520-589`): each inserted row gets a FRESH auto-generated PK via the
+  standard DAL insert (`insertObjectGraph`, NOT the literal XML id); then, only for a non-
+  client-import (`!isClientImport`), `(generic=<literal XML id>, specific=<the fresh id just
+  created>)` is recorded into `ReferenceDataStore`/`AD_REF_DATA_LOADED`, scoped per client. Any OTHER
+  reference in the SAME XML batch to that same literal id resolves, via `EntityResolver#getId`
+  (`EntityResolver.java:501-508`), to the freshly-generated id for THIS client — so referencing
+  another file's literal id WITHIN THE SAME `referencedata/sampledata/GOClient/` bundle (e.g.
+  `C_ACCTSCHEMA_DEFAULT.xml`'s `P_EXPENSE_ACCT` pointing at a `C_VALIDCOMBINATION.xml` row's own id)
+  is exactly the safe, established pattern to follow for any NEW `*_ACCT`-style column — it is NOT
+  the same thing as hardcoding a live-DB-only artifact. **Apply:** when adding a new default-account
+  value to this bundle, source the id by grepping it as a literal row PK somewhere else IN THE SAME
+  `referencedata/sampledata/GOClient/` directory (not from a live DB query) — confirm with `xmllint`/
+  grep, not inference. Empirically confirmed too: two already-onboarded local tenants (GOClient
+  itself, whose LIVE DB row IS this bundle byte-for-byte — same `C_ACCTSCHEMA_DEFAULT_ID` in both —
+  and "SantoEmpresa") hold DIFFERENT `c_elementvalue_id`/`c_validcombination_id` pairs for the exact
+  same account code (`99904000`), proving the translation is real, not just theoretical.
+- **The bundle's own referential-integrity test (`OnboardingDatasetReferentialIntegrityTest.java`)
+  only scans columns ending in `_ID`** — a new `*_ACCT`-named FK column (like
+  `P_INVOICEPRICEVARIANCE_ACCT`) is silently out of its scope, so it will NOT catch a dangling
+  reference in one of these columns. Verify a new `*_ACCT` reference manually (grep the referenced
+  id as a row PK elsewhere in the bundle) rather than trusting that test to catch a mistake there.
+- **The established regression-test pattern for "a freshly-provisioned tenant gets X" IS
+  `pathBackedNormalizer().buildDatasetXml()` in `OnboardingDatasetNormalizerTest.java`** — it reads
+  `referencedata/sampledata/GOClient` directly off disk (not the staged classpath copy) and asserts
+  a literal id/value string appears in the built XML. See
+  `testNormalizerIncludesAcctSchemaDefaultDoubtfulDebtAndDeferredAccounts` (R11) and
+  `testNormalizerIncludesAcctSchemaDefaultInvoicePriceVarianceAccount` (ETP-5222) as worked examples
+  — copy this pattern for any future "does the bundled dataset now include X" test rather than
+  inventing a new mechanism.
+
+## 2026-09-09 — ETP-5222 R35 simplification: same-transaction `@apply` visibility, and a COALESCE-from-parent cascade's real blast radius
+
+- **A multi-statement `@apply` body in the data-fixes framework runs sequentially on ONE already-open
+  transaction — a later statement in the SAME `@apply` block is GUARANTEED to see an earlier
+  statement's own writes.** Confirmed by reading `run.js#applyFix` (lines 339-424): the whole
+  `@apply` text is one `client.query(applySql)` call (`runBody`, node-postgres simple-query
+  protocol) between an explicit `BEGIN` and `COMMIT` on one pooled connection. This means a later
+  `UPDATE` in the same fix file can safely `COALESCE`/read a value an EARLIER `UPDATE` in the same
+  file just wrote, ordinary same-transaction SQL semantics, no special guard needed. **`@check`,
+  however, runs on the plain `pool` (not the transaction `client`), entirely BEFORE `@apply` even
+  starts** — so a `@check` clause that intends to mirror a cascaded `@apply` value must reason about
+  the PRE-fix state, not "what an earlier level's apply would produce" — correctness in that gap
+  relies on an independent, earlier-in-file level's OWN `@check` clause firing the overall `@check`
+  when the chain's root value itself still needs fixing (see the R35 SQL file's own "Ordering/
+  visibility" comment for the full worked argument). This is a durable pattern applicable to any
+  future multi-level cascade fix in this framework, not specific to IPV.
+- **A `COALESCE`-from-schema-default cascade propagates WHATEVER the parent row holds, including a
+  genuine manual override that has nothing to do with the specific account code the fix's own
+  `@description` names.** Concretely: simplifying R35's Levels 2/3 to copy
+  `c_acctschema_default.p_invoicepricevariance_acct` (instead of each independently re-deriving
+  99904000) meant a real client, "F&B International Group" (`23C59575B9CF467C9620760EB255B389`,
+  schema `732913485BB040FFA4643FF06D1AA095`), whose chart doesn't use GOClient's numbering at all
+  (its own dedicated "Invoice price variance" account is `5610`, not `99904000` — confirmed: that
+  schema's `C_AcctSchema_Element`/`elementtype='AC'` has NO `99904000` `C_ElementValue` whatsoever)
+  went from "0 rows touched" (first-shipped, independently-re-deriving version) to "35 product rows
+  correctly inherit the tenant's OWN `5610` combination" (simplified cascade version) — a real,
+  materially different outcome for a real client, not a hypothetical edge case. This was the
+  CORRECT, originally-intended behavior (the plan doc's "Layer B" always said "COALESCE from the
+  schema default," generically, not "chase this one specific account code at every level") — but
+  it's a live example of the general principle: **when refactoring an independent-per-row derivation
+  into a COALESCE-from-parent cascade, always live-check every multi-schema/non-standard-chart
+  client on the environment, not just the ones the original fix was validated against** — the
+  parent's value can carry information (a different, tenant-specific account) the child-level
+  re-derivation would never have surfaced or touched.
+- **A guard like `d.p_invoicepricevariance_acct IS NOT NULL` on the CHILD level is load-bearing when
+  cascading from a nullable parent column** — omitting it means a client whose parent value is
+  genuinely still NULL (chart lacks the standard account, no override either) gets that NULL
+  actively `UPDATE`d onto child rows, ERASING whatever fallback value (e.g. an older fix's
+  `P_Expense_Acct`-derived one) was already there. Verified live: "QA Testing" (2 schemas, neither
+  resolves 99904000) — with the guard, `@apply` correctly touches 0 rows on both schemas.
+- **`c_acctschema_default` has `UNIQUE(c_acctschema_id)`** (confirmed via
+  `pg_constraint`/`pg_get_constraintdef`) — NOT `UNIQUE(c_acctschema_id, ad_client_id)` as one might
+  assume from how it's usually queried. In practice this doesn't create a gotcha (a schema belongs to
+  exactly one client anyway), but it means a plain `JOIN c_acctschema_default d ON d.c_acctschema_id
+  = <child>.c_acctschema_id AND d.ad_client_id = <child>.ad_client_id` is already guaranteed
+  at-most-one-match by the `c_acctschema_id` half alone — the `ad_client_id` half is redundant-but-
+  harmless extra tenant-isolation documentation in the SQL, not load-bearing for uniqueness.
+
+---
+
+## ETP-5275 — PSD2 "Get Bank Statements" schedule removed from onboarding (R36, 2026-09-10)
+
+Onboarding step 6 (`OnboardingBankConnectionSyncService`, live since 2026-06-28) created one daily
+`AD_Process_Request` per tenant running the PSD2 `Get Bank Statements` process at a random time in
+the 03:00–06:00 window. Every tenant got it, connected bank or not. The step is deleted
+(preventive, `com.etendoerp.go`) and `R36-psd2-bank-statement-schedule-removal` deletes the rows
+already created (corrective, this repo). Four findings worth carrying forward:
+
+- **You cannot `DELETE` an `AD_Process_Request` that is still scheduled — core's trigger forbids
+  it.** `AD_PROCESS_REQUEST_TRG` ends with `IF (DELETING) THEN IF (:OLD.STATUS = 'SCH' OR
+  :OLD.STATUS = 'MIS') THEN RAISE_APPLICATION_ERROR(-20000,'@20630@')` — *"Unable to delete Process
+  Request whilst still scheduled."* Every onboarding-created row is `'SCH'`, so the obvious
+  one-statement fix aborts the whole tenant's transaction. The fix has to `UPDATE … SET
+  status='UNS'` first, **in the same transaction**, so the trigger sees the new value in `:OLD`.
+  **Apply:** before writing a data-fix that deletes from an AD table, read
+  `src-db/database/model/triggers/<TABLE>_TRG.xml` — Etendo puts referential *policy* in triggers,
+  not only in FKs, and the failure mode is a hard abort of the tenant rather than a skipped row.
+
+- **`isactive='N'` alone never stops a scheduled process; `status` is what the loader reads.**
+  `OBScheduler.initialize` re-arms everything returned by `ProcessRequestData.selectByStatus`,
+  whose SQL is literally `SELECT ... FROM AD_Process_Request WHERE Status = ?` —`isactive` is never
+  consulted (`src/org/openbravo/scheduling/ProcessRequest_data.xsql`). This matters even for the
+  delete variant, because `'UNS'` is doing double duty: it satisfies the trigger *and* it is the
+  correct state for the brief window before the row disappears.
+  **Apply:** grep the `.xsql` for the loader's real predicate before assuming which column gates a
+  core mechanism.
+
+- **A service's marker `description` is a moving target — check the DB for variants before
+  filtering on it.** The natural way to scope this fix is the description the creating service
+  stamped on each row. There turned out to be **two**: ETP-4097 shipped `PSD2 automatic bank
+  statement synchronization (Etendo GO onboarding)`, and ETP-4690 ("Rename PSD2 to bank
+  connection") changed the constant to `Automatic bank statement synchronization (Etendo GO
+  onboarding)`. Tenants onboarded before that rename still carry the old string — 9 of 127 rows on
+  the shared dev DB. Filtering on the constant as it reads in `HEAD` today would have silently left
+  every pre-rename tenant scheduled, with a green `@check` afterwards claiming success.
+  **Apply:** when a fix keys on a value some code once wrote, `GROUP BY` that column on the live DB
+  first and `git log -S` the constant. The current source is evidence of what is written *now*, not
+  of what is *stored*.
+
+- **Key a fix on the AD id when a sibling record shares the name.** A separate, still-wanted process
+  is named `Get Bank Statements (All Clients)`; `name ILIKE '%Get Bank Statements%'` would have
+  removed its schedule too. This is the case where hardcoding an AD id
+  (`F8704AB553464EFEABF8A5A82C74A308`) is *more* correct than resolving by name — the usual
+  "never hardcode UUIDs" rule assumes the name is unambiguous, and here it is not.
+  **Apply:** before writing a name-based predicate, `SELECT` the name pattern on the live DB and
+  count what it actually matches.
+
+**What the delete takes with it, and what would block it.** `AD_Process_Run` is a child through
+`ad_process_run_ad_process_requ`, which is `ON DELETE CASCADE` — the execution history goes with the
+request (~15.3k rows on the dev DB). Losing it is the explicit product decision on this ticket; an
+earlier draft only unscheduled the rows to preserve it. The other two referencing tables are `NO
+ACTION` and *would* block the delete if they held rows — `jobs_job_result`
+(`jobs_job_result_request_id`) and `etcop_schedule` (`etcop_sch_req_fk`) — both empty for this
+process. Deliberately left that way: they belong to other modules, so a tenant that somehow has such
+a row should fail loudly rather than have its rows deleted behind the owning module's back.
+Verified on the live DB inside a rolled-back transaction: `UPDATE 127` → `DELETE 127`, `@check`
+afterwards 0, `ad_process_run` 77634 → 62313, and the one unmarked manual `'COM'` row untouched.
+
+**Live-Quartz caveat for the operator — this is the one real cost of deleting over unscheduling.**
+The fix rewrites the DB; an already-armed trigger lives in the running scheduler's memory. If the
+job fires between the fix and the next Tomcat restart, `ProcessMonitor` tries to INSERT an
+`AD_Process_Run` row pointing at a request that no longer exists and hits a foreign-key violation in
+the log. With the unschedule-only approach that same stray fire was a harmless no-op run. It is
+noise rather than corruption — nothing else is written, and the trigger is not re-armed after the
+restart — but it argues for running this fix close to a restart.
+
+## ETP-4879 — K2: BP/PR accounting-dimension elements forced always-active/always-mandatory (2026-09-17)
+
+- **2026-09-17 — On this DB, `C_AcctSchema_Element.isactive` was ALREADY `'Y'` for 100% of BP/PR
+  rows (98/98 each, 96 distinct clients) before any fix ran — the corrective `.sql`'s `IsActive`
+  half is a pure no-op today, shipped only as a correctness guard.** Don't assume every gap
+  described by a product ticket implies broken current DB state — query first. The genuinely
+  broken flag here was `ismandatory` (`'N'` for 196/196 BP/PR rows, never forced anywhere before).
+- **2026-09-17 — `C_AcctSchema_Element.ismandatory`/`isMandatory()` is DEAD CODE for BP/PR type
+  rows in every consumer checked, confirmed by reading each one (not assumed):**
+  `GeneralLedgerConfigurationHandler.applyDimensionChanges` only reads `isMandatory()` inside the
+  `!LOCKED_DIMENSION_TYPES.contains(type)` branch, which BP/PR never enter; classic core's legacy
+  `AcctSchemaElement.getAcctSchemaElementList` (`src/org/openbravo/erpCommon/ad_forms/`) reads it
+  only to emit a DEBUG log line, no exception, no posting effect; the real posting/balancing
+  engine (`Fact.java`/`FactLine.java`) reads only `isBalanced` off the element list, never
+  `isMandatory`. **Apply:** before treating a boolean AD flag as risky to flip, grep every
+  read site across BOTH classic core (`src/`, not `src-core/` — that path is empty in this
+  checkout; classic core Java lives directly under `src/org/openbravo/...`) and `com.etendoerp.go`
+  — a flag with zero live readers for the affected row-type is safe defense-in-depth, not a
+  functional change.
+- **2026-09-17 — `COAUtility`/`InitialSetupUtility.insertAcctSchemaElement` (classic new-schema
+  creation, called from the "Initial Organization Setup" backoffice process) hardcodes BP/PR to
+  `isMandatory=false` BY DESIGN** — only OO (org) and AC (account) are `true`. This is intentional
+  classic business logic ("posting requires an org and an account, not necessarily a
+  partner/product") and is orthogonal to Etendo GO's own "always visible" UX decision — forcing
+  `ismandatory='Y'` for GO's purposes does not contradict or need to touch this classic rule
+  (confirmed no posting code path enforces `AcctSchemaElement.IsMandatory`).
+- **2026-09-17 — Etendo GO's own new-tenant seed (`com.etendoerp.go/referencedata/sampledata/
+  GOClient/C_ACCTSCHEMA_ELEMENT.xml`, imported via `OnboardingDatasetDefinition.INCLUDED_TABLES`)
+  already ships BP/PR with `ISACTIVE=Y`** — matches the fleet-wide DB finding above, confirming a
+  new GO tenant is NOT the classic-COAUtility path and is already born correct on that flag. Its
+  `ISMANDATORY=N` for BP/PR was the one value actually corrected (dataset-only edit, no new
+  onboarding Java service, no `ONBOARDING_PROVISIONED_THROUGH` bump — same "dataset-only, no CUT
+  bump" shape as A9/N4/N5).
+- **2026-09-17 — 2 client ids on this DB (`64DEB67F5B4B42EF80332F3FBB38A4E9`,
+  `6474E31657E24D8E9E8D8DDA7A2222A8`, both throwaway "E2E User 1 ..." Playwright test tenants)
+  have ZERO `C_AcctSchema`/`C_AcctSchema_Element` rows of ANY type, not just missing BP/PR.**
+  A fix whose `@check`/`@apply` join through `c_acctschema_element` naturally and correctly
+  reports `SKIPPED_NOT_NEEDED` for such a client — no special-casing needed. Don't confuse this
+  with a real gap in THIS fix's scope; it's the pre-existing A1/A2 "chart of accounts missing"
+  territory.
+
+---
+
+## ETP-5274 — "Reversed Sales/Purchase Invoice" doctypes selectable in the invoice doctype selector (R37)
+
+> **Scope note.** ETP-5274 closes both fronts, but NOT symmetrically. Preventive = the rows were
+> **deleted** from the bundled onboarding sampledata (`com.etendoerp.go/referencedata/sampledata/
+> GOClient/`: `C_DOCTYPE.xml`, `C_DOCTYPE_TRL.xml`, `C_POC_DOCTYPE_TEMPLATE.xml`,
+> `C_POC_EMAILDEFINITION.xml`, `AD_SEQUENCE.xml`, `AD_REF_DATA_LOADED.xml`). Corrective
+> (`20260916T120000Z__R37-deactivate-reversed-invoice-doctypes.sql`) only **deactivates**. The
+> asymmetry is deliberate and is the general rule for this framework: never delete rows from an
+> existing tenant when a hard FK (`C_Invoice.C_DocType_ID`) may already point at them.
+
+- **2026-09-16 — The discriminator for the two internal reversal invoice doctypes is
+  `isreturn='Y' AND docbasetype IN ('ARI','API')`, and nothing more.** Verified on
+  `etendo_go_new_2`: exactly 98 rows over 48 clients, and the only two names in the result are
+  "Reversed Purchase Invoice" (API, `issotrx='N'`) and "Reversed Sales Invoice" (ARI,
+  `issotrx='Y'`). This is the mirror image of the exclusion documented in
+  `20260911T120000Z__R35-verifactu-doctype-fields-corrected.sql` (whose `isreturn='N'` filter exists
+  precisely to keep "Reversed Sales Invoice" out of Verifactu seeding).
+  **Apply:** `docbasetype` alone is what excludes the other `isreturn='Y'` doctypes in the fleet —
+  "Return Material Sales Invoice" is `ARI_RM`, not `ARI` (plus already inactive since R17); the
+  others are `MMR`/`MMS`/`POO`/`SOO`.
+
+- **Adding a column that is constant across every matching row does not make a discriminator
+  "more explicit" — it makes it more fragile.** `issotrx`, `isreversal` and `isdefault` are all
+  constant over the 98 rows (and there is no ARI/API doctype anywhere in the DB with
+  `isreversal='Y'`), so each one would discriminate nothing while creating a way to MISS a
+  mis-seeded row on some tenant.
+  **Apply:** before narrowing a predicate "for safety", `GROUP BY` the candidate column over the
+  match set. Zero variance ⇒ zero discriminating power ⇒ leave it out and document why.
+
+- **An `ad_sequence` is NOT owned by the doctype that references it — deactivating it because one
+  referencing doctype is going away can break a doctype that stays alive.** Confirmed real case:
+  client "F&B International Group" (`23C59575B9CF467C9620760EB255B389`) has sequence
+  "ES Return Material Sales Invoice" (`5340EE6259034C45BA32A1933F4DD42E`) referenced by BOTH
+  "Reversed Sales Invoice" (ARI, deactivated by R37) and "ES Return Material Sales Invoice"
+  (`ARI_RM`, must stay active). For the record,
+  `20260730T180000Z__R17-rectificativa-doctype-sequence.sql` step 3 deactivates sequences with no
+  such guard — applied and immutable, not corrected.
+  **Apply:** implement the guard by ORDERING inside the single `@apply` transaction — flip the
+  doctypes first, then deactivate a sequence only when
+  `NOT EXISTS (… c_doctype d2 WHERE d2.docnosequence_id = s.ad_sequence_id AND d2.isactive='Y')`.
+  Post-step-1 live state answers the question with no hardcoded exception list. Surface what the
+  guard spared via `@report` (the R19 pattern), or the operator never learns what was skipped.
+
+- **Duplicated doctypes per tenant are real — never write one-row-per-client SQL.** That same F&B
+  tenant carries FOUR target doctypes: two "Reversed Purchase Invoice" (each with its OWN distinct
+  `ad_sequence` row, both named identically) and two "Reversed Sales Invoice" (one with its own
+  sequence, one sharing the ES Return Material one). Expected R37 outcome for it: 4 doctypes
+  deactivated, 3 sequences deactivated, 1 kept active and reported.
+
+- **`c_doctype` carries two ETSG triggers that fire on UPDATE, not just INSERT** —
+  `etsg_check_rectif_doc_type` and `etsg_doctype_modif_rectif_trg`. Both are gated on the client/org
+  having a SIF config (SII / TicketBAI / Verifactu, ETP-4548) and on
+  `em_etsg_isrectificative='Y'`. All 98 R37 targets are `em_etsg_isrectificative='N'` with
+  `isdocnocontrolled='Y'` and a sequence whose own `em_etsg_isrectificative` is also `'N'` (a
+  consistent pair), and R37 touches only `isactive` + the audit stamp, so neither trigger can raise.
+  Also confirmed: no `ad_sequence` row in the fleet links back to a target doctype via
+  `ad_sequence.c_doctype_id` (0 rows), so deactivating the sequence cannot disturb the trigger's
+  `V_Rectif_Seq_Status` lookup either.
+  **Apply:** before writing an `UPDATE` on `c_doctype`, dump `pg_get_functiondef` for its triggers
+  and check which columns they read. An `isactive`-only flip is not automatically safe there.
+
+- **Dry-run result (2026-09-16, `etendo_go_new_2`):** `--fix R37 --dry-run` over the full 56-tenant
+  universe → 48 `WOULD_APPLY`, 8 `SKIPPED_NOT_NEEDED`, which matches the 48 clients the
+  discriminator query returns. Guard verified read-only (no write transaction) by simulating the
+  post-step-1 state in a CTE.

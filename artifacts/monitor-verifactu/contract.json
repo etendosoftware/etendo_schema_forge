@@ -1,8 +1,8 @@
 {
-  "version": "0.11.0",
+  "version": "0.12.0",
   "generatedAt": "2026-05-04T17:02:25.021Z",
-  "updatedAt": "2026-08-04T14:03:24.110Z",
-  "checksum": "bdeef52685f3538b",
+  "updatedAt": "2026-09-11T11:25:38.550Z",
+  "checksum": "63f888005be67726",
   "frontendContract": {
     "window": {
       "id": "F4675DAB02134762B66881DAE4672AD0",
@@ -1202,6 +1202,14 @@
             "type": "id",
             "visibility": "system",
             "required": false
+          },
+          {
+            "name": "invoiceDate",
+            "apiKey": "invoiceDate",
+            "column": "Invoice_Date",
+            "type": "date",
+            "visibility": "system",
+            "required": false
           }
         ]
       },
@@ -1367,6 +1375,14 @@
             "apiKey": "id",
             "column": "Etvfac_Inv_Sent_Status_V_ID",
             "type": "id",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "invoiceDate",
+            "apiKey": "invoiceDate",
+            "column": "Invoice_Date",
+            "type": "date",
             "visibility": "system",
             "required": false
           }
@@ -1537,6 +1553,14 @@
             "type": "id",
             "visibility": "system",
             "required": false
+          },
+          {
+            "name": "invoiceDate",
+            "apiKey": "invoiceDate",
+            "column": "Invoice_Date",
+            "type": "date",
+            "visibility": "system",
+            "required": false
           }
         ]
       },
@@ -1702,6 +1726,14 @@
             "apiKey": "id",
             "column": "Etvfac_Inv_Sent_Status_V_ID",
             "type": "id",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "invoiceDate",
+            "apiKey": "invoiceDate",
+            "column": "Invoice_Date",
+            "type": "date",
             "visibility": "system",
             "required": false
           }
@@ -3032,6 +3064,14 @@
         "description": "System field 'id' should exist in backend but not frontend for facturasAceptadas"
       },
       {
+        "id": "t-system-field-facturasAceptadas-invoiceDate",
+        "category": "system-field",
+        "entity": "facturasAceptadas",
+        "field": "invoiceDate",
+        "runner": "node",
+        "description": "System field 'invoiceDate' should exist in backend but not frontend for facturasAceptadas"
+      },
+      {
         "id": "t-system-field-facturasAceptadas-organization",
         "category": "system-field",
         "entity": "facturasAceptadas",
@@ -3118,6 +3158,14 @@
         "field": "id",
         "runner": "node",
         "description": "System field 'id' should exist in backend but not frontend for facturasInválidas"
+      },
+      {
+        "id": "t-system-field-facturasInv-lidas-invoiceDate",
+        "category": "system-field",
+        "entity": "facturasInválidas",
+        "field": "invoiceDate",
+        "runner": "node",
+        "description": "System field 'invoiceDate' should exist in backend but not frontend for facturasInválidas"
       },
       {
         "id": "t-system-field-facturasInv-lidas-organization",
@@ -3216,6 +3264,14 @@
         "description": "System field 'id' should exist in backend but not frontend for facturasParcialmenteAceptadas"
       },
       {
+        "id": "t-system-field-facturasParcialmenteAceptadas-invoiceDate",
+        "category": "system-field",
+        "entity": "facturasParcialmenteAceptadas",
+        "field": "invoiceDate",
+        "runner": "node",
+        "description": "System field 'invoiceDate' should exist in backend but not frontend for facturasParcialmenteAceptadas"
+      },
+      {
         "id": "t-system-field-facturasParcialmenteAceptadas-organization",
         "category": "system-field",
         "entity": "facturasParcialmenteAceptadas",
@@ -3296,6 +3352,14 @@
         "description": "System field 'id' should exist in backend but not frontend for facturasRechazadas"
       },
       {
+        "id": "t-system-field-facturasRechazadas-invoiceDate",
+        "category": "system-field",
+        "entity": "facturasRechazadas",
+        "field": "invoiceDate",
+        "runner": "node",
+        "description": "System field 'invoiceDate' should exist in backend but not frontend for facturasRechazadas"
+      },
+      {
         "id": "t-system-field-facturasRechazadas-organization",
         "category": "system-field",
         "entity": "facturasRechazadas",
@@ -3364,7 +3428,7 @@
       }
     ],
     "summary": {
-      "total": 169,
+      "total": 173,
       "byCategory": {
         "action-endpoint": 5,
         "crud-flags": 5,
@@ -3377,11 +3441,11 @@
         "readonlylogic-valid": 1,
         "rule-declared": 5,
         "selector-endpoint": 4,
-        "system-field": 57,
+        "system-field": 61,
         "visibility": 5
       },
       "byRunner": {
-        "node": 169,
+        "node": 173,
         "junit": 0
       }
     }

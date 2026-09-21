@@ -19,6 +19,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A5 | Accounting | `C_Element` tree missing its root `AD_TreeNode` — new top-level posting accounts fail with an `ad_tree_id` NOT NULL violation | Corrective SQL data-fix (`R9b`) — root cause of the underlying duplicate-tree event not yet found | — |
 | A7 | Accounting | A single new named ledger account (`57210`, "Tarjetas de crédito, euros") introduced for a new document/entity type is missing from tenants already onboarded before the account existed in the chart — NOT a whole-chart gap (A1) or an FK-mapping gap (A2); the account definition itself doesn't exist yet | Preventive already shipped (ETP-4872 Task 5, GOClient onboarding sampledata); corrective data-fix (`R30`) creates the account (+ its new `5721` parent subgroup) for already-onboarded tenants, deriving the leaf's code width from the tenant's own `57200` sibling rather than assuming one convention | ETP-4872 |
 | A8 | Accounting | `P_InvoicePriceVariance_Acct` NULL at all three levels that feed it (`C_ACCTSCHEMA_DEFAULT`, `M_Product_Category_Acct`, `M_Product_Acct`) — a match whose invoiced price differs from its receipt cost fails to post with a misleadingly BP/BP-Group-flavored "Account could not be found.", even though the only account genuinely missing is this one and it has nothing to do with the business partner | Both fronts closed: preventive step in `OnboardingAccountingWiringService#backfillInvoicePriceVarianceDefault` (runs before the existing product/category copy-down inserts, so a new tenant's products/categories inherit a real account instead of propagating NULL); corrective data-fix (`R34`) backfills all three levels for already-onboarded tenants, each from that SAME row's own `P_Expense_Acct` | ETP-5075 |
+| A8b | Accounting | Product decision, made after A8/ETP-5075 shipped: the fleet-wide standard Invoice Price Variance account is a dedicated GL account (`99904000`), not each tenant's own `P_Expense_Acct` — A8's resolution was a reasonable unblocker but not the intended long-term value | Three fronts: preventive rewrites `backfillInvoicePriceVarianceDefault`'s SQL (same method/file as A8, no new step) to resolve `99904000`'s own NATURAL `C_ValidCombination` first (scoped through `C_AcctSchema_Element`/`elementtype='AC'`, filtered on all ~11 dimension columns being NULL), falling back to A8's `P_Expense_Acct`-derived value only when `99904000` doesn't resolve for that tenant's chart; a NEW dataset-baseline layer (Layer 0) bakes the same `99904000` combination directly into the bundled `C_ACCTSCHEMA_DEFAULT.xml` so a fresh tenant is correct from the dataset-import step itself, not merely by the time the Java step later runs; corrective is a NEW file, `R35`, which corrects any row R34 already touched (still `NULL` or still equal to R34's `P_Expense_Acct` value) to `99904000`'s resolved combination — R34 itself stays byte-identical, un-edited, and remains the sole source for a chart that genuinely lacks `99904000` | ETP-5222 |
 | A9 | Accounting | `FIN_Financial_Account_Acct.FIN_IN_CLEAR_ACCT` / `FIN_OUT_CLEAR_ACCT` ("Cleared payment account" IN/OUT) born pre-filled with the ledger asset account (`57200000`) instead of empty — a non-null cleared account is what makes `DocFINReconciliation` post a reconciliation, so reconciliations generated unwanted entries in Sumas y Saldos / Libro Mayor. NOT a missing-row gap (A2c) or a missing-account gap (A7): the row and the account both exist, the *value* is wrong | Both fronts closed: preventive in `OnboardingAccountingWiringService#FIN_FINANCIAL_ACCOUNT_ACCT_SQL` (stops selecting the two columns) + `FinancialAccountAccountingDefaultsSupport` (actively clears them after core's trigger seeds them, for the live create path); corrective data-fix (`R34`) blanks them on already-onboarded tenants, skipping accounts with posted reconciliations. CUT deliberately NOT bumped — a newborn tenant is now born correct, so `R34`'s `@check` returns 0 rows for it | ETP-5207 |
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
@@ -29,8 +30,12 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | I1 | Inventory / Warehouse | Locators born with inventory status "Undefined-OverIssue" (allows negative stock) | Onboarding sampledata XML (`M_LOCATOR.xml`) — dataset-only, no new service | ETP-4761 |
 | J1 | Costing | New tenants get ZERO `M_Costing_Rule` rows (not Average, NOTHING) — `M_Transaction.iscostcalculated` stuck `'N'` forever | `M_COSTING_RULE` added to `OnboardingDatasetDefinition.INCLUDED_TABLES`; sample row fixed to Standard algorithm | ETP-4760 |
 | K1 | Accounting dimension display | `AD_Client.Acctdim_Centrally_Maintained` hardcoded to `'Y'` for every new client, permanently routing dimension-field visibility through a fine-grained matrix Etendo GO has no screen for, making the "Dimensiones contables" screen a no-op | `OnboardingAcctdimCentrallyMaintainedService` — backfill `C_AcctSchema_Element.isactive` then flip the flag to `'N'` | ETP-4854 |
+| K2 | Accounting dimension display | Product decision: Contacto (BP) and Producto (PR) accounting-dimension elements must always be `active` and are never editable/visible through "Dimensiones contables" — DB-confirmed `isactive` was already `'Y'` fleet-wide (no-op, kept as a correctness guard) but `ismandatory` was `'N'` for every BP/PR row (196/196), never forced before | Both fronts closed: code-side lock (`GeneralLedgerConfigurationHandler.LOCKED_DIMENSION_TYPES`, already shipped) + preventive dataset-only fix (`C_ACCTSCHEMA_ELEMENT.xml` `ISMANDATORY` N→Y for BP/PR, no new service, no CUT bump — new tenant already born correct) + corrective data-fix (`R37-acctdim-bp-pr-locked-active`) forces both flags fleet-wide | ETP-4879 |
 | L1 | Tenant ownership | New `AD_User.EM_ETGO_Is_Owner` column (owner-lock enforcement) is only auto-set for tenants created AFTER ETP-4830 shipped — every pre-existing tenant has zero owner-flagged users, so the enforcement checks are silent no-ops for them | Preventive shipped (`OwnerSupport#markAsOwnerIfNoneExists`, wired into `EtendoGoJwtServlet#createClient`); corrective backfill (`R26-tenant-owner-and-personal-role-retrofit`) shipped 2026-08-26 — both fronts closed | ETP-4877 |
 | N1 | Tenant plan / fiscal test mode | A Demo/free tenant has no way to submit SII/TicketBAI/VeriFactu in test/sandbox mode without a manual `ETSG_ForceTestMode` edit in Classic — every self-registered free tenant defaults to real (production) fiscal submissions | Both fronts closed: `OnboardingForceTestModeService` (preventive, new step in `ensureOnboardingDataset`) + `R31-force-test-mode-demo-tenants` (corrective, also backfills already-existing SII/TicketBAI/VeriFactu config rows) | ETP-5117 |
+| N5 | Initial dataset configuration | No price list is flagged as default — the curated `M_PRICELIST.xml` shipped both tariffs with `ISDEFAULT='N'`, so the four consumers that disambiguate tariffs with `isdefault DESC` (the `ETGO_PRODUCT_SALE_PRICE`/`ETGO_PRODUCT_PURCHASE_PRICE` computed columns, `PriceListPicker.jsx`, `R33`'s standard-cost anchor, and ETP-5245's new default-tariff resolver) silently fall through to an arbitrary list | Both fronts closed: preventive is dataset-only (`ISDEFAULT` `N`→`Y` on both curated tariffs in `GOClient/M_PRICELIST.xml`, already in `INCLUDED_TABLES`); corrective data-fix (`R35`) marks one active list per trade direction on already-onboarded tenants. CUT deliberately NOT bumped — a newborn tenant is now born correct, so `R35`'s `@check` returns 0 rows for it | ETP-5245 |
+| P1 | Scheduled processes | A GO-onboarded tenant has NO scheduled "Costing Background process" (`AD_PROCESS_REQUEST`, `CostingBackground`), so product costs are never calculated automatically — `M_Transaction.iscostcalculated` stays `'N'` forever unless an operator launches the process by hand. NOT the same as J1 (which was the missing `M_Costing_Rule`): here the rule exists and is validated, the engine that consumes it is simply never scheduled | **Split across two PRs.** Corrective only in ETP-5245: data-fix (`R36`) backfills already-onboarded tenants. The preventive half (an onboarding service; the `AD_PROCESS_REQUEST` dataset table is and must stay excluded) is closed by a **separate PR authored by someone else** — ETP-5245 touches `com.etendoerp.go` not at all. CUT deliberately NOT bumped: with no preventive front in this PR a newborn tenant is still born broken and must keep seeing `R36`; once the other PR lands, `R36`'s `@check` self-heals to 0 | ETP-5245 (corrective) + a separate PR (preventive) |
+| P2 | Scheduled processes | The costing schedule created by P1 runs every **5 minutes**, so a freshly onboarded user waits up to 5 minutes before their movements are costed; and some tenants carry more than one active `SCH` row for the process, so it fires twice. Target invariant: **exactly one active scheduled `CostingBackground` request per client, every 30 seconds** | Both fronts closed. Preventive: `OnboardingCostingScheduleService` builds the row as `frequency='1'` + `SECONDLY_INTERVAL=30` (the shape GOClient has run by hand since 2026-04-08). Corrective: **NOT a `.sql`** — a SQL `UPDATE` cannot change a live Quartz trigger, so it is `OnboardingCostingScheduleService#realignCadence`, run over every tenant by `CostingCadenceStartup` on application boot (the module's own deploy provides that boot, so no operator action is needed), plus the `SFCostingCadence` webhook as a per-tenant escape hatch. Re-arms the survivor with `OBScheduler.reschedule(...)`, unschedules the extras | ETP-5370 |
 
 > **Label history note:** the ETP-4736 costing gap above was originally mislabeled `H1` when
 > authored, colliding with the pre-existing `H1` (webhook access, ETP-4520, superseded) and `H2`
@@ -913,6 +918,99 @@ silently skipping one of theirs for a brand-new tenant.
 
 ---
 
+### A8b — Standard Invoice Price Variance account revised to 99904000 (ETP-5222, follow-up to A8, 2026-09-09)
+
+**Not a new symptom — a product decision made after A8/ETP-5075 shipped.** A8's `P_Expense_Acct`
+copy-down unblocked posting (the immediate bug), but product subsequently confirmed the intended
+long-term value is a dedicated GL account from the chart's own `999*` default/suspense family:
+first `99905000` ("Diferencia entre el precio de compra y el coste estándar"), corrected mid-ticket
+to `99904000` after re-verification (see the ticket's own ledger,
+`etendo_schema_forge/santo_ETP-5222_ledger.md`, for the full 99905000→99904000 correction arc,
+including the accepted risk that both accounts are `AccountType='M'`/Memorandum rather than
+`E`/Expense). Both accounts already exist in GOClient's bundled chart (and broadly, fleet-wide) as
+a genuine leaf (`elementlevel='S'`) — this is a value-priority change, not a missing-account-shape
+gap like A7.
+
+**Orphan-element trap (same class as elsewhere in this catalog):** GOClient carries a SECOND,
+unwired `C_ElementValue` row for `99904000` under an orphan "GOOrg Account Tree" element (same
+trap independently confirmed for `99905000`). The resolution scopes through
+`C_AcctSchema_Element`/`elementtype='AC'` so only the wired element's leaf is ever picked — a
+plain `value`+`ad_client_id` join would risk resolving the wrong one.
+
+**Fix (preventive):** same method, same file as A8 — `OnboardingAccountingWiringService
+#backfillInvoicePriceVarianceDefault` / `ACCTSCHEMA_DEFAULT_IPV_BACKFILL_SQL`, rewritten (not a new
+step) to resolve `99904000`'s own NATURAL `C_ValidCombination` for the tenant's schema FIRST —
+scoped through `C_AcctSchema_Element`/`elementtype='AC'`, and (added in the same session, review
+finding W1) filtered on all ~11 `C_ValidCombination` dimension columns (`m_product_id`,
+`c_bpartner_id`, `ad_orgtrx_id`, `c_locfrom_id`, `c_locto_id`, `c_salesregion_id`, `c_project_id`,
+`c_campaign_id`, `c_activity_id`, `user1_id`, `user2_id`) being `NULL`, `ORDER BY
+c_validcombination_id LIMIT 1` — the same defensive shape
+`GlItemProvisioningSupport#resolveNaturalCombination` uses elsewhere in this codebase, needed
+because a non-natural, dimension-specific row for the same `(account, schema)` pair could otherwise
+make Postgres `UPDATE ... FROM` pick an arbitrary match. `COALESCE`s with A8's own
+`P_Expense_Acct`-derived value as the fallback for a chart that genuinely lacks `99904000`.
+`ONBOARDING_PROVISIONED_THROUGH` not bumped — same reasoning as A8/A7 (this edits the SQL a single
+already-correctly-placed statement runs, not where/when it runs).
+
+**Fix (preventive, Layer 0 — dataset baseline, ETP-5222 follow-up, 2026-09-09):** the bundled
+`referencedata/sampledata/GOClient/C_ACCTSCHEMA_DEFAULT.xml` itself shipped with no
+`<P_INVOICEPRICEVARIANCE_ACCT>` element at all. That XML is the LIVE source a brand-new tenant's
+own `C_AcctSchema_Default` row is cloned from during the earlier `PROGRESS_DATASET` onboarding step
+(`importOnboardingDataset` → `OnboardingDatasetImportService` → core's `DataImportService`) — i.e.
+BEFORE `wireAccounting()`/the Java fix above even runs (that's the later `PROGRESS_ACCOUNTING`
+step). Without this baseline, a fresh tenant's schema-default row was briefly NULL between the two
+steps and depended entirely on the Java backstop to self-heal it. Added
+`<P_INVOICEPRICEVARIANCE_ACCT>29616DEC549948E7A65ABC28BCC18742</P_INVOICEPRICEVARIANCE_ACCT>`
+directly to the XML — id sourced from the bundle's OWN `C_VALIDCOMBINATION.xml`/`C_ELEMENTVALUE.xml`/
+`C_ACCTSCHEMA_ELEMENT.xml` content (never a live-DB query, even though GOClient's live row
+coincidentally matches byte-for-byte), scoped to the same wired (not orphan) element as the Java
+fix. Dataset-only, no new onboarding step — matches this catalog's own A3b/A3c precedent for a
+`C_ACCTSCHEMA_DEFAULT.xml`-only fix. The Java backfill above stays as defense-in-depth for any
+provisioning path that skips this XML or any future regression to this baseline — the two are
+complementary layers, not alternatives. `ONBOARDING_PROVISIONED_THROUGH` not bumped (this doesn't
+retract or backfill anything for an already-provisioned tenant). Regression-guarded by
+`OnboardingDatasetNormalizerTest#testNormalizerIncludesAcctSchemaDefaultInvoicePriceVarianceAccount`
+(asserts the emitted `<pInvoicepricevarianceAcct>` tag, not a substring — tightened after a review
+finding proved the original assertion was a tautology) and
+`#testNormalizerInvoicePriceVarianceCombinationRowSurvivesNormalization` (added during QA's second
+pass — confirms the referenced `C_ValidCombination` row itself survives normalization in the SAME
+generated XML, the necessary condition for `EntityResolver#getId()` to resolve the FK within one
+import batch).
+
+**Fix (corrective):** `cli/src/data-fixes/sql/20260909T150000Z__R35-invoice-price-variance-99904000-correction.sql`
+— a NEW file, R34 stays untouched (immutable-applied-fix rule, `sql/README.md` rule 3; R17-to-R21
+is the precedent for a new file superseding an old one's value choice rather than an in-place edit).
+Three levels, but only **Level 1** (schema default) independently resolves `99904000` — same
+`C_AcctSchema_Element`/dimension-null filter as the Java fix above — and only when the row's current
+value is still `NULL` or still equals its own `P_Expense_Acct` (i.e. R34's value); a chart lacking
+`99904000` leaves Level 1 a no-op, so the schema default keeps whatever it already held (R34's
+`P_Expense_Acct` value, or still `NULL`). **Levels 2/3** (product-category, product) no longer
+re-derive `99904000` on their own — they `COALESCE`/cascade WHATEVER
+`C_AcctSchema_Default.P_InvoicePriceVariance_Acct` ends up holding after Level 1 (guarded
+`IS NOT NULL`), onto any row still `NULL` or still equal to that row's own `P_Expense_Acct`. **This
+means a chart lacking `99904000` can still get its product/category rows corrected** — not to
+`99904000`'s combination (which doesn't exist there), but to whatever value `C_AcctSchema_Default`
+already carries for that schema (its own pre-existing default, possibly a dedicated variance account
+set by that tenant, or R34's `P_Expense_Acct` value if nothing else was ever set). Live-verified:
+"F&B International Group" — a real client whose chart has NO `99904000` element at all — had 35
+`M_Product_Acct`/`M_Product_Category_Acct` rows corrected during the same R35 run, cascaded down to
+that schema's own existing account `5610` (its `C_AcctSchema_Default` value, set independently of
+this fix). GOClient/SantoEmpresa (both have `99904000`) resolve Level 1 to `99904000`'s own
+combination, which then cascades identically. A row holding neither `NULL` nor its own
+`P_Expense_Acct` — a genuine manual override — is left untouched at every level on purpose (confirmed
+live against GOClient's own "Fernet" product, manually pointed at `99905000` outside either catalog
+fix). A tenant is `SKIPPED_NOT_NEEDED` when `C_AcctSchema_Default.P_InvoicePriceVariance_Acct`
+is itself `NULL` (Level 1 no-op with nothing set beforehand either) — e.g. "QA Testing" — or when
+every level already holds the correct value (an idempotent re-run) — not merely because the chart
+lacks `99904000`.
+
+**Open item, not yet closed by this ticket:** whether R34 (and now R35) has already run on the
+experimental/production server — this session had DB credentials only for local dev. Flagged in
+`etendo_schema_forge/santo_ETP-5222_ledger.md`, not resolved there either; check
+`etgo_data_fix_history` directly before treating either fix as applied fleet-wide.
+
+---
+
 ### A9 — `Cleared payment account` (IN/OUT) born pre-filled instead of empty (ETP-5207, 2026-09-08)
 
 **Symptom:** creating a Financial Account leaves the accounting-configuration fields **Cleared
@@ -1463,6 +1561,55 @@ also carries a `cli/src/data-fixes/sql/` directory per the repo-topology note, b
 checkout it is a stale mirror (tops out at `R8`, not kept in sync with `R9`–`R22` shipped after
 the repo split) and is not on a branch related to this ticket — no changes were made there. If it
 needs reconciling with the current fix catalog, that is a separate task.
+
+---
+
+### K2 — Contacto (BP) / Producto (PR) accounting dimensions must always be `active`, never toggleable (ETP-4879, 2026-09-17)
+
+**Symptom:** the "Dimensiones contables" screen let an operator toggle Contacto
+(Business Partner) and Producto (Product) off, but every window that actually renders these two
+dimensions (Assets, Financial Account, Amortization) already hardcodes them as always visible and
+never reads this config's `active` flag — the toggle was a no-op that only confused users.
+
+**Product decision (Santiago):** Contacto and Producto are no editable (y no visible) y siempre
+en true. Project (PJ) and Cost Center (CC) stay editable/optional, unchanged.
+
+**Code-side lock (already shipped, this branch, NOT part of this data-fix):**
+`GeneralLedgerConfigurationHandler.LOCKED_DIMENSION_TYPES = ["BP", "PR"]` — `buildDimensions()`
+excludes BP/PR rows from the GET response entirely; `applyDimensionChanges()` silently ignores any
+attempt to toggle their `active` flag, regardless of `mandatory`.
+
+**DB-state investigation (2026-09-17, this DB, confirmed by query before writing the fix):**
+
+- `C_AcctSchema_Element.isactive` was **already `'Y'` for every existing BP/PR row** (98/98 BP,
+  98/98 PR, across all 96 clients that have an accounting schema at all) — the AD-standard
+  default, same fact already recorded for K1/R23. The `IsActive` half of this fix is therefore a
+  **no-op on the current fleet**, shipped only as a correctness guard for any future/other write
+  path.
+- `ismandatory` was **`'N'` for every single BP/PR row** (196/196) — never forced anywhere before.
+  This is the real corrective content.
+- 2 client ids (throwaway Playwright "E2E User 1 ..." test tenants) have **zero** accounting-schema
+  rows at all (no `C_AcctSchema`, no `C_AcctSchema_Element` of any type) — unrelated pre-existing
+  A1/A2 "chart of accounts missing" gap, out of scope here; the fix's `@check` naturally returns 0
+  rows for them.
+
+**Safety of forcing `IsMandatory='Y'` (confirmed by reading every consumer, not assumed):**
+`applyDimensionChanges` reads `isMandatory()` only inside the `!LOCKED_DIMENSION_TYPES.contains(...)`
+branch — for BP/PR that branch is never entered, so the flag is dead code there. Classic core's
+legacy `AcctSchemaElement.getAcctSchemaElementList` (`src/org/openbravo/erpCommon/ad_forms/`) reads
+`ismandatory` only to emit a DEBUG log line, no exception, no posting effect. The actual
+posting/balancing engine (`Fact.java`/`FactLine.java`) reads only `isBalanced`, never `isMandatory`,
+off this element list. `COAUtility`/`InitialSetupUtility.insertAcctSchemaElement` (new-schema
+creation) hardcodes BP/PR to `isMandatory=false` BY DESIGN (only OO/AC are `true`) — a
+"posting requires an org and an account, not necessarily a partner/product" rule this fix does not
+contradict. Conclusion: forcing `IsMandatory='Y'` is safe defense-in-depth, not merely cosmetic.
+
+**Both fronts closed (2026-09-17):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260917T120000Z__R37-acctdim-bp-pr-locked-active.sql` — one guarded `UPDATE` forcing `isactive='Y'` AND `ismandatory='Y'` for `elementtype IN ('BP','PR')`, scoped to `:client_id`. Live-validated: dry-run + real run across the full fleet (98 clients) → 96 `APPLIED` (2 or 4 rows, per number of accounting schemas) / 2 `SKIPPED_NOT_NEEDED` (the schema-less E2E tenants); re-run → 98/98 `SKIPPED_NOT_NEEDED` (96 "kept prior success state" + the 2 schema-less clients), zero `APPLIED`/`FAILED`. DB re-query after the run: 0 BP/PR rows anywhere with `isactive != 'Y'` or `ismandatory != 'Y'`. |
+| **Preventive** | Dataset-only, no new onboarding service: `com.etendoerp.go/referencedata/sampledata/GOClient/C_ACCTSCHEMA_ELEMENT.xml` already shipped BP/PR with `ISACTIVE=Y`; its `ISMANDATORY=N` for both was corrected to `Y` in the same change. `ONBOARDING_PROVISIONED_THROUGH` deliberately **NOT bumped** — a new tenant is already born correct on both flags (same "dataset-only, no CUT bump" shape as A9/N4/N5 above), so R37's own `@check` converges to 0 rows for it, a clean `SKIPPED_NOT_NEEDED`. |
 
 ---
 
@@ -2171,6 +2318,189 @@ financial accounts / 2 warehouses / 3 categories; a fresh tenant at 1 product (`
 accounts / 1 warehouse / 2 categories with `Generic` + `Genérico`.
 
 ---
+
+### N5 — No price list flagged as default (ETP-5245, 2026-09-09)
+
+**Symptom.** On every already-onboarded tenant, `SELECT * FROM m_pricelist WHERE isdefault = 'Y'`
+returns nothing. The curated dataset shipped both tariffs with `ISDEFAULT='N'`:
+
+| `m_pricelist_id` | Name | `issopricelist` |
+|---|---|---|
+| `782B468DCC3948D69BC2AE5B68C3F4A4` | Tarifa de venta principal | `Y` (sales) |
+| `F888E6AAB93E44E88433C21A8F3C0161` | Tarifa de compra principal | `N` (purchase) |
+
+`M_PRICELIST` **is** in `OnboardingDatasetDefinition.INCLUDED_TABLES` (line 92), so that XML is what
+a new tenant actually gets — a defect in the dataset's *content*, which is what the `N` series is
+for (see §N4 for the series definition), not a missing provisioning step.
+
+**Why it matters — four consumers, all of which degrade silently rather than fail:**
+
+1. `com.etendoerp.go/src-db/database/model/functions/ETGO_PRODUCT_SALE_PRICE.xml` and
+   `ETGO_PRODUCT_PURCHASE_PRICE.xml`, line 15 of each: `ORDER BY (pl.isdefault = 'Y') DESC, …`.
+   With nothing flagged that first key is constant, so the *Precio de venta* / *Precio de compra*
+   columns of the Products list resolve through the remaining keys — an arbitrary tariff on any
+   tenant holding more than one.
+2. `schema_forge/tools/app-shell/src/components/contract-ui/PriceListPicker.jsx:70` —
+   `matches.find(p => p.default) || matches[0]`: the generic fallback never finds a default and
+   always lands on the first entry the API happened to return.
+3. `cli/src/data-fixes/sql/20260903T120000Z__R33-standard-cost-anchor-unified.sql:334,351` —
+   `ORDER BY pl.isdefault DESC, …` decides which tariff a standard-cost anchor is priced from. The
+   broken flag therefore degrades one of our own fixes.
+4. ETP-5245's new Java default-tariff resolver (sales + purchase), used to auto-create the
+   zero-price lines when a product is registered: with nothing flagged it has nothing to resolve.
+
+**Scope of the flag: per client × per direction, NOT per organization.** `m_pricelist` does carry
+`ad_org_id`, and nothing in the model enforces uniqueness (the only UNIQUE constraint is
+`m_pricelist_name (name, ad_org_id, ad_client_id)`; the sole trigger, core's `m_pricelist_trg`,
+only guards `istaxincluded` changes). But every consumer above reads the flag *without* an org
+filter, so a one-default-per-org reading would hand them several flagged rows per direction on a
+multi-org tenant and restore the exact arbitrary tie-breaking being fixed. The invariant is
+therefore: **at most one active default per `(ad_client_id, issopricelist)`**.
+
+**Both fronts.**
+
+| Front | Deliverable |
+|---|---|
+| Preventive | Dataset-only, no new service — `GOClient/M_PRICELIST.xml` flips `ISDEFAULT` `N`→`Y` on both curated tariffs. `ONBOARDING_PROVISIONED_THROUGH` deliberately **NOT bumped**: a newborn tenant is now born correct, so `R35`'s `@check` returns 0 rows for it and the runner records a clean `SKIPPED_NOT_NEEDED` — the case that constant's contract excludes from a bump (same reasoning as A9/`R34`). |
+| Corrective | `20260909T120000Z__R35-pricelist-isdefault.sql` — single guarded `UPDATE`, `@check`/`@apply` sharing a textually identical `ranked` CTE, plus an `@report` section. |
+
+**Deterministic pick** (only reached for a direction that has no active default at all):
+(1) most referencing `c_order` + `c_invoice` rows — the tariff the tenant actually transacts with,
+the one an operator would name; (2) has priced products in an already-valid version
+(`validfrom <= now()`), mirroring the computed-column functions' own second key; (3) oldest
+`created` — on a GO tenant, the tariff the dataset created first; (4) `m_pricelist_id ASC` as the
+absolute tie-break, which is **not** cosmetic: F&B International Group's eight purchase tariffs
+share a `created` to the millisecond, so without it the pick would not be reproducible.
+
+**Deliberately out of scope.** The fix never re-points a direction that already has an active
+default (an operator decision — QA Testing flags "Customer A" for sales), never de-duplicates a
+direction with several flagged lists (choosing which deliberate flag to clear is not a decision a
+data-fix can make), and never activates an inactive list. `@report` surfaces all three situations
+instead, and stays silent — leaving `detail` null — on the healthy GO shape of one active list and
+one default per direction.
+
+**Live validation (2026-09-09, shared dev DB, one rolled-back transaction per tenant).** All 5
+non-System clients that own price lists converge (post-apply `@check` = 0 rows in 5/5). GOClient and
+both E2E tenants: one candidate per direction, the two dataset rows, `@report` silent. F&B: sales
+"General Sales" (736 documents, 2 candidates) and purchase "Other services" (506 documents, 8
+candidates) — key 1 decided both. QA Testing: purchase "Purchase" (15 documents, 9 candidates);
+sales untouched, so `@check` returned only one row. Worst case 59 ms for the whole
+check → apply → report → re-check cycle.
+
+---
+
+## P — Scheduled Processes
+
+### P1 — No scheduled "Costing Background process" reaches a new tenant (ETP-5245, 2026-09-10)
+
+**Symptom.** A tenant created through GO onboarding never calculates product costs automatically.
+Live on the shared dev DB: "E2E User 1 5b33eb60" has 20 `M_TRANSACTION` rows, **all 20** with
+`iscostcalculated='N'`, while carrying a perfectly valid, validated Standard-Algorithm
+`M_COSTING_RULE`. The rule is there (J1 fixed that); the engine that consumes it is not.
+
+This is the second half of the warning ETP-5245 added to the Product window — *"sin costo no se
+podrán calcular los costes ni contabilizar los movimientos"*. On a GO tenant that sentence stayed
+true even AFTER the user defined a cost, because nothing was scheduled to do the calculating.
+
+**Measured state (2026-09-10, `etendo_go_merge`).** `AD_PROCESS_REQUEST` rows per client:
+
+| Tenant | Total rows | Scheduled (`SCH`) costing request |
+|---|---|---|
+| GOClient (dataset source) | 27 | yes (freq 1) |
+| F&B International Group (core sampledata) | 72 | yes (freq 2, org `'0'`, user `'100'`) |
+| QA Testing | 16 | **no** — only a completed `COM` run |
+| E2E User 1 5b33eb60 | **2** | **no** |
+| E2E User 2 8bc91bf1 | **2** | **no** |
+| Empresa madera (onboarded 2026-09-10) | **2** | **no** |
+
+**Root cause.** `AD_PROCESS_REQUEST` is in `OnboardingDatasetDefinition.EXCLUDED_TABLES`
+(`OnboardingDatasetDefinition.java:37` — inside the `EXCLUDED_TABLES` literal spanning lines 28–47,
+*not* the `INCLUDED_TABLES` one that starts at line 49). `shouldIncludeTable()` requires
+`INCLUDED_TABLES.contains(t) && !EXCLUDED_TABLES.contains(t)`, so **zero** of the 24 rows in
+`referencedata/sampledata/GOClient/AD_PROCESS_REQUEST.xml` ever reach a new tenant.
+
+**The exclusion is correct and must stay.** Two independent reasons:
+
+1. **23 of the 24 rows are `STATUS='COM'`** — completed one-shot executions (Process Order ×13,
+   Process Inventory Count ×3, Set as Ready ×3, Create Periods, Create Price List, Generate Invoice
+   from Receipt, Post Amortization, Process Movements, Calculate Standard Costs, Update Quantity).
+   They are GOClient's execution *history*, not scheduled jobs. Importing them would copy another
+   tenant's audit trail into every new tenant, and would schedule nothing.
+2. **Every row carries cross-tenant references the normalizer does not rewrite.** `AD_USER_ID`
+   points at GOClient's own `GOAdmin` (`47EAF009B7BB42BBB663C7BA1792D958`) and `OB_CONTEXT` is a
+   JSON blob naming GOClient's user, role, client and org. `OnboardingDatasetNormalizer` remaps
+   `AD_ORG_ID` only (`OnboardingDatasetNormalizer.java:209`); `AD_USER` and `AD_ROLE` are themselves
+   excluded tables. Un-excluding `AD_PROCESS_REQUEST` would plant dangling FKs in every tenant.
+
+So **exactly one** of the 24 rows is a real scheduled job: `STATUS='SCH'`,
+`AD_PROCESS_ID=3F2B4AAC707B4CE7B98D2005CF7310B5` = `CostingBackground`. Nothing else of value is
+being lost.
+
+**Why the two rows that DO arrive, arrive.** Neither comes from the dataset:
+
+- `Get Bank Statements` (`SCH`) is built programmatically by `OnboardingBankConnectionSyncService`
+  from the tenant's own client/org/user/role.
+- `Set as Ready` (`COM`) is not provisioned at all — it is the residue of
+  `OnboardingMarkOrgReadyService` running the `AD_Org_Ready` process.
+
+That is the whole explanation for "2 of 24": the dataset contributes **nothing**, and the two
+survivors are side-effects of onboarding code.
+
+**Why it matters technically.** `org.openbravo.costing.CostingBackground` is strictly
+**client-scoped** — it lists the organizations to process with
+`ad_isorgincluded(o.id, :orgId, :clientId) <> -1`, binding `bundle.getContext().getClient()`
+(`src/org/openbravo/costing/CostingBackground.java:90-95`). No system-level or other-tenant run ever
+covers this client, so a per-tenant `AD_PROCESS_REQUEST` is genuinely required. (Contrast: Alert
+Process, Acct Server Process, Payment Monitor, Log Clean Up, Analytics Sync, Stored Column Queue
+Processor and Refresh Pending Payments are all scheduled once at System level and are *not*
+per-tenant gaps.)
+
+**Fix — the two fronts are split across two PRs.**
+
+- **Corrective (this ticket, ETP-5245):**
+  `20260910T120000Z__R36-costing-background-schedule.sql`. Creates the missing request for tenants
+  already onboarded without it. Self-contained SQL — it depends on nothing from the preventive side.
+- **Preventive (NOT this ticket):** closed by a **separate PR, authored by someone else**. ETP-5245
+  deliberately touches `com.etendoerp.go` not at all. A preventive service was drafted here and then
+  dropped once that overlap surfaced, so the two PRs do not both wire a step into
+  `ensureOnboardingDataset`.
+
+**Notes for whoever writes the preventive half** (the traps this investigation already paid for):
+
+- **Do not lift the exclusion.** The fix has to be *code*, not dataset — for the two reasons in the
+  root-cause section above (23 of 24 rows are `COM` history; every row drags GOClient's `AD_USER_ID`
+  and an `OB_CONTEXT` blob the normalizer never rewrites). The shape to copy is
+  `OnboardingBankConnectionSyncService`: build the `ProcessRequest` from the tenant's OWN client,
+  organization, admin user and admin role; create the row inside the onboarding transaction and
+  activate it in Quartz *after* the commit.
+- **Judge "already provisioned" on `status='SCH'`, never on row existence.** QA Testing has a `COM`
+  row for `CostingBackground` — a completed manual run. An existence-only probe would read that as
+  provisioned and leave the tenant permanently unscheduled. R36's `@check` gates on `SCH` for
+  exactly this reason.
+- **The request org may differ from R36's without conflict.** R36 uses the client root `'0'` because
+  `CostingBackground` only processes orgs *included in* the request's org and a legacy tenant can be
+  multi-org (QA Testing has validated costing rules on both "USA" and "Spain"). A newborn GO tenant
+  has exactly one business org, so using it there is equivalent. R36's `@check` keys on the client,
+  not the org, so either shape satisfies it.
+- **Do not bump `ONBOARDING_PROVISIONED_THROUGH` for this gap, in either PR.** See below.
+
+**Why the CUT stays put.** `ONBOARDING_PROVISIONED_THROUGH` (in `OnboardingBaselineService`)
+remains at `2026-09-02T12:00:00Z`. R36's own timestamp (`2026-09-10T12:00:00Z`) sits *above* it, so a
+freshly onboarded tenant's BASELINE watermark does not cover R36 and the runner still evaluates it
+for that tenant — which is correct while no preventive front exists: a tenant onboarded today is
+still born without the schedule. Bumping the CUT would push R36 under every new tenant's watermark
+and silently skip it for exactly the tenants that need it. Note this inverts the reasoning used for
+`R34`, which could skip its bump because its preventive front shipped in the same PR. Once the
+separate onboarding PR merges, no bump is needed either: a newborn tenant already has the `SCH` row,
+so `@check` returns 0 and the runner records `SKIPPED_NOT_NEEDED` on its own. Do **not** retire R36 —
+legacy tenants still need it.
+
+**Idempotency note that matters for BOTH halves of the gap (this fix and the separate PR).** "Already provisioned" must be judged on
+`status='SCH'`, not on the mere existence of an `AD_PROCESS_REQUEST` row for the process. QA Testing
+has a `COM` row for `CostingBackground` — a completed manual run — and treating that as a schedule
+would leave the tenant permanently unscheduled. Both `findExistingRequest` and the fix's `@check`
+gate on `SCH`.
+
 
 ## Recommended Order of Operations
 

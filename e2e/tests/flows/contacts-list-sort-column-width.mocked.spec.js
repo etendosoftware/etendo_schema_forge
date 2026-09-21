@@ -121,6 +121,11 @@ test.describe('ETP-5182 — Contacts list column widths stay stable across sort 
 
     const widthAfter = await nameHeader.evaluate((el) => el.getBoundingClientRect().width);
 
-    expect(widthAfter).toBe(widthBefore);
+    // Sub-pixel tolerance, not exact equality: getBoundingClientRect() returns fractional
+    // widths and the same unchanged column can measure 139.24835205078125 before and 139.25
+    // after, purely from layout rounding. Half a pixel still catches what ETP-5182 is about —
+    // a column that re-fits itself to the long sorted content grows by tens of pixels here
+    // (LONG_NAME is ~4x the short names), so any real resize is orders of magnitude above this.
+    expect(Math.abs(widthAfter - widthBefore)).toBeLessThan(0.5);
   });
 });

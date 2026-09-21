@@ -1,3 +1,5 @@
+let lastRowQuickActions = null;
+let lastBulkActionsFn = null;
 vi.mock('@generated/goods-receipt/generated/web/goods-receipt/index.jsx', () => ({
   default: ({
     rowQuickActions,
@@ -11,7 +13,10 @@ vi.mock('@generated/goods-receipt/generated/web/goods-receipt/index.jsx', () => 
     renderPreview,
     refreshTrigger,
     refetchAfterSave,
-  }) => (
+  }) => {
+    lastRowQuickActions = rowQuickActions;
+    lastBulkActionsFn = BulkActions;
+    return (
     <div
       data-testid="generated-app"
       data-initial-filters={initialColumnFilters ? JSON.stringify(initialColumnFilters) : ''}
@@ -125,7 +130,8 @@ vi.mock('@generated/goods-receipt/generated/web/goods-receipt/index.jsx', () => 
       </button>
       <span id="menu-dr-count" data-testid="menu-dr-count" />
     </div>
-  ),
+    );
+  },
 }));
 
 vi.mock('@generated/goods-receipt/generated/web/goods-receipt/GoodsReceiptTable', () => ({
@@ -140,9 +146,15 @@ vi.mock('@/components/attachments', () => ({
   AttachmentsTab: () => null,
 }));
 
-vi.mock('@/components/contract-ui/BulkDocumentAction', () => ({
-  default: () => null,
-  buildInOutActions: vi.fn(),
+let bulkDocumentActionCalls = [];
+// The named exports come from the shared helper (it documents why a mock must expose
+// the module's FULL export surface); only the `default` stub is window-specific.
+vi.mock('@/components/contract-ui/BulkDocumentAction', async () => ({
+  ...(await import('@/test/bulkDocumentActionMock.js')).bulkDocumentActionNamedExports(),
+  default: (props) => {
+    bulkDocumentActionCalls.push(props);
+    return null;
+  },
 }));
 
 vi.mock('@/components/contract-ui/CloneOrderModal', () => ({
@@ -152,6 +164,28 @@ vi.mock('@/components/contract-ui/CloneOrderModal', () => ({
       <button data-testid="clone-modal-cloned" onClick={onCloned}>Cloned</button>
     </div>
   ),
+}));
+
+// ETP-5404 — Contacto (BusinessPartner) selector must offer "create new contact"
+// inline, at parity with purchase-order/goods-shipment. Mirrors the mock shape
+// used in goods-shipment/__tests__/index.vitest.jsx: a stub Provider that stays
+// visible in the DOM (data-testid="contact-provider") and a captured-args hook
+// stub so the documentType wiring can be asserted directly.
+let lastCreateContactModalArgs = null;
+vi.mock('@/components/contract-ui/CreateContactContext.js', () => ({
+  CreateContactContext: {
+    Provider: ({ children }) => <div data-testid="contact-provider">{children}</div>,
+  },
+}));
+
+vi.mock('@/components/contract-ui/useCreateContactModal.jsx', () => ({
+  useCreateContactModal: vi.fn((args) => {
+    lastCreateContactModalArgs = args;
+    return {
+      createContactCtxValue: { fieldKey: 'businessPartner', onOpen: vi.fn() },
+      contactPortal: <div data-testid="contact-portal" />,
+    };
+  }),
 }));
 
 vi.mock('@/components/contract-ui/SendDocumentModal', () => ({
@@ -203,6 +237,9 @@ vi.mock('react-router-dom', () => ({
 
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import {
+  postRowFilter, buildPostActions, buildUnpostActions, unpostRowFilter,
+} from '@/components/contract-ui/BulkDocumentAction';
 import GoodsReceiptWindow from '../index.jsx';
 
 const DEFAULT_PROPS = {
@@ -216,11 +253,46 @@ describe('GoodsReceiptWindow', () => {
     vi.clearAllMocks();
     mockSearchParams = new URLSearchParams();
     capturedOnSuccess = null;
+    lastRowQuickActions = null;
+    lastBulkActionsFn = null;
+    bulkDocumentActionCalls = [];
+    lastCreateContactModalArgs = null;
   });
 
   it('renders the generated app', () => {
     render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
     expect(screen.getByTestId('generated-app')).toBeInTheDocument();
+  });
+
+  // ── ETP-5404 — Contacto selector: create-new-contact wiring ────────────────
+  // The bug: the Contacto (BusinessPartner) selector on this window never
+  // offered "create a new contact" inline, unlike Purchase Order / Sales Order /
+  // Sales Quotation / Purchase Invoice / Sales Invoice / Goods Shipment. The fix
+  // wraps the tree in CreateContactContext.Provider (fed by useCreateContactModal)
+  // and renders its portal alongside the generated app.
+  describe('ETP-5404 — Contacto selector create-new-contact wiring', () => {
+    it('wraps the generated app in CreateContactContext.Provider', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+      const provider = screen.getByTestId('contact-provider');
+      expect(provider).toBeInTheDocument();
+      expect(provider).toContainElement(screen.getByTestId('generated-app'));
+    });
+
+    it('renders the contactPortal returned by useCreateContactModal', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+      expect(screen.getByTestId('contact-portal')).toBeInTheDocument();
+    });
+
+    // Given the user is creating a Goods Receipt (Albarán de Compra), the modal
+    // must build the "create new contact" form for a purchase-side partner.
+    it('calls useCreateContactModal with documentType: "purchase"', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+      expect(lastCreateContactModalArgs).toMatchObject({
+        apiBaseUrl: '/api',
+        token: 'tok',
+        documentType: 'purchase',
+      });
+    });
   });
 
   // ── ETP-5058: refetchAfterSave ─────────────────────────────────────────────
@@ -271,21 +343,25 @@ describe('GoodsReceiptWindow', () => {
     window.removeEventListener('goods-receipt:open-confirm-modal', listener);
   });
 
+  // ETP-5265 QA follow-up — the event carries a mutable `detail` so the
+  // GoodsReceiptActions listener can hand its in-flight promise back; onConfirm returns
+  // it so the core's Confirm button can await it and spin (no more "processing" toast).
+  it('draftMode.onConfirm dispatches an event with a mutable detail object', () => {
+    let seen = null;
+    const listener = (e) => { seen = e.detail; };
+    window.addEventListener('goods-receipt:open-confirm-modal', listener);
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    fireEvent.click(screen.getByTestId('trigger-confirm'));
+    window.removeEventListener('goods-receipt:open-confirm-modal', listener);
+    expect(seen).toEqual({});
+  });
+
   // ── menuActionsForForm ─────────────────────────────────────────────────────
 
   it('menuActionsForForm returns empty array for non-CO status', () => {
     render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
     fireEvent.click(screen.getByTestId('trigger-menu-dr'));
     expect(screen.getByTestId('menu-dr-count').textContent).toBe('0');
-  });
-
-  it('menuActionsForForm downloadPdf action dispatches goods-receipt:download-pdf CustomEvent', () => {
-    const listener = vi.fn();
-    window.addEventListener('goods-receipt:download-pdf', listener);
-    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
-    fireEvent.click(screen.getByTestId('trigger-menu-co'));
-    expect(listener).toHaveBeenCalledTimes(1);
-    window.removeEventListener('goods-receipt:download-pdf', listener);
   });
 
   // ── rowQuickActions.onClone ────────────────────────────────────────────────
@@ -392,5 +468,150 @@ describe('GoodsReceiptWindow', () => {
     expect(screen.queryByTestId('clone-modal')).not.toBeInTheDocument();
     const after = screen.getByTestId('generated-app').getAttribute('data-refresh-trigger');
     expect(Number(after)).toBe(Number(before) + 1);
+  });
+
+  // ── ETP-5209 — Post row-kebab entry and bulk button ────────────────────────
+  // The gate itself (processed + not posted) is covered exhaustively in
+  // BulkDocumentAction.vitest.jsx (buildPostActions/postRowFilter) — these
+  // tests only verify this window wires the shared helper through correctly.
+
+  it('offers the post row-kebab menu action for a processed, unposted row', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    const actions = lastRowQuickActions.menuActions({ row: { processed: 'Y', posted: 'N' } });
+    expect(actions).toEqual([{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }]);
+  });
+
+  it('does not offer the post row-kebab menu action for an already-posted row', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    const actions = lastRowQuickActions.menuActions({ row: { processed: 'Y', posted: 'Y' } });
+    expect(actions).toEqual([]);
+  });
+
+  it('does not offer the post row-kebab menu action for a not-yet-processed row', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    const actions = lastRowQuickActions.menuActions({ row: { processed: 'N', posted: 'N' } });
+    expect(actions).toEqual([]);
+  });
+
+  it('bumps refreshKey when a neoAction row-kebab menu action (post) completes', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    const before = screen.getByTestId('generated-app').getAttribute('data-refresh-trigger');
+
+    act(() => {
+      lastRowQuickActions.onMenuActionExecuted({ neoAction: 'post' });
+    });
+
+    const after = screen.getByTestId('generated-app').getAttribute('data-refresh-trigger');
+    expect(Number(after)).toBe(Number(before) + 1);
+  });
+
+  it('does not bump refreshKey for a menu action without a neoAction', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    const before = screen.getByTestId('generated-app').getAttribute('data-refresh-trigger');
+
+    act(() => {
+      lastRowQuickActions.onMenuActionExecuted({ key: 'someOtherAction' });
+    });
+
+    const after = screen.getByTestId('generated-app').getAttribute('data-refresh-trigger');
+    expect(after).toBe(before);
+  });
+
+  it('wires the bulk Post BulkDocumentAction with the shared postRowFilter reference', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    // GoodsReceiptBulkAction (rendered inside bulk-actions-slot) passes the
+    // imported postRowFilter reference straight through as rowFilter — no
+    // caller-side factory/hook call needed (ETP-5209).
+    const postCall = bulkDocumentActionCalls.find((p) => p.labelKey === 'post');
+    expect(postCall).toBeDefined();
+    expect(postCall.rowFilter).toBe(postRowFilter);
+  });
+
+  // ETP-5302 — the in-out (DR→CO) bulk button is labelled "Procesar" (`process`),
+  // NOT "Confirmar" (`confirmBulk`, now deleted from the locales): "Confirmar" is
+  // the label of the dropdown OPTION inside the dialog. Asserted alongside the
+  // `post` instance above so the two BulkDocumentAction mounts of this window
+  // stay distinguishable by labelKey.
+  it('wires the in-out bulk BulkDocumentAction to labelKey="process"', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    const labelKeys = bulkDocumentActionCalls.map((p) => p.labelKey);
+    expect(labelKeys).toContain('process');
+    expect(labelKeys).not.toContain('confirmBulk');
+    const processCall = bulkDocumentActionCalls.find((p) => p.labelKey === 'process');
+    expect(processCall.entity).toBe('goodsReceipt');
+  });
+
+  // ── ETP-5302 — bulk Descontabilizar (unpost) ───────────────────────────────
+  // Its own button rather than a second option inside "Contabilizar" (that button
+  // would then be named after the opposite of what it does). The gate itself
+  // (`buildUnpostActions` / `unpostRowFilter`) is covered exhaustively in
+  // BulkDocumentAction.vitest.jsx — these tests only verify this window mounts a
+  // THIRD instance and hands the SHARED helper references through, rather than
+  // re-deriving its own local copies (which is how two implementations of one rule
+  // drift apart — the root cause of the ETP-5302 bug itself).
+  describe('ETP-5302 — bulk unpost button', () => {
+    const unpostCall = () => bulkDocumentActionCalls.find((p) => p.labelKey === 'unpost');
+
+    it('mounts a third BulkDocumentAction for unpost, on the neoAction path', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+
+      // Deduped, order preserved: proves all three instances mount in this order
+      // without being brittle about how many times React re-rendered them.
+      const labelKeys = bulkDocumentActionCalls.map((p) => p.labelKey);
+      expect(labelKeys.filter((k, i) => labelKeys.indexOf(k) === i)).toEqual(['process', 'post', 'unpost']);
+      expect(unpostCall().actionMode).toBe('neoAction');
+      expect(unpostCall().entity).toBe('goodsReceipt');
+    });
+
+    it('wires the SHARED buildUnpostActions/unpostRowFilter references, not local copies', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+
+      expect(unpostCall().buildActions).toBe(buildUnpostActions);
+      expect(unpostCall().rowFilter).toBe(unpostRowFilter);
+    });
+
+    it('keeps the post and unpost instances independent (no crossed helpers)', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+
+      const postCall = bulkDocumentActionCalls.find((p) => p.labelKey === 'post');
+      expect(postCall.buildActions).toBe(buildPostActions);
+      expect(postCall.rowFilter).toBe(postRowFilter);
+      expect(postCall.rowFilter).not.toBe(unpostRowFilter);
+    });
+
+    // A receipt's accounting reversal IS a standalone action here, so no bulk
+    // instance of this window chains an unpost before its document action — that
+    // opt-in belongs to the invoice windows only.
+    it('never opts into preUnpostActions on any of its bulk instances', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+
+      for (const call of bulkDocumentActionCalls) {
+        expect(call.preUnpostActions).toBeUndefined();
+      }
+    });
+  });
+
+  // ETP-5209 regression: production crash root cause. The real
+  // generated/goods-receipt index.jsx invokes `bulkActions` as a PLAIN
+  // FUNCTION CALL inside ListView's own render body, never as JSX. The mock
+  // above renders BulkActions via JSX (`<BulkActions />`), which is exactly
+  // why the old suite never caught this: JSX invocation gives a function
+  // component its own hook dispatcher, so a stray `useUI()` inside the
+  // wrapper would have passed silently there. Calling the captured
+  // `lastBulkActionsFn` reference directly here, OUTSIDE of any React render
+  // pass, reproduces the same hook-dispatcher-less context production hits —
+  // any hook call inside the wrapper throws React's "Invalid hook call" error
+  // here, exactly as it would crash with "Rendered more hooks than during the
+  // previous render" in production the moment a row got selected.
+  it('ETP-5209 regression: bulkActions wrapper is callable as a plain function (not JSX) without an Invalid Hook Call error', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+
+    expect(() => lastBulkActionsFn({
+      selectedRows: [{ id: 'row-1', processed: 'Y', posted: 'N' }],
+      clearSelection: vi.fn(),
+      token: 'tok',
+      apiBaseUrl: '/api',
+      windowName: 'goods-receipt',
+    })).not.toThrow();
   });
 });

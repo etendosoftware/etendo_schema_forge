@@ -3,7 +3,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:conversionRateDownloaderLog
 const columns = [
-  { key: 'syncDate', column: 'sync_date', type: 'string', label: 'Sync Date' },
+  { key: 'syncDate', column: 'sync_date', type: 'string', label: 'Sync Date', maxLength: 19 },
   { key: 'pairsUpdated', column: 'pairs_updated', type: 'number', label: 'Pairs Updated' },
   { key: 'pairsFailed', column: 'pairs_failed', type: 'number', label: 'Pairs Failed' },
   { key: 'durationms', column: 'duration_ms', type: 'number', label: 'Duration (ms)' },

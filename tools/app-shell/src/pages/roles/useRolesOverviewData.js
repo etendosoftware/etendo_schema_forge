@@ -69,7 +69,9 @@ export const ROLE_ORDER = ['admin', 'sales', 'purchasing', 'finance', 'inventory
  * `feature/ETP-4906` branch for the User window's own role-preview matrix
  * (`UserRolesTab.jsx`'s `ROLE_ICONS`) — kept consistent across both screens
  * even though that branch isn't merged here yet. `admin` (`Settings`) is new
- * — that matrix never has an admin column.
+ * — `UserRolesTab.jsx`'s matrix now has an admin column too (ETP-5196),
+ * gated by `isClientAdmin` there rather than by a name key in its own
+ * `ROLE_ICONS` map, since that map is keyed by the 4 fixed template names.
  */
 export const ROLE_ICONS = {
   admin: Settings,
@@ -203,6 +205,12 @@ function adaptCards(roles) {
  * candidate's own `hidden` flag is therefore `true` only when EVERY menu.json entry for
  * that id is hidden (no visible alternative exists) — `adaptMatrix` uses exactly that
  * signal to drop sidebar-hidden windows from the matrix (see ETP-5071 below).
+ *
+ * **Second consumer (ETP-5196):** `windows/custom/user/UserRolesTab.jsx` now imports this
+ * function directly (not re-implemented) to resolve its own per-window category/label/order,
+ * so the User window's "Roles del usuario" tab groups windows identically to this page's
+ * `RolesAccessMatrix` — see that file's `resolveCategoryRow` JSDoc for its own fallback
+ * chain (AD-menu-tree walk, then an "Other" bucket) for a window this index doesn't cover.
  */
 export function buildMenuWindowIndex() {
   const index = new Map();

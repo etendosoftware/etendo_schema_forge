@@ -383,7 +383,16 @@ describe('registry', () => {
       const groups = filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess);
       const bypassedAnchors = entry.capability === 'isAdminOrClientAdmin'
         ? defaultNavigation.filter(candidate => candidate.accessWindowId) : [];
-      expectNavigation(groups, [...ungated, ...proof, entry, ...bypassedAnchors]);
+      // A capability is a NAMED BOOLEAN, not a per-entry grant: switching one on reveals every
+      // entry gated on that same name, not only the entry we asked for. Latent until ETP-5269
+      // added a second `isAdminOrClientAdmin` entry next to `roles` — with one entry per
+      // capability the distinction was invisible. Same shape as `bypassedAnchors` above: a
+      // second, indirect consequence of the one grant under test.
+      const capabilitySiblings = entry.capability
+        ? defaultNavigation.filter(candidate => candidate !== entry && candidate.capability === entry.capability)
+        : [];
+      const expected = [...new Set([...ungated, ...proof, entry, ...bypassedAnchors, ...capabilitySiblings])];
+      expectNavigation(groups, expected);
     });
 
     it.each(gated)('revoked grant: $name', entry => {
@@ -391,6 +400,21 @@ describe('registry', () => {
       const remaining = defaultNavigation.filter(candidate => candidate !== entry && !candidate.capability);
       const { allowedIds, capabilities, windowAccess } = navigationPermissions(remaining);
       expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess), [...remaining, ...proof]);
+    });
+
+    // ETP-5395 — `isOwner` is a distinct capability name from
+    // `isAdminOrClientAdmin`. Unlike the accessWindowId axis (which
+    // deliberately bypasses for any admin/client-admin, see the
+    // "admin/client-admin bypass" describe block above), the `capability`
+    // axis has no such bypass: an Admin/ClientAdmin who is not the account
+    // Owner must NOT see First Steps, while an Owner-only grant must not
+    // leak into admin-gated siblings like `roles`.
+    it('first-steps requires its own isOwner grant — an admin/client-admin capability does not imply it', () => {
+      const names = filterMenuGroupsByAccess(
+        buildMenuGroups(), new Set(), { isAdminOrClientAdmin: true, isOwner: false }, {},
+      ).flatMap(group => group.items.map(item => item.name));
+      expect(names).not.toContain('first-steps');
+      expect(names).toContain('roles');
     });
 
     it.each(defaultNavigation.filter(entry => entry.accessWindowId))('read-only anchor grant: $name', entry => {

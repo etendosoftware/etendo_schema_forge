@@ -71,12 +71,12 @@ vi.mock('../../../FmTabContent.jsx', () => ({
 }));
 vi.mock('../FmBoxes303.jsx', () => ({ default: () => null }));
 vi.mock('lucide-react', () => ({
-  Settings: () => null, Download: () => null, OctagonAlert: () => null,
+  Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
   TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
   TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,
   ClipboardCheck: () => null, ReceiptText: () => null, Folder: () => null,
-  FileCheck: () => null,
+  FileCheck: () => null, Landmark: () => null,
 }));
 
 // PresentModal mock: renders a button that reports the 'aeat_telematic' sentinel status,
@@ -110,16 +110,23 @@ const BASE_DECL = {
   id: '303-2026-T2', model: '303', year: 2026, period: 'T2', type: 'ord',
   status: 'draft', result: null, incidents: { blocking: 0, warning: 0, items: [] },
   _precomputed: null, boxes: null, sources: [], history: [],
+  // ETP-5187 required-field gate: tipo_declaracion must be set or "Marcar como
+  // Presentado" never even opens PresentModal — unrelated to this file's incidents tests.
+  identification: { tipo_declaracion: 'I' },
 };
 
 function incidentsTabButton() {
   return screen.getAllByRole('tab').find(t => t.textContent.includes('fm.tab.incidents'));
 }
 
-function openAeatFlow() {
+// ETP-5338 pt.4 — `handlePresent` now `await`s `persistEditableFields()` before opening
+// AeatSubmitFlow (see FmModel303Page.jsx), so the flow no longer mounts synchronously off the
+// 'aeat_telematic' click — callers must await its actual mount before interacting with it.
+async function openAeatFlow() {
   const btns = Array.from(document.querySelectorAll('button'));
   fireEvent.click(btns.find(b => b.textContent.includes('fm.action.submit')));
   fireEvent.click(screen.getByTestId('present-confirm-aeat'));
+  await screen.findByTestId('aeat-flow-incidents-changed');
 }
 
 beforeEach(() => {
@@ -195,7 +202,7 @@ describe('FmModel303Page — incidents fetched on mount (ETP-4456)', () => {
     render(<FmModel303Page decl={BASE_DECL} token="tok" apiBaseUrl="/api" onBack={vi.fn()} onStatusChange={vi.fn()} />);
     await waitFor(() => expect(screen.getByTestId('kpi-fm.tab.incidents').getAttribute('data-value')).toBe('2'));
 
-    openAeatFlow();
+    await openAeatFlow();
     fireEvent.click(screen.getByTestId('aeat-flow-incidents-changed'));
 
     await waitFor(() => expect(fetchDeclarationIncidents).toHaveBeenCalledTimes(2));

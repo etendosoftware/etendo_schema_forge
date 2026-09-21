@@ -7,6 +7,9 @@ import { collectAllowedIds } from '../../lib/menuTree.js';
 // Sources: docs/generated-custom-windows/INDEX.md and each window's guide;
 // runtime-routes.jsx for synthetic destinations. Additions/removals need review.
 const groups = {
+  // ETP-5190 — ungated, like Home: the checklist is every tenant's landing page,
+  // so menu.json declares it with no windowId and no capability.
+  'First Steps': 'first-steps',
   Home: 'dashboard',
   People: 'contacts',
   Sales: 'sales-quotation sales-order goods-shipment sales-invoice return-material-receipt',
@@ -14,15 +17,28 @@ const groups = {
   Inventory: 'product product-category physical-inventory goods-movements internal-consumption warehouse report-viewer-inventory',
   Finance: 'payment-in payment-out financial-account chart-of-accounts cost-center service-project general-ledger-configuration calendar assets asset-group amortization not-posted-documents simple-g-l-journal fiscal-monitor conversion-rates fiscal-models tax tax-category report-viewer-finance',
   Connections: 'authorize',
-  Settings: 'organization price-list payment-term business-partner-category user roles smart-scan fiscal-config',
+  Settings: 'organization document-sequence price-list payment-term business-partner-category user roles api-keys acct-process-monitor fiscal-config',
 };
 
 // Composition aliases documented in calendar/fiscal-monitor/fiscal-config guides.
 const aliases = { calendar: 'fiscal-calendar', 'fiscal-monitor': 'sii-monitor', 'fiscal-config': 'sii-config' };
 const exceptions = {
   dashboard: {},
+  // ETP-5395 — gated to the account Owner via the `isOwner` capability
+  // (menu.json). Distinct capability name from `isAdminOrClientAdmin` below,
+  // so it does not participate in the accessWindowId admin bypass or in the
+  // `roles`/`acct-process-monitor` capability-sibling set.
+  'first-steps': { capability: 'isOwner' },
   authorize: {},
   roles: { capability: 'isAdminOrClientAdmin' },
+  'api-keys': { capability: 'isAdminOrClientAdmin', flag: 'public-api-keys' },
+  // ETP-5269. Synthetic destination (runtime-routes.jsx), no AD window of its own.
+  // Additionally hidden behind the `acct-process-monitor` feature flag. That gate lives in
+  // SideMenu and is invisible to buildMenuGroups — the boundary this catalog measures — so here
+  // it is an ordinary capability-gated Settings entry, exactly like `roles` above. `flag` is
+  // metadata for the one spec that DOES cross the flag boundary (SideMenu.vitest.jsx enables
+  // every flag declared here); nothing else in this module reads it.
+  'acct-process-monitor': { capability: 'isAdminOrClientAdmin', flag: 'acct-process-monitor' },
   // Tax Report AD window: core-maps/ad-menu-cache.json (typed window entry),
   // app-shell-functional-flows.md, "Role-gated custom pages".
   'fiscal-models': { windowId: '3E8FEA1EA7404D979306C9EE7FD2E7E8' },
@@ -32,7 +48,6 @@ const exceptions = {
   // Independent content gates: ReportViewerPage.jsx and SmartScanPage.jsx.
   'report-viewer-finance': { accessWindowId: 'D647D118F5014D00AF47A636B2CD0DD3', path: 'report-viewer?category=finance' },
   'report-viewer-inventory': { accessWindowId: '6346B88619F948F9A42224BDB0B239FA', path: 'report-viewer?category=inventory' },
-  'smart-scan': { accessWindowId: '33705E0F52874D91B0BB2FF8BB648B8E' },
 };
 
 export const defaultNavigation = Object.entries(groups).flatMap(([group, names]) => names.split(' ').map(name => {
@@ -55,7 +70,9 @@ export const optionalNavigation = [
 
 // Hidden/route-only entries from the functional guides and current product
 // exclusions. App Store is classified above, not permanently hidden.
-export const hiddenNavigation = 'business-partner deal activity lead hr employee absence report-viewer-purchases warehouse-storage-bins project time-tracking document match-rule fiscal-calendar open-close-period-control recurring-invoice oauth2-clients'.split(' ');
+// ETP-5196 — smart-scan moved here (hidden: true in menu.json); its runtime
+// access gate lives in SmartScanPage.jsx's own content gate, unaffected by this.
+export const hiddenNavigation = 'business-partner deal activity lead hr employee absence report-viewer-purchases warehouse-storage-bins project time-tracking document match-rule fiscal-calendar open-close-period-control recurring-invoice oauth2-clients smart-scan'.split(' ');
 
 export const navigationProfiles = [
   { label: 'default', apps: [], marketplace: false, proof: false },
@@ -81,6 +98,12 @@ export function navigationPermissions(entries = defaultNavigation, tier = 'full'
     capabilities: Object.fromEntries(entries.filter(entry => entry.capability).map(entry => [entry.capability, true])),
   };
 }
+
+// Every feature flag a catalog entry declares. SideMenu is the only layer that reads flags, so
+// its profile specs enable exactly this set to assert catalog MEMBERSHIP; each flag's own
+// on/off behaviour belongs in a dedicated test, not in the shared profiles.
+export const catalogFeatureFlags = [...defaultNavigation, ...optionalNavigation]
+  .filter(entry => entry.flag).map(entry => entry.flag);
 
 // Exact named membership (including duplicates), groups and destinations, not
 // circular counts. Used by registry and AppLayout against real built groups.

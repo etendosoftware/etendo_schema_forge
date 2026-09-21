@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-stripe-local test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration test-e2e-purchase-sales test-e2e-last-failed email-stress-limits email-stress-limits-report email-stress-help ast-churn-ranking ast-churn-heatmap generate regen dev dev-local-core dev-mock ai-bff-install build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage flag-debt menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status ci-parity ci-parity-help
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-stripe-local test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration test-e2e-purchase-sales test-e2e-last-failed email-stress-limits email-stress-limits-report email-stress-help ast-churn-ranking ast-churn-heatmap generate regen dev dev-local-core dev-mock ai-bff-install build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage flag-debt menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status ci-parity ci-parity-help regen-public-api generate-base-public-api-manifest gateway-link-local-core gateway-dev-local-core docs-api-sync docs-api-generate docs-api-build docs-api-dev mcp-test mcp-login mcp-ui
 
 export SF_ROOT := $(CURDIR)
 
@@ -101,7 +101,7 @@ test-ci-coverage: ## Run all unit tests with JUnit XML reports + LCOV coverage (
 	cd tools/app-shell && npx vitest run --coverage --coverage.reporter=lcov \
 	  --reporter=junit \
 	  --outputFile=../../test-results/vitest.xml \
-	  && cp coverage/vitest/lcov.info ../../coverage/vitest-lcov.info
+	  && sed 's|^SF:src/|SF:tools/app-shell/src/|' coverage/vitest/lcov.info > ../../coverage/vitest-lcov.info
 	@echo "=== Merging LCOV reports ==="
 	node scripts/merge-lcov.js 'coverage/*-lcov.info' coverage/merged-lcov.info
 
@@ -119,6 +119,9 @@ test-frontend: ## Run only frontend generator tests
 
 test-stripe-local: ## Start Stripe Test Mode forwarding and smoke-test hosted Checkout
 	tools/stripe-local-smoke.sh
+
+stripe-simulate: ## Simulate a signed Stripe checkout webhook locally (no Stripe account needed)
+	tools/stripe-webhook-simulate.sh --status $(ARGS)
 HOTSPOT_FILE ?= tools/app-shell/src/components/contract-ui/DetailView.jsx
 HOTSPOT_DAYS ?= 15
 HOTSPOT_LIMIT ?= 10
@@ -302,6 +305,66 @@ regen-help: ## Show usage and examples for `make regen`
 	@echo "  - A full 'make regen CACHE_DB=1' (no ONLY=) also prunes orphan cache files (SF_CACHE_SWEEP=1);"
 	@echo "    scoped 'CACHE_DB=1 ONLY=<spec>' never sweeps, so it only refreshes that window's queries."
 
+# --- Public API Gateway (ETP-5345) ---
+#
+# Resolves artifacts/*/contract.json's field-level `publicApi` curation into one flat
+# allowlist artifact per API version (artifacts/_public-api/allowlist.<version>.json),
+# consumed by the gateway/ NestJS app. Same LOCAL_CORE dispatcher as `regen` above.
+
+regen-public-api: ## Generate artifacts/_public-api/allowlist.v1.json from curated publicApi fields
+	$(SF) sf-generate-public-api-schema --artifacts-root artifacts
+
+generate-base-public-api-manifest: ## Generate the editable primary-entity Base-window public API manifest
+	node scripts/generate-base-public-api-manifest.mjs artifacts public-api/base.v1.json
+	node scripts/validate-base-public-api-manifest.mjs public-api/base.v1.json
+
+# gateway/'s package.json declares @etendosoftware/api-gateway-core as a real npm
+# dependency (not a CLI bin, not bundler-resolved React source) — neither of the two
+# mechanisms above fits, so LOCAL_CORE consumption here uses `npm link`, gated the
+# same way: opt-in, never touches the default (published) install. Requires
+# schema_forge_core cloned as a sibling with its deps installed (npm install there) —
+# see docs/repo-topology.md.
+GATEWAY_CORE_PKG := $(CURDIR)/../schema_forge_core/packages/api-gateway-core
+
+gateway-link-local-core: ## Build api-gateway-core in the sibling core repo and npm-link it into gateway/ (LOCAL_CORE dev only)
+	@if [ ! -d "$(GATEWAY_CORE_PKG)" ]; then \
+		echo "gateway-link-local-core: schema_forge_core not found as a sibling at $(GATEWAY_CORE_PKG)" >&2; \
+		echo "  Clone schema_forge_core as a sibling of this repo first. See docs/repo-topology.md." >&2; \
+		exit 1; \
+	fi; \
+	if [ ! -d "gateway" ]; then \
+		echo "gateway-link-local-core: gateway/ does not exist in this repo yet." >&2; \
+		exit 1; \
+	fi
+	cd $(GATEWAY_CORE_PKG) && npm run build && npm link
+	cd gateway && npm link @etendosoftware/api-gateway-core
+
+# `npm link` resolves a linked package against its REAL (symlink-target) path, not
+# the symlink's location in gateway/node_modules — so api-gateway-core would still
+# resolve @nestjs/common etc. from schema_forge_core's own node_modules even though
+# they're peerDependencies there now (ETP-5345). NODE_OPTIONS=--preserve-symlinks
+# makes Node resolve as if the package physically lived at the symlink's location
+# instead, so it picks up gateway's own installed copies — the single shared
+# instance peerDependencies alone can't guarantee across two independently
+# npm-installed sibling repos. Scoped to this target only (not baked into
+# gateway/package.json's start:dev) since it would be a no-op for the published
+# (non-linked) consumption path anyway, and forcing it repo-wide risks changing
+# resolution for other, unrelated symlinked packages this monorepo may have.
+gateway-dev-local-core: ## Start the gateway dev server against the linked local api-gateway-core (LOCAL_CORE dev only)
+	cd gateway && NODE_OPTIONS=--preserve-symlinks npm run start:dev
+
+docs-api-sync: ## Copy the running gateway OpenAPI contract into the Docusaurus portal
+	cd docs-api && npm run sync:openapi
+
+docs-api-generate: docs-api-sync ## Generate Docusaurus API reference pages from OpenAPI
+	cd docs-api && npx docusaurus clean-api-docs publicApi && npm run gen:api
+
+docs-api-build: docs-api-generate ## Build the static self-hosted API documentation portal
+	cd docs-api && npm run build
+
+docs-api-dev: ## Docusaurus is disabled while Scalar is the active API documentation
+	@echo 'Docusaurus is disabled for now. Use Scalar at http://localhost:4300/docs'
+
 # --- Push-to-NEO Delta Dump ---
 
 PREV_XML_DIR ?=
@@ -330,7 +393,7 @@ dump-delta: ## Dump the writes push-to-neo WOULD make for ONLY=<spec> (no DB wri
 # Default prev-XML dir: ../modules/com.etendoerp.go/src-db/database/sourcedata
 # Output: tmp/regen-check/<spec>/{neo-delta.json,predicted/,prev/}
 
-REGEN_CHECK_PREV_XML_DIR ?= ../modules/com.etendoerp.go/src-db/database/sourcedata
+REGEN_CHECK_PREV_XML_DIR ?= $(firstword $(wildcard etendo_core/modules/com.etendoerp.go/src-db/database/sourcedata ../modules/com.etendoerp.go/src-db/database/sourcedata))
 REGEN_CHECK_OUT_ROOT     ?= tmp/regen-check
 
 regen-check: ## Predict and compare ETGO_SF_*.xml against committed XML (no DB, no gradle). Defaults to all AD-backed windows.
@@ -343,11 +406,29 @@ process.stdout.write(r.windows.filter(w=>{\
 }).map(w=>w.name).join(','))"); \
 	  echo "No ONLY= given — running registry windows with decisions+contract ($$SPECS)"; \
 	fi; \
+	if [ "$(CACHE_DB)" = "1" ] && [ "$(FROM_CACHE)" = "1" ]; then \
+	  echo "regen-check: CACHE_DB=1 and FROM_CACHE=1 are mutually exclusive."; exit 1; \
+	fi; \
+	if [ "$(CACHE_DB)" != "1" ]; then \
+	  echo "=== regen-check cache preflight ==="; \
+	  node cli/src/cache-preflight.js "$(SF_CACHE_PATH)" --strict || { \
+	    echo "regen-check stopped before drift comparison: the AD cache is not trustworthy."; \
+	    echo "Action: make regen CACHE_DB=1 (full) or make regen ONLY=<spec> CACHE_DB=1; then rerun with FROM_CACHE=1."; \
+	    exit 1; \
+	  }; \
+	fi; \
 	REGEN_ARGS="--only $$SPECS --skip-extract"; \
 	if [ "$(CACHE_DB)" = "1" ]; then REGEN_ARGS="--only $$SPECS --write-cache"; fi; \
 	CACHE_ENV=""; \
-	if [ "$(FROM_CACHE)" = "1" ]; then REGEN_ARGS="--only $$SPECS"; CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
-	env $$CACHE_ENV $(SF) sf-regen-all $$REGEN_ARGS || exit $$?; \
+	if [ "$(CACHE_DB)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=write SF_CACHE_PATH=$(SF_CACHE_PATH)"; \
+	else REGEN_ARGS="--only $$SPECS"; CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
+	if ! env $$CACHE_ENV $(SF) sf-regen-all $$REGEN_ARGS; then \
+	  if [ "$(CACHE_DB)" != "1" ]; then \
+	    echo "regen-check stopped before drift comparison: regeneration could not be served by the AD cache (possibly AD_CACHE_MISS)."; \
+	    echo "Action: refresh with make regen CACHE_DB=1 (full) or make regen ONLY=<spec> CACHE_DB=1, then rerun FROM_CACHE=1."; \
+	  fi; \
+	  exit 1; \
+	fi; \
 	FAIL=0; TOTAL_OK=0; TOTAL_FAIL=0; \
 	for spec in $$(echo "$$SPECS" | tr ',' ' '); do \
 	  OUTDIR="$(REGEN_CHECK_OUT_ROOT)/$$spec"; \
@@ -355,11 +436,15 @@ process.stdout.write(r.windows.filter(w=>{\
 	  echo ""; \
 	  echo "=== regen-check: $$spec ==="; \
 	  CACHE_ENV=""; \
-	  if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
+	  if [ "$(CACHE_DB)" != "1" ]; then CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
 	  if [ "$(CACHE_DB)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=write SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
 	  env $$CACHE_ENV $(SF) sf-push-neo $$spec \
 	    --dump-delta "$$OUTDIR/neo-delta.json" \
-	    --prev-xml-dir "$(REGEN_CHECK_PREV_XML_DIR)" || { FAIL=1; TOTAL_FAIL=$$((TOTAL_FAIL+1)); continue; }; \
+	    --prev-xml-dir "$(REGEN_CHECK_PREV_XML_DIR)" || { \
+	      FAIL=1; TOTAL_FAIL=$$((TOTAL_FAIL+1)); \
+	      if [ "$(CACHE_DB)" != "1" ]; then echo "  action: inspect the command output and previous XML path; refresh cache only if AD_CACHE_MISS is reported"; fi; \
+	      continue; \
+	    }; \
 	  $(SF) sf-xml-apply-delta \
 	    --prev-xml-dir "$(REGEN_CHECK_PREV_XML_DIR)" \
 	    --delta "$$OUTDIR/neo-delta.json" \
@@ -384,7 +469,7 @@ regen-check-help: ## Show usage and examples for `make regen-check`
 	@echo ""
 	@echo "Variables:"
 	@echo "  ONLY=<spec>[,<spec>...]      Comma-separated window specs (kebab-case)"
-	@echo "  FROM_CACHE=1                 Run the full check offline from $(SF_CACHE_PATH)"
+	@echo "  FROM_CACHE=1                 Run the full check offline from $(SF_CACHE_PATH) (explicit; default mode)"
 	@echo "  CACHE_DB=1                   Refresh cache from DB during the regen step (writes snapshot)"
 	@echo "  REGEN_CHECK_PREV_XML_DIR     Path to committed ETGO_SF_*.xml directory"
 	@echo "                               (default: ../modules/com.etendoerp.go/src-db/database/sourcedata)"
@@ -397,7 +482,9 @@ regen-check-help: ## Show usage and examples for `make regen-check`
 	@echo ""
 	@echo "Notes:"
 	@echo "  - Windows only (specType=W). Process/report specs are NOT supported yet."
-	@echo "  - Exit code 0 = no drift, non-zero = drift or pipeline error."
+	@echo "  - The AD cache is preflighted before comparison. Missing, empty, invalid, or cache-miss runs stop before reporting drift."
+	@echo "  - Without CACHE_DB=1, the check reads the cache by default (FROM_CACHE=1 is explicit for CI readability)."
+	@echo "  - Exit code 0 = no drift, non-zero = drift, cache action required, or pipeline error."
 	@echo "  - Outputs are under tmp/regen-check/<spec>/ (gitignored)."
 	@echo "  - To refresh the AD cache when AD changes: make regen ONLY=<spec> CACHE_DB=1, then commit $(SF_CACHE_PATH)."
 
@@ -601,6 +688,7 @@ CI_PARITY_SID       = $(call ci_parity_var,BBDD_SID,etendo_ci)
 CI_PARITY_ALLOW_SID = $(call ci_parity_var,ALLOW_LOCAL_SID,)
 CI_PARITY_JSON      = $(call ci_parity_var,JSON,)
 CI_PARITY_NO_FETCH  = $(call ci_parity_var,NO_FETCH,)
+CI_PARITY_CHECK_CACHE = $(call ci_parity_var,CHECK_CACHE,)
 
 ci-parity: ## Bring the local Etendo checkout to CI parity, then clean DB + install (DRY RUN by default; HELP=1 or `make ci-parity-help` for options)
 	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s ci-parity-help; exit 0; fi; \
@@ -611,6 +699,7 @@ ci-parity: ## Bring the local Etendo checkout to CI parity, then clean DB + inst
 	PARITY_ARGS="$$PARITY_ARGS --dry-run $(or $(CI_PARITY_DRY_RUN),1)"; \
 	if [ "$(CI_PARITY_ALLOW_SID)" = "1" ]; then PARITY_ARGS="$$PARITY_ARGS --allow-local-sid"; fi; \
 	if [ "$(CI_PARITY_NO_FETCH)" = "1" ]; then PARITY_ARGS="$$PARITY_ARGS --no-fetch"; fi; \
+	if [ "$(CI_PARITY_CHECK_CACHE)" = "1" ]; then PARITY_ARGS="$$PARITY_ARGS --check-cache"; fi; \
 	if [ "$(CI_PARITY_JSON)" = "1" ]; then PARITY_ARGS="$$PARITY_ARGS --json"; fi; \
 	node cli/src/ci-parity.js $$PARITY_ARGS
 
@@ -628,6 +717,7 @@ ci-parity-help: ## Show usage and examples for `make ci-parity`
 	@echo "  BBDD_SID=<sid>      Target database (default: etendo_ci)"
 	@echo "  ALLOW_LOCAL_SID=1   Permit a target sid equal to your local dev sid (DESTROYS it)"
 	@echo "  NO_FETCH=1          Use cached remote refs; freshness can be stale (offline mode)"
+	@echo "  CHECK_CACHE=1       Fail if the committed AD cache is missing or invalid"
 	@echo "  JSON=1              Machine-readable report (secrets redacted)"
 	@echo ""
 	@echo "Phases:"
@@ -799,6 +889,27 @@ sonar-coverage: ## Run all tests with coverage then SonarQube analysis
 	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/appshell-test-lcov.info 'tools/app-shell/test/*.test.js'
 	cd tools/app-shell && npx vitest run --coverage && sed 's|^SF:src/|SF:tools/app-shell/src/|' coverage/vitest/lcov.info > ../../coverage/vitest-lcov.info
 	sonar-scanner -Dproject.settings=sonar-project.properties
+
+# --- MCP Test Harness ---
+# Self-contained Python tool under mcp-tests/ (see docs/plans/2026-09-11-mcp-test-harness-design.md).
+# Run through uv so the harness never pollutes the system interpreter.
+
+TARGET ?= local
+SUITE  ?= sales-order
+PROBE  ?=
+MODEL  ?=
+
+mcp-test: ## Fire an agent probe suite at an MCP target (TARGET=, SUITE=, PROBE=, MODEL=)
+	cd mcp-tests && uv run python -m runner.cli --target $(TARGET) --suite $(SUITE) $(if $(PROBE),--probe $(PROBE)) $(if $(MODEL),--model $(MODEL))
+
+mcp-login: ## Pre-warm or refresh a target's OAuth token (TARGET=). Never a prerequisite for mcp-test.
+	cd mcp-tests && uv run python -m runner.cli --target $(TARGET) --login
+
+# Deliberately NOT folded into mcp-test: that target must stay a command that
+# starts, runs and returns an exit code, so it keeps working from a script and
+# from CI. The UI is a separate, optional process that only reads files.
+mcp-ui: ## Launch the optional Streamlit panel for the MCP harness (§9)
+	cd mcp-tests && uv run --extra ui streamlit run ui/app.py
 
 # --- Feature Flag Debt ---
 

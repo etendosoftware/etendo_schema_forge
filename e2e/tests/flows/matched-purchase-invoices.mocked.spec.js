@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
+import { t } from '../helpers/i18n.js';
 
 /**
  * Matched Purchase Invoices — bulk accounting post/unpost (ETP-5075, mocked).
@@ -113,10 +114,14 @@ test.describe('Matched Purchase Invoices — bulk post/unpost', () => {
     await row1.getByRole('checkbox').click({ force: true });
     await row2.getByRole('checkbox').click({ force: true });
 
-    // Floating toolbar's bulk-action button — labelKey="confirmBulk" → "Confirmar" (es_ES).
-    const confirmBtn = page.getByRole('button', { name: /confirmar|confirm/i });
-    await expect(confirmBtn).toBeVisible();
-    await confirmBtn.click();
+    // ETP-5302 — floating toolbar's bulk-action button: labelKey="process" →
+    // "Procesar" (es_ES). It used to be labelKey="confirmBulk" → "Confirmar";
+    // "Confirmar" is now the label of the DR→CO dropdown option instead (which
+    // this window never offers — its actions are post/unpost), so matching on
+    // /confirmar/ here would no longer find the button at all.
+    const processBtn = page.getByRole('button', { name: /^(procesar|process)$/i });
+    await expect(processBtn).toBeVisible();
+    await processBtn.click();
 
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
@@ -133,9 +138,10 @@ test.describe('Matched Purchase Invoices — bulk post/unpost', () => {
     // buildPostActions whenever any row is not posted) without changing it.
     await page.getByRole('option', { name: /^(contabilizar|post)$/i }).click();
 
-    // "Completado" is the real es_ES translation of the shared modal's Done button
-    // (labelKey 'done'), not a document-status label — this window has no DocAction.
-    await dialog.getByRole('button', { name: /^(completado|done)$/i }).click();
+    // ETP-5302 — the shared modal's confirm button is "Aceptar"/"Accept" (labelKey
+    // 'accept'). It used to be 'done' → "Completado" in es_ES, which reads as the
+    // document STATUS of the same name on a dialog that runs document actions.
+    await dialog.getByRole('button', { name: /^(aceptar|accept)$/i }).click();
 
     // rowFilter pre-blocks mi-002 for 'post' — it is already posted ('Y') — so only
     // mi-001 (state 'T', not posted) is actually sent. Sending 'post' again on an
@@ -146,18 +152,30 @@ test.describe('Matched Purchase Invoices — bulk post/unpost', () => {
     expect(byId['mi-001']).toBe('post');
     expect(byId['mi-002']).toBeUndefined();
 
-    // The shared modal counts the pre-blocked row as "failed" (1 ok, 1 failed) — read
-    // straight from sessionStorage, which handleDone writes synchronously right after the
-    // click, rather than the post-reload toast: that assertion raced the reload + sonner's
-    // default auto-dismiss duration inside the same 10s window and was flaky in CI.
-    const stored = await page
-      .waitForFunction(() => {
-        const raw = sessionStorage.getItem('bulkActionResult');
-        return raw ? JSON.parse(raw) : null;
-      }, null, { timeout: 5_000 })
-      .then((handle) => handle.jsonValue());
-    expect(stored.ok).toBe(1);
-    expect(stored.failed).toHaveLength(1);
-    expect(stored.failed[0].documentNo).toBe('mi-002');
+    // The shared modal keeps the pre-blocked row separate from a real API failure
+    // (ETP-5209): mi-002 was blocked by rowFilter BEFORE any API call, so it lands in
+    // `omitted`, not `failed` — nothing actually errored (1 ok, 1 omitted, 0 failed).
+    //
+    // Assert the toast the user actually sees. This used to read the result out of
+    // sessionStorage instead, because `handleDone` persisted it and reloaded the whole
+    // page, and asserting the post-reload toast raced the reload plus sonner's
+    // auto-dismiss. ETP-5302 removed that reload: whenever ListView's `bulkActions`
+    // slot supplies a `refresh` (always, in the real app) the toast is shown in place,
+    // immediately and stably — so do NOT reinstate the sessionStorage workaround.
+    //
+    // The exact 3-number message is what keeps omitted ≠ failed guarded: counting the
+    // pre-blocked row as a failure renders the 2-number `processExecuted` instead
+    // ("… y 1 registros fallidos."), and counting it as processed renders that same
+    // 2-number message as a *success* toast — both fail this assertion.
+    // mi-002 being the omitted one is already proven above: it is the only selected row
+    // for which no action request was ever sent.
+    const bulkToast = page.locator('[data-sonner-toast]').first();
+    await expect(bulkToast).toBeVisible({ timeout: 10_000 });
+    await expect(bulkToast).toContainText(
+      t('processExecutedWithOmitted', { ok: 1, omitted: 1, failed: 0 }),
+    );
+    // richColors variant: 1 ok + 1 omitted + 0 failed is a partial outcome ⇒ warning,
+    // never success (all processed) and never error (nothing processed).
+    await expect(bulkToast).toHaveAttribute('data-type', 'warning');
   });
 });

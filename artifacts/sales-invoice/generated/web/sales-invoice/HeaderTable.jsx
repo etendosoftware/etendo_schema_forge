@@ -4,7 +4,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 // @sf-generated-start columns:header
 const columns = [
   { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', label: 'Invoice Date', required: true },
-  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.', required: true },
+  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.', required: true, maxLength: 30 },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner', required: true },
   { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', enumLabels: { 'CL': 'docStatusCl', 'CO': 'docStatusCo', 'DR': 'docStatusDr', 'NA': 'docStatusNa', 'WP': 'docStatusWp', 'RE': 'docStatusRe', 'TEMP': 'docStatusTemp', 'IP': 'docStatusIp', '??': 'docStatus', 'VO': 'docStatusVo' }, required: true },
   { key: 'posted', column: 'Posted', type: 'boolean', label: 'Posted', badge: true, badgeLabels: {"true":{"en_US":"Posted","es_ES":"Contabilizado"},"false":{"en_US":"Not posted","es_ES":"Sin contabilizar"}}, badgeVariants: {"true":"green","false":"orange"}, required: true, visibleWhenCapability: 'showAccountingFields' },
@@ -14,6 +14,7 @@ const columns = [
   { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'number', label: 'em_etgo_delivery_status' },
   { key: 'etvfacInvoiceStatus', column: 'EM_Etvfac_Invoice_Status', type: 'status', label: 'Estado de Envío a Verifactu', enumLabels: { 'AC': 'emEtvfacInvoiceStatusAc', 'AE': 'emEtvfacInvoiceStatusAe', 'IN': 'emEtvfacInvoiceStatusIn', 'PE': 'emEtvfacInvoiceStatusPe', 'ER': 'emEtvfacInvoiceStatusEr' } },
   { key: 'aeatsiiEstado', column: 'EM_Aeatsii_Estado', type: 'enum', label: 'SII Registration Status', enumLabels: { 'AE': 'emAeatsiiEstadoAe', 'AN': 'emAeatsiiEstadoAn', 'IN': 'emAeatsiiEstadoIn', 'NR': 'emAeatsiiEstadoNr', 'PE': 'emAeatsiiEstadoPe', 'CO': 'emAeatsiiEstadoCo', 'EE': 'emAeatsiiEstadoEe', 'BA': 'emAeatsiiEstadoBa' } },
+  { key: 'eTGOTbaiStatus', column: 'EM_ETGO_Tbai_Status', type: 'status', label: 'EM_ETGO_Tbai_Status', computed: {"mode":"stored","refresh":"synchronous"} },
 ];
 // @sf-generated-end columns:header
 

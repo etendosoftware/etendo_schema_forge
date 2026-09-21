@@ -1,4 +1,7 @@
+import { createElement } from 'react';
 import { formatCurrency } from '../../../lib/formatCurrency.js';
+import { parseCalendarDate } from '../../../lib/dateOnly.js';
+import { toast } from 'sonner';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // ── Box computation ──────────────────────────────────────────────────
@@ -60,6 +63,23 @@ const IDENT_PARAM_MAP = [
 // same set before hitting the network.
 export const IBAN_REQUIRED_TIPOS = ['U', 'D', 'X'];
 
+// ETP-5393 [B1 re-review] — imperative mirror of fm303Layouts.js's `_BANK_IBAN_REQUIRED_WHEN`
+// (condition A: tipo U/D/X — OR — condition B: rectificativa checked AND box 111 non-zero).
+// `generate303File` below and `AeatSubmitFlow.jsx`'s pre-flight guard used to test only
+// `identChecks?.rectificativa === true` for condition B, ignoring box 111 entirely — so a
+// rectificativa filed under tipo 'I' with box 111 = 0 (bank block correctly HIDDEN per the
+// narrowed Bug E visibility) still hit `iban_required` from a field the user can't even see.
+// `identChecksWithBox111Flag` must already carry the synthetic `_box111NonZero` key — pass it
+// through `withBox111NonZeroFlag` first (same as `fm303Layouts.js`'s callers). Keep this in sync
+// with `_BANK_IBAN_REQUIRED_WHEN` by hand; it is intentionally not re-derived from it (the
+// declarative matcher lives in fm303Layouts.js, which has no imports and must stay dependency-free).
+export function isBankIbanRequired(tipo, identChecksWithBox111Flag) {
+  return (
+    IBAN_REQUIRED_TIPOS.includes(tipo) ||
+    (identChecksWithBox111Flag?.rectificativa === true && identChecksWithBox111Flag?._box111NonZero === true)
+  );
+}
+
 // Declaration type (tipo_declaracion) for which AEAT's NRC (Número de Referencia Completo)
 // field actually applies: Ingreso (I) only, per AEAT's own bundled Modelo 303 spec. The backend
 // already discards any NRC value for every other tipo before it reaches AEAT
@@ -71,19 +91,48 @@ export const IBAN_REQUIRED_TIPOS = ['U', 'D', 'X'];
 // never be paired with a required/blocking validation.
 export const DECLARATION_TYPE_INGRESO = 'I';
 
+// ETP-5393 Bug C [W1 re-review] — boxes 111 (Rectificación – Importe) and 77 (IVA a la
+// importación liquidado por la Aduana pendiente de ingreso) are the only editable boxes the
+// classic AEAT303Report engine hard-rejects when negative (AEAT303Report2024.java:276-278 for
+// 111, AEAT303Report2015.java:149-162 for 77). Single source of truth, consolidated out of a
+// literal `new Set([111, 77])` duplicated in both `FmBoxes303.jsx` (the `min="0"` UX hint) and
+// `FmModel303Page.jsx` (`handleBoxChange`'s actual clamp + i18n error enforcement).
+export const NEGATIVE_NOT_ALLOWED_BOXES = new Set([111, 77]);
+
 // Maps editable box numbers (from manualOverrides / liveBoxes) to AEAT HTTP param names.
 // Only boxes that the AEAT module reads from inputParams (not computed from DB) are listed.
 const BOX_PARAM_MAP = {
   42:  'Special_Compensations',      // compensaciones régimen especial / agrario
   43:  'Investment_Adjustment',      // regularización bienes de inversión
   44:  'Adjustment_Final_Percentage',// prorrata definitiva
+  65:  'ToPublicTreasury',           // atribuible al Estado % (resultado_final/atribuible_estado).
+                                     // SAME AEAT param casilla 107 (territorio_comun) mirrors in the
+                                     // UI — see fm303Layouts.js's territorio_comun `derivedValue`.
+                                     // AEAT303Report2014.java:818 and AEAT303Report2018LastPeriod's
+                                     // commonTerritory() both read this one key off box 65, so 107 no
+                                     // longer needs its own BOX_PARAM_MAP entry (ETP-5391).
   68:  'AnnualRegularAmt',           // regularización anual prorrata (T4/12 only)
+  70:  'ComplementaryAmt',           // a_deducir — importe complementaria/rectificativa a deducir
+                                     // (AEAT303Report2014.java:946-958, gated by IsComplementary=Y)
+  76:  'REG_CUOTAS_ART80',           // regularización cuotas art. 80.cinco.5ª LIVA (last period only,
+                                     // AEAT303Report2014LastPeriod.java)
+  77:  'IVA_IMPORT_ADUANA',          // IVA importación liquidado por la Aduana pendiente de ingreso
+                                     // (last period only, AEAT303Report2014LastPeriod.java)
   78:  'PreviousPeriodAmtApplied',   // cuotas a compensar aplicadas en este período
+  89:  'ALAVA',                      // territorio Araba/Álava % (last period only, ETP-5391)
+  90:  'GUIPUZCOA',                  // territorio Gipuzkoa % (last period only, ETP-5391)
+  91:  'VIZCAYA',                    // territorio Bizkaia % (last period only, ETP-5391)
+  92:  'NAVARRA',                    // territorio Navarra % (last period only, ETP-5391)
+  95:  '303REAGYP',                  // régimen especial agricultura/ganadería/pesca (last period only, ETP-5391)
+  97:  '303USED_GOODS',              // bienes usados/objetos de arte/antigüedades (last period only, ETP-5391)
+  98:  '303TRAVEL_AGENCY',           // régimen especial agencias de viajes (last period only, ETP-5391)
   108: 'AdministrativeCriteriaDiscrepancy', // discrepancia criterio administrativo (2024+)
   109: 'ReturnsPendingSettlement',   // devoluciones en tramitación (2023+)
   110: 'PreviousPeriodAmt',          // cuotas a compensar pendientes de períodos anteriores
   111: 'RectifyingAmount',           // rectificación. importe (2024+ rectificativa)
   124: 'OSS_SujetaYAcogida',         // operaciones OSS sujetas y acogidas (2021+)
+  127: 'OPSUJETASCONOSS',            // operaciones sujetas y acogidas a la OSS (last period only, ETP-5391)
+  128: 'OPINTRAGRUPO',               // operaciones intragrupo, arts. 78/79 LIVA (last period only, ETP-5391)
 };
 
 /**
@@ -95,6 +144,22 @@ const BOX_PARAM_MAP = {
  *   manualOverrides — editable box values keyed by box number
  *   filename      — optional download filename (defaults to 303_<period>_<year>.txt)
  */
+// Formats a date-only value (as read from the `fecha_concurso` `<input type="date">`, always a
+// plain `yyyy-MM-dd` string — see fm303Layouts.js) into AEAT's strict `ddMMyyyy` digit format
+// (no separators), which is what ConcursoDate must carry (AEAT303Report2014.java:350-372,
+// unchanged through AEAT303Report2025; strict format validated by AEAT303Report2023+, ETP-5272).
+// Reuses the canonical `parseCalendarDate` (per this project's date-only parsing policy) rather
+// than a hand-rolled `new Date(string)` parse. Returns null when there's nothing to format
+// (blank/undefined/unparsable) — callers must not send a garbage ConcursoDate in that case.
+function formatAeatConcursoDate(raw) {
+  const date = parseCalendarDate(raw);
+  if (!date) return null;
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const yyyy = String(date.getFullYear());
+  return `${dd}${mm}${yyyy}`;
+}
+
 function applyRectificativaParams(params, identChecks) {
   params.set('IsComplementary', 'Y');
   if (identChecks.nro_justificante) params.set('ComplementaryNo', identChecks.nro_justificante);
@@ -103,26 +168,56 @@ function applyRectificativaParams(params, identChecks) {
     params.set('AdministrativeDiscrepancyRectifyingReason', 'Y');
 }
 
-export function applyIdentParams(params, identChecks) {
+// 1:1 string forwarding of IDENT_PARAM_MAP — value is set only when truthy. Split out of
+// applyIdentParams (SonarQube S3776) so the loop's own nested if/ternary doesn't stack on
+// top of every other ident-check branch below.
+function applyMappedIdentParams(params, identChecks) {
   for (const [field, paramName] of IDENT_PARAM_MAP) {
     const v = identChecks[field];
     if (v) params.set(paramName, paramName === 'IBAN' ? v.replace(/\s/g, '') : v);
   }
+}
+
+// Concurso de acreedores — AEAT303Report2014's "IsConcurso"/"ConcursoType" constants, still
+// read unchanged through the override chain up to AEAT303Report2025 (ETP-5027). ConcursoDate
+// (the bankruptcy statement date) must go alongside them — AEAT303Report2023+ throws
+// @AEAT303_Bad_Bankruptcy_Statement_Date_Format@ when it's missing/blank, and 2021/2022 ship
+// 8 blank spaces into that AEAT field slot otherwise (ETP-5272 pt.7). Only sent when there's
+// an actual date to format — fm303Layouts.js's `fecha_concurso` required-field gate is what
+// stops a blank date from reaching this point in the first place.
+function applyConcursoParams(params, identChecks) {
+  if (identChecks.concurso === true) {
+    params.set('IsConcurso', 'Y');
+    const concursoDate = formatAeatConcursoDate(identChecks.fecha_concurso);
+    if (concursoDate) params.set('ConcursoDate', concursoDate);
+  }
+  if (identChecks.postconcursal === true) params.set('ConcursoType', 'Y');
+}
+
+function applyComplementariaParams(params, identChecks) {
+  if (identChecks.complementaria === true) {
+    params.set('IsComplementary', 'Y');
+    if (identChecks.nro_justificante) params.set('ComplementaryNo', identChecks.nro_justificante);
+  }
+}
+
+export function applyIdentParams(params, identChecks) {
+  applyMappedIdentParams(params, identChecks);
   if (identChecks.sin_actividad === true) params.set('Declaration_NoActivity', 'Y');
   // Sujeto pasivo inscrito en el Registro de devolución mensual (art. 30 RIVA) — read by
   // AEAT303Report.java's MONTHLY_REGISTER constant; box 65 defaults to "not registered"
   // (2) unless this is explicitly "Y" (ETP-5027).
   if (identChecks.redeme === true) params.set('MonthlyRegister', 'Y');
-  // Concurso de acreedores — AEAT303Report2014's "IsConcurso"/"ConcursoType" constants, still
-  // read unchanged through the override chain up to AEAT303Report2025 (ETP-5027).
-  if (identChecks.concurso === true) params.set('IsConcurso', 'Y');
-  if (identChecks.postconcursal === true) params.set('ConcursoType', 'Y');
-  if (identChecks.complementaria === true) {
-    params.set('IsComplementary', 'Y');
-    if (identChecks.nro_justificante) params.set('ComplementaryNo', identChecks.nro_justificante);
-  }
+  applyConcursoParams(params, identChecks);
+  applyComplementariaParams(params, identChecks);
   // Rectificativa (2024+): IsComplementary=Y activates rectAssessment in the AEAT module.
   if (identChecks.rectificativa) applyRectificativaParams(params, identChecks);
+  // Modelo 347 exemption checkbox (last period only, ETP-5391). NOT forwarded via
+  // IDENT_PARAM_MAP: AEAT303Report2019.java checks inputParams.get('347TAX_FORM').equals('Y')
+  // literally (unlike Cancel_Modify_Debit's mere-presence check above), so this must send the
+  // exact string 'Y' rather than IDENT_PARAM_MAP's raw boolean forwarding (which would send the
+  // string 'true' and never match).
+  if (identChecks.declaracion_terceros === true) params.set('347TAX_FORM', 'Y');
 }
 
 function applyBoxParams(params, manualOverrides) {
@@ -175,13 +270,15 @@ export function triggerBase64Download(base64, downloadName, mimeType = 'applicat
   triggerDownload(base64ToBlob(base64, mimeType), downloadName);
 }
 
-export async function generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, filename } = {}) {
+export async function generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, liveBoxes, filename } = {}) {
   if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
 
   const tipo = identChecks?.tipo_declaracion ?? decl.result?.kind ?? 'N';
 
+  // ETP-5393 [B1] — must match the final Bug E visibility (fm303Layouts.js's
+  // `_BANK_IBAN_REQUIRED_WHEN`), not just `rectificativa`. See `isBankIbanRequired`'s docstring.
   if (
-    (IBAN_REQUIRED_TIPOS.includes(tipo) || identChecks?.rectificativa === true) &&
+    isBankIbanRequired(tipo, withBox111NonZeroFlag(identChecks ?? {}, liveBoxes)) &&
     !identChecks?.bank_iban?.trim()
   ) {
     return { ok: false, error: 'iban_required' };
@@ -233,6 +330,31 @@ export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUr
       token,
       method: 'PUT',
       body: JSON.stringify(body),
+    });
+    if (!res.ok) return { ok: false, error: `http_${res.status}` };
+    return { ok: true };
+  } catch (_) {
+    return { ok: false, error: 'network' };
+  }
+}
+
+/**
+ * Calls DELETE /fiscal303/declarations?id=... to remove a draft declaration (ETP-5187, row hover
+ * "delete" action in `FmListPage.jsx`). Despite the URL, this endpoint is generic across fiscal
+ * models — both 303 and 349 declarations live in the same backend table. The backend
+ * (`FiscalDeclCrudHandler#handleDeclDelete`) independently rejects (409) deleting anything but a
+ * draft declaration — this is defense in depth, not the only gate; the frontend must still only
+ * ever show this action for draft rows.
+ * Returns { ok: true } on success, or { ok: false, error: string } on failure.
+ */
+export async function deleteDeclaration(id, { token, apiBaseUrl } = {}) {
+  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  try {
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    const res = await apiFetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
+      baseUrl: '',
+      token,
+      method: 'DELETE',
     });
     if (!res.ok) return { ok: false, error: `http_${res.status}` };
     return { ok: true };
@@ -343,6 +465,22 @@ export const STATUS_ICON = {
 
 export const STATUS_ORDER = [...STATUSES];
 
+// Resultado sign-coloring (ETP-5236 / M303-01): 'I' (a ingresar — org owes money) is
+// green, 'V'/'C' (a devolver / a compensar — refundable or offsettable) are blue, and
+// 'N'/null/anything else (no result) keeps the neutral styling this always had.
+// Shared by the Modelo 303 detail KPI (FmModel303Page.jsx) and the declarations list's
+// "Resultado" column (FmListPage.jsx) — single source of truth for both call sites.
+export const RESULT_COLOR_MAP = {
+  I: { valueColor: 'var(--status-success-fg)', badgeBg: 'var(--status-success-bg)', badgeColor: 'var(--status-success-fg)' },
+  V: { valueColor: 'var(--status-info-fg)', badgeBg: 'var(--status-info-bg)', badgeColor: 'var(--status-info-fg)' },
+  C: { valueColor: 'var(--status-info-fg)', badgeBg: 'var(--status-info-bg)', badgeColor: 'var(--status-info-fg)' },
+};
+export const RESULT_COLOR_NEUTRAL = { valueColor: 'hsl(var(--foreground))', badgeBg: 'hsl(var(--muted))', badgeColor: 'hsl(var(--muted-foreground))' };
+
+export function resolveResultColors(resultKind) {
+  return RESULT_COLOR_MAP[resultKind] ?? RESULT_COLOR_NEUTRAL;
+}
+
 export function formatPeriod(period) {
   if (!period) return '—';
   if (/^T\d$/.test(period)) return period;
@@ -366,7 +504,124 @@ export function fmtDecl(decl) {
   return `${decl.model} ${decl.year} ${formatPeriod(decl.period)}`;
 }
 
-function roundEur(n) {
+/**
+ * Single source of truth for the Modelo 303 "Resultado" badge kind (ETP-5187), shared by the
+ * list page (`FmListPage.jsx`) and the detail page (`FmModel303Page.jsx`). Before this, the list
+ * page derived its own `getResultKind(r)` from the live-computed `summary.result` while the
+ * detail page read a separate, effectively never-populated `decl.result?.kind` (the backend never
+ * persists a `result.kind` on the declaration record) — the two screens could show a different
+ * "Resultado" label for the exact same declaration, and neither one distinguished a real zero
+ * result (a declaration with invoices whose boxes net to exactly 0.00) from a genuinely empty/new
+ * declaration.
+ *
+ * Business rules (fixed, not a nuance to refine further — deliberately do NOT try to disambiguate
+ * "a compensar" vs "a devolver" via `tipo_declaracion`; that's out of scope):
+ *   - `result < 0`             → `'C'`    ("A compensar/devolver" — one combined label)
+ *   - `result > 0`             → `'I'`    ("A ingresar" — unchanged)
+ *   - `result === 0`, has invoices  → `'zero'` ("Resultado cero" — a real declaration that nets to 0)
+ *   - `result === 0`, no invoices   → `'N'`    ("Sin resultado" — unchanged)
+ *
+ * @param {{result?: number}} summary — the computed summary (`computeBoxes303`'s `res.summary`,
+ *   `liveSummary`, or `liveBoxSummary`), read for its `.result` field.
+ * @param {{hasInvoices?: boolean}} [opts]
+ * @returns {'I'|'C'|'zero'|'N'|null} `null` when no finite result is available yet (nothing
+ *   computed) — callers should fall back to their own generic label in that case, same as before.
+ */
+export function deriveResultKind(summary, { hasInvoices = false } = {}) {
+  const amount = Number(summary?.result);
+  if (!Number.isFinite(amount)) return null;
+  if (amount > 0) return 'I';
+  if (amount < 0) return 'C';
+  return hasInvoices ? 'zero' : 'N';
+}
+
+// ── Manual-override box merging (ETP-5272 pt.6) ────────────────────
+// Single source of truth for merging a declaration's manual box overrides onto a
+// backend-computed box set and re-deriving the boxes the AEAT 303 formula computes
+// FROM other boxes. Shared by FmModel303Page.jsx (detail view) and FmListPage.jsx
+// (list's own "Resultado" column) — GET /fiscal303/boxes always computes purely
+// from invoice data, with no declaration id and no knowledge of manualOverrides, so
+// every caller that wants the TRUE final result (box 71, "Resultado de la
+// liquidación") rather than the raw backend sub-total (box 46, "Resultado régimen
+// general") must route through these three helpers instead of re-deriving the
+// formula locally — that duplication is exactly how this bug class (ETP-5272)
+// happened in the first place.
+
+// Normalizes the two shapes `boxes` can arrive in — a plain object
+// ({ [boxNum]: value }, e.g. straight off the backend) or an array of
+// { num, value } (e.g. already-merged output from these helpers) — to the array
+// form the other helpers below operate on.
+export function toBoxArray(src) {
+  if (Array.isArray(src)) return src;
+  if (src && typeof src === 'object') {
+    // ETP-5393 Bug B: Fiscal303BoxesHandler serializes every box value as a JSON STRING
+    // (BigDecimal#toString). Without this coercion, `recomputeDerivedBoxes`'s numeric
+    // accumulation (`s + get(n)`) silently does string concatenation the first time any
+    // of these boxes is a non-zero string (e.g. `0 + "-0.63"` -> `"0-0.63"`), which then
+    // becomes NaN and cascades through every derived box (45/46/64/66/69/71).
+    return Object.entries(src).map(([n, v]) => ({ num: Number(n), value: v == null ? v : Number(v) }));
+  }
+  return [];
+}
+
+// Merges manualOverrides (decl.manualData.manualOverrides, keyed by box number)
+// onto the backend-computed boxes — an overridden box replaces the computed value,
+// everything else passes through unchanged.
+export function applyOverrides(boxes, overrides) {
+  const ov = overrides ?? {};
+  if (!Object.keys(ov).length) return toBoxArray(boxes);
+  const arr = toBoxArray(boxes);
+  const result = arr.filter(b => !(b.num in ov));
+  Object.entries(ov).forEach(([num, val]) => {
+    if (val != null) result.push({ num: Number(num), value: val });
+  });
+  return result;
+}
+
+// Re-derives every box the AEAT 303 formula computes from other boxes (45, 46, 64,
+// 66, 69, 71) so a manual override on any of their inputs (e.g. 42/43/44, or the
+// territorial-split box 65) is reflected in the final liquidation result. Always
+// call this AFTER applyOverrides.
+export function recomputeDerivedBoxes(boxArr) {
+  const r2 = v => Math.round(v * 100) / 100;
+  const get = num => { const e = boxArr.find(b => b.num === num); return e != null ? (e.value ?? 0) : 0; };
+  const box65entry = boxArr.find(b => b.num === 65);
+  const box65 = box65entry != null ? (box65entry.value ?? 100) : 100;
+  const box45 = r2([29,31,33,35,37,39,41,42,43,44].reduce((s, n) => s + get(n), 0));
+  const box46 = r2(get(27) - box45);
+  const box64 = r2(box46 + get(58) + get(76));
+  const box66 = r2(box64 * box65 / 100);
+  const box69 = r2(box66 + get(77) - get(78) + get(68) + get(108));
+  const box71 = r2(box69 - get(70) + get(109) - get(112));
+  const derived = { 45: box45, 46: box46, 64: box64, 66: box66, 69: box69, 71: box71 };
+  return [
+    ...boxArr.filter(b => !(b.num in derived)),
+    ...Object.entries(derived).map(([num, value]) => ({ num: Number(num), value })),
+  ];
+}
+
+// Reads a single box's value out of the array shape (as returned by
+// applyOverrides/recomputeDerivedBoxes) — null when the box isn't present at all
+// (distinct from a present box whose value is 0).
+export function getBoxValue(liveBoxes, num) {
+  const e = toBoxArray(liveBoxes).find(b => b.num === num);
+  return e ? (e.value ?? 0) : null;
+}
+
+// ETP-5393 Bug E — fm303Layouts.js's `bank_iban.requiredWhen` needs to know whether box 111
+// (Rectificación - Importe) currently holds a non-zero value, but `matchesVisibility`/
+// `isFieldRequired` only ever read the `identification` object (checkboxes/selects), never the
+// separate `liveBoxes` array. Callers merge this synthetic `_box111NonZero` flag into
+// `identification` before handing it to `getMissingRequiredFields` or FmBoxes303's
+// `identification` prop, so both the pre-flight gate and the red-asterisk rendering agree.
+export function withBox111NonZeroFlag(identification, liveBoxes) {
+  const box111 = getBoxValue(liveBoxes, 111);
+  return { ...identification, _box111NonZero: box111 != null && Number(box111) !== 0 };
+}
+
+// Exported (ETP-5409) so FmModel303Page.jsx's parseBoxInput can reuse the same 2-decimal
+// rounding used everywhere else in this file for box values, instead of a second copy.
+export function roundEur(n) {
   return Math.round(n * 100) / 100;
 }
 
@@ -845,4 +1100,63 @@ export function isUpcomingDeadline(decl, referenceDate = new Date()) {
  */
 export function countUpcomingDeadlines(decls, referenceDate = new Date()) {
   return decls.filter(d => isUpcomingDeadline(d, referenceDate)).length;
+}
+
+// ── IAE activity reminder (ETP-5187, adjacent scope) ──────────────────
+/**
+ * Proactive, non-blocking heads-up that the organization needs a default IAE ("Impuesto de
+ * Actividades Económicas") activity configured before Modelo 303 can be filed for the last
+ * period of the year — shown at the two points where the user commits to a path that will
+ * eventually hit that requirement:
+ *   - `FmCatalogPage.jsx` — activating (not deactivating) Modelo 303 in the catalog.
+ *   - `FmOverlays.jsx`'s `NewDeclModal` — selecting period T4 (quarterly) or 12 (monthly) in
+ *     "Nueva declaración".
+ *
+ * This is deliberately NOT the same mechanism as the ETP-4975 hard guard in
+ * `FmModel303Page.jsx`/`AeatSubmitFlow.jsx` (`isMissingDefaultIaeActivity` +
+ * `missingIaeGuard`), which blocks "Generar fichero"/"Marcar como Presentado" for the actual
+ * last-period declaration when no default IAE activity is configured, backed by a real
+ * `GET /sws/neo/organization/actividadesDelIae` check. That guard is authoritative and runs
+ * right before the backend call; this reminder is purely informational, fires earlier (at
+ * activation/selection time, with no backend check of its own), and never blocks anything —
+ * it exists only so the user isn't surprised later. Reuses the same
+ * `fm.aeat.action.go_to_organization` CTA label as that guard's own "Go to Organization"
+ * button. Navigates to `/organization` plain — `OrganizationPage.jsx` has no
+ * section-anchor/deep-link support yet to land scrolled at "Actividades del IAE" directly.
+ *
+ * CTA placement (ETP-5187 follow-up): the CTA must read as the tail of the warning
+ * sentence, in bold, not as a separate control. sonner's built-in `action` option was
+ * tried first but doesn't lay out that way — per sonner's own markup
+ * (`node_modules/sonner/dist/index.mjs`), `toast.action` renders as a flex SIBLING of
+ * `[data-content]` (the title/description column), inside a `[data-sonner-toast]` that
+ * is itself `display:flex; align-items:center`. That places the action button to the
+ * right of the message, vertically centered, never inline after the text — so instead
+ * the whole toast message is built as one JSX node (sonner accepts a `ReactNode` message,
+ * which becomes `toast.title` and renders as-is) with the CTA as an inline `<button>`
+ * immediately after the sentence text. `toast.action`'s automatic click-to-dismiss is
+ * replicated manually via `toast.dismiss(id)` to keep the same UX as before.
+ */
+export function showIaeActivityReminder(t, navigate) {
+  const sentence = t('fm.aeat.reminder.iaeActivity')
+    ?? 'Recordá configurar la actividad del IAE de tu organización para poder generar el Modelo 303 correctamente.';
+  const cta = t('fm.aeat.action.go_to_organization') ?? 'Ir a Organización';
+  const id = toast.warning(
+    createElement(
+      'span',
+      null,
+      `${sentence} `,
+      createElement(
+        'button',
+        {
+          type: 'button',
+          className: 'fm-link-btn fm-link-btn--bold',
+          onClick: () => {
+            navigate('/organization');
+            toast.dismiss(id);
+          },
+        },
+        cta,
+      ),
+    ),
+  );
 }

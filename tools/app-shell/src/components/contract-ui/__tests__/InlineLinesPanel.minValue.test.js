@@ -30,13 +30,16 @@ describe('InlineLinesPanel — min-value validation (ETP-4005)', () => {
     assert.match(src, /value == null/);
   });
 
-  it('isValueBelowMin parses the value with parseFloat and compares to col.min', () => {
-    assert.match(src, /parseFloat\(value\)/);
+  // ETP-5107 — isValueBelowMin now parses via the canonical, comma-aware
+  // parseLocaleNumber() instead of a bare parseFloat, so a locale-typed value
+  // like "10,5" clamps correctly instead of parsing as 10 (plan §6.3.2).
+  it('isValueBelowMin parses the value with parseLocaleNumber and compares to col.min', () => {
+    assert.match(src, /parseLocaleNumber\(value\)/);
     assert.match(src, /num\s*<\s*col\.min/);
   });
 
-  it('isValueBelowMin rejects NaN explicitly so empty / non-numeric input does not trip the check', () => {
-    assert.match(src, /!isNaN\(num\)/);
+  it('isValueBelowMin rejects an invalid/partial parse explicitly so empty / non-numeric input does not trip the check', () => {
+    assert.match(src, /isValid\s*&&\s*num\s*!=\s*null/);
   });
 
   it('declares the editInputClassName helper', () => {

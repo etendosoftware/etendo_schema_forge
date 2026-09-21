@@ -180,7 +180,15 @@ describe('DataTable — ETP-4603 coverage top-up', () => {
   });
 
   // ── flexSpec / growColumnWidth / renderLinesColgroup (hideHeader mode) ──
-  it('renders a fixed-layout colgroup with calc()-based widths for grow columns when hideHeader is set', () => {
+  // ETP-5332 — `growColumnWidth()` used to emit a `calc((100% - Fpx) / N + Bpx)`
+  // expression for grow columns; Chrome doesn't honour that per column inside
+  // `table-layout: fixed` (it splits the space equally and ignores each column's own
+  // basis), so the function now does the arithmetic itself and returns a literal
+  // number. jsdom has no `ResizeObserver`, so `availableWidthPx` stays 0 here and the
+  // grow column renders at the bare basis its own type declares — same shape a fixed
+  // column gets, just still driven by `columnFlex()`'s grow flag rather than a
+  // decodable string.
+  it('renders a fixed-layout colgroup with a literal-px width for grow columns when hideHeader is set', () => {
     render(
       <DataTable
         columns={[
@@ -199,8 +207,9 @@ describe('DataTable — ETP-4603 coverage top-up', () => {
     expect(cols.length).toBeGreaterThan(0);
     // The fixed-basis column keeps its literal 80px width...
     expect(cols[1].style.width).toBe('80px');
-    // ...while the grow column gets a calc() expression restoring its own basis.
-    expect(cols[0].style.width).toMatch(/^calc\(/);
+    // ...and the grow column now renders its own literal basis (120px, per the
+    // `columnFlex` mock above) instead of a calc() expression.
+    expect(cols[0].style.width).toBe('120px');
     // Header row is hidden entirely in this mode.
     expect(screen.getByTestId('TableHeader__eb5261')).toHaveAttribute('aria-hidden', 'true');
   });
@@ -262,21 +271,27 @@ describe('DataTable — ETP-4603 coverage top-up', () => {
     // the DATA columns, exactly as it is on InlineLinesPanel's real
     // header/flex row. Before the ETP-4803 fix, this list gained a phantom
     // `120px`/'1 0' DATA entry that desynced fixedColsTotalPx/growCount,
-    // shrinking every subsequent grow column's calc() width.
+    // throwing off every subsequent grow column's width.
     //
     // ETP-4735's leading chevron reservation is the one legitimate
-    // difference: one extra '44px' <col>, plus the grow column's calc()
-    // subtracting those same 44px from its fixedTotalPx term (so the row's
-    // total literal-pixel width — chevron + fixed cols — stays accounted for
-    // instead of overflowing the table by 44px under table-layout: fixed).
+    // difference: one extra '44px' <col>. (ETP-5332: `growColumnWidth()` used
+    // to fold that extra 44px into a `calc()` expression's fixed-total term,
+    // which this test could decode back out of the rendered string. Under
+    // jsdom — no `ResizeObserver` — the grow column now renders its bare
+    // basis regardless of the fixed total, so that specific accounting is no
+    // longer observable at this level; it is covered directly by
+    // `growColumnWidth()`'s own unit tests in
+    // linesAddRowColumnAlignment.vitest.jsx instead. What stays pinned here
+    // is the property this test actually owns: the dimensionsPanel column
+    // adds no data <col>, the chevron slot is the only structural addition,
+    // and every other column's width is untouched by its presence.)
     expect(colsWith[0]).toBe('44px');
     expect(colsWith[2]).toBe(colsWithout[1]); // the 'Fixed' column is untouched
     expect(colsWithout[1]).toBe('80px');
-    expect(colsWithout[0]).toMatch(/^calc\(/);
-    expect(colsWith[1]).toMatch(/^calc\(/);
-    const fixedTotalWithout = Number(colsWithout[0].match(/100% - (\d+)px/)[1]);
-    const fixedTotalWith = Number(colsWith[1].match(/100% - (\d+)px/)[1]);
-    expect(fixedTotalWith).toBe(fixedTotalWithout + 44);
+    // The grow column keeps its own literal basis (120px) with or without the
+    // leading chevron column ahead of it.
+    expect(colsWithout[0]).toBe('120px');
+    expect(colsWith[1]).toBe('120px');
   });
 
   // ── visibleColumns auto-hide/reveal for a displayIf-controlled column ───
@@ -430,6 +445,16 @@ describe('DataTable — ETP-4603 coverage top-up', () => {
     await ref.current.flush();
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(onAdd).not.toHaveBeenCalled();
+
+    // ETP-5107 — the numeric cell now renders MaskedAmountInput, which (like
+    // its AmountInput/MoneyInput siblings, see fields.vitest.jsx) only syncs
+    // its display from an external `value` prop change while NOT focused —
+    // while focused it keeps whatever the user is mid-typing, by design, so a
+    // live keystroke is never clobbered by a stale re-render. The row's first
+    // field auto-focuses on mount (DataTable.jsx), so blur it first to exercise
+    // the same "external state write, then re-render" path setFieldValues is
+    // meant to cover, rather than the deliberately-buffered focused case.
+    fireEvent.blur(screen.getByTestId('inline-add-field-qty'));
 
     // setFieldValues() writes directly into row state without an onChange event.
     ref.current.setFieldValues({ qty: '7' });

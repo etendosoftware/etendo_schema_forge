@@ -1,8 +1,7 @@
 {
-  "version": "0.86.0",
-  "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-09-02T16:41:28.327Z",
-  "contractChecksum": "1080513c5c7d8b89",
+  "version": "0.88.0",
+  "generatedAt": "2026-09-17T15:12:05.781Z",
+  "contractChecksum": "70542a4b0abb5d3c",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -987,14 +986,16 @@
         "em_etgo_delivery_status": "Estado de entrega",
         "C_DocTypeTarget_ID": "Tipo de documento",
         "PriceList": "Precio",
-        "Foreign_Amount": "Importe en Moneda Objetivo"
+        "Foreign_Amount": "Importe en Moneda Objetivo",
+        "em_etgo_tbai_status": "Estado TicketBAI"
       },
       "en_US": {
         "OutstandingAmt": "Outstanding Amount",
         "EM_Etgo_Due_Date": "Due Date",
         "em_etgo_delivery_status": "Delivery Status",
         "C_DocTypeTarget_ID": "Document Type",
-        "Foreign_Amount": "Target Currency Amount"
+        "Foreign_Amount": "Target Currency Amount",
+        "em_etgo_tbai_status": "TicketBAI Status"
       },
       "es_AR": {
         "OutstandingAmt": "Saldo pendiente"
@@ -1082,6 +1083,11 @@
             "required": true,
             "readOnlyLogic": "@Processed@='Y'"
           },
+          "accountingDate": {
+            "required": true,
+            "readOnlyLogic": "@Posted@='Y'",
+            "defaultValue": "@#Date@"
+          },
           "project": {
             "readOnlyLogic": "@Posted@='Y'"
           },
@@ -1166,11 +1172,10 @@
             "readOnly": true,
             "readOnlyLogic": "true"
           },
-          "aeatsiiFechaRegCont": {
-            "readOnlyLogic": "@AEATSII_InSIIAndPostedInvoices@='Y'",
-            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y' AND (SELECT c.posted_invoices FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual) AND c.isactive = 'Y')='Y') THEN null ELSE now() END FROM dual"
-          },
           "eTGOCurrencyRate": {},
+          "eTGOTbaiStatus": {
+            "readOnly": true
+          },
           "eTGODeliveryStatus": {
             "readOnly": true
           },
@@ -1336,6 +1341,7 @@
         "paymentMethod",
         "currency",
         "priceList",
+        "accountingDate",
         "aeatsiiErrorRegistral",
         "aeatsiiIsauthorization"
       ],
@@ -1487,6 +1493,7 @@
           "paymentMethod",
           "currency",
           "priceList",
+          "accountingDate",
           "aeatsiiErrorRegistral",
           "aeatsiiIsauthorization"
         ]
@@ -1515,5 +1522,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "605d0c5d7b34f83e"
+  "checksum": "ca732ac197129e44"
 }

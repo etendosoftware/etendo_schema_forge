@@ -43,12 +43,15 @@ const draftMode = {
   "enabled": true,
   "processField": "documentAction",
   "processValue": "CO",
-  "label": "Confirmar"
+  "label": "Confirmar",
+  "keepSaveWhenCompletedFields": [
+    "orderReference"
+  ]
 };
 // @sf-generated-end draftMode:goodsReceipt
 
 // @sf-generated-start requiredHeaderFields:goodsReceipt
-const requiredHeaderFields = ['warehouse', 'businessPartner', 'movementDate', 'etgoCurrency'];
+const requiredHeaderFields = ['warehouse', 'businessPartner', 'partnerAddress', 'movementDate', 'etgoCurrency'];
 // @sf-generated-end requiredHeaderFields:goodsReceipt
 
 // @sf-generated-start addLineFields:goodsReceiptLine

@@ -56,7 +56,7 @@ The Contacts window should let users maintain a shared business-partner master r
   - vendor billing fields appear only when the vendor flag is enabled;
   - the Customer and Vendor flags are rendered as inline checkboxes (label + checkbox on one row, no extra vertical padding) using a `[&_.pt-6]:pt-0` wrapper to remove EntityForm's default label-alignment offset;
   - "Bloqueo de cliente" and "Bloqueo de proveedor" are rendered as **No / Sí** radio groups (`YesNoRadio`) positioned next to the respective payment-terms selector in the same flex row, not as checkboxes;
-  - the billing fields per side are split into two rows: top row (Price List, Payment Method, Account on the customer side / Expense Account on the vendor side) rendered by EntityForm in default 3-column grid; bottom row rendered as a flex row with Condiciones de pago (EntityForm, 1 column) and the blocking radio group side-by-side. The third selector in the top row uses `FIN_Financial_Account_ID` for customer ("Cuenta" / "Account") and `PO_Financial_Account_ID` for vendor ("Cuenta contable de gastos" / "Expense Account") — both labels are declared in `decisions.json → window.labelOverrides`.
+  - the billing fields per side are split into two rows: top row (Price List, Payment Method, Account — on both the customer and the vendor side) rendered by EntityForm in default 3-column grid; bottom row rendered as a flex row with Condiciones de pago (EntityForm, 1 column) and the blocking radio group side-by-side. The third selector in the top row uses `FIN_Financial_Account_ID` for customer and `PO_Financial_Account_ID` for vendor. Both are labelled **"Cuenta" / "Account"** (ETP-5328 reverted ETP-4017's vendor-side rename to "Cuenta contable de gastos" / "Expense Account"). The two labels are declared independently in `decisions.json → window.labelOverrides` and happen to share copy — they are still two different AD columns, so changing one does not change the other.
 - Before the header is saved, the financial panel suppresses effective billing-preference editing and clears prefilled billing values from the unsaved draft so those values are not posted too early.
 - The discount selector (native `<select>`) is only visible after the header exists **and** there is at least one available discount option in the catalog. If the catalog returns no options the selector is not rendered, so the "Ninguno" empty state never appears without meaningful choices.
 - Customer-side and vendor-side account selectors are filtered by the selected payment method, mirroring Etendo Classic. The `selectorContext` passes `Fin_Paymentmethod_ID` (for customer) and `PO_Paymentmethod_ID` (for vendor) to the selector request, so the eligible financial account list is filtered in real time as the payment method changes. The filter is applied in NEO Headless by a dedicated selector policy (`FinancialAccountPaymentMethodSelectorPolicy` in `com.etendoerp.go`), which emits an HQL `EXISTS` over the `FinancialMgmtFinAccPaymentMethod` link table — the generic SQL→HQL validation-rule fallback cannot translate the Classic subquery rule, so it is handled by the policy instead.
@@ -96,7 +96,7 @@ The Contacts window should let users maintain a shared business-partner master r
 7. In the Financial tab, verify the Credit section shows as a horizontal row: descriptive text on the left, stepper on the right. Click + rapidly five times; confirm the UI updates immediately on each click but only **one PATCH request** is sent to the backend after you stop clicking (verify in the Network tab). Confirm − does not go below 0.
 8. Verify a horizontal separator line (`<hr>`) appears between the Credit section and the Billing Preferences section.
 9. In the Financial tab, verify the Customer and Vendor checkboxes are rendered inline (checkbox + label on a single row with no extra vertical spacing above).
-10. When Customer is enabled, verify billing fields appear in two rows: top row (Tarifa, Método de pago, Cuenta); bottom row (Condiciones de pago selector on the left, Bloqueo de cliente No/Sí radio on the right, side by side). When Vendor is enabled, verify the equivalent block shows: top row (Tarifa de compra, Método de pago, Cuenta contable de gastos); bottom row (Condiciones de pago, Bloqueo de proveedor No/Sí radio).
+10. When Customer is enabled, verify billing fields appear in two rows: top row (Tarifa, Método de pago, Cuenta); bottom row (Condiciones de pago selector on the left, Bloqueo de cliente No/Sí radio on the right, side by side). When Vendor is enabled, verify the equivalent block shows: top row (Tarifa de compra, Método de pago, Cuenta); bottom row (Condiciones de pago, Bloqueo de proveedor No/Sí radio).
 11. Verify "Bloqueo de cliente" and "Bloqueo de proveedor" show as **No** / **Sí** radio buttons, not checkboxes. Default selection is No.
 12. In the Financial tab, verify customer and vendor flags control the related billing-preference sections.
 13. Select a payment method in the financial section and confirm the eligible financial account selector is filtered to only accounts compatible with that payment method.
@@ -134,7 +134,7 @@ The Contacts window should let users maintain a shared business-partner master r
 - `tools/app-shell/src/windows/custom/contacts/ContactsFinancialPanel.jsx` and `BillingPreferencesForm.jsx` confirm post-save financial editing, customer/vendor-dependent sections, credit-limit persistence, and discount-row maintenance. The Financial tab layout uses a horizontal two-column design (descriptive text fixed-width on the left, interactive widget on the right) for both the Credit and Billing Preferences sections. `ContactsFinancialPanel.jsx` includes an inline `CreditLimitStepper` sub-component that renders a numeric input with − and + buttons; rapid clicks are debounced (400 ms via `useRef + setTimeout + clearTimeout`) so at most one PATCH is sent per burst. An `<hr>` separator divides the Credit section from the Billing Preferences section. The container uses `space-y-2` for tight vertical rhythm. `BillingPreferencesForm.jsx` renders billing fields in a two-row layout: the top row holds price list, payment method, and financial account; the bottom row holds payment terms alongside a `YesNoRadio` for the customer/vendor blocking flag. Customer and vendor checkboxes are wrapped in a `[&_.pt-6]:pt-0` div to neutralize `EntityForm`'s label-alignment padding without removing the expand-on-click toggle behavior.
 - `tools/app-shell/src/windows/custom/contacts/LocationEditorModal.jsx` confirms saved-header dependency, country/region selector dependency, paginated searchable country/region pickers, and atomic create/update/delete behavior through the `locationAddress` endpoint. All user-facing labels including the close button are i18n-driven via `useUI`.
 - `tools/app-shell/src/components/contract-ui/PartnerAddressPicker.jsx` and `tools/app-shell/src/components/contract-ui/__tests__/PartnerAddressPicker.test.js` confirm that the same contacts location modal now supports inline "+ Add address" creation for partner-address selectors outside the Contacts window.
-- `tools/app-shell/src/components/contract-ui/CreateContactModal.jsx` provides partial supporting evidence for person/company create payload semantics in the shared quick-create flow, but no contacts-window-specific automated test was found for the main detail-route save behavior.
+- `CreateContactModal.jsx` (and its `EntityCreationModal.jsx`/`AddressSection.jsx`/`FinancialSection.jsx`/`contactModalConfig.js` supporting files) — the shared quick-create flow's former hand-rolled reimplementation of this window — was deleted in ETP-5332. The "+ Crear contacto" affordance in other windows' partner/contact selectors now mounts this Contacts window itself via `RecordCreateModal` (`docs/ui-customization.md` §19b), so person/company create payload semantics for that flow are exercised through this window's own tests rather than a separate quick-create test suite; no contacts-window-specific automated test was found for the main detail-route save behavior.
 - `tools/app-shell/src/menu.json` and `tools/app-shell/src/windows/registry.js` confirm menu visibility and route-to-loader registration for `/contacts`.
 - `tools/app-shell/src/windows/custom/contacts/ContactsSummaryWidget.jsx`, `ContactsPeriodButton.jsx`, `ContactsFinanceContext.jsx`, and `ContactsFinancialPanel.jsx` implement the horizontal financial summary that replaced the former right-side sidebar (`BusinessPartnerSidebar.jsx`, deleted). `ContactsFinanceContext` holds the shared period state and fetches `bp-stats`/`bp-trend` by record id. `ContactsSummaryWidget` renders the three KPIs with period-aware trend badges and the "Ver gráfico" dialog (reusing the local `BPChartSVGContent` in `contacts/BPChartSVGContent.jsx`); Net Balance value is Income − Expenses and every badge trend is computed from the `bp-trend` series via `windowTrend` (last month vs first month of the selected period). In the General tab the widget is wired through `DetailView` `headerContent`; in the Financial tab it is rendered at the top of `ContactsFinancialPanel`, so the same summary is visible in both tabs. `ContactsPeriodButton` (wired via the `DetailView` `tabsBarAfter` slot) renders the period selector immediately to the right of the General/Financial tabs. The sidebar is removed by setting `window.sidebarLayout: false` in `decisions.json`, which stops the generator from emitting `sidebarContent`.
 - `tools/app-shell/src/components/contract-ui/__tests__/DetailView.autoSaveOnBlur.test.js` is a static regression guard (ETP-3660) that reads `DetailView.jsx` as a string and asserts: `autoSaveOnBlur` prop has a `false` default; `handleFieldBlur` exists alongside `hook.editing`, `hook.selected`, and `hook.handleSave` usage; `onFieldBlur={autoSaveOnBlur ? handleFieldBlur : undefined}` appears on both Form instances (principal and collapsed sections).
@@ -259,6 +259,41 @@ The import mapping exposes aliases for Spanish compact and spaced headers: `codi
 }
 ```
 `resolve-curated.js` forwards this to `contract.json → frontendContract.window.labelOverrides`, and the generated `BusinessPartnerPage.jsx` threads it through as the `labelOverrides` prop consumed by `useLabel()` in the form/detail components — resolution order: `labelOverrides[locale][C_BP_Group_ID]` → global AD dictionary label → raw `field.label`. The field's raw `label` in `decisions.json` was also updated from `"Business Partner Category"` to `"Contact Category"` so the (English) fallback matches if the override chain is ever bypassed. Renders as **"Categoría de contacto"** in es_ES and **"Contact Category"** in en_US; unaffected by the reorder fix above — the field now renders with this label at position 3 (right after Razón Social).
+
+## ETP-4564 — Shared cache lifecycle and invalidation (SEC T-01 3/3)
+
+**All Contacts reads now go through the shared `@etendosoftware/app-shell-core` cache.** This closes finding T-01 (no shared client-side cache): reopening a contact, returning to the list, or reopening a tab reuses previously loaded data instead of refetching. The cache is provided app-wide by `DataProvider` (composed in `AppShellRuntime`) and is memory-only — no business data is written to `localStorage`.
+
+**What is cached, and its freshness policy:**
+
+| Data | Where | Query key (isolating dimensions) | Freshness |
+| --- | --- | --- | --- |
+| List (page 0) | generic `useEntity` (ETP-4563) | scope + spec + entity + sort + filters | record (30s) |
+| Header record | `useEntity.fetchById` | scope + spec + entity + recordId | record (30s) |
+| 5 child collections | `useEntity.fetchChildren` | scope + spec + childEntity + parentId | record (30s) |
+| Finance KPIs `bp-stats` / `bp-trend` | `ContactsFinanceContext` | scope + spec `contacts` + entity `bp-stats`/`bp-trend` + recordId | record (30s) |
+| Attachments | `useAttachments` | scope + `attachments` + tableName + recordId | record (30s) |
+| Selector / catalog options | `SelectorInput` | scope + selectorUrl + normalized context + page offset | catalog (5min) |
+
+"scope" is `{ auth, client, role, org }` from the cache provider, so **cached Contacts data cannot leak across a session, role, or organization** — a role/org change produces distinct keys (and `DataProvider` also clears the cache on identity change).
+
+**Attachments are now truly lazy.** `useAttachments` no longer lists on mount; it fetches only once the Attachments tab becomes active (`isActive`), and reopening a fresh tab reuses the cache. Callers that don't pass `isActive` (e.g. `goods-receipt`) keep the previous eager behavior.
+
+**Invalidation.** Mutations that go through the generic `useEntity` (header save/delete, child add/update/delete) already invalidate their list/record/child queries. The Contacts-specific raw-fetch mutations that bypass `useEntity` invalidate explicitly via the `useContactsCacheInvalidation` helper (`windows/custom/contacts/contactsCacheInvalidation.js`):
+
+- inline table edit / row delete / bulk delete → invalidate `businessPartner` (list + record);
+- credit-limit save (`ContactsFinancialPanel`) → invalidate `businessPartner` + finance KPIs (`bp-stats`, `bp-trend`);
+- discount create/update/delete (`BillingPreferencesForm`) → invalidate finance KPIs + `businessPartner`;
+- attachment upload/remove/update-description → invalidate that record's attachment list.
+
+Explicit **Refresh** still forces a network revalidation (bypasses freshness).
+
+**Limitations.**
+
+- **Selection is not preserved across navigation** — that is T-05, tracked separately. T-01 only reduces request volume / improves reuse.
+- **No server-side / HTTP caching** — this is a client-side, in-memory cache only; a full page reload starts cold.
+- Selector option **pages beyond page 0** are cached per offset but the accumulated infinite-scroll list is not deduplicated across partial scroll positions.
+- **Before/after network trace:** the historical "~19 requests" figure has no committed source report (`docs/reports/contacts-test-report.md` is an external assessment doc, not in this repo); a reproducible current measurement is captured separately as delivery evidence rather than embedded here.
 
 ## ETP-4156 — Contact name/username derivation moved server-side
 
@@ -674,6 +709,14 @@ modal's tax-ID input by locating its label text, were updated from
 `<label>` specifically because the sibling "Clave NIF país residencia" `<select>` also has a
 literal `<option>NIF</option>`, which a plain `getByText(/^nif/i)` would ambiguously match too.
 
+**Superseded by ETP-5332.** `CreateContactModal.jsx` and `EntityCreationModal.jsx` no longer
+exist — the "+ crear contacto" flow from other windows now mounts this Contacts window itself
+via `RecordCreateModal` (see `docs/ui-customization.md` §19b), so the tax-ID field it renders is
+this window's own `TaxID`, already resolved to "NIF" through the `window.labelOverrides.es_ES`
+mechanism described above. `genericLabels.taxIDField` (still `"NIF"` in `es_ES.json`) has no
+remaining consumer in the codebase; the paragraph above is kept as the historical record of why
+the label was changed on that day, not as a description of current wiring.
+
 The import's `TAX_ID_KEY_VALUES` alias list in `contactsImportDescriptor.js` (accepting
 user-typed `'CIF'`/`'CIF/NIF'`/`'NIF/CIF'` as synonyms for the *Tax ID Type* enum value `NIF`)
 remains unchanged — it recognizes what users type in their own CSV files and is unrelated to
@@ -1071,3 +1114,98 @@ No secondary sort key was needed here, unlike `financial-account`'s two-key rest
 Purely declarative — no new generator or component logic — so no new test was added beyond the
 existing generic `listSortBy` coverage (`parseListSortBy.test.js`,
 `ListView.interactions.vitest.jsx`).
+
+## ETP-5348 — Import: the file is judged before the mapping step
+
+Engine-level work shared with Product, reported against Product Import but landing entirely in
+the shared `ImportDialog` and parsers, so Contacts gets all of it. Full write-up in
+`product.md` → *ETP-5348*.
+
+Five rejections now happen before the mapping step instead of not at all: a file over the
+window's declared row limit (which used to be truncated in silence, *and* whose declared value
+was never read because the contract nests it under `limit`), a file whose format the window does
+not declare, duplicate headers differing only in case/accents/whitespace, a blank header, and a
+file carrying headers but no data rows.
+
+Two points specific to this window:
+
+- Contacts declares the same `limit: { maxRows: 5000, concurrency: 4 }` as Product, so the
+  nested-key fix changes no effective value here either — it only means the declaration now
+  governs, rather than coinciding with a default.
+- The duplicate-header fix matters more here than in Product: the Contacts template legitimately
+  carries several columns whose AD labels collide before qualification ("Correo electrónico" for
+  both `etgoEmail` and `email`), which is what `resolveTemplateHeaders`' collision fallback and
+  the `headerScope` qualifier exist for. Tightening the guard to normalized comparison does not
+  touch those — they are disambiguated *before* they are written — but it does mean a
+  hand-edited file that flattens two qualified headers back onto the same name is now caught at
+  upload instead of silently losing a column.
+
+## ETP-5373 — The downloaded template could not be imported as-is
+
+Two of the template's own example values were refused by `BusinessPartnerHandler` at confirm
+time, each with a different error, so the user discovered them one at a time and the "download
+the template, fill it in, upload it" path never completed without hand-editing the sample row.
+
+| Column | Shipped | Result | Now |
+| --- | --- | --- | --- |
+| `taxID` | `B12345678` | Rejected — wrong check digit (`SpanishTaxIdValidator`) | `B12345674` |
+| `etgoWeb` | `https://distribucionesgarcia.es` | Rejected — the validator wants a bare domain | `distribucionesgarcia.es` |
+
+The other format-validated examples (`etgoEmail`, `email`, `etgoPhone`, `phone`) were already
+fine.
+
+### Why the web example was wrong, and the rule that prevents the next one
+
+`EM_Etgo_Web` stores **only the host**: the form renders a fixed, non-editable `https://` chip
+before the input (`inputPrefix` on the field descriptor, ETP-4749), so what the user sees is not
+what the column holds. The backend validates the stored value as a host — at least two
+dot-separated labels, the last a 2+ letter TLD — and `https://…` makes the first label invalid.
+
+The general rule, which is the one worth remembering: **an import example is the value that will
+be STORED, not the one a user sees in the form.** That covers the coded columns too, from the
+other direction — `etgoIsperson` ships `"Empresa"` and `oBTIKTaxIDKey` ships `"NIF"` because
+those cells are labels the descriptor resolves (`'N'`, `'1'`) before sending.
+
+### Why nothing caught it
+
+The examples live in `artifacts/contacts/decisions.json` → `window.import.fields[].example` and
+the pipeline writes them into the contract. Client-side, the review screen runs `validateRow`,
+which knows about required / email / numeric and nothing else — so both values previewed as
+correct. Nothing connected the examples to the rules that would judge them, and an invalid
+example therefore shipped without anything failing.
+
+### The guard
+
+`importTemplateRoundTrip.vitest.js` → *ETP-5373* now judges every window's examples with the
+browser mirrors of the Java validators (`lib/taxIdValidation.js` ↔ `SpanishTaxIdValidator.java`,
+`recipientEdits.js` ↔ the handler's `EMAIL_PATTERN` / `isDomainShaped` / `isPlausiblePhone`) —
+imported, never restated, so a third copy cannot drift from either side.
+
+It is deliberately not a list of the two values that were wrong. It asks the **same detectors
+production uses** (`isTaxIdField`, `isEmailField`, `isWebsiteField`, `isPhoneField`) which
+columns carry a format rule, so the next import column named `*email*`, `*phone*`, `*web*` or
+`taxID` is covered the day it is declared. Four assertions hold it up: every detected example
+passes its rule; the set of detected columns is pinned (otherwise the guard could pass by
+matching nothing); every example fits its AD column length (`etgoPhone`'s 15 is the same cap the
+handler applies); and the two values shipped before this ticket are still rejected, so the rules
+cannot go soft without the suite saying so.
+
+The tax-id assertion is dispatched the way the backend dispatches it: the NIF algorithm only
+runs when the row declares document type NIF, which the template does in a sibling column, so
+the test resolves `oBTIKTaxIDKey`'s example through the descriptor's own `TAX_ID_KEY_VALUES`
+label table rather than assuming it.
+
+## ETP-5374 — Duplicate detection died in silence above ~72 rows
+
+Engine-level work shared with Product, reported against Product Import but landing entirely in
+the shared `existingRecordLookup.js` + `ImportDialog`, so Contacts gets all of it. Full write-up
+in `product.md` → *ETP-5374*.
+
+One point specific to this window: Contacts dedupes on `taxID`, a single column, so its batches
+land at ~38 keys each — the same order as Product's `searchKey`. A window that ever declares a
+composite `dedupe.key` gets proportionally smaller batches automatically, which is the whole
+reason the new rule measures URL length instead of counting keys.
+
+The threshold was the same here as in Product, because the limit is Tomcat's and not the
+window's: above ~72 distinct NIFs the pre-check was refused with a 400 and every row showed as
+Correcta.

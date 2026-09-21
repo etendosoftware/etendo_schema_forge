@@ -58,7 +58,7 @@ vi.mock('sonner', () => ({
 import OnboardingWizard from '../OnboardingWizard.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
-import { buildOnboardingPayloads } from '../fiscalConfig.utils.js';
+import { buildOnboardingPayloads, getAllowedSystemsForTerritory } from '../fiscalConfig.utils.js';
 
 // --- Helpers --------------------------------------------------------------
 
@@ -155,6 +155,13 @@ describe('OnboardingWizard — territory selection', () => {
   it('navigates directly to ConfirmScreen for navarra (no sub-questions)', () => {
     renderWizard();
     fireEvent.click(screen.getByText('fiscal.territory.navarra'));
+    fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
+    expect(screen.getByText('fiscal.onboarding.confirm.title')).toBeInTheDocument();
+  });
+
+  it('navigates directly to ConfirmScreen for ceuta (no sub-questions — VERIFACTU is the only applicable system, ETP-5272 point 4)', () => {
+    renderWizard();
+    fireEvent.click(screen.getByText('fiscal.territory.ceuta'));
     fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
     expect(screen.getByText('fiscal.onboarding.confirm.title')).toBeInTheDocument();
   });
@@ -436,6 +443,40 @@ describe('OnboardingWizard — ManualScreen', () => {
     fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
     fireEvent.click(screen.getByText('fiscal.onboarding.back'));
     expect(screen.getByText('fiscal.onboarding.manual.title')).toBeInTheDocument();
+  });
+});
+
+describe('OnboardingWizard — ManualScreen territory restriction (ETP-5272 point 4)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function navigateToManual() {
+    renderWizard();
+    fireEvent.click(screen.getByText('fiscal.onboarding.territory.prefer.manual.link'));
+  }
+
+  it('ceuta/melilla only offers VERI*FACTU — SII is not rendered as an option', () => {
+    vi.mocked(getAllowedSystemsForTerritory).mockImplementation((territory) => {
+      if (territory === 'ceuta') return ['VERIFACTU'];
+      return ['SII', 'TBAI', 'VERIFACTU'];
+    });
+    navigateToManual();
+    fireEvent.click(screen.getByText('fiscal.territory.ceuta'));
+    expect(screen.getByText('VERI*FACTU')).toBeInTheDocument();
+    expect(screen.queryByText('SII')).not.toBeInTheDocument();
+  });
+
+  it('canarias (SII-supported territory) still offers both SII and VERI*FACTU — no regression', () => {
+    vi.mocked(getAllowedSystemsForTerritory).mockImplementation((territory) => {
+      if (territory === 'ceuta') return ['VERIFACTU'];
+      if (territory === 'canarias') return ['SII', 'VERIFACTU'];
+      return ['SII', 'TBAI', 'VERIFACTU'];
+    });
+    navigateToManual();
+    fireEvent.click(screen.getByText('fiscal.territory.canarias'));
+    expect(screen.getByText('SII')).toBeInTheDocument();
+    expect(screen.getByText('VERI*FACTU')).toBeInTheDocument();
   });
 });
 
@@ -737,5 +778,124 @@ describe('OnboardingWizard — AppliedScreen environment row (ETP-5027)', () => 
   it('shows the sandbox label when SII is not in the production environment', async () => {
     await navigateToAppliedFor({ systemLabel: 'SII', payloadKey: 'sii', record: { entornoDeProduccin: 'N' } });
     expect(screen.getByText('fiscal.onboarding.applied.env.sandbox')).toBeInTheDocument();
+  });
+});
+
+// ETP-5272 follow-up — the onboarding/setup wizard is the ONLY path that
+// performs a first-time fiscal-system ACTIVATION (createRecords() POSTs the
+// sii-config/tbai-config/verifactu-config record on the confirm step), which
+// is exactly what "Fuerza SII/TicketBAI/VeriFactu a modo prueba" exists to
+// block — there is no carve-out for first-time setup in the requirement.
+describe('OnboardingWizard — forceTestMode (ETP-5272 follow-up)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function navigateToConfirmViaNavarra(overrides = {}) {
+    // Navarra (sii_foral regime) has no national/volume sub-question, so
+    // "Continue" goes straight from the territory screen to 'confirm'.
+    const result = renderWizard(overrides);
+    fireEvent.click(screen.getByText('fiscal.territory.navarra'));
+    fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
+    return result;
+  }
+
+  it('does not show the test-mode banner on the territory screen when forceTestMode is false', () => {
+    renderWizard({ forceTestMode: false });
+    expect(screen.queryByTestId('OnboardingWizard__testModeBanner')).not.toBeInTheDocument();
+  });
+
+  it('shows the test-mode banner on the territory screen when forceTestMode is true', () => {
+    renderWizard({ forceTestMode: true });
+    expect(screen.getByTestId('OnboardingWizard__testModeBanner')).toBeInTheDocument();
+    expect(screen.getByText('fiscal.testModeLock.warning')).toBeInTheDocument();
+  });
+
+  it('defaults to unlocked (no banner) when forceTestMode is omitted — no regression', () => {
+    renderWizard();
+    expect(screen.queryByTestId('OnboardingWizard__testModeBanner')).not.toBeInTheDocument();
+  });
+
+  it('territory selection and navigation still work while locked (browsing is not blocked)', () => {
+    navigateToConfirmViaNavarra({ forceTestMode: true });
+    // Reaching the confirm screen proves territory pick + Continue still work.
+    expect(screen.getByText('fiscal.onboarding.confirm.title')).toBeInTheDocument();
+    expect(screen.getByTestId('OnboardingWizard__confirmActivateButton')).toBeInTheDocument();
+  });
+
+  it('keeps the banner visible on the confirm screen when forceTestMode is true', () => {
+    navigateToConfirmViaNavarra({ forceTestMode: true });
+    expect(screen.getByTestId('OnboardingWizard__testModeBanner')).toBeInTheDocument();
+  });
+
+  it('disables the confirm/activate button when forceTestMode is true — no first-time activation', () => {
+    navigateToConfirmViaNavarra({ forceTestMode: true });
+    expect(screen.getByTestId('OnboardingWizard__confirmActivateButton')).toBeDisabled();
+  });
+
+  it('enables the confirm/activate button when forceTestMode is false (no regression)', () => {
+    navigateToConfirmViaNavarra({ forceTestMode: false });
+    expect(screen.getByTestId('OnboardingWizard__confirmActivateButton')).not.toBeDisabled();
+  });
+
+  it('clicking the confirm button never calls the API when forceTestMode is true', async () => {
+    const mockFetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    vi.mocked(useApiFetch).mockReturnValue(mockFetch);
+    vi.mocked(buildOnboardingPayloads).mockReturnValue({ sii: { orgField: 'x' } });
+
+    navigateToConfirmViaNavarra({ forceTestMode: true });
+    fireEvent.click(screen.getByTestId('OnboardingWizard__confirmActivateButton'));
+
+    // Disabled button never fires onClick, and createRecords() itself also
+    // short-circuits on forceTestMode — either way, no network write happens.
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(screen.queryByText('fiscal.save')).not.toBeInTheDocument();
+  });
+
+  it('clicking the confirm button still creates records when forceTestMode is false (no regression)', async () => {
+    const mockFetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    vi.mocked(useApiFetch).mockReturnValue(mockFetch);
+    vi.mocked(buildOnboardingPayloads).mockReturnValue({ sii: { orgField: 'x' } });
+
+    navigateToConfirmViaNavarra({ forceTestMode: false });
+    fireEvent.click(screen.getByTestId('OnboardingWizard__confirmActivateButton'));
+
+    await waitFor(() => {
+      expect(screen.getByText('fiscal.save')).toBeInTheDocument();
+    });
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('sii-config'),
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('disables the detail-screen Save button when forceTestMode is true (defense-in-depth for a mid-session flip)', async () => {
+    const mockFetch = vi.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ response: { data: [{ id: 'sii-1' }] } }),
+    }));
+    vi.mocked(useApiFetch).mockReturnValue(mockFetch);
+    vi.mocked(buildOnboardingPayloads).mockReturnValue({ sii: { orgField: 'x' } });
+
+    // Reach the detail screen while unlocked (the only way to get past the
+    // confirm gate), then re-render with forceTestMode=true to simulate the
+    // preference flipping on while the wizard is still open on the detail step.
+    const { rerender } = renderWizard({ forceTestMode: false });
+    fireEvent.click(screen.getByText('fiscal.territory.navarra'));
+    fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
+    fireEvent.click(screen.getByTestId('OnboardingWizard__confirmActivateButton'));
+    await waitFor(() => {
+      expect(screen.getByTestId('OnboardingWizard__detailSaveButton')).toBeInTheDocument();
+    });
+
+    rerender(
+      <OnboardingWizard
+        apiBaseUrl="/api/fiscal-config"
+        onComplete={vi.fn()}
+        onGoHome={vi.fn()}
+        forceTestMode
+      />,
+    );
+    expect(screen.getByTestId('OnboardingWizard__detailSaveButton')).toBeDisabled();
   });
 });

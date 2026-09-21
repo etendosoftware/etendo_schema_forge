@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getLayout303, applyPatch, SUPPORTED_YEARS } from '../fm303Layouts.js';
+import { getLayout303, applyPatch, SUPPORTED_YEARS, SELECTABLE_YEARS } from '../fm303Layouts.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -537,16 +537,52 @@ describe('getLayout303 — datos_bancarios section visibility (EDID065 + rectifi
   const layout = getLayout303(2026, 1);
   const sec = layout.sections.find(s => s.id === 'datos_bancarios');
 
-  it('sectionVisibleWhen is an anyOf of tipo_declaracion U/D/X OR rectificativa checked', () => {
+  // ETP-5393 manual-QA fix — the rectificativa branch now also requires `_box111NonZero`,
+  // matching `_BANK_FULL_BLOCK_REQUIRED_WHEN` exactly, so the section hides again as soon
+  // as either rectificativa is unchecked or box 111 goes back to 0 (previously it stayed
+  // visible on rectificativa alone — see fm303Layouts.bankVisibilityReactivity.vitest.js).
+  it('sectionVisibleWhen is an anyOf of tipo_declaracion U/D/X OR (rectificativa checked AND box 111 non-zero)', () => {
     expect(sec.sectionVisibleWhen).toEqual({ anyOf: [
       { field: 'tipo_declaracion', in: ['U', 'D', 'X'] },
-      { field: 'rectificativa', equals: true },
+      { allOf: [
+        { field: 'rectificativa', equals: true },
+        { field: '_box111NonZero', equals: true },
+      ] },
     ] });
   });
 
-  it('bank_iban stays required: true (Classic also requires IBAN for the rectificativa case)', () => {
+  // ETP-5393 Bug E — bank_iban is no longer a static `required: true`. It's now conditional
+  // via `requiredWhen`: always required for tipo U/D/X (unchanged, AEAT EDID065), and for a
+  // rectificativa filed under any other tipo ONLY when box 111 is non-zero — see
+  // fm303Layouts.bankIbanRequiredWhen.vitest.js for full requiredWhen coverage.
+  it('bank_iban has no static `required` flag — required is conditional via requiredWhen', () => {
     const iban = sec.fields.find(f => f.id === 'bank_iban');
-    expect(iban.required).toBe(true);
+    expect(iban.required).toBeUndefined();
+    expect(iban.requiredWhen).toEqual({ anyOf: [
+      { field: 'tipo_declaracion', in: ['U', 'D', 'X'] },
+      { allOf: [
+        { field: 'rectificativa', equals: true },
+        { field: '_box111NonZero', equals: true },
+      ] },
+    ] });
+  });
+
+  // ETP-5393 follow-up (manual-QA fix) — AEAT303Report requires the FULL bank block (not just
+  // IBAN) ONLY under condition B (rectificativa + non-zero box 111) — NOT under condition A
+  // (a plain tipo U/D/X devolución/domiciliación, which requires IBAN alone per AEAT EDID065).
+  // The other 6 bank fields therefore carry a NARROWER requiredWhen than bank_iban — no
+  // `tipo_declaracion in [U,D,X]` branch.
+  it('the other 6 bank fields require ONLY condition B (rectificativa + non-zero box 111), narrower than bank_iban', () => {
+    const expectedRequiredWhen = { allOf: [
+      { field: 'rectificativa', equals: true },
+      { field: '_box111NonZero', equals: true },
+    ] };
+    ['bank_swift_bic', 'bank_nombre', 'bank_direccion', 'bank_ciudad', 'bank_pais', 'bank_sepa']
+      .forEach((id) => {
+        const field = sec.fields.find(f => f.id === id);
+        expect(field.required).toBeUndefined();
+        expect(field.requiredWhen).toEqual(expectedRequiredWhen);
+      });
   });
 
   it('titleKeyMap only maps D, X (devolucion) and U (domiciliacion) — no G, I, V entries', () => {
@@ -607,5 +643,200 @@ describe('getLayout303 — sin_actividad section', () => {
     const layout = getLayout303(2026, 1);
     const sec = layout.sections.find(s => s.id === 'sin_actividad');
     expect(sec.fields[0].labelKey).toBe('fm.ident.sin_actividad');
+  });
+});
+
+// ── identificacion — dep_aduanero/dep_foral removal (ETP-5272 pt.7) ──────────
+// Both checkboxes were non-functional (no backend field ever read them) and
+// were removed from BASE's `identificacion` fields and from
+// `_2024_IDENTIFICACION_FIELDS` (shared by the 2021/2022/2024 patches) along
+// with their i18n keys. Regression guard: neither id may resurface in any
+// year's resolved identificacion field list.
+describe('getLayout303 — identificacion no longer carries dep_aduanero/dep_foral (ETP-5272 pt.7)', () => {
+  function identificacionFieldIds(year, period = 1) {
+    const layout = getLayout303(year, period);
+    const sec = layout.sections.find(s => s.id === 'identificacion');
+    return sec.fields.map(f => f.id);
+  }
+
+  it('BASE (2026) identificacion has neither dep_aduanero nor dep_foral', () => {
+    const ids = identificacionFieldIds(2026);
+    expect(ids).not.toContain('dep_aduanero');
+    expect(ids).not.toContain('dep_foral');
+  });
+
+  it('the 2021 patch (_2024_IDENTIFICACION_FIELDS) has neither field', () => {
+    const ids = identificacionFieldIds(2021);
+    expect(ids).not.toContain('dep_aduanero');
+    expect(ids).not.toContain('dep_foral');
+  });
+
+  it('the 2022 patch (_2024_IDENTIFICACION_FIELDS) has neither field', () => {
+    const ids = identificacionFieldIds(2022);
+    expect(ids).not.toContain('dep_aduanero');
+    expect(ids).not.toContain('dep_foral');
+  });
+
+  it('the 2024 patch (_2024_IDENTIFICACION_FIELDS) has neither field', () => {
+    const ids = identificacionFieldIds(2024);
+    expect(ids).not.toContain('dep_aduanero');
+    expect(ids).not.toContain('dep_foral');
+  });
+
+  it('nif and nombre remain present (removal did not collaterally drop sibling read-only fields)', () => {
+    const ids = identificacionFieldIds(2026);
+    expect(ids).toContain('nif');
+    expect(ids).toContain('nombre');
+  });
+});
+
+// ── Last-period-only sections (ETP-5391): tributacion_territorial,
+// info_adicional_ultimo_periodo (the latter also carries the merged
+// declaracion_terceros checkbox as a leading field) ─────────────────────────
+// Only meaningful/populated by Classic's AEAT303Report when the declared
+// period is the last one of the fiscal year (quarterly T4 / monthly 12) —
+// getLayout303 must strip both out entirely for any other period.
+
+const LAST_PERIOD_SECTION_IDS = ['tributacion_territorial', 'info_adicional_ultimo_periodo'];
+
+describe('getLayout303 — last-period-only sections are present for T4/12 and absent otherwise', () => {
+  it.each([
+    ['T1', 1], ['T2', 2], ['T3', 3],
+  ])('absent for quarterly period %s', (period) => {
+    const ids = sectionIds(getLayout303(2026, period));
+    for (const id of LAST_PERIOD_SECTION_IDS) expect(ids).not.toContain(id);
+  });
+
+  it.each([
+    ['1', '1'], ['2', '2'], ['3', '3'],
+    ['11 (monthly, not last)', '11'],
+  ])('absent for period %s', (_label, period) => {
+    const ids = sectionIds(getLayout303(2026, period));
+    for (const id of LAST_PERIOD_SECTION_IDS) expect(ids).not.toContain(id);
+  });
+
+  it.each([
+    ['T4 (quarterly last)', 'T4'],
+    ["'12' (monthly last, string)", '12'],
+    ['12 (monthly last, number)', 12],
+    ["'4' (last, string)", '4'],
+    ['4 (last, number)', 4],
+  ])('present for %s', (_label, period) => {
+    const ids = sectionIds(getLayout303(2026, period));
+    for (const id of LAST_PERIOD_SECTION_IDS) expect(ids).toContain(id);
+  });
+
+  it('sectionOrder still places the two sections between resultado_final and sin_actividad for T4', () => {
+    const ids = sectionIds(getLayout303(2026, 'T4'));
+    const rfIdx = ids.indexOf('resultado_final');
+    const saIdx = ids.indexOf('sin_actividad');
+    expect(rfIdx).toBeGreaterThan(-1);
+    expect(saIdx).toBeGreaterThan(rfIdx);
+    for (const id of LAST_PERIOD_SECTION_IDS) {
+      const idx = ids.indexOf(id);
+      expect(idx).toBeGreaterThan(rfIdx);
+      expect(idx).toBeLessThan(saIdx);
+    }
+  });
+});
+
+describe('getLayout303 — tributacion_territorial section content (T4)', () => {
+  const layout = getLayout303(2026, 'T4');
+  const sec = layout.sections.find(s => s.id === 'tributacion_territorial');
+
+  it('exists and has 5 rows (89/90/91/92 + 107 territorio_comun)', () => {
+    expect(sec).toBeTruthy();
+    expect(sec.rows).toHaveLength(5);
+  });
+
+  it('all 4 territorial percentage rows (Álava/Gipuzkoa/Bizkaia/Navarra) are editable percent cells', () => {
+    const editableRows = ['territorio_alava', 'territorio_guipuzcoa', 'territorio_vizcaya', 'territorio_navarra'];
+    const expectedCells = { territorio_alava: 89, territorio_guipuzcoa: 90, territorio_vizcaya: 91, territorio_navarra: 92 };
+    for (const id of editableRows) {
+      const row = sec.rows.find(r => r.id === id);
+      expect(row).toBeTruthy();
+      expect(row.editable).toBe(true);
+      expect(row.cells).toEqual([expectedCells[id]]);
+      expect(row.cellTypes).toEqual(['percent']);
+      expect(row.cellUnits).toEqual(['%']);
+      expect(row.derivedValue).toBeUndefined();
+    }
+  });
+
+  it('territorio_comun (box 107) is a NOT-editable derivedValue mirroring box 65, defaulting to 100', () => {
+    const row = sec.rows.find(r => r.id === 'territorio_comun');
+    expect(row).toBeTruthy();
+    expect(row.cells).toEqual([107]);
+    expect(row.cellTypes).toEqual(['percent']);
+    expect(row.cellUnits).toEqual(['%']);
+    expect(row.editable).toBeUndefined();
+    expect(row.derivedValue).toEqual({ box: 65, defaultValue: 100 });
+  });
+});
+
+describe('getLayout303 — info_adicional_ultimo_periodo section content (T4)', () => {
+  const layout = getLayout303(2026, 'T4');
+  const sec = layout.sections.find(s => s.id === 'info_adicional_ultimo_periodo');
+
+  // ETP-5391 follow-up: declaracion_terceros (Modelo 347 filing-exemption checkbox) no longer
+  // has its own section — it is merged in as this section's leading field, matching Classic's
+  // own popup layout (grouped with these 5 boxes under one heading, no separate title of its own).
+  it('carries the merged declaracion_terceros checkbox as its leading field', () => {
+    expect(sec.fields).toHaveLength(1);
+    const field = sec.fields[0];
+    expect(field.id).toBe('declaracion_terceros');
+    expect(field.type).toBe('checkbox');
+    expect(field.readOnly).toBe(false);
+    expect(field.labelKey).toBe('fm.ident.declaracion_terceros');
+  });
+
+  it('is not sectionType identificacion (row-based section carrying a leading fields checkbox)', () => {
+    expect(sec.sectionType).toBeUndefined();
+  });
+
+  it('exists and has exactly 5 editable rows for casillas 95/97/98/127/128', () => {
+    expect(sec).toBeTruthy();
+    expect(sec.rows).toHaveLength(5);
+    const expected = {
+      info_reagyp: 95, info_bienes_usados: 97, info_agencias_viaje: 98,
+      info_oss: 127, info_intragrupo: 128,
+    };
+    for (const [id, box] of Object.entries(expected)) {
+      const row = sec.rows.find(r => r.id === id);
+      expect(row).toBeTruthy();
+      expect(row.editable).toBe(true);
+      expect(row.cells).toEqual([box]);
+    }
+  });
+
+  it('does NOT include box 96 (always zero-filled) or box 99 (DB-computed) as manual rows', () => {
+    const allCells = sec.rows.flatMap(r => r.cells ?? []);
+    expect(allCells).not.toContain(96);
+    expect(allCells).not.toContain(99);
+  });
+});
+
+// ── SELECTABLE_YEARS export (ETP-5391) ───────────────────────────────────────
+// Narrower than SUPPORTED_YEARS — only the current filing year is offered when
+// CREATING a new declaration; SUPPORTED_YEARS keeps resolving layouts for
+// existing declarations back to 2021.
+
+describe('SELECTABLE_YEARS', () => {
+  it('is an array containing only the current filing year (2026)', () => {
+    expect(SELECTABLE_YEARS).toEqual([2026]);
+  });
+
+  it('is a strict subset of SUPPORTED_YEARS', () => {
+    for (const y of SELECTABLE_YEARS) expect(SUPPORTED_YEARS).toContain(y);
+  });
+
+  it('does not include any prior filing year present in SUPPORTED_YEARS (2021-2025)', () => {
+    for (const y of [2021, 2022, 2023, 2024, 2025]) {
+      expect(SELECTABLE_YEARS).not.toContain(y);
+    }
+  });
+
+  it('SUPPORTED_YEARS still spans 2021-2026 regardless of the SELECTABLE_YEARS restriction (existing declarations still resolve)', () => {
+    expect(SUPPORTED_YEARS).toEqual([2021, 2022, 2023, 2024, 2025, 2026]);
   });
 });

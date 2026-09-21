@@ -4,7 +4,13 @@ import { registerImportRowValidator } from '@etendosoftware/app-shell-core/lib/i
 // cannot disagree about whether a price cell is a number (ETP-4996).
 import { parseImportNumber } from '@etendosoftware/app-shell-core/lib/import/parseImportNumber.js';
 import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendosoftware/app-shell-core/lib/import/resolveDependentEntity.js';
+import { fetchNeoList } from '@etendosoftware/app-shell-core/lib/import/fetchNeoList.js';
 import { getFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResolvers.js';
+import {
+  getCachedCategories,
+  categoryLookupFailedMessage,
+  categoryCreateFailedError,
+} from '@/lib/importCategoryResolution.js';
 import { parseBoolean } from '@/lib/parseBoolean.js';
 import { resolveCodedCellOrThrow, codedCellError, codeLabels } from '@/lib/codedValue.js';
 import { registerExportHints } from '@/lib/importExportColumns.js';
@@ -71,6 +77,16 @@ function getSalesFlag(item) {
   return null;
 }
 
+// ETP-5245: the tenant's own "default tariff" flag, exposed on the selector by
+// ProductPriceHandler.enrichSelectorItem. Read explicitly rather than by key sniffing (unlike
+// getSalesFlag above, which has to cope with the flag arriving under several key shapes) —
+// "default" is a common enough word that a substring match would risk false positives.
+function getDefaultFlag(item) {
+  if (!item || typeof item !== 'object') return null;
+  const raw = item.default ?? item['priceListVersion$default'];
+  return raw === undefined || raw === null ? null : parseBoolean(raw);
+}
+
 function extractId(value) {
   if (value == null) return null;
   if (typeof value === 'string') return value.trim() || null;
@@ -124,14 +140,25 @@ async function fetchPriceListVersion(spec, token, wantSales) {
   if (!res.ok) return null;
   const payload = await res.json().catch(() => null);
   const items = Array.isArray(payload?.items) ? payload.items : [];
-  // Sales: prefer an explicitly sales-flagged version, otherwise an unflagged one (the
-  // catalog may not expose the flag — a human sees those in the Sales tab too).
-  // Purchase: require the flag to be explicitly false. An unflagged version must NOT be
-  // assumed to be a purchase list, or a sale price would silently land on it.
-  const chosen = wantSales
-    ? (items.find((it) => getSalesFlag(it) === true) ?? items.find((it) => getSalesFlag(it) === null) ?? null)
-    : (items.find((it) => getSalesFlag(it) === false) ?? null);
-  return chosen ? extractId(chosen.id ?? chosen) : null;
+  // Direction first, exactly as before:
+  //   Sales: prefer an explicitly sales-flagged version, otherwise an unflagged one (the
+  //   catalog may not expose the flag — a human sees those in the Sales tab too).
+  //   Purchase: require the flag to be explicitly false. An unflagged version must NOT be
+  //   assumed to be a purchase list, or a sale price would silently land on it.
+  const groups = wantSales
+    ? [items.filter((it) => getSalesFlag(it) === true), items.filter((it) => getSalesFlag(it) === null)]
+    : [items.filter((it) => getSalesFlag(it) === false)];
+  // ETP-5245: within a direction, honour the tenant's default tariff instead of taking whichever
+  // version the selector happened to return first. That first-wins behaviour was invisible while
+  // the shipped dataset had no default flagged at all; now that it does, an import must land on
+  // the same tariff as PriceListVersionResolver (backend seeding), PriceListPicker (the UI) and
+  // the ETGO_PRODUCT_*_PRICE computed columns — otherwise the imported price and the price shown
+  // in the product list come from two different price lists.
+  for (const group of groups) {
+    const chosen = group.find((it) => getDefaultFlag(it) === true) ?? group[0];
+    if (chosen) return extractId(chosen.id ?? chosen);
+  }
+  return null;
 }
 
 function resolvePlv(spec, token, wantSales) {
@@ -145,27 +172,21 @@ function resolvePlv(spec, token, wantSales) {
 // Existing product categories cache per token/run
 const productCategoriesCache = new Map();
 
-async function fetchProductCategories(token) {
+/**
+ * ETP-5227: this used to ask for `?limit=1000` — not a parameter NEO reads — and NEO's own
+ * default capped the answer at the first 100 categories, silently. A tenant with more than that
+ * got "category does not exist" for anything further down the table, which auto-created a
+ * duplicate the database then rejected. `fetchNeoList` pages properly and throws instead of
+ * returning `[]` when the read fails; its header carries the full account.
+ */
+function fetchProductCategories(token) {
   const base = detectEtendoBase();
-  const url = `${base}/sws/neo/product-category/productCategory?limit=1000`;
-  try {
-    const res = await apiFetch(url, { baseUrl: '', token });
-    if (!res.ok) return [];
-    const json = await res.json().catch(() => null);
-    const data = json?.response?.data ?? json?.data ?? [];
-    return Array.isArray(data) ? data : [];
-  } catch (e) {
-    return [];
-  }
+  return fetchNeoList(`${base}/sws/neo/product-category/productCategory`, { token });
 }
 
 function getExistingCategories(token, existingCategoriesOverride) {
   if (existingCategoriesOverride) return Promise.resolve(existingCategoriesOverride);
-  const key = token || 'default';
-  if (!productCategoriesCache.has(key)) {
-    productCategoriesCache.set(key, fetchProductCategories(token));
-  }
-  return productCategoriesCache.get(key);
+  return getCachedCategories(productCategoriesCache, token, () => fetchProductCategories(token));
 }
 
 /**
@@ -190,7 +211,14 @@ async function resolveUom(row, config, productDefaults) {
 
 async function resolveCategory(row, config) {
   if (!row.category) return null;
-  const categories = await getExistingCategories(config.token, config.existingCategories);
+  // A read that fails must fail the ROW, with a message that says so. Falling through with an
+  // empty catalogue is what made the import try to create a category that already existed.
+  let categories;
+  try {
+    categories = await getExistingCategories(config.token, config.existingCategories);
+  } catch (error) {
+    throw new Error(categoryLookupFailedMessage(row.category, config));
+  }
   const runCache = getResolutionCache(config.token || 'product-import');
 
   const createFn = config.createCategoryFn || (async ({ searchKey, name }) => {
@@ -204,8 +232,8 @@ async function resolveCategory(row, config) {
     });
     if (!res.ok) {
       const errJson = await res.json().catch(() => null);
-      const errDetail = errJson?.error?.message || errJson?.message || 'Category creation failed';
-      throw new Error(errDetail);
+      const errDetail = errJson?.error?.message || errJson?.message || '';
+      throw categoryCreateFailedError(errDetail, row.category, config);
     }
     const json = await res.json().catch(() => null);
     const record = json?.response?.data?.[0] ?? json?.data?.[0] ?? json;

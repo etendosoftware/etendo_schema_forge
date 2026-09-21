@@ -1,14 +1,26 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { useUI } from '@/i18n';
+import { toast } from 'sonner';
+import { useUI, useLocaleSwitch } from '@/i18n';
 import {
   LayoutGrid, ArrowUpDown,
   ChevronDown, Calendar, Clock, TriangleAlert, OctagonAlert, Check,
 } from 'lucide-react';
 import { EmptyState, KpiWidget, MoreOptionsMenu } from './FmCommon.jsx';
-import { Checkbox } from '@/components/ui/checkbox';
+import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { NewDeclModal } from './FmOverlays.jsx';
 import FmCatalogPage from './FmCatalogPage.jsx';
-import { formatAmount, countUpcomingDeadlines, isUpcomingDeadline, checkModified303, checkModified349, compute349Operators, fetchDeclarationIncidents } from './fiscalModelsUtils.js';
+import FmRowActions from './FmRowActions.jsx';
+import DeleteConfirmDialog from '@/components/contract-ui/DeleteConfirmDialog.jsx';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
+} from '@/components/ui/dialog.jsx';
+import { Button } from '@/components/ui/button.jsx';
+import {
+  formatAmount, countUpcomingDeadlines, isUpcomingDeadline, checkModified303, checkModified349,
+  compute349Operators, fetchDeclarationIncidents, deriveResultKind, deleteDeclaration,
+  applyOverrides, recomputeDerivedBoxes, getBoxValue, resolveResultColors,
+  persistDeclarationStatus,
+} from './fiscalModelsUtils.js';
 import useFiscalAutoCompute from './useFiscalAutoCompute.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -224,17 +236,22 @@ function ResultText({ isComputing, error, result, t }) {
   if (error) return <span style={RESULT_BADGE_STYLE}>{t('fm.status.error') ?? 'Error de cálculo'}</span>;
   if (!result?.kind) return <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>;
   if (result.kind === 'N') return <span style={RESULT_BADGE_STYLE}>{t('fm.result.N') ?? 'Sin resultado'}</span>;
+  if (result.kind === 'zero') return <span style={RESULT_BADGE_STYLE}>{t('fm.result.zero') ?? 'Resultado cero'}</span>;
   if (result.kind === 'info') {
     return result.amount > 0
       ? <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: 'hsl(var(--foreground))' }}>{formatAmount(result.amount)}</span>
       : <span style={RESULT_BADGE_STYLE}>{t('fm.result.info') ?? 'Informativa'}</span>;
   }
   const label = t(`fm.result.${result.kind}`) ?? result.kind;
+  // Resultado sign-coloring (ETP-5236 / M303-01): 'I' (a ingresar) green, 'V'/'C'
+  // (a devolver / a compensar) blue — same rule as the Modelo 303 detail KPI, via
+  // the shared fiscalModelsUtils.js helper so both call sites stay in sync.
+  const colors = resolveResultColors(result.kind);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-      <span style={RESULT_BADGE_STYLE}>{label}</span>
+      <span style={{ ...RESULT_BADGE_STYLE, background: colors.badgeBg, color: colors.badgeColor }}>{label}</span>
       {result.amount != null && (
-        <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, fontWeight: 500, color: 'hsl(var(--foreground))' }}>
+        <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, fontWeight: 500, color: colors.valueColor }}>
           {formatAmount(result.amount)}
         </span>
       )}
@@ -269,8 +286,8 @@ function KpiCardsRow({ decls, t, kpiFilter, onFilterClick }) {
         <KpiWidget
           icon={<Calendar size={20} strokeWidth={1.75} data-testid="Calendar__cb728e" />}
           iconColor="hsl(var(--muted-foreground))"
-          label="Por vencer"
-          badge="Esta semana"
+          label={t('fm.kpi.upcoming') ?? 'Por vencer'}
+          badge={t('fm.kpi.upcoming_sub') ?? 'Esta semana'}
           badgeBg="var(--status-warning-bg)"
           badgeColor="var(--status-warning-fg)"
           value={upcomingCount}
@@ -283,7 +300,7 @@ function KpiCardsRow({ decls, t, kpiFilter, onFilterClick }) {
           icon={<Clock size={20} strokeWidth={1.75} data-testid="Clock__cb728e" />}
           iconColor="hsl(var(--muted-foreground))"
           label={t('fm.kpi.pending') ?? 'Pendientes'}
-          badge="Sin presentar"
+          badge={t('fm.kpi.pending_sub') ?? 'Sin presentar'}
           badgeBg="hsl(var(--muted))"
           badgeColor="hsl(var(--muted-foreground))"
           value={pendingCount}
@@ -295,8 +312,8 @@ function KpiCardsRow({ decls, t, kpiFilter, onFilterClick }) {
         <KpiWidget
           icon={<TriangleAlert size={20} strokeWidth={1.75} data-testid="TriangleAlert__cb728e" />}
           iconColor="hsl(var(--muted-foreground))"
-          label="Incidencias"
-          badge="Requiere revisión"
+          label={t('fm.m303.kpi.incidents') ?? 'Incidencias'}
+          badge={t('fm.kpi.incidents_sub') ?? 'Requiere revisión'}
           badgeBg="var(--status-destructive-bg)"
           badgeColor="hsl(var(--destructive))"
           value={incidentCount}
@@ -308,18 +325,76 @@ function KpiCardsRow({ decls, t, kpiFilter, onFilterClick }) {
   );
 }
 
-function normDecl(d) {
+// `bcpLocale` defaults to 'es-ES' to preserve behavior for callers outside a
+// component render (e.g. tests) that don't have access to the active locale.
+function normDecl(d, bcpLocale = 'es-ES') {
   return {
     ...d,
-    updatedAt: d.updatedAt ? new Date(d.updatedAt).toLocaleDateString('es-ES') : '—',
+    updatedAt: d.updatedAt ? new Date(d.updatedAt).toLocaleDateString(bcpLocale) : '—',
     result: d.result ?? null,
     incidents: d.incidents ?? { blocking: 0, warning: 0 },
   };
 }
 
+// ETP-5338 — "Reactivar declaración": eligible only for a filed declaration
+// (submitted / submitted_ack) that was NOT a real AEAT telematic submission —
+// reactivating one of those would desync this table from what Hacienda already
+// has on record. `submitted_ext` is deliberately excluded: it's a legacy status
+// that predates `submissionMethod` (PresentModal can no longer produce it, see
+// fiscal-models.md) and was not requested by ETP-5338; the backend guard
+// (FiscalDeclCrudHandler#handleDeclPut) is the actual enforcement, this is only
+// the UI gate.
+function canReactivate(decl) {
+  return (decl.status === 'submitted' || decl.status === 'submitted_ack')
+    && decl.submissionMethod !== 'aeat_telematic';
+}
+
 // ── Sub-components ───────────────────────────────────────────────
 function ModelBadge({ model }) {
   return <span className={`fm-model-badge fm-model-badge--${model}`}>{model}</span>;
+}
+
+// ETP-5338 — "Reactivar declaración" confirmation. Not the app's shared
+// DeleteConfirmDialog (that component's copy/testids are hardcoded to the
+// delete flow — see its header comment); this is a non-destructive analogue
+// built from the same Dialog primitives, same shape.
+function ReactivateConfirmDialog({ open, reactivating = false, onConfirm, onClose, t }) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => { if (!next) onClose?.(); }}
+      data-testid="Dialog__fm-reactivate">
+      <DialogContent className="max-w-sm" data-testid="DialogContent__fm-reactivate">
+        <DialogHeader data-testid="DialogHeader__fm-reactivate">
+          <DialogTitle data-testid="DialogTitle__fm-reactivate">
+            {t('fm.reactivate.confirm_title') ?? 'Reactivar declaración'}
+          </DialogTitle>
+          <DialogDescription data-testid="DialogDescription__fm-reactivate">
+            {t('fm.reactivate.confirm_message')
+              ?? 'La declaración volverá a estado borrador y podrá editarse de nuevo. ¿Continuar?'}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter data-testid="DialogFooter__fm-reactivate">
+          <DialogClose asChild data-testid="DialogClose__fm-reactivate">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={reactivating}
+              data-testid="Button__fm-reactivate-cancel">{t('cancel') ?? 'Cancelar'}</Button>
+          </DialogClose>
+          <Button
+            variant="default"
+            size="sm"
+            disabled={reactivating}
+            data-testid="fm-reactivate-confirm"
+            onClick={onConfirm}
+          >
+            {t('fm.action.reactivate') ?? 'Reactivar'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function IncidentsCell({ blocking, warning, t }) {
@@ -357,6 +432,14 @@ const resultBadge = (text) => (
   }}>{text}</span>
 );
 
+// ETP-5272 pt.6 — dead code: not rendered anywhere in this file (the table cell
+// below renders `ResultText`, not `ResultCell`). Kept as-is rather than deleted —
+// `__tests__/FmListPage.test.js` still asserts on this function's source directly
+// and that test suite is out of scope for this change (deferred to the
+// consolidated tests/docs pass for ETP-5272). If this is ever reactivated, it must
+// receive the same manual-override-merge treatment as `ResultText`'s caller below
+// (merge `decl.manualData?.manualOverrides` via `applyOverrides`/`recomputeDerivedBoxes`
+// and read box 71, not a raw `summary.result`) — it currently does not.
 function ResultCell({ isComputing, error, result, t }) {
   if (isComputing) return <span style={{ color: 'hsl(var(--muted-foreground))', fontSize: 12 }}>…</span>;
   if (error) {
@@ -364,6 +447,7 @@ function ResultCell({ isComputing, error, result, t }) {
   }
   if (!result?.kind) return <span style={{ color: 'hsl(var(--muted-foreground))' }}>—</span>;
   if (result.kind === 'N') return resultBadge(t('fm.result.N') ?? 'Sin resultado');
+  if (result.kind === 'zero') return resultBadge(t('fm.result.zero') ?? 'Resultado cero');
   if (result.kind === 'info') {
     return result.amount > 0
       ? <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 14, color: 'hsl(var(--foreground))' }}>{formatAmount(result.amount)}</span>
@@ -380,12 +464,6 @@ function ResultCell({ isComputing, error, result, t }) {
       )}
     </div>
   );
-}
-
-function getResultKind(r) {
-  if (r > 0) return 'I';
-  if (r < 0) return 'C';
-  return 'N';
 }
 
 // Resolves the auto-computed boxes/operators entry for a declaration row —
@@ -423,9 +501,11 @@ function fmListRowClassName({ selected, current }) {
   return current ? 'fm-table__row--current' : '';
 }
 
-export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, token, apiBaseUrl }) {
+export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, declStatusPatch, declManualDataPatch, token, apiBaseUrl }) {
   const ui = useUI();
   const t  = ui;
+  const { locale: appLocale } = useLocaleSwitch();
+  const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
   const apiFetch = useApiFetch(apiBaseUrl);
 
   const [decls, setDecls] = useState(propDecls ?? []);
@@ -435,9 +515,50 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     apiFetch(`${base}/fiscal303/declarations`, { baseUrl: '' })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(data => setDecls((Array.isArray(data) ? data : (data?.data ?? [])).map(normDecl)))
+      .then(data => setDecls((Array.isArray(data) ? data : (data?.data ?? [])).map(d => normDecl(d, bcpLocale))))
       .catch(() => {});
-  }, [token, apiBaseUrl, apiFetch]);
+  }, [token, apiBaseUrl, apiFetch, bcpLocale]);
+
+  // ETP-5338 CRITICAL FIX — this component "stays mounted at all times" (see the render
+  // below) so that `useFiscalAutoCompute` keeps polling, which means it is NEVER remounted
+  // (and therefore never refetches `decls`) when the user opens a declaration, presents it,
+  // and navigates back — via "Volver"/go-back OR the pre-existing "Cancelar", both of which
+  // just call `onBack` to flip `FiscalModelsPage`'s view back to `{ type: 'list' }`.
+  //
+  // The actual status change IS persisted correctly server-side by `FiscalModelsPage`'s
+  // `onStatusChange` handler (`persistDeclarationStatus`) — that PUT is not tied to component
+  // lifecycle and completes regardless of whether the detail page is still mounted. But
+  // nothing ever pushed that new status into THIS component's own `decls` state, which was
+  // fetched once on mount and never touched again for anything but computedMap/incidents
+  // patches. So the row the user just presented kept showing its stale pre-submission status
+  // (typically "Borrador"/draft) the moment they landed back on the list — reported as
+  // "presenting a declaration and going back reverts it to draft". It never actually
+  // reverted anything: the backend was right, this list's cache was stale.
+  //
+  // `declStatusPatch` is a one-shot `{ id, patch }` (a fresh object each time, so this effect
+  // re-fires on every status change even if `id`/status happen to repeat) pushed down by
+  // `FiscalModelsPage` right after a successful `persistDeclarationStatus`, applied the exact
+  // same way `handleConfirmReactivate` above already patches `decls` for a change made
+  // in-place in this same component.
+  useEffect(() => {
+    if (!declStatusPatch) return;
+    setDecls(ds => ds.map(d => (d.id === declStatusPatch.id ? { ...d, ...declStatusPatch.patch } : d)));
+  }, [declStatusPatch]);
+
+  // ETP-5338 Bug A fix — same one-shot patch mechanism as `declStatusPatch` above, but for a
+  // successful manualData save (Guardar/Calcular) on the detail page instead of a status change.
+  // Root cause this closes: `FmModel303Page` used to autosave `identChecks`/`manualOverrides` via
+  // a debounced background PUT, and NOTHING ever pushed that saved value into this component's
+  // own cached `decls` — reopening the same declaration from the list (without a full page
+  // reload) handed the stale pre-edit `manualData` right back into a freshly-mounted detail page,
+  // which re-hydrates its local state from it. Under the redesigned explicit-save-only model
+  // (identChecks/manualOverrides are pure local state until Guardar/Calcular), Guardar is now the
+  // ONE place a save can succeed, so patching the cache here from that single call site is enough
+  // — see `FmModel303Page.jsx`'s `persistEditableFields`.
+  useEffect(() => {
+    if (!declManualDataPatch) return;
+    setDecls(ds => ds.map(d => (d.id === declManualDataPatch.id ? { ...d, ...declManualDataPatch.patch } : d)));
+  }, [declManualDataPatch]);
 
   // Real per-declaration incidents (ETP-4755 fix): GET /fiscal303/declarations above never
   // carries real blocking/warning counts — `FiscalDeclCrudHandler#declToJson` doesn't serialize
@@ -570,6 +691,15 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
   const [showCatalog,  setShowCatalog]  = useState(false);
   const [showNewDecl,  setShowNewDecl]  = useState(false);
   const [selected,     setSelected]     = useState(new Set());
+  // Row hover actions (ETP-5187) — Edit/Delete, draft rows only. `deleteTarget` holds the
+  // declaration pending confirmation (or null); `deletingId` tracks the in-flight DELETE call
+  // so the confirm dialog can disable its buttons while it's outstanding.
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deletingId,   setDeletingId]   = useState(null);
+  // Row hover "reactivate" action (ETP-5338) — submitted/submitted_ack rows only, excluding
+  // aeat_telematic (see canReactivate above). Mirrors the deleteTarget/deletingId pattern.
+  const [reactivateTarget, setReactivateTarget] = useState(null);
+  const [reactivatingId,   setReactivatingId]   = useState(null);
   // Sort state — field-selector popover (mirrors ListView.jsx's sortColumn/sortDirection
   // pattern used by the generated/Factura windows, not a generic single-toggle button).
   // `null` sortColumn = default order (year+period, most recent first).
@@ -593,10 +723,55 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
         body: JSON.stringify({ model, year: parseInt(year, 10), period, status }),
       })
         .then(r => r.ok ? r.json() : Promise.reject(r.status))
-        .then(created => setDecls(ds => [normDecl(created?.data ?? created), ...ds]))
-        .catch(() => {});
+        .then(created => setDecls(ds => [normDecl(created?.data ?? created, bcpLocale), ...ds]))
+        .catch(() => {
+          // ETP-5272 — this used to silently swallow the backend's error (a 409 when a draft
+          // already exists for the period, or any other failure), leaving the user staring at a
+          // closed modal with no created row and no explanation. Mirrors the exact toast pattern
+          // already used for delete failures (handleConfirmDelete above).
+          toast.error(t('fm.list.new_decl_failed') ?? 'No se pudo crear la declaración.');
+        });
     }
-  }, [token, apiBaseUrl, apiFetch]);
+  }, [token, apiBaseUrl, apiFetch, t, bcpLocale]);
+
+  // Row hover "delete" action (ETP-5187) — draft declarations only, gated the same
+  // way both here (caller only ever passes a draft decl into setDeleteTarget) and
+  // server-side (FiscalDeclCrudHandler#handleDeclDelete rejects anything but draft).
+  const handleConfirmDelete = useCallback(() => {
+    if (!deleteTarget) return;
+    setDeletingId(deleteTarget.id);
+    deleteDeclaration(deleteTarget.id, { token, apiBaseUrl })
+      .then((result) => {
+        if (result.ok) {
+          setDecls(ds => ds.filter(d => d.id !== deleteTarget.id));
+          setDeleteTarget(null);
+        } else {
+          toast.error(t('fm.list.delete_failed') ?? 'No se pudo eliminar la declaración.');
+        }
+      })
+      .finally(() => setDeletingId(null));
+  }, [deleteTarget, token, apiBaseUrl, t]);
+
+  // Row hover "reactivate" action (ETP-5338) — reverts a submitted/submitted_ack declaration
+  // back to draft. Gated the same way both here (caller only ever passes a
+  // canReactivate(decl) === true declaration into setReactivateTarget) and server-side
+  // (FiscalDeclCrudHandler#handleDeclPut rejects reverting an aeat_telematic declaration to
+  // draft, defense in depth). No submissionMethod is sent — persistDeclarationStatus only
+  // includes it when explicitly passed, and reactivating doesn't set one.
+  const handleConfirmReactivate = useCallback(() => {
+    if (!reactivateTarget) return;
+    setReactivatingId(reactivateTarget.id);
+    persistDeclarationStatus(reactivateTarget.id, 'draft', { token, apiBaseUrl })
+      .then((result) => {
+        if (result.ok) {
+          setDecls(ds => ds.map(d => d.id === reactivateTarget.id ? { ...d, status: 'draft' } : d));
+          setReactivateTarget(null);
+        } else {
+          toast.error(t('fm.list.reactivate_failed') ?? 'No se pudo reactivar la declaración.');
+        }
+      })
+      .finally(() => setReactivatingId(null));
+  }, [reactivateTarget, token, apiBaseUrl, t]);
 
   const yearOptions = useMemo(
     () => Array.from(new Set(decls.map(d => String(d.year)))).sort((a, b) => b - a)
@@ -607,8 +782,8 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
   const statusOptions = STATUS_FILTER_OPTIONS;
 
   const modelOptions = [
-    { value: '303', label: 'Modelo 303', badge: '303' },
-    { value: '349', label: 'Modelo 349', badge: '349' },
+    { value: '303', label: t('fm.config.m303.title') ?? 'Modelo 303', badge: '303' },
+    { value: '349', label: t('fm.config.m349.title') ?? 'Modelo 349', badge: '349' },
   ].filter(opt => activeModels[opt.value]);
 
   const activeDecls = decls.filter(d => activeModels[d.model]);
@@ -686,11 +861,11 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
         <thead>
           <tr>
             <th style={{ width: 32 }} onClick={e => e.stopPropagation()}>
-              <Checkbox
+              <CheckboxField
                 checked={allSelected}
-                onChange={toggleAll}
+                onToggle={toggleAll}
                 onClick={e => e.stopPropagation()}
-                data-testid="Checkbox__cb728e" />
+                data-testid="CheckboxField__cb728e" />
             </th>
             <th>{t('fm.col.model')}</th>
             <th>{t('fm.col.period')}</th>
@@ -699,6 +874,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             <th style={{ textAlign: 'right' }}>{t('fm.col.result')}</th>
             <th>{t('fm.col.incidents')}</th>
             <th>{t('fm.col.updated_at') ?? 'Última actualización'}</th>
+            <th style={{ width: 72 }} aria-hidden="true" />
           </tr>
         </thead>
         <tbody>
@@ -723,31 +899,65 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                   .reduce((s, k) => s + (parseFloat(computed.summary[k]) || 0), 0);
                 displayResult = { kind: 'info', amount: total };
               } else {
-                const r = computed.summary.result;
-                const kind = getResultKind(r);
+                // ETP-5272 pt.6 (4th finding) — GET /fiscal303/boxes (computeBoxes303Real above)
+                // computes purely from invoice data: no declaration id, no manualData input, so
+                // `computed.summary.result` is always box 46 ("Resultado régimen general", a
+                // sub-total under a "standard company" assumption), never the true final result
+                // (box 71, "Resultado de la liquidación"). Same class of bug already fixed in
+                // FmModel303Page.jsx's `applyComputeResult` — reuse its exact helpers (merge this
+                // row's manualOverrides, re-derive box 71) instead of trusting the raw summary, so
+                // the list and the detail page can never disagree on the same declaration's result.
+                const manualOverrides = decl.manualData?.manualOverrides ?? {};
+                const mergedBoxes = recomputeDerivedBoxes(applyOverrides(computed.boxes, manualOverrides));
+                // ETP-5393 Bug B — `??` doesn't catch NaN; require a finite number before
+                // trusting the re-derived box 71 (same guard as FmModel303Page's applyComputeResult).
+                const box71Derived = getBoxValue(mergedBoxes, 71);
+                const r = Number.isFinite(box71Derived) ? box71Derived : computed.summary.result;
+                const hasInvoices = (computed.sources?.length ?? 0) > 0;
+                const kind = deriveResultKind({ ...computed.summary, result: r }, { hasInvoices });
                 displayResult = { kind, amount: Math.abs(r) };
               }
             }
+
+            // ETP-5187 — flags this declaration as a 2nd/Nth one for the same
+            // (model, year, period): the detail page (FmModel303Page.jsx) uses this
+            // to warn + gate on "Autoliquidación rectificativa". Computed off the
+            // full `decls` list (not the filtered/sorted view) so it's correct
+            // regardless of the active filters.
+            const hasDuplicatePeriod = decls.some(d => d.id !== decl.id
+              && d.model === decl.model && d.year === decl.year && d.period === decl.period);
 
             return (
               <tr
                 key={decl.id}
                 className={fmListRowClassName({ selected: selected.has(decl.id), current: decl.current })}
-                onClick={() => onSelect?.({ ...decl, _precomputed: computed })}
+                onClick={() => onSelect?.({ ...decl, _precomputed: computed, _hasDuplicatePeriod: hasDuplicatePeriod })}
               >
                 <td onClick={e => e.stopPropagation()}>
-                  <Checkbox
+                  <CheckboxField
                     checked={selected.has(decl.id)}
-                    onChange={() => toggleSelect(decl.id)}
+                    onToggle={() => toggleSelect(decl.id)}
                     onClick={e => e.stopPropagation()}
-                    data-testid="Checkbox__cb728e" />
+                    data-testid="CheckboxField__cb728e" />
                 </td>
                 <td>
                   <ModelBadge model={decl.model} data-testid="ModelBadge__cb728e" />
                   <span className="fm-model-year" style={{ marginLeft: 6, fontWeight: 600 }}>{decl.year}</span>
                 </td>
                 <td><span className="fm-period">{decl.period}</span></td>
-                <td>{decl.type === 'ord' ? t('fm.type.ordinary') : t('fm.type.complementary')}</td>
+                {/* ETP-5338 pt.3 — "Tipo" must reflect AEAT's rectificativa flag, which the
+                    user sets on the 303 detail page's "Autoliquidación Rectificativa" checkbox
+                    (`identChecks.rectificativa`, persisted as
+                    `manualData.identification.rectificativa`). `decl.type` (DECL_TYPE, ord/com)
+                    is a genuine but DIFFERENT AEAT concept (ordinaria/complementaria) that no UI
+                    flow currently sets to "com" — every declaration is created with DECL_TYPE=O,
+                    so deriving "Tipo" from it always showed "Ordinaria". 349 declarations have no
+                    rectificativa checkbox, so this correctly falls back to "Ordinaria" for them. */}
+                <td>
+                  {decl.manualData?.identification?.rectificativa
+                    ? t('fm.type.rectificative')
+                    : t('fm.type.ordinary')}
+                </td>
                 <td>
                   <StatusText status={decl.status} submissionMethod={decl.submissionMethod} t={t} data-testid="StatusText__cb728e" />
                 </td>
@@ -767,6 +977,21 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                     data-testid="IncidentsCell__cb728e" />
                 </td>
                 <td><span className="fm-date">{decl.updatedAt ?? '—'}</span></td>
+                <td style={{ position: 'relative' }}>
+                  {isDraft && (
+                    <FmRowActions
+                      onEdit={() => onSelect?.({ ...decl, _precomputed: computed, _hasDuplicatePeriod: hasDuplicatePeriod })}
+                      onDelete={() => setDeleteTarget(decl)}
+                      deleting={deletingId === decl.id}
+                      data-testid="FmRowActions__cb728e" />
+                  )}
+                  {!isDraft && canReactivate(decl) && (
+                    <FmRowActions
+                      onReactivate={() => setReactivateTarget(decl)}
+                      reactivating={reactivatingId === decl.id}
+                      data-testid="FmRowActions__reactivate-cb728e" />
+                  )}
+                </td>
               </tr>
             );
           })}
@@ -801,21 +1026,21 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
       {/* ── Toolbar ──────────────────────────────────────────────── */}
       <div className="fm-toolbar">
         <FilterDropdown
-          label="Todos los años"
+          label={t('fm.filter.all_years') ?? 'Todos los años'}
           value={yearFilter}
           options={yearOptions}
           onChange={setYearFilter}
           data-testid="FilterDropdown__cb728e" />
         {catalogLoaded && (
           <FilterDropdown
-            label="Todos los modelos"
+            label={t('fm.filter.all_models') ?? 'Todos los modelos'}
             value={modelFilter}
             options={modelOptions}
             onChange={setModelFilter}
             data-testid="FilterDropdown__cb728e" />
         )}
         <FilterDropdown
-          label="Todos los estados"
+          label={t('fm.filter.all_statuses') ?? 'Todos los estados'}
           value={statusFilter}
           options={statusOptions}
           onChange={setStatusFilter}
@@ -894,7 +1119,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
             onClick={() => setShowNewDecl(true)}
           >
-            + Nueva declaración
+            + {t('fm.action.new_declaration') ?? 'Nueva declaración'}
           </button>
         )}
       </div>
@@ -912,6 +1137,29 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
         {tableSection}
       </div>
       {/* ── Overlays ─────────────────────────────────────────────── */}
+      {/* Mounted only while a delete is pending confirmation (matches the
+          showNewDecl/showCatalog convention below) — Dialog/DialogContent pulls
+          in lucide-react's X icon at render time even when `open` is false, so
+          keeping this unconditionally mounted needlessly drags that dependency
+          into every render of this page. */}
+      {deleteTarget && (
+        <DeleteConfirmDialog
+          open
+          count={1}
+          deleting={deletingId != null}
+          onConfirm={handleConfirmDelete}
+          onClose={() => setDeleteTarget(null)}
+          data-testid="DeleteConfirmDialog__cb728e" />
+      )}
+      {reactivateTarget && (
+        <ReactivateConfirmDialog
+          open
+          reactivating={reactivatingId != null}
+          onConfirm={handleConfirmReactivate}
+          onClose={() => setReactivateTarget(null)}
+          t={t}
+          data-testid="ReactivateConfirmDialog__cb728e" />
+      )}
       {showNewDecl && <NewDeclModal
         onConfirm={handleNewDecl}
         onClose={() => setShowNewDecl(false)}

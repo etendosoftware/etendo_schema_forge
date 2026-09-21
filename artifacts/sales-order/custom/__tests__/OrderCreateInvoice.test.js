@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// ETP-5295 — the REAL reader, not a stub: the computation blocks extracted below now call
+// `readOrderPendingDocs(data)`, so the harness feeds them the same function the component uses.
+import { readOrderPendingDocs } from '../../../../tools/app-shell/src/windows/custom/shared/orderPendingDocs.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'OrderCreateInvoice.jsx'), 'utf8');
@@ -16,9 +19,28 @@ describe('OrderCreateInvoice', () => {
     assert.match(src, /\{\s*data.*recordId.*token.*apiBaseUrl/);
   });
 
-  it('renders confirm flow only for draft orders (status DR)', () => {
+  // ETP-5255 — this test used to also assert
+  // `assert.match(src, /\{isDraft && showConfirm && createPortal\(/)`. That half is gone
+  // rather than re-pointed at the new expression, for two reasons.
+  //
+  // It was a source-text assertion, of the kind forbidden since ETP-4958. And it was pinning
+  // the defect: `isDraft` in that gate unmounted the confirm modal the instant `onRefresh()`
+  // reloaded the just-confirmed order as CO, so a failed shipment/invoice step was reported
+  // nowhere — no error, no toast, no retry path — and the expression could not be corrected
+  // without turning this test red. Re-writing the regex would have re-pinned whatever shape
+  // came next, which is the same mistake in a new form.
+  //
+  // The two real properties (the modal does not OPEN outside draft; once open it SURVIVES the
+  // DR→CO transition with its state intact, on both render paths) are asserted behaviourally
+  // in tools/app-shell/src/windows/custom/sales-order/__tests__/
+  //   OrderCreateInvoice.confirmModalLifecycle.vitest.jsx
+  // which mounts THIS module (via `@generated/...`) and drives the real open event. Verified
+  // non-vacuous: those tests fail against the pre-fix source.
+  //
+  // The `isDraft` derivation itself stays — it is a value, not a JSX shape, and it is what the
+  // behavioural tests exercise.
+  it('derives draft status from documentStatus', () => {
     assert.match(src, /const isDraft\s*=\s*status\s*===\s*'DR'/);
-    assert.match(src, /\{isDraft && showConfirm && createPortal\(/);
   });
 
   it('uses createPortal for modal rendering', () => {
@@ -134,15 +156,69 @@ describe('OrderCreateInvoice', () => {
       assert.match(src, /const discountFactor\s*=\s*\(isPreCompletion && discountPct > 0\) \? \(1 - discountPct \/ 100\) : 1/);
     });
 
-    it('computes grandTotal as round(net × factor) + round(tax × factor), not round(gross × factor) (ETP-4017)', () => {
-      // Anti-double-rounding rule: see DocumentTotalsPanel / documentTotals.js.
-      // The displayed total must equal sum of displayed components so it agrees
-      // with the order's right panel and with AEAT-compliant printed invoices.
+    it('computes grandTotal as grossBase directly, not totalLines + a re-derived tax delta (ETP-5132 double-discount fix, supersedes ETP-4017)', () => {
+      // ETP-5132 (confirm-modal double-discount regression — see
+      // docs/bug-reports/2026-09-09-etp5132-confirm-modal-double-discount.md):
+      // grossBase (d.grandTotalAmount) is ALREADY GET-time-compensated for a
+      // pending total discount by the backend (ETP-4029) whenever the order is
+      // still in DR. The old ETP-4017 formula re-applied discountFactor on top
+      // of that already-discounted value, double-discounting the tax portion.
+      // totalLines (the Subtotal row) still needs the client-side factor —
+      // netBase/summedLineAmount is never backend-compensated — only the
+      // grandTotal (Total row) computation itself changes.
       assert.match(src, /const round2\s*=\s*\(n\) => Math\.round\(\(n \+ Number\.EPSILON\) \* 100\) \/ 100/);
       assert.match(src, /const grossBase\s*=\s*Number\(d\.grandTotalAmount\) \|\| 0/);
       assert.match(src, /const netBase\s*=\s*Number\(d\.summedLineAmount \?\? d\.totalLines \?\? grossBase\) \|\| 0/);
       assert.match(src, /const totalLines\s*=\s*round2\(netBase \* discountFactor\)/);
-      assert.match(src, /const grandTotal\s*=\s*totalLines \+ round2\(\(grossBase - netBase\) \* discountFactor\)/);
+      assert.match(src, /const grandTotal\s*=\s*grossBase;/);
+      assert.doesNotMatch(
+        src,
+        /const grandTotal\s*=\s*totalLines \+ round2\(\(grossBase - netBase\) \* discountFactor\)/,
+        'the superseded ETP-4017 formula must not be reintroduced — it double-discounts grossBase',
+      );
+    });
+  });
+
+  // ETP-5132 — proves the double-discount fix with concrete numbers, not just
+  // the literal-formula regex above. Extracts the REAL totals computation
+  // block from the live source (not a hand-copied re-implementation) and
+  // executes it via `new Function(...)`, mirroring the extraction pattern
+  // used for the needsInvoice/needsShip computation further below in this
+  // file — so this test tracks the actual arithmetic/branching and fails if
+  // the double-discount regression is reintroduced.
+  describe('ConfirmModal grandTotal numeric proof (ETP-5132 double-discount fix)', () => {
+    function extractTotalsBlock(source) {
+      const re = /const discountPct[\s\S]*?const grandTotal\s*=\s*grossBase;/;
+      const m = source.match(re);
+      assert.ok(m, 'could not locate the totals computation block (const discountPct … const grandTotal = grossBase;)');
+      return m[0];
+    }
+
+    function evaluate(d) {
+      const block = extractTotalsBlock(src);
+      // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+      const fn = new Function('d', `${block}\nreturn { discountFactor, totalLines, grandTotal };`);
+      return fn(d);
+    }
+
+    it('does not double-discount a Draft order whose grandTotalAmount is already GET-time-compensated (ETP-5132)', () => {
+      // grossBase simulates ETP-4029's GET-time compensation: the backend
+      // already applied the pending 10% total discount to grandTotalAmount
+      // (100 -> 90). netBase (summedLineAmount) simulates the raw,
+      // never-backend-compensated line total (100).
+      const { discountFactor, totalLines, grandTotal } = evaluate({
+        documentStatus: 'DR',
+        etgoTotalDiscount: 10,
+        grandTotalAmount: 90,
+        summedLineAmount: 100,
+      });
+      assert.equal(discountFactor, 0.9);
+      assert.equal(totalLines, 90, 'Subtotal row still applies the client-side factor to the raw netBase');
+      assert.equal(grandTotal, 90, 'Total row must equal grossBase as-is — not double-discounted');
+      // Regression guard: the superseded ETP-4017 formula would have produced
+      // 81 (90 + round2((90 - 100) * 0.9) = 90 - 9 = 81), silently discounting
+      // the already-compensated grossBase a second time.
+      assert.notEqual(grandTotal, 81);
     });
   });
 
@@ -390,23 +466,22 @@ describe('OrderCreateInvoice', () => {
     });
   });
 
-  // ETP-4717 (Pair 2 — P2): the Send button/modal must only be available once
-  // the order is Confirmed (CO), not while it is still Draft (DR). Grid and
-  // Form-view must agree on the same rule.
-  describe('Send button visibility gated by document status (ETP-4717)', () => {
-    it('does NOT show the Send button while the order is still Draft (DR)', () => {
-      assert.doesNotMatch(src, /\{\(isDraft \|\| isCompleted\) && <SendDocumentButton/);
+  // ETP-4717 (Pair 2 — P2), relocated by ETP-5260: the Send button itself
+  // (SendDocumentButton) moved to the topbarSecondary slot
+  // (OrderCreateInvoiceSecondaryActions, `showSend={isCompleted}` — CO only,
+  // never true while DR) — see
+  // artifacts/sales-order/custom/__tests__/OrderCreateInvoiceSecondaryActions.test.js.
+  // This component still owns the SendDocumentModal (PDF/documentType
+  // context), opened via the `sales-order:open-send-modal` window event and
+  // gated on isCompleted only, matching the button's own gate.
+  describe('SendDocumentModal integration (ETP-5260 — button moved out, modal stays)', () => {
+    it('no longer renders a SendDocumentButton at all', () => {
+      assert.doesNotMatch(src, /SendDocumentButton/);
     });
 
-    it('shows the Send button only when the order is Completed (CO)', () => {
-      assert.match(src, /\{isCompleted && <SendDocumentButton/);
-    });
-
-    it('does NOT gate the SendDocumentModal render on isDraft', () => {
-      assert.doesNotMatch(
-        src,
-        /\{\(isDraft \|\| isCompleted\) && showSend && createPortal\(\s*<SendDocumentModal/,
-      );
+    it('listens to the sales-order:open-send-modal custom event to open its own SendDocumentModal', () => {
+      assert.match(src, /window\.addEventListener\(['"]sales-order:open-send-modal['"]/);
+      assert.match(src, /window\.removeEventListener\(['"]sales-order:open-send-modal['"]/);
     });
 
     it('gates the SendDocumentModal render on isCompleted only', () => {
@@ -467,8 +542,23 @@ describe('OrderCreateInvoice', () => {
     function extractNeedsBlocks(source, needsVarName) {
       // ETP-4567: post-fix source compares against 0 with !== instead of the
       // clamp-dependent > 0 (which always failed for a floored-to-zero pending).
+      // ETP-5295 — ManageDocsLauncher's needs* lines carry an extra `fetched != null && `
+      // guard (hooks hoisted above the loading early-return, so the derivation must be
+      // null-safe); the main-component occurrence has no such guard. The optional
+      // non-capturing group matches both.
+      //
+      // ETP-5295 — the block now STARTS one line earlier, at the
+      // `const { needsPrimaryDoc, needsInvoiceDoc } = readOrderPendingDocs(data);`
+      // destructuring, instead of at `const ${needsVarName}`. That line is part of the
+      // computation under test now: without it, `needsPrimaryDoc`/`needsInvoiceDoc` would be
+      // free variables inside the `new Function(...)` harness and the eval threw
+      // `ReferenceError: needsShip is not defined`. Including it keeps the harness feeding on
+      // the LITERAL source (the whole point of this suite) rather than on a hand-copied
+      // re-implementation of the `??` fallback.
       const re = new RegExp(
-        `const ${needsVarName}[\\s\\S]*?const needsInvoice\\s*=\\s*totalPending !== 0 && !invoiceDraft;`,
+        `const \\{ needsPrimaryDoc, needsInvoiceDoc \\} = readOrderPendingDocs\\(data\\);`
+        + `[\\s\\S]*?const ${needsVarName}\\s*=\\s*(?:fetched != null && )?\\(?needsPrimaryDoc \\?\\? \\(qtyPending !== 0`
+        + `[\\s\\S]*?const needsInvoice\\s*=\\s*(?:fetched != null && )?\\(?needsInvoiceDoc \\?\\? \\(totalPending !== 0 && !invoiceDraft\\)\\)?;`,
         'g',
       );
       return [...source.matchAll(re)].map(m => m[0]);
@@ -482,11 +572,41 @@ describe('OrderCreateInvoice', () => {
       assert.equal(needsBlocks.length, 2);
     });
 
-    function evaluate(siteIndex, { grandTotalAmount, invoicesComplete = [], shipmentsDraft = [], invoiceDraft = null }) {
+    // ETP-5295 — two free variables remain in the extracted source and each is wired
+    // DELIBERATELY, not merely "made to run":
+    //
+    //   `fetched`              — only present in the ManageDocsLauncher occurrence's
+    //                            `fetched != null && ` guard. Passed as always-loaded (`true`):
+    //                            this suite's concern is the pending arithmetic, not the loading
+    //                            state, which `useOrderWindow`/launcher render tests cover.
+    //   `readOrderPendingDocs` — the REAL shared reader is injected (imported at the top of this
+    //                            file), NOT a stub. So what the annotation branch does is decided
+    //                            by production code, and the default `data` below (which carries
+    //                            only `grandTotalAmount`, no `needsPrimaryDoc`/`needsInvoiceDoc`)
+    //                            makes it return `undefined` for both flags. `undefined` is what
+    //                            makes `??` fall through to the local derivation — which is
+    //                            exactly the arithmetic the ETP-4567 cases below were written to
+    //                            measure, so they keep measuring it and nothing else. Hard-coding
+    //                            a `() => ({})` stub would have measured the same thing today but
+    //                            would stop tracking the real absent-annotation contract (e.g. a
+    //                            reader that ever returned `false` instead of `undefined` for an
+    //                            absent flag would break every caller and not one test here).
+    //
+    // `annotations` lets the ETP-5295 cases further down flip the other branch on, through the
+    // same real reader and the same literal source.
+    function evaluate(siteIndex, {
+      grandTotalAmount, invoicesComplete = [], shipmentsDraft = [], invoiceDraft = null, annotations = {},
+    }) {
       const body = `${compBlocks[siteIndex]}\n${needsBlocks[siteIndex]}\nreturn { qtyPending, totalPending, needsShip, needsInvoice };`;
       // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
-      const fn = new Function('data', 'orderLines', 'invoicesComplete', 'shipmentsDraft', 'invoiceDraft', body);
-      return fn({ grandTotalAmount }, [], invoicesComplete, shipmentsDraft, invoiceDraft);
+      const fn = new Function(
+        'data', 'orderLines', 'invoicesComplete', 'shipmentsDraft', 'invoiceDraft', 'fetched', 'readOrderPendingDocs',
+        body,
+      );
+      return fn(
+        { grandTotalAmount, ...annotations },
+        [], invoicesComplete, shipmentsDraft, invoiceDraft, true, readOrderPendingDocs,
+      );
     }
 
     const sites = [
@@ -539,6 +659,87 @@ describe('OrderCreateInvoice', () => {
       const { needsShip, needsInvoice } = evaluate(1, { grandTotalAmount: -450.75 });
       const nothingToManage = !needsShip && !needsInvoice;
       assert.equal(nothingToManage, false);
+    });
+    // ETP-5295 — the branch the ETP-4567 cases above deliberately never reach: a record that
+    // DOES carry the backend annotations. The whole point of the fix is that the server's answer
+    // wins over this component's own arithmetic, so that the list kebab (which has nothing but
+    // the annotation) and this component (which has the real shipments/invoices/lines) can never
+    // disagree again. Each case below sets up local arithmetic that would produce the OPPOSITE
+    // answer, so a regression that dropped the annotation — or subordinated it to the local
+    // derivation — turns the test red instead of silently reinstating two sources of truth.
+    describe('backend annotation wins over the local derivation (ETP-5295)', () => {
+      for (const [siteName, siteIndex] of sites) {
+        describe(siteName, () => {
+          it('needsInvoiceDoc:false suppresses an invoice entry the local arithmetic would have set true', () => {
+            // Local derivation says TRUE (100 ordered, nothing invoiced, no draft).
+            const local = evaluate(siteIndex, { grandTotalAmount: 100 });
+            assert.equal(local.needsInvoice, true, 'precondition: local arithmetic must say true here');
+
+            const { needsInvoice } = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              annotations: { needsInvoiceDoc: false },
+            });
+            assert.equal(needsInvoice, false);
+          });
+
+          it('needsPrimaryDoc:false suppresses a shipment entry the local arithmetic would have set true', () => {
+            const { needsShip } = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              annotations: { needsPrimaryDoc: false },
+            });
+            assert.equal(needsShip, false);
+          });
+
+          it('needsInvoiceDoc:true forces the invoice entry on even though the document is fully invoiced locally', () => {
+            const local = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              invoicesComplete: [{ grandTotalAmount: 100, documentStatus: 'CO' }],
+            });
+            assert.equal(local.needsInvoice, false, 'precondition: local arithmetic must say false here');
+
+            const { needsInvoice } = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              invoicesComplete: [{ grandTotalAmount: 100, documentStatus: 'CO' }],
+              annotations: { needsInvoiceDoc: true },
+            });
+            assert.equal(needsInvoice, true);
+          });
+
+          it('needsPrimaryDoc:true forces the shipment entry on even though a draft shipment already covers it', () => {
+            const { needsShip } = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              shipmentsDraft: [{ documentStatus: 'DR' }],
+              annotations: { needsPrimaryDoc: true },
+            });
+            assert.equal(needsShip, true);
+          });
+
+          it("accepts the AD string form ('N' is false, not truthy)", () => {
+            const { needsShip, needsInvoice } = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              annotations: { needsPrimaryDoc: 'N', needsInvoiceDoc: 'N' },
+            });
+            assert.equal(needsShip, false);
+            assert.equal(needsInvoice, false);
+          });
+        });
+      }
+
+      // `readAnnotatedFlag` returns `undefined` — never `false` — for an ABSENT annotation, and
+      // the fallback operator is `??`, never `||`. That pairing is the load-bearing detail: with
+      // `||`, a genuine `needsInvoiceDoc: false` from the server would be discarded and the local
+      // arithmetic would silently take over, reinstating precisely the two-sources-of-truth
+      // disagreement this ticket removed. A source-text assertion is used here on purpose — the
+      // difference between `??` and `||` is invisible to a behavioural test whenever the local
+      // derivation happens to agree with the annotation.
+      it('uses ?? (not ||) so an explicit false annotation is not discarded', () => {
+        for (const block of needsBlocks) {
+          assert.match(block, /needsPrimaryDoc \?\? \(/);
+          assert.match(block, /needsInvoiceDoc \?\? \(/);
+          assert.doesNotMatch(block, /needsPrimaryDoc \|\|/);
+          assert.doesNotMatch(block, /needsInvoiceDoc \|\|/);
+        }
+      });
     });
   });
 
@@ -664,8 +865,12 @@ describe('OrderCreateInvoice', () => {
     describe('ConfirmModal.handleConfirm — Step 2 (createShipment)', () => {
       function resolveMessage(e, res) {
         const expr = extractCallExprAround(src, 'soOrderConfirmedShipmentError', 'throw new Error(');
-        const fn = new Function('e', 'res', 'ui', `return ${expr};`);
-        return fn(e, res, (k) => k);
+        // ETP-5276: the raw backend message now passes through translateBackendError(msg, ui)
+        // before being appended to the ui() prefix. Stub it as identity — the point of this
+        // test is that the RAW backend message survives end-to-end, not re-testing
+        // translateBackendError's own mapping table (covered by backendErrors.test.js).
+        const fn = new Function('e', 'res', 'ui', 'translateBackendError', `return ${expr};`);
+        return fn(e, res, (k) => k, (msg) => msg);
       }
 
       it('appends the real backend message after the ui() prefix for a flat 400 body', () => {
@@ -698,7 +903,11 @@ describe('OrderCreateInvoice', () => {
 
       function resolveMessage(e, res) {
         const expr = extractCallExprAfter(createDocsModalSrc, 'action/createShipment', 'throw new Error(');
-        return new Function('e', 'res', `return ${expr};`)(e, res);
+        // ETP-5276: the expression itself calls translateBackendError(msg, ui) — both must be
+        // in scope even though this call site has no ui() prefix of its own. Stub identity, same
+        // rationale as the ConfirmModal Step 2 block above.
+        return new Function('e', 'res', 'ui', 'translateBackendError', `return ${expr};`)(
+          e, res, (k) => k, (msg) => msg);
       }
 
       it('surfaces the real backend message for a flat {status,message} 400 body', () => {
