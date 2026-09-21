@@ -37,7 +37,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:General
 
 // @sf-generated-start requiredHeaderFields:General
-const requiredHeaderFields = ['organization', 'name', 'gAAP', 'currency', 'allowNegative'];
+const requiredHeaderFields = ['organization', 'name', 'gAAP', 'currency'];
 // @sf-generated-end requiredHeaderFields:General
 
 // @sf-generated-start addLineFields:Dimensiones

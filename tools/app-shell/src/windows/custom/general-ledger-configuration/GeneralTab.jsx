@@ -1,16 +1,19 @@
 import { useUI } from '@/i18n';
-import { ToggleRow } from '@/components/contract-ui';
 import SectionShell from './SectionShell.jsx';
 import Field from './Field.jsx';
 import { CURRENCY_OPTIONS } from './mockCatalogs.js';
 
 /**
- * General tab — Identidad del esquema · Calendario y moneda · Políticas contables.
+ * General tab — Identidad del esquema · Calendario y moneda.
  * Field binding follows the LOCKED "Field data-binding treatment" table in
  * figma-spec.md:
  *  - editable: name, accrual (Devengo/Caja), description, currency
  *  - read-only org-scoped: fiscal calendar, organization (sourced live by the
  *    aggregate handler from the org's calendar + name; mock seed is the fallback)
+ *  - hidden, backend-only: allowNegative (`AllowNegative`) — decisions.json marks it
+ *    `system`-visibility and the handler's write path no longer accepts a
+ *    client-supplied value (ETP-4947); the "Políticas contables" section that used to
+ *    hold its toggle was removed entirely since it had no other content.
  */
 export default function GeneralTab({ general, orgInfo, currencyOptions = CURRENCY_OPTIONS, setGeneralField, errors = {} }) {
   const ui = useUI();
@@ -84,21 +87,6 @@ export default function GeneralTab({ general, orgInfo, currencyOptions = CURRENC
             required
             error={errors.currency}
             data-testid="glc-field-currency"
-          />
-        </div>
-      </SectionShell>
-      {/* Políticas contables */}
-      <SectionShell
-        title={ui('glc.section.policies.title')}
-        subtitle={ui('glc.section.policies.subtitle')}
-        data-testid="glc-section-policies"
-      >
-        <div className="max-w-2xl">
-          <ToggleRow
-            label={ui('glc.toggle.allowNegative')}
-            checked={Boolean(general.allowNegative)}
-            onCheckedChange={(checked) => setGeneralField('allowNegative', checked)}
-            data-testid="glc-toggle-allow-negative"
           />
         </div>
       </SectionShell>

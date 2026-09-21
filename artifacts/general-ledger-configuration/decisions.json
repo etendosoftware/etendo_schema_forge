@@ -43,8 +43,7 @@
         },
         "automaticPeriodControl": {},
         "allowNegative": {
-          "visibility": "editable",
-          "section": "policies"
+          "visibility": "system"
         },
         "historyDays": {
           "visibility": "system"

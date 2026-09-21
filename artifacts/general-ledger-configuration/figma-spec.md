@@ -45,6 +45,12 @@ Three stacked sections, divided by hairline rules.
    > "Mark as non-functional" = a subtle indicator the value isn't persisted (e.g. a small "no guardado"/
    > "sin conexión a datos" helper text or an info icon with tooltip). Decide a clean treatment; it must be
    > obvious to a developer/QA that these two don't save, without shouting at the end user.
+   >
+   > **ETP-4947 update:** this section previously also rendered a fourth toggle, "Permitir
+   > negativos" (`AllowNegative`) — not part of the Figma mock's three toggles above, it was
+   > the only *implemented* one in this section. It has been removed entirely: no longer
+   > rendered, no longer settable by the backend. See the LOCKED field data-binding table
+   > below.
 
 ## Tab 2 — Valores por defecto
 **Account selector** control style (reused across this tab): a pill showing a **grey rounded code badge**
@@ -95,6 +101,7 @@ The General tab mixes backed, read-only-from-elsewhere, and unbacked fields. Bin
 | Criterio contable | **editable select** → `accrual` (`IsAccrual` bool → Devengo/Caja) |
 | Descripción | **editable** → `description` |
 | Moneda principal | **editable select** → `currency` (required) |
+| Permitir negativos | **hidden, internally fixed to N** — `allowNegative` (`AllowNegative`) is `system`-visibility; backend rejects any client-supplied write (ETP-4947). The toggle and its "Políticas contables" section were removed from the General tab entirely. |
 | Asientos en periodos cerrados | **editable toggle** → `automaticPeriodControl`, **bound INVERTED** (toggle ON ⇒ `AutoPeriodControl = N`) so the label stays truthful |
 | **Calendario fiscal** | **READ-ONLY**, real value read from `AD_OrgInfo.C_Calendar_ID` (Phase-3 backend supplies it). Not editable here. The red start/end validation in the mock is just a mock state — for read-only, show the value. |
 | **Organización** | **READ-ONLY**, real value from `AD_OrgInfo` (schema→org scope). Not editable here. |

@@ -28,11 +28,11 @@ The current frontend is production-shaped but still backed by local mock data be
 
 ### General
 
-Three sections:
+Two sections (the former "Políticas contables" section, which held only the `Allow
+negative` toggle, was removed entirely — see below):
 
 1. **Identidad del esquema**
 2. **Calendario y moneda**
-3. **Políticas contables**
 
 Backed editable fields:
 
@@ -40,11 +40,14 @@ Backed editable fields:
 - `Criterio contable` → `accrual`
 - `Descripción` → `description`
 - `Moneda principal` → `currency`
-- `Allow negative` → direct binding of `Allownegative`
 
-Hidden-but-kept backend field:
+Hidden-but-kept backend fields:
 
 - `Esquema contable` / `gAAP` stays persisted in the ledger but is not user-editable in this custom surface.
+- `Allow negative` / `Allownegative` — `decisions.json` marks `allowNegative` as
+  `system`-visibility and `GeneralLedgerConfigurationHandler.applyGeneralChanges()` no
+  longer accepts a client-supplied value for it; the checkbox was removed entirely from
+  the General tab (ETP-4947). The value is still reported on GET via `buildGeneral()`.
 
 Read-only fields sourced from the organization-level backend relation in the delivered implementation:
 

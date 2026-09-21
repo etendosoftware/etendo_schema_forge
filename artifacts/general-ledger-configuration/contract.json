@@ -1,8 +1,8 @@
 {
-  "version": "0.8.0",
+  "version": "0.9.0",
   "generatedAt": "2026-06-28T15:34:57.400Z",
-  "updatedAt": "2026-07-21T12:35:18.509Z",
-  "checksum": "46ac01d9fae4b6af",
+  "updatedAt": "2026-09-21T13:55:28.582Z",
+  "checksum": "18154b38e38ca14d",
   "frontendContract": {
     "window": {
       "id": "125",
@@ -172,29 +172,6 @@
             }
           },
           {
-            "name": "allowNegative",
-            "apiKey": "allowNegative",
-            "column": "Allownegative",
-            "label": "Allow negative",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "defaultValue": "N",
-            "section": "policies",
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            }
-          },
-          {
             "name": "accrual",
             "apiKey": "accrual",
             "column": "IsAccrual",
@@ -230,13 +207,6 @@
             "derivation": {
               "type": "computed",
               "source": "OT"
-            }
-          },
-          {
-            "name": "allowNegative",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
             }
           },
           {
@@ -1760,7 +1730,7 @@
             "apiKey": "allowNegative",
             "column": "Allownegative",
             "type": "boolean",
-            "visibility": "editable",
+            "visibility": "system",
             "required": true
           },
           {
@@ -3693,14 +3663,6 @@
         "description": "Default value for 'accrual' in General should be a string"
       },
       {
-        "id": "t-default-value-type-General-allowNegative",
-        "category": "default-value-type",
-        "entity": "General",
-        "field": "allowNegative",
-        "runner": "node",
-        "description": "Default value for 'allowNegative' in General should be a string"
-      },
-      {
         "id": "t-default-value-type-General-gAAP",
         "category": "default-value-type",
         "entity": "General",
@@ -4147,14 +4109,6 @@
         "field": "accrual",
         "runner": "node",
         "description": "Field 'accrual' should be present in General"
-      },
-      {
-        "id": "t-field-presence-General-allowNegative",
-        "category": "field-presence",
-        "entity": "General",
-        "field": "allowNegative",
-        "runner": "node",
-        "description": "Field 'allowNegative' should be present in General"
       },
       {
         "id": "t-field-presence-General-currency",
@@ -4715,14 +4669,6 @@
         "field": "accrual",
         "runner": "node",
         "description": "Field 'accrual' should have type 'boolean' in General"
-      },
-      {
-        "id": "t-field-type-General-allowNegative",
-        "category": "field-type",
-        "entity": "General",
-        "field": "allowNegative",
-        "runner": "node",
-        "description": "Field 'allowNegative' should have type 'boolean' in General"
       },
       {
         "id": "t-field-type-General-currency",
@@ -5964,6 +5910,14 @@
         "description": "System field 'active' should exist in backend but not frontend for General"
       },
       {
+        "id": "t-system-field-General-allowNegative",
+        "category": "system-field",
+        "entity": "General",
+        "field": "allowNegative",
+        "runner": "node",
+        "description": "System field 'allowNegative' should exist in backend but not frontend for General"
+      },
+      {
         "id": "t-system-field-General-assetPositive",
         "category": "system-field",
         "entity": "General",
@@ -6513,24 +6467,24 @@
       }
     ],
     "summary": {
-      "total": 365,
+      "total": 363,
       "byCategory": {
         "action-endpoint": 1,
         "crud-flags": 4,
-        "default-value-type": 6,
+        "default-value-type": 5,
         "displaylogic-evaluable": 14,
         "displaylogic-valid": 14,
-        "field-presence": 71,
-        "field-type": 71,
+        "field-presence": 70,
+        "field-type": 70,
         "readonlylogic-evaluable": 2,
         "readonlylogic-valid": 2,
         "rule-declared": 33,
         "selector-endpoint": 56,
-        "system-field": 87,
+        "system-field": 88,
         "visibility": 4
       },
       "byRunner": {
-        "node": 365,
+        "node": 363,
         "junit": 0
       }
     }
