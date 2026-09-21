@@ -414,10 +414,11 @@ function adaptMatrix(matrix, menuIndex) {
 
 /**
  * ETP-5402 — adapts the backend's `reportsMatrix` (the Informes subsection) — see
- * `adaptCategoryMatrix`. Exported so `RolesOverviewPage.jsx` can merge this into the
- * per-category "Informes" sub-block alongside the real-window rows from `adaptMatrix`.
+ * `adaptCategoryMatrix`. Not exported, same as `adaptMatrix` — consumed only through
+ * `useRolesOverviewData()`'s `reportsMatrix` field, which `RolesAccessMatrix.jsx` then
+ * merges into its per-category "Informes" sub-block alongside `adaptMatrix`'s rows.
  */
-export function adaptReportsMatrix(reportsMatrix, menuIndex) {
+function adaptReportsMatrix(reportsMatrix, menuIndex) {
   return adaptCategoryMatrix(reportsMatrix, menuIndex, 'reports');
 }
 
