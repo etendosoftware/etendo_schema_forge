@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { translateBackendError } from '@/lib/backendErrors.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI } from '@/i18n';
 import ConfirmGoodsReceiptModal from './ConfirmGoodsReceiptModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
@@ -17,6 +19,7 @@ import { useDocumentAction } from '@/hooks/useDocumentAction';
 export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl, onRefresh }) {
   const ui = useUI();
   const navigate = useNavigate();
+  const apiFetch = useApiFetch();
   const [showConfirm, setShowConfirm] = useState(false);
   const [showInvoiceConfirm, setShowInvoiceConfirm] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -25,6 +28,20 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
   const [confirmedDocs, setConfirmedDocs] = useState(null);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
   const resultNavigatedRef = useRef(false);
+
+  // Quote inputs — mirrors BulkInvoiceFromReceipt.jsx's own quote (and GoodsShipmentActions'
+  // identical single-record wiring) exactly; see either for the full rationale. Only
+  // meaningful when the receipt has NO linked purchase order — createFromReceipt's linked-PO
+  // branch prices from the order via OrderLine.class in Core, and this button sends no line
+  // overrides, so a quote computed from just this receipt's own lines would risk disagreeing
+  // with what actually gets billed. `hasLinkedOrder` is derived from the same single-record
+  // enrichment `data` already carries.
+  const [selectedPriceListId, setSelectedPriceListId] = useState('');
+  const [lineDetails, setLineDetails] = useState(null);
+  const [pendingByLine, setPendingByLine] = useState(null);
+  const [orderLinePrices, setOrderLinePrices] = useState({});
+  const [tariffPrices, setTariffPrices] = useState({});
+  const hasLinkedOrder = Array.isArray(data?.linkedOrders) && data.linkedOrders.length > 0;
 
   const isCompleted = data?.documentStatus === 'CO';
   const isFullyInvoiced = (parseFloat(data?.invoiceStatus ?? 0)) >= 100;
@@ -149,6 +166,102 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
     }
   }, [confirmedDocs, onRefresh, ui]);
 
+  // Fetches this receipt's own lines (product + salesOrderLine) and its pending-quantity map.
+  // Skipped entirely when a linked order exists (see hasLinkedOrder above).
+  useEffect(() => {
+    if (!showInvoiceConfirm || hasLinkedOrder || !recordId) {
+      setLineDetails(null);
+      setPendingByLine(null);
+      setOrderLinePrices({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const [lineRes, pendingRes] = await Promise.all([
+        apiFetch(`${base}/goods-receipt/goodsReceiptLine?parentId=${recordId}&_startRow=0&_endRow=200`, { baseUrl: '', token })
+          .catch(() => null),
+        apiFetch(`${base}/goods-receipt/goodsReceipt/${recordId}/action/pendingInvoiceLines`, { baseUrl: '', token })
+          .catch(() => null),
+      ]);
+      if (cancelled) return;
+
+      const lines = lineRes?.ok ? (await lineRes.json())?.response?.data || [] : [];
+      const details = {};
+      lines.forEach(l => { details[l.id] = { product: l.product, salesOrderLine: l.salesOrderLine || null }; });
+      setLineDetails(details);
+
+      const pendingData = pendingRes?.ok ? (await pendingRes.json())?.response?.data || [] : [];
+      const pendingMap = {};
+      pendingData.forEach(item => { pendingMap[item.lineId] = Number(item.pendingQty) || 0; });
+      setPendingByLine(pendingMap);
+
+      const orderLineIds = [...new Set(Object.values(details).map(d => d.salesOrderLine).filter(Boolean))];
+      const prices = {};
+      await Promise.all(orderLineIds.map(async (id) => {
+        try {
+          const res = await apiFetch(`${base}/purchase-order/lines/${id}`, { baseUrl: '', token });
+          if (res.ok) {
+            const ol = (await res.json())?.response?.data?.[0];
+            if (ol) prices[id] = Number(ol.unitPrice) || 0;
+          }
+        } catch { /* a line whose order-line price can't be resolved just contributes nothing */ }
+      }));
+      if (!cancelled) setOrderLinePrices(prices);
+    })();
+    return () => { cancelled = true; };
+  }, [showInvoiceConfirm, hasLinkedOrder, recordId, base, apiFetch, token]);
+
+  // Tariff prices for lines with no linked order line — reactive to the Tarifa selection.
+  useEffect(() => {
+    if (!lineDetails || !selectedPriceListId) { setTariffPrices({}); return; }
+    const products = [...new Set(
+      Object.values(lineDetails).filter(d => !d.salesOrderLine).map(d => d.product).filter(Boolean),
+    )];
+    if (products.length === 0) { setTariffPrices({}); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch(
+          `${base}/purchase-invoice/lines/selectors/M_Product_ID?limit=500&offset=0&priceList=${encodeURIComponent(selectedPriceListId)}`,
+          { baseUrl: '', token },
+        );
+        if (!res.ok || cancelled) return;
+        const items = (await res.json())?.items || [];
+        const prices = {};
+        items.forEach(item => {
+          if (!item.id || !products.includes(item.id)) return;
+          const std = Number(item._aux?._PSTD);
+          if (std) prices[item.id] = std;
+        });
+        if (!cancelled) setTariffPrices(prices);
+      } catch { /* products left unpriced just don't contribute to the quote */ }
+    })();
+    return () => { cancelled = true; };
+  }, [lineDetails, selectedPriceListId, base, apiFetch, token]);
+
+  const quoteAmount = useMemo(() => {
+    if (!lineDetails || !pendingByLine) return null;
+    let sum = 0;
+    let resolvedAny = false;
+    for (const [lineId, qty] of Object.entries(pendingByLine)) {
+      if (!qty) continue;
+      const detail = lineDetails[lineId];
+      if (!detail) continue;
+      const price = detail.salesOrderLine
+        ? orderLinePrices[detail.salesOrderLine]
+        : tariffPrices[detail.product];
+      if (price != null) {
+        sum += qty * price;
+        resolvedAny = true;
+      }
+    }
+    return resolvedAny ? sum : null;
+  }, [lineDetails, pendingByLine, orderLinePrices, tariffPrices]);
+
+  const cardAmountLabel = quoteAmount != null
+    ? formatCurrency(data?.['etgoCurrency$_identifier'] || data?.['currency$_identifier'] || '', quoteAmount)
+    : undefined;
+
   const handleCreateInvoice = async (priceListId) => {
     if (creatingInvoice) return;
     setCreatingInvoice(true);
@@ -207,7 +320,10 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
           // Fix (not part of ETP-5260): was `var(--status-info-fg)` — a badge-text token,
           // not a button-background token — which rendered a saturated blue instead of
           // the dark gray used by the real `Confirmar` button. Same pattern as ETP-4781.
-          style={{ ...textBtn, border: '1px solid var(--status-info-border)', background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
+          // The `1px solid var(--status-info-border)` ring was a leftover from that same
+          // badge styling — the real `Confirmar` button (DraftModeConfirmButton) has no
+          // border at all, just the dark fill.
+          style={{ ...textBtn, border: 'none', background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
           // Hover to match the shared Confirm button's `hover:bg-primary/90` (90% opacity).
           onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--primary) / 0.9)'; }}
           onMouseLeave={e => { e.currentTarget.style.background = 'hsl(var(--primary))'; }}
@@ -240,12 +356,15 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
         <CreateInvoiceConfirmModal
           data={data}
           loading={creatingInvoice}
+          pendingQtyUrl={`${base}/goods-receipt/goodsReceipt/${recordId}/action/pendingInvoiceLines`}
+          cardAmountLabel={cardAmountLabel}
           showPriceListPicker
           isSOTrx={false}
           apiBaseUrl={apiBaseUrl}
           token={token}
           onConfirm={handleCreateInvoice}
           onClose={() => setShowInvoiceConfirm(false)}
+          onPriceListChange={setSelectedPriceListId}
         />
       )}
 
