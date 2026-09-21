@@ -64,16 +64,10 @@ describe('ConfirmWithCreditButton (return-to-vendor)', () => {
     expect(screen.getByTestId('action-confirm-with-credit')).not.toBeDisabled();
   });
 
-  it('renders create-return-invoice button in CO status when no CO invoice exists', () => {
-    render(
-      <ConfirmWithCreditButton
-        {...BASE_PROPS}
-        data={{ documentStatus: 'CO', returnInvoices: [{ documentStatus: 'DR' }] }}
-      />,
-    );
-    expect(screen.getByTestId('action-create-return-invoice')).toBeInTheDocument();
-  });
-
+  // The duplicate-invoice gate (hasReturnInvoice flag vs. returnInvoices array fallback)
+  // is shared behaviour — covered once in
+  // shared/__tests__/ConfirmWithCreditButtonBase.vitest.jsx. What stays here is the
+  // wiring this window owns: that it renders the base and forwards its own `data`.
   it('does NOT render create-return-invoice button when a CO invoice already exists', () => {
     render(
       <ConfirmWithCreditButton

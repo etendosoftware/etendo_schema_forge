@@ -106,11 +106,18 @@ function renderSavedPanel({ data = {}, panelProps = {}, ...fetchOpts } = {}) {
   return { ...utils, props };
 }
 
-/** Open the add form on a new-record panel and pick the mocked candidate. */
-async function openAddAndPickCandidate() {
+/**
+ * Open the add form on a new-record panel and pick the mocked candidate.
+ *
+ * ETP-5381: the draft picker runs in MULTI-select mode (one rectification row per selected
+ * invoice), so a pick is now tick-then-confirm rather than click-to-close, and the draft field's
+ * trigger is labelled `rectifySelectInvoices` instead of the old "Seleccionar...".
+ */
+async function openAddAndPickCandidate(id = 'inv-orig-9') {
   fireEvent.click(await screen.findByTestId('btn__addFirstRectificacion'));
-  fireEvent.click(screen.getByText('Seleccionar...'));
-  fireEvent.click(await screen.findByText('10000090'));
+  fireEvent.click(screen.getByText('rectifySelectInvoices'));
+  fireEvent.click(await screen.findByTestId(`invoice-picker-option-${id}`));
+  fireEvent.click(screen.getByTestId('invoice-picker-apply'));
 }
 
 beforeEach(() => {
@@ -130,7 +137,7 @@ describe('save-header-first — add button on an unsaved record', () => {
     fireEvent.click(addBtn);
 
     // The draft form is open (picker trigger + save/cancel buttons render) …
-    expect(screen.getByText('Seleccionar...')).toBeInTheDocument();
+    expect(screen.getByText('rectifySelectInvoices')).toBeInTheDocument();
     expect(screen.getByTestId('btn__saveNewLine')).toBeInTheDocument();
     // … but the header has NOT been saved yet — save happens on Guardar, not on add
     expect(onSaveHeader).not.toHaveBeenCalled();
@@ -203,9 +210,19 @@ describe('save-header-first — child POST failure after header save', () => {
     fireEvent.click(screen.getByTestId('btn__saveNewLine'));
 
     await waitFor(() => expect(onGoToSavedRecord).toHaveBeenCalledTimes(1));
+    // The draft carried across the navigation is the RAW draft state, `_reversedInvoiceIds`
+    // included: it is what the picker last applied, and it has to survive so the reopened form
+    // still knows the whole selection. It is stripped on the way to the wire, not here.
+    // The identifier is the picked invoice's document number (a multi-selection would carry ''
+    // instead, with the count standing in on the field) — so the reopened form still NAMES the
+    // invoice rather than showing the "select invoices" placeholder over an armed draft.
     expect(onGoToSavedRecord).toHaveBeenCalledWith(saved, {
       reopenAdd: true,
-      draft: { reversedInvoice: 'inv-orig-9', 'reversedInvoice$_identifier': '10000090' },
+      draft: {
+        _reversedInvoiceIds: ['inv-orig-9'],
+        reversedInvoice: 'inv-orig-9',
+        'reversedInvoice$_identifier': '10000090',
+      },
       error: 'trigger rejected',
     });
     // No inline error anywhere — the paragraph no longer exists (ETP-5027)
@@ -296,9 +313,7 @@ describe('parseNeoError — 400 field-errors shape joins all messages', () => {
       },
     });
 
-    fireEvent.click(await screen.findByTestId('btn__addFirstRectificacion'));
-    fireEvent.click(screen.getByText('Seleccionar...'));
-    fireEvent.click(await screen.findByText('10000090'));
+    await openAddAndPickCandidate();
     fireEvent.click(screen.getByTestId('btn__saveNewLine'));
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('msg1 · msg2'));

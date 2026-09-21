@@ -3,6 +3,8 @@ name: testing-delivery-gate
 description: Use when closing, preparing, reviewing, or documenting a development task, PR, delivery, bugfix, refactor, regression fix, functional change, test evidence, QA validation, or when asked if a task is done.
 ---
 
+<!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/skills/testing-delivery-gate/SKILL.md - Regenerate: make sync-agents -->
+
 # Testing Delivery Gate
 
 ## Overview
@@ -18,7 +20,7 @@ Before applying this gate, identify and validate the git repository that is bein
 1. Detect the repository root for the delivery with `git rev-parse --show-toplevel` from the changed area.
 2. Capture the active branch and changed files for that repository.
 3. If more than one git repository has relevant changes, or if the requested delivery target is ambiguous, ask the owner to confirm which repository is being delivered before judging completion.
-4. Read the confirmed repository's delivery instructions (`AGENTS.md`, `AGENTS.md`, package/module docs, or equivalent) and use them to decide the required validation commands.
+4. Read the confirmed repository's delivery instructions (`AGENTS.md`, `CLAUDE.md`, package/module docs, or equivalent) and use them to decide the required validation commands.
 5. Validate only against the confirmed delivery repository. Do not use tests from a sibling repository as evidence unless the delivery explicitly spans both repositories.
 6. Include the confirmed repository root, branch, changed-file scope, and repo-specific validation commands in the delivery evidence.
 

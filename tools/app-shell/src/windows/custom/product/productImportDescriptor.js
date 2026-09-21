@@ -12,6 +12,10 @@ import {
   categoryCreateFailedError,
 } from '@/lib/importCategoryResolution.js';
 import { parseBoolean } from '@/lib/parseBoolean.js';
+// The shared import-cell date parser (ETP-5350 promoted it out of financial-account) and the
+// local-calendar "today". Never `new Date(...)` on a date-only cell — see ETP-4031 / ETP-4850.
+import { normalizeImportDate, isInvalidImportDate } from '@/lib/importDateCell.js';
+import { todayCalendarISO } from '@/lib/dateOnly.js';
 import { resolveCodedCellOrThrow, codedCellError, codeLabels } from '@/lib/codedValue.js';
 import { registerExportHints } from '@/lib/importExportColumns.js';
 import { asDependentEntityInput } from '@/lib/dependentEntityCell.js';
@@ -306,6 +310,60 @@ async function buildPriceOperation(rawPrice, { opId, wantSales, config }) {
 }
 
 /**
+ * Build the M_Costing operation, or null when the row declares no cost.
+ *
+ * ETP-5350. Like a price, a cost is not a product column — it is a row of the costing engine's
+ * own table, reached through the `costing` entity, which `artifacts/product/decisions.json`
+ * already wires to `productCostingHandler`. `/batch` runs handler hooks (BatchService →
+ * handleWithHooks whenever the entity declares a `Java_Qualifier`), so an imported cost takes
+ * EXACTLY the path the Costing tab takes. Everything the handler owns is therefore inherited
+ * for free and must NOT be sent from here:
+ *
+ *  - `costType = 'STA'`, `manual`, `permanent`, `production`;
+ *  - the organisation, and **its** currency rather than the AD default (which is USD);
+ *  - `endingDate`, filled from `CostingUtils.getLastDate()` (31-12-9999). Sending the key at
+ *    all — even empty — stops that inference from running, which is why this body carries
+ *    only two fields.
+ *
+ * A blank cost cell returns null, exactly as `buildPriceOperation` does. This is not a
+ * nicety: the handler rejects a blank cost, and `/batch` is all-or-nothing per row, so one
+ * empty cell would lose the whole product rather than just its cost.
+ */
+function buildCostOperation(row, { config }) {
+  const cost = parseImportNumber(row.cost);
+  if (cost === null) return null; // no cost cell → no M_Costing row for this product
+
+  // Unreachable from the review queue (`isNumeric` fails the row first, and so does the
+  // negative check in the row validator below), but this function is also the send path's
+  // last word on the cell, and the two must not be able to disagree — the same reason
+  // buildPriceOperation keeps its own NaN branch.
+  if (Number.isNaN(cost) || cost < 0) {
+    const key = Number.isNaN(cost) ? 'importErrorInvalidCost' : 'importErrorNegativeCost';
+    const fallback = Number.isNaN(cost)
+      ? `The cost "${row.cost}" is not a valid number.`
+      : `The cost "${row.cost}" cannot be negative.`;
+    throw new Error(typeof config.translate === 'function' ? config.translate(key, { value: row.cost }) : fallback);
+  }
+
+  // `todayCalendarISO`, never `new Date().toISOString().slice(0, 10)`: the latter is UTC, so it
+  // yields YESTERDAY for most of the evening under a negative-UTC offset (America/Argentina/…),
+  // and would silently backdate every imported cost. It also matches NeoDateFormat.ISO_DATE.
+  //
+  // Not taken from `/defaults`, which prefills this with the PRODUCT'S CREATION DATE rather
+  // than today. Identical during an import (the product is created in the same batch), but the
+  // two diverge the moment this is ever run against existing products.
+  const startingDate = normalizeImportDate(row.costStartingDate) ?? todayCalendarISO();
+
+  return {
+    id: 'cost',
+    spec: config.spec,
+    entity: 'costing',
+    parentRef: 'product',
+    body: { cost: String(cost), startingDate },
+  };
+}
+
+/**
  * ETP-4996: `productType` is checked during REVIEW, not at send time.
  *
  * The two price columns are covered generically instead — they declare `isNumeric: true`
@@ -318,7 +376,39 @@ registerImportRowValidator('product', (row, { translate } = {}) => [
   codedCellError(row.productType, PRODUCT_TYPE_VALUES, {
     target: 'productType', fieldLabelKey: 'importFieldProductType', fieldLabelFallback: 'Product Type', translate,
   }),
+  ...costCellErrors(row, translate),
 ].filter(Boolean));
+
+/**
+ * ETP-5350 — the three ways a costing pair can be wrong that `validateRow` cannot see.
+ *
+ * `isNumeric` on the cost column already catches "abc", and `required` is not set on either
+ * column, so what is left is: a negative cost (the handler's own ERR_costingCostNegative, which
+ * would otherwise surface as a 400 at confirm time), an unparseable date (`31/02/2026` is not
+ * blank, so nothing generic rejects it), and a date with no cost.
+ *
+ * That last one is the reason this function exists at all. A starting date cannot create an
+ * M_Costing row by itself, so `buildCostOperation` returns null and the value is DROPPED — no
+ * error, no warning, the product imports and the user never learns their cost went nowhere.
+ * That is the exact silent-drop this codebase has now removed twice (ETP-4997's location
+ * resolver, then the province predicate one level above it). A row is failed instead.
+ */
+function costCellErrors(row, translate) {
+  const t = (key, fallback, params) => (typeof translate === 'function' ? translate(key, params) : fallback);
+  const errors = [];
+  const cost = parseImportNumber(row.cost);
+  const hasDate = String(row.costStartingDate ?? '').trim() !== '';
+
+  if (cost !== null && !Number.isNaN(cost) && cost < 0) {
+    errors.push({ target: 'cost', message: t('importErrorNegativeCost', `The cost "${row.cost}" cannot be negative.`, { value: row.cost }) });
+  }
+  if (isInvalidImportDate(row.costStartingDate)) {
+    errors.push({ target: 'costStartingDate', message: t('importErrorInvalidDate', `The date "${row.costStartingDate}" is not valid. Use dd/mm/yyyy.`, { value: row.costStartingDate }) });
+  } else if (hasDate && cost === null) {
+    errors.push({ target: 'cost', message: t('importErrorStartingDateWithoutCost', 'A starting date needs a cost: fill in the cost, or clear the date.') });
+  }
+  return errors;
+}
 
 // ETP-4997 — see the twin block in `contactsImportDescriptor.js`. Three of the eight import
 // targets are spelled differently on a product LIST row; `uOM` needs no entry because its
@@ -330,6 +420,16 @@ registerExportHints('product', {
     // the M_ProductPrice rows the import writes through — those are not on a product row.
     salesPrice: 'eTGOSalePrice',
     purchasePrice: 'eTGOPurchasePrice',
+    // ETP-5350 — the cost and its starting date are M_Costing rows, reached through the
+    // `costing` entity (see buildCostOperation above), not columns of the product header row:
+    // `artifacts/product/contract.json` puts `cost` under `costing`, and the header entity has
+    // no cost field at all. Declaring them `null` emits the column with an empty cell, which is
+    // what the round trip needs. Leaving them out instead lets `exportSourceKeyForField` fall
+    // through to the target itself, shipping `cost`/`costStartingDate` as source keys the
+    // backend resolves to null anyway — an empty column either way, but one that claims a
+    // source it does not have.
+    cost: null,
+    costStartingDate: null,
   },
   // A raw 'I'/'S'/'E' is unreadable in a spreadsheet. Inverted from the same synonym table
   // validated above, so every exported word is one this descriptor accepts back.
@@ -360,5 +460,10 @@ registerImportDescriptor('product', async (row, config) => {
     buildPriceOperation(row.purchasePrice, { opId: 'purchasePrice', wantSales: false, config }),
   ]);
   ops.push(...priceOps.filter(Boolean));
+
+  // ETP-5350. Synchronous, unlike the two price ops: a cost needs no price-list-version lookup,
+  // since the handler derives the organisation and its currency itself.
+  const costOp = buildCostOperation(row, { config });
+  if (costOp) ops.push(costOp);
   return ops;
 });

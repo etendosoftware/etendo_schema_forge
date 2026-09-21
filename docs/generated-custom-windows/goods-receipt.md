@@ -63,7 +63,7 @@ Observed reactive behavior:
 - Related-document behavior is custom rather than contract-declared: the window adds a **Related Documents** tab that links back to the purchase order from the header and forward to purchase invoices fetched by that order reference.
 - **Currency (ETP-4028)**: header field `etgoCurrency` (`M_InOut.EM_Etgo_Currency_ID`, mandatory). Defaults to the organization's currency (`defaultExpr: "@C_Currency_ID@"`), editable while the receipt is in draft, and becomes read-only once the receipt is processed (`readOnlyLogic: "@Processed@='Y'"`). Changing the currency after lines already exist does **not** recalculate those existing lines' prices — only new lines are affected. A receipt created from a purchase order inherits that order's currency; return receipts inherit the currency of the original receipt being returned. As with Goods Shipment, no total/amount conversion display was implemented — `M_InOutLine` has no monetary columns, so there is no reliable receipt "total" to convert (scoped out of ETP-4028, open question left on the ticket).
 - Currency filter on line import (ETP-4028): the receipt's own `etgoCurrency` value determines which source documents appear in **Import from Purchase Order** / **Import from Purchase Invoice**. Each modal self-fetches the current receipt header to read its currency and filters candidates to matching-currency documents only, showing a dedicated empty-state message (`noPurchaseOrdersMatchReceiptCurrency` / `noPurchaseInvoicesMatchReceiptCurrency`) when nothing matches.
-- Invoice creation from a completed receipt (via `ReceiptInvoicePreview`, action `createPurchaseInvoice`) now presents the same `CreateInvoiceConfirmModal` price-list picker used by Goods Shipment: Currency shown read-only (inherited from the receipt), Tarifa (price list) required and user-selectable. `CreatePurchaseInvoiceHandler.java` applies the chosen `priceListId` to the invoice (both the linked-PO path and the no-PO fallback path, which otherwise defaults to the vendor's purchase price list) before invoice lines are priced.
+- Invoice creation from a completed receipt (via `ReceiptInvoicePreview`, action `createPurchaseInvoice`) now presents the same `CreateInvoiceConfirmModal` price-list picker used by Goods Shipment: Currency shown read-only (inherited from the receipt), Tarifa (price list) required and user-selectable. `CreatePurchaseInvoiceHandler.java` applies the chosen `priceListId` to the invoice (both the linked-PO path and the no-PO fallback path, which otherwise defaults to the vendor's purchase price list) before invoice lines are priced. Since ETP-5381 that same request also **completes** the invoice, so this flow no longer produces a draft — see "Invoice is created and confirmed in one step, and guards P3a/P3b — ETP-5381" below.
 - **`orderReference` (`M_InOut.POReference`, "Nº documento") — editable and saveable regardless of document status (ETP-4839).** See the dedicated section below.
 
 No current evidence shows:
@@ -94,7 +94,7 @@ Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears 
 5. Expand a purchase order in the modal and confirm each line shows pending quantity, import quantity, and non-selectable fully received lines.
 6. Import selected lines and confirm new receipt lines are created under the current receipt, including purchase-order line linkage and incremented line numbers.
 7. With lines already present, confirm the line-area extra action still exposes **Import from Purchase Order** while the receipt remains in draft.
-8. Confirm the receipt and verify the document leaves draft status and the draft-only import affordances disappear. Confirm with "Crear Factura de Compra en borrador" left OFF (or on a receipt that is already fully invoiced, where the confirm popup only offers registering the movement) and verify **no** result modal appears — instead an auto-dismissing green `sonner` toast reads `goodsReceipt.confirmModal.confirmedTitle` ("Albarán de compra confirmado" / "Goods receipt confirmed") and the page refreshes (ETP-5063). Repeat with the toggle ON and confirm the result modal still appears, listing the created invoice.
+8. Confirm the receipt and verify the document leaves draft status and the draft-only import affordances disappear. Confirm with the "Crear Factura de Compra" toggle left OFF (`goodsReceipt.confirmModal.createInvoiceTitle` — the label no longer carries the "en borrador" suffix this step used to quote; or use a receipt that is already fully invoiced, where the confirm popup only offers registering the movement) and verify **no** result modal appears — instead an auto-dismissing green `sonner` toast reads `goodsReceipt.confirmModal.confirmedTitle` ("Albarán de compra confirmado" / "Goods receipt confirmed") and the page refreshes (ETP-5063). Repeat with the toggle ON and confirm the result modal still appears, listing the created invoice.
 9. Open **Related Documents** and confirm the purchase-order chip routes to `/purchase-order/:id` and invoice chips route to `/purchase-invoice/:id`.
 10. Select two or more draft goods receipts from the list and confirm the bulk action bar shows a `Procesar (N)` button. Open it, confirm the document-action dropdown offers **Confirmar** (`CO`) as its only entry, trigger it, and verify all selected receipts move to completed status and a result toast appears.
 11. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
@@ -430,3 +430,84 @@ Structural surfaces and controls consume background, card, foreground, muted, an
 border roles; operational feedback uses success, warning, information, neutral,
 and destructive roles. No local palette is used, so the active application theme
 controls the appearance.
+
+## Invoice is created and confirmed in one step, and guards P3a/P3b — ETP-5381
+
+Both invoicing paths on this window — the "Crear Factura de Compra" toggle in the
+confirm popup, and `Create Invoice` from a completed receipt's preview panel —
+used to leave a **draft** purchase invoice. A draft reserves nothing:
+`m_inoutline.isinvoiced` is only written when the invoice is completed, so the
+same receipt could be invoiced repeatedly, and the topbar `InvoiceStatusPill`
+stayed at 0% (gray) because `invoiceStatus` filters
+`docstatus NOT IN ('VO','CL','DR')`.
+
+`createPurchaseInvoice` now creates **and completes** the invoice in one atomic
+request. The endpoint name is unchanged; only the outcome is. Completion runs the
+`CO` document action through core `ProcessInvoiceUtil` via
+`InvoiceCompletionService` (`InvoiceCompletionService.java:110`, `:167`) rather
+than `C_Invoice_Post0` directly, so the `ProcessInvoiceHook` CDI chain fires. The
+response now also carries `documentStatus`, which the frontend needs to render the
+result. Rollback is all-or-nothing: the handler only `flush()`es and
+`ProcessInvoiceUtil` owns the commit, so a failed completion leaves no orphan
+draft and no burned document number
+(`CreatePurchaseInvoiceHandler.java:113-126`).
+
+### The latent bug this exposed — `resolveReceiptLineQty`
+
+Making the invoice real made a pre-existing defect unsafe, so it was fixed in the
+same ticket. `resolveReceiptLineQty`
+(`CreatePurchaseInvoiceHandler.java:576-581`) falls back to the line's **full
+`movementQuantity`** whenever the caller sends no explicit per-line quantities —
+and the UI *never* sends them, it posts only `priceListId`. Its own javadoc
+already promised the map came from `computePendingQtyPerLine`; that was simply
+never wired up. The result: every invoicing run billed the entire receipt again,
+from scratch.
+
+The caller now seeds the map before calling it
+(`CreatePurchaseInvoiceHandler.java:434-439`):
+
+- **P3a** — when `parseLineOverrides(body)` is empty, `qtyOverrides` is filled
+  from `NeoInvoiceSupport.computePendingQtyPerLineOrThrow(receiptId, true)`, so
+  only lines with something pending are invoiced, and only for their pending
+  quantity. `includeDrafts=true` counts pre-existing drafts.
+- **P3b** — if that map is *also* empty, there is genuinely nothing left, which
+  means a duplicate request: `AlreadyInvoicedException` with the literal
+  **"This goods receipt has already been fully invoiced."**, surfaced as
+  **HTTP 409** by the catch at `CreatePurchaseInvoiceHandler.java:138-140`.
+
+The *throwing* variant is used deliberately so a DB failure surfaces as a 500
+rather than being mistaken for "fully invoiced".
+
+`backendErrors.js` maps the literal to `backendError.receiptAlreadyInvoiced`
+("Este albarán de compra ya está totalmente facturado." / "This goods receipt has
+already been fully invoiced."). Note the HTTP-status convention this ticket
+establishes: **409 means "already invoiced" (a duplicate); 400 means "nothing to
+invoice" or a missing datum** — the pre-existing price-list 400 is unaffected.
+
+**To modify a generated invoice**, the user reactivates it: `purchase-invoice`
+exposes a `reactivate` menu action (`documentAction: 'RE'`, `preUnpost: true`,
+visible at `DocStatus='CO'`), now the only route back to `DR`.
+
+### Manual verification
+
+1. On a completed receipt that has never been invoiced, use `Create Invoice` from
+   the preview panel and verify the resulting invoice opens in **Confirmado**, and
+   that the topbar `InvoiceStatusPill` turns green (100%) instead of staying gray.
+2. Trigger `Create Invoice` again on that receipt and verify it is rejected with
+   the translated 409 ("Este albarán de compra ya está totalmente facturado.") and
+   that no second invoice is created. **This is the regression this ticket fixes**
+   — before it, the second run silently produced a full duplicate invoice.
+3. On a **partially** invoiced receipt (invoice one PO line, leave another
+   pending), run `Create Invoice` again and verify the new invoice carries only
+   the pending quantities, not the full `movementQuantity` of every line.
+4. Confirm a draft receipt with the invoice toggle ON and verify the result modal
+   lists the invoice as confirmed.
+5. Force the completion to fail and verify nothing is persisted — no draft
+   invoice, and the next successful attempt reuses the same document number.
+
+### Automated evidence
+
+- `{etendo_root}/modules/com.etendoerp.go/src-test/src/com/etendoerp/go/schemaforge/InvoiceCompletionServiceTest.java` (new) covers the extracted completion path.
+- `CreatePurchaseInvoiceHandlerTest.java` was extended for the create-and-confirm flow and for guards P3a/P3b, including the pending-quantity seeding that replaces the `movementQuantity` fallback.
+- `NeoInvoiceSupportTest.java` covers `computePendingQtyPerLineOrThrow`, whose throwing behavior is what keeps a DB failure from being read as "fully invoiced".
+- No frontend test covers the preview panel's handling of the new `documentStatus` field in the response.

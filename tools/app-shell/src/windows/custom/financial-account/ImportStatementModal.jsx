@@ -751,7 +751,17 @@ function MappingBody({
         onSkipEntry={review.skipEntry}
         onUnskipEntry={review.unskipEntry}
         onDownloadErrors={() => downloadBlobAsFile(
-          new Blob([buildErrorsCsv(entries, headers, mapping)], { type: 'text/csv;charset=utf-8;' }),
+          // ETP-5349: this window has its own Omitir button, so it carried the same defect —
+          // a hand-skipped row showed under Errores and was missing from the file. It also
+          // passed no captions at all, so the file's reason column was headed "Error" in
+          // English regardless of session language.
+          new Blob([buildErrorsCsv(
+            entries,
+            headers,
+            mapping,
+            ui('financeAccountStatementsImportReviewStatusError'),
+            ui('importSkippedByUser'),
+          )], { type: 'text/csv;charset=utf-8;' }),
           `${ui('financeAccountStatementsImportErrorsFileName')}.csv`,
         )}
         showRetry={false}
