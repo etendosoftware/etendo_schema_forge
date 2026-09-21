@@ -6,16 +6,43 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, isPendingStatus, fmtDate, PAGE_SIZE, ExportIcon, useFmSelection, fetchCsvAndDownload, selectedRowClassName } from './FmPrimitives.jsx';
 import { TBAI_SPEC, TBAI_ENTITY, buildCutoverCriteria } from './useFiscalMonitor.js';
 
-// ETP-5229 #14 — a sales and a purchase invoice have INDEPENDENT documentno
-// sequences, so they can share the same number. `issotrx` ('Y'/'N', boolean,
-// or truthy/falsy) comes back on the row the same way `invoiceDate` and
-// `invoice$_identifier` already do (joined companion fields NEO projects for
-// the `invoice` FK) — no backend change needed, just consuming what NEO
-// already returns.
+// ETP-5229 #14 (ETP-5432 items #6/#7 fix) — a sales and a purchase invoice have
+// INDEPENDENT documentno sequences, so they can share the same number. The
+// direction needs the invoice's OWN `IsSOTrx` flag, joined through the
+// `invoice` FK. The ORIGINAL #14 fix read `row.issotrx` / `row['invoice$issotrx']`,
+// assuming NEO's classic `DefaultJsonDataService` would project it under that
+// name the same way `invoice$_identifier` is always projected for a reference
+// field. That assumption was wrong: `IsSOTrx` is one of the rare Openbravo
+// columns whose DAL property name does NOT follow the generic `IsXxx` -> `xxx`
+// convention — it maps to `salesTransaction`
+// (`org.openbravo.model.common.invoice.Invoice.PROPERTY_SALESTRANSACTION`, see
+// `src-gen/org/openbravo/model/common/invoice/Invoice.java`). A dot-path
+// `_extraProperties` request for a non-existent `invoice.issotrx` property
+// never resolves, so `row.issotrx`/`row['invoice$issotrx']` were never
+// populated by the mechanism the original fix relied on — `isSalesRow` fell
+// through to "not sales" (false) whenever that companion field was actually
+// requested/checked, which is exactly the "sales row treated as purchase"
+// symptom reported in ETP-5432 #6 (wrong click-through target) and #7 (wrong
+// "Emisión"/Direction badge). `salesTransaction`/`invoice$salesTransaction`
+// are now the PRIMARY fields checked (requested explicitly below via
+// `_extraProperties=invoice.salesTransaction`, so presence no longer depends
+// on an unrequested, coincidental companion projection); the historical
+// `issotrx`/`invoice$issotrx` names are kept as a fallback only for any row
+// shape that might already carry them.
 function isSalesRow(row) {
-  const v = row?.issotrx ?? row?.['invoice$issotrx'];
+  const v = row?.salesTransaction ?? row?.['invoice$salesTransaction']
+    ?? row?.issotrx ?? row?.['invoice$issotrx'];
   return v === true || v === 'Y' || v === 'y';
 }
+
+// Explicitly requests the invoice's `salesTransaction` (IsSOTrx) property via
+// classic Openbravo's `_extraProperties`/`additionalProperties` datasource
+// parameter (`JsonConstants.ADDITIONAL_PROPERTIES_PARAMETER`), which NEO's
+// `NeoCrudHandler` forwards verbatim to `DefaultJsonDataService.fetch()` (it
+// copies the whole incoming query-param map into the DAL fetch params). This
+// makes `invoice$salesTransaction` a GUARANTEED response field instead of an
+// assumed one — see `isSalesRow` above for the root-cause writeup.
+const TBAI_EXTRA_PROPERTIES = 'invoice.salesTransaction';
 
 /**
  * Groups resultadoValidación rows by tbaiSyncinvoiceID (FK → sincronización row id).
@@ -105,6 +132,7 @@ async function fetchTbaiList(apiFetch, orgId, page, filterKey, earliestCutoverDa
     organization: orgId,
     _startRow: String((page - 1) * PAGE_SIZE),
     _endRow:   String(page * PAGE_SIZE),
+    _extraProperties: TBAI_EXTRA_PROPERTIES,
   });
   const criteria = [...buildCutoverCriteria(earliestCutoverDate)];
   if (filterKey === FILTER_SENT) {
@@ -190,7 +218,7 @@ export default function TbaiMonitorSection({
     if (exporting) return;
     setExporting(true);
     try {
-      const params = { organization: orgId };
+      const params = { organization: orgId, _extraProperties: TBAI_EXTRA_PROPERTIES };
       const criteria = [...buildCutoverCriteria(earliestCutoverDate)];
       if (filter === FILTER_SENT) {
         criteria.push({ fieldName: 'estado', operator: 'equals', value: 'Recibido' });
