@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { getNeoBaseUrl } from '@/lib/neoBaseUrl.js';
 /**
  * Drives the generic transactional batch endpoint.
  *
@@ -15,18 +16,22 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  * This hook does no orchestration beyond POST + JSON parsing — the same shape
  * an MCP agent would use when calling a `neo_batch` tool.
  */
-export function useBatch({ apiBaseUrl, token }) {
+export function useBatch({ token }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const apiFetch = useApiFetch('');
 
-  // The /batch endpoint lives at the NEO root, not under any spec. apiBaseUrl
-  // points at the *host* spec (e.g. /sws/neo/purchase-invoice) so we strip
-  // the trailing spec segment to land on /sws/neo.
-  const batchUrl = useMemo(() => {
-    if (!apiBaseUrl) return '/sws/neo/batch';
-    return `${apiBaseUrl.replace(/\/[^/]+$/, '')}/batch`;
-  }, [apiBaseUrl]);
+  // The /batch endpoint lives at the NEO root, not under any spec, so it is asked for directly
+  // rather than derived from the caller's own base URL.
+  //
+  // ETP-5371 — this used to strip the last segment off the host spec's URL
+  // (`/etendo/sws/neo/product` → `/etendo/sws/neo`), which silently carried the assumption that
+  // every caller passes a spec URL. `FirstStepsImportButton` passed the deployment prefix
+  // (`/etendo`), so the chop produced `''` and the POST went to `/batch` — a URL outside the
+  // backend entirely, which CloudFront rejected with a 403 that read like an infrastructure
+  // outage. The derivation could not tell a right answer from a wrong one because both are
+  // strings, so it no longer derives: the NEO root has one owner now.
+  const batchUrl = useMemo(() => `${getNeoBaseUrl()}/batch`, []);
 
   const runBatch = useCallback(async (operations) => {
     setError(null);

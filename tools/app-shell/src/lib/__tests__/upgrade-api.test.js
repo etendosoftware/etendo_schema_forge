@@ -6,6 +6,10 @@ import {
   getPlatformToken,
   createCheckoutSession,
   fetchPlans,
+  createBillingPurchase,
+  getBillingOverview,
+  getBillingOffer,
+  getBillingPurchase,
 } from '../upgrade/api.js';
 
 function jsonResponse(data, { ok = true, status = 200 } = {}) {
@@ -30,6 +34,32 @@ describe('getPlatformToken', () => {
   it('returns null when storage is absent or throws', () => {
     assert.equal(getPlatformToken(undefined), null);
     assert.equal(getPlatformToken({ getItem: () => { throw new Error('blocked'); } }), null);
+  });
+});
+
+describe('account billing projection', () => {
+  it('reads overview with account authentication', async () => {
+    const fetchImpl = recordingFetch(jsonResponse({ canManageBilling: true, purchases: [] }));
+    const result = await getBillingOverview(fetchImpl, '', 'account-token');
+    assert.deepEqual(result, { canManageBilling: true, purchases: [] });
+    assert.equal(fetchImpl.calls[0].url, '/sws/go/billing/overview');
+    assert.equal(fetchImpl.calls[0].init.headers.Authorization, 'Bearer account-token');
+  });
+
+  it('encodes purchase ids and returns a stable error for an unavailable projection', async () => {
+    const fetchImpl = recordingFetch(jsonResponse({ message: 'missing' }, { ok: false, status: 404 }));
+    await assert.rejects(
+      () => getBillingPurchase(fetchImpl, '', 'token', 'purchase/1'),
+      error => error.code === UPGRADE_ERROR_CODES.checkoutCreationFailed && error.status === 404
+    );
+    assert.equal(fetchImpl.calls[0].url, '/sws/go/billing/purchases/purchase%2F1');
+  });
+
+  it('reads the server-owned billing offer', async () => {
+    const fetchImpl = recordingFetch(jsonResponse({ amountMinor: 4900, currency: 'EUR', interval: 'month' }));
+    const result = await getBillingOffer(fetchImpl, '', 'token');
+    assert.equal(result.amountMinor, 4900);
+    assert.equal(fetchImpl.calls[0].url, '/sws/go/billing/offers');
   });
 });
 
@@ -156,6 +186,37 @@ describe('createCheckoutSession', () => {
     await assert.rejects(
       () => createCheckoutSession(fetchImpl, '', 'token'),
       error => error.code === UPGRADE_ERROR_CODES.checkoutUnavailable
+    );
+  });
+});
+
+describe('createBillingPurchase', () => {
+  it('uses the account-level billing boundary while sending only product intent', async () => {
+    const fetchImpl = recordingFetch(jsonResponse({
+      requestId: 'req-2',
+      checkoutUrl: 'https://checkout.example/session-2',
+    }));
+    const result = await createBillingPurchase(fetchImpl, 'https://api.test', 'token', {
+      clientName: 'Acme Productive', language: 'es_ES',
+    });
+    assert.equal(result.requestId, 'req-2');
+    assert.equal(fetchImpl.calls[0].url, 'https://api.test/sws/go/billing/purchases');
+    assert.deepEqual(JSON.parse(fetchImpl.calls[0].init.body), {
+      action: 'productive-tenant',
+      upgradeAction: 'create-productive',
+      clientName: 'Acme Productive',
+      language: 'es_ES',
+    });
+  });
+
+  it('returns an identifiable error for a duplicate active purchase', async () => {
+    const fetchImpl = recordingFetch(jsonResponse(
+      { purchaseId: 'req-1', status: 'CREATED' }, { ok: false, status: 409 }
+    ));
+    await assert.rejects(
+      () => createBillingPurchase(fetchImpl, '', 'token', { clientName: 'Acme' }),
+      error => error.code === UPGRADE_ERROR_CODES.purchaseAlreadyExists
+        && error.purchase.purchaseId === 'req-1'
     );
   });
 });

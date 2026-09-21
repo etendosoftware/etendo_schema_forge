@@ -61,7 +61,7 @@ vi.mock('../../../FmOverlays.jsx', () => ({
   FileGenModal303: () => null,
 }));
 vi.mock('lucide-react', () => ({
-  Settings: () => null, Download: () => null, OctagonAlert: () => null,
+  Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
   TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
   TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,
@@ -91,10 +91,16 @@ describe('FmModel303Page — breadcrumb against the real locale dictionary (ETP-
     expect(container.textContent).not.toContain('Tesorería');
   });
 
-  it('resolves the en_US breadcrumb to "Finance / Fiscal Models / Modelo 303 - 2026/T2"', () => {
+  // ETP-5338 — the "Modelo 303" segment itself used to be a hardcoded Spanish
+  // literal even under en_US, surviving the ETP-4945 fix which only localized
+  // the root/section segments. Now resolved via the shared 'fm.config.m303.title'
+  // key (already used by the catalog config section header), which translates
+  // "Modelo" to "Form" — the term AEAT-form-aware English UI copy uses.
+  it('resolves the en_US breadcrumb to "Finance / Fiscal Models / Form 303 - 2026/T2", not the stale "Modelo"', () => {
     activeUi = realUiEn;
     const { container } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
 
-    expect(container.textContent).toContain('Finance / Fiscal Models / Modelo 303 - 2026/T2');
+    expect(container.textContent).toContain('Finance / Fiscal Models / Form 303 - 2026/T2');
+    expect(container.textContent).not.toContain('Modelo 303');
   });
 });

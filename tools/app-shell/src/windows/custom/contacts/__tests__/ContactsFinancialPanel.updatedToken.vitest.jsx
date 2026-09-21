@@ -51,8 +51,13 @@ function seedUseEntityVersion(updated = BP_TOKEN) {
   rememberRecordVersion({ id: BP_ID, updated });
 }
 
+/**
+ * ETP-5328 replaced the raw `<input type="number">` with `MaskedAmountInput`, which renders
+ * `type="text"` — the field no longer has the `spinbutton` role. Anchor on the testid the
+ * component forwards instead of on an input type this helper has already been bitten by once.
+ */
 function creditLimitInput() {
-  return screen.getAllByRole('spinbutton')[0];
+  return screen.getByTestId('CreditLimitStepperInput');
 }
 
 beforeEach(() => {

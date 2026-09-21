@@ -11,9 +11,10 @@ import { DateField } from '@/components/ui/date-field';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { SelectorChip } from '@/components/contract-ui/SelectorChip.jsx';
 import { FIELD_HEIGHT } from '@/components/ui/formDensity';
-import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
+import { formatCurrency, getCurrencySymbol, formatPlainDecimal } from '@/lib/formatCurrency.js';
 import { getCurrencyFormatConfig, isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
+import { parseAmountInput } from '@/lib/parseAmountInput.js';
 import {
   Select as RSelect, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -79,14 +80,14 @@ export function Select({ label, required, value, onChange, options, placeholder,
 }
 
 /** Date field. `value` is an ISO date (yyyy-mm-dd); `onChange` emits the same. */
-export function DateInput({ label, required, value, onChange, className, name }) {
+export function DateInput({ label, required, value, onChange, className, name, disabled }) {
   return (
     <Field
       label={label}
       required={required}
       className={className}
       data-testid="Field__7183e9">
-      <DateField value={value} onChange={onChange} data-testid={name ? `field-date-${name}` : 'DateField__7183e9'} />
+      <DateField value={value} onChange={onChange} disabled={disabled} data-testid={name ? `field-date-${name}` : 'DateField__7183e9'} />
     </Field>
   );
 }
@@ -157,12 +158,21 @@ export function AmountInput({ label, required, value, onChange, onBlur, placehol
 }
 
 // ─── MaskedAmountInput internals (ETP-5107) ───────────────────────────────
-// A NEW sibling of AmountInput/MoneyInput above — those two are NOT modified
-// by this addition (zero diff on their function bodies). See
-// docs/plans/2026-09-08-etp5107-price-input-locale-fix.md §6.3/§6.3.1 for why
-// they stay untouched: 4 existing screens (PaymentForm, ReversedInvoicesPanel,
-// NewTransactionModal, NewMovementWizard) depend on their exact current
-// behavior, and this ticket has no reason to put those at risk.
+// The canonical masked money input, and the one every EDITABLE amount field in
+// the app must use. See
+// docs/plans/2026-09-13-etp5107-experimental-server-verification.md §7.12 for
+// the migration and the rule that goes with it: once a field renders this
+// component its value is CLEAN, so it must be read back with parseLocaleNumber,
+// never with a structural/grouping-aware parser.
+//
+// AmountInput and MoneyInput above are the deliberate exception, and NOT a
+// migration that was forgotten. Their only editable consumer is PaymentForm,
+// which is reachable solely through NewMovementWizard — dead since ETP-4500
+// (2026-07-15) replaced it with NewTransactionModal. AmountInput's one live
+// caller, ReversedInvoicesPanel, passes no `onChange` and is display-only.
+// Migrating them would have changed only unreachable code, so they were left
+// exactly as they were. If NewMovementWizard is ever revived, they are the
+// first thing to move onto this component.
 
 function countSignificantChars(str, thousandsSeparator) {
   if (!thousandsSeparator) return str.length;
@@ -276,7 +286,14 @@ function toCleanValue(filtered, decimalSeparator) {
  */
 function toIdleDisplay(value, grouping) {
   if (value == null || value === '') return '';
-  if (!grouping) return String(value);
+  if (!grouping) {
+    // Ungrouped, but STILL localized. The outward value is always clean (dot decimal), so a bare
+    // String(value) rendered the JS number literal verbatim — `10.5` — leaving a period sitting in
+    // a comma-decimal UI. That is what QA saw on the lines grid, where `% de descuento` showed
+    // `10.5` next to a `12,00` price on the same row (ETP-5107 reopened). Only the thousands
+    // grouping is skipped here; the decimal separator is never JS's.
+    return formatPlainDecimal(value);
+  }
   const formatted = formatCurrency(undefined, value);
   return formatted === '—' ? '' : formatted;
 }
@@ -321,19 +338,44 @@ function toIdleDisplay(value, grouping) {
  * @param {import('react').RefObject} [inputRef] - optional external ref to the underlying input (e.g. for a caller-managed autoFocus)
  */
 export function MaskedAmountInput({
-  label, required, value, onChange, onCommit, onBlur, onKeyDown, placeholder, disabled,
+  label, required, value, onChange, onCommit, onBlur, onFocus, onKeyDown, placeholder, disabled,
   className = '', name, currency, bare = false, grouping = true, autoFocus, inputRef,
   inputMode = 'decimal', 'data-testid': dataTestId,
 }) {
   const internalRef = useRef(null);
   const activeRef = inputRef || internalRef;
   const [focused, setFocused] = useState(false);
-  const [display, setDisplay] = useState(() => toIdleDisplay(value, grouping));
+  // What the field shows: the user's in-progress keystrokes (`draft`) while editing, and the
+  // committed `value` the rest of the time — DERIVED on every render, never mirrored into state
+  // by an effect.
+  //
+  // The semantics are the ones this component always had: while the field is focused the draft is
+  // protected so a parent that re-formats on every change cannot fight the keystrokes, and the
+  // moment the parent puts a different `value` on an unfocused field that value wins (which is
+  // how typing 50 into the converted-amount field comes back as the formatted "50,00").
+  //
+  // What changed is WHEN that re-sync happens, and it is load-bearing rather than cosmetic
+  // (ETP-5107). As an effect it ran AFTER the commit, so the DOM input kept the previous text for
+  // one render. That single stale frame re-opened the ETP-4876 window in NewPaymentEntryModal:
+  // when a real edit (blanking the amount) landed inside it, React's input value-tracker compared
+  // the edit against the stale DOM value, judged it a no-op and never fired `onChange` — so the
+  // converted amount never cleared and the exchange rate stayed seeded. Measured over 100 runs
+  // each: 0 failures before this component rendered the field, 2 in 73 after, 0 after this fix.
+  // Re-syncing during render closes the window: React re-renders before committing, so the DOM
+  // never shows a value the component has already superseded.
+  //
+  // It also retires the old "commit tick": a commit the parent CLAMPS BACK to the value it already
+  // held (type 220 into a credit line capped at 120) used to leave the rejected text on screen,
+  // because neither `value` nor `focused` changed and the effect never re-ran. Blur drops the
+  // draft outright, so the field re-reads the authoritative value whatever the parent decides.
+  const [draft, setDraft] = useState(null);
+  const [syncedOn, setSyncedOn] = useState({ value, grouping });
+  if (!focused && (value !== syncedOn.value || grouping !== syncedOn.grouping)) {
+    setSyncedOn({ value, grouping });
+    setDraft(null);
+  }
+  const display = draft != null ? draft : toIdleDisplay(value, grouping);
   const desiredCursorRef = useRef(null);
-
-  useEffect(() => {
-    if (!focused) setDisplay(toIdleDisplay(value, grouping));
-  }, [value, focused, grouping]);
 
   useLayoutEffect(() => {
     if (desiredCursorRef.current == null || !activeRef.current) return;
@@ -356,14 +398,53 @@ export function MaskedAmountInput({
     const newDisplay = grouping ? formatGrouped(filtered, thousandsSeparator, decimalSeparator) : filtered;
 
     desiredCursorRef.current = positionAfterSignificant(newDisplay, sigBeforeCursor, groupSeparator);
-    setDisplay(newDisplay);
+    setDraft(newDisplay);
 
     const clean = toCleanValue(filtered, decimalSeparator);
     onChange?.(clean, parseLocaleNumber(clean).value);
   };
 
+  /**
+   * ETP-5107 (QA round 2, §2 of the attached report) — pasting is NOT typing.
+   *
+   * Keystroke filtering has to drop a typed thousands separator: mid-typing, `12.` carries no
+   * information about what comes next, so the mask cannot tell a decimal point from grouping and
+   * the configured decimal separator is the only safe answer. A PASTE is different: the whole
+   * string arrives at once, so the convention can be read off it. Without this, pasting a price
+   * copied from a web page or an English-locale spreadsheet silently multiplied it: `129.56`
+   * became `12.956,00` and `12.50` became `1.250,00`, with no warning and a clean save.
+   *
+   * A pasted string is exactly the problem `parseAmountInput` already solves for CSV/xlsx import
+   * (ETP-4954): opaque text from an outside source whose separator convention is unknown. Reusing
+   * it keeps paste and file import agreeing, instead of inventing a second heuristic here.
+   *
+   * Only a paste that REPLACES the whole value is treated as an import. Pasting into the middle of
+   * an existing number is editing, not importing, so it falls through to the normal keystroke path.
+   * The genuinely ambiguous shape (`1.500` — one separator, exactly 3 digits) stays with the
+   * grouping reading, which is also what typing it produces.
+   */
+  const handlePaste = (e) => {
+    const el = e.currentTarget;
+    const pasted = e.clipboardData?.getData('text') ?? '';
+    const selectsAll = el.selectionStart === 0 && el.selectionEnd === el.value.length;
+    if (!pasted.trim() || !(el.value === '' || selectsAll)) return;
+
+    const parsed = parseAmountInput(pasted);
+    if (parsed == null || !Number.isFinite(parsed)) return;
+
+    e.preventDefault();
+    const { thousandsSeparator, decimalSeparator } = getCurrencyFormatConfig();
+    const clean = String(parsed);
+    const filtered = filterMaskChars(clean.split('.').join(decimalSeparator), decimalSeparator, grouping);
+    setDraft(grouping ? formatGrouped(filtered, thousandsSeparator, decimalSeparator) : filtered);
+    onChange?.(clean, parsed);
+  };
+
   const handleBlur = () => {
     setFocused(false);
+    // Drop the editing draft so the field goes back to rendering the committed `value`,
+    // whatever the parent makes of what was just committed (accepted, clamped or rejected).
+    setDraft(null);
     const { decimalSeparator } = getCurrencyFormatConfig();
     // `display` may still hold a grouped string (when grouping is on) — re-run
     // the strict filter to strip it back down to the clean shape before commit.
@@ -394,7 +475,8 @@ export function MaskedAmountInput({
       inputMode={inputMode}
       value={display}
       onChange={handleChange}
-      onFocus={() => setFocused(true)}
+      onPaste={handlePaste}
+      onFocus={(e) => { setFocused(true); onFocus?.(e); }}
       onBlur={handleBlur}
       onKeyDown={(e) => {
         onKeyDown?.(e);
@@ -513,7 +595,7 @@ export function LookupPicker({ value, onChange, useLookup, placeholder = 'Buscar
  * @param {string} [placeholder]
  * @param {string} [testId] - base for the field's data-testids
  */
-export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscar…', testId = 'chip-select' }) {
+export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscar…', testId = 'chip-select', disabled = false }) {
   const ui = useUI();
   const inputRef = useRef(null);
   const dropdownRef = useRef(null);
@@ -588,7 +670,7 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscar�
   // Radix Popover portals the list to the body and auto-flips on collision, so it is never
   // clipped by an ancestor's overflow (e.g. the modal body) — unlike an inline dropdown.
   return (
-    <Popover open={open} onOpenChange={(v) => (v ? setOpen(true) : close())} data-testid="Popover__chip">
+    <Popover open={!disabled && open} onOpenChange={(v) => { if (!disabled) (v ? setOpen(true) : close()); }} data-testid="Popover__chip">
       <PopoverAnchor asChild data-testid="PopoverAnchor__chip">
         <div
           // `group` is load-bearing, not decoration: SelectorChip's clear (X) is
@@ -605,8 +687,8 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscar�
           // rounded than the plain `Input` sitting right next to it in the same modal row (Importe),
           // let alone than the equivalent field in every generated window. Height, radius and focus
           // belong to the density tokens, not to this component.
-          className={`group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-2 shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] hover:bg-[hsl(var(--muted))] focus-within:ring-2 focus-within:ring-primary`}
-          onClick={showChip ? startEditing : undefined}
+          className={`group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] px-2 shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] focus-within:ring-2 focus-within:ring-primary ${disabled ? 'bg-[hsl(var(--muted))] opacity-70' : 'bg-card hover:bg-[hsl(var(--muted))]'}`}
+          onClick={!disabled && showChip ? startEditing : undefined}
         >
           {showChip ? (
             <SelectorChip
@@ -615,6 +697,7 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscar�
               onClear={() => { onChange(null); close(); }}
               clearAriaLabel={ui('clear')}
               testId={`${testId}-chip`}
+              disabled={disabled}
               data-testid={`${testId}-chip`} />
           ) : (
             <input
@@ -625,8 +708,9 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscar�
               className="h-full min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap border-0 bg-transparent px-1 text-sm outline-none placeholder:text-[hsl(var(--muted-foreground))]"
               value={query}
               placeholder={placeholder}
+              disabled={disabled}
               onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
-              onFocus={() => setOpen(true)}
+              onFocus={() => !disabled && setOpen(true)}
               onKeyDown={handleInputKeyDown}
               role="combobox"
               aria-expanded={open}

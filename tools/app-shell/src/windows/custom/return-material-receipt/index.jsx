@@ -6,6 +6,8 @@ import ReturnWindowShell from '../shared/ReturnWindowShell';
 import { useMenuLabel } from '@/i18n';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
+import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
+import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 
 // ETP-4857 — bulk "Confirmar" for Borrador rows, at parity with Goods Shipment.
 // buildInOutActions only offers CO (confirm) when a draft is selected; it never
@@ -17,7 +19,7 @@ function ReturnMaterialReceiptBulkActions(props) {
         {...props}
         entity="returnMaterialReceipt"
         buildActions={buildInOutActions}
-        labelKey="confirmBulk"
+        labelKey="process"
         data-testid="BulkDocumentAction__4e1c28" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
@@ -29,45 +31,56 @@ function ReturnMaterialReceiptBulkActions(props) {
 
 export default function ReturnMaterialReceiptWindow({ windowName, recordId, apiBaseUrl, token, ...rest }) {
   const tMenu = useMenuLabel();
+  const { createContactCtxValue, contactPortal } =
+    useCreateContactModal({ apiBaseUrl, token, documentType: 'sale' });
   return (
-    <ReturnWindowShell
-      windowName={windowName}
-      recordId={recordId}
-      apiBaseUrl={apiBaseUrl}
-      token={token}
-      PageComponent={ReturnMaterialReceiptPage}
-      renderPreview={({ row, onClose, onEdit }) => (
-        <ReturnMaterialReceiptPreview
-          receipt={row}
-          token={token}
-          apiBaseUrl={apiBaseUrl}
-          windowName={windowName}
-          onClose={onClose}
-          onEdit={onEdit}
-          data-testid="ReturnMaterialReceiptPreview__4e1c28" />
-      )}
-      entity="returnMaterialReceipt"
-      headerEntity="returnMaterialReceipt"
-      routePrefix="/return-material-receipt/"
-      // ETP-5260 defect fix — forwarded through ReturnWindowShell's `...pageProps`
-      // and the generated ReturnMaterialReceiptPage's own `{...props}` spread
-      // straight to DetailView; renders Copy link to the LEFT of Save/Confirm.
-      // ConfirmWithCreditButton (topbarRight, hardcoded in the generated Page)
-      // is untouched — see ReturnMaterialReceiptSecondaryActions' doc comment.
-      topbarSecondary={ReturnMaterialReceiptSecondaryActions}
-      duplicateAction={{ show: true, visibleWhen: "@documentStatus@='CO'" }}
-      hideLink
-      bulkActions={ReturnMaterialReceiptBulkActions}
-      // ETP-4912 — without `usePdf` the row-hover envelope falls back to useNoPdf, so the
-      // modal had no client PDF and sent the print-* artifact instead of the document the
-      // preview shows. return-to-vendor-shipment has NO emailAction (removed under ETP-4717
-      // due to a backend contract-name mismatch) — this window keeps its own on purpose.
-      emailAction={{
-        usePdf: useReturnReceiptPdf,
-        documentType: tMenu('Return Material Receipt'),
-        visibleWhen: "@documentStatus@='CO'",
-      }}
-      {...rest}
-      data-testid="ReturnWindowShell__4e1c28" />
+    <CreateContactContext.Provider value={createContactCtxValue}>
+      <ReturnWindowShell
+        windowName={windowName}
+        recordId={recordId}
+        apiBaseUrl={apiBaseUrl}
+        token={token}
+        PageComponent={ReturnMaterialReceiptPage}
+        renderPreview={({ row, onClose, onEdit }) => (
+          <ReturnMaterialReceiptPreview
+            receipt={row}
+            token={token}
+            apiBaseUrl={apiBaseUrl}
+            windowName={windowName}
+            onClose={onClose}
+            onEdit={onEdit}
+            data-testid="ReturnMaterialReceiptPreview__4e1c28" />
+        )}
+        entity="returnMaterialReceipt"
+        headerEntity="returnMaterialReceipt"
+        routePrefix="/return-material-receipt/"
+        // ETP-5260 defect fix — forwarded through ReturnWindowShell's `...pageProps`
+        // and the generated ReturnMaterialReceiptPage's own `{...props}` spread
+        // straight to DetailView; renders Copy link to the LEFT of Save/Confirm.
+        // ConfirmWithCreditButton (topbarRight, hardcoded in the generated Page)
+        // is untouched — see ReturnMaterialReceiptSecondaryActions' doc comment.
+        topbarSecondary={ReturnMaterialReceiptSecondaryActions}
+        // ETP-5316 — Clone/duplicate is not a supported action for Customer Returns
+        // (grid row action was showing it for CO rows). Mirrors sibling
+        // return-to-vendor-shipment (duplicateAction={{ show: false }}), which
+        // already had this suppressed. Document view has never shown Clone
+        // (ReturnMaterialReceiptSecondaryActions already passes clone={false}).
+        duplicateAction={{ show: false }}
+        hideLink
+        bulkActions={ReturnMaterialReceiptBulkActions}
+        // ETP-4912 — without `usePdf` the row-hover envelope falls back to useNoPdf, so the
+        // modal had no client PDF and sent the print-* artifact instead of the document the
+        // preview shows. return-to-vendor-shipment now has its own `emailAction` too (ETP-5124,
+        // once its backend contract-name mismatch — ETP-4717 — was fixed); each window keeps
+        // its own `usePdf`/`documentType` wiring since the PDF hooks and labels differ.
+        emailAction={{
+          usePdf: useReturnReceiptPdf,
+          documentType: tMenu('Return Material Receipt'),
+          visibleWhen: "@documentStatus@='CO'",
+        }}
+        {...rest}
+        data-testid="ReturnWindowShell__4e1c28" />
+      {contactPortal}
+    </CreateContactContext.Provider>
   );
 }

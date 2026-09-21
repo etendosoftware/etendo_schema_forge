@@ -21,6 +21,11 @@ back to the originating account so onboarding can resume.
 All of it is implemented on this branch:
 
 - `POST <base>/sws/go/checkout/sessions` creates a hosted session.
+- `POST <base>/sws/go/billing/purchases` creates the purchase boundary and reopens the existing
+  hosted session correlation when an unpaid `CREATING` or `CREATED` purchase is retried.
+  It requires a `planKey` naming a row in the plan catalog (ETP-5046): there is no configured
+  fallback price any more, so a body without one is rejected `400 INVALID_REQUEST`, and a key that
+  names no active plan is rejected `400 PLAN_NOT_AVAILABLE` without revealing which keys exist.
 - `GET  <base>/sws/go/checkout/sessions/{requestId}` reports `pending` or `paid`.
 - `POST <base>/sws/go/checkout/webhook` verifies the Stripe signature, de-duplicates by event id
   durably (`ETGO_BILLING_EVENT`, see below), and records the payment.
@@ -42,6 +47,15 @@ Expect `CREATING -> CREATED -> PAID -> PROVISIONING -> PROVISIONED`. The status 
 forward: a replayed webhook or a browser reload is silently ignored rather than rewinding it,
 and each phase timestamp is first-write-wins, so `paid_at` keeps meaning *when the payment was
 confirmed*.
+
+### Retrying an interrupted purchase
+
+The purchase endpoint is safe to retry after a browser refresh or a lost redirect. If the same
+account and environment name already have a `CREATING` or `CREATED` request, the backend reopens a
+provider checkout using that request's existing correlation id and returns `200` with a new
+`checkoutUrl` and the same `requestId`. It does not create a second purchase row. A request that is
+already `PAID`, `PROVISIONING`, or `PROVISIONED` returns `409`; the client must resume the paid
+onboarding path or show the final environment state instead of charging again.
 
 Consequences to plan around:
 

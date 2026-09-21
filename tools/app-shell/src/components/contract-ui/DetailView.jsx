@@ -1233,7 +1233,7 @@ export function DetailView({
   // `displayLogic`) are willing to trust as config-driven dimension-macro
   // visibility, SCOPED TO THIS WINDOW INSTANCE ONLY — see `DIMENSION_MACRO_KEYS`
   // above for why the global allowlist itself must never include 'product'.
-  dimensionsPanelFieldKeys = [], lineRowActions = [], lineCellBadges = {}, // ETP-4888: generic per-row action / per-column badge slots forwarded to DetailTable.rowActions/.cellBadges (docs/ui-customization.md)
+  dimensionsPanelFieldKeys = [], lineRowActions = [], lineCellBadges = {}, initialData = null, // ETP-4888: generic per-row action / per-column badge slots forwarded to DetailTable.rowActions/.cellBadges (docs/ui-customization.md). ETP-5332: initialData seeds a new record — see useEntity.
 }) {
   // DetailView never needs the parent list: on `/new` there is no record to match, and on
   // `/:id` the currentItem shortcut only helps when we arrived from ListView (items already
@@ -1266,7 +1266,7 @@ export function DetailView({
       : (Form?.fields ?? []).filter(f => !gateExclusions.includes(f.key))),
     [Form, gateExclusions]
   );
-  const hook = useEntity(entity, detailEntity, { token, apiBaseUrl, skipListFetch: true, refetchAfterSave, specName: windowName, contractFields: gateFields });
+  const hook = useEntity(entity, detailEntity, { token, apiBaseUrl, skipListFetch: true, refetchAfterSave, specName: windowName, contractFields: gateFields, initialData });
   const apiFetch = useApiFetch(apiBaseUrl);
   // Session-level currency fallback. NEO Headless doesn't return
   // `currency$_identifier` on every line endpoint (only on the header), so we
@@ -1739,13 +1739,9 @@ export function DetailView({
       return () => clearTimeout(t);
     }
   }, [selectedChildRows.length, selectionBarVisible]);
-  // Per-tab close-animation timeouts. Kept in a ref so the lifecycle effect
-  // below doesn't have to depend on visibility state (which would cancel its
-  // own scheduled close on the next re-render).
+  // Per-tab close-animation timeout ids (kept in a ref so the effect below doesn't depend on visibility state).
   const secondaryBarTimeoutRef = useRef({});
-  // Mirrors the primary lifecycle, but iterates secondary tabs. Each tab's
-  // bar mounts when its selection becomes non-empty and slides out 250ms
-  // after the selection is cleared.
+  // Mirrors the primary close-line lifecycle per secondary tab: bar slides out 250ms after selection clears.
   useEffect(() => {
     for (const st of secondaryTabs) {
       const tabKey = st.key;
@@ -1767,9 +1763,9 @@ export function DetailView({
       }
     }
   }, [secondarySelectedRows, secondaryTabs]);
-  // Flush any pending secondary-bar close timeouts on unmount so they can't
-  // fire a setState after teardown (which throws "window is not defined" once
-  // the test/jsdom environment is gone).
+  // Flush pending secondary-bar, close-line and close-secondary-line timeouts on
+  // unmount so they can't fire a setState after teardown (which throws "window is
+  // not defined" once the test/jsdom environment is gone).
   useEffect(() => {
     const timeouts = secondaryBarTimeoutRef.current;
     return () => {
@@ -1777,6 +1773,8 @@ export function DetailView({
         clearTimeout(timeouts[key]);
         delete timeouts[key];
       }
+      clearTimeout(closeLineTimeoutRef.current);
+      clearTimeout(closeSecondaryLineTimeoutRef.current);
     };
   }, []);
   // Clear secondary-tab selection state when the active tab changes. The
@@ -1813,9 +1811,10 @@ export function DetailView({
   const [editingChild, setEditingChild] = useState(null);
   const [savingChild, setSavingChild] = useState(false);
 
+  const closeLineTimeoutRef = useRef(null);
   const closeLine = useCallback(() => {
     setIsClosingLine(true);
-    setTimeout(() => {
+    closeLineTimeoutRef.current = setTimeout(() => {
       setSelectedLine(null);
       setLineEdits(null);
       setLineEditColumns({});
@@ -1835,9 +1834,10 @@ export function DetailView({
     return translateBackendError(raw ?? `Error ${res.status}`, ui);
   }, [ui]);
 
+  const closeSecondaryLineTimeoutRef = useRef(null);
   const closeSecondaryLine = useCallback(() => {
     setIsClosingSecondaryLine(true);
-    setTimeout(() => {
+    closeSecondaryLineTimeoutRef.current = setTimeout(() => {
       setSelectedSecondaryLine(null);
       setSecondaryLineEdits(null);
       setSecondaryLineEditColumns({});
@@ -4323,7 +4323,17 @@ export function DetailView({
             open={customModalState.key === st.key}
             onClose={() => setCustomModalState({ key: null, rowId: null })}
             onSaved={() => {
-              secondaryHooks[idx]?.handleSelect(hook.selected ?? hook.editing);
+              const parent = hook.selected ?? hook.editing;
+              // ETP-5366: this modal persists the row with its own raw fetch, so it never went
+              // through handleAddChild and nothing marked the cached child collection stale. The
+              // handleSelect below ends in a NON-forced fetchChildren, which for the next 30s
+              // (recordStaleTime) resolves from the cache with the very same array instance — a
+              // no-op setChildren, so the tab kept showing the pre-save rows and its count until
+              // the user left the record and came back. Dropping the entry first is what makes
+              // that fetch reach the network. Same shape as handleAddChild's own invalidate, and
+              // as the ETP-5278 fix for extraActions' onRefresh.
+              secondaryHooks[idx]?.invalidateChildrenCache?.(parent?.id);
+              secondaryHooks[idx]?.handleSelect(parent);
               setCustomModalState({ key: null, rowId: null });
             }}
             onParentRefresh={() => {

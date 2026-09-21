@@ -1,5 +1,5 @@
 /**
- * ETP-5315 — grid bulk-select Reactivate for Purchase Order.
+ * ETP-5315 / ETP-5302 — grid bulk-select document actions for Purchase Order.
  *
  * Source-reading test, mirroring the convention already used for
  * BulkPurchaseOrderMoreMenu.test.js in this same directory: vitest's include
@@ -8,7 +8,20 @@
  * sales-order counterpart OrderReactivateBulkAction.jsx) is never picked up.
  * `BulkDocumentAction` itself already has full render/behavioral coverage
  * (tools/app-shell/src/components/contract-ui/__tests__/BulkDocumentAction.vitest.jsx),
- * so this file only needs to prove the thin wrapper wires the right contract.
+ * and this wrapper's own render behaviour is covered from the app-shell side in
+ * tools/app-shell/src/windows/custom/purchase-order/__tests__/
+ * (PurchaseOrderBulkActions.singleProcessButton.vitest.jsx +
+ * PurchaseOrderReactivateBulkAction.mixedSelection.vitest.jsx), so this file
+ * only needs to prove the thin wrapper wires the right contract.
+ *
+ * ETP-5302 collapsed this window's two bulk buttons into one: ETP-5315 had shipped
+ * Reactivate as a SECOND BulkDocumentAction beside the pre-existing CO-only one,
+ * which forced two workarounds that are now deleted — a local
+ * `buildReactivateActions` emitting only 'RE' (so the two buttons would not both
+ * offer 'CO') and a `reactivateBulk` label (so a mixed draft+completed selection
+ * would not show two identically-named buttons). With a single "Procesar" button
+ * whose dropdown offers Confirmar and/or Reactivar, this file is a verbatim mirror
+ * of sales-order's OrderReactivateBulkAction.jsx, and the assertions below say so.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -19,7 +32,16 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'PurchaseOrderReactivateBulkAction.jsx'), 'utf8');
 
-describe('PurchaseOrderReactivateBulkAction source (ETP-5315)', () => {
+// The rendered JSX only — the file's prose comments legitimately NAME the retired
+// `buildReactivateActions` / `reactivateBulk` while explaining why they are gone,
+// so a whole-file `doesNotMatch` would fail on the explanation itself.
+const jsxBlock = (() => {
+  const m = src.match(/return\s*\(?\s*<BulkDocumentAction[\s\S]*?\/>\s*\)?;/);
+  assert.ok(m, 'could not locate the rendered <BulkDocumentAction /> block');
+  return m[0];
+})();
+
+describe('PurchaseOrderReactivateBulkAction source (ETP-5315, single-button rework ETP-5302)', () => {
   it('exports PurchaseOrderReactivateBulkAction as the default component', () => {
     assert.match(src, /export default function PurchaseOrderReactivateBulkAction/);
   });
@@ -27,6 +49,11 @@ describe('PurchaseOrderReactivateBulkAction source (ETP-5315)', () => {
   it('imports BulkDocumentAction and useUI', () => {
     assert.match(src, /import\s+BulkDocumentAction\s+from\s+'@\/components\/contract-ui\/BulkDocumentAction'/);
     assert.match(src, /import\s+\{\s*useUI\s*\}\s+from\s+'@\/i18n'/);
+  });
+
+  it('delegates to the shared BulkDocumentAction, spreading its props through', () => {
+    assert.match(jsxBlock, /<BulkDocumentAction\s+\{\.\.\.props\}/);
+    assert.match(jsxBlock, /rowFilter=\{rowFilter\}/);
   });
 
   it('blocks the RE action for a row with hasLinkedDocuments via the cannotReactivateLinkedDocs key', () => {
@@ -38,82 +65,30 @@ describe('PurchaseOrderReactivateBulkAction source (ETP-5315)', () => {
     assert.match(src, /return true;/);
   });
 
-  it('renders BulkDocumentAction with a custom buildActions, its own rowFilter, and the reactivateBulk labelKey', () => {
-    assert.match(src, /<BulkDocumentAction\b/);
-    assert.match(src, /buildActions=\{buildReactivateActions\}/);
-    assert.match(src, /rowFilter=\{rowFilter\}/);
-    assert.match(src, /labelKey="reactivateBulk"/);
+  it('uses i18n for the rejection message (no hardcoded strings)', () => {
+    assert.match(src, /useUI\(\)/);
   });
 
-  // ETP-5315 QA fix (medium) — this component used to share the same labelKey
-  // as the sibling CO-only BulkDocumentAction (buildInOutActions) rendered right
-  // next to it in PurchaseOrderBulkActions (index.jsx). For a mixed DR+CO-unlinked
-  // selection both buttons rendered simultaneously with the identical "Confirmar"/
-  // "Confirm" label — indistinguishable even though one books and the other
-  // reactivates. Guard against ever reusing the collided key again — matched only
-  // against the rendered JSX block (not the file's prose comments, which legitimately
-  // reference the sibling's own untouched labelKey by name).
-  it('never reuses the collided labelKey on the rendered <BulkDocumentAction> (would collide with the sibling CO-only one)', () => {
-    const jsxBlock = src.match(/return\s*\(\s*<BulkDocumentAction[\s\S]*?\/>\s*\);/);
-    assert.ok(jsxBlock, 'could not locate the rendered <BulkDocumentAction /> block');
-    assert.doesNotMatch(jsxBlock[0], /labelKey="confirmBulk"/);
+  // ETP-5302 — the bar's single button reads "Procesar"; "Confirmar" and "Reactivar"
+  // are DROPDOWN OPTION labels emitted by BulkDocumentAction's own action builder,
+  // not button labels. Both `confirmBulk` and `reactivateBulk` have been deleted from
+  // every locale file, so either one reappearing here is a dangling key.
+  it('labels the bulk button with the process key, never the deleted confirmBulk / reactivateBulk keys', () => {
+    assert.match(jsxBlock, /labelKey="process"/);
+    assert.doesNotMatch(jsxBlock, /confirmBulk/);
+    assert.doesNotMatch(jsxBlock, /reactivateBulk/);
   });
 
-  // ETP-5315 review fix (blocker) — purchase-order renders BOTH the
-  // pre-existing CO-only `<BulkDocumentAction buildActions={buildInOutActions}>`
-  // AND this component alongside it. BulkDocumentAction's DEFAULT buildActions
-  // (used when none is passed) adds a 'CO' option whenever any selected row
-  // is DR, so without a custom buildActions here, any draft-containing
-  // selection would render TWO "Confirmar" buttons. buildReactivateActions
-  // must never offer 'CO' and must offer 'RE' only when a reactivatable
-  // (CO, not linked) row is present.
-  describe('buildReactivateActions (ETP-5315 review fix — no overlap with the CO-only BulkDocumentAction)', () => {
-    function extractBuildActions(source) {
-      const re = /const buildReactivateActions = \(rows\) => \{[\s\S]*?\n\};/;
-      const m = source.match(re);
-      assert.ok(m, 'could not locate the buildReactivateActions function body');
-      return m[0];
-    }
+  // The whole point of the rework: no local action builder. BulkDocumentAction's
+  // DEFAULT builder offers 'CO' when any selected row is a draft and 'RE' when any is
+  // completed, which is exactly the menu this window needs now that it owns the only
+  // document-action button in the bar. A `buildActions` prop here would silently drop
+  // one of the two entries again — the ETP-5315 shape this ticket undid.
+  it('passes NO buildActions prop — it relies on BulkDocumentAction default CO/RE builder', () => {
+    assert.doesNotMatch(jsxBlock, /buildActions=/);
+  });
 
-    function evaluate(rows) {
-      const block = extractBuildActions(src);
-      // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
-      const fn = new Function('rows', `${block}\nreturn buildReactivateActions(rows);`);
-      return fn(rows);
-    }
-
-    it('never includes a CO option (that stays exclusively the other BulkDocumentAction\'s job)', () => {
-      assert.doesNotMatch(extractBuildActions(src), /value:\s*'CO'/);
-    });
-
-    it('offers nothing for an all-draft selection', () => {
-      const actions = evaluate([
-        { documentStatus: 'DR', hasLinkedDocuments: false },
-        { documentStatus: 'DR', hasLinkedDocuments: false },
-      ]);
-      assert.deepEqual(actions, []);
-    });
-
-    it('offers RE for a selection with a completed row that has no linked documents', () => {
-      const actions = evaluate([
-        { documentStatus: 'DR', hasLinkedDocuments: false },
-        { documentStatus: 'CO', hasLinkedDocuments: false },
-      ]);
-      assert.deepEqual(actions, [{ value: 'RE', labelKey: 'reactivate' }]);
-    });
-
-    it('offers nothing when every completed row already has linked documents', () => {
-      const actions = evaluate([
-        { documentStatus: 'CO', hasLinkedDocuments: true },
-      ]);
-      assert.deepEqual(actions, []);
-    });
-
-    it('falls back to docStatus when documentStatus is absent', () => {
-      const actions = evaluate([
-        { docStatus: 'CO', hasLinkedDocuments: false },
-      ]);
-      assert.deepEqual(actions, [{ value: 'RE', labelKey: 'reactivate' }]);
-    });
+  it('no longer declares the retired buildReactivateActions helper', () => {
+    assert.doesNotMatch(src, /const buildReactivateActions\s*=/);
   });
 });

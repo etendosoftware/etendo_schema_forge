@@ -1,14 +1,16 @@
 /**
  * Default country for a NEW address (ETP-5103).
  *
- * Two unrelated popups let a user create an address — the Contacts window's
- * "Nueva dirección" (LocationEditorModal) and the "Nuevo contacto" popup shown
- * from every document (CreateContactModal → AddressSection) — and both must
- * open with Spain preselected. They resolve the option list differently (one
- * asks the selector for a single `?q=Spain` page, the other already holds the
- * whole paginated catalog), so what they share is not the fetch: it is the
- * alias set and the label→option matching, which live here so the strings are
- * declared once.
+ * An address is created from the Contacts window's "Nueva dirección"
+ * (LocationEditorModal), which must open with Spain preselected. What is shared
+ * is not the fetch — callers resolve the option list differently — but the alias
+ * set and the label→option matching, which live here so the strings are declared
+ * once.
+ *
+ * ETP-5332 removed the second caller: the document "Nuevo contacto" popup used to
+ * reach this through its own `CreateContactModal → AddressSection`, and now mounts
+ * the Contacts window itself, so it goes through LocationEditorModal like everyone
+ * else. Kept shared because that is still two call sites away from being window-local.
  */
 
 import { matchOptionByLabel } from './matchOptionLabel.js';

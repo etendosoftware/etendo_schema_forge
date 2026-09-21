@@ -17,16 +17,21 @@ const groups = {
   Inventory: 'product product-category physical-inventory goods-movements internal-consumption warehouse report-viewer-inventory',
   Finance: 'payment-in payment-out financial-account chart-of-accounts cost-center service-project general-ledger-configuration calendar assets asset-group amortization not-posted-documents simple-g-l-journal fiscal-monitor conversion-rates fiscal-models tax tax-category report-viewer-finance',
   Connections: 'authorize',
-  Settings: 'organization document-sequence price-list payment-term business-partner-category user roles acct-process-monitor fiscal-config',
+  Settings: 'organization document-sequence price-list payment-term business-partner-category user roles api-keys acct-process-monitor fiscal-config',
 };
 
 // Composition aliases documented in calendar/fiscal-monitor/fiscal-config guides.
 const aliases = { calendar: 'fiscal-calendar', 'fiscal-monitor': 'sii-monitor', 'fiscal-config': 'sii-config' };
 const exceptions = {
   dashboard: {},
-  'first-steps': {},
+  // ETP-5395 — gated to the account Owner via the `isOwner` capability
+  // (menu.json). Distinct capability name from `isAdminOrClientAdmin` below,
+  // so it does not participate in the accessWindowId admin bypass or in the
+  // `roles`/`acct-process-monitor` capability-sibling set.
+  'first-steps': { capability: 'isOwner' },
   authorize: {},
   roles: { capability: 'isAdminOrClientAdmin' },
+  'api-keys': { capability: 'isAdminOrClientAdmin', flag: 'public-api-keys' },
   // ETP-5269. Synthetic destination (runtime-routes.jsx), no AD window of its own.
   // Additionally hidden behind the `acct-process-monitor` feature flag. That gate lives in
   // SideMenu and is invisible to buildMenuGroups — the boundary this catalog measures — so here

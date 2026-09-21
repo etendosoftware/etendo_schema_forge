@@ -141,3 +141,77 @@ describe('CertModal', () => {
     expect(screen.getByText('fiscal.cert.info.title')).toBeInTheDocument();
   });
 });
+
+// ETP-5338 point 6: the passphrase field was being autofilled by the browser's
+// password-manager heuristic, which paired it with the visible "authorizationno"
+// field from SiiSection as if it were a username. Fixed with explicit
+// id/name/autoComplete on the passphrase input plus a hidden dummy "username"
+// input inside its own <form autoComplete="off">.
+describe('CertModal — anti-autofill hardening (ETP-5338)', () => {
+  it('passphrase input has the expected id, name and autoComplete', () => {
+    render(<CertModal {...baseProps} />);
+    const passInput = document.getElementById('cert-passphrase');
+    expect(passInput).toBeInTheDocument();
+    expect(passInput).toHaveAttribute('name', 'cert-passphrase');
+    expect(passInput).toHaveAttribute('autoComplete', 'new-password');
+  });
+
+  it('renders a hidden dummy username input paired with the passphrase form', () => {
+    render(<CertModal {...baseProps} />);
+    const dummy = document.querySelector('input[name="username"]');
+    expect(dummy).toBeInTheDocument();
+    expect(dummy).toHaveAttribute('type', 'text');
+    expect(dummy).toHaveAttribute('autoComplete', 'username');
+    expect(dummy).toHaveAttribute('readonly');
+    expect(dummy.value).toBe('');
+    expect(dummy).toHaveStyle({ display: 'none' });
+  });
+
+  it('typing into the passphrase field never changes the dummy username value', () => {
+    render(<CertModal {...baseProps} />);
+    const passInput = document.getElementById('cert-passphrase');
+    const dummy = document.querySelector('input[name="username"]');
+    fireEvent.change(passInput, { target: { value: 'my-secret-password' } });
+    expect(passInput.value).toBe('my-secret-password');
+    expect(dummy.value).toBe('');
+  });
+
+  it('the passphrase input lives inside its own form with autoComplete off', () => {
+    render(<CertModal {...baseProps} />);
+    const passInput = document.getElementById('cert-passphrase');
+    const form = passInput.closest('form');
+    expect(form).toBeInTheDocument();
+    expect(form).toHaveAttribute('autoComplete', 'off');
+  });
+
+  it('never includes a "username" key in the upload FormData payload', async () => {
+    vi.useFakeTimers();
+    try {
+      stableApiFetch.mockClear();
+      stableApiFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ cert: null }) });
+
+      render(<CertModal {...baseProps} />);
+
+      const file = new File(['dummy'], 'cert.p12', { type: 'application/x-pkcs12' });
+      const fileInput = screen.getByTestId('cert-file-input');
+      fireEvent.change(fileInput, { target: { files: [file] } });
+
+      const passInput = document.getElementById('cert-passphrase');
+      fireEvent.change(passInput, { target: { value: 'secret-pass' } });
+
+      const verifyBtn = screen.getByText('fiscal.cert.btn.verify').closest('button');
+      fireEvent.click(verifyBtn);
+
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(stableApiFetch).toHaveBeenCalledTimes(1);
+      const [, options] = stableApiFetch.mock.calls[0];
+      const formData = options.body;
+      expect(formData instanceof FormData).toBe(true);
+      expect(formData.has('username')).toBe(false);
+      expect(formData.get('password')).toBe('secret-pass');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

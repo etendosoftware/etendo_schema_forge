@@ -20,7 +20,7 @@ Automated coverage note: the current automated evidence is mostly source-shape, 
 | Area | Entry path | Current behavior | Evidence |
 |---|---|---|---|
 | Public access | `/onboarding`, `/login` | `/onboarding` is the only public entry page. `/login` redirects to `/onboarding`. | `tools/app-shell/src/App.jsx` |
-| Authenticated shell | `/dashboard`, `/first-steps`, `/sales`, `/inventory`, `/purchases`, `/accounting`, `/reports`, `/report-viewer`, `/crm`, `/hr`, `/projects`, `/smart-scan`, `/oauth2-clients`, `/roles`, `/authorize`, `/quick-sales-order`, `/quick-purchase-order`, `/preview`, `/artifacts`, `/artifacts/:windowName` | These routes render inside `AppLayout` and require `AuthGuard`. `/roles` (ETP-4513) is registered in `tools/app-shell/src/runtime-routes.jsx`, not `App.jsx`. | `tools/app-shell/src/App.jsx`, `tools/app-shell/src/runtime-routes.jsx`, `tools/app-shell/src/layout/AppLayout.jsx` |
+| Authenticated shell | `/dashboard`, `/first-steps`, `/sales`, `/inventory`, `/purchases`, `/accounting`, `/reports`, `/report-viewer`, `/crm`, `/hr`, `/projects`, `/smart-scan`, `/oauth2-clients`, `/api-keys`, `/roles`, `/authorize`, `/quick-sales-order`, `/quick-purchase-order`, `/preview`, `/artifacts`, `/artifacts/:windowName` | These routes render inside `AppLayout` and require `AuthGuard`. `/api-keys` is visible only when the backend returns `capabilities.publicApiKeyManagement=true`; `/roles` (ETP-4513) is registered in `tools/app-shell/src/runtime-routes.jsx`, not `App.jsx`. | `tools/app-shell/src/App.jsx`, `tools/app-shell/src/runtime-routes.jsx`, `tools/app-shell/src/layout/AppLayout.jsx` |
 | Generated/custom windows | `/:windowName`, `/:windowName/:recordId` | Loads the matching generated or custom window and optionally passes a record context. | `tools/app-shell/src/windows/WindowLoader.jsx`, `tools/app-shell/src/windows/registry.js` |
 | Menu-driven report links | `/report-viewer?category=purchases\|inventory\|finance` | Menu items can override the route with `item.path`, so report entries navigate to the shared report viewer instead of the generic window route. | `tools/app-shell/src/menu.json`, `tools/app-shell/src/components/layout/SideMenu/SideMenu.jsx` |
 
@@ -90,8 +90,8 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - **Capability axis:** an item declaring `capability` is hidden unless `capabilities[item.capability] === true`. For example, the Roles entry requires `isAdminOrClientAdmin`. A missing or not-yet-loaded capability fails closed.
   - **Permission-anchor axis (ETP-5240):** `accessWindowId` is separate from `windowId`: it checks `windowAccess[item.accessWindowId]`, not membership in the `SFListMenu` tree. `report-viewer-finance`, `report-viewer-inventory`, and `smart-scan` use it because their permission-anchor `AD_Window` records have grants but no active `AD_Menu` node. Putting those anchors in `windowId` would hide the entries for every role, including admins. For non-admins, a missing map or an `undefined` entry hides the item; both `full` and `read-only` permit visibility. The filter checks whether the value is defined, not its tier value; the backend represents denied access by omitting the key, not by returning a `none` entry.
   - **Admin/client-admin exemption:** a truthy `capabilities.isAdminOrClientAdmin` bypasses only the `accessWindowId` check, even when `windowAccess` is absent or lacks the anchor. It does not bypass a separate `capability` or menu-tree gate on the same item, hidden flags, or the shell's no-access blocking screen below. This sidebar exemption does not grant content access: the page's own `useWindowAccess()`/`WindowAccessGuard` still consumes the backend map. `SFWindowAccessMap` also includes permission anchors with active grants in its admin map (runtime `docs/neo-headless.md` section 8b); both protections are intentional.
-  - **Loading and nullable inputs:** while `useRoleMenu()` returns `undefined` (fetch in flight), `AppLayout` passes an empty `Set` to hide menu-tree-gated entries. A resolved `null` (unauthenticated or fetch failure) disables only that axis, not capability or permission-anchor checks. Both safe map hooks return `{}` before their data is available, so capability/anchor entries remain hidden unless their own checks pass (including the admin exemption). At the filter-function level, only when all three inputs are falsy are groups returned unchanged; a `null`/omitted map does not individually disable its check once another input activates filtering. The shell's `{}` fallbacks prevent that all-falsy shortcut even when `allowedIds` is `null`.
-  - **No-access blocking screen (ETP-4514):** if `allowedIds` resolves to a confirmed empty `Set` — the authenticated user's role (or lack of one) grants zero `AD_Window_Access`/`AD_Process_Access` — `AppLayout` renders `NoAccessScreen` instead of the sidebar/top bar/`Outlet`, so no menu item and no direct window route is reachable. This only fires on the resolved-empty-Set case: `undefined` (fetch in flight) and `null` (unauthenticated, or a fetch failure — deliberately fail-open so a backend outage doesn't lock everyone out) never trigger it. The guard sits above the `embedded` branch in `AppLayout`, so it is **not suppressed by `?embedded=1`** — an embedded integration (e.g. an iframe pointed at a single window) still gets the blocking screen instead of silently rendering nothing or the bare `Outlet`. The check also re-evaluates on every render rather than only at mount: if `useRoleMenu()`'s Set goes from non-empty to a confirmed-empty Set on a later render (e.g. an admin revokes the user's role mid-session and a subsequent fetch reflects it), the blocking screen replaces the previously mounted sidebar/`Outlet` instead of leaving both mounted together.
+  - **Loading state (ETP-5395):** `AppLayout` resolves `allowedIds` through a 3-state flow, checked in this order, before deciding what to mount. **State 1 — `undefined` (fetch in flight):** `AppLayout` returns `AppLayoutLoading` and mounts nothing else at all — no sidebar, no top bar, no `Outlet`, and `filterMenuGroupsByAccess()` is not called yet. This replaces the old behavior of passing a stand-in empty `Set` into the filter: that stand-in only hid menu-tree-gated entries (those declaring `windowId`/`processId`/`obuiappProcessId`), while an item declaring none of those — e.g. `menu.json`'s `first-steps` or `dashboard` entries — is never filtered by `filterMenuGroupsByAccess()` regardless of the `Set` it receives, so it used to render and become reachable via `<Outlet>` during the loading window, before the real `Set` (and the no-access check below) ever got a chance to act. **State 2 — confirmed empty `Set`:** see the No-access blocking screen bullet below. **State 3 — populated `Set` or `null`:** `AppLayout` calls `filterMenuGroupsByAccess()` for real. A resolved `null` (unauthenticated or fetch failure) disables only the menu-tree axis, not capability or permission-anchor checks. Both safe map hooks return `{}` before their data is available, so capability/anchor entries remain hidden unless their own checks pass (including the admin exemption). At the filter-function level, only when all three inputs are falsy are groups returned unchanged; a `null`/omitted map does not individually disable its check once another input activates filtering. The shell's `{}` fallbacks prevent that all-falsy shortcut even when `allowedIds` is `null`.
+  - **No-access blocking screen (ETP-4514):** if `allowedIds` resolves to a confirmed empty `Set` — the authenticated user's role (or lack of one) grants zero `AD_Window_Access`/`AD_Process_Access` — `AppLayout` renders `NoAccessScreen` instead of the sidebar/top bar/`Outlet`, so no menu item and no direct window route is reachable. This only fires on the resolved-empty-Set case: `undefined` (fetch in flight) is now caught earlier by the loading state above (`AppLayoutLoading`), and `null` (unauthenticated, or a fetch failure — deliberately fail-open so a backend outage doesn't lock everyone out) never triggers it either. The guard sits above the `embedded` branch in `AppLayout`, so it is **not suppressed by `?embedded=1`** — an embedded integration (e.g. an iframe pointed at a single window) still gets the blocking screen instead of silently rendering nothing or the bare `Outlet`. The check also re-evaluates on every render rather than only at mount: if `useRoleMenu()`'s Set goes from non-empty to a confirmed-empty Set on a later render (e.g. an admin revokes the user's role mid-session and a subsequent fetch reflects it), the blocking screen replaces the previously mounted sidebar/`Outlet` instead of leaving both mounted together.
 - **Automated evidence:**
   - `tools/app-shell/src/windows/__tests__/registry.test.js` and `registry.vitest.jsx` verify that menu groups are built from `menu.json`, keep the expected name/label shape, and are correctly reduced by `filterMenuGroupsByAccess()`/the optional `allowedIds` argument to `buildMenuGroups()`.
   - `tools/app-shell/src/windows/__tests__/registry.vitest.jsx` also covers capability gates, missing/loaded permission-anchor maps, both permitted tiers, independent menu-tree/anchor checks, empty-group removal, and admin/client-admin exemption without bypassing a separate capability gate. These are filter-level fixtures, not live role/grant verification.
@@ -133,6 +133,26 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   2. Open `/sales-order/<record-id>` and confirm the window still loads with a record context.
   3. Open `/unknown-window` and confirm the not-found error state is rendered.
   4. Open `/report-viewer?category=inventory` and confirm it uses the explicit report viewer route rather than the generic `:windowName` loader.
+
+#### 3.1 Backend base URLs (ETP-5371)
+
+- **Why it has its own section:** a wrong base URL does not fail loudly. It produces a plausible request to a path that does not exist, and the resulting 403/404 names the CDN or the data, never the line that built it.
+- **The one owner:** `tools/app-shell/src/lib/neoBaseUrl.js`.
+  - `detectBasePath()` → `{ apiBase, routerBase }` from the `/web/` marker in `window.location.pathname`, with `VITE_API_BASE` overriding `apiBase`.
+  - `getNeoBaseUrl()` → the NEO root: `/etendo/sws/neo` (or `<base>/api` under `VITE_MOCK`). `/batch` and every webhook hang off this.
+  - `getSpecBaseUrl(spec)` → one spec's URL: `/etendo/sws/neo/product`. This is the shape `WindowLoader` passes down as `apiBaseUrl`, so it is what `useApiFetch` and `useWindowImportDialog`'s existing-record lookup are written against.
+- **Rule:** any surface that drives a window's data from OUTSIDE the `:windowName` route builds its base with `getSpecBaseUrl(spec)`. Never derive one base from another by string surgery.
+- **What this fixed:** `FirstStepsImportButton` passed `getApiBase()` — the deployment prefix (`/etendo`) — where the spec URL was expected. Both are non-empty strings, so nothing downstream rejected it, and the checklist's bulk load broke in two ways at once: the batch POST resolved to `/batch` (CloudFront answered 403, which read as an infrastructure outage) and the duplicate pre-check to `/etendo/product` (404, swallowed by `findExistingKeys`, so no row was ever marked as already existing). `useBatch` also stopped deriving the NEO root by stripping a segment off its caller's base; it asks `getNeoBaseUrl()` and no longer takes `apiBaseUrl`.
+- **Why it never reproduced locally:** dev has no `VITE_API_BASE`, so the prefix is `''` and the old chop produced the correct URL by accident. Only a deployment WITH a context path (`.env.production` sets `VITE_API_BASE=/etendo`) shows the bug.
+- **Automated evidence:**
+  - `tools/app-shell/src/lib/__tests__/neoBaseUrl.vitest.js` — the three helpers across root / context-path / `VITE_API_BASE` / `VITE_MOCK` deployments, plus the assertion that `getSpecBaseUrl` equals what `WindowLoader` builds for the same window.
+  - `tools/app-shell/src/pages/first-steps/__tests__/FirstStepsImportButton.vitest.jsx` — pins the base the checklist hands `useWindowImportDialog`, per step spec.
+  - `tools/app-shell/src/components/copilot/ocr/ingest/__tests__/useBatch.vitest.jsx` — the batch URL keeps the context path whatever the caller passes, and both entry points reach the same endpoint.
+- **Manual verification path:**
+  1. On a deployment served under a context path, open Primeros pasos → "Carga masiva de productos" and import a file.
+  2. In the Network tab, confirm the POST goes to `<context>/sws/neo/batch` and not to `/batch`.
+  3. Import the same file again and confirm the rows come back as Omitidas — that is the duplicate pre-check, which uses the same base.
+  4. Repeat both from the Productos window and confirm the two flows issue identical URLs.
 
 ### 4. Entity list/detail data flow
 
@@ -507,3 +527,58 @@ the padding rules change.
 Covered by `getTabStripBleedClassName` cases in
 `src/components/contract-ui/__tests__/DetailView.helpers.vitest.jsx` (one per row of the
 table above, plus a `formScrollPaddingX` override).
+
+## Bulk actions refetch the list in place — ETP-5302
+
+**Applies to every list with a selection toolbar.** Running a bulk action from the floating
+selection bar no longer reloads the browser page. The action ends with
+`clearSelection()` → result toast → `refresh()`, where `refresh` is the in-place refetch
+`ListView` now hands to its `bulkActions` slot.
+
+What a user sees change: scroll position, the active filters (column filters, subset/quick
+filters, the advanced-filter popover) and the SPA itself all survive the action, and the
+result toast appears immediately instead of after a full reboot.
+
+The reload was never about the data. It was the mechanism that let the toast survive: the
+result was written to `sessionStorage` under `bulkActionResult` and read back by
+`useBulkActionToast()`'s mount effect on the *next* mount. Showing the toast directly removes
+the only reason to reload. That persist-then-reload path is kept, but only as a fallback for
+a bulk host mounted outside `ListView`'s slot, so no caller can silently lose its result.
+
+Windows affected: every `BulkDocumentAction` mount (sales-invoice, purchase-invoice,
+goods-receipt, goods-shipment, sales-order, purchase-order, return-material-receipt,
+return-to-vendor-shipment, matched-purchase-invoices), the sales-order and purchase-order
+kebabs ("Crear facturas" / "Crear albaranes"), and goods-shipment's "Crear Factura" — that
+last one previously neither reloaded nor refreshed, so it left the rows it had just invoiced
+showing a stale invoicing status.
+
+In the same change, the bulk dialog's confirm button reads **Aceptar** / **Accept**
+(`accept`) instead of **Completado** (`done`). "Completado" is the name of a document
+*state* — the same lists show it in their "Estado doc." column — so the button read as
+though pressing it would mark the selected documents completed. `done` is unchanged;
+`RecordCreateModal.jsx` still uses it.
+
+Developer contract (the slot's context object, the mandatory fallback branch,
+`showBulkActionToast` vs `useBulkActionToast`): [`../ui-customization.md`](../ui-customization.md)
+§9e.
+
+## Reversing a posted document before reactivating it lives in one helper — ETP-5302
+
+**Applies to every window whose `decisions.json` carries `preUnpost: true` on a menu action**
+(today sales-invoice, purchase-invoice, amortization). The rule — *reactivating an
+already-posted record unposts it first* — is implemented exactly once, in
+`tools/app-shell/src/lib/preUnpost.js`, and both surfaces call it: the detail kebab
+(`DetailMoreActionsMenu.jsx`) and the list's bulk bar (`BulkDocumentAction.jsx`, via its
+`preUnpostActions` prop).
+
+This is a rule that was previously implemented in one surface only, and the divergence was
+invisible until a user hit it: reactivating a posted invoice from the form worked, while the
+very same invoice reactivated from the list's bulk bar failed with "Factura contabilizada",
+because the bulk path sent a bare `docAction: 'RE'` that Core's `C_INVOICE_POST` rejects.
+Two implementations of one rule is what let them diverge, so there is now one.
+
+It is **opt-in per window**, and deliberately so: orders do not carry `preUnpostActions`
+because `C_ORDER_POST1` has no posted-state guard on its `RE` branch, making an unpost there
+a gratuitous accounting reversal. Full reference, including the `isPosted` /
+`runPreUnpost` contracts and why the helper is a plain module rather than a hook:
+[`../ui-customization.md`](../ui-customization.md) §9e.

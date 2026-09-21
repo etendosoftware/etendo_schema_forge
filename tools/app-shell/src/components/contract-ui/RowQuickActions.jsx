@@ -6,6 +6,21 @@ import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { isDeleteVisibleForRecord, evalRowVisibleWhen } from '@/utils/recordActions.js';
 
+// Resolves whether an action should render, given its actionsConfig entry
+// (decisions.json → window.rowQuickActions.actions.<key>) and an optional fallback
+// visibleWhen expression (e.g. a menuAction descriptor's own `.visibleWhen`).
+//
+// `show: false` is checked FIRST and short-circuits to hidden regardless of
+// `visibleWhen` — this is the documented contract (docs/decisions-reference.md,
+// "Row Quick Actions"): "`false` removes it from both the fixed buttons and the
+// kebab." `true`, the process-promotion strings `'fixed'`/`'kebab'`, and an absent
+// `show` all fall through unchanged to the existing visibleWhen evaluation
+// (defaults to visible when no expression is set).
+function isActionVisible(config, fallbackVisibleWhen, row) {
+  if (config?.show === false) return false;
+  return evalRowVisibleWhen(config?.visibleWhen ?? fallbackVisibleWhen, row);
+}
+
 /**
  * RowQuickActions — hover-revealed action icons overlaid at the end of a list row.
  *
@@ -78,9 +93,12 @@ export default function RowQuickActions({
   // Optional per-action config from decisions.json → window.rowQuickActions.actions.
   // Shape: { edit: { show: true, visibleWhen?: string }, duplicate: ..., email: ..., delete: ...,
   //          <processKey>: { show: 'fixed'|'kebab'|false, visibleWhen?: string } }
-  // Only `visibleWhen` is consumed here (per-action display-logic gate). Show/hide decisions
-  // for canonical buttons are still derived from the existing props (documentPreview, statusField,
-  // hideDeleteWhenComplete) — `actionsConfig` only refines visibility further.
+  // `show === false` unconditionally hides the action (checked before `visibleWhen`, see
+  // `isActionVisible`); any other `show` value (`true`, absent, or the process-promotion
+  // strings `'fixed'`/`'kebab'` — the latter not yet implemented as a fixed-slot promotion,
+  // it currently just falls through to the kebab like any other menuAction) falls through to
+  // `visibleWhen`. This is layered on top of, not a replacement for, the existing per-canonical-
+  // button gates derived from other props (documentPreview, statusField, hideDeleteWhenComplete).
   actionsConfig = null,
   // View-only window (decisions.json → window.readOnly, threaded via ListView →
   // DataTable). When true the write actions (Edit, Clone, Delete) are suppressed so
@@ -100,11 +118,12 @@ export default function RowQuickActions({
   // is already scoped to the spec; entity segment mirrors useDocumentAction.
   const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl, token });
 
-  // visibleWhen lookup for a given action key. Falls back to `true` when no expression set.
-  const passesVisibleWhen = useCallback((key) => {
-    const expr = actionsConfig?.[key]?.visibleWhen;
-    return evalRowVisibleWhen(expr, row);
-  }, [actionsConfig, row]);
+  // Visibility lookup for a given canonical action key (edit/duplicate/email/delete).
+  // Honors `actionsConfig[key].show === false` (unconditional hide) before falling back
+  // to `visibleWhen` (`true` when no expression set). See `isActionVisible` above.
+  const passesVisibleWhen = useCallback((key) => (
+    isActionVisible(actionsConfig?.[key], undefined, row)
+  ), [actionsConfig, row]);
 
   // Wrap a handler so we track in-flight state per button. Idempotent: if already in-flight
   // for that key, we ignore the click (no double-submit).
@@ -174,12 +193,10 @@ export default function RowQuickActions({
     : menuActions;
   const visibleMenuActions = (Array.isArray(resolvedMenuActions) ? resolvedMenuActions : [])
     .filter(a => a && a.visible !== false)
-    .filter(a => evalRowVisibleWhen(
-      // Prefer the per-key override in actionsConfig (decisions.json), fall back to the
-      // expression possibly attached to the menuAction descriptor itself.
-      actionsConfig?.[a.key]?.visibleWhen ?? a.visibleWhen,
-      row,
-    ));
+    // Prefer the per-key override in actionsConfig (decisions.json) — including its
+    // `show: false` hide — fall back to the visibleWhen possibly attached to the
+    // menuAction descriptor itself.
+    .filter(a => isActionVisible(actionsConfig?.[a.key], a.visibleWhen, row));
 
   // ETP-3504 — Figma exact colors:
   // - Neutral icons (Edit, Clone, Email, More): hsl(var(--text-disabled))
@@ -236,6 +253,16 @@ export default function RowQuickActions({
       // sizes it to the enclosing <td>'s own full height instead of a
       // shorter fixed height floating inside it.
       //
+      // ETP-5268 follow-up — "las acciones no deberian estar en la columna,
+      // si no que siempre tiene que estar al hacer hover": the reserved
+      // column width/space stays (DataTable's own quickActionsColumnStyle is
+      // untouched), but the icons themselves are hover-only again —
+      // `opacity-0 group-hover/row:opacity-100`, no transition class, so the
+      // toggle is instant ("sacale la transicion... que sea 100% rapido").
+      // Independent of the cell's own `group-hover/row:sticky` (this div
+      // stays `position: absolute` either way, so hiding it at rest never
+      // reintroduces the row-height regression above).
+      //
       // ETP-5268 follow-up — "no forma parte de una columna ... va con la
       // pantalla": DataTable's quick-actions column used to be
       // UNCONDITIONALLY `sticky right-0`, floating over whatever real
@@ -272,7 +299,7 @@ export default function RowQuickActions({
         // espacio" (a `right-3` gap here read as an unexplained sliver of
         // the reserved column left uncovered at the true edge). `px-3`
         // keeps the icons themselves off the very edge as inner padding.
-        'absolute right-0 inset-y-0 h-full flex flex-row items-center justify-center gap-0.5 px-3 z-10 opacity-100',
+        'absolute right-0 inset-y-0 h-full flex flex-row items-center justify-center gap-0.5 px-3 z-10 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100',
       ].join(' ')}
       data-testid="row-quick-actions"
       onClick={stop}

@@ -561,6 +561,63 @@
           }
         ]
       }
+    },
+    {
+      "id": "lookup-create-contact",
+      "description": "Create a contact from a document's Contacto selector without leaving the document. The '+ Crear contacto' row now MOUNTS THE CONTACTS WINDOW ITSELF inside the popup (reusing ETP-5254's RecordCreateModal/EmbeddedWindowRoute), replacing a hand-rolled reimplementation of that window. Adds the `initialData` seeding extension point to useEntity/DetailView so the embedded window can be pre-filled. ~1,972 lines of duplicated form code deleted.",
+      "owner": "ivanrobledofutit",
+      "jira": "ETP-5332",
+      "created": "2026-09-16",
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/components/contract-ui/useCreateContactModal.jsx",
+          "tools/app-shell/src/components/copilot/ocr/CreateContactModalAdapter.jsx"
+        ],
+        "backend": []
+      },
+      "$pathsComment": "Only the two call sites that decide WHAT opens are owned. lookupCreateTargets.js, RecordCreateModal.jsx and EmbeddedWindowRoute.jsx are owned by lookup-create-product; this feature adds an entry and two props to them. useEntity.js and DetailView.jsx are touch points, not owned: `initialData` is a general capability every window can use, not code that would be deleted with this feature. No runtime flag — the registry entry itself is the switch, compile-time and greppable in one place, same reasoning as lookup-create-product.",
+      "$knownGapComment": "USABLE SLICE WITH ACCEPTED DEBT: `initialData` seeds the HEADER record only, so the Copilot OCR flow no longer pre-fills the four address fields that live on the `locationAddress` child tab (`ocr-contact-address-prefill`). NOT a gap, recorded because it was investigated and wrongly suspected of being one: a contact created from the popup can have zero locations, where the deleted CreateContactModal required an address and always POSTed one. That is harmless. The document's `partnerAddress` field routes through `PartnerAddressPicker` (EntityForm.DependentFkField dispatches on column C_BPartner_Location_ID), which offers '+ Añadir dirección' and opens LocationEditorModal with `bpId` set to the partner just selected — so the user creates the address inline on the document. The old modal's mandatory address was redundant against that picker. The Contacts window itself has always allowed a partner with no location.",
+      "deferredItems": [
+        {
+          "id": "secondary-row-update-no-required-validation",
+          "kind": "open",
+          "note": "PLATFORM BUG, not scoped to Contacts — discovered while manually testing this feature's Persona tab, but the root cause is generic and affects all 17 windows whose decisions.json declares a secondaryTabs entry with linesLayout: 'inlineEditable' (sales-order, purchase-order, sales-invoice, purchase-invoice, sales-quotation, goods-receipt, goods-shipment, goods-movements, physical-inventory, internal-consumption, return-material-receipt, return-to-vendor-shipment, amortization, asset-group, business-partner-category, product-category, and contacts itself). Editing an EXISTING row's cell (as opposed to the inline ADD row, which does validate — see the add-row fixes above) commits via a per-field PATCH with zero client-side required-field check: clearing a required column (e.g. Persona's 'Nombre') and blurring PATCHes an empty value straight to the backend, which accepts it — the column is form-required but not NOT NULL in the database — and the row silently saves blank. Confirmed pre-existing: reproduced by the user on a separate server, unrelated to any ETP-5332 change, and the add-row fixes in this same ticket do not touch this code path at all.",
+          "refs": [
+            "tools/app-shell/src/components/contract-ui/DetailView.jsx:239 - getSecondaryRowUpdateHandler, the async (row, fieldKey, value, opts) => {...} handler; the PATCH fires with no isMissingRequired-style check before it",
+            "tools/app-shell/src/components/contract-ui/DataTable.jsx:347 - isMissingRequired, the only required-field check in this file, used solely by the inline ADD-row's submitLine (line ~912) — never reused here",
+            "Proposed fix: before the PATCH in getSecondaryRowUpdateHandler, resolve the field's `required` from st's Form/Table field descriptor and refuse (revert the optimistic value via handleUpdateChild, toast the same 'missing required' message the add-row uses) when the new value is blank. Needs the descriptor threaded through `ctx` since the handler currently only receives `st, linesLayout, ctx` — st doesn't carry the field list today."
+          ]
+        },
+        {
+          "id": "ocr-contact-address-prefill",
+          "kind": "open",
+          "note": "The OCR create-contact popup no longer pre-fills address / postalCode / city / country. `createPrefilledFrom` in ocrDocTypes.js still declares them, but `buildOcrContactSeed` can only forward the four keys that are businessPartner HEADER fields (name, taxID, etgoEmail, etgoPhone); the rest live on the `locationAddress` child tab, which `initialData` does not reach. The user retypes them. Closing this means a seeding mechanism for a child tab's new row, parallel to useEntity.handleNew.",
+          "refs": [
+            "ETP-4855 Error 1 - the ticket that added the rich OCR prefill being partially lost here",
+            "tools/app-shell/src/components/copilot/ocr/CreateContactModalAdapter.jsx - buildOcrContactSeed",
+            "tools/app-shell/src/hooks/useEntity.js - handleNew, the header-only seam"
+          ]
+        },
+        {
+          "id": "contacts-window-chrome-in-popup",
+          "kind": "open",
+          "note": "DetailView's chromeless mode (useChromelessEmbed) only hides the sidebar and the window's own Cancel button. The Contacts window additionally renders ContactsSummaryWidget (headerContent), ContactsKpiCards and ContactsPeriodButton (tabsBarAfter), none of which are suppressed inside the dialog. Same class of problem ETP-5254 hit with the Products stock side panel. Unverified in a browser at the time of writing.",
+          "refs": [
+            "tools/app-shell/src/windows/custom/contacts/index.jsx",
+            "tools/app-shell/src/components/contract-ui/DetailView.jsx - resolveEmbeddedSidebarContent, DetailCancelButton"
+          ]
+        },
+        {
+          "id": "contacts-e2e-specs-target-deleted-modal",
+          "kind": "open",
+          "note": "e2e/tests/flows/contacts-integration.spec.js and contacts-razon-social-prefill.mocked.spec.js drive the deleted modal's DOM (the 'Guardar contacto' button, EntityCreationModal's overlay classes, AddressSection's OptionPicker). They must be rewritten against the embedded Contacts window, not deleted — the prefill spec is the regression guard for the initialData seeding.",
+          "refs": [
+            "e2e/tests/flows/contacts-integration.spec.js",
+            "e2e/tests/flows/contacts-razon-social-prefill.mocked.spec.js",
+            "docs/e2e-testing-guide.md"
+          ]
+        }
+      ]
     }
   ]
 }

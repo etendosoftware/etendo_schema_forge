@@ -793,6 +793,29 @@ native app-shell UI; only the bank login is an external popup.
 - **Provider memory:** creating an account offline with a real Salt Edge provider selected stores
   that provider on the FA (`psd2Provider` FK, metadata only — the account stays offline). A later
   connect then preselects that bank, so the Salt Edge widget skips the bank picker.
+- **Sandbox/fake banks are offered to Demo tenants only (ETP-5344).** Whether the Salt Edge widget
+  lists test banks alongside the real ones is decided by `handleConnect` and passed down as the
+  `includeSandboxes` argument of `SaltEdgeConnectionBuilder.createSaltEdgeConnection`, which is the only
+  thing that puts `include_sandboxes` in the consent body. Two conditions, both required: the PSD2
+  module's own `PSD2_ShowFakeProviders` preference must be `Y` (an operator who turns it off is
+  never overridden), **and** the tenant must not carry `ETGO_TenantPlan = productive`. A tenant that
+  paid for its plan is connecting its real bank and has no use for test providers; a Demo tenant
+  needs them to exercise the flow without real credentials. This is the same demo/productive signal
+  (`TenantPlanService#resolvePlan`) that `OnboardingForceTestModeService` uses to keep Demo tenants'
+  fiscal submissions in test mode, and absence of the plan marker reads back as Demo.
+  - `com.etendoerp.go` ships the System-level `PSD2_ShowFakeProviders='Y'` row (its only
+    `AD_PREFERENCE.xml` entry) so the preference is on everywhere and the plan is what
+    discriminates. That row carries **`SELECTED='Y'` and must keep it**: the PSD2 module ships its
+    own System row at `'N'`, and two System rows with different values and no `Selected` flag make
+    `Preferences.getHighestPriority` report a conflict — `isFakeProvidersEnabled()` swallows the
+    resulting `PropertyConflictException` and returns `false`, which would silently disable fake
+    banks for every tenant, Demo included.
+  - The plan is read **live on every connect**, not cached into a preference, so upgrading a tenant
+    takes effect on its next connection with no data-fix and nothing to re-run.
+  - Unaffected on purpose: the offline bank picker (`BankPicker` → `GET ?action=providers`) never
+    lists sandbox providers in any tenant — its middleware query omits `include_sandboxes`, and Salt
+    Edge keeps sandboxes under `country_code=XF` while the picker only queries `ES`. The PIS
+    (payments) flow and the `SyncBankProviders` catalog job still decide from the preference alone.
 - **Sync statements:** bank-synced accounts run the PSD2 module per-account statement fetch (the
   Classic "Get Bank Statement" equivalent) from the row-hover sync icon, the kebab "Sincronizar
   ahora", the Edit modal "Sincronizar ahora", and — on the Imported Statements tab — a dedicated
@@ -1186,7 +1209,7 @@ Display the full detail of a financial account: a summary strip with KPIs, and t
 - **Payment column** (`Pago`): when the movement has a related payment, the document number renders as an underlined link (with an `ArrowUpRight` icon) that navigates to `/payment-in/:id` (received payments, `paymentIsReceipt === 'Y'`) or `/payment-out/:id` (made payments). Movements with no payment show plain text.
 - **Expandable "more info" panel**: the leading circular chevron (or a click anywhere on the row) toggles an inline panel showing a **fixed set of three accounting dimensions — Proyecto, Centro de costes, Producto** (`DISPLAYED_DIMENSIONS = ['project', 'costcenter', 'product']` in `MovementsTable.jsx`). This is intentionally independent of the chart-of-accounts `enabledDimensions`: Organización and the other dimensions are never shown, and the business partner is excluded (it already has its own Contacto column). The header row and panel form one elevated card (shadow at the bottom only, no seam line — the header row sits at `z-20` over the panel's `z-10` to hide the shadow bleed).
   - **Editable in place, ETP-5101.** Each of the three fields is a live `ChipSelect` picker (same primitive the Editar modal uses, `useDimensionLookup`-backed) whenever `canEditDimensions(movement)` — `!movement.paymentId && movement.posted !== 'Y'` — mirrors `MovementRowKebab.jsx`'s own `canEdit` exactly: a manual G/L transaction that is Draft or Processed-but-not-yet-posted. Picking a value (or clearing one) auto-saves immediately via `action=update`, reusing `buildDimensionUpdatePayload()` (`hooks/useCreateMovement.js`) to reconstruct the full payload the `update` action requires (that action has no partial-patch support — every call resends the movement's own current amount/type/currency unchanged, only the one edited dimension differs; `process` is always sent `false`, matching what the Editar modal's own "Guardar" already does for a Processed movement — proven safe, never reverts processed/posted state). On save failure the row keeps its prior value and a toast shows the backend's own message (translated) or the generic `financeAccountTxRowDimensionUpdateError` fallback.
-  - **Stays the original read-only label+value display** (empty when the transaction has no value) for: a **posted** movement, a **payment-linked** movement (no `paymentId` exclusion applies — Payments-module-managed rows are never editable here, matching the kebab's own Editar hide rule), and **every dimension key other than the three above** — `EDITABLE_DIMENSION_KEYS` is a hardcoded allowlist because `FinancialAccountTransactionsHandler#applyEditableDimensions` (the backend) only accepts `projectId`/`costcenterId`/`productId`; organization/activity/campaign/salesregion/user1/user2 have no write path at all regardless of document status (moot in practice for this window today — its contract never configures them as panel fields — but the allowlist is explicit rather than relying on that).
+  - **Stays the original read-only label+value display** (empty when the transaction has no value) for: a **posted** movement, a **payment-linked** movement (no `paymentId` exclusion applies — Payments-module-managed rows are never editable here, matching the kebab's own Editar hide rule), and **every dimension key other than the three above** — `EDITABLE_DIMENSION_KEYS` is a hardcoded allowlist scoped to this panel's own three fields (the backend's `applyEditableDimensions` also accepts `businessPartnerId`/`glItemId`/`description`, per the Editar-modal rule above, but this panel deliberately excludes Contacto — it already has its own column — and has no G/L item or description field at all); organization/activity/campaign/salesregion/user1/user2 have no write path at all regardless of document status (moot in practice for this window today — its contract never configures them as panel fields — but the allowlist is explicit rather than relying on that).
 - Locale-aware date format in the Date column (es_ES → `dd/MM/yyyy`, en_US → `M/d/yyyy`).
 - Individual row checkbox + select-all (indeterminate when partial).
 - **Selection clears on any filter change** (ETP-4972 QA fix): changing the type filter, date range, search box or the advanced "by conditions" filter drops the current checkbox selection and hides the floating `SelectionToolbar`, so a bulk "Eliminar" can never fire against movements that scrolled out of the filtered view. A sort-only change (`toggleSort`/`selectSort`) leaves the selection untouched. Same rule applies to the Imported Statements tab's own local filters (search, date range, status, advanced filter).
@@ -1247,7 +1270,7 @@ The footer has two actions: **Guardar** saves as **Draft** (Borrador); **Confirm
 
 **Error surfacing (ETP-5085, applies to every movement action — create / update / process / reactivate / delete / transfer):** `useCreateMovement.postAction` no longer throws `HTTP <status>: <raw response body>`. It reads the backend's own business message with the shared `parseBackendErrorMessage` (`lib/backendErrors.js`) and attaches `error.status`; `MovementRowKebab.runLifecycle` then runs it through `translateBackendError` before the toast, falling back to the per-action i18n key when the response carried no message. Before this, a rejected action showed the user the literal JSON envelope — that is how ETP-5085's 500 reached the screen as `HTTP 500: {"error":{"message":"Could not delete the movement…"}}`. New backend literals therefore need an entry in `BACKEND_ERROR_MAP` plus the `backendError.*` key in all three locale files.
 
-**Edit mode**: opened from the kebab's **Editar**, available for both Draft and Processed-but-not-yet-posted manual G/L movements (`MovementRowKebab.jsx`: `canEdit = isGlTransaction && !isPosted`) — the same modal, seeded from the row (which carries the FK ids + display names + the deposit/withdrawal split), titled "Editar movimiento", saving via `action=update`. On a Draft movement everything is editable; on an already-**Processed** movement (`ETP-4500`) only **amount and direction are locked** (`NewTransactionModal.jsx`: `lockAmountType = isEdit && Boolean(movement.processed)`, Classic parity) — G/L item, dimensions, description and dates stay editable, and the backend (`FinancialAccountTransactionsHandler.applyEditableDimensions`) accepts the update. Once the movement is **posted** (contabilizado), Editar is no longer offered at all — it must be reactivated first (Reactivar, kebab). Delete/Reactivate happen from the kebab, backed by `?action=delete|reactivate` (delegating to the `com.etendoerp.payment.removal` `TransactionRemovalUtil`) — except for a funds-transfer leg, which `action=delete` rejects with a 409 before reaching that module (ETP-5085, see below). Posting (contabilización) stays an independent flag (the kebab's Post action).
+**Edit mode**: opened from the kebab's **Editar**, available for both Draft and Processed-but-not-yet-posted manual G/L movements (`MovementRowKebab.jsx`: `canEdit = isGlTransaction && !isPosted`) — the same modal, seeded from the row (which carries the FK ids + display names + the deposit/withdrawal split), titled "Editar movimiento", saving via `action=update`. On a Draft movement everything is editable; on an already-**Processed** movement (`ETP-4500`, tightened by `ETP-4879`) **amount, direction and date are locked** (`NewTransactionModal.jsx`: `lockWhileProcessed = isEdit && Boolean(movement.processed)`, applied to `DirectionToggle`/`AmountInput`/the date `DateInput`, Classic parity for amount/direction) — G/L item, the 4 accounting dimensions and the description stay editable, and the backend (`FinancialAccountTransactionsHandler.applyEditableDimensions`) accepts exactly those fields (description, businessPartner, glItem, project, costcenter, product) and no longer touches `transactionDate`/`dateAcct` — an earlier version of this method reassigned both dates unconditionally, which silently rolled `DATEACCT` back to the transaction date on every Processed edit; ETP-4879 removed that. Once the movement is **posted** (contabilizado), Editar is no longer offered at all — it must be reactivated first (Reactivar, kebab). Delete/Reactivate happen from the kebab, backed by `?action=delete|reactivate` (delegating to the `com.etendoerp.payment.removal` `TransactionRemovalUtil`) — except for a funds-transfer leg, which `action=delete` rejects with a 409 before reaching that module (ETP-5085, see below). Posting (contabilización) stays an independent flag (the kebab's Post action).
 
 **Reactivar (kebab) and the Reconciliación tab's un-reconcile action overlap in scope but are separate code paths.** A movement matched to a bank statement can be un-done from either surface — the Reconciliación split panel's Desconciliar (`ReconciliationHandler`, see above; its sibling Reactivar was removed by ETP-5135, see below), or this Movimientos-tab kebab item (`FinancialAccountTransactionsHandler.handleReactivate` → `TransactionRemovalUtil.reactivate`, which internally un-reconciles via the same `ReconciliationRemovalUtil.removeTransactionFromReconciliation` before running Core's transaction-level `FIN_TransactionProcess` `"R"` action). One gap between them was closed in this task: when the reactivated transaction was matched to a bank-statement line that Core had physically split for a 1:N match, this kebab path only cleared the line's transaction pointer and left the ETGO-tagged split siblings fragmented — the Reconciliación tab already re-collapses them (`ReconciliationHandler.normalizeReactivatedMatchGroup`), this path didn't. `handleReactivate` now captures the linked line before reactivating and calls the same `normalizeReactivatedMatchGroup` (a plain `new ReconciliationHandler()` instantiation — no CDI wiring needed, same composition pattern `ReconciliationHandlerSupport` already uses).
 
@@ -3254,6 +3277,29 @@ matching the statements grid. That ordering difference predates ETP-4954 and was
 entirely from `.xlsx`, and the reader behind `parseXlsx` only speaks OOXML. Rather than surfacing the
 reader's opaque failure, an `.xls` upload is caught on the extension before any parse is attempted
 and gets a message naming the one thing that fixes it — re-save as `.xlsx`.
+
+#### Which parse rejection gets which message (ETP-5348)
+
+`useStatementImportReview.loadFile` translates the shared parsers' complaints into this window's
+own copy, and the split is **by `ImportParseError.messageKey`**, not by whether the parse threw:
+
+| Core `messageKey` | Message shown | Why |
+|---|---|---|
+| `importErrorNoDataRows`, `importErrorFileEmpty` | `financeAccountStatementsImportErrorEmptyFile` — "El archivo no tiene ninguna línea de datos." | there is nothing to import |
+| `importErrorDuplicateHeader`, `importErrorEmptyHeader`, `importErrorMultipleSheets`, `importErrorUnreadableXlsx` | `financeAccountStatementsImportErrorUnreadable` — "Comprueba que tenga una fila de encabezados, sin columnas repetidas, y una sola hoja con datos." | the file's shape is wrong, and that sentence names exactly what to look at |
+| anything that is not an `ImportParseError` | the generic format copy | not a parser complaint, so not something the user can act on |
+
+**Why this needed saying.** ETP-5348 made `parseDelimited`/`parseXlsx` refuse a header-only file
+themselves, throwing `importErrorNoDataRows`. This window used to detect that case itself, *after*
+a successful parse (`rows.length === 0`), so the new throw silently took that branch out of reach
+and every rejection collapsed onto the generic unreadable copy — which told the user to check for a
+header row, duplicate columns and extra sheets, none of which was the problem. The `rows.length === 0`
+guard is still there and deliberately returns the same key, so the two paths cannot answer
+differently; that disagreement is what produced the wrong message in the first place.
+
+Covered by `__tests__/ImportStatementModal.vitest.jsx` — one test per row of that table, each
+asserting the OTHER message is absent, so flattening the branches again fails the suite in both
+directions.
 
 #### Unusable-amount lines and empty files (alignment with Classic, except negatives)
 
