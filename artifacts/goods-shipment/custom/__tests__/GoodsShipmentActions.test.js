@@ -160,6 +160,56 @@ describe('GoodsShipmentActions', () => {
     });
   });
 
+  // The single-record modal now shows a real quote too, mirroring BulkInvoiceFromShipment.jsx
+  // exactly — but ONLY when this shipment has no linked sales order. createFromShipments'
+  // single-shipment-with-order short-circuit into createFromOrder bills the WHOLE order's
+  // pending lines (this button sends no line overrides), so a quote computed from just this
+  // shipment's own lines would under-report the real invoice total in that case; the modal's
+  // existing linkedOrder.grandTotalAmount fallback stays in charge instead.
+  describe('single-record quote — gated on hasLinkedOrder', () => {
+    it('derives hasLinkedOrder from data.linkedOrders, the same single-record enrichment already received', () => {
+      assert.match(src, /const hasLinkedOrder = Array\.isArray\(data\?\.linkedOrders\) && data\.linkedOrders\.length > 0;/);
+    });
+
+    it('skips the line/pending fetch entirely when a linked order exists', () => {
+      assert.match(
+        src,
+        /if \(!showInvoiceConfirm \|\| hasLinkedOrder \|\| !recordId\) \{/,
+      );
+    });
+
+    it('fetches this shipment\'s own lines and pendingInvoiceLines, not a bulk collection', () => {
+      assert.match(src, /goods-shipment\/goodsShipmentLine\?parentId=\$\{recordId\}/);
+      assert.match(src, /goods-shipment\/goodsShipment\/\$\{recordId\}\/action\/pendingInvoiceLines`, \{ baseUrl: '', token \}/);
+    });
+
+    it('prices order-linked LINES from their own order line, unlinked lines from the Tarifa', () => {
+      assert.match(src, /sales-order\/lines\/\$\{id\}/);
+      assert.match(src, /sales-invoice\/lines\/selectors\/M_Product_ID\?limit=500&offset=0&priceList=/);
+      assert.match(
+        src,
+        /const price = detail\.salesOrderLine\s*\n\s*\?\s*orderLinePrices\[detail\.salesOrderLine\]\s*\n\s*:\s*tariffPrices\[detail\.product\];/,
+      );
+    });
+
+    it('only overrides the modal default (grandTotal/documentNo) once the quote has actually resolved', () => {
+      assert.match(
+        src,
+        /const cardAmountLabel = quoteAmount != null\s*\n\s*\?\s*formatCurrency\([\s\S]*?, quoteAmount\)\s*\n\s*:\s*undefined;/,
+      );
+    });
+
+    it('passes cardAmountLabel and onPriceListChange to the modal', () => {
+      assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?cardAmountLabel=\{cardAmountLabel\}[\s\S]*?\/>/);
+      assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?onPriceListChange=\{setSelectedPriceListId\}[\s\S]*?\/>/);
+    });
+
+    it('uses the authenticated request helper for the new fetches, not a bare fetch', () => {
+      assert.match(src, /import \{ useApiFetch \} from '@\/auth\/useApiFetch\.js'/);
+      assert.match(src, /const apiFetch = useApiFetch\(\);/);
+    });
+  });
+
   // ETP-5265 — the intermediate "already fully invoiced" confirmation popup
   // (ConfirmShipmentInvoicedModal, now deleted entirely) was removed. Confirming
   // a fully-invoiced shipment now calls the documentAction endpoint directly via
