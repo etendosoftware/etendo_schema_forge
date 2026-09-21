@@ -1131,6 +1131,10 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
               apiBaseUrl={apiBaseUrl}
               isActive={activeTab === 'receipt'}
               config={{ allowedMimeTypes: ['application/pdf'] }}
+              // ETP-5432 pt.3 — the justificante must only be deletable while the
+              // declaration is still a draft, same rule `FmRowActions`' own delete
+              // action already enforces for the declaration record itself.
+              readOnly={status !== 'draft'}
               key={`${status}-${receiptRefreshTick}`}
               data-testid="AttachmentsTab__303receipt" />)
           )}

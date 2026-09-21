@@ -33,6 +33,16 @@ import { buildTypesLabel } from './attachmentPolicy';
  *                       the header. Only present (non-undefined) while isNew.
  *   onGoToSavedRecord - (savedRecord) => void. Navigates to the just-saved
  *                       record with this tab re-opened. Only present while isNew.
+ *   readOnly          - When true, hides the single-row and "delete all" delete
+ *                       actions (download/upload stay available). Default false
+ *                       (every existing caller is unaffected). A window passes
+ *                       this when the owning record has left an editable/draft
+ *                       state — e.g. fiscal-models' "Justificante" tab, where an
+ *                       already-submitted declaration's receipt must not be
+ *                       deletable (ETP-5432 pt.3). This is a UI convenience only:
+ *                       the backend `DELETE /sws/neo/attachments/:id` endpoint has
+ *                       no per-record status check, so it does not stop a direct
+ *                       API call — see NeoAttachmentsHelper#handleDelete.
  *
  * ── Attaching before the header is saved (ETP-4315 QA follow-up) ───────────
  * A brand-new record has no persisted id, so `recordId` here is the literal
@@ -57,6 +67,7 @@ export default function AttachmentsTab({
   isNew,
   onSaveHeader,
   onGoToSavedRecord,
+  readOnly = false,
 }) {
   const ui = useUI();
   const saveBeforeAttach = !!config.saveBeforeAttach;
@@ -161,9 +172,9 @@ export default function AttachmentsTab({
         loading={loading}
         uploadingFiles={uploadingFiles}
         onDownload={download}
-        onDelete={setDeletingAttachment}
+        onDelete={readOnly ? undefined : setDeletingAttachment}
         onDownloadAll={items.length > 0 ? downloadAll : undefined}
-        onDeleteAll={items.length > 0 ? () => setConfirmDeleteAll(true) : undefined}
+        onDeleteAll={!readOnly && items.length > 0 ? () => setConfirmDeleteAll(true) : undefined}
         formatBytes={formatBytes}
         data-testid="AttachmentsTable__281340" />
       <ConfirmDeleteDialog
