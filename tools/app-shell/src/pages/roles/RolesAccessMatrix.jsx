@@ -48,6 +48,14 @@ import { buildRowKey } from './useRolesOverviewData.js';
  * never collide with a real window id sharing the same category, even though in
  * practice the two id-spaces never overlap (see `SFRolesOverview.java`'s
  * `ReportRow` javadoc).
+ *
+ * **No sticky column headers here (deliberately, ETP-5402 QA follow-up).** A sticky
+ * header was attempted through 6 different CSS strategies in one session — all
+ * failed live with the same "header visually overlaps/ghosts a body row during and
+ * after scroll" symptom (confirmed via screen recordings and DevTools bounding-box
+ * inspection), even though `UserRolesTab.jsx`'s own sticky `<thead>` (same
+ * `AppLayout.jsx` scroll chrome) works fine. Split out to its own ticket —
+ * **ETP-5435** — rather than keep blocking this ticket on it.
  */
 function reportRowKey(category, reportId) {
   return `${buildRowKey(category, reportId)}--informes`;
@@ -67,72 +75,32 @@ export default function RolesAccessMatrix({ cards, matrix, reportsMatrix, iconFo
     ...[...reportGroupsByCategory.keys()].filter((category) => !windowGroupsByCategory.has(category)),
   ];
 
-  // ETP-5402 QA follow-up (round 4) — shared column widths for the two SEPARATE <table>s below
-  // (header table + body table). Rounds 1-3 all tried to keep the header row INSIDE the same
-  // scrolling <table> as the body (sticky on <thead>, then on overflow-wrapper tuning, then on
-  // each <th>) and all three failed live: `position: sticky` on table row-groups/cells is a
-  // well-known cross-browser table-layout gotcha — confirmed via a screen recording AND a
-  // DevTools inspection showing the "stuck" header's own box genuinely overlapping a body row
-  // two rows down, a real layout miscomputation, not a paint/HMR artifact. The only reliable fix
-  // is to stop asking the SAME table to both scroll its body and pin its header — this renders
-  // the header as its own table with no <tbody>, sticky-positioned as a plain <div> (no table
-  // row-group involved in the sticky calculation at all), stacked directly above a second,
-  // non-sticky table for the body. `table-layout: fixed` + an identical <colgroup> on both
-  // tables is what keeps their columns pixel-aligned despite being two separate elements.
-  const roleColumnWidth = cards.length > 0 ? `${70 / cards.length}%` : '0%';
-  const renderColGroup = () => (
-    <colgroup>
-      <col style={{ width: '30%' }} />
-      {cards.map((role) => (
-        <col key={role.id} style={{ width: roleColumnWidth }} />
-      ))}
-    </colgroup>
-  );
-
   return (
-    <div data-testid="RolesAccessMatrix">
-      {/* ETP-5402 QA follow-up (round 5) — `will-change: transform` promotes this sticky element
-          to its OWN GPU compositing layer. Confirmed via a decisive test: the exact same
-          overlap/ghosting does NOT happen on UserRolesTab.jsx's own sticky <thead> (same
-          AppLayout.jsx scroll chrome, so that shared ancestor is ruled out) — the one concrete
-          structural difference is RolesOverviewPage's summary-cards CSS Grid sitting, as a
-          sibling, directly above this sticky element inside the SAME scroll container, which
-          UserRolesTab has no equivalent of. "Sticky content overlapping/ghosting body rows
-          during scroll" is a well-known compositing-layer invalidation bug in this class of
-          layout (grid sibling + sticky descendant under one scroll root) — forcing a dedicated
-          layer is the standard, targeted remedy, not a structural rewrite. */}
-      <div
-        className="sticky top-0 z-10 bg-card will-change-transform"
-        data-testid="RolesAccessMatrix__headerWrapper">
-        <table className="w-full table-fixed text-sm">
-          {renderColGroup()}
-          <thead>
-            <tr className="border-b border-border/50">
-              <th className="py-2.5 pr-4 text-left text-sm font-semibold text-foreground">
-                {ui('rolesMatrixWindowColumn')}
-              </th>
-              {cards.map((role) => {
-                const Icon = iconFor?.(role);
-                const displayName = role.isClientAdmin
-                  ? ui(ADMIN_NAME_I18N_KEY)
-                  : resolveRoleDisplayName(ui, role.name);
-                return (
-                  <th key={role.id} className="py-2.5 px-3 text-center text-sm font-semibold text-foreground">
-                    <span className="inline-flex items-center justify-center gap-1.5">
-                      {Icon && (
-                        <Icon className="h-3.5 w-3.5" data-testid={`RolesAccessMatrix__headerIcon-${role.id}`} />
-                      )}
-                      {displayName}
-                    </span>
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-        </table>
-      </div>
-      <table className="w-full table-fixed text-sm">
-        {renderColGroup()}
+    <div className="overflow-x-auto" data-testid="RolesAccessMatrix">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border/50">
+            <th className="py-2.5 pr-4 text-left text-sm font-semibold text-foreground">
+              {ui('rolesMatrixWindowColumn')}
+            </th>
+            {cards.map((role) => {
+              const Icon = iconFor?.(role);
+              const displayName = role.isClientAdmin
+                ? ui(ADMIN_NAME_I18N_KEY)
+                : resolveRoleDisplayName(ui, role.name);
+              return (
+                <th key={role.id} className="py-2.5 px-3 text-center text-sm font-semibold text-foreground">
+                  <span className="inline-flex items-center justify-center gap-1.5">
+                    {Icon && (
+                      <Icon className="h-3.5 w-3.5" data-testid={`RolesAccessMatrix__headerIcon-${role.id}`} />
+                    )}
+                    {displayName}
+                  </span>
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
         <tbody className="divide-y divide-border/50">
           {categories.map((category) => {
             const windowRows = windowGroupsByCategory.get(category)?.rows ?? [];
