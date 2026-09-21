@@ -271,11 +271,11 @@ function AddonsStep({ ui, dataTransfer, onDataTransferChange, onContinue }) {
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <Card className="border-border bg-card" data-testid="upgrade-data-transfer">
-            <CardHeader data-testid="CardHeader__58bad7">
-              <CardTitle className="text-base" data-testid="CardTitle__58bad7">{ui('upgradeDataTransferTitle')}</CardTitle>
+            <CardHeader>
+              <CardTitle className="text-base">{ui('upgradeDataTransferTitle')}</CardTitle>
               <p className="text-sm text-muted-foreground">{ui('upgradeDataTransferBody')}</p>
             </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-2" data-testid="CardContent__58bad7">
+            <CardContent className="grid gap-3 sm:grid-cols-2">
               {[
                 { key: 'products', labelKey: 'upgradeMigrateProducts' },
                 { key: 'contacts', labelKey: 'upgradeMigrateContacts' },
@@ -295,9 +295,7 @@ function AddonsStep({ ui, dataTransfer, onDataTransferChange, onContinue }) {
           </Card>
           {[1, 2, 3, 4].map(item => (
             <Card key={item} className="min-h-[130px] border-border bg-muted/20" data-testid={`upgrade-addon-skeleton-${item}`}>
-              <CardContent
-                className="flex h-full items-center gap-4 p-5"
-                data-testid="CardContent__58bad7">
+              <CardContent className="flex h-full items-center gap-4 p-5">
                 <div className="h-12 w-12 shrink-0 animate-pulse rounded-xl bg-muted" />
                 <div className="flex-1 space-y-3">
                   <div className="h-5 w-2/3 animate-pulse rounded bg-muted" />
@@ -403,7 +401,7 @@ function SuccessPanel({ ui, onContinue, entering, enterError }) {
           </p>
         )}
         <Button className="w-full sm:w-auto" onClick={() => onContinue()} disabled={entering} data-testid="upgrade-enter-productive">
-          {entering ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__58bad7" /> : ui('upgradeMigrationContinue')}
+          {entering ? <Loader2 className="h-4 w-4 animate-spin" /> : ui('upgradeMigrationContinue')}
           {!entering && <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />}
         </Button>
       </CardContent>
@@ -416,7 +414,7 @@ function BillingOverviewPanel({ purchases, onResume, resumingPurchaseId, ui }) {
   return (
     <Card data-testid="upgrade-billing-overview">
       <CardHeader data-testid="CardHeader__58bad7">
-        <CardTitle className="text-base" data-testid="CardTitle__58bad7">{ui('upgradeBillingOverviewTitle')}</CardTitle>
+        <CardTitle className="text-base">{ui('upgradeBillingOverviewTitle')}</CardTitle>
         <p className="mt-1 text-sm text-muted-foreground">{ui('upgradeBillingOverviewBody')}</p>
       </CardHeader>
       <CardContent data-testid="CardContent__58bad7">
@@ -425,8 +423,8 @@ function BillingOverviewPanel({ purchases, onResume, resumingPurchaseId, ui }) {
             <li key={purchase.purchaseId} className="flex items-center justify-between gap-3">
               <span className="truncate">{purchase.clientName || ui('upgradeUnnamedPurchase')}</span>
               <div className="flex items-center gap-2">
-                <Badge variant="secondary" data-testid="Badge__58bad7">{purchase.status}</Badge>
-                {purchase.status === 'PAID' && (
+                <Badge variant="secondary">{purchase.status}</Badge>
+                {(purchase.status === 'PAID' || purchase.status === 'PROVISIONING') && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -435,7 +433,7 @@ function BillingOverviewPanel({ purchases, onResume, resumingPurchaseId, ui }) {
                     data-testid={`upgrade-resume-purchase-${purchase.purchaseId}`}
                   >
                     {resumingPurchaseId === purchase.purchaseId
-                      ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__58bad7" />
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
                       : ui('upgradeResumePurchase')}
                   </Button>
                 )}
@@ -715,7 +713,6 @@ export default function UpgradePage() {
           clientName: form.tenantName.trim(),
           upgradeAction: form.upgradeAction,
           language: getStoredLocale(),
-          dataTransfer,
         }
       );
       // Payment and provisioning are confirmed by the backend/webhook. The
@@ -789,11 +786,7 @@ export default function UpgradePage() {
           </div>
           <span className="text-xl font-bold tracking-tight">{ui('brandEtendo')}</span>
         </div>
-        <CheckoutSteps
-          ui={ui}
-          phase={phase}
-          checkoutStep={checkoutStep}
-          data-testid="CheckoutSteps__58bad7" />
+        <CheckoutSteps ui={ui} phase={phase} checkoutStep={checkoutStep} />
         <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label={ui('back')} data-testid="upgrade-close">
           <span className="text-2xl leading-none" aria-hidden="true">×</span>
         </Button>
@@ -825,14 +818,8 @@ export default function UpgradePage() {
           className="w-full"
           onSelect={() => setCheckoutStep('addons')}
           data-testid="PlanCard__58bad7" />
-        <SkeletonPlanCard
-          testId="upgrade-plan-coming-soon-1"
-          className="w-full"
-          data-testid="SkeletonPlanCard__58bad7" />
-        <SkeletonPlanCard
-          testId="upgrade-plan-coming-soon-2"
-          className="w-full"
-          data-testid="SkeletonPlanCard__58bad7" />
+        <SkeletonPlanCard testId="upgrade-plan-coming-soon-1" className="w-full" />
+        <SkeletonPlanCard testId="upgrade-plan-coming-soon-2" className="w-full" />
       </div>
       <div className="flex justify-end md:hidden">
         <Button onClick={() => setCheckoutStep('addons')} data-testid="upgrade-plan-continue">
@@ -847,7 +834,7 @@ export default function UpgradePage() {
           dataTransfer={dataTransfer}
           onDataTransferChange={(key, checked) => setDataTransfer(previous => ({ ...previous, [key]: checked }))}
           onContinue={() => setCheckoutStep('payment')}
-          data-testid="AddonsStep__58bad7" />
+        />
       )}
       {phase === 'running' && <ProgressPanel steps={steps} ui={ui} data-testid="ProgressPanel__58bad7" />}
       {phase === 'success' && <SuccessPanel
@@ -966,7 +953,7 @@ export default function UpgradePage() {
           onResume={resumePaidPurchase}
           resumingPurchaseId={resumingPurchaseId}
           ui={ui}
-          data-testid="BillingOverviewPanel__58bad7" />
+        />
         </div>
       )}
       </main>

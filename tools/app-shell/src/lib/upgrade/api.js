@@ -26,7 +26,6 @@ export async function createCheckoutSession(fetchImpl, baseUrl, token, input = {
       ...(input.clientName ? { clientName: input.clientName } : {}),
       ...(input.language ? { language: input.language } : {}),
       ...(input.countryCode ? { countryCode: input.countryCode } : {}),
-      ...(input.dataTransfer ? { dataTransfer: input.dataTransfer } : {}),
     }),
   });
 
@@ -52,7 +51,6 @@ export async function createBillingPurchase(fetchImpl, baseUrl, token, input = {
       ...(input.clientName ? { clientName: input.clientName } : {}),
       ...(input.language ? { language: input.language } : {}),
       ...(input.countryCode ? { countryCode: input.countryCode } : {}),
-      ...(input.dataTransfer ? { dataTransfer: input.dataTransfer } : {}),
     }),
   });
   const data = await readJsonSafely(response);

@@ -216,7 +216,6 @@ describe('UpgradePage — hosted checkout', () => {
       clientName: 'Acme Trial',
       upgradeAction: 'create-productive',
       language: 'es_ES',
-      dataTransfer: { products: true, contacts: true },
     });
     expect(JSON.stringify(requests[0].body)).not.toMatch(/card|paymentToken|mock-paid|priceId|amount/i);
   });
@@ -420,6 +419,23 @@ describe('UpgradePage — checkout funnel tracking', () => {
     await renderUpgradePage();
 
     await user.click(screen.getByTestId('upgrade-resume-purchase-purchase-1'));
+    await screen.findByTestId('upgrade-success');
+    expect(requests).toHaveLength(0);
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/sws/go/onboarding', expect.objectContaining({ method: 'POST' })
+    );
+  });
+
+  it('offers recovery for a purchase stalled in provisioning', async () => {
+    const user = userEvent.setup();
+    const requests = installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      purchases: [{ purchaseId: 'purchase-stalled', status: 'PROVISIONING', clientName: 'Acme Productive' }],
+      onboarding: () => successStream(),
+    });
+    await renderUpgradePage();
+
+    await user.click(screen.getByTestId('upgrade-resume-purchase-purchase-stalled'));
     await screen.findByTestId('upgrade-success');
     expect(requests).toHaveLength(0);
     expect(globalThis.fetch).toHaveBeenCalledWith(
