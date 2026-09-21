@@ -299,20 +299,27 @@ const BASE = {
         // select, same shape as TIPO_DECLARACION_FIELD (`type: 'select'` + `options[{value,
         // labelKey}]`, rendered by FmBoxes303's renderIdentSelectField).
         //
-        // All four options are offered in every context, deliberately: under Nota 3 the marca
-        // must be 1/2/3, but AEAT303Report2024 already rejects 0 there with its own message
-        // (@AEAT303_sepa_mark_required_111@), so hiding the option would be redundant.
+        // Only marcas 1/2/3 are declared. Marca 0 ("Vacía") is NOT offered as an option: it means
+        // "no value set", which is exactly what the leading placeholder option `<option value="">`
+        // that renderIdentSelectField always renders already expresses. Declaring both would put
+        // two visually identical empty entries in the list with different behaviour.
         //
-        // `-` carries the literal value "0", not '' or null: the record design defines 0
-        // ("Vacía") as an admitted value of the marca, and position 194 of the DID page is a
-        // 1-character field that must carry the digit. This matches what an empty field already
-        // produced — AEAT303Report2023#generatePageDID0 substitutes "0" for a blank marca before
-        // writing the page — so the emitted file is unchanged. Note the select still renders its
-        // own leading placeholder option (value ''), which remains distinct: it sends no SEPA
-        // param at all, exactly as an empty text input did.
+        // The placeholder is therefore the only empty choice, and it behaves exactly as the old
+        // empty text input did: `applyMappedIdentParams`'s `if (v)` skips it, so no SEPA param is
+        // sent at all. The emitted file is unchanged either way — AEAT303Report2023's
+        // generatePageDID0 substitutes "0" for a blank marca before writing position 194.
+        //
+        // Deliberately NOT making the placeholder emit "0": the REDEME + tipo D/V/X validators
+        // (AEAT303Report2021#checkData, AEAT303Report2023#checkData) reject a BLANK marca with
+        // @AEAT303_sepa_empty@, and a "0" would sail past them — an untouched field would be
+        // filed as marca "Vacía" instead of raising the error it raises today.
+        //
+        // Under Nota 3 the marca must be 1/2/3; leaving the placeholder selected there is still
+        // rejected by AEAT303Report2024 with @AEAT303_sepa_mark_required_111@ (a missing param
+        // resolves to null, which is not in SEPA_MARKS_VALID_FOR_BOX_111), so no option needs
+        // hiding and no dynamic option logic exists.
         { id: 'bank_sepa',      labelKey: 'fm.ident.bank.sepa',      type: 'select', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN,
           options: [
-            { value: '0', labelKey: 'fm.ident.bank.sepa.none' },
             { value: '1', labelKey: 'fm.ident.bank.sepa.spain' },
             { value: '2', labelKey: 'fm.ident.bank.sepa.eu_sepa' },
             { value: '3', labelKey: 'fm.ident.bank.sepa.rest_of_world' },

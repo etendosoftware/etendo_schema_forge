@@ -1084,27 +1084,38 @@ persisted in that shape keeps working. `_BANK_NOT_WAIVED` accepts `'N'`/`''` for
 *4. `bank_sepa` is a select, not free text.* The field only ever admitted `0`/`1`/`2`/`3` but was
 a free-text input. It is now `type: 'select'` with `options[{value, labelKey}]`, the same shape
 `TIPO_DECLARACION_FIELD` uses and the same one `FmBoxes303`'s `renderIdentSelectField` renders:
-`0` → `-`, `1` → Cuenta España, `2` → Unión Europea SEPA, `3` → Resto Países. Labels are i18n keys
-(`fm.ident.bank.sepa.none` / `.spain` / `.eu_sepa` / `.rest_of_world`) in **both** `es_ES.json` and
-`en_US.json`. `0` is labelled literally `-`, not "Vacía" — it must read as "no value set".
 
-**All four options are offered in every context**, with no dynamic option logic: under Nota 3 the
-marca must be 1/2/3, but `AEAT303Report2024` already rejects `0` there with its own message
-(`AEAT303_sepa_mark_required_111`), so hiding the option would only duplicate that guard.
+| value | labelKey | es_ES | en_US |
+| --- | --- | --- | --- |
+| `'1'` | `fm.ident.bank.sepa.spain` | Cuenta España | Spanish account |
+| `'2'` | `fm.ident.bank.sepa.eu_sepa` | Unión Europea SEPA | European Union SEPA |
+| `'3'` | `fm.ident.bank.sepa.rest_of_world` | Resto Países | Rest of the world |
 
-`-` carries the literal value `"0"`, never `''` or `null`: the record design defines `0` ("Vacía")
-as an admitted value of the marca, and position 194 of the DID page is a 1-character field that
-must carry the digit. **This does not change the emitted file.**
-`AEAT303Report2023#generatePageDID0` already substitutes `"0"` for a blank marca before writing
-the page (`if (StringUtils.isBlank(sepa)) { sepa = "0"; }`), so an empty text input produced a
-`"0"` at position 194 too. One genuine difference to be aware of: `renderIdentSelectField` always
-renders its own leading placeholder option (value `''`), which remains distinct from `-` — it
-sends no `SEPA` parameter at all, exactly as an empty text input did. That matters only for the
-REDEME + tipo `D`/`V`/`X` validators (`AEAT303Report2021#checkData`,
-`AEAT303Report2023#checkData`), which reject a *blank* marca with `@AEAT303_sepa_empty@` but
-accept `"0"`. Choosing `-` therefore satisfies a check that leaving the field untouched does not —
-correct, since `0` is a valid marca value, but it is a reachable behaviour difference between the
-two "empty-looking" choices.
+Labels are i18n keys in **both** `es_ES.json` and `en_US.json` (under `genericLabels`, beside the
+other `fm.ident.bank.*` keys). All three options are offered in every context — no dynamic option
+logic.
+
+**Marca `0` is not an option.** It means "Vacía", which is exactly what the leading placeholder
+option (`<option value="">`, always rendered by `renderIdentSelectField`) already expresses;
+declaring both would put two visually identical empty entries in the list with different
+behaviour. The placeholder is the only empty choice, and it behaves **exactly as the old empty
+text input did**: `applyMappedIdentParams`'s `if (v)` skips it, so no `SEPA` parameter is sent.
+
+**The emitted file is unchanged, byte for byte.** `AEAT303Report2023#generatePageDID0` substitutes
+`"0"` for a blank marca before writing the page (`if (StringUtils.isBlank(sepa)) { sepa = "0"; }`),
+so position 194 carries `"0"` with the placeholder selected, just as it did with an empty text
+input.
+
+Making the placeholder emit `SEPA=0` was considered and **rejected**: the REDEME + tipo `D`/`V`/`X`
+validators (`AEAT303Report2021#checkData`, `AEAT303Report2023#checkData`) reject a *blank* marca
+with `@AEAT303_sepa_empty@`, and a `"0"` sails past them — an untouched field would be filed as
+marca "Vacía" instead of raising the error it raises today.
+
+Under Nota 3 the marca must be 1/2/3, and leaving the placeholder selected is still rejected:
+the missing parameter resolves to `null`, which is not in `SEPA_MARKS_VALID_FOR_BOX_111`, so
+`checkIsDeclarationRMandatoryParams` throws `@AEAT303_sepa_mark_required_111@`
+(`Arrays.asList(...).contains(null)` is `false`, no NPE). The guard is reachable from the UI only
+via the placeholder now that `0` cannot be typed.
 
 This fix covers **both** Java readers, not just the Nota 3 guard. `generatePage3` writes the mark
 itself at position 440 of page 3, and it was reading the same never-matching value, so the mark

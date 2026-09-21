@@ -21952,7 +21952,6 @@
     "fm.ident.bank.ciudad": "Bank city",
     "fm.ident.bank.pais": "Country ISO code (2 characters)",
     "fm.ident.bank.sepa": "SEPA mark",
-    "fm.ident.bank.sepa.none": "-",
     "fm.ident.bank.sepa.spain": "Spanish account",
     "fm.ident.bank.sepa.eu_sepa": "European Union SEPA",
     "fm.ident.bank.sepa.rest_of_world": "Rest of the world",
