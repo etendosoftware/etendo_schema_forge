@@ -131,6 +131,44 @@ Cambios concretos en `DocumentTotalsPanel.jsx` (líneas 192-206 actuales):
 
 No se requieren cambios en: `decisions.json` de ninguna ventana, la definición de columna AD, `InlineLinesPanel.jsx`, `MaskedAmountInput`/`fields.jsx`, archivos de generador/pipeline. Es un fix de Developer (Schema Forge Developer) puro, y de alcance más pequeño de lo inicialmente estimado — reutiliza un componente existente en vez de introducir una segunda ruta de parseo.
 
+## 4.1. Post-implementación: ¿`MaskedAmountInput` "a secas" pierde las restricciones de la implementación anterior? (verificado en vivo, 2026-09-20)
+
+Pregunta que surgió tras implementar el fix: la implementación anterior (el regex casero) solo dejaba escribir dígitos positivos, sin signo y sin separador de miles — `MaskedAmountInput` es un componente pensado para importes, que sí permite un `-` inicial y sí sabe agrupar miles (cuando `grouping: true`). ¿Al reusarlo "a secas" para "Descuento total" se perdieron esas restricciones?
+
+**Respuesta corta: no, porque esas restricciones NUNCA vivieron dentro del input — ni antes ni ahora.** `MaskedAmountInput` es puramente un enmascarador de caracteres (dígitos + un separador decimal + opcional `-` inicial); no conoce el concepto de "mínimo"/"máximo" de ningún campo. La limitación de negocio (rango `[0, 100]`) siempre fue responsabilidad del **llamador**, aplicada en `onCommit`/blur — así funcionaba ya la implementación anterior de `DocumentTotalsPanel.jsx` (`Math.max(0, Math.min(100, ...))` ya existía antes de este fix) y así funciona hoy el campo de línea "% de descuento" (`InlineLinesPanel.jsx`'s `clampToMax`/`isValueBelowMin`, fuera de `MaskedAmountInput`). Confirmado con 4 pruebas en vivo contra el entorno local (rama `feature/ETP-5321`), pedido de venta de prueba, producto "E2E Product Alpha" (12,00 €):
+
+| Caso | Campo de línea (`InlineLinesPanel.jsx`) | Campo de cabecera (`DocumentTotalsPanel.jsx`, este fix) |
+|---|---|---|
+| Escribir `150` | Se clampa a `100` silenciosamente (`clampToMax`) | Se clampa a `100` silenciosamente (`Math.min(100,...)`) — **idéntico** |
+| Escribir `-50` | El carácter `-` SÍ aparece mientras se escribe (mismo `MaskedAmountInput`) — pero al perder el foco, `isValueBelowMin` lo **rechaza con un toast** ("El valor debe ser al menos 0") y el valor **vuelve a 0** (no al valor negativo, ni a 0 silenciosamente) | El carácter `-` también aparece mientras se escribe — al perder el foco, `Math.max(0, ...)` lo clampa **silenciosamente a 0**, sin toast (mismo comportamiento que la implementación VIEJA de este mismo campo, que ya tenía ese mismo `Math.max(0,...)` antes de este fix) |
+
+La única diferencia real entre los dos campos es **min**, no max: el campo de línea usa un patrón "rechazar + toast" (`isValueBelowMin`) para el mínimo, mientras que cabecera usa "clampar en silencio" (`Math.max`) — pero esa diferencia **ya existía en el código previo al fix** (el regex casero de cabecera ya hacía `Math.max(0, ...)` sin toast); este fix no la introduce ni la agrava. Es la misma asimetría ya anotada como pregunta abierta más abajo (mensaje de error explícito), no un defecto nuevo.
+
+**Sobre "poner miles":** con `grouping={false}` (el modo usado tanto en línea como en cabecera), no hay agrupación visual de miles, y al ESCRIBIR, `filterMaskChars` interpreta cualquier `.`/`,` tecleado como EL separador decimal (nunca como agrupador) — escribir `1.234` produce el valor `1,234` (uno con tres decimales), no mil doscientos treinta y cuatro. La única vía real para que "miles" aparezcan es **pegar** (paste) un texto con forma de importe agrupado (ej. pegar `1.500`): `handlePaste` siempre usa la heurística `parseAmountInput` (pensada para CSV/Excel) que SÍ interpreta un separador seguido de exactamente 3 dígitos como agrupador de miles → pegar `1.500` se leería como `1500`. Esto es un comportamiento del componente compartido, **idéntico en el campo de línea ya existente** (mismo código, mismo `handlePaste`, no depende de `grouping`) — no es algo que este fix introduzca de forma exclusiva en cabecera. Y en cualquier caso, el valor resultante (`1500`) queda igualmente acotado por el `Math.min(100, ...)` al confirmar, igual que un `150` tecleado a mano.
+
+**Conclusión:** no hizo falta un componente nuevo. Seguir el mismo patrón que ya usa "% de descuento" por línea (`MaskedAmountInput` + clamp externo en el llamador) es justamente lo consistente con cómo está diseñado el resto de la app — el propio campo de referencia que se menciona en la pregunta usa exactamente el mismo mecanismo. Construir un componente de "descuento" aparte solo para hornear el rango `[0,100]` adentro duplicaría lo que el patrón `col.min`/`col.max` + clamp-on-commit ya resuelve en todos los grids de líneas, e introduciría una segunda forma de expresar la misma regla de negocio.
+
+### 4.1.1. Matriz exhaustiva en vivo — campo "Descuento total" (cabecera), 2026-09-20
+
+Batería de 11 casos probados en vivo contra el entorno local (`localhost:3100` + backend `:8080`, rama `feature/ETP-5321`), pedido de venta de prueba (contacto "E2E Contact Code", línea "E2E Product Alpha" a 12,00 €). Pedido eliminado al finalizar.
+
+| # | Caso | Se escribe | Mientras se escribe | Al confirmar (blur) | Resultado |
+|---|---|---|---|---|---|
+| 1 | Positivo simple | `50` | `50` | `50` | ✅ 50%, -6,00 € |
+| 2 | Decimal con coma | `10,5` | `10,5` | `10,5` | ✅ -1,26 € |
+| 3 | Decimal con punto | `10.5` | `10,5` (normalizado al separador del locale) | `10,5` | ✅ punto también aceptado — mismo resultado que el 2 |
+| 4 | Excede 100 | `150` | `150` | `100` | ✅ clamp a 100, -12,00 € |
+| 5 | Decimal que excede 100 | `150,5` | `150,5` | `100` | ✅ clamp a 100, -12,00 € |
+| 6 | Negativo entero | `-50` | `-50` (el `-` sí se muestra) | `0` | ✅ clamp silencioso a 0, sin toast de error, panel se colapsa |
+| 7 | Negativo decimal | `-10,5` | `-10,5` | `0` | ✅ clamp silencioso a 0 |
+| 8 | "Miles" **tecleado** | `1.234` | `1,234` | `1,234` | ✅ el punto tecleado se lee como separador decimal, NUNCA como agrupador — no se convierte en 1234 |
+| 9 | Doble separador decimal | `10,5,5` | `10,55` | `10,55` | ✅ el segundo separador se ignora; los dígitos siguientes se anexan a la parte decimal ya abierta |
+| 10 | Letras mezcladas | `10a5` | `105` (la `a` se descarta) | `100` | ✅ ninguna letra llega al valor final; el resultado numérico igual queda acotado por el clamp |
+| 11 | Campo vacío | *(borrado)* | — | `0` | ✅ se guarda como "sin descuento", panel se colapsa |
+| 12 | "Miles" **pegado** (`1.500`, paste real) | — | — | — | ⚠️ **no reproducible en vivo** en esta sesión — `navigator.clipboard.writeText`/`execCommand('copy')` quedan bloqueados sin gesto de usuario real en este contexto automatizado. Verificado solo por lectura de código (`parseAmountInput`/`normalizeSeparators`, `parseAmountInput.js:126-140`): un paste que reemplaza todo el campo con `1.500` se leería como `1500` (regla "un separador seguido de exactamente 3 dígitos agrupa miles") — pero el resultado sigue acotado por `Math.min(100,...)` al confirmar, igual que el caso 4. Mismo comportamiento en el campo de línea (mismo `handlePaste`, no depende de `grouping`) — no es exclusivo de este fix. Pendiente de una verificación manual real (pegado desde teclado humano) si se quiere cerrar el 100% de la matriz.
+
+**Conclusión de la matriz:** en los 11 casos reproducibles en vivo, el campo nunca terminó fuera de `[0, 100]`, nunca aceptó una letra en el valor final, y el separador decimal (coma o punto) se interpretó siempre correctamente — igualando el comportamiento ya validado del campo de línea, con la única asimetría conocida y pre-existente (min: rechazo-con-toast en línea vs. clamp-silencioso en cabecera, documentada en 4.1) sin cambios por este fix.
+
 ## 5. Preguntas abiertas para DEV/QA
 
 - **¿Mensaje de error explícito al superar 100?** El ticket pide literalmente "el sistema rechaza el valor o lo limita a 100, **mostrando un mensaje de error claro al usuario**". Hoy ni el campo de línea ni el de cabecera muestran un toast al clampar (a diferencia del clamp de mínimo en `InlineLinesPanel`, que sí usa `toast.error(ui('fieldMinValueError', ...))`). Confirmar con QA/reportante si el clamp silencioso ya satisface el criterio (literalmente lo hace — "o lo limita a 100") o si hace falta añadir un toast en ambos campos (línea y cabecera) para cumplir también la parte del mensaje.
