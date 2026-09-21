@@ -1,11 +1,22 @@
 import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadCustomModule } from '../../../_test-support/loadCustomModule.js';
+import { orderLineApiKey } from '../../../_test-support/contractApiKey.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(join(__dirname, '..', 'ImportFromSourceInvoiceModal.jsx'), 'utf8');
+
+// The REAL production helpers, evaluated straight out of the .jsx — not a copy.
+// See artifacts/_test-support/loadCustomModule.js (ETP-5381).
+const { helpers, source: src } = loadCustomModule(
+  join(__dirname, '..', 'ImportFromSourceInvoiceModal.jsx'),
+);
+const { fetchDocuments, fetchLines, buildLineBody, afterImport } = helpers;
+
+// The invoice-line -> order-line FK key, read from the generated contract
+// (ETGO_SF_FIELD.java_qualifier for C_INVOICELINE.C_OrderLine_ID).
+const ORDER_LINE_FK = orderLineApiKey('sales-invoice');
 
 describe('ImportFromSourceInvoiceModal — source shape', () => {
   it('exports a default function component', () => {
@@ -23,32 +34,10 @@ describe('ImportFromSourceInvoiceModal — source shape', () => {
     assert.match(src, /transactionDocument\$etsgIsRectificative.*notEqual.*value:\s*true/);
   });
 
-  it('excludes the current invoice and matches business partner + CO status', () => {
-    assert.match(src, /inv\.documentStatus\s*===\s*'CO'/);
-    assert.match(src, /inv\.businessPartner\s*===\s*bpId/);
-    assert.match(src, /inv\.id\s*!==\s*invoiceId/);
-  });
-
-  it('unconditionally force-negates imported line quantity — ETP-4737, resolved with product', () => {
-    assert.match(src, /const negQty = -Math\.abs\(qty\);/);
-    assert.doesNotMatch(src, /sourceQty\s*<\s*0\s*\?\s*-Math\.abs\(qty\)\s*:\s*Math\.abs\(qty\)/);
-  });
-
   it('shows the quantity stepper as negative and links back to the source invoice(s)', () => {
     assert.match(src, /negativeQuantity/);
     assert.match(src, /originInvoices/);
     assert.match(src, /afterImport=\{afterImport\}/);
-  });
-
-  // ETP-4919: importing from a SECOND source invoice used to silently drop the link to the
-  // first one — afterImport only ever PATCHed when exactly one document had been imported in
-  // that run, and always sent a single `originInvoice` id, discarding any earlier import.
-  it('does not gate afterImport on importedDocIds.size === 1 (ETP-4919 fix)', () => {
-    assert.doesNotMatch(src, /importedDocIds\.size\s*!==\s*1/);
-  });
-
-  it('sends the full set of imported ids as a plural originInvoices array', () => {
-    assert.match(src, /originInvoices:\s*\[\.\.\.importedDocIds\]/);
   });
 
   it('wires the source-invoice-specific i18n keys', () => {
@@ -59,84 +48,12 @@ describe('ImportFromSourceInvoiceModal — source shape', () => {
     assert.match(src, /successMessageKey="linesImportedFromSourceInvoice"/);
   });
 
-  it('sends sourceInvoiceLineId and reads it back for duplicate detection — ETP-4737 follow-up', () => {
-    assert.match(src, /sourceInvoiceLineId:\s*line\.id/);
-    assert.match(src, /il\.sourceInvoiceLineId/);
-    assert.match(src, /alreadyImportedSourceLineIds/);
+  // ETP-5381: `cOrderlineId` is not a key of the sales-invoice NEO spec, and
+  // NeoFieldFilter.filterRecord drops unknown body keys silently.
+  it('never mentions the non-existent cOrderlineId key', () => {
+    assert.doesNotMatch(src, /cOrderlineId/);
   });
 });
-
-// ── Behavioral tests: fetchDocuments (re-implemented verbatim, per the
-// established pattern in ImportFromReturnShipmentModal.test.js /
-// ImportFromGoodsReceiptModal.test.js — the source file only default-exports
-// the component, so inner helpers are duplicated here to exercise them
-// directly under plain node:test, without the `@/` alias resolution the
-// bundler provides at runtime). ──────────────────────────────────────────────
-
-async function fetchDocuments({ base, headers, bpId, invoiceId }) {
-  const facOnlyCriteria = encodeURIComponent(JSON.stringify([
-    { fieldName: 'transactionDocument$documentCategory', operator: 'equals', value: 'ARI' },
-    { fieldName: 'transactionDocument$etsgIsRectificative', operator: 'notEqual', value: true },
-  ]));
-  const [invRes, invLinesRes, headerRes] = await Promise.all([
-    fetch(`${base}/sales-invoice/header?_startRow=0&_endRow=500&_sortBy=creationDate desc&criteria=${facOnlyCriteria}`, { headers }),
-    fetch(`${base}/sales-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`, { headers }),
-    fetch(`${base}/sales-invoice/header/${invoiceId}`, { headers }),
-  ]);
-
-  const alreadyImportedSourceLineIds = new Set();
-  if (invLinesRes.ok) {
-    const invLines = (await invLinesRes.json())?.response?.data || [];
-    invLines.forEach(il => { if (il.sourceInvoiceLineId) alreadyImportedSourceLineIds.add(il.sourceInvoiceLineId); });
-  }
-
-  let invoiceCurrency = null;
-  if (headerRes.ok) {
-    invoiceCurrency = (await headerRes.json())?.response?.data?.[0]?.currency || null;
-  }
-
-  let documents = [];
-  let excludedByCurrency = false;
-  if (invRes.ok) {
-    const all = (await invRes.json())?.response?.data || [];
-    const candidates = all.filter(inv =>
-      inv.documentStatus === 'CO'
-      && inv.businessPartner === bpId
-      && inv.id !== invoiceId,
-    );
-    documents = invoiceCurrency ? candidates.filter(inv => inv.currency === invoiceCurrency) : candidates;
-    excludedByCurrency = !!invoiceCurrency && documents.length === 0 && candidates.length > 0;
-  }
-  return { documents, sharedContext: { alreadyImportedSourceLineIds }, excludedByCurrency };
-}
-
-function fetchLinesAlreadyImported(lines, sharedContext) {
-  const { alreadyImportedSourceLineIds } = sharedContext;
-  return lines.map(l => ({ ...l, _alreadyImported: !!alreadyImportedSourceLineIds?.has(l.id) }));
-}
-
-function buildLineBody({ line, qty, invoiceId, lineNo }) {
-  const unitPrice = Number(line.unitPrice) || 0;
-  const listPrice = Number(line.listPrice) || unitPrice;
-  const grossUnitPrice = Number(line.grossUnitPrice) || 0;
-  const discount = Number(line.etgoDiscount) || 0;
-  const negQty = -Math.abs(qty);
-  return {
-    parentId: invoiceId,
-    product: line.product,
-    invoicedQuantity: negQty,
-    unitPrice,
-    listPrice,
-    ...(grossUnitPrice ? { grossUnitPrice } : {}),
-    ...(discount ? { etgoDiscount: discount } : {}),
-    lineNetAmount: unitPrice * negQty,
-    tax: line.tax || null,
-    uOM: line.uOM || null,
-    lineNo,
-    cOrderlineId: line.cOrderlineId || null,
-    sourceInvoiceLineId: line.id,
-  };
-}
 
 function mockRes(ok, data) {
   return { ok, json: async () => ({ response: { data } }) };
@@ -146,7 +63,7 @@ function mockResSingle(ok, item) {
   return { ok, json: async () => ({ response: { data: item ? [item] : [] } }) };
 }
 
-function installFetch({ invoices, invLines = [], invoiceHeader = {} }) {
+function installFetch({ invoices = [], invLines = [], invoiceHeader = {} }) {
   globalThis.fetch = mock.fn(async (url) => {
     if (url.includes('/sales-invoice/header?')) return mockRes(true, invoices);
     if (url.includes('/sales-invoice/lines?parentId=')) return mockRes(true, invLines);
@@ -160,14 +77,13 @@ describe('ImportFromSourceInvoiceModal — fetchDocuments (edge case 5: rectific
     mock.reset();
   });
 
-  it('server-side criteria requests only ARI category, non-rectificative invoices', () => {
+  it('server-side criteria requests only ARI category, non-rectificative invoices', async () => {
     installFetch({ invoices: [] });
-    return fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' }).then(() => {
-      const calledUrl = globalThis.fetch.mock.calls[0].arguments[0];
-      const decoded = decodeURIComponent(calledUrl);
-      assert.match(decoded, /"fieldName":"transactionDocument\$documentCategory","operator":"equals","value":"ARI"/);
-      assert.match(decoded, /"fieldName":"transactionDocument\$etsgIsRectificative","operator":"notEqual","value":true/);
-    });
+    await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    const calledUrl = globalThis.fetch.mock.calls[0].arguments[0];
+    const decoded = decodeURIComponent(calledUrl);
+    assert.match(decoded, /"fieldName":"transactionDocument\$documentCategory","operator":"equals","value":"ARI"/);
+    assert.match(decoded, /"fieldName":"transactionDocument\$etsgIsRectificative","operator":"notEqual","value":true/);
   });
 
   it('excludes the invoice being edited from its own source-invoice candidates', async () => {
@@ -222,8 +138,8 @@ describe('ImportFromSourceInvoiceModal — fetchDocuments (edge case 5: rectific
 });
 
 describe('ImportFromSourceInvoiceModal — buildLineBody (always negative, ETP-4737)', () => {
-  it('force-negates a positive source line on import', () => {
-    const body = buildLineBody({
+  it('force-negates a positive source line on import', async () => {
+    const body = await buildLineBody({
       line: { product: 'p1', unitPrice: 10, invoicedQuantity: 5 },
       qty: 3,
       invoiceId: 'inv1',
@@ -233,8 +149,8 @@ describe('ImportFromSourceInvoiceModal — buildLineBody (always negative, ETP-4
     assert.equal(body.lineNetAmount, -30);
   });
 
-  it('keeps a negative source line negative on import', () => {
-    const body = buildLineBody({
+  it('keeps a negative source line negative on import', async () => {
+    const body = await buildLineBody({
       line: { product: 'p1', unitPrice: 10, invoicedQuantity: -5 },
       qty: 3,
       invoiceId: 'inv1',
@@ -244,24 +160,71 @@ describe('ImportFromSourceInvoiceModal — buildLineBody (always negative, ETP-4
     assert.equal(body.lineNetAmount, -30);
   });
 
-  it('always uses the negative of the magnitude regardless of the stepper qty\'s own sign', () => {
-    const negativeSourceNegativeQty = buildLineBody({
+  it('always uses the negative of the magnitude regardless of the stepper qty\'s own sign', async () => {
+    const body = await buildLineBody({
       line: { product: 'p1', unitPrice: 10, invoicedQuantity: -5 },
       qty: -3,
       invoiceId: 'inv1',
       lineNo: 10,
     });
-    assert.equal(negativeSourceNegativeQty.invoicedQuantity, -3);
+    assert.equal(body.invoicedQuantity, -3);
   });
 
-  it('carries the source line id as sourceInvoiceLineId, ETP-4737 duplicate-detection follow-up', () => {
-    const body = buildLineBody({
+  it('carries the source line id as sourceInvoiceLineId, ETP-4737 duplicate-detection follow-up', async () => {
+    const body = await buildLineBody({
       line: { id: 'source-line-1', product: 'p1', unitPrice: 10 },
       qty: 3,
       invoiceId: 'inv1',
       lineNo: 10,
     });
     assert.equal(body.sourceInvoiceLineId, 'source-line-1');
+  });
+});
+
+describe('ImportFromSourceInvoiceModal — buildLineBody order line FK (ETP-5381)', () => {
+  // ETP-5381 REGRESSION GUARD — the FK must travel under the spec's key.
+  // Under the old `cOrderlineId`, NeoFieldFilter dropped it silently (HTTP 200,
+  // line created, C_OrderLine_ID NULL), which kept M_MATCHSO empty and skipped
+  // `UPDATE C_ORDERLINE SET QtyInvoiced`, leaving the order invoiceable forever.
+  it('propagates the source line order line under the spec API key for C_OrderLine_ID', async () => {
+    const body = await buildLineBody({
+      line: { id: 'source-line-1', product: 'p1', unitPrice: 10, [ORDER_LINE_FK]: 'ol1' },
+      qty: 3,
+      invoiceId: 'inv1',
+      lineNo: 10,
+    });
+    assert.equal(body[ORDER_LINE_FK], 'ol1');
+  });
+
+  it('does not send the order line under a key the NEO spec would silently drop', async () => {
+    const body = await buildLineBody({
+      line: { id: 'source-line-1', product: 'p1', unitPrice: 10, [ORDER_LINE_FK]: 'ol1' },
+      qty: 3,
+      invoiceId: 'inv1',
+      lineNo: 10,
+    });
+    assert.equal(Object.hasOwn(body, 'cOrderlineId'), false);
+  });
+
+  it('reads the source line FK from the spec key, not from the legacy cOrderlineId', async () => {
+    const body = await buildLineBody({
+      line: { id: 'source-line-1', product: 'p1', unitPrice: 10, cOrderlineId: 'ol9' },
+      qty: 3,
+      invoiceId: 'inv1',
+      lineNo: 10,
+    });
+    assert.equal(body[ORDER_LINE_FK], null);
+  });
+
+  it('sends an explicit null when the source line has no linked order line', async () => {
+    const body = await buildLineBody({
+      line: { id: 'source-line-1', product: 'p1', unitPrice: 10 },
+      qty: 3,
+      invoiceId: 'inv1',
+      lineNo: 10,
+    });
+    assert.equal(Object.hasOwn(body, ORDER_LINE_FK), true);
+    assert.equal(body[ORDER_LINE_FK], null);
   });
 });
 
@@ -279,34 +242,21 @@ describe('ImportFromSourceInvoiceModal — duplicate detection via sourceInvoice
     assert.ok(result.sharedContext.alreadyImportedSourceLineIds.has('source-line-1'));
   });
 
-  it('marks a source line already imported into the current invoice as _alreadyImported', () => {
-    const sharedContext = { alreadyImportedSourceLineIds: new Set(['source-line-1']) };
-    const lines = fetchLinesAlreadyImported(
-      [{ id: 'source-line-1' }, { id: 'source-line-2' }],
-      sharedContext,
-    );
+  it('marks a source line already imported into the current invoice as _alreadyImported', async () => {
+    globalThis.fetch = mock.fn(async () => mockRes(true, [
+      { id: 'source-line-1', invoicedQuantity: 2, unitPrice: 10 },
+      { id: 'source-line-2', invoicedQuantity: 2, unitPrice: 10 },
+    ]));
+    const lines = await fetchLines({
+      base: '/b',
+      headers: {},
+      docId: 'inv2',
+      sharedContext: { alreadyImportedSourceLineIds: new Set(['source-line-1']) },
+    });
     assert.equal(lines.find(l => l.id === 'source-line-1')._alreadyImported, true);
     assert.equal(lines.find(l => l.id === 'source-line-2')._alreadyImported, false);
   });
 });
-
-// ── Behavioral: afterImport (ETP-4919 — multi-origin fix) ───────────────────
-// Re-implemented verbatim (same reasoning as the other helpers above: only the
-// component is exported). Proves the PATCH always fires and always carries the
-// FULL set of imported ids, not just when exactly one document was imported.
-
-async function afterImport({ importedDocIds, base, headers, invoiceId }) {
-  if (importedDocIds.size === 0) return;
-  try {
-    await fetch(`${base}/sales-invoice/header/${invoiceId}`, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify({ originInvoices: [...importedDocIds] }),
-    });
-  } catch {
-    // best-effort — the lines are already imported regardless of this link.
-  }
-}
 
 describe('ImportFromSourceInvoiceModal — afterImport (ETP-4919: multi-origin fix)', () => {
   afterEach(() => {
@@ -326,11 +276,8 @@ describe('ImportFromSourceInvoiceModal — afterImport (ETP-4919: multi-origin f
     assert.deepEqual(JSON.parse(opts.body), { originInvoices: ['source-1'] });
   });
 
-  it('PATCHes originInvoices with BOTH ids when importing from two source invoices across two runs — this used to silently drop the first one', async () => {
+  it('PATCHes originInvoices with BOTH ids when importing from two source invoices — this used to silently drop the first one', async () => {
     globalThis.fetch = mock.fn(async () => ({ ok: true, json: async () => ({}) }));
-    // Simulates the second "Import from Source Invoice" popup run — a real second call
-    // would carry only the ids imported in THAT run, but this proves the guard that used to
-    // block anything but exactly one id is gone, and both ids are sent when present.
     await afterImport({
       importedDocIds: new Set(['source-1', 'source-2']),
       base: '/b', headers: {}, invoiceId: 'inv1',

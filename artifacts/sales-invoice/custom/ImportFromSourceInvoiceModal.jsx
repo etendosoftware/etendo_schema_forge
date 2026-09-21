@@ -131,7 +131,11 @@ const buildLineBody = async ({ line, qty, invoiceId, lineNo }) => {
     tax: line.tax || null,
     uOM: line.uOM || null,
     lineNo,
-    cOrderlineId: line.cOrderlineId || null,
+    // ETP-5381: the key MUST be the spec's java_qualifier for C_OrderLine_ID. NeoFieldFilter
+    // drops any key absent from the spec silently (200, line created, FK NULL), and without
+    // C_OrderLine_ID the invoice never reaches C_INVOICE_POST's MatchSO block (no M_MATCHSO row)
+    // nor its `UPDATE C_ORDERLINE SET QtyInvoiced` — so the order stays invoiceable forever.
+    salesOrderLine: line.salesOrderLine || null,
     sourceInvoiceLineId: line.id,
   };
 };
