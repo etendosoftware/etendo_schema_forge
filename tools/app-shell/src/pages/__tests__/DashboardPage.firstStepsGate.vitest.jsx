@@ -22,13 +22,17 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
+// ETP-5395 — mutable ref so the "non-owner" case below can flip `isOwner` without a second
+// `vi.mock` registration; every other test in this suite exercises an Owner account (the
+// pre-ETP-5395 default), reset in `beforeEach`.
+const authCapabilities = vi.hoisted(() => ({ current: { isAdminOrClientAdmin: true, isOwner: true } }));
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({
     token: 'test-token',
     username: 'testuser',
     logout: () => {},
     windowAccess: {},
-    capabilities: { isAdminOrClientAdmin: true },
+    capabilities: authCapabilities.current,
   }),
 }));
 
@@ -110,6 +114,7 @@ const LOADED_UNSEEN = { loading: false, error: null, seen: false };
 beforeEach(() => {
   vi.clearAllMocks();
   setScenario({ loading: true, error: null, seen: false });
+  authCapabilities.current = { isAdminOrClientAdmin: true, isOwner: true };
 });
 
 describe('DashboardPage — First Steps gate (ETP-5190)', () => {
@@ -202,6 +207,20 @@ describe('DashboardPage — First Steps gate (ETP-5190)', () => {
 
     expect(screen.getByTestId('dashboard-rendered')).toBeInTheDocument();
     expect(screen.queryByTestId('navigate-stub')).not.toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(gate.markSeen).not.toHaveBeenCalled();
+  });
+
+  // ETP-5395 — "Primeros pasos" is Owner-only. A non-owner must never be bounced there, even on
+  // a never-seen account: `seen` is meaningless for them, so `markSeen()` must not fire either
+  // (that POST is what the real gate uses to record the visit — see the header comment).
+  it('does not redirect a never-seen NON-owner account to /first-steps', async () => {
+    authCapabilities.current = { isAdminOrClientAdmin: true, isOwner: false };
+    setScenario(LOADED_UNSEEN);
+    render(<DashboardPage />);
+
+    expect(screen.queryByTestId('navigate-stub')).not.toBeInTheDocument();
+    expect(screen.getByTestId('dashboard-rendered')).toBeInTheDocument();
     await new Promise((r) => setTimeout(r, 0));
     expect(gate.markSeen).not.toHaveBeenCalled();
   });

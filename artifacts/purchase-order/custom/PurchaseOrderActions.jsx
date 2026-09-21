@@ -8,6 +8,7 @@ import { ConfirmResultModal } from '@/components/contract-ui';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { usePurchaseOrderPdf } from '@/windows/custom/shared/usePurchaseOrderPdf.js';
+import { readOrderPendingDocs } from '@/windows/custom/shared/orderPendingDocs.js';
 import { trackTransactionPosted, trackDocumentCreated } from '@/lib/observability/health-events.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
@@ -233,8 +234,21 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
 
     currency = data?.['currency$_identifier'] || '';
 
-    const needsReceipt = qtyPending !== 0 && receiptsDraft.length === 0;
-    const needsInvoice = totalPending !== 0 && !invoiceDraft;
+    // Pending action = there is pending qty/amount AND no draft document already covering it
+    // (when a draft exists the topbar chip already covers it — the Manage button leaves it out).
+    //
+    // ETP-5295 — that rule now has ONE owner: the backend annotations `needsPrimaryDoc` (the
+    // receipt, for this window) / `needsInvoiceDoc` on the order GET record, computed server-side
+    // with exactly the formula written out below. The list row kebab (`useOrderWindow.jsx`) reads
+    // the same two flags, so the kebab can no longer offer work this button considers done, nor
+    // hide work it offers. The local derivation is kept as the fallback for a record that carries
+    // no annotation (legacy backend / unannotated spec): unlike the kebab, this component has
+    // already fetched the real receipts, invoices and lines, so falling back costs nothing and
+    // keeps both the label AND the modal's sections (`derived.needsReceipt` /
+    // `derived.needsInvoice` below) working.
+    const { needsPrimaryDoc, needsInvoiceDoc } = readOrderPendingDocs(data);
+    const needsReceipt = needsPrimaryDoc ?? (qtyPending !== 0 && receiptsDraft.length === 0);
+    const needsInvoice = needsInvoiceDoc ?? (totalPending !== 0 && !invoiceDraft);
 
     if      (needsReceipt && needsInvoice) buttonLabel = ui('poManageReceiptAndInvoice');
     else if (needsReceipt)                 buttonLabel = ui('poManageReceipt');
@@ -920,8 +934,13 @@ const closeBtn = {
 // Self-contained mount point for the "Gestionar recepción/factura" flow from
 // the list-view row kebab. Mirrors the fetch+derive logic in
 // PurchaseOrderActions (receipts / invoices / order lines → pending qty &
-// amount) and opens CreateDocsModal once derived data is ready. If nothing is
-// pending the launcher closes silently.
+// amount) and opens CreateDocsModal once derived data is ready.
+//
+// ETP-5295 — "if nothing is pending it closes silently" is no longer a state a user can reach by
+// clicking the kebab item: the kebab only offers the item when the backend annotated this record
+// as still pending, and this launcher reads those same annotations. The silent close survives
+// only as the defence for the no-annotation fallback path and for a record that changed between
+// the list load and the click.
 export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, onCreated }) {
   const ui = useUI();
   const [fetched, setFetched] = useState(null);
@@ -975,10 +994,16 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
   const totalInvoiced = invoicesComplete.reduce((s, i) => s + (Number(i.grandTotalAmount) || 0), 0);
   const totalPending  = totalOrder - totalInvoiced;
 
-  // `fetched != null` gates all three: while still loading, neither "needs" flag may read true off
-  // the placeholder empty arrays above, or the close-effect below could fire before data ever loads.
-  const needsReceipt = fetched != null && qtyPending !== 0 && receiptsDraft.length === 0;
-  const needsInvoice = fetched != null && totalPending !== 0 && !invoiceDraft;
+  // ETP-5295 — same single source as the detail-page button above: the `needsPrimaryDoc` /
+  // `needsInvoiceDoc` annotations the backend put on this very row, with the local derivation as
+  // the no-annotation fallback. Reading the same flags the kebab used to decide to SHOW this
+  // launcher is what makes "the option opens an empty flow and closes itself" impossible: both
+  // ends now read one value off one record instead of two independent computations.
+  // `fetched != null` still gates both: while loading, neither "needs" flag may read true off the
+  // placeholder empty arrays above, or the close-effect below could fire before data ever loads.
+  const { needsPrimaryDoc, needsInvoiceDoc } = readOrderPendingDocs(data);
+  const needsReceipt = fetched != null && (needsPrimaryDoc ?? (qtyPending !== 0 && receiptsDraft.length === 0));
+  const needsInvoice = fetched != null && (needsInvoiceDoc ?? (totalPending !== 0 && !invoiceDraft));
   const nothingToManage = fetched != null && !needsReceipt && !needsInvoice;
 
   // Close asynchronously when there's nothing pending — avoids the

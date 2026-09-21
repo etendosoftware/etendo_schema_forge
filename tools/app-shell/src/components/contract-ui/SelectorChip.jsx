@@ -19,8 +19,11 @@ import { X } from 'lucide-react';
  *                                   click or Enter / Space keypress.
  * @param {string}   clearAriaLabel - aria-label for the X (typically `ui('clear')`).
  * @param {string}   testId        - data-testid for the chip button.
+ * @param {boolean}  disabled      - When true, the chip is read-only: no click-to-edit, no
+ *                                   clear (X), dimmed text (ETP-4879 — a locked FK on a
+ *                                   Processed financial-account movement).
  */
-export function SelectorChip({ label, onClick, onClear, clearAriaLabel, testId, clearable = true }) {
+export function SelectorChip({ label, onClick, onClear, clearAriaLabel, testId, clearable = true, disabled = false }) {
   const triggerClear = (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -34,12 +37,13 @@ export function SelectorChip({ label, onClick, onClear, clearAriaLabel, testId, 
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
       data-testid={testId}
-      className="flex flex-1 self-stretch items-center gap-1 max-w-full min-w-0 text-sm text-[hsl(var(--muted-foreground))] cursor-text bg-transparent"
+      className={`flex flex-1 self-stretch items-center gap-1 max-w-full min-w-0 text-sm bg-transparent ${disabled ? 'text-[hsl(var(--text-disabled))] cursor-default' : 'text-[hsl(var(--muted-foreground))] cursor-text'}`}
     >
       <span className="truncate" title={label}>{label}</span>
-      {clearable && (
+      {clearable && !disabled && (
         <span
           role="button"
           tabIndex={0}

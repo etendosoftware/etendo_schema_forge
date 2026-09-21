@@ -108,6 +108,18 @@ describe('SiiSection — rendering', () => {
 
 // ETP-5272 — external `locked` prop (forceTestMode) disables editing regardless
 // of any other state.
+// ETP-5338 point 6: explicit name/id on the authorization number input avoids
+// the browser autofill heuristic pairing it with the cert passphrase field.
+describe('SiiSection — anti-autofill hardening (ETP-5338)', () => {
+  it('renders the authorization number input with the expected name and id', () => {
+    render(<SiiSection {...PROPS} />);
+    const input = screen.getByTestId('Input__fcb159');
+    expect(input).toHaveAttribute('name', 'sii-authorization-number');
+    expect(input).toHaveAttribute('id', 'sii-authorization-number');
+    expect(input).toHaveAttribute('autoComplete', 'off');
+  });
+});
+
 describe('SiiSection — locked prop (ETP-5272)', () => {
   it('disables the authorization number input when locked=true', () => {
     render(<SiiSection {...PROPS} locked />);

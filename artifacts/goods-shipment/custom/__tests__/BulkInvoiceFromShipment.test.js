@@ -12,8 +12,11 @@ describe('BulkInvoiceFromShipment', () => {
     assert.match(src, /export default function BulkInvoiceFromShipment/);
   });
 
-  it('accepts selectedRows, clearSelection, token, and apiBaseUrl props', () => {
-    assert.match(src, /\{\s*selectedRows.*clearSelection.*token.*apiBaseUrl\s*\}/);
+  it('accepts selectedRows, clearSelection, token, apiBaseUrl and refresh props', () => {
+    assert.match(
+      src,
+      /export default function BulkInvoiceFromShipment\(\{\s*selectedRows,\s*clearSelection,\s*token,\s*apiBaseUrl,\s*refresh\s*\}\)/,
+    );
   });
 
   it('filters invoiceable rows by documentStatus CO and not completely invoiced', () => {
@@ -106,6 +109,37 @@ describe('BulkInvoiceFromShipment', () => {
       assert.doesNotMatch(src, /['"`]created as Draft['"`]/);
       assert.doesNotMatch(src, /['"`]creada como Borrador['"`]/);
       assert.doesNotMatch(src, /['"`]Review before confirming['"`]/);
+    });
+  });
+
+  // ETP-5302 — this action used to close the modal and clear the selection but never
+  // refetch (and never reload either), so the shipments it had just invoiced kept
+  // showing a stale invoicing status with nothing on screen hinting they were out of
+  // date. `refresh` comes from ListView's `bulkActions` slot context, the same one
+  // BulkDocumentAction and the kebab menu now use.
+  describe('ETP-5302 — refetches the list after a successful bulk invoice', () => {
+    it('invokes refresh (in addition to clearSelection) from the modal onSuccess', () => {
+      assert.match(
+        src,
+        /onSuccess=\{\(\)\s*=>\s*\{[\s\S]*?clearSelection\(\);[\s\S]*?refresh\?\.\(\);[\s\S]*?\}\}/,
+      );
+    });
+
+    it('calls refresh optionally so a host that supplies no refresh cannot crash', () => {
+      assert.match(src, /refresh\?\.\(\)/);
+      assert.doesNotMatch(src, /[^?.]\brefresh\(\)/);
+    });
+
+    it('still closes the modal on success', () => {
+      assert.match(src, /onSuccess=\{\(\)\s*=>\s*\{\s*setShowModal\(false\);/);
+    });
+
+    it('does not refetch on a plain cancel/close (nothing changed server-side)', () => {
+      assert.match(src, /onClose=\{\(\)\s*=>\s*setShowModal\(false\)\}/);
+    });
+
+    it('the modal reports success through onSuccess after the create call', () => {
+      assert.match(src, /onSuccess\(\);/);
     });
   });
 

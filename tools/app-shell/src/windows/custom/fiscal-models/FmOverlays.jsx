@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
-import { SUPPORTED_YEARS } from './models/303/fm303Layouts';
+import { SELECTABLE_YEARS } from './models/303/fm303Layouts';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { FileText, Landmark, OctagonAlert, TriangleAlert, X, Check, ChevronDown, Search } from 'lucide-react';
-import { Checkbox } from '@/components/ui/checkbox';
+import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { formatPeriod, showIaeActivityReminder } from './fiscalModelsUtils.js';
 import './fiscal-models.css';
 
@@ -312,10 +312,10 @@ export function FileGenModal({ decl, onConfirm, onClose }) {
           </div>
           <div style={{ marginBottom: 12 }}>
             <label style={checkboxRowSt}>
-              <Checkbox
+              <CheckboxField
                 checked={substitutive}
-                onChange={() => setSubstitutive(v => !v)}
-                data-testid="Checkbox__cda0bb" />
+                onToggle={val => setSubstitutive(val)}
+                data-testid="CheckboxField__cda0bb" />
               {t('fm.filegen.substitutive')}
             </label>
           </div>
@@ -333,19 +333,19 @@ export function FileGenModal({ decl, onConfirm, onClose }) {
           </div>
           <div style={{ marginBottom: 12 }}>
             <label style={checkboxRowSt}>
-              <Checkbox
+              <CheckboxField
                 checked={navarra}
-                onChange={() => setNavarra(v => !v)}
-                data-testid="Checkbox__cda0bb" />
+                onToggle={val => setNavarra(val)}
+                data-testid="CheckboxField__cda0bb" />
               {t('fm.filegen.navarra')}
             </label>
           </div>
           <div style={{ marginBottom: 12 }}>
             <label style={checkboxRowSt}>
-              <Checkbox
+              <CheckboxField
                 checked={guipuzcoa}
-                onChange={() => setGuipuzcoa(v => !v)}
-                data-testid="Checkbox__cda0bb" />
+                onToggle={val => setGuipuzcoa(val)}
+                data-testid="CheckboxField__cda0bb" />
               {t('fm.filegen.guipuzcoa')}
             </label>
           </div>
@@ -495,7 +495,7 @@ function ModelSelectMenu({ model, availableModels, onSelect, onClose, t }) {
 
 // YearSelectMenu — the "Año" dropdown panel for NewDeclModal. Visually and
 // mechanically a simplified sibling of ModelSelectMenu above (button trigger +
-// outside-click-to-close panel + checkmark on the selected row), but SUPPORTED_YEARS
+// outside-click-to-close panel + checkmark on the selected row), but SELECTABLE_YEARS
 // is a short flat list of plain year labels, so there's no search input and no
 // chip/subtitle here — just the year text and, for the selected one, a checkmark.
 function YearSelectMenu({ year, years, onSelect, onClose }) {
@@ -558,16 +558,20 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
   const canCreate = availableModels.length > 0;
   const [model, setModel] = useState(availableModels[0] ?? '303');
   const _cy = new Date().getFullYear();
-  const [year, setYear] = useState(SUPPORTED_YEARS.includes(_cy) ? _cy : SUPPORTED_YEARS[SUPPORTED_YEARS.length - 1]);
+  const [year, setYear] = useState(SELECTABLE_YEARS.includes(_cy) ? _cy : SELECTABLE_YEARS[SELECTABLE_YEARS.length - 1]);
   const [frequency, setFrequency] = useState('quarterly'); // 'quarterly' | 'monthly' — drives the Período grid below
   const [period, setPeriod] = useState('T1');
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [yearMenuOpen, setYearMenuOpen] = useState(false);
 
   const periods = frequency === 'monthly' ? MONTHLY_PERIODS : QUARTERLY_PERIODS;
-  // Most-recent-first for the Año dropdown — SUPPORTED_YEARS itself stays
+  // Most-recent-first for the Año dropdown — SELECTABLE_YEARS itself stays
   // ascending (other consumers, if any, keep relying on that order).
-  const yearOptions = useMemo(() => [...SUPPORTED_YEARS].sort((a, b) => b - a), []);
+  // Restricted to the current filing year only (see SELECTABLE_YEARS in
+  // fm303Layouts.js) — past years remain resolvable for existing
+  // declarations via SUPPORTED_YEARS, but are not offered here as choices
+  // for a brand-new one.
+  const yearOptions = useMemo(() => [...SELECTABLE_YEARS].sort((a, b) => b - a), []);
 
   // Periods that already carry a declaration for the currently selected model+year.
   // Rendered with a small dot badge in the grid below — informational only
@@ -1049,17 +1053,17 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
                 </div>
                 <div style={{ display: 'flex', gap: 20 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer' }}>
-                    <Checkbox
+                    <CheckboxField
                       checked={redeme}
-                      onChange={() => { setRedeme(v => !v); setIsDirty(true); }}
-                      data-testid="Checkbox__cda0bb" />
+                      onToggle={val => { setRedeme(val); setIsDirty(true); }}
+                      data-testid="CheckboxField__cda0bb" />
                     {t('fm.config.m303.redeme') ?? 'Inscrito en REDEME'}
                   </label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer' }}>
-                    <Checkbox
+                    <CheckboxField
                       checked={recc}
-                      onChange={() => { setRecc(v => !v); setIsDirty(true); }}
-                      data-testid="Checkbox__cda0bb" />
+                      onToggle={val => { setRecc(val); setIsDirty(true); }}
+                      data-testid="CheckboxField__cda0bb" />
                     {t('fm.config.m303.recc') ?? 'Régimen RECC'}
                   </label>
                 </div>

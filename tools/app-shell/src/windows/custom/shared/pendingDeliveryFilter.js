@@ -14,6 +14,9 @@ export function buildPendingDeliveryFilter(searchParams, deliveryField) {
   return {
     initialColumnFilters: docStatus ? { documentStatus: docStatus } : undefined,
     isPendingDelivery,
+    // ETP-5009 — tells ListView that the filters above came from the URL, so they
+    // outrank the grid state saved from a previous visit to this window.
+    initialFiltersFromUrl: isPendingDelivery || Boolean(docStatus),
     initialAdvancedFilter: isPendingDelivery
       ? {
           rowOperator: 'and',

@@ -6,14 +6,16 @@ import { buildRectifiableInvoicesPayload } from '../helpers/rectifiable-invoices
  * Return Material Receipt — full flow smoke (mocked).
  *
  * Covers ETP-4033:
- *   - List view: columns, row quick-actions (edit/delete for DR; clone for CO)
+ *   - List view: columns, row quick-actions (edit/delete for DR and CO; clone
+ *     is NOT a supported action for this window and stays hidden for both
+ *     statuses — ETP-5316 fixed it showing up for CO rows only)
  *   - Preview panel: row click opens GenericPreviewModal, shows documentNo, closes
  *   - DR detail: ConfirmWithCreditButton renders "Confirmar", Print button absent
  *     on Draft (ETP-4714 / ETP-5124 — decisions.json hidePrintWhen gates on
  *     documentStatus !== CO), modal opens on click, Cancel dismisses it,
  *     Confirm fires documentAction POST
  *   - CO detail (no invoice): "Crear factura de devolución" button visible,
- *     Clone button visible, Print button now VISIBLE on Completed (ETP-5124 —
+ *     Print button now VISIBLE on Completed (ETP-5124 —
  *     hidePrintWhen changed from an unconditional true to a conditional gate,
  *     matching sibling windows), clicking "Crear factura" opens modal, confirming
  *     fires createReturnInvoice POST and shows ConfirmResultModal
@@ -289,10 +291,11 @@ test.describe('return-material-receipt — list and preview', () => {
     await expect(drRow.getByTestId('row-quick-action-edit')).toBeVisible();
     await expect(drRow.getByTestId('row-quick-action-delete')).toBeVisible();
 
-    // Clone/duplicate is hidden for DR (visibleWhen CO)
+    // Clone/duplicate is not a supported action for this window — hidden for DR
+    // (decisions.json / index.jsx duplicateAction={{ show: false }} — ETP-5316).
     await expect(drRow.getByTestId('row-quick-action-clone')).toHaveCount(0);
 
-    // --- Row quick-actions for CO row (RD/00002) — clone visible ---
+    // --- Row quick-actions for CO row (RD/00002) — clone stays hidden too ---
     const coRow = page.locator('tbody tr').filter({ hasText: 'RD/00002' }).first();
     await expect(coRow).toBeVisible();
     await coRow.hover();
@@ -300,8 +303,10 @@ test.describe('return-material-receipt — list and preview', () => {
     const coOverlay = coRow.getByTestId('row-quick-actions');
     await expect(coOverlay).toBeVisible();
 
-    // Clone (duplicate) must be visible for CO rows
-    await expect(coRow.getByTestId('row-quick-action-clone')).toBeVisible();
+    // ETP-5316: Clone (duplicate) used to show up for CO rows only
+    // (visibleWhen="@documentStatus@='CO'"); it must now be hidden for CO too,
+    // matching the DR row above and sibling return-to-vendor-shipment.
+    await expect(coRow.getByTestId('row-quick-action-clone')).toHaveCount(0);
 
     // Grid delete stays visible regardless of status (ETP-4656, commit 044edad45) —
     // see e2e/tests/flows/delete-visibility.mocked.spec.js for the dedicated regression guard.

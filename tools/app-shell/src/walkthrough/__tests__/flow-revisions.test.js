@@ -28,11 +28,12 @@ const FLOWS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'flows');
  */
 const REVIEWED_FLOWS = Object.freeze({
   'create-contact': {
-    revision: 1,
+    revision: 2,
     steps: [
       'open-new', 'contact-type', 'legal-name', 'first-name', 'last-name',
-      'category', 'tax-id', 'email', 'save', 'address-tab', 'address-add',
-      'address-street', 'address-city', 'address-country', 'address-save',
+      'category', 'tax-id-key', 'tax-id', 'email', 'save', 'address-tab',
+      'address-add', 'address-street', 'address-city', 'address-country',
+      'address-save',
     ],
   },
   'create-product': {

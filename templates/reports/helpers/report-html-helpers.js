@@ -189,11 +189,12 @@ export function createReportHelpers({ numberFormat } = {}) {
   // split, since `IsReturn` has no equivalent code in ad_ref_list and can't
   // come from that JOIN. See RETURN_LABELS' docstring (report-i18n.js).
   function translateDocType(docbasetype, isreturn, translatedName, locale) {
+    if (isreturn === 'Y' && (docbasetype === 'MMR' || docbasetype === 'MMS')) {
+      var dict = RETURN_LABELS[locale] || RETURN_LABELS.en_US;
+      return dict[docbasetype + '_RETURN'] || translatedName;
+    }
     var overrides = DOC_TYPE_LABEL_OVERRIDES[locale] || DOC_TYPE_LABEL_OVERRIDES.en_US;
-    if (overrides[docbasetype]) return overrides[docbasetype];
-    if (isreturn !== 'Y' || (docbasetype !== 'MMR' && docbasetype !== 'MMS')) return translatedName;
-    var dict = RETURN_LABELS[locale] || RETURN_LABELS.en_US;
-    return dict[docbasetype + '_RETURN'] || translatedName;
+    return overrides[docbasetype] || translatedName;
   }
 
   return {
@@ -416,11 +417,12 @@ const JSREPORT_HELPER_SOURCES = {
   translateDocType: `function translateDocType(docbasetype, isreturn, translatedName, locale) {
   var RETURN_LABELS = ${JSON.stringify(RETURN_LABELS)};
   var DOC_TYPE_LABEL_OVERRIDES = ${JSON.stringify(DOC_TYPE_LABEL_OVERRIDES)};
+  if (isreturn === 'Y' && (docbasetype === 'MMR' || docbasetype === 'MMS')) {
+    var dict = RETURN_LABELS[locale] || RETURN_LABELS.en_US;
+    return dict[docbasetype + '_RETURN'] || translatedName;
+  }
   var overrides = DOC_TYPE_LABEL_OVERRIDES[locale] || DOC_TYPE_LABEL_OVERRIDES.en_US;
-  if (overrides[docbasetype]) return overrides[docbasetype];
-  if (isreturn !== 'Y' || (docbasetype !== 'MMR' && docbasetype !== 'MMS')) return translatedName;
-  var dict = RETURN_LABELS[locale] || RETURN_LABELS.en_US;
-  return dict[docbasetype + '_RETURN'] || translatedName;
+  return overrides[docbasetype] || translatedName;
 }`,
   // ETP-5032 — see createReportHelpers()'s csvField for why this exists and why
   // it must stay behaviourally identical to it. Being listed here also makes
@@ -584,10 +586,27 @@ export function buildJsreportHelpersString(helpersCode, numberFormatOverride, se
 
   const stateSrc = 'var _prevGroupValues = {};';
 
+  // toFixedHalfUp mirrors formatCurrency.js's helper of the same name: round HALF-UP on the
+  // DECIMAL value, not on its binary approximation, so a printed document shows the same cent as
+  // the screen it was printed from and as the backend's own BigDecimal HALF_UP arithmetic.
+  // `(2.675).toFixed(2)` is "2.67"; shifting through the string form avoids the lossy ×10^n
+  // multiply. If the browser twin changes, so must this, or UI and PDF drift by a cent
+  // (ETP-5107 QA round 2).
+  //
+  // Declared INSIDE __groupEsEs on purpose: jsreport registers helpers by top-level
+  // `function NAME(` text, so a second top-level function here would be registered as a callable
+  // helper it is not — which is exactly what the "emits no helper createReportHelpers() does not
+  // expose" guardrail in report-jsreport-helpers-builder.test.js protects against.
   const groupEsEsSrc = `function __groupEsEs(num, minFrac, maxFrac) {
+  function toFixedHalfUp(abs, digits) {
+    var shifted = Number(abs + 'e' + digits);
+    if (!isFinite(shifted)) return abs.toFixed(digits);
+    var rounded = Number(Math.round(shifted) + 'e-' + digits);
+    return isFinite(rounded) ? rounded.toFixed(digits) : abs.toFixed(digits);
+  }
   var sign = num < 0 ? '-' : '';
   var abs = Math.abs(num);
-  var fixed = abs.toFixed(maxFrac);
+  var fixed = toFixedHalfUp(abs, maxFrac);
   // Guard against "-0,00" (ETP-4898): summing floats (e.g. a report-wide
   // Total row) routinely leaves a residual like -2.9e-11 instead of exactly
   // 0 — genuinely negative, but rounds to zero at this precision. Dropping the

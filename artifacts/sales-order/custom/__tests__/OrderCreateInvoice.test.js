@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// ETP-5295 — the REAL reader, not a stub: the computation blocks extracted below now call
+// `readOrderPendingDocs(data)`, so the harness feeds them the same function the component uses.
+import { readOrderPendingDocs } from '../../../../tools/app-shell/src/windows/custom/shared/orderPendingDocs.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'OrderCreateInvoice.jsx'), 'utf8');
@@ -789,12 +792,23 @@ describe('OrderCreateInvoice', () => {
     function extractNeedsBlocks(source, needsVarName) {
       // ETP-4567: post-fix source compares against 0 with !== instead of the
       // clamp-dependent > 0 (which always failed for a floored-to-zero pending).
-      // ETP-5295 — ManageDocsLauncher's needsInvoice line now carries an extra
-      // `fetched != null && ` guard (hooks hoisted above the loading early-return, so
-      // the derivation must be null-safe); the main-component occurrence has no such
-      // guard. The optional non-capturing group matches both.
+      // ETP-5295 — ManageDocsLauncher's needs* lines carry an extra `fetched != null && `
+      // guard (hooks hoisted above the loading early-return, so the derivation must be
+      // null-safe); the main-component occurrence has no such guard. The optional
+      // non-capturing group matches both.
+      //
+      // ETP-5295 — the block now STARTS one line earlier, at the
+      // `const { needsPrimaryDoc, needsInvoiceDoc } = readOrderPendingDocs(data);`
+      // destructuring, instead of at `const ${needsVarName}`. That line is part of the
+      // computation under test now: without it, `needsPrimaryDoc`/`needsInvoiceDoc` would be
+      // free variables inside the `new Function(...)` harness and the eval threw
+      // `ReferenceError: needsShip is not defined`. Including it keeps the harness feeding on
+      // the LITERAL source (the whole point of this suite) rather than on a hand-copied
+      // re-implementation of the `??` fallback.
       const re = new RegExp(
-        `const ${needsVarName}[\\s\\S]*?const needsInvoice\\s*=\\s*(?:fetched != null && )?totalPending !== 0 && !invoiceDraft;`,
+        `const \\{ needsPrimaryDoc, needsInvoiceDoc \\} = readOrderPendingDocs\\(data\\);`
+        + `[\\s\\S]*?const ${needsVarName}\\s*=\\s*(?:fetched != null && )?\\(?needsPrimaryDoc \\?\\? \\(qtyPending !== 0`
+        + `[\\s\\S]*?const needsInvoice\\s*=\\s*(?:fetched != null && )?\\(?needsInvoiceDoc \\?\\? \\(totalPending !== 0 && !invoiceDraft\\)\\)?;`,
         'g',
       );
       return [...source.matchAll(re)].map(m => m[0]);
@@ -808,14 +822,41 @@ describe('OrderCreateInvoice', () => {
       assert.equal(needsBlocks.length, 2);
     });
 
-    function evaluate(siteIndex, { grandTotalAmount, invoicesComplete = [], shipmentsDraft = [], invoiceDraft = null }) {
+    // ETP-5295 — two free variables remain in the extracted source and each is wired
+    // DELIBERATELY, not merely "made to run":
+    //
+    //   `fetched`              — only present in the ManageDocsLauncher occurrence's
+    //                            `fetched != null && ` guard. Passed as always-loaded (`true`):
+    //                            this suite's concern is the pending arithmetic, not the loading
+    //                            state, which `useOrderWindow`/launcher render tests cover.
+    //   `readOrderPendingDocs` — the REAL shared reader is injected (imported at the top of this
+    //                            file), NOT a stub. So what the annotation branch does is decided
+    //                            by production code, and the default `data` below (which carries
+    //                            only `grandTotalAmount`, no `needsPrimaryDoc`/`needsInvoiceDoc`)
+    //                            makes it return `undefined` for both flags. `undefined` is what
+    //                            makes `??` fall through to the local derivation — which is
+    //                            exactly the arithmetic the ETP-4567 cases below were written to
+    //                            measure, so they keep measuring it and nothing else. Hard-coding
+    //                            a `() => ({})` stub would have measured the same thing today but
+    //                            would stop tracking the real absent-annotation contract (e.g. a
+    //                            reader that ever returned `false` instead of `undefined` for an
+    //                            absent flag would break every caller and not one test here).
+    //
+    // `annotations` lets the ETP-5295 cases further down flip the other branch on, through the
+    // same real reader and the same literal source.
+    function evaluate(siteIndex, {
+      grandTotalAmount, invoicesComplete = [], shipmentsDraft = [], invoiceDraft = null, annotations = {},
+    }) {
       const body = `${compBlocks[siteIndex]}\n${needsBlocks[siteIndex]}\nreturn { qtyPending, totalPending, needsShip, needsInvoice };`;
       // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
-      // `fetched` is a free variable inside the ManageDocsLauncher occurrence's
-      // `fetched != null && ` guard (ETP-5295); pass it as always-loaded (`true`) since
-      // this test's concern is the pending arithmetic, not the loading state.
-      const fn = new Function('data', 'orderLines', 'invoicesComplete', 'shipmentsDraft', 'invoiceDraft', 'fetched', body);
-      return fn({ grandTotalAmount }, [], invoicesComplete, shipmentsDraft, invoiceDraft, true);
+      const fn = new Function(
+        'data', 'orderLines', 'invoicesComplete', 'shipmentsDraft', 'invoiceDraft', 'fetched', 'readOrderPendingDocs',
+        body,
+      );
+      return fn(
+        { grandTotalAmount, ...annotations },
+        [], invoicesComplete, shipmentsDraft, invoiceDraft, true, readOrderPendingDocs,
+      );
     }
 
     const sites = [
@@ -868,6 +909,87 @@ describe('OrderCreateInvoice', () => {
       const { needsShip, needsInvoice } = evaluate(1, { grandTotalAmount: -450.75 });
       const nothingToManage = !needsShip && !needsInvoice;
       assert.equal(nothingToManage, false);
+    });
+    // ETP-5295 — the branch the ETP-4567 cases above deliberately never reach: a record that
+    // DOES carry the backend annotations. The whole point of the fix is that the server's answer
+    // wins over this component's own arithmetic, so that the list kebab (which has nothing but
+    // the annotation) and this component (which has the real shipments/invoices/lines) can never
+    // disagree again. Each case below sets up local arithmetic that would produce the OPPOSITE
+    // answer, so a regression that dropped the annotation — or subordinated it to the local
+    // derivation — turns the test red instead of silently reinstating two sources of truth.
+    describe('backend annotation wins over the local derivation (ETP-5295)', () => {
+      for (const [siteName, siteIndex] of sites) {
+        describe(siteName, () => {
+          it('needsInvoiceDoc:false suppresses an invoice entry the local arithmetic would have set true', () => {
+            // Local derivation says TRUE (100 ordered, nothing invoiced, no draft).
+            const local = evaluate(siteIndex, { grandTotalAmount: 100 });
+            assert.equal(local.needsInvoice, true, 'precondition: local arithmetic must say true here');
+
+            const { needsInvoice } = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              annotations: { needsInvoiceDoc: false },
+            });
+            assert.equal(needsInvoice, false);
+          });
+
+          it('needsPrimaryDoc:false suppresses a shipment entry the local arithmetic would have set true', () => {
+            const { needsShip } = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              annotations: { needsPrimaryDoc: false },
+            });
+            assert.equal(needsShip, false);
+          });
+
+          it('needsInvoiceDoc:true forces the invoice entry on even though the document is fully invoiced locally', () => {
+            const local = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              invoicesComplete: [{ grandTotalAmount: 100, documentStatus: 'CO' }],
+            });
+            assert.equal(local.needsInvoice, false, 'precondition: local arithmetic must say false here');
+
+            const { needsInvoice } = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              invoicesComplete: [{ grandTotalAmount: 100, documentStatus: 'CO' }],
+              annotations: { needsInvoiceDoc: true },
+            });
+            assert.equal(needsInvoice, true);
+          });
+
+          it('needsPrimaryDoc:true forces the shipment entry on even though a draft shipment already covers it', () => {
+            const { needsShip } = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              shipmentsDraft: [{ documentStatus: 'DR' }],
+              annotations: { needsPrimaryDoc: true },
+            });
+            assert.equal(needsShip, true);
+          });
+
+          it("accepts the AD string form ('N' is false, not truthy)", () => {
+            const { needsShip, needsInvoice } = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              annotations: { needsPrimaryDoc: 'N', needsInvoiceDoc: 'N' },
+            });
+            assert.equal(needsShip, false);
+            assert.equal(needsInvoice, false);
+          });
+        });
+      }
+
+      // `readAnnotatedFlag` returns `undefined` — never `false` — for an ABSENT annotation, and
+      // the fallback operator is `??`, never `||`. That pairing is the load-bearing detail: with
+      // `||`, a genuine `needsInvoiceDoc: false` from the server would be discarded and the local
+      // arithmetic would silently take over, reinstating precisely the two-sources-of-truth
+      // disagreement this ticket removed. A source-text assertion is used here on purpose — the
+      // difference between `??` and `||` is invisible to a behavioural test whenever the local
+      // derivation happens to agree with the annotation.
+      it('uses ?? (not ||) so an explicit false annotation is not discarded', () => {
+        for (const block of needsBlocks) {
+          assert.match(block, /needsPrimaryDoc \?\? \(/);
+          assert.match(block, /needsInvoiceDoc \?\? \(/);
+          assert.doesNotMatch(block, /needsPrimaryDoc \|\|/);
+          assert.doesNotMatch(block, /needsInvoiceDoc \|\|/);
+        }
+      });
     });
   });
 

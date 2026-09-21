@@ -13,9 +13,11 @@ Use this window to register and complete outbound customer shipments. The functi
 - Start a return flow from a completed shipment so the user can select shipped lines and quantities to send back through the return process.
 - Open related downstream or upstream documents from the shipment, especially the linked sales order and the invoices created from that order.
 - Send the shipment document by email from the detail view, once the shipment is completed.
-- Complete multiple draft shipments at once from the list selection bar using the bulk action (labeled "Confirmar" / i18n key `confirmBulk`), which processes each shipment through the standard `documentAction=CO` endpoint.
+- Complete multiple draft shipments at once from the list selection bar using the bulk action (labeled "Procesar" / i18n key `process`). Its dialog offers a single document action, **Confirmar** / **Confirm** (`CO`), which processes each shipment through the standard `documentAction=CO` endpoint.
 - Post ("Contabilizar") or unpost a completed shipment from the detail-view kebab menu, gated on posted/processed state.
 - Post ("Contabilizar") a completed, not-yet-posted shipment directly from the list — via the row-hover kebab menu for a single record, or via the dedicated "Contabilizar" bulk action in the list selection bar for multiple selected records — without needing to open the record in form view first (ETP-5209).
+- Unpost ("Descontabilizar") posted shipments in bulk from the list selection bar, via a dedicated button that appears only when at least one selected row is posted (ETP-5302). It is the list counterpart of the *Descontabilizar* entry this window's detail kebab already offered.
+- Every bulk action in this window's selection bar — "Procesar", "Contabilizar", "Descontabilizar" and "Crear Factura" — now **refetches the list in place** instead of reloading the browser page, so scroll position and active filters survive (ETP-5302).
 - Copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved.
 
 ## Interaction model
@@ -73,7 +75,7 @@ Use this window to register and complete outbound customer shipments. The functi
 8. In the batch invoice modal, deselect some lines or reduce quantities and confirm the preview total changes before creation.
 9. Open `Related Documents` on a shipment that came from a sales order and confirm the order chip and any invoice chips navigate to the expected records.
 10. Attempt the return flow on a completed shipment and verify whether the backend actually completes the return creation; if it fails, record it as the current functional gap.
-11. Select two or more draft shipments from the list and confirm the bulk action bar shows a `Confirmar (N)` button. Trigger it and verify all selected shipments move to completed status and a result toast appears.
+11. Select two or more draft shipments from the list and confirm the bulk action bar shows a `Procesar (N)` button. Open it, confirm the document-action dropdown offers **Confirmar** (`CO`) as its only entry, trigger it, and verify all selected shipments move to completed status and a result toast appears.
 12. Open the Send Email modal from the topbar and confirm: the business partner's email registered in `EM_Etgo_Email` is proposed as an editable `To` chip (when none is registered, the To list starts empty); the proposed chip can be removed; additional To recipients and CC recipients (via the `Add CC` affordance) can be added; entering a syntactically invalid email shows an inline validation error and disables Send; Send is also disabled while the final To list is empty (even with CC entries) or when more than 10 recipients are entered across To and CC; and the modal title reads the translated document name in the active UI language. Also confirm the `Asunto` and `Mensaje` fields are editable (not greyed-out/read-only), that they pre-fill with the auto-derived subject and an empty message, and that sending without touching either still succeeds normally.
 13. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
 14. In the list, select 0, then 1, then 2+ shipments and confirm `Copy link` appears in the selection bar only when exactly one row is selected. Click it and confirm a `Link copied` toast appears and the clipboard contains `{origin}/goods-shipment/<id>`. Open a saved shipment and confirm the same `Copy link` action (with tooltip on hover) is available in the detail topbar.
@@ -84,6 +86,8 @@ Use this window to register and complete outbound customer shipments. The functi
 19. Use `Create Invoice` on a completed shipment and confirm the confirmation popup shows Currency read-only (inherited from the shipment) and a required Tarifa (price list) selector; confirm the created invoice's lines price off the selected price list.
 20. Select multiple completed shipments with different currencies from the list and confirm `Create Invoice` stays disabled with an explanatory tooltip; repeat with same-currency shipments and confirm it enables.
 21. Create a draft shipment with **no** linked sales order (not created "from" an order), open the `Confirm` popup, leave the "Crear factura de venta" toggle ON (`goodsShipment.confirmModal.createInvoiceTitle` — the label no longer carries the "en borrador" suffix this step used to quote), and confirm a **Tarifa** selector appears and blocks "Confirmar y crear factura" until a price list is chosen; choosing one and confirming must succeed and create the invoice with that price list — in **Confirmado** since ETP-5381 — never a 500. Repeat on a shipment that **does** have a linked order and confirm the selector still appears (pre-filled) but does **not** block confirming even if left untouched. Then confirm a shipment with the "Crear factura de venta" toggle OFF (no invoice created) and verify **no** result modal appears — instead an auto-dismissing green `sonner` toast reads `goodsShipment.confirmModal.confirmedTitle` ("Albarán de venta confirmado" / "Goods shipment confirmed") and the page refreshes (ETP-5063). Confirm the result modal still appears, listing the created invoice, when the toggle is ON and an invoice is created.
+22. **ETP-5302 — bulk "Descontabilizar".** Select one or more posted shipments and confirm a `Descontabilizar` button appears in the selection bar; run it and verify each row's Posted state clears and a result toast appears. With only not-posted rows selected the button must not render at all. With a mixed selection, confirm the not-posted rows are reported as omitted with the `bulkRowNotPosted` message rather than counted as failures. Confirm the dialog's confirm button reads **Aceptar** / **Accept**, not "Completado".
+23. **ETP-5302 — no page reload.** Scroll down a long shipment list, apply a filter, then run any bulk action ("Procesar", "Contabilizar", "Descontabilizar", "Crear Factura"). The filter and the scroll position must survive, only the rows refetch, and the result toast must appear immediately (not after an SPA reboot). For "Crear Factura" specifically, confirm the invoiced rows now show their updated invoicing status — before this fix that action neither reloaded nor refreshed, leaving the rows visibly stale with no hint they were out of date.
 
 ## Automated evidence
 
@@ -93,8 +97,14 @@ Use this window to register and complete outbound customer shipments. The functi
 - `artifacts/goods-shipment/custom/RelatedDocuments.jsx` shows that related-document navigation currently resolves the linked sales order and sales invoices, with return receipts left pending backend support.
 - `artifacts/goods-shipment/custom/ReturnWizard.jsx` explicitly documents the pending backend dependency for `createReturn`.
 - `artifacts/goods-shipment/custom/__tests__/BulkInvoiceFromShipment.test.js` provides source-shape coverage for the bulk invoice component, including invoiceable filtering, same-customer enforcement, line fetching, sales-order price enrichment, draft-invoice checking, and draft-invoice creation endpoint usage.
-- `tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx` provides the bulk-complete component (CO only, via `buildInOutActions`) mounted in the list selection bar for goods shipments with `labelKey="confirmBulk"` so the button renders as "Confirmar" / "Confirm".
-- **ETP-5209 — Post reachable from the list, not just form view**: `tools/app-shell/src/windows/custom/goods-shipment/index.jsx`'s `rowQuickActions.menuActions` adds a `{ neoAction: 'post' }` entry to the row-hover kebab, gated on `!posted && processed` — the same gate `GoodsShipmentPage.jsx`'s decisions-derived form-view `menuActions` already applies (that one IS live for this window's detail branch, since the wrapper does not override `menuActions` there). A successful post refreshes the list (`onMenuActionExecuted` bumps `refreshKey`). For bulk, `GoodsShipmentBulkActions` renders a third component alongside `BulkInvoiceFromShipment` and the existing book-only `BulkDocumentAction`: a `BulkDocumentAction` instance (`entity="goodsShipment"`, `actionMode="neoAction"`, `buildActions={buildPostActions}`, `rowFilter={postRowFilter}`, `labelKey="post"`) — `buildPostActions`/`postRowFilter` are exported from `BulkDocumentAction.jsx` and shared across purchase-invoice, sales-invoice, goods-receipt, and goods-shipment. `postRowFilter` is a plain `(row, action, ui) => ...` function (not a `createPostRowFilter(ui)` factory), so it is passed by reference — the `ui` translator is supplied by `BulkDocumentAction`'s own `handleDone` at call time, not by the window wrapper. `BulkInvoiceFromShipment.jsx` itself is untouched — the single `customComponents.bulkActions`-shaped slot in this hand-rolled window is not a single-component constraint in practice, since `GoodsShipmentBulkActions` already stacks multiple bulk components side by side. A row already posted, or not yet processed (completed), is excluded from the bulk post run with a translated rejection message (`bulkRowAlreadyPosted` / `bulkRowNotCompleted`).
+- `tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx` provides the bulk-complete component (CO only, via `buildInOutActions`) mounted in the list selection bar for goods shipments with `labelKey="process"` so the button renders as "Procesar" / "Process"; the single `CO` entry in its dropdown renders as "Confirmar" / "Confirm" (`labelKey: 'confirm'`).
+- **ETP-5302 — selection-bar button renamed to "Procesar", dropdown option renamed to "Confirmar"**: the floating selection-bar button is now mounted with `labelKey="process"` ("Procesar" / "Process") — the `confirmBulk` key it used before was deleted from `en_US.json`, `es_ES.json` and `es_AR.json`. In the same move, `BulkDocumentAction`'s `CO` entry (in both `buildInOutActions` and the default `buildActions`) switched from `labelKey: 'book'` to `labelKey: 'confirm'`, so the dropdown option that completes the document now reads "Confirmar" / "Confirm". The `RE` entry keeps `labelKey: 'reactivate'`. Labels only — the dialog, the per-row `Promise.allSettled` loop, the `documentAction=CO` call and the result toast are untouched. The second selection-bar button added by ETP-5209 (`labelKey="post"`, "Contabilizar") is unaffected.
+- **ETP-5209 — Post reachable from the list, not just form view**: `tools/app-shell/src/windows/custom/goods-shipment/index.jsx`'s `rowQuickActions.menuActions` adds a `{ neoAction: 'post' }` entry to the row-hover kebab, gated on `!posted && processed` — the same gate `GoodsShipmentPage.jsx`'s decisions-derived form-view `menuActions` already applies (that one IS live for this window's detail branch, since the wrapper does not override `menuActions` there). A successful post refreshes the list (`onMenuActionExecuted` bumps `refreshKey`). For bulk, `GoodsShipmentBulkActions` renders a third component alongside `BulkInvoiceFromShipment` and the existing CO-only `BulkDocumentAction`: a `BulkDocumentAction` instance (`entity="goodsShipment"`, `actionMode="neoAction"`, `buildActions={buildPostActions}`, `rowFilter={postRowFilter}`, `labelKey="post"`) — `buildPostActions`/`postRowFilter` are exported from `BulkDocumentAction.jsx` and shared across purchase-invoice, sales-invoice, goods-receipt, and goods-shipment. `postRowFilter` is a plain `(row, action, ui) => ...` function (not a `createPostRowFilter(ui)` factory), so it is passed by reference — the `ui` translator is supplied by `BulkDocumentAction`'s own `handleDone` at call time, not by the window wrapper. `BulkInvoiceFromShipment.jsx` itself is untouched — the single `customComponents.bulkActions`-shaped slot in this hand-rolled window is not a single-component constraint in practice, since `GoodsShipmentBulkActions` already stacks multiple bulk components side by side. A row already posted, or not yet processed (completed), is excluded from the bulk post run with a translated rejection message (`bulkRowAlreadyPosted` / `bulkRowNotCompleted`).
+- **ETP-5302 — bulk "Descontabilizar"**: `GoodsShipmentBulkActions` in `tools/app-shell/src/windows/custom/goods-shipment/index.jsx` now mounts a *third* `BulkDocumentAction` instance (`entity="goodsShipment"`, `actionMode="neoAction"`, `buildActions={buildUnpostActions}`, `rowFilter={unpostRowFilter}`, `labelKey="unpost"`). `buildUnpostActions(rows)` — exported from `BulkDocumentAction.jsx` — offers `{ value: 'unpost', labelKey: 'unpost' }` only when at least one selected row is posted, so the button does not render otherwise; `unpostRowFilter(row, action, ui)` blocks a not-posted row with `ui('bulkRowNotPosted')`. No backend or i18n work was required: the per-row call is `POST …/{id}/action/unpost` served by `DocumentPostingService`, the same endpoint this window's detail kebab already used, and the `unpost`, `bulkRowNotPosted` and `documentUnposted` keys already existed in all three locale files.
+  - **Why a separate pair from `buildPostActions`/`postRowFilter`:** `sales-invoice` and `purchase-invoice` mount the post pair too and must **not** offer a standalone unpost — on an invoice, reversing the accounting is a step inside Reactivate (`preUnpost`), never an action of its own. Only `goods-receipt` and `goods-shipment`, whose detail kebab already exposes *Descontabilizar*, mount the unpost pair.
+  - **Why its own button rather than a second option inside "Contabilizar":** the dropdown sits under a button whose label *is* the action, so *Descontabilizar* offered there would appear under a button reading "Contabilizar" — named as the opposite of what it does. In practice the two buttons are rarely on screen together, since one needs a posted row and the other a processed-not-posted one.
+- **ETP-5302 — bulk actions refetch in place instead of reloading the page**: `ListView.jsx` now hands `refresh` (a stable in-place refetch) to the `bulkActions` slot context, and every bulk host in this window's bar consumes it. `BulkDocumentAction` ends with `clearSelection()` → toast → `refresh()`; `artifacts/goods-shipment/custom/BulkInvoiceFromShipment.jsx` accepts `refresh` and calls it from `onSuccess`. That last one is the behaviour change users will notice most: "Crear Factura" previously neither reloaded nor refreshed, so the rows it had just invoiced kept showing a stale invoicing status with nothing on screen hinting they were out of date. The old `sessionStorage` + `window.location.reload()` path survives only as a fallback for a host mounted outside `ListView`'s slot. Full contract: `docs/ui-customization.md` §9e.
+- **ETP-5302 — dialog confirm button reads "Aceptar"**: `BulkDocumentAction`'s dialog footer now calls `ui('accept')` instead of `ui('done')`. `done` translates to "Completado", the name of a document *state* shown in this very list's status column, so the button read as though it would mark the documents completed. `accept` is a new key in `en_US.json`, `es_ES.json` and `es_AR.json`; `done` was deliberately left in place because `RecordCreateModal.jsx` still uses it.
 - There is no dedicated browser E2E or interaction test in the current worktree proving the full shipment execution, invoicing, or return flow end to end.
 - `artifacts/goods-shipment/custom/GoodsShipmentActions.jsx` proves the Send Email modal is wired with `bPartnerId` and `apiBaseUrl` so the recipient email is resolved from the contacts spec at open time and proposed as an editable `To` chip (removable, with additional To/CC recipients supported per ETP-4226 — edits reach the backend only through the allowlisted `recipientEdits` command field), and `documentType` is translated via `useMenuLabel()`.
 - **ETP-4717 — editable subject/message and status-gated Send:** `tools/app-shell/src/components/contract-ui/__tests__/SendDocumentModal.vitest.jsx` and `documentEmailSend.vitest.js` cover the editable `Asunto`/`Mensaje` fields and the opt-in `messageEdits` command field (present only when the operator actually changes subject or message; omitted — byte-identical legacy payload — otherwise). `e2e/tests/flows/document-send-recipients.mocked.spec.js` adds browser-level coverage that a typed message reaches the backend as `messageEdits.message`. `artifacts/goods-shipment/custom/__tests__/GoodsShipmentActions.test.js` adds a regression lock-in for the already-correct `isCompleted && <SendDocumentButton>` gating (this window needed no logic fix, unlike the other 4). `artifacts/__tests__/etp-4717-send-email-visibility.test.js` asserts `contract.json → frontendContract.window.rowQuickActions.actions.email.visibleWhen === "@DocumentStatus@='CO'"` so the grid row quick-action agrees with the Form-view topbar gate.
@@ -231,6 +241,65 @@ fires). The draft-status confirm flow (`GoodsShipmentConfirmModal.jsx` → `Conf
 never had this defect — it owns its own `loading` state and is unaffected by this change.
 `CreateInvoiceConfirmModal.jsx` was also hardened so its backdrop/× no longer close it while
 `loading` is `true` (previously only the "Cancelar" footer button was disabled).
+
+## Confirming an already fully-invoiced shipment (ETP-5265)
+
+A shipment whose `invoiceStatus` is already >= 100 used to open an intermediate "already
+invoiced" confirmation popup on `Confirm`. ETP-5265 removed that popup: `Confirm` now calls
+the canonical `documentAction` endpoint directly (`useDocumentAction`, `documentAction=CO`),
+then takes the same success path the popup used to trigger (`setInvoiceResult({ invoice: null })` -> the
+`goodsShipment.confirmModal.confirmedTitle` success toast + refresh), or shows
+`toast.error` on failure. The non-fully-invoiced flow still opens `GoodsShipmentConfirmModal` and is untouched.
+
+**In-flight feedback lives in the Confirm button, not in a toast (ETP-5265 QA follow-up).**
+The first cut showed a floating `toast.loading` card while the POST was in flight; QA rejected
+it, because every other document (invoices in particular) spins inside the `Confirm` button
+itself. The mechanism:
+
+1. `GoodsShipmentActions.jsx` publishes the in-flight promise on the event object:
+   `e.detail.promise = handleConfirmFullyInvoiced()`. The modal branch deliberately leaves
+   `detail.promise` unset — opening a modal is instantaneous and must not spin the button.
+2. The window's `draftMode.onConfirm` (`dispatchConfirmModalEvent` in the window's
+   `index.jsx`) dispatches `goods-shipment:open-confirm-modal` with a mutable `detail` object and returns
+   `detail.promise`.
+3. The core awaits it: `runDraftModeConfirm` in
+   `tools/app-shell/src/components/contract-ui/saveActions.jsx` wraps `await
+   draftMode.onConfirm()` in `DraftModeConfirmButton`'s local `customConfirmBusy` state
+   (try/finally), which drives the button's `Loader2` spinner and its `disabled`.
+
+This is additive for every other `draftMode.onConfirm` window: an `onConfirm` that returns
+nothing makes `await undefined` settle on the next microtask, so the button never renders a
+spinner and its DOM is unchanged.
+
+**The busy window spans the refetch, not just the POST (ETP-5265 QA follow-up 2).** The
+first version of the mechanism above resolved as soon as the `documentAction` POST came
+back (~150-300 ms locally) and the spinner was imperceptible: the record refresh happened
+afterwards, out of band, through the `setInvoiceResult` effect. `handleConfirmFullyInvoiced`
+therefore awaits the refetch as well, so the busy state runs unbroken from the click until
+the refreshed record is on screen. Three consequences:
+
+- `useEntity.fetchById` now **returns** its `runQuery` promise (`useEntity.js`, one added
+  `return`). DetailView's `onRefresh` prop is literally
+  `() => hook.fetchById?.(id, { force: true })`, so without it the caller awaited
+  `undefined`. No other caller reads the return value and the chain still ends in `.catch`,
+  so this is behaviour-preserving.
+- **Two failure domains, kept apart.** A failed POST is a failed confirmation:
+  `toast.error`, no success toast, no refresh. A failed *refresh* is not — the document is
+  confirmed and only the screen is stale, so the rejection is swallowed rather than
+  reported as a failed confirm.
+- This branch **no longer routes through `setInvoiceResult({ invoice: null })`**. That
+  setter's effect both toasts and refreshes but cannot be awaited, so it could not hold the
+  button busy; the success toast (`goodsShipment.confirmModal.confirmedTitle`) is emitted
+  inline instead, at the same point the native draftMode path emits its own — right after
+  the action POST succeeds and **before** the refetch (see `handleSaveAndProcess` in
+  `useEntity.js`). The effect is still live and still owns the `GoodsShipmentConfirmModal`
+  path, which is why the two branches read differently in `GoodsShipmentActions.jsx`.
+
+Known divergence from the native path: `hook.isSaving` only covers the save PATCH inside
+`handleSaveAndProcess`, not its process POST or its refetch, so a fully-invoiced albarán now
+spins for at least as long as — and usually longer than — an invoice does. That is the
+behaviour the acceptance bar asked for (busy until the record is back); unifying the native
+path to the same span would be a core change affecting every `draftMode` window.
 
 ## Theme roles
 

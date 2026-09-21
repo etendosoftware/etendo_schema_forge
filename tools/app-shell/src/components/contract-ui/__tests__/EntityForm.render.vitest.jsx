@@ -1649,7 +1649,7 @@ describe('EntityForm — extended render coverage', () => {
 
   // --- Number field editable ---
 
-  it('renders editable number field with input type number', () => {
+  it('renders an editable number field as a locale-aware masked input, never a native number input', () => {
     const fields = [
       { key: 'qty', label: 'Quantity', type: 'number', column: 'Qty' },
     ];
@@ -1658,7 +1658,11 @@ describe('EntityForm — extended render coverage', () => {
     );
     const input = screen.getByTestId('field-qty');
     expect(input).not.toBeDisabled();
-    expect(input).toHaveAttribute('type', 'number');
+    // ETP-5107: a native <input type="number"> rejects the comma keystroke at the browser
+    // level, so `1234,56` became `123456`. What matters is the numeric keypad hint, NOT the
+    // bare type="text".
+    expect(input).toHaveAttribute('inputMode', 'decimal');
+    expect(input).not.toHaveAttribute('type', 'number');
   });
 
   // --- Image field inline (no side panel) ---
@@ -2200,10 +2204,12 @@ describe('EntityForm — extended render coverage', () => {
 
   // --- number input type ---
 
-  it('renders number field with type=number input', () => {
+  it('renders number field with inputMode=decimal, not a native number input', () => {
     const fields = [{ key: 'qty', label: 'Qty', type: 'number', column: 'Qty' }];
     render(<EntityForm fields={fields} data={{ qty: 5 }} onChange={vi.fn()} />);
     const input = screen.getByTestId('field-qty');
-    expect(input.getAttribute('type')).toBe('number');
+    // ETP-5107 — see the sibling assertion above: type="number" is the defect shape.
+    expect(input.getAttribute('inputMode')).toBe('decimal');
+    expect(input.getAttribute('type')).not.toBe('number');
   });
 });

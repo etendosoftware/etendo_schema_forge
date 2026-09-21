@@ -226,6 +226,8 @@ All spec names are **kebab-case** via `toSpecName()` in `cli/src/push-to-neo.js`
 Artifact directory name = spec name. **NEVER** guess — use `toSpecName()` or read from artifact dir.
 When referring to a window in code or config, use kebab-case (`purchase-order`), not PascalCase or display name.
 
+**A window's vector-search target is its spec name.** `decisions.json → window.vectorSearch.target` must equal the spec (and so the artifact directory), and must equal `ETARC_VECTOR_SEARCH_TARGET.SEARCH_KEY` in `com.etendoerp.go`. A vector match carries no pointer to where its record lives, so the target key is the only clue the caller has — when it is the spec name, a match is read with `neo_get(spec:<target>, id:<match.id>)` and nothing has to be guessed. The key is declared in those two places independently and validated in neither, so changing one side alone makes the SPA search a key the server does not know; the SPA shows that as *no results*, never as an error. Change both, and re-run `make regen ONLY=<window> PUSH_TO_NEO=1` plus `export.database`.
+
 ## UI Customization
 
 **Any UI customization MUST survive pipeline re-runs.** `decisions.json` is the source of truth — if it's not declared there, a regeneration will wipe it. Never patch generated files directly.
