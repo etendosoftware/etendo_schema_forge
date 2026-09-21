@@ -77,7 +77,17 @@ const pillCls = (size = 'md') => {
     : `${base} text-xs px-2 py-1`;
 };
 
-function SiiStatusBadge({ estado, ui, size = 'md' }) {
+// ETP-5432: `eligible` mirrors the not-eligible-means-dash rule already applied by
+// `PurchaseInvoiceHeaderTable.jsx`'s list column and `useFiscalStatus.js` (the invoice
+// preview's "Estado SII" InfoRow) — an invoice dated before the org's earliest-ever SII
+// cutover must render a dash, never a fabricated "Pendiente". This badge previously had
+// no eligibility concept at all: any falsy/unmapped `estado` fell through to
+// `SII_DEFAULT` ("Pendiente"), so an older, pre-cutover invoice's SIF tab showed
+// "Pendiente" instead of the "—" the other two surfaces already got right.
+function SiiStatusBadge({ estado, eligible, ui, size = 'md' }) {
+  if (!eligible) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
   const current = SII_STATUS[estado] ?? SII_DEFAULT;
   return (
     <span className={`${pillCls(size)} ${current.cls}`}>{ui(current.key)}</span>
@@ -294,6 +304,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
     showSii,
     showVerifactu,
     showTbai,
+    siiEligible,
     dateReadOnly,
     siiFieldReadOnly,
     isDraft,
@@ -486,7 +497,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
           <Panel
             titleKey={PANEL_META.sii.titleKey}
             subtitleKey={PANEL_META.sii.subtitleKey}
-            badge={<SiiStatusBadge estado={data?.aeatsiiEstado} ui={ui} data-testid="SiiStatusBadge__b99c8b" />}
+            badge={<SiiStatusBadge estado={data?.aeatsiiEstado} eligible={siiEligible} ui={ui} data-testid="SiiStatusBadge__b99c8b" />}
             ui={ui}
             data-testid="Panel__b99c8b">
             <OperationDateField
