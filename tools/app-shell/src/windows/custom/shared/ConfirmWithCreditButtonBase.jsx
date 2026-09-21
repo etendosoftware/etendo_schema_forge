@@ -1,11 +1,30 @@
 import { useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { Check } from 'lucide-react';
+import { Button } from '@/components/ui/button.jsx';
 import { ConfirmResultModal } from '@/components/contract-ui/ConfirmResultModal';
 import ConfirmInOutModal from '@/components/contract-ui/ConfirmInOutModal';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
-import { maybeSaveBeforeConfirm } from '@/components/contract-ui/detailViewHelpers.jsx';
+import { getButtonClass, getSaveBtnCls, maybeSaveBeforeConfirm } from '@/components/contract-ui/detailViewHelpers.jsx';
+import { GateTooltip } from '@/components/contract-ui/saveActions.jsx';
 import { useConfirmWithCredit } from './useConfirmWithCredit';
+
+/**
+ * ETP-5408 — the DR "Confirm" button is the same kind of action as the generic
+ * positive AD process button DetailView renders for Facturas / Pedidos / Albaranes,
+ * so it must look the same: shared `Button` + a `<Check>` icon. It was a hand-rolled
+ * `<button>` with inline styles and no icon, which is the whole bug.
+ *
+ * Classes come from the same helpers DetailView uses (`getButtonClass` /
+ * `getSaveBtnCls`, see DetailView.jsx's process-button map) rather than being
+ * restated here, so a future restyle of the positive process button reaches this
+ * button too. Both arguments are the values DetailView would pass for these windows:
+ * `salesTheme` is undefined (neither return window declares one) and
+ * `toolbarButtonSize` is DetailView's own default `'sm'` (neither window overrides
+ * that prop). `p` is the positive-style process descriptor shape the helper reads.
+ */
+const CONFIRM_BTN_CLS = `${getButtonClass(undefined, { style: 'positive' }, true)} ${getSaveBtnCls('sm')}`.trim();
 
 export default function ConfirmWithCreditButtonBase({
   data, recordId, token, apiBaseUrl,
@@ -47,7 +66,16 @@ export default function ConfirmWithCreditButtonBase({
   return (
     <>
       {status === 'DR' && (
-        <button type="button" data-testid="action-confirm-with-credit"
+        // A blocked button that does not say why is the bug we already hit once, and the
+        // shared `Button` carries `disabled:pointer-events-none`, so once `confirmBlocked`
+        // is true the element gets no hover and its own `title` never fires. GateTooltip
+        // (the very wrapper saveActions.jsx uses for Save/Confirm) restores it: the span is
+        // never disabled, so it does receive the hover, and it is only inserted when there
+        // IS a reason to explain — the DOM is unchanged on the normal path.
+        <GateTooltip title={saveGate?.blocked ? saveGate.title : undefined} data-testid="GateTooltip__f9608e"><Button type="button" data-testid="action-confirm-with-credit"
+          variant="default"
+          size="default"
+          className={CONFIRM_BTN_CLS}
           onClick={async () => {
             if (confirmBlocked) return;
             // ETP-4940 follow-up: this button fires its own documentAction POST
@@ -60,13 +88,10 @@ export default function ConfirmWithCreditButtonBase({
             setShowModal(true);
           }}
           disabled={confirmBlocked}
-          // A blocked button that does not say why is the bug we already hit once. This
-          // is a plain <button>, not the shared one carrying `disabled:pointer-events-none`,
-          // so the native title fires on hover without needing a wrapper element.
-          title={saveGate?.blocked ? saveGate.title : undefined}
-          style={{ fontSize: 14, fontWeight: 500, padding: '8px 18px', borderRadius: 8, background: confirmBlocked ? 'hsl(var(--text-disabled))' : 'hsl(var(--foreground))', color: 'hsl(var(--card))', border: 'none', cursor: confirmBlocked ? 'not-allowed' : 'pointer', lineHeight: 1.4, opacity: confirmBlocked ? 0.6 : 1 }}>
+          title={saveGate?.blocked ? saveGate.title : undefined}>
+          <Check size={16} className="mr-1" data-testid="Check__f9608e" />
           {confirmDrLabel}
-        </button>
+        </Button></GateTooltip>
       )}
       {status === 'CO' && !hasReturnInvoice && (
         <button type="button" data-testid="action-create-return-invoice" onClick={() => setShowModal(true)}
