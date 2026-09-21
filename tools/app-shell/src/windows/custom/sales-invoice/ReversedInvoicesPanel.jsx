@@ -801,6 +801,52 @@ export default function ReversedInvoicesPanel({
   }
 
   // ── create ─────────────────────────────────────────────────────────────────
+
+  // ETP-5381 — one row PER selected invoice. A rectification row holds a single
+  // `reversedInvoice`, so a multi-selection fans out into several rows sharing the same AEAT349
+  // year/period/corrective values. Sequential on purpose, not Promise.all: the C_Invoice_Reverse
+  // trigger and the AEAT349 corrective rule both run per insert, and firing them concurrently
+  // would report whichever failed first while the others had already landed — leaving a partial
+  // set with no clear message. Sequential stops at the first refusal, so what the toast says
+  // matches what is on screen after `fetchLines()`.
+  // Returns the LAST response: the first refusal when one happened, the final success otherwise.
+  async function postRectificationRows(parentId) {
+    // Strip the display-only identifier and the multi-select carrier before POSTing
+    const payload = { ...newLine };
+    delete payload['reversedInvoice$_identifier'];
+    delete payload._reversedInvoiceIds;
+    const ids = (newLine._reversedInvoiceIds?.length ? newLine._reversedInvoiceIds
+      : [newLine.reversedInvoice]).filter(Boolean);
+    let res = null;
+    for (const invoiceId of ids) {
+      res = await apiFetch(`/reversedInvoices`, {
+        method: 'POST',
+        body: JSON.stringify({ invoice: parentId, ...payload, reversedInvoice: invoiceId }),
+      });
+      if (!res.ok) break;
+    }
+    return res;
+  }
+
+  // Toast-only on every path (ETP-5027): the owner validated that these backend messages
+  // (e.g. the AEAT349 corrective trigger) must surface in the toast, never as inline red
+  // text next to the fields.
+  async function reportSaveFailure(res, savedHeader) {
+    let msg = ui('rectSaveError');
+    try {
+      msg = parseNeoError(await res.json()) || msg;
+    } catch { /* keep default */ }
+    failedDraftRef.current = draftSignature(newLine);
+    if (savedHeader) {
+      // Header WAS created: navigate to it (staying on /new would make every tab switch
+      // re-save a "new" header → duplicate invoices + repeated "Record created" toasts).
+      // The draft and error survive the remount, where the error is re-emitted as a toast.
+      onGoToSavedRecord?.(savedHeader, { reopenAdd: true, draft: newLine, error: msg });
+      return;
+    }
+    toast.error(msg);
+  }
+
   async function handleSaveNewLine() {
     if (!newLine.reversedInvoice) return;
     if (!recordId && !onSaveHeader) return;
@@ -820,27 +866,7 @@ export default function ReversedInvoicesPanel({
         }
         parentId = savedHeader.id;
       }
-      // Strip the display-only identifier and the multi-select carrier before POSTing
-      const payload = { ...newLine };
-      delete payload['reversedInvoice$_identifier'];
-      delete payload._reversedInvoiceIds;
-      // ETP-5381 — one row PER selected invoice. A rectification row holds a single
-      // `reversedInvoice`, so a multi-selection fans out into several rows sharing the same AEAT349
-      // year/period/corrective values. Sequential on purpose, not Promise.all: the C_Invoice_Reverse
-      // trigger and the AEAT349 corrective rule both run per insert, and firing them concurrently
-      // would report whichever failed first while the others had already landed — leaving a partial
-      // set with no clear message. Sequential stops at the first refusal, so what the toast says
-      // matches what is on screen after `fetchLines()`.
-      const ids = (newLine._reversedInvoiceIds?.length ? newLine._reversedInvoiceIds
-        : [newLine.reversedInvoice]).filter(Boolean);
-      let res = null;
-      for (const invoiceId of ids) {
-        res = await apiFetch(`/reversedInvoices`, {
-          method: 'POST',
-          body: JSON.stringify({ invoice: parentId, ...payload, reversedInvoice: invoiceId }),
-        });
-        if (!res.ok) break;
-      }
+      const res = await postRectificationRows(parentId);
       if (res?.ok) {
         setNewLine({});
         setAddingLine(false);
@@ -852,23 +878,7 @@ export default function ReversedInvoicesPanel({
         }
         fetchLines();
       } else {
-        let msg = ui('rectSaveError');
-        try {
-          msg = parseNeoError(await res.json()) || msg;
-        } catch { /* keep default */ }
-        // Toast-only on every path (ETP-5027): the owner validated that these
-        // backend messages (e.g. the AEAT349 corrective trigger) must surface in
-        // the toast, never as inline red text next to the fields.
-        failedDraftRef.current = draftSignature(newLine);
-        if (savedHeader) {
-          // Header WAS created: navigate to it (staying on /new would make every
-          // tab switch re-save a "new" header → duplicate invoices + repeated
-          // "Record created" toasts). The draft and error survive the remount,
-          // where the error is re-emitted as a toast.
-          onGoToSavedRecord?.(savedHeader, { reopenAdd: true, draft: newLine, error: msg });
-          return;
-        }
-        toast.error(msg);
+        await reportSaveFailure(res, savedHeader);
       }
     } catch {
       toast.error(ui('rectSaveError'));

@@ -237,9 +237,12 @@ const invoiceMeta = (inv) => [
   inv.businessPartner,
 ].filter(Boolean).join(' · ');
 
-const invoiceAmount = (inv) => (inv.grandTotalAmount == null
-  ? null
-  : (inv.currency ? formatCurrency(inv.currency, inv.grandTotalAmount) : String(inv.grandTotalAmount)));
+const invoiceAmount = (inv) => {
+  if (inv.grandTotalAmount == null) return null;
+  return inv.currency
+    ? formatCurrency(inv.currency, inv.grandTotalAmount)
+    : String(inv.grandTotalAmount);
+};
 
 // ── Selection field ───────────────────────────────────────────────────────────
 

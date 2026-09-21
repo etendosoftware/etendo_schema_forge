@@ -8,6 +8,21 @@ import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
 import { useRectifiableInvoices, RectifiableInvoiceField } from './RectifiableInvoicePicker';
 
 /**
+ * POSTs one NEO action and throws the backend's own message when it refuses.
+ * Extracted so the two action calls below do not each repeat the response-check
+ * and error-unwrapping (which pushed the component over Sonar's cognitive-complexity
+ * budget, javascript:S3776).
+ */
+async function postAction(apiFetch, url, body) {
+  const res = await apiFetch(url, { method: 'POST', body: JSON.stringify(body) });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => null);
+    throw new Error(errBody?.response?.message || errBody?.message || `Error (${res.status})`);
+  }
+  return res;
+}
+
+/**
  * Generic confirm modal for InOut documents (goods-receipt, goods-shipment, return-receipt).
  * Matches the ConfirmGoodsReceiptModal design: toggle switch + green info row + dynamic button.
  *
@@ -85,6 +100,16 @@ export default function ConfirmInOutModal({
     total != null ? formatCurrency(currency, total) : null,
   ].filter(Boolean);
 
+  // Only the keys the backend actually needs travel: NEO drops anything outside the
+  // spec silently, so an always-present `priceListId: undefined` would be invisible noise.
+  const buildInvoiceBody = () => ({
+    ...(pickerActive && priceListId ? { priceListId } : {}),
+    // ETP-5381: the rectificative invoice cannot be confirmed without this link.
+    ...(rectifyActive && rectify.selectedIds.length > 0
+      ? { originInvoices: rectify.selectedIds }
+      : {}),
+  });
+
   const handleConfirm = async () => {
     if (!canConfirm) return;
     setLoading(true);
@@ -93,31 +118,12 @@ export default function ConfirmInOutModal({
       const actionBase = `/${specName}/${entityName}/${recordId}/action`;
 
       if (!skipDocumentAction) {
-        const res = await apiFetch(`${actionBase}/documentAction`, {
-          method: 'POST', body: JSON.stringify({ docAction: 'CO' }),
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => null);
-          throw new Error(body?.response?.message || body?.message || `Error (${res.status})`);
-        }
+        await postAction(apiFetch, `${actionBase}/documentAction`, { docAction: 'CO' });
       }
 
       let invoice = null;
       if (invoiceRequested && invoiceAction) {
-        const invoiceBody = {
-          ...(pickerActive && priceListId ? { priceListId } : {}),
-          // ETP-5381: the rectificative invoice cannot be confirmed without this link.
-          ...(rectifyActive && rectify.selectedIds.length > 0
-            ? { originInvoices: rectify.selectedIds }
-            : {}),
-        };
-        const invRes = await apiFetch(`${actionBase}/${invoiceAction}`, {
-          method: 'POST', body: JSON.stringify(invoiceBody),
-        });
-        if (!invRes.ok) {
-          const body = await invRes.json().catch(() => null);
-          throw new Error(body?.response?.message || body?.message || `Error (${invRes.status})`);
-        }
+        const invRes = await postAction(apiFetch, `${actionBase}/${invoiceAction}`, buildInvoiceBody());
         const invData = (await invRes.json())?.response?.data;
         invoice = {
           id: invData?.id ?? null,
