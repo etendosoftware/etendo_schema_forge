@@ -1,5 +1,5 @@
 import { registerFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResolvers.js';
-import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
+import { simSearchEveryLanguage } from '@etendosoftware/app-shell-core/lib/simSearch.js';
 import { classifyCandidates } from '@etendosoftware/app-shell-core/lib/import/resolveForeignKeys.js';
 
 /**
@@ -17,7 +17,10 @@ import { classifyCandidates } from '@etendosoftware/app-shell-core/lib/import/re
  *
  * 'UOM' is the DAL entity name for C_UOM (verified against AD_Table.classname).
  */
-registerFkResolver('product-uom', async (value, { token, simSearchFn = simSearch }) => {
+// ETP-5350 — `simSearchEveryLanguage`, not `simSearch`: C_UOM carries its English name on
+// the base row and only an es_ES translation, so "Unidad" resolved for a Spanish session
+// and was refused for an English one, for the same file.
+registerFkResolver('product-uom', async (value, { token, simSearchFn = simSearchEveryLanguage }) => {
   const [result] = await simSearchFn({ token, entityName: 'UOM', items: [value], qtyResults: 5 });
   return classifyCandidates(result?.candidates ?? []);
 });
