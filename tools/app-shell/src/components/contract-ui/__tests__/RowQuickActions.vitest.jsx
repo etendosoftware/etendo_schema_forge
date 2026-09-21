@@ -1,5 +1,6 @@
 import { render, screen, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toast } from 'sonner';
 
 // i18n stub — return the key so we can assert on it.
 vi.mock('@/i18n', () => ({
@@ -15,6 +16,21 @@ vi.mock('@/hooks/useDocumentAction', () => ({
     get loading() { return docActionLoadingFlag; },
     error: null,
   }),
+}));
+
+// ETP-5414 — useNeoAction stub, shared by both the declarative `neoAction`
+// dispatch and the new `preUnpost` pre-step (which also calls `execute`, with
+// actionName='unpost'). A single mock lets tests assert call ORDER across
+// both steps via `mockNeoExecute.mock.calls`.
+const mockNeoExecute = vi.fn();
+vi.mock('@/hooks/useNeoAction', () => ({
+  useNeoAction: () => ({ execute: mockNeoExecute, loading: false }),
+}));
+
+// ETP-5414 — RowQuickActions now toasts directly for a preUnpost failure (the
+// one exception to its "never toasts" rule — see its own docblock).
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
 }));
 
 import RowQuickActions from '../RowQuickActions.jsx';
@@ -57,6 +73,10 @@ describe('RowQuickActions', () => {
   beforeEach(() => {
     docActionExecuteMock.mockClear();
     docActionLoadingFlag = false;
+    mockNeoExecute.mockReset();
+    mockNeoExecute.mockResolvedValue({ success: true });
+    toast.success.mockClear();
+    toast.error.mockClear();
   });
 
   it('renders Edit and Clone buttons by default (no menu, no email)', () => {
@@ -419,6 +439,95 @@ describe('RowQuickActions', () => {
     it('renders Clone normally when show is explicitly true', () => {
       setup({ row: DRAFT_ROW, actionsConfig: { duplicate: { show: true } } });
       expect(screen.getByTestId('row-quick-action-clone')).toBeTruthy();
+    });
+  });
+
+  // ── ETP-5414: neoActionName override + preUnpost gate on a `neoAction` menu entry ──
+  describe('neoAction menu entries — neoActionName / preUnpost (ETP-5414)', () => {
+    async function clickMenuAction(row, action) {
+      const user = userEvent.setup();
+      const { onMenuActionExecuted } = setup({ row, menuActions: [action] });
+      await user.click(screen.getByTestId('row-quick-action-more'));
+      await user.click(screen.getByText(action.label));
+      // Let the async handleMenuActionClick chain (preUnpost + main execute) settle.
+      await new Promise((r) => setTimeout(r, 0));
+      return { onMenuActionExecuted };
+    }
+
+    it('uses the literal neoAction name when neoActionName is not set (unchanged behavior)', async () => {
+      await clickMenuAction(DRAFT_ROW, { key: 'a', label: 'Post', neoAction: 'post' });
+      expect(mockNeoExecute).toHaveBeenCalledWith('1', 'post');
+      expect(mockNeoExecute).toHaveBeenCalledTimes(1);
+    });
+
+    it('sends neoActionName as the wire action name when set, never the literal neoAction', async () => {
+      await clickMenuAction(DRAFT_ROW, {
+        key: 'confirm', label: 'Confirmar', neoAction: 'confirm', neoActionName: 'Processed',
+      });
+      expect(mockNeoExecute).toHaveBeenCalledWith('1', 'Processed');
+      expect(mockNeoExecute).not.toHaveBeenCalledWith('1', 'confirm');
+      expect(mockNeoExecute).toHaveBeenCalledTimes(1);
+    });
+
+    it('backward compat: an action with neither neoActionName nor preUnpost calls execute once with the literal name, no unpost call, no toast', async () => {
+      const { onMenuActionExecuted } = await clickMenuAction(
+        DRAFT_ROW,
+        { key: 'x', label: 'Do X', neoAction: 'X' },
+      );
+      expect(mockNeoExecute).toHaveBeenCalledWith('1', 'X');
+      expect(mockNeoExecute).toHaveBeenCalledTimes(1);
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(onMenuActionExecuted).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'x' }),
+        { success: true },
+      );
+    });
+
+    it('preUnpost success path: on a posted row, unpost runs BEFORE the main action, which still runs after', async () => {
+      const postedRow = { id: '9', documentStatus: 'CO', posted: 'Y' };
+      const { onMenuActionExecuted } = await clickMenuAction(postedRow, {
+        key: 'reactivate', label: 'Reactivar', neoAction: 'Processed', preUnpost: true,
+      });
+      // Both calls share the one mock, so call order IS array order.
+      expect(mockNeoExecute.mock.calls).toEqual([
+        ['9', 'unpost'],
+        ['9', 'Processed'],
+      ]);
+      expect(onMenuActionExecuted).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'reactivate' }),
+        { success: true },
+      );
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('preUnpost failure path: toasts the translated message, never calls the main action, and reports failure to onMenuActionExecuted', async () => {
+      mockNeoExecute.mockImplementation(async (id, actionName) => {
+        if (actionName === 'unpost') return { success: false, message: 'accounting settled' };
+        return { success: true };
+      });
+      const postedRow = { id: '9', documentStatus: 'CO', posted: 'Y' };
+      const { onMenuActionExecuted } = await clickMenuAction(postedRow, {
+        key: 'reactivate', label: 'Reactivar', neoAction: 'Processed', preUnpost: true,
+      });
+      expect(mockNeoExecute).toHaveBeenCalledWith('9', 'unpost');
+      expect(mockNeoExecute).not.toHaveBeenCalledWith('9', 'Processed');
+      expect(mockNeoExecute).toHaveBeenCalledTimes(1);
+      expect(toast.error).toHaveBeenCalledWith('accounting settled');
+      expect(onMenuActionExecuted).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'reactivate' }),
+        { success: false, message: 'accounting settled' },
+      );
+    });
+
+    it('preUnpost is a no-op when the row is NOT posted: only the main action call fires, no unpost call', async () => {
+      const unpostedRow = { id: '9', documentStatus: 'CO', posted: 'N' };
+      await clickMenuAction(unpostedRow, {
+        key: 'reactivate', label: 'Reactivar', neoAction: 'Processed', preUnpost: true,
+      });
+      expect(mockNeoExecute).toHaveBeenCalledWith('9', 'Processed');
+      expect(mockNeoExecute).not.toHaveBeenCalledWith('9', 'unpost');
+      expect(mockNeoExecute).toHaveBeenCalledTimes(1);
     });
   });
 });

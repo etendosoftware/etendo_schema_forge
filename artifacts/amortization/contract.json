@@ -1,8 +1,8 @@
 {
   "version": "0.40.0",
   "generatedAt": "2026-07-14T13:57:24.059Z",
-  "updatedAt": "2026-09-04T12:40:15.884Z",
-  "checksum": "328cf9a8ef5e23d4",
+  "updatedAt": "2026-09-21T13:20:13.943Z",
+  "checksum": "d8426c9294cfb78a",
   "frontendContract": {
     "window": {
       "id": "800026",
@@ -14,6 +14,9 @@
       "hideDeleteButton": true,
       "hideLink": true,
       "breadcrumb": "Finance / Amortization",
+      "customComponents": {
+        "bulkActions": "AmortizationBulkActions"
+      },
       "menuActions": [
         {
           "key": "reactivate",
@@ -594,6 +597,9 @@
       "hideDeleteButton": true,
       "hideLink": true,
       "breadcrumb": "Finance / Amortization",
+      "customComponents": {
+        "bulkActions": "AmortizationBulkActions"
+      },
       "menuActions": [
         {
           "key": "reactivate",
