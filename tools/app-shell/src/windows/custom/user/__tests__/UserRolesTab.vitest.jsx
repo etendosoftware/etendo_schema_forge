@@ -76,7 +76,11 @@ vi.mock('../../../../menu.json', () => ({
       // groupOrder 5 — ETP-5402: a report row's own id ("tax-report") has NO AD-tree
       // counterpart at all, so it can ONLY ever resolve via this `reportId`-keyed
       // menu.json entry (see UserRolesTab.jsx's own JSDoc on `activeWindowIds`).
-      { group: 'ReportsGroup', items: [{ name: 'tax-report', label: 'Tax Report', reportId: 'tax-report' }] },
+      // hidden: true matches every real report menu.json entry (ETP-5402 bug: a report
+      // never gets its own top-level sidebar link, but that must NOT exclude it from this
+      // tab's matrix — see resolveCategoryRow's `excludeHidden` param). This fixture
+      // omitting `hidden` originally masked the bug entirely.
+      { group: 'ReportsGroup', items: [{ name: 'tax-report', label: 'Tax Report', reportId: 'tax-report', hidden: true }] },
     ],
   },
 }));

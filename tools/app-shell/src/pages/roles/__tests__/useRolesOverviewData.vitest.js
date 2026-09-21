@@ -93,7 +93,12 @@ vi.mock('../../../menu.json', () => ({
         // `obuiappProcessId`/`processId` of its own, only a `reportId` matching the
         // backend's `reports`/`reportsMatrix` row id ("tax-report" etc., never an AD id).
         group: 'Reports',
-        items: [{ name: 'tax-report', label: 'Tax Report', reportId: 'tax-report' }],
+        // hidden: true matches every real report menu.json entry (ETP-5402 bug: a report
+        // never gets its own top-level sidebar link, but that must NOT exclude it from
+        // reportsMatrix — see resolveMatrixRow's `excludeHidden` param). This fixture
+        // omitting `hidden` originally masked the bug entirely — every test below passed
+        // against a fixture that didn't match production menu.json.
+        items: [{ name: 'tax-report', label: 'Tax Report', reportId: 'tax-report', hidden: true }],
       },
     ],
   },
@@ -217,7 +222,7 @@ describe('buildMenuWindowIndex', () => {
       label: 'Tax Report',
       groupOrder: 7,
       itemOrder: 0,
-      hidden: false,
+      hidden: true,
     });
   });
 });

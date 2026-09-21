@@ -227,15 +227,15 @@ function adaptCards(roles) {
  * chain (AD-menu-tree walk, then an "Other" bucket) for a window this index doesn't cover.
  *
  * **ETP-5402 — `item.reportId` (4th identity key).** A report row's backend id (`tax-report`,
- * `bank-statements`, ...) lives in an entirely different id-space than `windowId`/
+ * `balance-sheet`, ...) lives in an entirely different id-space than `windowId`/
  * `obuiappProcessId`/`processId` — it is the stable Informes row id, not the classic AD
  * anchor (window/process) id that access is actually resolved against server-side. Using an
- * anchor id as the join key here would collide for the 6 financial-family report rows, which
- * all share the SAME `AD_Window_ID` (Financial Account) as their access anchor but must
- * resolve to 6 DISTINCT category/label rows — a `windowId`-keyed index can only ever hold one
- * candidate per key. `reportId` sidesteps this entirely: it is never an AD id (no collision
- * risk with the other 3 branches) and is always unique per Informes row, so one shared `Map`
- * keeps working unchanged for both id-spaces.
+ * anchor id as the join key here would collide for the 5 financial-family report rows, which
+ * all share the SAME `AD_Window_ID` ("Informes financieros" pseudo-window) as their access
+ * anchor but must resolve to 5 DISTINCT category/label rows — a `windowId`-keyed index can
+ * only ever hold one candidate per key. `reportId` sidesteps this entirely: it is never an AD
+ * id (no collision risk with the other 3 branches) and is always unique per Informes row, so
+ * one shared `Map` keeps working unchanged for both id-spaces.
  */
 export function buildMenuWindowIndex() {
   const index = new Map();
@@ -285,6 +285,18 @@ function compareByOrderThenFallback(orderA, orderB, fallbackCompare) {
  * `AD_Window_Access` — an admin configuring "what can this role see" should never be
  * shown a toggle for something nobody can navigate to.
  *
+ * **`excludeHidden` (ETP-5402 fix).** The hidden-exclusion above encodes "not reachable
+ * from the sidebar as its OWN link, so hide it from the admin matrix too" — a real
+ * inference for a window, which normally has (or could have) its own sidebar entry. Every
+ * one of the 9 Informes report rows is marked `hidden: true` in `menu.json` for a
+ * DIFFERENT reason — a report never gets its own top-level sidebar link at all, by design
+ * (it's reached through the Reports viewer pages instead) — so applying the same exclusion
+ * to `reportsMatrix` silently dropped every single report row, even ones with real access,
+ * despite the backend returning correct data (caught live, ETP-5402 QA — the "Informes"
+ * sub-header never rendered anywhere despite confirmed non-empty `reportsMatrix` grants in
+ * the DB and the raw HTTP response). `adaptReportsMatrix` passes `excludeHidden: false` so
+ * report rows are never dropped on this basis; `adaptMatrix` keeps the default (`true`).
+ *
  * Otherwise returns the resolved `resolvedCategory` (falls back to the backend's raw
  * `category.name` when the window isn't in `menuIndex` — e.g. "Roles"/"Usuario",
  * deliberately granted to none of the 4 templates — it must never disappear from the
@@ -295,9 +307,9 @@ function compareByOrderThenFallback(orderA, orderB, fallbackCompare) {
  * declaration-order index, or `null` if absent from `menuIndex`) for
  * `trackBestGroupOrder` to fold into the running per-category best.
  */
-function resolveMatrixRow(w, category, menuIndex) {
+function resolveMatrixRow(w, category, menuIndex, excludeHidden = true) {
   const match = menuIndex.get(String(w.id));
-  if (match?.hidden) return null;
+  if (excludeHidden && match?.hidden) return null;
   const resolvedCategory = match?.group ?? category.name;
   const row = {
     windowId: w.id,
@@ -332,17 +344,19 @@ function trackBestGroupOrder(groupOrderByCategory, resolvedCategory, groupOrder)
  * (see `resolveMatrixRow`) — since two different backend `category.name` buckets can map
  * to the same menu.json `group` (or vice versa), every window is flattened across all
  * backend categories first, then re-bucketed by its resolved category string. Windows
- * excluded by `resolveMatrixRow` (sidebar-hidden, ETP-5071) are skipped entirely. Also
- * tracks, per resolved category, the smallest `groupOrder` seen among its windows via
- * `trackBestGroupOrder`.
+ * excluded by `resolveMatrixRow` (sidebar-hidden, ETP-5071) are skipped entirely — reports
+ * are NOT subject to this exclusion (`excludeHidden: false` when `itemsKey === 'reports'`,
+ * see `resolveMatrixRow`'s own JSDoc for why). Also tracks, per resolved category, the
+ * smallest `groupOrder` seen among its windows via `trackBestGroupOrder`.
  */
 function bucketRowsByResolvedCategory(categories, menuIndex, itemsKey = 'windows') {
   const rowsByCategory = new Map();
   const groupOrderByCategory = new Map();
+  const excludeHidden = itemsKey !== 'reports';
 
   for (const category of categories) {
     for (const w of category[itemsKey] ?? []) {
-      const resolved = resolveMatrixRow(w, category, menuIndex);
+      const resolved = resolveMatrixRow(w, category, menuIndex, excludeHidden);
       if (!resolved) continue;
       const { resolvedCategory, row, groupOrder } = resolved;
       if (!rowsByCategory.has(resolvedCategory)) rowsByCategory.set(resolvedCategory, []);

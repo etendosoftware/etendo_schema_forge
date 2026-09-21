@@ -199,7 +199,12 @@ function flattenWindowRows(nodes, category, out) {
  * `hidden` flag is `true` means EVERY `menu.json` entry for that window id is hidden
  * (e.g. Match Rule/Periods under Finance) — a window nobody can navigate to from the
  * real sidebar shouldn't appear as a row here either, matching the Roles-overview
- * page's `resolveMatrixRow` behavior exactly.
+ * page's `resolveMatrixRow` behavior exactly. **`excludeHidden = false` (ETP-5402
+ * fix)** turns this exclusion off for a report id — every one of the 9 Informes rows
+ * is `hidden: true` in `menu.json` for an unrelated reason (a report never gets its own
+ * top-level sidebar link at all, by design), so applying the exclusion to them silently
+ * dropped every report row despite real backend access data — same root cause and same
+ * fix as `useRolesOverviewData.js`'s `resolveMatrixRow`/`adaptReportsMatrix`.
  *
  * Falls back, in order, to:
  * 1. `adTreeIndex` (this window's row from the raw `SFListMenu` AD-menu-tree walk,
@@ -220,9 +225,9 @@ function flattenWindowRows(nodes, category, out) {
  * fallback paths return `null` for them, sorting after every menu.json-ordered
  * category/row while keeping their OWN relative order (see `groupResolvedRows`).
  */
-function resolveCategoryRow(windowId, menuIndex, adTreeIndex, fallbackNameById, uncategorizedLabel) {
+function resolveCategoryRow(windowId, menuIndex, adTreeIndex, fallbackNameById, uncategorizedLabel, excludeHidden = true) {
   const match = menuIndex.get(windowId);
-  if (match?.hidden) return null;
+  if (excludeHidden && match?.hidden) return null;
   if (match) {
     return { windowId, name: match.label, category: match.group, groupOrder: match.groupOrder, itemOrder: match.itemOrder };
   }
@@ -400,6 +405,21 @@ export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
     return ids;
   }, [overviewRoles]);
 
+  // ETP-5402 — the subset of `activeWindowIds` that are actually report ids (from
+  // `role.reports`, not `role.windows`) — used below to pass `excludeHidden: false` into
+  // `resolveCategoryRow` only for those ids. See that function's own JSDoc for why a
+  // report id must never be dropped on the `menu.json` hidden-flag check a real window id
+  // legitimately is.
+  const reportIds = useMemo(() => {
+    const ids = new Set();
+    for (const role of overviewRoles) {
+      for (const r of role.reports ?? []) {
+        if (r?.id != null) ids.add(String(r.id));
+      }
+    }
+    return ids;
+  }, [overviewRoles]);
+
   // ETP-5196 — `menu.json`'s own windowId -> {group, label, groupOrder, itemOrder,
   // hidden} index (see `resolveCategoryRow`'s JSDoc above), the SAME function
   // ETP-5071 built for the Roles-overview matrix, imported rather than
@@ -452,13 +472,14 @@ export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
 
     const uncategorizedLabel = ui('userRolesTabUncategorizedCategory');
     const resolvedRows = [...treeOrderedIds, ...remainingIds]
-      .map((windowId) => resolveCategoryRow(windowId, menuIndex, adTreeIndex, windowNameById, uncategorizedLabel))
+      .map((windowId) => resolveCategoryRow(
+        windowId, menuIndex, adTreeIndex, windowNameById, uncategorizedLabel, !reportIds.has(windowId)))
       .filter((row) => row !== null);
 
     // Drop any category left with zero surviving rows — must not render an empty
     // category header with nothing under it.
     return groupResolvedRows(resolvedRows).filter((group) => group.rows.length > 0);
-  }, [menuTreeData, activeWindowIds, menuIndex, adTreeIndex, windowNameById, ui]);
+  }, [menuTreeData, activeWindowIds, reportIds, menuIndex, adTreeIndex, windowNameById, ui]);
 
   // ETP-5196 — for a confirmed admin holder, the matrix's sole column is the admin role
   // itself (`adminRole` already has the exact shape a column needs: `{ id, name,
