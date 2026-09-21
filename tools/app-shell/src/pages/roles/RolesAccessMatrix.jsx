@@ -85,12 +85,20 @@ export default function RolesAccessMatrix({ cards, matrix, reportsMatrix, iconFo
     // own table already accepts.
     <div data-testid="RolesAccessMatrix">
       <table className="w-full text-sm">
-        {/* Sticky column headers, mirroring UserRolesTab.jsx's `<thead>` (same `sticky top-0
-            z-10 bg-card` pattern) — see the wrapper's own comment above for why it has no
-            overflow class of its own. */}
-        <thead className="sticky top-0 z-10 bg-card">
+        {/* ETP-5402 QA follow-up (round 3) — sticky moved from the <thead> itself down onto
+            EACH <th> cell. Putting `position: sticky` on a <thead> (display: table-header-group)
+            is a well-known cross-browser table-layout gotcha: several engines handle sticky
+            positioning on table row-groups inconsistently, which reproduced live here as the
+            header row visually reordering itself BELOW the first body row during/after scroll
+            (confirmed via a live recording: correct at rest on top, broken during and after any
+            scroll). `<th>` computes to `display: table-cell`, where `position: sticky` is
+            reliably supported everywhere — the standard, broadly-used workaround for exactly
+            this glitch. `bg-card`/`z-10` move down onto each cell too, since a sticky table CELL
+            (unlike a sticky row-group) doesn't paint an opaque background for the whole row on
+            its own. */}
+        <thead>
           <tr className="border-b border-border/50">
-            <th className="py-2.5 pr-4 text-left text-sm font-semibold text-foreground">
+            <th className="sticky top-0 z-10 bg-card py-2.5 pr-4 text-left text-sm font-semibold text-foreground">
               {ui('rolesMatrixWindowColumn')}
             </th>
             {cards.map((role) => {
@@ -99,7 +107,7 @@ export default function RolesAccessMatrix({ cards, matrix, reportsMatrix, iconFo
                 ? ui(ADMIN_NAME_I18N_KEY)
                 : resolveRoleDisplayName(ui, role.name);
               return (
-                <th key={role.id} className="py-2.5 px-3 text-center text-sm font-semibold text-foreground">
+                <th key={role.id} className="sticky top-0 z-10 bg-card py-2.5 px-3 text-center text-sm font-semibold text-foreground">
                   <span className="inline-flex items-center justify-center gap-1.5">
                     {Icon && (
                       <Icon className="h-3.5 w-3.5" data-testid={`RolesAccessMatrix__headerIcon-${role.id}`} />
