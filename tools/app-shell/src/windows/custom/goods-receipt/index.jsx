@@ -8,6 +8,7 @@ import GoodsReceiptSecondaryActions from '@generated/goods-receipt/custom/GoodsR
 import GoodsReceiptPreview from './GoodsReceiptPreview.jsx';
 import RelatedDocuments from './RelatedDocuments.jsx';
 import { AttachmentsTab } from '@/components/attachments';
+import BulkInvoiceFromReceipt from '@generated/goods-receipt/custom/BulkInvoiceFromReceipt';
 import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter, buildUnpostActions, unpostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
@@ -62,6 +63,7 @@ function CustomHeaderTable(props) {
 function GoodsReceiptBulkAction(props) {
   return (
     <>
+      <BulkInvoiceFromReceipt {...props} data-testid="BulkInvoiceFromReceipt__bf4f23" />
       <BulkDocumentAction
         {...props}
         entity="goodsReceipt"
