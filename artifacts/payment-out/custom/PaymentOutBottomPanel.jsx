@@ -121,7 +121,7 @@ function DatosSection({ data, ui }) {
 // it either. Renamed the remaining two to match Classic's wording.
 const DET_COLS = '1.8fr 1fr 1fr';
 
-function LineasSection({ data, token, apiBaseUrl, ui }) {
+function LineasSection({ data, apiBaseUrl, ui }) {
   // Empty base ON PURPOSE: every URL below is already absolute, and several address a
   // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
   // starts with that same base, so a configured base turns a cross-spec call into
@@ -147,7 +147,7 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
   // is edited, and `Updated` is not a NEO field on this entity, so nothing in the payload
   // moves for this effect to react to. Without it the panel kept showing the amounts from
   // before the save until the whole window was reloaded.
-  }, [data?.id, refreshSignal, token, apiBaseUrl]);
+  }, [data?.id, refreshSignal, apiBaseUrl, apiFetch]);
 
   // Line amounts are stored in the payment's own currency (see fmtAmt).
   const currency = data?.['currency$_identifier'];
@@ -214,15 +214,13 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
 }
 
 export default function PaymentOutBottomPanel({ data, token, apiBaseUrl }) {
-  // ETP-4576 - the credential belongs to apiFetch, not to the component.
-  const apiFetch = useApiFetch('');
   const ui = useUI();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <PaymentDraftBanner data={data} />
       <DatosSection data={data} ui={ui} />
       <div style={{ margin: '0 20px', borderTop: '1px solid var(--status-neutral-border)' }} />
-      <LineasSection data={data} token={token} apiBaseUrl={apiBaseUrl} ui={ui} />
+      <LineasSection data={data} apiBaseUrl={apiBaseUrl} ui={ui} />
     </div>
   );
 }

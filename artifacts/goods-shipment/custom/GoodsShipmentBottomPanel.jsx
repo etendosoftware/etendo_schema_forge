@@ -5,7 +5,6 @@ import { LinesBottomSection } from '@/components/contract-ui';
 import RelatedDocuments from './RelatedDocuments';
 import ImportFromSalesOrderModal from './ImportFromSalesOrderModal';
 import ImportFromSalesInvoiceModal from './ImportFromSalesInvoiceModal';
-import { useApiFetch } from '@/auth/useApiFetch.js';
 
 function ShipmentLinesEmptyState({ data, recordId, apiBaseUrl, token, onAddLine, canAddLine, onSave, onRefresh, forceOpen, onForceOpenHandled }) {
   const ui = useUI();
@@ -22,12 +21,6 @@ function ShipmentLinesEmptyState({ data, recordId, apiBaseUrl, token, onAddLine,
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  // ETP-4576 - the credential belongs to apiFetch, not to the component.
-  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
-  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
-  // starts with that same base, so a configured base turns a cross-spec call into
-  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
-  const apiFetch = useApiFetch('');
 
   const handleImportOrderClick = async () => {
     if (onSave) {
@@ -118,8 +111,6 @@ const ShipmentLineActions = forwardRef(function ShipmentLineActions(
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  // ETP-4576 - the credential belongs to apiFetch, not to the component.
-  const apiFetch = useApiFetch('');
 
   useEffect(() => {
     if (!forceOpen) return;

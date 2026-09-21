@@ -74,7 +74,6 @@ export default function ReturnWizard({
   onClose,
   shipmentData,
   lines = [],
-  token,
   apiBaseUrl,
   onSuccess,
   onError,
@@ -107,7 +106,10 @@ export default function ReturnWizard({
 
       // Fetch order header + lines to get currency and unit prices (shipment lines don't carry prices)
       const orderId = shipmentData?.salesOrder;
-      if (orderId && token && apiBaseUrl) {
+      // ETP-4576 - no `token` conjunct: under the cookie session the client holds no token,
+      // so gating on it would leave this prefetch permanently dead and the wizard would show
+      // neither the order currency nor the unit prices. apiFetch carries the credential.
+      if (orderId && apiBaseUrl) {
         const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
         // Fetch order header for currency
         apiFetch(`${base}/sales-order/header/${orderId}`)
@@ -131,7 +133,7 @@ export default function ReturnWizard({
           .catch(() => {});
       }
     }
-  }, [open, lines, shipmentData, token, apiBaseUrl]);
+  }, [open, lines, shipmentData, apiBaseUrl, apiFetch]);
 
   const toggleLine = useCallback((id) => {
     setSelected((prev) => {
