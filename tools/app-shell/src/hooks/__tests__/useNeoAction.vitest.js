@@ -240,4 +240,75 @@ describe('useNeoAction', () => {
       expect.anything(),
     );
   });
+
+  // ETP-5316 — unlike useDocumentAction (which throws), this hook RESOLVES a structured failure,
+  // so the keys have to ride in the result object. BulkDocumentAction's neoAction adapter reads
+  // them off this shape and re-attaches them to the Error it throws.
+  describe('messageKeys on the failure result (ETP-5316)', () => {
+    it('returns messageKeys alongside message on a non-ok response', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: false,
+        statusText: 'Bad Request',
+        json: async () => ({
+          status: 'error',
+          message: 'En la línea 10, 20, 30, la cantidad movida no debe ser cero.',
+          messageKeys: ['Inline', 'ProductNotNullAndMovementQtyZero'],
+        }),
+      });
+      const { result } = renderHook(() => useNeoAction(baseOpts));
+      let res;
+      await act(async () => { res = await result.current.execute('rec-k1', 'post'); });
+
+      expect(res).toEqual({
+        success: false,
+        message: 'En la línea 10, 20, 30, la cantidad movida no debe ser cero.',
+        messageKeys: ['Inline', 'ProductNotNullAndMovementQtyZero'],
+      });
+    });
+
+    it('reads the keys out of the nested error.* envelope', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: false,
+        statusText: 'Unprocessable Entity',
+        json: async () => ({
+          error: { message: 'boom', status: 422, messageKeys: ['lockedProduct'] },
+        }),
+      });
+      const { result } = renderHook(() => useNeoAction(baseOpts));
+      let res;
+      await act(async () => { res = await result.current.execute('rec-k2', 'post'); });
+
+      expect(res.messageKeys).toEqual(['lockedProduct']);
+      expect(res.message).toBe('boom');
+    });
+
+    it('leaves messageKeys undefined against a backend that does not send them', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: false,
+        statusText: 'Bad Request',
+        json: async () => ({ message: 'Already posted' }),
+      });
+      const { result } = renderHook(() => useNeoAction(baseOpts));
+      let res;
+      await act(async () => { res = await result.current.execute('rec-k3', 'post'); });
+
+      expect(res.success).toBe(false);
+      expect(res.messageKeys).toBeUndefined();
+    });
+
+    // The success path is deliberately untouched by ETP-5316 — a key set there would let a
+    // consumer render a failure wording for an action that worked.
+    it('never attaches messageKeys to a successful result', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true, message: 'ok', messageKeys: ['lockedProduct'] }),
+      });
+      const { result } = renderHook(() => useNeoAction(baseOpts));
+      let res;
+      await act(async () => { res = await result.current.execute('rec-k4', 'post'); });
+
+      expect(res).toEqual({ success: true, message: 'ok' });
+      expect('messageKeys' in res).toBe(false);
+    });
+  });
 });

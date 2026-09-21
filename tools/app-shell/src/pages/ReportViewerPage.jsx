@@ -575,16 +575,24 @@ function PopupMultiSelector({ selector, label, onChange, value = '', displayValu
   // this snapshot float to the top of the list. Deliberately NOT derived from `pending`, so
   // checking a brand-new item mid-session doesn't make it jump up until the next reopen.
   const [openSnapshotIds, setOpenSnapshotIds] = useState(() => new Set());
+  // ETP-5400 — without this, "options.length === 0 && query === ''" was the
+  // ONLY signal the empty-state text relied on, so a selector with genuinely
+  // zero records (e.g. no products assigned to any accounting entry) got
+  // stuck on "Loading..." forever: the fetch had already resolved, but an
+  // empty result looks identical to "still in flight" with no query typed.
+  const [loading, setLoading] = useState(false);
   const inputRef = useRef(null);
   const apiFetch = useApiFetch(ETENDO_BASE);
 
   useEffect(() => {
     if (!open) return;
+    setLoading(true);
     const t = setTimeout(() => {
       apiFetch(`/sws/report-selectors/${selector}?q=${encodeURIComponent(query)}`)
         .then(r => r.json())
         .then(data => setOptions(Array.isArray(data) ? data : (data?.items ?? [])))
-        .catch(() => setOptions([]));
+        .catch(() => setOptions([]))
+        .finally(() => setLoading(false));
     }, query ? 300 : 0);
     return () => clearTimeout(t);
   }, [query, open, selector, apiFetch]);
@@ -628,6 +636,32 @@ function PopupMultiSelector({ selector, label, onChange, value = '', displayValu
   const MAX_VISIBLE_TAGS = 3;
   const visibleTags = confirmed.slice(0, MAX_VISIBLE_TAGS);
   const hiddenCount = confirmed.length - MAX_VISIBLE_TAGS;
+
+  // Sonar S3358 — extracted out of a nested ternary in the JSX below.
+  let optionsListContent;
+  if (loading) {
+    optionsListContent = <p className="px-4 py-6 text-sm text-muted-foreground text-center">{ui('loading')}</p>;
+  } else if (options.length === 0) {
+    optionsListContent = <p className="px-4 py-6 text-sm text-muted-foreground text-center">{ui('noResults')}</p>;
+  } else {
+    optionsListContent = orderedOptions.map(o => {
+      const isSelected = pending.some(s => s.id === o.id);
+      return (
+        <label key={o.id} className="flex items-center gap-3 px-4 py-2 hover:bg-muted/40 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => toggleItem(o)}
+            className="w-4 h-4 accent-primary shrink-0"
+          />
+          <TruncatedText
+            text={o.name}
+            className="text-sm min-w-0"
+            data-testid="TruncatedText__PopupMultiSelector" />
+        </label>
+      );
+    });
+  }
 
   return (
     <>
@@ -681,29 +715,7 @@ function PopupMultiSelector({ selector, label, onChange, value = '', displayValu
               />
             </div>
             <div className="flex-1 overflow-auto">
-              {options.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-muted-foreground text-center">
-                  {query.length > 0 ? ui('noResults') : ui('loading')}
-                </p>
-              ) : (
-                orderedOptions.map(o => {
-                  const isSelected = pending.some(s => s.id === o.id);
-                  return (
-                    <label key={o.id} className="flex items-center gap-3 px-4 py-2 hover:bg-muted/40 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleItem(o)}
-                        className="w-4 h-4 accent-primary shrink-0"
-                      />
-                      <TruncatedText
-                        text={o.name}
-                        className="text-sm min-w-0"
-                        data-testid="TruncatedText__PopupMultiSelector" />
-                    </label>
-                  );
-                })
-              )}
+              {optionsListContent}
             </div>
             <div className="flex items-center justify-between px-4 py-3 border-t border-border/30 bg-muted/20">
               <span className="text-xs text-muted-foreground">{ui('selected', { count: pending.length })}</span>
@@ -711,104 +723,6 @@ function PopupMultiSelector({ selector, label, onChange, value = '', displayValu
                 <button onClick={() => setOpen(false)} className="h-8 px-3 text-xs rounded-md border border-border hover:bg-muted/50">{ui('cancel')}</button>
                 <button onClick={confirm} className="h-8 px-3 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90">OK</button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-// Single-select modal: shows a button with the current value, opens a modal with
-// a search input and a clickable list. Single click selects and closes immediately.
-function SingleSelectModal({ selector, label, value, displayValue, onChange, hasError = false, extraParams = {} }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [options, setOptions] = useState([]);
-  const inputRef = useRef(null);
-  const extraParamsRef = useRef(extraParams);
-  const apiFetch = useApiFetch(ETENDO_BASE);
-  useEffect(() => { extraParamsRef.current = extraParams; });
-
-  useEffect(() => {
-    if (!open) return;
-    const extra = Object.entries(extraParamsRef.current)
-      .filter(([, v]) => v)
-      .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
-      .join('&');
-    const path = `/sws/report-selectors/${selector}?q=${encodeURIComponent(query)}${extra ? '&' + extra : ''}`;
-    const t = setTimeout(() => {
-      apiFetch(path)
-        .then(r => r.json()).then(setOptions).catch(() => setOptions([]));
-    }, query ? 300 : 0);
-    return () => clearTimeout(t);
-  }, [query, open, selector, apiFetch]);
-
-  const openModal = () => {
-    setQuery('');
-    setOptions([]);
-    setOpen(true);
-    setTimeout(() => inputRef.current?.focus(), 50);
-  };
-
-  const selectItem = (item) => {
-    onChange(item.id, item.name);
-    setOpen(false);
-  };
-
-  const clear = (e) => {
-    e.stopPropagation();
-    onChange('', '');
-  };
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={openModal}
-        className={`w-full h-9 px-3 text-sm rounded-md border bg-card hover:bg-muted/50 flex items-center justify-between gap-2 ${hasError ? 'border-destructive ring-1 ring-destructive/30' : 'border-border'}`}
-      >
-        <span className={`truncate ${displayValue ? 'text-foreground' : 'text-muted-foreground'}`}>
-          {displayValue || `Select ${label}...`}
-        </span>
-        {displayValue && (
-          <span onClick={clear} className="text-muted-foreground hover:text-destructive shrink-0 text-base leading-none">&times;</span>
-        )}
-      </button>
-
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30" onClick={e => { if (e.target === e.currentTarget) setOpen(false); }}>
-          <div className="bg-card rounded-xl shadow-2xl w-[420px] max-h-[500px] flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
-              <h3 className="text-sm font-semibold">{label}</h3>
-              <button onClick={() => setOpen(false)} className="text-lg leading-none text-muted-foreground hover:text-foreground">&times;</button>
-            </div>
-            <div className="px-4 py-2 border-b border-border/30">
-              <input
-                ref={inputRef}
-                type="text"
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                placeholder={ui('searchPlaceholder')}
-                className="w-full h-8 px-2 text-sm border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary/30"
-              />
-            </div>
-            <div className="flex-1 overflow-auto">
-              {options.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-muted-foreground text-center">
-                  {query.length > 0 ? 'No results' : 'Loading...'}
-                </p>
-              ) : (
-                options.map(o => (
-                  <button
-                    key={o.id}
-                    onClick={() => selectItem(o)}
-                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-muted/50 truncate ${value === o.id ? 'bg-primary/10 text-primary font-medium' : ''}`}
-                  >
-                    {o.name}
-                  </button>
-                ))
-              )}
             </div>
           </div>
         </div>

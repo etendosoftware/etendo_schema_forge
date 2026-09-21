@@ -220,6 +220,34 @@ describe('useBatch — runBatch', () => {
     expect(error.raw).toBe('Gateway error: upstream connection reset\n  at some.internal.Handler');
   });
 
+  it('ETP-5350: declares the locale key and the status on the thrown error, so the user never reads "Batch failed (502)"', async () => {
+    // `Batch failed (<status>)` is a developer-facing diagnostic, and until ETP-5350 it was
+    // also the sentence the user read — app-shell-core's `sendRow` handed the rejection
+    // straight back, so this English literal reached the review queue and the blocking
+    // system-error dialog in an otherwise Spanish session. The engine can now recover the
+    // status by parsing it back out of the prose, but this is what makes that unnecessary:
+    // the throw site knows the status, so it states it rather than encoding it in a sentence
+    // someone might reword later.
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      text: async () => 'Gateway error: upstream connection reset',
+    });
+    const { result } = renderHook(() => useBatch({ token: 'tok' }));
+
+    let error;
+    await act(async () => {
+      try {
+        await result.current.runBatch([]);
+      } catch (e) {
+        error = e;
+      }
+    });
+
+    expect(error.messageKey).toBe('importErrorServerFailure');
+    expect(error.params).toEqual({ status: 502 });
+  });
+
   it('sets error and rethrows when fetch rejects', async () => {
     const networkErr = new Error('network down');
     globalThis.fetch = vi.fn().mockRejectedValue(networkErr);

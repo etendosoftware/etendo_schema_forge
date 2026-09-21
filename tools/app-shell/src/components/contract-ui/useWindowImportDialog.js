@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useLabel, useUI } from '@/i18n';
-import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
+import { simSearchEveryLanguage } from '@etendosoftware/app-shell-core/lib/simSearch.js';
 import { useBatch } from '../copilot/ocr/ingest/useBatch.js';
 
 /**
@@ -92,7 +92,17 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
     // actually waiting on. The 401 is handed back as a normal `!res.ok` and the review screen
     // reports the check as incomplete.
     const res = await apiFetch(`/${entity}?${params.toString()}`, { on401: 'ignore' });
-    if (!res.ok) throw new Error(`existing-record lookup failed: ${res.status}`);
+    // ETP-5350 — `messageKey`/`params` alongside the English text, the contract
+    // `ImportDialog.localizeError` (and now `sendRow`) reads: a plain module has no
+    // translator, so it declares the key and lets the dialog resolve it. Without this the
+    // developer-facing sentence below WAS the message the user read, in English, in the
+    // middle of a Spanish flow.
+    if (!res.ok) {
+      throw Object.assign(
+        new Error(`existing-record lookup failed: ${res.status}`),
+        { messageKey: 'importErrorLookupFailed', params: { status: res.status } },
+      );
+    }
     const json = await res.json().catch(() => null);
     const data = json?.response?.data ?? json?.data ?? [];
     // Only the key columns are read back; anything else the endpoint returns is ignored.
@@ -156,12 +166,22 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
       filterError: ui('importFilterError'),
       skip: ui('importSkip'),
       skipped: ui('importSkipped'),
+      // ETP-5349. Not rendered in the grid — this is the reason written into the
+      // downloadable error file for a row the user skipped by hand, which is the only
+      // kind of skip that records no reason of its own.
+      skippedByUser: ui('importSkippedByUser'),
       unskip: ui('importUnskip'),
       downloadErrors: ui('importDownloadErrors'),
       status: ui('importStatus'),
       statusOk: ui('importStatusOk'),
       statusError: ui('importStatusError'),
       fieldErrorsTooltip: ui('importFieldErrorsTooltip'),
+      // ETP-5350. The unresolved-foreign-key popover — where a user lands to fix the very
+      // row that failed, and the last part of this dialog still hardcoded in English.
+      fkSearchPlaceholder: ui('importFkSearchPlaceholder'),
+      fkSearching: ui('importFkSearching'),
+      fkNoMatches: ui('importFkNoMatches'),
+      fkUseTyped: ui('importFkUseTyped'),
       bulkApplyTitle: ui('importBulkApplyTitle'),
       bulkApplyDescription: ui('importBulkApplyDescription'),
       bulkApplyOnlyThis: ui('importBulkApplyOnlyThis'),
@@ -194,7 +214,11 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
   return useMemo(() => ({
     token,
     postBatch: runBatch,
-    simSearchFn: simSearch,
+    // ETP-5350: every installed AD language, not just the session one. The endpoint
+    // translates the term OUT of the session language before matching the English base
+    // rows, so an English value always matched and a Spanish one only matched a Spanish
+    // session — the same CSV passed for one user of a client and failed for another.
+    simSearchFn: simSearchEveryLanguage,
     labels,
     translate: ui,
     fieldLabelFn,

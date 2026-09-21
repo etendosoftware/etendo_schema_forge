@@ -20,8 +20,8 @@
 // timezone.
 //
 // Reached the same way TC-03 in ReversedInvoicesPanel.vitest.jsx does: the
-// empty-state "add" flow opens the draft ExpandedForm, whose "Seleccionar..."
-// button opens InvoicePickerModal (picker(false)) — the modal fetches
+// empty-state "add" flow opens the draft ExpandedForm, whose
+// `rectifySelectInvoices` button opens InvoicePickerModal (picker(false)) — the modal fetches
 // {apiBaseUrl}/header and renders each CO invoice through invoiceRow().
 
 // --- Mocks (before imports) ---
@@ -96,7 +96,7 @@ describe('ReversedInvoicesPanel — InvoicePickerModal — ETP-4850 date off-by-
     renderPanel({ headerInvoices: [INVOICE_AUG_10] });
 
     fireEvent.click(await screen.findByTestId('btn__addFirstRectificacion'));
-    fireEvent.click(screen.getByText('Seleccionar...'));
+    fireEvent.click(screen.getByText('rectifySelectInvoices'));
     await screen.findByPlaceholderText('rectSearchInvoice');
     await waitFor(() => expect(screen.queryByText('loading')).not.toBeInTheDocument());
 
