@@ -202,7 +202,7 @@ export default function AmortizationWindow(props) {
       // own breadcrumb never reaches it.
       breadcrumb="Finance / Amortization"
       api={api}
-      bulkActions={(ctx) => <AmortizationBulkActions {...ctx} />}
+      bulkActions={(ctx) => <AmortizationBulkActions {...ctx} data-testid="AmortizationBulkActions__c5474e" />}
       listbarPaddingX="px-2"
       tablePaddingX="px-2"
       hidePrint
