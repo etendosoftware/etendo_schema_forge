@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
@@ -73,12 +73,6 @@ const SUBTAB_SII_DATA_ENTITIES = {
 };
 
 const INVOICE_FK_FIELD = 'aeatsiiInvoice';
-
-const ChevDownIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-    <polyline points="6 9 12 15 18 9"/>
-  </svg>
-);
 
 function resolveTabState(initialTab) {
   if (initialTab.includes('previous')) {
@@ -262,9 +256,11 @@ export default function SiiMonitorSection({
   const ui = useUI();
   const apiFetch = useApiFetch(neoBase(apiBaseUrl));
   const [tab, setTab]       = useState('issued');
+  // ETP-5432: the period toggle UI (below) is hidden, so this never leaves
+  // 'current' in practice — kept as state (rather than a hardcoded literal)
+  // so resolveEntityKey/resolveTabState/handleExport don't need touching,
+  // and the previousPeriod fetch path stays intact but unreachable.
   const [period, setPeriod] = useState('current');
-  const [showPeriodDrop, setShowPeriodDrop] = useState(false);
-  const dropRef = useRef(null);
 
   const [page, setPage]           = useState(1);
   const [rows, setRows]           = useState([]);
@@ -279,7 +275,6 @@ export default function SiiMonitorSection({
   function changeTab(newTab, newPeriod) {
     setTab(newTab);
     setPeriod(newPeriod);
-    setShowPeriodDrop(false);
     const combined = newPeriod === 'previous' ? `${newTab}-previous` : newTab;
     onTabChange?.(combined);
   }
@@ -289,14 +284,6 @@ export default function SiiMonitorSection({
     setTab(t);
     setPeriod(p);
   }, [initialTab]);
-
-  // Close period dropdown on outside click
-  useEffect(() => {
-    if (!showPeriodDrop) return;
-    const handler = (e) => { if (dropRef.current && !dropRef.current.contains(e.target)) setShowPeriodDrop(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showPeriodDrop]);
 
   const entityKey = resolveEntityKey(tab, period);
 
@@ -375,13 +362,6 @@ export default function SiiMonitorSection({
   const siiKpis        = kpis?.sii ?? {};
   const issuedTotal    = (siiKpis.issued ?? 0) + (siiKpis.issuedPrevious ?? 0);
   const receivedTotal  = (siiKpis.received ?? 0) + (siiKpis.receivedPrevious ?? 0);
-  const currentCount   = tab === 'issued' ? (siiKpis.issued ?? 0) : (siiKpis.received ?? 0);
-  const previousCount  = tab === 'issued' ? (siiKpis.issuedPrevious ?? 0) : (siiKpis.receivedPrevious ?? 0);
-
-  const periodLabel = period === 'current'
-    ? `${ui('fiscalMonitor.sii.period.current')} (${currentCount})`
-    : `${ui('fiscalMonitor.sii.period.previous')} (${previousCount})`;
-
   const inner = (
     <>
       {/* Invoice type tabs — only in standard (non-compact) mode */}
@@ -409,62 +389,34 @@ export default function SiiMonitorSection({
 
       {/* Filter bar */}
       <div className="fm-filter-bar">
-        {compact ? (
-          // Compact: segmented control (invoice type) + period dropdown immediately adjacent
-          (<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div className="fm-filter-pills">
-              <button
-                className={`fm-filter-pill${tab === 'issued' ? ' active' : ''}`}
-                onClick={() => changeTab('issued', period)}
-              >
-                <FileUp size={14} strokeWidth={2} data-testid="FileUp__be1aa5" />
-                {ui('fiscalMonitor.sii.tab.issued')}
-                {issuedTotal > 0 && <span className="pill-count">{issuedTotal}</span>}
-              </button>
-              <button
-                className={`fm-filter-pill${tab === 'received' ? ' active' : ''}`}
-                onClick={() => changeTab('received', period)}
-              >
-                <FileDown size={14} strokeWidth={2} data-testid="FileDown__be1aa5" />
-                {ui('fiscalMonitor.sii.tab.received')}
-                {receivedTotal > 0 && <span className="pill-count">{receivedTotal}</span>}
-              </button>
-            </div>
-            <div className="fm-period-dropdown" ref={dropRef}>
-              <button className="fm-period-btn" onClick={() => setShowPeriodDrop(d => !d)}>
-                {periodLabel} <ChevDownIcon data-testid="ChevDownIcon__be1aa5" />
-              </button>
-              {showPeriodDrop && (
-                <div className="fm-period-menu">
-                  <button onClick={() => changeTab(tab, 'current')}>
-                    {ui('fiscalMonitor.sii.period.current')} ({currentCount})
-                  </button>
-                  <button onClick={() => changeTab(tab, 'previous')}>
-                    {ui('fiscalMonitor.sii.period.previous')} ({previousCount})
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>)
-        ) : (
-          // Standard: period pills in segmented control
-          (<div className="fm-filter-pills" data-testid="fm-period-toggle">
+        {compact && (
+          // Compact: segmented control (invoice type) only.
+          // Periodo anterior selector hidden — AEATSII_PRESII_INVOICE
+          // (org.openbravo.module.sii) doesn't implement a real rolling
+          // previous-period window, only a pre-SII-enrollment bootstrap check;
+          // showing it produces duplicate/wrong data. Deferred, see ETP-5432.
+          <div className="fm-filter-pills">
             <button
-              className={`fm-filter-pill${period === 'current' ? ' active' : ''}`}
-              onClick={() => changeTab(tab, 'current')}
+              className={`fm-filter-pill${tab === 'issued' ? ' active' : ''}`}
+              onClick={() => changeTab('issued', period)}
             >
-              {ui('fiscalMonitor.sii.period.current')}
-              {currentCount > 0 && <span className="pill-count">{currentCount}</span>}
+              <FileUp size={14} strokeWidth={2} data-testid="FileUp__be1aa5" />
+              {ui('fiscalMonitor.sii.tab.issued')}
+              {issuedTotal > 0 && <span className="pill-count">{issuedTotal}</span>}
             </button>
             <button
-              className={`fm-filter-pill${period === 'previous' ? ' active' : ''}`}
-              onClick={() => changeTab(tab, 'previous')}
+              className={`fm-filter-pill${tab === 'received' ? ' active' : ''}`}
+              onClick={() => changeTab('received', period)}
             >
-              {ui('fiscalMonitor.sii.period.previous')}
-              {previousCount > 0 && <span className="pill-count">{previousCount}</span>}
+              <FileDown size={14} strokeWidth={2} data-testid="FileDown__be1aa5" />
+              {ui('fiscalMonitor.sii.tab.received')}
+              {receivedTotal > 0 && <span className="pill-count">{receivedTotal}</span>}
             </button>
-          </div>)
+          </div>
         )}
+        {/* Standard (non-compact) mode: no period toggle rendered — see the
+            compact-mode comment above for why (ETP-5432). Only the export
+            button remains in the filter bar. */}
         <button className="fm-export-btn" onClick={handleExport} disabled={loading || exporting}>
           <ExportIcon data-testid="ExportIcon__be1aa5" /> {ui('fiscalMonitor.export')}
         </button>
