@@ -199,10 +199,9 @@ export function getPlatformToken(storage = globalThis.localStorage) {
  */
 export function getCheckoutToken(storage = globalThis.localStorage) {
   try {
-    // The selected environment JWT is the session currently used by NEO and remains valid when
-    // another tab refreshes the account token. The platform token is only the fallback for the
-    // account/onboarding screen where no environment has been selected yet.
-    return storage?.getItem('sf_auth_token') || storage?.getItem('sf_platform_token') || null;
+    // Billing mutations require the account session. An environment JWT is never a fallback:
+    // it authenticates a tenant operation and can remain valid after an account switch.
+    return storage?.getItem(PLATFORM_TOKEN_KEY) || null;
   } catch {
     return null;
   }
