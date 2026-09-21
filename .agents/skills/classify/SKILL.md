@@ -3,6 +3,8 @@ name: classify
 description: Use when classifying schema fields or business rules for a window. Triggers on classify window, classify fields, classify rules, curate schema, curate rules, pre-classify. AI-guided replacement for manual Decision Panel.
 ---
 
+<!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/skills/classify/SKILL.md - Regenerate: make sync-agents -->
+
 # Schema & Rules Classification
 
 Unified classification skill for Schema Forge. You ARE the classifier — no external API calls needed.
@@ -210,7 +212,7 @@ Report count: "{N} fields classified by heuristics"
 
 ### Step 4: AI classification (Nivel 3)
 
-For remaining fields, YOU (Codex) decide based on:
+For remaining fields, YOU (Claude) decide based on:
 
 1. **Field name and label** — Does it sound user-facing?
 2. **Data type** — Amounts, dates, strings are usually editable

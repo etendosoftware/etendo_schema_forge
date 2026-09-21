@@ -25,7 +25,7 @@ The current evidence shows a purchase-order-specific experience rather than a ge
 - Clone an existing order, and — once confirmed (`CO`) — send the document from the top bar.
 - Reactivate a confirmed order back to draft — from the detail view kebab (three-dot) menu, from the list row-hover kebab, or in bulk from the list selection bar — whenever the order has no linked documents (ETP-5315). All three surfaces are consistent by product decision (Valeria, ETP-5315 Jira comment): "las funcionalidades tiene que ser consistentes... en todos los puntos: form, grid (selección) y hover en menu ⋮." See the `Reactivate` bullet under "Gap assessment" below and the `MCP document actions` section for the backend mechanism.
 - Act on multiple orders at once from the list selection bar through a **single** bulk button labeled "Procesar" / "Process" (i18n key `process`). The user picks the document action inside that button's dialog: **Confirmar** / **Confirm** (`CO`) is offered when at least one selected row is a draft, **Reactivar** / **Reactivate** (`RE`) when at least one selected row is completed, and both appear together for a mixed selection. This is the same one-button shape `sales-order`, the invoice windows and the shipment windows use. The button disappears entirely when the selection yields no applicable action. See the `Reactivate` bullet under "Gap assessment" for the wiring, the ETP-5315 → ETP-5302 history behind it, and the known mixed-selection rough edge.
-- Generate downstream documents in bulk for completed purchase orders from the list selection bar via a kebab (three-dot) menu — `BulkPurchaseOrderMoreMenu`. The menu exposes "Crear facturas" and "Crear albaranes"; each item posts one request per selected order to the existing per-record `createPurchaseInvoice` and `createGoodsReceipt` NeoHandler endpoints. Before each create call, the kebab pre-checks whether the order already has a draft of the same kind by querying `purchase-invoice/header?criteria=salesOrder=<id>` for invoices and `goods-receipt/goodsReceipt?criteria=salesOrder=<id>` for receipts, mirroring the patterns used in `PurchaseOrderActions.jsx` for the single-record flow. Orders with an existing draft are reported as failed without a duplicate creation; orders not in `CO` are also reported as failed; orders that are fully fulfilled fall back to the backend's "no pending lines" message. The run never aborts on per-order failures — the aggregated `{ok}/{failed}` toast is surfaced through `useBulkActionToast` after the page reload.
+- Generate downstream documents in bulk for completed purchase orders from the list selection bar via a kebab (three-dot) menu — `BulkPurchaseOrderMoreMenu`. The menu exposes "Crear facturas" and "Crear albaranes"; each item posts one request per selected order to the existing per-record `createPurchaseInvoice` and `createGoodsReceipt` NeoHandler endpoints. Before each create call, the kebab pre-checks whether the order already has a draft of the same kind by querying `purchase-invoice/header?criteria=salesOrder=<id>` for invoices and `goods-receipt/goodsReceipt?criteria=salesOrder=<id>` for receipts, mirroring the patterns used in `PurchaseOrderActions.jsx` for the single-record flow. Orders with an existing draft are reported as failed without a duplicate creation; **since ETP-5381 the invoice half of that pre-check no longer catches the common case** — a purchase invoice generated from this window is confirmed on creation, so it is never in `DR` and the `purchase-invoice/header?criteria=...` probe will not see it. It now only catches an invoice a user drafted by hand. The receipt half is unaffected: `createGoodsReceipt` still produces a draft. Duplicate protection for generated invoices comes from the backend instead — the order's `qtyinvoiced` is written at completion time, so the existing "No pending lines to invoice in this purchase order" **400** now actually fires; orders not in `CO` are also reported as failed; orders that are fully fulfilled fall back to the backend's "no pending lines" message. The run never aborts on per-order failures — the aggregated `{ok}/{failed}` toast is surfaced through `useBulkActionToast` after the page reload.
 - Copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved.
 
 ## Interaction model
@@ -111,14 +111,14 @@ The current evidence shows a purchase-order-specific experience rather than a ge
 4. Open a draft order at `/purchase-order/:recordId` and confirm the detail page allows line editing and exposes the draft top-bar actions for confirmation, deletion, and cloning — the Send/"Enviar" action must **not** be shown yet. Open a line for edit and confirm the `Impuesto`/`Tax` field opens a dropdown listing the configured purchase taxes (filtered by `IsSOTrx=N` and validity against the order date), not a free-text search that returns "Sin resultados". Confirm the order and verify Send/"Enviar" now appears in the detail topbar and as a row quick action in the list.
 5. Confirm a draft order and verify the confirmation flow offers downstream procurement follow-up rather than only a status change. Confirm with **both** `Create receipt` and `Create invoice` left unchecked and verify **no** result modal appears — instead an auto-dismissing green `sonner` toast reads `confirmedTitle || poConfirmedTitle` ("Pedido de compra confirmado" / "Purchase order confirmed") and the page refreshes (ETP-5063). Confirm the result modal still appears, listing the created document(s), when at least one of the two checkboxes is selected.
 6. Open a confirmed order with remaining receipt and/or invoice work and verify the top bar exposes the corresponding management action based on pending quantities or pending amount.
-7. Open a confirmed order that already has draft receipts or a draft invoice and verify the top-bar chips link the user toward those downstream documents.
+7. Open a confirmed order that already has draft receipts, or a purchase invoice (confirmed since ETP-5381, or still in draft if created by hand), and verify the top-bar chips link the user toward those downstream documents.
 8. Open the Related Documents tab on an order with receipts, purchase invoices, or payments and verify each chip routes to the linked document window.
 9. On a completed purchase order **without linked documents** (no receipts, no purchase invoices), open the three-dot menu and confirm `Reactivate` appears (ETP-5315). Click it and verify the order transitions back to `DR`, editable fields become writable, and a `sonner` toast notification appears with the message `Document reactivated` / `Documento reactivado` (i18n key `reactivated`). On a completed purchase order **with** a linked receipt or invoice, open the three-dot menu and verify `Reactivate` is **not visible** — the `hasLinkedDocuments` backend flag must hide the action before the user can even attempt it.
 9. Select two or more **draft** purchase orders from the list and confirm exactly ONE document-action button, `Procesar (N)`, appears in the bulk action bar — there must be no second button beside it. Open it and verify the dialog's document-action dropdown offers only **Confirmar** (`CO`); **Reactivar** must not be listed, because no completed row is selected. (The kebab checked in step 13 is a separate control and may sit to its left.)
 10. From the list view, select one or more purchase orders, run `Clone`, close the result modal and confirm the cloned drafts appear in the list without manually pressing `Refresh`.
 12. On a draft purchase order with a vendor already chosen, change `Payment Terms` to a different value than the vendor default and save. Reopen the record and confirm the chosen value persisted (regression: the post-create cascade and PATCH path used to revert it).
-13. In the list view, select two or more completed orders. Verify a kebab (three-dot) button appears as the first item of the bulk-action group, just before `Procesar` (the button was named `Confirmar` before ETP-5302). Open the kebab and confirm the two items `Crear facturas` and `Crear albaranes` are listed. Trigger each one and verify a draft purchase invoice / goods receipt is created per selected order, and the resulting toast reads `PROCESO EJECUTADO: N registros procesados correctamente y 0 registros fallidos`. Then add one draft order to the selection and trigger either menu item: the toast must downgrade to a warning showing the per-order failure for the non-completed row while the completed orders still produce their documents. **ETP-5302:** the page must **not** reload — scroll down a long list, apply a filter, run the menu item, and confirm the filter and scroll position survive while only the rows refetch and the toast appears immediately. The same applies to the `Procesar` button beside the kebab, whose dialog confirm button now reads **Aceptar** / **Accept** rather than "Completado".
-14. Re-run either menu item on the same selection without first completing the freshly created drafts. Verify each order now reports back as failed with the `Pedido {documentNo} ya tiene una factura/albarán en borrador` message and no duplicate draft is created. Then complete one of those drafts (so its status moves to `CO` while leaving pending qty/amount on the order) and trigger the menu item again — that order must succeed and produce a new draft, while orders still holding a `DR` document keep failing with the same "already has draft" message.
+13. In the list view, select two or more completed orders. Verify a kebab (three-dot) button appears as the first item of the bulk-action group, just before `Procesar` (the button was named `Confirmar` before ETP-5302). Open the kebab and confirm the two items `Crear facturas` and `Crear albaranes` are listed. Trigger each one and verify a purchase invoice (in **Confirmado**, not Borrador — ETP-5381) and a draft goods receipt are created per selected order, and the resulting toast reads `PROCESO EJECUTADO: N registros procesados correctamente y 0 registros fallidos`. Then add one draft order to the selection and trigger either menu item: the toast must downgrade to a warning showing the per-order failure for the non-completed row while the completed orders still produce their documents. **ETP-5302:** the page must **not** reload — scroll down a long list, apply a filter, run the menu item, and confirm the filter and scroll position survive while only the rows refetch and the toast appears immediately. The same applies to the `Procesar` button beside the kebab, whose dialog confirm button now reads **Aceptar** / **Accept** rather than "Completado".
+14. Re-run either menu item on the same selection without first completing the freshly created documents. **Since ETP-5381 the two halves behave differently.** For `Crear albaranes` (still a draft flow), each order reports back as failed with the client-side `Pedido {documentNo} ya tiene un albarán en borrador` message and no duplicate draft is created; complete one of those drafts (so its status moves to `CO` while leaving pending qty on the order) and trigger the item again — that order must succeed. For `Crear facturas`, the generated invoice is already `CO`, so the client-side "already has a draft invoice" probe finds nothing and the request reaches the backend, which rejects it with the "No pending lines to invoice in this purchase order" **400** once the order is fully invoiced. Verify no duplicate invoice is produced either way.
 15. On a draft purchase order, open the confirm modal and check both `Create receipt` and `Create invoice`. From the browser console, override `window.fetch` to return a 500 for the `createPurchaseInvoice` request (or `createGoodsReceipt` for the inverse case) and confirm. Verify the first request that succeeded actually created its document, the second one displays the localised error, and the modal stays open. Retry from the same modal without removing the override and verify (a) the already-completed step's card is green, locked, and shows "Already created" / "Ya creado" and (b) no duplicate document is created — the network tab must NOT show a second `documentAction=CO` (no `@AlreadyPosted@` 400) nor a second `createGoodsReceipt` request. Restore the original `fetch` and confirm again: only the previously-failed step runs, and the result modal lists both documents (receipt from the first attempt + invoice from the retry, or vice-versa) with their document numbers.
 16. Open the Send Email modal from the topbar and confirm: the business partner's email registered in `EM_Etgo_Email` is proposed as an editable `To` chip (when none is registered, the To list starts empty); the proposed chip can be removed; additional To recipients and CC recipients (via the `Add CC` affordance) can be added; entering a syntactically invalid email shows an inline validation error and disables Send; Send is also disabled while the final To list is empty (even with CC entries) or when more than 10 recipients are entered across To and CC; and the modal title reads the translated document name in the active UI language. Also confirm the `Asunto` and `Mensaje` fields are editable (not greyed-out/read-only), that they pre-fill with the auto-derived subject and an empty message, and that sending without touching either still succeeds normally.
 17. Open an existing draft order without touching any field and confirm the "Save" and "Save Draft" buttons are **disabled**. Change any header field and confirm they become enabled. Save and confirm they disable again. Revert the changed field to its original value without saving and confirm the buttons disable once more. Add a line: once the add-row is submitted, the buttons should disable again if no header changes remain pending. Confirm the "Confirm" button stays enabled throughout all these states.
@@ -420,3 +420,103 @@ Automated evidence: `src/locales/__tests__/etp5125-printable-tax-labels.test.js`
 `documentPdf.template.vitest.jsx`, plus
 `lib/__tests__/attachmentFreshness.test.js` and `lib/__tests__/rendererBuildEpoch.vitest.js` for
 the cache invalidation.
+
+## Invoice is created and confirmed in one step — ETP-5381
+
+Every purchase invoice this window generates — from the confirm modal's
+`Create invoice` checkbox, from "Gestionar recepción y factura" on a completed
+order, from the row kebab's `Gestionar recepción / factura`, and from the list's
+`Crear facturas` kebab item — used to be left in **Borrador**. That was the
+duplication hole: `c_orderline.qtyinvoiced` is only written when the invoice is
+completed, so a draft reserved nothing and the same order could be invoiced
+repeatedly. The topbar's `Invoiced` progress badge suffered the same blindness,
+since it aggregates completed purchase invoices only.
+
+The `createPurchaseInvoice` action now creates **and completes** the invoice in
+one atomic request. The endpoint name is unchanged; only the outcome is.
+Completion runs the `CO` document action through core `ProcessInvoiceUtil` via
+`InvoiceCompletionService` (`InvoiceCompletionService.java:110`, `:167`) rather
+than `C_Invoice_Post0` directly, so the `ProcessInvoiceHook` CDI chain fires. The
+response now also carries `documentStatus`, which the frontend needs to render
+the result correctly.
+
+**Rollback is all-or-nothing.** The handler only `flush()`es; `ProcessInvoiceUtil`
+owns the commit and rolls back on failure, so a failed completion leaves no orphan
+draft and no burned document number. The handler captures the invoice id before
+completing and re-reads the entity afterwards
+(`CreatePurchaseInvoiceHandler.java:113-126`), which also picks up any
+`DocumentNo` the completion reassigned from the document type's sequence.
+
+**`createGoodsReceipt` is untouched** — receipts are still created in draft. Only
+the invoice half of every one of the flows above changed.
+
+**No new 409 guard on this window.** Unlike goods-receipt, goods-shipment,
+sales-quotation and the two return windows, the purchase order itself got no
+`AlreadyInvoicedException`. It did not need one: the pre-existing pending-line
+check (`CreatePurchaseInvoiceHandler.java:305-308` → **400**, "No pending lines to
+invoice in this purchase order") only ever failed to protect the order because
+draft invoices never moved `qtyinvoiced`. Now that generated invoices are
+confirmed, that 400 is reliable. Do not expect a 409 here — the 409s in this
+ticket belong to the shipment/receipt/quotation/return windows.
+
+**To modify a generated invoice**, the user reactivates it. `purchase-invoice`
+exposes a `reactivate` menu action (`documentAction: 'RE'`, `preUnpost: true`,
+visible at `DocStatus='CO'`), which is now the only route back to `DR`. The
+previous "review the draft before confirming it" workflow no longer exists on
+this path.
+
+**Confirm-flow idempotency is unchanged.** The three-step retry logic under
+"Reactive behavior and dependencies" still holds — only what step 3 produces
+changed. `PurchaseOrderActions.jsx` additionally now runs the step-3 failure
+message through `translateBackendError` before prefixing it with
+`poOrderConfirmedInvoiceError`, so a backend rejection renders in the session
+locale instead of raw English.
+
+**Known residual gap (UI copy, not behavior):** the confirm modal still describes
+the outcome as a draft — `poCreateInvoiceCheckDesc` reads "Se creará una factura
+de compra en borrador" / "A draft purchase invoice will be created", and
+`poConfirmWithInvoiceDesc` the same. Neither key was reworded in this ticket.
+
+### Manual verification
+
+1. On a draft order, confirm with `Create invoice` checked. Verify the invoice in
+   the result modal opens in **Confirmado** and the receipt (if also checked) opens
+   in **Borrador** — the two now differ by design.
+2. Verify the topbar `Facturado` badge shows a non-zero percentage right away (it
+   used to stay at 0% because the draft was excluded from the completed-invoice
+   aggregate).
+3. Re-run "Gestionar recepción y factura" on the same order and verify the invoice
+   side is rejected with the translated "no pending lines" **400** and no second
+   invoice appears.
+4. Force the completion to fail and verify nothing is persisted — no draft invoice,
+   and the next successful attempt reuses the same document number.
+
+### Automated evidence
+
+- `{etendo_root}/modules/com.etendoerp.go/src-test/src/com/etendoerp/go/schemaforge/InvoiceCompletionServiceTest.java` (new) covers the extracted completion path.
+- `CreatePurchaseInvoiceHandlerTest.java` and `NeoInvoiceSupportTest.java` were extended for the create-and-confirm flow.
+- No frontend test was added for this window; `PurchaseOrderActions.jsx`'s new `translateBackendError` wrapping is uncovered.
+
+### "Gestionar documentos" — the sole pending action is implied (ETP-5381)
+
+On a COMPLETED order, `CreateDocsModal` offers a card per still-pending action (create
+shipment/receipt, create invoice). When **both** are pending it is a real choice and each card keeps
+its checkbox, with the primary button disabled until one is ticked.
+
+When only **one** remains, the tick was a confirmation of a confirmation — the dialog's only button
+already says "Crear", and there is nothing to choose between. So the sole pending action is implied:
+its card keeps the selected styling but drops the tick box and the click handler (a control that
+cannot change anything invites a click that does nothing), the section label switches from
+`soGenerateDocs` ("Generar documentos (opcional)") to `soGenerateDocsImplied` ("Documento a
+generar") because "(optional)" is only true while there is something to opt out of, and the button
+is live on open.
+
+The effective choice (`shipWanted`/`receiptWanted` and `invoiceWanted`) is threaded through
+`handleCreate`, both POST branches and `canCreate` — **not** only through the render. Hiding the
+checkbox alone would have enabled the button while the underlying state stayed `false`, so the
+action would have fired and done nothing.
+
+**Deliberately NOT applied to the confirm-the-order modal** in the same file: there both actions are
+genuinely optional and the button says "Confirmar", which is the distinction commit `a84798d2a`
+established when it removed the redundant checkbox from `CreateInvoiceConfirmModal`. Applying
+`implied` there would create documents the user never asked for.

@@ -150,7 +150,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
           title={confirmedTitle || ui('poConfirmedTitle')}
           docs={[
             confirmedDocs?.receipt?.id && { type: 'entrada', num: confirmedDocs.receipt.documentNo, amount: confirmedDocs.receipt.amount, route: `/goods-receipt/${confirmedDocs.receipt.id}` },
-            confirmedDocs?.invoice?.id && { type: 'facturaCompra', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, route: `/purchase-invoice/${confirmedDocs.invoice.id}` },
+            confirmedDocs?.invoice?.id && { type: 'facturaCompra', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, documentStatus: confirmedDocs.invoice.documentStatus, route: `/purchase-invoice/${confirmedDocs.invoice.id}` },
           ].filter(Boolean)}
           currency={data?.['currency$_identifier'] || ''}
           navigate={navigate}
@@ -477,7 +477,10 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(ui('poOrderConfirmedInvoiceError') + ' ' + (e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`));
+          // ETP-5381: mirrors the sales twin — this was the only branch here not translating the
+          // backend message, so the new duplicate-invoice and completion messages would have
+          // surfaced in English.
+          throw new Error(ui('poOrderConfirmedInvoiceError') + ' ' + translateBackendError(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`, ui));
         }
         const doc = (await res.json())?.response?.data;
         const docObj = Array.isArray(doc) ? doc[0] : doc;
@@ -485,6 +488,9 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           id:         docObj?.id ?? null,
           documentNo: docObj?.documentNo ?? '',
           amount:     docObj?.grandTotalAmount ?? null,
+          // ETP-5381: carry documentStatus so the result modal badges the invoice as Confirmada
+          // instead of defaulting to Borrador — it is confirmed on creation now.
+          documentStatus: docObj?.documentStatus ?? null,
         };
         setInvoiceResult(currentInvoice);
         trackDocumentCreated('purchase-invoice');
@@ -671,15 +677,22 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
 // hash, so it could not have told the two cards apart even if it had been applied. The mocked
 // confirm spec had to locate them by their translated label in both locales as a result. Mirrors
 // `SoCheckboxCard` in sales-order, which already did this correctly.
-function PoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled, testId }) {
+/**
+ * @param implied the only action available, so there is nothing to choose: the card states what
+ *     will happen instead of asking. Keeps the selected styling, drops the tick box and the
+ *     click handler — a control that cannot change anything invites a click that does nothing.
+ */
+function PoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled, implied, testId }) {
+  const interactive = !disabled && !implied;
   return (
     <div
       data-testid={testId}
-      onClick={disabled ? undefined : onChange}
+      data-implied={implied ? 'true' : 'false'}
+      onClick={interactive ? onChange : undefined}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
         padding: checked ? '11px 13px' : '12px 14px', borderRadius: 8,
-        cursor: disabled ? 'default' : 'pointer',
+        cursor: interactive ? 'pointer' : 'default',
         border: disabled ? '2px solid var(--status-success-border)' : (checked ? '2px solid var(--status-info-border)' : '1px solid hsl(var(--border-subtle))'),
         background: disabled ? 'var(--status-success-bg)' : (checked ? 'var(--status-info-bg)' : 'hsl(var(--card))'),
         opacity: disabled ? 0.85 : 1,
@@ -695,19 +708,22 @@ function PoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled, te
           {subtitle}
         </div>
       </div>
-      <div style={{
-        width: 18, height: 18, borderRadius: 4, flexShrink: 0,
-        border: (checked || disabled) ? 'none' : '1.5px solid hsl(var(--border-subtle))',
-        background: disabled ? 'var(--status-success-fg)' : (checked ? 'var(--status-info-fg)' : 'hsl(var(--card))'),
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        transition: 'background 0.15s',
-      }}>
-        {(checked || disabled) && (
-          <svg width="11" height="9" viewBox="0 0 11 9" fill="none" stroke="hsl(var(--card))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="1 4 4 7.5 10 1" />
-          </svg>
-        )}
-      </div>
+      {/* Omitted entirely when the action is implied (see `implied`). */}
+      {!implied && (
+        <div style={{
+          width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+          border: (checked || disabled) ? 'none' : '1.5px solid hsl(var(--border-subtle))',
+          background: disabled ? 'var(--status-success-fg)' : (checked ? 'var(--status-info-fg)' : 'hsl(var(--card))'),
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          transition: 'background 0.15s',
+        }}>
+          {(checked || disabled) && (
+            <svg width="11" height="9" viewBox="0 0 11 9" fill="none" stroke="hsl(var(--card))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="1 4 4 7.5 10 1" />
+            </svg>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -745,14 +761,22 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
         : `${formatCurrency(currency, totalPending)} ${ui('poPendingInvoice')}`)
     : ui('poCreateInvoiceCheckDesc');
 
+  // ETP-5381: with only ONE action left the tick confirms a confirmation — the dialog's only
+  // button already says it. The sole pending action is implied, its card drops the checkbox, and
+  // the button is live on open. With BOTH pending it is a real choice, so the checkboxes stay.
+  // Mirrors CreateDocsModal in sales-order's OrderCreateInvoice.jsx — same modal, other side.
+  const soleAction = needsReceipt !== needsInvoice;
+  const receiptWanted = soleAction ? needsReceipt : createReceipt;
+  const invoiceWanted = soleAction ? needsInvoice : createInvoice;
+
   const handleCreate = async () => {
-    if (loading || (!createReceipt && !createInvoice)) return;
+    if (loading || (!receiptWanted && !invoiceWanted)) return;
     setLoading(true);
     setError(null);
     try {
       const result = {};
 
-      if (createReceipt) {
+      if (receiptWanted) {
         const res = await fetch(`${base}/purchase-order/header/${orderId}/action/createGoodsReceipt`,
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
@@ -765,7 +789,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
         trackDocumentCreated('goods-receipt');
       }
 
-      if (createInvoice) {
+      if (invoiceWanted) {
         const res = await fetch(`${base}/purchase-order/header/${orderId}/action/createPurchaseInvoice`,
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
@@ -774,7 +798,9 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
         }
         const doc = (await res.json())?.response?.data;
         const docObj = Array.isArray(doc) ? doc[0] : doc;
-        result.invoice = { id: docObj?.id ?? null, documentNo: docObj?.documentNo ?? '', amount: docObj?.grandTotalAmount ?? null };
+        // ETP-5381: carry documentStatus so the result modal badges the invoice as Confirmada
+        // instead of defaulting to Borrador — it is confirmed on creation now.
+        result.invoice = { id: docObj?.id ?? null, documentNo: docObj?.documentNo ?? '', amount: docObj?.grandTotalAmount ?? null, documentStatus: docObj?.documentStatus ?? null };
         trackDocumentCreated('purchase-invoice');
       }
 
@@ -786,7 +812,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
     }
   };
 
-  const canCreate = createReceipt || createInvoice;
+  const canCreate = receiptWanted || invoiceWanted;
 
   return (
     <div onClick={onClose} style={overlayStyle}>
@@ -817,11 +843,13 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
         {/* Only show checkboxes for pending actions; subtitle shows outstanding qty/amount */}
         <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
-            {ui('soGenerateDocs')}
+            {/* "(optional)" only holds while there is something to opt out of. */}
+            {soleAction ? ui('soGenerateDocsImplied') : ui('soGenerateDocs')}
           </div>
           {needsReceipt && (
             <PoCheckboxCard
-              checked={createReceipt}
+              implied={soleAction}
+              checked={receiptWanted}
               onChange={() => setCreateReceipt(v => !v)}
               icon="📦"
               title={ui('poCreateReceiptTitle')}
@@ -830,7 +858,8 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           )}
           {needsInvoice && (
             <PoCheckboxCard
-              checked={createInvoice}
+              implied={soleAction}
+              checked={invoiceWanted}
               onChange={() => setCreateInvoice(v => !v)}
               icon="🧾"
               title={ui('soCreateInvoiceTitle')}

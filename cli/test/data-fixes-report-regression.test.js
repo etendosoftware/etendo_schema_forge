@@ -100,6 +100,14 @@ const FIXES_WITH_REPORT = new Set([
   // Invoice"). Its @report lists every such sequence plus the doctype that kept it alive — same
   // "flag, don't guess" pattern as R19.
   '20260916T120000Z__R37-deactivate-reversed-invoice-doctypes',
+  // R38 (ETP-5352) backfills AD_ORG.AD_LEGALENTITY_ORG_ID, but only on organizations that
+  // finished provisioning (isready='Y'). Its @report lists the legal-entity orgs left
+  // untouched because isready='N' — an org whose alta never completed is missing far more
+  // than this one column (no accounting schema, no business partners, no products), so
+  // filling it would mask a half-created tenant rather than fix it. Same "flag, don't guess"
+  // pattern as R19/R28/R35: the fix declines part of its own scope and says so instead of
+  // silently doing nothing. Empty — `detail` null — on any tenant whose orgs are all ready.
+  '20260918T120000Z__R38-org-legalentity-pointer',
   // R38 (ETP-5285) sets the product-defined PREFIX and aligns STARTNO/CURRENTNEXT at 1000000 on
   // the five document series Etendo GO configures. Like its sibling R31-document-sequence-startno
   // above — and unlike the "flag, don't guess" entries — its @report is a pure POST-CONDITION: it
