@@ -25,7 +25,7 @@ import { useServiceWorker } from './hooks/useServiceWorker.js';
 import { fetchMenuTree, collectAllowedIds, MENU_ACCESS_UNREACHABLE } from './lib/menuTree.js';
 import { useInstalledApps } from './hooks/useInstalledApps.js';
 import { useAppStoreUnlock, attachKeySequenceWatcher } from './hooks/useAppStoreUnlock.js';
-import { buildOnboardingReturnTo } from './lib/oauthReturnTo.js';
+import { resolveUnauthenticatedRedirect } from './lib/unauthenticatedRedirect.js';
 import { ObservabilityRouteTracker } from './lib/observability/RouteTracker.jsx';
 import { SurveyModal } from './components/survey/SurveyModal.jsx';
 import { useSurveyEngine } from './hooks/useSurveyEngine.js';
@@ -286,7 +286,7 @@ function UnauthenticatedRedirect() {
   const location = useLocation();
   return (
     <Navigate
-      to={buildOnboardingReturnTo(location)}
+      to={resolveUnauthenticatedRedirect(location)}
       replace
       data-testid="Navigate__ecaf3f" />
   );

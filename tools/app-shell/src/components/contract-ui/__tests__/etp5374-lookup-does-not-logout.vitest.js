@@ -61,6 +61,14 @@ describe('ETP-5374 — the existing-record lookup never triggers a logout', () =
     // `on401: 'ignore'` hands the 401 back as an ordinary non-ok response. It must still throw,
     // or the batch would be recorded as a successful check that found no duplicates — which is
     // the exact lie ETP-5374 exists to stop telling.
-    expect(SOURCE).toMatch(/if \(!res\.ok\) throw new Error\(`existing-record lookup failed/);
+    expect(SOURCE).toMatch(/if \(!res\.ok\)[\s\S]{0,80}new Error\(`existing-record lookup failed/);
+  });
+
+  it('ETP-5350: the throw declares a locale key, so its English text never reaches the user', () => {
+    // `ImportDialog.localizeError` shows a thrown error's own `message` when there is no
+    // `messageKey` to resolve — so this developer-facing sentence WAS what the user read, in
+    // English, in the file-error dialog, at the end of an otherwise Spanish flow.
+    expect(SOURCE).toMatch(/messageKey:\s*'importErrorLookupFailed'/);
+    expect(SOURCE).toMatch(/params:\s*\{\s*status:\s*res\.status\s*\}/);
   });
 });
