@@ -969,23 +969,78 @@ test it as normative. The adopted selection, and the reading it rests on (the re
 Nota 3 at exactly SWIFT-BIC, IBAN and marca SEPA, and at none of Banco/Dirección/Ciudad/Código
 País, which only route a rest-of-world transfer an IBAN alone cannot address):
 
-| marca SEPA | required under condition B |
-| --- | --- |
-| `1` Cuenta España | `bank_iban`, `bank_sepa` |
-| `2` Unión Europea SEPA | + `bank_swift_bic` |
-| `3` Resto Países | + `bank_nombre`, `bank_direccion`, `bank_ciudad`, `bank_pais` (the IBAN field carries the account number — the layout has no separate one) |
+| marca SEPA | written / required under condition B | left blank |
+| --- | --- | --- |
+| `1` Cuenta España | `bank_iban` (pos 23), `bank_sepa` (194) | SWIFT-BIC (12), Banco (57), Dirección (127), Ciudad (162), Código País (192) |
+| `2` Unión Europea SEPA | + `bank_swift_bic` | Banco, Dirección, Ciudad, Código País |
+| `3` Resto Países | + `bank_nombre`, `bank_direccion`, `bank_ciudad`, `bank_pais` | — |
 
-Implemented as `_BANK_SWIFT_REQUIRED_WHEN` (condition B ∧ marca ∈ {2,3}) and
+**Marca `0` (Vacía) is rejected** under condition B. A rectificativa with content in box 111 that
+is not cancelling its direct debit does have an account to declare, so "vacía" cannot be right.
+`AEAT303Report2024.checkIsDeclarationRMandatoryParams` throws a new module message,
+`AEAT303_sepa_mark_required_111` (`src-db/database/sourcedata/AD_MESSAGE.xml`). The existing
+`AEAT303_sepa_not_valid` is deliberately **not** reused: its text lists `0` among the allowed
+values, which would be actively misleading here. `sepaValuesAllowed` (which does admit `0`) is
+untouched — the narrowing applies only to this path.
+
+**Position 23 is not always an IBAN.** Under marca `3` it carries the *account number*; the record
+design has no separate account-number field, so the one field serves both roles. It is mandatory
+under every marca. No IBAN format validation exists on it anywhere (frontend or Classic) — only
+presence checks and whitespace stripping — and the one place that does read its format, the
+`isDomesticAccount` "starts with ES" test, is now scoped to marcas 1/2 so it cannot misfire on a
+rest-of-world account number and wrongly suppress the SWIFT-BIC that marca 3 requires. The rule as
+stated names both "País" and "Código País"; the form has a single 2-character ISO field
+(`bank_pais`, position 192) and the two collapse into it — there is no eighth field.
+
+**The file actively blanks what the marca does not call for** — it does not merely skip those
+positions. The model has one bank block, shared by the box 73 refund and by any refund arising
+from box 111, and boxes 73 and 111 are compatible, so two sets of bank data must never accumulate
+in it. `AEAT303Report2024.patchBankSection` writes `length` spaces over every unused position via
+a new `blankDidField`/`writeDidField` pair (`replaceDidField` keeps its "a blank value means
+nothing to write" contract, which cannot express this). Page width is preserved: the delete and
+the insert are both exactly `length` characters. **This deliberately overrides the ancestor
+writers** — a tipo `D` rectificativa with marca 1 and a non-zero box 111 now ends with the
+foreign-bank fields blank even though `AEAT303Report2021#generatePage3` had filled them. The
+blanking is **scoped to the Nota 3 case**; an ordinary refund with no box 111 never reaches
+`correctBankSectionIfBox111HasValues` at all.
+
+On the frontend, requiredness is `_BANK_SWIFT_REQUIRED_WHEN` (condition B ∧ marca ∈ {2,3}) and
 `_BANK_FOREIGN_DETAILS_REQUIRED_WHEN` (condition B ∧ marca = 3);
 `_BANK_FULL_BLOCK_REQUIRED_WHEN` now means the baseline branch itself and is what `bank_sepa`
-carries. **Visibility is deliberately not narrowed by the marca** — a `D`/`V`/`X` declaration may
-legitimately fill any of these fields, and hiding one the user already typed into would lose data.
+carries.
+
+**Fields the marca does not call for are hidden — and their values are deliberately NOT cleared.**
+`_BANK_SWIFT_VW` / `_BANK_FOREIGN_DETAILS_VW` gate visibility the same way requiredness is gated.
+No `onChange`/callout clears the hidden fields, and that is a decision, not an oversight: the
+backend blanking already guarantees the file is correct, so clearing would only destroy typed
+work. Switching marca 3 → 1 → 3 (by mistake, or to compare options) must bring the bank name,
+address, city and country back exactly as they were. Hiding achieves the same outcome without
+the loss — the user does not see them and cannot fill them in by mistake.
+
+**The marca restriction is scoped to the Nota 3 branch only.** It sits *inside*
+`_BANK_RECTIFICATIVA_BRANCH` (as `_BANK_NOTA3_NEEDS_SWIFT` / `_BANK_NOTA3_NEEDS_FOREIGN_DETAILS`),
+never as a sibling of the tipo `U`/`D`/`X` branch — `_BANK_SWIFT_VW` is
+`anyOf: [_TIPO_IS_DVX, _BANK_NOTA3_NEEDS_SWIFT]`. A plain `D`/`V`/`X` refund with no box 111
+therefore behaves **exactly as before**: nothing is narrowed by the marca. That matches the
+backend, whose blanking is scoped the same way — hiding a field there would send a value the user
+can no longer see, since `AEAT303Report2021` (untouched by this ticket) still writes it.
+
 Classic mirrors the same table in `AEAT303Report2024`'s `sepaMarkRequiresSwiftBic` /
 `sepaMarkRequiresForeignBankDetails`, used by both the writer and the validators so screen and file
 demand the same set. There, the pre-existing `isDomesticAccount` carve-out (commit `2f11a90`,
 SWIFT-BIC suppressed for a `D`/`V` refund on a Spanish account) is now partly subsumed — marca `1`
-writes no SWIFT-BIC for any type — but its IBAN-prefix half still applies on top for marcas 2/3, so
+writes no SWIFT-BIC for any type — but its IBAN-prefix half still applies on top for marca 2, so
 both conditions are kept and ANDed.
+
+*3. The flag never reached the backend from Go at all (fixed here).* `baja_domiciliacion` travelled
+through `IDENT_PARAM_MAP`, which forwards a value verbatim — so a checked box arrived as
+`Cancel_Modify_Debit=true`, while every Java reader tests `StringUtils.equals("Y", …)`. Both
+`AEAT303Report2024#generatePage3` (which writes the mark at position 440 of page 3) and the new
+Nota 3 guard were therefore dead on the Go path: the mark was never written and the exception could
+never fire. `baja_domiciliacion` is now out of `IDENT_PARAM_MAP` and goes through the explicit
+Y-flag convention the other checkboxes already use (`sin_actividad`, `redeme`, `concurso`), via
+`isCancelModifyDebitRequested` — which also accepts the literal `'Y'` so any value already
+persisted in that shape keeps working. `_BANK_NOT_WAIVED` accepts `'N'`/`''` for the same reason.
 
 **Bug F — boxes [14][15], [25][26] and [40][41] always rendered blank instead of autocalculating.**
 `Fiscal303BoxesHandler.computeBoxes` never populated boxes 14/15 ("Modificación bases y cuotas"),

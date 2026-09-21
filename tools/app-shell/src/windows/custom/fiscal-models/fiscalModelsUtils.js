@@ -53,8 +53,23 @@ const IDENT_PARAM_MAP = [
   ['bank_ciudad',        'BankCity'],
   ['bank_pais',          'CountryIso'],
   ['bank_sepa',          'SEPA'],
-  ['baja_domiciliacion', 'Cancel_Modify_Debit'],
+  // NOTE: `baja_domiciliacion` is deliberately NOT here — see `isCancelModifyDebitRequested`
+  // and `applyIdentParams` below. It is a checkbox, and this map stringifies its value as-is.
 ];
+
+// ETP-5431 — `baja_domiciliacion` ("dar de baja/modificar la domiciliación efectuada") used to
+// travel through IDENT_PARAM_MAP, which forwards a value verbatim. The checkbox holds a boolean,
+// so a checked box reached the backend as `Cancel_Modify_Debit=true` — and every reader on the
+// Java side tests `StringUtils.equals("Y", ...)` (`AEAT303Report2024#generatePage3`, which writes
+// position 440 of page 3, and `#isCancelOrModifyDebitRequested`, which applies Nota 3's
+// exception). So from the Go frontend the flag never took effect at all: the mark was never
+// written to the file and the Nota 3 exception could never fire. It now goes through the same
+// explicit Y-flag convention every other checkbox here already uses (`sin_actividad`,
+// `redeme`, `concurso`). The `'Y'` string is accepted alongside the boolean so any value already
+// persisted in `manualData.identification` in that shape keeps working.
+export function isCancelModifyDebitRequested(identChecks) {
+  return identChecks?.baja_domiciliacion === true || identChecks?.baja_domiciliacion === 'Y';
+}
 
 // Declaration types (tipo_declaracion) for which AEAT actually allows/requires an
 // IBAN: Domiciliación (U), Devolución (D), and Devolución transferencia extranjero
@@ -84,7 +99,7 @@ export function isBankIbanRequired(tipo, identChecksWithBox111Flag) {
     IBAN_REQUIRED_TIPOS.includes(tipo) ||
     (identChecksWithBox111Flag?.rectificativa === true
       && identChecksWithBox111Flag?._box111NonZero === true
-      && identChecksWithBox111Flag?.baja_domiciliacion !== true)
+      && !isCancelModifyDebitRequested(identChecksWithBox111Flag))
   );
 }
 
@@ -216,6 +231,8 @@ export function applyIdentParams(params, identChecks) {
   // AEAT303Report.java's MONTHLY_REGISTER constant; box 65 defaults to "not registered"
   // (2) unless this is explicitly "Y" (ETP-5027).
   if (identChecks.redeme === true) params.set('MonthlyRegister', 'Y');
+  // ETP-5431 — see isCancelModifyDebitRequested: this must reach AEAT303Report2024 as "Y".
+  if (isCancelModifyDebitRequested(identChecks)) params.set('Cancel_Modify_Debit', 'Y');
   applyConcursoParams(params, identChecks);
   applyComplementariaParams(params, identChecks);
   // Rectificativa (2024+): IsComplementary=Y activates rectAssessment in the AEAT module.
