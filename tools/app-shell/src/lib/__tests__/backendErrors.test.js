@@ -1,6 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { translateBackendError, parseBackendErrorMessage } from '../backendErrors.js';
+import {
+  extractBackendMessageKeys,
+  translateBackendError,
+  parseBackendErrorMessage,
+} from '../backendErrors.js';
 
 /**
  * Unit tests for translateBackendError.
@@ -1830,6 +1834,287 @@ describe('translateBackendError — "zero or negative quantity (process)" parame
     const raw = 'This movement cannot be processed: the line(s) of SK-003 have a zero or negative quantity.';
     const missingT = (k) => k;
     assert.equal(translateBackendError(raw, missingT), raw);
+  });
+});
+
+// ── ETP-5316: matching by AD_MESSAGE key ─────────────────────────────────────────
+//
+// The third mechanism in backendErrors.js, next to the exact-match map and the parameterized
+// matchers. A core PL/SQL document-action failure (M_INOUT_POST and friends) reaches us as a
+// sentence assembled from AD_MESSAGE tokens plus run-time data — "En la línea 10, 20, 30, 40,
+// Cuando el producto no esta vacío entonces la cantidad movida no debe ser cero." — so it is
+// unmatchable by text (the embedded values differ per document) AND unhelpful (10/20/30 are AD
+// line numbers, not the row positions the user sees). Etendo GO now also sends the keys it
+// extracted BEFORE translating, so the SPA resolves the failure by identity and owns the wording.
+//
+// Two invariants these tests exist to protect:
+//   1. The key route runs FIRST and wins over the text route.
+//   2. Everything about the two-argument call is unchanged — the two repos deploy separately, so
+//      "frontend ahead of backend, no keys on the wire" is the normal steady state for a while.
+
+const DOC_LINES_KEYS = {
+  'backendError.docLinesWithoutQuantity': 'Hay líneas sin cantidad.',
+  'backendError.docLinesWithoutLocator': 'Hay líneas sin ubicación asignada.',
+  'backendError.docLinesLocatorNotAvailable': 'Hay líneas cuya ubicación no está disponible.',
+  'backendError.docLinesInactiveProduct': 'Hay líneas con productos inactivos.',
+  'backendError.docLinesLockedProduct': 'Hay líneas con productos bloqueados que no pueden entregarse.',
+  'backendError.docLinesAttributeRequired': 'Hay líneas cuyo producto requiere que se indique su atributo.',
+  'backendError.docLinesNotExploded': 'Hay líneas con productos que deben desglosarse antes de confirmar.',
+  'backendError.docLinesQtyExceedsOrdered': 'Hay líneas que superan la cantidad pedida.',
+};
+
+// Mimics useUI(): returns the locale entry, or echoes the key back when there is none.
+const keyT = (k) => DOC_LINES_KEYS[k] ?? k;
+
+// The real sentence core produces for @Inline@ + @ProductNotNullAndMovementQtyZero@. It is not in
+// any exact-match map and never can be — the line numbers change per document.
+const CORE_DOC_LINES_SENTENCE =
+  'En la línea 10, 20, 30, 40, Cuando el producto no esta vacío entonces la cantidad movida '
+  + 'no debe ser cero.';
+
+describe('extractBackendMessageKeys (ETP-5316)', () => {
+  it('reads messageKeys from the top-level envelope', () => {
+    assert.deepEqual(
+      extractBackendMessageKeys({ status: 'error', messageKeys: ['Inline', 'lockedProduct'] }),
+      ['Inline', 'lockedProduct'],
+    );
+  });
+
+  it('reads messageKeys from the response.* envelope', () => {
+    assert.deepEqual(
+      extractBackendMessageKeys({ response: { messageKeys: ['InActiveProducts'] } }),
+      ['InActiveProducts'],
+    );
+  });
+
+  it('reads messageKeys from the error.* envelope', () => {
+    assert.deepEqual(
+      extractBackendMessageKeys({ error: { status: 400, messageKeys: ['MovementQtyCheck'] } }),
+      ['MovementQtyCheck'],
+    );
+  });
+
+  it('prefers the top-level envelope when more than one carries keys', () => {
+    assert.deepEqual(
+      extractBackendMessageKeys({
+        messageKeys: ['Inline'],
+        response: { messageKeys: ['lockedProduct'] },
+        error: { messageKeys: ['InActiveProducts'] },
+      }),
+      ['Inline'],
+    );
+  });
+
+  it('prefers response.* over error.* when the top level has none', () => {
+    assert.deepEqual(
+      extractBackendMessageKeys({
+        response: { messageKeys: ['lockedProduct'] },
+        error: { messageKeys: ['InActiveProducts'] },
+      }),
+      ['lockedProduct'],
+    );
+  });
+
+  // `undefined`, never `[]`: an empty array would read as "the backend answered, with no keys",
+  // which is a different statement from "this backend does not send keys at all".
+  it('returns undefined — never an empty array — when the body carries no keys', () => {
+    assert.equal(extractBackendMessageKeys({ status: 'error', message: 'boom' }), undefined);
+    assert.equal(extractBackendMessageKeys({}), undefined);
+  });
+
+  it('returns undefined for a null / undefined body (res.json() failed)', () => {
+    assert.equal(extractBackendMessageKeys(null), undefined);
+    assert.equal(extractBackendMessageKeys(undefined), undefined);
+  });
+
+  it('returns undefined when messageKeys is present but not an array', () => {
+    assert.equal(extractBackendMessageKeys({ messageKeys: 'Inline' }), undefined);
+    assert.equal(extractBackendMessageKeys({ messageKeys: { 0: 'Inline' } }), undefined);
+    assert.equal(extractBackendMessageKeys({ messageKeys: 42 }), undefined);
+    assert.equal(extractBackendMessageKeys({ messageKeys: null }), undefined);
+  });
+
+  it('returns undefined when every entry is junk (nothing usable survives the filter)', () => {
+    assert.equal(extractBackendMessageKeys({ messageKeys: [1, '', null] }), undefined);
+    assert.equal(extractBackendMessageKeys({ messageKeys: [] }), undefined);
+    assert.equal(extractBackendMessageKeys({ messageKeys: [undefined, {}, false] }), undefined);
+  });
+
+  it('keeps the usable entries and drops the junk around them', () => {
+    assert.deepEqual(
+      extractBackendMessageKeys({ messageKeys: [1, 'Inline', '', null, 'lockedProduct'] }),
+      ['Inline', 'lockedProduct'],
+    );
+  });
+
+  it('never throws on a hostile body shape', () => {
+    assert.doesNotThrow(() => extractBackendMessageKeys('a string'));
+    assert.doesNotThrow(() => extractBackendMessageKeys(0));
+    assert.doesNotThrow(() => extractBackendMessageKeys([]));
+  });
+});
+
+describe('translateBackendError — messageKeys route (ETP-5316)', () => {
+  it('maps the real core document-action sentence via its keys, dropping the AD line numbers', () => {
+    assert.equal(
+      translateBackendError(CORE_DOC_LINES_SENTENCE, keyT, {
+        messageKeys: ['Inline', 'ProductNotNullAndMovementQtyZero'],
+      }),
+      'Hay líneas sin cantidad.',
+    );
+  });
+
+  it('maps each of the eight M_INOUT_POST keys to its own locale entry', () => {
+    const EXPECTED = [
+      ['ProductNotNullAndMovementQtyZero', 'Hay líneas sin cantidad.'],
+      ['InoutLineWithoutLocator', 'Hay líneas sin ubicación asignada.'],
+      ['LocatorWithNotAvailableStatus', 'Hay líneas cuya ubicación no está disponible.'],
+      ['InActiveProducts', 'Hay líneas con productos inactivos.'],
+      ['lockedProduct', 'Hay líneas con productos bloqueados que no pueden entregarse.'],
+      ['productWithoutAttributeSet', 'Hay líneas cuyo producto requiere que se indique su atributo.'],
+      ['InoutLineNotExploded', 'Hay líneas con productos que deben desglosarse antes de confirmar.'],
+      ['MovementQtyCheck', 'Hay líneas que superan la cantidad pedida.'],
+    ];
+    for (const [key, expected] of EXPECTED) {
+      assert.equal(
+        translateBackendError('whatever the backend said', keyT, { messageKeys: [key] }),
+        expected,
+        `key ${key}`,
+      );
+    }
+  });
+
+  // The key is a stable identity; the prose it produced may embed per-document values. When both
+  // could match, identity has to win — otherwise a message that happens to also be an exact-map
+  // literal would silently keep the old, line-number-bearing wording.
+  it('the key wins over an exact-match text that would also have matched', () => {
+    assert.equal(
+      translateBackendError('Country needed in an IBAN account.', keyT, {
+        messageKeys: ['lockedProduct'],
+      }),
+      'Hay líneas con productos bloqueados que no pueden entregarse.',
+    );
+  });
+
+  // Core emits the structural @Inline@ token before the real failure, so "first RECOGNISED key"
+  // (not "first key") is the rule — an unknown token must not shadow the failure behind it.
+  it('skips unrecognised keys and resolves the first one it knows', () => {
+    assert.equal(
+      translateBackendError('anything', keyT, {
+        messageKeys: ['Inline', 'SomeUnknownToken', 'InoutLineNotExploded'],
+      }),
+      'Hay líneas con productos que deben desglosarse antes de confirmar.',
+    );
+  });
+
+  it('resolves the FIRST recognised key when several are known', () => {
+    assert.equal(
+      translateBackendError('anything', keyT, {
+        messageKeys: ['InActiveProducts', 'lockedProduct'],
+      }),
+      'Hay líneas con productos inactivos.',
+    );
+  });
+
+  it('falls back to the text route when no key is recognised', () => {
+    assert.equal(
+      translateBackendError('Country needed in an IBAN account.', (k) => (
+        k === 'backendError.countryIban' ? 'País necesario en una cuenta IBAN.' : keyT(k)
+      ), { messageKeys: ['TotallyUnknownKey'] }),
+      'País necesario en una cuenta IBAN.',
+    );
+  });
+
+  it('falls back to the backend sentence when no key is recognised and no text matches either', () => {
+    assert.equal(
+      translateBackendError(CORE_DOC_LINES_SENTENCE, keyT, { messageKeys: ['TotallyUnknownKey'] }),
+      CORE_DOC_LINES_SENTENCE,
+    );
+  });
+
+  // A locale gap must not render the raw i18n key at the user: an untranslated result is
+  // indistinguishable from no result, same convention as translateSingleMessage.
+  it('falls back to the text when the mapped locale entry is missing (t echoes the key)', () => {
+    const missingT = (k) => k;
+    assert.equal(
+      translateBackendError(CORE_DOC_LINES_SENTENCE, missingT, {
+        messageKeys: ['ProductNotNullAndMovementQtyZero'],
+      }),
+      CORE_DOC_LINES_SENTENCE,
+    );
+  });
+
+  it('falls back to the text when the mapped locale entry is an empty string', () => {
+    const emptyT = (k) => (k === 'backendError.docLinesWithoutQuantity' ? '' : k);
+    assert.equal(
+      translateBackendError(CORE_DOC_LINES_SENTENCE, emptyT, {
+        messageKeys: ['ProductNotNullAndMovementQtyZero'],
+      }),
+      CORE_DOC_LINES_SENTENCE,
+    );
+  });
+
+  // The keys alone say what failed, so an empty/absent sentence is still translatable — the old
+  // code returned early on a falsy `msg` before ever looking at them.
+  it('translates from the keys alone when the message is empty', () => {
+    assert.equal(
+      translateBackendError('', keyT, { messageKeys: ['ProductNotNullAndMovementQtyZero'] }),
+      'Hay líneas sin cantidad.',
+    );
+    assert.equal(
+      translateBackendError(undefined, keyT, { messageKeys: ['lockedProduct'] }),
+      'Hay líneas con productos bloqueados que no pueden entregarse.',
+    );
+  });
+
+  it('ignores a non-array messageKeys and behaves as a text-only call', () => {
+    assert.equal(
+      translateBackendError(CORE_DOC_LINES_SENTENCE, keyT, { messageKeys: 'lockedProduct' }),
+      CORE_DOC_LINES_SENTENCE,
+    );
+    assert.equal(
+      translateBackendError(CORE_DOC_LINES_SENTENCE, keyT, { messageKeys: null }),
+      CORE_DOC_LINES_SENTENCE,
+    );
+  });
+
+  it('still returns the message untouched when t is not a function, keys or no keys', () => {
+    assert.equal(
+      translateBackendError(CORE_DOC_LINES_SENTENCE, undefined, { messageKeys: ['lockedProduct'] }),
+      CORE_DOC_LINES_SENTENCE,
+    );
+    assert.equal(
+      translateBackendError(null, {}, { messageKeys: ['lockedProduct'] }),
+      null,
+    );
+  });
+
+  // ── regression: the two-argument call is exactly what it was ──────────────────
+  // The frontend ships ahead of the backend, so most calls have no third argument for a while.
+  describe('two-argument behaviour is unchanged (pre-ETP-5316 regression guard)', () => {
+    it('an exact-match message still translates with no third argument', () => {
+      const t = (k) => (k === 'backendError.countryIban' ? 'País necesario en una cuenta IBAN.' : k);
+      assert.equal(
+        translateBackendError('Country needed in an IBAN account.', t),
+        'País necesario en una cuenta IBAN.',
+      );
+    });
+
+    it('an unmapped message is still returned verbatim with no third argument', () => {
+      assert.equal(translateBackendError(CORE_DOC_LINES_SENTENCE, keyT), CORE_DOC_LINES_SENTENCE);
+    });
+
+    it('null / empty input is still returned unchanged with no third argument', () => {
+      assert.equal(translateBackendError(null, keyT), null);
+      assert.equal(translateBackendError(undefined, keyT), undefined);
+      assert.equal(translateBackendError('', keyT), '');
+    });
+
+    it('an explicitly empty options object behaves exactly like omitting it', () => {
+      assert.equal(translateBackendError(CORE_DOC_LINES_SENTENCE, keyT, {}), CORE_DOC_LINES_SENTENCE);
+      assert.equal(translateBackendError('', keyT, {}), '');
+      assert.equal(translateBackendError(null, keyT, {}), null);
+    });
   });
 });
 

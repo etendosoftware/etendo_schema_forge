@@ -2,9 +2,23 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { extractBackendMessageKeys, translateBackendError } from '@/lib/backendErrors.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
+
+/**
+ * Turns a failed NEO action response into an Error carrying BOTH the backend sentence and, when
+ * the backend sent them, the AD_MESSAGE search keys behind it (ETP-5316). The keys are what lets
+ * `translateBackendError` resolve a core document-action failure whose text embeds AD line
+ * numbers and so can never be matched as a literal. An older backend simply sends no keys and the
+ * Error is exactly what it used to be.
+ */
+function buildBackendError(body, status) {
+  const err = new Error(body?.response?.message || body?.message || `Error (${status})`);
+  err.status = status;
+  err.messageKeys = extractBackendMessageKeys(body);
+  return err;
+}
 
 /**
  * Generic confirm modal for InOut documents (goods-receipt, goods-shipment, return-receipt).
@@ -87,7 +101,7 @@ export default function ConfirmInOutModal({
         });
         if (!res.ok) {
           const body = await res.json().catch(() => null);
-          throw new Error(body?.response?.message || body?.message || `Error (${res.status})`);
+          throw buildBackendError(body, res.status);
         }
       }
 
@@ -99,7 +113,7 @@ export default function ConfirmInOutModal({
         });
         if (!invRes.ok) {
           const body = await invRes.json().catch(() => null);
-          throw new Error(body?.response?.message || body?.message || `Error (${invRes.status})`);
+          throw buildBackendError(body, invRes.status);
         }
         const invData = (await invRes.json())?.response?.data;
         invoice = {
@@ -111,7 +125,7 @@ export default function ConfirmInOutModal({
 
       onConfirmed({ invoice });
     } catch (err) {
-      setError(translateBackendError(err.message, ui));
+      setError(translateBackendError(err.message, ui, { messageKeys: err.messageKeys }));
       setLoading(false);
     }
   };

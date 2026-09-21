@@ -301,7 +301,7 @@ toast.error(translateBackendError(result.message, ui) || ui('actionFailed'));
 inside `genericLabels` (e.g. `"backendError.countryIban"`), following the same "add to BOTH locale
 files" rule as any other `genericLabels` key.
 
-Two matching mechanisms coexist — know both before adding a new backend-error translation:
+Three matching mechanisms coexist — know all three before adding a new backend-error translation:
 
 1. **Exact-match (`BACKEND_ERROR_MAP`)** — the default and simplest case. A dictionary keyed by the
    literal backend string (trimmed), mapping to a `backendError.*` i18n key. Use this whenever the
@@ -325,9 +325,46 @@ Two matching mechanisms coexist — know both before adding a new backend-error 
    that first added the field-level `maxLength` prevention (see `docs/generated-custom-windows/assets.md`
    § ETP-4984 for the paired client-side cap).
 
-`translateBackendError` tries the exact-match map first, then falls through to the parameterized
-matchers, and returns the original (untranslated) message if neither matches — never throws and
-never silently swallows an unrecognized backend error.
+3. **Message-key matching (`BACKEND_ERROR_KEY_MAP`, ETP-5316)** — for a message that cannot be
+   matched by its text *by construction*, because the backend assembled it from AD_MESSAGE tokens
+   plus run-time data. A core document-action failure is the reference case: `M_INOUT_POST` raises
+   `'@Inline@ '||v_Message_Qty||' @ProductNotNullAndMovementQtyZero@'`, which reaches the browser
+   as *"En la línea 10, 20, 30, 40, Cuando el producto no esta vacío entonces la cantidad movida no
+   debe ser cero."* — a different string for every document, and the numbers in it are **AD line
+   numbers** (`C_OrderLine.line`, numbered in tens), not the row positions the user sees, so they
+   locate nothing. Neither an exact entry nor a matcher can help.
+
+   `NeoProcessService.translatePInstanceResult` therefore also returns `messageKeys`: the AD_MESSAGE
+   search keys it extracted from the raw message **before** `safeParseTranslation` replaced them
+   with prose (`["Inline", "ProductNotNullAndMovementQtyZero"]`). The SPA maps a key to a
+   `backendError.*` entry and authors the whole sentence itself — dropping the line reference
+   entirely, which is what product decided for ETP-5316. Keys are matched in order and the first
+   recognised one wins, so structural tokens like `@Inline@`/`@Inlines@` are simply skipped.
+
+   Plumbing: `extractBackendMessageKeys(payload)` (same module) is the only place that knows the
+   wire shape; `useDocumentAction` exposes the result as `err.messageKeys`, `useNeoAction` as
+   `result.messageKeys`, and the caller passes it on as the third argument:
+
+   ```js
+   toast.error(translateBackendError(result.message, ui, { messageKeys: result.messageKeys })
+     || ui('actionFailed'));
+   ```
+
+   **Degradation is the point, not a shim.** `com.etendoerp.go` and this repo deploy separately, so
+   a frontend running against a backend that predates the field is the normal steady state for a
+   while. No keys → `translateBackendError` skips this mechanism entirely and behaves exactly as it
+   did before, showing the backend's own sentence.
+
+   Add a key here only when it identifies a failure the user can act on. Use the AD_MESSAGE search
+   key **verbatim** — several are lowercase-initial in the catalog (`lockedProduct`,
+   `productWithoutAttributeSet`) and "normalizing" them silently breaks the match. One key can cover
+   several windows for free: `productWithoutAttributeSet` is raised under the same name by
+   `M_INOUT_POST`, `M_MOVEMENT_POST`, `M_INVENTORY_POST` and `M_INTERNAL_CONSUMPTION_POST1`, so the
+   locale string must be worded generically ("hay líneas…"), not per document type.
+
+`translateBackendError` tries the message keys first (they are a stable identity; the text is not),
+then the exact-match map, then the parameterized matchers, and returns the original (untranslated)
+message if none matches — never throws and never silently swallows an unrecognized backend error.
 
 **Multi-line messages (ETP-5109).** Some backends accumulate several result messages into one
 newline-joined buffer before returning it — `SaltEdgeAccountLinkHelper.fetchAccountTransactions`
@@ -363,7 +400,9 @@ with it — the SPA authors the placeholder, so there is no `%s` that never inte
 duplicated `{param}` inherited from a Core string — and the code is stable under rewording, unlike
 an English literal that silently un-translates its own toast the day someone edits it. Rule of
 thumb: **new** Etendo GO endpoint → return a code; message you inherited as English prose →
-`backendErrors.js`.
+`backendErrors.js`; message raised by **core** where Etendo GO is only the courier → have the
+courier forward the AD_MESSAGE key (mechanism 3 above) and treat that key as the code. The last one
+is the same principle, not an exception to it: the identity crosses the wire, the wording does not.
 
 ## Shared RelatedDocuments Components
 
