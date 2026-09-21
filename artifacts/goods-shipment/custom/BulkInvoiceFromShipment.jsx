@@ -1,20 +1,53 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { FilePlus } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
+import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
+import { ConfirmResultModal } from '@/components/contract-ui';
 
 // ETP-5302 — `refresh` comes from ListView's `bulkActions` slot context. Without it this
 // action used to close the modal and clear the selection but never refetch, so the rows
 // it had just invoiced kept showing a stale invoicing status with nothing on screen
 // hinting they were out of date.
+//
+// This component used to open a bespoke modal with its own line-level selection, editable
+// quantities and totals. It now opens the SAME "Gestionar documentos" modal the form view
+// uses (CreateInvoiceConfirmModal) — the one that offers the Tarifa (price list) picker the
+// bespoke modal never had. That trade-off is deliberate: the shared modal has no per-line
+// selection, so a bulk invoice now always takes the full pending quantity of every selected
+// shipment's lines (the backend's own pending-quantity cap still prevents double-invoicing —
+// see CreateDraftInvoiceHandler#createFromShipments). Partial-quantity bulk invoicing is no
+// longer available from the grid; it remains available from a single shipment's own
+// "Crear Factura" flow in the form view.
 export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, token, apiBaseUrl, refresh }) {
   const ui = useUI();
+  const navigate = useNavigate();
+  const apiFetch = useApiFetch();
   const [showModal, setShowModal] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [invoiceResult, setInvoiceResult] = useState(null);
 
+  // Quote inputs — see the useMemo below for how they combine into an amount.
+  const [selectedPriceListId, setSelectedPriceListId] = useState('');
+  const [lineDetails, setLineDetails] = useState(null); // null = not fetched yet
+  const [pendingByLine, setPendingByLine] = useState(null); // null = not fetched yet
+  const [orderLinePrices, setOrderLinePrices] = useState({});
+  const [tariffPrices, setTariffPrices] = useState({});
+  const [resolvedPriceListId, setResolvedPriceListId] = useState(undefined);
+
+  const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
+
+  // invoiceStatus (0-100, %) is the real "already invoiced" signal on this window — the AD
+  // column `Iscompletelyinvoiced` this used to read is renamed to `invoiced` with
+  // grid:false/form:false in decisions.json, so it never reaches a grid row and the old
+  // `completelyInvoiced` check here was silently always-true (a no-op guard).
   const invoiceableRows = useMemo(
-    () => selectedRows.filter(r => r.documentStatus === 'CO' && r.completelyInvoiced !== true),
+    () => selectedRows.filter(r => r.documentStatus === 'CO' && parseFloat(r.invoiceStatus ?? 0) < 100),
     [selectedRows],
   );
 
@@ -26,9 +59,9 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
     return { same: allSame, name };
   }, [invoiceableRows]);
 
-  // ETP-4028: shipments now carry their own currency — a single invoice cannot mix
-  // lines from documents in different currencies, so block the batch the same way
-  // an inconsistent business partner already blocks it.
+  // ETP-4028: shipments carry their own currency — a single invoice cannot mix lines from
+  // documents in different currencies, so block the batch the same way an inconsistent
+  // business partner already blocks it.
   const currencyCheck = useMemo(() => {
     if (invoiceableRows.length === 0) return { same: false };
     const firstCurrency = invoiceableRows[0].etgoCurrency;
@@ -40,6 +73,164 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
   const allInvoiced = invoiceableCount === 0;
   const canCreate = invoiceableCount > 0 && bpCheck.same && currencyCheck.same;
 
+  // Fetches, per invoiceable shipment: the lines (product + salesOrderLine, to know each
+  // line's real price source) and the pending-quantity map (the same one that caps what the
+  // backend will actually invoice). Both are needed for the quote below, not just for the
+  // subtitle — unlike the pre-cotización version of this component, which only needed the sum.
+  useEffect(() => {
+    if (!showModal || !canCreate) {
+      setLineDetails(null);
+      setPendingByLine(null);
+      setOrderLinePrices({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const [lineResults, pendingResults] = await Promise.all([
+        Promise.all(invoiceableRows.map(async (r) => {
+          try {
+            const res = await apiFetch(
+              `${base}/goods-shipment/goodsShipmentLine?parentId=${r.id}&_startRow=0&_endRow=200`,
+              { baseUrl: '', token },
+            );
+            if (!res.ok) return [];
+            return (await res.json())?.response?.data || [];
+          } catch {
+            return [];
+          }
+        })),
+        Promise.all(invoiceableRows.map(async (r) => {
+          try {
+            const res = await apiFetch(
+              `${base}/goods-shipment/goodsShipment/${r.id}/action/pendingInvoiceLines`,
+              { baseUrl: '', token },
+            );
+            if (!res.ok) return {};
+            const data = (await res.json())?.response?.data || [];
+            const map = {};
+            data.forEach(item => { map[item.lineId] = Number(item.pendingQty) || 0; });
+            return map;
+          } catch {
+            return {};
+          }
+        })),
+      ]);
+      if (cancelled) return;
+
+      const details = {};
+      lineResults.flat().forEach(l => {
+        details[l.id] = { product: l.product, salesOrderLine: l.salesOrderLine || null };
+      });
+      setLineDetails(details);
+      setPendingByLine(Object.assign({}, ...pendingResults));
+
+      // Order-linked lines are priced at the ORDER's price, not the chosen Tarifa (Core's
+      // UpdatePricesAndAmounts copies orderLine.getUnitPrice() whenever the line has a related
+      // order line, ignoring the invoice's price list entirely) — so this fetch does not depend
+      // on selectedPriceListId and runs once per shipment selection, not on every Tarifa change.
+      const orderLineIds = [...new Set(Object.values(details).map(d => d.salesOrderLine).filter(Boolean))];
+      const prices = {};
+      await Promise.all(orderLineIds.map(async (id) => {
+        try {
+          const res = await apiFetch(`${base}/sales-order/lines/${id}`, { baseUrl: '', token });
+          if (res.ok) {
+            const ol = (await res.json())?.response?.data?.[0];
+            if (ol) prices[id] = Number(ol.unitPrice) || 0;
+          }
+        } catch { /* a line whose order-line price can't be resolved just contributes nothing */ }
+      }));
+      if (!cancelled) setOrderLinePrices(prices);
+    })();
+    return () => { cancelled = true; };
+  }, [showModal, canCreate, invoiceableRows, base, apiFetch, token]);
+
+  // Auto-preselects the Tarifa for exactly ONE selected shipment — the same server-resolved
+  // tariff the single-shipment "Crear Factura" flow already preselects (linked order's price
+  // list, else the Business Partner's own), via the same single-record GET that enrichment
+  // comes from. CreateInvoiceConfirmModal's own usePriceListPicker already knows how to consume
+  // `data.resolvedPriceListId` (ETP-4942) — this just has to feed it the field, which a grid
+  // row never carries. For N>=2 there is no single well-defined resolved tariff (different
+  // orders could resolve to different ones), so the picker stays empty and the choice stays
+  // explicit, same as before.
+  useEffect(() => {
+    if (!showModal || invoiceableRows.length !== 1) { setResolvedPriceListId(undefined); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch(`${base}/goods-shipment/goodsShipment/${invoiceableRows[0].id}`, { baseUrl: '', token });
+        if (!res.ok || cancelled) return;
+        const rec = (await res.json())?.response?.data?.[0];
+        if (rec?.resolvedPriceListId) setResolvedPriceListId(rec.resolvedPriceListId);
+      } catch { /* silent — the picker just stays empty, same as before this feature */ }
+    })();
+    return () => { cancelled = true; };
+  }, [showModal, invoiceableRows, base, apiFetch, token]);
+
+  // Tariff prices for lines with NO linked order line — these are the only ones Core actually
+  // prices from the invoice's price list (setPricesBasedOnBOM), so this is the only part of the
+  // quote that reacts to the Tarifa selection. Reuses the same product-price selector the manual
+  // line-entry callout cascade uses (ProductPriceSelectorPolicy, gated on a `priceList` context
+  // param) — see artifacts/sales-invoice/custom/ImportFromShipmentModal.jsx for the same pattern.
+  useEffect(() => {
+    if (!lineDetails || !selectedPriceListId) { setTariffPrices({}); return; }
+    const products = [...new Set(
+      Object.values(lineDetails).filter(d => !d.salesOrderLine).map(d => d.product).filter(Boolean),
+    )];
+    if (products.length === 0) { setTariffPrices({}); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch(
+          `${base}/sales-invoice/lines/selectors/M_Product_ID?limit=500&offset=0&priceList=${encodeURIComponent(selectedPriceListId)}`,
+          { baseUrl: '', token },
+        );
+        if (!res.ok || cancelled) return;
+        const items = (await res.json())?.items || [];
+        const prices = {};
+        items.forEach(item => {
+          if (!item.id || !products.includes(item.id)) return;
+          const std = Number(item._aux?._PSTD);
+          if (std) prices[item.id] = std;
+        });
+        if (!cancelled) setTariffPrices(prices);
+      } catch { /* products left unpriced just don't contribute to the quote */ }
+    })();
+    return () => { cancelled = true; };
+  }, [lineDetails, selectedPriceListId, base, apiFetch, token]);
+
+  // The quote: pendingQty × real unit price per line — the order's price when the line has one
+  // (always correct, since that's what Core actually bills), the selected Tarifa's price
+  // otherwise. Never an estimate by design (per the decision behind this feature): a line whose
+  // price cannot be resolved from either source simply doesn't contribute, the same "left blank
+  // for the user to fill in" gap the single-shipment flow already has for a priceless product.
+  const quoteAmount = useMemo(() => {
+    if (!lineDetails || !pendingByLine) return null;
+    let sum = 0;
+    let resolvedAny = false;
+    for (const [lineId, qty] of Object.entries(pendingByLine)) {
+      if (!qty) continue;
+      const detail = lineDetails[lineId];
+      if (!detail) continue;
+      const price = detail.salesOrderLine
+        ? orderLinePrices[detail.salesOrderLine]
+        : tariffPrices[detail.product];
+      if (price != null) {
+        sum += qty * price;
+        resolvedAny = true;
+      }
+    }
+    return resolvedAny ? sum : null;
+  }, [lineDetails, pendingByLine, orderLinePrices, tariffPrices]);
+
+  const pendingQtyTotal = pendingByLine
+    ? Object.values(pendingByLine).reduce((a, b) => a + b, 0)
+    : undefined;
+
+  const currencyCode = invoiceableRows[0]?.['etgoCurrency$_identifier'] || '';
+  const cardAmountLabel = quoteAmount != null
+    ? formatCurrency(currencyCode, quoteAmount)
+    : `${invoiceableCount} ${ui('shipment')}${invoiceableCount !== 1 ? 's' : ''}`;
+
   if (selectedRows.length < 1) return null;
 
   const tooltip = allInvoiced
@@ -49,6 +240,43 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
       : !currencyCheck.same
         ? ui('selectShipmentsSameCurrency')
         : undefined;
+
+  const handleCreate = async (priceListId) => {
+    if (creating) return;
+    setCreating(true);
+    try {
+      const res = await apiFetch(
+        `${base}/goods-shipment/goodsShipment/${invoiceableRows[0].id}/action/createDraftInvoice`,
+        {
+          method: 'POST',
+          baseUrl: '',
+          token,
+          body: JSON.stringify({ shipmentIds: invoiceableRows.map(r => r.id), priceListId }),
+        },
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.response?.message || err?.message || `Failed (${res.status})`);
+      }
+      const json = await res.json();
+      setShowModal(false);
+      setInvoiceResult({
+        invoice: {
+          id: json?.response?.data?.id || null,
+          documentNo: json?.response?.data?.documentNo || '',
+          // ETP-5381: the invoice is confirmed in the same request — ConfirmResultModal
+          // badges the result off this instead of assuming a draft.
+          documentStatus: json?.response?.data?.documentStatus ?? null,
+        },
+      });
+    } catch (err) {
+      // ETP-5381: the duplicate-invoice guard now answers in English (Core's own
+      // pending-quantity rejection), so without this the user reads the raw literal.
+      toast.error(translateBackendError(err.message, ui) || ui('failedToCreateInvoice'));
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return (
     <>
@@ -71,6 +299,7 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
         disabled={!canCreate}
         onClick={() => setShowModal(true)}
         title={tooltip}
+        data-testid="BulkInvoiceFromShipment__button"
         className="inline-flex items-center gap-1 rounded-md px-3 py-[7px] text-sm font-medium transition-colors hover:bg-[hsl(var(--floating-toolbar-fg)/0.1)]"
         style={{
           color: canCreate ? 'hsl(var(--floating-toolbar-fg))' : 'hsl(var(--floating-toolbar-muted))',
@@ -82,383 +311,44 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
         {ui('createInvoiceBtn')}
       </button>
 
-      {showModal && createPortal(
-        <BulkInvoiceModal
-          shipments={invoiceableRows}
-          bpName={bpCheck.name}
-          token={token}
+      {showModal && (
+        <CreateInvoiceConfirmModal
+          data={{ 'businessPartner$_identifier': bpCheck.name, resolvedPriceListId }}
+          loading={creating}
+          cardAmountLabel={cardAmountLabel}
+          pendingQtyTotal={pendingQtyTotal}
+          showPriceListPicker
+          isSOTrx
           apiBaseUrl={apiBaseUrl}
+          token={token}
+          onConfirm={handleCreate}
           onClose={() => setShowModal(false)}
-          onSuccess={() => { setShowModal(false); clearSelection(); refresh?.(); }}
+          onPriceListChange={setSelectedPriceListId}
+          data-testid="BulkInvoiceFromShipment__confirmModal"
+        />
+      )}
+
+      {invoiceResult?.invoice?.id && createPortal(
+        <ConfirmResultModal
+          title={ui('soInvoiceCreated')}
+          docs={[{
+            type: 'facturaVenta',
+            num: invoiceResult.invoice.documentNo,
+            documentStatus: invoiceResult.invoice.documentStatus,
+            route: `/sales-invoice/${invoiceResult.invoice.id}`,
+          }]}
+          primary={ui('soViewInvoice')}
+          navigate={(route) => navigate(route)}
+          onClose={() => {
+            setInvoiceResult(null);
+            // ETP-5302 rule: a bulk action ends with clearSelection, then the result, then a
+            // refetch — never a full page reload.
+            clearSelection();
+            refresh?.();
+          }}
         />,
         document.body,
       )}
     </>
-  );
-}
-
-function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuccess }) {
-  const ui = useUI();
-  const [linesByShipment, setLinesByShipment] = useState({});
-  const [orderLinePrices, setOrderLinePrices] = useState({});
-  const [loadingLines, setLoadingLines] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [collapsed, setCollapsed] = useState(() => {
-    const init = {};
-    shipments.forEach(s => { init[s.id] = true; });
-    return init;
-  });
-  const [selectedLines, setSelectedLines] = useState(new Set());
-  const [lineQuantities, setLineQuantities] = useState({});
-  const [pendingByLine, setPendingByLine] = useState({});
-  const [existingDraft, setExistingDraft] = useState(null);
-  const [dismissedWarning, setDismissedWarning] = useState(false);
-
-  const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const hdrs = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        // Fetch shipment lines and draft-aware pending qty in parallel
-        const [lineResults, pendingResults] = await Promise.all([
-          Promise.all(
-            shipments.map(async (s) => {
-              const res = await fetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${s.id}&_startRow=0&_endRow=200`, { headers: hdrs });
-              if (!res.ok) return { id: s.id, lines: [] };
-              return { id: s.id, lines: (await res.json())?.response?.data || [] };
-            }),
-          ),
-          Promise.all(
-            shipments.map(async (s) => {
-              try {
-                const res = await fetch(`${base}/goods-shipment/goodsShipment/${s.id}/action/pendingInvoiceLines`, { headers: hdrs });
-                if (!res.ok) return {};
-                const data = (await res.json())?.response?.data || [];
-                const map = {};
-                data.forEach(item => { map[item.lineId] = Number(item.pendingQty) || 0; });
-                return map;
-              } catch { return {}; }
-            }),
-          ),
-        ]);
-        if (cancelled) return;
-
-        // Merge pending qty maps (one per shipment)
-        const pending = Object.assign({}, ...pendingResults);
-        setPendingByLine(pending);
-
-        const linesMap = {};
-        const allLineIds = new Set();
-        const qtyDefaults = {};
-        lineResults.forEach(r => {
-          linesMap[r.id] = r.lines;
-          r.lines.forEach(l => {
-            // Use server-side draft-aware pending qty; fall back to raw movementQty - invoicedQty
-            const fallback = Math.max(0, (Number(l.movementQuantity) || 0) - (Number(l.invoicedQuantity) || 0));
-            const pendingQty = pending[l.id] !== undefined ? pending[l.id] : fallback;
-            if (pendingQty > 0) allLineIds.add(l.id);
-            qtyDefaults[l.id] = pendingQty;
-          });
-        });
-        setLinesByShipment(linesMap);
-        setSelectedLines(allLineIds);
-        setLineQuantities(qtyDefaults);
-
-        const orderIds = [...new Set(shipments.map(s => s.salesOrder).filter(Boolean))];
-        const priceMap = {};
-        await Promise.all(orderIds.map(async (orderId) => {
-          try {
-            const res = await fetch(`${base}/sales-order/lines?parentId=${orderId}&_startRow=0&_endRow=200`, { headers: hdrs });
-            if (res.ok) {
-              ((await res.json())?.response?.data || []).forEach(ol => { priceMap[ol.id] = ol; });
-            }
-          } catch { /* silent */ }
-        }));
-        if (!cancelled) setOrderLinePrices(priceMap);
-
-        try {
-          const draftRes = await fetch(
-            `${base}/goods-shipment/goodsShipment/${shipments[0].id}/action/checkDraftInvoice`,
-            { method: 'POST', headers: hdrs, body: JSON.stringify({ shipmentIds: shipments.map(s => s.id) }) },
-          );
-          if (draftRes.ok && !cancelled) {
-            const draftData = (await draftRes.json())?.response?.data;
-            if (draftData?.exists) setExistingDraft(draftData);
-          }
-        } catch { /* silent */ }
-      } catch { /* silent */ }
-      finally { if (!cancelled) setLoadingLines(false); }
-    })();
-    return () => { cancelled = true; };
-  }, [shipments, base, hdrs]);
-
-  const shipmentSummaries = useMemo(() =>
-    shipments.map(s => {
-      const lines = (linesByShipment[s.id] || []).map(l => {
-        const ol = orderLinePrices[l.salesOrderLine] || {};
-        const unitPrice = Number(ol.unitPrice) || 0;
-        // Use server-side draft-aware pending qty; fall back to raw computation
-        const fallback = Math.max(0, (Number(l.movementQuantity) || 0) - (Number(l.invoicedQuantity) || 0));
-        const maxQty = pendingByLine[l.id] !== undefined ? Number(pendingByLine[l.id]) : fallback;
-        const currentQty = lineQuantities[l.id] ?? maxQty;
-        const isSel = selectedLines.has(l.id);
-        return { ...l, unitPrice, maxQty, currentQty, lineTotal: isSel ? unitPrice * currentQty : 0, productName: l['product$_identifier'] || l.id, isSelected: isSel };
-      }).filter(l => l.maxQty > 0);  // hide fully-invoiced / fully-drafted lines
-      const total = lines.reduce((sum, l) => sum + l.lineTotal, 0);
-      const selectedCount = lines.filter(l => l.isSelected).length;
-      return { ...s, enrichedLines: lines, total, selectedCount };
-    }),
-    [shipments, linesByShipment, orderLinePrices, selectedLines, lineQuantities, pendingByLine],
-  );
-
-  const totalSelectedLines = shipmentSummaries.reduce((sum, s) => sum + s.selectedCount, 0);
-  const grandTotal = shipmentSummaries.reduce((sum, s) => sum + s.total, 0);
-
-  const toggleCollapse = useCallback((id) => setCollapsed(prev => ({ ...prev, [id]: !prev[id] })), []);
-  const toggleLine = (lineId) => setSelectedLines(prev => { const n = new Set(prev); n.has(lineId) ? n.delete(lineId) : n.add(lineId); return n; });
-  const toggleShipmentLines = (shipmentId) => {
-    const lines = linesByShipment[shipmentId] || [];
-    const lineIds = lines.map(l => l.id);
-    const allSel = lineIds.every(id => selectedLines.has(id));
-    setSelectedLines(prev => {
-      const n = new Set(prev);
-      if (allSel) { lineIds.forEach(id => n.delete(id)); } else { lineIds.forEach(id => n.add(id)); }
-      return n;
-    });
-  };
-
-  const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
-  // No currency field is available on these rows (bulk cross-shipment selection) —
-  // format the number in Spanish grouping without a symbol, same as formatCurrency's
-  // own fallback for an unrecognized/missing currency code.
-  const fmtNum = (v) => formatCurrency(undefined, Number(v || 0));
-
-  const handleCreate = async () => {
-    if (creating || totalSelectedLines === 0) return;
-    setCreating(true);
-    try {
-      const linesPayload = [];
-      shipmentSummaries.forEach(s => {
-        s.enrichedLines.forEach(l => {
-          if (l.isSelected) linesPayload.push({ shipmentLineId: l.id, quantity: String(l.currentQty) });
-        });
-      });
-      const res = await fetch(
-        `${base}/goods-shipment/goodsShipment/${shipments[0].id}/action/createDraftInvoice`,
-        { method: 'POST', headers: hdrs, body: JSON.stringify({ shipmentIds: shipments.map(s => s.id), lines: linesPayload }) },
-      );
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        throw new Error(err?.response?.message || err?.message || `Failed (${res.status})`);
-      }
-      const json = await res.json();
-      const invoiceId = json?.response?.data?.id;
-      const docNo = json?.response?.data?.documentNo || '';
-      // ETP-5381: the invoice is confirmed in the same request now, so the copy no longer tells
-      // the user to go and review a draft. Falls back to the old wording if an older backend
-      // still returns a draft, rather than asserting something untrue.
-      const confirmed = json?.response?.data?.documentStatus === 'CO';
-      if (invoiceId) {
-        const bp = window.location.pathname.replace(/\/goods-shipment\/.*$/, '').replace(/\/goods-shipment\/?$/, '');
-        const invoiceUrl = `${bp}/sales-invoice/${invoiceId}`;
-        toast.custom((t) => (
-          <div style={{ background: 'var(--status-success-bg)', color: 'hsl(var(--card))', borderRadius: 10, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 8px 30px hsl(var(--foreground) / 0.18)', minWidth: 380 }}>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'hsl(var(--foreground) / 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--card))" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                {`${ui('invoiceRef')}${docNo} ${confirmed ? ui('invoiceCreatedAndConfirmed') : ui('createdAsDraft')}`}
-              </div>
-              {!confirmed && (
-                <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{ui('reviewBeforeConfirming')}</div>
-              )}
-            </div>
-            <button
-              onClick={() => { toast.dismiss(t); window.location.href = invoiceUrl; }}
-              style={{ border: '1px solid hsl(var(--foreground) / 0.4)', borderRadius: 6, padding: '6px 14px', fontSize: 13, fontWeight: 500, color: 'hsl(var(--foreground))', background: 'hsl(var(--foreground) / 0.15)', cursor: 'pointer', whiteSpace: 'nowrap' }}
-            >{ui('viewInvoice')}</button>
-          </div>
-        ), { duration: 10000 });
-      } else {
-        toast.success(ui('invoiceCreatedAsDraftToast'));
-      }
-      onSuccess();
-    } catch (err) {
-      toast.error(err.message || ui('failedToCreateInvoice'));
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const navToInvoice = (id) => {
-    onClose();
-    const bp = window.location.pathname.replace(/\/goods-shipment\/.*$/, '').replace(/\/goods-shipment\/?$/, '');
-    window.location.href = `${bp}/sales-invoice/${id}`;
-  };
-
-  return (
-    <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30">
-      <div onClick={e => e.stopPropagation()} style={{ width: 600, minWidth: 560, maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))', boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--card))' }}>
-
-        {/* Header — fixed */}
-        <div style={{ padding: '14px 16px', background: 'hsl(var(--card))', borderBottom: '1px solid hsl(var(--card))', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{ui('createInvoiceBtn')}</div>
-              <div style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', marginTop: 3 }}>
-                {shipments.length} {ui('shipment')}{shipments.length !== 1 ? 's' : ''} · {bpName}
-              </div>
-            </div>
-            <button type="button" onClick={onClose} style={{ fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }}>&times;</button>
-          </div>
-        </div>
-
-        {existingDraft && !dismissedWarning && (
-          <div style={{ padding: '12px 20px', background: 'var(--status-warning-bg)', borderBottom: '0.5px solid var(--status-warning-bg)', display: 'flex', gap: 10, flexShrink: 0 }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--status-warning-bg)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--status-warning-fg)' }}>{ui('draftInvoiceExistsForShipments')}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                <button type="button" onClick={() => navToInvoice(existingDraft.id)} style={{ fontSize: 12, color: 'var(--status-info-fg)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}>{ui('viewExistingInvoice')}</button>
-                <span style={{ color: 'var(--status-warning-bg)', fontSize: 12 }}>·</span>
-                <button type="button" onClick={() => setDismissedWarning(true)} style={{ fontSize: 12, color: 'var(--status-warning-fg)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline' }}>{ui('createAnotherAnyway')}</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Body — scrollable */}
-        <div style={{ flex: 1, overflowY: 'auto', maxHeight: 380, padding: 0 }}>
-          {loadingLines ? (
-            <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', padding: '24px 0', textAlign: 'center' }}>{ui('loadingShipmentLines')}</p>
-          ) : shipmentSummaries.every(s => s.enrichedLines.length === 0) ? (
-            <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', padding: '24px 0', textAlign: 'center' }}>{ui('noLinesInSelectedShipments')}</p>
-          ) : (
-            shipmentSummaries.map((shipment) => {
-              const isExpanded = !collapsed[shipment.id];
-              const allLinesSel = shipment.enrichedLines.every(l => l.isSelected);
-              const someLinesSel = shipment.enrichedLines.some(l => l.isSelected) && !allLinesSel;
-              return (
-                <div key={shipment.id}>
-                  {/* Shipment header */}
-                  <div
-                    onClick={() => toggleCollapse(shipment.id)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 6,
-                      padding: '9px 16px', background: 'hsl(var(--card))', borderBottom: '0.5px solid hsl(var(--card))',
-                      borderLeft: isExpanded ? '3px solid var(--status-info-bg)' : '3px solid transparent',
-                      cursor: 'pointer', userSelect: 'none',
-                    }}
-                  >
-                    <span style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', width: 14, textAlign: 'center', transition: 'transform 0.2s ease', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', flexShrink: 0 }}>▶</span>
-                    <input
-                      type="checkbox"
-                      checked={allLinesSel}
-                      ref={el => { if (el) el.indeterminate = someLinesSel; }}
-                      onChange={(e) => { e.stopPropagation(); toggleShipmentLines(shipment.id); }}
-                      onClick={(e) => e.stopPropagation()}
-                      style={{ accentColor: 'var(--status-info-border)', cursor: 'pointer', flexShrink: 0 }}
-                    />
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--status-info-fg)' }}>{ui('shipmentRef')}{shipment.documentNo}</span>
-                    <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>· {fmtDate(shipment.movementDate)} · {shipment.enrichedLines.length} {ui('line')}{shipment.enrichedLines.length !== 1 ? 's' : ''}</span>
-                    <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--status-info-fg)', fontVariantNumeric: 'tabular-nums', fontWeight: 500, flexShrink: 0 }}>
-                      {fmtNum(shipment.total)}
-                    </span>
-                  </div>
-
-                  {/* Lines */}
-                  {isExpanded && (
-                    <>
-                      <div style={{ display: 'flex', padding: '4px 16px 4px 54px', fontSize: 11, fontWeight: 600, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '0.5px solid hsl(var(--foreground))' }}>
-                        <span style={{ flex: 1 }}>{ui('product')}</span>
-                        <span style={{ width: 70, textAlign: 'right' }}>{ui('qty')}</span>
-                        <span style={{ width: 70, textAlign: 'right' }}>{ui('price')}</span>
-                        <span style={{ width: 80, textAlign: 'right' }}>{ui('amount')}</span>
-                      </div>
-                      {shipment.enrichedLines.map(line => {
-                        const qtyEdited = line.currentQty !== line.maxQty;
-                        return (
-                          <div
-                            key={line.id}
-                            onClick={() => toggleLine(line.id)}
-                            style={{
-                              display: 'flex', alignItems: 'center', padding: '5px 16px 5px 38px', borderBottom: '0.5px solid hsl(var(--card))', cursor: 'pointer',
-                              background: line.isSelected ? 'hsl(var(--card))' : 'transparent',
-                              opacity: line.isSelected ? 1 : 0.5,
-                            }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={line.isSelected}
-                              onChange={() => toggleLine(line.id)}
-                              onClick={e => e.stopPropagation()}
-                              style={{ accentColor: 'var(--status-info-border)', cursor: 'pointer', marginRight: 8, flexShrink: 0 }}
-                            />
-                            <span style={{ flex: 1, fontSize: 13, color: line.isSelected ? 'var(--status-info-border)' : 'hsl(var(--foreground))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: line.isSelected ? 500 : 400 }}>
-                              {line.productName}
-                            </span>
-                            <span style={{ width: 70, textAlign: 'right' }} onClick={e => e.stopPropagation()}>
-                              <input
-                                type="number"
-                                min={1}
-                                max={line.maxQty}
-                                value={line.currentQty}
-                                onChange={e => {
-                                  const v = Math.max(1, Math.min(line.maxQty, Number(e.target.value) || 1));
-                                  setLineQuantities(prev => ({ ...prev, [line.id]: v }));
-                                }}
-                                style={{
-                                  width: 56, fontSize: 12, padding: '2px 4px', borderRadius: 4, textAlign: 'center',
-                                  fontVariantNumeric: 'tabular-nums', outline: 'none',
-                                  border: qtyEdited ? '1px solid var(--status-warning-border)' : '0.5px solid hsl(var(--card))',
-                                  background: qtyEdited ? 'hsl(var(--card))' : 'hsl(var(--card))',
-                                }}
-                              />
-                            </span>
-                            <span style={{ width: 70, fontSize: 12, color: 'hsl(var(--muted-foreground))', fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}>
-                              {fmtNum(line.unitPrice)}
-                            </span>
-                            <span style={{ width: 80, fontSize: 13, color: 'hsl(var(--foreground))', fontVariantNumeric: 'tabular-nums', textAlign: 'right', fontWeight: 500 }}>
-                              {line.isSelected ? fmtNum(line.lineTotal) : '-'}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* Footer — fixed */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'hsl(var(--card))', borderTop: '1px solid hsl(var(--card))', padding: '10px 16px', flexShrink: 0 }}>
-          <span style={{ fontSize: 13, color: 'hsl(var(--muted))', fontVariantNumeric: 'tabular-nums' }}>
-            {totalSelectedLines > 0 ? (
-              <>
-                {totalSelectedLines} {ui('line')}{totalSelectedLines !== 1 ? 's' : ''} {ui('from')} {shipments.length} {ui('shipment')}{shipments.length !== 1 ? 's' : ''}
-                {' · '}<span style={{ fontWeight: 500, color: 'var(--status-info-border)' }}>{ui('total')}: {fmtNum(grandTotal)}</span>
-              </>
-            ) : ui('selectLinesToInvoice')}
-          </span>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" onClick={onClose} style={{ fontSize: 13, padding: '6px 14px', borderRadius: 6, border: '1px solid hsl(var(--card))', background: 'transparent', color: 'hsl(var(--muted))', cursor: 'pointer' }}>{ui('cancel')}</button>
-            <button
-              type="button"
-              onClick={handleCreate}
-              disabled={totalSelectedLines === 0 || creating}
-              style={{ fontSize: 13, fontWeight: 500, padding: '6px 14px', borderRadius: 6, border: 'none', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))', cursor: (totalSelectedLines === 0 || creating) ? 'not-allowed' : 'pointer', opacity: (totalSelectedLines === 0 || creating) ? 0.4 : 1 }}
-            >{creating ? ui('creating') : ui('createInvoiceBtn')}</button>
-          </div>
-        </div>
-      </div>
-    </div>
   );
 }
