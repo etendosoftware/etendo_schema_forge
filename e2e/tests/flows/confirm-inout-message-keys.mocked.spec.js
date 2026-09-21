@@ -122,6 +122,25 @@ async function openConfirmModal(page) {
 
   const modal = page.getByTestId('confirm-inout-modal');
   await expect(modal).toBeVisible({ timeout: 8_000 });
+
+  // This spec only exercises the documentAction failure -> AD_MESSAGE key mapping
+  // path — it has nothing to do with invoice creation or invoice rectification.
+  // ConfirmWithCreditButtonBase defaults the invoice-creation toggle ON (ROW has no
+  // invoiceStatus, so isFullyInvoiced is false), which since ETP-5381 makes
+  // ConfirmInOutModal treat rectifiableInvoicesUrl as active and require a selected
+  // rectifiable invoice before it considers the form satisfied. installMocks() does
+  // not mock that endpoint (out of scope for this spec), so the picker never
+  // resolves and the confirm button stays permanently disabled. Turning the toggle
+  // off makes invoiceRequested false, which makes the rectify gate inactive, so
+  // confirm becomes clickable purely on the documentAction path under test.
+  const invoiceToggle = modal.getByTestId('confirm-modal-invoice-toggle');
+  if (await invoiceToggle.count() > 0) {
+    await invoiceToggle.click();
+  }
+
+  const confirmModalBtn = page.getByTestId('confirm-modal-confirm-btn');
+  await expect(confirmModalBtn).toBeEnabled({ timeout: 8_000 });
+
   return modal;
 }
 
