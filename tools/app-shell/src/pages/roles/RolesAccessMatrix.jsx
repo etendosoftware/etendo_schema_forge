@@ -68,14 +68,22 @@ export default function RolesAccessMatrix({ cards, matrix, reportsMatrix, iconFo
   ];
 
   return (
-    <div className="overflow-x-auto" data-testid="RolesAccessMatrix">
+    // ETP-5402 QA follow-up — `overflow-y-visible` is NOT decorative: the CSS overflow spec
+    // auto-corrects a `visible` axis to `auto` the moment the OTHER axis is anything but
+    // `visible` (https://www.w3.org/TR/css-overflow-3/#overflow-properties), so plain
+    // `overflow-x-auto` alone silently makes THIS div its own vertical scroll container/sticky
+    // containing block too — it never actually scrolls (no `h-`/`max-h-` constraint, it only
+    // ever grows to fit its content), but that's exactly what breaks `sticky top-0` below: it
+    // sticks against this inert wrapper instead of RolesOverviewPage's real `overflow-y-auto`
+    // ancestor, so the header never visibly pins on scroll. Confirmed live (2026-09-22, QA
+    // screenshot). Same root-cause class UserRolesTab.jsx's own comment already documents for
+    // its sibling table, just the opposite direction (that one avoids adding a wrapper at all;
+    // this one already has one for horizontal scroll and must neutralize its Y axis instead).
+    <div className="overflow-x-auto overflow-y-visible" data-testid="RolesAccessMatrix">
       <table className="w-full text-sm">
-        {/* ETP-5402 QA follow-up — sticky column headers, mirroring UserRolesTab.jsx's
-            `<thead>` (same `sticky top-0 z-10 bg-card` pattern). This page's own ancestor
-            scroll context is RolesOverviewPage.jsx's single `overflow-y-auto` container
-            (cards + this table both live inside it, same shape as UserRolesTab's enclosing
-            DetailView panel), so `sticky top-0` pins correctly against it with no local
-            wrapper needed. */}
+        {/* Sticky column headers, mirroring UserRolesTab.jsx's `<thead>` (same `sticky top-0
+            z-10 bg-card` pattern) — see the wrapper's own comment above for why `overflow-y-
+            visible` had to be added alongside this for it to actually take effect. */}
         <thead className="sticky top-0 z-10 bg-card">
           <tr className="border-b border-border/50">
             <th className="py-2.5 pr-4 text-left text-sm font-semibold text-foreground">
