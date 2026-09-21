@@ -13,6 +13,14 @@ import { isRowPosted, isRowProcessed } from '@/components/contract-ui/BulkDocume
 
 /* eslint-disable react/prop-types */
 
+// Sonar S6478 — a component-like function defined inline inside a parent's render body is
+// recreated on every render, which can cause avoidable remounts. Defined at module scope so
+// `ListView`'s `bulkActions` slot (`ListView.jsx`: `bulkActions({ selectedRows, ... })`, a plain
+// function call, not a `<bulkActions/>` JSX element) gets a stable reference instead.
+function renderAmortizationBulkActions(ctx) {
+  return <AmortizationBulkActions {...ctx} data-testid="AmortizationBulkActions__c5474e" />;
+}
+
 /**
  * ETP-5414 — per-row kebab ("⋮") for /amortization, offering "Confirmar"/"Reactivar" on
  * each grid row individually, alongside the multi-select bulk bar already shipped
@@ -202,7 +210,7 @@ export default function AmortizationWindow(props) {
       // own breadcrumb never reaches it.
       breadcrumb="Finance / Amortization"
       api={api}
-      bulkActions={(ctx) => <AmortizationBulkActions {...ctx} data-testid="AmortizationBulkActions__c5474e" />}
+      bulkActions={renderAmortizationBulkActions}
       listbarPaddingX="px-2"
       tablePaddingX="px-2"
       hidePrint
