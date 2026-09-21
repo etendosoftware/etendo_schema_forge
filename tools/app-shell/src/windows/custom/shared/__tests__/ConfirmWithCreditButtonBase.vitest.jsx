@@ -139,6 +139,86 @@ describe('ConfirmWithCreditButtonBase — postConfirmButtonLabel (ETP-4737)', ()
 // ETP-4728 — print unification. PrintButton no longer exists: printing is
 // served exclusively by the generic icon-only print flow in DetailView.jsx /
 // DocumentPrintDrawer.jsx. This component must never regrow it.
+// ── ETP-5381 — a DRAFT rectificative invoice already counts as "invoiced" ─────────
+// The duplicate-invoice gate lives entirely in the shared layer: useConfirmWithCredit
+// derives hasReturnInvoice and ConfirmWithCreditButtonBase renders the create button
+// only for `status === 'CO' && !hasReturnInvoice`. Every return window reaches it
+// through a thin wrapper, so this matrix belongs here once, not per window.
+//
+// The DR case is deliberately inverted from what it used to assert. It used to demand
+// the button stay VISIBLE while a rectificative invoice sat in DR, which is precisely
+// how a second one got created: a draft reserves nothing (C_Invoice_Post is what raises
+// qtyinvoiced / isinvoiced), so the same return document could be invoiced twice. The
+// gate now mirrors the server-side duplicate guard — any non-voided invoice hides the
+// button, and only a voided one is treated as if it were never issued.
+describe('ConfirmWithCreditButtonBase — duplicate-invoice gate, returnInvoices array fallback (ETP-5381)', () => {
+  const co = (extra) => ({ documentStatus: 'CO', ...extra });
+
+  it('hides the create button when a DRAFT return invoice already exists', () => {
+    render(
+      <ConfirmWithCreditButtonBase {...BASE_PROPS} data={co({ returnInvoices: [{ documentStatus: 'DR' }] })} />
+    );
+    expect(screen.queryByTestId('action-create-return-invoice')).not.toBeInTheDocument();
+  });
+
+  it('hides the create button when a COMPLETED return invoice already exists', () => {
+    render(
+      <ConfirmWithCreditButtonBase {...BASE_PROPS} data={co({ returnInvoices: [{ documentStatus: 'CO' }] })} />
+    );
+    expect(screen.queryByTestId('action-create-return-invoice')).not.toBeInTheDocument();
+  });
+
+  it('hides the create button when only one entry of a mixed list is non-voided', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={co({ returnInvoices: [{ documentStatus: 'VO' }, { documentStatus: 'DR' }] })}
+      />
+    );
+    expect(screen.queryByTestId('action-create-return-invoice')).not.toBeInTheDocument();
+  });
+
+  it('still shows the create button when every invoice in the list is VOIDED', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={co({ returnInvoices: [{ documentStatus: 'VO' }, { documentStatus: 'VO' }] })}
+      />
+    );
+    expect(screen.getByTestId('action-create-return-invoice')).toBeInTheDocument();
+  });
+
+  it('still shows the create button when returnInvoices is an empty array', () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={co({ returnInvoices: [] })} />);
+    expect(screen.getByTestId('action-create-return-invoice')).toBeInTheDocument();
+  });
+
+  it('still shows the create button when neither the flag nor the array is present', () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={co()} />);
+    expect(screen.getByTestId('action-create-return-invoice')).toBeInTheDocument();
+  });
+
+  it('lets the explicit backend flag win over the array: flag true + VO-only list hides the button', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={co({ hasReturnInvoice: true, returnInvoices: [{ documentStatus: 'VO' }] })}
+      />
+    );
+    expect(screen.queryByTestId('action-create-return-invoice')).not.toBeInTheDocument();
+  });
+
+  it('lets the explicit backend flag win over the array: flag false + DRAFT list shows the button', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={co({ hasReturnInvoice: false, returnInvoices: [{ documentStatus: 'DR' }] })}
+      />
+    );
+    expect(screen.getByTestId('action-create-return-invoice')).toBeInTheDocument();
+  });
+});
+
 describe('ConfirmWithCreditButtonBase — no private PrintButton (ETP-4728)', () => {
   it('does not render a print button in any status', () => {
     render(
