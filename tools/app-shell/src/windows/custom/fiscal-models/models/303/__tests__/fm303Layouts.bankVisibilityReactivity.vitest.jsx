@@ -70,7 +70,9 @@ function makeDecl(identification, overrides = {}) {
 
 describe('FmModel303Page + FmBoxes303 — datos_bancarios visibility reactivity (ETP-5393 manual-QA fix)', () => {
   it('shows the bank block on rectificativa+box111!=0, then hides it again when box 111 returns to 0', () => {
-    const decl = makeDecl({ tipo_declaracion: 'I', rectificativa: false });
+    // ETP-5431 — marca 3 is seeded so SWIFT-BIC is one of the fields the marca calls for;
+    // without a marca it would be hidden for a reason unrelated to what this test drives.
+    const decl = makeDecl({ tipo_declaracion: 'I', rectificativa: false, bank_sepa: '3' });
     render(<FmModel303Page decl={decl} onBack={vi.fn()} onStatusChange={vi.fn()} />);
 
     // Activate: check rectificativa, set box 111 = 10.
@@ -93,7 +95,9 @@ describe('FmModel303Page + FmBoxes303 — datos_bancarios visibility reactivity 
   });
 
   it('shows the bank block on rectificativa+box111!=0, then hides it again when rectificativa is unchecked', () => {
-    const decl = makeDecl({ tipo_declaracion: 'I', rectificativa: false });
+    // ETP-5431 — marca 3 is seeded so SWIFT-BIC is one of the fields the marca calls for;
+    // without a marca it would be hidden for a reason unrelated to what this test drives.
+    const decl = makeDecl({ tipo_declaracion: 'I', rectificativa: false, bank_sepa: '3' });
     render(<FmModel303Page decl={decl} onBack={vi.fn()} onStatusChange={vi.fn()} />);
 
     fireEvent.click(screen.getByText('fm.page.resultado_final'));
@@ -109,5 +113,131 @@ describe('FmModel303Page + FmBoxes303 — datos_bancarios visibility reactivity 
 
     fireEvent.click(screen.getByText('fm.page.identificacion'));
     expect(screen.queryByText(/^fm\.ident\.bank\.swift_bic\*?$/)).not.toBeInTheDocument();
+  });
+});
+
+// ── ETP-5431 — marca SEPA drives visibility, and hiding never destroys data ───
+// The marca restriction is scoped to the Nota 3 case, so these all start from a rectificativa
+// with a non-zero box 111 and the cancel/modify-debit flag unmarked.
+
+function identInlineField(labelKey) {
+  const label = Array.from(document.querySelectorAll('.fm-aeat-ident-inline-field__label'))
+    .find(el => el.textContent.replace(/\*$/, '') === labelKey);
+  return label ? label.closest('.fm-aeat-ident-inline-field') : null;
+}
+
+function marcaSelect() {
+  return identInlineField('fm.ident.bank.sepa').querySelector('select');
+}
+
+function setMarca(value) {
+  fireEvent.change(marcaSelect(), { target: { value } });
+}
+
+function bankTextInput(labelKey) {
+  const field = identInlineField(labelKey);
+  return field ? field.querySelector('.fm-aeat-ident-inline-field__input') : null;
+}
+
+describe('FmModel303Page + FmBoxes303 — marca SEPA reactivity (ETP-5431)', () => {
+  // Drives the page into the Nota 3 case and lands on the identificacion tab.
+  function renderInNota3(marca) {
+    const decl = makeDecl({ tipo_declaracion: 'I', rectificativa: false, bank_sepa: marca });
+    render(<FmModel303Page decl={decl} onBack={vi.fn()} onStatusChange={vi.fn()} />);
+    fireEvent.click(screen.getByText('fm.page.resultado_final'));
+    fireEvent.click(findRectificativaCheckbox());
+    setBoxValue(111, 10);
+    fireEvent.click(screen.getByText('fm.page.identificacion'));
+  }
+
+  it('raising the marca from 1 to 3 reveals the four foreign-bank fields', () => {
+    renderInNota3('1');
+    expect(identInlineField('fm.ident.bank.nombre')).toBeNull();
+
+    setMarca('3');
+    ['fm.ident.bank.nombre', 'fm.ident.bank.direccion', 'fm.ident.bank.ciudad', 'fm.ident.bank.pais']
+      .forEach(key => expect(identInlineField(key)).not.toBeNull());
+  });
+
+  it('lowering the marca from 3 to 1 hides SWIFT-BIC and the four foreign-bank fields again', () => {
+    renderInNota3('3');
+    expect(identInlineField('fm.ident.bank.swift_bic')).not.toBeNull();
+
+    setMarca('1');
+    ['fm.ident.bank.swift_bic', 'fm.ident.bank.nombre', 'fm.ident.bank.direccion',
+      'fm.ident.bank.ciudad', 'fm.ident.bank.pais']
+      .forEach(key => expect(identInlineField(key)).toBeNull());
+  });
+
+  it('the marca selector and bank_iban stay reachable at every marca', () => {
+    renderInNota3('3');
+    for (const marca of ['1', '2', '3']) {
+      setMarca(marca);
+      expect(marcaSelect()).not.toBeNull();
+      expect(identInlineField('fm.ident.bank.iban')).not.toBeNull();
+    }
+  });
+
+  // THE decision this ticket made deliberately (and the reason no dependent-field-clearing
+  // callout was added): hiding a field must NOT clear it. The backend already blanks the
+  // unused positions when it writes the file, so clearing here would only destroy typed work
+  // if the user changes the marca by mistake. A future refactor that "tidies up" the residue
+  // by deleting it breaks this test — which is exactly the point.
+  it('switching marca 3 -> 1 -> 3 preserves the typed foreign-bank values', () => {
+    renderInNota3('3');
+
+    fireEvent.change(bankTextInput('fm.ident.bank.nombre'), { target: { value: 'Banque Cantonale' } });
+    fireEvent.change(bankTextInput('fm.ident.bank.direccion'), { target: { value: '12 Rue du Rhone' } });
+    fireEvent.change(bankTextInput('fm.ident.bank.ciudad'), { target: { value: 'Geneve' } });
+    fireEvent.change(bankTextInput('fm.ident.bank.pais'), { target: { value: 'CH' } });
+
+    setMarca('1');
+    expect(identInlineField('fm.ident.bank.nombre')).toBeNull();
+
+    setMarca('3');
+    expect(bankTextInput('fm.ident.bank.nombre').value).toBe('Banque Cantonale');
+    expect(bankTextInput('fm.ident.bank.direccion').value).toBe('12 Rue du Rhone');
+    expect(bankTextInput('fm.ident.bank.ciudad').value).toBe('Geneve');
+    expect(bankTextInput('fm.ident.bank.pais').value).toBe('CH');
+  });
+
+  it('a typed SWIFT-BIC survives a trip down to marca 1 and back up to marca 2', () => {
+    renderInNota3('2');
+    fireEvent.change(bankTextInput('fm.ident.bank.swift_bic'), { target: { value: 'BBVAESMMXXX' } });
+
+    setMarca('1');
+    expect(identInlineField('fm.ident.bank.swift_bic')).toBeNull();
+
+    setMarca('2');
+    expect(bankTextInput('fm.ident.bank.swift_bic').value).toBe('BBVAESMMXXX');
+  });
+
+  // The select's own placeholder (value '') is distinct from every declared option: it is what
+  // an untouched field holds, and it must trigger no escalation at all.
+  it('selecting the placeholder hides every marca-gated field without clearing them', () => {
+    renderInNota3('3');
+    fireEvent.change(bankTextInput('fm.ident.bank.ciudad'), { target: { value: 'Geneve' } });
+
+    setMarca('');
+    ['fm.ident.bank.swift_bic', 'fm.ident.bank.nombre', 'fm.ident.bank.direccion',
+      'fm.ident.bank.ciudad', 'fm.ident.bank.pais']
+      .forEach(key => expect(identInlineField(key)).toBeNull());
+
+    setMarca('3');
+    expect(bankTextInput('fm.ident.bank.ciudad').value).toBe('Geneve');
+  });
+
+  it('the marca select renders four options: its own placeholder plus the three marcas', () => {
+    renderInNota3('3');
+    const options = Array.from(marcaSelect().querySelectorAll('option'));
+    expect(options.map(o => o.value)).toEqual(['', '1', '2', '3']);
+    // The placeholder is the ONLY empty-valued choice — there is no separate "0" option.
+    expect(options.filter(o => o.value === '')).toHaveLength(1);
+    expect(options.map(o => o.textContent)).toEqual([
+      'fm.ident.decl.placeholder',
+      'fm.ident.bank.sepa.spain',
+      'fm.ident.bank.sepa.eu_sepa',
+      'fm.ident.bank.sepa.rest_of_world',
+    ]);
   });
 });

@@ -1313,13 +1313,17 @@ describe('FmBoxes303 — datos_bancarios individual bank field visibility (ETP-4
   // so this scenario must carry a non-zero box 111 to stay visible (see
   // fm303Layouts.bankVisibilityReactivity.vitest.js for the box111==0/rectificativa-false
   // hide-again coverage).
-  it('tipo I + rectificativa true + box 111 non-zero → bank_swift_bic visible (the actual bug fix — commit edb448754)', () => {
+  // ETP-5431 — inside the Nota 3 case, visibility now also depends on the marca SEPA:
+  // SWIFT-BIC is only shown from marca 2 upwards, because the file carries position 12 blank
+  // below that (AEAT303Report2024#patchBankSection). Marca 2 is therefore what preserves the
+  // original intent of this ETP-4456 regression guard.
+  it('tipo I + rectificativa true + box 111 non-zero + marca 2 → bank_swift_bic visible (the actual bug fix — commit edb448754)', () => {
     const { container } = render(
       <FmBoxes303
         {...BASE_PROPS}
         boxes={{}}
         sectionIds={['datos_bancarios']}
-        identification={{ tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true }}
+        identification={{ tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true, bank_sepa: '2' }}
       />
     );
     expect(bankFieldLabels(container)).toContain('fm.ident.bank.swift_bic');
@@ -1337,13 +1341,16 @@ describe('FmBoxes303 — datos_bancarios individual bank field visibility (ETP-4
     expect(bankFieldLabels(container)).toContain('fm.ident.bank.swift_bic');
   });
 
-  it('also covers bank_nombre, bank_direccion, bank_ciudad, bank_pais, bank_sepa for the bug-fix case (tipo I + rectificativa true + box 111 non-zero)', () => {
+  // ETP-5431 — the four foreign-bank fields only route a rest-of-world transfer, so they are
+  // shown from marca 3 only. bank_sepa itself is never gated by its own value — it is the
+  // selector, and must stay reachable for the whole section.
+  it('also covers bank_nombre, bank_direccion, bank_ciudad, bank_pais, bank_sepa for the bug-fix case (tipo I + rectificativa true + box 111 non-zero + marca 3)', () => {
     const { container } = render(
       <FmBoxes303
         {...BASE_PROPS}
         boxes={{}}
         sectionIds={['datos_bancarios']}
-        identification={{ tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true }}
+        identification={{ tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true, bank_sepa: '3' }}
       />
     );
     const labels = bankFieldLabels(container);
@@ -1503,17 +1510,93 @@ describe('FmBoxes303 — datos_bancarios required-mark rendering (ETP-5393 follo
     expect(labels).toHaveLength(0);
   });
 
-  it('tipo I + rectificativa true + box 111 non-zero → visible DVX-gated fields render WITH the required-mark', () => {
+  // ETP-5431 — at marca 3 every field in the block is called for, so this keeps asserting what
+  // it always did: inside the Nota 3 case the whole visible block carries the required-mark.
+  it('tipo I + rectificativa true + box 111 non-zero + marca 3 → visible DVX-gated fields render WITH the required-mark', () => {
     const { container } = render(
       <FmBoxes303
         {...BASE_PROPS}
         boxes={{}}
         sectionIds={['datos_bancarios']}
-        identification={{ tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true }}
+        identification={{ tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true, bank_sepa: '3' }}
       />
     );
     const labels = rawBankFieldLabels(container);
     DVX_GATED_LABEL_KEYS.forEach(key => expect(labels).toContain(`${key}*`));
+  });
+
+  // ETP-5431 — and below marca 3, the fields the marca does not call for are GONE, not merely
+  // un-asterisked. That distinction is the ETP-5393 manual-QA lesson applied to the marca:
+  // a visible-but-unrequired field in a block whose file positions are blanked reads as a bug.
+  it('marca 1 → SWIFT-BIC and the four foreign-bank fields do not render at all; IBAN and the marca do, with the mark', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true, bank_sepa: '1' }}
+      />
+    );
+    const labels = rawBankFieldLabels(container);
+    ['fm.ident.bank.swift_bic', 'fm.ident.bank.nombre', 'fm.ident.bank.direccion',
+      'fm.ident.bank.ciudad', 'fm.ident.bank.pais'].forEach((key) => {
+      expect(labels).not.toContain(key);
+      expect(labels).not.toContain(`${key}*`);
+    });
+    expect(labels).toContain('fm.ident.bank.iban*');
+    expect(labels).toContain('fm.ident.bank.sepa*');
+  });
+
+  it('marca 2 → SWIFT-BIC appears with the mark, the four foreign-bank fields still do not render', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true, bank_sepa: '2' }}
+      />
+    );
+    const labels = rawBankFieldLabels(container);
+    expect(labels).toContain('fm.ident.bank.swift_bic*');
+    ['fm.ident.bank.nombre', 'fm.ident.bank.direccion', 'fm.ident.bank.ciudad', 'fm.ident.bank.pais']
+      .forEach(key => expect(labels).not.toContain(key));
+  });
+
+  // Nota 3's exception, rendered: the taxpayer asked to cancel the direct debit, so for a tipo
+  // with no account need of its own (C) the block disappears entirely.
+  it('tipo C + Nota 3 case + cancel/modify-debit flag marked → no bank field renders at all', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{
+          tipo_declaracion: 'C', rectificativa: true, _box111NonZero: true,
+          bank_sepa: '3', baja_domiciliacion: true,
+        }}
+      />
+    );
+    expect(container.querySelector('.fm-aeat-section')).toBeNull();
+    expect(rawBankFieldLabels(container)).toHaveLength(0);
+  });
+
+  // ...but tipo D keeps its own U/D/X need for an account to receive the refund into, which is
+  // outside Nota 3's scope. The waiver puts the declaration OUTSIDE the Nota 3 branch, so the
+  // marca restriction does not apply either: every field renders, unrestricted.
+  it('tipo D + Nota 3 case + flag marked → the block stays visible and unrestricted by the marca', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{
+          tipo_declaracion: 'D', rectificativa: true, _box111NonZero: true,
+          bank_sepa: '1', baja_domiciliacion: true,
+        }}
+      />
+    );
+    const labels = rawBankFieldLabels(container);
+    ALL_BANK_LABEL_KEYS.forEach(key => expect(labels.some(l => l.startsWith(key))).toBe(true));
   });
 
   it('tipo U + rectificativa false → only bank_iban renders, and it carries the required-mark', () => {
