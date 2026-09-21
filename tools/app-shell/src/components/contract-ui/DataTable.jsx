@@ -1344,7 +1344,7 @@ function applyResolvedIdentifiers(empty, resolvedDefaults, fieldMap) {
   return empty;
 }
 
-const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, onValuesChange, selectable, hasDeleteColumn, hasCloneColumn, hoverRowActions, hoverRowHasDelete, hasQuickActionsColumn, token, apiBaseUrl, entity, specName, selectorContext, seedValues = EMPTY_SEED, resolvedDefaults = EMPTY_SEED, ilpReservesActionSlot = false, ilpTrailing = false, labelOverrides, convertOptimisticPrice, hasDimensionsPanel = false }, ref) {
+const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, onValuesChange, selectable, hasDeleteColumn, hasCloneColumn, hoverRowActions, hoverRowHasDelete, hasQuickActionsColumn, token, apiBaseUrl, entity, specName, selectorContext, seedValues = EMPTY_SEED, resolvedDefaults = EMPTY_SEED, ilpReservesActionSlot = false, ilpTrailing = false, labelOverrides, convertOptimisticPrice, hasDimensionsPanel = false, scrollHostContainer = null }, ref) {
   const t = useLabel(labelOverrides);
   const ui = useUI();
   const { locale } = useLocaleSwitch();
@@ -1541,6 +1541,20 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
       const target = e.target;
       if (!(target instanceof Node)) return;
       if (rowRef.current?.contains(target)) return;
+      // ETP-5133 follow-up — a click-drag on the InlineLinesPanel horizontal
+      // scrollbar (or on blank space in its scroll body) targets that
+      // scrollable ancestor element itself, not a descendant row: since
+      // ETP-5133 portaled this add-row's `<table>` INTO that same scroll
+      // body (see lib/linesScrollHost.js), the scrollbar's owner is now a
+      // legitimate ancestor of `rowRef`, not an unrelated part of the page.
+      // Without this check, `rowRef.current?.contains(target)` above is
+      // false for that ancestor and the click was wrongly treated as
+      // "outside", cancelling/committing the in-progress line on every
+      // scrollbar click-drag. `scrollHostContainer` is only ever the exact
+      // scroll-body element (see the DataTable call site), so this stays
+      // narrow: a click on an actual saved row or truly outside the panel
+      // still targets a different node and falls through to the checks below.
+      if (scrollHostContainer && target === scrollHostContainer) return;
       // The dialog hosting the row, when the whole window is mounted inside one
       // (RecordCreateModal). null on a normal page, which keeps both checks below identical
       // to what they did before ETP-5332.
@@ -1574,7 +1588,7 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
     // InlineLinesPanel.jsx (flush-pending-edit-on-outside-pointerdown).
     document.addEventListener('pointerdown', handler, true);
     return () => document.removeEventListener('pointerdown', handler, true);
-  }, [onCancel, submitLine]);
+  }, [onCancel, submitLine, scrollHostContainer]);
 
   // Wrap handleChange to also notify parent (for callout triggering)
   const handleFieldChange = useCallback((key, val, selectedItem) => {
@@ -3480,6 +3494,13 @@ export function DataTable({
                 ilpTrailing={ilpTrailing}
                 labelOverrides={labelOverrides}
                 hasDimensionsPanel={hasDimensionsPanel}
+                // ETP-5133 follow-up — `addRowScrollHost` (see lib/linesScrollHost.js) is
+                // InlineLinesPanel's empty `addRowHostRef` div, a direct child of ITS
+                // `bodyScrollRef` div (the actual `overflow-x-auto` element that owns the
+                // native scrollbar). `.parentElement` is that scrollbar owner — pass it so
+                // the outside-click handler can recognize a scrollbar click-drag as staying
+                // inside the add-row's own (now portaled) scroll region instead of "outside".
+                scrollHostContainer={addRowScrollHost?.parentElement ?? null}
                 data-testid="InlineAddRow__eb5261" />
             )}
           </TableBody>
