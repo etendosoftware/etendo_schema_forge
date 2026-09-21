@@ -73,6 +73,10 @@ vi.mock('../../../../menu.json', () => ({
       // per-test AD-tree fixture, to prove menu.json wins over the AD-tree fallback
       // when a window id exists in BOTH sources.
       { group: 'DualMappedGroup', items: [{ name: 'dual-via-menu', label: 'Dual (menu.json label)', windowId: 'm-dual' }] },
+      // groupOrder 5 — ETP-5402: a report row's own id ("tax-report") has NO AD-tree
+      // counterpart at all, so it can ONLY ever resolve via this `reportId`-keyed
+      // menu.json entry (see UserRolesTab.jsx's own JSDoc on `activeWindowIds`).
+      { group: 'ReportsGroup', items: [{ name: 'tax-report', label: 'Tax Report', reportId: 'tax-report' }] },
     ],
   },
 }));
@@ -802,6 +806,61 @@ describe('UserRolesTab', () => {
       const table = await screen.findByTestId('UserRolesTab');
       const rowLabels = within(table).getAllByText(/^Row [AB] \(itemOrder \d\)$/);
       expect(rowLabels.map((el) => el.textContent)).toEqual(['Row B (itemOrder 0)', 'Row A (itemOrder 1)']);
+    });
+  });
+
+  // ETP-5402 — a report row (e.g. "tax-report") has no AD-tree counterpart at all, so it
+  // can ONLY ever resolve through `menuIndex` (the `reportId`-keyed 'ReportsGroup' entry
+  // in this file's module-level menu.json mock, groupOrder 5) — unlike a window id, which
+  // still has the AD-tree/uncategorized fallback chain. This block proves `activeWindowIds`
+  // folds in `role.reports[]` ids and `cellValue` falls back to `role.reports` when
+  // `role.windows` has no match for that id.
+  describe('Informes subsection (ETP-5402)', () => {
+    const ROLES_OVERVIEW_WITH_REPORTS = {
+      roles: [
+        { id: 'role-fin', name: 'Finance', windows: [], reports: [{ id: 'tax-report', tier: 'full' }] },
+      ],
+    };
+    const TEMPLATE_ROLES_WITH_REPORTS = {
+      roles: [
+        { id: 'role-fin', name: 'Finance', windows: [], reports: [{ id: 'tax-report', tier: 'full' }] },
+      ],
+    };
+
+    beforeEach(() => {
+      fetchMenuTree.mockResolvedValue(MENU_TREE);
+      fetchRolesOverview.mockResolvedValue(ROLES_OVERVIEW_WITH_REPORTS);
+      fetchTemplateRoles.mockResolvedValue(TEMPLATE_ROLES_WITH_REPORTS);
+    });
+
+    it('renders a report row (resolved via its menu.json reportId entry) even though it has zero AD windows', async () => {
+      renderTab({ selectedRoleIds: ['role-fin'] });
+
+      const row = await screen.findByTestId('UserRolesTab__row-tax-report');
+      expect(row).toHaveTextContent('Tax Report');
+      expect(screen.getByText('ReportsGroup')).toBeInTheDocument();
+    });
+
+    it('resolves a full-access report tier from role.reports[] (cellValue falls back to it when role.windows has no match)', async () => {
+      renderTab({ selectedRoleIds: ['role-fin'] });
+
+      const row = await screen.findByTestId('UserRolesTab__row-tax-report');
+      const cells = within(row).getAllByRole('cell');
+      expect(cells[1]).toHaveTextContent('✓');
+    });
+
+    it('never renders a report row at all when no role has been granted it (activeWindowIds excludes it)', async () => {
+      fetchRolesOverview.mockResolvedValue({
+        roles: [{ id: 'role-fin', name: 'Finance', windows: [], reports: [] }],
+      });
+      fetchTemplateRoles.mockResolvedValue({
+        roles: [{ id: 'role-fin', name: 'Finance', windows: [], reports: [] }],
+      });
+      renderTab({ selectedRoleIds: ['role-fin'] });
+
+      // No report row at all — activeWindowIds never included "tax-report" for this role.
+      await screen.findByTestId('UserRolesTab');
+      expect(screen.queryByTestId('UserRolesTab__row-tax-report')).not.toBeInTheDocument();
     });
   });
 });

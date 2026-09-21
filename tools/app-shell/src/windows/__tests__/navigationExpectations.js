@@ -72,7 +72,15 @@ export const optionalNavigation = [
 // exclusions. App Store is classified above, not permanently hidden.
 // ETP-5196 — smart-scan moved here (hidden: true in menu.json); its runtime
 // access gate lives in SmartScanPage.jsx's own content gate, unaffected by this.
-export const hiddenNavigation = 'business-partner deal activity lead hr employee absence report-viewer-purchases warehouse-storage-bins project time-tracking document match-rule fiscal-calendar open-close-period-control recurring-invoice oauth2-clients smart-scan'.split(' ');
+// ETP-5402 — the 10 Informes-subsection report rows (tax-report, both aging schedules,
+// inventory-stock-report, and the 6 financial-family reports), each `hidden: true` and
+// carrying a `reportId` (not windowId/obuiappProcessId/processId/accessWindowId) — a
+// grant-only identity key SideMenu's own filterMenuGroupsByAccess never reads at all.
+// Their real access gate is server-side (SFRolesOverview/SFSystemRoleTemplates ->
+// ReportAccessCatalog); `reportId` exists purely so the "Configuración > Roles" and
+// "Roles del usuario" matrices can resolve a category/label override for them (same
+// convention as match-rule/fiscal-calendar above, no live sidebar link either).
+export const hiddenNavigation = 'business-partner deal activity lead hr employee absence report-viewer-purchases warehouse-storage-bins project time-tracking document match-rule fiscal-calendar open-close-period-control recurring-invoice oauth2-clients smart-scan tax-report aging-receivable aging-payable inventory-stock-report bank-statements bank-reconciliation cash-close financial-account-transactions financial-account-bank-connection financial-accounts-page'.split(' ');
 
 export const navigationProfiles = [
   { label: 'default', apps: [], marketplace: false, proof: false },
