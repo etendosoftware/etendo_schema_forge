@@ -63,10 +63,16 @@ describe('account billing projection', () => {
 });
 
 describe('getCheckoutToken', () => {
-  it('prefers the active environment JWT over a stale account token', async () => {
+  it('uses the account token when an environment JWT is also present', () => {
     assert.equal(getCheckoutToken({
       getItem: key => ({ sf_auth_token: 'environment-token', sf_platform_token: 'stale-token' }[key]),
-    }), 'environment-token');
+    }), 'stale-token');
+  });
+
+  it('does not authorize billing with an environment JWT when the account token is missing', () => {
+    assert.equal(getCheckoutToken({
+      getItem: key => (key === 'sf_auth_token' ? 'environment-token' : null),
+    }), null);
   });
 });
 
