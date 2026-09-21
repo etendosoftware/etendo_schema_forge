@@ -274,7 +274,9 @@ if [[ "$RUN_COVERAGE" == "true" ]]; then
   # right version if nvm is present.
   if [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
     # shellcheck source=/dev/null
-    source "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+    # `|| true`: nvm.sh is not `set -u` clean, so sourcing it under `set -euo pipefail`
+    # aborts this script silently before the Node check below can report anything.
+    source "${NVM_DIR:-$HOME/.nvm}/nvm.sh" || true
     nvm use 22 --silent 2>/dev/null || true
   fi
   NODE_MAJOR=$(node -e "process.stdout.write(process.versions.node.split('.')[0])" 2>/dev/null || echo "0")
