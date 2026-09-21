@@ -286,6 +286,68 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   6. Confirm "Fiscal Monitor", "Fiscal Models", and "Not Posted Documents" appear in the matrix with cells that track their proxy's access (SII Monitor / Tax Report / the proxy process, respectively) rather than always showing full access.
   7. Pick a role with no access to the SII Monitor window and confirm "Fiscal Monitor" is also absent from that role's real sidebar (not just shown as "none" in the matrix) — this is the sidebar-visibility side effect, not only an admin-matrix display change.
 
+### 6d. Informes subsection (ETP-5402, same `/roles` page)
+
+Nested inside `RolesAccessMatrix` (6c above) — not a separate top-level section, and not a
+separate page — the Informes subsection surfaces the 9 report-type specs (`tax-report`, both
+aging schedules, `inventory-stock-report`, and 6 financial-family reports) that have no
+`AD_Window_ID` of their own and were previously entirely absent from both the roles-overview
+listing and the roles-overview matrix.
+
+- **What it renders:** inside each real category block from 6c (e.g. "Finance"), right after that
+  category's own window rows, a small uppercase "Informes" sub-header row followed by that
+  category's report rows — rendered ONLY when the category has at least one report row (a
+  category with real window rows but zero report rows never shows the sub-header). A category
+  present ONLY in the Informes data (none exist today, but not assumed to stay that way) still
+  gets its own full category block. Each report row is a normal tri-state `AccessTierPill` row,
+  identical in shape to a window row.
+- **Data source:** the SAME single fetch as 6b/6c — `useRolesOverviewData()` now also returns
+  `reportsMatrix` (adapted from the backend's new `reportsMatrix.categories[].reports[]`, via
+  `adaptCategoryMatrix()`'s shared bucketing/sorting/menu.json-resolution machinery — the exact
+  same code path `adaptMatrix()` uses for real windows, parameterized on `itemsKey: 'reports'`
+  instead of `'windows'`). No separate request.
+- **Category/label resolution — a 4th `menu.json` identity key (`reportId`):** a report row's
+  stable id (`tax-report`, `bank-statements`, ...) has no AD windowId/obuiappProcessId/processId
+  of its own to key off — and using one of its RELATED entities' ids would collide, since the 6
+  financial-family rows all share the SAME anchor `AD_Window_ID` (Financial Account) but must
+  resolve to 6 distinct rows. `buildMenuWindowIndex()`'s identity resolution gained a 4th `??`
+  branch, `item.reportId`, which is always unique per Informes row and never collides with a real
+  AD id. All 10 report rows have a corresponding `menu.json` entry (`hidden: true`, `group` set to
+  the same hardcoded category the backend uses — `Finance`/`Inventory`).
+- **Row keying:** `${category}::${reportId}--informes` (via `reportRowKey()` in
+  `RolesAccessMatrix.jsx`) — the `--informes` suffix keeps a report row's key distinct from any
+  window row in the same category, even though in practice a report id and a window id never
+  collide (different id-spaces entirely).
+- **`UserRolesTab.jsx` (the User window's own permission-preview matrix) gets the same
+  treatment**, sharing the SAME `menu.json` `reportId` entries: `activeWindowIds` (its
+  union-of-every-role's-reachable-ids set) now also folds in each role's `reports[]` ids, and
+  `cellValue()` falls back to `role.reports` when `role.windows` has no match for a given row id.
+  Since a report id has NO `SFListMenu`/AD-tree fallback at all (unlike a window id, which still
+  degrades to an "uncategorized" bucket with its raw AD name), a report row can ONLY ever resolve
+  through `menuIndex` — this is exactly why every report id needs its own `menu.json` entry; one
+  missing would silently vanish from this tab's matrix with no error.
+- **Failure or edge behavior:** a category with real windows but no accessible report rows never
+  shows the Informes sub-header (not an empty one). Passing no `reportsMatrix` prop at all to
+  `RolesAccessMatrix` (backward compatibility) renders nothing extra — no crash, no empty
+  sub-header anywhere.
+- **Automated evidence:** `RolesAccessMatrix.vitest.jsx`'s "Informes subsection (ETP-5402)"
+  suite (sub-header nesting, zero-report-category suppression, missing-prop backward
+  compatibility, independent per-role cells, a report-only category block);
+  `useRolesOverviewData.vitest.js` (the `reportId` menuIndex branch, `reportsMatrix` adaptation,
+  missing-`reportsMatrix` safety); `UserRolesTab.vitest.jsx`'s "Informes subsection (ETP-5402)"
+  suite (a report row renders via its `reportId` menu.json entry despite zero AD windows,
+  `cellValue` falls back to `role.reports`, an ungranted report never renders at all).
+- **Manual verification path:**
+  1. Open `/roles` as an admin/client-admin and confirm an "Informes" sub-header appears inside
+     the Finance category, below its window rows, with report rows for whichever reports the
+     Finance role/template actually has access to.
+  2. Confirm a category with no accessible report rows (e.g. Sales, Purchasing) shows no Informes
+     sub-header at all.
+  3. Open the User window's "Roles del usuario" tab for a user with the Finance role/template
+     selected and confirm the same report rows appear there too, with matching tiers.
+  4. Confirm `tax-report` shows `"full"` (never a read-only pill) for any role holding it — the
+     classic `AD_Process_Access` grant is binary by design.
+
 ### 7. PWA update and recovery behavior
 
 - **User goal / entry point:** Keep the SPA fresh after deploys and avoid stale cached assets during environment entry.
