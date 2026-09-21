@@ -254,6 +254,19 @@ function resolveCategoryRow(windowId, menuIndex, adTreeIndex, fallbackNameById, 
  * order (tree-walk order for the fallback rows, matching this tab's pre-fix behavior
  * for exactly those windows) rather than reshuffling them.
  */
+/**
+ * ETP-5402 QA follow-up — `sortedRows` is split into `rows` (real windows) and `reportRows`
+ * (Informes subsection, `row.isReport` true) here, at the very end, rather than earlier in the
+ * pipeline: both kinds share the exact same category/ordering resolution up to this point (see
+ * `resolveCategoryRow`), and splitting only at render time keeps that resolution logic
+ * single-sourced. `itemOrder` already places every report row after its category's real windows
+ * (menu.json declares each category's `report-viewer-*`/report entries at the END of that
+ * group's `items` array), so filtering `sortedRows` in place preserves each sublist's own
+ * relative order with no extra sort — matching `RolesAccessMatrix.jsx`'s own `windowRows`/
+ * `reportRows` split (`RolesAccessMatrix__informesHeader`), so both matrices render the
+ * "Informes" subsection identically instead of one silently flattening reports into the main
+ * row list with no sub-header (the QA-reported gap this fixes).
+ */
 function groupResolvedRows(rows) {
   const categoryOrder = [];
   const rowsByCategory = new Map();
@@ -289,7 +302,11 @@ function groupResolvedRows(rows) {
       if (b.itemOrder != null) return 1;
       return 0;
     });
-    return { category, rows: sortedRows };
+    return {
+      category,
+      rows: sortedRows.filter((row) => !row.isReport),
+      reportRows: sortedRows.filter((row) => row.isReport),
+    };
   });
 }
 
@@ -472,13 +489,18 @@ export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
 
     const uncategorizedLabel = ui('userRolesTabUncategorizedCategory');
     const resolvedRows = [...treeOrderedIds, ...remainingIds]
-      .map((windowId) => resolveCategoryRow(
-        windowId, menuIndex, adTreeIndex, windowNameById, uncategorizedLabel, !reportIds.has(windowId)))
+      .map((windowId) => {
+        const isReport = reportIds.has(windowId);
+        const row = resolveCategoryRow(
+          windowId, menuIndex, adTreeIndex, windowNameById, uncategorizedLabel, !isReport);
+        return row ? { ...row, isReport } : null;
+      })
       .filter((row) => row !== null);
 
-    // Drop any category left with zero surviving rows — must not render an empty
-    // category header with nothing under it.
-    return groupResolvedRows(resolvedRows).filter((group) => group.rows.length > 0);
+    // Drop any category left with zero surviving rows (window AND report) — must not
+    // render an empty category header with nothing under it.
+    return groupResolvedRows(resolvedRows)
+      .filter((group) => group.rows.length > 0 || group.reportRows.length > 0);
   }, [menuTreeData, activeWindowIds, reportIds, menuIndex, adTreeIndex, windowNameById, ui]);
 
   // ETP-5196 — for a confirmed admin holder, the matrix's sole column is the admin role
@@ -669,6 +691,46 @@ export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
                             winnerTooltipTitle={winnerTooltipTitle}
                             winnerTooltipDescription={winnerTooltipDescription}
                             data-testid="MatrixRoleCell__71bdc9" />
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+                {/* ETP-5402 QA follow-up — "Informes" subsection, same sub-header pattern as
+                    RolesAccessMatrix.jsx's own `RolesAccessMatrix__informesHeader` row: nested
+                    inside this category block, right after its real window rows, only when
+                    this category actually has report rows. */}
+                {group.reportRows.length > 0 && (
+                  <tr className="bg-muted/10" data-testid={`UserRolesTab__informesHeader-${group.category}`}>
+                    <th
+                      colSpan={columns.length + 1}
+                      scope="row"
+                      className="text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70 py-1 pr-4 pl-3"
+                    >
+                      {ui('rolesMatrixInformesHeader')}
+                    </th>
+                  </tr>
+                )}
+                {group.reportRows.map((row) => {
+                  const cellsForRow = columns.map((role) => cellValue(row, role));
+                  const { winnerIndex } = resolveRowWinner(cellsForRow);
+                  return (
+                    <tr key={row.windowId} data-testid={`UserRolesTab__row-${row.windowId}`}>
+                      <td className="py-2.5 pr-4 pl-3 text-foreground">{tMenu(row.name)}</td>
+                      {columns.map((role, i) => {
+                        const { tier, text } = cellsForRow[i];
+                        const isWinner = i === winnerIndex;
+                        return (
+                          <MatrixRoleCell
+                            key={role.id}
+                            role={role}
+                            tier={tier}
+                            text={text}
+                            isWinner={isWinner}
+                            testIdKey={row.windowId}
+                            winnerTooltipTitle={winnerTooltipTitle}
+                            winnerTooltipDescription={winnerTooltipDescription}
+                            data-testid="MatrixRoleCell__informes-71bdc9" />
                         );
                       })}
                     </tr>
