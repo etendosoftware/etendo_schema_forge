@@ -1,4 +1,4 @@
--- @id: R38-mixed-period-open
+-- @id: R39-mixed-period-open
 -- @gap: C3
 -- @risk: medium
 -- @type: sql
