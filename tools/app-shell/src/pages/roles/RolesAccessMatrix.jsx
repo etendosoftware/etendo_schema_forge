@@ -68,22 +68,26 @@ export default function RolesAccessMatrix({ cards, matrix, reportsMatrix, iconFo
   ];
 
   return (
-    // ETP-5402 QA follow-up — `overflow-y-visible` is NOT decorative: the CSS overflow spec
-    // auto-corrects a `visible` axis to `auto` the moment the OTHER axis is anything but
-    // `visible` (https://www.w3.org/TR/css-overflow-3/#overflow-properties), so plain
-    // `overflow-x-auto` alone silently makes THIS div its own vertical scroll container/sticky
-    // containing block too — it never actually scrolls (no `h-`/`max-h-` constraint, it only
-    // ever grows to fit its content), but that's exactly what breaks `sticky top-0` below: it
-    // sticks against this inert wrapper instead of RolesOverviewPage's real `overflow-y-auto`
-    // ancestor, so the header never visibly pins on scroll. Confirmed live (2026-09-22, QA
-    // screenshot). Same root-cause class UserRolesTab.jsx's own comment already documents for
-    // its sibling table, just the opposite direction (that one avoids adding a wrapper at all;
-    // this one already has one for horizontal scroll and must neutralize its Y axis instead).
-    <div className="overflow-x-auto overflow-y-visible" data-testid="RolesAccessMatrix">
+    // ETP-5402 QA follow-up (round 2) — NO overflow class on this wrapper, matching
+    // UserRolesTab.jsx's own table exactly. The previous `overflow-x-auto overflow-y-visible`
+    // attempt was based on a misreading of the CSS overflow spec: per spec, an explicitly
+    // authored `overflow-y: visible` does NOT opt out of the auto-correction that fires the
+    // moment the OTHER axis is non-`visible` — the browser forces the COMPUTED value to `auto`
+    // regardless of what was authored, specifically to prevent this exact "one clipped, one
+    // not" state. So `overflow-x-auto overflow-y-visible` computed to the exact same thing as
+    // `overflow-x-auto` alone, and the wrapper was STILL its own (content-sized, never
+    // independently scrolling) sticky containing block — confirmed still broken live
+    // (2026-09-22, second QA round). There is no CSS-only way to keep `overflow-x-auto` on this
+    // element while making `sticky top-0` below resolve against RolesOverviewPage's outer
+    // `overflow-y-auto` instead: dropping horizontal overflow handling here entirely is the
+    // only fix that actually works, at the cost of the matrix overflowing the PAGE horizontally
+    // on a very narrow viewport with many role columns — the same tradeoff UserRolesTab.jsx's
+    // own table already accepts.
+    <div data-testid="RolesAccessMatrix">
       <table className="w-full text-sm">
         {/* Sticky column headers, mirroring UserRolesTab.jsx's `<thead>` (same `sticky top-0
-            z-10 bg-card` pattern) — see the wrapper's own comment above for why `overflow-y-
-            visible` had to be added alongside this for it to actually take effect. */}
+            z-10 bg-card` pattern) — see the wrapper's own comment above for why it has no
+            overflow class of its own. */}
         <thead className="sticky top-0 z-10 bg-card">
           <tr className="border-b border-border/50">
             <th className="py-2.5 pr-4 text-left text-sm font-semibold text-foreground">
