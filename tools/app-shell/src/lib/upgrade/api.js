@@ -83,6 +83,10 @@ export async function createBillingPurchase(fetchImpl, baseUrl, token, input = {
     body: JSON.stringify({
       action: input.action || 'productive-tenant',
       upgradeAction: input.upgradeAction || 'create-productive',
+      // Required by the server, which has no default plan and no fallback price (ETP-5046).
+      // Always a catalog KEY, never a price: pricing is server-owned and the browser has no
+      // field that could influence it.
+      ...(input.planKey ? { planKey: input.planKey } : {}),
       ...(input.clientName ? { clientName: input.clientName } : {}),
       ...(input.language ? { language: input.language } : {}),
       ...(input.countryCode ? { countryCode: input.countryCode } : {}),
