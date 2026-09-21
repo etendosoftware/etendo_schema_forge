@@ -268,6 +268,13 @@ export default function ConfirmInOutModal({
               onApply={rectify.setSelectedIds}
               loading={rectify.loading}
               isEmpty={rectify.isEmpty}
+              selectedInvoices={rectify.selectedInvoices}
+              search={rectify.search}
+              onSearchChange={rectify.setSearch}
+              onReachBottom={rectify.loadMore}
+              loadingMore={rectify.loadingMore}
+              loadError={rectify.loadError}
+              onRetry={rectify.retry}
               idPrefix="confirm-modal-rectify" />
           )}
 

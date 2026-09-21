@@ -20568,7 +20568,6 @@
     "backendError.swiftRequired": "Para generar la Cuenta Mostrada con Código SWIFT es necesario introducir un Código SWIFT y el Número de Cuenta Genérica",
     "backendError.invalidAccountBpAndGroup": "No se pudo encontrar una cuenta contable necesaria para contabilizar el documento. Revisar la configuración contable del esquema contable, del producto y de la categoría de tercero. (Documento de {bp}, categoría {group})",
     "backendError.invalidAccountBpOnly": "No se pudo encontrar una cuenta contable necesaria para contabilizar el documento. Revisar la configuración contable del esquema contable, del producto y de la categoría de tercero. (Documento de {bp})",
-    "backendError.invoiceLineAlreadyInvoiced": "El albarán {docNo} no se puede facturar: la cantidad a facturar ({invoiced}) supera la cantidad pendiente ({pending}). Puede que ya esté facturado en otro documento.",
     "backendError.insufficientStockLine": "La cantidad ingresada ({requested}) supera el stock disponible de {product} en {warehouse} ({available} unidades).",
     "backendError.insufficientStockProcess": "Este movimiento no se puede procesar: Las línea(s) de {products} superan el stock disponible del almacén origen: {details}",
     "backendError.zeroOrNegativeQtyProcess": "Este movimiento no se puede procesar: la(s) línea(s) de {products} tienen una cantidad cero o negativa.",
@@ -25020,11 +25019,13 @@
     "invoiceCreatedAndConfirmed": "creada y confirmada",
     "rectifySearchPlaceholder": "Buscar por nº de factura o contacto…",
     "rectifySelectedCount": "{count} seleccionadas",
-    "rectifySuggestedBadge": "Detectada",
     "rectifyNoMatches": "Ninguna factura coincide con la búsqueda.",
     "rectifyMoreHidden": "{count} más — afina la búsqueda para verlas.",
     "rectifySelectInvoices": "Seleccionar facturas a rectificar…",
-    "rectifyChangeSelection": "Cambiar selección"
+    "rectifyChangeSelection": "Cambiar selección",
+    "couldNotLoadInvoicesToRectify": "No se pudieron cargar las facturas a rectificar.",
+    "rectifyLinkedBadge": "Relacionada",
+    "soGenerateDocsImplied": "Documento a generar"
   },
   "menus": {
     "Goods Movement": {

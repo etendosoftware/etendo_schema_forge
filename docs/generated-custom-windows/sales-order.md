@@ -518,3 +518,27 @@ draft the flow no longer produces.
 - `CreateDraftInvoiceHandlerTest.java` and `NeoInvoiceSupportTest.java` were extended for the create-and-confirm flow.
 - `AbstractInvoiceHeaderHandlerTest.java`'s 131 tests pass unmodified — `completeInvoiceIfNeeded` keeps its guard and delegates to the new service.
 - `artifacts/sales-order/custom/__tests__/OrderCreateInvoice.test.js` was adapted rather than extended: the Step-3 error-path test now stubs `translateBackendError` as identity, proving the raw backend message still survives end to end through the new wrapping (the mapping table itself is covered by `backendErrors.test.js`). Nothing asserts the resulting document status — the confirmed-not-draft outcome has no frontend coverage on this window.
+
+### "Gestionar documentos" — the sole pending action is implied (ETP-5381)
+
+On a COMPLETED order, `CreateDocsModal` offers a card per still-pending action (create
+shipment/receipt, create invoice). When **both** are pending it is a real choice and each card keeps
+its checkbox, with the primary button disabled until one is ticked.
+
+When only **one** remains, the tick was a confirmation of a confirmation — the dialog's only button
+already says "Crear", and there is nothing to choose between. So the sole pending action is implied:
+its card keeps the selected styling but drops the tick box and the click handler (a control that
+cannot change anything invites a click that does nothing), the section label switches from
+`soGenerateDocs` ("Generar documentos (opcional)") to `soGenerateDocsImplied` ("Documento a
+generar") because "(optional)" is only true while there is something to opt out of, and the button
+is live on open.
+
+The effective choice (`shipWanted`/`receiptWanted` and `invoiceWanted`) is threaded through
+`handleCreate`, both POST branches and `canCreate` — **not** only through the render. Hiding the
+checkbox alone would have enabled the button while the underlying state stayed `false`, so the
+action would have fired and done nothing.
+
+**Deliberately NOT applied to the confirm-the-order modal** in the same file: there both actions are
+genuinely optional and the button says "Confirmar", which is the distinction commit `a84798d2a`
+established when it removed the redundant checkbox from `CreateInvoiceConfirmModal`. Applying
+`implied` there would create documents the user never asked for.

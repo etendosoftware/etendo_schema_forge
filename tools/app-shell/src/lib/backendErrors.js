@@ -287,35 +287,6 @@ function matchAccountNotFound(msg) {
   return { bp, group };
 }
 
-// This skeleton comes from com.etendoerp.go's own `ETGO_InvoiceLineAlreadyInvoiced`
-// AD_MESSAGE ("The shipment @docNo@ cannot be invoiced: quantity to invoice
-// (@invoiced@) exceeds pending quantity (@pending@). The shipment may already be
-// invoiced in another document.") — en_US only, same no-translation-pack root cause
-// as the ACCOUNT_NOT_FOUND_PREFIX skeleton above (ETP-4831, sibling of ETP-4706).
-//
-// Same plain-string-slicing rationale as matchAccountNotFound: docNo/invoiced/pending
-// are free-form/user-influenced data, so no regex — linear-time slicing around fixed
-// delimiters instead of a backtracking-prone pattern (SonarQube javascript:S5852).
-const INVOICE_LINE_PREFIX = 'The shipment ';
-const INVOICE_LINE_MID1 = ' cannot be invoiced: quantity to invoice (';
-const INVOICE_LINE_MID2 = ') exceeds pending quantity (';
-const INVOICE_LINE_SUFFIX = '). The shipment may already be invoiced in another document.';
-
-function matchInvoiceLineAlreadyInvoiced(msg) {
-  if (!msg.startsWith(INVOICE_LINE_PREFIX) || !msg.endsWith(INVOICE_LINE_SUFFIX)) return null;
-  const middle = msg.slice(INVOICE_LINE_PREFIX.length, -INVOICE_LINE_SUFFIX.length);
-  const mid1Idx = middle.indexOf(INVOICE_LINE_MID1);
-  if (mid1Idx === -1) return null;
-  const docNo = middle.slice(0, mid1Idx);
-  const afterMid1 = middle.slice(mid1Idx + INVOICE_LINE_MID1.length);
-  const mid2Idx = afterMid1.indexOf(INVOICE_LINE_MID2);
-  if (mid2Idx === -1) return null;
-  const invoiced = afterMid1.slice(0, mid2Idx);
-  const pending = afterMid1.slice(mid2Idx + INVOICE_LINE_MID2.length);
-  if (!docNo || !invoiced || !pending) return null;
-  return { docNo, invoiced, pending };
-}
-
 // StockAvailabilityGuard.java (com.etendoerp.go — ETP-5037), `ETGO_InsufficientStockLine`
 // AD_MESSAGE — raised by GoodsMovementLineHandler when a Goods Movement line's quantity
 // exceeds on-hand stock at the selected source storage bin. en_US only, same no-translation-
@@ -730,7 +701,6 @@ function matchIbanCountryLengthMismatch(msg) {
  * to two different keys, and omits a param, depending on what it found.
  */
 const PARAMETERIZED_MATCHERS = [
-  [matchInvoiceLineAlreadyInvoiced, 'backendError.invoiceLineAlreadyInvoiced'],
   [matchInsufficientStockLine, 'backendError.insufficientStockLine'],
   [matchInsufficientStockProcess, 'backendError.insufficientStockProcess'],
   [matchZeroOrNegativeQtyProcess, 'backendError.zeroOrNegativeQtyProcess'],

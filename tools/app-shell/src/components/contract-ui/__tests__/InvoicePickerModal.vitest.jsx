@@ -30,6 +30,20 @@ const BASE = {
 const optionIds = () => [...document.body.querySelectorAll('[data-testid^="invoice-picker-option-"]')]
   .map(node => node.getAttribute('data-testid'));
 
+// jsdom has no layout, so scroll geometry has to be installed on the node by hand.
+// defineProperty rather than fireEvent's `target` option: clientHeight/scrollHeight are
+// getter-only on Element.prototype, and assigning to them throws inside an ES module.
+const scrollTo = (node, { scrollTop, clientHeight, scrollHeight }) => {
+  Object.defineProperty(node, 'scrollTop', { value: scrollTop, configurable: true });
+  Object.defineProperty(node, 'clientHeight', { value: clientHeight, configurable: true });
+  Object.defineProperty(node, 'scrollHeight', { value: scrollHeight, configurable: true });
+  fireEvent.scroll(node);
+};
+// Inside the component's 60px margin — "the user is arriving at the end".
+const scrollToBottom = (node) => scrollTo(node, { scrollTop: 640, clientHeight: 400, scrollHeight: 1050 });
+// Comfortably outside it.
+const scrollFarFromBottom = (node) => scrollTo(node, { scrollTop: 100, clientHeight: 400, scrollHeight: 1050 });
+
 const rowOf = (id) => screen.getByTestId(`invoice-picker-option-${id}`);
 // The interactive control nested inside the clickable row — the path a user actually aims at,
 // and the one no test covered while it was broken.
@@ -181,6 +195,39 @@ describe('InvoicePickerModal — multiple select (the return-document flow)', ()
     expect(optionIds()[0]).toBe('invoice-picker-option-inv-3');
     expect(screen.getByTestId('invoice-picker-suggested-inv-3')).toBeInTheDocument();
     expect(screen.queryByTestId('invoice-picker-suggested-inv-1')).not.toBeInTheDocument();
+  });
+
+  // The badge is now the ONLY thing telling the user what the chain found: with two or more
+  // detected invoices the hook deliberately preselects nothing (see
+  // RectifiableInvoicePicker.vitest.jsx), so a row that stops being badged stops being
+  // distinguishable from any other invoice in the list — and the user is left choosing blind.
+  it('labels the badge with rectifyLinkedBadge — "Related", not the old "Detected"', () => {
+    render(<InvoicePickerModal {...MULTI} />);
+    // The mocked useUI echoes the key, so this pins the KEY the component asks for. `Detected`
+    // read as an assertion the app had already made a decision; `Related` states the fact — this
+    // invoice is in the chain — and leaves the decision where it belongs.
+    expect(screen.getByTestId('invoice-picker-suggested-inv-3')).toHaveTextContent('rectifyLinkedBadge');
+    // The rename must be complete: a surviving `ui('rectifySuggestedBadge')` call would render
+    // the raw identifier, since no locale ships that key any more.
+    expect(screen.queryByText('rectifySuggestedBadge')).not.toBeInTheDocument();
+  });
+
+  it('badges EVERY detected row, not just the first — ambiguity is shown, not resolved', () => {
+    const twoDetected = [
+      { ...INVOICES[0], suggested: true },
+      INVOICES[1],
+      INVOICES[2],
+    ];
+    render(<InvoicePickerModal {...MULTI} invoices={twoDetected} />);
+    // One order billed across two invoices: both are genuinely in the chain, neither is picked
+    // for the user, so both have to carry the badge or the second one is invisible as a candidate.
+    expect(screen.getByTestId('invoice-picker-suggested-inv-1')).toHaveTextContent('rectifyLinkedBadge');
+    expect(screen.getByTestId('invoice-picker-suggested-inv-3')).toHaveTextContent('rectifyLinkedBadge');
+    expect(screen.queryByTestId('invoice-picker-suggested-inv-2')).not.toBeInTheDocument();
+    // Badged, and still nothing preselected: the badge is information, not a selection.
+    for (const id of ['inv-1', 'inv-2', 'inv-3']) {
+      expect(rowOf(id)).toHaveAttribute('data-selected', 'false');
+    }
   });
 
   it('reports the draft size', () => {
@@ -396,29 +443,167 @@ describe('InvoicePickerModal — row rendering', () => {
   });
 });
 
-describe('InvoicePickerModal — overflow', () => {
+// ETP-5381 — these used to guard a hard cap: 5 rows plus a "+N more, refine the search" hint,
+// which left every invoice past the fifth reachable only by guessing a search term. The cap is
+// gone, so the same intent — "both callers see the SAME list, and nothing is silently
+// unreachable" — is now expressed as a page size plus scroll-driven growth.
+describe('InvoicePickerModal — paging (uncontrolled)', () => {
   const many = (n) => Array.from({ length: n }, (_, i) => ({ id: `inv-${i}`, documentNo: `FAC-${i}` }));
 
-  it('caps at 5 rows by default and announces the remainder', () => {
-    render(<InvoicePickerModal {...BASE} invoices={many(9)} />);
-    expect(optionIds()).toHaveLength(5);
-    expect(screen.getByText(/rectMoreInvoicesHint/)).toHaveTextContent('4');
-  });
-
-  it('honours a wider cap when a caller asks for one', () => {
-    render(<InvoicePickerModal {...BASE} invoices={many(57)} maxVisible={50} />);
-    expect(optionIds()).toHaveLength(50);
-    expect(screen.getByText(/rectMoreInvoicesHint/)).toHaveTextContent('7');
-  });
-
-  it('counts the overflow after the currentId row is removed, not before', () => {
-    render(<InvoicePickerModal {...BASE} invoices={many(6)} maxVisible={5} currentId="inv-0" />);
-    expect(optionIds()).toHaveLength(5);
+  it('renders one page of 20 rows by default, with no truncation notice', () => {
+    render(<InvoicePickerModal {...BASE} invoices={many(57)} />);
+    expect(optionIds()).toHaveLength(20);
+    // The old "+N more" hint is gone for good: it is what made the rest of the list a guess.
     expect(screen.queryByText(/rectMoreInvoicesHint/)).not.toBeInTheDocument();
   });
 
-  it('says nothing about hidden rows when everything fits', () => {
+  it('honours a caller-supplied page size', () => {
+    render(<InvoicePickerModal {...BASE} invoices={many(9)} pageSize={5} />);
+    expect(optionIds()).toHaveLength(5);
+  });
+
+  it('grows by one page every time the user reaches the bottom, until the whole set is rendered', () => {
+    render(<InvoicePickerModal {...BASE} invoices={many(12)} pageSize={5} />);
+    const list = screen.getByTestId('invoice-picker-list');
+    expect(optionIds()).toHaveLength(5);
+    scrollToBottom(list);
+    expect(optionIds()).toHaveLength(10);
+    scrollToBottom(list);
+    expect(optionIds()).toHaveLength(12);
+    // Nothing left to grow into: the last row of the set stays the last row.
+    scrollToBottom(list);
+    expect(optionIds()).toHaveLength(12);
+  });
+
+  it('does not grow while the user is still far from the bottom', () => {
+    render(<InvoicePickerModal {...BASE} invoices={many(12)} pageSize={5} />);
+    scrollFarFromBottom(screen.getByTestId('invoice-picker-list'));
+    expect(optionIds()).toHaveLength(5);
+  });
+
+  it('renders the whole set in one page when it fits', () => {
     render(<InvoicePickerModal {...BASE} />);
-    expect(screen.queryByText(/rectMoreInvoicesHint/)).not.toBeInTheDocument();
+    expect(optionIds()).toEqual([
+      'invoice-picker-option-inv-1',
+      'invoice-picker-option-inv-2',
+      'invoice-picker-option-inv-3',
+    ]);
+  });
+
+  it('pages what is left after the currentId row is removed, not before', () => {
+    render(<InvoicePickerModal {...BASE} invoices={many(6)} pageSize={5} currentId="inv-0" />);
+    // 6 candidates minus the record itself is exactly one page — so no growth is needed.
+    expect(optionIds()).toHaveLength(5);
+    expect(optionIds()).not.toContain('invoice-picker-option-inv-0');
+  });
+
+  it('collapses back to the first page when the user types', () => {
+    render(<InvoicePickerModal {...BASE} invoices={many(12)} pageSize={5} />);
+    const list = screen.getByTestId('invoice-picker-list');
+    scrollToBottom(list);
+    expect(optionIds()).toHaveLength(10);
+    // Without the reset, a narrowed search would keep rendering every row it had grown to and
+    // the load-more path would never be exercised again.
+    fireEvent.change(screen.getByTestId('invoice-picker-search'), { target: { value: 'FAC-1' } });
+    expect(optionIds()).toEqual(['invoice-picker-option-inv-1', 'invoice-picker-option-inv-10', 'invoice-picker-option-inv-11']);
+  });
+
+  it('never asks the caller for more rows — the set it holds is the whole set', () => {
+    const onReachBottom = vi.fn();
+    render(<InvoicePickerModal {...BASE} invoices={many(12)} pageSize={5} onReachBottom={onReachBottom} />);
+    scrollToBottom(screen.getByTestId('invoice-picker-list'));
+    expect(onReachBottom).not.toHaveBeenCalled();
+    expect(optionIds()).toHaveLength(10);
+  });
+});
+
+// The mode the return-document flow runs in: the caller owns the search and the paging, and hands
+// down one server batch at a time.
+describe('InvoicePickerModal — server-driven paging', () => {
+  const SERVER = {
+    ...BASE,
+    multiple: true,
+    search: '',
+    onSearchChange: vi.fn(),
+    onReachBottom: vi.fn(),
+  };
+
+  it('forwards every keystroke to the caller instead of filtering its own rows', () => {
+    const onSearchChange = vi.fn();
+    render(<InvoicePickerModal {...SERVER} onSearchChange={onSearchChange} />);
+    fireEvent.change(screen.getByTestId('invoice-picker-search'), { target: { value: 'FAC-002' } });
+    expect(onSearchChange).toHaveBeenCalledWith('FAC-002');
+    // THE regression that matters: a local filter over one batch would claim "no matches" for an
+    // invoice the server has but has not sent yet. Every row handed down must stay on screen
+    // until the caller replaces the batch.
+    expect(optionIds()).toHaveLength(3);
+    expect(screen.queryByTestId('invoice-picker-no-matches')).not.toBeInTheDocument();
+  });
+
+  it('renders exactly the batch it was handed, even when nothing in it matches the query', () => {
+    render(<InvoicePickerModal {...SERVER} search="nothing-like-this" />);
+    // In the server's order, verbatim: the suggested-first nicety is a no-query affordance, and
+    // once the user is searching the backend's ranking is the one to respect.
+    expect(optionIds()).toEqual([
+      'invoice-picker-option-inv-1',
+      'invoice-picker-option-inv-2',
+      'invoice-picker-option-inv-3',
+    ]);
+    expect(screen.queryByTestId('invoice-picker-no-matches')).not.toBeInTheDocument();
+  });
+
+  it('shows the caller’s search text rather than keeping its own', () => {
+    render(<InvoicePickerModal {...SERVER} search="globex" />);
+    expect(screen.getByTestId('invoice-picker-search')).toHaveValue('globex');
+  });
+
+  it('reports no matches when the caller hands down an empty batch', () => {
+    render(<InvoicePickerModal {...SERVER} invoices={[]} search="zzz" />);
+    expect(screen.getByTestId('invoice-picker-no-matches')).toBeInTheDocument();
+  });
+
+  it('asks the caller for the next batch when the list reaches the bottom', () => {
+    const onReachBottom = vi.fn();
+    render(<InvoicePickerModal {...SERVER} onReachBottom={onReachBottom} />);
+    scrollToBottom(screen.getByTestId('invoice-picker-list'));
+    expect(onReachBottom).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not ask while the user is still far from the bottom', () => {
+    const onReachBottom = vi.fn();
+    render(<InvoicePickerModal {...SERVER} onReachBottom={onReachBottom} />);
+    scrollFarFromBottom(screen.getByTestId('invoice-picker-list'));
+    expect(onReachBottom).not.toHaveBeenCalled();
+  });
+
+  it('survives a caller that pages without supplying onReachBottom', () => {
+    render(<InvoicePickerModal {...SERVER} onReachBottom={undefined} />);
+    expect(() => scrollToBottom(screen.getByTestId('invoice-picker-list'))).not.toThrow();
+  });
+
+  it('never grows its own slice — the caller decides how many rows exist', () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({ id: `inv-${i}`, documentNo: `FAC-${i}` }));
+    const onReachBottom = vi.fn();
+    render(<InvoicePickerModal {...SERVER} invoices={many} pageSize={5} onReachBottom={onReachBottom} />);
+    expect(optionIds()).toHaveLength(30);
+    scrollToBottom(screen.getByTestId('invoice-picker-list'));
+    expect(optionIds()).toHaveLength(30);
+    expect(onReachBottom).toHaveBeenCalledTimes(1);
+  });
+
+  it('announces the batch in flight instead of stopping dead at the last row', () => {
+    const { rerender } = render(<InvoicePickerModal {...SERVER} loadingMore={false} />);
+    expect(screen.queryByTestId('invoice-picker-loading-more')).not.toBeInTheDocument();
+
+    rerender(<InvoicePickerModal {...SERVER} loadingMore={true} />);
+    expect(screen.getByTestId('invoice-picker-loading-more')).toHaveTextContent('loading');
+    // Not the whole-list spinner: the rows already fetched must stay visible under it.
+    expect(optionIds()).toHaveLength(3);
+  });
+
+  it('honours the idPrefix on the list and the loading-more line', () => {
+    render(<InvoicePickerModal {...SERVER} idPrefix="rect-tab" loadingMore={true} />);
+    expect(screen.getByTestId('rect-tab-list')).toBeInTheDocument();
+    expect(screen.getByTestId('rect-tab-loading-more')).toBeInTheDocument();
   });
 });

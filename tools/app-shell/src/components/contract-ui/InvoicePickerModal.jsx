@@ -22,9 +22,15 @@ import { Checkbox } from '@/components/ui/checkbox';
  * while the return flow reads the `rectifiableInvoices` action (`businessPartner`, plus a
  * `suggested` flag for the invoices detected from the return document's own chain).
  *
+ * <p><b>Infinite scroll, not truncation.</b> The list renders `pageSize` rows (20) and appends
+ * another `pageSize` each time the user scrolls to the bottom — no pager, no page buttons. It
+ * previously capped at 5 and printed a "+N more — refine the search" hint, which left every invoice
+ * past the fifth reachable only by guessing a search term.
+ *
  * @param zIndex stacking level — defaults to the app's modal tier (50). Pass 60 when opening this
  *     on top of another modal, which is the return-document case; the walkthrough overlay owns 70
  *     and must stay above (ETP-5108).
+ * @param pageSize rows per batch — the initial render and the size of each scroll-triggered append.
  */
 export default function InvoicePickerModal({
   invoices = [],
@@ -38,11 +44,28 @@ export default function InvoicePickerModal({
   title,
   zIndex = 50,
   idPrefix = 'invoice-picker',
-  maxVisible = 5,
+  pageSize = 20,
+  search: controlledSearch,
+  onSearchChange,
+  onReachBottom,
+  loadingMore = false,
 }) {
   const ui = useUI();
-  const [search, setSearch] = useState('');
+  const [localSearch, setLocalSearch] = useState('');
+  const [visibleCount, setVisibleCount] = useState(pageSize);
   const [draft, setDraft] = useState(selectedIds);
+
+  // Two modes, and the difference is WHERE the set lives.
+  //
+  // Controlled (`onSearchChange` given): the caller pages and searches against the server and hands
+  // us one batch at a time. We must NOT filter locally — the rows we hold are a window onto a
+  // larger set, so a local filter would hide rows the server already matched and, worse, report
+  // "no matches" for an invoice sitting in a batch nobody fetched.
+  //
+  // Uncontrolled: the caller handed us the whole set, so searching and growing the rendered slice
+  // are both ours to do. This is the transitional mode for the Rectificaciones tab.
+  const serverDriven = typeof onSearchChange === 'function';
+  const search = serverDriven ? (controlledSearch ?? '') : localSearch;
 
   const toggleDraft = (id) =>
     setDraft(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
@@ -56,20 +79,43 @@ export default function InvoicePickerModal({
   const partner = (inv) => inv['businessPartner$_identifier'] || inv.businessPartner || '';
   const amount = (inv) => inv.grandTotalAmount ?? inv.grandTotalAmt;
 
-  const { filtered, hiddenCount } = useMemo(() => {
+  // ETP-5381: infinite scroll, not truncation. This used to `slice(0, maxVisible)` at 5 and print a
+  // "+N more — refine the search" hint, which made every invoice past the fifth reachable ONLY by
+  // guessing a search term. Now the list grows by `pageSize` each time the user reaches the bottom.
+  //
+  // `visibleCount` is clamped against the row count on render rather than tracked precisely: the
+  // set shrinks under us whenever the search narrows, and a stale count would ask for rows that no
+  // longer exist. Slicing past the end is harmless, so the clamp only matters for `hasMore`.
+  const { pageRows, moreLocally } = useMemo(() => {
     let visible = invoices.filter(inv => inv.id !== currentId);
     const q = search.trim().toLowerCase();
-    if (q) {
+    if (q && !serverDriven) {
       visible = visible.filter(inv => `${label(inv)} ${partner(inv)}`.toLowerCase().includes(q));
-    } else if (multiple) {
+    } else if (!q && multiple) {
       // No query: lead with the invoices the backend detected from the return document's chain.
       visible = [...visible].sort((a, b) => Number(Boolean(b.suggested)) - Number(Boolean(a.suggested)));
     }
+    if (serverDriven) {
+      return { pageRows: visible, moreLocally: false };
+    }
     return {
-      filtered: visible.slice(0, maxVisible),
-      hiddenCount: Math.max(0, visible.length - maxVisible),
+      pageRows: visible.slice(0, visibleCount),
+      moreLocally: visible.length > visibleCount,
     };
-  }, [invoices, search, currentId, multiple, maxVisible]);
+  }, [invoices, search, currentId, multiple, visibleCount, serverDriven]);
+
+  // Reaching the bottom means "give me more": the next network batch when the caller owns the set,
+  // or the next rendered slice when we do. The 60px margin fires it a row early so the rows are
+  // there by the time the user arrives rather than after a visible stall.
+  const onListScroll = (e) => {
+    const { scrollTop, clientHeight, scrollHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop - clientHeight >= 60) return;
+    if (serverDriven) {
+      onReachBottom?.();
+    } else if (moreLocally) {
+      setVisibleCount(c => c + pageSize);
+    }
+  };
 
   const fmtDate = (d) => formatCalendarDate(d, 'es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
   // Through the canonical helper, never a hand-rolled toLocaleString: CLAUDE.md makes that
@@ -138,7 +184,7 @@ export default function InvoicePickerModal({
                 data-testid={`${idPrefix}-suggested-${inv.id}`}
                 style={{ fontSize: 9, fontWeight: 500, padding: '1px 6px', borderRadius: 999, background: 'var(--status-info-bg)', color: 'var(--status-info-fg)', whiteSpace: 'nowrap' }}
               >
-                {ui('rectifySuggestedBadge')}
+                {ui('rectifyLinkedBadge')}
               </span>
             )}
           </div>
@@ -156,10 +202,10 @@ export default function InvoicePickerModal({
   let listBody;
   if (loading) {
     listBody = <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', padding: '24px 0', textAlign: 'center' }}>{ui('loading')}</p>;
-  } else if (filtered.length === 0) {
+  } else if (pageRows.length === 0) {
     listBody = <p data-testid={`${idPrefix}-no-matches`} style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', padding: '24px 0', textAlign: 'center' }}>{ui('rectNoInvoices')}</p>;
   } else {
-    listBody = filtered.map(invoiceRow);
+    listBody = pageRows.map(invoiceRow);
   }
 
   return (
@@ -181,17 +227,35 @@ export default function InvoicePickerModal({
         </div>
         <div style={{ padding: '10px 16px 0' }}>
           <input
-            type="text" value={search} onChange={e => setSearch(e.target.value)}
+            type="text" value={search}
+            // Collapse back to the first slice on every keystroke: after scrolling deep into a wide
+            // list, a narrower search would otherwise keep rendering every row it had already grown
+            // to, so the "load more" behaviour would never be exercised again. In server-driven
+            // mode the caller resets its own window, so we only forward the text.
+            onChange={e => {
+              if (serverDriven) { onSearchChange(e.target.value); return; }
+              setLocalSearch(e.target.value);
+              setVisibleCount(pageSize);
+            }}
             placeholder={ui('rectSearchInvoice')} autoFocus
             data-testid={`${idPrefix}-search`}
             style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '7px 10px', border: '0.5px solid hsl(var(--border))', borderRadius: 6, outline: 'none', color: 'hsl(var(--foreground))' }}
           />
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+        <div
+          data-testid={`${idPrefix}-list`}
+          onScroll={onListScroll}
+          style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}
+        >
           {listBody}
-          {hiddenCount > 0 && (
-            <p data-testid={`${idPrefix}-more-hidden`} style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '8px 16px 4px', textAlign: 'center' }}>
-              +{hiddenCount} {ui('rectMoreInvoicesHint')}
+          {loadingMore && (
+            // Without this the list simply stops at the last row while the next batch is in
+            // flight, which reads as "that is all there is" rather than "more is coming".
+            <p
+              data-testid={`${idPrefix}-loading-more`}
+              style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '10px 0', textAlign: 'center' }}
+            >
+              {ui('loading')}
             </p>
           )}
         </div>

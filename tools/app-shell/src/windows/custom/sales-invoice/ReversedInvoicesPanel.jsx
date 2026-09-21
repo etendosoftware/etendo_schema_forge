@@ -116,42 +116,109 @@ function InfoTooltip({ text }) {
 // multi-select mode (ETP-5381). Only the fetch stays here, because this tab reads the NEO header
 // entity directly while the return flow reads its own action endpoint.
 //
-// Candidates: COMPLETED invoices of the same flow (sales or purchase). No business-partner filter
-// — the C_Invoice_Reverse DB trigger enforces same-BP only when applicable (Verifactu orgs allow
-// cross-BP rectifications), and any rejection is surfaced via the save error message.
-// NEO ignores arbitrary query-param filters, so all filtering is client-side.
-function InvoicePickerModal({ apiBaseUrl, token, currentId, onSelect, onClose }) {
+// Candidates: COMPLETED invoices of the same flow (sales or purchase) AND the same business
+// partner as the invoice being rectified.
+//
+// ETP-5381: the business-partner filter is NEW, and it replaces a comment here that argued the
+// opposite — "the C_Invoice_Reverse DB trigger enforces same-BP only when applicable (Verifactu
+// orgs allow cross-BP rectifications), and any rejection is surfaced via the save error message".
+// That was wrong. The trigger (src-db/database/model/triggers/C_INVOICE_REVERSE_TRG.xml, whose own
+// title is "Check the introduced BP is the same as the Invoice") raises @NotEqualBPartner@ from an
+// UNCONDITIONAL check — Openbravo core, no Verifactu branch. So the unfiltered list offered rows
+// the database always rejects and the user only found out on save. The same fix landed on the
+// return-document side in ReturnShipmentUtils#fetchSelectableInvoices. Do NOT reinstate the old
+// behaviour on the strength of the old comment.
+// Paged server-side (ETP-5381), the same way the list windows page through `useEntity`: one batch
+// of PAGE_SIZE rows, another appended when the user reaches the bottom. `criteria` carries the
+// partner and the CO filter so the SERVER narrows the set — filtering a fetched page in the browser
+// would drop rows the server already matched, and, worse, report "no matches" for an invoice
+// sitting in a batch nobody asked for.
+const RECT_PAGE_SIZE = 80;
+
+// Search rides in the SAME criteria array rather than a bespoke query parameter. An earlier
+// revision of this invented `_textFilter`, which NEO does not implement — it would have been
+// accepted and ignored, so typing would have narrowed nothing while looking like it worked.
+// `contains` on documentNo is enough here precisely because the list is already one partner:
+// matching the partner name too would match every row.
+const rectCriteria = (bpId, query) => encodeURIComponent(JSON.stringify([
+  { fieldName: 'documentStatus', operator: 'equals', value: 'CO' },
+  ...(bpId ? [{ fieldName: 'businessPartner', operator: 'equals', value: bpId }] : []),
+  ...(query ? [{ fieldName: 'documentNo', operator: 'contains', value: query }] : []),
+]));
+
+function InvoicePickerModal({ apiBaseUrl, token, currentId, bpId, multiple, selectedIds, onSelect, onApply, onClose }) {
   const apiFetch = useApiFetch(apiBaseUrl);
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
+  const reqRef = useRef(0);
+  const startRowRef = useRef(0);
 
   useEffect(() => {
+    const id = setTimeout(() => setQuery(search.trim()), 250);
+    return () => clearTimeout(id);
+  }, [search]);
+
+  const fetchBatch = useCallback(async (startRow, { append }) => {
     if (!apiBaseUrl || !token) return;
-    // apiBaseUrl = /sws/neo/{spec} — data lives at {spec}/header
-    apiFetch('/header?_startRow=0&_endRow=500')
-      .then(r => r.ok ? r.json() : null)
-      .then(json => {
-        // NEO does not expose `updated` — sort by invoiceDate desc, then
-        // documentNo desc as tie-breaker (higher number = created later)
-        const rows = parseRows(json)
-          .filter(inv => inv.documentStatus === 'CO')
-          .sort((a, b) =>
-            (new Date(b.invoiceDate ?? 0) - new Date(a.invoiceDate ?? 0))
-            || String(b.documentNo ?? '').localeCompare(String(a.documentNo ?? ''), undefined, { numeric: true }));
-        setInvoices(rows);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, [apiBaseUrl, token, apiFetch]);
+    const seq = ++reqRef.current;
+    if (append) setLoadingMore(true); else setLoading(true);
+    try {
+      // apiBaseUrl = /sws/neo/{spec} — data lives at {spec}/header
+      const qs = new URLSearchParams({
+        _startRow: String(startRow),
+        _endRow: String(startRow + RECT_PAGE_SIZE - 1),
+        _sortBy: 'documentNo desc',
+      });
+      const res = await apiFetch(`/header?${qs}&criteria=${rectCriteria(bpId, query)}`);
+      if (seq !== reqRef.current) return;
+      const rows = res.ok ? parseRows(await res.json()) : [];
+      if (seq !== reqRef.current) return;
+      setInvoices(prev => (append ? [...prev, ...rows] : rows));
+      // Same short-batch signal useEntity reads — no second COUNT(*) per scroll.
+      setHasMore(rows.length >= RECT_PAGE_SIZE);
+      startRowRef.current = startRow + rows.length;
+    } catch {
+      // Stop paging rather than retrying into a loop; the rows already fetched stay usable.
+      setHasMore(false);
+    } finally {
+      if (seq === reqRef.current) { setLoading(false); setLoadingMore(false); }
+    }
+  }, [apiFetch, apiBaseUrl, token, bpId, query]);
+
+  useEffect(() => { startRowRef.current = 0; fetchBatch(0, { append: false }); }, [fetchBatch]);
+
+  const loadMore = useCallback(() => {
+    if (!hasMore || loadingMore || loading) return;
+    fetchBatch(startRowRef.current, { append: true });
+  }, [hasMore, loadingMore, loading, fetchBatch]);
 
   return (
     <SharedInvoicePickerModal
       invoices={invoices}
       loading={loading}
       currentId={currentId}
+      multiple={multiple}
+      selectedIds={selectedIds}
       onSelect={onSelect}
+      // A single pick still deserves its document number on the field — "1 selected" tells the user
+      // less than "10000094" does. The shared modal only hands back ids, and only this wrapper holds
+      // the rows, so the label is resolved here rather than pushing row shape into the caller.
+      onApply={onApply ? (ids) => {
+        const only = ids.length === 1 ? invoices.find(inv => inv.id === ids[0]) : null;
+        onApply(ids, only ? (only.documentNo || only._identifier || only.id) : '');
+      } : undefined}
       onClose={onClose}
-      maxVisible={5}
+      // Server-driven: hands over one batch at a time and asks for the next on scroll. No
+      // `suggested` flag reaches these rows — this tab has no return document and therefore no
+      // chain to detect, so nothing is ever badged "related" here.
+      search={search}
+      onSearchChange={setSearch}
+      onReachBottom={loadMore}
+      loadingMore={loadingMore}
     />
   );
 }
@@ -307,6 +374,7 @@ function ExpandedForm({
 
   const invoiceIdentifier = lineData?.['reversedInvoice$_identifier'] ?? '';
   const ref = parseReversedRef(lineData);
+  const draftSelectedCount = lineData?._reversedInvoiceIds?.length ?? 0;
 
   // Formatted display: "10000067 · 05/06/2026 · 2.854,20"
   const invoiceDisplayParts = [
@@ -316,18 +384,39 @@ function ExpandedForm({
   ].filter(Boolean);
   const invoiceDisplay = invoiceDisplayParts.join(' · ');
 
-  // Picker used by both the draft row and an existing (editable) row. The draft
-  // row does not persist immediately; the existing row PATCHes on select.
+  // Picker used by both the draft row and an existing (editable) row. The draft row does not
+  // persist immediately; the existing row PATCHes on select.
+  //
+  // ETP-5381 — multi-select on the DRAFT only, and that asymmetry is the point. A row in this tab
+  // holds exactly one `reversedInvoice`, so "select several" cannot mean "put several in this
+  // field" — it means CREATE SEVERAL ROWS, which is only meaningful while adding. Editing an
+  // existing row is still picking one invoice to replace one invoice; offering checkboxes there
+  // would imply it could fan out into new rows, which it cannot.
   const picker = (persistOnSelect) => pickerOpen && (
     <InvoicePickerModal
       apiBaseUrl={apiBaseUrl}
       token={token}
       currentId={recordId}
-      onSelect={(id, label) => {
+      bpId={bpId}
+      multiple={isDraft}
+      selectedIds={isDraft ? (lineData?._reversedInvoiceIds ?? []) : []}
+      onApply={isDraft ? (ids, soleLabel) => {
+        // The first id keeps feeding `reversedInvoice` so every existing consumer (the save
+        // guard, the payload, the display) keeps working unchanged; the full list rides
+        // alongside and is what handleSaveNewLine fans out over.
+        onChange('_reversedInvoiceIds', ids);
+        onChange('reversedInvoice', ids[0] ?? null);
+        // Empty for a multi-selection — there is no single identifier to show, and the count
+        // stands in. For exactly one, the document number goes back in, or the field would read
+        // as "nothing selected" while Save is enabled.
+        onChange('reversedInvoice$_identifier', soleLabel || '');
+        setPickerOpen(false);
+      } : undefined}
+      onSelect={!isDraft ? (id, label) => {
         onChange('reversedInvoice', id);
         onChange('reversedInvoice$_identifier', label);
         if (persistOnSelect) onFieldSave?.('reversedInvoice', id);
-      }}
+      } : undefined}
       onClose={() => setPickerOpen(false)}
       data-testid="InvoicePickerModal__4395d6" />
   );
@@ -351,7 +440,12 @@ function ExpandedForm({
           className="flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-border-control bg-card px-3 text-sm hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30"
         >
           <span className={`truncate ${lineData?.reversedInvoice ? 'text-foreground' : 'text-muted-foreground'}`}>
-            {lineData?.['reversedInvoice$_identifier'] || 'Seleccionar...'}
+            {/* A multi-selection has no single identifier to show, so the count stands in — and it
+                has to say something, because an empty field next to a filled-in draft reads as
+                "nothing selected" and invites the user to pick again. */}
+            {draftSelectedCount > 1
+              ? ui('rectifySelectedCount', { count: draftSelectedCount })
+              : (lineData?.['reversedInvoice$_identifier'] || ui('rectifySelectInvoices'))}
           </span>
           <Search className="h-4 w-4 text-muted-foreground shrink-0" data-testid="Search__4395d6" />
         </button>
@@ -726,14 +820,28 @@ export default function ReversedInvoicesPanel({
         }
         parentId = savedHeader.id;
       }
-      // Strip the display-only identifier before POSTing the payload
+      // Strip the display-only identifier and the multi-select carrier before POSTing
       const payload = { ...newLine };
       delete payload['reversedInvoice$_identifier'];
-      const res = await apiFetch(`/reversedInvoices`, {
-        method: 'POST',
-        body: JSON.stringify({ invoice: parentId, ...payload }),
-      });
-      if (res.ok) {
+      delete payload._reversedInvoiceIds;
+      // ETP-5381 — one row PER selected invoice. A rectification row holds a single
+      // `reversedInvoice`, so a multi-selection fans out into several rows sharing the same AEAT349
+      // year/period/corrective values. Sequential on purpose, not Promise.all: the C_Invoice_Reverse
+      // trigger and the AEAT349 corrective rule both run per insert, and firing them concurrently
+      // would report whichever failed first while the others had already landed — leaving a partial
+      // set with no clear message. Sequential stops at the first refusal, so what the toast says
+      // matches what is on screen after `fetchLines()`.
+      const ids = (newLine._reversedInvoiceIds?.length ? newLine._reversedInvoiceIds
+        : [newLine.reversedInvoice]).filter(Boolean);
+      let res = null;
+      for (const invoiceId of ids) {
+        res = await apiFetch(`/reversedInvoices`, {
+          method: 'POST',
+          body: JSON.stringify({ invoice: parentId, ...payload, reversedInvoice: invoiceId }),
+        });
+        if (!res.ok) break;
+      }
+      if (res?.ok) {
         setNewLine({});
         setAddingLine(false);
         failedDraftRef.current = null;

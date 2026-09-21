@@ -21299,7 +21299,12 @@
     "recordNotFoundBody": "Este registro no existe o tu rol no tiene acceso a él. Revisá el enlace o volvé al listado.",
     "recordLoadFailedTitle": "No se pudo cargar el registro",
     "recordLoadFailedBody": "Hubo un problema al contactar con el servidor. Probá de nuevo o volvé al listado.",
-    "backToList": "Volver al listado"
+    "backToList": "Volver al listado",
+    "couldNotLoadInvoicesToRectify": "No se pudieron cargar las facturas a rectificar.",
+    "rectifyLinkedBadge": "Relacionada",
+    "soGenerateDocsImplied": "Documento a generar",
+    "rectifySelectedCount": "{count} seleccionadas",
+    "rectifySelectInvoices": "Seleccionar facturas a rectificar…"
   },
   "menus": {
     "Goods Movement": {
