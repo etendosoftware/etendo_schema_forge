@@ -121,3 +121,67 @@ describe('es_ES.json structural integrity', () => {
     assert.equal(esES.fields['Quantity']?.label, 'Cantidad');
   });
 });
+
+// ── ETP-5316: BACKEND_ERROR_KEY_MAP ↔ locale parity ─────────────────────────
+//
+// `BACKEND_ERROR_KEY_MAP` (backendErrors.js) maps an AD_MESSAGE search key to an i18n key, and
+// `translateByMessageKey` only accepts the result when `t(key) !== key`. So a map entry pointing
+// at a locale key that does not exist fails SILENTLY: the key route returns null, the text route
+// cannot match (the core sentence embeds per-document AD line numbers), and the user reads the
+// raw core sentence again — the exact symptom this ticket set out to remove, with nothing
+// failing anywhere. This guard binds the map to both shipped `genericLabels` dictionaries so a
+// new entry added without its two locale strings fails here instead.
+//
+// The map is module-private on purpose (it is an implementation detail of translateBackendError),
+// so it is read from the source text rather than imported.
+describe('BACKEND_ERROR_KEY_MAP locale parity (ETP-5316)', () => {
+  let mappedKeys;
+  let esES;
+  let enUS;
+
+  before(() => {
+    esES = JSON.parse(readFileSync(new URL('../es_ES.json', import.meta.url), 'utf8'));
+    enUS = JSON.parse(readFileSync(new URL('../en_US.json', import.meta.url), 'utf8'));
+
+    const src = readFileSync(new URL('../../lib/backendErrors.js', import.meta.url), 'utf8');
+    const block = src.match(/const BACKEND_ERROR_KEY_MAP = \{([\s\S]*?)\n\};/);
+    assert.ok(block, 'BACKEND_ERROR_KEY_MAP must exist in lib/backendErrors.js');
+    mappedKeys = [...block[1].matchAll(/:\s*'([^']+)'/g)].map((m) => m[1]);
+  });
+
+  it('parses a non-empty set of i18n keys out of the map (guards the guard)', () => {
+    assert.ok(mappedKeys.length >= 8,
+      `expected at least the 8 M_INOUT_POST entries, parsed ${mappedKeys.length}`);
+    assert.ok(mappedKeys.every((k) => k.startsWith('backendError.')),
+      `every mapped value must be a backendError.* key, got: ${mappedKeys.join(', ')}`);
+  });
+
+  for (const locale of ['en_US', 'es_ES']) {
+    it(`${locale} defines a non-empty genericLabels entry for every mapped key`, () => {
+      const labels = (locale === 'es_ES' ? esES : enUS).genericLabels ?? {};
+      const missing = mappedKeys.filter(
+        (k) => typeof labels[k] !== 'string' || labels[k].trim() === '',
+      );
+      assert.equal(missing.length, 0, `${locale} is missing: ${missing.join(', ')}`);
+    });
+  }
+
+  it('does not leave the Spanish entries as a verbatim copy of the English ones', () => {
+    // A copy-paste placeholder would satisfy the parity check above while still showing English
+    // to a Spanish tenant, which is treated as a bug (CLAUDE.md § i18n).
+    const untranslated = mappedKeys.filter(
+      (k) => esES.genericLabels[k] === enUS.genericLabels[k],
+    );
+    assert.equal(untranslated.length, 0, `still English in es_ES: ${untranslated.join(', ')}`);
+  });
+
+  it('does not put the AD line numbers back into the copy', () => {
+    // The whole point of mapping by key is that the core sentence's "línea 10, 20, 30" is
+    // meaningless to the user — AD line numbers, not grid positions. Our own wording must not
+    // reintroduce a line reference.
+    const offenders = mappedKeys.filter((k) => /l[ií]nea\s+\d|line\s+\d/i.test(
+      `${esES.genericLabels[k]} ${enUS.genericLabels[k]}`,
+    ));
+    assert.equal(offenders.length, 0, `copy cites a line number in: ${offenders.join(', ')}`);
+  });
+});

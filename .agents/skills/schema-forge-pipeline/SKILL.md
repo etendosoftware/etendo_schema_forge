@@ -3,6 +3,8 @@ name: schema-forge-pipeline
 description: Use when working with Schema Forge windows — generating, regenerating, or modifying frontend/backend code from schemas and contracts. Triggers: "regenerate window", "update schema", "generate frontend", "run pipeline", "contract.json", "schema-curated", working in artifacts/ directory.
 ---
 
+<!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/skills/schema-forge-pipeline/SKILL.md - Regenerate: make sync-agents -->
+
 # Schema Forge Pipeline
 
 ## Overview

@@ -291,6 +291,10 @@ describe('the shipped windows resolve their sources', () => {
       salesPrice: 'eTGOSalePrice',
       purchasePrice: 'eTGOPurchasePrice',
       category: 'productCategory$_identifier',
+      // ETP-5350 — cost lives on the `costing` entity, not on the product header row, so the
+      // descriptor declares both targets sourceless and the export emits an empty cell.
+      cost: '',
+      costStartingDate: '',
     });
   });
 });
