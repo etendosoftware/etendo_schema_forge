@@ -497,6 +497,19 @@ message through `translateBackendError` before prefixing it with
 `soOrderConfirmedInvoiceError`, so a backend rejection renders in the session
 locale.
 
+**The result pills badge each document by its own status.** `OrderConfirmModal`'s
+success state hardcoded `ui('statusDraft')` and applied it to BOTH pills, so a
+confirm that generated an invoice reported it as "Borrador" while the record was
+already `CO` — a user-visible lie no test caught, since nothing asserted on the
+label. The two `result` objects now carry `documentStatus` from the action
+response, and `DocPill` picks label and palette per document with the same rule
+`ConfirmResultModal` uses (`'CO'` → success + `statusCompleted`, anything else
+including a missing status → warning + `statusDraft`). The shipment and the
+invoice can legitimately disagree now: a draft shipment beside a confirmed
+invoice is the normal outcome of ticking both boxes.
+`artifacts/sales-order/custom/__tests__/OrderConfirmModal.test.js` evaluates the
+tone expression rather than matching its text, so an inverted mapping fails.
+
 **Known residual gap (UI copy, not behavior):** the confirm modal's invoice card
 still reads `soCreateInvoiceCheckDesc` — "Se generará una factura en borrador con
 las cantidades del pedido" / "A draft invoice will be created using order
