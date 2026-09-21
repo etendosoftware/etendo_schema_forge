@@ -316,6 +316,21 @@ describe('CreateInvoiceConfirmModal', () => {
     expect(screen.getByText('soCreateInvoiceCheckDesc')).toBeInTheDocument();
   });
 
+  // ── pendingQtyTotal — bulk callers skip the single-document fetch ──────────
+
+  it('shows the pending subtitle from pendingQtyTotal without fetching pendingQtyUrl', () => {
+    renderModal({ pendingQtyUrl: '/api/pending', pendingQtyTotal: 8 });
+
+    expect(screen.getByText(/soAmountPendingInvoice/)).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('treats pendingQtyTotal of 0 as a real value, not "no data"', () => {
+    renderModal({ pendingQtyTotal: 0 });
+    expect(screen.getByText(/soAmountPendingInvoice/)).toBeInTheDocument();
+    expect(screen.queryByText('soCreateInvoiceCheckDesc')).not.toBeInTheDocument();
+  });
+
   // ── formatCurrency usage (ETP-4314 policy: no hand-rolled currency formatting) ──
 
   it('uses the shared formatCurrency utility to format the grand total (not a hand-rolled formatter)', () => {
@@ -547,6 +562,42 @@ describe('CreateInvoiceConfirmModal', () => {
       const confirmBtn = screen.getByText('soCreateDocsBtn').closest('button');
       expect(confirmBtn).toBeDisabled();
     });
+
+    // A bulk caller (e.g. BulkInvoiceFromShipment) has no other way to observe the picker's
+    // internal selection — it needs it to compute a per-line quote reactively.
+    describe('onPriceListChange — notifies the caller of the picker\'s internal selection', () => {
+      it('fires with the initial resolved/preselected priceListId', async () => {
+        mockPriceListFetch([makePriceList({ id: 'pl-a' }), makePriceList({ id: 'pl-b' })]);
+        const onPriceListChange = vi.fn();
+        renderModal({
+          showPriceListPicker: true, isSOTrx: true, apiBaseUrl,
+          data: makeData({ resolvedPriceListId: 'pl-b' }), onPriceListChange,
+        });
+        await waitFor(() => {
+          expect(onPriceListChange).toHaveBeenCalledWith('pl-b');
+        });
+      });
+
+      it('fires again when the user changes the selection', async () => {
+        mockPriceListFetch([makePriceList({ id: 'pl-a' }), makePriceList({ id: 'pl-b' })]);
+        const onPriceListChange = vi.fn();
+        renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl, onPriceListChange });
+        await waitFor(() => {
+          expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
+        });
+        onPriceListChange.mockClear();
+        fireEvent.change(screen.getByTestId('select-control'), { target: { value: 'pl-b' } });
+        expect(onPriceListChange).toHaveBeenCalledWith('pl-b');
+      });
+
+      it('is a no-op when omitted — the picker still works with no callback supplied', async () => {
+        mockPriceListFetch([makePriceList({ id: 'pl-a' })]);
+        expect(() => renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl })).not.toThrow();
+        await waitFor(() => {
+          expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
+        });
+      });
+    });
   });
 
   // ── rectifiable-invoice picker (ETP-5381) ─────────────────────────────────
@@ -680,6 +731,29 @@ describe('CreateInvoiceConfirmModal', () => {
         expect(screen.getByTestId('invoice-confirm-rectify-empty')).toBeInTheDocument();
       });
       expect(confirmBtn()).toBeDisabled();
+    });
+  });
+
+  // ── cardAmountLabel — bulk callers with no single trustworthy total ────────
+  // A bulk toolbar action (N selected documents) has no linkedOrders total and no
+  // documentNo that means anything, so it passes a label instead of a `data` total.
+
+  describe('cardAmountLabel', () => {
+    it('overrides the computed total when provided', () => {
+      renderModal({ data: makeData({ grandTotalAmount: 1234.56 }), cardAmountLabel: '3 albaranes' });
+      expect(screen.getByText('3 albaranes')).toBeInTheDocument();
+      expect(screen.queryByText(/1\.234,56/)).not.toBeInTheDocument();
+    });
+
+    it('overrides the documentNo fallback when the total is 0', () => {
+      renderModal({ data: makeData({ grandTotalAmount: 0, documentNo: 'SO-999' }), cardAmountLabel: '3 albaranes' });
+      expect(screen.getByText('3 albaranes')).toBeInTheDocument();
+      expect(screen.queryByText('SO-999')).not.toBeInTheDocument();
+    });
+
+    it('leaves the computed total untouched when omitted (single-record behavior unchanged)', () => {
+      renderModal({ data: makeData({ grandTotalAmount: 1234.56, 'currency$_identifier': 'EUR' }) });
+      expect(screen.getByText(/1\.234,56\s€/)).toBeInTheDocument();
     });
   });
 });
