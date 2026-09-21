@@ -933,6 +933,60 @@ so there is one source of truth instead of three independently-hand-copied check
 Covered by `fm303Layouts.bankIbanRequiredWhen.vitest.js` and a regression case reproducing the
 exact broken state (tipo `I` + rectificativa + box111=0 no longer blocks generation).
 
+**Bug E follow-up (ETP-5431) — Nota 3's exception, and which fields "los datos bancarios" means.**
+Two changes to the condition-B branch described above.
+
+*1. The cancel/modify-direct-debit exception (the actual bug).* Nota 3 of the AEAT record design
+(sheet `DP303DID`, cell `A38` of `doc/2026/DR303e26v101.xlsx` in the Classic module) states the
+box-111 obligation **with one exception**: the bank data must not be filled when the declaration
+marks *"Rectificativa - Como consecuencia de la presentación de la autoliquidación rectificativa
+solicito dar de baja/modificar la domiciliación efectuada"* — the `baja_domiciliacion` checkbox
+here, `Cancel_Modify_Debit` on the wire, position 440 of page 3. Neither layer honoured it: the UI
+demanded and showed the bank block, and Classic's
+`AEAT303Report2024.correctBankSectionIfBox111HasValues` wrote it into the file. Both now skip the
+whole block in that case. In `fm303Layouts.js` the condition-B branch is a single shared constant,
+`_BANK_RECTIFICATIVA_BRANCH` = `{ allOf: [rectificativa == true, _box111NonZero == true,
+_BANK_NOT_WAIVED] }`, used by `sectionVisibleWhen`, `_BANK_DVX_VW`, `_BANK_IBAN_REQUIRED_WHEN` and
+the requiredness constants alike, so visibility and requiredness cannot drift apart again.
+`isBankIbanRequired` (`fiscalModelsUtils.js`), the imperative mirror behind the generate/submit
+pre-flight guards, carries the same `!== true` test. Condition A (tipo `U`/`D`/`X`) is deliberately
+**not** affected: those types need an account by virtue of the type itself, which is outside Nota
+3's scope.
+
+`matchesVisibility` has no `not`/`notEquals` operator and this change deliberately does not add
+one. The negation is expressed with the existing `in` operator — `_BANK_NOT_WAIVED` is
+`{ field: 'baja_domiciliacion', in: [false, undefined, null] }` — which is safe because the value
+is a strict boolean in React state (`identification?.[f.id] ?? false`, `onToggle(boolean)`) and
+JSON-round-trips through `decl.manualData.identification` unchanged. Unlike `_box111NonZero`, no
+synthetic key is needed: `baja_domiciliacion` is a real form field already in `identification`.
+
+*2. Field selection by marca SEPA — a DESIGN DECISION, NOT A CITED AEAT RULE.* Which fields make up
+"los datos de cuenta bancaria" of Nota 3 is a team decision; `DR303e26v101.xlsx` conditions no
+field on the marca SEPA (Nota 2, `DP303DID!A30:B35`, only enumerates its values `0` Vacía, `1`
+Cuenta España, `2` Unión Europea SEPA, `3` Resto Países). An earlier version of ETP-5431 wrongly
+cited the AEAT virtual advisory service as authority for this table — do not document, comment or
+test it as normative. The adopted selection, and the reading it rests on (the record design points
+Nota 3 at exactly SWIFT-BIC, IBAN and marca SEPA, and at none of Banco/Dirección/Ciudad/Código
+País, which only route a rest-of-world transfer an IBAN alone cannot address):
+
+| marca SEPA | required under condition B |
+| --- | --- |
+| `1` Cuenta España | `bank_iban`, `bank_sepa` |
+| `2` Unión Europea SEPA | + `bank_swift_bic` |
+| `3` Resto Países | + `bank_nombre`, `bank_direccion`, `bank_ciudad`, `bank_pais` (the IBAN field carries the account number — the layout has no separate one) |
+
+Implemented as `_BANK_SWIFT_REQUIRED_WHEN` (condition B ∧ marca ∈ {2,3}) and
+`_BANK_FOREIGN_DETAILS_REQUIRED_WHEN` (condition B ∧ marca = 3);
+`_BANK_FULL_BLOCK_REQUIRED_WHEN` now means the baseline branch itself and is what `bank_sepa`
+carries. **Visibility is deliberately not narrowed by the marca** — a `D`/`V`/`X` declaration may
+legitimately fill any of these fields, and hiding one the user already typed into would lose data.
+Classic mirrors the same table in `AEAT303Report2024`'s `sepaMarkRequiresSwiftBic` /
+`sepaMarkRequiresForeignBankDetails`, used by both the writer and the validators so screen and file
+demand the same set. There, the pre-existing `isDomesticAccount` carve-out (commit `2f11a90`,
+SWIFT-BIC suppressed for a `D`/`V` refund on a Spanish account) is now partly subsumed — marca `1`
+writes no SWIFT-BIC for any type — but its IBAN-prefix half still applies on top for marcas 2/3, so
+both conditions are kept and ANDed.
+
 **Bug F — boxes [14][15], [25][26] and [40][41] always rendered blank instead of autocalculating.**
 `Fiscal303BoxesHandler.computeBoxes` never populated boxes 14/15 ("Modificación bases y cuotas"),
 25/26 ("Modificaciones bases y cuotas del recargo de equivalencia") or 40/41 ("Rectificación de

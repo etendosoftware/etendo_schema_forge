@@ -73,10 +73,18 @@ export const IBAN_REQUIRED_TIPOS = ['U', 'D', 'X'];
 // through `withBox111NonZeroFlag` first (same as `fm303Layouts.js`'s callers). Keep this in sync
 // with `_BANK_IBAN_REQUIRED_WHEN` by hand; it is intentionally not re-derived from it (the
 // declarative matcher lives in fm303Layouts.js, which has no imports and must stay dependency-free).
+// ETP-5431 — condition B no longer applies when the declaration marks `baja_domiciliacion`
+// ("dar de baja/modificar la domiciliación efectuada", sent as `Cancel_Modify_Debit`): that is
+// the single exception Nota 3 states to the box-111 bank-data obligation, and both
+// `_BANK_RECTIFICATIVA_BRANCH` in fm303Layouts.js and `isCancelOrModifyDebitRequested` in
+// AEAT303Report2024.java now honour it. Condition A (tipo U/D/X) is untouched: those types need
+// an account by virtue of the type itself, which is outside Nota 3's scope.
 export function isBankIbanRequired(tipo, identChecksWithBox111Flag) {
   return (
     IBAN_REQUIRED_TIPOS.includes(tipo) ||
-    (identChecksWithBox111Flag?.rectificativa === true && identChecksWithBox111Flag?._box111NonZero === true)
+    (identChecksWithBox111Flag?.rectificativa === true
+      && identChecksWithBox111Flag?._box111NonZero === true
+      && identChecksWithBox111Flag?.baja_domiciliacion !== true)
   );
 }
 
