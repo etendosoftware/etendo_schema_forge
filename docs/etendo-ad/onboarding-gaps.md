@@ -298,8 +298,21 @@ comment, and the updated JUnit test) were initially blocked by this session's to
 boundary (writes outside `etendo_schema_forge`'s own working directory, and real/non-dry-run DB
 writes). The user granted this session write access to `modules/com.etendoerp.go` plus an
 allowlisted real-run/psql command, and Clerk created `feature/ETP-4947` there (off `develop`,
-working tree was clean) — all deliverables above were then completed on that branch. All changes in
-both repos remain **unstaged/uncommitted**, pending REVIEW.
+working tree was clean) — all deliverables above were then completed on that branch. Both fronts
+above (R29 corrective + the preventive dataset/CUT bump) are merged into `develop` — this was the
+first, default-only fix; superseded by the follow-up below.
+
+**Follow-up (2026-09-21) — superseded by full elimination, not just a default fix.** After this A3c
+fix shipped and QA approved it (checkbox defaults OFF, stays editable), the product decision changed:
+remove the "Permitir negativos" checkbox from the UI entirely, and close the backend write path too,
+not merely default it to `N`. This is now closed on a separate `feature/ETP-4947` branch pair (the
+Jira ticket number is reused — same ticket, later scope). `decisions.json` marks `allowNegative`
+`system`-visibility, the "Políticas contables" section is gone from `GeneralTab.jsx`, and
+`GeneralLedgerConfigurationHandler.applyGeneralChanges()` no longer accepts a client-supplied value —
+GET still reports the persisted value via `buildGeneral()`. This A3c fix (R29 + the dataset default)
+is still what guarantees that persisted value stays `N` for every onboarded tenant; nothing here is
+retired. See `docs/generated-custom-windows/general-ledger-configuration.md` and
+`artifacts/general-ledger-configuration/figma-spec.md` for the current (post-elimination) state.
 
 ### A3b — `C_ACCTSCHEMA_DEFAULT` "Defaults tab" incomplete — Jorge's list (ETP-4245 follow-up, 2026-07-06)
 
