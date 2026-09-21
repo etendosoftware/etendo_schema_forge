@@ -67,16 +67,33 @@ export function buildMenuActionExecutedHandler(ui, onRefresh) {
 // Convenience composite for the common call shape: spread the result into a
 // window's own rowQuickActions object literal, e.g.
 // `...buildDocumentRowQuickActionsPostMenu({ ui, onRefresh: () => setRefreshKey(k => k + 1) })`.
-export function buildDocumentRowQuickActionsPostMenu({ ui, onRefresh, includeUnpost = false } = {}) {
+export function buildDocumentRowQuickActionsPostMenu({
+  ui, onRefresh, includeUnpost = false, extraMenuActions = null,
+} = {}) {
   return {
     // RowQuickActions calls this with `{ row, data, status }`. With no knob set, hand it
     // buildPostMenuActions ITSELF rather than a wrapper: callers memoize the slice and a
     // fresh closure per call would be a new prop identity on every render (pinned by
-    // buildDocumentRowQuickActions.test.js). Only a window that opts into the knob pays
+    // buildDocumentRowQuickActions.test.js). Only a window that opts into a knob pays
     // for the wrapper.
-    menuActions: includeUnpost
-      ? ({ row }) => buildPostMenuActions({ row, includeUnpost })
+    //
+    // ETP-5378 — `extraMenuActions(row)` lets a window prepend its own entries (the
+    // albarán windows put "Confirmar" ahead of Post/Unpost, mirroring the order Pedido
+    // de Venta uses). It may return one descriptor, an array, or nothing.
+    menuActions: (includeUnpost || extraMenuActions)
+      ? ({ row }) => [
+        ...normalizeExtra(extraMenuActions, row),
+        ...buildPostMenuActions({ row, includeUnpost }),
+      ]
       : buildPostMenuActions,
     onMenuActionExecuted: buildMenuActionExecutedHandler(ui, onRefresh),
   };
+}
+
+/** Accepts a descriptor, an array of them, or nothing, and always yields an array. */
+function normalizeExtra(extraMenuActions, row) {
+  if (typeof extraMenuActions !== 'function') return [];
+  const extra = extraMenuActions(row);
+  if (!extra) return [];
+  return Array.isArray(extra) ? extra : [extra];
 }

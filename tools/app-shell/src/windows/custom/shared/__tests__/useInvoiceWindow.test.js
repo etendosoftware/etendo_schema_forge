@@ -190,6 +190,14 @@ describe('useInvoiceWindow', () => {
         preUnpost: true,
       };
       const POST = { key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' };
+      // ETP-5378 — an invoice has no confirm popup: its form-view Confirm is DetailView's
+      // draftMode button firing this same docAction, so the row entry is that action.
+      const CONFIRM = {
+        key: 'confirm',
+        labelKey: 'confirm',
+        documentAction: 'CO',
+        successKey: 'documentConfirmed',
+      };
       const build = () => buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {});
 
       it('completed and NOT posted -> Reactivate AND Post, in that order', () => {
@@ -202,9 +210,9 @@ describe('useInvoiceWindow', () => {
         assert.deepEqual(actions, [REACTIVATE]);
       });
 
-      it('draft -> neither, so RowQuickActions renders no kebab at all', () => {
+      it('draft -> Confirm only, never Reactivate or Post', () => {
         const actions = build().menuActions({ row: { documentStatus: 'DR', processed: false, posted: 'N' } });
-        assert.deepEqual(actions, []);
+        assert.deepEqual(actions, [CONFIRM]);
       });
 
       it('a posting-error status (posted="i") still counts as not posted, so Post stays offered', () => {
@@ -220,6 +228,16 @@ describe('useInvoiceWindow', () => {
 
       it('exposes documentStatus as the statusField so RowQuickActions can resolve the status', () => {
         assert.equal(build().statusField, 'documentStatus');
+      });
+
+      it('never offers Confirm outside draft — the three states do not overlap', () => {
+        for (const row of [
+          { documentStatus: 'CO', processed: true, posted: 'N' },
+          { documentStatus: 'CO', processed: true, posted: 'Y' },
+          { documentStatus: 'VO', processed: true, posted: 'Y' },
+        ]) {
+          assert.ok(!build().menuActions({ row }).some(a => a.key === 'confirm'));
+        }
       });
     });
 

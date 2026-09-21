@@ -17022,6 +17022,7 @@
     "unpost": "Descontabilizar",
     "documentPosted": "Documento contabilizado correctamente",
     "documentUnposted": "Documento descontabilizado correctamente",
+    "documentConfirmed": "Documento confirmado correctamente",
     "notPostedDocuments": "Documentos no contabilizados",
     "postSelected": "Contabilizar seleccionados",
     "postingComplete": "Todos los documentos contabilizados",

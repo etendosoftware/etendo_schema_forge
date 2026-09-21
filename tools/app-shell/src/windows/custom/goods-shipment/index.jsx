@@ -16,6 +16,8 @@ import { useUI, useMenuLabel } from '@/i18n';
 import { useRowEmailModal } from '../shared/useRowEmailModal.jsx';
 import { SEND_VISIBLE_WHEN_CONFIRMED } from '../shared/sendActionVisibility.js';
 import { buildDocumentRowQuickActionsPostMenu } from '../shared/buildDocumentRowQuickActions.js';
+import { useRowConfirmAction } from '../shared/useRowConfirmAction.jsx';
+import GoodsShipmentConfirmModal from '@generated/goods-shipment/custom/GoodsShipmentConfirmModal';
 import { useShipmentPdf } from './useShipmentPdf';
 import GoodsShipmentPreview from './GoodsShipmentPreview';
 
@@ -86,6 +88,22 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
     onSuccess: () => setRefreshKey(k => k + 1),
   });
 
+  // ETP-5378 — "Confirmar" in the row-hover kebab, opening this window's own confirm
+  // popup exactly as the form does. See useRowConfirmAction for why it refetches the
+  // record first (the modal needs detail-only enrichments the grid row does not carry).
+  const { confirmMenuAction, confirmPortal } = useRowConfirmAction({
+    specName: 'goods-shipment',
+    entityName: 'goodsShipment',
+    apiBaseUrl,
+    token,
+    ConfirmModal: GoodsShipmentConfirmModal,
+    confirmedTitleKey: 'goodsShipment.confirmModal.confirmedTitle',
+    invoiceResultTitleKey: 'soInvoiceCreated',
+    invoiceDocType: 'facturaVenta',
+    invoiceRoute: '/sales-invoice',
+    onRefresh: () => setRefreshKey(k => k + 1),
+  });
+
   // ETP-4372 — row-hover email envelope opens SendDocumentModal with a PDF preview.
   const { onEmail: onRowEmail, emailModalPortal } = useRowEmailModal({
     usePdf: useShipmentPdf,
@@ -125,12 +143,16 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
     // Descontabilizar while the grid row went silent the moment the document was
     // posted — the kebab disappeared entirely, since Post was its only entry. The
     // grid now mirrors the form: Post while unposted, Unpost once posted.
+    // ETP-5378 — Confirmar first, then Post/Unpost: the same order Pedido de Venta's
+    // kebab uses. The entry opens this window's own confirm popup, so confirming from
+    // the list is the identical flow as from the form.
     ...buildDocumentRowQuickActionsPostMenu({
       ui,
       onRefresh: () => setRefreshKey(k => k + 1),
       includeUnpost: true,
+      extraMenuActions: confirmMenuAction,
     }),
-  }), [navigate, windowName, requestDelete, onRowEmail, ui]);
+  }), [navigate, windowName, requestDelete, onRowEmail, ui, confirmMenuAction]);
 
   if (recordId) {
     return (
@@ -200,6 +222,7 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
         document.body,
       )}
       {emailModalPortal}
+      {confirmPortal}
     </>
   );
 }

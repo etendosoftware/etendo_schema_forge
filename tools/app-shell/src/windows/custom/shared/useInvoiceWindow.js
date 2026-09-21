@@ -73,13 +73,27 @@ export function buildInvoiceRowQuickActions(navigate, windowName, setCloneTarget
     //   completed + not posted  → Reactivate AND Post
     //   completed + posted      → Reactivate only (Post would be a no-op; the
     //                             reactivation unposts first via preUnpost)
-    //   draft                   → neither, so the kebab does not render at all
+    //   draft                   → Confirm only (ETP-5378, see the note inside)
     // Order matches decisions.json → window.menuActions (reactivate first).
     menuActions: ({ row }) => {
       const isPosted = row?.posted === 'Y' || row?.posted === true;
       const isProcessed = row?.processed === 'Y' || row?.processed === true;
       const isCompleted = row?.documentStatus === 'CO';
+      const isDraft = row?.documentStatus === 'DR';
       return [
+        // ETP-5378 — Confirmar from the grid, at parity with Pedido de Venta/Compra.
+        // Unlike the albarán windows there is no popup to reuse: an invoice's form-view
+        // Confirm is DetailView's plain draftMode button, which fires exactly this
+        // docAction (see getInvoiceDraftMode above). So the row entry IS the same action,
+        // not a reduced version of it.
+        ...(isDraft
+          ? [{
+            key: 'confirm',
+            labelKey: 'confirm',
+            documentAction: 'CO',
+            successKey: 'documentConfirmed',
+          }]
+          : []),
         ...(isCompleted
           ? [{
             key: 'reactivate',
