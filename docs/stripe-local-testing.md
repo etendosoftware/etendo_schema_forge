@@ -23,7 +23,7 @@ All of it is implemented on this branch:
 - `POST <base>/sws/go/checkout/sessions` creates a hosted session.
 - `POST <base>/sws/go/billing/purchases` creates the purchase boundary and reopens the existing
   hosted session correlation when an unpaid `CREATING` or `CREATED` purchase is retried.
-  It requires a `planKey` naming a row in the plan catalog (ETP-5046): there is no configured
+  It requires a `planKey` naming a row in the Subscription Plan Catalog (ETP-5046): there is no configured
   fallback price any more, so a body without one is rejected `400 INVALID_REQUEST`, and a key that
   names no active plan is rejected `400 PLAN_NOT_AVAILABLE` without revealing which keys exist.
 - `GET  <base>/sws/go/checkout/sessions/{requestId}` reports `pending` or `paid`.
