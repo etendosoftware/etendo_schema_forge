@@ -63,6 +63,37 @@ export async function login(page, {
             }),
           });
         }
+        // ETP-5402 QA follow-up — same admin-bypass idea as windowaccessmap above, for the new
+        // SFMyReportAccess endpoint (fetchMyReportAccess()/ReportViewerPage.jsx's per-report
+        // gallery filter + AppLayout.jsx's sidebar "Informes" fallback). Left unmocked, this
+        // falls into the generic /sws/** catch-all below, whose empty/unrecognized-shape
+        // fallback fetchMyReportAccess() correctly treats as "zero access" (fail-closed, the
+        // right production behavior) — which then hides every Informes report from any mocked
+        // spec that never explicitly mocks this endpoint, exactly the way an un-mocked
+        // windowaccessmap would hide every window.
+        //
+        // Deliberately NOT a `get`-trapping Proxy the way windowAccess/capabilities above are:
+        // fetchMyReportAccess() goes through fetchNeoWebhookJson(), which calls `res.text()`
+        // then JSON.parse()s the string — unlike windowAccess's own consumer, which calls
+        // `res.json()` directly on the live response object. A Proxy survives a direct
+        // `res.json()` untouched (no serialization step), but `res.text()` doesn't exist on
+        // this mock at all without one, and even with one a `JSON.stringify()`'d Proxy that
+        // only traps `get` (not `ownKeys`) serializes to the empty target object `{}` — so a
+        // real object listing every ReportAccessCatalog id explicitly is required here. Mirrors
+        // the real backend's admin bypass: full access to every one of the 9 report rows.
+        if (url && url.includes('/sws/neo/myreportaccess')) {
+          const reportAccess = Object.fromEntries([
+            'tax-report', 'aging-receivable', 'aging-payable', 'balance-sheet', 'profit-loss',
+            'report-general-ledger', 'report-journal-entries', 'report-trial-balance',
+            'inventory-stock-report',
+          ].map((id) => [id, 'full']));
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: () => Promise.resolve(JSON.stringify({ reportAccess })),
+            json: () => Promise.resolve({ reportAccess }),
+          });
+        }
         return realFetch(input, init);
       };
     });
