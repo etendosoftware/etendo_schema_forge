@@ -70,7 +70,13 @@ export default function RolesAccessMatrix({ cards, matrix, reportsMatrix, iconFo
   return (
     <div className="overflow-x-auto" data-testid="RolesAccessMatrix">
       <table className="w-full text-sm">
-        <thead>
+        {/* ETP-5402 QA follow-up — sticky column headers, mirroring UserRolesTab.jsx's
+            `<thead>` (same `sticky top-0 z-10 bg-card` pattern). This page's own ancestor
+            scroll context is RolesOverviewPage.jsx's single `overflow-y-auto` container
+            (cards + this table both live inside it, same shape as UserRolesTab's enclosing
+            DetailView panel), so `sticky top-0` pins correctly against it with no local
+            wrapper needed. */}
+        <thead className="sticky top-0 z-10 bg-card">
           <tr className="border-b border-border/50">
             <th className="py-2.5 pr-4 text-left text-sm font-semibold text-foreground">
               {ui('rolesMatrixWindowColumn')}
