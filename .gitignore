@@ -109,3 +109,4 @@ docs/plans/drafts/
 # schema_forge.properties.example to schema_forge.properties and fill in your
 # own paths; only the .example is versioned.
 schema_forge.properties
+mcp-usage/

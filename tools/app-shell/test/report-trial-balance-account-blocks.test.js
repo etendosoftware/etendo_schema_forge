@@ -68,9 +68,11 @@ const TB_GROUPS = [
   },
 ];
 
+// is_root: true — mirrors what the real SQL always returns for Cuenta/
+// Subcuenta rows like these (ETP-5401: only Epígrafe self-nests).
 const FLAT_ROWS = [
-  { account_no: '35000000', account_id: 'ACC-35', account_name: 'Productos terminados', opening_balance: 17780.44, activity_debit: 0, activity_credit: 640.52, closing_balance: 17139.92 },
-  { account_no: '43000000', account_id: 'ACC-43', account_name: 'Clientes', opening_balance: -3275.78, activity_debit: 10, activity_credit: 0, closing_balance: -3265.78 },
+  { account_no: '35000000', account_id: 'ACC-35', account_name: 'Productos terminados', is_root: true, opening_balance: 17780.44, activity_debit: 0, activity_credit: 640.52, closing_balance: 17139.92 },
+  { account_no: '43000000', account_id: 'ACC-43', account_name: 'Clientes', is_root: true, opening_balance: -3275.78, activity_debit: 10, activity_credit: 0, closing_balance: -3265.78 },
 ];
 
 function buildMeta({ groupBy, grouped }) {
@@ -215,7 +217,7 @@ describe('report-trial-balance — flat (ungrouped) branch is unaffected (ETP-50
     assert.match(flatHtml, /<tr class="acct-total">\s*<td colspan="2">Total<\/td>/);
   });
 
-  it('sums the amount columns across ALL rows via sumField (the flat grand total)', () => {
+  it('sums the amount columns across all is_root rows via sumFieldWhere (the flat grand total)', () => {
     const totalStart = flatHtml.indexOf('<td colspan="2">Total</td>');
     const totalRow = flatHtml.slice(totalStart, flatHtml.indexOf('</tr>', totalStart));
     // 17780.44 + (-3275.78) = 14504.66 ; 0 + 10 = 10 ; 17139.92 + (-3265.78) = 13874.14
@@ -228,7 +230,7 @@ describe('report-trial-balance — flat (ungrouped) branch is unaffected (ETP-50
     assert.match(flatBranch, /\{\{#each rows\}\}/);
     assert.match(flatBranch, /\{\{lookup this 'account_no'\}\}/);
     assert.match(flatBranch, /\{\{formatCurrency \(lookup this 'opening_balance'\)\}\}/);
-    assert.match(flatBranch, /\{\{formatCurrency \(sumField rows 'closing_balance'\)\}\}/);
+    assert.match(flatBranch, /\{\{formatCurrency \(sumFieldWhere rows 'is_root' 'closing_balance'\)\}\}/);
   });
 });
 

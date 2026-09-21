@@ -442,11 +442,18 @@ test.describe('Sales Invoice — ETP-4404 save-header-first from /new (mocked)',
     expect(page.url()).toContain('/sales-invoice/new');
     expect(capture.headerPosts).toBe(0);
 
-    // Pick the original invoice through the picker modal ("Seleccionar..." is a
-    // literal placeholder in the component, not an i18n key).
-    await panel.getByText('Seleccionar...').click();
-    await page.getByPlaceholder('Buscar factura...').waitFor({ state: 'visible' });
-    await page.getByText('10000090').click();
+    // Pick the original invoice through the picker modal. The trigger label is
+    // translated and changes with the selection, so it is located by testid.
+    await panel.getByTestId('rectify-select-invoices').click();
+    await page.getByTestId('invoice-picker-search').waitFor({ state: 'visible' });
+
+    // ETP-5381: the DRAFT row runs the picker in multi-select mode, so a row
+    // click only toggles the selection — committing needs the footer confirm.
+    const candidate = page.getByTestId(`invoice-picker-option-${PICKER_CANDIDATE.id}`);
+    await candidate.click();
+    await expect(candidate).toHaveAttribute('data-selected', 'true');
+    await page.getByTestId('invoice-picker-apply').click();
+    await expect(page.getByTestId('invoice-picker-picker-modal')).toBeHidden();
 
     // Guardar: persists the header first (1 POST), POSTs the line against the
     // fresh id, then navigates to /sales-invoice/{savedId}.

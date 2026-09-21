@@ -29,8 +29,8 @@
   "sections": [
     { "id": "periodo", "label": { "en_US": "Period", "es_ES": "Periodo" } },
     { "id": "alcance", "label": { "en_US": "Scope", "es_ES": "Alcance" } },
-    { "id": "dimensiones", "label": { "en_US": "Dimensions", "es_ES": "Dimensiones" } },
-    { "id": "agrupacion", "label": { "en_US": "Grouping", "es_ES": "Agrupación" } }
+    { "id": "agrupacion", "label": { "en_US": "Grouping", "es_ES": "Agrupación" } },
+    { "id": "dimensiones", "label": { "en_US": "Dimensions", "es_ES": "Dimensiones" } }
   ],
   "parameters": [
     { "name": "dateFrom", "label": { "en_US": "From Date", "es_ES": "Desde" }, "type": "date", "required": true, "section": "periodo" },

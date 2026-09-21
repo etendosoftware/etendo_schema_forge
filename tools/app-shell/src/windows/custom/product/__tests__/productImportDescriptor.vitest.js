@@ -544,3 +544,101 @@ describe('ETP-5227 — a category catalogue that cannot be read', () => {
     assert.equal(ops[0].body.productCategory, 'CAT-HERR');
   });
 });
+
+/**
+ * ETP-5350 — the cost and its starting date, both rows of M_Costing.
+ *
+ * A cost is not a product column: it is a record of the costing engine's own table, reached
+ * through the `costing` entity, which `artifacts/product/decisions.json` already wires to
+ * `productCostingHandler`. `/batch` runs handler hooks whenever the entity declares a
+ * `Java_Qualifier`, so an imported cost takes exactly the path the Costing tab takes — which is
+ * why this op carries only two fields and the tests below assert what is NOT sent as carefully
+ * as what is.
+ */
+describe('product import descriptor — cost (ETP-5350)', () => {
+  it('adds a parentRef-linked costing op, with no price-list lookup of its own', async () => {
+    const fetchMock = stubFetch(SALES_ITEMS);
+    const ops = await buildOperations({ ...baseRow, cost: '7,40' }, productConfig('tok-cost-1'));
+
+    const cost = ops.find((o) => o.entity === 'costing');
+    assert.ok(cost, `expected a costing op, got: ${ops.map((o) => o.entity).join(', ')}`);
+    assert.equal(cost.parentRef, 'product');
+    assert.equal(cost.body.cost, '7.4');
+    // No PRICE-LIST fetch: the handler derives the organisation and its currency server-side,
+    // so a cost-only row must not pay for a price-list-version lookup it has no use for. (The
+    // one call it does make is `/defaults`, which every row makes for the UOM.)
+    const urls = fetchMock.mock.calls.map(([url]) => String(url));
+    assert.ok(!urls.some((u) => u.includes('M_PriceList_Version_ID')), `unexpected PLV lookup: ${urls.join(', ')}`);
+  });
+
+  it('never sends endingDate — the key\'s absence is what makes the handler infer 31-12-9999', async () => {
+    // CostingUtils.getLastDate() only runs when the field is missing. Sending it empty, or
+    // null, stops the inference and leaves the cost with no end of validity.
+    stubFetch(SALES_ITEMS);
+    const ops = await buildOperations({ ...baseRow, cost: '10' }, productConfig('tok-cost-2'));
+    const cost = ops.find((o) => o.entity === 'costing');
+    assert.ok(!('endingDate' in cost.body), `expected endingDate to be absent, got: ${JSON.stringify(cost.body)}`);
+  });
+
+  it('sends only cost and startingDate — everything else is the handler\'s to decide', async () => {
+    // costType/manual/permanent/production, the organisation and ITS currency (not the AD
+    // default, which is USD) all come from ProductCostingHandler. Sending any of them from here
+    // would be a second source of truth for values the Costing tab already gets right.
+    stubFetch(SALES_ITEMS);
+    const ops = await buildOperations({ ...baseRow, cost: '10' }, productConfig('tok-cost-3'));
+    const cost = ops.find((o) => o.entity === 'costing');
+    assert.deepEqual(Object.keys(cost.body).sort(), ['cost', 'startingDate']);
+  });
+
+  it('emits NO costing op for a blank cost, so one empty cell cannot lose the whole product', async () => {
+    // `/batch` is all-or-nothing per row and the handler rejects a blank cost, so a row that
+    // says nothing about cost must produce no op at all — same contract buildPriceOperation has.
+    stubFetch(SALES_ITEMS);
+    const blank = await buildOperations({ ...baseRow, cost: '   ' }, productConfig('tok-cost-4'));
+    const absent = await buildOperations({ ...baseRow }, productConfig('tok-cost-5'));
+    assert.equal(blank.find((o) => o.entity === 'costing'), undefined);
+    assert.equal(absent.find((o) => o.entity === 'costing'), undefined);
+  });
+
+  it('defaults startingDate to the LOCAL calendar today, never the UTC one', async () => {
+    // `new Date().toISOString().slice(0, 10)` is yesterday for most of the evening under
+    // America/Argentina/Buenos_Aires, which would silently backdate every imported cost.
+    // ETP-4031 / ETP-4850 are the same bug class, twice shipped.
+    stubFetch(SALES_ITEMS);
+    const ops = await buildOperations({ ...baseRow, cost: '10' }, productConfig('tok-cost-6'));
+    const now = new Date();
+    const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    assert.equal(ops.find((o) => o.entity === 'costing').body.startingDate, localToday);
+  });
+
+  it('normalizes the four date shapes a file can carry to yyyy-MM-dd', async () => {
+    // Day-first for every separated form, matching the template's example and all three
+    // locales: 01/08/2026 is 1 August, never 8 January.
+    stubFetch(SALES_ITEMS);
+    const shapes = ['01/08/2026', '01-08-2026', '01.08.2026', '2026-08-01'];
+    for (const [i, raw] of shapes.entries()) {
+      const ops = await buildOperations(
+        { ...baseRow, cost: '10', costStartingDate: raw },
+        productConfig(`tok-cost-date-${i}`),
+      );
+      assert.equal(ops.find((o) => o.entity === 'costing').body.startingDate, '2026-08-01', `for ${raw}`);
+    }
+  });
+
+  it('rejects a negative cost rather than letting the handler 400 at confirm time', async () => {
+    stubFetch(SALES_ITEMS);
+    await assert.rejects(
+      () => buildOperations({ ...baseRow, cost: '-5' }, productConfig('tok-cost-neg')),
+      /negative/i,
+    );
+  });
+
+  it('localizes its own errors through the injected translate', async () => {
+    stubFetch(SALES_ITEMS);
+    const translate = (key) => (key === 'importErrorNegativeCost' ? 'El coste no puede ser negativo.' : key);
+    await assert.rejects(
+      () => buildOperations({ ...baseRow, cost: '-5' }, productConfig('tok-cost-neg-i18n', { translate })),
+      /El coste no puede ser negativo\./,
+    );
+  });
+});

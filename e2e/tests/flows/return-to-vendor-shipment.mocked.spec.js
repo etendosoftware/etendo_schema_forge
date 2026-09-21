@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
+import {
+  buildRectifiableInvoicesPayload,
+  RECTIFIABLE_PAGE_SIZE,
+} from '../helpers/rectifiable-invoices-mock.js';
 
 /**
  * Return to Vendor Shipment — full flow smoke (mocked) — ETP-4034
@@ -79,6 +83,46 @@ const CO_WITH_INVOICE = makeReturn({
 
 const ALL_ROWS = [DR_RECORD, CO_NO_INVOICE, CO_WITH_INVOICE];
 
+// ETP-5381 (commit 0007e2019): candidates returned by the `rectifiableInvoices` action.
+// Field names mirror ReturnShipmentUtils#runInvoiceQuery exactly (id, documentNo, invoiceDate,
+// grandTotalAmount, currency, businessPartner) plus the `suggested` flag added in
+// #buildRectifiableInvoicesResponse. `businessPartner` carries the NAME, not an id — these rows
+// come from a hand-built SQL projection, not the entity serializer (InvoicePickerModal.jsx:54).
+const RECTIFIABLE_INVOICES = [
+  {
+    id: 'rtv-rect-inv-a',
+    documentNo: 'FC-RTV-OLD-001',
+    invoiceDate: '2026-04-10',
+    grandTotalAmount: 250,
+    currency: 'EUR',
+    businessPartner: 'Proveedor Test S.L.',
+  },
+  {
+    id: 'rtv-rect-inv-b',
+    documentNo: 'FC-RTV-OLD-002',
+    invoiceDate: '2026-04-22',
+    grandTotalAmount: 120,
+    currency: 'EUR',
+    businessPartner: 'Proveedor Test S.L.',
+  },
+];
+
+// A candidate set LARGER than one batch, with the interesting invoice deliberately parked past
+// the end of it. This is the scenario the server-side-search redesign exists for: while the
+// picker filtered locally it could only ever search the batch it held, so this invoice was
+// unreachable — the list said "no matches" for a document the server has. Index 84 of 85, so the
+// first batch (80 rows) genuinely cannot contain it.
+const BULK_RECTIFIABLE_INVOICES = Array.from({ length: RECTIFIABLE_PAGE_SIZE + 5 }, (_, i) => ({
+  id: `rtv-bulk-inv-${String(i).padStart(3, '0')}`,
+  documentNo: `FC-RTV-BULK-${String(i).padStart(3, '0')}`,
+  invoiceDate: '2026-03-01',
+  grandTotalAmount: 100 + i,
+  currency: 'EUR',
+  businessPartner: 'Proveedor Test S.L.',
+}));
+const BULK_LAST = BULK_RECTIFIABLE_INVOICES[BULK_RECTIFIABLE_INVOICES.length - 1];
+const BULK_FIRST = BULK_RECTIFIABLE_INVOICES[0];
+
 // ---------------------------------------------------------------------------
 // Route installation helpers
 // ---------------------------------------------------------------------------
@@ -88,7 +132,11 @@ const ALL_ROWS = [DR_RECORD, CO_NO_INVOICE, CO_WITH_INVOICE];
  * Must be called AFTER login() so these specific handlers win over the
  * generic /sws/** stub from login() (Playwright routes match in LIFO order).
  */
-async function installReturnToVendorMocks(page, rows = ALL_ROWS) {
+async function installReturnToVendorMocks(
+  page,
+  rows = ALL_ROWS,
+  { suggestedInvoiceIds = [], state, rectifiableInvoices = RECTIFIABLE_INVOICES } = {},
+) {
   // Lines endpoint — installed FIRST (lower LIFO priority). Returns empty.
   await page.route(
     (url) => url.href.includes('/sws/neo/return-to-vendor-shipment/returnToVendorShipmentLine'),
@@ -132,9 +180,40 @@ async function installReturnToVendorMocks(page, rows = ALL_ROWS) {
         return;
       }
 
+      // ETP-5381: POST rectifiableInvoices → the candidate list the picker shows.
+      // Search and paging are SERVER-SIDE — the picker renders this batch verbatim and never
+      // filters locally — so the mock MUST honour the request body ({ startRow, pageSize,
+      // search }). A mock that answers the same full list regardless would make every search
+      // assertion vacuous: the row stays visible and the test is "green" against a UI that
+      // never searched. buildRectifiableInvoicesPayload models the real action (see
+      // ReturnShipmentUtils#buildRectifiableInvoicesResponse).
+      //
+      // MUST be handled before the generic branches below — otherwise the request falls through
+      // to this handler's catch-all `{ response: { data: [] } }`, `data.invoices` reads
+      // undefined, the hook reports "nothing to rectify", and the confirm button stays disabled.
+      if (method === 'POST' && url.includes('/action/rectifiableInvoices')) {
+        const body = req.postData() ? JSON.parse(req.postData()) : {};
+        state?.rectifiableRequests?.push(body);
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            response: {
+              data: buildRectifiableInvoicesPayload({
+                invoices: rectifiableInvoices,
+                suggestedInvoiceIds,
+                body,
+              }),
+            },
+          }),
+        });
+        return;
+      }
+
       // POST createReturnInvoice → synthetic purchase rectificativa invoice.
       // ETP-4737: the generated invoice carries a NEGATIVE total (return flow).
       if (method === 'POST' && url.includes('/action/createReturnInvoice')) {
+        state?.invoicePosts?.push(req.postData() ? JSON.parse(req.postData()) : {});
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -286,9 +365,16 @@ test.describe('return-to-vendor-shipment — list view', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('return-to-vendor-shipment — DR detail actions', () => {
+  // ETP-5381: the backend walked the return chain (M_InOutLine.Canceled_Inoutline_ID →
+  // original line → its invoice) and found FC-RTV-OLD-001, so it arrives preselected. This
+  // flow therefore covers the auto-detected half of the picker on the ConfirmInOutModal side;
+  // return-material-receipt.mocked.spec.js covers the manual half of the same modal.
+  let state;
+
   test.beforeEach(async ({ page }) => {
+    state = { invoicePosts: [], rectifiableRequests: [] };
     await login(page);
-    await installReturnToVendorMocks(page);
+    await installReturnToVendorMocks(page, ALL_ROWS, { suggestedInvoiceIds: ['rtv-rect-inv-a'], state });
   });
 
   /**
@@ -357,9 +443,21 @@ test.describe('return-to-vendor-shipment — DR detail actions', () => {
     const dialog2 = page.getByRole('dialog');
     await expect(dialog2).toBeVisible({ timeout: 8_000 });
 
+    // ── ETP-5381: the auto-detected invoice arrives preselected ──────────────────
+    // With a suggestion present the user has nothing to do, but the selection must be
+    // real: assert the chip, not just an enabled button — an absent gate would also
+    // leave the button enabled, and that is the regression this guards.
+    await expect(dialog2.getByTestId('confirm-modal-rectify-selected-rtv-rect-inv-a'))
+      .toBeVisible({ timeout: 8_000 });
+    await expect(dialog2.getByTestId('confirm-modal-rectify-selected-rtv-rect-inv-a'))
+      .toContainText('FC-RTV-OLD-001');
+    // The non-suggested candidate must NOT be preselected.
+    await expect(dialog2.getByTestId('confirm-modal-rectify-selected-rtv-rect-inv-b')).toHaveCount(0);
+
     // Toggle is checked → button label is confirmWithInvoice ("Confirmar y crear factura")
     const modalConfirmBtn = dialog2.getByRole('button', { name: /confirmar/i });
     await expect(modalConfirmBtn).toBeVisible();
+    await expect(modalConfirmBtn).toBeEnabled({ timeout: 5_000 });
     await modalConfirmBtn.click();
 
     // ConfirmResultModal shows the newly created invoice documentNo
@@ -370,6 +468,13 @@ test.describe('return-to-vendor-shipment — DR detail actions', () => {
     // ETP-4737: the rectificativa invoice is created with a negative total (credit
     // flow) — the result card must render the negative amount from the backend.
     await expect(page.getByText(/-250,00/)).toBeVisible();
+
+    // ETP-5381: the preselected suggestion must travel on the createReturnInvoice POST —
+    // ConfirmInOutModal builds `{ originInvoices: rectify.selectedIds }`. Without it the
+    // backend would fall back to its own chain detection, which is a different code path
+    // and would silently hide a frontend that dropped the selection.
+    expect(state.invoicePosts).toHaveLength(1);
+    expect(state.invoicePosts[0].originInvoices).toEqual(['rtv-rect-inv-a']);
   });
 });
 
@@ -379,9 +484,15 @@ test.describe('return-to-vendor-shipment — DR detail actions', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('return-to-vendor-shipment — CO detail actions', () => {
+  // ETP-5381: no suggestion — models a standalone return whose chain the backend could not
+  // walk, so the user MUST pick by hand. Covers the manual half of the picker on the
+  // CreateInvoiceConfirmModal side (return-material-receipt covers its preselected half).
+  let state;
+
   test.beforeEach(async ({ page }) => {
+    state = { invoicePosts: [], rectifiableRequests: [] };
     await login(page);
-    await installReturnToVendorMocks(page);
+    await installReturnToVendorMocks(page, ALL_ROWS, { suggestedInvoiceIds: [], state });
   });
 
   /**
@@ -438,14 +549,64 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
     // RTVS-CO-001 appears as large text in the summary card (displayAmount = documentNo when total=0)
     await expect(page.getByText('RTVS-CO-001').first()).toBeVisible({ timeout: 8_000 });
 
-    // Invoice checkbox card is rendered (labeled "Crear factura") and checked by default
-    const invoiceCardLabel = page.getByText('Crear factura', { exact: true });
-    await expect(invoiceCardLabel).toBeVisible({ timeout: 8_000 });
+    // ETP-5381 (commit a84798d2a, "Drop the redundant create-invoice checkbox"): the
+    // "Crear factura" checkbox card (soCreateInvoiceTitle) that used to be asserted here no
+    // longer exists. Every button that opens this modal already says "Crear Factura
+    // Rectificativa", so the checkbox was a confirmation of a confirmation — and unticking it
+    // left a dialog whose only action did nothing. The assertion is removed rather than
+    // rewritten because the control is gone on purpose, not moved. (The optional-extra toggle
+    // in ConfirmInOutModal is a DIFFERENT control and is still asserted in the DR flow above.)
+
+    // ── ETP-5381: pick the invoice this rectificative invoice rectifies ──────────
+    const invoiceModal = page.getByTestId('create-invoice-confirm-modal');
+    const createDocsBtn = invoiceModal.getByRole('button').last();
+    await expect(createDocsBtn).toBeVisible({ timeout: 8_000 });
+
+    // Nothing auto-detected → the gate must hold. A rectificative invoice with no
+    // C_Invoice_Reverse row cannot be confirmed, and these are created AND confirmed in one
+    // step, so the frontend refuses to send rather than creating a document stuck in draft.
+    await expect(createDocsBtn).toBeDisabled();
+
+    await invoiceModal.getByTestId('invoice-confirm-rectify-open').click();
+    const picker = page.getByTestId('invoice-confirm-rectify-picker-modal');
+    await expect(picker).toBeVisible({ timeout: 8_000 });
+
+    // Both candidates offered, neither badged as suggested (suggestedInvoiceIds is empty).
+    await expect(picker.getByTestId('invoice-confirm-rectify-option-rtv-rect-inv-a')).toBeVisible();
+    await expect(picker.getByTestId('invoice-confirm-rectify-option-rtv-rect-inv-b')).toBeVisible();
+    await expect(picker.getByTestId('invoice-confirm-rectify-suggested-rtv-rect-inv-a')).toHaveCount(0);
+
+    // The search box narrows the list — and it does so through a SERVER round-trip, not a
+    // local filter: the picker runs in its controlled mode here and renders whatever batch it
+    // is handed. Typing therefore has to reach the mock as `search` in the POST body, and the
+    // narrowing we assert below is the mock's answer, not client-side filtering.
+    await picker.getByTestId('invoice-confirm-rectify-search').fill('FC-RTV-OLD-002');
+
+    // The request itself — asserted separately from the rendering so a regression that stops
+    // sending `search` is distinguishable from one that mis-renders the reply. Polled because
+    // useRectifiableInvoices debounces typing by 250ms before it fetches.
+    await expect
+      .poll(() => state.rectifiableRequests.some(r => r.search === 'FC-RTV-OLD-002'), { timeout: 8_000 })
+      .toBe(true);
+    // Narrowing always restarts at the first batch — otherwise the results would be windowed
+    // by an offset belonging to the previous, wider result set.
+    const searchReq = state.rectifiableRequests.find(r => r.search === 'FC-RTV-OLD-002');
+    expect(searchReq.startRow).toBe(0);
+
+    // …and the rendering: the non-matching row is gone, the matching one stayed.
+    await expect(picker.getByTestId('invoice-confirm-rectify-option-rtv-rect-inv-a')).toHaveCount(0);
+    await expect(picker.getByTestId('invoice-confirm-rectify-option-rtv-rect-inv-b')).toBeVisible();
+
+    await picker.getByTestId('invoice-confirm-rectify-option-rtv-rect-inv-b').click();
+    await picker.getByTestId('invoice-confirm-rectify-apply').click();
+    await expect(picker).toBeHidden({ timeout: 5_000 });
+
+    // The chosen invoice shows in the host modal and the gate opens.
+    await expect(invoiceModal.getByTestId('invoice-confirm-rectify-selected-rtv-rect-inv-b'))
+      .toContainText('FC-RTV-OLD-002');
+    await expect(createDocsBtn).toBeEnabled({ timeout: 5_000 });
 
     // "Crear →" button (soCreateDocsBtn) triggers the POST
-    // The button renders the text "Crear →" with an arrow character
-    const createDocsBtn = page.getByRole('button', { name: /crear/i }).last();
-    await expect(createDocsBtn).toBeVisible({ timeout: 8_000 });
     await createDocsBtn.click();
 
     // createReturnInvoice POST returns FC-RTV-NEW-001 → ConfirmResultModal appears
@@ -456,6 +617,12 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
     // ETP-4737: same negative-total contract applies from the CO (already confirmed)
     // detail flow — useConfirmWithCredit.handleCreateReturnInvoice reads grandTotalAmount.
     await expect(page.getByText(/-250,00/)).toBeVisible();
+
+    // ETP-5381: the user's choice must reach the backend —
+    // CreateInvoiceConfirmModal.onConfirm(priceListId, originInvoices) →
+    // useConfirmWithCredit.handleCreateReturnInvoice(originInvoices).
+    expect(state.invoicePosts).toHaveLength(1);
+    expect(state.invoicePosts[0].originInvoices).toEqual(['rtv-rect-inv-b']);
 
     // ETP-4299: ConfirmWithCreditButtonBase.onClose fires window.location.reload()
     // via setTimeout(0) when the user closes without navigating.
@@ -475,6 +642,109 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
     // Use a short explicit wait instead of a fixed delay so we don't pass prematurely on a slow load.
     await page.getByRole('button', { name: /guardar|cancelar/i }).first().waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
     await expect(page.getByTestId('action-create-return-invoice')).toHaveCount(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Describe 3b — ETP-5381: the rectify picker searches the SERVER, not the batch
+// ---------------------------------------------------------------------------
+
+test.describe('return-to-vendor-shipment — rectify picker paging and server search', () => {
+  // 85 candidates against a batch size of 80: the invoice this test goes looking for is the
+  // 85th, so it is provably NOT in the first batch.
+  let state;
+
+  test.beforeEach(async ({ page }) => {
+    state = { invoicePosts: [], rectifiableRequests: [] };
+    await login(page);
+    await installReturnToVendorMocks(page, ALL_ROWS, {
+      suggestedInvoiceIds: [],
+      state,
+      rectifiableInvoices: BULK_RECTIFIABLE_INVOICES,
+    });
+  });
+
+  /**
+   * The regression the server-side-search redesign exists to prevent.
+   *
+   * While the picker filtered locally it could only ever search the rows it had already
+   * fetched, so an invoice sitting past the first batch was unreachable: the list answered
+   * "no matches" for a document the server holds, and the user concluded it did not exist.
+   * Nothing covered that end-to-end — the old fixtures were two rows, which fit in any batch,
+   * so a purely local filter would have passed every existing assertion.
+   *
+   * Also covers the `knownById` cache: a selection has to keep rendering its number once the
+   * rows it came from are replaced by a different batch.
+   */
+  test('an invoice outside the first batch is unreachable by scrolling but findable by search', async ({ page }) => {
+    test.setTimeout(120_000);
+
+    await page.goto('/return-to-vendor-shipment/rtvs-co-001');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    const createInvoiceBtn = page.getByTestId('action-create-return-invoice');
+    await createInvoiceBtn.waitFor({ state: 'visible', timeout: 15_000 });
+    await createInvoiceBtn.click();
+
+    const invoiceModal = page.getByTestId('create-invoice-confirm-modal');
+    await expect(invoiceModal).toBeVisible({ timeout: 8_000 });
+    await invoiceModal.getByTestId('invoice-confirm-rectify-open').click();
+
+    const picker = page.getByTestId('invoice-confirm-rectify-picker-modal');
+    await expect(picker).toBeVisible({ timeout: 8_000 });
+
+    // ── Pre-condition: the first batch is exactly one page, and the target is not in it ──
+    // Counted with an attribute selector rather than getByTestId because the ids are dynamic
+    // and the point of the assertion is the SIZE of the set, not any one row. Scoped to the
+    // list's own testid so it cannot drift onto rows rendered elsewhere.
+    const options = picker.getByTestId('invoice-confirm-rectify-list')
+      .locator('[data-testid^="invoice-confirm-rectify-option-"]');
+    await expect(options).toHaveCount(RECTIFIABLE_PAGE_SIZE, { timeout: 8_000 });
+    await expect(picker.getByTestId(`invoice-confirm-rectify-option-${BULK_FIRST.id}`)).toBeVisible();
+    await expect(picker.getByTestId(`invoice-confirm-rectify-option-${BULK_LAST.id}`)).toHaveCount(0);
+
+    // The first request asked for the first batch and the server said there is more.
+    expect(state.rectifiableRequests[0]).toMatchObject({ startRow: 0, pageSize: RECTIFIABLE_PAGE_SIZE });
+
+    // ── Search finds it anyway — because the query goes to the server ────────────────────
+    await picker.getByTestId('invoice-confirm-rectify-search').fill(BULK_LAST.documentNo);
+
+    await expect(picker.getByTestId(`invoice-confirm-rectify-option-${BULK_LAST.id}`))
+      .toBeVisible({ timeout: 8_000 });
+    // …and the batch-1 rows it replaced are gone: this is a refetch, not an append.
+    await expect(picker.getByTestId(`invoice-confirm-rectify-option-${BULK_FIRST.id}`)).toHaveCount(0);
+    await expect(options).toHaveCount(1);
+
+    // ── The selection survives the rows being swapped out from under it ─────────────────
+    await picker.getByTestId(`invoice-confirm-rectify-option-${BULK_LAST.id}`).click();
+    await picker.getByTestId('invoice-confirm-rectify-apply').click();
+    await expect(picker).toBeHidden({ timeout: 5_000 });
+
+    const chip = invoiceModal.getByTestId(`invoice-confirm-rectify-selected-${BULK_LAST.id}`);
+    await expect(chip).toContainText(BULK_LAST.documentNo);
+
+    // Reopen and clear the search: the list falls back to batch 1, which does NOT contain the
+    // selected invoice — yet the chip must still render its document number. That is the
+    // `knownById` cache in useRectifiableInvoices; without it the chip would degrade to a bare
+    // id while the id itself still rode along in the submitted payload.
+    await invoiceModal.getByTestId('invoice-confirm-rectify-open').click();
+    await expect(picker).toBeVisible({ timeout: 8_000 });
+    await picker.getByTestId('invoice-confirm-rectify-search').fill('');
+    await expect(picker.getByTestId(`invoice-confirm-rectify-option-${BULK_FIRST.id}`))
+      .toBeVisible({ timeout: 8_000 });
+    await expect(picker.getByTestId(`invoice-confirm-rectify-option-${BULK_LAST.id}`)).toHaveCount(0);
+    await picker.getByTestId('invoice-confirm-rectify-apply').click();
+    await expect(picker).toBeHidden({ timeout: 5_000 });
+    await expect(chip).toContainText(BULK_LAST.documentNo);
+
+    // ── And it is the cross-batch invoice that actually gets submitted ──────────────────
+    const createDocsBtn = invoiceModal.getByRole('button').last();
+    await expect(createDocsBtn).toBeEnabled({ timeout: 5_000 });
+    await createDocsBtn.click();
+
+    await expect(page.getByTestId('confirm-result-modal')).toBeVisible({ timeout: 10_000 });
+    expect(state.invoicePosts).toHaveLength(1);
+    expect(state.invoicePosts[0].originInvoices).toEqual([BULK_LAST.id]);
   });
 });
 

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertAdjacentStatements } from '../../../_test-support/sourceAdjacency.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'GoodsShipmentActions.jsx'), 'utf8');
@@ -357,11 +358,19 @@ describe('GoodsShipmentActions', () => {
   // CreateInvoiceConfirmModal so it can show its own spinner/label while the
   // modal stays mounted.
   describe('handleCreateInvoice — modal closes only on success, right before setInvoiceResult (ETP-5333)', () => {
+    // Adjacency is asserted through assertAdjacentStatements, which strips
+    // comments first: the property under test is "no intervening STATEMENT",
+    // not "no intervening CHARACTERS". The raw `\s*` form of this regex is the
+    // exact mirror of the one ETP-5381 broke in GoodsReceiptActions.test.js by
+    // adding an explanatory comment; here it survived only because the comment
+    // landed two lines further down, inside the object literal. A real
+    // statement between the two calls still fails.
     it('calls setShowInvoiceConfirm(false) immediately before setInvoiceResult inside the success path', () => {
-      const successBlock = src.match(
-        /setShowInvoiceConfirm\(false\);\s*setInvoiceResult\(\{/,
+      assertAdjacentStatements(
+        src,
+        [/setShowInvoiceConfirm\(false\);/, /setInvoiceResult\(\{/],
+        'expected setShowInvoiceConfirm(false) to run right before setInvoiceResult({...}) on success',
       );
-      assert.ok(successBlock, 'expected setShowInvoiceConfirm(false) to run right before setInvoiceResult({...}) on success');
     });
 
     it('does NOT close the modal inside the catch (error) branch — it must stay open on failure so the user can retry', () => {
