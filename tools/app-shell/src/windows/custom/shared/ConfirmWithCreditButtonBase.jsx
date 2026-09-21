@@ -63,6 +63,12 @@ export default function ConfirmWithCreditButtonBase({
 
   const isFullyInvoiced = parseFloat(data?.invoiceStatus ?? 0) >= 100;
 
+  // ETP-5381: a rectificative invoice is now created AND confirmed in one step, and the
+  // completion is rejected outright unless it declares which invoice it rectifies. Both entry
+  // points below therefore load the candidates and make the user pick.
+  const rectifiableInvoicesUrl =
+    `${base}/${specName}/${entityName}/${data?.id || recordId}/action/rectifiableInvoices`;
+
   return (
     <>
       {status === 'DR' && (
@@ -110,6 +116,8 @@ export default function ConfirmWithCreditButtonBase({
           entityName={entityName}
           invoiceAction={isFullyInvoiced ? undefined : 'createReturnInvoice'}
           defaultCreateInvoice={!isFullyInvoiced}
+          rectifiableInvoicesUrl={rectifiableInvoicesUrl}
+          token={token}
           title={confirmModalTitle}
           docInfo={{ bpName: data?.['businessPartner$_identifier'], documentNo: data?.documentNo }}
           infoRowPre={infoRowPre}
@@ -136,7 +144,9 @@ export default function ConfirmWithCreditButtonBase({
         <CreateInvoiceConfirmModal
           data={data}
           loading={creatingInvoice}
-          onConfirm={handleCreateReturnInvoice}
+          token={token}
+          rectifiableInvoicesUrl={rectifiableInvoicesUrl}
+          onConfirm={(_priceListId, originInvoices) => handleCreateReturnInvoice(originInvoices)}
           onClose={() => setShowModal(false)}
           data-testid="CreateInvoiceConfirmModal__f9608e" />,
         document.body,

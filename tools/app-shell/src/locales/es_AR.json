@@ -21438,7 +21438,12 @@
     "documentSequenceSalesOrder": "Pedido de venta",
     "documentSequenceSalesInvoice": "Factura de venta",
     "documentSequenceSalesCorrectiveInvoice": "Factura de venta rectificativa",
-    "documentSequencePurchaseCorrectiveInvoice": "Factura de compra rectificativa"
+    "documentSequencePurchaseCorrectiveInvoice": "Factura de compra rectificativa",
+    "couldNotLoadInvoicesToRectify": "No se pudieron cargar las facturas a rectificar.",
+    "rectifyLinkedBadge": "Relacionada",
+    "soGenerateDocsImplied": "Documento a generar",
+    "rectifySelectedCount": "{count} seleccionadas",
+    "rectifySelectInvoices": "Seleccionar facturas a rectificar…"
   },
   "menus": {
     "Goods Movement": {

@@ -448,89 +448,21 @@ describe('translateBackendError — cost not calculated exact match (ETP-4706)',
   });
 });
 
-// ── ETP-4831: "shipment already invoiced" parameterized enrichment ──────────────
-//
-// com.etendoerp.go's own `ETGO_InvoiceLineAlreadyInvoiced` AD_MESSAGE ("The shipment
-// @docNo@ cannot be invoiced: quantity to invoice (@invoiced@) exceeds pending
-// quantity (@pending@). The shipment may already be invoiced in another document.")
-// has zero AD_Message_Trl rows for ANY language, because com.etendoerp.go has no
-// companion translation module (AD_MODULE.ISTRANSLATIONREQUIRED = N) — the same root
-// cause as the ETP-4706 "Account could not be found" messages above. The backend
-// always renders this with the literal docNo/invoiced/pending values substituted in
-// (never the raw `@token@` placeholders), so a matcher must parse those three values
-// back out of the rendered string via plain string slicing (same ReDoS-safe style as
-// `matchAccountNotFound` / ACCOUNT_NOT_FOUND_PREFIX above — a document number and
-// quantities are effectively free-form data, so no backtracking-prone regex).
-//
-// EXPECTED (not yet implemented): a `matchInvoiceLineAlreadyInvoiced` parameterized
-// matcher wired into `translateParameterized`, re-rendering via a new
-// `backendError.invoiceLineAlreadyInvoiced` i18n key. Until that lands, these tests
-// MUST fail: translateBackendError has no exact-match entry and no matcher for this
-// message shape, so it falls through to returning `msg` unchanged.
-describe('translateBackendError — "shipment already invoiced" parameterized match (ETP-4831)', () => {
-  const en = fakeUiTranslator({
-    'backendError.invoiceLineAlreadyInvoiced':
-      'Shipment {docNo} cannot be invoiced: quantity to invoice ({invoiced}) exceeds pending quantity ({pending}). It may already be invoiced in another document.',
-  });
-  const es = fakeUiTranslator({
-    'backendError.invoiceLineAlreadyInvoiced':
-      'El albarán {docNo} no se puede facturar: la cantidad a facturar ({invoiced}) supera la cantidad pendiente ({pending}). Puede que ya esté facturado en otro documento.',
-  });
-  const RAW = 'The shipment 10000039 cannot be invoiced: quantity to invoice (2) exceeds pending quantity (0). The shipment may already be invoiced in another document.';
-
-  it('translates the rendered backend message to es_ES, interpolating docNo/invoiced/pending', () => {
-    assert.equal(
-      translateBackendError(RAW, es),
-      'El albarán 10000039 no se puede facturar: la cantidad a facturar (2) supera la cantidad pendiente (0). Puede que ya esté facturado en otro documento.',
-    );
-  });
-
-  it('translates the rendered backend message to en_US, interpolating docNo/invoiced/pending', () => {
-    assert.equal(
-      translateBackendError(RAW, en),
-      'Shipment 10000039 cannot be invoiced: quantity to invoice (2) exceeds pending quantity (0). It may already be invoiced in another document.',
-    );
-  });
-
-  it('returns the original message unchanged when the translation key is missing (guard)', () => {
-    const missingT = (k) => k; // echoes the key back — simulates an unmapped locale
-    assert.equal(translateBackendError(RAW, missingT), RAW);
-  });
-
-  // BUG-1 (QA finding, ETP-4831): the backend builds @invoiced@/@pending@ from
-  // BigDecimal#toPlainString() (AbstractInvoiceHeaderHandler.checkInoutEntryForOverInvoicing
-  // in com.etendoerp.go), so for a product with fractional UOM precision the rendered
-  // values are decimal, not just integers — e.g. "2.50" / "0.75". The matcher does plain
-  // digit-agnostic string slicing between fixed delimiters, so it must parse a decimal
-  // quantity exactly like an integer one.
-  it('translates a rendered message with decimal invoiced/pending quantities to es_ES', () => {
-    const decimalRaw = 'The shipment 10000039 cannot be invoiced: quantity to invoice (2.50) exceeds pending quantity (0.75). The shipment may already be invoiced in another document.';
-    assert.equal(
-      translateBackendError(decimalRaw, es),
-      'El albarán 10000039 no se puede facturar: la cantidad a facturar (2.50) supera la cantidad pendiente (0.75). Puede que ya esté facturado en otro documento.',
-    );
-  });
-});
-
 // ── ETP-4831 case 2: "No hay líneas a facturar en este pedido" always in Spanish ──
 //
 // CreateDraftInvoiceHandler#createFromOrder (com.etendoerp.go) throws
 // `new OBException("No hay líneas a facturar en este pedido")` — a hardcoded
-// Spanish literal with NO AD_Message/i18n involvement at all, so it always
-// renders in Spanish even in an en_US session (the inverse symptom of case 1,
-// which always rendered in English regardless of locale).
+// Spanish literal with NO AD_Message/i18n involvement at all, so the backend
+// renders it in Spanish in every session, including an en_US one.
 //
-// Unlike the parameterized messages above, this string carries no dynamic/
-// interpolated value — it's a fixed literal — so it belongs in the plain
-// exact-match BACKEND_ERROR_MAP (same style as 'A tariff marked as default
-// cannot be deactivated.' / the costing-engine entry), not a parameterized
-// matcher. Suggested key: `backendError.noLinesToInvoice`.
+// The string carries no dynamic/interpolated value — it's a fixed literal — so
+// it lives in the plain exact-match BACKEND_ERROR_MAP (same style as 'A tariff
+// marked as default cannot be deactivated.' / the costing-engine entry) rather
+// than in a parameterized matcher, under `backendError.noLinesToInvoice`.
 //
-// EXPECTED (not yet implemented): a `BACKEND_ERROR_MAP` entry mapping the raw
-// Spanish literal to `backendError.noLinesToInvoice`. Until that lands, these
-// tests MUST fail: translateBackendError has no matching key for this message,
-// so it falls through to returning `msg` unchanged (still Spanish, even for an
-// en_US translator).
+// These tests guarantee that entry stays wired: translateBackendError must
+// resolve the raw Spanish literal through the caller's translator in both
+// directions, so an en_US session sees English instead of the backend's Spanish.
 describe('translateBackendError — "no lines to invoice" exact match (ETP-4831 case 2)', () => {
   const RAW = 'No hay líneas a facturar en este pedido';
 
@@ -562,11 +494,9 @@ describe('translateBackendError — "no lines to invoice" exact match (ETP-4831 
 // Both throw sites emit the exact same string, so ONE BACKEND_ERROR_MAP entry
 // covers both. Suggested key: `backendError.noPendingLinesToInvoiceShipment`.
 //
-// EXPECTED (not yet implemented): a `BACKEND_ERROR_MAP` entry mapping the raw
-// Spanish literal to `backendError.noPendingLinesToInvoiceShipment`. Until that
-// lands, these tests MUST fail: translateBackendError has no matching key for
-// this message, so it falls through to returning `msg` unchanged (still
-// Spanish, even for an en_US translator).
+// These tests guarantee that entry stays wired: translateBackendError must
+// resolve the raw Spanish literal through the caller's translator in both
+// directions, so an en_US session sees English instead of the backend's Spanish.
 describe('translateBackendError — "no pending lines to invoice" shipment exact match (ETP-4831 case 3)', () => {
   const RAW = 'No hay líneas pendientes de facturar en este albarán';
 
@@ -589,16 +519,15 @@ describe('translateBackendError — "no pending lines to invoice" shipment exact
 //
 // Verified directly against com.etendoerp.go source. Two families:
 //
-//  A) Exact-match literals (no interpolation) — belong in BACKEND_ERROR_MAP, same
+//  A) Exact-match literals (no interpolation) — live in BACKEND_ERROR_MAP, same
 //     style as case 2/3 above.
-//  B) Parameterized literals (fixed prefix + a dynamic ID appended) — need NEW
+//  B) Parameterized literals (fixed prefix + a dynamic ID appended) — handled by
 //     matchers wired into translateParameterized, same plain-string-slicing style
-//     (no regex, ReDoS-safe) as matchAccountNotFound / matchInvoiceLineAlreadyInvoiced.
+//     (no regex, ReDoS-safe) as matchAccountNotFound.
 //
-// EXPECTED (not yet implemented): none of the BACKEND_ERROR_MAP entries, matcher
-// functions, or i18n keys below exist yet. Until they land, ALL tests in this
-// block MUST fail: translateBackendError falls through to returning `msg`
-// unchanged for every one of these raw messages.
+// These tests guarantee every one of those entries, matchers and i18n keys stays
+// wired: translateBackendError must resolve each raw message through the caller's
+// translator rather than falling through and returning `msg` unchanged.
 
 describe('translateBackendError — ETP-4831 case 4 (9 more hardcoded messages)', () => {
   // A.1) CreateShipmentHandler.java:136 — hardcoded Spanish literal, no
