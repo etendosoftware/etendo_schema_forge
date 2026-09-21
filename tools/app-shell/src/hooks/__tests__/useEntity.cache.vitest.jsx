@@ -220,7 +220,7 @@ describe('useEntity — shared cache integration (ETP-4563)', () => {
     expect(counts.record).toBe(2);
   });
 
-  it('6. adding a child invalidates only the affected parent collection', async () => {
+  it('6. adding a child invalidates its own children collection (and, per ETP-5366, the parent entity cache too — see test 19)', async () => {
     const { fetchMock, counts } = makeFetch();
     globalThis.fetch = fetchMock;
 
@@ -233,8 +233,11 @@ describe('useEntity — shared cache integration (ETP-4563)', () => {
     await act(async () => { await a.result.current.fetchChildren('p1'); });
     await waitFor(() => expect(counts.children).toBe(1));
 
-    // Adding a child under the selected parent invalidates only that collection,
-    // so the next children read refetches.
+    // Adding a child under the selected parent invalidates that collection,
+    // so the next children read refetches. NOTE: as of ETP-5366, handleAddChild
+    // ALSO invalidates the parent entity's own list/record cache (invalidateEntityCache) —
+    // this test only exercises the children-collection side of that; test 19 below
+    // covers the parent-entity side explicitly.
     await act(async () => { await a.result.current.handleAddChild({ qty: 1 }); });
     await waitFor(() => expect(counts.children).toBeGreaterThanOrEqual(2));
   });
@@ -479,5 +482,82 @@ describe('useEntity — shared cache integration (ETP-4563)', () => {
     await waitFor(() => expect(a.result.current.children).toHaveLength(2));
     expect(counts.children).toBe(2);
     expect(a.result.current.children.map(r => r.id)).toEqual(['ADDR-1', 'ADDR-2']);
+  });
+
+  // --- ETP-5366 regression: child mutations must also invalidate the PARENT entity's
+  // own list/record cache, not just the children collection. A child row can carry
+  // a value the parent list row displays (a computed header total, a rolled-up
+  // address/count), so leaving the parent's cache entry fresh means the grid keeps
+  // showing pre-mutation data for up to `recordStaleTime` after editing/adding/
+  // deleting a child, until a manual refresh. Before the fix, handleAddChild/
+  // handleUpdateChild/handleDeleteChild called ONLY invalidateChildrenCache — these
+  // tests would have failed against that old code because `cache.invalidate` would
+  // never have been called with `{ entity: 'header' }`, and the parent list re-mount
+  // below would have kept serving the stale cached page (counts.list staying at 1).
+
+  it('19. handleAddChild invalidates the parent entity cache, not just the children collection', async () => {
+    const { fetchMock, counts } = makeFetch();
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts()), { wrapper });
+    await waitFor(() => expect(a.result.current.items.length).toBe(1));
+    expect(counts.list).toBe(1);
+
+    await act(async () => { a.result.current.handleSelect({ id: '1', name: 'Item 1' }); });
+
+    const invalidateSpy = vi.spyOn(cache, 'invalidate');
+    await act(async () => { await a.result.current.handleAddChild({ qty: 1 }); });
+
+    // The parent entity ('header'), not only the child entity ('lines'), was marked stale.
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ entity: 'header' }));
+    a.unmount();
+
+    // Behavioral proof: the parent LIST cache was actually dropped, so returning to the
+    // grid (a fresh mount) refetches instead of serving the pre-add cached page.
+    const b = renderHook(() => useEntity('header', 'lines', opts()), { wrapper });
+    await waitFor(() => expect(b.result.current.items.length).toBe(1));
+    expect(counts.list).toBe(2);
+  });
+
+  it('20. handleUpdateChild invalidates the parent entity cache, not just the children collection', async () => {
+    const { fetchMock, counts } = makeFetch();
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts()), { wrapper });
+    await waitFor(() => expect(a.result.current.items.length).toBe(1));
+    expect(counts.list).toBe(1);
+
+    await act(async () => { a.result.current.handleSelect({ id: '1', name: 'Item 1' }); });
+
+    const invalidateSpy = vi.spyOn(cache, 'invalidate');
+    act(() => { a.result.current.handleUpdateChild('c1', 'qty', 5); });
+
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ entity: 'header' }));
+    a.unmount();
+
+    const b = renderHook(() => useEntity('header', 'lines', opts()), { wrapper });
+    await waitFor(() => expect(b.result.current.items.length).toBe(1));
+    expect(counts.list).toBe(2);
+  });
+
+  it('21. handleDeleteChild invalidates the parent entity cache, not just the children collection', async () => {
+    const { fetchMock, counts } = makeFetch();
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts()), { wrapper });
+    await waitFor(() => expect(a.result.current.items.length).toBe(1));
+    expect(counts.list).toBe(1);
+
+    await act(async () => { a.result.current.handleSelect({ id: '1', name: 'Item 1' }); });
+
+    const invalidateSpy = vi.spyOn(cache, 'invalidate');
+    act(() => { a.result.current.handleDeleteChild('c1'); });
+
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ entity: 'header' }));
+    a.unmount();
+
+    const b = renderHook(() => useEntity('header', 'lines', opts()), { wrapper });
+    await waitFor(() => expect(b.result.current.items.length).toBe(1));
+    expect(counts.list).toBe(2);
   });
 });
