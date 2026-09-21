@@ -5,10 +5,15 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
+// ETP-5316 — exposed through vi.hoisted (same reason as `mockUseNeoAction` below) so a test can
+// make the DocAction path REJECT with a specific error and assert what lands in `failed`. The
+// default implementation resolves `{}` — a success — which is what every pre-existing test here
+// relied on when this was an inline `vi.fn().mockResolvedValue({})`.
+const { mockDocExecute } = vi.hoisted(() => ({
+  mockDocExecute: vi.fn(() => Promise.resolve({})),
+}));
 vi.mock('@/hooks/useDocumentAction', () => ({
-  useDocumentAction: () => ({
-    execute: vi.fn().mockResolvedValue({}),
-  }),
+  useDocumentAction: () => ({ execute: mockDocExecute }),
 }));
 
 // ETP-5075 — `useNeoAction` backs the `actionMode="neoAction"` path. Exposed as
@@ -414,5 +419,152 @@ describe('BulkDocumentAction — actionMode (ETP-5075)', () => {
     expect(ok).toBe(1);
     expect(failed).toEqual([]);
     expect(mockNeoExecute).not.toHaveBeenCalled();
+  });
+});
+
+// ETP-5316 — `handleDone` writes `failed[]` to sessionStorage and reloads the page;
+// useBulkActionToast then replays it after the reload and renders the single-failure toast.
+// The AD_MESSAGE keys therefore have to (a) be captured off the rejection in BOTH executor
+// modes and (b) survive JSON.stringify → sessionStorage → JSON.parse as plain strings. If
+// either half breaks, the toast silently falls back to core's own sentence — the exact
+// line-number-citing text this ticket removed — with nothing failing anywhere.
+describe('BulkDocumentAction — messageKeys reach the persisted failure (ETP-5316)', () => {
+  const STORAGE_KEY = 'bulkActionResult';
+  const CORE_SENTENCE = 'En la línea 10, 20, 30, 40, Cuando el producto no esta vacío entonces '
+    + 'la cantidad movida no debe ser cero.';
+  const KEYS = ['Inline', 'ProductNotNullAndMovementQtyZero'];
+  const buildPost = () => [{ value: 'post', labelKey: 'post' }];
+
+  function docActionError(message, messageKeys) {
+    const err = new Error(message);
+    err.messageKeys = messageKeys;
+    return err;
+  }
+
+  function readStored() {
+    return JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseNeoAction.mockReturnValue({ execute: mockNeoExecute, loading: false });
+    sessionStorage.clear();
+    Object.defineProperty(window, 'location', {
+      value: { reload: vi.fn() },
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  it('documentAction mode: carries err.messageKeys into failed[i].messageKeys', async () => {
+    mockDocExecute.mockRejectedValueOnce(docActionError(CORE_SENTENCE, KEYS));
+    render(
+      <BulkDocumentAction
+        selectedRows={[{ id: 'row-dk1', documentNo: 'ALB-01', documentStatus: 'DR' }]}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+      />,
+    );
+
+    fireEvent.click(screen.getByText('bulkCompletion'));
+    fireEvent.click(screen.getByText('done'));
+
+    await waitFor(() => expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull());
+    const { ok, failed } = readStored();
+
+    expect(ok).toBe(0);
+    expect(failed).toEqual([
+      { documentNo: 'ALB-01', message: CORE_SENTENCE, messageKeys: KEYS },
+    ]);
+
+    await waitFor(() => expect(window.location.reload).toHaveBeenCalled(), { timeout: 3000 });
+  });
+
+  // The neoAction adapter resolves `{ success: false }` and re-throws it as an Error; before
+  // ETP-5316 that normalisation was the one place the keys were dropped.
+  it('neoAction mode: the resolve→throw adapter does not lose the keys', async () => {
+    mockNeoExecute.mockResolvedValueOnce({
+      success: false, message: CORE_SENTENCE, messageKeys: KEYS,
+    });
+    render(
+      <BulkDocumentAction
+        selectedRows={[{ id: 'row-nk1', documentNo: 'ALB-02' }]}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+        windowName="goods-shipment"
+        actionMode="neoAction"
+        buildActions={buildPost}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('bulkCompletion'));
+    fireEvent.click(screen.getByText('done'));
+
+    await waitFor(() => expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull());
+    const { ok, failed } = readStored();
+
+    expect(ok).toBe(0);
+    expect(failed).toEqual([
+      { documentNo: 'ALB-02', message: CORE_SENTENCE, messageKeys: KEYS },
+    ]);
+
+    await waitFor(() => expect(window.location.reload).toHaveBeenCalled(), { timeout: 3000 });
+  });
+
+  it('keeps per-row keys distinct across a multi-row failure', async () => {
+    mockDocExecute
+      .mockRejectedValueOnce(docActionError('no qty', ['ProductNotNullAndMovementQtyZero']))
+      .mockRejectedValueOnce(docActionError('locked', ['lockedProduct']));
+    render(
+      <BulkDocumentAction
+        selectedRows={[
+          { id: 'row-dk2', documentNo: 'ALB-03', documentStatus: 'DR' },
+          { id: 'row-dk3', documentNo: 'ALB-04', documentStatus: 'DR' },
+        ]}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+      />,
+    );
+
+    fireEvent.click(screen.getByText('bulkCompletion'));
+    fireEvent.click(screen.getByText('done'));
+
+    await waitFor(() => expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull());
+    const { failed } = readStored();
+
+    expect(failed).toEqual([
+      { documentNo: 'ALB-03', message: 'no qty', messageKeys: ['ProductNotNullAndMovementQtyZero'] },
+      { documentNo: 'ALB-04', message: 'locked', messageKeys: ['lockedProduct'] },
+    ]);
+
+    await waitFor(() => expect(window.location.reload).toHaveBeenCalled(), { timeout: 3000 });
+  });
+
+  // Against a backend that sends no keys, `undefined` drops out of JSON.stringify by itself,
+  // leaving the pre-ETP-5316 `{ documentNo, message }` shape byte-for-byte.
+  it('a keyless rejection persists exactly the pre-ETP-5316 shape (no messageKeys property)', async () => {
+    mockDocExecute.mockRejectedValueOnce(new Error('Document already completed'));
+    render(
+      <BulkDocumentAction
+        selectedRows={[{ id: 'row-dk4', documentNo: 'ALB-05', documentStatus: 'DR' }]}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+      />,
+    );
+
+    fireEvent.click(screen.getByText('bulkCompletion'));
+    fireEvent.click(screen.getByText('done'));
+
+    await waitFor(() => expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull());
+    const { failed } = readStored();
+
+    expect(failed).toHaveLength(1);
+    expect(Object.keys(failed[0]).sort()).toEqual(['documentNo', 'message']);
+
+    await waitFor(() => expect(window.location.reload).toHaveBeenCalled(), { timeout: 3000 });
   });
 });

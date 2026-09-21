@@ -21,6 +21,9 @@ vi.mock('@/i18n', () => ({
       processExecutedWithOmitted: '{ok} processed, {omitted} omitted, {failed} failed',
       actionFailed: 'Action failed',
       'backendError.countryIban': 'País necesario en una cuenta IBAN.',
+      // ETP-5316 — the AD_MESSAGE-key route's locale entries.
+      'backendError.docLinesWithoutQuantity': 'Hay líneas sin cantidad.',
+      'backendError.docLinesLockedProduct': 'Hay líneas con productos bloqueados que no pueden entregarse.',
     };
     return map[key] || key;
   },
@@ -235,5 +238,107 @@ describe('useBulkActionToast', () => {
     const stored = JSON.parse(sessionStorage.getItem('bulkActionResult'));
     expect(stored.ok).toBe(5);
     expect(stored.failed).toEqual(['err1']);
+  });
+
+  // ETP-5316 — the single-record fast path is the ONLY branch that renders a backend message, so
+  // it is the only one that can use the AD_MESSAGE keys. The multi/mixed branches keep rendering
+  // the generic counter summary, still as a single toast argument (no `description`) — that is a
+  // separate, earlier fix in this same ticket and must not regress here.
+  describe('AD_MESSAGE key mapping on the single-failure fast path (ETP-5316)', () => {
+    it('renders the key-mapped string instead of the core sentence citing AD line numbers', () => {
+      const { result } = renderHook(() => useBulkActionToast());
+      act(() => {
+        result.current.showResult({
+          ok: 0,
+          failed: [{
+            documentNo: 'ALB-01',
+            message: 'En la línea 10, 20, 30, 40, Cuando el producto no esta vacío entonces la '
+              + 'cantidad movida no debe ser cero.',
+            messageKeys: ['Inline', 'ProductNotNullAndMovementQtyZero'],
+          }],
+        });
+      });
+      expect(toast.error).toHaveBeenCalledWith('Hay líneas sin cantidad.');
+      expect(toast.error.mock.calls[0]).toHaveLength(1);
+    });
+
+    it('falls back to the backend sentence when the keys are not recognised', () => {
+      const { result } = renderHook(() => useBulkActionToast());
+      act(() => {
+        result.current.showResult({
+          ok: 0,
+          failed: [{ documentNo: 'ALB-02', message: 'Some unmapped backend error', messageKeys: ['NopeNotAKey'] }],
+        });
+      });
+      expect(toast.error).toHaveBeenCalledWith('Some unmapped backend error');
+    });
+
+    it('still maps by key when the failure carries no message at all', () => {
+      const { result } = renderHook(() => useBulkActionToast());
+      act(() => {
+        result.current.showResult({
+          ok: 0,
+          failed: [{ documentNo: 'ALB-03', messageKeys: ['lockedProduct'] }],
+        });
+      });
+      expect(toast.error).toHaveBeenCalledWith(
+        'Hay líneas con productos bloqueados que no pueden entregarse.',
+      );
+    });
+
+    it('survives the sessionStorage round-trip on the reload replay flow', () => {
+      persistBulkActionResult({
+        ok: 0,
+        failed: [{
+          documentNo: 'ALB-04',
+          message: 'En la línea 10, 20, la cantidad movida no debe ser cero.',
+          messageKeys: ['Inline', 'ProductNotNullAndMovementQtyZero'],
+        }],
+      });
+      renderHook(() => useBulkActionToast());
+      expect(toast.error).toHaveBeenCalledWith('Hay líneas sin cantidad.');
+      expect(sessionStorage.getItem('bulkActionResult')).toBeNull();
+    });
+
+    it('does not use the keys on a multi-failure result — the generic summary stays, with no description', () => {
+      const { result } = renderHook(() => useBulkActionToast());
+      act(() => {
+        result.current.showResult({
+          ok: 0,
+          failed: [
+            { documentNo: 'ALB-05', message: 'x', messageKeys: ['ProductNotNullAndMovementQtyZero'] },
+            { documentNo: 'ALB-06', message: 'y', messageKeys: ['lockedProduct'] },
+          ],
+        });
+      });
+      expect(toast.error).toHaveBeenCalledWith('0 processed, 2 failed');
+      expect(toast.error.mock.calls[0]).toHaveLength(1);
+    });
+
+    it('does not use the keys on a mixed result — the warning summary stays, with no description', () => {
+      const { result } = renderHook(() => useBulkActionToast());
+      act(() => {
+        result.current.showResult({
+          ok: 2,
+          failed: [{ documentNo: 'ALB-07', message: 'x', messageKeys: ['ProductNotNullAndMovementQtyZero'] }],
+        });
+      });
+      expect(toast.warning).toHaveBeenCalledWith('2 processed, 1 failed');
+      expect(toast.warning.mock.calls[0]).toHaveLength(1);
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('does not use the keys when a single failure is accompanied by an omitted row', () => {
+      const { result } = renderHook(() => useBulkActionToast());
+      act(() => {
+        result.current.showResult({
+          ok: 0,
+          omitted: [{ documentNo: 'ALB-08', message: 'bulkRowAlreadyPosted' }],
+          failed: [{ documentNo: 'ALB-09', message: 'x', messageKeys: ['ProductNotNullAndMovementQtyZero'] }],
+        });
+      });
+      expect(toast.warning).toHaveBeenCalledWith('0 processed, 1 omitted, 1 failed');
+      expect(toast.warning.mock.calls[0]).toHaveLength(1);
+    });
   });
 });

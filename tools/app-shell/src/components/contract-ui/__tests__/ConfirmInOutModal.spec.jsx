@@ -1,6 +1,21 @@
 // @vitest-environment jsdom
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
+// ETP-5316 — the modal's only use of `useUI()` is `translateBackendError(err.message, ui, …)`,
+// and this spec renders without a LocaleProvider, so the real hook echoes every key back and no
+// mapping could ever be observed. A PARTIAL mock keeps the rest of `@/i18n` real (PriceListPicker
+// uses it too) while supplying just the entries the AD_MESSAGE-key route needs. Everything not
+// listed still echoes its key, which is exactly the "translation missing" input the pre-existing
+// error tests below rely on.
+const CONFIRM_UI_DICT = {
+  'backendError.docLinesWithoutQuantity': 'Hay líneas sin cantidad.',
+  'backendError.docLinesLockedProduct': 'Hay líneas con productos bloqueados que no pueden entregarse.',
+};
+vi.mock('@/i18n', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, useUI: () => (key) => CONFIRM_UI_DICT[key] ?? key };
+});
+
 // Radix Select cannot run in JSDOM — replace with a native <select> that
 // honours value/onValueChange and renders options via SelectItem. Only
 // exercised by the showPriceListPicker=true suite below; every other test in
@@ -368,8 +383,100 @@ describe('ConfirmInOutModal', () => {
     await waitFor(() => {
       expect(screen.getByText(priceListRequiredMsg)).toBeInTheDocument();
     });
-    expect(spy).toHaveBeenCalledWith(priceListRequiredMsg, expect.any(Function));
+    // ETP-5316 added a third argument: the AD_MESSAGE keys the backend sent, `undefined` here
+    // because this error body carries none.
+    expect(spy).toHaveBeenCalledWith(
+      priceListRequiredMsg, expect.any(Function), { messageKeys: undefined },
+    );
     spy.mockRestore();
+  });
+
+  // ETP-5316 — confirming a shipment/return whose lines are broken used to render core's own
+  // sentence, which cites AD line numbers (10, 20, 30 — numbered in tens, unrelated to the row
+  // positions in the grid): unlocatable for the user and unmatchable for us, since the numbers
+  // differ per document. The modal now hands the AD_MESSAGE keys the backend extracted BEFORE
+  // translating to translateBackendError, which resolves the failure by identity.
+  describe('AD_MESSAGE key mapping on the inline error (ETP-5316)', () => {
+    const CORE_SENTENCE = 'En la línea 10, 20, 30, 40, Cuando el producto no esta vacío entonces '
+      + 'la cantidad movida no debe ser cero.';
+
+    function mockDocumentActionFailure(body) {
+      vi.stubGlobal('fetch', vi.fn((url) => {
+        if (String(url).includes('/action/documentAction')) {
+          return Promise.resolve({ ok: false, status: 400, json: async () => body });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({ response: { data: {} } }) });
+      }));
+    }
+
+    it('renders the key-mapped wording instead of the core sentence', async () => {
+      mockDocumentActionFailure({
+        status: 'error',
+        message: CORE_SENTENCE,
+        messageKeys: ['Inline', 'ProductNotNullAndMovementQtyZero'],
+      });
+      render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={false} />);
+      fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+
+      await waitFor(() => expect(screen.getByText('Hay líneas sin cantidad.')).toBeInTheDocument());
+      // The AD line numbers are gone from what the user reads.
+      expect(screen.queryByText(CORE_SENTENCE)).toBeNull();
+    });
+
+    it('reads the keys out of the response.* envelope too', async () => {
+      mockDocumentActionFailure({
+        response: { message: CORE_SENTENCE, messageKeys: ['lockedProduct'] },
+      });
+      render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={false} />);
+      fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+
+      await waitFor(() => expect(
+        screen.getByText('Hay líneas con productos bloqueados que no pueden entregarse.'),
+      ).toBeInTheDocument());
+    });
+
+    // Against a backend that does not send keys (the two repos deploy separately), the modal
+    // must show exactly what it showed before — core's own phrase.
+    it('shows the core sentence unchanged when the backend sends no keys', async () => {
+      mockDocumentActionFailure({ status: 'error', message: CORE_SENTENCE });
+      render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={false} />);
+      fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+
+      await waitFor(() => expect(screen.getByText(CORE_SENTENCE)).toBeInTheDocument());
+    });
+
+    it('shows the core sentence when the keys are not ones we map', async () => {
+      mockDocumentActionFailure({
+        status: 'error', message: CORE_SENTENCE, messageKeys: ['Inline', 'SomeUnknownToken'],
+      });
+      render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={false} />);
+      fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+
+      await waitFor(() => expect(screen.getByText(CORE_SENTENCE)).toBeInTheDocument());
+    });
+
+    // buildBackendError is used for BOTH POSTs; the invoice leg must not be the one path that
+    // loses the keys.
+    it('maps a failure raised by the invoice action, not just by documentAction', async () => {
+      vi.stubGlobal('fetch', vi.fn((url) => {
+        const u = String(url);
+        if (u.includes('/action/documentAction')) {
+          return Promise.resolve({ ok: true, json: async () => ({ response: { data: {} } }) });
+        }
+        if (u.includes('/createInvoice')) {
+          return Promise.resolve({
+            ok: false,
+            status: 400,
+            json: async () => ({ message: CORE_SENTENCE, messageKeys: ['ProductNotNullAndMovementQtyZero'] }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) });
+      }));
+      render(<ConfirmInOutModal {...BASE_PROPS} defaultCreateInvoice={true} />);
+      fireEvent.click(screen.getByTestId('confirm-modal-confirm-btn'));
+
+      await waitFor(() => expect(screen.getByText('Hay líneas sin cantidad.')).toBeInTheDocument());
+    });
   });
 
   // ── ETP-5108: one typeface across the whole modal ───────────────────────────
