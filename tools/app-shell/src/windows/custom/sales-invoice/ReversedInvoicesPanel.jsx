@@ -2,7 +2,6 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { ChevronDown, FileText, Loader2, Plus, Search, Trash2, Info } from 'lucide-react';
 import { useUI, useLabel, useLocaleSwitch } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
-import { formatCalendarDate } from '@/lib/dateOnly';
 import { toast } from 'sonner';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
