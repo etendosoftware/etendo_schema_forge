@@ -295,7 +295,29 @@ const BASE = {
         { id: 'bank_direccion', labelKey: 'fm.ident.bank.direccion', type: 'text', readOnly: false, visibleWhen: _BANK_FOREIGN_DETAILS_VW, requiredWhen: _BANK_FOREIGN_DETAILS_REQUIRED_WHEN },
         { id: 'bank_ciudad',    labelKey: 'fm.ident.bank.ciudad',    type: 'text', readOnly: false, visibleWhen: _BANK_FOREIGN_DETAILS_VW, requiredWhen: _BANK_FOREIGN_DETAILS_REQUIRED_WHEN },
         { id: 'bank_pais',      labelKey: 'fm.ident.bank.pais',      type: 'text', readOnly: false, visibleWhen: _BANK_FOREIGN_DETAILS_VW, requiredWhen: _BANK_FOREIGN_DETAILS_REQUIRED_WHEN },
-        { id: 'bank_sepa',      labelKey: 'fm.ident.bank.sepa',      type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
+        // ETP-5431 — was a free-text input for a field that only ever admits 0/1/2/3. Now a
+        // select, same shape as TIPO_DECLARACION_FIELD (`type: 'select'` + `options[{value,
+        // labelKey}]`, rendered by FmBoxes303's renderIdentSelectField).
+        //
+        // All four options are offered in every context, deliberately: under Nota 3 the marca
+        // must be 1/2/3, but AEAT303Report2024 already rejects 0 there with its own message
+        // (@AEAT303_sepa_mark_required_111@), so hiding the option would be redundant.
+        //
+        // `-` carries the literal value "0", not '' or null: the record design defines 0
+        // ("Vacía") as an admitted value of the marca, and position 194 of the DID page is a
+        // 1-character field that must carry the digit. This matches what an empty field already
+        // produced — AEAT303Report2023#generatePageDID0 substitutes "0" for a blank marca before
+        // writing the page — so the emitted file is unchanged. Note the select still renders its
+        // own leading placeholder option (value ''), which remains distinct: it sends no SEPA
+        // param at all, exactly as an empty text input did.
+        { id: 'bank_sepa',      labelKey: 'fm.ident.bank.sepa',      type: 'select', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN,
+          options: [
+            { value: '0', labelKey: 'fm.ident.bank.sepa.none' },
+            { value: '1', labelKey: 'fm.ident.bank.sepa.spain' },
+            { value: '2', labelKey: 'fm.ident.bank.sepa.eu_sepa' },
+            { value: '3', labelKey: 'fm.ident.bank.sepa.rest_of_world' },
+          ],
+        },
       ],
       rows: [],
     },

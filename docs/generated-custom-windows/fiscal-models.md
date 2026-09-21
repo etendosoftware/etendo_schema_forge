@@ -1081,6 +1081,31 @@ Y-flag convention the other checkboxes already use (`sin_actividad`, `redeme`, `
 `isCancelModifyDebitRequested` — which also accepts the literal `'Y'` so any value already
 persisted in that shape keeps working. `_BANK_NOT_WAIVED` accepts `'N'`/`''` for the same reason.
 
+*4. `bank_sepa` is a select, not free text.* The field only ever admitted `0`/`1`/`2`/`3` but was
+a free-text input. It is now `type: 'select'` with `options[{value, labelKey}]`, the same shape
+`TIPO_DECLARACION_FIELD` uses and the same one `FmBoxes303`'s `renderIdentSelectField` renders:
+`0` → `-`, `1` → Cuenta España, `2` → Unión Europea SEPA, `3` → Resto Países. Labels are i18n keys
+(`fm.ident.bank.sepa.none` / `.spain` / `.eu_sepa` / `.rest_of_world`) in **both** `es_ES.json` and
+`en_US.json`. `0` is labelled literally `-`, not "Vacía" — it must read as "no value set".
+
+**All four options are offered in every context**, with no dynamic option logic: under Nota 3 the
+marca must be 1/2/3, but `AEAT303Report2024` already rejects `0` there with its own message
+(`AEAT303_sepa_mark_required_111`), so hiding the option would only duplicate that guard.
+
+`-` carries the literal value `"0"`, never `''` or `null`: the record design defines `0` ("Vacía")
+as an admitted value of the marca, and position 194 of the DID page is a 1-character field that
+must carry the digit. **This does not change the emitted file.**
+`AEAT303Report2023#generatePageDID0` already substitutes `"0"` for a blank marca before writing
+the page (`if (StringUtils.isBlank(sepa)) { sepa = "0"; }`), so an empty text input produced a
+`"0"` at position 194 too. One genuine difference to be aware of: `renderIdentSelectField` always
+renders its own leading placeholder option (value `''`), which remains distinct from `-` — it
+sends no `SEPA` parameter at all, exactly as an empty text input did. That matters only for the
+REDEME + tipo `D`/`V`/`X` validators (`AEAT303Report2021#checkData`,
+`AEAT303Report2023#checkData`), which reject a *blank* marca with `@AEAT303_sepa_empty@` but
+accept `"0"`. Choosing `-` therefore satisfies a check that leaving the field untouched does not —
+correct, since `0` is a valid marca value, but it is a reachable behaviour difference between the
+two "empty-looking" choices.
+
 This fix covers **both** Java readers, not just the Nota 3 guard. `generatePage3` writes the mark
 itself at position 440 of page 3, and it was reading the same never-matching value, so the mark
 was never written either — a declaration that requested the cancellation reached AEAT with
