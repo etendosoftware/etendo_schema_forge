@@ -1,6 +1,7 @@
 import ReturnToVendorShipmentPage from '@generated/return-to-vendor-shipment/generated/web/return-to-vendor-shipment/ReturnToVendorShipmentPage';
 import ReturnToVendorShipmentPreview from './ReturnToVendorShipmentPreview';
 import { useReturnToVendorPdf } from './useReturnToVendorPdf.js';
+import ReturnToVendorShipmentRowConfirmModal from './ReturnToVendorShipmentRowConfirmModal.jsx';
 import ReturnToVendorShipmentSecondaryActions from './ReturnToVendorShipmentSecondaryActions.jsx';
 import ReturnWindowShell from '../shared/ReturnWindowShell';
 import { useMenuLabel } from '@/i18n';
@@ -82,6 +83,17 @@ export default function ReturnToVendorShipmentWindow({ windowName, recordId, api
           usePdf: useReturnToVendorPdf,
           documentType: tMenu('Return to Vendor Shipment'),
           visibleWhen: "@documentStatus@='CO'",
+        }}
+        // ETP-5378 — row-hover Confirmar, opening the same popup
+        // ConfirmWithCreditButton shows in the form.
+        confirmAction={{
+          ConfirmModal: ReturnToVendorShipmentRowConfirmModal,
+          specName: 'return-to-vendor-shipment',
+          entityName: 'returnToVendorShipment',
+          confirmedTitleKey: 'documentConfirmed',
+          invoiceResultTitleKey: 'returnToVendor.invoiceCreatedTitle',
+          invoiceDocType: 'facturaCompra',
+          invoiceRoute: '/purchase-invoice',
         }}
         {...rest}
         data-testid="ReturnWindowShell__a5f79c" />

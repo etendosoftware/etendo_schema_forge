@@ -174,4 +174,23 @@ describe('ReturnToVendorShipmentWindow custom wrapper', () => {
       assert.equal((src.match(/<BulkDocumentAction/g) || []).length, 2);
     });
   });
+  // ETP-5378 — row-hover "Confirmar", opening the same popup the form's
+  // ConfirmWithCreditButton already shows on this window (topbarRight, Borrador only).
+  describe('ETP-5378 — row-hover "Confirmar" (confirmAction)', () => {
+    it('imports its own row confirm modal', () => {
+      assert.match(src, /import ReturnToVendorShipmentRowConfirmModal from '\.\/ReturnToVendorShipmentRowConfirmModal\.jsx';/);
+    });
+
+    it('passes confirmAction to ReturnWindowShell with the modal and spec/entity names', () => {
+      assert.match(src, /confirmAction=\{\{[\s\S]{0,400}ConfirmModal: ReturnToVendorShipmentRowConfirmModal[\s\S]{0,400}\}\}/);
+      assert.match(src, /confirmAction=\{\{[\s\S]{0,400}specName: 'return-to-vendor-shipment'[\s\S]{0,400}\}\}/);
+      assert.match(src, /confirmAction=\{\{[\s\S]{0,400}entityName: 'returnToVendorShipment'[\s\S]{0,400}\}\}/);
+    });
+
+    it("wires the invoice-result title, doc type and route for the popup's \"create invoice\" branch", () => {
+      assert.match(src, /invoiceResultTitleKey: 'returnToVendor.invoiceCreatedTitle'/);
+      assert.match(src, /invoiceDocType: 'facturaCompra'/);
+      assert.match(src, /invoiceRoute: '\/purchase-invoice'/);
+    });
+  });
 });

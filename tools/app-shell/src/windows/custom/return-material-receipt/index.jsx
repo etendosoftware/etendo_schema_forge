@@ -1,6 +1,7 @@
 import ReturnMaterialReceiptPage from '@generated/return-material-receipt/generated/web/return-material-receipt/ReturnMaterialReceiptPage';
 import ReturnMaterialReceiptPreview from './ReturnMaterialReceiptPreview';
 import { useReturnReceiptPdf } from './useReturnReceiptPdf.js';
+import ReturnMaterialReceiptRowConfirmModal from './ReturnMaterialReceiptRowConfirmModal.jsx';
 import ReturnMaterialReceiptSecondaryActions from './ReturnMaterialReceiptSecondaryActions.jsx';
 import ReturnWindowShell from '../shared/ReturnWindowShell';
 import { useMenuLabel } from '@/i18n';
@@ -87,6 +88,17 @@ export default function ReturnMaterialReceiptWindow({ windowName, recordId, apiB
           usePdf: useReturnReceiptPdf,
           documentType: tMenu('Return Material Receipt'),
           visibleWhen: "@documentStatus@='CO'",
+        }}
+        // ETP-5378 — row-hover Confirmar, opening the same popup
+        // ConfirmWithCreditButton shows in the form.
+        confirmAction={{
+          ConfirmModal: ReturnMaterialReceiptRowConfirmModal,
+          specName: 'return-material-receipt',
+          entityName: 'returnMaterialReceipt',
+          confirmedTitleKey: 'documentConfirmed',
+          invoiceResultTitleKey: 'rmrInvoiceCreatedTitle',
+          invoiceDocType: 'facturaVenta',
+          invoiceRoute: '/sales-invoice',
         }}
         {...rest}
         data-testid="ReturnWindowShell__4e1c28" />

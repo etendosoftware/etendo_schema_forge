@@ -24,8 +24,12 @@ import { buildHeaders } from '@/auth/api.js';
  * list and creating the invoice against the wrong one. The extra GET is the price of
  * driving a detail-shaped modal from the list; it happens once, on click.
  *
- * The fully-invoiced shortcut mirrors ETP-5265 in the form: there is nothing to offer in
- * the popup when the document is already 100% invoiced, so it confirms directly.
+ * The fully-invoiced shortcut mirrors ETP-5265 in the form (goods-shipment/goods-receipt):
+ * there is nothing to offer in the popup when the document is already 100% invoiced, so it
+ * confirms directly. The two return windows do NOT have that shortcut in their own form —
+ * `ConfirmWithCreditButtonBase` always opens its popup on a draft, only disabling the
+ * "create invoice" toggle once fully invoiced — so `skipPopupWhenFullyInvoiced: false` lets
+ * a caller opt out and keep the row-hover flow identical to its own form.
  *
  * @param {object}   params
  * @param {string}   params.specName        NEO spec segment, e.g. "goods-shipment"
@@ -37,6 +41,8 @@ import { buildHeaders } from '@/auth/api.js';
  * @param {string}   params.invoiceResultTitleKey i18n key for the result popup's title
  * @param {string}   params.invoiceDocType  ConfirmResultModal doc type, e.g. "facturaVenta"
  * @param {string}   params.invoiceRoute    route prefix of the created invoice
+ * @param {boolean}  [params.skipPopupWhenFullyInvoiced=true] confirm directly, without ever
+ *   opening `ConfirmModal`, on an already-fully-invoiced document
  * @param {Function} params.onRefresh       called after a successful confirm
  * @returns {{confirmMenuAction: Function, confirmPortal: JSX.Element}}
  */
@@ -50,6 +56,7 @@ export function useRowConfirmAction({
   invoiceResultTitleKey,
   invoiceDocType,
   invoiceRoute,
+  skipPopupWhenFullyInvoiced = true,
   onRefresh,
 }) {
   const ui = useUI();
@@ -91,7 +98,7 @@ export function useRowConfirmAction({
       // Same unwrapping useEntity applies, bare-record fallback included.
       const record = payload?.response?.data?.[0] ?? payload;
 
-      if (parseFloat(record?.invoiceStatus ?? 0) >= 100) {
+      if (skipPopupWhenFullyInvoiced && parseFloat(record?.invoiceStatus ?? 0) >= 100) {
         await docAction.execute(row.id, 'CO');
         toast.dismiss(toastId);
         finishWithoutInvoice();
@@ -105,7 +112,7 @@ export function useRowConfirmAction({
     } finally {
       inFlightRef.current = false;
     }
-  }, [apiFetch, specName, entityName, docAction, ui, finishWithoutInvoice]);
+  }, [apiFetch, specName, entityName, docAction, ui, finishWithoutInvoice, skipPopupWhenFullyInvoiced]);
 
   /**
    * Spread into a window's `rowQuickActions.menuActions` result. Confirm only makes
