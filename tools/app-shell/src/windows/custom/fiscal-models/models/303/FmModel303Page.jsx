@@ -406,6 +406,40 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // mirrors `missingIaeGuard` in AeatSubmitFlow.jsx.
   const [missingIaeGuard, setMissingIaeGuard] = useState(false);
 
+  // ETP-5432 pt.10 — proactive version of the same ETP-4975 guard above. Before this,
+  // the missing-default-IAE-activity check only ever ran REACTIVELY: after clicking
+  // "Generar fichero 303" (this page) or after diving into "Registrar/Presentar" ->
+  // "Presentación telemática AEAT" -> "Presentar" (AeatSubmitFlow.jsx's own modal). A
+  // user only discovered the gap deep inside one of those flows — for the AEAT path,
+  // inside an already-open blocking modal — instead of upfront on the page, the way
+  // the duplicate-period and missing-required-fields banners already work below. Runs
+  // once per last-period declaration, mirrors `handleGenerate`'s own guard exactly
+  // (same endpoint, same fail-OPEN-on-error semantics: a flaky pre-check must never
+  // manufacture a false block), and only ever feeds the existing `genError` banner —
+  // it never blocks anything by itself.
+  useEffect(() => {
+    let cancelled = false;
+    if (!isLastPeriodOfYear(decl?.period) || !selectedOrg?.id) return undefined;
+    (async () => {
+      try {
+        const iaeRes = await apiFetch(
+          `${neoBase(apiBaseUrl)}/organization/actividadesDelIae?parentId=${selectedOrg.id}&_limit=100`,
+          { baseUrl: '' },
+        );
+        if (cancelled || !iaeRes.ok) return;
+        const iaeRows = (await iaeRes.json())?.response?.data ?? [];
+        if (!cancelled && isMissingDefaultIaeActivity(iaeRows)) {
+          setMissingIaeGuard(true);
+          setGenError(t('fm.aeat.error.missingDefaultIae') ?? 'This organization needs at least one IAE activity marked as default, with a code assigned, before filing the last period\'s declaration.');
+        }
+      } catch (_) {
+        // fail open — see comment above.
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decl?.id, decl?.period, selectedOrg?.id]);
+
   // AEAT validation-error incidents (ETP-4456) — starts from whatever `decl.incidents` already
   // carries (list-load snapshot, or the demo mock in `FmListPage.jsx`'s DEMO_DECLARATIONS when no
   // token/apiBaseUrl is configured) and is refreshed from the real backend on mount and after
