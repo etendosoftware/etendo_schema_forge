@@ -437,6 +437,9 @@ function ExpandedForm({
         <button
           type="button"
           onClick={() => setPickerOpen(true)}
+          // Stable handle for E2E: the label is translated AND varies with the selection
+          // (placeholder / document number / "N seleccionadas"), so no text locator can hold.
+          data-testid="rectify-select-invoices"
           className="flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-border-control bg-card px-3 text-sm hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30"
         >
           <span className={`truncate ${lineData?.reversedInvoice ? 'text-foreground' : 'text-muted-foreground'}`}>
