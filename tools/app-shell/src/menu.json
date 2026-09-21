@@ -9,7 +9,8 @@
           "name": "first-steps",
           "label": "First Steps",
           "favname": "First Steps",
-          "capability": "isOwner"
+          "capability": "isOwner",
+          "hideWhenFirstStepsDismissed": true
         }
       ]
     },

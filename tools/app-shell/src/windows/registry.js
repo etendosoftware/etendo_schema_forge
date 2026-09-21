@@ -112,11 +112,39 @@ const windowLoaders = {
  *   items. When `allowedIds`, `capabilities` and `windowAccess` are all falsy,
  *   `groups` is returned unchanged (matches this function's pre-ETP-4513
  *   behavior).
+ * A fourth axis (ETP-5364) lets an item declare `"hideWhenFirstStepsDismissed": true`
+ * so the user can put the onboarding checklist away for good. It is a user
+ * PREFERENCE, not an access rule — but it belongs here rather than in
+ * `SideMenu`, for the same reason the three above do: an entry must be decided
+ * once, before the menu paints. Filtering the group inside `SideMenu` instead
+ * made the entry render first and vanish a moment later, because the checklist
+ * state arrives on its own request (ETP-5364 bug: "aparece brevemente y luego
+ * se oculta" on reload and on locale change).
+ *
+ * Fails CLOSED like the other two declared axes: the item is hidden unless
+ * `firstStepsDismissed` is exactly `false`. `undefined` means "not answered
+ * yet" and hides it, which costs nothing here — the only item declaring this
+ * flag also declares `"capability": "isOwner"`, so it is ALREADY hidden until
+ * that capability resolves. The two gates lift together and the entry appears
+ * once, or not at all.
+ *
+ * @param {Array} groups — output of buildMenuGroups.
+ * @param {Set<string>|null} allowedIds — from useRoleMenu(). `null` disables
+ *   the windowId/processId/obuiappProcessId filtering axis.
+ * @param {Record<string, boolean>|null} [capabilities] — from `useAuth()`/
+ *   `useCapabilitiesSafe()`. `null`/omitted fails closed for capability-gated
+ *   items. When `allowedIds`, `capabilities` and `windowAccess` are all falsy,
+ *   `groups` is returned unchanged (matches this function's pre-ETP-4513
+ *   behavior).
  * @param {Record<string, string>|null} [windowAccess] — from `useAuth()`/
  *   `useWindowAccessSafe()`. `null`/omitted fails closed for accessWindowId
  *   items unless the admin exemption or all-falsy passthrough above applies.
+ * @param {boolean|undefined} [firstStepsDismissed] — from
+ *   `useFirstStepsProgressOptional()`. Only `false` reveals an item declaring
+ *   `hideWhenFirstStepsDismissed`; `true` and `undefined` both hide it.
  */
-export function filterMenuGroupsByAccess(groups, allowedIds, capabilities = null, windowAccess = null) {
+export function filterMenuGroupsByAccess(groups, allowedIds, capabilities = null, windowAccess = null,
+  firstStepsDismissed = undefined) {
   if (!allowedIds && !capabilities && !windowAccess) return groups;
   const itemIds = item => [item.windowId, item.processId, item.obuiappProcessId].filter(Boolean);
   return groups
@@ -124,6 +152,7 @@ export function filterMenuGroupsByAccess(groups, allowedIds, capabilities = null
       ...group,
       items: group.items.filter(item => {
         if (item.capability && capabilities?.[item.capability] !== true) return false;
+        if (item.hideWhenFirstStepsDismissed && firstStepsDismissed !== false) return false;
         if (item.accessWindowId && !capabilities?.isAdminOrClientAdmin && (!windowAccess || windowAccess[item.accessWindowId] === undefined)) return false;
         if (!allowedIds) return true;
         const ids = itemIds(item);

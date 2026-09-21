@@ -21242,6 +21242,11 @@
     "firstStepsTeamDesc": "Invite the people who will work with you and choose what each one can do.",
     "firstStepsAllSetTitle": "You're all set",
     "firstStepsAllSetSubtitle": "Your account is ready. Create your first invoice and start working.",
+    "firstStepsFinishSetup": "Finish initial setup",
+    "firstStepsFinishSetupHint": "Hides First Steps from the menu. You can bring it back from this page at any time.",
+    "firstStepsDismissedTitle": "First Steps is hidden",
+    "firstStepsDismissedSubtitle": "It no longer appears in the menu. Bring it back whenever you want to review the setup.",
+    "firstStepsReopen": "Show it in the menu again",
     "inviteUser": "Invite user",
     "inviteUserDescriptionTitle": "Company user invitations",
     "inviteUserDescription": "Invite people to join your company by email. They can accept with an existing account or register a new one.",
@@ -24909,6 +24914,7 @@
     "documentSequenceSalesOrder": "Sales Order",
     "documentSequenceSalesInvoice": "Sales Invoice",
     "documentSequenceSalesCorrectiveInvoice": "Corrective Sales Invoice",
+    "documentSequencePurchaseInvoice": "Purchase Invoice",
     "documentSequencePurchaseCorrectiveInvoice": "Corrective Purchase Invoice"
   },
   "menus": {

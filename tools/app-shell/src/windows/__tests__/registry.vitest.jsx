@@ -74,6 +74,83 @@ describe('registry', () => {
   // useCapabilitiesSafe() wiring). These tests cover that axis directly with
   // synthetic groups, and also re-confirm the pre-existing windowId axis is
   // untouched by its addition (no regression).
+  // ETP-5364 — the fourth axis, and the only one that is a user PREFERENCE rather than an access
+  // rule: `"hideWhenFirstStepsDismissed": true` on menu.json's first-steps entry, fed from
+  // `useFirstStepsProgressOptional()?.dismissed` by AppLayout.
+  //
+  // It lives here, with the access axes, rather than as a group filter in SideMenu — which is
+  // where it was first written, and which is what produced the bug: the checklist state arrives
+  // on its own request, so the sidebar painted the entry and removed it a moment later, visibly,
+  // on every reload and every locale change. Deciding it here means the entry is never painted
+  // before its state is known.
+  describe('filterMenuGroupsByAccess — first-steps dismissal axis (ETP-5364)', () => {
+    const dismissible = () => [{
+      group: 'First Steps',
+      items: [{ name: 'first-steps', hideWhenFirstStepsDismissed: true }],
+    }];
+
+    it('shows the entry when the checklist is explicitly NOT dismissed', () => {
+      const result = filterMenuGroupsByAccess(dismissible(), null, {}, null, false);
+      expect(result.find(g => g.group === 'First Steps')).toBeDefined();
+    });
+
+    it('hides the entry once the user dismissed the checklist', () => {
+      const result = filterMenuGroupsByAccess(dismissible(), null, {}, null, true);
+      expect(result.find(g => g.group === 'First Steps')).toBeUndefined();
+    });
+
+    it('hides the entry while the state is still unknown (fails closed)', () => {
+      // THE REGRESSION TEST. `undefined` is "not answered yet" — the state AppLayout holds on
+      // the first render after boot. Revealing the entry here and hiding it when the GET lands
+      // is exactly the flash this axis exists to remove, so `undefined` must not reveal it.
+      const result = filterMenuGroupsByAccess(dismissible(), null, {}, null, undefined);
+      expect(result.find(g => g.group === 'First Steps')).toBeUndefined();
+    });
+
+    it('hides the entry when the argument is omitted entirely', () => {
+      // Every pre-ETP-5364 call site passes four arguments. Defaulting to "shown" would have
+      // reintroduced the flash through any caller that had not been updated.
+      const result = filterMenuGroupsByAccess(dismissible(), null, {}, null);
+      expect(result.find(g => g.group === 'First Steps')).toBeUndefined();
+    });
+
+    it('leaves items that do not declare the flag alone', () => {
+      // The axis is opt-in per item, like `capability` and `accessWindowId`. A dismissed
+      // checklist must not remove anything else from the menu.
+      const groups = [{ group: 'Home', items: [{ name: 'dashboard' }] }];
+      const result = filterMenuGroupsByAccess(groups, null, {}, null, true);
+      expect(result.find(g => g.group === 'Home').items.map(i => i.name)).toEqual(['dashboard']);
+    });
+
+    it('keeps Home reachable in every checklist state', () => {
+      // The ticket's own acceptance criterion. Home is a separate menu.json group carrying no
+      // capability, no flag and no windowId, so no checklist state can take it away.
+      for (const dismissed of [true, false, undefined]) {
+        const groups = [
+          { group: 'First Steps', items: [{ name: 'first-steps', hideWhenFirstStepsDismissed: true }] },
+          { group: 'Home', items: [{ name: 'dashboard' }] },
+        ];
+        const result = filterMenuGroupsByAccess(groups, null, {}, null, dismissed);
+        expect(result.find(g => g.group === 'Home')).toBeDefined();
+      }
+    });
+
+    it('is independent of the capability axis on the same item', () => {
+      // menu.json's first-steps entry declares BOTH. Each must be able to hide it on its own,
+      // and neither may reveal it while the other refuses.
+      const gated = () => [{
+        group: 'First Steps',
+        items: [{ name: 'first-steps', capability: 'isOwner', hideWhenFirstStepsDismissed: true }],
+      }];
+      expect(filterMenuGroupsByAccess(gated(), null, { isOwner: true }, null, false)
+        .find(g => g.group === 'First Steps')).toBeDefined();
+      expect(filterMenuGroupsByAccess(gated(), null, { isOwner: false }, null, false)
+        .find(g => g.group === 'First Steps')).toBeUndefined();
+      expect(filterMenuGroupsByAccess(gated(), null, { isOwner: true }, null, true)
+        .find(g => g.group === 'First Steps')).toBeUndefined();
+    });
+  });
+
   describe('filterMenuGroupsByAccess — capability axis (ETP-4513)', () => {
     it('shows a capability-gated item when capabilities[cap] === true', () => {
       const groups = [{ group: 'Settings', items: [{ name: 'roles', capability: 'isAdminOrClientAdmin' }] }];

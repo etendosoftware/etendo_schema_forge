@@ -77,6 +77,20 @@ vi.mock('@/hooks/useCapabilitiesSafe.js', () => ({
   useWindowAccessSafe: vi.fn(() => ({})),
 }));
 
+// ETP-5364 — AppLayout now MOUNTS FirstStepsProvider itself (above the allowedIds gate, so the
+// checklist GET starts alongside SFListMenu instead of after it) and threads
+// `useFirstStepsProgressOptional()?.dismissed` into filterMenuGroupsByAccess as the 5th arg.
+// Both are stubbed here for the same reason useAccountIdentity is: the real provider calls
+// useApiFetch/useAuthOptional and useTenantPlan, none of which this file's tree provides. The
+// provider stub is a pass-through, so what is asserted is that AppLayout WRAPS its tree in it.
+// Default `{ dismissed: false }` = "loaded, not dismissed", which leaves every other test in
+// this file unchanged — none of them declares hideWhenFirstStepsDismissed on an item.
+const useFirstStepsProgressOptionalMock = vi.fn(() => ({ dismissed: false }));
+vi.mock('@/pages/first-steps/FirstStepsContext.jsx', () => ({
+  FirstStepsProvider: ({ children }) => <div data-testid="first-steps-provider">{children}</div>,
+  useFirstStepsProgressOptional: () => useFirstStepsProgressOptionalMock(),
+}));
+
 // Same situation as useRoleMenu above: AppLayout now mounts useAccountIdentity()
 // (ETP-4693) to resolve the account flags are targeted on, and that hook calls
 // useAuth(). Rendering AppLayout without an AuthProvider therefore throws, so the
@@ -322,6 +336,44 @@ describe('AppLayout — normal mode', () => {
     const reports = groups.find((g) => g.group === 'Reports');
     expect(reports).toBeDefined();
     expect(reports.items.map((i) => i.name)).toContain('report-viewer-finance');
+  });
+
+  it('threads the checklist dismissal through to filterMenuGroupsByAccess as the 5th arg (ETP-5364)', () => {
+    const props = {
+      menuGroups: [
+        {
+          group: 'First Steps',
+          items: [{ name: 'first-steps', label: 'Primeros pasos', hideWhenFirstStepsDismissed: true }],
+        },
+      ],
+    };
+
+    const { rerender } = render(<AppLayout {...props} />);
+    let groups = JSON.parse(screen.getByTestId('side-menu-groups').textContent);
+    // Default mock is `{ dismissed: false }` -> the entry is offered.
+    expect(groups.find((g) => g.group === 'First Steps')).toBeDefined();
+
+    useFirstStepsProgressOptionalMock.mockReturnValueOnce({ dismissed: true });
+    rerender(<AppLayout {...props} />);
+    groups = JSON.parse(screen.getByTestId('side-menu-groups').textContent);
+    expect(groups.find((g) => g.group === 'First Steps')).toBeUndefined();
+  });
+
+  it('hides the entry while the checklist state is still unknown (ETP-5364)', () => {
+    // THE REGRESSION TEST for "aparece brevemente y luego se oculta". Before the fix the
+    // provider was mounted BELOW the allowedIds gate, so its GET could not start until the
+    // sidebar was already painting and `dismissed` was necessarily unanswered on that first
+    // render. Whatever the timing, an unanswered state must not put the entry on screen.
+    useFirstStepsProgressOptionalMock.mockReturnValueOnce(null);
+    render(<AppLayout menuGroups={[
+      { group: 'First Steps', items: [{ name: 'first-steps', hideWhenFirstStepsDismissed: true }] },
+      { group: 'Home', items: [{ name: 'dashboard' }] },
+    ]} />);
+
+    const groups = JSON.parse(screen.getByTestId('side-menu-groups').textContent);
+    expect(groups.find((g) => g.group === 'First Steps')).toBeUndefined();
+    // ...and Home is never collateral damage.
+    expect(groups.find((g) => g.group === 'Home')).toBeDefined();
   });
 });
 

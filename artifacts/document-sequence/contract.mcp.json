@@ -2,7 +2,7 @@
   "version": "0.3.0",
   "generatedAt": "2026-09-08T16:52:49.566Z",
   "updatedAt": "2026-09-19T19:45:53.408Z",
-  "contractChecksum": "3cb8ce387efd1b31",
+  "contractChecksum": "06ca4005fbe9d457",
   "apiPrediction": {
     "specName": "document-sequence",
     "baseUrl": "/sws/neo/document-sequence",

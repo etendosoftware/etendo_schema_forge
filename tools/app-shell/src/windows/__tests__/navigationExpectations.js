@@ -28,7 +28,13 @@ const exceptions = {
   // (menu.json). Distinct capability name from `isAdminOrClientAdmin` below,
   // so it does not participate in the accessWindowId admin bypass or in the
   // `roles`/`acct-process-monitor` capability-sibling set.
-  'first-steps': { capability: 'isOwner' },
+  //
+  // ETP-5364 — ALSO the only entry declaring `hideWhenFirstStepsDismissed`, the fourth menu
+  // axis: a user preference rather than a permission, so it is not part of
+  // `navigationPermissions()` (which models grants). A caller filtering the catalog has to pass
+  // `false` as `filterMenuGroupsByAccess`'s 5th argument to mean "not dismissed"; omitting it
+  // fails closed and drops this entry, deliberately — see registry.vitest.jsx.
+  'first-steps': { capability: 'isOwner', hideWhenFirstStepsDismissed: true },
   authorize: {},
   roles: { capability: 'isAdminOrClientAdmin' },
   'api-keys': { capability: 'isAdminOrClientAdmin', flag: 'public-api-keys' },
