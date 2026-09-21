@@ -24,6 +24,7 @@ import QuotationSecondaryActions from '@generated/sales-quotation/custom/Quotati
 // rather than inventing a third flow. See openConfirm below for why.
 import SendToEvaluationModal from '@generated/sales-quotation/custom/SendToEvaluationModal';
 import QuotationConfirmModal from '@generated/sales-quotation/custom/QuotationConfirmModal';
+import RejectQuotationModal from '@generated/sales-quotation/custom/RejectQuotationModal';
 
 const draftModeWithModal = {
   enabled: true,
@@ -122,6 +123,7 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
   const apiFetch = useApiFetch(apiBaseUrl);
   const [confirmRow, setConfirmRow] = useState(null);
   const confirmInFlightRef = useRef(false);
+  const [rejectRow, setRejectRow] = useState(null);
 
   // The grid row carries `grandTotalAmount` (a real column) but not
   // `summedLineAmount`/`businessPartner$_identifier`'s freshest value — and
@@ -160,14 +162,27 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
   // form's button stays visible-but-inert there (a separate, pre-existing gap,
   // not one to paper over here by inventing a third flow this ticket never asked
   // for).
+  // ETP-5378 — customMenuActions' own "reject" entry dispatches a DOM event
+  // (sales-quotation:open-reject-modal) that only QuotationTopbarActions listens
+  // for, and that component is mounted ONLY in form view — so the same entry,
+  // reused verbatim for the row kebab, fired the event and nothing happened:
+  // reported live, "cuando le doy a rechazar no hace nada" in the grid, versus
+  // the popup that opens fine from the record. Rather than fork a second
+  // "reject" descriptor, this keeps customMenuActions' own label/icon/visible
+  // untouched and only swaps the row kebab's onClick to open RejectQuotationModal
+  // directly against THIS row — no event indirection needed once there's a
+  // real row to open it against.
   const rowMenuActions = useCallback(({ row, status }) => [
     ...(row?.documentStatus === 'DR' || row?.documentStatus === 'CO' || row?.documentStatus === 'UE'
       ? [{ key: 'confirm', label: ui('confirm'), onClick: openQuotationConfirm }]
       : []),
-    ...customMenuActions({ status }),
+    ...customMenuActions({ status }).map((action) => (
+      action.key === 'reject' ? { ...action, onClick: () => setRejectRow(row) } : action
+    )),
   ], [ui, openQuotationConfirm]);
 
   const closeQuotationConfirm = useCallback(() => setConfirmRow(null), []);
+  const closeReject = useCallback(() => setRejectRow(null), []);
 
   const confirmPortal = confirmRow && createPortal(
     confirmRow.documentStatus === 'DR' ? (
@@ -188,6 +203,17 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
         onRefresh={() => setRefreshKey(k => k + 1)}
         data-testid="RowQuotationConfirmModal__bc8637" />
     ),
+    document.body,
+  );
+
+  const rejectPortal = rejectRow && createPortal(
+    <RejectQuotationModal
+      quotationId={rejectRow.id}
+      data={rejectRow}
+      token={token}
+      apiBaseUrl={apiBaseUrl}
+      onClose={closeReject}
+      data-testid="RowRejectQuotationModal__bc8637" />,
     document.body,
   );
 
@@ -294,6 +320,7 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
       )}
       {emailModalPortal}
       {confirmPortal}
+      {rejectPortal}
     </>
   );
 }

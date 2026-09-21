@@ -69,6 +69,11 @@ vi.mock('@generated/sales-quotation/custom/QuotationConfirmModal', () => ({
   default: (props) => { quotationConfirmProps = props; return <div data-testid="quotation-confirm-modal" />; },
 }));
 
+let rejectProps;
+vi.mock('@generated/sales-quotation/custom/RejectQuotationModal', () => ({
+  default: (props) => { rejectProps = props; return <div data-testid="reject-modal" />; },
+}));
+
 import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import SalesQuotationWindow from '../index.jsx';
@@ -91,6 +96,7 @@ describe('SalesQuotationWindow — row-hover Confirmar (ETP-5378)', () => {
     lastGeneratedAppProps = null;
     sendToEvalProps = null;
     quotationConfirmProps = null;
+    rejectProps = null;
     apiFetchMock.mockReset();
     toastError.mockClear();
   });
@@ -182,5 +188,48 @@ describe('SalesQuotationWindow — row-hover Confirmar (ETP-5378)', () => {
     await openConfirm({ id: 'q-1', documentStatus: 'DR' });
     await act(async () => { sendToEvalProps.onClose(); });
     expect(screen.queryByTestId('send-to-eval-modal')).not.toBeInTheDocument();
+  });
+});
+
+// ETP-5378 — "Rechazar" reused customMenuActions' own reject descriptor
+// (labelKey, icon, visible: status === 'UE') verbatim, but that descriptor's
+// onClick dispatched a DOM event only QuotationTopbarActions listens for — a
+// component mounted ONLY in form view. From the grid the click fired the event
+// into the void: reported live as "cuando le doy a rechazar no hace nada".
+describe('SalesQuotationWindow — row-hover Rechazar (ETP-5378)', () => {
+  beforeEach(() => {
+    lastGeneratedAppProps = null;
+    rejectProps = null;
+    apiFetchMock.mockReset();
+  });
+
+  function getRejectEntry(documentStatus) {
+    render(<SalesQuotationWindow windowName="sales-quotation" apiBaseUrl="/sws/neo/sales-quotation" token="tkn" />);
+    return lastGeneratedAppProps.rowQuickActions.menuActions({ row: { id: 'q-1', documentStatus }, status: documentStatus })
+      .find(a => a.key === 'reject');
+  }
+
+  it('keeps the same visibility customMenuActions already declares — UE only', () => {
+    expect(getRejectEntry('UE').visible).toBe(true);
+    expect(getRejectEntry('DR').visible).toBe(false);
+    expect(getRejectEntry('CO').visible).toBe(false);
+  });
+
+  it('opens RejectQuotationModal directly for THIS row instead of dispatching the dead DOM event', async () => {
+    const entry = getRejectEntry('UE');
+    await act(async () => { entry.onClick(); });
+
+    expect(screen.getByTestId('reject-modal')).toBeInTheDocument();
+    expect(rejectProps.quotationId).toBe('q-1');
+    expect(rejectProps.data).toEqual({ id: 'q-1', documentStatus: 'UE' });
+  });
+
+  it('closes without a network call when dismissed', async () => {
+    const entry = getRejectEntry('UE');
+    await act(async () => { entry.onClick(); });
+    await act(async () => { rejectProps.onClose(); });
+
+    expect(screen.queryByTestId('reject-modal')).not.toBeInTheDocument();
+    expect(apiFetchMock).not.toHaveBeenCalled();
   });
 });
