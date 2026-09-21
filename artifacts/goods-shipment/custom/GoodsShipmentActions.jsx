@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import { useUI, useMenuLabel } from '@/i18n';
 import ReturnWizard from './ReturnWizard';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal';
@@ -176,10 +177,14 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
           id: invoiceId || null,
           documentNo: docNo,
           amount: json?.response?.data?.grandTotalAmount ?? null,
+          // ETP-5381: the result modal badges off this — the invoice is confirmed on creation.
+          documentStatus: json?.response?.data?.documentStatus ?? null,
         },
       });
     } catch (err) {
-      toast.error(err.message || ui('failedToCreateInvoice'));
+      // ETP-5381: the duplicate-invoice guard answers in English (the module's convention;
+      // backendErrors.js localizes it), so without this the user reads the raw literal.
+      toast.error(translateBackendError(err.message, ui) || ui('failedToCreateInvoice'));
     } finally {
       setCreatingInvoice(false);
     }
@@ -264,7 +269,7 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
       {invoiceResult?.invoice?.id && createPortal(
         <ConfirmResultModal
           title={ui('soInvoiceCreated')}
-          docs={[{ type: 'facturaVenta', num: invoiceResult.invoice.documentNo, amount: invoiceResult.invoice.amount, route: `/sales-invoice/${invoiceResult.invoice.id}` }]}
+          docs={[{ type: 'facturaVenta', num: invoiceResult.invoice.documentNo, amount: invoiceResult.invoice.amount, documentStatus: invoiceResult.invoice.documentStatus, route: `/sales-invoice/${invoiceResult.invoice.id}` }]}
           primary={ui('soViewInvoice')}
           currency={data?.['currency$_identifier'] || ''}
           navigate={(route) => { resultNavigatedRef.current = true; navigate(route); }}

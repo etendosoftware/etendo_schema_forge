@@ -1277,6 +1277,118 @@ export async function expectStatusPill(page, pattern, message, timeout = 10_000)
   await expect(pill, message).toContainText(pattern, { timeout });
 }
 
+/**
+ * Verify a document's status pill carries the expected status CODE, read from the
+ * `data-status` attribute `DocumentStatusPill` exposes (`DR` / `CO` / `VO` / `CL`).
+ *
+ * Prefer this over `expectStatusPill` whenever the assertion is about the status
+ * itself: the attribute is language-independent, while the translated text differs
+ * per locale and per window (a completed invoice reads "Completado", a completed
+ * journal reads "Registrado"). See docs/e2e-testing-guide.md § "Document status
+ * attributes". `expectStatusPill` stays as-is for the many call sites that assert
+ * what the USER reads.
+ */
+export async function expectDocumentStatus(page, status, message, timeout = 10_000) {
+  const pill = page.getByTestId('document-status-pill').first();
+  await expect(pill, message).toHaveAttribute('data-status', status, { timeout });
+}
+
+/**
+ * ETP-5381 — assert that a document the backend generated from another document
+ * arrived ALREADY CONFIRMED, i.e. there is no draft stage left for the test to
+ * confirm by hand.
+ *
+ * Two halves, both of which are the product's new contract:
+ *   1. the status pill reads `CO`;
+ *   2. no "Confirmar" action is offered. A completed draftMode document renders no
+ *      save-actions row at all (`shouldRenderSaveActionsRow` in DetailView.jsx), so
+ *      `action-save` is absent from the DOM — which is exactly how the specs that
+ *      still tried to confirm these invoices failed.
+ */
+export async function expectAlreadyConfirmed(page, message) {
+  await expectDocumentStatus(page, 'CO', message);
+  await expect(page.getByTestId('action-save'),
+    `${message} — a document that arrives confirmed must offer no Confirmar action`,
+  ).toBeHidden({ timeout: 10_000 });
+}
+
+/**
+ * ETP-5381 — pick the invoice a rectificative invoice will rectify, inside an open
+ * confirm modal.
+ *
+ * `useRectifiableInvoices` (RectifiableInvoicePicker.jsx) preselects ONLY when the
+ * backend's chain detection reports exactly one candidate. Zero or two-or-more leave
+ * the field deliberately empty, which keeps `rectify.isSatisfied` false and therefore
+ * `confirm-modal-confirm-btn` disabled until the user picks — "no se deben auto
+ * seleccionar las facturas".
+ *
+ * Idempotent: returns immediately when something is already selected, so it is safe to
+ * call on the single-candidate path too.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {import('@playwright/test').Locator} modal host modal (`confirm-inout-modal`)
+ * @param {object} [opts]
+ * @param {string} [opts.idPrefix] `confirm-modal-rectify` inside `ConfirmInOutModal`
+ *   (the default), `invoice-confirm-rectify` inside `CreateInvoiceConfirmModal`.
+ */
+export async function pickRectifiableInvoice(page, modal, { idPrefix = 'confirm-modal-rectify' } = {}) {
+  // The field renders a loading placeholder in place of everything else while the first
+  // batch is in flight; decide only once it is gone.
+  await expect(modal.getByTestId(`${idPrefix}-loading`))
+    .toBeHidden({ timeout: 30_000 }).catch(() => {});
+
+  if (await modal.getByTestId(`${idPrefix}-selected-count`).isVisible().catch(() => false)) return;
+
+  // A failed load and a genuinely empty candidate set are DIFFERENT states, and both
+  // make the confirm button unreachable. Name them here instead of letting the picker
+  // click time out with no diagnostic value.
+  if (await modal.getByTestId(`${idPrefix}-error`).isVisible().catch(() => false)) {
+    throw new Error(
+      'pickRectifiableInvoice: the rectifiable-invoice list failed to load — the field is showing '
+      + `its error state (${idPrefix}-error). The confirm button can never enable in this state.`,
+    );
+  }
+  if (await modal.getByTestId(`${idPrefix}-empty`).isVisible().catch(() => false)) {
+    throw new Error(
+      'pickRectifiableInvoice: the backend reports NO confirmed invoice this return document can '
+      + 'rectify. Candidates are filtered by business partner and transaction side '
+      + '(RectifiableInvoiceUtils), so the flow needs at least one confirmed invoice for the same '
+      + 'partner on the same side before a rectificative invoice can be generated.',
+    );
+  }
+
+  await modal.getByTestId(`${idPrefix}-open`).click();
+
+  // The picker is portalled to document.body — scope it to the page, NOT to the host modal.
+  const picker = page.getByTestId(`${idPrefix}-picker-modal`);
+  await expect(picker, 'The rectifiable-invoice picker should open').toBeVisible({ timeout: 10_000 });
+
+  const rows = picker.locator(`[data-testid^="${idPrefix}-option-"]`);
+  await expect(rows.first(),
+    'The picker should list at least one invoice this return document can rectify',
+  ).toBeVisible({ timeout: 20_000 });
+
+  // Prefer a row the backend's chain detection flagged as related to this return (the
+  // `…-suggested-{id}` badge) — that is the invoice a user would pick. Fall back to the
+  // first row when the chain found none, which is the standalone-return case.
+  const suggested = rows.filter({ has: page.locator(`[data-testid^="${idPrefix}-suggested-"]`) }).first();
+  const target = (await suggested.count()) > 0 ? suggested : rows.first();
+
+  await target.click();
+  await expect(target,
+    'Clicking a row in the multi-select picker should tick it',
+  ).toHaveAttribute('data-selected', 'true', { timeout: 5_000 });
+
+  // In multi-select mode a row click only TOGGLES the draft selection; it is the Apply
+  // button that commits it back to the host modal.
+  await picker.getByTestId(`${idPrefix}-apply`).click();
+  await expect(picker, 'Applying the selection should close the picker').toBeHidden({ timeout: 10_000 });
+
+  await expect(modal.getByTestId(`${idPrefix}-selected-count`),
+    'The picked invoice should show as selected in the confirm modal',
+  ).toBeVisible({ timeout: 10_000 });
+}
+
 // ── Price / totals utilities ─────────────────────────────────────────────────
 
 /**

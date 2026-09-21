@@ -33,8 +33,8 @@
     { "id": "opciones", "label": { "en_US": "Options", "es_ES": "Opciones" }, "excludeFromSummary": true }
   ],
   "parameters": [
-    { "name": "dateFrom", "label": { "en_US": "From Date", "es_ES": "Desde" }, "type": "date", "required": false, "section": "periodo" },
-    { "name": "dateTo", "label": { "en_US": "To Date", "es_ES": "Hasta" }, "type": "date", "required": false, "section": "periodo" },
+    { "name": "dateFrom", "label": { "en_US": "From Date", "es_ES": "Desde" }, "type": "date", "required": true, "section": "periodo" },
+    { "name": "dateTo", "label": { "en_US": "To Date", "es_ES": "Hasta" }, "type": "date", "required": true, "section": "periodo" },
     { "name": "orgId", "label": { "en_US": "Organization", "es_ES": "Organización" }, "type": "search", "selector": "org", "inputStyle": "popup-single", "required": true, "hidden": true },
     { "name": "acctSchemaId", "label": { "en_US": "General Ledger", "es_ES": "Libro Mayor" }, "type": "search", "selector": "acctschema", "inputStyle": "popup-single", "required": true, "hidden": true, "autoDefault": true, "section": "alcance" },
     { "name": "fromAccountId", "label": { "en_US": "From Account", "es_ES": "Desde la cuenta" }, "type": "search", "selector": "account", "inputStyle": "popup-single", "dependsOn": "acctSchemaId", "section": "alcance" },

@@ -1,26 +1,41 @@
 ---
 name: schema-forge-architecture-audit
-description: Use when auditing Schema Forge for architecture drift, duplicated window logic, cross-window dependencies, shared code in concrete windows, selector repetition, related-document duplication, or generic components containing window-specific fixes.
+description: Audit Schema Forge for architecture drift, duplicated window logic, cross-window dependencies, generic components leaking window-specific fixes, selector/related-document repetition, AND propose grounded refactors. Triggers on architecture audit, duplicated code, código repetido, duplicado, dedupe, DRY, complejidad cognitiva, cross-window imports, generic leak, refactor, selector repetition, related documents duplication.
 ---
 
-# Schema Forge Architecture Audit
+<!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/skills/schema-forge-architecture-audit/SKILL.md - Regenerate: make sync-agents -->
+
+# Schema Forge Architecture Audit & Refactor
 
 ## Overview
 
-Audit Schema Forge architecture boundaries with evidence. The goal is not to list every duplicate line; it is to identify design decisions that are represented in the wrong place, repeated across windows, or leaking into generic layers.
+This skill has two phases that share one knowledge base:
 
-Default scope is the `schema-forge` repository only. Do **not** inspect `etendo_core` module code unless the user explicitly asks for Etendo module code.
+- **Phase 1 — AUDIT** (read-only). Identify design decisions that live in the wrong place, repeat across windows, or leak into generic layers. Produce an evidence-based report with the correct owner/layer for each finding.
+- **Phase 2 — REFACTOR** (write, when explicitly requested). Pick a finding, look up the applicable pattern in [`patterns/`](patterns/), check precedent in [`cases/`](cases/), and produce a refactor brief or apply the change. Every applied refactor must end as a new case file.
 
-## Non-Negotiables
+Default scope is the `schema-forge` repository only. Do NOT inspect `etendo_core` module code unless the user explicitly asks for it.
 
-- Read-only unless the user explicitly asks for fixes.
+Java duplication / static analysis lives elsewhere: delegate to `/etendo:sonar`.
+
+---
+
+## Non-negotiables
+
+- **Phase 1 is read-only.** Phase 2 only runs when the user explicitly asks for a fix.
+- **Never lose functionality.** Every style attribute, padding, gap, conditional in the original must remain reachable via the extracted component's props. When in doubt, add a prop rather than hardcode. Defaults match the most common original.
 - Do not report generated output as the root cause. Attribute generated repetition to the generator/template/contract source when possible.
 - Every issue needs exact file paths and observed evidence.
 - Mark inference explicitly.
 - Separate architecture smells from normal per-window configuration.
 - Severity must be justified by blast radius, coupling, and maintenance risk.
+- Refactors in `artifacts/*/generated/` are forbidden — those are regenerated from `decisions.json` and the generators.
 
-## Audit Areas
+---
+
+## Phase 1 — AUDIT
+
+### Audit areas
 
 | Area | Smell | Where to look |
 |---|---|---|
@@ -30,50 +45,38 @@ Default scope is the `schema-forge` repository only. Do **not** inspect `etendo_
 | Related documents duplication | Each window redefines relation graph, fetches, chip rendering, dedupe, status mapping | `RelatedDocuments.jsx`, `components/related-documents`, `artifacts/*/(decisions|contract).json` |
 | Specific fixes in generic code | Generic UI/CLI code branches on concrete window/entity/field names | `tools/app-shell/src/components`, `tools/app-shell/src/hooks`, `cli/src` |
 | Backend generation drift | Schema Forge CLI embeds backend/window-specific behavior in generic pipeline code | `cli/src`, not `etendo_core` unless requested |
+| Tactical UI duplication | N≥2 sibling components share an identical wrapper, header, empty-state, or leaf node | `tools/app-shell/src/components`, `tools/app-shell/src/windows/custom` |
+| Cognitive complexity | A function or component has so many branches/nesting it's hard to read | Any layer; long generator files are common offenders |
 
-## Required Workflow
+### Required workflow
 
-1. **Confirm scope**
-   - Verify repository path and branch.
-   - State if dirty working tree exists, but do not modify it.
-   - If user says “Schema Forge only”, exclude `etendo_core`.
+1. **Confirm scope** — repo path, branch, dirty-tree summary (do not modify), exclusions.
+2. **Map source layers** — frontend generic (`tools/app-shell/src/components|hooks|lib`), frontend windows (`tools/app-shell/src/windows/custom/<window>`), CLI (`cli/src`), artifacts (config only, never `generated/`).
+3. **Search before reading** — use the targeted patterns below.
+4. **Read evidence sections** — answer: what layer, what concrete concept, repeated where, config vs shared behavior vs workaround.
+5. **Classify severity** (table below).
+6. **Report with recommendation** — name the correct owner/layer or, for tactical UI dup, the applicable pattern in `patterns/`.
 
-2. **Map source layers**
-   - Frontend generic: `tools/app-shell/src/components`, `tools/app-shell/src/hooks`, `tools/app-shell/src/lib`.
-   - Frontend windows: `tools/app-shell/src/windows/custom/<window>`.
-   - CLI/generators: `cli/src`.
-   - Artifacts: `artifacts/*` for configuration/source clues only; never treat `artifacts/*/generated` as the fix target.
+### Search recipes
 
-3. **Search before reading**
-   Use targeted searches for:
-   - Cross-window imports: `@/windows/custom/`, `from '../<window>/`, `../../windows/custom/`, one-line re-exports `export { default } from '@/windows/custom/`.
-   - Selector duplication: `selectors/`, `serverResults`, `fetchServerResults`, `fetchAllPages`, `fetchSelectorPage`, `parseSelectorItems`, `SELECTOR_PAGE`, `hasMore`, `offsetRef`, `data?.items`, `data?.response?.data`, `Array.isArray(data)`, `label || name`, `label ?? name`.
-   - Contacts selector policy drift: `countrySelectors`, `selectorBases`, `C_Country_ID`, `C_Region_ID`, `country`, `region`, `locationAddress/selectors`, `bankAccount/selectors`, `intrastatAdquisitions/selectors`.
-   - Related documents: `RelatedDocuments`, `RelatedDocumentsShell`, `DocChip`, `relatedDocuments`, `fetchPayments`, `fetchLinkedDocuments`, `fetchChild`, `fetchByCriteria`, `fetchById`, `new Set()`, `chips.push`, `neoBase(apiBaseUrl)`.
-   - Generic-layer concrete leaks: `entity ===`, `field.key ===`, `col.key ===`, `windowName ===`, `customDir ===`, `aliases =`, `internalConsumptionLine`, `InternalConsumptionProductSearchDrawer`, `contacts`, `businessPartner`, `sales-order`.
-   - Document-line policies in generic UI: `standardPrice`, `grossUnitPrice`, `grossListPrice`, `netUnitPrice`, `unitPrice`, `listPrice`, `lineNetAmount`, `grossAmount`, `taxRate`, `orderedQuantity`, `invoicedQuantity`, `movementQuantity`, `SL_Order_Amt`, `SL_Invoice_Amt`, `PriceActual`, `inpgrossUnitPrice`.
-   - Selector context leaks: `isSOTrx`, `IsSOTrx`, `isCustomer`, `isVendor`, `DateInvoiced`, `invoiceDate`, `orderDate`, `priceList`.
+- Cross-window imports: `@/windows/custom/`, `from '../<window>/`, `../../windows/custom/`, one-line re-exports `export { default } from '@/windows/custom/`.
+- Selector duplication: `selectors/`, `serverResults`, `fetchServerResults`, `fetchAllPages`, `fetchSelectorPage`, `parseSelectorItems`, `SELECTOR_PAGE`, `hasMore`, `offsetRef`, `data?.items`, `data?.response?.data`, `Array.isArray(data)`, `label || name`, `label ?? name`.
+- Contacts selector policy drift: `countrySelectors`, `selectorBases`, `C_Country_ID`, `C_Region_ID`, `country`, `region`, `locationAddress/selectors`, `bankAccount/selectors`, `intrastatAdquisitions/selectors`.
+- Related documents: `RelatedDocuments`, `RelatedDocumentsShell`, `DocChip`, `relatedDocuments`, `fetchPayments`, `fetchLinkedDocuments`, `fetchChild`, `fetchByCriteria`, `fetchById`, `new Set()`, `chips.push`, `neoBase(apiBaseUrl)`.
+- Generic-layer concrete leaks: `entity ===`, `field.key ===`, `col.key ===`, `windowName ===`, `customDir ===`, `aliases =`, `internalConsumptionLine`, `InternalConsumptionProductSearchDrawer`, `contacts`, `businessPartner`, `sales-order`.
+- Document-line policies in generic UI: `standardPrice`, `grossUnitPrice`, `grossListPrice`, `netUnitPrice`, `unitPrice`, `listPrice`, `lineNetAmount`, `grossAmount`, `taxRate`, `orderedQuantity`, `invoicedQuantity`, `movementQuantity`, `SL_Order_Amt`, `SL_Invoice_Amt`, `PriceActual`, `inpgrossUnitPrice`.
+- Selector context leaks: `isSOTrx`, `IsSOTrx`, `isCustomer`, `isVendor`, `DateInvoiced`, `invoiceDate`, `orderDate`, `priceList`.
 
-4. **Read evidence sections**
-   For each candidate, read enough context to answer:
-   - What layer is this file in?
-   - What concrete concept does it know about?
-   - Is the concept repeated elsewhere?
-   - Is this config, shared behavior, or a workaround?
-
-5. **Classify severity**
+### Severity
 
 | Severity | Criteria |
 |---|---|
 | Critical | Wrong-layer logic can corrupt generated output or broadly mis-route pipeline behavior across many windows. |
 | High | Cross-window dependency or generic-to-window dependency that makes unrelated windows break together. |
 | Medium | Repeated domain logic across several windows/components with likely divergence or inconsistent bug fixes. |
-| Low | Localized hardcoded compatibility fallback or naming smell with limited blast radius. |
+| Low | Localized hardcoded compatibility fallback, naming smell, or tactical UI duplication limited to a small surface. |
 
-6. **Report with recommendation**
-   Recommend the smallest architectural move that restores one concept/one representation.
-
-## Report Format
+### Audit report format
 
 ```markdown
 # Schema Forge Architecture Audit
@@ -102,67 +105,111 @@ Why it matters:
 - [coupling/duplication/wrong layer/blast radius]
 
 Recommendation:
-- [target layer/config/helper/generator]
+- [target layer/config/helper/generator] or [pattern: extract-card-shell, see patterns/<file>.md]
 - [clean cutover; no aliases unless compatibility requires it]
 
 Confidence: High|Medium|Low
 ```
 
-## Evidence Patterns
+---
+
+## Phase 2 — REFACTOR (on explicit user request)
+
+Workflow when the user picks an audit finding and asks to fix it:
+
+1. **Read all listed files in full** — never excerpts. Duplication signal lives in style attrs, repeated wrappers.
+2. **Classify** the duplication against [`patterns/INDEX.md`](patterns/INDEX.md). If no pattern fits, propose a new one and ask the user before continuing.
+3. **Check precedent** in [`cases/`](cases/) — prior cases ground prop naming, file location, prop shape.
+4. **Produce a refactor brief** (template below) and confirm with the user.
+5. **Verify tests exist** for every consumer being touched. If missing, delegate to Tester (`test-generator` subagent) FIRST, then refactor.
+6. **Apply the refactor**, run the test suite, confirm zero regressions.
+7. **Add tests** for the new shared component(s).
+8. **Write a case file** in `cases/` documenting the refactor (template below). The skill learns from it.
+
+### Refactor brief template
+
+```markdown
+# Refactor brief — <date> — <short-name>
+
+## Duplication map
+| # | Block | File A:lines | File B:lines | File C:lines |
+|---|---|---|---|---|
+
+## Proposed extraction
+- **Location:** `<dir>/_shared/<Component>.jsx`
+- **Props API:** ...
+- **Pattern:** [pattern-name](../patterns/<pattern-name>.md)
+- **Precedent:** [case-name](../cases/<date>-<name>.md) (if any)
+
+## Functionality preservation checklist
+- [ ] No prop omitted vs original (style attrs, padding, gap)
+- [ ] Optional behaviors configurable via prop, not hardcoded
+- [ ] Tests covering each original file BEFORE refactor
+- [ ] Tests for the new shared component AFTER refactor
+
+## Estimated impact
+- LOC delta: -X
+- Future card creation cost: -Y LOC starting baseline
+```
+
+### Case file template
+
+See [`cases/2026-05-13-dashboard-cards.md`](cases/2026-05-13-dashboard-cards.md) for a canonical example. Sections required: targets, duplication map (pre-refactor), extracted components, functionality preservation notes, tests (before/after counts), LOC delta table, decisions worth remembering, surprises.
+
+---
+
+## Evidence patterns
 
 ### Cross-window import
-
-Report when a concrete window imports another concrete window:
 
 ```jsx
 // Bad architecture boundary
 import InvoicePreviewModal from '../purchase-invoice/InvoicePreviewModal.jsx';
 ```
 
-Better direction: move reusable component to `windows/custom/shared`, `components/contract-ui`, or another neutral layer; both windows import it.
+Better: move reusable component to `windows/custom/shared`, `components/contract-ui`, or another neutral layer; both windows import it.
 
 ### Generic code importing window code
-
-Report when generic components depend on a custom window:
 
 ```jsx
 // Bad: shared component depends on contacts implementation
 import LocationEditorModal from '../../windows/custom/contacts/LocationEditorModal.jsx';
 ```
 
-Better direction: generic code depends on generic/shared implementation; windows supply config or callbacks.
+Better: generic code depends on generic/shared implementation; windows supply config or callbacks.
 
 ### Selector repetition
 
-Report when multiple places independently implement selector fetch concerns:
+Report when multiple places independently implement: URL construction for `/selectors/`, bearer headers, `{ id, label || name || id }` mapping, pagination loops, fallback selector URL arrays, local/server result reconciliation.
 
-- URL construction for `/selectors/`.
-- Bearer headers.
-- `{ id, label || name || id }` mapping.
-- pagination loops.
-- fallback selector URL arrays.
-- local/server result reconciliation.
-
-Better direction: shared `fetchSelectorOptions`, `fetchAllSelectorPages`, and `useSelectorSearch` with one normalization shape.
+Better: shared `fetchSelectorOptions`, `fetchAllSelectorPages`, and `useSelectorSearch` with one normalization shape.
 
 ### Related documents repetition
 
 Repeated `RelatedDocuments.jsx` files are not automatically bad. Report when they duplicate relation graph traversal, fetch/dedupe/status/chip rendering patterns that could be declarative.
 
-Better direction: `relatedDocuments` config should describe document graph edges; shared renderer/hook performs fetch, dedupe, status labels, and routing.
+Better: `relatedDocuments` config should describe document graph edges; shared renderer/hook performs fetch, dedupe, status labels, and routing.
 
 ### Specific fixes in generic code
-
-Report concrete names in generic layers:
 
 ```js
 if (entity === 'internalConsumptionLine' && field.key === 'product') { ... }
 if (windowName === 'contacts') { ... }
 ```
 
-Better direction: declare behavior in metadata (`selectorResultMappings`, aliases, field policies, line amount policy) and let generic code execute the declaration.
+Better: declare behavior in metadata (`selectorResultMappings`, aliases, field policies, line amount policy) and let generic code execute the declaration.
 
-## Project-Specific Current Hotspots
+### Tactical UI duplication (small surface)
+
+Two or more sibling components inline the same wrapper/header/empty-state. Recommend the matching pattern from `patterns/`:
+
+- Same outer container + header strip → [`extract-card-shell`](patterns/extract-card-shell.md)
+- Same "no data" layout with optional CTAs → [`extract-empty-state`](patterns/extract-empty-state.md)
+- Same small leaf (icon + fixed-size wrapper) → [`extract-leaf-icon-slot`](patterns/extract-leaf-icon-slot.md)
+
+---
+
+## Project-specific current hotspots
 
 > These examples are current Schema Forge failure modes. Future audits should search for the pattern, not only the exact file.
 
@@ -176,10 +223,13 @@ Better direction: declare behavior in metadata (`selectorResultMappings`, aliase
 | Selector protocol | `EntityForm`, `DataTable`, `CreateContactModal`, `LocationEditorModal`, quick hooks each normalize selector responses | `selectorClient` + `useSelectorSearch/useSelectorOptions` |
 | Related documents | per-window `RelatedDocuments.jsx` graph traversal, de-dupe, lifecycle, and `DocChip` props | relation graph config + `useRelatedDocuments` + document-type chip registry |
 | Pipeline default | `pipeline.js` falls back to `sales-order` when only `windowId` is supplied | required `windowName`, DB/menu resolution, or explicit legacy flag |
+| Dashboard cards shell/empty-state/chevron | `CollectionsPaymentsCard`, `RecentSalesList`, `BestProductsList` inlined the same shell+header+empty-state+chevron | extracted to `dashboard/_shared/` — see [case](cases/2026-05-13-dashboard-cards.md) |
 
-When reporting these, name the intended owner: contract metadata, decisions.json, generator, shared app-shell helper, window adapter, or quality-gate policy. Do not stop at “dedupe this”.
+When reporting these, name the intended owner: contract metadata, decisions.json, generator, shared app-shell helper, window adapter, or quality-gate policy. Do not stop at "dedupe this".
 
-## Common Mistakes
+---
+
+## Common mistakes
 
 | Mistake | Correction |
 |---|---|
@@ -188,15 +238,34 @@ When reporting these, name the intended owner: contract metadata, decisions.json
 | Mixing Etendo module code into Schema Forge audit | Exclude `etendo_core` unless explicitly requested. |
 | Calling a window-specific requirement a bug | It is only an architecture issue if it leaks across layer boundaries or repeats. |
 | Suggesting incremental aliases by default | Default to clean cutover; name compatibility boundaries only if required. |
+| Refactoring without prior tests | Always ensure consumer tests exist before extracting; add tests for new shared components after. |
+| Hardcoding a value the original had as variable | If the original differed across consumers, expose as a prop. |
 
-## Completion Checklist
+---
 
-Before yielding:
+## Completion checklist (audit phase)
 
 - [ ] Scope and exclusions are stated.
 - [ ] No `etendo_core` findings included unless requested.
 - [ ] Every issue has file/line evidence.
 - [ ] Severity is justified.
 - [ ] Generated artifacts are attributed to source causes.
-- [ ] Recommendations name the target owner/layer.
+- [ ] Recommendations name the target owner/layer or the applicable pattern.
 - [ ] Report distinguishes observed facts from inference.
+
+## Completion checklist (refactor phase)
+
+- [ ] Pattern in `patterns/` matched or new pattern proposed and confirmed.
+- [ ] Consumer tests existed (or were added) before refactor.
+- [ ] Refactor preserves every original style/behavior, configurable via props when needed.
+- [ ] Tests for the new shared component(s) added.
+- [ ] Test suite green pre and post.
+- [ ] Case file written in `cases/`.
+- [ ] If pattern was new, added entry to `patterns/INDEX.md` and a `patterns/<name>.md` reference.
+
+---
+
+## Knowledge base
+
+- [`patterns/`](patterns/) — named refactors with anti-pattern/refactored/prop-API/validation. Adding a new pattern requires at least one case file backing it.
+- [`cases/`](cases/) — real refactors applied in this repo. Before/after, decisions, surprises, LOC delta. Future refactors cite these.

@@ -195,7 +195,10 @@ export default function QuotationConfirmModal({
           id: doc?.id ?? null,
           documentNo: doc?.documentNo ?? '',
           total: formatCurrency(currency, doc?.grandTotalAmount ?? grandTotal),
-          status: 'Draft',
+          // ETP-5381: the invoice is created AND confirmed in one step now, so this must read
+          // the real status instead of the hardcoded 'Draft' it used to assume — otherwise the
+          // badge below says "Borrador" over a confirmed invoice.
+          status: doc?.documentStatus === 'CO' ? 'Completed' : (doc?.documentStatus ?? 'Draft'),
         });
       }
     } catch (err) {

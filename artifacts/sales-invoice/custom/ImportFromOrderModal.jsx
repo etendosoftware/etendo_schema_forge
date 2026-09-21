@@ -12,7 +12,7 @@ const fetchDocuments = async ({ base, bpId, invoiceId }) => {
   const alreadyImportedOrderLines = new Set();
   if (invLinesRes.ok) {
     const invLines = (await invLinesRes.json())?.response?.data || [];
-    invLines.forEach(il => { if (il.cOrderlineId) alreadyImportedOrderLines.add(il.cOrderlineId); });
+    invLines.forEach(il => { if (il.salesOrderLine) alreadyImportedOrderLines.add(il.salesOrderLine); });
   }
 
   let invoiceCurrency = null;
@@ -97,7 +97,11 @@ const buildLineBody = async ({ line, qty, invoiceId, lineNo }) => {
     tax: line.tax || null,
     uOM: line.uOM || null,
     lineNo,
-    cOrderlineId: line.id,
+    // ETP-5381: the key MUST be the spec's java_qualifier for C_OrderLine_ID. NeoFieldFilter
+    // drops any key absent from the spec silently (200, line created, FK NULL), and without
+    // C_OrderLine_ID the invoice never reaches C_INVOICE_POST's MatchSO block (no M_MATCHSO row)
+    // nor its `UPDATE C_ORDERLINE SET QtyInvoiced` — so the order stays invoiceable forever.
+    salesOrderLine: line.id,
   };
 };
 

@@ -146,8 +146,11 @@ test.describe('ETP-4905 — Product import category resolution (Tomcat integrati
     });
 
     // ETP-4954: the mapping modal is now field-first — the count is FIELDS with a source out
-    // of all importable fields (8 for Product), not columns mapped out of columns present.
-    await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('5/8');
+    // of all importable fields, not columns mapped out of columns present. ETP-5350 took
+    // Product from 8 to 10 by adding `cost` and `costStartingDate` to
+    // `artifacts/product/decisions.json` → `window.import.fields`, so the denominator tracks
+    // that list: add a field there and this number moves.
+    await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('5/10');
     // ETP-5223: the chip reads `<source column>→<target caption>`, and the target caption
     // is now resolved through `fieldLabelFn` (the AD label dictionary for the SESSION locale)
     // instead of the English `field.label` declared in decisions.json. The locale here is

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { translateBackendError } from '@/lib/backendErrors.js';
 import { useUI } from '@/i18n';
 import ConfirmGoodsReceiptModal from './ConfirmGoodsReceiptModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
@@ -165,9 +166,12 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
       }
       const invData = (await res.json())?.response?.data;
       setShowInvoiceConfirm(false);
-      setConfirmedDocs({ invoice: { id: invData?.id ?? null, documentNo: invData?.documentNo || '' } });
+      // ETP-5381: carry documentStatus so the result modal badges the invoice as Confirmada.
+      setConfirmedDocs({ invoice: { id: invData?.id ?? null, documentNo: invData?.documentNo || '', documentStatus: invData?.documentStatus ?? null } });
     } catch (err) {
-      toast.error(err.message || ui('failedToCreateInvoice'));
+      // ETP-5381: the duplicate-invoice guard answers in English (the module's convention;
+      // backendErrors.js localizes it), so without this the user reads the raw literal.
+      toast.error(translateBackendError(err.message, ui) || ui('failedToCreateInvoice'));
     } finally {
       setCreatingInvoice(false);
     }
@@ -250,7 +254,7 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
       {confirmedDocs?.invoice?.id && createPortal(
         <ConfirmResultModal
           title={ui('goodsReceipt.confirmModal.confirmedTitle')}
-          docs={[{ type: 'facturaCompra', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, route: `/purchase-invoice/${confirmedDocs.invoice.id}` }]}
+          docs={[{ type: 'facturaCompra', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, documentStatus: confirmedDocs.invoice.documentStatus, route: `/purchase-invoice/${confirmedDocs.invoice.id}` }]}
           primary={ui('soViewInvoice')}
           currency={data?.['currency$_identifier'] || ''}
           navigate={(route) => { resultNavigatedRef.current = true; navigate(route); }}
