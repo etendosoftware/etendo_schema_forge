@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertAdjacentStatements } from '../../../_test-support/sourceAdjacency.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'GoodsReceiptActions.jsx'), 'utf8');
@@ -174,11 +175,22 @@ describe('GoodsReceiptActions', () => {
   // CreateInvoiceConfirmModal so it can show its own spinner/label while the
   // modal stays mounted.
   describe('handleCreateInvoice — modal closes only on success, right before setConfirmedDocs (ETP-5333)', () => {
+    // Adjacency is asserted through assertAdjacentStatements, which strips
+    // comments first: the property under test is "no intervening STATEMENT",
+    // not "no intervening CHARACTERS". The raw `\s*` version of this regex
+    // broke when ETP-5381 added an explanatory comment above setConfirmedDocs —
+    // a change with no behavioural effect. A real statement inserted between
+    // the two calls still fails, which is the regression this guards against.
     it('calls setShowInvoiceConfirm(false) immediately before setConfirmedDocs inside the success path', () => {
-      const successBlock = src.match(
-        /const invData = \(await res\.json\(\)\)\?\.response\?\.data;\s*setShowInvoiceConfirm\(false\);\s*setConfirmedDocs\(\{/,
+      assertAdjacentStatements(
+        src,
+        [
+          /const invData = \(await res\.json\(\)\)\?\.response\?\.data;/,
+          /setShowInvoiceConfirm\(false\);/,
+          /setConfirmedDocs\(\{/,
+        ],
+        'expected setShowInvoiceConfirm(false) to run right before setConfirmedDocs({...}) on success',
       );
-      assert.ok(successBlock, 'expected setShowInvoiceConfirm(false) to run right before setConfirmedDocs({...}) on success');
     });
 
     it('does NOT close the modal inside the catch (error) branch — it must stay open on failure so the user can retry', () => {

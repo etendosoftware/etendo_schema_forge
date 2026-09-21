@@ -131,6 +131,46 @@ describe('contacts import descriptor', () => {
     assert.equal(ops.find((op) => op.entity === 'locationAddress'), undefined);
   });
 
+  /**
+   * ETP-5350 — `region` used to be missing from the HAS_ADDRESS predicate, so a row whose only
+   * location column was the province produced no `locationAddress` op and the province was lost
+   * without any error. The review queue showed it resolved, the saved contact had it blank, and
+   * nothing in between said so.
+   */
+  it('builds the location op for a row whose only location columns are the province and its country', async () => {
+    const resolveCountry = vi.fn().mockResolvedValue({ status: 'auto-resolved', id: 'C-AR', name: 'Argentina' });
+    const row = {
+      name: 'Acme Corp', etgoFirstname: 'Lucia', etgoLastname: 'Fernandez',
+      country: 'Argentina', region: 'Córdoba',
+    };
+    const ops = await buildOperations(row, {
+      spec: 'contacts', descriptorName: 'contacts', token: 't', resolveCountryFn: resolveCountry,
+    });
+    const location = ops.find((op) => op.entity === 'locationAddress');
+    assert.ok(location, 'a row carrying a province must still produce a location op');
+    assert.equal(location.body.regionName, 'Córdoba');
+  });
+
+  /**
+   * The province alone cannot be resolved — `ContactsLocationAddressHandler` needs the country to
+   * know whether that country even models regions. Failing the row is the intended outcome; the
+   * old predicate made it succeed while quietly discarding the value.
+   */
+  it('fails a province-only row on the country check rather than discarding the province', async () => {
+    const resolveCountry = vi.fn().mockResolvedValue({ status: 'unresolved' });
+    await assert.rejects(
+      () => buildOperations({ name: 'Acme Corp', region: 'Córdoba' }, {
+        spec: 'contacts', descriptorName: 'contacts', token: 't', resolveCountryFn: resolveCountry,
+      }),
+    );
+  });
+
+  it('still omits the location op when the province is present but blank', async () => {
+    const row = { name: 'Acme Corp', etgoFirstname: 'Lucia', region: '   ' };
+    const ops = await buildOperations(row, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+    assert.equal(ops.find((op) => op.entity === 'locationAddress'), undefined);
+  });
+
   it('defaults oBTIKTaxIDKey to a valid enum value (NIF) when the row has no tax-id-key column', async () => {
     const row = { name: 'Acme Corp', etgoFirstname: 'Lucia', etgoLastname: 'Fernandez', etgoEmail: 'lucia@x.com' };
     const ops = await buildOperations(row, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
@@ -195,9 +235,10 @@ describe('contacts import descriptor', () => {
     });
 
     it('imports a person and a company through the etgoIsperson column', async () => {
-      const [person] = await buildOperations({ name: 'Lucia Fernandez', etgoIsperson: 'Persona' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+      const [person] = await buildOperations({ name: 'Ignored company name', etgoFirstname: 'Lucia', etgoLastname: 'Fernandez', etgoIsperson: 'Persona' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
       const [company] = await buildOperations({ name: 'Acme Corp', etgoIsperson: 'Empresa' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
       assert.equal(person.body.etgoIsperson, 'Y');
+      assert.equal(person.body.name, 'Lucia Fernandez');
       assert.equal(company.body.etgoIsperson, 'N');
     });
 
@@ -228,11 +269,28 @@ describe('contacts import descriptor', () => {
   // leaving both the commercial name and the derived searchKey empty — a silently
   // malformed business partner. "nombre" now maps to `name`; this guards the descriptor
   // itself for any caller that still reaches it without one.
-  describe('commercial name guard', () => {
-    it('falls back to the person name when the row carries no commercial name', async () => {
+  describe('type-aware contact identity', () => {
+    it('derives a company legal name from first and last name without persisting person fields', async () => {
       const [op] = await buildOperations({ etgoFirstname: 'Lucia', etgoLastname: 'Fernandez' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
       assert.equal(op.body.name, 'Lucia Fernandez');
       assert.equal(op.body.searchKey, 'Lucia Fernandez');
+      assert.equal(op.body.etgoFirstname, undefined);
+      assert.equal(op.body.etgoLastname, undefined);
+    });
+
+    it('discards a person row commercial name and derives it from first and last name', async () => {
+      const [op] = await buildOperations({ name: 'ACME SL', etgoFirstname: 'Lucia', etgoLastname: 'Fernandez', etgoIsperson: 'Persona' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+      assert.equal(op.body.name, 'Lucia Fernandez');
+      assert.equal(op.body.searchKey, 'Lucia Fernandez');
+      assert.equal(op.body.etgoFirstname, 'Lucia');
+      assert.equal(op.body.etgoLastname, 'Fernandez');
+    });
+
+    it('fails a person whose first name or last name is absent', async () => {
+      await assert.rejects(
+        () => buildOperations({ etgoFirstname: 'Lucia', etgoIsperson: 'Persona' }, { spec: 'contacts', descriptorName: 'contacts', token: 't' }),
+        /first name and last name/i,
+      );
     });
 
     it('fails the row instead of creating a business partner with no name at all', async () => {
@@ -254,8 +312,6 @@ describe('contacts import descriptor', () => {
       oBTIKTaxIDKey: '1',
       etgoIsperson: 'N',
       name: 'Acme Iberia',
-      etgoFirstname: 'Ana',
-      etgoLastname: 'García',
       etgoEmail: 'ana@acme.example',
       etgoPhone: '+34 910 000 001',
       // ETP-5031 follow-up — stripped of its scheme, matching what the Contacts form itself

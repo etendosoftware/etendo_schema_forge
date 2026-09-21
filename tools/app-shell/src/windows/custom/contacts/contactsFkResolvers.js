@@ -1,8 +1,11 @@
 import { registerFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResolvers.js';
-import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
+import { simSearchEveryLanguage } from '@etendosoftware/app-shell-core/lib/simSearch.js';
 import { classifyCandidates } from '@etendosoftware/app-shell-core/lib/import/resolveForeignKeys.js';
 
-registerFkResolver('contacts-country', async (value, { token, simSearchFn = simSearch }) => {
+// ETP-5350 — same defect as the product UoM, unreported: C_COUNTRY holds "Spain" on the
+// base row and "España" only in its es_ES translation, so the country resolved for a
+// Spanish session and was refused for an English one.
+registerFkResolver('contacts-country', async (value, { token, simSearchFn = simSearchEveryLanguage }) => {
   const [result] = await simSearchFn({ token, entityName: 'Country', items: [value], qtyResults: 5 });
   return classifyCandidates(result?.candidates ?? []);
 });
