@@ -13,6 +13,8 @@ import {
   SII_RECIBIDAS_ENTITY,
   SII_EMITIDAS_ANT_ENTITY,
   SII_RECIBIDAS_ANT_ENTITY,
+  buildCutoverCriteria,
+  SII_DATE_FIELD,
 } from './useFiscalMonitor.js';
 
 // Reference list: SII invoice type keys → display names (from AD_Ref_List)
@@ -90,7 +92,13 @@ function resolveEntityKey(tab, period) {
   return period === 'current' ? 'received' : 'receivedPrevious';
 }
 
-async function fetchSubtab(apiFetch, entityKey, parentId, orgId, page) {
+/**
+ * @param {string|null} earliestCutoverDate lower-bound applied the same way as
+ * the KPI counts in useFiscalMonitor.js's fetchSiiMonitorData() — see
+ * buildCutoverCriteria (ETP-5432 #9). Keeps the list in sync with the pill
+ * counts above it, matching TbaiMonitorSection/VerifactuMonitorSection.
+ */
+async function fetchSubtab(apiFetch, entityKey, parentId, orgId, page, earliestCutoverDate) {
   const entity        = SUBTAB_ENTITIES[entityKey];
   const siiDataEntity = SUBTAB_SII_DATA_ENTITIES[entityKey];
 
@@ -99,6 +107,8 @@ async function fetchSubtab(apiFetch, entityKey, parentId, orgId, page) {
     _startRow: String((page - 1) * PAGE_SIZE),
     _endRow:   String(page * PAGE_SIZE),
   });
+  const criteria = buildCutoverCriteria(earliestCutoverDate, SII_DATE_FIELD);
+  if (criteria.length) params.set('criteria', JSON.stringify(criteria));
   const siiDataParams = new URLSearchParams({ organization: orgId, _startRow: '0', _endRow: '9999' });
 
   const [res, siiRes] = await Promise.all([
@@ -245,6 +255,7 @@ export default function SiiMonitorSection({
   initialTab = 'issued', mockRows, onTabChange, refreshKey = 0,
   onInvoiceOpen, onBpClick,
   kpis,
+  earliestCutoverDate = null,
   compact,   // true when rendered as sub-tab inside SII+TBAI combined view
   noWrap,    // true when parent provides fm-tablecard wrapper
 }) {
@@ -312,7 +323,7 @@ export default function SiiMonitorSection({
     }
     setLoading(true);
     setError(null);
-    fetchSubtab(apiFetch, entityKey, parentId, orgId, page)
+    fetchSubtab(apiFetch, entityKey, parentId, orgId, page, earliestCutoverDate)
       .then(({ data, totalRows, csvMap: newCsvMap, motivoMap: newMotivoMap }) => {
         setRows(prev => page === 1 ? data : [...prev, ...data]);
         setTotalRows(totalRows);
@@ -321,7 +332,7 @@ export default function SiiMonitorSection({
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [parentId, orgId, entityKey, page, apiFetch, mockRows, refreshKey]);
+  }, [parentId, orgId, entityKey, page, apiFetch, mockRows, refreshKey, earliestCutoverDate]);
 
   // Reset to first page, rows and selection when tab/period changes
   useEffect(() => { setPage(1); setRows([]); setCsvMap({}); setMotivoMap({}); setSelectedIds(new Set()); }, [tab, period, setSelectedIds]);
@@ -347,10 +358,12 @@ export default function SiiMonitorSection({
       } catch {
         // Non-fatal: export proceeds with the header-only Error column.
       }
+      const criteria = buildCutoverCriteria(earliestCutoverDate, SII_DATE_FIELD);
+      const exportParams = criteria.length ? { parentId, criteria: JSON.stringify(criteria) } : { parentId };
       await fetchCsvAndDownload(
         apiFetch,
         `/${SII_SPEC}/${encodeURIComponent(SUBTAB_ENTITIES[entityKey])}`,
-        { parentId },
+        exportParams,
         `sii_${tab}_${period}`,
         buildSiiExportCols(exportMotivoMap),
       );
