@@ -50,6 +50,7 @@ const requiredHeaderFields = ['documentNo', 'movementDate', 'businessPartner', '
 // @sf-generated-start addLineFields:returnMaterialReceiptLine
 const addLineFields = {
   entry: [
+    { key: 'movementQuantity', column: 'MovementQty', type: 'number', required: true, label: 'Movement Quantity', defaultValue: 0 },
     { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
   ],
   derived: [

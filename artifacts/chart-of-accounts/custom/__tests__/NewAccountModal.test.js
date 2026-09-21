@@ -53,7 +53,7 @@ describe('NewAccountModal — lastUsedSuffix placeholder hint (ETP-5101)', () =>
   it('returns undefined (no hint) when no parent prefix is selected yet', () => {
     assert.match(
       src,
-      /const lastUsedSuffix = useMemo\(\(\) => \{\s*if \(!selectedParentCodePrefix\) return undefined;/,
+      /const lastUsedSuffix = useMemo\(\(\) => \{\s*if \(!selectedPostingPrefix\) return undefined;/,
     );
   });
 
@@ -63,7 +63,7 @@ describe('NewAccountModal — lastUsedSuffix placeholder hint (ETP-5101)', () =>
     // running max rather than just taking the last matching row.
     assert.match(
       src,
-      /for \(const a of accountRows\) \{\s*const code = String\(a\.searchKey \?\? ''\);\s*if \(code\.length !== 8 \|\| !code\.startsWith\(selectedParentCodePrefix\)\) continue;\s*const suffix = Number\(code\.slice\(4\)\);\s*if \(Number\.isFinite\(suffix\) && suffix > max\) max = suffix;\s*\}/,
+      /for \(const a of accountRows\) \{\s*const code = String\(a\.searchKey \?\? ''\);\s*if \(code\.length !== 8 \|\| !code\.startsWith\(selectedPostingPrefix\)\) continue;\s*const suffix = Number\(code\.slice\(POSTING_PREFIX_LENGTH\)\);\s*if \(Number\.isFinite\(suffix\) && suffix > max\) max = suffix;\s*\}/,
     );
   });
 

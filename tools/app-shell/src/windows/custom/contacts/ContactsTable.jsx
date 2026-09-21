@@ -43,7 +43,12 @@ function TypeBadge({ row, t }) {
 // it by defining their own `render` (needed for inline editing), which bypasses
 // CELL_RENDERERS entirely (see DataTable.jsx's `renderCellValue`).
 function TextCell({ value }) {
-  return <TruncatedText text={value ?? '—'} className="max-w-[200px]" />;
+  return (
+    <TruncatedText
+      text={value ?? '—'}
+      className="max-w-[200px]"
+      data-testid="TruncatedText__5c74a8" />
+  );
 }
 
 function EditableCell({ value, onChange, onKeyDown }) {

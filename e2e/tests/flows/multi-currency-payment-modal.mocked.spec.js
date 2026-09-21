@@ -37,7 +37,21 @@ const DOC_NO = 'PINV-CONV-001';
 // with a hand-typed rate that differs from the system one served by validate-exchange-rate.
 const DRAFT_DOC_NO = 'PAY-DRAFT-001';
 const DRAFT_PAYMENT_ID = 'pay-draft-1';
+/**
+ * The canonical, dot-decimal rate: what the mock seeds onto the draft and what the client must
+ * submit back. This is the value the BACKEND sees, and it must never become comma-decimal.
+ */
 const DRAFT_RATE = '0.89';
+/**
+ * The same rate as the user SEES it. ETP-5107 routed the rate field through `MaskedAmountInput`,
+ * which renders the locale format (es-ES → comma decimal) while still reporting the clean
+ * dot-decimal value outward. Rendering a JS dot decimal in a comma-decimal UI is precisely the
+ * defect QA reopened the ticket for, so the comma here is the fix, not a tolerance.
+ *
+ * Deliberately a SEPARATE constant from `DRAFT_RATE`: display and payload are different contracts
+ * and must be able to fail independently. Never collapse them back into one.
+ */
+const DRAFT_RATE_DISPLAY = '0,89';
 const SYSTEM_RATE = 0.92;
 
 /**
@@ -300,8 +314,8 @@ test.describe('Reopened draft keeps its saved conversion rate (ETP-4841) — pur
 
     // Account (EUR) ≠ invoice (USD) → the conversion block is present in edit mode too.
     await expect(modal.getByTestId('cp-conversion-fields')).toBeVisible();
-    // The persisted 0.89 wins over the system 0.92.
-    await expect(modal.getByTestId('cp-conversion-rate-input')).toHaveValue(DRAFT_RATE);
+    // The persisted 0.89 wins over the system 0.92 — shown in the UI locale (es-ES → "0,89").
+    await expect(modal.getByTestId('cp-conversion-rate-input')).toHaveValue(DRAFT_RATE_DISPLAY);
 
     // The account-currency amount is derived from the SAME rate: 100 × 0.89 = 89. The currency
     // symbol now renders in a sibling <span> right after the (editable) input — NOT inside a
@@ -325,7 +339,8 @@ test.describe('Reopened draft keeps its saved conversion rate (ETP-4841) — pur
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     const modal = await reopenDraftPaymentModal(page);
-    await expect(modal.getByTestId('cp-conversion-rate-input')).toHaveValue(DRAFT_RATE);
+    // Displayed in the UI locale…
+    await expect(modal.getByTestId('cp-conversion-rate-input')).toHaveValue(DRAFT_RATE_DISPLAY);
 
     const saveDraft = modal.getByTestId('cp-save-draft');
     await expect(saveDraft).toBeEnabled();
@@ -336,6 +351,8 @@ test.describe('Reopened draft keeps its saved conversion rate (ETP-4841) — pur
 
     const body = JSON.parse(request.postData() || '{}');
     expect(body.process).toBe('draft');
+    // …but submitted canonically. The comma is a rendering concern only: what crosses the wire
+    // must stay the dot-decimal `0.89`, or the backend parses a different number (or none).
     expect(body.conversionRate).toBe(DRAFT_RATE);
     // Edit mode → the same payment is updated rather than a second one created.
     expect(body.paymentId).toBe(DRAFT_PAYMENT_ID);

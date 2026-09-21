@@ -23,7 +23,14 @@ import SelectionToolbar from './SelectionToolbar.jsx';
 import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
 import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-pane.jsx';
 import { useWindowImportDialog } from './useWindowImportDialog.js';
-import { buildAdvancedFilterCriteria } from '@/lib/gridQuery';
+import { buildAdvancedFilterCriteria, extractQueryParamConditions } from '@/lib/gridQuery';
+import {
+  readListState,
+  persistListState,
+  resolveDefaultSubsetIndex,
+  resolveDefaultQuickFilterIndices,
+  sanitizeFilterIndices,
+} from '@/lib/listViewSession.js';
 import { useWindowFilterPresets } from '@/hooks/useWindowFilterPresets';
 import { trackSearchPerformed, trackWindowOpened } from '@/lib/productUsageTelemetry.js';
 import {
@@ -395,6 +402,12 @@ export function ListView({
   onCloneRow = null,
   initialColumnFilters,
   initialAdvancedFilter = null,
+  // ETP-5009 — set by a window whose `initial*` props were derived from the URL
+  // (a dashboard deep-link such as `/sales-invoice?filter=overdue`). It is the ONLY
+  // way ListView can tell "this is the intent of THIS navigation" from "this is the
+  // window's own declared default" — the props themselves look identical, and a
+  // window is free to declare an initial filter with no deep-link in sight.
+  initialFiltersFromUrl = false,
   initialColumns = null,
   rowFilter,
   dateFilterKey = null,
@@ -418,11 +431,34 @@ export function ListView({
   listSortBy = null,
   import: importConfig = null,
 }) {
+  // ETP-4994 — the grid state saved the last time this window's list was left, restored on
+  // every return path (breadcrumb, Cancel, browser back) because all three remount ListView.
+  // Read ONCE per mount: a later read would fight the live state it is meant to seed.
+  // `null` when there is nothing saved, which is the "behave exactly as before" path.
+  const listStateScope = windowName || entity;
+  // ETP-5009 — precedence is: deep-link (URL) > session snapshot > window default.
+  // A deep-link is an explicit intent for THIS navigation, so the snapshot is not read
+  // at all: every state seeded below (advanced filter, column filters, subset and quick
+  // filters, sort) falls back to the `initial*` props the URL produced. Reading it only
+  // for some of them would leave the grid half-restored and half-deep-linked.
+  //
+  // The previous snapshot is DISCARDED, not kept: the persistence effect below rewrites
+  // the key from the deep-linked state on this very mount (see the baseline it compares
+  // against). Consequence for the user: after arriving from a dashboard card, opening a
+  // record and coming back, the DEEP-LINKED view is what is restored — the filter they
+  // had typed before visiting the dashboard is gone for good. The newest explicit intent
+  // wins, and no stale filter can silently resurface one navigation later.
+  const [restoredListState] = useState(
+    () => (initialFiltersFromUrl ? null : readListState(listStateScope)),
+  );
+
   // Subset filters — radio-style, always one active, applied first.
+  const defaultSubsetIndex = resolveDefaultSubsetIndex(subsetFilters, initialSubsetIndex);
   const [activeSubsetIndex, setActiveSubsetIndex] = useState(() => {
     if (!subsetFilters?.length) return null;
-    const idx = initialSubsetIndex != null && subsetFilters[initialSubsetIndex] ? initialSubsetIndex : 0;
-    return idx;
+    const saved = restoredListState?.subsetIndex;
+    if (Number.isInteger(saved) && subsetFilters[saved]) return saved;
+    return defaultSubsetIndex;
   });
 
   const selectSubset = useCallback((i) => {
@@ -430,11 +466,18 @@ export function ListView({
   }, []);
 
   // Quick filters — independent toggles, refine the current subset.
-  const [activeFilterIndices, setActiveFilterIndices] = useState(() =>
-    initialQuickFilterIndex != null && quickFilters?.[initialQuickFilterIndex]
-      ? new Set([initialQuickFilterIndex])
-      : new Set(),
+  // Memoized: it feeds the persistence effect's dependency array, and a fresh array every
+  // render would re-run that effect (and re-hit sessionStorage) on every render.
+  const defaultQuickFilterIndices = useMemo(
+    () => resolveDefaultQuickFilterIndices(quickFilters, initialQuickFilterIndex),
+    [quickFilters, initialQuickFilterIndex],
   );
+  const [activeFilterIndices, setActiveFilterIndices] = useState(() => {
+    // A saved snapshot can outlive a change to `quickFilters`, so validate every index
+    // against the CURRENT props before trusting it.
+    const saved = sanitizeFilterIndices(restoredListState?.quickFilterIndices, quickFilters);
+    return new Set(saved ?? defaultQuickFilterIndices);
+  });
 
   const toggleQuickFilter = useCallback((i) => {
     setActiveFilterIndices(prev => {
@@ -445,8 +488,12 @@ export function ListView({
     });
   }, []);
 
-  // Advanced filter (funnel popover) — ephemeral state, lost on page refresh.
-  const [advancedFilter, setAdvancedFilter] = useState(initialAdvancedFilter);
+  // Advanced filter (funnel popover). ETP-4994 — no longer ephemeral: it is restored from the
+  // session snapshot when the user comes back from a record. Stale field references are
+  // harmless, `buildAdvancedFilterCriteria` already drops conditions whose column is gone.
+  const [advancedFilter, setAdvancedFilter] = useState(
+    restoredListState ? (restoredListState.advancedFilter ?? null) : initialAdvancedFilter,
+  );
 
   const [tableColumns, setTableColumns] = useState(initialColumns ?? []);
 
@@ -463,9 +510,17 @@ export function ListView({
   );
 
   const advancedFilterPart = useMemo(() => {
-    const criteria = buildAdvancedFilterCriteria(advancedFilter, filterColumns);
-    if (!criteria || criteria.length === 0) return null;
-    return `criteria=${encodeURIComponent(JSON.stringify(criteria))}`;
+    // ETP-5188 — a column can declare `toQueryParams` to opt its condition out of
+    // the generic `criteria=` builder entirely and translate it into raw backend
+    // query params instead (e.g. Users' "Rol" field → `RoleIds=`/`NoRole=`, whose
+    // condition targets an N:M role-assignment collection the HQL criteria layer
+    // cannot dot-path through). See `extractQueryParamConditions` in `gridQuery.js`.
+    const { conditions, extraParams } = extractQueryParamConditions(advancedFilter, filterColumns);
+    const criteria = buildAdvancedFilterCriteria(conditions, filterColumns);
+    const segments = [];
+    if (criteria && criteria.length > 0) segments.push(`criteria=${encodeURIComponent(JSON.stringify(criteria))}`);
+    if (extraParams) segments.push(extraParams);
+    return segments.length > 0 ? segments.join('&') : null;
   }, [advancedFilter, filterColumns]);
 
   const effectiveFilter = useMemo(() => {
@@ -525,7 +580,11 @@ export function ListView({
     return (item) => fns.every(fn => fn(item));
   }, [subsetFilters, activeSubsetIndex, quickFilters, activeFilterIndices, rowFilter]);
 
-  const [columnFilters, setColumnFilters] = useState(initialColumnFilters ?? {});
+  const [columnFilters, setColumnFilters] = useState(() => {
+    const saved = restoredListState?.columnFilters;
+    if (saved && typeof saved === 'object') return saved;
+    return initialColumnFilters ?? {};
+  });
   const columnDefs = useMemo(
     () => Object.fromEntries(tableColumns.map(c => [c.key, c])),
     [tableColumns],
@@ -607,9 +666,51 @@ export function ListView({
     columnFilters,
     trailingFilter: advancedFilterPart,
     specName: windowName,
-    initialSortColumn,
-    initialSortDirection,
+    // ETP-4994 — seed the hook with the sort the user left behind, if any. Deliberately NOT
+    // folded into `initialSortColumn`/`initialSortDirection`: those stay the WINDOW's declared
+    // default, which `isDefaultSort` and `handleClearSort` below must keep pointing at.
+    initialSortColumn: restoredListState?.sortColumn ?? initialSortColumn,
+    initialSortDirection: restoredListState?.sortDirection ?? initialSortDirection,
   });
+
+  // ETP-4994 — mirror the live grid state into the session snapshot. Writes nothing (and
+  // removes any previous key) while the list is still at the window's own default, so an
+  // untouched window never gains persisted state.
+  useEffect(() => {
+    persistListState(
+      listStateScope,
+      {
+        columnFilters,
+        advancedFilter,
+        subsetIndex: activeSubsetIndex,
+        quickFilterIndices: [...activeFilterIndices],
+        sortColumn: hook.sortColumn,
+        sortDirection: hook.sortDirection,
+      },
+      {
+        // ETP-5009 — when the `initial*` props came from the URL they are NOT the
+        // window's own default, they are this navigation's filter. Measuring "is the
+        // grid still at its default?" against them would classify the deep-linked view
+        // as default and remove the key, so returning from a record (breadcrumb and
+        // Cancel both navigate to the bare `/${windowName}`, dropping the query string)
+        // would land on an unfiltered list. Compare against the empty grid instead: the
+        // deep-linked view is persisted, so it is what comes back, and the filter the
+        // user had before the deep-link is overwritten rather than resurrected.
+        columnFilters: initialFiltersFromUrl ? {} : (initialColumnFilters ?? {}),
+        advancedFilter: initialFiltersFromUrl ? null : (initialAdvancedFilter ?? null),
+        subsetIndex: subsetFilters?.length ? defaultSubsetIndex : null,
+        quickFilterIndices: defaultQuickFilterIndices,
+        sortColumn: initialSortColumn,
+        sortDirection: initialSortDirection,
+      },
+    );
+  }, [
+    listStateScope, columnFilters, advancedFilter, activeSubsetIndex, activeFilterIndices,
+    hook.sortColumn, hook.sortDirection, initialColumnFilters, initialAdvancedFilter,
+    initialFiltersFromUrl,
+    subsetFilters, defaultSubsetIndex, defaultQuickFilterIndices,
+    initialSortColumn, initialSortDirection,
+  ]);
 
   useEffect(() => {
     if (!entity && !windowName) return;
@@ -622,6 +723,13 @@ export function ListView({
 
   const refreshRef = useRef(hook.refresh);
   refreshRef.current = hook.refresh;
+
+  // ETP-5302 — stable in-place refetch handed to the `bulkActions` slot, so a bulk
+  // action can reload just the rows instead of doing a full `window.location.reload()`
+  // (which threw away scroll position, active filters and the whole SPA boot). Reads
+  // through `refreshRef` rather than closing over `hook.refresh`, so the identity stays
+  // stable across renders even though `hook.refresh` does not.
+  const refreshList = useCallback(() => refreshRef.current?.(), []);
 
   useEffect(() => {
     if (!didInitialFetchRef.current) {
@@ -1047,7 +1155,7 @@ export function ListView({
                     <Trash2 className={iconSizeClass(selectionBarSize)} data-testid="Trash2__620cbc" />
                   </Button>
                 )}
-                {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api })}
+                {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api, refresh: refreshList })}
                 {selectionBarRightActions && selectionBarRightActions({
                   selectedRows,
                   clearSelection,
@@ -1106,6 +1214,22 @@ export function ListView({
                       </button>
                     ))}
                   </div>
+                )}
+                {/* ETP-5188 — a custom `Table` component may expose a companion
+                    toolbar-slot component via a static property (same convention
+                    `DetailView.jsx` uses for `formFooter.inlineInHeaderCard`), so it can
+                    render a quick-filter control right here — same toolbar row as
+                    "Filtros", left of it — with zero changes to the generated page,
+                    `decisions.json`, or the generator. See `UserHeaderTable.
+                    ToolbarQuickFilter` / `RoleQuickFilterToolbarSlot.jsx` for the
+                    reference implementation. */}
+                {Table?.ToolbarQuickFilter && (
+                  <Table.ToolbarQuickFilter
+                    entity={entity}
+                    windowName={windowName}
+                    token={token}
+                    apiBaseUrl={apiBaseUrl}
+                    data-testid="TableToolbarQuickFilter__620cbc" />
                 )}
                 <ListFilterBarSection
                   hideFilters={listViewOptions?.hideFilters}

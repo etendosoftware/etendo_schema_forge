@@ -96,7 +96,9 @@ export function useOcrFlow({
   onRefresh,
 } = {}) {
   const docType = getOcrDocType(docTypeId);
-  const { runBatch } = useBatch({ apiBaseUrl, token });
+  // ETP-5371 — `useBatch` resolves the NEO root itself now; `apiBaseUrl` stays for the rest of
+  // the flow, which genuinely needs this window's spec URL.
+  const { runBatch } = useBatch({ token });
   const { showResult } = useBulkActionToast();
 
   const [loading, setLoading] = useState(false);

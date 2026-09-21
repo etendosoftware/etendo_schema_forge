@@ -10,7 +10,7 @@ import GoodsShipmentPage from '@generated/goods-shipment/generated/web/goods-shi
 import GoodsShipmentTable from '@generated/goods-shipment/generated/web/goods-shipment/GoodsShipmentTable';
 import BulkInvoiceFromShipment from '@generated/goods-shipment/custom/BulkInvoiceFromShipment';
 import GoodsShipmentSecondaryActions from '@generated/goods-shipment/custom/GoodsShipmentSecondaryActions';
-import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter, buildUnpostActions, unpostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import { useUI, useMenuLabel } from '@/i18n';
 import { useRowEmailModal } from '../shared/useRowEmailModal.jsx';
@@ -48,7 +48,7 @@ function GoodsShipmentBulkActions(props) {
         {...props}
         entity="goodsShipment"
         buildActions={buildInOutActions}
-        labelKey="confirmBulk"
+        labelKey="process"
         data-testid="BulkDocumentAction__9851c7" />
       {/* ETP-5209 — bulk Contabilizar (post), gated to processed & not-yet-posted rows */}
       <BulkDocumentAction
@@ -59,12 +59,36 @@ function GoodsShipmentBulkActions(props) {
         rowFilter={postRowFilter}
         labelKey="post"
         data-testid="BulkDocumentActionPost__9851c7" />
+      {/* ETP-5302 — bulk Descontabilizar, the counterpart of the unpost entry this
+          window's detail kebab already offers. Its own button rather than a second
+          option inside "Contabilizar": that button would then be named after the
+          opposite of what it does. Only shows when a posted row is selected, so in
+          practice it and "Contabilizar" are rarely on screen together. */}
+      <BulkDocumentAction
+        {...props}
+        entity="goodsShipment"
+        actionMode="neoAction"
+        buildActions={buildUnpostActions}
+        rowFilter={unpostRowFilter}
+        labelKey="unpost"
+        data-testid="BulkDocumentActionUnpost__9851c7" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
         data-testid="CopyLinkButton__9851c7" />
     </>
   );
+}
+
+/**
+ * ETP-5265 QA follow-up — dispatches the confirm event and returns whatever promise the
+ * GoodsShipmentActions listener attached to `detail`. Undefined when that listener only
+ * opened the confirm modal, which is the unchanged pre-existing behaviour.
+ */
+function dispatchConfirmModalEvent() {
+  const detail = {};
+  window.dispatchEvent(new CustomEvent('goods-shipment:open-confirm-modal', { detail }));
+  return detail.promise;
 }
 
 export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, token, ...rest }) {
@@ -164,7 +188,12 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
           token={token}
           Table={CustomGoodsShipmentTable}
           processes={[]}
-          draftMode={{ enabled: true, label: 'Confirm', style: 'positive', onConfirm: () => window.dispatchEvent(new CustomEvent('goods-shipment:open-confirm-modal')) }}
+          // ETP-5265 QA follow-up — onConfirm hands the listener's in-flight promise back
+          // to the core through the event `detail`, so the Confirm button can await it and
+          // show its own spinner (see runDraftModeConfirm in saveActions.jsx). The
+          // not-fully-invoiced path only opens a modal and leaves `detail.promise`
+          // undefined, which the core treats exactly as the previous fire-and-forget call.
+          draftMode={{ enabled: true, label: 'Confirm', style: 'positive', onConfirm: () => dispatchConfirmModalEvent() }}
           hideMoreMenu={({ data }) => data?.documentStatus !== 'CO'}
           autoSaveOnBlur={true}
           // ETP-5058 — GoodsShipmentHeaderHandler.afterHandle only enriches linkedInvoices/
@@ -190,6 +219,8 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
         token={token}
         Table={CustomGoodsShipmentTable}
         initialColumnFilters={initialColumnFilters}
+        /* ETP-5009 — a ?DocStatus deep-link outranks the saved grid state. */
+        initialFiltersFromUrl={Boolean(docStatus)}
         rowQuickActions={rowQuickActions}
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}
         refreshTrigger={refreshKey}

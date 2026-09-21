@@ -1,41 +1,25 @@
 import BulkDocumentAction from '@/components/contract-ui/BulkDocumentAction';
 import { useUI } from '@/i18n';
 
-// ETP-5315 review fix (blocker) — unlike sales-order, purchase-order's
-// PurchaseOrderBulkActions ALSO renders the pre-existing CO-only
-// `<BulkDocumentAction buildActions={buildInOutActions} labelKey="confirmBulk">`
-// (unrelated to this ticket, left untouched). BulkDocumentAction's DEFAULT
-// `buildActions` (used when none is passed) independently adds a 'CO' option
-// whenever any selected row is DR, so mirroring OrderReactivateBulkAction.jsx
-// verbatim (no buildActions) would make BOTH components render their own
-// "Confirmar" button for any draft-containing selection — two identical
-// buttons side by side. sales-order never hits this because it has no
-// second BulkDocumentAction to collide with.
+// The selection bar carries ONE action button for this window, "Procesar", and the
+// user picks the document action inside its dialog — the same shape sales-order,
+// the invoices and the shipments use. So this mounts `BulkDocumentAction` with no
+// `buildActions` of its own: the component's default offers `CO` when a draft row
+// is selected and `RE` when a completed one is, which is exactly the menu this
+// window needs now that ETP-5315 made purchase orders reactivatable again.
 //
-// Fix: a custom buildActions scoped to THIS component that only ever offers
-// 'RE' (never 'CO' — that stays exclusively the other component's job), and
-// only when a completed row still eligible for reactivation (not blocked by
-// hasLinkedDocuments) is present. An all-draft selection — already fully
-// covered by the untouched CO-only BulkDocumentAction — yields an empty
-// action list here, so this component renders nothing (see
-// BulkDocumentAction's `actions.length === 0` early return) instead of a
-// second overlapping button.
+// ETP-5315 originally shipped this as a SECOND button beside the pre-existing
+// CO-only one, which forced two workarounds that are now gone: a local
+// `buildReactivateActions` emitting only `RE` (so the two buttons would not both
+// render a `CO` entry), and a separate `reactivateBulk` label (so a mixed
+// draft+completed selection would not show two identically-named buttons). With a
+// single button neither problem exists — mirroring OrderReactivateBulkAction.jsx
+// verbatim is finally the right thing.
 //
-// ETP-5315 QA fix (medium) — this component used to pass labelKey="confirmBulk",
-// the EXACT same key as the sibling CO-only BulkDocumentAction in
-// PurchaseOrderBulkActions (index.jsx). For a selection mixing a DRAFT row and a
-// COMPLETED-unlinked row, both buttons render side by side, both reading
-// "Confirmar"/"Confirm" — indistinguishable even though one books and the other
-// reactivates. Fixed by giving this button its own `reactivateBulk` label
-// (see en_US.json/es_ES.json) instead of reusing `confirmBulk`.
-const buildReactivateActions = (rows) => {
-  const statusOf = (row) => row.documentStatus || row.docStatus;
-  const hasReactivatableRow = rows.some(
-    (row) => statusOf(row) === 'CO' && !row.hasLinkedDocuments,
-  );
-  return hasReactivatableRow ? [{ value: 'RE', labelKey: 'reactivate' }] : [];
-};
-
+// `rowFilter` stays: a completed order WITH linked documents must not be sent to
+// the backend for `RE`. Returning a message counts that row as omitted in the
+// result toast, so the user learns which orders were skipped and why instead of
+// getting an opaque backend rejection.
 export default function PurchaseOrderReactivateBulkAction(props) {
   const ui = useUI();
 
@@ -46,12 +30,5 @@ export default function PurchaseOrderReactivateBulkAction(props) {
     return true;
   };
 
-  return (
-    <BulkDocumentAction
-      {...props}
-      buildActions={buildReactivateActions}
-      rowFilter={rowFilter}
-      labelKey="reactivateBulk"
-    />
-  );
+  return <BulkDocumentAction {...props} rowFilter={rowFilter} labelKey="process" />;
 }

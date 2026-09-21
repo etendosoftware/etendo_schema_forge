@@ -30,12 +30,22 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
     assert.equal(windowContract.labelOverrides.en_US.POReference, 'Document No.');
   });
 
-  it('keeps documentNo hidden from the purchase header and grid surfaces', () => {
+  // ETP-5274 deliberately reverses ETP-3778's original decision to hide the AD
+  // `DocumentNo` (the real internal system number) from both surfaces. The
+  // supplier-facing reference that ETP-3778 protects is a DIFFERENT field —
+  // `orderReference`/POReference, relabeled "Nº documento" above — so this is
+  // not a regression of that guard, it is a second, distinct field becoming
+  // visible. documentNo is now readOnly (never user-editable) on both grid and
+  // form.
+  it('shows documentNo (the real internal number) as readOnly on both the purchase header form and grid (ETP-5274)', () => {
     const documentNo = headerField('documentNo');
     assert.ok(documentNo, 'documentNo field must remain present in the contract');
-    assert.equal(documentNo.form, false);
-    assert.equal(documentNo.grid, false);
+    assert.equal(documentNo.visibility, 'readOnly');
+    assert.equal(documentNo.form, true);
+    assert.equal(documentNo.grid, true);
     assert.match(documentNo.label, /Document No\./);
+    assert.ok(documentNo.readOnlyLogic, 'documentNo must carry the AD-derived readOnlyLogic');
+    assert.equal(documentNo.readOnlyLogic.raw, "@Processed@='Y'");
   });
 
   // ETP-4933's regen surfaced a readOnlyLogic on orderReference that did not exist in the
@@ -67,13 +77,20 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
     assert.doesNotMatch(orderReference.readOnlyLogic.js, /processed|documentStatus/);
   });
 
-  it('keeps the generated HeaderForm order as Business Partner, Transaction Document, Document No. first', () => {
+  // ETP-5274 moves documentNo after transactionDocument (and before orderReference),
+  // not right after businessPartner as originally landed.
+  it('keeps the generated HeaderForm order as Business Partner, Transaction Document, Document No., Supplier Reference first (ETP-5274)', () => {
     const keys = [...headerFormSrc.matchAll(/key: '([^']+)'/g)].map((match) => match[1]);
-    assert.deepEqual(keys.slice(0, 3), ['businessPartner', 'transactionDocument', 'orderReference']);
+    assert.deepEqual(
+      keys.slice(0, 4),
+      ['businessPartner', 'transactionDocument', 'documentNo', 'orderReference'],
+    );
   });
 
-  it('does not generate documentNo as a visible HeaderForm field', () => {
-    assert.doesNotMatch(headerFormSrc, /key: 'documentNo'/);
+  it('generates documentNo as a readOnly HeaderForm field (ETP-5274)', () => {
+    const documentNoBlock = headerFormSrc.match(/\{ key: 'documentNo'[\s\S]*?\},/);
+    assert.ok(documentNoBlock, 'expected documentNo field block in HeaderForm.jsx');
+    assert.match(documentNoBlock[0], /readOnly: true/);
   });
 
   // Mirrors the contract assertion above, against the generated HeaderForm.jsx this

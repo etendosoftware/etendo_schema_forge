@@ -72,9 +72,13 @@ import {
 import { cn } from '@/lib/utils.js';
 import { useMenuLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { useFavorites } from '@/components/layout/FavoritesContext';
-import { useFeatureFlag, PROOF_OF_CONCEPT_MENU, ACCT_PROCESS_MONITOR } from '@/lib/flags';
+import { useFeatureFlag, PROOF_OF_CONCEPT_MENU, ACCT_PROCESS_MONITOR, PUBLIC_API_KEYS } from '@/lib/flags';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
-import { environmentPlanLabelKey } from '@/lib/environmentPresentation.js';
+import {
+  environmentCommercialLabel,
+  environmentPlanLabelKey,
+  environmentRelationshipLabel,
+} from '@/lib/environmentPresentation.js';
 import menuConfig from '@/menu.json';
 import { useFirstStepsProgressOptional } from '@/pages/first-steps/FirstStepsContext.jsx';
 
@@ -573,6 +577,7 @@ export default function SideMenu({
   // ETP-5269. Item-level flag gating, where Proof of Concept above gates a whole group. Visual
   // only: the route is registered unconditionally and SFAcctProcessMonitor enforces admin access.
   const showAcctProcessMonitor = useFeatureFlag(ACCT_PROCESS_MONITOR);
+  const showPublicApiKeys = useFeatureFlag(PUBLIC_API_KEYS);
   // Unconditional since ETP-4966: owning more than one environment is a shipped
   // capability, so the switcher is always available. The hook already returns an
   // empty list for a session that cannot list environments, which is what keeps
@@ -593,7 +598,8 @@ export default function SideMenu({
 
   const featureFlagValues = useMemo(() => ({
     [ACCT_PROCESS_MONITOR]: showAcctProcessMonitor,
-  }), [showAcctProcessMonitor]);
+    [PUBLIC_API_KEYS]: showPublicApiKeys,
+  }), [showAcctProcessMonitor, showPublicApiKeys]);
 
   // Applied to Favorites TOO. Favorites are rebuilt from the user's own saved list rather than
   // from menuGroups, so returning early for that group let a favourited flag-gated item stay
@@ -694,6 +700,11 @@ export default function SideMenu({
                       {ui(environmentPlanLabelKey(currentEnvironment))}
                     </span>
                   )}
+                  {currentEnvironment && environmentCommercialLabel(currentEnvironment, ui) && (
+                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                      {environmentCommercialLabel(currentEnvironment, ui)}
+                    </span>
+                  )}
                   <ChevronDown
                     className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
                     data-testid="ChevronDown__247c75" />
@@ -728,6 +739,16 @@ export default function SideMenu({
                         )}>
                           {ui(environmentPlanLabelKey(env))}
                         </span>
+                        {environmentCommercialLabel(env, ui) && (
+                          <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">
+                            {environmentCommercialLabel(env, ui)}
+                          </span>
+                        )}
+                        {environmentRelationshipLabel(env, ui) && (
+                          <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">
+                            {environmentRelationshipLabel(env, ui)}
+                          </span>
+                        )}
                         {switching === env.clientId && (
                           <Loader2
                             className="h-3.5 w-3.5 ml-2 shrink-0 animate-spin"

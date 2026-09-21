@@ -12,6 +12,7 @@ This is **not** the full Etendo Classic "Organization" window. It flattens a cur
 - Edit fiscal identification: NIF, legal name (razón social), and fiscal address (via an inline address editor — create or pick an existing address, no separate navigation).
 - View (read-only) the organization's country and currency, both derived from existing AD_Org/AD_OrgInfo data — not editable from this screen.
 - Edit public contact details (email, phone, website) — always editable, optional, and unrelated to any linked Business Partner.
+- Upload, view, or replace the organization's digital certificate (ETP-5391) — see "Digital certificate section" below; the same certificate SII/Verifactu/TicketBAI use.
 - See a sticky "unsaved changes" banner (yellow dot, bold title, secondary hint) whenever any field differs from the last-loaded state, with Discard / Guardar cambios actions.
 
 ## AD window mapping
@@ -117,6 +118,40 @@ A later ETP-4749 review round removed the original "Nombre comercial" field (`C_
 ## Field change: contact fields moved from Business Partner to dedicated AD_OrgInfo columns
 
 A later round removed the Business-Partner-sourced contact fields (email/phone/website via `AD_OrgInfo.businessPartner` → `contacts` spec) and replaced them with three new, dedicated `AD_OrgInfo` columns (`EM_Etgo_Email`, `EM_Etgo_Phone`, `EM_Etgo_Web`), added in `com.etendoerp.go`. This removed the entire "is a Business Partner linked, and did it load" state machine: the "no BP linked" notice, the "BP linked but failed to load" notice + retry affordance, and the `disabled`/gray styling on those three inputs are all gone. The fields are now always editable, plain optional strings on the `information` entity, handled exactly like `taxID` or `locationAddress` in `useOrganizationData.js`'s `load`/`save`.
+
+## Digital certificate section (ETP-5391)
+
+A "Certificado digital" section now sits on this page between "Datos fiscales" and "Datos de
+contacto" — `SectionRow` with `titleKey="fiscal.cert.section.legend"` /
+`descKey="fiscal.cert.section.hint"`, wrapping `CertSection` (imported directly from
+`../fiscal-config/CertSection.jsx`, **not forked**). It lets a user upload, view, or replace the
+organization's digital certificate straight from this window, instead of only through one of the
+SII/Verifactu/TicketBAI tabs on the Fiscal Config window.
+
+**This is the SAME certificate as SII/Verifactu/TicketBAI, not a separate one per fiscal system.**
+`CertSection` fetches `GET {neoBase}/certificate?orgId=` and the backend
+(`NeoCertificateHelper.java`, `com.etendoerp.go`) resolves and stores the certificate keyed by
+organization alone (`ETSG_Certificate`, the same table backing Classic AD window 110's
+"Certificado Digital" tab — see "AD window mapping" above) — there is no per-fiscal-system
+partition on the backend at all. `SiiSection`/`VerifactuSection`/`TbaiSection` in `fiscal-config`
+each mount this identical component; uploading or replacing the certificate from any one of those
+four places (this window's own section, or any of the three fiscal-config tabs) updates the exact
+same record and is immediately reflected everywhere else it's shown. See `fiscal-config.md`'s
+"Certificate upload (CertModal + CertSection)" for the shared component's full behavior (drag-drop,
+`CertModal`'s pick → verify → done/confirmNif steps, expiry warnings).
+
+`context` is intentionally omitted on this window's `<CertSection>` call (unlike the fiscal-config
+tabs, which each pass their own `context="sii"|"verifactu"|"tbai"`) — `CertModal`'s
+`CONTEXT_SUBTITLE` map only has entries for those three fiscal systems, so an unmatched/undefined
+context already falls back to the generic `ui('fiscal.cert.subtitle.default')` copy, which reads at
+the organization level rather than naming any one fiscal system — exactly right for this page.
+
+**AD window mapping note:** the "Certificado Digital" tab row in the table above is still marked
+"No" for the ETP-4749 flattening (this window's `decisions.json` does not extract that AD_Tab
+through the normal pipeline) — this section reaches the same underlying data through the NEO
+Headless `/certificate` endpoint and a reused React component instead, the same pattern
+`fiscal-config.md` already documents for its own three tabs. No new extension point or generic
+component was introduced; this is a straight reuse of an existing org-scoped endpoint and component.
 
 ## Actividades del IAE (ETP-4975)
 
