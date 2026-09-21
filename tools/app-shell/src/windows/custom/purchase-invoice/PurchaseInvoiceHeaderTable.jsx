@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Check, Plus } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { DataTable } from '@/components/contract-ui';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import { useLocale, useLocaleSwitch, useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { formatCalendarDate } from '@/lib/dateOnly';
@@ -184,6 +185,12 @@ export default function PurchaseInvoiceHeaderTable(props) {
 
     return [
       { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', dot: false, required: true },
+      // ETP-5274: internal AD document number, distinct from `orderReference`
+      // (POReference, the supplier's own reference, relabeled "Document No." /
+      // "Nº documento" below). No explicit `label` — resolves via
+      // `window.labelOverrides.DocumentNo` ("N° interno" / "Internal No."),
+      // same mechanism `orderReference` already relies on.
+      { key: 'documentNo', column: 'DocumentNo', type: 'string', required: true },
       {
         key: 'transactionDocument',
         column: 'C_DocTypeTarget_ID',
@@ -199,6 +206,12 @@ export default function PurchaseInvoiceHeaderTable(props) {
         // which otherwise resolves to "Documento transacción".
         labels: { [locale]: t('documentType') },
         label: t('documentType'),
+        // `custom` has no width entry in linesColumnWidth.js (generic 120px
+        // fallback), but the widest label here ("Factura rectificativa") alone
+        // measures ~128px — with the cell's own overflow-hidden now in effect
+        // (ETP-5281), a too-narrow column clipped the pill mid-word with no
+        // ellipsis instead of showing the full label.
+        minWidth: 160,
         render: (row) => {
           const cfg = SUBTYPE_BADGE[getApSubtype(row)];
           if (!cfg) return <span className="text-muted-foreground">—</span>;
@@ -261,6 +274,16 @@ export default function PurchaseInvoiceHeaderTable(props) {
         // to text mode, which has no `greaterThan`, and the operator select
         // renders empty (ETP-4681).
         filterMode: 'numeric',
+        // `custom` has no width entry in linesColumnWidth.js, so it falls back
+        // to the generic 120px basis — 24px of cell padding leaves only 96px
+        // for the button, and the "pending" badge (dot + amount) alone already
+        // measures ~97px for a 3-digit amount. The ~1px overflow made the
+        // cell's own `text-overflow: ellipsis` kick in on the whole button,
+        // rendering a literal "…" next to the pill. ETP-5268 follow-up: the
+        // credit-available pill grew a 72px inline amount box (6-digit
+        // truncation + tooltip), pushing its natural width past 160px and
+        // clipping the pill itself — 220px covers that plus larger amounts.
+        minWidth: 220,
         render: (row) => {
           const currency = row['currency$_identifier'] || 'EUR';
           // ETP-4841: the badge follows the SIGN of the total, not the document
@@ -280,6 +303,12 @@ export default function PurchaseInvoiceHeaderTable(props) {
             // supplier, never money still owed to them — the label stays
             // "Saldo a favor" for any remaining unused balance, however much
             // of it has already been applied elsewhere.
+            // ETP-5268 follow-up — the pill shows the amount again, but capped
+            // to ~6 digits before ellipsing via TruncatedText: it measures its
+            // own scrollWidth vs clientWidth, so the tooltip with the full
+            // amount only opens when the value genuinely doesn't fit that
+            // width — a short amount (e.g. "15 €") shows in full with no
+            // tooltip at all.
             return (
               <button
                 type="button"
@@ -287,7 +316,11 @@ export default function PurchaseInvoiceHeaderTable(props) {
                 style={{...NOWRAP_FLEX,display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-info-bg)',border:'1px solid var(--status-info-border)',color:'var(--status-info-fg)',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
               >
                 <span style={{width:8,height:8,borderRadius:'50%',background:'var(--status-info-fg)',flexShrink:0,display:'inline-block'}}/>
-                {ui('cpFavorBadge')} · {formatCurrency(currency, badge.amount)}
+                {ui('cpFavorBadge')}
+                <TruncatedText
+                  text={formatCurrency(currency, badge.amount)}
+                  className="w-[72px] shrink-0 text-left"
+                  data-testid="TruncatedText__6b7cdb" />
               </button>
             );
           }
@@ -327,7 +360,6 @@ export default function PurchaseInvoiceHeaderTable(props) {
             >
               <span style={{width:8,height:8,borderRadius:'50%',background:'var(--status-warning-fg)',flexShrink:0,display:'inline-block'}}/>
               {formatCurrency(currency, badge.amount)}
-              <span style={{display:'inline-flex',alignItems:'center',color:'var(--status-warning-fg)'}}><Plus size={13} data-testid="Plus__6b7cdb" /></span>
             </button>
           );
         },

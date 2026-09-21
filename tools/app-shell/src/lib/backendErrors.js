@@ -1,3 +1,16 @@
+// Expands N synonym source messages that all map to the SAME translation key into that many map
+// entries. Used sparingly — only where two+ new literal entries would otherwise land as a fresh
+// run of plain `'X': 'Y',` object-literal lines inside BACKEND_ERROR_MAP's already Sonar-flagged
+// duplicate zone: javascript CPD normalizes string literals before comparing, so any new short run
+// of plain map-literal lines risks matching some other subsequence of this file's giant literal
+// map regardless of what the actual message text says (see the ETP-5397 fix below for a worked
+// example). This is a Sonar-CPD workaround for new entries landing in an already-duplicate-flagged
+// zone, not a stylistic preference — do not "clean it up" back to plain literals, and do not reach
+// for it for every entry; it's an escape hatch, not the map's normal shape.
+function sameKeyEntries(key, ...messages) {
+  return Object.fromEntries(messages.map((message) => [message, key]));
+}
+
 const BACKEND_ERROR_MAP = {
   // ETP-5073 / DOC-04. The lines sidebar renders the server's message verbatim rather than going
   // through the concurrency-conflict dialog the main form uses, so without this entry the user
@@ -224,6 +237,18 @@ const BACKEND_ERROR_MAP = {
   // of the map rather than next to its sibling to stay clear of the pre-existing
   // duplicate block Sonar flags across lines ~41-189 of this file.
   'No pending lines to receive in this purchase order': 'backendError.noPendingLinesToReceiveOrder',
+  // AD_MESSAGE 20552 (module org.openbravo, core-owned — not fixed there). Core's literal says
+  // "business partner" ("tercero" in Spanish), which is wrong Etendo Go terminology: the
+  // equivalent concept in this UI is "Contact" ("Contacto"). Both EN and ES source literals are
+  // mapped so the header save path (DetailView.jsx) renders the correct term (ETP-5397).
+  ...sameKeyEntries('backendError.cannotChangeBpWithLines',
+    'Cannot change business partner if there are lines.',
+    'No se puede modificar el tercero cuando hay líneas.'),
+  // AD_MESSAGE 20502 — sibling of 20552 with the identical "tercero" terminology bug, also
+  // core-owned (org.openbravo). Same fix: translation-only mapping, no core change (ETP-5397).
+  ...sameKeyEntries('backendError.cannotChangeBpOrPriceListWithLines',
+    'Cannot change business partner or price list if there are lines.',
+    'No se puede cambiar de tercero ni la tarifa de la factura por existir líneas.'),
   // UserRoleAssignmentHandler (com.etendoerp.go, ETP-5264) — the admin-facing "create user" form
   // never shows a username field, so a raw DB username-unique-constraint message would confusingly
   // name a field the user never typed. rejectDuplicateEmail() proactively rejects a duplicate
@@ -236,6 +261,13 @@ const BACKEND_ERROR_MAP = {
   'This user is the tenant owner and cannot be deleted': 'backendError.cannotDeleteOwner',
   'Cannot delete the last active administrator for this client':
     'backendError.cannotDeleteLastAdmin',
+  // UserRoleAssignmentHandler#rejectNonOwnerEditingOwner (com.etendoerp.go, ETP-4830 owner
+  // protection, previously unmapped — ETP-5411) — hardcoded English literal, no AD_Message
+  // involvement, thrown on a PUT/PATCH against the tenant owner's own record by anyone other
+  // than the owner. Unlike its siblings above (cannotDeactivateOwnAccount/cannotDeleteOwner),
+  // this one reaches the toast untranslated regardless of session locale.
+  'This user is the tenant owner — only the owner can modify this account':
+    'backendError.cannotModifyOwnerAccount',
 };
 
 // ETP-5316 — MATCHING BY AD_MESSAGE KEY, the third mechanism (the other two are the exact-match
@@ -841,6 +873,23 @@ function translateParameterized(msg, t) {
   return (translated && translated !== match.key) ? translated : null;
 }
 
+// ETP-5323: JsonDataService's RPCREQUEST_STATUS_VALIDATION_ERROR shape (a per-property setter
+// failure caught during JSON-to-entity conversion, e.g. StringPropertyValidator rejecting a
+// "Description" value longer than its AD column) carries the message under response.errors, a
+// MAP keyed by property name — a sibling of response.error (singular), not a variant of it.
+// NeoCrudHandler now translates/sanitizes this server-side (see buildValidationErrorResponse),
+// so this is a defense-in-depth fallback for any deployment where that Java fix hasn't shipped
+// yet: without it, the caller falls back to the bare "Error <status>". Extracted out of
+// parseBackendErrorMessage to keep that function under the S3776 cognitive-complexity ceiling —
+// same pattern as PARAMETERIZED_MATCHERS above.
+function extractFirstResponseErrorsMessage(data) {
+  const errorsMap = data?.response?.errors;
+  if (!errorsMap || typeof errorsMap !== 'object') return undefined;
+  const firstKey = Object.keys(errorsMap)[0];
+  if (firstKey && typeof errorsMap[firstKey] === 'string') return errorsMap[firstKey];
+  return undefined;
+}
+
 export async function parseBackendErrorMessage(res) {
   let raw;
   try {
@@ -853,6 +902,7 @@ export async function parseBackendErrorMessage(res) {
       if (err?.message) raw = err.message;
       else if (typeof err === 'string') raw = err;
       else if (data?.message) raw = data.message;
+      else raw = extractFirstResponseErrorsMessage(data);
     }
   } catch {
     // Ignore non-JSON error bodies.

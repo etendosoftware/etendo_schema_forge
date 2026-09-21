@@ -2,9 +2,9 @@ import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import GeneratedApp from '@generated/purchase-order/generated/web/purchase-order/index.jsx';
 import HeaderTable from '@generated/purchase-order/generated/web/purchase-order/HeaderTable';
-import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import BulkPurchaseOrderMoreMenu from '@generated/purchase-order/custom/BulkPurchaseOrderMoreMenu';
+import PurchaseOrderReactivateBulkAction from '@generated/purchase-order/custom/PurchaseOrderReactivateBulkAction';
 import { ConfirmModal as PoConfirmModal, PoConfirmResultModal, ManageDocsLauncher as PoManageDocsLauncher } from '@generated/purchase-order/custom/PurchaseOrderActions';
 import PurchaseOrderSecondaryActions from '@generated/purchase-order/custom/PurchaseOrderSecondaryActions';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
@@ -72,11 +72,15 @@ function PurchaseOrderBulkActions(props) {
   return (
     <>
       <BulkPurchaseOrderMoreMenu {...props} data-testid="BulkPurchaseOrderMoreMenu__b7ace5" />
-      <BulkDocumentAction
-        {...props}
-        buildActions={buildInOutActions}
-        labelKey="confirmBulk"
-        data-testid="BulkDocumentAction__b7ace5" />
+      {/* ONE "Procesar" button for the whole selection bar, like every other
+          document window: the dialog's dropdown offers Confirmar and/or
+          Reactivar depending on what is selected. ETP-5315 first added its
+          Reactivate as a SECOND button beside the CO-only one, which put two
+          buttons in the bar at once for a mixed draft+completed selection and
+          left a lone "Reactivar" for a completed-only one. Folding both into
+          this component also retires the `buildInOutActions` gate and the
+          `reactivateBulk` label that split was forced to invent. */}
+      <PurchaseOrderReactivateBulkAction {...props} data-testid="BulkDocumentAction__b7ace5" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
@@ -106,7 +110,6 @@ export default function PurchaseOrderWindow(props) {
   } = useOrderWindow({
     windowName, token, apiBaseUrl,
     specName: 'purchase-order',
-    deliveryKey: 'deliveryStatusPurchase',
     manageLabelKeys: PO_MANAGE_LABELS,
     confirmLabelKey: 'poConfirmBtn',
     confirmedTitleKey: 'poConfirmedTitle',
@@ -117,6 +120,7 @@ export default function PurchaseOrderWindow(props) {
     ConfirmResultModal: PoConfirmResultModal,
     ManageDocsLauncher: PoManageDocsLauncher,
     setCloneTargets,
+    showReactivate: true,
     usePdf: usePurchaseOrderPdf,
     documentType: tMenu('Purchase Order'),
   });

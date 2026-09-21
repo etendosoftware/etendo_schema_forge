@@ -86,13 +86,18 @@ vi.mock('@/components/contract-ui/ListView.jsx', () => ({
   },
 }));
 
-vi.mock('@/components/contract-ui/BulkDocumentAction', () => ({
-  default: () => <div data-testid="bulk-document-action" />,
-  buildInOutActions: vi.fn(),
-}));
-
 vi.mock('@generated/purchase-order/custom/BulkPurchaseOrderMoreMenu', () => ({
   default: () => <div data-testid="bulk-more-menu" />,
+}));
+
+// ETP-5315 — grid bulk-select Reactivate, mirroring sales-order's own mock
+// of OrderReactivateBulkAction in its index.vitest.jsx.
+// ETP-5302 — this is now the bar's ONLY document-action button (it carries the
+// `process` label and offers Confirmar/Reactivar in its dropdown), so index.jsx
+// no longer imports BulkDocumentAction directly and the module mock that used to
+// sit here, alongside its `buildInOutActions` export, went with it.
+vi.mock('@generated/purchase-order/custom/PurchaseOrderReactivateBulkAction', () => ({
+  default: () => <div data-testid="reactivate-bulk-action" />,
 }));
 
 vi.mock('@generated/purchase-order/custom/PurchaseOrderActions', () => ({
@@ -180,5 +185,17 @@ describe('PurchaseOrderWindow — render smoke tests (ETP-4520 window-access wir
     render(<PurchaseOrderWindow windowName="purchase-order" apiBaseUrl="/api" token="tkn" />);
 
     expect(lastUseOrderWindowArgs).toMatchObject({ specName: 'purchase-order', documentType: 'Purchase Order' });
+  });
+
+  // ETP-5315 — Reactivate must be consistent across all three surfaces (form
+  // kebab, grid bulk-select, grid row-hover kebab). This asserts the
+  // row-hover kebab wiring: showReactivate: true reaches the shared
+  // useOrderWindow hook, which is what actually adds the 'reactivate' entry
+  // to rowQuickActions.menuActions (see useOrderWindow.vitest.jsx for that
+  // shared, window-agnostic behavior).
+  it('passes showReactivate: true to useOrderWindow, enabling the row-hover kebab Reactivate item', () => {
+    render(<PurchaseOrderWindow windowName="purchase-order" apiBaseUrl="/api" token="tkn" />);
+
+    expect(lastUseOrderWindowArgs).toMatchObject({ showReactivate: true });
   });
 });

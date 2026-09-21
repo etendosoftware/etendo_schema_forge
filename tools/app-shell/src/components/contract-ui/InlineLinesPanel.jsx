@@ -15,17 +15,17 @@ import { DateField } from '@/components/ui/date-field';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useLabel, useLocaleSwitch, useUI } from '@/i18n';
 import { resolveRowCurrency } from '@/lib/rowCurrency.js';
-import { formatCurrency } from '@/lib/formatCurrency.js';
+import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency.js';
 import { formatSignedDelta } from '@/lib/formatSigned.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { InlineSearchCombo } from './InlineSearchCombo.jsx';
-import { SelectorInput } from './SelectorInput.jsx';
 import { PillToggle } from '@/components/PillToggle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { resolveLookupDrawer } from './lookupDrawers.js';
 import { columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
 import { ACTION_SLOT_WIDTH_PX, resolveTrailingColumn } from '@/lib/linesActionSlot.js';
+import { registerLinesScroller } from '@/lib/linesScrollSync.js';
 import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
 import { getContactsTextFieldError } from './contactsFieldValidation.js';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
@@ -637,6 +637,14 @@ function ReadCell({ row, col, locale, t, ui }) {
     }
   }
   const display = resolveIdentifier(row, col.key);
+  // ETP-5107 (reopened) — a numeric column that is NOT amount/price-shaped (number, decimal,
+  // integer, quantity) reaches here, and rendering it bare printed JS's own '.' next to a
+  // comma-formatted Precio on the same row: the `% de descuento` = `10.5` vs `Precio` = `44,00`
+  // screenshot QA reopened this ticket with. The masked EDIT cell above was fixed first; this is
+  // the READ-ONLY cell, the one a user sees without clicking anything, and it is a separate path.
+  if (NUMERIC_TYPES.has(col.type)) {
+    return <span className="tabular-nums">{formatPlainDecimal(display)}</span>;
+  }
   if (typeof display === 'string') {
     return <span className="block truncate" title={display || undefined}>{display}</span>;
   }
@@ -846,12 +854,21 @@ function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, 
 
   // Always `text`: the `col.type === 'date'` branch above returns EditDateCell, so a date
   // column can never reach here (ETP-5245 left the ternary behind when it added that branch).
+  // ETP-5323: `maxLength` (when the column declares one — see generate-frontend.js's
+  // `maxLengthColPart`, sourced from the contract's DB-derived `validation.maxLength`) is a
+  // hard client-side stop on keystrokes, e.g. C_OrderLine/C_InvoiceLine.Description's 2000-char
+  // AD column length. It only PREVENTS typing past the limit; it does not replace the backend's
+  // own StringPropertyValidator rejection, which still applies (and is now translated into a
+  // friendly toast — see backendErrors.js's fieldTooLong matcher) for any value that reaches the
+  // server some other way (paste beyond the limit is still trimmed by the browser's native
+  // maxLength enforcement, so this covers that path too).
   return (
     <Input
       ref={inputRef}
       data-testid={`field-${col.key}`}
       type="text"
       defaultValue={value ?? ''}
+      maxLength={col.maxLength}
       onBlur={(e) => onCommit(e.target.value)}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
@@ -983,6 +1000,17 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   const handleBodyScroll = useCallback((e) => {
     if (headerScrollRef.current) headerScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
   }, []);
+  // ETP-5332 — the same alignment problem one level out: when the add-row is open the
+  // "Add ..." row is drawn by a SIBLING `<DataTable hideHeader hideDataRows>` with its own
+  // scroll box, which `handleBodyScroll` above cannot reach. Both join a group keyed by
+  // entity instead; see `@/lib/linesScrollSync.js`. Cleanup is tracked by hand because
+  // React 18 ignores a callback ref's return value (that only became a cleanup in 19).
+  const bodySyncCleanupRef = useRef(null);
+  const attachBodyScroll = useCallback((el) => {
+    bodyScrollRef.current = el;
+    bodySyncCleanupRef.current?.();
+    bodySyncCleanupRef.current = el ? registerLinesScroller(entity, el) : null;
+  }, [entity]);
 
   // Close edit mode when the user clicks outside the editing row. Defers the state
   // update to the next tick so any focused input fires its onBlur first — that triggers
@@ -1416,7 +1444,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           elevated hover shadow to protect from the overflow-y:auto clipping
           DataTable's `pb-6` compensates for (ETP-5216), so no bottom padding
           is added here. */}
-      <div ref={bodyScrollRef} className="overflow-x-auto" onScroll={handleBodyScroll}>
+      <div ref={attachBodyScroll} className="overflow-x-auto" onScroll={handleBodyScroll}>
       {selectableRows.map((row) => {
         const isEditing = editingRowId === row.id;
         const isHovered = hoveredRowId === row.id;

@@ -5,7 +5,6 @@ import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { isDeleteVisibleForRecord, evalRowVisibleWhen } from '@/utils/recordActions.js';
-import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
 
 // Resolves whether an action should render, given its actionsConfig entry
 // (decisions.json → window.rowQuickActions.actions.<key>) and an optional fallback
@@ -41,8 +40,15 @@ function isActionVisible(config, fallbackVisibleWhen, row) {
  * `@/utils/recordActions.js` (same matcher as DetailView's `evalDisplayLogicRaw`). ANDed with the
  * existing edit-view visibility (delete gate, `documentPreview`, `action.visible`).
  *
- * The wrapping <td> uses absolute positioning so the icons overlay the trailing
- * grid columns and reveal on `group-hover/row` (set by DataTable's <TableRow>).
+ * This component is always absolutely positioned (see the className comment
+ * below for why), inside a `<td>` DataTable always renders at this window's
+ * own full reserved width and `position: sticky; right: 0` (ETP-5268 —
+ * quickActionsColumnStyle/quickActionsColumnClassName). That sticky cell —
+ * not this component — is what makes the pill appear to float over trailing
+ * columns while there's more to scroll, and settle into normal flow once the
+ * user reaches the true end: a pure CSS "frozen last column" effect, so the
+ * pill's own positioning here never has to know or care which of those two
+ * states it's currently in.
  *
  * NOTE: this component is generic — every prop is optional and gates behavior
  * gracefully. It is safe to mount on every list row regardless of window config.
@@ -238,7 +244,63 @@ export default function RowQuickActions({
 
   return (
     <div
-      className={`absolute right-3 top-1/2 -translate-y-1/2 flex flex-row items-center justify-center gap-0.5 h-10 px-3 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100 transition-opacity z-10 ${QUICK_ACTIONS_PILL_CLASS}`.trim()}
+      // Always absolutely positioned — this MUST stay out of normal flow:
+      // regardless of hover state (only `opacity` toggles), so in-flow it
+      // would inflate every row's height to fit these 32-40px icon buttons
+      // even while invisible — that regression shipped and was caught by
+      // hand on /contacts before being reverted here. `inset-y-0 h-full`
+      // (rather than a fixed `h-10` centered via `top-1/2 -translate-y-1/2`)
+      // sizes it to the enclosing <td>'s own full height instead of a
+      // shorter fixed height floating inside it.
+      //
+      // ETP-5268 follow-up — "las acciones no deberian estar en la columna,
+      // si no que siempre tiene que estar al hacer hover": the reserved
+      // column width/space stays (DataTable's own quickActionsColumnStyle is
+      // untouched), but the icons themselves are hover-only again —
+      // `opacity-0 group-hover/row:opacity-100`, no transition class, so the
+      // toggle is instant ("sacale la transicion... que sea 100% rapido").
+      // Independent of the cell's own `group-hover/row:sticky` (this div
+      // stays `position: absolute` either way, so hiding it at rest never
+      // reintroduces the row-height regression above).
+      //
+      // ETP-5268 follow-up — "no forma parte de una columna ... va con la
+      // pantalla": DataTable's quick-actions column used to be
+      // UNCONDITIONALLY `sticky right-0`, floating over whatever real
+      // column was scrolled underneath any time there was overflow — live-
+      // verified overlapping far more of the neighboring column than was
+      // ever genuinely hidden. The column now sits in plain, normal table
+      // flow by default, and only becomes sticky WHILE the row is hovered
+      // (`group-hover/row:sticky` — see DataTable's quickActionsColumnClassName),
+      // and even then CSS sticky positioning is a no-op once the column is
+      // already fully in view — so it only ever floats/covers when there's
+      // genuinely still something to reach ("al hacer hover y no verse la
+      // ultima columna que se vea el stick de botones como estaba antes").
+      //
+      // ETP-5268 follow-up — "se nota como una diferencia en los colores":
+      // this pill used to carry its OWN background (`bg-card` at rest,
+      // `group-hover/row:bg-muted` on hover) — matching the row's hover
+      // color in NAME, but not in actual pixels: the row's own hover tint
+      // is the translucent `hover:bg-muted/50` (getRowClassName's default
+      // `tint` style), a visibly LIGHTER gray than the same token at full
+      // opacity. Since this pill is narrower than the cell's own reserved
+      // width, that mismatch painted as a seam INSIDE one cell — solid gray
+      // under the icons, lighter translucent gray in the gutter beside them
+      // — live-verified. This div now sets NO background of its own at
+      // all: the masking/tinting background lives on the enclosing `<td>`
+      // instead (DataTable's quickActionsColumnClassName), applied to the
+      // WHOLE cell so gutter and icons always match — solid `bg-muted` only
+      // when hover-sticky can actually float this pill over real data
+      // (masking beats color-matching there), otherwise nothing, letting
+      // the row's own `hover:bg-muted/50` show through this div exactly as
+      // it does everywhere else in the row, at rest AND transitioning.
+      className={[
+        // `right-0` (not `right-3`) — flush against the cell's own right
+        // edge, no outer margin: "que se empuje al fondo, tiene como un
+        // espacio" (a `right-3` gap here read as an unexplained sliver of
+        // the reserved column left uncovered at the true edge). `px-3`
+        // keeps the icons themselves off the very edge as inner padding.
+        'absolute right-0 inset-y-0 h-full flex flex-row items-center justify-center gap-0.5 px-3 z-10 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100',
+      ].join(' ')}
       data-testid="row-quick-actions"
       onClick={stop}
     >

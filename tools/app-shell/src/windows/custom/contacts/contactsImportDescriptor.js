@@ -2,6 +2,12 @@ import { registerImportDescriptor } from '@etendosoftware/app-shell-core/lib/imp
 import { registerImportRowValidator } from '@etendosoftware/app-shell-core/lib/import/rowValidators.js';
 import { getFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResolvers.js';
 import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendosoftware/app-shell-core/lib/import/resolveDependentEntity.js';
+import { fetchNeoList } from '@etendosoftware/app-shell-core/lib/import/fetchNeoList.js';
+import {
+  getCachedCategories,
+  categoryLookupFailedMessage,
+  categoryCreateFailedError,
+} from '@/lib/importCategoryResolution.js';
 import { resolveCodedCellOrThrow, codedCellError, codeLabels } from '@/lib/codedValue.js';
 import { registerExportHints } from '@/lib/importExportColumns.js';
 import { asDependentEntityInput } from '@/lib/dependentEntityCell.js';
@@ -23,27 +29,24 @@ function detectEtendoBase() {
   return import.meta.env?.VITE_API_BASE || '';
 }
 
-async function fetchBusinessPartnerCategories(token) {
+/**
+ * ETP-5227 — the same defect as `productImportDescriptor`, and here for the same reason: this
+ * descriptor was copied from that one, `?limit=1000` included. NEO does not read that parameter
+ * and caps an unpaged list at 100 rows, so a tenant past 100 contact categories got a phantom
+ * "does not exist" and an auto-create the database rejected. See `fetchNeoList`'s header.
+ */
+function fetchBusinessPartnerCategories(token) {
   const base = detectEtendoBase();
-  const url = `${base}/sws/neo/business-partner-category/businessPartnerCategory?limit=1000`;
-  try {
-    const res = await apiFetch(url, { baseUrl: '', token });
-    if (!res.ok) return [];
-    const json = await res.json().catch(() => null);
-    const data = json?.response?.data ?? json?.data ?? [];
-    return Array.isArray(data) ? data : [];
-  } catch (e) {
-    return [];
-  }
+  return fetchNeoList(`${base}/sws/neo/business-partner-category/businessPartnerCategory`, { token });
 }
 
 function getExistingBusinessPartnerCategories(token, existingCategoriesOverride) {
   if (existingCategoriesOverride) return Promise.resolve(existingCategoriesOverride);
-  const key = token || 'default';
-  if (!businessPartnerCategoriesCache.has(key)) {
-    businessPartnerCategoriesCache.set(key, fetchBusinessPartnerCategories(token));
-  }
-  return businessPartnerCategoriesCache.get(key);
+  return getCachedCategories(
+    businessPartnerCategoriesCache,
+    token,
+    () => fetchBusinessPartnerCategories(token),
+  );
 }
 
 function pick(row, targets) {
@@ -89,7 +92,9 @@ const DEFAULT_TAX_ID_KEY = '1';
 // identificacion expedido por el pais, 5=Certificado de residencia fiscal, 6=Otro documento
 // probatorio, 7=No Censado. Before ETP-4995 the column accepted ONLY the raw code, so a user
 // who typed the label they see in the UI ("NIF") had the row rejected by the list reference.
-const TAX_ID_KEY_VALUES = {
+// Exported since ETP-5373 so the template test can dispatch the tax-id example on the SAME
+// label table the import itself resolves with, instead of restating which labels mean NIF.
+export const TAX_ID_KEY_VALUES = {
   // 'CIF' is not an AD_Ref_List name, but it is what people actually type: CIF was the
   // Spanish company tax ID until it was folded into NIF in 2008, and this window's own
   // tax-id column was labelled "CIF/NIF" until ETP-4992 renamed it to "NIF" (CIF no longer
@@ -165,7 +170,12 @@ function resolveBusinessPartnerName(bpFields, config) {
 
 async function resolveCategoryId(row, config) {
   if (!row.category) return null;
-  const categories = await getExistingBusinessPartnerCategories(config.token, config.existingCategories);
+  let categories;
+  try {
+    categories = await getExistingBusinessPartnerCategories(config.token, config.existingCategories);
+  } catch (error) {
+    throw new Error(categoryLookupFailedMessage(row.category, config));
+  }
   const runCache = getResolutionCache(config.token || 'contacts-import');
   const createFn = config.createCategoryFn || (async ({ searchKey, name }) => {
     const base = detectEtendoBase();
@@ -178,7 +188,7 @@ async function resolveCategoryId(row, config) {
     });
     if (!res.ok) {
       const errJson = await res.json().catch(() => null);
-      throw new Error(errJson?.error?.message || errJson?.message || 'Contact category creation failed');
+      throw categoryCreateFailedError(errJson?.error?.message || errJson?.message || '', row.category, config);
     }
     const json = await res.json().catch(() => null);
     const record = json?.response?.data?.[0] ?? json?.data?.[0] ?? json;

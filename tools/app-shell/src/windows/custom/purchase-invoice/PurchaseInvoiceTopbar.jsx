@@ -2,6 +2,7 @@ import { useState } from 'react';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.js';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
 
@@ -58,6 +59,8 @@ export default function PurchaseInvoiceTopbar({ data, recordId, apiBaseUrl, onRe
               </span>
             );
           }
+          // ETP-5268 follow-up — amount shown again, capped to ~6 digits via
+          // TruncatedText (tooltip only opens when it genuinely truncates).
           return (
             <span
               className="inline-flex items-center gap-1.5 text-[13px] font-medium"
@@ -67,8 +70,10 @@ export default function PurchaseInvoiceTopbar({ data, recordId, apiBaseUrl, onRe
             >
               <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'var(--status-info-fg)' }} />
               {ui('cpFavorBadge')}
-              <span style={{ opacity: 0.4 }}>&middot;</span>
-              <span className="font-semibold tabular-nums">{formatCurrency(currency || 'USD', badge.amount)}</span>
+              <TruncatedText
+                text={formatCurrency(currency || 'USD', badge.amount)}
+                className="w-[72px] shrink-0 text-left font-semibold tabular-nums"
+                data-testid="TruncatedText__8addd1" />
             </span>
           );
         }

@@ -1,6 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { extractBackendMessageKeys, translateBackendError } from '../backendErrors.js';
+import {
+  extractBackendMessageKeys,
+  translateBackendError,
+  parseBackendErrorMessage,
+} from '../backendErrors.js';
 
 /**
  * Unit tests for translateBackendError.
@@ -2111,5 +2115,257 @@ describe('translateBackendError — messageKeys route (ETP-5316)', () => {
       assert.equal(translateBackendError('', keyT, {}), '');
       assert.equal(translateBackendError(null, keyT, {}), null);
     });
+  });
+});
+
+// ── ETP-5397: "tercero" → "Contacto" terminology fix on the goods-receipt header ──
+//
+// AD_MESSAGE 20552 and its sibling 20502 (module org.openbravo, core-owned, not fixed there)
+// use core's "business partner" / "tercero" wording, which is wrong Etendo Go terminology — the
+// equivalent concept in this UI is "Contact" / "Contacto". Both the EN and the ES AD_MESSAGE_TRL
+// literals are mapped so the header save path (DetailView.jsx) renders the correct term
+// regardless of which language the backend responded in.
+describe('translateBackendError — "cannot change business partner" terminology fix (ETP-5397)', () => {
+  const en = fakeUiTranslator({
+    'backendError.cannotChangeBpWithLines': 'You cannot change the Contact once the document has lines.',
+    'backendError.cannotChangeBpOrPriceListWithLines':
+      'You cannot change the Contact or the price list once the document has lines.',
+  });
+  const es = fakeUiTranslator({
+    'backendError.cannotChangeBpWithLines': 'No se puede modificar el Contacto cuando hay líneas.',
+    'backendError.cannotChangeBpOrPriceListWithLines':
+      'No se puede cambiar el Contacto ni la tarifa cuando hay líneas.',
+  });
+
+  describe('AD_MESSAGE 20552 — "Cannot change business partner if there are lines."', () => {
+    const RAW_EN = 'Cannot change business partner if there are lines.';
+    const RAW_ES = 'No se puede modificar el tercero cuando hay líneas.';
+
+    it('translates the raw English literal to en_US', () => {
+      assert.equal(
+        translateBackendError(RAW_EN, en),
+        'You cannot change the Contact once the document has lines.',
+      );
+    });
+
+    it('translates the raw English literal to es_ES', () => {
+      assert.equal(
+        translateBackendError(RAW_EN, es),
+        'No se puede modificar el Contacto cuando hay líneas.',
+      );
+    });
+
+    it('translates the raw Spanish (AD_MESSAGE_TRL) literal to en_US', () => {
+      assert.equal(
+        translateBackendError(RAW_ES, en),
+        'You cannot change the Contact once the document has lines.',
+      );
+    });
+
+    it('translates the raw Spanish (AD_MESSAGE_TRL) literal to es_ES', () => {
+      assert.equal(
+        translateBackendError(RAW_ES, es),
+        'No se puede modificar el Contacto cuando hay líneas.',
+      );
+    });
+  });
+
+  describe('AD_MESSAGE 20502 — "Cannot change business partner or price list if there are lines."', () => {
+    const RAW_EN = 'Cannot change business partner or price list if there are lines.';
+    const RAW_ES = 'No se puede cambiar de tercero ni la tarifa de la factura por existir líneas.';
+
+    it('translates the raw English literal to en_US', () => {
+      assert.equal(
+        translateBackendError(RAW_EN, en),
+        'You cannot change the Contact or the price list once the document has lines.',
+      );
+    });
+
+    it('translates the raw English literal to es_ES', () => {
+      assert.equal(
+        translateBackendError(RAW_EN, es),
+        'No se puede cambiar el Contacto ni la tarifa cuando hay líneas.',
+      );
+    });
+
+    it('translates the raw Spanish (AD_MESSAGE_TRL) literal to en_US', () => {
+      assert.equal(
+        translateBackendError(RAW_ES, en),
+        'You cannot change the Contact or the price list once the document has lines.',
+      );
+    });
+
+    it('translates the raw Spanish (AD_MESSAGE_TRL) literal to es_ES', () => {
+      assert.equal(
+        translateBackendError(RAW_ES, es),
+        'No se puede cambiar el Contacto ni la tarifa cuando hay líneas.',
+      );
+    });
+  });
+
+  it('does not cross-match the two sibling messages (20552 key vs 20502 raw)', () => {
+    const raw20502 = 'Cannot change business partner or price list if there are lines.';
+    assert.notEqual(
+      translateBackendError(raw20502, en),
+      'You cannot change the Contact once the document has lines.',
+    );
+  });
+});
+
+// ── ETP-5323: parseBackendErrorMessage's response.errors (MAP) fallback ──────────
+//
+// A line PATCH that goes through core's DefaultJsonDataService (not NeoCrudHandler's own
+// pre-check) returns a validation error under `response.errors`, a MAP keyed by property
+// name — a sibling of `response.error` (singular) above, NOT a variant of it. Before this
+// fallback existed, `raw` stayed `undefined` for this shape and the caller fell back to the
+// bare "Error 400" toast the user actually reported (this is the regression's root cause).
+//
+// NeoCrudHandler.buildValidationErrorResponse now translates/sanitizes this server-side, so
+// this branch is a defense-in-depth fallback for any deployment where that Java fix hasn't
+// shipped yet (or for a JsonDataService write that bypasses NeoCrudHandler entirely).
+describe('parseBackendErrorMessage — response.errors MAP fallback (ETP-5323)', () => {
+  function jsonResponse(body) {
+    return { json: async () => body };
+  }
+
+  it('extracts the first entry of response.errors when no response.error/data.error/message exists', async () => {
+    const res = jsonResponse({
+      response: {
+        status: -1,
+        errors: {
+          description: 'C_OrderLine.description: Value too long. Length 2150, maximum allowed 2000 '
+            + '[Some very long description text that exceeds the column...]',
+        },
+      },
+    });
+    const raw = await parseBackendErrorMessage(res);
+    assert.equal(
+      raw,
+      'C_OrderLine.description: Value too long. Length 2150, maximum allowed 2000 '
+        + '[Some very long description text that exceeds the column...]',
+    );
+  });
+
+  it('feeds a raw response.errors message all the way through translateBackendError (the actual regression)', async () => {
+    // This is the exact shape that reached the frontend as a bare "Error 400" toast before
+    // ETP-5323: parseBackendErrorMessage() couldn't find a raw string anywhere in the
+    // response, so its caller had nothing to hand to translateBackendError and fell back to
+    // the generic status-code message.
+    const res = jsonResponse({
+      response: {
+        status: -1,
+        errors: {
+          description: 'C_OrderLine.description: Value too long. Length 2150, maximum allowed 2000 '
+            + '[Lorem ipsum dolor sit amet...]',
+        },
+      },
+    });
+    const raw = await parseBackendErrorMessage(res);
+    const es = fakeUiTranslator({
+      'backendError.fieldTooLong': 'Este valor es demasiado largo. No puede superar los {maxLength} caracteres.',
+    });
+    assert.equal(
+      translateBackendError(raw, es),
+      'Este valor es demasiado largo. No puede superar los 2000 caracteres.',
+    );
+  });
+
+  it('returns undefined for an empty response.errors object (no crash, no false match)', async () => {
+    const res = jsonResponse({ response: { status: -1, errors: {} } });
+    const raw = await parseBackendErrorMessage(res);
+    assert.equal(raw, undefined);
+  });
+
+  it('returns undefined when response.errors is present but has no string-valued entries', async () => {
+    // A non-string value under errors.<key> (e.g. a nested object or array) must not crash
+    // parseBackendErrorMessage and must not be handed to the caller as if it were the raw
+    // message — Object.keys(errorsMap)[0] resolves the key, but the
+    // `typeof errorsMap[firstKey] === 'string'` guard declines to use it.
+    const res = jsonResponse({ response: { status: -1, errors: { description: { nested: 'oops' } } } });
+    const raw = await parseBackendErrorMessage(res);
+    assert.equal(raw, undefined);
+  });
+
+  it('returns undefined when response.errors is not an object (defensive guard)', async () => {
+    const res = jsonResponse({ response: { status: -1, errors: 'not-an-object' } });
+    const raw = await parseBackendErrorMessage(res);
+    assert.equal(raw, undefined);
+  });
+
+  it('still prefers the NEO top-level error.message over response.errors when both are present (regression guard)', async () => {
+    // Precedence must not change: data.error.message (NEO Headless's own pre-checked shape,
+    // e.g. NeoCrudHandler.buildValidationErrorResponse) wins over the JsonDataService
+    // response.errors fallback added by this fix.
+    const res = jsonResponse({
+      error: { message: 'neo pre-checked message', status: 400 },
+      response: { errors: { description: 'should not be used' } },
+    });
+    const raw = await parseBackendErrorMessage(res);
+    assert.equal(raw, 'neo pre-checked message');
+  });
+
+  it('still prefers response.error.message over response.errors when both are present (regression guard)', async () => {
+    const res = jsonResponse({
+      response: {
+        error: { message: 'service error message' },
+        errors: { description: 'should not be used' },
+      },
+    });
+    const raw = await parseBackendErrorMessage(res);
+    assert.equal(raw, 'service error message');
+  });
+
+  it('still prefers response.error (string) over response.errors when both are present (regression guard)', async () => {
+    const res = jsonResponse({
+      response: {
+        error: 'plain string error',
+        errors: { description: 'should not be used' },
+      },
+    });
+    const raw = await parseBackendErrorMessage(res);
+    assert.equal(raw, 'plain string error');
+  });
+
+  it('still prefers top-level data.message over response.errors when both are present (regression guard)', async () => {
+    const res = jsonResponse({
+      message: 'top-level message',
+      response: { errors: { description: 'should not be used' } },
+    });
+    const raw = await parseBackendErrorMessage(res);
+    assert.equal(raw, 'top-level message');
+  });
+
+  it('returns undefined when res.json() rejects (non-JSON body), same as before this fix', async () => {
+    const res = { json: async () => { throw new Error('not JSON'); } };
+    const raw = await parseBackendErrorMessage(res);
+    assert.equal(raw, undefined);
+  });
+});
+
+// ETP-5411 — UserRoleAssignmentHandler#rejectNonOwnerEditingOwner's owner-modification guard
+// (com.etendoerp.go, part of the ETP-4830 owner-protection concern) was previously unmapped,
+// unlike its siblings cannotDeactivateOwnAccount/cannotDeleteOwner — so it reached the toast
+// untranslated regardless of session locale. Suggested key: backendError.cannotModifyOwnerAccount.
+describe('"tenant owner — only the owner can modify" exact match (UserRoleAssignmentHandler)', () => {
+  const RAW = 'This user is the tenant owner — only the owner can modify this account';
+
+  it('translates the raw English literal to en_US', () => {
+    const t = (k) => (k === 'backendError.cannotModifyOwnerAccount'
+      ? 'This user is the tenant owner — only the owner can modify this account.'
+      : k);
+    assert.equal(
+      translateBackendError(RAW, t),
+      'This user is the tenant owner — only the owner can modify this account.',
+    );
+  });
+
+  it('translates the raw English literal to es_ES', () => {
+    const t = (k) => (k === 'backendError.cannotModifyOwnerAccount'
+      ? 'Este usuario es el propietario de la empresa — solo el propietario puede modificar esta cuenta.'
+      : k);
+    assert.equal(
+      translateBackendError(RAW, t),
+      'Este usuario es el propietario de la empresa — solo el propietario puede modificar esta cuenta.',
+    );
   });
 });

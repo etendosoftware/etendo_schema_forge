@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { DataTable } from '@/components/contract-ui';
 import { useLocale, useUI } from '@/i18n';
 import { Tag } from '@/components/ui/tag';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import { Button } from '@/components/ui/button.jsx';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -35,6 +36,19 @@ function TypeBadge({ row, t }) {
   if (isCust) return <Tag variant="purple" label={t('Customer')} data-testid="Tag__5c74a8" />;
   if (isVend) return <Tag variant="blue" label={t('Vendor')} data-testid="Tag__5c74a8" />;
   return '—';
+}
+
+// ETP-5268 follow-up — same "see the full value when it's cut off" tooltip the
+// generic `renderDefaultCell` gives every column, but these columns opt out of
+// it by defining their own `render` (needed for inline editing), which bypasses
+// CELL_RENDERERS entirely (see DataTable.jsx's `renderCellValue`).
+function TextCell({ value }) {
+  return (
+    <TruncatedText
+      text={value ?? '—'}
+      className="max-w-[200px]"
+      data-testid="TruncatedText__5c74a8" />
+  );
 }
 
 function EditableCell({ value, onChange, onKeyDown }) {
@@ -112,7 +126,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
           onChange={(v) => handleEditChange('name', v)}
           onKeyDown={handleKeyDown}
           data-testid="EditableCell__5c74a8" />
-          : (row.name ?? '—'),
+          : <TextCell value={row.name} data-testid="TextCell__5c74a8" />,
       },
       {
         key: 'etgoFirstname', column: 'EM_Etgo_Firstname', type: 'string', label: t('firstNameColumn'),
@@ -122,7 +136,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
           onChange={(v) => handleEditChange('etgoFirstname', v)}
           onKeyDown={handleKeyDown}
           data-testid="EditableCell__5c74a8" />
-          : (row.etgoFirstname ?? '—'),
+          : <TextCell value={row.etgoFirstname} data-testid="TextCell__5c74a8" />,
       },
       {
         key: 'etgoLastname', column: 'EM_Etgo_Lastname', type: 'string', label: t('lastNameColumn'),
@@ -132,7 +146,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
           onChange={(v) => handleEditChange('etgoLastname', v)}
           onKeyDown={handleKeyDown}
           data-testid="EditableCell__5c74a8" />
-          : (row.etgoLastname ?? '—'),
+          : <TextCell value={row.etgoLastname} data-testid="TextCell__5c74a8" />,
       },
       {
         key: '__type', type: 'string', label: t('typeColumn'), sortable: false, filterable: false,
@@ -162,7 +176,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
         // minus prefix is required, a trailing ` desc` makes Openbravo miss the
         // identifier path and answer 500.
         sortMode: 'identifier',
-        render: (row) => row['eTGOLocation$_identifier'] ?? '—',
+        render: (row) => <TextCell value={row['eTGOLocation$_identifier']} data-testid="TextCell__5c74a8" />,
       },
       {
         key: 'etgoWeb', column: 'EM_Etgo_Web', type: 'string', label: t('webColumn'),
@@ -172,7 +186,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
           onChange={(v) => handleEditChange('etgoWeb', v)}
           onKeyDown={handleKeyDown}
           data-testid="EditableCell__5c74a8" />
-          : (row.etgoWeb ?? '—'),
+          : <TextCell value={row.etgoWeb} data-testid="TextCell__5c74a8" />,
       },
       {
         key: 'etgoEmail', column: 'EM_Etgo_Email', type: 'string', label: t('emailColumn'),
@@ -182,7 +196,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
           onChange={(v) => handleEditChange('etgoEmail', v)}
           onKeyDown={handleKeyDown}
           data-testid="EditableCell__5c74a8" />
-          : (row.etgoEmail ?? '—'),
+          : <TextCell value={row.etgoEmail} data-testid="TextCell__5c74a8" />,
       },
       {
         key: 'etgoPhone', column: 'EM_Etgo_Phone', type: 'string', label: t('phoneColumn'),
@@ -192,7 +206,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
           onChange={(v) => handleEditChange('etgoPhone', v)}
           onKeyDown={handleKeyDown}
           data-testid="EditableCell__5c74a8" />
-          : (row.etgoPhone ?? '—'),
+          : <TextCell value={row.etgoPhone} data-testid="TextCell__5c74a8" />,
       },
       // Hidden virtual column — appears in conditional filter panel as "Tipo" with
       // "Cliente"/"Proveedor" options. buildCriteria maps each value to the real

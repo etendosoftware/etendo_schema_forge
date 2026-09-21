@@ -179,7 +179,8 @@ vi.mock('../lib/observability/RouteTracker.jsx', () => ({
 }));
 
 import { render, screen } from '@testing-library/react';
-import App, { fetchWindowAccess } from '../App.jsx';
+import App, { fetchWindowAccess, __resetMenuAccessCacheForTest } from '../App.jsx';
+import { MENU_ACCESS_UNREACHABLE } from '../lib/menuTree.js';
 
 describe('App', () => {
   it('renders without crashing', () => {
@@ -204,38 +205,91 @@ describe('App', () => {
  * inconsistent backend that returns `data.result` as a plain object, or the
  * fully unwrapped `{windowAccess, capabilities}` payload with no wrapper at
  * all.
+ *
+ * ETP-5189 — `fetchWindowAccess` now ALSO calls the SFListMenu webhook (via
+ * `fetchMenuTree()`/`collectAllowedIds()` in `lib/menuTree.js`) to build the
+ * `menuAccess` map it merges into its return value. That call goes through the
+ * SAME global `fetch` stub, so every success-path test below must be able to
+ * answer BOTH `/sws/neo/windowaccessmap` and `/sws/neo/listmenu` — hence the
+ * URL-branching `stubFetch` (unlike the single-response stub this replaced,
+ * which made `fetchMenuTree()`'s internal `res.text()` call throw, since the
+ * old `jsonResponse` helper had no `.text()`).
  */
 describe('fetchWindowAccess', () => {
   const PAYLOAD = { windowAccess: { W1: 'full' }, capabilities: { showAccountingFields: true } };
+
+  // A realistic role-filtered menu tree: 3 levels deep, mixing all three id
+  // kinds `collectAllowedIds` recognizes (windowId/processId/obuiappProcessId),
+  // including two on the SAME node — mirrors `lib/__tests__/menuTree.vitest.js`'s
+  // own coverage of `collectAllowedIds` so the flattening behavior is exercised
+  // here too, end-to-end through `fetchWindowAccess`.
+  const MENU_TREE = {
+    tree: [
+      {
+        windowId: 'W1',
+        processId: 'P1',
+        children: [
+          {
+            obuiappProcessId: 'OP1',
+            children: [{ windowId: 'W2' }],
+          },
+        ],
+      },
+    ],
+    count: 1,
+  };
+  const EXPECTED_MENU_ACCESS = { W1: true, P1: true, OP1: true, W2: true };
+
+  // ETP-5189 follow-up — `fetchMenuAccess()`'s module-level cache (60s TTL) is scoped
+  // to one real page load in production, but this file calls `fetchWindowAccess()`
+  // many times against the SAME imported module instance, so a cache populated by an
+  // earlier test case would otherwise leak into later, independent assertions (the
+  // menu-fetch-failure tests below need a genuinely fresh `{}` fallback, not a stale
+  // successful `menuAccess` left over from a prior `it()`).
+  beforeEach(() => {
+    __resetMenuAccessCacheForTest();
+  });
 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  function stubFetch(response) {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response));
-  }
-
   function jsonResponse(body, ok = true) {
     return { ok, json: async () => body };
+  }
+
+  // `callMenuWebhook` (lib/menuTree.js) reads the body via `res.text()`, not `.json()`.
+  function menuTextResponse(body, ok = true) {
+    return { ok, text: async () => (typeof body === 'string' ? body : JSON.stringify(body)) };
+  }
+
+  /**
+   * Branches the global `fetch` stub by URL: `/sws/neo/listmenu` (SFListMenu,
+   * read via `.text()`) gets `menuResponse`; everything else (SFWindowAccessMap,
+   * read via `.json()`) gets `windowAccessResponse`.
+   */
+  function stubFetch(windowAccessResponse, menuResponse = menuTextResponse(MENU_TREE)) {
+    vi.stubGlobal('fetch', vi.fn((url) => Promise.resolve(
+      String(url).includes('/listmenu') ? menuResponse : windowAccessResponse,
+    )));
   }
 
   it('parses data.result when it is a JSON string (real/current backend shape)', async () => {
     stubFetch(jsonResponse({ result: JSON.stringify(PAYLOAD) }));
     const result = await fetchWindowAccess({ token: 'tok' });
-    expect(result).toEqual(PAYLOAD);
+    expect(result).toEqual({ ...PAYLOAD, menuAccess: EXPECTED_MENU_ACCESS });
   });
 
   it('uses data.result directly when it is already a plain object', async () => {
     stubFetch(jsonResponse({ result: PAYLOAD }));
     const result = await fetchWindowAccess({ token: 'tok' });
-    expect(result).toEqual(PAYLOAD);
+    expect(result).toEqual({ ...PAYLOAD, menuAccess: EXPECTED_MENU_ACCESS });
   });
 
   it('falls back to data itself when there is no result wrapper and the shape looks right', async () => {
     stubFetch(jsonResponse(PAYLOAD));
     const result = await fetchWindowAccess({ token: 'tok' });
-    expect(result).toEqual(PAYLOAD);
+    expect(result).toEqual({ ...PAYLOAD, menuAccess: EXPECTED_MENU_ACCESS });
   });
 
   it('fails closed (null) when data.result is an unparsable string', async () => {
@@ -260,5 +314,132 @@ describe('fetchWindowAccess', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
     const result = await fetchWindowAccess({ token: 'tok' });
     expect(result).toBeNull();
+  });
+
+  // ETP-5189 — the menu fetch (SFListMenu) is wrapped in its OWN try/catch, decoupled
+  // from the windowaccessmap parsing above — a menu-fetch failure fails OPEN for
+  // `menuAccess` alone (falls back to the MENU_ACCESS_UNREACHABLE sentinel, see below),
+  // leaving `windowAccess`/`capabilities` from the already-successful SFWindowAccessMap
+  // fetch untouched. This mirrors `useRoleMenu()`'s own fail-open philosophy for
+  // SFListMenu specifically (an unreachable menu webhook means "don't filter", not "deny
+  // everything"). Confirmed live: the E2E mocked-spec harness (`e2e/tests/helpers/
+  // auth.js`) deliberately `route.abort()`s `/sws/neo/listmenu` to exercise this exact
+  // fallback — an earlier version of `fetchWindowAccess` lumped the menu fetch into the
+  // outer catch, which nulled out `windowAccess`/`capabilities` too and broke every
+  // window's WindowAccessGuard across ~40 unrelated mocked specs.
+  //
+  // ETP-5375 — the fallback value used to be a plain `{}`, indistinguishable from a
+  // resolved-but-legitimately-empty allow set once it reached `useRoleMenu()`, which
+  // permanently defeated the ETP-4514 "zero access" blocking screen. It must carry the
+  // MENU_ACCESS_UNREACHABLE sentinel instead — see menuTree.js's own comment on it.
+  it('keeps windowAccess/capabilities and falls back to the unreachable-menu sentinel when the menu fetch (SFListMenu) itself fails', async () => {
+    stubFetch(jsonResponse(PAYLOAD), menuTextResponse('<!doctype html><html><body>App</body></html>'));
+    const result = await fetchWindowAccess({ token: 'tok' });
+    expect(result).toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
+  });
+
+  it('keeps windowAccess/capabilities and falls back to the unreachable-menu sentinel when the menu fetch (SFListMenu) rejects outright', async () => {
+    vi.stubGlobal('fetch', vi.fn((url) => (
+      String(url).includes('/listmenu')
+        ? Promise.reject(new Error('network down'))
+        : Promise.resolve(jsonResponse(PAYLOAD))
+    )));
+    const result = await fetchWindowAccess({ token: 'tok' });
+    expect(result).toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
+  });
+
+  it('does not block window access forever when SFListMenu never settles', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn((url) => (
+      String(url).includes('/listmenu')
+        ? new Promise(() => {})
+        : Promise.resolve(jsonResponse(PAYLOAD))
+    )));
+
+    const resultPromise = fetchWindowAccess({ token: 'tok' });
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    await expect(resultPromise).resolves.toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
+    vi.useRealTimers();
+  });
+
+  // ETP-5189 follow-up — this is the behavior the whole cache exists for: a burst of
+  // silent refreshes within the 60s TTL must not re-hit SFListMenu each time. Only the
+  // menu fetch is cached (see `fetchMenuAccess()` in App.jsx), so `/windowaccessmap`
+  // is still expected to be called once per `fetchWindowAccess()` invocation.
+  it('caches the SFListMenu fetch so two calls within the TTL only hit /listmenu once', async () => {
+    stubFetch(jsonResponse(PAYLOAD));
+
+    const first = await fetchWindowAccess({ token: 'tok' });
+    const second = await fetchWindowAccess({ token: 'tok' });
+
+    expect(first).toEqual({ ...PAYLOAD, menuAccess: EXPECTED_MENU_ACCESS });
+    expect(second).toEqual({ ...PAYLOAD, menuAccess: EXPECTED_MENU_ACCESS });
+
+    const calls = globalThis.fetch.mock.calls.map(([url]) => String(url));
+    const menuCalls = calls.filter((url) => url.includes('/listmenu'));
+    const windowAccessCalls = calls.filter((url) => url.includes('/windowaccessmap'));
+    expect(menuCalls).toHaveLength(1);
+    expect(windowAccessCalls).toHaveLength(2);
+  });
+
+  // [ETP-5395] — the other half of the TTL shrink: the whole point of moving from
+  // 60s to 3s (see App.jsx's MENU_ACCESS_CACHE_TTL_MS comment) is that the cache
+  // must actually EXPIRE quickly enough to pick up a real permission change, not
+  // just dedupe a same-burst sequence of calls (already proven by the test above).
+  // Uses fake timers to advance `Date.now()` past the 3s TTL between two calls —
+  // real timers would make this test slow and flaky. This mirrors the existing
+  // "does not block window access forever" test's use of fake timers with the same
+  // mocked-fetch setup, so no `advanceTimersByTimeAsync` is needed to unblock the
+  // calls themselves (the fetch/menu mocks resolve via microtasks, not timers) —
+  // it's only used here to move the clock forward.
+  it('refetches SFListMenu once the TTL has elapsed instead of serving the stale cache', async () => {
+    vi.useFakeTimers();
+    try {
+      stubFetch(jsonResponse(PAYLOAD));
+
+      const first = await fetchWindowAccess({ token: 'tok' });
+      expect(first).toEqual({ ...PAYLOAD, menuAccess: EXPECTED_MENU_ACCESS });
+
+      // Past the 3s TTL, with margin.
+      await vi.advanceTimersByTimeAsync(3_100);
+
+      const second = await fetchWindowAccess({ token: 'tok' });
+      expect(second).toEqual({ ...PAYLOAD, menuAccess: EXPECTED_MENU_ACCESS });
+
+      const calls = globalThis.fetch.mock.calls.map(([url]) => String(url));
+      const menuCalls = calls.filter((url) => url.includes('/listmenu'));
+      expect(menuCalls).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // [ETP-5395 QA] — the shrunk 3s TTL still caches the FAILURE case (the
+  // `MENU_ACCESS_UNREACHABLE` sentinel, see fetchMenuAccess()'s catch branch), not
+  // just successful resolutions. This is what bounds the request-volume regression
+  // under a genuinely down/unreachable SFListMenu: without this, every refresh
+  // trigger (bootstrap, focus, visibility, the 5-min poll) would hit `/listmenu`
+  // again immediately, defeating the cache entirely for the one case (a sustained
+  // outage) where repeated failed round trips are most costly. With the cache
+  // applying to failures too, the worst case is bounded to one attempt per 3s
+  // (~20/min) — still a ~20x increase over the previous 60s TTL's ~1/min ceiling,
+  // but bounded rather than unbounded.
+  it('caches the SFListMenu FAILURE too, so two calls within the TTL only attempt /listmenu once', async () => {
+    vi.stubGlobal('fetch', vi.fn((url) => (
+      String(url).includes('/listmenu')
+        ? Promise.reject(new Error('network down'))
+        : Promise.resolve(jsonResponse(PAYLOAD))
+    )));
+
+    const first = await fetchWindowAccess({ token: 'tok' });
+    const second = await fetchWindowAccess({ token: 'tok' });
+
+    expect(first).toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
+    expect(second).toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
+
+    const calls = globalThis.fetch.mock.calls.map(([url]) => String(url));
+    const menuCalls = calls.filter((url) => url.includes('/listmenu'));
+    expect(menuCalls).toHaveLength(1);
   });
 });

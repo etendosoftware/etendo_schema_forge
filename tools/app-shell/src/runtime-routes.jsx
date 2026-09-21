@@ -21,6 +21,7 @@ import ArtifactViewerPage from './pages/ArtifactViewerPage.jsx';
 const OnboardingPage = lazy(() => import('./pages/OnboardingPage.jsx'));
 const SmartScanPage = lazy(() => import('./pages/SmartScanPage.jsx'));
 const OAuth2ClientsPage = lazy(() => import('./pages/OAuth2ClientsPage.jsx'));
+const ApiKeysPage = lazy(() => import('./pages/ApiKeysPage.jsx'));
 const RolesOverviewPage = lazy(() => import('./pages/RolesOverviewPage.jsx'));
 const AcctProcessMonitorPage = lazy(() => import('./pages/AcctProcessMonitorPage.jsx'));
 const AuthorizePage = lazy(() => import('./pages/AuthorizePage.jsx'));
@@ -30,6 +31,8 @@ const AppStorePage = lazy(() => import('./pages/AppStorePage.jsx'));
 const UpgradePage = lazy(() => import('./pages/UpgradePage.jsx'));
 const AccountSettingsPage = lazy(() => import('./pages/AccountSettingsPage.jsx'));
 const InviteAcceptancePage = lazy(() => import('./pages/InviteAcceptancePage.jsx'));
+const DevLifecyclePage = import.meta.env.DEV
+  ? lazy(() => import('./pages/DevLifecyclePage.jsx')) : null;
 const PortalPage = lazy(() => import('./pages/PortalPage.jsx'));
 
 const LOADING_FALLBACK = <div className="p-8 text-muted-foreground">Loading...</div>;
@@ -95,6 +98,7 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
     { path: 'projects', public: false, element: <ProjectsPage data-testid="ProjectsPage__e8c60d" /> },
     lazyRoute('smart-scan', SmartScanPage),
     lazyRoute('oauth2-clients', OAuth2ClientsPage),
+    lazyRoute('api-keys', ApiKeysPage),
     lazyRoute('roles', RolesOverviewPage),
     // ETP-5269. Registered unconditionally, like 'upgrade' below: the `acct-process-monitor` flag
     // gates the menu entry, not the route, and SFAcctProcessMonitor enforces admin access itself.
@@ -123,5 +127,6 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
           apiBaseUrl={apiBaseUrl}
           data-testid="WindowLoader__e8c60d" />
       ) },
+    ...(DevLifecyclePage ? [lazyRoute('dev/lifecycle', DevLifecyclePage)] : []),
   ];
 }

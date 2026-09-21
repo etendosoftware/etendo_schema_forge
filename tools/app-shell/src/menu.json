@@ -8,7 +8,8 @@
         {
           "name": "first-steps",
           "label": "First Steps",
-          "favname": "First Steps"
+          "favname": "First Steps",
+          "capability": "isOwner"
         }
       ]
     },
@@ -467,7 +468,8 @@
           "name": "smart-scan",
           "label": "Smart Scan",
           "favname": "Smart Scan",
-          "accessWindowId": "33705E0F52874D91B0BB2FF8BB648B8E"
+          "accessWindowId": "33705E0F52874D91B0BB2FF8BB648B8E",
+          "hidden": true
         },
         {
           "name": "oauth2-clients",
@@ -475,6 +477,14 @@
           "favname": "OAuth2 Clients",
           "icon": "Shield",
           "hidden": true
+        },
+        {
+          "name": "api-keys",
+          "label": "Public API Keys",
+          "favname": "Public API Keys",
+          "icon": "KeyRound",
+          "featureFlag": "public-api-keys",
+          "capability": "isAdminOrClientAdmin"
         },
         {
           "name": "fiscal-config",

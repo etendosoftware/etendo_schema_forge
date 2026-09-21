@@ -221,9 +221,10 @@ function handleRolesOverviewRequest() {
     // ETP-4907 follow-up: illustrative only — a small representative slice, NOT verified
     // against the live category/window breakdown (this session has no DB access). In
     // particular this does NOT include General/Inicio/Favoritos/Copilot-style windowless
-    // rows (see `UserRolesTab.jsx`'s ETP-4906 `GENERAL_ROWS` precedent on the sibling,
-    // unmerged `feature/ETP-4906` branch) — open question for the backend dev on whether the
-    // real matrix includes those or the frontend must still overlay them itself.
+    // rows — this is now confirmed correct, not an open question: the real backend matrix
+    // never included them either, and the frontend's own hardcoded overlay for them (once
+    // present in both `RolesAccessMatrix.jsx` and `UserRolesTab.jsx`) was removed for good
+    // (ETP-5071, then ETP-5196).
     matrix: {
       categories: [
         mockCategory('Commercial', [

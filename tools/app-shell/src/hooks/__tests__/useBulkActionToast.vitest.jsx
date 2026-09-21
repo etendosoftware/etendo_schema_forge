@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 import { toast } from 'sonner';
-import { useBulkActionToast, persistBulkActionResult } from '../useBulkActionToast';
+import { useBulkActionToast, persistBulkActionResult, showBulkActionToast } from '../useBulkActionToast';
 
 vi.mock('sonner', () => ({
   toast: {
@@ -340,5 +340,147 @@ describe('useBulkActionToast', () => {
       expect(toast.warning).toHaveBeenCalledWith('0 processed, 1 omitted, 1 failed');
       expect(toast.warning.mock.calls[0]).toHaveLength(1);
     });
+  });
+});
+
+// ================================================================
+// ETP-4994 — sessionStorage must never escalate to a broken render
+// ================================================================
+// This hook runs inside ListView's render tree. With site data blocked (strict
+// private mode, corporate policy) the accessor itself throws — an unguarded
+// access there unmounts the whole grid instead of losing one toast.
+describe('useBulkActionToast — storage unavailable', () => {
+  const realDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
+
+  const installSessionStorage = (descriptor) => {
+    Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, ...descriptor });
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (realDescriptor) {
+      Object.defineProperty(globalThis, 'sessionStorage', realDescriptor);
+    } else {
+      delete globalThis.sessionStorage;
+    }
+  });
+
+  it('mounts without throwing when reading the accessor throws', () => {
+    installSessionStorage({
+      get() { throw new DOMException('The operation is insecure.', 'SecurityError'); },
+    });
+
+    expect(() => renderHook(() => useBulkActionToast())).not.toThrow();
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.warning).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('mounts without throwing when getItem throws', () => {
+    installSessionStorage({
+      value: {
+        getItem: () => { throw new DOMException('denied', 'SecurityError'); },
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+      },
+      writable: true,
+    });
+
+    expect(() => renderHook(() => useBulkActionToast())).not.toThrow();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('still shows the toast when persisting hits the quota', () => {
+    installSessionStorage({
+      value: {
+        getItem: () => null,
+        setItem: () => { throw new DOMException('quota', 'QuotaExceededError'); },
+        removeItem: vi.fn(),
+      },
+      writable: true,
+    });
+
+    const { result } = renderHook(() => useBulkActionToast());
+    expect(() => {
+      act(() => {
+        result.current.showResult({ ok: 2, failed: [] }, { persist: true });
+      });
+    }).not.toThrow();
+    expect(toast.success).toHaveBeenCalledWith('2 processed, 0 failed');
+  });
+
+  it('persistBulkActionResult swallows a throwing accessor', () => {
+    installSessionStorage({
+      get() { throw new DOMException('The operation is insecure.', 'SecurityError'); },
+    });
+
+    expect(() => persistBulkActionResult({ ok: 1, failed: [] })).not.toThrow();
+  });
+});
+
+// ETP-5302 — `showBulkActionToast` went from module-private to EXPORTED so a caller
+// that already holds a `useUI()` result can show the toast WITHOUT mounting the hook.
+// That matters because mounting the hook only to reach `showResult` also installs its
+// sessionStorage-DRAINING effect, which re-runs on every `ui` identity change and eats
+// the caller's own persisted result before a fallback reload can hand it to the next
+// mount (tried and reverted while fixing the bulk-action full-page reload).
+//
+// Called with an explicit `ui` here — no renderHook — which IS the contract
+// BulkDocumentAction, BulkOrderMoreMenu and BulkPurchaseOrderMoreMenu rely on.
+describe('showBulkActionToast — exported pure helper (ETP-5302)', () => {
+  const ui = (key) => ({
+    processExecuted: '{ok} ok, {failed} failed',
+    processExecutedWithOmitted: '{ok} ok, {omitted} omitted, {failed} failed',
+  }[key] ?? key);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+  });
+
+  it('shows a success toast and writes nothing to sessionStorage', () => {
+    showBulkActionToast(ui, { ok: 3, failed: [] });
+    expect(toast.success).toHaveBeenCalledWith('3 ok, 0 failed');
+    expect(sessionStorage.getItem('bulkActionResult')).toBeNull();
+  });
+
+  // ETP-5316 QA rejection — every multi-record branch shows ONLY the generic count
+  // summary. The helper passes no second argument at all, so `toHaveLength(1)` is the
+  // assertion that actually pins it: `toHaveBeenCalledWith(msg)` alone would still pass
+  // if a `description` object came back.
+  it('shows an error toast when every attempted row failed', () => {
+    showBulkActionToast(ui, { ok: 0, failed: ['e1', 'e2'] });
+    expect(toast.error).toHaveBeenCalledWith('0 ok, 2 failed');
+    expect(toast.error.mock.calls[0]).toHaveLength(1);
+  });
+
+  it('shows a warning toast on a partial failure', () => {
+    showBulkActionToast(ui, { ok: 2, failed: ['e1'] });
+    expect(toast.warning).toHaveBeenCalledWith('2 ok, 1 failed');
+    expect(toast.warning.mock.calls[0]).toHaveLength(1);
+  });
+
+  it('switches to the 3-count message when rows were omitted', () => {
+    showBulkActionToast(ui, { ok: 1, omitted: ['skipped'], failed: [] });
+    expect(toast.warning).toHaveBeenCalledWith('1 ok, 1 omitted, 0 failed');
+    expect(toast.warning.mock.calls[0]).toHaveLength(1);
+  });
+
+  it('normalizes a null result instead of throwing', () => {
+    showBulkActionToast(ui, null);
+    expect(toast.success).toHaveBeenCalledWith('0 ok, 0 failed');
+  });
+
+  it('has no side effect: it never consumes a result persisted by another run', () => {
+    persistBulkActionResult({ ok: 9, failed: [] });
+
+    showBulkActionToast(ui, { ok: 1, failed: [] });
+
+    // The other (fallback-path) run's persisted result must survive untouched —
+    // this is the exact regression that made mounting the hook here unusable.
+    expect(JSON.parse(sessionStorage.getItem('bulkActionResult')).ok).toBe(9);
   });
 });

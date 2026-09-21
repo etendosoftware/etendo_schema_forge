@@ -181,24 +181,29 @@ describe('DataTable — per-column isolation', () => {
 });
 
 /**
- * ETP-5281 — the generic `minWidth: columnMinWidthPx(col, colIdx)` floor applied to
- * both the header (`renderColumnHeaderCell`) and body (`TableDataRow`) cells, and its
- * skip when the column opts into `headClass`/`cellClass` pinning. `columnMinWidthPx`
- * is mocked (above) to a constant 100, so "applied" means `style.minWidth === '100px'`
- * and "skipped" means the inline style carries no `minWidth` at all.
+ * ETP-5281, follow-up ETP-5268 — the generic `columnMinWidthPx(col, colIdx)`
+ * floor applied to both the header (`renderColumnHeaderCell`) and body
+ * (`TableDataRow`) cells, and its skip when the column opts into
+ * `headClass`/`cellClass` pinning. `columnMinWidthPx` is mocked (above) to a
+ * constant 100. The header cell uses `style.width` (a real `width`, not
+ * `minWidth` — `table-layout: fixed` ignores `minWidth` entirely, verified
+ * live: every column rendered at an identical equal share of the container
+ * regardless of it), since table-layout:fixed only reads a column's width
+ * off the FIRST row (the header); the body cell keeps `style.minWidth`,
+ * which is inert for column sizing under fixed layout but harmless to leave.
  */
 describe('DataTable — generic minWidth floor', () => {
-  it('applies the minWidth floor to both header and body cell when no headClass/cellClass is set', () => {
+  it('applies the width floor to the header cell and the minWidth floor to the body cell when no headClass/cellClass is set', () => {
     render(<DataTable columns={[STRING_COL]} data={DATA} />);
 
     const th = screen.getByTestId('column-header-name');
     const td = screen.getByTestId('row-r1').querySelectorAll('td')[1];
 
-    expect(th.style.minWidth).toBe('100px');
+    expect(th.style.width).toBe('100px');
     expect(td.style.minWidth).toBe('100px');
   });
 
-  it('skips the minWidth floor on both header and body cell when headClass/cellClass is set', () => {
+  it('skips the width/minWidth floor on both header and body cell when headClass/cellClass is set', () => {
     render(
       <DataTable
         columns={[{ ...STRING_COL, headClass: 'w-[200px]', cellClass: 'w-[200px]' }]}
@@ -209,8 +214,21 @@ describe('DataTable — generic minWidth floor', () => {
     const th = screen.getByTestId('column-header-name');
     const td = screen.getByTestId('row-r1').querySelectorAll('td')[1];
 
-    expect(th.style.minWidth).toBe('');
+    expect(th.style.width).toBe('');
     expect(td.style.minWidth).toBe('');
+  });
+
+  // ETP follow-up (Tax window) — `col.grow` is the sanctioned way to let one
+  // column absorb 100% of a sparse window's leftover space: omitting `width`
+  // entirely on the header cell (not a calc()/percentage, which the doc
+  // comment above already found resolves to 0px — see getTableContainerStyle
+  // in DataTable.jsx) is a plain, non-circular case table-layout: fixed
+  // handles natively.
+  it('also skips the header width floor when col.grow is set, independent of headClass', () => {
+    render(<DataTable columns={[{ ...STRING_COL, grow: true }]} data={DATA} />);
+
+    const th = screen.getByTestId('column-header-name');
+    expect(th.style.width).toBe('');
   });
 });
 
