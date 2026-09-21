@@ -10,7 +10,7 @@
  * The allowlist is asserted exhaustively (all 7 entries) on purpose: dropping a spec from
  * it silently removes the button from that window with no other failing test.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import productDecisions from '@generated/product/decisions.json';
 // Read as TEXT rather than imported: `ProductPage.jsx` is the module the registry exists to
 // avoid pulling in (DetailView, ListView, the sidebar, the price bar, the gallery). The drift
@@ -145,6 +145,17 @@ describe('post-create tabs mirror ProductPage customTabs', () => {
   const pageKeys = matchAll(/\bkey:\s*'([^']+)'/g);
   const pageLabelKeys = matchAll(/labelKey:\s*'([^']+)'/g);
 
+  // The FIRST `loadPostCreateTabs()` call pays a heavy dynamic import (the whole
+  // ProductPage panel tree); every later call is a module-cache hit. Charging that
+  // one-off cost to whichever `it` happened to run first is what made this file
+  // trip the 15s `testTimeout` intermittently under load — the test was never slow,
+  // it was just the one holding the import. Paying it once here, with an explicit
+  // timeout, keeps the global limit meaningful for everyone else.
+  let tabs;
+  beforeAll(async () => {
+    tabs = await LOOKUP_CREATE_TARGETS.product.loadPostCreateTabs();
+  }, 60000);
+
   it('finds the customTabs literal in the generated page', () => {
     // Guards the guard: a generator change that reshapes this prop must not silently turn
     // every assertion below into a comparison against an empty list.
@@ -152,37 +163,32 @@ describe('post-create tabs mirror ProductPage customTabs', () => {
     expect(pageKeys.length).toBeGreaterThan(0);
   });
 
-  it('exposes the same tab keys, in the same order, as the window', async () => {
-    const tabs = await LOOKUP_CREATE_TARGETS.product.loadPostCreateTabs();
+  it('exposes the same tab keys, in the same order, as the window', () => {
     expect(tabs.map(t => t.key)).toEqual(pageKeys);
   });
 
-  it('exposes the same labelKeys as the window', async () => {
-    const tabs = await LOOKUP_CREATE_TARGETS.product.loadPostCreateTabs();
+  it('exposes the same labelKeys as the window', () => {
     expect(tabs.map(t => t.labelKey)).toEqual(pageLabelKeys);
   });
 
-  it('passes AttachmentsTab the same AD table name the window passes', async () => {
-    const tabs = await LOOKUP_CREATE_TARGETS.product.loadPostCreateTabs();
+  it('passes AttachmentsTab the same AD table name the window passes', () => {
     const attachments = tabs.find(t => t.key === 'attachments');
     const pageTableName = /tableName:\s*["']([^"']+)["']/.exec(customTabsLiteral)?.[1];
     expect(pageTableName).toBe('M_Product');
     expect(attachments.props).toEqual({ tableName: pageTableName, config: {} });
   });
 
-  it('resolves a real component for every tab', async () => {
-    const tabs = await LOOKUP_CREATE_TARGETS.product.loadPostCreateTabs();
+  it('resolves a real component for every tab', () => {
     for (const tab of tabs) {
       expect(typeof tab.Component, `${tab.key} resolved no component`).toBe('function');
     }
   });
 
-  it('deliberately omits Accounting', async () => {
+  it('deliberately omits Accounting', () => {
     // Not an oversight: Accounting is a `secondaryTabs` entry, not a custom panel, so it
     // needs DetailView's per-tab useEntity machinery — and it is capability-gated behind
     // `showAccountingFields`. Tracked as debt; if it is ever added, this test is the place
     // that says so out loud.
-    const tabs = await LOOKUP_CREATE_TARGETS.product.loadPostCreateTabs();
     expect(tabs.map(t => t.key)).not.toContain('accounting');
     // The two properties that justify the omission, read from the window's own config:
     // it is a secondary TABLE tab (not a custom panel) and it is capability-gated.

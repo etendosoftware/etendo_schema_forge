@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
-  "generatedAt": "2026-09-09T11:18:23.940Z",
-  "updatedAt": "2026-09-17T19:53:28.053Z",
-  "checksum": "9ae00711d3973483",
+  "version": "0.4.0",
+  "generatedAt": "2026-09-18T18:02:08.296Z",
+  "updatedAt": "2026-09-18T19:15:12.502Z",
+  "checksum": "ca803d23b1d5c42d",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -144,7 +144,7 @@
       "layoutType": "default",
       "linesLayout": "inlineEditable",
       "vectorSearch": {
-        "target": "business-partner"
+        "target": "contacts"
       },
       "import": {
         "enabled": true,
@@ -5437,7 +5437,7 @@
       ],
       "linesLayout": "inlineEditable",
       "vectorSearch": {
-        "target": "business-partner"
+        "target": "contacts"
       },
       "import": {
         "enabled": true,

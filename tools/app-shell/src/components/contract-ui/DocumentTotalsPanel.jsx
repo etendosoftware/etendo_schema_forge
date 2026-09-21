@@ -43,6 +43,15 @@ import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 // (see the `persistedTotals` prop doc above for the full rationale). Extracted
 // out of the component so its branching doesn't count against the component's
 // own cognitive-complexity budget.
+//
+// ETP-5292 — `netSubtotal` returned here is always the FINAL, net-of-every-discount
+// figure (`discountedNet`), ready to display as-is. It must never be run back through
+// `persistedNet / factor` to reconstruct a "raw" figure for the render to subtract
+// `totalDiscountAmt` from again: `persistedNet` (once already-discounted) is a real
+// per-tax-group-rounded server value, not an exact multiple of `factor`, so that
+// division introduced a rounding residue that silently undercut the displayed Subtotal
+// by 1 cent on completed documents (and on an invoice created from an
+// already-discounted order) — see docs/plans/2026-09-17-etp5292-total-discount-rounding-fix-plan.md.
 function resolvePersistedTotals(recomputed, persistedTotals, totalDiscountPct) {
   const factor = 1 - (totalDiscountPct || 0) / 100;
   const persistedNet = persistedTotals.netSubtotal;
@@ -51,9 +60,8 @@ function resolvePersistedTotals(recomputed, persistedTotals, totalDiscountPct) {
     && Math.abs(persistedNet - rawFromLines) > 0.01;
   const netIfNotYetDiscounted = persistedNet != null ? persistedNet * factor : null;
   const discountedNet = isAlreadyDiscounted ? persistedNet : netIfNotYetDiscounted;
-  const netSubtotal = isAlreadyDiscounted && factor > 0 ? persistedNet / factor : persistedNet;
   const taxAmt = discountedNet != null ? persistedTotals.grandTotal - discountedNet : null;
-  return { netSubtotal, taxAmt, grandTotal: persistedTotals.grandTotal };
+  return { netSubtotal: discountedNet, taxAmt, grandTotal: persistedTotals.grandTotal };
 }
 
 export default function DocumentTotalsPanel({
@@ -118,6 +126,18 @@ export default function DocumentTotalsPanel({
   const { netSubtotal, taxAmt, grandTotal } = useBaseline
     ? resolvePersistedTotals(recomputed, persistedTotals, totalDiscountPct)
     : recomputed;
+
+  // ETP-5292 — the two paths hand back a differently-shaped `netSubtotal`:
+  // the baseline path (`resolvePersistedTotals`) already returns the FINAL
+  // net-of-every-discount figure, ready to display as-is; the live-recompute
+  // path (`computeDocumentTotals`) returns the RAW pre-total-discount net,
+  // which still needs `totalDiscountAmt` (always freshly computed from the
+  // current lines) subtracted here. Do not merge these into one shared
+  // "always subtract" expression — that mix-up is exactly what silently
+  // undercounted the baseline Subtotal by 1 cent (see resolvePersistedTotals's
+  // own comment above).
+  const liveSubtotal = totalDiscountAmt != null ? netSubtotal - totalDiscountAmt : netSubtotal;
+  const displaySubtotal = useBaseline ? netSubtotal : liveSubtotal;
 
   const fmt = (val) => {
     if (val == null) return '';
@@ -216,11 +236,12 @@ export default function DocumentTotalsPanel({
               above, so the divider is always drawn here. */}
           {divider}
 
-          {/* Net subtotal — deducts totalDiscountAmt when active (0 when no discount, so always safe) */}
+          {/* Net subtotal — see displaySubtotal above for how each path (baseline vs
+              live-recompute) arrives at the final, net-of-every-discount figure. */}
           {netSubtotal != null && (
             <div className="flex justify-between py-2 px-2" data-testid="totals-row-subtotal">
               <span className="text-muted-foreground">{ui('subtotal')}</span>
-              <span className="tabular-nums" data-testid="totals-row-subtotal-value">{fmt(totalDiscountAmt != null ? netSubtotal - totalDiscountAmt : netSubtotal)}</span>
+              <span className="tabular-nums" data-testid="totals-row-subtotal-value">{fmt(displaySubtotal)}</span>
             </div>
           )}
 
