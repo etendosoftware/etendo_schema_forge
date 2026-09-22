@@ -290,7 +290,11 @@ describe('NewPaymentEntryModal', () => {
       renderModal({
         payment: { id: 'pay-edit-3', paymentDate: 'not-a-real-date', paymentMethod: 'Transfer', accountId: 'acc-1', amount: 10 },
       });
-      const today = new Date().toISOString().slice(0, 10);
+      // Oracle built from LOCAL calendar getters, not `toISOString().slice(0, 10)`:
+      // the latter is a UTC read, so east of UTC it names yesterday late in the evening
+      // (this assertion failed in Europe/Madrid after 00:00 local). See `lib/dateOnly.js`.
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       expect(screen.getByTestId('date-field')).toHaveValue(today);
     });
 

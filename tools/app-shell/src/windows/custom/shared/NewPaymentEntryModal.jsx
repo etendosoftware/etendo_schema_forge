@@ -14,6 +14,7 @@ import { useUI } from '@/i18n';
 import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { openCenteredPopup } from '@/lib/popupWindow.js';
+import { parseCalendarDate, todayCalendarISO } from '@/lib/dateOnly.js';
 import { usePaymentBalance, formatPlain, parseMaskedAmount, round2 } from './usePaymentBalance.js';
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
@@ -1059,14 +1060,18 @@ function PaymentModalFooter({
  *   onClose      — close callback (returns to the history popup)
  *   onSaved      — (result, state) callback after save/confirm to refresh the popup
  */
-/** Normalizes a draft's payment date to yyyy-MM-dd (today when absent/invalid). */
+/**
+ * Normalizes a draft's payment date to yyyy-MM-dd (today when absent/invalid).
+ *
+ * Routed through the canonical date-only helpers rather than
+ * `new Date(...).toISOString().slice(0, 10)`, which is a UTC read: west of UTC
+ * (America/Argentina/Buenos_Aires) it seeds *yesterday* from ~21:00 local onward,
+ * and east of UTC it can land on *tomorrow* — see `lib/dateOnly.js`. Same class of
+ * bug as ETP-4031 / ETP-4850, found while fixing ETP-5046.
+ */
 function normalizeDraftDate(raw) {
-  const today = () => new Date().toISOString().slice(0, 10);
-  if (!raw) return today();
-  const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  const d = new Date(raw);
-  return Number.isNaN(d.getTime()) ? today() : d.toISOString().slice(0, 10);
+  const parsed = raw ? parseCalendarDate(raw) : null;
+  return todayCalendarISO(parsed ?? new Date());
 }
 
 /** Resolves a payment-method id from its display name (draft rows carry the name). */
