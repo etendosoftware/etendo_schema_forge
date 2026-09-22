@@ -100,6 +100,15 @@ function looksLikeWindowAccessPayload(value) {
 // headroom (10x+ over "a few hundred ms") while being far too short to meaningfully
 // outlive a real permission change relative to how far apart real triggers actually fire.
 const MENU_ACCESS_CACHE_TTL_MS = 3_000;
+// ETP-5403 — the 3s success TTL above, sized for a benign refresh burst, is far too
+// short to also govern the FAILURE outcome: every refresh trigger (bootstrap, tab
+// focus/visibility, the 5-min poll) across every open tab would re-attempt the fetch
+// as soon as it lapses, turning a sustained /sws/neo/listmenu outage into a
+// thundering-herd retry storm against an already-degraded backend (~20x/min per
+// session vs. ~1/min before ETP-5395 shrank the shared TTL). The failure outcome gets
+// its own, much longer TTL — back near the pre-ETP-5395 baseline — so retries stay
+// throttled for as long as the outage lasts, independent of the success-path cadence.
+const MENU_ACCESS_FAILURE_TTL_MS = 60_000;
 // SFListMenu is optional for the window-access decision. A hung/aborted menu
 // request must not hold AuthContext bootstrap behind the global 60s test timeout.
 const MENU_ACCESS_FETCH_TIMEOUT_MS = 1_000;
@@ -115,16 +124,19 @@ async function fetchMenuAccess() {
   }
   menuAccessInFlight = (async () => {
     let value;
+    let ttl;
     try {
       const tree = await fetchMenuTree();
       const ids = collectAllowedIds(tree?.tree);
       value = Object.fromEntries([...ids].map((id) => [id, true]));
+      ttl = MENU_ACCESS_CACHE_TTL_MS;
     } catch {
       // ETP-5375 — NOT `{}`: an unresolved fetch must stay distinguishable from a
       // resolved-but-empty allow set (see MENU_ACCESS_UNREACHABLE's own comment).
       value = { [MENU_ACCESS_UNREACHABLE]: true };
+      ttl = MENU_ACCESS_FAILURE_TTL_MS; // ETP-5403 — see comment above the constant.
     }
-    menuAccessCache = { value, expiresAt: Date.now() + MENU_ACCESS_CACHE_TTL_MS };
+    menuAccessCache = { value, expiresAt: Date.now() + ttl };
     return value;
   })().finally(() => {
     menuAccessInFlight = null;
