@@ -12,6 +12,7 @@ import { detectBaseUrl } from '@/components/copilot/copilotApi.js';
 import { Button } from '@/components/ui/button';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog.jsx';
 import { SecuritySection } from '@/components/account/SecuritySection.jsx';
+import { SubscriptionSection } from '@/components/account/SubscriptionSection.jsx';
 import { useLogout } from '@/auth/useLogout.js';
 
 /**
@@ -102,12 +103,17 @@ export default function AccountSettingsPage() {
       </Button>
     </div>
   ) : (
-    <SecuritySection
-      authMethods={authMethods}
-      removing={removing}
-      onRemove={handleRemove}
-      onChangePassword={() => setChangePasswordOpen(true)}
-      data-testid="SecuritySection__account" />
+    <>
+      <SecuritySection
+        authMethods={authMethods}
+        removing={removing}
+        onRemove={handleRemove}
+        onChangePassword={() => setChangePasswordOpen(true)}
+        data-testid="SecuritySection__account" />
+      <SubscriptionSection
+        apiBaseUrl={detectBaseUrl()}
+        data-testid="SubscriptionSection__account" />
+    </>
   );
 
   return (

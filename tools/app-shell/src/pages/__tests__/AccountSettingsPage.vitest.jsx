@@ -59,6 +59,20 @@ vi.mock('@/components/ChangePasswordDialog.jsx', () => ({
   },
 }));
 
+// SubscriptionSection fetches and renders its own 'loading'/error/data states from
+// `@/lib/upgrade/api.js`; this page only has to host it once the account has loaded. Left
+// unmocked, its own real loading line collided with this page's — the "loading" text this
+// suite asserts against was still on screen (from the child, not the page) after the page's
+// own load had resolved. The page's own contract for the section is just: mount it once
+// loaded, with the base URL and the composed test id.
+const subscriptionSectionRender = vi.fn();
+vi.mock('@/components/account/SubscriptionSection.jsx', () => ({
+  SubscriptionSection: (props) => {
+    subscriptionSectionRender(props);
+    return <div data-testid={props['data-testid'] || 'SubscriptionSection__account'} />;
+  },
+}));
+
 function lastDialogProps() {
   const calls = changePasswordDialogRender.mock.calls;
   expect(calls.length).toBeGreaterThan(0);
@@ -469,6 +483,7 @@ describe('AccountSettingsPage', () => {
     expect(screen.getByTestId('account-settings-page')).toBeInTheDocument();
     expect(screen.getByText('accountSettingsTitle')).toBeInTheDocument();
     await screen.findByTestId('account-security-section');
+    expect(screen.getByTestId('SubscriptionSection__account')).toBeInTheDocument();
   });
 
   describe('telling the password form what the account already has', () => {
