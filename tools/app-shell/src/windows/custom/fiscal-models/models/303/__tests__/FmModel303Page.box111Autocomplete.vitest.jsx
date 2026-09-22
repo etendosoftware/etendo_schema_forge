@@ -1,18 +1,23 @@
 // ETP-5431 pt.2 — box 111 (Rectificación - Importe) autocompletion integration coverage.
 //
-// The exhaustive {box69, box70, box71} -> box111 matrix is covered directly, as a pure
-// function, in `fm303Layouts.computeBox111.vitest.js`. This file covers the INTEGRATION
-// wiring around that formula at the FmModel303Page level:
-//   - reactive typing: a representative, UI-REACHABLE subset of the matrix (box69/71 are
-//     themselves DERIVED from other boxes here, not free parameters like in the pure test —
-//     see the note on each scenario below for which branch it exercises and why some
-//     {69,70,71} combinations from the pure matrix are not independently reachable this way);
+// The exhaustive `{ isRectificativa, box70, box71 }` -> box111 matrix (`MIN(box70, ABS(box71))`,
+// rewritten in `0d196b0c4` — see that commit and `fm303Layouts.computeBox111.vitest.js`'s own
+// header for the full rationale/confirmed-bug context) is covered directly, as a pure function,
+// in `fm303Layouts.computeBox111.vitest.js`. This file covers the INTEGRATION wiring around that
+// formula at the FmModel303Page level:
+//   - reactive typing: a representative, UI-REACHABLE subset of the matrix (box70/71 are
+//     themselves DERIVED from other boxes here, not free parameters like in the pure test — see
+//     the note on each scenario below for which branch it exercises);
 //   - the "Calcular" flow (`applyComputeResult`), which must reach the exact same result as
 //     interactive typing;
 //   - `syncBox111Override` — the side-fix that mirrors the freshly-autocompleted box111 into
 //     `manualOverrides`, the object `generate303File`/"Guardar" actually forward to AEAT as
 //     `RectifyingAmount`. This is the single most fragile part of the implementation: nothing
 //     errors if it silently stops firing, the file would just quietly carry a stale box 111.
+//
+// Every scenario below seeds `manualData.identification.rectificativa: true` (via `BASE_DECL`) —
+// the new formula's explicit `isRectificativa` guard means box111 stays unconditionally empty
+// otherwise, regardless of box70/71.
 //
 // The box70-clamp-before-box111-formula ordering guarantee has its own dedicated test in
 // `FmModel303Page.negativeBoxClamp.vitest.jsx` (same file Rule B's clamp mechanism lives in).
@@ -100,11 +105,16 @@ vi.mock('lucide-react', () => ({
 import FmModel303Page from '../FmModel303Page.jsx';
 import { jsonResponse } from '@/test/realApiFetch.js';
 
+// `rectificativa: true` is REQUIRED under the new (ETP-5431, `0d196b0c4` rewrite) MIN/ABS
+// formula: `computeBox111` now has an explicit `isRectificativa` guard the old per-sign draft
+// didn't have, so a `manualData.identification` that omits it makes box111 unconditionally null
+// regardless of box69/70/71 — every scenario in this file needs it seeded to exercise the
+// formula at all.
 const BASE_DECL = {
   id: '303-2026-T2', model: '303', year: 2026, period: 'T2', type: 'ord',
   status: 'draft', result: null, incidents: { blocking: 0, warning: 0 },
   _precomputed: null, boxes: null, sources: [], history: [],
-  manualData: { identification: { tipo_declaracion: 'N' } },
+  manualData: { identification: { tipo_declaracion: 'N', rectificativa: true } },
 };
 
 // `boxes: []`/`summary: {}` — not `_precomputed: null` — so the mount effect's own
@@ -181,17 +191,31 @@ describe('FmModel303Page — box 111 reactive typing (ETP-5431 pt.2, computeBox1
     expect(boxValue(111)).toBe(15);
   });
 
-  it('box69 negative -> box111 = box70 (verbatim)', () => {
+  it('box69 negative -> box111 = box70 (MIN(box70, |box71|), |box71| > box70 branch)', () => {
     render(<FmModel303Page decl={BASE_DECL} token={TOKEN} apiBaseUrl={API_BASE_URL} onBack={vi.fn()} onStatusChange={vi.fn()} />);
     commit(68, '-500'); // box69 = -500
-    commit(70, '300');  // box71 = -500 - 300 = -800 (< 0)
+    commit(70, '300');  // box71 = -500 - 300 = -800 (< 0); MIN(300, 800) = 300.
     expect(boxValue(111)).toBe(300);
   });
 
-  it('box69 exactly 0 -> box111 stays empty (confirmed decision, neither branch fires)', () => {
+  // ETP-5431 (0d196b0c4 rewrite) — THE case the AEAT rejection fixed. Under the OLD per-sign
+  // draft, box69 === 0 fell through to "111 queda vacía" — a confirmed bug (real ServValiDos
+  // rejection, errors 35100/E030292/35068). The new MIN/ABS formula doesn't read box69 at all,
+  // so this same scenario now correctly autocompletes box111 = box70 (since |box71| = box70 here).
+  it('box69 exactly 0 -> box111 autocompletes to box70 (the confirmed AEAT rejection fix, was empty before)', () => {
     render(<FmModel303Page decl={BASE_DECL} token={TOKEN} apiBaseUrl={API_BASE_URL} onBack={vi.fn()} onStatusChange={vi.fn()} />);
-    commit(68, '0'); // box69 = 0
-    commit(70, '10'); // box71 = 0 - 10 = -10 (< 0), but box69 = 0 matches neither branch
+    commit(68, '0'); // box69 = 0 (irrelevant to the new formula)
+    commit(70, '10'); // box71 = 0 - 10 = -10 (< 0), box70 = 10 (> 0) -> MIN(10, 10) = 10.
+    expect(boxValue(111)).toBe(10);
+  });
+
+  // Explicit isRectificativa=false guard, driven through the real UI (checkbox never ticked):
+  // box70/box71 alone would otherwise fully qualify (matches the very first scenario above).
+  it('rectificativa unchecked -> box111 stays empty even though box70/box71 otherwise qualify', () => {
+    const decl = { ...BASE_DECL, manualData: { identification: { tipo_declaracion: 'N', rectificativa: false } } };
+    render(<FmModel303Page decl={decl} token={TOKEN} apiBaseUrl={API_BASE_URL} onBack={vi.fn()} onStatusChange={vi.fn()} />);
+    commit(68, '5');   // box69 = 5
+    commit(70, '20');  // box71 = 5 - 20 = -15 (< 0), box70 = 20 (> 0) — would qualify if rectificativa were true.
     expect(boxValue(111)).toBeUndefined();
   });
 

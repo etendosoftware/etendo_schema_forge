@@ -246,21 +246,28 @@ describe('FmModel303Page — negative value rejected on boxes 111 and 77 (ETP-53
 
   // ETP-5431 pt.2 — ordering dependency between Rule B's box70 clamp and Rule A's box111
   // formula: `recomputeDerivedBoxes` always reads box70 AFTER `handleBoxChange` has already
-  // clamped a negative commit to 0, never the raw negative value. Box 27 (declared VAT,
-  // negative-allowed, exposed by this same harness) drives box69 negative with nothing else
-  // set (box69 = box66 + box77 - box78 + box68 + box108, and box66 collapses to box27 here) —
-  // computeBox111's "box69 negative" branch then returns box70 verbatim. If the clamp ran
-  // AFTER (or never), box111 would come out -300 (a negative rectification amount, itself an
-  // invalid AEAT value); by construction it must come out exactly 0 instead.
+  // clamped a negative commit to 0, never the raw negative value.
+  //
+  // ETP-5431 (0d196b0c4 rewrite) — the OLD per-sign formula's "box69 negative -> box111 = box70
+  // verbatim" branch (which this test originally exercised, expecting box111 = 0 = the clamped
+  // box70) no longer exists. The new `MIN(box70, ABS(box71))` formula requires `box70 > 0` as an
+  // explicit gate — a box70 clamped down to 0 therefore fails that gate and box111 comes out
+  // EMPTY, not "0". The ordering guarantee this test protects (the clamp must run BEFORE the
+  // formula reads box70) still holds and is still worth pinning: `identChecks.rectificativa:
+  // true` is seeded so the formula's other two conditions (box71 < 0, isRectificativa) are met,
+  // isolating "box70 > 0" as the only thing the clamp can affect.
   it('a negative box70 commit is clamped BEFORE box111 is recomputed from it (ordering guarantee)', () => {
-    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    const decl = { ...BASE_DECL, identification: { tipo_declaracion: 'N', rectificativa: true } };
+    render(<FmModel303Page decl={decl} {...defaultProps} />);
 
-    commit(27, '-500'); // box69 = -500 (< 0) — arms computeBox111's "box69 negative" branch.
-    commit(70, '-300'); // would make box71 = -500 - (-300) = -200 < 0 if left unclamped too.
+    commit(27, '-500'); // box69 = -500 (< 0), box71 = -500 - box70 stays < 0 regardless of clamp.
+    commit(70, '-300'); // would leave box71 = -500 - (-300) = -200 < 0 if left unclamped too.
 
     expect(toastErrorMock).toHaveBeenCalled();
     expect(boxValue(70)).toBe(0); // Rule B clamp applied.
-    expect(boxValue(111)).toBe(0); // Rule A formula read the ALREADY-clamped box70, never -300.
+    // box70 clamped to 0 fails computeBox111's own `box70 > 0` gate -> box111 stays absent, never
+    // negative — by construction, because the clamp ran BEFORE the formula read box70 (not after).
+    expect(boxValue(111)).toBeUndefined();
   });
 });
 
@@ -281,6 +288,9 @@ describe('FmModel303Page — negative value rejected on boxes 111 and 77 (ETP-53
 // `liveBoxes` entirely. Both cases below reproduce Alex's exact scenarios and assert (a) the
 // clamp lands in the displayed `liveBoxes`, and (b) box 111 never comes out negative.
 describe('FmModel303Page — box70/109 clamp applies even when handleBoxChange never runs (ETP-5431 B1 fix)', () => {
+  // ETP-5431 (0d196b0c4 rewrite) — same formula-signature change as the ordering test above:
+  // box70 clamped to 0 now fails the new formula's `box70 > 0` gate (empty, not "0").
+  // `rectificativa: true` seeded on `CALCULAR_DECL` below so the other two conditions are met.
   it('"Calcular" returning a negative box70 in res.boxes is clamped before box111 is derived', async () => {
     // box27 = -500 drives box69 negative (see the ordering test above for the full chain), and
     // box70 = -300 arrives DIRECTLY from the backend response — never typed, never routed
@@ -290,21 +300,29 @@ describe('FmModel303Page — box70/109 clamp applies even when handleBoxChange n
       summary: { accrued: 0, deductible: 0, result: 0 },
       sources: [],
     });
-    render(<FmModel303Page decl={CALCULAR_DECL} token={TOKEN} apiBaseUrl={API_BASE_URL} {...defaultProps} />);
+    const decl = { ...CALCULAR_DECL, identification: { tipo_declaracion: 'N', rectificativa: true } };
+    render(<FmModel303Page decl={decl} token={TOKEN} apiBaseUrl={API_BASE_URL} {...defaultProps} />);
 
     await clickCalcular();
 
     expect(boxValue(70)).toBe(0); // clamped by recomputeDerivedBoxes, not by handleBoxChange.
-    expect(boxValue(111)).toBe(0); // never negative, despite the -300 the backend returned.
+    // box70 clamped to 0 fails computeBox111's `box70 > 0` gate -> box111 stays absent, never
+    // negative, despite the -300 the backend returned.
+    expect(boxValue(111)).toBeUndefined();
   });
 
   it('a negative box70 hydrated from a persisted manualOverrides is clamped on mount, before any click', async () => {
     // Simulates a declaration saved BEFORE Rule B existed (or by any future bug): box70 = -300
     // sits in manualOverrides from the very first render, with no interactive input at all.
+    // `rectificativa: true` is seeded so box111 exercises the new formula's `box70 > 0` gate
+    // instead of being unconditionally null regardless of the clamp.
     const decl = {
       ...BASE_DECL,
       _precomputed: { boxes: [{ num: 27, value: -500 }], summary: {}, sources: [] },
-      manualData: { identification: { tipo_declaracion: 'N' }, manualOverrides: { 70: -300 } },
+      manualData: {
+        identification: { tipo_declaracion: 'N', rectificativa: true },
+        manualOverrides: { 70: -300 },
+      },
     };
     installImmediateServer();
     render(<FmModel303Page decl={decl} token={TOKEN} apiBaseUrl={API_BASE_URL} {...defaultProps} />);
@@ -312,7 +330,9 @@ describe('FmModel303Page — box70/109 clamp applies even when handleBoxChange n
     // The mount effect (`decl._precomputed?.boxes != null` -> `applyComputeResult`) runs
     // synchronously off props, no click/await needed for the box/box111 assertions themselves.
     expect(boxValue(70)).toBe(0); // clamped on mount, not after a user edit.
-    expect(boxValue(111)).toBe(0); // never negative, despite the persisted -300.
+    // box70 clamped to 0 fails computeBox111's `box70 > 0` gate -> box111 stays absent, never
+    // negative, despite the persisted -300.
+    expect(boxValue(111)).toBeUndefined();
 
     // The clamp must also reach the `manualOverrides` MAP itself (not just the displayed
     // `liveBoxes`), because `applyBoxParams` reads box 70's AEAT param straight off that map,

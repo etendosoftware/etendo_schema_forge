@@ -205,14 +205,28 @@ describe('recomputeDerivedBoxes', () => {
   // level, independent of the FmModel303Page integration coverage in
   // FmModel303Page.negativeBoxClamp.vitest.jsx.
   describe('negative-not-allowed clamp (ETP-5431 B1 fix)', () => {
-    it('clamps an unclamped negative box70 to 0 before computing box111 (box69 negative branch)', () => {
-      // box27 = -500 drives box69 negative (box46=box64=box66=box69=-500 with default box65=100);
-      // box70 = -300 is handed in RAW, as if it arrived straight from a backend response or a
-      // hydrated manualOverrides — never through handleBoxChange's own clamp.
-      const result = recomputeDerivedBoxes([{ num: 27, value: -500 }, { num: 70, value: -300 }]);
+    // ETP-5431 (0d196b0c4 rewrite) — `computeBox111` no longer reads box69 or returns box70
+    // "verbatim" on a negative-box69 branch; the new formula (`MIN(box70, ABS(box71))`) requires
+    // box70 > 0 as an explicit gate. Clamping a negative box70 to 0 therefore makes box111 come
+    // out EMPTY (not "0"), because 0 fails the `box70 > 0` gate — same net effect (box111 can
+    // never be negative), reached through the new formula's own guard instead of the clamp
+    // coincidentally producing a 0 that used to flow through the old per-sign branch. Also passes
+    // `identChecks: { rectificativa: true }` now — without it box111 is unconditionally null
+    // regardless of the clamp, which would prove nothing about ordering either way.
+    it('clamps an unclamped negative box70 to 0, so box111 can never derive from a negative box70', () => {
+      // box27 = -500 drives box69 negative (box46=box64=box66=box69=-500 with default box65=100),
+      // so box71 = -500 - box70 stays negative regardless of the clamp outcome; box70 = -300 is
+      // handed in RAW, as if it arrived straight from a backend response or a hydrated
+      // manualOverrides — never through handleBoxChange's own clamp.
+      const result = recomputeDerivedBoxes(
+        [{ num: 27, value: -500 }, { num: 70, value: -300 }],
+        { rectificativa: true },
+      );
       expect(result.find(b => b.num === 70).value).toBe(0); // clamped in place.
       expect(result.find(b => b.num === 71).value).toBe(-500); // -500 - 0 (clamped, not -300).
-      expect(result.find(b => b.num === 111).value).toBe(0); // box69<0 branch returns box70 (=0).
+      // box70 (clamped to 0) fails computeBox111's own `box70 > 0` gate -> box111 stays absent,
+      // by construction — clamping BEFORE the formula runs is what guarantees this.
+      expect(result.find(b => b.num === 111)).toBeUndefined();
     });
 
     it('clamps an unclamped negative box109 to 0 (feeds box71, not computeBox111 directly)', () => {
