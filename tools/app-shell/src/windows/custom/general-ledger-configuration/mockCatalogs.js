@@ -132,7 +132,7 @@ export const GAAP_OPTIONS = [
 export const GENERAL_SEED = {
   name: 'Contabilidad España — EUR',
   gAAP: 'SA',
-  accrual: true, // IsAccrual=true ⇒ Devengo
+  accrual: true, // IsAccrual fixed to true (Devengo) — hidden field, not user-editable (ETP-5372)
   description: '',
   currency: 'EUR',
   allowNegative: false, // Allownegative=N ⇒ toggle OFF

@@ -1,8 +1,8 @@
 {
-  "version": "0.8.0",
+  "version": "0.9.0",
   "generatedAt": "2026-06-28T15:34:57.400Z",
-  "updatedAt": "2026-07-21T12:35:18.509Z",
-  "checksum": "46ac01d9fae4b6af",
+  "updatedAt": "2026-09-21T12:33:21.674Z",
+  "checksum": "9a989b3a8c3f7b6c",
   "frontendContract": {
     "window": {
       "id": "125",
@@ -193,27 +193,6 @@
               "required": true,
               "maxLength": 1
             }
-          },
-          {
-            "name": "accrual",
-            "apiKey": "accrual",
-            "column": "IsAccrual",
-            "label": "Accrual",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "derivation": {
-              "type": "computed",
-              "source": "Y"
-            },
-            "defaultValue": "Y",
-            "section": "identity",
-            "validation": {
-              "maxLength": 1
-            }
           }
         ],
         "searchableFields": [],
@@ -237,13 +216,6 @@
             "derivation": {
               "type": "computed",
               "source": "N"
-            }
-          },
-          {
-            "name": "accrual",
-            "derivation": {
-              "type": "computed",
-              "source": "Y"
             }
           }
         ],
@@ -1768,7 +1740,7 @@
             "apiKey": "accrual",
             "column": "IsAccrual",
             "type": "boolean",
-            "visibility": "editable",
+            "visibility": "system",
             "required": false
           },
           {
@@ -3685,14 +3657,6 @@
         "description": "Default value for 'sequenceNumber' in Dimensiones should be a string"
       },
       {
-        "id": "t-default-value-type-General-accrual",
-        "category": "default-value-type",
-        "entity": "General",
-        "field": "accrual",
-        "runner": "node",
-        "description": "Default value for 'accrual' in General should be a string"
-      },
-      {
         "id": "t-default-value-type-General-allowNegative",
         "category": "default-value-type",
         "entity": "General",
@@ -4139,14 +4103,6 @@
         "field": "type",
         "runner": "node",
         "description": "Field 'type' should be present in Dimensiones"
-      },
-      {
-        "id": "t-field-presence-General-accrual",
-        "category": "field-presence",
-        "entity": "General",
-        "field": "accrual",
-        "runner": "node",
-        "description": "Field 'accrual' should be present in General"
       },
       {
         "id": "t-field-presence-General-allowNegative",
@@ -4707,14 +4663,6 @@
         "field": "type",
         "runner": "node",
         "description": "Field 'type' should have type 'string' in Dimensiones"
-      },
-      {
-        "id": "t-field-type-General-accrual",
-        "category": "field-type",
-        "entity": "General",
-        "field": "accrual",
-        "runner": "node",
-        "description": "Field 'accrual' should have type 'boolean' in General"
       },
       {
         "id": "t-field-type-General-allowNegative",
@@ -5956,6 +5904,14 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for Dimensiones"
       },
       {
+        "id": "t-system-field-General-accrual",
+        "category": "system-field",
+        "entity": "General",
+        "field": "accrual",
+        "runner": "node",
+        "description": "System field 'accrual' should exist in backend but not frontend for General"
+      },
+      {
         "id": "t-system-field-General-active",
         "category": "system-field",
         "entity": "General",
@@ -6513,24 +6469,24 @@
       }
     ],
     "summary": {
-      "total": 365,
+      "total": 363,
       "byCategory": {
         "action-endpoint": 1,
         "crud-flags": 4,
-        "default-value-type": 6,
+        "default-value-type": 5,
         "displaylogic-evaluable": 14,
         "displaylogic-valid": 14,
-        "field-presence": 71,
-        "field-type": 71,
+        "field-presence": 70,
+        "field-type": 70,
         "readonlylogic-evaluable": 2,
         "readonlylogic-valid": 2,
         "rule-declared": 33,
         "selector-endpoint": 56,
-        "system-field": 87,
+        "system-field": 88,
         "visibility": 4
       },
       "byRunner": {
-        "node": 365,
+        "node": 363,
         "junit": 0
       }
     }

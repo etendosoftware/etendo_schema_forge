@@ -1,8 +1,8 @@
 {
-  "version": "0.8.0",
+  "version": "0.9.0",
   "generatedAt": "2026-06-28T15:34:57.400Z",
-  "updatedAt": "2026-07-07T19:23:48.530Z",
-  "contractChecksum": "46ac01d9fae4b6af",
+  "updatedAt": "2026-09-21T12:33:21.674Z",
+  "contractChecksum": "9a989b3a8c3f7b6c",
   "apiPrediction": {
     "specName": "general-ledger-configuration",
     "baseUrl": "/sws/neo/general-ledger-configuration",
@@ -584,9 +584,6 @@
           "allowNegative": {
             "required": true,
             "defaultValue": "N"
-          },
-          "accrual": {
-            "defaultValue": "Y"
           }
         }
       },
@@ -814,5 +811,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "75fa0961cbd2bb03"
+  "checksum": "67c183c0845d57f1"
 }
