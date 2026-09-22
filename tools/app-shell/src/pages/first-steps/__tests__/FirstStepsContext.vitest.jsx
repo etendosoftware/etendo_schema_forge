@@ -13,17 +13,21 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const hook = vi.hoisted(() => ({ lastOptions: undefined, completed: [], toggleStep: null }));
+const hook = vi.hoisted(() => ({
+  lastOptions: undefined, completed: [], toggleStep: null, dismissed: false, setDismissed: null,
+}));
 vi.mock('../useFirstSteps.js', () => ({
   useFirstSteps: (options) => {
     hook.lastOptions = options;
     return {
       completed: hook.completed,
       seen: false,
+      dismissed: hook.dismissed,
       loading: false,
       error: null,
       toggleStep: hook.toggleStep,
       markSeen: async () => true,
+      setDismissed: hook.setDismissed,
     };
   },
 }));
@@ -59,6 +63,8 @@ beforeEach(() => {
   hook.lastOptions = undefined;
   hook.completed = [];
   hook.toggleStep = vi.fn(async () => true);
+  hook.dismissed = false;
+  hook.setDismissed = vi.fn(async () => true);
   tenantPlan.plan = PLAN_PRODUCTIVE;
   tenantPlan.loading = false;
 });
@@ -210,13 +216,15 @@ describe('no provider above', () => {
     // A caller that surfaces "could not save" is correct here; one told `true` would show a
     // completion that was never persisted.
     function Bare() {
-      const { toggleStep, markSeen } = useFirstStepsState();
+      const { toggleStep, markSeen, setDismissed } = useFirstStepsState();
       return (
         <button
           type="button"
           data-testid="inert"
           onClick={async () => {
-            const results = [await toggleStep('products'), await markSeen()];
+            const results = [
+              await toggleStep('products'), await markSeen(), await setDismissed(true),
+            ];
             document.title = results.join(',');
           }}
         />
@@ -225,6 +233,59 @@ describe('no provider above', () => {
     const user = userEvent.setup();
     render(<Bare />);
     await user.click(screen.getByTestId('inert'));
-    expect(document.title).toBe('false,false');
+    expect(document.title).toBe('false,false,false');
+  });
+
+  it('reports the checklist as not dismissed, so the menu keeps the entry', () => {
+    // ETP-5364 — the inert state is "no provider above me", which is indistinguishable from
+    // "not answered yet". Reporting `true` here would delete a menu entry in every bare
+    // component test, and in any tree that forgot the provider.
+    function Bare() {
+      const { dismissed } = useFirstStepsState();
+      return <span data-testid="dismissed">{String(dismissed)}</span>;
+    }
+    render(<Bare />);
+    expect(screen.getByTestId('dismissed')).toHaveTextContent('false');
+  });
+});
+
+describe('FirstStepsProvider — `dismissed` passes through (ETP-5364)', () => {
+  it('exposes the flag and the writer the page and the menu both read', async () => {
+    hook.dismissed = true;
+    const calls = [];
+    hook.setDismissed = async (next) => { calls.push(next); return true; };
+
+    function Probe() {
+      const { dismissed, setDismissed } = useFirstStepsState();
+      return (
+        <button
+          type="button"
+          data-testid="probe"
+          data-dismissed={String(dismissed)}
+          onClick={() => setDismissed(false)}
+        />
+      );
+    }
+    const user = userEvent.setup();
+    render(<FirstStepsProvider><Probe /></FirstStepsProvider>);
+
+    expect(screen.getByTestId('probe')).toHaveAttribute('data-dismissed', 'true');
+    await user.click(screen.getByTestId('probe'));
+    expect(calls).toEqual([false]);
+  });
+
+  it('is independent of the completion count', () => {
+    // Finishing every step must not dismiss the checklist, and dismissing it must not mark
+    // anything complete — the sidebar reads one and the progress badge the other.
+    hook.dismissed = true;
+    hook.completed = [];
+
+    function Probe() {
+      const { dismissed, completedCount } = useFirstStepsState();
+      return <span data-testid="probe">{`${dismissed}:${completedCount}`}</span>;
+    }
+    render(<FirstStepsProvider><Probe /></FirstStepsProvider>);
+    // 1 = the always-done `create-account` row, not a side effect of dismissing.
+    expect(screen.getByTestId('probe')).toHaveTextContent('true:1');
   });
 });

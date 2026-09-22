@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
+import { openAccountRowMenu } from '../helpers/financial-account-helpers.js';
 
 /**
  * Financial Account detail view — smoke (mocked).
@@ -81,11 +82,20 @@ function recentMovementDate(daysAgo) {
   return d.toISOString();
 }
 
+const LONG_MOVEMENT_VALUES = {
+  documentNo: 'PAYMENT-DOCUMENT-2026-000000000000001',
+  businessPartner: 'DHL Technologies Sociedad Limitada International Logistics Division',
+  description: 'Invoice settlement with a description that is wider than the movement column',
+  transactionType: 'Incoming payment generated from a very long transaction type label',
+  gLItem: '100000000-Share capital and other long accounting account information',
+};
+
 const MOVEMENTS = [
   {
-    id: 'tx-1', date: recentMovementDate(1), documentNo: 'PAY-001',
-    contact: 'DHL Technologies SL', description: 'Invoice No.: 100',
-    paymentStatus: 'RPPC', trxType: 'BPD',
+    id: 'tx-1', date: recentMovementDate(1), documentNo: LONG_MOVEMENT_VALUES.documentNo,
+    contact: LONG_MOVEMENT_VALUES.businessPartner, description: LONG_MOVEMENT_VALUES.description,
+    paymentStatus: 'RPPC', trxType: 'BPD', typeLabel: LONG_MOVEMENT_VALUES.transactionType,
+    glItem: LONG_MOVEMENT_VALUES.gLItem, paymentId: 'payment-long-1', paymentIsReceipt: 'Y',
     amount: 12450.00, balance: 211841.01,
     currencyIso: 'EUR', posted: 'Y',
   },
@@ -246,6 +256,30 @@ test.describe('Financial Account Detail (T6) — mocked', () => {
     }
   });
 
+  test('clipped movement values reveal their complete content on hover', async ({ page }) => {
+    await expect(page.getByTestId('movement-row-tx-1')).toBeVisible();
+
+    for (const [field, fullValue] of Object.entries(LONG_MOVEMENT_VALUES)) {
+      const cellText = page.getByTestId(`movement-cell-tx-1-${field}`);
+      await expect(cellText).toBeVisible();
+      await expect(cellText).toHaveCSS('text-overflow', 'ellipsis');
+      expect(await cellText.evaluate((element) => element.scrollWidth > element.clientWidth + 1)).toBe(true);
+
+      await cellText.hover();
+      await expect(page.getByTestId(`movement-cell-tx-1-${field}-tooltip`)).toHaveText(fullValue);
+    }
+  });
+
+  test('a movement value that fits does not open a redundant tooltip', async ({ page }) => {
+    const shortContact = page.getByTestId('movement-cell-tx-2-businessPartner');
+    await expect(shortContact).toHaveText('Acme Corp');
+    expect(await shortContact.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+
+    await shortContact.hover();
+
+    await expect(page.getByTestId('movement-cell-tx-2-businessPartner-tooltip')).toHaveCount(0);
+  });
+
   test('Type filter narrows the table to BPD (Cobro) rows only', async ({ page }) => {
     await expect(page.getByTestId('movement-row-tx-1')).toBeVisible();
 
@@ -323,8 +357,7 @@ test.describe('Financial Account Detail (T6) — mocked', () => {
 
     const row = page.getByTestId(`row-${ACCOUNT_ID}`);
     await expect(row).toBeVisible();
-    await row.hover();
-    await row.getByTestId(`account-row-menu-trigger-${ACCOUNT_ID}`).click();
+    await openAccountRowMenu(page, ACCOUNT_ID);
     await page.getByTestId(`account-row-menu-open-${ACCOUNT_ID}`).click();
 
     await expect(page).toHaveURL(new RegExp(`/financial-account/${ACCOUNT_ID}$`));

@@ -8,16 +8,18 @@ starting number and the number the next document takes. It is the target of the
 invoice numbering was the one thing on the onboarding checklist a tenant could not reach from
 Etendo GO at all.
 
-**ETP-5285 narrowed it to the product's own document series.** The window used to show seven
-sequences and eleven fields; it now shows **five sequences and five fields**. Everything the
-ticket asked for that is not here has a reason stated below — read "Which sequences the list
-shows" and "The sixth series" before adding anything back.
+**ETP-5285 narrowed it to the product's own document series, and ETP-5364 completed it.** The
+window used to show seven sequences and eleven fields; ETP-5285 cut it to five sequences and five
+fields, and ETP-5364 added the sixth series — `AP Invoice` / `FC` — so it now shows **six
+sequences and five fields**. Everything the ticket asked for that is not here has a reason stated
+below — read "Which sequences the list shows" and "The sixth series" before adding anything
+back.
 
 ## What this window should allow
 
 Users should be able to:
 
-- browse their tenant's five document series by name
+- browse their tenant's six document series by name
 - open a series and edit its **description**, **prefix**, **starting number** and **next assigned
   number**
 - see, and not accidentally change, the series' identity or the internal fields Etendo maintains
@@ -34,10 +36,10 @@ Users should be able to:
   so there is no detail tab strip and no lines
 - **List behavior:** sorted by name (`listSortBy: "name asc"`); the grid shows Name, Description,
   Prefix, Starting No. and Next Assigned Number — the five fields ETP-5285 specified, and no
-  others. **The list is scoped** — see below; a tenant has 242 sequences and the window shows
-  five of them
+  others. **The list is scoped** — see below; a tenant has ~145 sequences and the window shows
+  six of them
 - **The set of series is fixed: no create, no delete** — see below. The window reads and edits
-  the five rows the onboarding dataset provisions; it cannot add a sixth or remove one
+  the six rows the onboarding dataset provisions; it cannot add a seventh or remove one
 - **Reachability:** also linked from `/first-steps` — the checklist's numbering step navigates
   here rather than editing the values inline (see the "Why the step navigates" note below).
   It is **step 6 of 7**, after the product and contact imports and before the team
@@ -88,10 +90,11 @@ Why both are refused:
 
 - **Create.** A sequence created here would carry a name outside `VISIBLE_SEQUENCE_NAMES` and
   vanish from the list on the next load. `AD_Sequence.IncrementNo` is also `required` with no DB
-  default and is no longer on the form, so the insert could not succeed anyway. The five series
-  are provisioned by the onboarding dataset (`GOClient/AD_SEQUENCE.xml`); adding a sixth is a
-  product change that goes through the dataset and the allowlist, not through the UI.
-- **Delete.** Each of the five is pointed at by a `C_DocType.DocNoSequence_ID`. Deleting one
+  default and is no longer on the form, so the insert could not succeed anyway. The six series
+  are provisioned by the onboarding dataset (`GOClient/AD_SEQUENCE.xml`); adding a seventh is a
+  product change that goes through the dataset and the allowlist, not through the UI — that is
+  exactly the path ETP-5364 took to add `AP Invoice`.
+- **Delete.** Each of the six is pointed at by a `C_DocType.DocNoSequence_ID`. Deleting one
   orphans that reference and breaks the numbering of every document of that type.
 
 **This needs `push-to-neo` + `./gradlew export.database` to take effect.** Until the
@@ -117,21 +120,25 @@ read-only branch renders the option's label. One declaration, both surfaces, no 
 | `Standard Order` | `documentSequenceSalesOrder` | Pedido de venta | Sales Order |
 | `AR Invoice` | `documentSequenceSalesInvoice` | Factura de venta | Sales Invoice |
 | `Factura Rectificativa (Ventas)` | `documentSequenceSalesCorrectiveInvoice` | Factura de venta rectificativa | Corrective Sales Invoice |
+| `AP Invoice` | `documentSequencePurchaseInvoice` | Factura de compra | Purchase Invoice |
 | `Factura Rectificativa (Compras)` | `documentSequencePurchaseCorrectiveInvoice` | Factura de compra rectificativa | Corrective Purchase Invoice |
 
 The keys live in `tools/app-shell/src/locales/{en_US,es_ES,es_AR}.json` under `genericLabels`.
 Adding a series means adding its name to `VISIBLE_SEQUENCE_NAMES`, to `enumValues`, and to all
-three locale files — miss the last and the grid renders the raw English name, with no error.
+three locale files — miss the last and the grid renders the raw English name, with no error. It
+also means shipping the `AD_Sequence` row itself in `GOClient/AD_SEQUENCE.xml`: a name on the
+allowlist that no row carries is simply a series that never appears, with no error either.
 
 ## Which sequences the list shows
 
-`AD_Sequence` holds **242 rows per provisioned tenant** (measured on the instance). Almost all
-are record-ID counters and internal numbering that a user opening this window has no reason to
-touch, so a 242-row list would have been no shorter a path to the invoice series than the
-Classic window was.
+`AD_Sequence` holds **~145 rows per provisioned tenant** (242 before ETP-5364 stopped the
+duplicated `DocumentNo_*` rows reaching a tenant — see below; an already-provisioned tenant still
+carries the higher figure). Almost all of them are record-ID counters and internal numbering that a
+user opening this window has no reason to touch, so the full list would have been no shorter a path
+to the invoice series than the Classic window was.
 
 `DocumentSequenceHandler.applyListScope` narrows a list GET to the caller's own client and to
-these five, by name (ETP-5285 — previously seven):
+these six, by name (seven before ETP-5285, five after it, six since ETP-5364):
 
 | `AD_Sequence.Name` | Series | Prefix | Start |
 |---|---|---|---|
@@ -139,11 +146,13 @@ these five, by name (ETP-5285 — previously seven):
 | `Standard Order` | Pedido de venta | `PV` | 1000000 |
 | `AR Invoice` | Factura de venta | `FV` | 1000000 |
 | `Factura Rectificativa (Ventas)` | Factura de venta rectificativa | `FVR` | 1000000 |
+| `AP Invoice` | Factura de compra | `FC` | 1000000 |
 | `Factura Rectificativa (Compras)` | Factura de compra rectificativa | `FCR` | 1000000 |
 
 The allowlist is a **product decision** and lives in `VISIBLE_SEQUENCE_NAMES`; adding a sequence
 to the product means adding its name there. Every one was verified to exist, by this exact name,
-**exactly once per organization**, in a provisioned client.
+**exactly once per organization**, in a provisioned client — `AP Invoice` since ETP-5364 shipped
+its row in the dataset, the other five since before.
 
 **Four names were dropped by ETP-5285** — `AP Payment`, `AR Receipt`, `MM Shipment` and
 `Secuencia TICKETBAI`. They are not document series a tenant defines on this screen. Dropping a
@@ -155,16 +164,33 @@ record-ID counters `ad_sequence_doc` and the DAL depend on; deleting them breaks
 them from this window — which is what the allowlist does — is the executable reading of that
 requirement.
 
-### The sixth series: "Factura de compra" (`FC`) is not here
+### The sixth series: "Factura de compra" (`FC`) — ETP-5364
 
-ETP-5285 lists six series. Five are above. `FC` has no `AD_Sequence` to point at: `AP Invoice`
-carries `IsDocNoControlled='N'` and no sequence in **76 of 76 doctypes across all 75 clients**,
-because a purchase invoice is numbered by the supplier — stock Openbravo semantics. Its proposed
-number comes from the shared `DocumentNo_C_Invoice` fallback counter, which is itself duplicated
-per tenant (below). Giving `FC` a real series means **creating a sequence and flipping
-`C_DocType.IsDocNoControlled` to `'Y'` for `AP Invoice`**, which changes how purchase invoices are
-numbered. That is a product decision and is tracked separately; it is deliberately out of scope
-here.
+ETP-5285 listed six series and could ship only five. `FC` had no `AD_Sequence` to point at:
+stock Openbravo gives `AP Invoice` `IsDocNoControlled='N'` and no sequence — measured at the time
+as **76 of 76 doctypes across all 75 clients**, and still 107 of 107 before this change — because a
+purchase invoice is numbered by the supplier. Its proposed number came from the shared
+`DocumentNo_C_Invoice` fallback counter.
+
+**ETP-5364 took that product decision.** A purchase invoice in Etendo GO is now numbered by the
+tenant's own `FC` series, exactly like every other invoice doctype. That needed two dataset
+changes, and BOTH are required — either alone is a silent no-op:
+
+| Where | Change |
+|---|---|
+| `GOClient/AD_SEQUENCE.xml` | a new `AD_Sequence` named `AP Invoice`, prefix `FC`, `STARTNO`/`CURRENTNEXT` 1000000, mask `#######` (id `B1BF521B12684968B31531D88B9F20AB`) |
+| `GOClient/C_DOCTYPE.xml` | the `AP Invoice` doctype flips to `ISDOCNOCONTROLLED='Y'` and points `DOCNOSEQUENCE_ID` at that sequence |
+
+A sequence nothing points at shows a configurable prefix that governs no numbering; a doctype
+flipped with no sequence to read falls back to the counter it was already using.
+
+**Preventive only.** Both rows reach a tenant through the onboarding dataset, so they apply to
+tenants provisioned **from this change on**. The 107 already-provisioned tenants keep
+`IsDocNoControlled='N'` and own no `AP Invoice` sequence: their window shows five rows instead of
+six — the name filter matches nothing, which is the entire failure mode — and their purchase
+invoices keep taking the fallback number. Retrofitting them is a data-fix that was deliberately
+not written here; it would change the numbering of documents those tenants have already issued,
+which is the same fiscal premise R38's header documents.
 
 ### Why no `DocumentNo_*` sequence is listed
 
@@ -172,13 +198,40 @@ An earlier revision also exposed four table-level fallback counters —
 `DocumentNo_C_Invoice`, `DocumentNo_M_InOut`, `DocumentNo_M_Movement` and
 `DocumentNo_A_Asset`. They were removed for two independent reasons.
 
-**They are duplicated in the data.** Provisioning creates each of them twice: 6912 surplus
-`AD_Sequence` rows across 72 of 94 clients, 96 duplicated groups out of 242 sequences in a
-freshly provisioned tenant. (Rows differing only by organization are NOT this — per-org
-numbering is legitimate. Only rows sharing client *and* org are duplicates.) The cause is two
-creation passes ~30s apart: the initial client setup writes them, then
-`EtendoGoJwtServlet.generateOnboardingSequences` runs Etendo's classic *Create Sequences* over
-the same client.
+**They were duplicated in the data until ETP-5364.** Provisioning created each of them twice:
+**9888 surplus `AD_Sequence` rows across 103 of 125 clients** when re-measured, 96 duplicated
+groups out of 242 sequences in a freshly provisioned tenant. (Rows differing only by organization
+are NOT this — per-org numbering is legitimate. Only rows sharing client *and* org are
+duplicates.)
+
+The cause is two creation passes ~45s apart, and it is **not** the one an earlier revision of this
+guide named. Openbravo's `InitialClientSetup` creates the 97 `DocumentNo_<table>` rows for the new
+client (`createdby='0'`, no mask), and the GO onboarding dataset then imported 96 of those same
+names again from `GOClient/AD_SEQUENCE.xml` (`createdby` = the tenant admin, mask `#######`) as
+new rows with fresh ids. `generateOnboardingSequences` is not the culprit: Etendo's classic
+*Create Sequences* names its rows `<Table>-<Column>` and sets `AD_Column_ID`, and there are only
+**206 such rows fleet-wide** — it produced none of the duplicates.
+
+**ETP-5364 fixed pass 2 — at import time, not in the source file.** A new sub-filter,
+`OnboardingDatasetNormalizer.TableCounterSequenceFilter`, drops every `AD_SEQUENCE` row whose
+`NAME` starts with `DocumentNo_`, except `DocumentNo_C_ExtBP_Config_Filter_Opt` and
+`DocumentNo_C_ExtBP_Config_Prop_Opt` — the only two such names `InitialClientSetup` does **not**
+create (verified: exactly one row per client, in all 105 clients that have them, versus two for
+every other). 96 rows dropped, 46 imported. A tenant provisioned from here on gets one copy of
+each.
+
+**Deleting them from `GOClient/AD_SEQUENCE.xml` would have been wrong**, and quietly so. That file
+has a second consumer: `install.source` → `import.sample.data` seeds the GOClient *sample* client
+from all 121 dataset files **wholesale**, and never runs `InitialClientSetup` — so for that
+consumer the XML is the only source of these counters, and the sample client would have been left
+unable to number a document. Unlike ETP-5079's deletion (gap N4b) this one leaves no dangling
+foreign key, so `OnboardingDatasetReferentialIntegrityTest` stays green and nothing would have said
+so until someone created a document in GOClient. The filter is the mechanism that file's own
+`OnboardingDemoMasterData` javadoc prescribes for exactly this split.
+
+This is **preventive only** — the 103 already-provisioned tenants still carry both copies, so
+everything below still describes them. And note the filter is Java, loaded once per JVM, while the
+XMLs are re-read on every provisioning: **verifying it by hand needs a Tomcat restart** first.
 
 Numbering survives it by accident. `ad_sequence_doc` increments **every** row matching the name
 (`WHERE Name = ... AND ad_client_id = ...`, no org, no id) and then reads one back with a
@@ -194,28 +247,28 @@ so the Java layer (`UtilitySequence`, implemented by `com.etendoerp.sequences`; 
 `ad_sequence_doc('DocumentNo_' || tableName, client)`. In one client `DocumentNo_C_Invoice.currentnext`
 is `10000024` and the highest such invoice is `10000023` — an exact match.
 
-But `AP Invoice` carries `IsDocNoControlled='N'` and no sequence in **76 of 76 doctypes across
-all 75 clients**, while every other invoice doctype (reversed, corrective, rectificativa, and
-`AR Invoice`) has both. That is stock Openbravo semantics for "the number comes from outside" —
-a purchase invoice is numbered by the supplier. The fallback counter only supplies a *proposed*
-number so the field is not empty, so a prefix there would be configuring a series that is not
-the tenant's to define.
+That was the stock behaviour for `AP Invoice` too, until ETP-5364 gave it its own `FC` series —
+see "The sixth series" above. On a tenant provisioned since that change the fallback no longer
+numbers purchase invoices at all; on an older one it still does. Either way the fallback counter
+supplies only a *proposed* number, shared with every other doctype that has no sequence, so a
+prefix set on it would configure a series that belongs to no single document type.
 
-**What it costs.** The doctypes without a sequence of their own are no longer reachable here:
-`AP Invoice` and `AP CreditMemo`, `MM Receipt`, plus asset and internal-movement numbering. One
-fallback row is SHARED by every doctype lacking a sequence, so that entry point changed all of
-them at once.
+**What it costs.** The doctypes still without a sequence of their own are not reachable here:
+`AP CreditMemo`, `MM Receipt`, plus asset and internal-movement numbering. One fallback row is
+SHARED by all of them, so that entry point would change them all at once.
 
-**Before putting any of these names back**, the duplication has to be fixed at the source — one
-row per (client, org, name) with `currentnext = max(...)` so no number is re-issued, plus a
-preventive change so `generateOnboardingSequences` does not re-create what the client setup
-already wrote. It is not urgent: no product capability is blocked, since the one series a tenant
-might want to prefix is the one Etendo does not consider configurable.
+**Putting any of these names back is still wrong**, and fixing the duplication does not change
+that: the objection is that a fallback counter is not a document series. If a doctype needs a
+configurable series, give it one — that is what ETP-5364 did for `AP Invoice`. Note the
+duplication is fixed **only for new tenants**; on the 103 existing ones, editing one row of a pair
+still makes the applied value non-deterministic. And it is fixed on the tenant path only: the
+GOClient sample client still holds one copy of each by design, because that is where its counters
+come from.
 
 **Injected as criteria, not filtered out of the response.** The pre-hook shares its `NeoContext`
 with the default CRUD that runs after it, so appending clauses to the request's `criteria`
 parameter means the narrowed query is the one that executes — paging, sorting and the total count
-stay honest. Filtering the response instead would have returned "page 1 of 242" and thrown most
+stay honest. Filtering the response instead would have returned "page 1 of ~145" and thrown most
 of it away, so the first page could legitimately have come back empty. Top-level criteria clauses
 are ANDed, so a filter the user typed still applies; it is narrowed, not replaced.
 
@@ -268,35 +321,45 @@ two code paths writing the same rows. See
 
 ## Gap assessment
 
-- **Purchase invoices have no configurable series, by Etendo's design.** `AP Invoice` is
-  `IsDocNoControlled='N'` with no sequence in 76 of 76 doctypes across all 75 clients, so its
-  number comes from the shared `DocumentNo_C_Invoice` fallback and is meant to be the supplier's
-  number, not one the tenant defines. See "Why no `DocumentNo_*` sequence is listed" above. One
-  loose end, **unverified**: `documentNo` is `readOnly` with `grid: false, form: false` in
-  `artifacts/purchase-invoice/decisions.json`, so it is hidden from the UI entirely and the
-  supplier's number cannot be typed. `orderReference` is editable there and may be serving that
-  role in practice — worth checking before assuming a gap.
+- **[Closed for new tenants — ETP-5364] Purchase invoices had no configurable series.** Stock
+  Etendo makes `AP Invoice` `IsDocNoControlled='N'` with no sequence, so its number came from the
+  shared `DocumentNo_C_Invoice` fallback. ETP-5364 ships an `AP Invoice` sequence (`FC`) and
+  points the doctype at it, in the onboarding dataset — so this is closed for tenants provisioned
+  from now on and **still open for the 107 existing ones**, which show five rows here instead of
+  six. See "The sixth series" above.
+- **Related loose end, still unverified.** `documentNo` is `readOnly` with
+  `grid: false, form: false` in `artifacts/purchase-invoice/decisions.json`, so it is hidden from
+  the UI entirely. With ETP-5364 that is now the right shape for a GO-numbered purchase invoice
+  (the tenant's own series fills it), but on a pre-ETP-5364 tenant the supplier's number still
+  cannot be typed anywhere; `orderReference` is editable and may be serving that role in
+  practice — worth checking before assuming a gap.
 - **No guard against renumbering a sequence already in use.** Lowering `CurrentNext` on a
   sequence whose numbers are already on issued documents re-issues them. The removed onboarding
   endpoint had a `409` guard for exactly this; the generic CRUD path has none. Worth a follow-up
   ticket rather than a silent assumption.
-- **Every `DocumentNo_*` sequence is duplicated per tenant**, which is why none of them is
-  listed any more — see "Why no `DocumentNo_*` sequence is listed" above for the measurements,
-  the cause and the pending data-fix. The five names the window does show have exactly one row
-  per organization.
+- **[Closed for new tenants — ETP-5364] Every `DocumentNo_*` sequence was duplicated per
+  tenant** (9888 surplus rows across 103 of 125 clients). ETP-5364 drops the 96 colliding rows at
+  import time (`OnboardingDatasetNormalizer.TableCounterSequenceFilter`), leaving the source
+  dataset complete for the sample-client consumer, so a newly provisioned tenant gets one copy of
+  each; the 103 existing tenants still carry both, and a corrective data-fix was deliberately not
+  written. See "Why no `DocumentNo_*` sequence is listed" above for the measurements and the cause.
+  The six names the window does show have exactly one row per organization either way.
 - No callouts. `rules-raw.json` reports 4 validation rules and 9 display-logic rows on the AD tab
   and no callout rows.
 
 ## Manual verification
 
 1. Open `/document-sequence` from the Configuración menu and confirm the list shows **exactly
-   five rows**, each ONCE, NOT the tenant's full 242 — and that the columns are exactly Nombre,
-   Descripción, Prefijo, Número inicial, Próximo número.
+   six rows**, each ONCE, NOT the tenant's full sequence table — and that the columns are exactly
+   Nombre, Descripción, Prefijo, Número inicial, Próximo número. **On a tenant provisioned before
+   ETP-5364 you will see five**, without *Factura de compra*: that tenant owns no `AP Invoice`
+   sequence, and it is the expected result, not a regression (see "The sixth series").
 2. In Spanish, confirm the Nombre column reads *Pedido de compra*, *Pedido de venta*, *Factura de
-   venta*, *Factura de venta rectificativa*, *Factura de compra rectificativa* — not the stored
-   English names. Switch to English and confirm the same rows read *Purchase Order*, *Sales
-   Order*, *Sales Invoice*, *Corrective Sales Invoice*, *Corrective Purchase Invoice*. A raw
-   English name in Spanish means a missing `genericLabels` key (or a stale Vite locale slice).
+   venta*, *Factura de venta rectificativa*, *Factura de compra*, *Factura de compra
+   rectificativa* — not the stored English names. Switch to English and confirm the same rows read
+   *Purchase Order*, *Sales Order*, *Sales Invoice*, *Corrective Sales Invoice*, *Purchase
+   Invoice*, *Corrective Purchase Invoice*. A raw English name in Spanish means a missing
+   `genericLabels` key (or a stale Vite locale slice).
 3. Confirm `AP Payment`, `AR Receipt`, `MM Shipment` and `Secuencia TICKETBAI` are **gone**, and
    that no row whose name starts with `DocumentNo_` appears.
 4. Confirm there is **no Create/New button** in the list toolbar and no delete (trash) action on
@@ -307,7 +370,7 @@ two code paths writing the same rows. See
    means `push-to-neo` + `export.database` have not been run yet.
 5. Type something into the list's own filter and confirm it narrows further rather than
    revealing sequences outside the allowlist. Open "Filtro por condicionales" on Nombre and
-   confirm the value dropdown offers the five translated names.
+   confirm the value dropdown offers the six translated names.
 6. Open a series and confirm the form shows those same five fields and nothing else — in
    particular no Suffix, Increment By, Auto Numbering, Mask, Value Format or Restart every year —
    and that **Nombre is read-only** and translated.
@@ -321,9 +384,20 @@ two code paths writing the same rows. See
 11. Clear the prefix entirely and confirm that saves too.
 12. Open `/first-steps`, expand "Personaliza tus facturas" and confirm **Configurar** navigates
    here.
-13. On a **freshly provisioned** tenant, confirm the five rows already carry `PC` / `PV` / `FV` /
-   `FVR` / `FCR` with Número inicial and Próximo número both at 1000000 — that is the onboarding
-   dataset, not the data-fix.
+13. On a **freshly provisioned** tenant, confirm the six rows already carry `PC` / `PV` / `FV` /
+   `FVR` / `FC` / `FCR` with Número inicial and Próximo número both at 1000000 — that is the
+   onboarding dataset, not the data-fix.
+14. ETP-5364, same freshly provisioned tenant: in Classic, confirm the `AP Invoice` doc type has
+   **Documento controlado = Y** and points at the `AP Invoice` sequence, then create a purchase
+   invoice and confirm its number reads `FC1000000`. A number with no prefix means the doctype
+   half did not arrive.
+15. ETP-5364, same tenant, and the reason this is a separate check (**restart Tomcat first** —
+   the import filter is Java and is loaded once per JVM, while the dataset XMLs are re-read on
+   every provisioning): run
+   `SELECT name, count(*) FROM ad_sequence WHERE ad_client_id = '<client>' GROUP BY name HAVING
+   count(*) > 1;` and confirm it returns **zero rows**. On a tenant provisioned before ETP-5364
+   the same query returns ~96 `DocumentNo_*` names, which is the pre-existing state, not a
+   regression.
 
 ## Automated evidence
 
@@ -334,20 +408,22 @@ two code paths writing the same rows. See
   `menuName: "Document Sequence"`) — required before `make regen ONLY=document-sequence` will
   process it.
 - `artifacts/document-sequence/decisions.json` classifies the 26 extracted fields (five visible
-  after ETP-5285), declares `entities.sequence.methods: ["GET","GETBYID","PUT","PATCH"]` (no POST,
+  after ETP-5285) and maps the six series names to i18n keys via `enumValues`, declares `entities.sequence.methods: ["GET","GETBYID","PUT","PATCH"]` (no POST,
   no DELETE), sets `window.hideCreate` / `window.hideDeleteButton` /
   `entities.sequence.hideDelete`, and sets `entities.sequence.javaQualifier: "document-sequence"`.
 - `cli/test/document-sequence.contract.test.js` pins all of it: the method allowlist, the
   `post: false` / `delete: false` contract flags, the five visible fields and their grid order,
-  the read-only translated `name`, and the presence of the five `genericLabels` keys in all three
-  locale files.
+  the read-only translated `name`, and the presence of the six `genericLabels` keys in all three
+  locale files. The `enumValues` order is asserted against
+  `DocumentSequenceHandler.VISIBLE_SEQUENCE_NAMES` byte for byte — these are `AD_Sequence.Name`
+  values and a mismatch hides the row with no error anywhere.
 - `artifacts/document-sequence/contract.json` carries that qualifier through to both the frontend
   and backend entity sections; the pipeline generated 70 contract tests, all passing at
   onboarding time.
 - `DocumentSequenceHandlerTest` (`com.etendoerp.go`) covers the four prefix rules, their order,
-  the guards that stop the handler before the country lookup, and — since ETP-5285 — the exact
-  five-name allowlist, the four names that must stay out of it, and the absence of a
-  purchase-invoice series.
+  the guards that stop the handler before the country lookup, and — since ETP-5285, updated by
+  ETP-5364 — the exact six-name allowlist, the four names that must stay out of it, the presence
+  of the purchase-invoice series, and the guard that keeps every `DocumentNo_*` name out.
 
 ## Onboarding — ETP-5190
 

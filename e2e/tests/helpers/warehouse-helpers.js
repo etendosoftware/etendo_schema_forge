@@ -42,8 +42,9 @@
  * `LocationEditorModal` with its own country/region pickers, the Storage Bin
  * secondary tab) would buy nothing but flakiness. Everything below talks to
  * `/sws/neo/warehouse/**` through `page.request` (Playwright's
- * APIRequestContext), authenticated with the bearer token `login(page)` already
- * put in `localStorage['sf_auth_token']`.
+ * APIRequestContext), authenticated with whatever credential `login(page)`
+ * established — see `apiAuthHeaders()` in auth.js, which serves the cookie
+ * session and the legacy bearer alike (ETP-4576).
  *
  * Endpoints used — all read from source (`ETGO_SF_ENTITY.xml` for the entity
  * names, `ETGO_SF_FIELD.xml` + `artifacts/warehouse/contract.json` for the
@@ -158,6 +159,8 @@
  * lands at that index.
  */
 
+import { apiAuthHeaders } from './auth.js';
+
 const SPEC_BASE = '/sws/neo/warehouse';
 const WAREHOUSE_ENTITY = 'warehouse';
 const STORAGE_BIN_ENTITY = 'storageBin';
@@ -191,15 +194,12 @@ export const SECONDARY_WAREHOUSE_FIXTURE = {
   binSearchKey: 'E2E-WH2-0-0-0',
 };
 
+// ETP-4576: the credential comes from apiAuthHeaders, not from localStorage. Under the cookie
+// session there is no bearer in localStorage at all, so reading `sf_auth_token` here threw on
+// every run. apiAuthHeaders returns whichever credential this run actually uses (the cookie
+// CSRF proof or the legacy bearer) plus the Origin the backend's CSRF gate requires.
 async function getAuthHeaders(page) {
-  const token = await page.evaluate(() => localStorage.getItem('sf_auth_token'));
-  if (!token) {
-    throw new Error(
-      'ensureSecondaryWarehouse could not find an auth token in localStorage["sf_auth_token"] — '
-      + 'call login(page) before ensureSecondaryWarehouse(page).',
-    );
-  }
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  return { ...(await apiAuthHeaders(page)), 'Content-Type': 'application/json' };
 }
 
 /** NEO wraps CRUD create/read responses in `{ response: { data: [...] } }`. */

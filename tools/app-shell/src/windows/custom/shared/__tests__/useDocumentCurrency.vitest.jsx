@@ -153,13 +153,16 @@ describe('useDocumentCurrency', () => {
       expect(fetchOptionalJson).not.toHaveBeenCalled();
     });
 
-    it('sets loading: false immediately when token is absent', async () => {
+    it('sets loading: false immediately when token is absent — inverted: the cookie carries the session', async () => {
       const { result } = renderHook(() =>
         useDocumentCurrency({ ...BASE_PARAMS, token: undefined }),
       );
 
       await waitFor(() => expect(result.current.loading).toBe(false));
-      expect(fetchOptionalJson).not.toHaveBeenCalled();
+    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
+    // so the request MUST still go out. The old expectation encoded the guard that made
+    // this call silently disappear for every authenticated user.
+      expect(fetchOptionalJson).toHaveBeenCalled();
     });
   });
 
