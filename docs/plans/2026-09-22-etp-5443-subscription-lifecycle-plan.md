@@ -43,7 +43,7 @@
 | `tools/app-shell/src/lib/upgrade/api.js` (modify) | `getSubscription`, `createPortalSession` |
 | `tools/app-shell/src/components/account/SubscriptionSection.jsx` (new) | The section UI |
 | `tools/app-shell/src/pages/AccountSettingsPage.jsx` (modify) | Compose the section |
-| `tools/app-shell/src/i18n/locales/{en_US,es_ES}.json` (modify) | Keys |
+| `tools/app-shell/src/locales/{en_US,es_ES}.json` (modify) | Keys |
 
 ---
 
@@ -610,7 +610,7 @@ git -C $SF commit -m "Feature ETP-5443: Add the subscription API clients"
 **Files:**
 - Create: `tools/app-shell/src/components/account/SubscriptionSection.jsx`
 - Modify: `tools/app-shell/src/pages/AccountSettingsPage.jsx`
-- Modify: `tools/app-shell/src/i18n/locales/en_US.json`, `tools/app-shell/src/i18n/locales/es_ES.json`
+- Modify: `tools/app-shell/src/locales/en_US.json`, `tools/app-shell/src/locales/es_ES.json`
 - Test: `tools/app-shell/src/components/account/__tests__/SubscriptionSection.vitest.jsx`
 
 **Interfaces:**
@@ -630,9 +630,18 @@ cancellation-scheduled state, and that clicking Manage navigates to the returned
 
 - [ ] **Step 3: Implement `SubscriptionSection.jsx`**
 
-Follow `SecuritySection.jsx` for structure and props. Use `useUI()` for labels, `useApiFetch` for
-both calls, `formatCurrency(currency, amountMinor / 100)` for the amount and `formatCalendarDate`
-for the dates. Put a `data-testid` on every element the tests query.
+Follow `SecuritySection.jsx` for structure and props. Use `useUI()` for labels,
+`formatCurrency(currency, amountMinor / 100)` for the amount and `formatCalendarDate` for the
+dates. Put a `data-testid` on every element the tests query.
+
+**Deliberate deviation from the Global Constraints' `useApiFetch` rule:** `SubscriptionSection`
+calls `getSubscription`/`createPortalSession` with the global `fetch` and the account/platform
+token (`getCheckoutToken()` from `tools/app-shell/src/lib/upgrade/api.js`), each call marked with
+a `raw-fetch-ok` comment for `tools/app-shell/test/no-raw-fetch.test.js` — not `useApiFetch`. This
+mirrors `UpgradePage.jsx`, which follows the same pattern for every billing call: billing is an
+account-level operation and must work with the account/platform token even while the ERP session
+is paywalled, whereas `useApiFetch` sends the environment/ERP session token. Reachability while
+blocked (§3.2 of the design) depends on this, not on a special case in the component.
 
 - [ ] **Step 4: Compose it into `AccountSettingsPage.jsx`**
 
@@ -654,7 +663,7 @@ npx vitest run tools/app-shell/src/components/account/__tests__/SubscriptionSect
 
 ```bash
 git -C $SF add tools/app-shell/src/components/account tools/app-shell/src/pages/AccountSettingsPage.jsx \
-  tools/app-shell/src/i18n/locales/en_US.json tools/app-shell/src/i18n/locales/es_ES.json
+  tools/app-shell/src/locales/en_US.json tools/app-shell/src/locales/es_ES.json
 git -C $SF commit -m "Feature ETP-5443: Add the Subscription section to account settings"
 ```
 

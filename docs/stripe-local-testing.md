@@ -25,7 +25,13 @@ All of it is implemented on this branch:
   hosted session correlation when an unpaid `CREATING` or `CREATED` purchase is retried.
 - `GET  <base>/sws/go/checkout/sessions/{requestId}` reports `pending` or `paid`.
 - `POST <base>/sws/go/checkout/webhook` verifies the Stripe signature, de-duplicates by event id
-  durably (`ETGO_BILLING_EVENT`, see below), and records the payment.
+  durably (`ETGO_BILLING_EVENT`, see below), and records the payment **and** the subscription
+  lifecycle (ETP-5443, see below): `invoice.paid`, `invoice.payment_failed`,
+  `customer.subscription.updated` and `customer.subscription.deleted`.
+- `GET  <base>/sws/go/billing/subscription` returns the account's live subscription detail plus
+  the stored grace state (ETP-5443).
+- `POST <base>/sws/go/billing/subscription/portal` opens a Stripe Customer Portal session for the
+  account's stored customer (ETP-5443).
 - Server-side Price ID and subscription/payment mode configuration.
 - Paid onboarding resume: the `requestId` is passed back as `paymentToken` on the onboarding call.
 
@@ -132,6 +138,105 @@ Both tables are readable as System Administrator without DB access: the Classic 
 **Checkout Request** (its **Billing Event** child tab lists the events linked through
 `etgo_checkout_request_id`) and **Billing Event** (standalone, every event including those with no
 link). Both are read-only.
+
+### Subscription lifecycle (ETP-5443)
+
+Once a checkout has created a Stripe subscription, four more event types keep Etendo's access
+decision in sync with it. `applyCheckoutEvent` routes them to a second path
+(`applySubscriptionLifecycle`), separate from the two payment-confirmation types above but
+sharing the same signature verification and idempotency claim — nothing new to configure or
+re-test for replay protection.
+
+| Event | Target status | `ETGO_SubscriptionDueAt` |
+| --- | --- | --- |
+| `invoice.paid` | `CURRENT` | cleared |
+| `invoice.payment_failed` | `PAST_DUE` | end of the failed invoice's period |
+| `customer.subscription.updated`, `status` `active`/`trialing` | `CURRENT` | cleared |
+| `customer.subscription.updated`, `status` `past_due`/`unpaid` | `PAST_DUE` | end of the current period |
+| `customer.subscription.updated`, `status` `canceled` | `EXPIRED` | cleared |
+| `customer.subscription.deleted` | `EXPIRED` | cleared |
+
+Both fields are `AD_Preference` rows scoped to the tenant's `Client` (`Attribute` =
+`ETGO_SubscriptionStatus` / `ETGO_SubscriptionDueAt`), not columns on `ETGO_CHECKOUT_REQUEST`.
+Read them back through the classic **Preference** window as System Administrator (filter by
+`Attribute` and the tenant's client), or call `TenantEnvironmentLifecycleService.resolve(clientId)`
+in a debugger — there is no dedicated SQL table to query.
+
+**The grace anchor is the end of the paid period, never the moment the charge failed.**
+`SubscriptionLifecycleApplier` reads `data.object.period_end` (the failed invoice's own period),
+falling back to `data.object.current_period_end` (the subscription's). The customer paid through
+that date, and Stripe commonly retries a renewal a few days before the period closes — anchoring
+on the failure instead would take away days already paid for. The grace window itself is
+`etendo.go.billing.grace.days` / `ETGO_BILLING_GRACE_DAYS`, default 15 days.
+
+**`PAST_DUE` is never written without a due date.** `EnvironmentAccessPolicy.evaluate()` grants
+zero grace when `renewalDueAt` is null, so writing the status half-way would lock the customer out
+instantly and silently. When neither `period_end` nor `current_period_end` is present,
+`SubscriptionLifecycleApplier` returns an **ignore** — `failure_reason = "missing period end"` —
+and the stored status is left untouched rather than written half-way.
+
+**`cancel_at_period_end = true` does not change the status.** A `customer.subscription.updated`
+event with that flag set but `status: "active"` still maps to `CURRENT`: access continues until
+Stripe actually sends `customer.subscription.deleted` at the period boundary. The flag is
+display-only — the Subscription section on `/account` reads it live from Stripe on every page
+load, it is never stored.
+
+An unrecognized `customer.subscription.updated` status (e.g. `incomplete`, `incomplete_expired`)
+is ignored with `failure_reason = "unhandled subscription status"` — a different reason string
+from the dispatcher's generic `"unhandled event type"`, useful when reading the audit row.
+
+#### Correlation is different from the checkout path
+
+Lifecycle events carry no `metadata.request_id` — that metadata travels only on the checkout
+session, so `CheckoutWebhookProcessor`'s `extractRequestId` finds nothing and claims the event
+with a null `request_id`. **A lifecycle event's `ETGO_BILLING_EVENT` row therefore never carries a
+`request_id` or an `etgo_checkout_request_id` link, applied or not** — unlike the checkout rows
+described above. Correlation instead walks the subscription, then the customer:
+
+```
+invoice.*                  → data.object.subscription
+customer.subscription.*    → data.object.id
+     ↓ CheckoutRequestStore.findByStripeSubscription(...)
+     ↓ (fallback) findByStripeCustomer(data.object.customer)
+     ↓ CheckoutRequest.createdClient
+     ↓ TenantEnvironmentLifecycleService.updateSubscriptionStatus(clientId, status, dueAt)
+```
+
+Both fields were captured once, at checkout time: `applyCheckoutPaid` calls
+`checkoutRequestStore.recordPaid(requestId, customer, subscription)` from the ONE event that
+carries both ids alongside the correlation id (`checkout.session.completed` /
+`.async_payment_succeeded`). Every later invoice or subscription event is keyed by those two
+values instead.
+
+**An event that resolves to no environment is ignored, never blocking** —
+`failure_reason = "unresolved subscription"`. This covers both a subscription/customer that names
+no `ETGO_CHECKOUT_REQUEST` on this instance, and a matched request whose `createdClient` is null.
+A tenant with no subscription row is never blocked by a stray lifecycle event; that is what keeps
+grandfathered and free tenants safe. If `updateSubscriptionStatus` itself fails after a purchase
+*was* resolved, the row is marked `FAILED` (`"Could not store the subscription projection"`), not
+`IGNORED` — Stripe's retry schedule will re-claim and reprocess it, same as any other `FAILED` row
+(§1).
+
+### The two account endpoints (ETP-5443)
+
+Both hang off `runWithPlatformAccount`, so the JWT — not a request body field — decides which
+account's subscription is read or which portal session is opened.
+
+- **`GET /sws/go/billing/subscription`** — resolves the account's `CheckoutRequest` with a
+  `stripeSubscription`, fetches the live detail from Stripe (`plan`, `amountMinor`, `currency`,
+  `status`, `renewalAt`, `cancelAtPeriodEnd`), and merges in the stored `graceEndsAt` /
+  `graceDaysRemaining`. An account with none returns `200 {"hasSubscription": false}`, never a
+  `404` — free and grandfathered accounts must still render the page.
+  **Note:** `status` in this response is Stripe's own live subscription status string (e.g.
+  `"active"`, `"past_due"`, `"canceled"`) — not the internal `CURRENT` / `PAST_DUE` / `EXPIRED`
+  enum this guide uses above. Use `graceDaysRemaining` / `graceEndsAt` to detect the grace state,
+  not a `status` string comparison.
+- **`POST /sws/go/billing/subscription/portal`** — resolves the account's stored Stripe customer
+  (`CheckoutRequestStore.findBillableForAccount`) and calls `StripeCustomerPortalService.
+  createSession(...)`. No subscription for the account → `404 NO_SUBSCRIPTION`. The portal's
+  `return_url` is `PublicUrlResolver.resolveConfiguredAppBaseUrl()` (`etendo.go.app.baseUrl` /
+  `ETGO_APP_BASE_URL`, legacy `etgo.app.url` / `ETGO_APP_URL`) plus `/account` — never the
+  browser's `Origin`, the same rule hosted checkout already follows.
 
 ## 2. Base URL and ports
 
@@ -323,6 +428,76 @@ curl -i -X POST "$BASE/sws/go/checkout/webhook" \
 backend answers `200 {"received":true}` and records nothing. The email must match the account that
 later polls the status endpoint (matching is case-insensitive).
 
+### Subscription lifecycle events (offline)
+
+`tools/stripe-webhook-simulate.sh` only builds `checkout.session.*`-shaped payloads
+(`metadata.request_id`/`account_email`, no `period_end`, no subscription `status`) — reusing its
+`--type` flag for `invoice.payment_failed` or `customer.subscription.updated` sends a payload the
+applier cannot read correctly (it would land as `"missing period end"` or a correlation miss for
+the wrong reason). Hand-sign these instead, the same way as the "Doing it by hand" recipe above.
+
+**Step 1 — get a real, correlated subscription id.** Run the offline stub flow above once
+(`tools/stripe-session-stub.py` + `POST /checkout/sessions` + `stripe-webhook-simulate.sh
+--request-id "$RID" --status`). That webhook call persists `stripeCustomer` and
+`stripeSubscription` on the `$RID` row via `recordPaid(...)`, both shaped `cus_sim_<epoch>` /
+`sub_sim_<epoch>` from the timestamp the script ran at. Read them back:
+
+```sql
+select stripe_customer, stripe_subscription from etgo_checkout_request where request_id = '<RID>';
+```
+
+**Step 2 — sign and post the lifecycle event.** Reuse `$SECRET` from §4 and the `SUB`/`CUST`
+values from Step 1. Four payload shapes, matching `SubscriptionLifecycleApplierTest` exactly:
+
+```bash
+BASE=http://localhost:8080/etendo
+SECRET=whsec_local_simulation
+SUB="sub_sim_..."      # from Step 1
+CUST="cus_sim_..."     # from Step 1
+
+post_event() {
+  local payload="$1"
+  local ts=$(date +%s)
+  local sig=$(printf '%s.%s' "$ts" "$payload" | openssl dgst -sha256 -hmac "$SECRET" -r | cut -d' ' -f1)
+  curl -i -X POST "$BASE/sws/go/checkout/webhook" \
+    -H 'Content-Type: application/json' \
+    -H "Stripe-Signature: t=$ts,v1=$sig" \
+    --data-raw "$payload"
+}
+
+# invoice.paid — clears the due date, status -> CURRENT
+post_event "$(printf '{"id":"evt_%s","type":"invoice.paid","data":{"object":{"subscription":"%s"}}}' "$(date +%s)" "$SUB")"
+
+# invoice.payment_failed — anchored on the paid period end (here: 2026-10-31T00:00:00Z,
+# the same fixture value SubscriptionLifecycleApplierTest uses)
+post_event "$(printf '{"id":"evt_%s","type":"invoice.payment_failed","data":{"object":{"subscription":"%s","period_end":1793750400}}}' "$(date +%s)" "$SUB")"
+
+# invoice.payment_failed WITHOUT a period end — must be ignored, never written half-way
+post_event "$(printf '{"id":"evt_%s","type":"invoice.payment_failed","data":{"object":{"subscription":"%s"}}}' "$(date +%s)" "$SUB")"
+
+# customer.subscription.updated, cancellation scheduled — status stays CURRENT
+post_event "$(printf '{"id":"evt_%s","type":"customer.subscription.updated","data":{"object":{"id":"%s","status":"active","cancel_at_period_end":true}}}' "$(date +%s)" "$SUB")"
+
+# customer.subscription.updated, past_due — same anchor rule as invoice.payment_failed
+post_event "$(printf '{"id":"evt_%s","type":"customer.subscription.updated","data":{"object":{"id":"%s","status":"past_due","current_period_end":1793750400}}}' "$(date +%s)" "$SUB")"
+
+# customer.subscription.deleted — EXPIRED, due date cleared
+post_event "$(printf '{"id":"evt_%s","type":"customer.subscription.deleted","data":{"object":{"id":"%s"}}}' "$(date +%s)" "$SUB")"
+
+# Correlation fallback via customer only (no matching subscription on file)
+post_event "$(printf '{"id":"evt_%s","type":"invoice.paid","data":{"object":{"subscription":"sub_unknown","customer":"%s"}}}' "$(date +%s)" "$CUST")"
+
+# Unresolvable — both ids unknown; must be ignored, never blocking
+post_event "$(printf '{"id":"evt_%s","type":"customer.subscription.deleted","data":{"object":{"id":"sub_unknown_%s"}}}' "$(date +%s)" "$(date +%s)")"
+```
+
+Check the outcome the same way as §1: `select event_id, event_type, event_result, failure_reason,
+request_id, etgo_checkout_request_id from etgo_billing_event order by received_at desc;` — expect
+`request_id` and `etgo_checkout_request_id` **empty** on every one of these rows (see "Correlation
+is different from the checkout path" above), and the stored projection changed by reading the
+**Preference** window for `ETGO_SubscriptionStatus` / `ETGO_SubscriptionDueAt` on the tenant's
+client.
+
 ## 5. Stripe Test Mode
 
 ### Prerequisites
@@ -377,6 +552,43 @@ stripe trigger checkout.session.completed   # accepted, but provisions nothing
 The canned fixture carries no `metadata.request_id` / `metadata.account_email`, so the handler
 acknowledges it and records nothing. Use the offline simulator (§4) for synthetic events, and
 `stripe events resend` for real ones.
+
+### `stripe trigger` for lifecycle events — different failure mode, same conclusion
+
+Unlike `checkout.session.completed`, all four lifecycle events ARE in `stripe trigger`'s supported
+list (`stripe trigger --help` prints `invoice.paid`, `invoice.payment_failed`,
+`customer.subscription.updated`, `customer.subscription.deleted`). But each `stripe trigger` run
+creates a **brand-new** test customer and subscription as a side effect, so the triggered event's
+ids never match anything already stored in `ETGO_CHECKOUT_REQUEST`:
+
+```bash
+stripe trigger customer.subscription.deleted   # accepted, correlates to nothing local
+```
+
+The webhook still answers `200`, but the event lands `IGNORED` / `"unresolved subscription"` —
+proving the ignore path, not the write path. This is the lifecycle equivalent of the
+`checkout.session.completed` limitation above: a canned `stripe trigger` run alone cannot exercise
+the write path either, just for a correlation reason instead of a missing-metadata one.
+
+To exercise the write path with genuinely real, correlated Test Mode events, act on a subscription
+Etendo already knows about — one created through a real Test Mode checkout (below), whose
+`stripeSubscription` was captured by `applyCheckoutPaid`:
+
+```bash
+# customer.subscription.deleted, on the real correlated subscription
+stripe subscriptions cancel sub_REPLACE_WITH_REAL_ID
+
+# customer.subscription.updated with cancel_at_period_end, same subscription
+stripe subscriptions update sub_REPLACE_WITH_REAL_ID --cancel-at-period-end true
+```
+
+`stripe listen` (below) forwards the resulting real webhook, which correlates correctly because
+the subscription id is the one `recordPaid` already stored. `invoice.paid` /
+`invoice.payment_failed` are harder to force on demand in Test Mode without a **Stripe Test Clock**
+(`stripe test_clocks`, confirmed available in this CLI) advancing the subscription past its
+renewal date — attaching a test clock would need to happen at Stripe customer creation, which the
+checkout flow does not currently do. The offline hand-rolled simulator above is the practical way
+to exercise those two deterministically.
 
 ### Create a Checkout Session directly
 
@@ -486,6 +698,14 @@ and the resulting tenant/payment state in Etendo.
 | SF-STRIPE-LOCAL-07 | Account polls another account's requestId | `--status` with a mismatched `--email` | `200 {"status":"pending"}`; no information disclosure | P1 |
 | SF-STRIPE-LOCAL-08 | First free onboarding | onboarding without `paymentToken` | Existing free flow unchanged | P1 |
 | SF-STRIPE-LOCAL-09 | Billing event audit trail survives the restart | after SF-STRIPE-LOCAL-06, run the §1 query and open the Classic windows as System Administrator | Exactly one `etgo_billing_event` row for the event id: `event_result=APPLIED`, `duplicate_count=1`, `etgo_checkout_request_id` set; the row is visible in **Billing Event** and in the **Billing Event** child tab of the matching **Checkout Request**; both read-only; `payload_summary` shows no card data | P0 |
+| SF-STRIPE-LOCAL-10 | `invoice.payment_failed` writes `PAST_DUE` anchored on the period end | offline recipe (§4) | `ETGO_SubscriptionStatus=PAST_DUE`, `ETGO_SubscriptionDueAt` = the invoice's `period_end` (or `current_period_end`), never the delivery time | P0 |
+| SF-STRIPE-LOCAL-11 | `invoice.payment_failed` with no period end is never written half-way | offline recipe (§4), omit `period_end`/`current_period_end` | `event_result=IGNORED`, `failure_reason="missing period end"`; the previously stored status/due date are unchanged | P0 |
+| SF-STRIPE-LOCAL-12 | `invoice.paid` recovers the account | offline recipe (§4), after SF-STRIPE-LOCAL-10 | `ETGO_SubscriptionStatus=CURRENT`, `ETGO_SubscriptionDueAt` cleared | P0 |
+| SF-STRIPE-LOCAL-13 | `cancel_at_period_end=true` does not change the status | offline recipe (§4), `customer.subscription.updated` with `status:"active"` | Status stays `CURRENT`; the flag is not persisted anywhere | P1 |
+| SF-STRIPE-LOCAL-14 | `customer.subscription.deleted` ends access | offline recipe (§4), or Test Mode `stripe subscriptions cancel <real sub id>` (§5) | `ETGO_SubscriptionStatus=EXPIRED`, `ETGO_SubscriptionDueAt` cleared | P0 |
+| SF-STRIPE-LOCAL-15 | An unresolvable subscription/customer never blocks | offline recipe (§4), unknown ids; or `stripe trigger customer.subscription.deleted` (§5) | `200 {"received":true}`; `event_result=IGNORED`, `failure_reason="unresolved subscription"`; no tenant's stored status changes | P0 |
+| SF-STRIPE-LOCAL-16 | `GET /billing/subscription` for an account with no subscription | authenticated call, account with no `stripeSubscription` on file | `200 {"hasSubscription": false}`, never `404` | P1 |
+| SF-STRIPE-LOCAL-17 | `POST /billing/subscription/portal` returns a real Customer Portal session | authenticated call, account with a `stripeCustomer` on file | `200 {"url": "https://billing.stripe.com/..."}`; opening it lands back on `<appBaseUrl>/account` | P0 |
 
 ## 8. Troubleshooting
 
@@ -518,6 +738,25 @@ from the recorded one. The `etgo_billing_event` row (§1) says which:
 A Tomcat restart is no longer a cause. Resend the event (§5) only when there is no row or the row
 is `FAILED`; resending an `APPLIED` event just counts a duplicate.
 
+### A lifecycle event's `etgo_billing_event` row has no `request_id` or `etgo_checkout_request_id`
+
+That is expected, not a bug: lifecycle events carry no `metadata.request_id`, so
+`CheckoutWebhookProcessor` claims them with a null one. Correlation for these events happens only
+inside `applySubscriptionLifecycle` (walking `stripeSubscription`/`stripeCustomer`), and its
+result is visible only in `event_result` / `failure_reason`, not as a foreign key on the row. See
+"Correlation is different from the checkout path" (§1).
+
+### `status` vs. the grace fields — read the right one
+
+`GET /billing/subscription`'s `status` field is Stripe's own live status string (`"active"`,
+`"past_due"`, …), not the internal `CURRENT`/`PAST_DUE`/`EXPIRED` enum used elsewhere in this
+guide (compare `handleBillingPurchase`, which puts the internal `checkoutRequestStatus` in that
+same field name for a different endpoint — the name is reused across handlers with different
+value spaces). The past-due/grace signal for the Subscription section is `graceDaysRemaining` /
+`graceEndsAt`, which the endpoint derives from the stored projection, not from `status`. A
+component or test that keys its past-due UI off `status === 'PAST_DUE'` is reading the wrong
+field.
+
 ### CORS error in the browser
 
 The SPA origin must be allowlisted. `http://localhost:3100` and `:3000` are defaults; anything else
@@ -548,3 +787,6 @@ Confirm the Dashboard is in Test Mode, the session was created with the `sk_test
   `etgo_checkout_request_id`), captured after the restart replay, plus a screenshot of the row in
   the Classic **Billing Event** window or the **Checkout Request** child tab.
 - Etendo tenant/payment state before and after each scenario.
+- For subscription lifecycle scenarios (§1, §4, §7 SF-STRIPE-LOCAL-10..17): the `etgo_billing_event`
+  row per event id (`event_result`, `failure_reason`), and the **Preference** window rows for
+  `ETGO_SubscriptionStatus` / `ETGO_SubscriptionDueAt` on the affected client, before and after.
