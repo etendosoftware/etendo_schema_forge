@@ -106,15 +106,30 @@ export function isPostedStatusColumn(column) {
  * one per renderer — are exactly what made the same record read as "—" in the grid and
  * "Not posted" in the detail (ETP-5075).
  *
- * @param badge the `extraBadges` entry (`{ key, trueKey, falseKey, … }`)
+ * @param badge the `extraBadges` entry (`{ key, trueKey, falseKey, hintKeys, … }`). An
+ *   optional `hintKeys` map (code → i18n key) lets ONE window attach a table-specific
+ *   explanation to a code whose core meaning is generic across every table that carries
+ *   this domain (e.g. `D` means "no M_Transaction has a calculated cost yet" only on
+ *   goods-movements' M_Movement — see ETP-5436 — but means something structurally
+ *   different on DocFINPayment/DocInventory/DocGLJournal). Deliberately per-window, not a
+ *   new case added to the shared `POSTED_STATUS` table above: that table has no notion of
+ *   which AD table produced the code, so a hint added there would misinform every other
+ *   window that happens to hit the same code.
  * @param value raw value straight from the backend
  * @param ui    the `useUI()` translator
- * @returns `{ status, label, tone }`, or `null` when nothing should be rendered
+ * @returns `{ status, label, tone, hint }`, or `null` when nothing should be rendered.
+ *   `hint` is `undefined` unless the window declared a matching `hintKeys` entry.
  */
 export function resolveStatusPill(badge, value, ui) {
   const posted = resolvePostedStatus(badge.column ?? badge.key, value);
   if (posted) {
-    return { status: posted.rawLabel, label: postedStatusLabel(posted, ui), tone: posted.tone };
+    const hintKey = badge.hintKeys?.[posted.rawLabel];
+    return {
+      status: posted.rawLabel,
+      label: postedStatusLabel(posted, ui),
+      tone: posted.tone,
+      hint: hintKey ? ui(hintKey) : undefined,
+    };
   }
   const isTrue = value === true || value === 'Y' || value === 'true';
   const labelKey = isTrue ? badge.trueKey : badge.falseKey;
