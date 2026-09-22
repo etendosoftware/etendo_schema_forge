@@ -418,9 +418,57 @@ describe('report-journal-entries — rendered entry link output (ETP-5013)', () 
     }
   });
 
-  it('leaves the rest of the report intact (line rows still render)', () => {
-    assert.match(HTML, /<tr class="entry-line">/);
+  // ETP-5376 — every WINDOW_CASES entry is single-line (its own unique
+  // fact_acct_group_id), so it now renders FULLY merged into the entry-header
+  // row (entry no/date/detail + that line's own account/amount cells), like
+  // Classic does — no separate blank-header-then-line pair, and so no
+  // "entry-line" row at all for this fixture. See the multi-line regression
+  // guard below for the case where a second line DOES render as entry-line.
+  it('leaves the rest of the report intact (account/amount data on the merged header row)', () => {
+    assert.doesNotMatch(HTML, /<tr class="entry-line">/, 'every fixture entry is single-line — it must merge fully into entry-header, not leave a stray entry-line row');
     assert.match(HTML, /Clientes/);
+  });
+});
+
+// ── Part 4b: header/first-line merge (ETP-5376) ─────────────────────────────
+//
+// Classic never renders a standalone "header-only" row for an entry — the
+// document type sits on the SAME row as the entry's FIRST posting line
+// (entry no, date, document, account, name, debit, credit all together).
+// GO used to render a blank entry-header row (account/amount cells empty)
+// followed by a separate entry-line row repeating the first posting — that
+// wasted a full row and put "Detalle" out of step with Classic's layout.
+
+describe('report-journal-entries — header/first-line merge parity with Classic (ETP-5376)', () => {
+  const MULTI_ROWS = [
+    { dateacct: '2026-01-15', entry_no: 1, document_type: 'AR Invoice', doc_window: 'sales-invoice', doc_record_id: 'REC1', doc_query_key: null, doc_query_value: 'REC1', fact_acct_group_id: 'g1', account_no: '43000000', account_name: 'Clientes', amtacctdr: 101464.80, amtacctcr: 0 },
+    { dateacct: '2026-01-15', entry_no: 1, document_type: 'AR Invoice', doc_window: 'sales-invoice', doc_record_id: 'REC1', doc_query_key: null, doc_query_value: 'REC1', fact_acct_group_id: 'g1', account_no: '47700000', account_name: 'Hacienda Pública IVA repercutido', amtacctdr: 0, amtacctcr: 21064.80 },
+  ];
+  const html = renderReport(MULTI_ROWS);
+
+  it('merges the entry-header row with the FIRST posting line — its own account/amount cells are filled, not blank', () => {
+    const start = html.indexOf('<tr class="entry-header">');
+    const headerRow = html.slice(start, html.indexOf('</tr>', start));
+    assert.match(headerRow, /<td>43000000<\/td>/, 'the header row must carry the first line\'s account_no');
+    assert.match(headerRow, /Clientes/, 'the header row must carry the first line\'s account_name');
+    assert.match(headerRow, /101.464,80/, 'the header row must carry the first line\'s own amount');
+  });
+
+  it('renders exactly one entry-header row for a 2-line entry (not one header + one duplicate line for the first posting)', () => {
+    assert.equal((html.match(/<tr class="entry-header">/g) || []).length, 1);
+  });
+
+  it('still renders the SECOND (and later) posting lines as their own entry-line row, with blank entry-no/date/detail', () => {
+    const start = html.indexOf('<tr class="entry-line">');
+    assert.notEqual(start, -1, 'expected an entry-line row for the second posting');
+    const lineRow = html.slice(start, html.indexOf('</tr>', start));
+    assert.match(lineRow, /<td>47700000<\/td>/);
+    assert.match(lineRow, /Hacienda Pública IVA repercutido/);
+    assert.match(lineRow, /21.064,80/);
+    // The entry no/date/detail cells are blank on a continuation line — same
+    // 3 leading empty <td>s Classic's own layout leaves for every line after
+    // the first in an entry.
+    assert.match(lineRow, /^<tr class="entry-line">\s*<td><\/td>\s*<td><\/td>\s*<td><\/td>/);
   });
 });
 

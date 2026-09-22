@@ -815,8 +815,10 @@ public NeoResponse handle(NeoContext ctx) {
 > completion-intercepting call must come after them. Short-circuiting `handle()` early returns
 > straight to the caller, so any side-effecting step queued after it silently never runs. This exact
 > ordering bug was caught in ETP-4388's review cycle — `completeInvoiceIfNeeded` must be called after
-> `validateLineQtyBeforeComplete` and after `applyTotalDiscountBeforeComplete` in both
-> `SalesInvoiceHeaderHandler` and `PurchaseInvoiceHeaderHandler`.
+> `applyTotalDiscountBeforeComplete` in both `SalesInvoiceHeaderHandler` and
+> `PurchaseInvoiceHeaderHandler`. (The rule originally also named a second predecessor,
+> `validateLineQtyBeforeComplete`; that guard was removed in ETP-5381 — see
+> `docs/generated-custom-windows/sales-invoice.md`.)
 
 Real implementations: `GlJournalHeaderHandler#completeJournal` (ETP-4244),
 `AbstractInvoiceHeaderHandler#completeInvoiceIfNeeded` (ETP-4388, shared by

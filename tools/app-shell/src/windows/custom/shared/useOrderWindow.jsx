@@ -237,7 +237,9 @@ export function useOrderWindow({
       title={confirmedTitle || ui(confirmedTitleKey)}
       docs={[
         confirmedDocs?.[primaryDoc.key]?.id && { type: primaryDoc.type, num: confirmedDocs[primaryDoc.key].documentNo, amount: confirmedDocs[primaryDoc.key].amount, route: `/${primaryDoc.route}/${confirmedDocs[primaryDoc.key].id}` },
-        confirmedDocs?.[invoiceDoc.key]?.id && { type: invoiceDoc.type, num: confirmedDocs[invoiceDoc.key].documentNo, amount: confirmedDocs[invoiceDoc.key].amount, route: `/${invoiceDoc.route}/${confirmedDocs[invoiceDoc.key].id}` },
+        // ETP-5381: documentStatus on the invoice entry only — the primary doc (shipment or
+        // receipt) is still created as a draft, so it must keep the default Borrador badge.
+        confirmedDocs?.[invoiceDoc.key]?.id && { type: invoiceDoc.type, num: confirmedDocs[invoiceDoc.key].documentNo, amount: confirmedDocs[invoiceDoc.key].amount, documentStatus: confirmedDocs[invoiceDoc.key].documentStatus, route: `/${invoiceDoc.route}/${confirmedDocs[invoiceDoc.key].id}` },
       ].filter(Boolean)}
       currency={(confirmRow || manageRow)?.['currency$_identifier'] || ''}
       navigate={navigate}

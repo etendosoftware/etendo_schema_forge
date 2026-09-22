@@ -208,8 +208,11 @@ test('keeps invalid rows out of the batch and allows valid rows to continue', as
   });
 
   // ETP-4954: the mapping modal is now field-first — the count is FIELDS with a source out
-  // of all importable fields (8 for Product), not columns mapped out of columns present.
-  await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('4/8');
+  // of all importable fields, not columns mapped out of columns present. ETP-5350 took
+  // Product from 8 to 10 by adding `cost` and `costStartingDate` to
+  // `artifacts/product/decisions.json` → `window.import.fields`, so the denominator tracks
+  // that list: add a field there and this number moves.
+  await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('4/10');
 
   // The two invalid rows fail at DIFFERENT stages, and ETP-4996 is what moved the first one.
   // BAD-PRICE-4905 is caught during REVIEW: `isNumeric` on the price column makes validateRow

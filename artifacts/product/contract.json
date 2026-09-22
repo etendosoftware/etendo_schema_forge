@@ -1,8 +1,8 @@
 {
   "version": "0.12.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-09-15T16:30:42.198Z",
-  "checksum": "f8449fb0215dd691",
+  "updatedAt": "2026-09-20T21:04:03.898Z",
+  "checksum": "0304819bc3c591e7",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -143,6 +143,7 @@
             "label": "Name",
             "required": true,
             "example": "Tornillo hexagonal M8",
+            "exampleKey": "importExampleProductName",
             "column": "Name",
             "type": "string"
           },
@@ -150,9 +151,11 @@
             "target": "description",
             "aliases": [
               "descripcion",
-              "descripción"
+              "descripción",
+              "description"
             ],
             "example": "Tornillería inoxidable",
+            "exampleKey": "importExampleProductDescription",
             "label": "Description",
             "column": "Description",
             "required": false,
@@ -167,6 +170,7 @@
             "label": "Product Type",
             "required": false,
             "example": "Item",
+            "exampleKey": "importExampleProductType",
             "column": "ProductType",
             "type": "enum"
           },
@@ -182,6 +186,7 @@
             "matchEntity": "UOM",
             "required": false,
             "example": "Unidad",
+            "exampleKey": "importExampleProductUom",
             "column": "C_UOM_ID",
             "type": "foreignKey",
             "reference": "UOM"
@@ -199,6 +204,7 @@
             "label": "Sales Price",
             "isNumeric": true,
             "example": "12,50",
+            "exampleKey": "importExampleProductSalesPrice",
             "labelKey": "importHeaderSalesPrice"
           },
           {
@@ -207,14 +213,49 @@
             "target": "purchasePrice",
             "aliases": [
               "precio de compra",
-              "precio compra",
-              "coste",
-              "costo"
+              "precio compra"
             ],
             "label": "Purchase Price",
             "isNumeric": true,
             "example": "8,20",
+            "exampleKey": "importExampleProductPurchasePrice",
             "labelKey": "importHeaderPurchasePrice"
+          },
+          {
+            "target": "cost",
+            "aliases": [
+              "costo",
+              "coste",
+              "coste estandar",
+              "coste estándar",
+              "costo estandar",
+              "costo estándar",
+              "standard cost"
+            ],
+            "label": "Cost",
+            "required": false,
+            "isNumeric": true,
+            "example": "7,40",
+            "exampleKey": "importExampleProductCost",
+            "labelKey": "importHeaderCost",
+            "column": "Cost",
+            "type": "string"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "costStartingDate",
+            "aliases": [
+              "fecha de inicio",
+              "fecha inicio",
+              "vigente desde",
+              "fecha de inicio del coste",
+              "starting date"
+            ],
+            "label": "Cost Starting Date",
+            "example": "01/01/2026",
+            "exampleKey": "importExampleProductCostStartingDate",
+            "labelKey": "importHeaderCostStartingDate"
           },
           {
             "required": false,
@@ -230,6 +271,7 @@
             ],
             "label": "Category",
             "example": "Herramientas",
+            "exampleKey": "importExampleProductCategory",
             "column": "M_Product_Category_ID"
           }
         ]
@@ -2574,6 +2616,7 @@
             "label": "Name",
             "required": true,
             "example": "Tornillo hexagonal M8",
+            "exampleKey": "importExampleProductName",
             "column": "Name",
             "type": "string"
           },
@@ -2581,9 +2624,11 @@
             "target": "description",
             "aliases": [
               "descripcion",
-              "descripción"
+              "descripción",
+              "description"
             ],
             "example": "Tornillería inoxidable",
+            "exampleKey": "importExampleProductDescription",
             "label": "Description",
             "column": "Description",
             "required": false,
@@ -2598,6 +2643,7 @@
             "label": "Product Type",
             "required": false,
             "example": "Item",
+            "exampleKey": "importExampleProductType",
             "column": "ProductType",
             "type": "enum"
           },
@@ -2613,6 +2659,7 @@
             "matchEntity": "UOM",
             "required": false,
             "example": "Unidad",
+            "exampleKey": "importExampleProductUom",
             "column": "C_UOM_ID",
             "type": "foreignKey",
             "reference": "UOM"
@@ -2630,6 +2677,7 @@
             "label": "Sales Price",
             "isNumeric": true,
             "example": "12,50",
+            "exampleKey": "importExampleProductSalesPrice",
             "labelKey": "importHeaderSalesPrice"
           },
           {
@@ -2638,14 +2686,49 @@
             "target": "purchasePrice",
             "aliases": [
               "precio de compra",
-              "precio compra",
-              "coste",
-              "costo"
+              "precio compra"
             ],
             "label": "Purchase Price",
             "isNumeric": true,
             "example": "8,20",
+            "exampleKey": "importExampleProductPurchasePrice",
             "labelKey": "importHeaderPurchasePrice"
+          },
+          {
+            "target": "cost",
+            "aliases": [
+              "costo",
+              "coste",
+              "coste estandar",
+              "coste estándar",
+              "costo estandar",
+              "costo estándar",
+              "standard cost"
+            ],
+            "label": "Cost",
+            "required": false,
+            "isNumeric": true,
+            "example": "7,40",
+            "exampleKey": "importExampleProductCost",
+            "labelKey": "importHeaderCost",
+            "column": "Cost",
+            "type": "string"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "costStartingDate",
+            "aliases": [
+              "fecha de inicio",
+              "fecha inicio",
+              "vigente desde",
+              "fecha de inicio del coste",
+              "starting date"
+            ],
+            "label": "Cost Starting Date",
+            "example": "01/01/2026",
+            "exampleKey": "importExampleProductCostStartingDate",
+            "labelKey": "importHeaderCostStartingDate"
           },
           {
             "required": false,
@@ -2661,6 +2744,7 @@
             ],
             "label": "Category",
             "example": "Herramientas",
+            "exampleKey": "importExampleProductCategory",
             "column": "M_Product_Category_ID"
           }
         ]

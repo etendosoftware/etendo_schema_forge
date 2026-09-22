@@ -465,12 +465,50 @@ time, exactly like Contacts does for `country`.
 `standardPrice`/`listPrice`/`priceLimit` against the sales price list version only — a
 purchase price could not be imported at all. `price` is replaced by `salesPrice`
 (aliases `precio de venta`, `precio venta`, `precio`, `pvp`) and `purchasePrice`
-(`precio de compra`, `precio compra`, `coste`, `costo`); each produces its own
+(`precio de compra`, `precio compra`; ⚠️ **`coste`/`costo` moved to the new `cost` column in
+ETP-5350** — see below); each produces its own
 `parentRef`-linked `price` op (ids `salesPrice` / `purchasePrice`) against its own price list
 version, resolved once per run and cached per direction. An **unflagged** price list version
 still counts as a sales list (a human sees those in the Sales tab) but is never assumed to be
 a purchase one — a purchase price requires an explicitly purchase-flagged version, or the row
 fails rather than silently filing the cost against a sales list.
+
+**Standard cost and its starting date (ETP-5350).** The import writes `M_Costing` as well:
+`cost` (aliases `costo`, `coste`, `coste estandar`/`costo estandar` with and without the accent,
+`standard cost`) and `costStartingDate` (`fecha de inicio`, `fecha inicio`, `vigente desde`,
+`fecha de inicio del coste`, `starting date`). Together they produce one `parentRef`-linked op on
+the **`costing`** entity, which `decisions.json` wires to `productCostingHandler` — so an imported
+cost takes exactly the path the Costing tab takes, because `/batch` runs handler hooks for any
+entity declaring a `Java_Qualifier`.
+
+⚠️ **`coste`/`costo` no longer mean purchase price.** They were `purchasePrice` aliases until
+ETP-5350. A hand-made CSV with a single "Costo" column now writes a standard cost instead of a
+purchase price, silently — the value does not fail, it lands in a different table. Downloaded
+templates are unaffected (that header has always been "Precio de compra"), and a file carrying
+both columns already mapped correctly either way, since `mapColumns` claims the first *unclaimed*
+field.
+
+Four rules this import depends on, each of which has a test:
+
+- The op body carries **only** `cost` and `startingDate`. `costType='STA'`, `manual`/`permanent`/
+  `production`, the organisation and **its** currency (not the AD default, which is USD), and
+  `endingDate` (`CostingUtils.getLastDate()` → 31-12-9999) all come from the handler. Sending
+  `endingDate` **at all, even empty, stops that inference from running.**
+- A blank cost emits **no op**. `/batch` is all-or-nothing per row and the handler rejects a blank
+  cost, so one empty cell would lose the whole product rather than just its cost.
+- A starting date with **no** cost fails the row during review. A date alone cannot create an
+  `M_Costing` row, so it would otherwise be dropped in silence.
+- A blank date defaults to `todayCalendarISO()` — the local calendar day. Never
+  `new Date().toISOString().slice(0, 10)`, which is UTC and backdates the cost for most of the
+  evening under `America/Argentina/…`. It is also NOT taken from `/defaults`, which prefills the
+  field with the *product's creation date*: identical during an import, divergent the moment this
+  runs against existing products.
+
+The date cell is parsed by `@/lib/importDateCell.js` (`dd/MM/yyyy`, `dd-MM-yyyy`, `dd.MM.yyyy`,
+ISO — day-first for every separated form, in every locale), promoted there from the bank-statement
+import rather than copied. `31/02/2026` fails its row; `-5` fails as a negative cost before the
+handler can 400 on it. Neither column is read back from the list — the product list row exposes no
+cost — so an exported template leaves both blank.
 
 **Category columns 3 → 1.** `categoryCode`/`categoryName`/`category` collapse into `category`;
 the cell is probed against existing category codes first and treated as a name otherwise
@@ -1163,3 +1201,128 @@ Same symptom, different cause. This one: any window, above ~72 rows, a well-form
 too long → 400. ETP-5371: First Steps only, at any row count, a malformed URL
 (`/etendo/product` instead of `/etendo/sws/neo/product/product`) → 404. Both landed in the same
 `catch` that returned an empty Set, which is why they looked identical from the screen.
+
+## ETP-5349 — Download errors produced a file the screen disagreed with
+
+Engine-level work in the shared `ImportReviewQueue`, so every window with an import gets it —
+Contacts, Product, and the bank-statement import, which has its own Omitir button and carried the
+same defect (`financial-account.md` → *ETP-5349*).
+
+Skip two rows with the Omitir icon, open the **Errores** tab, see them listed, click **Descargar
+errores**: the file came out with its header line and nothing else. Skip every row and the file
+was empty. Nothing said so — the screen and the file simply disagreed.
+
+### Root cause: the question was asked in three places
+
+"Is this row under the Errores tag?" was written out three times, and the CSV's copy was the odd
+one out:
+
+| | |
+| --- | --- |
+| The tab filter | `entry.status === 'skipped' \|\| entry.errors.length > 0` |
+| The tab's count badge | the same |
+| `buildErrorsCsv` | `if (entry.errors.length === 0) continue;` |
+
+Skipping records no error — `handleSkipEntry` only sets `status: 'skipped'` — so the row passed
+the first two tests and failed the third.
+
+There is now one exported `needsAttention(entry)` and all three call it. Exported on purpose: a
+caller rendering its own queue asks the same question rather than writing a fourth copy.
+
+### The reason column
+
+A hand-skipped row is the only kind that has no reason of its own to print. Every other skip
+records one as an error at skip time — an in-file duplicate, a record that already exists — and
+the file repeats it unchanged. So `buildErrorsCsv` takes a fifth argument, the text for that one
+case, defaulting to English and supplied localized by both call sites
+(`importSkippedByUser`).
+
+That also fixed a second, unreported defect in the bank-statement import: it called
+`buildErrorsCsv` with no captions at all, so its reason column was headed `Error` in English
+regardless of session language. It now passes both.
+
+### The other half of the ticket was already fixed
+
+The ticket also reports that manual mapping lets two CSV columns target the same field, silently
+discarding one. **Not reproducible.** `6cfe5bef1` (ETP-4954) inverted the mapping editor to be
+field-first: each field has exactly one select, which chooses a column, so a field cannot have two
+sources by construction. Columns already claimed by another field are rendered `disabled` and
+labelled with the field holding them, and `ImportColumnMapping.test.jsx` already covers it —
+including *"blocks pointing two different fields at the same column"*.
+
+The ticket's code reference (`MappingGrid` renders `importFields.map(...)` as the select's
+options) describes the pre-ETP-4954 shape. The reverse direction — two FIELDS fed by one column —
+is still allowed, and deliberately so: that is one column and two fields, not a collision.
+
+## ETP-5350 — Three i18n leftovers in the import flow
+
+ETP-5223 translated the engine's error messages, the review grid's headers and the mapping
+editor's captions. These three lived elsewhere and were missed. All of them are engine-level, so
+Contacts gets them too (`contacts.md` → *ETP-5350*).
+
+### 1. The unresolved-foreign-key popover was English
+
+Four strings were written inline in `FkMismatchCell` — the search placeholder, `Use "{value}"`,
+`Searching…` and the empty-list message. It is exactly where a user lands to fix the row that
+failed, so it was the worst place left. They are labels now, resolved from the session locale.
+
+One translation note: **es_AR is voseo** across this app (`Guardá`, `Confirmá`, `Abrilo`). Only
+one of the four is imperative and it is the only one that differs between the two Spanish
+locales — *Escribe un valor arriba* (es_ES) vs *Escribí un valor arriba* (es_AR). Its own test
+pins that, so nobody copies one over the other.
+
+### 2. Recognition was asymmetric between languages — in two columns, not one
+
+The reported symptom: a Spanish session accepted a row whose unit said `Unit`, an English session
+refused the same file written as `Unidad`. A CSV was not portable between two users of the same
+client, which is the thing a shared import file most needs to be.
+
+The mechanism, from `simSearch.js`'s own comment plus the dictionary data: **the endpoint
+translates the search term out of the session language before matching it against the base rows,
+and the base rows are English.**
+
+| | base row | translations present |
+| --- | --- | --- |
+| `C_UOM` | `Unit` | es_ES only |
+| `C_COUNTRY` | `Spain` | es_ES only (243 rows) |
+
+So an English term matches the base row directly in any session and always worked; a Spanish term
+only worked when the session was Spanish and the translation step could rewrite it. The rule was
+never "the session language" — it was "English, plus the session language".
+
+`simSearchEveryLanguage` asks once per installed AD language (`IMPORT_MATCH_LANGUAGES`) and keeps
+each record's best score. Cost is one extra request per COLUMN — these calls are already batched
+across every row — and it is skipped when there is only one language to ask.
+
+Candidates merge on `id` rather than concatenating, and that is not a detail: the same record
+comes back from both languages, and a duplicate would become its own runner-up, collapsing the gap
+`classifyCandidates` requires and turning a clean match into "needs review". The merged entry also
+mirrors its best candidate, because callers read `result.id`/`result.name` directly.
+
+**`country` on Contacts had the identical defect and is not in the ticket.** Same table shape,
+same asymmetry, fixed by the same change.
+
+Worth recording, because it is the pattern the codebase had already chosen elsewhere: the CODED
+columns were never asymmetric. `PRODUCT_TYPE_VALUES`, `IS_PERSON_VALUES` and `TAX_ID_KEY_VALUES`
+are bilingual alias lists in the descriptor (`I: ['Articulo', 'Item', 'Producto', 'Bien']`), and
+`normalizeCodedInput` strips diacritics, so `Artículo` matches `Articulo`. Only the two columns
+that resolve against live AD data could drift.
+
+### 3. The template mixed languages
+
+Headers followed the session; the sample row under them did not. `decisions.json` now declares an
+`exampleKey` per field and `ImportDialog` resolves it through the dialog's own translator, falling
+back to `example`. The generator needed no change — `window.import.fields` is spread through, so
+the new key reached the contract for free.
+
+Which fields carry a key is a decision, and the locale test pins it rather than leaving it to
+memory:
+
+| | |
+| --- | --- |
+| **Keyed** (7 product, 6 contacts) | prose, coded and foreign-key values, and the prices — the decimal separator is part of the language, and an English template carrying `12,50` reads as twelve thousand fifty |
+| **Unkeyed, on purpose** | codes, emails, phones, the NIF, the postcode — identical in every language; person names (María, García, Lucía, Fernández) — proper nouns, translating them adds nothing; **city and region (Sevilla)** — matched against real AD records, so an English spelling would name a place the database does not have |
+
+The keyed coded/FK values are the point where parts 2 and 3 meet: an English template writes
+`Unit`, `Item` and `Spain`, and part 2 is what makes those resolve for a Spanish user who receives
+that file.

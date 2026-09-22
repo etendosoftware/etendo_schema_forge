@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { extractBackendMessageKeys } from '@/lib/backendErrors.js';
 /**
  * useNeoAction — invokes a generic NEO action endpoint (ETP-4298).
  *
@@ -15,7 +16,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  * (defaults to 'header' — the document header entity).
  *
  * Unlike useDocumentAction (which throws on error), this hook resolves to a
- * structured `{ success, message }` result so the RowQuickActions consumer can
+ * structured `{ success, message, messageKeys }` result so the RowQuickActions consumer can
  * forward it to `onMenuActionExecuted(action, result)` without try/catch.
  *
  * @param {object}  opts
@@ -23,7 +24,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  * @param {string} [opts.entityName='header'] - entity segment of the action URL
  * @param {string}  opts.apiBaseUrl - base URL already scoped to the spec
  * @param {string}  opts.token      - bearer token
- * @returns {{ execute: (recordId: string, actionName: string) => Promise<{success: boolean, message?: string}>, loading: boolean }}
+ * @returns {{ execute: (recordId: string, actionName: string) => Promise<{success: boolean, message?: string, messageKeys?: string[]}>, loading: boolean }}
  */
 export function useNeoAction({ specName: _specName, entityName = 'header', apiBaseUrl, token } = {}) {
   const [loading, setLoading] = useState(false);
@@ -47,7 +48,10 @@ export function useNeoAction({ specName: _specName, entityName = 'header', apiBa
       // HTTP reason phrase (e.g. "Unprocessable Entity" for a 422) (ETP-4706).
       const message = nested?.message ?? body?.response?.message ?? body?.error?.message ?? body?.message;
       if (!res.ok) {
-        return { success: false, message: message || res.statusText };
+        // ETP-5316 — `messageKeys` rides alongside `message` so the consumer's
+        // `translateBackendError(result.message, ui, { messageKeys: result.messageKeys })` can map
+        // by AD_MESSAGE key. Absent (undefined) against a backend that does not send it.
+        return { success: false, message: message || res.statusText, messageKeys: extractBackendMessageKeys(body) };
       }
       const success = nested?.success ?? body?.success ?? true;
       return { success, message };
