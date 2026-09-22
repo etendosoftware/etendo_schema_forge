@@ -54,7 +54,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   buildPostActions, postRowFilter, buildUnpostActions, unpostRowFilter, buildInOutActions,
 } from '@/components/contract-ui/BulkDocumentAction';
-import { buildPostMenuActions } from '../../shared/buildDocumentRowQuickActions.js';
 import GoodsMovementsWindow from '../index.jsx';
 
 const DEFAULT_PROPS = { token: 'tok', apiBaseUrl: '/api', windowName: 'goods-movements' };
@@ -114,11 +113,27 @@ describe('GoodsMovementsWindow', () => {
     expect(bulkDocumentActionCalls.map((p) => p.labelKey)).not.toContain('process');
   });
 
-  it('passes rowQuickActions with enabled:true and the buildDocumentRowQuickActionsPostMenu spread', () => {
+  // ETP-5436: the row kebab previously went empty (no "More" button at all —
+  // RowQuickActions only renders it when visibleMenuActions.length > 0) on an
+  // already-posted row, because buildPostMenuActions only ever returns "post" unless
+  // the caller opts into the ETP-5378 includeUnpost knob. This window passes
+  // includeUnpost: true so the list kebab is symmetric with the detail kebab (which
+  // already offers both via decisions.json's menuActions).
+  it('passes rowQuickActions with enabled:true, includeUnpost wired, and a function onMenuActionExecuted', () => {
     render(<GoodsMovementsWindow {...DEFAULT_PROPS} />);
-    expect(lastGeneratedAppProps.rowQuickActions.enabled).toBe(true);
-    expect(lastGeneratedAppProps.rowQuickActions.menuActions).toBe(buildPostMenuActions);
-    expect(typeof lastGeneratedAppProps.rowQuickActions.onMenuActionExecuted).toBe('function');
+    const { rowQuickActions } = lastGeneratedAppProps;
+    expect(rowQuickActions.enabled).toBe(true);
+    expect(typeof rowQuickActions.menuActions).toBe('function');
+    expect(typeof rowQuickActions.onMenuActionExecuted).toBe('function');
+
+    // Behavioral proof of includeUnpost:true — a posted, processed row gets "unpost",
+    // not an empty array (which is what an unposted-Unpost window would return).
+    expect(rowQuickActions.menuActions({ row: { processed: true, posted: false } }))
+      .toEqual([{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }]);
+    expect(rowQuickActions.menuActions({ row: { processed: true, posted: true } }))
+      .toEqual([{
+        key: 'unpost', labelKey: 'unpost', neoAction: 'unpost', successKey: 'documentUnposted', destructive: true,
+      }]);
   });
 
   it('bumps refreshTrigger when onMenuActionExecuted runs for a neoAction', () => {

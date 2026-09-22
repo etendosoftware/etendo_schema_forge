@@ -42,9 +42,17 @@ export default function GoodsMovementsWindow(props) {
   const ui = useUI();
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // ETP-5436 — includeUnpost:true (ETP-5378 knob, off by default so goods-receipt/
+  // goods-shipment are unaffected): this window's own detail kebab already offers both
+  // post and unpost (decisions.json's menuActions), so the row kebab should be
+  // symmetric with it — previously it went empty (no "More" button at all —
+  // RowQuickActions only renders it when there's at least one visible menu action) on
+  // an already-posted row, since buildPostMenuActions only ever returned "post".
   const rowQuickActions = useMemo(() => ({
     enabled: true,
-    ...buildDocumentRowQuickActionsPostMenu({ ui, onRefresh: () => setRefreshKey((k) => k + 1) }),
+    ...buildDocumentRowQuickActionsPostMenu({
+      ui, onRefresh: () => setRefreshKey((k) => k + 1), includeUnpost: true,
+    }),
   }), [ui]);
 
   return (
