@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
+import { openAccountRowMenu } from '../helpers/financial-account-helpers.js';
 
 /**
  * Financial Accounts list (Cuentas) — landing smoke (mocked).
@@ -430,8 +431,7 @@ test.describe('Financial Accounts list — Cuentas', () => {
   test('the row kebab opens on a zero-pending ("Conciliado") row and on an archived row', async ({ page }) => {
     const zeroPendingRow = page.getByTestId('row-acc-4');
     await expect(zeroPendingRow).toBeVisible();
-    await zeroPendingRow.hover();
-    await zeroPendingRow.getByTestId('account-row-menu-trigger-acc-4').click();
+    await openAccountRowMenu(page, 'acc-4');
     await expect(page.getByTestId('account-row-menu-archive-acc-4')).toBeVisible();
     await page.keyboard.press('Escape');
 
@@ -441,8 +441,7 @@ test.describe('Financial Accounts list — Cuentas', () => {
 
     const archivedRow = page.getByTestId('row-acc-5');
     await expect(archivedRow).toBeVisible();
-    await archivedRow.hover();
-    await archivedRow.getByTestId('account-row-menu-trigger-acc-5').click();
+    await openAccountRowMenu(page, 'acc-5');
     await expect(page.getByTestId('account-row-menu-unarchive-acc-5')).toBeVisible();
   });
 
@@ -487,8 +486,7 @@ test.describe('Financial Accounts list — Cuentas', () => {
     await expect(row.getByTestId('row-quick-action-delete')).toHaveCount(0);
 
     // The kebab is reachable by a normal click and opens its menu.
-    await row.hover();
-    await row.getByTestId('account-row-menu-trigger-acc-1').click();
+    await openAccountRowMenu(page, 'acc-1');
     await expect(page.getByTestId('account-row-menu-open-acc-1')).toBeVisible();
     await expect(page.getByTestId('account-row-menu-archive-acc-1')).toBeVisible();
   });

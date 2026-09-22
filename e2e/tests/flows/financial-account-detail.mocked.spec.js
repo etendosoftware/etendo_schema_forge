@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
+import { openAccountRowMenu } from '../helpers/financial-account-helpers.js';
 
 /**
  * Financial Account detail view — smoke (mocked).
@@ -356,8 +357,7 @@ test.describe('Financial Account Detail (T6) — mocked', () => {
 
     const row = page.getByTestId(`row-${ACCOUNT_ID}`);
     await expect(row).toBeVisible();
-    await row.hover();
-    await row.getByTestId(`account-row-menu-trigger-${ACCOUNT_ID}`).click();
+    await openAccountRowMenu(page, ACCOUNT_ID);
     await page.getByTestId(`account-row-menu-open-${ACCOUNT_ID}`).click();
 
     await expect(page).toHaveURL(new RegExp(`/financial-account/${ACCOUNT_ID}$`));
