@@ -2094,6 +2094,13 @@ export function useEntity(entity, childEntity, {
             // The refresh itself stays where ETP-5005 put it (after the optimistic
             // append, with `silent: true`) — do not re-add an eager fetch here.
             invalidateChildrenCache(selected.id);
+            // ETP-5366: a line/child add can change data the PARENT list row displays
+            // (a computed header total, a rolled-up count) even though nothing here
+            // touched the parent record directly. Mark the parent entity's own list
+            // cache stale too — same shape as handleSave/handleDelete/handleProcessSuccess
+            // below — so navigating back to the grid re-fetches instead of serving the
+            // pre-mutation cached page for up to `recordStaleTime`.
+            invalidateEntityCache();
             const savedLine = normalizeRecord(data?.response?.data?.[0] ?? data, childEntity);
             // ETP-5005 — show the persisted line IMMEDIATELY, then reconcile in the background.
             //
@@ -2141,7 +2148,7 @@ export function useEntity(entity, childEntity, {
             toast.error(msg);
             return null;
         }
-    }, [childEntity, apiBaseUrl, token, selected, fetchChildren, ui, invalidateChildrenCache, refreshHeaderTotals, applyExemptionCauseSignals, apiFetch]);
+    }, [childEntity, apiBaseUrl, token, selected, fetchChildren, ui, invalidateChildrenCache, invalidateEntityCache, refreshHeaderTotals, applyExemptionCauseSignals, apiFetch]);
 
     const handleUpdateChild = useCallback((childId, fieldOrObject, value, signalSource) => {
         setChildren(prev => prev.map(c => {
@@ -2159,8 +2166,12 @@ export function useEntity(entity, childEntity, {
         // object-only behaviour so unrelated single-field (string) updates don't reset the flag.
         if (signalSource) applyExemptionCauseSignals(signalSource);
         else if (typeof fieldOrObject === 'object') applyExemptionCauseSignals(fieldOrObject);
-        if (selected?.id) { invalidateChildrenCache(selected.id); refreshHeaderTotals(selected.id); }
-    }, [selected, refreshHeaderTotals, applyExemptionCauseSignals, invalidateChildrenCache]);
+        // ETP-5366: also invalidate the parent entity's own list cache — a line edit
+        // (e.g. quantity) can change a value the parent list row displays (a computed
+        // header total), so the grid must not keep serving the pre-edit cached page
+        // once the user navigates back to it. See handleAddChild's identical rationale.
+        if (selected?.id) { invalidateChildrenCache(selected.id); invalidateEntityCache(); refreshHeaderTotals(selected.id); }
+    }, [selected, refreshHeaderTotals, applyExemptionCauseSignals, invalidateChildrenCache, invalidateEntityCache]);
 
     const handleDeleteChild = useCallback((childId) => {
         setChildren(prev => prev.filter(c => String(c.id) !== String(childId)));
@@ -2177,8 +2188,10 @@ export function useEntity(entity, childEntity, {
         // when the header GET returns), not overwritten by it.
         applyExemptionCauseSignals({});
         // Refresh header to update totals after line deletion
-        if (selected?.id) { invalidateChildrenCache(selected.id); refreshHeaderTotals(selected.id); }
-    }, [selected, refreshHeaderTotals, applyExemptionCauseSignals, invalidateChildrenCache]);
+        // ETP-5366: also invalidate the parent entity's own list cache — see
+        // handleUpdateChild's identical rationale above.
+        if (selected?.id) { invalidateChildrenCache(selected.id); invalidateEntityCache(); refreshHeaderTotals(selected.id); }
+    }, [selected, refreshHeaderTotals, applyExemptionCauseSignals, invalidateChildrenCache, invalidateEntityCache]);
 
     /**
      * ETP-5073 follow-up: refresh ONLY the remembered `updated` token of a record, without
