@@ -134,7 +134,7 @@ function parseCurrency(text) {
 
 /** With Depreciar ON, the "Resumen de amortización" sidebar mirrors the live
  *  editing state: Valor del activo / Valor residual in the form must equal
- *  Valor actual / Valor residual del activo in the sidebar. Run after each
+ *  Valor actual / Pendiente de Amortizar in the sidebar. Run after each
  *  financial-field change and after creating the amortization. */
 async function verifySidebarSync(page) {
   // Scope to the sidebar's card container (no testids in the app): the
@@ -155,7 +155,10 @@ async function verifySidebarSync(page) {
   const formAsset = parseCurrency(await page.getByTestId('field-assetValue').inputValue());
   expect(parseCurrency(await sidebarValue('Valor actual'))).toBeCloseTo(formAsset, 2);
   const formResidual = parseCurrency(await page.getByTestId('field-residualAssetValue').inputValue());
-  expect(parseCurrency(await sidebarValue('Valor residual del activo'))).toBeCloseTo(formResidual, 2);
+  // ETP-5414 renamed the sidebar card's label from "Valor residual del activo" to
+  // "Pendiente de Amortizar" (AssetsSidebar.jsx) without updating this assertion — the
+  // form field's own label (asserted via testid above, never by text) is untouched.
+  expect(parseCurrency(await sidebarValue('Pendiente de Amortizar'))).toBeCloseTo(formResidual, 2);
 }
 
 /** Set a field's value and retry until the form is actually dirty (save enabled).

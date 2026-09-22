@@ -237,11 +237,21 @@ describe('GoodsShipmentWindow', () => {
       expect(actions).toEqual([{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }]);
     });
 
-    it('does not offer the post menu action for an already-posted row', () => {
+    // ETP-5378 — used to expect [], which is exactly the defect: with Post as the
+    // kebab's only entry, a posted row lost the kebab altogether, even though this
+    // window's decisions.json has always declared `unpost` for the form view.
+    it('offers Unpost instead of Post for an already-posted row', () => {
       render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
 
       const actions = lastPageProps.rowQuickActions.menuActions({ row: { processed: 'Y', posted: 'Y' } });
-      expect(actions).toEqual([]);
+      expect(actions).toEqual([{ key: 'unpost', labelKey: 'unpost', neoAction: 'unpost', successKey: 'documentUnposted', destructive: true }]);
+    });
+
+    it('offers nothing on a draft row, so the kebab does not render', () => {
+      render(<GoodsShipmentWindow windowName="goods-shipment" apiBaseUrl="/api" token="tkn" />);
+
+      expect(lastPageProps.rowQuickActions.menuActions({ row: { processed: 'N', posted: 'N' } })).toEqual([]);
+      expect(lastPageProps.rowQuickActions.menuActions({ row: { processed: 'N', posted: 'Y' } })).toEqual([]);
     });
 
     it('bumps refreshKey when a neoAction menu action (post) completes', () => {

@@ -163,7 +163,7 @@ export function useQuickSalesData(apiBaseUrl) {
   useEffect(() => {
     let cancelled = false;
 
-    if (!token || !soPath) {
+    if (!soPath) {
       setError('No API connection — authentication required');
       setLoading(false);
       return;

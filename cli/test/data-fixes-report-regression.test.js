@@ -118,6 +118,13 @@ const FIXES_WITH_REPORT = new Set([
   // dev fleet: 94 applied, 461 rows, 0 left off target.
   // See cli/test/data-fixes-r38-document-sequence-series-prefixes.test.js.
   '20260919T120000Z__R38-document-sequence-series-prefixes',
+  // R39 (gap C3) opens every C_PeriodControl row of a period whose aggregate status is
+  // Mixed, but deliberately never touches a Permanently Closed row and respects the same
+  // future-Permanently-Closed-period guard AD Process 167 itself enforces. Its @report
+  // lists every row still 'N'/'C' in a still-Mixed period after @apply, with the reason
+  // (blocked by a sibling 'P' row vs. blocked by the future-period guard) — same
+  // "flag, don't guess" pattern as R19.
+  '20260921T120000Z__R39-mixed-period-open',
 ]);
 
 async function loadCatalogFiles() {

@@ -99,14 +99,14 @@ describe('FmListPage — non-draft "Resultado" auto-compute (ETP-4755)', () => {
     const block = src.match(/useFiscalAutoCompute\(otherDecls303,\s*\{[\s\S]*?\}\);/);
     assert.ok(block, 'otherDecls303 useFiscalAutoCompute call must exist');
     assert.doesNotMatch(block[0], /checkModifiedFn/);
-    assert.match(block[0], /enabled:\s*Boolean\(token && apiBaseUrl\)/);
+    assert.match(block[0], /enabled:\s*Boolean\(apiBaseUrl\)/);
   });
 
   it('the otherDecls349 hook call has no checkModifiedFn (one-time compute, no polling)', () => {
     const block = src.match(/useFiscalAutoCompute\(otherDecls349,\s*\{[\s\S]*?\}\);/);
     assert.ok(block, 'otherDecls349 useFiscalAutoCompute call must exist');
     assert.doesNotMatch(block[0], /checkModifiedFn/);
-    assert.match(block[0], /enabled:\s*Boolean\(token && apiBaseUrl\)/);
+    assert.match(block[0], /enabled:\s*Boolean\(apiBaseUrl\)/);
   });
 
   it('the draft hooks still carry a checkModifiedFn (polling stays enabled for drafts)', () => {
