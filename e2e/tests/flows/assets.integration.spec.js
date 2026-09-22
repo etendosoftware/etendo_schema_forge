@@ -205,6 +205,18 @@ async function applyNameAndCategoryFilter(page, name) {
   const panel = page.getByRole('dialog');
   await expect(panel).toBeVisible();
 
+  // The panel is not guaranteed to be blank: a persisted filter (localStorage,
+  // scoped per window) can survive a fresh `/assets` reload and repopulate the
+  // dialog with whatever was applied earlier in the same test (e.g. by
+  // `findByNameAndCategory` before this helper runs a second time from
+  // `verifyAssetNotInList`). "Limpiar" resets the draft back to exactly one
+  // blank row, matching the truly-first-use state, and it self-disables when
+  // there is nothing to clear — so this is a no-op on a genuinely blank panel.
+  const clearButton = panel.getByTestId('advanced-filter-clear');
+  if (await clearButton.isEnabled().catch(() => false)) {
+    await clearButton.click();
+  }
+
   // Condition 1 — Nombre Es <name> (plain text value).
   await panel.locator('[role="combobox"]', { hasText: 'Selector de campo' }).first().click();
   await page.getByRole('option', { name: /^Nombre$|^Name$/ }).click();

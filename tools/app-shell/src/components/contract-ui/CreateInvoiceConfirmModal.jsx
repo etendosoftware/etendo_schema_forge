@@ -4,6 +4,7 @@ import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { overlayStyle, cardStyle, btnPrimaryStyle, btnSecondaryStyle, closeBtnStyle, Spinner } from './ConfirmDocumentModal';
 import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
+import { useRectifiableInvoices, RectifiableInvoiceField } from './RectifiableInvoicePicker';
 
 import { authHeaders } from '@/auth/api.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -25,10 +26,14 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  *   loading          — external loading state (parent sets while API call is in flight)
  *   pendingQtyUrl    — optional URL to fetch { response: { data: [{ pendingQty }] } }
  *                      to display the pending units subtitle. Omit for a generic subtitle.
- *   onConfirm        — called with the selected price list ID when the user clicks Confirm
- *                      (checkbox must be checked, and — when showPriceListPicker is true —
- *                      a price list must be selected)
+ *   onConfirm        — called with (priceListId, originInvoiceIds) when the user clicks Confirm
+ *                      (when showPriceListPicker is true a price list must be selected; when
+ *                      rectifiableInvoicesUrl is set at least one invoice to rectify must be)
  *   onClose          — called to dismiss without confirming
+ *   rectifiableInvoicesUrl — ETP-5381: when set, shows the required "invoice to rectify" picker.
+ *                      Rectificative invoices are now created AND confirmed in one step, and the
+ *                      completion is rejected outright unless the C_Invoice_Reverse link exists,
+ *                      so the choice has to be made here rather than afterwards.
  *   showPriceListPicker — ETP-4028: shipments/receipts carry no price list of their own —
  *                      when true, shows a required Tarifa selector so the user explicitly
  *                      picks the price list applied to every line of the generated invoice.
@@ -48,10 +53,10 @@ export default function CreateInvoiceConfirmModal({
   isSOTrx = true,
   apiBaseUrl,
   token,
+  rectifiableInvoicesUrl,
 }) {
   const ui = useUI();
   const apiFetch = useApiFetch();
-  const [checked, setChecked] = useState(true);
   const [pendingQty, setPendingQty] = useState(null);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
@@ -70,6 +75,12 @@ export default function CreateInvoiceConfirmModal({
     // variant), so the generic fallback (system `default` flag / first list entry) is
     // disabled: an arbitrary tariff must never silently satisfy a required field.
     allowGenericFallback: false,
+  });
+
+  const rectify = useRectifiableInvoices({
+    enabled: !!rectifiableInvoicesUrl,
+    url: rectifiableInvoicesUrl,
+    token,
   });
 
   const documentNo  = data?.documentNo || '';
@@ -107,7 +118,7 @@ export default function CreateInvoiceConfirmModal({
     ? ui('soAmountPendingInvoice', { pending: `${fmtNum(pendingQty, 0)} ${ui('units')}` })
     : ui('soCreateInvoiceCheckDesc');
 
-  const canConfirm = checked && (!showPriceListPicker || !!priceListId);
+  const canConfirm = (!showPriceListPicker || !!priceListId) && rectify.isSatisfied;
   // Sonar S3776 — the primary button below reused `loading || !canConfirm`
   // three times (disabled, opacity, cursor); computing it once removes two
   // redundant evaluations from the function's cognitive complexity.
@@ -117,28 +128,6 @@ export default function CreateInvoiceConfirmModal({
   // out from under the in-flight request, which would reproduce the same
   // "closes with no feedback" symptom the loading state exists to prevent.
   const dismiss = loading ? undefined : onClose;
-  // Sonar S3776 — the checkbox card below branched on `checked` six separate
-  // times (padding/border/background/title color/box border/box background).
-  // Collapsing them into one lookup keeps the same rendered values but leaves
-  // only one ternary instead of six.
-  const checkedStyle = checked
-    ? {
-        cardPadding: '11px 13px',
-        cardBorder: '2px solid var(--status-info-fg)',
-        cardBackground: 'var(--status-info-bg)',
-        titleColor: 'var(--status-info-fg)',
-        boxBorder: 'none',
-        boxBackground: 'var(--status-info-fg)',
-      }
-    : {
-        cardPadding: '12px 14px',
-        cardBorder: '1px solid hsl(var(--border-subtle))',
-        cardBackground: 'hsl(var(--card))',
-        titleColor: 'hsl(var(--foreground))',
-        boxBorder: '1.5px solid hsl(var(--text-disabled))',
-        boxBackground: 'hsl(var(--card))',
-      };
-
   return createPortal(
     <div data-testid="create-invoice-confirm-modal" onClick={dismiss} style={overlayStyle}>
       <div onClick={e => e.stopPropagation()} style={{ ...cardStyle, width: 460 }}>
@@ -171,42 +160,38 @@ export default function CreateInvoiceConfirmModal({
           </div>
         )}
 
-        <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
-            {ui('soGenerateDocs')}
+        {rectifiableInvoicesUrl && (
+          <div style={{ padding: '0 20px 14px' }}>
+            <RectifiableInvoiceField
+              invoices={rectify.invoices}
+              selectedIds={rectify.selectedIds}
+              onToggle={rectify.toggle}
+              onApply={rectify.setSelectedIds}
+              loading={rectify.loading}
+              isEmpty={rectify.isEmpty}
+              selectedInvoices={rectify.selectedInvoices}
+              search={rectify.search}
+              onSearchChange={rectify.setSearch}
+              onReachBottom={rectify.loadMore}
+              loadingMore={rectify.loadingMore}
+              loadError={rectify.loadError}
+              onRetry={rectify.retry}
+              idPrefix="invoice-confirm-rectify"
+              data-testid="RectifiableInvoiceField__e6fb8b" />
           </div>
-          <div
-            onClick={() => setChecked(v => !v)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              padding: checkedStyle.cardPadding, borderRadius: 8, cursor: 'pointer',
-              border: checkedStyle.cardBorder,
-              background: checkedStyle.cardBackground,
-              transition: 'border-color 0.15s, background 0.15s',
-            }}
-          >
-            <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>🧾</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 500, color: checkedStyle.titleColor }}>
-                {ui('soCreateInvoiceTitle')}
-              </div>
-              <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 3, lineHeight: 1.4 }}>
-                {subtitle}
-              </div>
-            </div>
-            <div style={{
-              width: 18, height: 18, borderRadius: 4, flexShrink: 0,
-              border: checkedStyle.boxBorder,
-              background: checkedStyle.boxBackground,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              {checked && (
-                <svg width="11" height="9" viewBox="0 0 11 9" fill="none" stroke="hsl(var(--card))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="1 4 4 7.5 10 1" />
-                </svg>
-              )}
-            </div>
-          </div>
+        )}
+
+        {/*
+          ETP-5381: no "create invoice" checkbox here. Every button that opens this modal already
+          says "Crear factura" / "Crear factura rectificativa", so asking again was a confirmation
+          of a confirmation — and unticking it left a dialog whose only action did nothing.
+          The pending-units subtitle it used to carry is shown above instead.
+
+          This is NOT the same as the toggle in ConfirmInOutModal: there the button says
+          "Confirmar", and generating the invoice really is an optional extra.
+        */}
+        <div style={{ padding: '0 20px 16px', fontSize: 12, color: 'hsl(var(--muted-foreground))', lineHeight: 1.4 }}>
+          {subtitle}
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 20px', borderTop: '0.5px solid hsl(var(--border-subtle))' }}>
@@ -215,7 +200,7 @@ export default function CreateInvoiceConfirmModal({
           </button>
           <button
             type="button"
-            onClick={() => onConfirm(priceListId)}
+            onClick={() => onConfirm(priceListId, rectify.selectedIds)}
             disabled={confirmDisabled}
             style={{ ...btnPrimaryStyle, opacity: confirmDisabled ? 0.6 : 1, cursor: confirmDisabled ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
