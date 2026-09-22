@@ -13,13 +13,11 @@ import { ConfirmResultModal } from '@/components/contract-ui';
 import { useShipmentPdf } from '@/windows/custom/goods-shipment/useShipmentPdf';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
-import { useApiFetch } from '@/auth/useApiFetch.js';
 
 export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl, api, onRefresh }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const navigate = useNavigate();
-  const apiFetch = useApiFetch();
   const [wizardOpen, setWizardOpen] = useState(false);
   const [showInvoiceConfirm, setShowInvoiceConfirm] = useState(false);
   const [creatingInvoice, setCreatingInvoice] = useState(false);

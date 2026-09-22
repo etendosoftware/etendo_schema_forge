@@ -12,7 +12,6 @@ import { useMainAttachment } from '@/windows/custom/shared/useMainAttachment.js'
 import PurchaseReturnWizard from './PurchaseReturnWizard';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
-import { useApiFetch } from '@/auth/useApiFetch.js';
 
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -20,7 +19,6 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl, onRefresh }) {
   const ui = useUI();
   const navigate = useNavigate();
-  const apiFetch = useApiFetch();
   const [showConfirm, setShowConfirm] = useState(false);
   const [showInvoiceConfirm, setShowInvoiceConfirm] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);

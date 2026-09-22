@@ -214,7 +214,9 @@ describe('GoodsReceiptActions', () => {
 
     it('uses the authenticated request helper for the new fetches, not a bare fetch', () => {
       assert.match(src, /import \{ useApiFetch \} from '@\/auth\/useApiFetch\.js'/);
-      assert.match(src, /const apiFetch = useApiFetch\(\);/);
+      // ETP-4576 — empty base on purpose, several call sites are cross-spec (see the
+      // component's own comment above its apiFetch declaration).
+      assert.match(src, /const apiFetch = useApiFetch\(''\);/);
     });
   });
 
