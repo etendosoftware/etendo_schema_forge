@@ -25,6 +25,94 @@ const IVA_DED_COLS = [
 
 // ── Shared field definitions (declared before BASE to avoid TDZ) ─────
 
+// ETP-5431 — Nota 3's only exception (sheet `DP303DID` cell `A38` of `DR303e26v101.xlsx`): the
+// box-111 obligation to supply bank data does NOT apply when the declaration marks
+// "Rectificativa - Como consecuencia de la presentación de la autoliquidación rectificativa
+// solicito dar de baja/modificar la domiciliación efectuada" (`baja_domiciliacion`, sent to AEAT
+// as `Cancel_Modify_Debit`). Mirrors AEAT303Report2024's `isCancelOrModifyDebitRequested` guard.
+//
+// `matchesVisibility` supports only `{field, equals|in}`, `anyOf` and `allOf` — there is no
+// `not`/`notEquals` operator, and this deliberately does NOT add one. The negation is expressed
+// with the existing `in` operator by enumerating every "unchecked" representation the checkbox
+// can hold: React state stores it as a strict boolean (`identification?.[f.id] ?? false` in
+// FmBoxes303, `onToggle` passes a boolean) and it JSON-round-trips through
+// `decl.manualData.identification` unchanged, so `false` and `undefined` (never touched) are the
+// real cases; `null` is defensive. Unlike `_box111NonZero`, this needs no synthetic key — the
+// field lives in `identification` already.
+// `'N'`/`''` are in the list for the same reason `isCancelModifyDebitRequested`
+// (fiscalModelsUtils.js) also accepts `'Y'`: a value persisted in that shape must still read as
+// "not waived" here, or the bank section would vanish for a taxpayer who never marked anything.
+const _BANK_NOT_WAIVED = { field: 'baja_domiciliacion', in: [false, undefined, null, '', 'N'] };
+
+// The "condition B" branch shared by every bank gate below: a rectificativa carrying a non-zero
+// box 111, with the direct-debit cancellation NOT requested. Single definition so visibility and
+// requiredness cannot drift apart again (the ETP-5393 manual-QA lesson).
+const _BANK_RECTIFICATIVA_BRANCH = { allOf: [
+  { field: 'rectificativa', equals: true },
+  { field: '_box111NonZero', equals: true },
+  _BANK_NOT_WAIVED,
+] };
+
+// DESIGN DECISION, NOT A CITED AEAT RULE (ETP-5431) — which fields make up "los datos de cuenta
+// bancaria" of Nota 3 is decided by this team; `DR303e26v101.xlsx` conditions no field on the
+// marca SEPA (Nota 2, cells `DP303DID!A30:B35`, only enumerates its values). Adopted selection,
+// mirroring AEAT303Report2024's `sepaMarkRequiresSwiftBic`/`sepaMarkRequiresForeignBankDetails`
+// so screen and file agree:
+//   marca 1 (Cuenta España)        → IBAN + marca SEPA
+//   marca 2 (Unión Europea SEPA)   → + SWIFT-BIC
+//   marca 3 (Resto Países)         → + Banco, Dirección, Ciudad, Código País
+// Rationale (our reading): the record design attaches the Nota 3 pointer to exactly SWIFT-BIC,
+// IBAN and marca SEPA, and to none of Banco/Dirección/Ciudad/Código País, which only route a
+// rest-of-world transfer. Do not document or test this as an AEAT requirement.
+// `bank_sepa` is a text input, so its value is a string; the numeric variants are defensive.
+const _SEPA_MARK_NEEDS_SWIFT = { field: 'bank_sepa', in: ['2', '3', 2, 3] };
+const _SEPA_MARK_NEEDS_FOREIGN_DETAILS = { field: 'bank_sepa', in: ['3', 3] };
+
+// ETP-5431 — the marca-SEPA restriction is SCOPED TO THE NOTA 3 BRANCH. It lives inside the
+// rectificativa branch, never as a sibling condition that would also narrow the tipo U/D/X one.
+// Reason: the backend's blanking (AEAT303Report2024#patchBankSection) is scoped the same way, so
+// screen and file agree. A plain D/V/X refund with no box 111 is untouched by this ticket -
+// `AEAT303Report2021#generatePage3` still writes whatever bank data is stored for it, so hiding
+// those fields on screen would send values the user can no longer see.
+const _BANK_NOTA3_NEEDS_SWIFT = { allOf: [
+  _BANK_RECTIFICATIVA_BRANCH,
+  _SEPA_MARK_NEEDS_SWIFT,
+] };
+const _BANK_NOTA3_NEEDS_FOREIGN_DETAILS = { allOf: [
+  _BANK_RECTIFICATIVA_BRANCH,
+  _SEPA_MARK_NEEDS_FOREIGN_DETAILS,
+] };
+
+const _TIPO_IS_DVX = { field: 'tipo_declaracion', in: ['D', 'V', 'X'] };
+
+// ETP-5431 — the logical negation of `_BANK_RECTIFICATIVA_BRANCH`, by De Morgan: NOT (a AND b AND
+// c) is (NOT a) OR (NOT b) OR (NOT c). Each negated clause is enumerated with the existing `in`
+// operator, the same technique `_BANK_NOT_WAIVED` uses, so the matcher still needs no `not`.
+//
+// Why it exists: without it, the tipo U/D/X branch of a bank field's `visibleWhen` stays true
+// even while the declaration IS in the Nota 3 case, so a tipo D rectificativa with a non-zero
+// box 111 and marca 1 showed SWIFT-BIC and the four foreign-bank fields on screen while
+// `AEAT303Report2024#patchBankSection` blanked those very positions in the file. ANDing the tipo
+// branch with this makes the tipo branch step aside exactly when the marca gate takes over, so
+// screen and file agree on BOTH sides of the scope boundary, not just one.
+//
+// The enumerations mirror how each field is actually stored. `rectificativa` is a checkbox
+// (strict boolean, JSON-round-tripped) and `_box111NonZero` is synthetic — always a strict
+// boolean from `withBox111NonZeroFlag`, `undefined` only if a caller forgot to merge it. The
+// third clause is the POSITIVE test for the waiver, so it enumerates the same two shapes
+// `isCancelModifyDebitRequested` (fiscalModelsUtils.js) accepts: the boolean the checkbox writes
+// today, and the legacy `'Y'` string. It is the exact complement of `_BANK_NOT_WAIVED`.
+const _NOT_NOTA3 = { anyOf: [
+  { field: 'rectificativa', in: [false, undefined, null, '', 'N'] },
+  { field: '_box111NonZero', in: [false, undefined, null] },
+  { field: 'baja_domiciliacion', in: [true, 'Y'] },
+] };
+
+// The plain-refund branch: tipo D/V/X *and not* in the Nota 3 case. Unrestricted by the marca,
+// exactly as before this ticket — `AEAT303Report2021#generatePage3` still writes the whole bank
+// block for these, so hiding a field here would send a value the user can no longer see.
+const _TIPO_DVX_OUTSIDE_NOTA3 = { allOf: [_TIPO_IS_DVX, _NOT_NOTA3] };
+
 // visibleWhen shared by 6 of the 7 bank fields (all but bank_iban, which has no
 // field-level gate of its own and relies solely on sectionVisibleWhen below).
 // NOTE: widened the same way and for the same reason as datos_bancarios.sectionVisibleWhen
@@ -43,13 +131,35 @@ const IVA_DED_COLS = [
 // clearing box 111 back to 0, left the whole bank block sitting on screen (just without
 // the asterisk) instead of disappearing — so visibility must track the exact same
 // condition as requiredness (`_BANK_FULL_BLOCK_REQUIRED_WHEN` below), not a looser one.
+//
+// ETP-5431 — the rectificativa branch now also demands that the taxpayer has NOT marked
+// `baja_domiciliacion`; see `_BANK_NOT_WAIVED` / `_BANK_RECTIFICATIVA_BRANCH` below.
 const _BANK_DVX_VW = { anyOf: [
-  { field: 'tipo_declaracion', in: ['D', 'V', 'X'] },
-  { allOf: [
-    { field: 'rectificativa', equals: true },
-    { field: '_box111NonZero', equals: true },
-  ] },
+  _TIPO_IS_DVX,
+  _BANK_RECTIFICATIVA_BRANCH,
 ] };
+
+// ETP-5431 — inside the Nota 3 branch, a field the marca SEPA does not call for is HIDDEN, not
+// merely un-required, so the user cannot leave a stray value on screen in a block whose unused
+// positions the file must carry blank (AEAT303Report2024#patchBankSection blanks them).
+//
+// Read the shape as "plain refund, unrestricted — OR — Nota 3 case, per the marca". The two
+// branches are mutually exclusive by construction (`_TIPO_DVX_OUTSIDE_NOTA3` carries
+// `_NOT_NOTA3`), so a tipo D that IS in the Nota 3 case falls through to the marca gate instead
+// of being shown unconditionally by its tipo. That mutual exclusivity is the whole point: it is
+// what makes the frontend agree with the backend on both sides of the scope boundary.
+//
+// `bank_sepa` and `bank_iban` are never gated this way: the marca selector must stay reachable,
+// and the position-23 field carries a value under every marca.
+//
+// Hiding does NOT clear the stored value, deliberately: the backend blanking already guarantees
+// the file is correct, so clearing would only destroy typed work. Switching marca 3 → 1 → 3 must
+// bring the bank name/address/city/country back exactly as they were, and there is deliberately
+// no dependent-field-clearing callout for these fields anywhere.
+const _BANK_SWIFT_VW = { anyOf: [_TIPO_DVX_OUTSIDE_NOTA3, _BANK_NOTA3_NEEDS_SWIFT] };
+const _BANK_FOREIGN_DETAILS_VW = {
+  anyOf: [_TIPO_DVX_OUTSIDE_NOTA3, _BANK_NOTA3_NEEDS_FOREIGN_DETAILS],
+};
 
 // ETP-5393 Bug E — bank_iban's requiredness: mandatory unconditionally for tipo U/D/X
 // (AEAT error EDID065, "devolución"/"domiciliación" case — condition A), OR for a
@@ -57,12 +167,12 @@ const _BANK_DVX_VW = { anyOf: [
 // tipo_declaracion (AEAT303Report's checkBox111MandatoryParams — condition B). `_box111NonZero`
 // is a synthetic key callers merge into `identification` via `withBox111NonZeroFlag`
 // (fiscalModelsUtils.js) before this is evaluated — it does not come from the form itself.
+// ETP-5431 — condition B additionally requires that `baja_domiciliacion` is not marked (Nota 3's
+// exception). Keep in sync with `isBankIbanRequired` in fiscalModelsUtils.js, its imperative
+// mirror used by the generate/submit pre-flight guards.
 const _BANK_IBAN_REQUIRED_WHEN = { anyOf: [
   { field: 'tipo_declaracion', in: ['U', 'D', 'X'] },
-  { allOf: [
-    { field: 'rectificativa', equals: true },
-    { field: '_box111NonZero', equals: true },
-  ] },
+  _BANK_RECTIFICATIVA_BRANCH,
 ] };
 
 // ETP-5393 follow-up (manual-QA fix) — ONLY condition B (rectificativa + non-zero box 111)
@@ -74,10 +184,18 @@ const _BANK_IBAN_REQUIRED_WHEN = { anyOf: [
 // the full bank block on every plain devolución (manual QA caught this: only IBAN should be
 // required there). Do NOT fold this back into `_BANK_IBAN_REQUIRED_WHEN` — the two are
 // deliberately different in scope.
-const _BANK_FULL_BLOCK_REQUIRED_WHEN = { allOf: [
-  { field: 'rectificativa', equals: true },
-  { field: '_box111NonZero', equals: true },
-] };
+//
+// ETP-5431 — this is no longer one condition for all 6 remaining fields. It stays the baseline
+// (condition B, now also gated on `baja_domiciliacion` not being marked) and is what `bank_sepa`
+// itself needs, but SWIFT-BIC and the Banco/Direccion/Ciudad/Pais block escalate with the marca
+// SEPA - see `_SEPA_MARK_NEEDS_SWIFT`/`_SEPA_MARK_NEEDS_FOREIGN_DETAILS` above for the decision
+// and its (non-normative) rationale.
+const _BANK_FULL_BLOCK_REQUIRED_WHEN = _BANK_RECTIFICATIVA_BRANCH;
+// Requiredness IS the Nota 3 branch plus the marca gate — the very same condition the visibility
+// constants embed, reused rather than restated so the two cannot drift apart. (Requiredness has
+// no tipo U/D/X branch at all: condition A requires IBAN only, per the ETP-5393 follow-up above.)
+const _BANK_SWIFT_REQUIRED_WHEN = _BANK_NOTA3_NEEDS_SWIFT;
+const _BANK_FOREIGN_DETAILS_REQUIRED_WHEN = _BANK_NOTA3_NEEDS_FOREIGN_DETAILS;
 
 const TIPO_DECLARACION_FIELD = {
   id: 'tipo_declaracion', labelKey: 'fm.ident.tipo_declaracion', type: 'select', readOnly: false, required: true,
@@ -91,6 +209,55 @@ const TIPO_DECLARACION_FIELD = {
     { value: 'X', labelKey: 'fm.ident.decl.dev_transferencia_ext' },
   ],
 };
+
+// ETP-5431 pt.2 — casilla 111 (rectificacion_importe) autocompletion formula.
+//
+// REPLACES an earlier draft that branched on the sign of casilla 69 (positive / negative / zero).
+// That draft had a CONFIRMED BUG: its `box69 === 0` case fell through to "111 queda vacía", which
+// a real ServValiDos submission got rejected for (errors 35100, E030292, 35068) — AEAT's own
+// official "Negativa/Saldo cero" example shows box 111 must still carry the full box 70 value in
+// that case, not go blank. The formula below is the corrected, CONFIRMED SPEC (closed with the
+// user/PM, verified algebraically against 4 official AEAT examples):
+//
+//   SI es autoliquidación rectificativa Y casilla_71 < 0 Y casilla_70 > 0:
+//       casilla 111 = MIN(casilla_70, ABS(casilla_71))
+//   EN OTRO CASO:
+//       casilla 111 = vacía
+//
+// Casilla 69 is deliberately NOT read anywhere in this formula (hence no `box69` param) — it is
+// already folded into casilla 71 via the official `71 = 69-70+109-112` formula, so re-branching on
+// its sign was both unnecessary and the source of the bug above. `MIN`/`ABS` subsumes every branch
+// of the old draft wherever it was correct, and fixes the one case where it wasn't.
+//
+// This box is no longer user-editable (see the `rectificacion_importe` row below, which now
+// carries neither `editable` nor `derivedValue` — its value comes exclusively from this
+// formula). Deliberately NOT routed through FmBoxes303's `derivedValue`/`computeDerivedValue`
+// display-only mechanism (see that file's own doc comment: "Client-side display only; never
+// feeds manualData/submission") — box 111 must be a genuine member of the real box array,
+// because (a) `withBox111NonZeroFlag` (fiscalModelsUtils.js) reads it via `getBoxValue(liveBoxes,
+// 111)` to drive the already-approved Nota 3 / bank-IBAN gating above, and (b) it is forwarded
+// verbatim to AEAT as `RectifyingAmount` (BOX_PARAM_MAP, fiscalModelsUtils.js). So the single
+// authoritative call site is `recomputeDerivedBoxes` (fiscalModelsUtils.js), which imports this
+// function directly — the formula still lives here, next to the field definition, exactly like
+// every other `derivedValue`, it just has a different (array-writing) consumer than the
+// display-only ones.
+//
+// `isRectificativa` is the explicit guard the formula's own spec states ("SI es autoliquidación
+// rectificativa Y...") — mirrors `identChecks?.rectificativa === true`, the same flag
+// `isBankIbanRequired`/`_BANK_RECTIFICATIVA_BRANCH` already gate on elsewhere in this window.
+// `recomputeDerivedBoxes` is the sole caller and passes it through from its own `identChecks` arg.
+export function computeBox111({ isRectificativa, box70, box71 }) {
+  if (!isRectificativa) return null;
+  // A missing box70 entry (`null`/`undefined`) is treated as 0 — same as an explicit 0, both
+  // fail the "casilla70 > 0" gate below (see the raw-read comment on the caller in
+  // fiscalModelsUtils.js). Sanitizing here up front (rather than comparing the raw possibly-
+  // undefined value) lets the guard use SonarQube's preferred non-negated form (S1940) safely:
+  // `undefined <= 0` is `false`, not `true`, so leaving box70 unsanitized and flipping the
+  // operator would silently let a missing box70 through into `Math.min`, producing NaN.
+  const box70Value = box70 ?? 0;
+  if (box71 >= 0 || box70Value <= 0) return null;
+  return Math.min(box70Value, Math.abs(box71));
+}
 
 // ── Base layout (current / default form) ─────────────────────────
 // Row ids are stable references for patches — use the leading box number
@@ -138,12 +305,16 @@ const BASE = {
       // visibly stuck on screen. It now requires `_box111NonZero` too, matching
       // `_BANK_FULL_BLOCK_REQUIRED_WHEN` exactly, so visibility and requiredness hide/show
       // together. See FmBoxes303's matchesSvw/anyOf+allOf support.
+      //
+      // ETP-5431 — the rectificativa branch is now `_BANK_RECTIFICATIVA_BRANCH`, which also
+      // requires that `baja_domiciliacion` is NOT marked: per Nota 3's exception, a taxpayer
+      // asking to cancel/modify the existing direct debit must not be asked for bank data, and
+      // AEAT303Report2024 leaves the block blank in that case. Tipo U/D/X keeps showing the
+      // section regardless of the flag - those types need an account by virtue of the type
+      // itself, which is outside Nota 3's scope.
       sectionVisibleWhen: { anyOf: [
         { field: 'tipo_declaracion', in: ['U', 'D', 'X'] },
-        { allOf: [
-          { field: 'rectificativa', equals: true },
-          { field: '_box111NonZero', equals: true },
-        ] },
+        _BANK_RECTIFICATIVA_BRANCH,
       ] },
       fieldLayout: 'aligned',
       colHeaderKeys: [],
@@ -163,12 +334,46 @@ const BASE = {
         // keeps the wider `_BANK_IBAN_REQUIRED_WHEN` (A OR B); do not widen the other 6 to match.
         { id: 'bank_iban', labelKey: 'fm.ident.bank.iban', type: 'text', readOnly: false,
           requiredWhen: _BANK_IBAN_REQUIRED_WHEN },
-        { id: 'bank_swift_bic', labelKey: 'fm.ident.bank.swift_bic', type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
-        { id: 'bank_nombre',    labelKey: 'fm.ident.bank.nombre',    type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
-        { id: 'bank_direccion', labelKey: 'fm.ident.bank.direccion', type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
-        { id: 'bank_ciudad',    labelKey: 'fm.ident.bank.ciudad',    type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
-        { id: 'bank_pais',      labelKey: 'fm.ident.bank.pais',      type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
-        { id: 'bank_sepa',      labelKey: 'fm.ident.bank.sepa',      type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
+        // ETP-5431 — visibility AND requiredness now escalate with the marca SEPA (`bank_sepa`):
+        // SWIFT-BIC from marca 2, and Banco/Dirección/Ciudad/País only for marca 3. A DESIGN
+        // DECISION, NOT an AEAT requirement - see `_SEPA_MARK_NEEDS_SWIFT` above. A field the
+        // marca does not call for is hidden (its stored value is deliberately NOT cleared - see
+        // `_BANK_SWIFT_VW`). `bank_sepa` stays visible for the whole section: it is the selector.
+        { id: 'bank_swift_bic', labelKey: 'fm.ident.bank.swift_bic', type: 'text', readOnly: false, visibleWhen: _BANK_SWIFT_VW, requiredWhen: _BANK_SWIFT_REQUIRED_WHEN },
+        { id: 'bank_nombre',    labelKey: 'fm.ident.bank.nombre',    type: 'text', readOnly: false, visibleWhen: _BANK_FOREIGN_DETAILS_VW, requiredWhen: _BANK_FOREIGN_DETAILS_REQUIRED_WHEN },
+        { id: 'bank_direccion', labelKey: 'fm.ident.bank.direccion', type: 'text', readOnly: false, visibleWhen: _BANK_FOREIGN_DETAILS_VW, requiredWhen: _BANK_FOREIGN_DETAILS_REQUIRED_WHEN },
+        { id: 'bank_ciudad',    labelKey: 'fm.ident.bank.ciudad',    type: 'text', readOnly: false, visibleWhen: _BANK_FOREIGN_DETAILS_VW, requiredWhen: _BANK_FOREIGN_DETAILS_REQUIRED_WHEN },
+        { id: 'bank_pais',      labelKey: 'fm.ident.bank.pais',      type: 'text', readOnly: false, visibleWhen: _BANK_FOREIGN_DETAILS_VW, requiredWhen: _BANK_FOREIGN_DETAILS_REQUIRED_WHEN },
+        // ETP-5431 — was a free-text input for a field that only ever admits 0/1/2/3. Now a
+        // select, same shape as TIPO_DECLARACION_FIELD (`type: 'select'` + `options[{value,
+        // labelKey}]`, rendered by FmBoxes303's renderIdentSelectField).
+        //
+        // Only marcas 1/2/3 are declared. Marca 0 ("Vacía") is NOT offered as an option: it means
+        // "no value set", which is exactly what the leading placeholder option `<option value="">`
+        // that renderIdentSelectField always renders already expresses. Declaring both would put
+        // two visually identical empty entries in the list with different behaviour.
+        //
+        // The placeholder is therefore the only empty choice, and it behaves exactly as the old
+        // empty text input did: `applyMappedIdentParams`'s `if (v)` skips it, so no SEPA param is
+        // sent at all. The emitted file is unchanged either way — AEAT303Report2023's
+        // generatePageDID0 substitutes "0" for a blank marca before writing position 194.
+        //
+        // Deliberately NOT making the placeholder emit "0": the REDEME + tipo D/V/X validators
+        // (AEAT303Report2021#checkData, AEAT303Report2023#checkData) reject a BLANK marca with
+        // @AEAT303_sepa_empty@, and a "0" would sail past them — an untouched field would be
+        // filed as marca "Vacía" instead of raising the error it raises today.
+        //
+        // Under Nota 3 the marca must be 1/2/3; leaving the placeholder selected there is still
+        // rejected by AEAT303Report2024 with @AEAT303_sepa_mark_required_111@ (a missing param
+        // resolves to null, which is not in SEPA_MARKS_VALID_FOR_BOX_111), so no option needs
+        // hiding and no dynamic option logic exists.
+        { id: 'bank_sepa',      labelKey: 'fm.ident.bank.sepa',      type: 'select', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN,
+          options: [
+            { value: '1', labelKey: 'fm.ident.bank.sepa.spain' },
+            { value: '2', labelKey: 'fm.ident.bank.sepa.eu_sepa' },
+            { value: '3', labelKey: 'fm.ident.bank.sepa.rest_of_world' },
+          ],
+        },
       ],
       rows: [],
     },
@@ -282,7 +487,12 @@ const BASE = {
             { id: 'devoluciones_at',       labelKey: 'fm.box.row.devoluciones_at',       cells: [109], editable: true },
             { id: 'resultado_declaracion', labelKey: 'fm.box.row.resultado_declaracion', cells: [71],  total: true },
             { id: 'importe_devolucion',    labelKey: 'fm.box.row.importe_devolucion',    cells: [null], rowVisibleWhen: { field: 'tipo_declaracion', in: ['D', 'V', 'X', 'C'] }, derivedValue: { box: 71, abs: true, subtractBox: 70, clampMin: 0 } },
-            { id: 'rectificacion_importe', labelKey: 'fm.box.row.rectificacion_importe', cells: [111], editable: true },
+            // ETP-5431 pt.2 — no longer editable: autocompleted by `computeBox111` above, applied
+            // to the real box array by `recomputeDerivedBoxes` (fiscalModelsUtils.js). Renders
+            // exactly like the `resultado_69`/`resultado_declaracion` rows above it (plain
+            // `cells`, no `editable`/`derivedValue`) — the computed value is already a genuine
+            // member of `valueMap` by the time this renders, same as boxes 69/71.
+            { id: 'rectificacion_importe', labelKey: 'fm.box.row.rectificacion_importe', cells: [111] },
           ],
         },
       ],
