@@ -208,7 +208,7 @@ A former 6th tab, **Historial** (`HistoryTab`), was removed together with this p
 
 ### Action bar
 
-Left to right: **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Guardar** (`Save`/`Loader2` icon, `handleSave` — ETP-5338, leftmost of the right-aligned group, replacing an earlier go-back button that used to sit next to Cancelar, see below), **Calcular** (`handleComputeClick` — persists any pending `identChecks`/`manualOverrides` edit via the same `persistEditableFields()` helper Guardar uses, then triggers the actual box recompute via `handleCompute`; spinner while `computing`), a standalone **"Generar fichero 303"** button, and, only while the declaration is not yet submitted (`!isSubmitted`), a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. "Generar fichero 303" is always visible regardless of submission status — it is not gated the way "Registrar/Presentar" is. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
+Left to right: **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Guardar** (`Save`/`Loader2` icon, `handleSave` — ETP-5338, leftmost of the right-aligned group, replacing an earlier go-back button that used to sit next to Cancelar, see below), **Calcular** (`handleComputeClick` — triggers the actual box recompute via `handleCompute` first, then persists the freshly-recomputed `identChecks`/`manualOverrides` via the same `persistEditableFields()` helper Guardar uses, fire-and-forget; spinner while `computing`. **Order matters here (ETP-5431 pt.5, see "Box 111 autocompletion" below): recompute always runs before the persist reads its snapshot** — an earlier version launched both in parallel, so the save's snapshot almost always raced the recompute and persisted box 111's pre-recompute value), a standalone **"Generar fichero 303"** button, and, only while the declaration is not yet submitted (`!isSubmitted`), a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. "Generar fichero 303" is always visible regardless of submission status — it is not gated the way "Registrar/Presentar" is. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
 
 **Guardar's position (ETP-5338 pt.6).** Guardar briefly landed in the old go-back slot (left, next to Cancelar) when it first replaced go-back, then moved into the right-aligned primary-action group — leftmost of it, before "Calcular" — to match `saveActions.jsx`'s established Save-before-Confirm ordering convention used by every AD-window's generic DetailView toolbar. It is not grouped with Cancelar: Cancelar discards/navigates away, Guardar persists and stays, and the two are visually separated by the `flex: 1` spacer between the left-aligned pair (Cancelar + status pill) and the right-aligned action cluster.
 
@@ -1174,9 +1174,73 @@ rectificativa Y...") — `recomputeDerivedBoxes` (`fiscalModelsUtils.js`) now ta
 parameter and forwards `identChecks?.rectificativa === true`, mirroring the same flag
 `isBankIbanRequired`/`_BANK_RECTIFICATIVA_BRANCH` already gate on elsewhere in this window. Every
 production call site of `recomputeDerivedBoxes` (`FmModel303Page.jsx`'s `applyBoxChange`,
-`removeBox108FromLive`, `applyComputeResult`, and `FmListPage.jsx`'s list-row result recompute) was
-updated to pass its `identChecks`/`decl.manualData?.identification` through — a caller that omits
-it gets box 111 forced blank rather than silently reusing a stale flag.
+`applyComputeResult`, and `FmListPage.jsx`'s list-row result recompute) was updated to pass its
+`identChecks`/`decl.manualData?.identification` through — a caller that omits it gets box 111
+forced blank rather than silently reusing a stale flag.
+
+**A 4th call site — `handleIdentChange` — was missed in that first pass and fixed separately
+(ETP-5431 pt.4).** There never was a dedicated `removeBox108FromLive` function to update: an
+earlier draft of `handleIdentChange` had one (it only deleted box 108 from `manualOverrides` when
+`motivo_rectificacion` stopped being `'D'`, with no `recomputeDerivedBoxes` call at all), but that
+helper was inlined directly into `handleIdentChange` once the box-108 and box-111 logic needed to
+share the same recomputed `baseBoxes`/`nextIdentChecks` values — so it no longer exists as a
+separate function to name. The gap this pt.4 fix closes: `handleIdentChange` fires on ANY
+identification-section edit, including ticking/unticking "Autoliquidación Rectificativa" itself —
+the one flag `computeBox111`'s formula reads directly — but it never called
+`recomputeDerivedBoxes`/`syncBox111Override` the way `applyBoxChange` and `applyComputeResult`
+already did. A user could check "Rectificativa" with box 70/71 already populated and see box 111
+stay at its previous (possibly stale or blank) value until some other box edit or a "Calcular"
+click happened to trigger a recompute. Fixed in `FmModel303Page.jsx`'s `handleIdentChange`
+(`FmModel303Page.jsx:283-300`): it now builds `nextIdentChecks` into a local first (not read back
+from `identChecks` React state, which `setIdentChecks` won't have applied yet), then recomputes
+via `recomputeDerivedBoxes(baseBoxes, nextIdentChecks)` and mirrors the result into
+`manualOverrides` via `syncBox111Override`, inline in the same handler — the box-108 cleanup
+(`motivo_rectificacion` leaving `'D'`) and the box-111 sync now share this one code path instead of
+being two independent, easy-to-desync branches.
+
+**A 5th gap — "Calcular" could persist the value it was about to replace (ETP-5431 pt.5).**
+`handleComputeClick` ("Calcular" in the action bar — see "Action bar" above) does two things: it
+recomputes the boxes (`handleCompute`, which recomputes box 111 and updates `manualOverrides` React
+state), and it persists any pending `identChecks`/`manualOverrides` edit (`persistEditableFields`,
+the same helper "Guardar" uses). The previous version launched both **in parallel** — `Promise.all`
+in spirit, if not in code — so `persistEditableFields`'s snapshot of `manualOverrides` almost always
+raced `handleCompute`'s `setManualOverrides` update and won, because a `setState` call only takes
+effect on React's *next* render, not synchronously inside the same tick. In practice this meant a
+"Calcular" click on a rectificativa declaration would recompute and display the correct, freshly
+autocompleted box 111 on screen, while silently persisting the STALE pre-recompute value to
+`manualData` — indistinguishable from a successful save until the next reload or the next
+`generate303File`/AEAT submission, both of which read box 111 from the persisted `manualOverrides`,
+not from what was on screen. Fixed by making `handleComputeClick` `await handleCompute()` first,
+then hand its freshly-synced return value straight to `persistEditableFields({
+manualOverridesOverride: nextManualOverrides })` — the persist reads the snapshot `handleCompute`
+just produced instead of re-reading `manualOverrides` off a state closure that the same-tick
+`setManualOverrides` call hasn't flowed into. The persist itself is still not awaited by the caller
+(fire-and-forget, same as before), so the UI stays exactly as responsive; only the ORDER — recompute
+completes, then snapshot — changed. See `FmModel303Page.calcularPersists.vitest.jsx`.
+
+**A 6th gap, the most serious of the three — the AEAT telematic submission never carried box
+overrides at all (ETP-5431, `AeatSubmitFlow`).** `AeatSubmitFlow.jsx`'s `handleSubmit` builds the
+`POST /fiscal303/submit` request params from `identChecks` (via `applyIdentParams`) and `liveBoxes`,
+but was never handed `manualOverrides` as a prop at all — so any manually-overridden box (111, 70,
+108, 109, …) reached "Generar fichero 303" (`generate303File`, which already read `manualOverrides`
+via `applyBoxParams`) but silently diverged from what the actual AEAT telematic filing received.
+This is functionally the most serious of the three sync gaps documented here: it is not a UI
+staleness bug that a reload or a re-save can correct — it means a REAL "Registrar/Presentar" →
+"Presentación telemática AEAT" submission could file a declaration with AEAT that numerically
+disagreed with the `.303` file the user had just reviewed, with no error or warning at any point.
+Fixed by exporting `applyBoxParams` from `fiscalModelsUtils.js` (previously private to that module)
+and threading a new `manualOverrides` prop from `FmModel303Page.jsx` into `AeatSubmitFlow`, which
+now calls `applyBoxParams(params, manualOverrides)` right alongside `applyIdentParams` — mirroring
+`generate303File`'s own mapping exactly, so the file the user downloads and the submission AEAT
+receives can no longer disagree on box values. See
+`models/303/__tests__/AeatSubmitFlow.vitest.jsx`.
+
+**All three sync gaps (pt.4/pt.5/pt.6 above) were found and confirmed empirically against the real
+AEAT test simulator (ServValiDos)** during ETP-5431 testing — not only via unit tests — the same
+simulator that surfaced the box69/box70 formula bug documented above. That real-submission
+confirmation is what gives the `AeatSubmitFlow` gap (pt.6) its severity: this was not a theoretical
+code-review finding, it was traced from an actual rejected/mismatched telematic test submission back
+to the missing `manualOverrides` prop.
 
 *Why this isn't routed through `FmBoxes303`'s existing `derivedValue`/`computeDerivedValue`
 mechanism* (used by box 87/107/`importe_devolucion` elsewhere in this doc): that mechanism is
@@ -1238,10 +1302,15 @@ box.
 
 **Rule A, second correction (ETP-5431, confirmed AEAT ServValiDos rejection) — the `box69 === 0`
 draft above was replaced by the `MIN`/`ABS` formula.** Any pre-existing test that asserted the OLD
-per-branch behaviour at `box69 = 0` (empty box 111) now has an outdated expectation — the correct
+per-branch behaviour at `box69 = 0` (empty box 111) had an outdated expectation — the correct
 result at `box69 = 0` is `box70` (via `MIN(box70, ABS(box71))`), not blank. These were identified
-but deliberately left untouched by the fix itself (testing is a separate pipeline phase): they need
-review/rewrite before the fix is considered fully verified.
+and deliberately left untouched by the fix itself in a first pass (testing is a separate pipeline
+phase), then rewritten in commit `ea2d9d5a4` ("Rewrite box111 tests for MIN/ABS formula rewrite"):
+`fiscalModelsUtils.boxMerge.vitest.js`, `FmModel303Page.box111Autocomplete.vitest.jsx`,
+`FmModel303Page.negativeBoxClamp.vitest.jsx`, and `fm303Layouts.computeBox111.vitest.js` all now
+assert the `MIN`/`ABS` behaviour instead of the superseded per-branch one. The full suite passes
+(1656 vitest + 301 Node test-runner cases, 0 failures, verified in REVIEW) — the fix is fully
+verified, not pending.
 
 **Bug F — boxes [14][15], [25][26] and [40][41] always rendered blank instead of autocalculating.**
 `Fiscal303BoxesHandler.computeBoxes` never populated boxes 14/15 ("Modificación bases y cuotas"),
