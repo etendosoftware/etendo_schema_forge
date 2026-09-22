@@ -10,25 +10,35 @@ export default function ContactTypeToggle({ data, onChange }) {
 
   const userSelectedRef = useRef(false);
   const prevDataIdRef = useRef(data?.id ?? null);
-
-  // Stores the exact string we last auto-wrote to `name` (null = we've written
-  // nothing). Used to detect whether the current Razón Social is still "owned by
-  // us" (safe to re-sync) or has been edited by the user / carries a persisted
-  // value we never generated (must never be overwritten).
-  const lastAutoFilledNameRef = useRef(null);
+  // The form only shows one identity shape at a time, but an existing record may be
+  // toggled back and forth before the user saves. Keep the hidden shape locally so a
+  // type preview never destroys a persisted value. These are drafts only: the active
+  // form state is still cleared so the eventual save cannot persist fields belonging
+  // to the other type.
+  const initialIsPerson = data?.etgoIsperson === true || data?.etgoIsperson === 'Y';
+  const companyNameDraftRef = useRef(initialIsPerson ? '' : (data?.name ?? ''));
+  // A draft derived from person names may be safely refreshed when those names change.
+  // A loaded or manually edited company name is always user-owned and restored verbatim.
+  const companyNameAutoDerivedRef = useRef(false);
+  const personNameDraftRef = useRef(initialIsPerson
+    ? { firstName: data?.etgoFirstname ?? '', lastName: data?.etgoLastname ?? '' }
+    : { firstName: '', lastName: '' });
 
   useEffect(() => {
     if (!data?.id) return;
     const prevDataId = prevDataIdRef.current;
     prevDataIdRef.current = data.id;
 
-    // Switching to a DIFFERENT existing record — start the auto-fill heuristic
-    // fresh so a value we wrote for the previous contact does not leak into the
-    // ownership check for this one. Guarded by `prevDataId && prevDataId !== data.id`
-    // so the "new record was just saved" path (prevDataId === null) below does
-    // NOT wipe a value we just wrote for the record being saved.
+    // Switching to a DIFFERENT existing record must not leak hidden drafts from
+    // the previously selected contact. Do not reset on a new record just saved:
+    // its current edit state is still the source of truth for this mounted form.
     if (prevDataId && prevDataId !== data.id) {
-      lastAutoFilledNameRef.current = null;
+      const isPerson = data.etgoIsperson === true || data.etgoIsperson === 'Y';
+      companyNameDraftRef.current = isPerson ? '' : (data.name ?? '');
+      companyNameAutoDerivedRef.current = false;
+      personNameDraftRef.current = isPerson
+        ? { firstName: data.etgoFirstname ?? '', lastName: data.etgoLastname ?? '' }
+        : { firstName: '', lastName: '' };
     }
 
     if (!prevDataId && userSelectedRef.current) {
@@ -49,32 +59,48 @@ export default function ContactTypeToggle({ data, onChange }) {
 
   if (!data) return null;
 
-  // Switching to company: keep the legal name (Razón Social) in sync with the
-  // typed first/last name — as long as the current value is still the one WE
-  // auto-generated (or is blank). Once the user edits it by hand, or the record
-  // carries a persisted value we never generated, it is user-owned and must never
-  // be overwritten. A company has no personal first/last name, so those fields
-  // are also cleared (they are hidden in company mode anyway).
+  // Switching to company restores its local draft. A new record that began as a
+  // person has no company draft, so first+last supply a useful initial legal name.
+  // First/last are cleared from the active state: if saved as a company, they must
+  // not be sent to the backend.
   function syncFieldsToCompany() {
     const firstName = (data?.etgoFirstname || '').trim();
     const lastName = (data?.etgoLastname || '').trim();
-    const currentName = (data?.name || '').trim();
     const fullName = `${firstName} ${lastName}`.trim().replace(/\s{2,}/g, ' ');
-    const ownedByAuto = currentName === '' || currentName === lastAutoFilledNameRef.current;
-    if (ownedByAuto && fullName && fullName !== currentName) {
-      onChange('name', fullName);
-      lastAutoFilledNameRef.current = fullName;
+    // Same rule for the person side: bank what the user typed, never overwrite the bank
+    // with the empties this function itself just produced.
+    if (firstName || lastName) personNameDraftRef.current = { firstName, lastName };
+    const existingDraft = String(companyNameDraftRef.current || '').trim();
+    const companyName = companyNameAutoDerivedRef.current || !existingDraft
+      ? fullName
+      : existingDraft;
+    // Only a real value may move the draft. With no person name to derive from there is
+    // nothing to record, and writing the empty result would discard a legal name the user
+    // still owns — which is also what makes re-selecting the already-active Empresa a no-op
+    // instead of a silent erase.
+    if (companyName) {
+      onChange('name', companyName);
+      companyNameDraftRef.current = companyName;
+      companyNameAutoDerivedRef.current = !existingDraft || companyNameAutoDerivedRef.current;
     }
     if (firstName) onChange('etgoFirstname', '');
     if (lastName) onChange('etgoLastname', '');
   }
 
-  // Switching to person: the backend rebuilds Name from first/last on save, so
-  // the Razón Social is not user-owned data — clear it to avoid carrying a stale
-  // company name. Reset the auto-fill tracker: the field is now blank.
+  // Switching to person stores the company legal name locally, clears it from the
+  // active payload, and restores any person draft. The backend rebuilds Name from
+  // first/last on save, so the company-only value must not travel with a person.
   function clearNameForPerson() {
-    if ((data?.name || '').trim() !== '') onChange('name', '');
-    lastAutoFilledNameRef.current = null;
+    const companyName = (data?.name || '').trim();
+    if (companyName) {
+      companyNameAutoDerivedRef.current = companyNameAutoDerivedRef.current
+        && companyName === companyNameDraftRef.current;
+      companyNameDraftRef.current = companyName;
+    }
+    if (companyName) onChange('name', '');
+    const { firstName, lastName } = personNameDraftRef.current;
+    if (firstName) onChange('etgoFirstname', firstName);
+    if (lastName) onChange('etgoLastname', lastName);
   }
 
   function handleSelect(newType) {
@@ -105,7 +131,19 @@ export default function ContactTypeToggle({ data, onChange }) {
           <label
             key={value}
             className="flex flex-row items-center gap-3 cursor-pointer select-none"
-            onClick={() => handleSelect(value)}
+            onClick={(event) => {
+              // ETP-5350 — `preventDefault` is load-bearing, not tidiness. This <label> wraps
+              // an `sr-only` radio, so the browser's label activation behavior synthesizes a
+              // SECOND click on that input, which bubbles back here and ran `handleSelect`
+              // twice per user click. Harmless until the toggle started keeping drafts: the
+              // second call runs after the first has already cleared the person fields, so it
+              // derived an empty name and wiped the very state the drafts exist to preserve
+              // (measured: legal name frozen at its first derivation, a corrected surname that
+              // never re-synced, and a hand-typed Razón Social replaced on the next click).
+              // The radio stays non-interactive and purely declarative for assistive tech.
+              event.preventDefault();
+              handleSelect(value);
+            }}
           >
             <div className="relative flex items-center justify-center w-6 h-6 shrink-0">
               <div

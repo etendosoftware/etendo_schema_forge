@@ -578,41 +578,42 @@ describe('ETP-4954 — the bank-statement CSV template round-trips', () => {
  * header strings from them — nothing here restates a label, so renaming
  * `financeAccountStatementsManualColOut` in any locale file fails these tests.
  */
+/**
+ * Locate `src/locales` the same way `importConfigFor` locates `artifacts/`: walk up from the
+ * cwd, which differs between `npx vitest --root tools/app-shell` run from the repo root and
+ * `npm run vitest` run from inside `tools/app-shell`.
+ */
+function localesDir() {
+  let dir = process.cwd();
+  for (;;) {
+    for (const candidate of ['src/locales', 'tools/app-shell/src/locales']) {
+      const path = resolve(dir, candidate, 'en_US.json');
+      if (existsSync(path)) return dirname(path);
+    }
+    const parent = dirname(dir);
+    if (parent === dir) throw new Error(`could not locate src/locales from ${process.cwd()}`);
+    dir = parent;
+  }
+}
+
+/** Every shipped locale, derived from the directory rather than from a hardcoded list. */
+function shippedLocales() {
+  const dir = localesDir();
+  return readdirSync(dir)
+    .filter((file) => /^[a-z]{2}_[A-Z]{2}\.json$/.test(file))
+    .sort()
+    .map((file) => ({
+      locale: file.replace(/\.json$/, ''),
+      dict: JSON.parse(readFileSync(resolve(dir, file), 'utf8')),
+    }));
+}
+
+/** A `useUI()`-shaped translator backed by a real locale dictionary. */
+const uiFor = (dict) => (key) => dict.genericLabels?.[key] ?? key;
+
 describe('ETP-4954 — the bank-statement template round-trips across languages', () => {
   const FIELDS = BANK_STATEMENT_IMPORT_FIELDS;
 
-  /**
-   * Locate `src/locales` the same way `importConfigFor` locates `artifacts/`: walk up from the
-   * cwd, which differs between `npx vitest --root tools/app-shell` run from the repo root and
-   * `npm run vitest` run from inside `tools/app-shell`.
-   */
-  function localesDir() {
-    let dir = process.cwd();
-    for (;;) {
-      for (const candidate of ['src/locales', 'tools/app-shell/src/locales']) {
-        const path = resolve(dir, candidate, 'en_US.json');
-        if (existsSync(path)) return dirname(path);
-      }
-      const parent = dirname(dir);
-      if (parent === dir) throw new Error(`could not locate src/locales from ${process.cwd()}`);
-      dir = parent;
-    }
-  }
-
-  /** Every shipped locale, derived from the directory rather than from a hardcoded list. */
-  function shippedLocales() {
-    const dir = localesDir();
-    return readdirSync(dir)
-      .filter((file) => /^[a-z]{2}_[A-Z]{2}\.json$/.test(file))
-      .sort()
-      .map((file) => ({
-        locale: file.replace(/\.json$/, ''),
-        dict: JSON.parse(readFileSync(resolve(dir, file), 'utf8')),
-      }));
-  }
-
-  /** A `useUI()`-shaped translator backed by a real locale dictionary. */
-  const uiFor = (dict) => (key) => dict.genericLabels?.[key] ?? key;
 
   const LOCALES = shippedLocales();
 
@@ -911,5 +912,111 @@ describe('ETP-4954 — the template sample row is localized and still round-trip
     for (const { dict } of LOCALES) templateRowFor(dict);
     assert.deepEqual(FIELDS.map((f) => f.example), before,
       'localizeFields must return new objects, not edit the shared descriptor');
+  });
+});
+
+/**
+ * ETP-5350 — every import column a user sees must be translatable.
+ *
+ * `useWindowImportDialog.fieldLabelFn` resolves a header as `labelKey` -> AD label for `column`
+ * -> `field.label`, and that last step is a hardcoded English string. Thirteen of the twenty
+ * contacts fields and five of the eight product fields reached it, so a Spanish session
+ * downloaded a template and opened a mapping step written half in English. ETP-5223 translated
+ * the dialog's own chrome; the column names it lists come from per-window config and were left
+ * behind.
+ *
+ * Reads the GENERATED contract, like its sibling suites above, so it fails until
+ * `make regen ONLY=contacts,product` has carried a new `decisions.json` through.
+ */
+describe('ETP-5350 — every import column is translatable', () => {
+  const LOCALES = shippedLocales();
+
+  it('gives every field either a labelKey or an AD column, for both windows', () => {
+    for (const window of ['contacts', 'product']) {
+      const config = frontendContractFor(window).window.import;
+      const untranslatable = config.fields
+        .filter((field) => !field.labelKey && !field.column)
+        .map((field) => field.target);
+      assert.deepEqual(untranslatable, [],
+        `${window}: these columns would render their hardcoded English label`);
+    }
+  });
+
+  it('translates every declared labelKey in every shipped locale, for both windows', () => {
+    for (const window of ['contacts', 'product']) {
+      const config = frontendContractFor(window).window.import;
+      for (const { locale, dict } of LOCALES) {
+        for (const field of config.fields.filter((f) => f.labelKey)) {
+          const header = uiFor(dict)(field.labelKey);
+          assert.notEqual(header, field.labelKey,
+            `${locale}: no translation for "${field.labelKey}" (${window}.${field.target})`);
+        }
+      }
+    }
+  });
+
+  /**
+   * The scope suffix is appended by `fieldLabelFn`, so a label that already spelled it out came
+   * back doubled — "Email (Contact) (Contact)". The base label is the field's own name.
+   */
+  it('leaves the scope suffix out of the label itself', () => {
+    for (const window of ['contacts', 'product']) {
+      const config = frontendContractFor(window).window.import;
+      for (const field of config.fields.filter((f) => f.headerScope)) {
+        assert.doesNotMatch(String(field.label ?? ''), /\((Contact|Address)\)\s*$/,
+          `${window}.${field.target}: headerScope already adds this suffix`);
+      }
+    }
+  });
+
+  /**
+   * ETP-5350 — the header the template PRINTS must never be read back as a different field.
+   *
+   * This is the one that mattered. `etgoFirstname` carries no `labelKey`, so its header came
+   * from the AD label, which `labelOverrides.es_ES` sets to "Nombre" — and "nombre" is a
+   * declared alias of `name`. A template downloaded in Spanish therefore had a column headed
+   * "Nombre" holding first names, and re-importing it wrote every one of them into the
+   * commercial name. Reported from the field as "the mapping confuses nombre with nombre
+   * comercial" and never reproduced, because it is invisible unless you round-trip the file.
+   *
+   * The header is resolved the way `useWindowImportDialog.fieldLabelFn` resolves it —
+   * `labelKey`, then the AD label through `labelOverrides`, then `label` — because reading only
+   * `labelKey` is exactly what let this through: the field that broke had none.
+   *
+   * Unmapped is tolerated, mis-mapped is not: `ImportDialog` adds the session language's own
+   * header to the field's aliases, which rescues a header nobody else claims (every scoped
+   * field's "… (Contacto)" lands here). It cannot rescue one another field already owns,
+   * because `mapColumns` awards a shared alias to the FIRST field that declares it.
+   */
+  it('never prints a header that another field would claim, in any locale, for both windows', () => {
+    const norm = (v) => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .trim().toLowerCase();
+    const SCOPE = { contact: 'importHeaderScopeContact', address: 'importHeaderScopeAddress' };
+
+    for (const window of ['contacts', 'product']) {
+      const contract = frontendContractFor(window).window;
+      const fields = contract.import.fields;
+      for (const { locale, dict } of LOCALES) {
+        const ui = uiFor(dict);
+        // `useLabel(labelOverrides)`: the window's override first, then the AD dictionary.
+        const adLabel = (column) => contract.labelOverrides?.[locale]?.[column]
+          ?? dict.fields?.[column]?.label ?? null;
+        const headerFor = (f) => {
+          const base = (f.labelKey ? ui(f.labelKey) : null)
+            || (f.column ? adLabel(f.column) : null) || f.label || f.target;
+          const scope = f.headerScope ? ui(SCOPE[f.headerScope]) : null;
+          return !scope || norm(base) === norm(scope) ? base : `${base} (${scope})`;
+        };
+        for (const field of fields) {
+          const header = norm(headerFor(field));
+          const owner = fields.find((candidate) => [candidate.label, ...(candidate.aliases ?? [])]
+            .some((known) => norm(known) === header));
+          if (!owner) continue;
+          assert.equal(owner.target, field.target,
+            `${locale}/${window}: "${field.target}" prints the header "${header}", `
+            + `which the import reads back as "${owner.target}"`);
+        }
+      }
+    }
   });
 });
