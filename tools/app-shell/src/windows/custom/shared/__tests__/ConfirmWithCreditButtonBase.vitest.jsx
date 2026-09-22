@@ -139,6 +139,86 @@ describe('ConfirmWithCreditButtonBase — postConfirmButtonLabel (ETP-4737)', ()
 // ETP-4728 — print unification. PrintButton no longer exists: printing is
 // served exclusively by the generic icon-only print flow in DetailView.jsx /
 // DocumentPrintDrawer.jsx. This component must never regrow it.
+// ── ETP-5381 — a DRAFT rectificative invoice already counts as "invoiced" ─────────
+// The duplicate-invoice gate lives entirely in the shared layer: useConfirmWithCredit
+// derives hasReturnInvoice and ConfirmWithCreditButtonBase renders the create button
+// only for `status === 'CO' && !hasReturnInvoice`. Every return window reaches it
+// through a thin wrapper, so this matrix belongs here once, not per window.
+//
+// The DR case is deliberately inverted from what it used to assert. It used to demand
+// the button stay VISIBLE while a rectificative invoice sat in DR, which is precisely
+// how a second one got created: a draft reserves nothing (C_Invoice_Post is what raises
+// qtyinvoiced / isinvoiced), so the same return document could be invoiced twice. The
+// gate now mirrors the server-side duplicate guard — any non-voided invoice hides the
+// button, and only a voided one is treated as if it were never issued.
+describe('ConfirmWithCreditButtonBase — duplicate-invoice gate, returnInvoices array fallback (ETP-5381)', () => {
+  const co = (extra) => ({ documentStatus: 'CO', ...extra });
+
+  it('hides the create button when a DRAFT return invoice already exists', () => {
+    render(
+      <ConfirmWithCreditButtonBase {...BASE_PROPS} data={co({ returnInvoices: [{ documentStatus: 'DR' }] })} />
+    );
+    expect(screen.queryByTestId('action-create-return-invoice')).not.toBeInTheDocument();
+  });
+
+  it('hides the create button when a COMPLETED return invoice already exists', () => {
+    render(
+      <ConfirmWithCreditButtonBase {...BASE_PROPS} data={co({ returnInvoices: [{ documentStatus: 'CO' }] })} />
+    );
+    expect(screen.queryByTestId('action-create-return-invoice')).not.toBeInTheDocument();
+  });
+
+  it('hides the create button when only one entry of a mixed list is non-voided', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={co({ returnInvoices: [{ documentStatus: 'VO' }, { documentStatus: 'DR' }] })}
+      />
+    );
+    expect(screen.queryByTestId('action-create-return-invoice')).not.toBeInTheDocument();
+  });
+
+  it('still shows the create button when every invoice in the list is VOIDED', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={co({ returnInvoices: [{ documentStatus: 'VO' }, { documentStatus: 'VO' }] })}
+      />
+    );
+    expect(screen.getByTestId('action-create-return-invoice')).toBeInTheDocument();
+  });
+
+  it('still shows the create button when returnInvoices is an empty array', () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={co({ returnInvoices: [] })} />);
+    expect(screen.getByTestId('action-create-return-invoice')).toBeInTheDocument();
+  });
+
+  it('still shows the create button when neither the flag nor the array is present', () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={co()} />);
+    expect(screen.getByTestId('action-create-return-invoice')).toBeInTheDocument();
+  });
+
+  it('lets the explicit backend flag win over the array: flag true + VO-only list hides the button', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={co({ hasReturnInvoice: true, returnInvoices: [{ documentStatus: 'VO' }] })}
+      />
+    );
+    expect(screen.queryByTestId('action-create-return-invoice')).not.toBeInTheDocument();
+  });
+
+  it('lets the explicit backend flag win over the array: flag false + DRAFT list shows the button', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={co({ hasReturnInvoice: false, returnInvoices: [{ documentStatus: 'DR' }] })}
+      />
+    );
+    expect(screen.getByTestId('action-create-return-invoice')).toBeInTheDocument();
+  });
+});
+
 describe('ConfirmWithCreditButtonBase — no private PrintButton (ETP-4728)', () => {
   it('does not render a print button in any status', () => {
     render(
@@ -567,5 +647,103 @@ describe('ConfirmWithCreditButtonBase — save pending edits before confirm (ETP
     fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
     await waitFor(() => expect(screen.getByTestId('confirm-inout-modal')).toBeInTheDocument());
     expect(onSave).not.toHaveBeenCalled();
+  });
+});
+
+// ETP-5408 — the DR "Confirmar" button was a hand-rolled <button> with an inline
+// style object and NO icon: the only Confirmar in the product without the checkmark
+// that Facturas / Pedidos / Albaranes show. It now renders the shared Button
+// (@/components/ui/button.jsx) with a <Check> icon and classes derived from the same
+// getButtonClass/getSaveBtnCls helpers DetailView uses for a positive process button.
+//
+// These tests deliberately exercise the REAL Button and the REAL class helpers — the
+// mocks at the top of this file cover i18n, the router, sonner and the three modals,
+// and must keep leaving button.jsx / detailViewHelpers.jsx unmocked, otherwise the
+// assertions below stop proving anything about the shared component.
+const DR_DATA = { documentStatus: 'DR', linesCount: 2 };
+
+describe('ConfirmWithCreditButtonBase — DR confirm renders the shared positive button (ETP-5408)', () => {
+  it('renders a check icon inside the DR confirm button', () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} />);
+    const btn = screen.getByTestId('action-confirm-with-credit');
+    const icon = btn.querySelector('svg');
+    // The pre-fix hand-rolled button had no icon at all.
+    expect(icon).not.toBeNull();
+    expect(icon.getAttribute('class')).toContain('lucide-check');
+    expect(icon).toHaveClass('mr-1');
+  });
+
+  it('carries no inline style attribute (the hand-rolled styling is gone)', () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} />);
+    expect(screen.getByTestId('action-confirm-with-credit')).not.toHaveAttribute('style');
+  });
+
+  it('renders through the shared Button, carrying its variant classes and the helper-derived gap', () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} />);
+    const btn = screen.getByTestId('action-confirm-with-credit');
+    // Only the shared Button's cva recipe emits these; a bespoke <button> would not.
+    expect(btn).toHaveClass('disabled:pointer-events-none');
+    expect(btn).toHaveClass('bg-primary');
+    // getSaveBtnCls('sm') — proves the class string came from the shared helper and
+    // was merged in, not hardcoded next to a hand-rolled element.
+    expect(btn).toHaveClass('gap-1.5');
+  });
+
+  it('still renders the caller-provided label next to the icon', () => {
+    render(
+      <ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} confirmDrLabel="Confirmar" />
+    );
+    expect(screen.getByTestId('action-confirm-with-credit')).toHaveTextContent('Confirmar');
+  });
+});
+
+// ETP-4933 guard, re-armed by ETP-5408. A `title` on a DISABLED element never fires,
+// and the shared Button carries `disabled:pointer-events-none` — so migrating this
+// button to it would have silently killed the "why is Confirm blocked" explanation.
+// GateTooltip (imported from saveActions.jsx, not re-implemented) restores it: a
+// non-disabled <span title=...> wrapper that does receive the hover.
+describe('ConfirmWithCreditButtonBase — blocked DR confirm still explains itself (ETP-5408 / ETP-4933)', () => {
+  const GATE = { blocked: true, title: 'saveMissingRequired: Business Partner' };
+
+  it('wraps the disabled button in a non-disabled span carrying the gate title', () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} saveGate={GATE} />);
+    const btn = screen.getByTestId('action-confirm-with-credit');
+    expect(btn).toBeDisabled();
+
+    const wrapper = btn.parentElement;
+    expect(wrapper.tagName).toBe('SPAN');
+    expect(wrapper).toHaveAttribute('title', GATE.title);
+    // The wrapper is what the pointer can still reach; it must never be disabled itself.
+    expect(wrapper).not.toBeDisabled();
+  });
+
+  it('does not open the confirm modal while the gate blocks it', () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} saveGate={GATE} />);
+    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
+  });
+
+  // The invariant the five existing saveActions.jsx call sites rely on: when there is
+  // nothing to explain, GateTooltip adds NO element — the DOM is a bare Button, so no
+  // existing selector or layout is affected.
+  it('adds no wrapper element when the gate is not blocking', () => {
+    const { container } = render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={DR_DATA}
+        saveGate={{ blocked: false, title: 'saveMissingRequired: Business Partner' }}
+      />
+    );
+    const btn = screen.getByTestId('action-confirm-with-credit');
+    expect(btn).not.toBeDisabled();
+    expect(btn.parentElement).toBe(container);
+    expect(container.querySelector('span[title]')).toBeNull();
+  });
+
+  it('adds no wrapper element when no saveGate is supplied at all', () => {
+    const { container } = render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} />);
+    const btn = screen.getByTestId('action-confirm-with-credit');
+    expect(btn.parentElement).toBe(container);
+    expect(container.querySelector('span[title]')).toBeNull();
   });
 });

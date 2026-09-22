@@ -260,6 +260,27 @@ Regenerated on 2026-05-12 as part of the feature/ETP-3908 epic merge. No functio
 
 Two new line-import flows are now available on draft purchase invoices when a business partner is selected:
 
+
+**Header order reference (`C_Invoice.C_Order_ID`) — ETP-5381.** Adding a line that carries a
+`salesOrderLine` re-derives the parent invoice's order reference server-side, in
+`InvoiceLineHandler#syncInvoiceOrderReferenceAfterLineSave` (`com.etendoerp.go`, POST only). It
+replicates Classic's `Create Lines From` rule verbatim
+(`UpdateInvoiceLineInformation#setOrderReferenceInInvoiceHeaderIfLinkedOnlyToTheSameOrderOrBlankIt`):
+the header points at the line's order, and is **blanked to null** as soon as the invoice also holds
+a line from a different order, rather than naming an arbitrary one. It is derived from the persisted
+lines, not from the set of documents the popup sent, so importing from a SHIPMENT that traces back
+to an order links the header too, and a second import from another order self-corrects.
+
+This **cannot** be done with a frontend PATCH after import: `C_Order_ID` is `isreadonly='Y'` on the
+`header` entity of both invoice specs, so `NeoFieldFilter#filterWriteRequest` strips it — HTTP 200,
+nothing written. The goods-receipt import modal's `afterImport` does PATCH `salesOrder`, and that
+works only because the field is `isreadonly='N'` in ITS spec; copying that code into an invoice
+window produces a silent no-op. Before the fix the invoice showed "Sin documentos relacionados"
+while the same invoice built in Classic showed its order chip — `RelatedDocuments.jsx` reads the
+header's `salesOrder`. GO's own auto-generation path was never affected
+(`CreateDraftInvoiceHandler` already called `invoice.setSalesOrder`); only the manual
+import-lines path left it empty.
+
 **Import from Purchase Order** (`artifacts/purchase-invoice/custom/ImportFromPurchaseOrderModal.jsx`):
 - Lists confirmed purchase orders (`documentStatus=CO`) for the same supplier with `invoiceStatus < 100`.
 - Expanding an order row lazy-loads its lines with product name, ordered quantity, unit price, and discount.
@@ -1851,3 +1872,33 @@ secondary line at all.
 - `artifacts/purchase-invoice/generated/web/purchase-invoice/HeaderPage.jsx` — `selectorPriceCurrency="org"` passed to
   `DetailView`.
 - `sf-validate-pipeline --scope=purchase-invoice` — clean.
+
+### Invoice quantity is no longer capped against the shipment — ETP-5381
+
+`AbstractInvoiceHeaderHandler.validateLineQtyBeforeComplete` (and its helper
+`checkInoutEntryForOverInvoicing`) have been **removed**, together with the `ETGO_InvoiceLineAlreadyInvoiced`
+AD_MESSAGE, its `backendErrors.js` matcher and its i18n keys. Do not reinstate them.
+
+The guard capped every invoice line at the pending quantity of the shipment/receipt line it pointed
+at. It took that ceiling from `ABS(sil.movementqty)` in `NeoInvoiceSupport.queryPendingQtyPerLine`,
+whose row filter is `WHERE sil.m_inout_id = ? AND sil.isactive = 'Y'` — **no docstatus filter on the
+shipment**. (Every `docstatus NOT IN ('VO','CL','DR')` clause in that query filters INVOICES, not the
+shipment.) So an unconfirmed shipment, which has delivered nothing, capped the invoice.
+
+Reported case: order for 15 → shipment created from it, edited down to 10, left in **draft** →
+invoice created from the ORDER, reactivated and set to 12 → completion refused with *"the quantity to
+invoice (12) exceeds the pending quantity (10). It may already be invoiced in another document."*
+Both clauses were false: 15 were pending on the order, and no other invoice existed.
+`InvoiceLineLinker` had attached the invoice line to the draft shipment line — its query matches on
+`C_OrderLine_ID` and does not look at the shipment's status either — which is what handed the guard
+the wrong ceiling.
+
+**What still protects over-invoicing:** the core, in `C_INVOICE_POST`. For every invoice line carrying
+a `C_OrderLine_ID` it computes `ABS(ol.qtyordered) - ABS(ol.qtyinvoiced + qty)` and raises
+`@QtyInvoicedHigherOrdered@` when that goes negative. That ceiling is measured against the **order**,
+which is the commitment, and it is Classic's own behaviour.
+
+**Known gap, accepted:** that core check is conditional on `C_OrderLine_ID`, so an invoice line with
+no order behind it (invoiced straight from a standalone shipment) now has no quantity ceiling at all.
+Flagged rather than papered over; covering it would need a validation against the *confirmed*
+shipment, which is a separate decision.
