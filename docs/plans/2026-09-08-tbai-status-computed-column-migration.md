@@ -988,6 +988,18 @@ The comparison is deliberately **not** truncated to a calendar day: Classic's
 config carrying a time-of-day excludes invoices dated that same day. Truncating would silently
 disagree with Classic on exactly those rows.
 
+> **ETP-5046 — the JavaScript side now honours the time-of-day too, so SQL and JS agree.**
+> `isSifEligibleByDate()` (`shared/fiscalTargets.js`, still live for SII and VERI\*FACTU) had been
+> comparing the reference date's LOCAL midnight against `new Date(adoptionDateRaw)`'s UTC-parsed
+> instant — two reference frames — so the inclusive boundary returned `true` in UTC and `false` in
+> every UTC+ timezone, Europe/Madrid included. The fix reads the adoption timestamp's wall clock
+> literally via `parseWallClockInstant()` (`lib/dateOnly.js`), discarding the `Z` the server did not
+> really mean. Both operands then sit in the same local frame, which removes the timezone dependency
+> **without** truncating to a calendar day. Collapsing both sides to a day would have been the
+> simpler fix but would have made this stored computed column and the send action disagree about an
+> invoice dated on an adoption day that carries a time-of-day — so the non-truncation above is now a
+> shared invariant, not a SQL-only one.
+
 ### A second dependency, deliberately added
 
 `AD_COLUMN_COMP_DEPENDENCY` `D51FD6FB8BBB4E09B0DCDEA2AF8D3A49` watches `TBAI_Config`

@@ -6,6 +6,7 @@ import {
   formatCalendarMonthYear,
   getCalendarDateRelation,
   parseCalendarDate,
+  parseWallClockInstant,
   todayCalendarISO,
   tomorrowCalendarISO,
 } from '../dateOnly.js';
@@ -173,6 +174,218 @@ describe('dateOnly helpers', () => {
 
     it('pads single-digit month and day', () => {
       assert.equal(calendarISODaysAgo(2, new Date(2026, 0, 5, 12, 0, 0)), '2026-01-03');
+    });
+  });
+
+  // ETP-5046 — the wall-clock reader. It exists because some AD config timestamps
+  // are authored as a wall-clock moment in the DB server's zone and then serialized
+  // with a `Z` the server never meant. Comparing such a value against a date-only
+  // business field (which `parseCalendarDate` puts at LOCAL midnight) with a plain
+  // `new Date(...)` puts the two operands in different reference frames, so the
+  // comparison's answer changes with the viewer's timezone — that is exactly how the
+  // TicketBAI adoption-date gate came to hide the send action in Europe/Madrid while
+  // CI (UTC) stayed green. See `isSifEligibleByDate` in windows/custom/shared/fiscalTargets.js.
+  describe('parseWallClockInstant', () => {
+    // Local getters, never `toISOString()`: the whole contract is about what the
+    // LOCAL clock reads, so asserting on a UTC rendering would re-introduce the very
+    // frame confusion this helper removes.
+    const wallClock = (date) => (date === null ? null : [
+      date.getFullYear(), date.getMonth(), date.getDate(),
+      date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds(),
+    ]);
+
+    describe('discards the zone designator', () => {
+      // The four spellings below denote four DIFFERENT absolute instants to
+      // `new Date(...)`. This helper deliberately reads only the wall clock, so all
+      // four must land on the same local 14:30 — that equality IS the contract.
+      const SPELLINGS = [
+        ['no zone at all', '2026-01-01T14:30:00'],
+        ['a Z suffix', '2026-01-01T14:30:00Z'],
+        ['a lowercase z suffix', '2026-01-01T14:30:00z'],
+        ['a positive offset', '2026-01-01T14:30:00+02:00'],
+        ['a negative offset', '2026-01-01T14:30:00-05:00'],
+        ['a colon-less offset', '2026-01-01T14:30:00+0530'],
+        ['a space separator instead of T', '2026-01-01 14:30:00'],
+        ['no seconds', '2026-01-01T14:30'],
+        ['a Z suffix and milliseconds', '2026-01-01T14:30:00.000Z'],
+      ];
+
+      for (const [label, raw] of SPELLINGS) {
+        it(`reads 14:30 local from a value with ${label}`, () => {
+          assert.deepEqual(wallClock(parseWallClockInstant(raw)), [2026, 0, 1, 14, 30, 0, 0]);
+        });
+      }
+
+      it('collapses every spelling onto the exact same instant', () => {
+        const instants = SPELLINGS.map(([, raw]) => parseWallClockInstant(raw).getTime());
+        assert.equal(new Set(instants).size, 1, 'a zone designator must not move the result');
+      });
+
+      it('does NOT agree with new Date() on a zoned value away from UTC', () => {
+        // A guard against a future "simplification" back to `new Date(raw)`: the two
+        // only coincide when the host happens to be UTC, which is precisely why the
+        // original bug survived CI. Skipped on a UTC host, where there is nothing to
+        // distinguish.
+        const originalTz = process.env.TZ;
+        process.env.TZ = 'Europe/Madrid';
+        try {
+          assert.notEqual(
+            parseWallClockInstant('2026-01-01T14:30:00Z').getTime(),
+            new Date('2026-01-01T14:30:00Z').getTime(),
+          );
+        } finally {
+          if (originalTz === undefined) delete process.env.TZ;
+          else process.env.TZ = originalTz;
+        }
+      });
+    });
+
+    describe('is timezone-independent', () => {
+      const originalTz = process.env.TZ;
+
+      // Europe/Madrid is the real client case (TicketBAI/SII/VERI*FACTU are Spanish
+      // fiscal regimes) and a UTC+ host, where the pre-fix reading was wrong.
+      // Buenos Aires covers the UTC- side, Kiritimati the +14 extreme, Kolkata a
+      // half-hour offset, and UTC the runner's own default.
+      for (const tz of [
+        'UTC',
+        'Europe/Madrid',
+        'America/Argentina/Buenos_Aires',
+        'Pacific/Kiritimati',
+        'Asia/Kolkata',
+      ]) {
+        it(`reads the same wall clock under host TZ=${tz}`, () => {
+          process.env.TZ = tz;
+          try {
+            assert.deepEqual(
+              wallClock(parseWallClockInstant('2026-01-01T14:30:00.000Z')),
+              [2026, 0, 1, 14, 30, 0, 0],
+            );
+            assert.deepEqual(
+              wallClock(parseWallClockInstant('2026-01-01T00:00:00.000Z')),
+              [2026, 0, 1, 0, 0, 0, 0],
+            );
+            // Year boundaries are where a one-day shift is most visible.
+            assert.deepEqual(
+              wallClock(parseWallClockInstant('2025-12-31T23:59:59.999Z')),
+              [2025, 11, 31, 23, 59, 59, 999],
+            );
+          } finally {
+            if (originalTz === undefined) delete process.env.TZ;
+            else process.env.TZ = originalTz;
+          }
+        });
+      }
+    });
+
+    describe('date-only input', () => {
+      it('falls back to local midnight, identical to parseCalendarDate', () => {
+        assert.deepEqual(wallClock(parseWallClockInstant('2026-04-27')), [2026, 3, 27, 0, 0, 0, 0]);
+        assert.equal(
+          parseWallClockInstant('2026-04-27').getTime(),
+          parseCalendarDate('2026-04-27').getTime(),
+        );
+      });
+
+      it('agrees with parseCalendarDate in every timezone', () => {
+        const originalTz = process.env.TZ;
+        try {
+          for (const tz of ['UTC', 'Europe/Madrid', 'America/Argentina/Buenos_Aires', 'Pacific/Kiritimati']) {
+            process.env.TZ = tz;
+            assert.equal(
+              parseWallClockInstant('2026-04-27').getTime(),
+              parseCalendarDate('2026-04-27').getTime(),
+              `disagreed under ${tz}`,
+            );
+          }
+        } finally {
+          if (originalTz === undefined) delete process.env.TZ;
+          else process.env.TZ = originalTz;
+        }
+      });
+    });
+
+    describe('fractional seconds', () => {
+      it('reads a single fractional digit as tenths (.5 -> 500ms), not as 5ms', () => {
+        assert.equal(parseWallClockInstant('2026-01-01T14:30:00.5').getMilliseconds(), 500);
+      });
+
+      it('reads two fractional digits as hundredths (.25 -> 250ms)', () => {
+        assert.equal(parseWallClockInstant('2026-01-01T14:30:00.25').getMilliseconds(), 250);
+      });
+
+      it('reads three fractional digits verbatim', () => {
+        assert.equal(parseWallClockInstant('2026-01-01T14:30:00.007').getMilliseconds(), 7);
+      });
+
+      it('truncates beyond millisecond precision rather than rounding or overflowing', () => {
+        assert.equal(parseWallClockInstant('2026-01-01T14:30:00.123456').getMilliseconds(), 123);
+        assert.equal(parseWallClockInstant('2026-01-01T14:30:00.999999').getMilliseconds(), 999);
+      });
+
+      it('defaults to zero milliseconds when no fraction is present', () => {
+        assert.equal(parseWallClockInstant('2026-01-01T14:30:00').getMilliseconds(), 0);
+      });
+    });
+
+    describe('Date input', () => {
+      it('returns a copy of the same instant, not the caller’s object', () => {
+        const input = new Date(2026, 0, 1, 14, 30, 0, 0);
+        const result = parseWallClockInstant(input);
+        assert.equal(result.getTime(), input.getTime());
+        assert.notEqual(result, input, 'must not hand back the caller’s Date');
+      });
+
+      it('does not let a mutation of the result leak back into the input', () => {
+        const input = new Date(2026, 0, 1, 14, 30, 0, 0);
+        const result = parseWallClockInstant(input);
+        result.setFullYear(1999);
+        assert.equal(input.getFullYear(), 2026);
+      });
+
+      it('returns null for an invalid Date', () => {
+        assert.equal(parseWallClockInstant(new Date('nope')), null);
+      });
+    });
+
+    describe('non-ISO and unusable input', () => {
+      it('delegates a non-ISO shape to parseCalendarDate rather than inventing a parser', () => {
+        assert.equal(
+          parseWallClockInstant('03/05/2024').getTime(),
+          parseCalendarDate('03/05/2024').getTime(),
+        );
+      });
+
+      it('trims surrounding whitespace before matching', () => {
+        assert.deepEqual(
+          wallClock(parseWallClockInstant('  2026-01-01T14:30:00Z  ')),
+          [2026, 0, 1, 14, 30, 0, 0],
+        );
+      });
+
+      it('returns null for falsy input', () => {
+        assert.equal(parseWallClockInstant(null), null);
+        assert.equal(parseWallClockInstant(undefined), null);
+        assert.equal(parseWallClockInstant(''), null);
+      });
+
+      it('returns null for unparsable garbage', () => {
+        assert.equal(parseWallClockInstant('not-a-date'), null);
+        assert.equal(parseWallClockInstant('tomorrow'), null);
+        assert.equal(parseWallClockInstant('{}'), null);
+      });
+
+      it('rolls an out-of-range component over, exactly like the Date constructor', () => {
+        // Documenting real behaviour, not endorsing it: the shape regex only checks
+        // digit COUNTS, so '2026-13-45T99:99:99' matches and the local-time
+        // constructor normalizes the overflow (month 13 -> next January, and so on).
+        // This helper is fed AD timestamp columns, which cannot hold an impossible
+        // value, so range validation belongs upstream rather than here -- but if that
+        // ever changes, this assertion is where the decision must be revisited.
+        const rolled = parseWallClockInstant('2026-13-45T99:99:99');
+        assert.ok(rolled instanceof Date);
+        assert.equal(Number.isNaN(rolled.getTime()), false);
+      });
     });
   });
 });
