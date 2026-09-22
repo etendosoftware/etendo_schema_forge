@@ -173,18 +173,7 @@ const BASE = {
         { id: 'bank_direccion', labelKey: 'fm.ident.bank.direccion', type: 'text', readOnly: false, maxLength: 35, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
         { id: 'bank_ciudad',    labelKey: 'fm.ident.bank.ciudad',    type: 'text', readOnly: false, maxLength: 30, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
         { id: 'bank_pais',      labelKey: 'fm.ident.bank.pais',      type: 'text', readOnly: false, maxLength: 2,  visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
-        // ETP-5438 — bank_sepa ("Devolución - Marca SEPA") is a single-digit Num field on the DID
-        // page whose only valid values are this 4-entry enum (spec's own "Nota 2: Devolución
-        // marca SEPA" table) — was a free-text input with no constraint at all. `renderIdentSelectField`
-        // (FmBoxes303.jsx) already generically supports `type: 'select'` (see TIPO_DECLARACION_FIELD
-        // above), so this reuses that existing control rather than inventing a new one.
-        { id: 'bank_sepa',      labelKey: 'fm.ident.bank.sepa',      type: 'select', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN,
-          options: [
-            { value: '0', labelKey: 'fm.ident.bank.sepa.vacia' },
-            { value: '1', labelKey: 'fm.ident.bank.sepa.cuenta_espana' },
-            { value: '2', labelKey: 'fm.ident.bank.sepa.ue_sepa' },
-            { value: '3', labelKey: 'fm.ident.bank.sepa.resto_paises' },
-          ] },
+        { id: 'bank_sepa',      labelKey: 'fm.ident.bank.sepa',      type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
       ],
       rows: [],
     },

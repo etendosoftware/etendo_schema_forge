@@ -1010,22 +1010,18 @@ text-input render paths now forward `maxLength={f.maxLength}`. Backend mirror: a
 400-and-leave-untouched contract, reading `manualData.identification` instead of
 `manualOverrides`) rejects a PUT whose value for any of these 7 keys exceeds its limit.
 
-**`bank_sepa` was free text; the spec defines it as a 4-value enum.** "Devolución - Marca SEPA" is
-actually a single-digit `Num` field on the DID page restricted to `0`/`1`/`2`/`3` (spec's own "Nota
-2: Devolución marca SEPA" table: 0 Vacía, 1 Cuenta España, 2 Unión Europea SEPA, 3 Resto Países) —
-the UI rendered it as unconstrained free text. `fm303Layouts.js`'s `bank_sepa` field is now
-`type: 'select'` with those 4 options (reusing `FmBoxes303.jsx`'s existing generic
-`renderIdentSelectField`, the same control `tipo_declaracion` already uses — no new component). New
-i18n keys `fm.ident.bank.sepa.{vacia,cuenta_espana,ue_sepa,resto_paises}` in `en_US.json`/
-`es_ES.json`/`es_AR.json`. Backend mirror: a new `rejectInvalidBankSepa` guard rejects a PUT whose
-`manualData.identification.bank_sepa` is present, non-blank, and not one of the 4 values —
-`bank_sepa`'s own conditional requiredness (`_BANK_FULL_BLOCK_REQUIRED_WHEN`) is left untouched, an
-absent/blank value is not rejected by this guard.
+**`bank_sepa` is also free text vs. the spec's 4-value enum — out of scope here, tracked
+separately.** "Devolución - Marca SEPA" is actually a single-digit `Num` field on the DID page
+restricted to `0`/`1`/`2`/`3` (spec's own "Nota 2: Devolución marca SEPA" table: 0 Vacía, 1 Cuenta
+España, 2 Unión Europea SEPA, 3 Resto Países), same audit finding as the two gaps above. An initial
+fix (converting `bank_sepa` to a `type: 'select'` with those 4 options plus a matching backend
+`rejectInvalidBankSepa` guard) was reverted from this ticket — it is being handled under a separate
+ticket instead, to avoid two tickets racing on the same field. Do not re-add it here.
 
 Regression tests: `FmModel303Page.negativeBoxClamp.vitest.jsx` (4 new boxes + the box78/box110
-interaction), `FmBoxes303.vitest.jsx` (`maxLength` DOM attributes + the `bank_sepa` select
-rendering/options/onChange/disabled), `fm303Layouts.vitest.js` (raw layout-data assertions for both),
-and `FiscalDeclCrudHandlerTest.java` (all 3 new backend guards, mirroring the existing 111/77 test
+interaction), `FmBoxes303.vitest.jsx` and `fm303Layouts.vitest.js` (`maxLength` DOM attributes /
+raw layout-data assertions for the 7 alphanumeric fields), and `FiscalDeclCrudHandlerTest.java`
+(the widened box111/77 set plus the new oversized-field guard, mirroring the existing 111/77 test
 style).
 
 ### Last-period-only sections — "Información adicional" (ETP-5391)
