@@ -17,7 +17,8 @@ import { GlobalSearchProvider } from '@/components/global-search/GlobalSearchCon
 import { CopilotProvider } from '@/components/CopilotContext';
 import { CopilotWidget } from '@/components/CopilotWidget';
 import { CurrentWindowProvider } from '@/components/CurrentWindowContext';
-import { FirstStepsProvider } from '@/pages/first-steps/FirstStepsContext.jsx';
+import { FirstStepsProvider, useFirstStepsProgressOptional }
+  from '@/pages/first-steps/FirstStepsContext.jsx';
 import { SupportChatProvider, useSupportChat } from '@/components/support/SupportChatContext.jsx';
 import { SupportChatWidget } from '@/components/support/SupportChatWidget.jsx';
 import { Button } from '@/components/ui/button';
@@ -255,7 +256,33 @@ function AppLayoutInner({ menuGroups, embedded }) {
   );
 }
 
+/**
+ * ETP-5364 — mounts `FirstStepsProvider` ABOVE the access gate below, so the checklist state is
+ * one more input the menu is decided from rather than something that arrives after it painted.
+ *
+ * Two reasons it has to be here and not inside `AppLayoutAccessGate`'s return tree, where it used
+ * to live:
+ *
+ *  - `filterMenuGroupsByAccess` runs inside that component and now reads `dismissed`, so the
+ *    provider must be an ANCESTOR of it, not a descendant;
+ *  - mounted below the `allowedIds === undefined` gate, the checklist GET could not even START
+ *    until SFListMenu had answered — so the sidebar was guaranteed to paint before the state was
+ *    known, and a dismissed user saw the entry appear and then vanish. Up here the two requests
+ *    are in flight together.
+ *
+ * It now also wraps `AppLayoutLoading` and `NoAccessScreen`. That is the point for the first one;
+ * for the second it costs one small account-scoped GET in a state that renders nothing, which is
+ * cheaper than threading the state around the gate.
+ */
 export default function AppLayout({ menuGroups }) {
+  return (
+    <FirstStepsProvider data-testid="FirstStepsProvider__488148">
+      <AppLayoutAccessGate menuGroups={menuGroups} data-testid="AppLayoutAccessGate__488148" />
+    </FirstStepsProvider>
+  );
+}
+
+function AppLayoutAccessGate({ menuGroups }) {
   const [searchParams] = useSearchParams();
   // `1` is the read-only preview embed (DetailView also drops pointer events for it).
   // `interactive` strips the same chrome — sidebar, topbar, palette, widgets — but leaves
@@ -289,6 +316,13 @@ export default function AppLayout({ menuGroups }) {
   // returns `{}` before the map has loaded, which filterMenuGroupsByAccess
   // already treats as "hide" for any accessWindowId-gated item (fails closed).
   const windowAccess = useWindowAccessSafe();
+  // ETP-5364 — the fourth menu axis, and the only one that is a user preference rather than an
+  // access rule: `"hideWhenFirstStepsDismissed": true` on menu.json's first-steps entry. Read
+  // through the Optional accessor for the same reason the two above use their `*Safe()` hooks —
+  // a tree with no provider must not throw. `undefined` (no provider, or the state not answered
+  // yet) fails closed in `filterMenuGroupsByAccess`, which is what stops the entry painting
+  // before its state is known.
+  const firstStepsDismissed = useFirstStepsProgressOptional()?.dismissed;
 
   // ETP-5395 Point 1 Fix B — must run BEFORE filterMenuGroupsByAccess and the
   // NoAccessScreen size-check below: id-less menu items (no
@@ -308,7 +342,8 @@ export default function AppLayout({ menuGroups }) {
     menuGroups,
     allowedIds,
     capabilities,
-    windowAccess
+    windowAccess,
+    firstStepsDismissed
   );
 
   // ETP-4514: a confirmed (not loading, not fail-open-null) empty Set means
@@ -337,12 +372,10 @@ export default function AppLayout({ menuGroups }) {
                   flows={WALKTHROUGH_FLOWS}
                   onFinish={reportWalkthroughFinish}
                   data-testid="WalkthroughProvider__488148">
-                  <FirstStepsProvider data-testid="FirstStepsProvider__488148">
-                    <AppLayoutInner
-                      menuGroups={filteredMenuGroups}
-                      embedded={embedded}
-                      data-testid="AppLayoutInner__488148" />
-                  </FirstStepsProvider>
+                  <AppLayoutInner
+                    menuGroups={filteredMenuGroups}
+                    embedded={embedded}
+                    data-testid="AppLayoutInner__488148" />
                 </WalkthroughProvider>
               </PageMetaProvider>
             </SidebarProvider>
