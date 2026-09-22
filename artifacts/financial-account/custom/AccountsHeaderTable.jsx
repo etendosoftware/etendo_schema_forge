@@ -491,7 +491,8 @@ export default function AccountsHeaderTable({
                   onDelete={handlers.onDelete}
                   onBankConnectionAction={handlers.onBankConnectionAction}
                   onTransfer={handlers.onTransfer}
-                  onNewMovement={handlers.onNewMovement} />
+                  onNewMovement={handlers.onNewMovement}
+                  data-testid="AccountRowActions__371f53" />
               ),
             }}
             data-testid="DataTable__accthdr" />

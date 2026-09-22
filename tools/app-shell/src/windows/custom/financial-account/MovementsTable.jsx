@@ -135,7 +135,8 @@ const MOVEMENT_CELL_RENDERERS = {
               movement={m}
               field="documentNo"
               value={m.documentNo}
-              className="min-w-0 flex-1 text-left" />
+              className="min-w-0 flex-1 text-left"
+              data-testid="MovementTruncatedText__ae5a16" />
             <ArrowUpRight className="h-3 w-3 shrink-0" data-testid="ArrowUpRight__ae5a16" />
           </button>
         ) : (
@@ -143,7 +144,8 @@ const MOVEMENT_CELL_RENDERERS = {
             movement={m}
             field="documentNo"
             value={m.documentNo}
-            className="text-[hsl(var(--foreground))]" />
+            className="text-[hsl(var(--foreground))]"
+            data-testid="MovementTruncatedText__ae5a16" />
         )}
       </TableCell>
     ),
@@ -155,7 +157,11 @@ const MOVEMENT_CELL_RENDERERS = {
       <TableCell
         className="text-sm leading-5 text-[hsl(var(--foreground))]"
         data-testid="TableCell__ae5a16">
-        <MovementTruncatedText movement={m} field="businessPartner" value={m.contact} />
+        <MovementTruncatedText
+          movement={m}
+          field="businessPartner"
+          value={m.contact}
+          data-testid="MovementTruncatedText__ae5a16" />
       </TableCell>
     ),
   },
@@ -166,7 +172,11 @@ const MOVEMENT_CELL_RENDERERS = {
       <TableCell
         className="max-w-[200px] text-sm text-[hsl(var(--foreground))]"
         data-testid="TableCell__ae5a16">
-        <MovementTruncatedText movement={m} field="description" value={m.description} />
+        <MovementTruncatedText
+          movement={m}
+          field="description"
+          value={m.description}
+          data-testid="MovementTruncatedText__ae5a16" />
       </TableCell>
     ),
   },
@@ -205,7 +215,8 @@ const MOVEMENT_CELL_RENDERERS = {
             movement={m}
             field="transactionType"
             value={ctx.getTrxTypeLabel(m)}
-            className="text-sm leading-5 text-[hsl(var(--foreground))]" />
+            className="text-sm leading-5 text-[hsl(var(--foreground))]"
+            data-testid="MovementTruncatedText__ae5a16" />
           <PostingStatusDot posted={m.posted} data-testid="PostingStatusDot__ae5a16" />
         </div>
       </TableCell>
@@ -218,7 +229,11 @@ const MOVEMENT_CELL_RENDERERS = {
       <TableCell
         className="max-w-[180px] text-sm text-[hsl(var(--foreground))]"
         data-testid="TableCell__ae5a16">
-        <MovementTruncatedText movement={m} field="gLItem" value={m.glItem} />
+        <MovementTruncatedText
+          movement={m}
+          field="gLItem"
+          value={m.glItem}
+          data-testid="MovementTruncatedText__ae5a16" />
       </TableCell>
     ),
   },
@@ -234,7 +249,11 @@ function renderContractCell(col, movement, ctx) {
       className="text-sm leading-5 text-[hsl(var(--foreground))]"
       data-testid="TableCell__ae5a16">
       {value == null || typeof value === 'string' ? (
-        <MovementTruncatedText movement={movement} field={col.name} value={value} />
+        <MovementTruncatedText
+          movement={movement}
+          field={col.name}
+          value={value}
+          data-testid="MovementTruncatedText__ae5a16" />
       ) : value}
     </TableCell>
   );

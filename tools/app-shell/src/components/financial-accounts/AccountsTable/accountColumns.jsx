@@ -50,28 +50,28 @@ export function NameCell({ account, ui, onConnect }) {
   const isDisconnected = !isCashLike && account.bankConnected !== true;
   return (
     <div className="flex h-full min-w-0 items-center">
-        <div className="shrink-0" data-testid={`account-row-avatar-${account.id}`}>
-          <AccountLogoAvatar account={account} />
+      <div className="shrink-0" data-testid={`account-row-avatar-${account.id}`}>
+        <AccountLogoAvatar account={account} data-testid="AccountLogoAvatar__dc050f" />
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 px-2 py-2">
+        <div className="flex w-fit max-w-full min-w-0 items-center gap-1">
+          <TruncatedText
+            text={account.name || '—'}
+            className="w-auto min-w-0 flex-1 text-sm font-semibold leading-5 text-[hsl(var(--foreground))]"
+            data-testid={`account-row-name-${account.id}`} />
+          {isDisconnected ? (
+            <span
+              className="inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-full bg-[hsl(var(--muted))] px-2 py-1 text-xs font-normal leading-4 text-[hsl(var(--muted-foreground))]"
+              data-testid={`account-row-connection-badge-${account.id}`}>
+              {ui('financeAccountsBadgeOffline')}
+            </span>
+          ) : null}
         </div>
-        <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 px-2 py-2">
-          <div className="flex w-fit max-w-full min-w-0 items-center gap-1">
-            <TruncatedText
-              text={account.name || '—'}
-              className="w-auto min-w-0 flex-1 text-sm font-semibold leading-5 text-[hsl(var(--foreground))]"
-              data-testid={`account-row-name-${account.id}`} />
-            {isDisconnected ? (
-              <span
-                className="inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-full bg-[hsl(var(--muted))] px-2 py-1 text-xs font-normal leading-4 text-[hsl(var(--muted-foreground))]"
-                data-testid={`account-row-connection-badge-${account.id}`}>
-                {ui('financeAccountsBadgeOffline')}
-              </span>
-            ) : null}
-          </div>
-          <SyncStatusInline
-            account={account}
-            onConnect={onConnect ? () => onConnect(account) : undefined}
-            data-testid="SyncStatusInline__dc050f" />
-        </div>
+        <SyncStatusInline
+          account={account}
+          onConnect={onConnect ? () => onConnect(account) : undefined}
+          data-testid="SyncStatusInline__dc050f" />
+      </div>
     </div>
   );
 }
