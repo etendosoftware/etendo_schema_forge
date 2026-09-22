@@ -374,9 +374,14 @@ function ExpandedGroupSection({
 /**
  * ETP-5190 — `x/7` progress on the First Steps entry.
  *
- * Only ever an ADDITION to the label: the entry itself is never hidden and never disabled,
- * whatever the count says, because the checklist has to stay reachable after the one-time
- * dashboard redirect has been spent (and after every step is done, to un-tick one).
+ * Only ever an ADDITION to the label: this badge never hides or disables the entry, whatever the
+ * count says, because the checklist has to stay reachable after the one-time dashboard redirect
+ * has been spent (and after every step is done, to un-tick one). The ONE thing that removes the
+ * entry is ETP-5364's explicit `dismissed` flag — a deliberate act by the user, never a
+ * consequence of the count reaching its total. That removal is NOT done here: like every other
+ * menu axis it is an item-level predicate in `filterMenuGroupsByAccess`
+ * (`"hideWhenFirstStepsDismissed"` in menu.json), applied before `SideMenu` is handed its groups.
+ * Filtering it in this component instead is what made the entry flash in and out on reload.
  *
  * Renders nothing while the state is loading, when it failed to load, or when the sidebar is
  * rendered outside a `FirstStepsProvider` (bare component tests) — a badge that flashed `1/7`

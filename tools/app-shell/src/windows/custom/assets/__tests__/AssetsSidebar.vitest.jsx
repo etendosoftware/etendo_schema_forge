@@ -71,7 +71,7 @@ describe('AssetsSidebar', () => {
   it('renders all metric labels via i18n keys', () => {
     render(<AssetsSidebar data={{ assetValue: 1 }} />);
     expect(screen.getByText('assetsCurrentValue')).toBeInTheDocument();
-    expect(screen.getByText('assetsResidualValueLabel')).toBeInTheDocument();
+    expect(screen.getByText('assetsPendingDepreciationLabel')).toBeInTheDocument();
     expect(screen.getByText('assetsPlannedDepreciation')).toBeInTheDocument();
     expect(screen.getByText('assetsDepreciated')).toBeInTheDocument();
   });

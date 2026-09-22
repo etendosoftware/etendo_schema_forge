@@ -128,7 +128,10 @@ export function resolveAttachmentPolicy(apiFetch, { token } = {}) {
   if (cachedPromise) return cachedPromise;
 
   cachedPromise = Promise.resolve()
-    .then(() => apiFetch(ATTACHMENT_POLICY_PATH, token ? { token } : undefined))
+    // ETP-4576 — the option is passed unconditionally: apiFetch treats an undefined
+    // `token` exactly as an absent one (it falls through to the session), so branching on
+    // it only encoded the assumption that a credential is something the client holds.
+    .then(() => apiFetch(ATTACHMENT_POLICY_PATH, { token }))
     .then((res) => {
       if (!res?.ok) throw new Error(`attachments config fetch failed: ${res?.status}`);
       return res.json();
