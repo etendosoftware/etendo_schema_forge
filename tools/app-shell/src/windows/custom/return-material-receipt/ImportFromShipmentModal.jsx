@@ -60,6 +60,6 @@ export default function ImportFromShipmentModal({ targetId, ...props }) {
       eagerLoadLines={false}
       showAvailableQtyColumn
       qtyColumnLabelKey="returnQty"
-    />
+      data-testid="ImportLinesModal__7efa65" />
   );
 }

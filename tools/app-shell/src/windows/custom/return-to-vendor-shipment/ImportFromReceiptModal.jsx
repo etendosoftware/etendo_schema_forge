@@ -63,6 +63,6 @@ export default function ImportFromReceiptModal({ targetId, bpId, ...props }) {
       eagerLoadLines={false}
       showAvailableQtyColumn
       qtyColumnLabelKey="returnQty"
-    />
+      data-testid="ImportLinesModal__ebdfa3" />
   );
 }

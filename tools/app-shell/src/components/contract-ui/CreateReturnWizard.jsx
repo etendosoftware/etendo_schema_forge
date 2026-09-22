@@ -200,17 +200,22 @@ export default function CreateReturnWizard({
   const cellStyle = { borderBottom: '0.5px solid hsl(var(--border) / 0.5)' };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => { if (!v) onClose(); }}
+      data-testid="Dialog__955eac">
       <DialogContent
         className="sm:max-w-[640px] p-0 gap-0 shadow-none bg-card"
         style={{ border: '0.5px solid hsl(var(--border))', boxShadow: 'none' }}
-      >
+        data-testid="DialogContent__955eac">
         {/* Header */}
         <div className="px-6 pt-5 pb-4" style={{ backgroundColor: 'hsl(var(--card))', borderBottom: '1px solid hsl(var(--border-subtle))', borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
-          <StepIndicator current={step} total={2} />
-          <DialogHeader>
-            <DialogTitle className="text-base font-semibold">{ui(titleKey)}</DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground">
+          <StepIndicator current={step} total={2} data-testid="StepIndicator__955eac" />
+          <DialogHeader data-testid="DialogHeader__955eac">
+            <DialogTitle className="text-base font-semibold" data-testid="DialogTitle__955eac">{ui(titleKey)}</DialogTitle>
+            <DialogDescription
+              className="text-sm text-muted-foreground"
+              data-testid="DialogDescription__955eac">
               {ui(refLabelKey)}{documentNo} &middot; {bpName}
             </DialogDescription>
           </DialogHeader>
@@ -233,7 +238,7 @@ export default function CreateReturnWizard({
                       <MiniCheck
                         checked={selected.size === lines.length && lines.length > 0}
                         onChange={() => { selected.size === lines.length ? deselectAll() : selectAll(); }}
-                      />
+                        data-testid="MiniCheck__955eac" />
                     </th>
                     <th className="text-left px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('product')}</th>
                     <th className="text-right px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('delivered')}</th>
@@ -253,7 +258,7 @@ export default function CreateReturnWizard({
                           <MiniCheck
                             checked={isSelected}
                             onChange={() => toggleLine(line.id)}
-                          />
+                            data-testid="MiniCheck__955eac" />
                         </td>
                         <td className="px-2 text-foreground" style={{ ...cellStyle, paddingTop: 6, paddingBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {line['product$_identifier'] || line.product$_identifier || '—'}
@@ -384,23 +389,38 @@ export default function CreateReturnWizard({
         )}
 
         {/* Footer */}
-        <DialogFooter className="px-6 pt-5 pb-4" style={{ backgroundColor: 'hsl(var(--muted))', borderTop: '1px solid hsl(var(--border-subtle))' }}>
+        <DialogFooter
+          className="px-6 pt-5 pb-4"
+          style={{ backgroundColor: 'hsl(var(--muted))', borderTop: '1px solid hsl(var(--border-subtle))' }}
+          data-testid="DialogFooter__955eac">
           {step === 1 && (
             <>
-              <Button variant="ghost" size="sm" onClick={onClose}>
+              <Button variant="ghost" size="sm" onClick={onClose} data-testid="Button__955eac">
                 {ui('cancel')}
               </Button>
-              <Button size="sm" disabled={!canProceed} onClick={() => setStep(2)}>
+              <Button
+                size="sm"
+                disabled={!canProceed}
+                onClick={() => setStep(2)}
+                data-testid="Button__955eac">
                 {ui('next')}
               </Button>
             </>
           )}
           {step === 2 && (
             <>
-              <Button variant="ghost" size="sm" onClick={() => setStep(1)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setStep(1)}
+                data-testid="Button__955eac">
                 {ui('back')}
               </Button>
-              <Button size="sm" onClick={handleConfirm} disabled={loading}>
+              <Button
+                size="sm"
+                onClick={handleConfirm}
+                disabled={loading}
+                data-testid="Button__955eac">
                 {loading ? ui('creating') : ui('createReturn')}
               </Button>
             </>

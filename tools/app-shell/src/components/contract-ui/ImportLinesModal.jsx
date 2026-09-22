@@ -176,55 +176,65 @@ export default function ImportLinesModal({
     return { checked: false, indeterminate: true };
   };
 
+  const collectSelectedLines = () => {
+    const lines = [];
+    for (const doc of documents) {
+      for (const line of (docLines[doc.id] || [])) {
+        if (!selected.has(line.id)) continue;
+        const qty = lineQuantities[line.id] ?? (line._maxQty || 0);
+        lines.push({ line, qty, docId: doc.id });
+      }
+    }
+    return lines;
+  };
+
+  // Caller-provided batch submit (e.g. the return-flow's single POST action).
+  const importViaSubmitHandler = async () => {
+    const lines = collectSelectedLines();
+    const result = await submitImport({ lines, base, headers, invoiceId, sharedContext });
+    if (!result?.ok) {
+      toast.error(result?.error || ui('failedToImportLines'));
+      return;
+    }
+    toast.success(ui(successMessageKey, { count: result.count ?? lines.length }));
+    onSuccess();
+  };
+
+  // Default: one POST per selected line against `linesEndpoint`.
+  const importViaPerLinePost = async () => {
+    let lineNo = 10;
+    let errors = 0;
+    const importedDocIds = new Set();
+    for (const doc of documents) {
+      const lines = (docLines[doc.id] || []).filter(l => selected.has(l.id));
+      if (lines.length === 0) continue;
+
+      for (const line of lines) {
+        const qty = lineQuantities[line.id] ?? (line._maxQty || 0);
+        const lineBody = await buildLineBody({ line, qty, invoiceId, lineNo, sharedContext, base, headers });
+        const res = await apiFetch(`/${linesEndpoint}`, {
+          method: 'POST', headers, body: JSON.stringify(lineBody), on401: 'ignore',
+        });
+        if (!res.ok) errors++;
+        else importedDocIds.add(doc.id);
+        lineNo += 10;
+      }
+    }
+    if (afterImport) await afterImport({ importedDocIds, sharedContext, base, headers, invoiceId });
+    if (errors > 0) {
+      toast.warning(`Imported with ${errors} error(s) — review the invoice`);
+    } else {
+      toast.success(ui(successMessageKey));
+    }
+    onSuccess();
+  };
+
   const handleImport = async () => {
     if (selected.size === 0 || importing) return;
     setImporting(true);
     try {
-      if (submitImport) {
-        const lines = [];
-        for (const doc of documents) {
-          for (const line of (docLines[doc.id] || [])) {
-            if (!selected.has(line.id)) continue;
-            const qty = lineQuantities[line.id] ?? (line._maxQty || 0);
-            lines.push({ line, qty, docId: doc.id });
-          }
-        }
-        const result = await submitImport({ lines, base, headers, invoiceId, sharedContext });
-        if (!result?.ok) {
-          toast.error(result?.error || ui('failedToImportLines'));
-          return;
-        }
-        toast.success(ui(successMessageKey, { count: result.count ?? lines.length }));
-        onSuccess();
-        return;
-      }
-
-      let lineNo = 10;
-      let errors = 0;
-
-      const importedDocIds = new Set();
-      for (const doc of documents) {
-        const lines = (docLines[doc.id] || []).filter(l => selected.has(l.id));
-        if (lines.length === 0) continue;
-
-        for (const line of lines) {
-          const qty = lineQuantities[line.id] ?? (line._maxQty || 0);
-          const lineBody = await buildLineBody({ line, qty, invoiceId, lineNo, sharedContext, base, headers });
-          const res = await apiFetch(`/${linesEndpoint}`, {
-            method: 'POST', headers, body: JSON.stringify(lineBody), on401: 'ignore',
-          });
-          if (!res.ok) errors++;
-          else importedDocIds.add(doc.id);
-          lineNo += 10;
-        }
-      }
-      if (afterImport) await afterImport({ importedDocIds, sharedContext, base, headers, invoiceId });
-      if (errors > 0) {
-        toast.warning(`Imported with ${errors} error(s) — review the invoice`);
-      } else {
-        toast.success(ui(successMessageKey));
-      }
-      onSuccess();
+      if (submitImport) await importViaSubmitHandler();
+      else await importViaPerLinePost();
     } catch (err) { toast.error(err.message || 'Failed to import'); } finally { setImporting(false); }
   };
 
