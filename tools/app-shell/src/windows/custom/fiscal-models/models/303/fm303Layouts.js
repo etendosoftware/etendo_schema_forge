@@ -210,6 +210,44 @@ const TIPO_DECLARACION_FIELD = {
   ],
 };
 
+// ETP-5431 pt.2 — casilla 111 (rectificacion_importe) autocompletion formula. CONFIRMED SPEC
+// (closed with the user/PM, not this team's own reading, unlike the Nota 3 field-selection
+// decisions above):
+//   SI casilla_71 < 0 Y casilla_70 tiene valor:
+//       SI casilla_69 es positiva: 111 = 70 - 69, SOLO SI el resultado es positivo (si no, vacía)
+//       SI casilla_69 es negativa: 111 = mismo valor que 70
+//   SI NO se cumple la condición de arriba: 111 queda vacía
+//
+// IMPLEMENTATION DECISION (not covered by the closed spec, which only enumerates "positiva" /
+// "negativa" for box 69): box69 === 0 matches neither branch, so it falls through to "111 queda
+// vacía" — the same outcome as the explicit fallthrough case. Flag for revisit if AEAT clarifies
+// the exact-zero case.
+//
+// This box is no longer user-editable (see the `rectificacion_importe` row below, which now
+// carries neither `editable` nor `derivedValue` — its value comes exclusively from this
+// formula). Deliberately NOT routed through FmBoxes303's `derivedValue`/`computeDerivedValue`
+// display-only mechanism (see that file's own doc comment: "Client-side display only; never
+// feeds manualData/submission") — box 111 must be a genuine member of the real box array,
+// because (a) `withBox111NonZeroFlag` (fiscalModelsUtils.js) reads it via `getBoxValue(liveBoxes,
+// 111)` to drive the already-approved Nota 3 / bank-IBAN gating above, and (b) it is forwarded
+// verbatim to AEAT as `RectifyingAmount` (BOX_PARAM_MAP, fiscalModelsUtils.js). So the single
+// authoritative call site is `recomputeDerivedBoxes` (fiscalModelsUtils.js), which imports this
+// function directly — the formula still lives here, next to the field definition, exactly like
+// every other `derivedValue`, it just has a different (array-writing) consumer than the
+// display-only ones. `valueMap` uses the same box-number-keyed shape `computeDerivedValue`'s
+// declarative combos already read (`box69`/`box70`/`box71`), so this same convention is directly
+// reusable by `computeDerivedValue`'s `compute` extension (FmBoxes303.jsx) if a future rule needs
+// a three-branch custom formula for a genuinely display-only box.
+export function computeBox111({ box69, box70, box71 }) {
+  if (!(box71 < 0) || box70 == null) return null;
+  if (box69 > 0) {
+    const diff = box70 - box69;
+    return diff > 0 ? diff : null;
+  }
+  if (box69 < 0) return box70;
+  return null;
+}
+
 // ── Base layout (current / default form) ─────────────────────────
 // Row ids are stable references for patches — use the leading box number
 // or a descriptive key for labeled rows.
@@ -438,7 +476,12 @@ const BASE = {
             { id: 'devoluciones_at',       labelKey: 'fm.box.row.devoluciones_at',       cells: [109], editable: true },
             { id: 'resultado_declaracion', labelKey: 'fm.box.row.resultado_declaracion', cells: [71],  total: true },
             { id: 'importe_devolucion',    labelKey: 'fm.box.row.importe_devolucion',    cells: [null], rowVisibleWhen: { field: 'tipo_declaracion', in: ['D', 'V', 'X', 'C'] }, derivedValue: { box: 71, abs: true, subtractBox: 70, clampMin: 0 } },
-            { id: 'rectificacion_importe', labelKey: 'fm.box.row.rectificacion_importe', cells: [111], editable: true },
+            // ETP-5431 pt.2 — no longer editable: autocompleted by `computeBox111` above, applied
+            // to the real box array by `recomputeDerivedBoxes` (fiscalModelsUtils.js). Renders
+            // exactly like the `resultado_69`/`resultado_declaracion` rows above it (plain
+            // `cells`, no `editable`/`derivedValue`) — the computed value is already a genuine
+            // member of `valueMap` by the time this renders, same as boxes 69/71.
+            { id: 'rectificacion_importe', labelKey: 'fm.box.row.rectificacion_importe', cells: [111] },
           ],
         },
       ],

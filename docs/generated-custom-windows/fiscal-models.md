@@ -1136,6 +1136,84 @@ the mark blank — a file stating the opposite of what it does).
   boxes remain independently editable/computed, as they were before this ticket.
 - No `@etendosoftware` module version bump accompanied this change in either repo.
 
+### Box 111 autocompletion + boxes 109/70 non-negative (ETP-5431 pt.2)
+
+Two rules, both purely client-side (`schema_forge` only — no Classic/`com.etendoerp.go` change).
+
+**Rule A — casilla 111 (`rectificacion_importe`) is no longer user-editable.** It used to be a
+plain `editable: true` box that only fed the synthetic `_box111NonZero` flag driving the Nota 3
+gating above. It is now autocompleted, per a **CONFIRMED SPEC** (closed with the user/PM, unlike
+the Nota 3 field-selection calls elsewhere in this document, which are this team's own reading):
+
+```
+SI casilla_71 < 0 Y casilla_70 tiene valor:
+    SI casilla_69 es positiva: 111 = 70 - 69, SOLO SI el resultado es positivo (si no, vacía)
+    SI casilla_69 es negativa: 111 = mismo valor que 70
+SI NO se cumple la condición de arriba: 111 queda vacía
+```
+
+Implemented as `computeBox111({ box69, box70, box71 })` in `fm303Layouts.js`, right next to the
+`rectificacion_importe` row definition (`resultado_final` section, `bicolumn_resultado` rows) —
+which now carries neither `editable` nor `derivedValue`, just a plain `cells: [111]`, rendering
+exactly like the `resultado_69`/`resultado_declaracion` total rows above it.
+
+*Implementation decision, not part of the closed spec:* the spec only enumerates "positiva" /
+"negativa" for box 69 — `box69 === 0` matches neither branch and falls through to "111 queda
+vacía". Flag for revisit if this needs to be something else.
+
+*Why this isn't routed through `FmBoxes303`'s existing `derivedValue`/`computeDerivedValue`
+mechanism* (used by box 87/107/`importe_devolucion` elsewhere in this doc): that mechanism is
+explicitly documented as "client-side display only; never feeds `manualData`/submission". Box 111
+can't be display-only, because (a) `withBox111NonZeroFlag` reads it via `getBoxValue(liveBoxes,
+111)` to drive the Nota 3 / bank-IBAN gating above, and (b) it's forwarded verbatim to AEAT as
+`RectifyingAmount` (`BOX_PARAM_MAP`). So `computeBox111` is instead consumed directly by
+`recomputeDerivedBoxes` (`fiscalModelsUtils.js`) — the single choke point both interactive typing
+(`applyBoxChange`) and the "Calcular" flow (`applyComputeResult`) already route every other
+derived box (45/46/64/66/69/71) through, so box 111 gets the same "always correct, both paths"
+guarantee for free. `fiscalModelsUtils.js` imports `computeBox111` from `fm303Layouts.js`
+(one-directional; `fm303Layouts.js` imports nothing back) — the formula still lives next to the
+field definition, it just has a different (array-writing) consumer than the display-only
+`derivedValue` rows.
+
+Because box 111 is no longer typed, `manualOverrides[111]` — the object `generate303File`'s
+`applyBoxParams` and "Guardar"'s `persistManualData` both read box 111 from — would otherwise go
+permanently stale/empty the moment autocompletion took over. `FmModel303Page.jsx` mirrors the
+freshly-derived value into `manualOverrides` via a small `syncBox111Override(overrides, boxArr)`
+helper, called from both `handleBoxChange` (typing any box that participates in 69/70/71) and
+`applyComputeResult` (now takes an extra `setManualOverrides` parameter, used by both the
+"Calcular" click and the precomputed-on-mount hydration).
+
+**Ordering dependency (box 70's clamp before box 111's formula).** Box 70 feeds `computeBox111`
+directly. This is guaranteed by construction rather than by a sequencing step inside
+`recomputeDerivedBoxes`: every caller that can put a negative value into the box array for box 70
+already clamps it to 0 first (see Rule B below) — `handleBoxChange` clamps a typed box 70 before
+ever calling `applyBoxChange`/`recomputeDerivedBoxes`, and the backend/`res.boxes` path
+(`applyComputeResult`) has no interactive input to clamp in the first place. So `recomputeDerivedBoxes`
+always reads an already-non-negative box 70 — there is nothing left to sequence at the point where
+box 111 is computed.
+
+**Rule B — boxes 109 (`devoluciones_at`) and 70 (`a_deducir`) can never be negative.** Same
+existing mechanism boxes 111/77 already used (`NEGATIVE_NOT_ALLOWED_BOXES` in
+`fiscalModelsUtils.js`, now `{111, 77, 109, 70}`) — clamp to 0 + `fm.box.error.negative_not_allowed`
+toast in `FmModel303Page.jsx`'s `handleBoxChange`, `min="0"` on the input in `FmBoxes303.jsx`. No
+new mechanism was needed; adding the two box numbers to the Set was sufficient.
+
+**Tests invalidated by Rule A (not rewritten here — flagged for the test-generator agent):** every
+test that used to drive Nota 3 scenarios by directly typing into casilla 111's now-removed pencil
+editor. As of this change, these fail:
+- `FmBoxes303.vitest.jsx` — "box 111: types -12, commits (blur), parent clamps to 0…"
+- `FmModel303Page.negativeBoxClamp.vitest.jsx` — both box111 clamp cases (negative -> 0, and
+  "accepts a positive value unchanged")
+- `FmModel303Page.requiredFieldGate.vitest.jsx` — one case that types into box 111 to reach the
+  bank-IBAN-required gate
+- `fm303Layouts.bankVisibilityReactivity.vitest.jsx` — both `datos_bancarios` reactivity cases
+  and all 6 "marca SEPA reactivity (ETP-5431)" cases (its shared `setBoxValue`/`renderInNota3`
+  helper drives Nota 3 exclusively by typing box 111 directly)
+
+Their replacements need to reach a non-zero box 111 through the formula (seeding boxes
+69/70/71-relevant values, or seeding `decl.boxes`/`liveBoxes` directly) instead of typing into the
+box.
+
 **Bug F — boxes [14][15], [25][26] and [40][41] always rendered blank instead of autocalculating.**
 `Fiscal303BoxesHandler.computeBoxes` never populated boxes 14/15 ("Modificación bases y cuotas"),
 25/26 ("Modificaciones bases y cuotas del recargo de equivalencia") or 40/41 ("Rectificación de

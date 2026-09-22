@@ -2,6 +2,11 @@ import { createElement } from 'react';
 import { formatCurrency } from '../../../lib/formatCurrency.js';
 import { parseCalendarDate } from '../../../lib/dateOnly.js';
 import { toast } from 'sonner';
+// ETP-5431 pt.2 — box 111's autocompletion formula lives next to its field definition in
+// fm303Layouts.js (like every other `derivedValue`); `recomputeDerivedBoxes` below is its single
+// authoritative consumer. One-directional dependency only (fm303Layouts.js imports nothing from
+// this file), so no import cycle.
+import { computeBox111 } from './models/303/fm303Layouts.js';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // ── Box computation ──────────────────────────────────────────────────
@@ -120,7 +125,11 @@ export const DECLARATION_TYPE_INGRESO = 'I';
 // 111, AEAT303Report2015.java:149-162 for 77). Single source of truth, consolidated out of a
 // literal `new Set([111, 77])` duplicated in both `FmBoxes303.jsx` (the `min="0"` UX hint) and
 // `FmModel303Page.jsx` (`handleBoxChange`'s actual clamp + i18n error enforcement).
-export const NEGATIVE_NOT_ALLOWED_BOXES = new Set([111, 77]);
+// ETP-5431 pt.2 — 109 (devoluciones en tramitación) and 70 (a deducir) added to the set: same
+// AEAT-can-never-be-negative rule as 111/77 above, no new mechanism needed (toast, `min="0"`,
+// clamp are all driven off this Set already). 70 additionally feeds `computeBox111` below — see
+// the ordering note on `recomputeDerivedBoxes` for why this clamp must run before that formula.
+export const NEGATIVE_NOT_ALLOWED_BOXES = new Set([111, 77, 109, 70]);
 
 // Maps editable box numbers (from manualOverrides / liveBoxes) to AEAT HTTP param names.
 // Only boxes that the AEAT module reads from inputParams (not computed from DB) are listed.
@@ -607,6 +616,21 @@ export function applyOverrides(boxes, overrides) {
 // 66, 69, 71) so a manual override on any of their inputs (e.g. 42/43/44, or the
 // territorial-split box 65) is reflected in the final liquidation result. Always
 // call this AFTER applyOverrides.
+//
+// ETP-5431 pt.2 — also the single authoritative place that (re)derives box 111
+// (rectificacion_importe, formula: `computeBox111` in fm303Layouts.js). This is the ONE choke
+// point both interactive typing (FmModel303Page's `applyBoxChange`) and the "Calcular" flow
+// (`applyComputeResult`) already route through for 45/46/64/66/69/71, so box 111 gets the same
+// guarantee for free.
+//
+// Ordering dependency (box70 clamp -> box111 formula), by construction rather than by careful
+// sequencing here: `get(70)` above reads straight out of `boxArr`, and every caller that can put
+// a NEGATIVE value into `boxArr` for box 70 already clamps it to 0 before this function ever
+// runs — `FmModel303Page.jsx`'s `handleBoxChange` clamps a typed box 70 (now in
+// `NEGATIVE_NOT_ALLOWED_BOXES`) BEFORE calling `applyBoxChange`/`recomputeDerivedBoxes`, and the
+// backend/`res.boxes` path (`applyComputeResult`) has no interactive input to clamp in the first
+// place. So `box70` here is always already non-negative by the time `computeBox111` reads it —
+// there is no separate clamp step to sequence inside this function.
 export function recomputeDerivedBoxes(boxArr) {
   const r2 = v => Math.round(v * 100) / 100;
   const get = num => { const e = boxArr.find(b => b.num === num); return e != null ? (e.value ?? 0) : 0; };
@@ -619,9 +643,21 @@ export function recomputeDerivedBoxes(boxArr) {
   const box69 = r2(box66 + get(77) - get(78) + get(68) + get(108));
   const box71 = r2(box69 - get(70) + get(109) - get(112));
   const derived = { 45: box45, 46: box46, 64: box64, 66: box66, 69: box69, 71: box71 };
+
+  // box70 read again here (not via `derived`/`get` reuse) on purpose: `computeBox111` needs the
+  // RAW box70 entry's presence/absence ("casilla_70 tiene valor" in the spec), not `get`'s
+  // always-numeric 0-for-missing fallback used by the arithmetic above.
+  const box70Entry = boxArr.find(b => b.num === 70);
+  const box111 = computeBox111({
+    box69,
+    box70: box70Entry != null ? box70Entry.value : null,
+    box71,
+  });
+
   return [
-    ...boxArr.filter(b => !(b.num in derived)),
+    ...boxArr.filter(b => !(b.num in derived) && b.num !== 111),
     ...Object.entries(derived).map(([num, value]) => ({ num: Number(num), value })),
+    ...(box111 != null ? [{ num: 111, value: r2(box111) }] : []),
   ];
 }
 
