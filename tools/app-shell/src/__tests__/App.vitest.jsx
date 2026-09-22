@@ -501,4 +501,47 @@ describe('fetchWindowAccess', () => {
       vi.useRealTimers();
     }
   });
+
+  // [ETP-5403 QA] — the decoupling must work in both directions: once a failure
+  // recovers into a SUCCESS, that outcome must be cached at the short 3s success TTL
+  // again, not left lingering at the 60s failure TTL from the previous attempt. Each
+  // `fetchMenuAccess()` call picks its TTL from its OWN outcome, not the cache's prior
+  // one — this proves it, by forcing a failure -> recovery -> success sequence and
+  // showing the post-recovery cache still expires quickly.
+  it('re-caches at the short success TTL again once a failure recovers into a success', async () => {
+    vi.useFakeTimers();
+    try {
+      let shouldFail = true;
+      vi.stubGlobal('fetch', vi.fn((url) => {
+        if (String(url).includes('/listmenu')) {
+          return shouldFail ? Promise.reject(new Error('network down')) : Promise.resolve(menuTextResponse(MENU_TREE));
+        }
+        return Promise.resolve(jsonResponse(PAYLOAD));
+      }));
+
+      const first = await fetchWindowAccess({ token: 'tok' });
+      expect(first).toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
+
+      // Past the 60s failure TTL — the outage has now cleared.
+      await vi.advanceTimersByTimeAsync(60_100);
+      shouldFail = false;
+
+      const second = await fetchWindowAccess({ token: 'tok' });
+      expect(second).toEqual({ ...PAYLOAD, menuAccess: EXPECTED_MENU_ACCESS });
+
+      // Only past the short 3s success TTL, well under the 60s failure TTL — if the
+      // recovered success were mistakenly cached at 60s, this would still be served
+      // from cache and no third /listmenu call would happen.
+      await vi.advanceTimersByTimeAsync(3_100);
+
+      const third = await fetchWindowAccess({ token: 'tok' });
+      expect(third).toEqual({ ...PAYLOAD, menuAccess: EXPECTED_MENU_ACCESS });
+
+      const calls = globalThis.fetch.mock.calls.map(([url]) => String(url));
+      const menuCalls = calls.filter((url) => url.includes('/listmenu'));
+      expect(menuCalls).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
