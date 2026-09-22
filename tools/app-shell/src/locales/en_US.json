@@ -17628,6 +17628,7 @@
     "accessTierReadOnly": "Read-only",
     "rolesWindowCount": "{count} Windows",
     "rolesMatrixWindowColumn": "Window",
+    "rolesMatrixInformesHeader": "Informes",
     "rolesUserCount": "{count} Users",
     "rolesSummaryCardNavigateAria": "View users with the {role} role",
     "userRolesTabLabel": "User roles",
@@ -26235,6 +26236,30 @@
     },
     "Receipt-Invoice Link": {
       "label": "Receipt-Invoice Link"
+    },
+    "Tax Report": {
+      "label": "Tax Report"
+    },
+    "Aging Report (Receivables)": {
+      "label": "Aging Report (Receivables)"
+    },
+    "Aging Report (Payables)": {
+      "label": "Aging Report (Payables)"
+    },
+    "Stock Report": {
+      "label": "Stock Report"
+    },
+    "Balance Sheet": {
+      "label": "Balance Sheet"
+    },
+    "Profit & Loss": {
+      "label": "Profit & Loss"
+    },
+    "General Ledger": {
+      "label": "General Ledger"
+    },
+    "Journal Entries": {
+      "label": "Journal Entries"
     }
   },
   "statuses": {

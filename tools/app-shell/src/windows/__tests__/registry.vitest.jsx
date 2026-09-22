@@ -403,6 +403,55 @@ describe('registry', () => {
     });
   });
 
+  // ETP-5402 QA follow-up — regression coverage for a live bug: reportAccess-derived
+  // visibility for report-viewer-finance/inventory must be keyed off menu.json's REAL
+  // "Finance"/"Inventory" groups (via REPORT_IDS_BY_GROUP), not a synthetic group name —
+  // confirmed live that a synthetic "Reports" group name (as every other test in this file
+  // uses) never matches REPORT_IDS_BY_GROUP, silently never exercising the fallback at all.
+  describe('filterMenuGroupsByAccess — reportAccess fallback on the accessWindowId axis (ETP-5402 QA follow-up)', () => {
+    it('shows report-viewer-finance for a role with real access to a Finance reportId sibling, even with no window grant', () => {
+      const groups = buildMenuGroups();
+      const result = filterMenuGroupsByAccess(
+        groups,
+        new Set(),
+        { isAdminOrClientAdmin: false },
+        {},
+        { 'aging-payable': 'full' },
+      );
+      const finance = result.find(g => g.group === 'Finance');
+      expect(finance).toBeDefined();
+      expect(finance.items.map(i => i.name)).toContain('report-viewer-finance');
+    });
+
+    it('hides report-viewer-finance when reportAccess has no entry for any Finance reportId and there is no window grant either', () => {
+      const groups = buildMenuGroups();
+      const result = filterMenuGroupsByAccess(
+        groups,
+        new Set(),
+        { isAdminOrClientAdmin: false },
+        {},
+        {},
+      );
+      const finance = result.find(g => g.group === 'Finance');
+      // The Finance group may still exist for other reasons in a real menu, but its
+      // report-viewer-finance item specifically must be gone.
+      expect(finance?.items.map(i => i.name) ?? []).not.toContain('report-viewer-finance');
+    });
+
+    it('an Inventory-category reportId does not leak the Finance link into visibility (group-scoped, not global)', () => {
+      const groups = buildMenuGroups();
+      const result = filterMenuGroupsByAccess(
+        groups,
+        new Set(),
+        { isAdminOrClientAdmin: false },
+        {},
+        { 'inventory-stock-report': 'full' },
+      );
+      const finance = result.find(g => g.group === 'Finance');
+      expect(finance?.items.map(i => i.name) ?? []).not.toContain('report-viewer-finance');
+    });
+  });
+
   describe('shipped navigation catalog (ETP-5240)', () => {
     // ETP-5364 — the fifth axis is a user PREFERENCE, not a grant. These specs measure the
     // permission boundary, so they hold the checklist at "not dismissed" throughout and let the

@@ -17860,6 +17860,7 @@
     "accessTierReadOnly": "Solo lectura",
     "rolesWindowCount": "{count} Ventanas",
     "rolesMatrixWindowColumn": "Ventana",
+    "rolesMatrixInformesHeader": "Informes",
     "rolesUserCount": "{count} Usuarios",
     "rolesSummaryCardNavigateAria": "Ver usuarios con el rol {role}",
     "userRolesTabLabel": "Roles del usuario",
@@ -26533,6 +26534,30 @@
     },
     "Account": {
       "label": "Plan de cuentas"
+    },
+    "Tax Report": {
+      "label": "Informe de Impuestos"
+    },
+    "Aging Report (Receivables)": {
+      "label": "Informe Antigüedad de Cobros"
+    },
+    "Aging Report (Payables)": {
+      "label": "Informe Antigüedad de Pagos"
+    },
+    "Stock Report": {
+      "label": "Informe de Stock"
+    },
+    "Balance Sheet": {
+      "label": "Balance de Situación"
+    },
+    "Profit & Loss": {
+      "label": "Pérdidas y Ganancias"
+    },
+    "General Ledger": {
+      "label": "Libro Mayor"
+    },
+    "Journal Entries": {
+      "label": "Diario de Asientos"
     }
   },
   "statuses": {
