@@ -7,6 +7,11 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'BulkInvoiceFromShipment.jsx'), 'utf8');
 
+// This bulk toolbar action used to open its own line-selection modal with editable
+// quantities. It now opens the SAME "Gestionar documentos" modal (CreateInvoiceConfirmModal)
+// the form-view "Crear Factura" button uses — the one with the Tarifa picker the bespoke
+// modal never had. See the file's own header comment for the trade-off this implies (no
+// per-line selection from the grid anymore).
 /**
  * The source with comments removed, for the `doesNotMatch` assertions only.
  *
@@ -33,128 +38,28 @@ describe('BulkInvoiceFromShipment', () => {
     );
   });
 
-  it('filters invoiceable rows by documentStatus CO and not completely invoiced', () => {
-    assert.match(src, /documentStatus\s*===\s*'CO'/);
-    assert.match(src, /completelyInvoiced\s*!==\s*true/);
-  });
-
-  it('checks all selected shipments belong to the same business partner', () => {
-    assert.match(src, /invoiceableRows\.every\(r\s*=>\s*r\.businessPartner\s*===\s*firstBp\)/);
-  });
-
   it('returns null when no rows are selected', () => {
     assert.match(src, /selectedRows\.length\s*<\s*1.*return null/s);
   });
 
-  it('renders a BulkInvoiceModal via createPortal', () => {
-    assert.match(src, /createPortal/);
-    assert.match(src, /BulkInvoiceModal/);
-  });
-
-  it('fetches shipment lines from goods-shipment API', () => {
-    assert.match(src, /goods-shipment\/goodsShipmentLine\?parentId=/);
-  });
-
-  it('fetches order line prices for unit price enrichment', () => {
-    assert.match(src, /sales-order\/lines\?parentId=/);
-  });
-
-  it('checks for existing draft invoices before creation', () => {
-    assert.match(src, /action\/checkDraftInvoice/);
-  });
-
-  it('creates draft invoice via action endpoint', () => {
-    assert.match(src, /action\/createDraftInvoice/);
-  });
-
-  it('supports line selection toggle and quantity editing', () => {
-    assert.match(src, /toggleLine/);
-    assert.match(src, /setLineQuantities/);
-  });
-
-  it('uses toast notifications for success and error feedback', () => {
-    assert.match(src, /toast\.success|toast\.custom|toast\.error/);
-  });
-
-  it('supports collapse/expand per shipment', () => {
-    assert.match(src, /toggleCollapse/);
-    assert.match(src, /collapsed/);
-  });
-
-  // ── ETP-5381 — the bulk invoice is confirmed in the same request ───────────────
-  // The success toast used to state unconditionally that a draft had been created and
-  // to tell the user to go review it. Both halves are now conditional on the status the
-  // backend actually returned, so the copy can never assert something untrue.
-  describe('success toast copy follows the returned documentStatus (ETP-5381)', () => {
-    it("derives `confirmed` from the response documentStatus === 'CO'", () => {
-      assert.match(
-        src,
-        /const confirmed = json\?\.response\?\.data\?\.documentStatus === 'CO';/,
-      );
+  // ── invoiceable-row guard: invoiceStatus, not the always-true completelyInvoiced ───
+  // `completelyInvoiced` is renamed to `invoiced` with grid:false/form:false in
+  // decisions.json, so it never reaches a grid row — the old `r.completelyInvoiced !== true`
+  // guard was a silent no-op. `invoiceStatus` (0-100 %) is the field the single-record
+  // "Crear factura" button already uses for the same "already invoiced" gate.
+  describe('invoiceable-row guard uses invoiceStatus, not completelyInvoiced', () => {
+    it('filters by documentStatus CO', () => {
+      assert.match(src, /documentStatus\s*===\s*'CO'/);
     });
 
-    it('reads the status from the create response, not from the selected shipment rows', () => {
-      assert.doesNotMatch(src, /const confirmed = .*selectedRows/);
-      assert.doesNotMatch(src, /const confirmed = .*shipments\[0\]/);
-    });
-
-    it('switches the headline between invoiceCreatedAndConfirmed and createdAsDraft', () => {
-      assert.match(
-        src,
-        /confirmed \? ui\('invoiceCreatedAndConfirmed'\) : ui\('createdAsDraft'\)/,
-      );
-    });
-
-    it('hides the reviewBeforeConfirming subtitle once the invoice is confirmed', () => {
-      assert.match(
-        src,
-        /\{!confirmed && \(\s*<div[^>]*>\{ui\('reviewBeforeConfirming'\)\}<\/div>\s*\)\}/,
-      );
-    });
-
-    it('never renders reviewBeforeConfirming unconditionally', () => {
-      const occurrences = [...src.matchAll(/ui\('reviewBeforeConfirming'\)/g)];
-      assert.equal(occurrences.length, 1, 'expected exactly one reviewBeforeConfirming call site');
-      const guardIdx = src.lastIndexOf('{!confirmed && (', occurrences[0].index);
-      assert.ok(guardIdx >= 0, 'expected the subtitle to sit inside a !confirmed guard');
-    });
-
-    it('keeps both toast strings translated — no hardcoded Draft/Borrador copy', () => {
-      assert.doesNotMatch(src, /['"`]created as Draft['"`]/);
-      assert.doesNotMatch(src, /['"`]creada como Borrador['"`]/);
-      assert.doesNotMatch(src, /['"`]Review before confirming['"`]/);
+    it('filters by invoiceStatus below 100, not the dead completelyInvoiced field', () => {
+      assert.match(src, /parseFloat\(r\.invoiceStatus\s*\?\?\s*0\)\s*<\s*100/);
+      assert.doesNotMatch(src, /r\.completelyInvoiced/);
     });
   });
 
-  // ETP-5302 — this action used to close the modal and clear the selection but never
-  // refetch (and never reload either), so the shipments it had just invoiced kept
-  // showing a stale invoicing status with nothing on screen hinting they were out of
-  // date. `refresh` comes from ListView's `bulkActions` slot context, the same one
-  // BulkDocumentAction and the kebab menu now use.
-  describe('ETP-5302 — refetches the list after a successful bulk invoice', () => {
-    it('invokes refresh (in addition to clearSelection) from the modal onSuccess', () => {
-      assert.match(
-        src,
-        /onSuccess=\{\(\)\s*=>\s*\{[\s\S]*?clearSelection\(\);[\s\S]*?refresh\?\.\(\);[\s\S]*?\}\}/,
-      );
-    });
-
-    it('calls refresh optionally so a host that supplies no refresh cannot crash', () => {
-      assert.match(src, /refresh\?\.\(\)/);
-      assert.doesNotMatch(src, /[^?.]\brefresh\(\)/);
-    });
-
-    it('still closes the modal on success', () => {
-      assert.match(src, /onSuccess=\{\(\)\s*=>\s*\{\s*setShowModal\(false\);/);
-    });
-
-    it('does not refetch on a plain cancel/close (nothing changed server-side)', () => {
-      assert.match(src, /onClose=\{\(\)\s*=>\s*setShowModal\(false\)\}/);
-    });
-
-    it('the modal reports success through onSuccess after the create call', () => {
-      assert.match(src, /onSuccess\(\);/);
-    });
+  it('checks all selected shipments belong to the same business partner', () => {
+    assert.match(src, /invoiceableRows\.every\(r\s*=>\s*r\.businessPartner\s*===\s*firstBp\)/);
   });
 
   // ETP-4576 — the other half of this file's post-merge state. Develop contributed the
@@ -180,7 +85,9 @@ describe('BulkInvoiceFromShipment', () => {
 
     it('issues every backend call through apiFetch, never a bare fetch', () => {
       const apiFetchCalls = code.match(/\bapiFetch\(/g) || [];
-      assert.ok(apiFetchCalls.length >= 5, `expected the call sites to use apiFetch, found ${apiFetchCalls.length}`);
+      // ETP-5410 removed the bespoke BulkInvoiceModal (and its own ~5 call sites) in favor of
+      // the shared CreateInvoiceConfirmModal; the surviving component has 4.
+      assert.ok(apiFetchCalls.length >= 4, `expected the call sites to use apiFetch, found ${apiFetchCalls.length}`);
       assert.doesNotMatch(code, /[^.\w$]fetch\(/);
     });
 
@@ -191,8 +98,11 @@ describe('BulkInvoiceFromShipment', () => {
 
     // Required by docs/request-policy.md: `apiFetch` is a hook result, so an effect that calls
     // it and omits it from the dep array can keep a stale binding across a credential change.
-    it('lists apiFetch in the dependency array of the effect that uses it', () => {
-      assert.match(src, /\}, \[shipments, base, apiFetch\]\);/);
+    // The pending-lines effect has its own dedicated assertion below (ETP-5410's "quote"
+    // describe block); this one pins the OTHER apiFetch-calling effect — the Tarifa-prices
+    // fetch — so neither can silently drop apiFetch from its deps.
+    it('lists apiFetch in the dependency array of the tariff-prices effect', () => {
+      assert.match(src, /\}, \[lineDetails, selectedPriceListId, invoiceableRows, base, apiFetch, token\]\);/);
     });
   });
 
@@ -228,6 +138,212 @@ describe('BulkInvoiceFromShipment', () => {
         src,
         /!bpCheck\.same\s*\n\s*\?\s*ui\('selectShipmentsSameCustomer'\)\s*\n\s*:\s*!currencyCheck\.same\s*\n\s*\?\s*ui\('selectShipmentsSameCurrency'\)/,
       );
+    });
+  });
+
+  // ── the shared modal, not the bespoke one ──────────────────────────────────────
+  describe('opens the shared CreateInvoiceConfirmModal', () => {
+    it('imports CreateInvoiceConfirmModal', () => {
+      assert.match(src, /import CreateInvoiceConfirmModal from '@\/components\/contract-ui\/CreateInvoiceConfirmModal'/);
+    });
+
+    it('renders it with the price-list picker enabled for sales', () => {
+      assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?showPriceListPicker[\s\S]*?isSOTrx/);
+    });
+
+    it('passes a computed cardAmountLabel (real quote when resolvable, "N shipments" fallback otherwise)', () => {
+      assert.match(src, /cardAmountLabel=\{cardAmountLabel\}/);
+    });
+
+    it('passes the pre-summed pendingQtyTotal instead of a single-document pendingQtyUrl', () => {
+      assert.match(src, /pendingQtyTotal=\{pendingQtyTotal\}/);
+      assert.doesNotMatch(src, /pendingQtyUrl=/);
+    });
+
+    it('observes the picker selection via onPriceListChange (the modal owns priceListId internally)', () => {
+      assert.match(src, /onPriceListChange=\{setSelectedPriceListId\}/);
+    });
+
+    it('no longer renders the bespoke BulkInvoiceModal', () => {
+      assert.doesNotMatch(src, /BulkInvoiceModal/);
+    });
+  });
+
+  // ── the quote: real per-line price, order price when linked, Tarifa price otherwise ─
+  // Verified against Core's own UpdatePricesAndAmounts.java (createlinesfromprocess package):
+  // a line copied from — or related to — an order line is priced at THAT order line's own
+  // unitPrice, ignoring the invoice's price list entirely; only an unrelated line is priced
+  // from the invoice's price list. The quote mirrors that rule exactly so it never disagrees
+  // with what the created invoice actually contains.
+  describe('quote — real price per line, not an estimate', () => {
+    it('gets product + salesOrderLine from pendingInvoiceLines, not a separate lines request', () => {
+      assert.match(src, /action\/pendingInvoiceLines/);
+      assert.doesNotMatch(src, /goodsShipmentLine\?parentId=/);
+      assert.match(src, /details\[item\.lineId\] = \{ product: item\.product, salesOrderLine: item\.salesOrderLine \|\| null \};/);
+    });
+
+    it('fetches the ORDER line\'s own price for lines that have one, independent of the chosen Tarifa', () => {
+      assert.match(src, /sales-order\/lines\/\$\{id\}/);
+      // The order-price effect's dependency array must not include selectedPriceListId — it
+      // runs once per selection, not on every Tarifa change.
+      assert.match(
+        src,
+        /\}, \[showModal, canCreate, invoiceableRows, base, apiFetch, token\]\);/,
+      );
+    });
+
+    it('fetches the Tarifa price only for lines with NO linked order line, reactive to selectedPriceListId', () => {
+      assert.match(src, /action\/productPrices/);
+      assert.match(src, /\.filter\(d => !d\.salesOrderLine\)/);
+      assert.match(
+        src,
+        /useEffect\(\(\) => \{\s*\n\s*if \(!lineDetails \|\| !selectedPriceListId\)/,
+      );
+    });
+
+    it('prices the tariff request via a dedicated POST action, not the generic product selector', () => {
+      assert.doesNotMatch(src, /selectors\/M_Product_ID/);
+      assert.match(src, /productIds: products, priceListId: selectedPriceListId/);
+    });
+
+    it('computes quoteAmount as pendingQty × (order price ?? tariff price), skipping unresolved lines', () => {
+      assert.match(
+        src,
+        /const price = detail\.salesOrderLine\s*\n\s*\?\s*orderLinePrices\[detail\.salesOrderLine\]\s*\n\s*:\s*tariffPrices\[detail\.product\];/,
+      );
+      assert.match(src, /sum \+= qty \* price;/);
+    });
+
+    it('formats the resolved quote with the real shipment currency, never a bare number', () => {
+      assert.match(src, /import \{ formatCurrency \} from '@\/lib\/formatCurrency\.js'/);
+      assert.match(src, /formatCurrency\(currencyCode, quoteAmount\)/);
+      assert.match(src, /invoiceableRows\[0\]\?\.\['etgoCurrency\$_identifier'\]/);
+    });
+
+    it('falls back to the "N shipments" label once loading has settled and no quote could be resolved', () => {
+      assert.match(
+        src,
+        /const cardAmountLabel = quoteLoading\s*\n\s*\?\s*undefined\s*\n\s*:\s*\(quoteAmount != null\s*\n\s*\?\s*formatCurrency\(currencyCode, quoteAmount\)\s*\n\s*:\s*`\$\{invoiceableCount\} \$\{ui\('shipment'\)\}/,
+      );
+    });
+
+    // ETP-5410 follow-up: the fallback used to render on EVERY open (quoteAmount starts null)
+    // and then get silently replaced the instant the quote resolved — a "1 envío" flash on every
+    // click, reported by QA. Two earlier attempts were also rejected: suppressing
+    // cardAmountLabel to undefined with no visual replacement just swapped the flash for a
+    // blank-then-pop-in; wiring quoteLoading straight into a SPINNER made it flicker on/off
+    // almost as fast as the text flash, since quoteLoading itself resolves in ~100-250ms
+    // locally. The fix: cardAmountLoading now shows a static skeleton placeholder (see
+    // CreateInvoiceConfirmModal's own doc — same primitive NewPaymentEntryModal already uses
+    // for its own async fields), which doesn't have the spinner's flicker problem even for a
+    // very brief show — ONLY for N===1, the one case where a value always resolves on its own
+    // (pending lines + order price + the auto-selected Tarifa, no user action required).
+    describe('quoteLoading — drives the shared modal\'s skeleton placeholder, and gates cardAmountLabel so the two can never disagree', () => {
+      it('is scoped to exactly one selected shipment — N>=2 has no auto-selected Tarifa, so "N shipments" is a correct steady state, not a loading placeholder', () => {
+        assert.match(src, /const quoteLoading = invoiceableRows\.length === 1 && \(/);
+        assert.match(src, /cardAmountLoading=\{quoteLoading\}/);
+      });
+
+      it('tracks whether the main fetch (lines + pending + order price) is still in flight', () => {
+        assert.match(src, /const \[mainFetchPending, setMainFetchPending\] = useState\(false\);/);
+        assert.match(src, /setMainFetchPending\(true\);/);
+        assert.match(src, /setOrderLinePrices\(prices\);\s*\n\s*setMainFetchPending\(false\);/);
+      });
+
+      it('also waits for the Tarifa-priced tariff fetch when at least one pending line has no linked order', () => {
+        assert.match(src, /const \[tariffFetchPending, setTariffFetchPending\] = useState\(false\);/);
+        assert.match(src, /setTariffFetchPending\(true\);/);
+        assert.match(
+          src,
+          /needsTariffPricing && \(!selectedPriceListId \|\| tariffFetchPending\)/,
+        );
+      });
+    });
+
+    it('no longer pre-checks for an existing draft invoice (the shared modal has no such banner)', () => {
+      assert.doesNotMatch(src, /action\/checkDraftInvoice/);
+    });
+  });
+
+  // ── auto-preselected Tarifa for a single shipment ───────────────────────────
+  describe('auto-preselects the Tarifa when exactly one shipment is selected', () => {
+    it('derives resolvedPriceListId from the pendingInvoiceLines response, not a separate full-record GET', () => {
+      assert.match(src, /results\.length === 1 && results\[0\]\.resolvedPriceListId \? results\[0\]\.resolvedPriceListId : undefined/);
+      assert.match(src, /resolvedPriceListId: json\?\.response\?\.resolvedPriceListId \|\| null/);
+    });
+
+    it('feeds it to the shared modal via data.resolvedPriceListId — the same field the single-record flow already uses', () => {
+      assert.match(src, /data=\{\{ 'businessPartner\$_identifier': bpCheck\.name, resolvedPriceListId \}\}/);
+    });
+  });
+
+  // ── request policy: the shared apiFetch helper, never a bare fetch ─────────────
+  describe('uses the authenticated request helper, not a bare fetch', () => {
+    it('imports useApiFetch', () => {
+      assert.match(src, /import \{ useApiFetch \} from '@\/auth\/useApiFetch\.js'/);
+    });
+
+    it('never calls the bare global fetch', () => {
+      assert.doesNotMatch(src, /(?<![\w.])fetch\s*\(/);
+    });
+  });
+
+  // ── creating the invoice ────────────────────────────────────────────────────────
+  describe('creates the invoice via createDraftInvoice with shipmentIds + priceListId', () => {
+    it('posts to the createDraftInvoice action', () => {
+      assert.match(src, /action\/createDraftInvoice/);
+    });
+
+    it('sends shipmentIds and the chosen priceListId, no per-line quantities', () => {
+      assert.match(src, /shipmentIds:\s*invoiceableRows\.map\(r => r\.id\)/);
+      assert.match(src, /priceListId/);
+      assert.doesNotMatch(src, /lines:\s*linesPayload/);
+    });
+
+    it('translates the backend error before toasting it', () => {
+      assert.match(src, /import \{ translateBackendError \} from '@\/lib\/backendErrors\.js'/);
+      assert.match(src, /toast\.error\(translateBackendError\(err\.message, ui\)/);
+    });
+  });
+
+  // ── showing the result ──────────────────────────────────────────────────────────
+  // The hand-rolled toast.custom card is gone — the result is now shown through the same
+  // ConfirmResultModal the form-view "Crear factura" flow uses, which already badges
+  // confirmed-vs-draft off `documentStatus` (ETP-5381) and offers "Ver factura".
+  describe('shows the result through the shared ConfirmResultModal', () => {
+    it('imports ConfirmResultModal from the contract-ui barrel', () => {
+      assert.match(src, /import \{ ConfirmResultModal \} from '@\/components\/contract-ui'/);
+    });
+
+    it('passes the created invoice id, documentNo and documentStatus into a facturaVenta doc', () => {
+      assert.match(src, /type:\s*'facturaVenta'/);
+      assert.match(src, /route:\s*`\/sales-invoice\/\$\{invoiceResult\.invoice\.id\}`/);
+      assert.match(src, /documentStatus:\s*invoiceResult\.invoice\.documentStatus/);
+    });
+
+    it('no longer hand-rolls a toast.custom success card', () => {
+      assert.doesNotMatch(src, /toast\.custom/);
+    });
+  });
+
+  // ETP-5302 — this action must close the modal, clear the selection and refetch (never
+  // reload) once the user is done with the result, so the shipments it just invoiced never
+  // keep showing a stale invoicing status.
+  describe('ETP-5302 — refetches the list after the result modal is dismissed', () => {
+    it('calls clearSelection and refresh from the result modal onClose', () => {
+      assert.match(
+        src,
+        /onClose=\{\(\)\s*=>\s*\{[\s\S]*?clearSelection\(\);[\s\S]*?refresh\?\.\(\);[\s\S]*?\}\}/,
+      );
+    });
+
+    it('calls refresh optionally so a host that supplies no refresh cannot crash', () => {
+      assert.match(src, /refresh\?\.\(\)/);
+      assert.doesNotMatch(src, /[^?.]\brefresh\(\)/);
+    });
+
+    it('does not refetch on a plain cancel/close of the confirm modal (nothing changed server-side)', () => {
+      assert.match(src, /onClose=\{\(\)\s*=>\s*setShowModal\(false\)\}/);
     });
   });
 });

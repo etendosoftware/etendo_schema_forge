@@ -142,6 +142,15 @@ vi.mock('@generated/goods-receipt/custom/GoodsReceiptBottomPanel', () => ({ defa
 vi.mock('../GoodsReceiptPreview.jsx', () => ({ default: () => null }));
 vi.mock('../RelatedDocuments.jsx', () => ({ default: () => null }));
 
+// Mirrors goods-shipment/__tests__/index.vitest.jsx's mock of BulkInvoiceFromShipment: this
+// window's tests exercise the `bulkActions` slot with partial/no props (the generated-app mock
+// above renders `<BulkActions />` with zero props for every test, not just the ones that target
+// the bulk toolbar), so the real component — which calls hooks and reads `selectedRows` — must
+// not run for real here.
+vi.mock('@generated/goods-receipt/custom/BulkInvoiceFromReceipt', () => ({
+  default: () => <div data-testid="bulk-invoice-receipt" />,
+}));
+
 vi.mock('@/components/attachments', () => ({
   AttachmentsTab: () => null,
 }));
@@ -415,6 +424,14 @@ describe('GoodsReceiptWindow', () => {
     render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
     expect(screen.getByTestId('table-slot')).toBeInTheDocument();
     expect(screen.getByTestId('bulk-actions-slot')).toBeInTheDocument();
+  });
+
+  // Bulk "Crear factura" action, mirroring the goods-shipment window: BulkInvoiceFromReceipt
+  // must render as a child of GoodsReceiptBulkAction, alongside Procesar/Contabilizar/
+  // Descontabilizar/Copy-link, not replace any of them.
+  it('renders BulkInvoiceFromReceipt inside the bulk-actions slot', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    expect(screen.getByTestId('bulk-invoice-receipt')).toBeInTheDocument();
   });
 
   // ── hideMoreMenu ────────────────────────────────────────────────────────────

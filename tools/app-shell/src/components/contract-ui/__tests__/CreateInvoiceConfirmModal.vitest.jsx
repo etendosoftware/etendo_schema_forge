@@ -321,6 +321,21 @@ describe('CreateInvoiceConfirmModal', () => {
     expect(screen.getByText('soCreateInvoiceCheckDesc')).toBeInTheDocument();
   });
 
+  // ── pendingQtyTotal — bulk callers skip the single-document fetch ──────────
+
+  it('shows the pending subtitle from pendingQtyTotal without fetching pendingQtyUrl', () => {
+    renderModal({ pendingQtyUrl: '/api/pending', pendingQtyTotal: 8 });
+
+    expect(screen.getByText(/soAmountPendingInvoice/)).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('treats pendingQtyTotal of 0 as a real value, not "no data"', () => {
+    renderModal({ pendingQtyTotal: 0 });
+    expect(screen.getByText(/soAmountPendingInvoice/)).toBeInTheDocument();
+    expect(screen.queryByText('soCreateInvoiceCheckDesc')).not.toBeInTheDocument();
+  });
+
   // ── formatCurrency usage (ETP-4314 policy: no hand-rolled currency formatting) ──
 
   it('uses the shared formatCurrency utility to format the grand total (not a hand-rolled formatter)', () => {
@@ -390,6 +405,10 @@ describe('CreateInvoiceConfirmModal', () => {
       });
     });
 
+    // ETP-5410 follow-up: CreatableSearchSelect only renders its option list in the DOM
+    // once the field is focused (unlike the old native-<select> mock, whose <option>s were
+    // always present) — every filtering assertion below now focuses the field first.
+
     it('filters out inactive price lists', async () => {
       mockPriceListFetch([
         makePriceList({ id: 'active-1', name: 'Active PL', active: true }),
@@ -397,8 +416,10 @@ describe('CreateInvoiceConfirmModal', () => {
       ]);
       renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl });
       await waitFor(() => {
-        expect(screen.getByText('Active PL')).toBeInTheDocument();
+        expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
       });
+      fireEvent.focus(screen.getByTestId('field-invoice-confirm-price-list'));
+      expect(screen.getByText('Active PL')).toBeInTheDocument();
       expect(screen.queryByText('Inactive PL')).not.toBeInTheDocument();
     });
 
@@ -409,8 +430,10 @@ describe('CreateInvoiceConfirmModal', () => {
       ]);
       renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl });
       await waitFor(() => {
-        expect(screen.getByText('Sales PL')).toBeInTheDocument();
+        expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
       });
+      fireEvent.focus(screen.getByTestId('field-invoice-confirm-price-list'));
+      expect(screen.getByText('Sales PL')).toBeInTheDocument();
       expect(screen.queryByText('Purchase PL')).not.toBeInTheDocument();
     });
 
@@ -423,8 +446,10 @@ describe('CreateInvoiceConfirmModal', () => {
       // the sales price list and excluding the purchase one.
       renderModal({ showPriceListPicker: true, apiBaseUrl });
       await waitFor(() => {
-        expect(screen.getByText('Sales PL')).toBeInTheDocument();
+        expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
       });
+      fireEvent.focus(screen.getByTestId('field-invoice-confirm-price-list'));
+      expect(screen.getByText('Sales PL')).toBeInTheDocument();
       expect(screen.queryByText('Purchase PL')).not.toBeInTheDocument();
     });
 
@@ -435,8 +460,10 @@ describe('CreateInvoiceConfirmModal', () => {
       ]);
       renderModal({ showPriceListPicker: true, isSOTrx: false, apiBaseUrl });
       await waitFor(() => {
-        expect(screen.getByText('Purchase PL')).toBeInTheDocument();
+        expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
       });
+      fireEvent.focus(screen.getByTestId('field-invoice-confirm-price-list'));
+      expect(screen.getByText('Purchase PL')).toBeInTheDocument();
       expect(screen.queryByText('Sales PL')).not.toBeInTheDocument();
     });
 
@@ -538,19 +565,67 @@ describe('CreateInvoiceConfirmModal', () => {
       await waitFor(() => {
         expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
       });
-      fireEvent.change(screen.getByTestId('select-control'), { target: { value: 'pl-b' } });
+      // ETP-5410 follow-up: focus + mousedown an option, replacing the old mocked
+      // native-<select> `fireEvent.change`.
+      fireEvent.focus(screen.getByTestId('field-invoice-confirm-price-list'));
+      fireEvent.mouseDown(screen.getByTestId('option-invoice-confirm-price-list-pl-b'));
       fireEvent.click(screen.getByText('soCreateDocsBtn'));
       expect(onConfirm).toHaveBeenCalledWith('pl-b', []);
     });
 
-    it('shows noPriceListsAvailable option when no price lists match', async () => {
+    // ETP-5410 follow-up: the old Radix-Select-based picker rendered an explicit
+    // "noPriceListsAvailable" option in this case. CreatableSearchSelect's own empty-state
+    // message only appears once the user has TYPED a non-matching search query (it has no
+    // "the whole catalog is empty" affordance of its own) — a real, narrow loss of an
+    // informational message, but not a functional one: the field renders with the correct
+    // resolvedLabel-based placeholder and, most importantly, the confirm button correctly
+    // stays disabled since priceListId can never resolve to anything.
+    it('renders normally (no crash) and keeps the confirm button disabled when no price lists match', async () => {
       mockPriceListFetch([]);
       renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl });
       await waitFor(() => {
-        expect(screen.getByText('noPriceListsAvailable')).toBeInTheDocument();
+        expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
       });
+      expect(screen.getByPlaceholderText(/salesPriceListField/)).toBeInTheDocument();
       const confirmBtn = screen.getByText('soCreateDocsBtn').closest('button');
       expect(confirmBtn).toBeDisabled();
+    });
+
+    // A bulk caller (e.g. BulkInvoiceFromShipment) has no other way to observe the picker's
+    // internal selection — it needs it to compute a per-line quote reactively.
+    describe('onPriceListChange — notifies the caller of the picker\'s internal selection', () => {
+      it('fires with the initial resolved/preselected priceListId', async () => {
+        mockPriceListFetch([makePriceList({ id: 'pl-a' }), makePriceList({ id: 'pl-b' })]);
+        const onPriceListChange = vi.fn();
+        renderModal({
+          showPriceListPicker: true, isSOTrx: true, apiBaseUrl,
+          data: makeData({ resolvedPriceListId: 'pl-b' }), onPriceListChange,
+        });
+        await waitFor(() => {
+          expect(onPriceListChange).toHaveBeenCalledWith('pl-b');
+        });
+      });
+
+      it('fires again when the user changes the selection', async () => {
+        mockPriceListFetch([makePriceList({ id: 'pl-a' }), makePriceList({ id: 'pl-b' })]);
+        const onPriceListChange = vi.fn();
+        renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl, onPriceListChange });
+        await waitFor(() => {
+          expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
+        });
+        onPriceListChange.mockClear();
+        fireEvent.focus(screen.getByTestId('field-invoice-confirm-price-list'));
+        fireEvent.mouseDown(screen.getByTestId('option-invoice-confirm-price-list-pl-b'));
+        expect(onPriceListChange).toHaveBeenCalledWith('pl-b');
+      });
+
+      it('is a no-op when omitted — the picker still works with no callback supplied', async () => {
+        mockPriceListFetch([makePriceList({ id: 'pl-a' })]);
+        expect(() => renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl })).not.toThrow();
+        await waitFor(() => {
+          expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
+        });
+      });
     });
   });
 
@@ -685,6 +760,55 @@ describe('CreateInvoiceConfirmModal', () => {
         expect(screen.getByTestId('invoice-confirm-rectify-empty')).toBeInTheDocument();
       });
       expect(confirmBtn()).toBeDisabled();
+    });
+  });
+
+  // ── cardAmountLabel — bulk callers with no single trustworthy total ────────
+  // A bulk toolbar action (N selected documents) has no linkedOrders total and no
+  // documentNo that means anything, so it passes a label instead of a `data` total.
+
+  describe('cardAmountLabel', () => {
+    it('overrides the computed total when provided', () => {
+      renderModal({ data: makeData({ grandTotalAmount: 1234.56 }), cardAmountLabel: '3 albaranes' });
+      expect(screen.getByText('3 albaranes')).toBeInTheDocument();
+      expect(screen.queryByText(/1\.234,56/)).not.toBeInTheDocument();
+    });
+
+    it('overrides the documentNo fallback when the total is 0', () => {
+      renderModal({ data: makeData({ grandTotalAmount: 0, documentNo: 'SO-999' }), cardAmountLabel: '3 albaranes' });
+      expect(screen.getByText('3 albaranes')).toBeInTheDocument();
+      expect(screen.queryByText('SO-999')).not.toBeInTheDocument();
+    });
+
+    it('leaves the computed total untouched when omitted (single-record behavior unchanged)', () => {
+      renderModal({ data: makeData({ grandTotalAmount: 1234.56, 'currency$_identifier': 'EUR' }) });
+      expect(screen.getByText(/1\.234,56\s€/)).toBeInTheDocument();
+    });
+  });
+
+  // ETP-5410 follow-up: a bulk caller used to pass cardAmountLabel=undefined while its own
+  // quote fetch was in flight, which just swapped a wrong-value flash for a blank-then-pop-in —
+  // also reported as jarring. A spinner was tried next and rejected too: at the ~100-250ms this
+  // resolves in, a spinning icon appearing and vanishing read as a glitch. cardAmountLoading now
+  // renders a static skeleton placeholder instead (same primitive NewPaymentEntryModal already
+  // uses for its own async fields — `@/components/ui/skeleton`), which has no motion of its own
+  // and so doesn't flicker even for a very brief show.
+  describe('cardAmountLoading', () => {
+    it('shows a skeleton placeholder instead of the amount, even when cardAmountLabel is also provided', () => {
+      renderModal({
+        data: makeData({ grandTotalAmount: 1234.56 }),
+        cardAmountLabel: '3 albaranes',
+        cardAmountLoading: true,
+      });
+      expect(screen.queryByText('3 albaranes')).not.toBeInTheDocument();
+      expect(screen.queryByText(/1\.234,56/)).not.toBeInTheDocument();
+      expect(screen.getByTestId('Skeleton__cardAmount')).toBeInTheDocument();
+    });
+
+    it('shows the normal amount when false (default) — single-record and non-loading bulk callers are unaffected', () => {
+      renderModal({ cardAmountLabel: '3 albaranes' });
+      expect(screen.getByText('3 albaranes')).toBeInTheDocument();
+      expect(screen.queryByTestId('Skeleton__cardAmount')).not.toBeInTheDocument();
     });
   });
 });

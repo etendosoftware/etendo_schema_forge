@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { translateBackendError } from '@/lib/backendErrors.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI, useMenuLabel } from '@/i18n';
 import ReturnWizard from './ReturnWizard';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal';
@@ -17,6 +19,7 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
   const ui = useUI();
   const tMenu = useMenuLabel();
   const navigate = useNavigate();
+  const apiFetch = useApiFetch();
   const [wizardOpen, setWizardOpen] = useState(false);
   const [showInvoiceConfirm, setShowInvoiceConfirm] = useState(false);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
@@ -25,6 +28,23 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [invoiceResult, setInvoiceResult] = useState(null);
   const resultNavigatedRef = useRef(false);
+
+  // Quote inputs — mirrors BulkInvoiceFromShipment.jsx's own quote exactly (see that file for
+  // the full rationale). Only meaningful here when the shipment has NO linked sales order:
+  // createFromShipments' single-shipment-with-order short-circuit into createFromOrder bills
+  // the WHOLE order's pending lines when no line overrides are sent (which this button never
+  // sends), so a quote computed from just this shipment's own lines would UNDER-report the real
+  // invoice total in that case. `hasLinkedOrder` (from the same single-record enrichment this
+  // component already receives via `data`) is what gates that off — the modal's existing
+  // linkedOrder.grandTotalAmount fallback stays in charge when a linked order exists.
+  const [selectedPriceListId, setSelectedPriceListId] = useState('');
+  const [lineDetails, setLineDetails] = useState(null);
+  const [pendingByLine, setPendingByLine] = useState(null);
+  const [orderLinePrices, setOrderLinePrices] = useState({});
+  const [tariffPrices, setTariffPrices] = useState({});
+  const [mainFetchPending, setMainFetchPending] = useState(false);
+  const [tariffFetchPending, setTariffFetchPending] = useState(false);
+  const hasLinkedOrder = Array.isArray(data?.linkedOrders) && data.linkedOrders.length > 0;
 
   const isCompleted = data?.documentStatus === 'CO';
   const isFullyInvoiced = data?.invoiceStatus >= 100;
@@ -156,6 +176,142 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
     }
   }, [invoiceResult, onRefresh, ui]);
 
+  // Fetches this shipment's pending-quantity map, which now ALSO carries each pending line's
+  // product and salesOrderLine (ETP-5410 follow-up — see
+  // CreateDraftInvoiceHandler#handlePendingLines), so this used to be two requests and is now
+  // one. Skipped entirely when a linked order exists (see hasLinkedOrder above): the quote would
+  // be misleading there, not just imprecise.
+  useEffect(() => {
+    if (!showInvoiceConfirm || hasLinkedOrder || !recordId) {
+      setLineDetails(null);
+      setPendingByLine(null);
+      setOrderLinePrices({});
+      setMainFetchPending(false);
+      return;
+    }
+    let cancelled = false;
+    setMainFetchPending(true);
+    (async () => {
+      const pendingRes = await apiFetch(
+        `${base}/goods-shipment/goodsShipment/${recordId}/action/pendingInvoiceLines`, { baseUrl: '', token },
+      ).catch(() => null);
+      if (cancelled) return;
+
+      const pendingData = pendingRes?.ok ? (await pendingRes.json())?.response?.data || [] : [];
+      const details = {};
+      const pendingMap = {};
+      pendingData.forEach(item => {
+        details[item.lineId] = { product: item.product, salesOrderLine: item.salesOrderLine || null };
+        pendingMap[item.lineId] = Number(item.pendingQty) || 0;
+      });
+      setLineDetails(details);
+      setPendingByLine(pendingMap);
+
+      // Order-linked LINES (as opposed to the header-level linked order gated above) are still
+      // priced at their own order line's unitPrice, never the Tarifa — see the bulk component's
+      // comment for the full Core-verified rationale.
+      const orderLineIds = [...new Set(Object.values(details).map(d => d.salesOrderLine).filter(Boolean))];
+      const prices = {};
+      await Promise.all(orderLineIds.map(async (id) => {
+        try {
+          const res = await apiFetch(`${base}/sales-order/lines/${id}`, { baseUrl: '', token });
+          if (res.ok) {
+            const ol = (await res.json())?.response?.data?.[0];
+            if (ol) prices[id] = Number(ol.unitPrice) || 0;
+          }
+        } catch { /* a line whose order-line price can't be resolved just contributes nothing */ }
+      }));
+      if (!cancelled) {
+        setOrderLinePrices(prices);
+        setMainFetchPending(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [showInvoiceConfirm, hasLinkedOrder, recordId, base, apiFetch, token]);
+
+  // Tariff prices for lines with no linked order line — reactive to the Tarifa selection.
+  useEffect(() => {
+    if (!lineDetails || !selectedPriceListId) { setTariffPrices({}); return; }
+    const products = [...new Set(
+      Object.values(lineDetails).filter(d => !d.salesOrderLine).map(d => d.product).filter(Boolean),
+    )];
+    if (products.length === 0) { setTariffPrices({}); return; }
+    let cancelled = false;
+    setTariffFetchPending(true);
+    (async () => {
+      try {
+        // ETP-5410 follow-up: a dedicated POST action that prices exactly these product ids,
+        // instead of the generic product-browse selector (up to 500 rows, filtered client-side)
+        // — see MultiDocumentInvoiceSupport#resolveProductPrices in com.etendoerp.go.
+        const res = await apiFetch(
+          `${base}/goods-shipment/goodsShipment/${recordId}/action/productPrices`,
+          {
+            method: 'POST',
+            baseUrl: '',
+            token,
+            body: JSON.stringify({ productIds: products, priceListId: selectedPriceListId }),
+          },
+        );
+        if (!res.ok || cancelled) return;
+        const items = (await res.json())?.response?.data || [];
+        const prices = {};
+        items.forEach(item => {
+          if (item.productId) prices[item.productId] = Number(item.price) || 0;
+        });
+        if (!cancelled) setTariffPrices(prices);
+      } catch { /* products left unpriced just don't contribute to the quote */
+      } finally {
+        if (!cancelled) setTariffFetchPending(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [lineDetails, selectedPriceListId, recordId, base, apiFetch, token]);
+
+  const quoteAmount = useMemo(() => {
+    if (!lineDetails || !pendingByLine) return null;
+    let sum = 0;
+    let resolvedAny = false;
+    for (const [lineId, qty] of Object.entries(pendingByLine)) {
+      if (!qty) continue;
+      const detail = lineDetails[lineId];
+      if (!detail) continue;
+      const price = detail.salesOrderLine
+        ? orderLinePrices[detail.salesOrderLine]
+        : tariffPrices[detail.product];
+      if (price != null) {
+        sum += qty * price;
+        resolvedAny = true;
+      }
+    }
+    return resolvedAny ? sum : null;
+  }, [lineDetails, pendingByLine, orderLinePrices, tariffPrices]);
+
+  // Only overrides the modal's own default (linkedOrder.grandTotalAmount, or the documentNo
+  // fallback) once a real quote has resolved — while it hasn't, the modal keeps showing
+  // whatever it already showed before this feature existed.
+  const cardAmountLabel = quoteAmount != null
+    ? formatCurrency(data?.['etgoCurrency$_identifier'] || data?.['currency$_identifier'] || '', quoteAmount)
+    : undefined;
+
+  // Whether any pending line still needs a Tarifa-sourced price we haven't fetched yet.
+  const needsTariffPricing = !!(lineDetails && pendingByLine
+    && Object.entries(pendingByLine).some(([lineId, qty]) => {
+      if (!qty) return false;
+      const detail = lineDetails[lineId];
+      return !!(detail && !detail.salesOrderLine);
+    }));
+  // ETP-5410 follow-up: this component used to fall straight through to the modal's own
+  // documentNo fallback while the quote was still resolving — the exact same "wrong value
+  // flashes, then gets replaced" glitch already fixed on the bulk toolbar actions
+  // (BulkInvoiceFromShipment.jsx), just showing a document number instead of "N envíos".
+  // Unifies onto the same fix: cardAmountLoading shows a skeleton placeholder instead, so this
+  // and the bulk modal never disagree on what "the quote is still loading" looks like. Gated on
+  // hasLinkedOrder like the rest of the quote feature — when a linked order exists, the quote
+  // is never computed at all, so there is nothing to show a loading state for.
+  const quoteLoading = !hasLinkedOrder && (
+    mainFetchPending || (needsTariffPricing && (!selectedPriceListId || tariffFetchPending))
+  );
+
   const handleCreateInvoice = async (priceListId) => {
     if (creatingInvoice) return;
     setCreatingInvoice(true);
@@ -201,7 +357,10 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
           // Fix (not part of ETP-5260): was `var(--status-info-fg)` — a badge-text token,
           // not a button-background token — which rendered a saturated blue instead of
           // the dark gray used by the real `Confirmar` button. Same pattern as ETP-4781.
-          style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid var(--status-info-border)', background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))', opacity: creatingInvoice ? 0.6 : 1, cursor: creatingInvoice ? 'not-allowed' : 'pointer' }}
+          // The `1px solid var(--status-info-border)` ring was a leftover from that same
+          // badge styling — the real `Confirmar` button (DraftModeConfirmButton) has no
+          // border at all, just the dark fill.
+          style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))', opacity: creatingInvoice ? 0.6 : 1, cursor: creatingInvoice ? 'not-allowed' : 'pointer' }}
           // Hover to match the shared Confirm button's `hover:bg-primary/90` (90% opacity).
           onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--primary) / 0.9)'; }}
           onMouseLeave={e => { e.currentTarget.style.background = 'hsl(var(--primary))'; }}
@@ -257,12 +416,15 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
           data={data}
           loading={creatingInvoice}
           pendingQtyUrl={`${base}/goods-shipment/goodsShipment/${recordId}/action/pendingInvoiceLines`}
+          cardAmountLabel={cardAmountLabel}
+          cardAmountLoading={quoteLoading}
           showPriceListPicker
           isSOTrx
           apiBaseUrl={apiBaseUrl}
           token={token}
           onConfirm={handleCreateInvoice}
           onClose={() => setShowInvoiceConfirm(false)}
+          onPriceListChange={setSelectedPriceListId}
         />
       )}
 

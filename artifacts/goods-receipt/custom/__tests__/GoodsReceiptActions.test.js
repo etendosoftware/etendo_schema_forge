@@ -105,6 +105,16 @@ describe('GoodsReceiptActions', () => {
       assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?apiBaseUrl=\{apiBaseUrl\}[\s\S]*?\/>/);
     });
 
+    // Parity with the goods-shipment "Crear factura" confirm popup — without this the
+    // pending-units subtitle falls back to the generic soCreateInvoiceCheckDesc instead of
+    // "N unidades pendientes de facturar".
+    it('passes pendingQtyUrl pointing at this receipt\'s pendingInvoiceLines action', () => {
+      assert.match(
+        src,
+        /<CreateInvoiceConfirmModal[\s\S]*?pendingQtyUrl=\{`\$\{base\}\/goods-receipt\/goodsReceipt\/\$\{recordId\}\/action\/pendingInvoiceLines`\}[\s\S]*?\/>/,
+      );
+    });
+
     // ETP-5333 — onConfirm used to be an inline arrow that closed the modal
     // SYNCHRONOUSLY on click, before the request even started (no loading
     // feedback). It is now wired directly to handleCreateInvoice, which closes
@@ -124,6 +134,87 @@ describe('GoodsReceiptActions', () => {
 
     it('posts to the createPurchaseInvoice action (not the sales-side createDraftInvoice)', () => {
       assert.match(src, /goods-receipt\/goodsReceipt\/\$\{recordId\}\/action\/createPurchaseInvoice/);
+    });
+  });
+
+  // Mirrors GoodsShipmentActions.jsx's own single-record quote exactly, gated the same way:
+  // only meaningful when this receipt has no linked purchase order (createFromReceipt's
+  // linked-PO branch bills off the order via OrderLine.class, not this receipt's own lines).
+  describe('single-record quote — gated on hasLinkedOrder', () => {
+    it('derives hasLinkedOrder from data.linkedOrders, the same single-record enrichment already received', () => {
+      assert.match(src, /const hasLinkedOrder = Array\.isArray\(data\?\.linkedOrders\) && data\.linkedOrders\.length > 0;/);
+    });
+
+    it('skips the line/pending fetch entirely when a linked order exists', () => {
+      assert.match(
+        src,
+        /if \(!showInvoiceConfirm \|\| hasLinkedOrder \|\| !recordId\) \{/,
+      );
+    });
+
+    it('gets product + salesOrderLine from pendingInvoiceLines, not a separate lines request, and not a bulk collection', () => {
+      assert.match(src, /goods-receipt\/goodsReceipt\/\$\{recordId\}\/action\/pendingInvoiceLines`, \{ baseUrl: '', token \}/);
+      // goodsReceiptLine?parentId=${receiptId} still exists elsewhere in this file (an unrelated
+      // feature) — only the recordId-anchored variant the quote effect used to call is gone.
+      assert.doesNotMatch(src, /goods-receipt\/goodsReceiptLine\?parentId=\$\{recordId\}/);
+      assert.match(src, /details\[item\.lineId\] = \{ product: item\.product, salesOrderLine: item\.salesOrderLine \|\| null \};/);
+    });
+
+    it('prices order-linked LINES from their own purchase order line, unlinked lines from the Tarifa', () => {
+      assert.match(src, /purchase-order\/lines\/\$\{id\}/);
+      assert.match(src, /goods-receipt\/goodsReceipt\/\$\{recordId\}\/action\/productPrices/);
+      assert.doesNotMatch(src, /selectors\/M_Product_ID/);
+      assert.match(
+        src,
+        /const price = detail\.salesOrderLine\s*\n\s*\?\s*orderLinePrices\[detail\.salesOrderLine\]\s*\n\s*:\s*tariffPrices\[detail\.product\];/,
+      );
+    });
+
+    it('only overrides the modal default once the quote has actually resolved', () => {
+      assert.match(
+        src,
+        /const cardAmountLabel = quoteAmount != null\s*\n\s*\?\s*formatCurrency\([\s\S]*?, quoteAmount\)\s*\n\s*:\s*undefined;/,
+      );
+    });
+
+    it('passes cardAmountLabel and onPriceListChange to the modal', () => {
+      assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?cardAmountLabel=\{cardAmountLabel\}[\s\S]*?\/>/);
+      assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?onPriceListChange=\{setSelectedPriceListId\}[\s\S]*?\/>/);
+    });
+
+    // ETP-5410 follow-up: this component used to fall straight through to the modal's own
+    // documentNo fallback while the quote was still resolving — unified onto the same
+    // cardAmountLoading skeleton fix already applied to BulkInvoiceFromReceipt.jsx, so the
+    // bulk and single-record "Crear factura" flows never disagree on what "still loading"
+    // looks like.
+    describe('quoteLoading — drives cardAmountLoading (skeleton), gated on hasLinkedOrder like the rest of the quote feature', () => {
+      it('tracks whether the main fetch (lines + pending + order price) is still in flight', () => {
+        assert.match(src, /const \[mainFetchPending, setMainFetchPending\] = useState\(false\);/);
+        assert.match(src, /setMainFetchPending\(true\);/);
+        assert.match(src, /setOrderLinePrices\(prices\);\s*\n\s*setMainFetchPending\(false\);/);
+      });
+
+      it('also waits for the Tarifa-priced tariff fetch when at least one pending line has no linked order', () => {
+        assert.match(src, /const \[tariffFetchPending, setTariffFetchPending\] = useState\(false\);/);
+        assert.match(src, /setTariffFetchPending\(true\);/);
+        assert.match(
+          src,
+          /needsTariffPricing && \(!selectedPriceListId \|\| tariffFetchPending\)/,
+        );
+      });
+
+      it('is false whenever hasLinkedOrder is true — the quote is never computed there, so there is nothing to show a loading state for', () => {
+        assert.match(src, /const quoteLoading = !hasLinkedOrder && \(/);
+      });
+
+      it('passes cardAmountLoading to the shared modal', () => {
+        assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?cardAmountLoading=\{quoteLoading\}[\s\S]*?\/>/);
+      });
+    });
+
+    it('uses the authenticated request helper for the new fetches, not a bare fetch', () => {
+      assert.match(src, /import \{ useApiFetch \} from '@\/auth\/useApiFetch\.js'/);
+      assert.match(src, /const apiFetch = useApiFetch\(\);/);
     });
   });
 

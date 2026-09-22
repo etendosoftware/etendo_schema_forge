@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { Skeleton } from '@/components/ui/skeleton';
 import { overlayStyle, cardStyle, btnPrimaryStyle, btnSecondaryStyle, closeBtnStyle, Spinner } from './ConfirmDocumentModal';
 import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
 import { useRectifiableInvoices, RectifiableInvoiceField } from './RectifiableInvoicePicker';
@@ -42,6 +43,31 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  *   isSOTrx          — sales (true) vs purchase (false) price lists offered by the picker
  *   apiBaseUrl       — required when showPriceListPicker is true, to fetch price lists
  *   token            — auth bearer token, required for the pendingQtyUrl and price-list fetches
+ *   cardAmountLabel  — overrides the summary card's amount line. The card's own total (see
+ *                      `grandTotal` below) only exists for a single open record — a bulk caller
+ *                      driving this modal from a grid selection has no such figure, so it passes
+ *                      a label instead (e.g. "3 albaranes"). Omit to keep the single-record total.
+ *   cardAmountLoading — ETP-5410 follow-up: shows a skeleton placeholder (same primitive as
+ *                      NewPaymentEntryModal's own async fields — `@/components/ui/skeleton`, a
+ *                      static pulsing shape, deliberately NOT a spinning icon) in the amount
+ *                      line instead of `cardAmountLabel`/the computed total. A caller that
+ *                      resolves its own quote asynchronously (the bulk toolbar actions) passes
+ *                      this true while the quote is still in flight, so the card reads as
+ *                      "loading" rather than flashing an empty amount and popping in the real
+ *                      one a beat later. A spinner was tried first and rejected: at the
+ *                      ~100-250ms this resolves in locally, a spinning icon appearing and
+ *                      vanishing read as a glitch, not a loading state — the static skeleton
+ *                      shape doesn't have that problem even for a very brief show.
+ *   pendingQtyTotal  — pre-summed pending-units count. A bulk caller already fetches
+ *                      `pendingInvoiceLines` per selected document to sum them for its own guard,
+ *                      so this skips the modal's own `pendingQtyUrl` fetch (which only ever
+ *                      targets one document) instead of duplicating N requests. Omit to keep the
+ *                      `pendingQtyUrl` fetch.
+ *   onPriceListChange — optional. Called with the picker's current `priceListId` every time it
+ *                      changes (including the initial preselect/resolve). The picker's selection
+ *                      is internal state this modal owns; a bulk caller that needs to react to it
+ *                      (e.g. to recompute a per-line quote once a Tarifa is chosen) has no other
+ *                      way to observe it. A no-op when omitted.
  */
 export default function CreateInvoiceConfirmModal({
   data,
@@ -54,6 +80,10 @@ export default function CreateInvoiceConfirmModal({
   apiBaseUrl,
   token,
   rectifiableInvoicesUrl,
+  cardAmountLabel,
+  cardAmountLoading,
+  pendingQtyTotal,
+  onPriceListChange,
 }) {
   const ui = useUI();
   const apiFetch = useApiFetch();
@@ -83,6 +113,10 @@ export default function CreateInvoiceConfirmModal({
     token,
   });
 
+  useEffect(() => {
+    onPriceListChange?.(priceListId);
+  }, [priceListId, onPriceListChange]);
+
   const documentNo  = data?.documentNo || '';
   const bpName      = data?.['businessPartner$_identifier'] || '';
   const linkedOrder = Array.isArray(data?.linkedOrders) ? data.linkedOrders[0] : null;
@@ -97,10 +131,15 @@ export default function CreateInvoiceConfirmModal({
     v != null ? Number(v).toLocaleString('es-ES', { minimumFractionDigits: dec, maximumFractionDigits: dec, useGrouping: true }) : '-';
 
   const formattedTotal = currencyCode ? formatCurrency(currencyCode, grandTotal) : fmtNum(grandTotal);
-  const displayAmount = grandTotal !== 0 ? formattedTotal : documentNo;
+  // A bulk caller passes cardAmountLabel because it has no single trustworthy total to show
+  // (see CreateInvoiceConfirmModal usage from the bulk toolbar actions) — it wins over both the
+  // computed total and the documentNo fallback, neither of which mean anything for N documents.
+  const displayAmount = cardAmountLabel ?? (grandTotal !== 0 ? formattedTotal : documentNo);
 
   useEffect(() => {
-    if (!pendingQtyUrl) return;
+    // A bulk caller supplies pendingQtyTotal already summed across its selection — pendingQtyUrl
+    // only ever targets one document, so it would be the wrong fetch (and the wrong number) here.
+    if (pendingQtyTotal !== undefined || !pendingQtyUrl) return;
     let cancelled = false;
     (async () => {
       try {
@@ -112,10 +151,11 @@ export default function CreateInvoiceConfirmModal({
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [pendingQtyUrl, token, apiFetch]);
+  }, [pendingQtyUrl, pendingQtyTotal, token, apiFetch]);
 
-  const subtitle = pendingQty != null
-    ? ui('soAmountPendingInvoice', { pending: `${fmtNum(pendingQty, 0)} ${ui('units')}` })
+  const effectivePendingQty = pendingQtyTotal !== undefined ? pendingQtyTotal : pendingQty;
+  const subtitle = effectivePendingQty != null
+    ? ui('soAmountPendingInvoice', { pending: `${fmtNum(effectivePendingQty, 0)} ${ui('units')}` })
     : ui('soCreateInvoiceCheckDesc');
 
   const canConfirm = (!showPriceListPicker || !!priceListId) && rectify.isSatisfied;
@@ -142,8 +182,10 @@ export default function CreateInvoiceConfirmModal({
         <div style={{ padding: '14px 20px' }}>
           <div style={{ background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10, padding: '14px 16px' }}>
             {bpName && <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>{bpName}</div>}
-            <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4 }}>
-              {displayAmount}
+            <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, display: 'flex', alignItems: 'center', minHeight: 28 }}>
+              {cardAmountLoading
+                ? <Skeleton className="h-6 w-28 rounded" data-testid="Skeleton__cardAmount" />
+                : displayAmount}
             </div>
           </div>
         </div>
