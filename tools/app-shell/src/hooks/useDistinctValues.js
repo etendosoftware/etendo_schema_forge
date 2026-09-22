@@ -59,7 +59,7 @@ export function useDistinctValues(entity, field, {
   }, [entity, field]);
 
   const fetchPage = useCallback(async (startRow, search, append) => {
-    if (!token || !entity || !field || !apiBaseUrl) return;
+    if (!entity || !field || !apiBaseUrl) return;
     const reqId = ++requestIdRef.current;
     const setBusy = append ? setLoadingMore : setLoading;
     setBusy(true);
@@ -99,7 +99,7 @@ export function useDistinctValues(entity, field, {
 
   // Reset + fetch page 1 whenever the query key changes.
   useEffect(() => {
-    if (!enabled || !token || !entity || !field || !apiBaseUrl) {
+    if (!enabled || !entity || !field || !apiBaseUrl) {
       setValues([]);
       setHasMore(false);
       return;

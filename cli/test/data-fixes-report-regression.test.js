@@ -128,6 +128,13 @@ const FIXES_WITH_REPORT = new Set([
   // declines part of its own scope instead of silently pretending it succeeded. Empty — `detail`
   // null — whenever the tenant's chart carries every account this fix references.
   '20260922T120000Z__R39-elementvalue-operand-backfill',
+  // R39 (gap C3) opens every C_PeriodControl row of a period whose aggregate status is
+  // Mixed, but deliberately never touches a Permanently Closed row and respects the same
+  // future-Permanently-Closed-period guard AD Process 167 itself enforces. Its @report
+  // lists every row still 'N'/'C' in a still-Mixed period after @apply, with the reason
+  // (blocked by a sibling 'P' row vs. blocked by the future-period guard) — same
+  // "flag, don't guess" pattern as R19.
+  '20260921T120000Z__R39-mixed-period-open',
 ]);
 
 async function loadCatalogFiles() {

@@ -217,7 +217,11 @@ describe('GoodsShipmentActions', () => {
       fireEvent.click(screen.getByTestId('invoice-confirm-confirm'));
 
       await waitFor(() => expect(screen.getByTestId('invoice-confirm-confirm')).toHaveTextContent('soProcessing'));
-      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      // The quote feature (see GoodsShipmentActions' own lineDetails/pendingByLine effect)
+      // issues its own GET requests once the modal opens — this assertion is scoped to POST
+      // calls specifically, since that is what a double-click guard actually protects against.
+      const postCalls = globalThis.fetch.mock.calls.filter(([, opts]) => opts?.method === 'POST');
+      expect(postCalls).toHaveLength(1);
 
       await act(async () => {
         resolveFetch({ ok: true, json: () => Promise.resolve({ response: { data: {} } }) });

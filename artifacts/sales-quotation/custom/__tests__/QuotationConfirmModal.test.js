@@ -214,4 +214,32 @@ describe('QuotationConfirmModal', () => {
       assert.ok(matches[matches.length - 1].index > invoicePostIdx);
     });
   });
+
+  // ETP-5378 — handleGoToDoc's basePath regex used to require a trailing
+  // "/something" after "sales-quotation" to strip anything. That held while this
+  // modal only ever opened from the form (/sales-quotation/{recordId}), but once
+  // the row-hover Confirmar entry started opening the SAME modal from the bare
+  // list route (/sales-quotation, no trailing segment), the regex matched
+  // nothing there, basePath stayed "/sales-quotation", and "Ver pedido" built
+  // /sales-quotation/sales-order/{id} — a dead URL, reported live. Real
+  // behavioral coverage (both origins, real regex execution) lives in
+  // tools/app-shell/src/windows/custom/sales-quotation/__tests__/
+  // QuotationConfirmModal.goToDoc.vitest.jsx — this repo's node --test runner
+  // can't import a .jsx component, so this file only pins the source text like
+  // every other test in it.
+  describe('handleGoToDoc basePath (ETP-5378)', () => {
+    // Plain substring checks, not a regex matching a regex literal — the fixed
+    // pattern makes the trailing "/something" OPTIONAL: `(\/.*)?` instead of a
+    // mandatory `\/.*`.
+    const FIXED_PATTERN = String.raw`window.location.pathname.replace(/\/sales-quotation(\/.*)?$/, '')`;
+    const OLD_PATTERN = String.raw`\/sales-quotation\/.*$`;
+
+    it('strips "/sales-quotation" with an OPTIONAL trailing segment, not a mandatory one', () => {
+      assert.ok(src.includes(FIXED_PATTERN), 'expected the fixed basePath regex in handleGoToDoc');
+    });
+
+    it('no longer uses the old mandatory-trailing-slash regex', () => {
+      assert.ok(!src.includes(OLD_PATTERN), 'the pre-fix regex text must not reappear');
+    });
+  });
 });

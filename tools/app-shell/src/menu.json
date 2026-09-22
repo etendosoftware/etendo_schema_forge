@@ -9,7 +9,8 @@
           "name": "first-steps",
           "label": "First Steps",
           "favname": "First Steps",
-          "capability": "isOwner"
+          "capability": "isOwner",
+          "hideWhenFirstStepsDismissed": true
         }
       ]
     },
@@ -222,6 +223,13 @@
           "label": "Storage Bin",
           "favname": "Storage Bin",
           "hidden": true
+        },
+        {
+          "name": "inventory-stock-report",
+          "label": "Stock Report",
+          "favname": "Inventory Stock Report",
+          "hidden": true,
+          "reportId": "inventory-stock-report"
         }
       ]
     },
@@ -394,6 +402,62 @@
           "favname": "Finance Reports",
           "path": "report-viewer?category=finance",
           "accessWindowId": "D647D118F5014D00AF47A636B2CD0DD3"
+        },
+        {
+          "name": "tax-report",
+          "label": "Tax Report",
+          "favname": "Tax Report",
+          "hidden": true,
+          "reportId": "tax-report"
+        },
+        {
+          "name": "aging-receivable",
+          "label": "Aging Report (Receivables)",
+          "favname": "Aging Report (Receivables)",
+          "hidden": true,
+          "reportId": "aging-receivable"
+        },
+        {
+          "name": "aging-payable",
+          "label": "Aging Report (Payables)",
+          "favname": "Aging Report (Payables)",
+          "hidden": true,
+          "reportId": "aging-payable"
+        },
+        {
+          "name": "balance-sheet",
+          "label": "Balance Sheet",
+          "favname": "Balance Sheet",
+          "hidden": true,
+          "reportId": "balance-sheet"
+        },
+        {
+          "name": "profit-loss",
+          "label": "Profit & Loss",
+          "favname": "Profit & Loss",
+          "hidden": true,
+          "reportId": "profit-loss"
+        },
+        {
+          "name": "report-general-ledger",
+          "label": "General Ledger",
+          "favname": "General Ledger",
+          "hidden": true,
+          "reportId": "report-general-ledger"
+        },
+        {
+          "name": "report-journal-entries",
+          "label": "Journal Entries",
+          "favname": "Journal Entries",
+          "hidden": true,
+          "reportId": "report-journal-entries"
+        },
+        {
+          "name": "report-trial-balance",
+          "label": "Trial Balance",
+          "favname": "Trial Balance",
+          "hidden": true,
+          "reportId": "report-trial-balance"
         }
       ]
     },

@@ -59,7 +59,7 @@ export function blobToBase64(blob) {
  * }} params
  */
 export async function attachFile({ token, tabId, recordId, file, fileName } = {}) {
-  if (!token || !tabId || !recordId || !file) {
+  if (!tabId || !recordId || !file) {
     return { error: 'Missing required parameters' };
   }
   const name = fileName || file.name || 'document.pdf';
